@@ -1,0 +1,766 @@
+== {"src":"198.51.100.20","dst":"203.0.113.200","protocol":"tcp","port":443}
+{
+  "status" : "COMPUTED",
+  "snapshot_id" : "SNAPSHOT",
+  "computed_at" : "2026-11-04T08:00:00Z",
+  "query" : {
+    "src" : "198.51.100.20",
+    "dst" : "203.0.113.200",
+    "protocol" : "tcp",
+    "port" : 443,
+    "ingress_node_id" : null,
+    "ingress_interface_name" : null,
+    "edge_mode" : false
+  },
+  "verdict" : "ALLOWED",
+  "verdict_reason" : "ALL_HOPS_ALLOWED",
+  "plain" : true,
+  "caveats" : [ ],
+  "warnings" : [ ],
+  "ecmp_truncated" : false,
+  "asymmetric" : false,
+  "blocking_hop" : null,
+  "ingress" : {
+    "ingress_mode" : "INFERRED",
+    "ingress_status" : "RESOLVED",
+    "candidates" : [ {
+      "node_id" : "FW-TANGO-04/physical/main",
+      "attachment_id" : "ATTACHMENT-FW-TANGO-04/physical/main-eth1",
+      "segment_id" : "SEGMENT-198.51.100.0/26"
+    } ]
+  },
+  "executive_summary" : {
+    "headline" : "Traffic is ALLOWED across 2 hop(s)",
+    "blocking_hops" : [ ],
+    "unknown_hops" : [ ],
+    "asymmetry_detected" : false,
+    "ecmp_branch_count" : 1,
+    "ecmp_truncated" : false,
+    "freshness_status" : "CURRENT"
+  },
+  "branches" : [ {
+    "branch_id" : "b1",
+    "verdict" : "ALLOWED",
+    "verdict_reason" : "ALL_HOPS_ALLOWED",
+    "termination" : "DELIVERED",
+    "blocking_hop_index" : null,
+    "caveats" : [ ],
+    "warnings" : [ ],
+    "hops" : [ {
+      "hop_index" : 1,
+      "node_id" : "FW-TANGO-04/physical/main",
+      "node_kind" : "ROUTING_CONTEXT",
+      "vendor" : "check_point",
+      "context" : "physical",
+      "routing_context" : "main",
+      "device_id" : "dev-t04",
+      "ingress" : {
+        "attachment_id" : "ATTACHMENT-FW-TANGO-04/physical/main-eth1",
+        "segment_id" : "SEGMENT-198.51.100.0/26",
+        "interface_name" : "eth1",
+        "zone" : null
+      },
+      "egress" : {
+        "attachment_id" : "ATTACHMENT-FW-TANGO-04/physical/main-eth2",
+        "segment_id" : "SEGMENT-192.0.2.0/30",
+        "interface_name" : "eth2",
+        "zone" : null
+      },
+      "packet_in" : {
+        "src" : "198.51.100.20",
+        "dst" : "203.0.113.200",
+        "protocol" : "tcp",
+        "port" : 443
+      },
+      "packet_out" : {
+        "src" : "198.51.100.20",
+        "dst" : "203.0.113.10",
+        "protocol" : "tcp",
+        "port" : 443
+      },
+      "route" : {
+        "route_id" : "route-dev-t04-9",
+        "destination" : "203.0.113.0/26",
+        "next_hop" : "192.0.2.2",
+        "interface_name" : "eth2",
+        "protocol" : "static",
+        "next_hop_kind" : "IP",
+        "ecmp_branch" : false
+      },
+      "nat" : {
+        "nat_status" : "TRANSLATED",
+        "nat_reason" : "NAT_FIRST_MATCH",
+        "applied" : true,
+        "nat_rules" : [ {
+          "rule_id" : "n1",
+          "rule_number" : 1,
+          "rule_name" : "NAT-n1",
+          "section_id" : "101d5c80-2c22-3ca3-8b09-58dac15d3f03",
+          "section_name" : "NAT",
+          "action" : "static"
+        } ],
+        "nat_undecidable_rules" : [ ]
+      },
+      "security" : {
+        "security_verdict" : "ALLOWED",
+        "security_reason" : "FIRST_MATCHING_RULE",
+        "deciding_rule" : {
+          "rule_id" : "r1",
+          "rule_number" : 1,
+          "rule_name" : "RULE-r1",
+          "section_id" : "6a3ac089-2b81-338d-bc84-329529dfbc0a",
+          "section_name" : "OBJ-SECTION-01",
+          "action" : "Accept"
+        },
+        "undecidable_rules" : [ ]
+      },
+      "post_nat_security" : {
+        "security_verdict" : "ALLOWED",
+        "security_reason" : "FIRST_MATCHING_RULE",
+        "deciding_rule" : {
+          "rule_id" : "r1",
+          "rule_number" : 1,
+          "rule_name" : "RULE-r1",
+          "section_id" : "6a3ac089-2b81-338d-bc84-329529dfbc0a",
+          "section_name" : "OBJ-SECTION-01",
+          "action" : "Accept"
+        },
+        "undecidable_rules" : [ ]
+      },
+      "policy_stale" : false,
+      "policy_collected_at" : "2026-11-04T05:00:00Z",
+      "own_verdict" : "ALLOWED",
+      "verdict" : "ALLOWED",
+      "verdict_reason" : "FIRST_MATCHING_RULE",
+      "reasons" : [ "FIRST_MATCHING_RULE" ],
+      "caveats" : [ ],
+      "notes" : [ "CP_IMPLIED_RULES_NOT_MODELED", "CP_ROUTE_AFTER_NAT_UNKNOWN" ],
+      "flags" : [ ]
+    }, {
+      "hop_index" : 2,
+      "node_id" : "FW-BRAVO-02/vsys1/vr-main",
+      "node_kind" : "ROUTING_CONTEXT",
+      "vendor" : "palo_alto",
+      "context" : "vsys1",
+      "routing_context" : "vr-main",
+      "device_id" : "dev-b02",
+      "ingress" : {
+        "attachment_id" : "ATTACHMENT-FW-BRAVO-02/vsys1/vr-main-ethernet1/1",
+        "segment_id" : "SEGMENT-192.0.2.0/30",
+        "interface_name" : "ethernet1/1",
+        "zone" : "ZONE-TRANSIT"
+      },
+      "egress" : {
+        "attachment_id" : "ATTACHMENT-FW-BRAVO-02/vsys1/vr-main-ethernet1/2",
+        "segment_id" : "SEGMENT-203.0.113.0/26",
+        "interface_name" : "ethernet1/2",
+        "zone" : "ZONE-DMZ"
+      },
+      "packet_in" : {
+        "src" : "198.51.100.20",
+        "dst" : "203.0.113.10",
+        "protocol" : "tcp",
+        "port" : 443
+      },
+      "packet_out" : {
+        "src" : "203.0.113.1",
+        "dst" : "203.0.113.10",
+        "protocol" : "tcp",
+        "port" : 443
+      },
+      "route" : {
+        "route_id" : "route-dev-b02-5",
+        "destination" : "203.0.113.0/26",
+        "next_hop" : null,
+        "interface_name" : "ethernet1/2",
+        "protocol" : "connected",
+        "next_hop_kind" : "CONNECTED",
+        "ecmp_branch" : false
+      },
+      "nat" : {
+        "nat_status" : "TRANSLATED",
+        "nat_reason" : "NAT_FIRST_MATCH",
+        "applied" : true,
+        "nat_rules" : [ {
+          "rule_id" : "1e8f6973-746b-3340-960c-c61cab1a0e82",
+          "rule_number" : 1,
+          "rule_name" : "NAT-SNAT-01",
+          "section_id" : "705c9ed4-91aa-38ac-aedf-55d0c738cd56",
+          "section_name" : "Local NAT rules",
+          "action" : "source-nat"
+        } ],
+        "nat_undecidable_rules" : [ ]
+      },
+      "security" : {
+        "security_verdict" : "ALLOWED",
+        "security_reason" : "FIRST_MATCHING_RULE",
+        "deciding_rule" : {
+          "rule_id" : "487b78e3-4829-3c11-9835-50c70d95b387",
+          "rule_number" : 1,
+          "rule_name" : "RULE-WEB-01",
+          "section_id" : "68792cc2-e590-38c6-b84b-03177be049ad",
+          "section_name" : "Local rules",
+          "action" : "allow"
+        },
+        "undecidable_rules" : [ ]
+      },
+      "post_nat_security" : null,
+      "policy_stale" : false,
+      "policy_collected_at" : "2026-11-04T05:00:00Z",
+      "own_verdict" : "ALLOWED",
+      "verdict" : "ALLOWED",
+      "verdict_reason" : "FIRST_MATCHING_RULE",
+      "reasons" : [ "FIRST_MATCHING_RULE" ],
+      "caveats" : [ ],
+      "notes" : [ ],
+      "flags" : [ ]
+    } ],
+    "return_path" : {
+      "return_status" : "SYMMETRIC",
+      "return_reason" : "DELIVERED",
+      "branches" : [ {
+        "termination" : "DELIVERED",
+        "return_status" : "SYMMETRIC",
+        "hops" : [ {
+          "hop_index" : 1,
+          "node_id" : "FW-BRAVO-02/vsys1/vr-main",
+          "src" : "203.0.113.10",
+          "dst" : "198.51.100.20",
+          "reverse_translated" : true,
+          "route" : {
+            "route_id" : "route-dev-b02-6",
+            "destination" : "198.51.100.0/24",
+            "next_hop" : "192.0.2.1",
+            "interface_name" : "ethernet1/1",
+            "protocol" : "static",
+            "next_hop_kind" : "IP",
+            "ecmp_branch" : false
+          },
+          "egress" : {
+            "attachment_id" : "ATTACHMENT-FW-BRAVO-02/vsys1/vr-main-ethernet1/1",
+            "segment_id" : "SEGMENT-192.0.2.0/30",
+            "interface_name" : "ethernet1/1",
+            "zone" : "ZONE-TRANSIT"
+          },
+          "reasons" : [ ]
+        }, {
+          "hop_index" : 2,
+          "node_id" : "FW-TANGO-04/physical/main",
+          "src" : "203.0.113.200",
+          "dst" : "198.51.100.20",
+          "reverse_translated" : true,
+          "route" : {
+            "route_id" : "route-dev-t04-6",
+            "destination" : "198.51.100.0/26",
+            "next_hop" : null,
+            "interface_name" : "eth1",
+            "protocol" : "kernel",
+            "next_hop_kind" : "CONNECTED",
+            "ecmp_branch" : false
+          },
+          "egress" : {
+            "attachment_id" : "ATTACHMENT-FW-TANGO-04/physical/main-eth1",
+            "segment_id" : "SEGMENT-198.51.100.0/26",
+            "interface_name" : "eth1",
+            "zone" : null
+          },
+          "reasons" : [ ]
+        } ]
+      } ]
+    }
+  } ],
+  "limitations" : "Management intent only (stored inventory and policy), not observed traffic. IPv4 only; source port not modelled; Check Point implied rules and anti-spoofing not evaluated; return traffic is traced by routing only."
+}
+== {"src":"198.51.100.20","dst":"203.0.113.200","protocol":"tcp","port":22}
+{
+  "status" : "COMPUTED",
+  "snapshot_id" : "SNAPSHOT",
+  "computed_at" : "2026-11-04T08:00:00Z",
+  "query" : {
+    "src" : "198.51.100.20",
+    "dst" : "203.0.113.200",
+    "protocol" : "tcp",
+    "port" : 22,
+    "ingress_node_id" : null,
+    "ingress_interface_name" : null,
+    "edge_mode" : false
+  },
+  "verdict" : "DENIED",
+  "verdict_reason" : "DENIED_AT_HOP",
+  "plain" : false,
+  "caveats" : [ ],
+  "warnings" : [ ],
+  "ecmp_truncated" : false,
+  "asymmetric" : false,
+  "blocking_hop" : {
+    "branch_id" : "b1",
+    "hop_index" : 2
+  },
+  "ingress" : {
+    "ingress_mode" : "INFERRED",
+    "ingress_status" : "RESOLVED",
+    "candidates" : [ {
+      "node_id" : "FW-TANGO-04/physical/main",
+      "attachment_id" : "ATTACHMENT-FW-TANGO-04/physical/main-eth1",
+      "segment_id" : "SEGMENT-198.51.100.0/26"
+    } ]
+  },
+  "executive_summary" : {
+    "headline" : "Traffic is DENIED at hop 2 by rule 2",
+    "blocking_hops" : [ {
+      "branch_id" : "b1",
+      "hop_index" : 2
+    } ],
+    "unknown_hops" : [ ],
+    "asymmetry_detected" : false,
+    "ecmp_branch_count" : 1,
+    "ecmp_truncated" : false,
+    "freshness_status" : "CURRENT"
+  },
+  "branches" : [ {
+    "branch_id" : "b1",
+    "verdict" : "DENIED",
+    "verdict_reason" : "DENIED_AT_HOP",
+    "termination" : "BLOCKED",
+    "blocking_hop_index" : 2,
+    "caveats" : [ ],
+    "warnings" : [ ],
+    "hops" : [ {
+      "hop_index" : 1,
+      "node_id" : "FW-TANGO-04/physical/main",
+      "node_kind" : "ROUTING_CONTEXT",
+      "vendor" : "check_point",
+      "context" : "physical",
+      "routing_context" : "main",
+      "device_id" : "dev-t04",
+      "ingress" : {
+        "attachment_id" : "ATTACHMENT-FW-TANGO-04/physical/main-eth1",
+        "segment_id" : "SEGMENT-198.51.100.0/26",
+        "interface_name" : "eth1",
+        "zone" : null
+      },
+      "egress" : {
+        "attachment_id" : "ATTACHMENT-FW-TANGO-04/physical/main-eth2",
+        "segment_id" : "SEGMENT-192.0.2.0/30",
+        "interface_name" : "eth2",
+        "zone" : null
+      },
+      "packet_in" : {
+        "src" : "198.51.100.20",
+        "dst" : "203.0.113.200",
+        "protocol" : "tcp",
+        "port" : 22
+      },
+      "packet_out" : {
+        "src" : "198.51.100.20",
+        "dst" : "203.0.113.10",
+        "protocol" : "tcp",
+        "port" : 22
+      },
+      "route" : {
+        "route_id" : "route-dev-t04-9",
+        "destination" : "203.0.113.0/26",
+        "next_hop" : "192.0.2.2",
+        "interface_name" : "eth2",
+        "protocol" : "static",
+        "next_hop_kind" : "IP",
+        "ecmp_branch" : false
+      },
+      "nat" : {
+        "nat_status" : "TRANSLATED",
+        "nat_reason" : "NAT_FIRST_MATCH",
+        "applied" : true,
+        "nat_rules" : [ {
+          "rule_id" : "n1",
+          "rule_number" : 1,
+          "rule_name" : "NAT-n1",
+          "section_id" : "101d5c80-2c22-3ca3-8b09-58dac15d3f03",
+          "section_name" : "NAT",
+          "action" : "static"
+        } ],
+        "nat_undecidable_rules" : [ ]
+      },
+      "security" : {
+        "security_verdict" : "ALLOWED",
+        "security_reason" : "FIRST_MATCHING_RULE",
+        "deciding_rule" : {
+          "rule_id" : "r1",
+          "rule_number" : 1,
+          "rule_name" : "RULE-r1",
+          "section_id" : "6a3ac089-2b81-338d-bc84-329529dfbc0a",
+          "section_name" : "OBJ-SECTION-01",
+          "action" : "Accept"
+        },
+        "undecidable_rules" : [ ]
+      },
+      "post_nat_security" : {
+        "security_verdict" : "ALLOWED",
+        "security_reason" : "FIRST_MATCHING_RULE",
+        "deciding_rule" : {
+          "rule_id" : "r1",
+          "rule_number" : 1,
+          "rule_name" : "RULE-r1",
+          "section_id" : "6a3ac089-2b81-338d-bc84-329529dfbc0a",
+          "section_name" : "OBJ-SECTION-01",
+          "action" : "Accept"
+        },
+        "undecidable_rules" : [ ]
+      },
+      "policy_stale" : false,
+      "policy_collected_at" : "2026-11-04T05:00:00Z",
+      "own_verdict" : "ALLOWED",
+      "verdict" : "ALLOWED",
+      "verdict_reason" : "FIRST_MATCHING_RULE",
+      "reasons" : [ "FIRST_MATCHING_RULE" ],
+      "caveats" : [ ],
+      "notes" : [ "CP_IMPLIED_RULES_NOT_MODELED", "CP_ROUTE_AFTER_NAT_UNKNOWN" ],
+      "flags" : [ ]
+    }, {
+      "hop_index" : 2,
+      "node_id" : "FW-BRAVO-02/vsys1/vr-main",
+      "node_kind" : "ROUTING_CONTEXT",
+      "vendor" : "palo_alto",
+      "context" : "vsys1",
+      "routing_context" : "vr-main",
+      "device_id" : "dev-b02",
+      "ingress" : {
+        "attachment_id" : "ATTACHMENT-FW-BRAVO-02/vsys1/vr-main-ethernet1/1",
+        "segment_id" : "SEGMENT-192.0.2.0/30",
+        "interface_name" : "ethernet1/1",
+        "zone" : "ZONE-TRANSIT"
+      },
+      "egress" : {
+        "attachment_id" : "ATTACHMENT-FW-BRAVO-02/vsys1/vr-main-ethernet1/2",
+        "segment_id" : "SEGMENT-203.0.113.0/26",
+        "interface_name" : "ethernet1/2",
+        "zone" : "ZONE-DMZ"
+      },
+      "packet_in" : {
+        "src" : "198.51.100.20",
+        "dst" : "203.0.113.10",
+        "protocol" : "tcp",
+        "port" : 22
+      },
+      "packet_out" : {
+        "src" : "203.0.113.1",
+        "dst" : "203.0.113.10",
+        "protocol" : "tcp",
+        "port" : 22
+      },
+      "route" : {
+        "route_id" : "route-dev-b02-5",
+        "destination" : "203.0.113.0/26",
+        "next_hop" : null,
+        "interface_name" : "ethernet1/2",
+        "protocol" : "connected",
+        "next_hop_kind" : "CONNECTED",
+        "ecmp_branch" : false
+      },
+      "nat" : {
+        "nat_status" : "TRANSLATED",
+        "nat_reason" : "NAT_FIRST_MATCH",
+        "applied" : true,
+        "nat_rules" : [ {
+          "rule_id" : "1e8f6973-746b-3340-960c-c61cab1a0e82",
+          "rule_number" : 1,
+          "rule_name" : "NAT-SNAT-01",
+          "section_id" : "705c9ed4-91aa-38ac-aedf-55d0c738cd56",
+          "section_name" : "Local NAT rules",
+          "action" : "source-nat"
+        } ],
+        "nat_undecidable_rules" : [ ]
+      },
+      "security" : {
+        "security_verdict" : "DENIED",
+        "security_reason" : "FIRST_MATCHING_RULE",
+        "deciding_rule" : {
+          "rule_id" : "021405a7-1ce8-3e8b-ae4f-8bb49ce14dcc",
+          "rule_number" : 2,
+          "rule_name" : "RULE-DENY-01",
+          "section_id" : "68792cc2-e590-38c6-b84b-03177be049ad",
+          "section_name" : "Local rules",
+          "action" : "deny"
+        },
+        "undecidable_rules" : [ ]
+      },
+      "post_nat_security" : null,
+      "policy_stale" : false,
+      "policy_collected_at" : "2026-11-04T05:00:00Z",
+      "own_verdict" : "DENIED",
+      "verdict" : "DENIED",
+      "verdict_reason" : "FIRST_MATCHING_RULE",
+      "reasons" : [ "FIRST_MATCHING_RULE" ],
+      "caveats" : [ ],
+      "notes" : [ ],
+      "flags" : [ ]
+    } ],
+    "return_path" : {
+      "return_status" : "NOT_COMPUTED",
+      "return_reason" : "BLOCKED",
+      "branches" : [ ]
+    }
+  } ],
+  "limitations" : "Management intent only (stored inventory and policy), not observed traffic. IPv4 only; source port not modelled; Check Point implied rules and anti-spoofing not evaluated; return traffic is traced by routing only."
+}
+== {"src":"198.51.100.20","dst":"203.0.113.150","protocol":"tcp","port":443,"edge_mode":true}
+{
+  "status" : "COMPUTED",
+  "snapshot_id" : "SNAPSHOT",
+  "computed_at" : "2026-11-04T08:00:00Z",
+  "query" : {
+    "src" : "198.51.100.20",
+    "dst" : "203.0.113.150",
+    "protocol" : "tcp",
+    "port" : 443,
+    "ingress_node_id" : null,
+    "ingress_interface_name" : null,
+    "edge_mode" : true
+  },
+  "verdict" : "ALLOWED_TO_EDGE",
+  "verdict_reason" : "EXITS_KNOWN_TOPOLOGY",
+  "plain" : false,
+  "caveats" : [ ],
+  "warnings" : [ ],
+  "ecmp_truncated" : false,
+  "asymmetric" : false,
+  "blocking_hop" : null,
+  "ingress" : {
+    "ingress_mode" : "INFERRED",
+    "ingress_status" : "RESOLVED",
+    "candidates" : [ {
+      "node_id" : "FW-TANGO-04/physical/main",
+      "attachment_id" : "ATTACHMENT-FW-TANGO-04/physical/main-eth1",
+      "segment_id" : "SEGMENT-198.51.100.0/26"
+    } ]
+  },
+  "executive_summary" : {
+    "headline" : "Traffic is ALLOWED up to the edge of known topology across 1 hop(s)",
+    "blocking_hops" : [ ],
+    "unknown_hops" : [ ],
+    "asymmetry_detected" : false,
+    "ecmp_branch_count" : 1,
+    "ecmp_truncated" : false,
+    "freshness_status" : "CURRENT"
+  },
+  "branches" : [ {
+    "branch_id" : "b1",
+    "verdict" : "ALLOWED_TO_EDGE",
+    "verdict_reason" : "EXITS_KNOWN_TOPOLOGY",
+    "termination" : "EXITS_KNOWN_TOPOLOGY",
+    "blocking_hop_index" : null,
+    "caveats" : [ ],
+    "warnings" : [ ],
+    "hops" : [ {
+      "hop_index" : 1,
+      "node_id" : "FW-TANGO-04/physical/main",
+      "node_kind" : "ROUTING_CONTEXT",
+      "vendor" : "check_point",
+      "context" : "physical",
+      "routing_context" : "main",
+      "device_id" : "dev-t04",
+      "ingress" : {
+        "attachment_id" : "ATTACHMENT-FW-TANGO-04/physical/main-eth1",
+        "segment_id" : "SEGMENT-198.51.100.0/26",
+        "interface_name" : "eth1",
+        "zone" : null
+      },
+      "egress" : {
+        "attachment_id" : "ATTACHMENT-FW-TANGO-04/physical/main-eth3",
+        "segment_id" : "SEGMENT-198.51.100.128/30",
+        "interface_name" : "eth3",
+        "zone" : null
+      },
+      "packet_in" : {
+        "src" : "198.51.100.20",
+        "dst" : "203.0.113.150",
+        "protocol" : "tcp",
+        "port" : 443
+      },
+      "packet_out" : {
+        "src" : "198.51.100.20",
+        "dst" : "203.0.113.150",
+        "protocol" : "tcp",
+        "port" : 443
+      },
+      "route" : {
+        "route_id" : "route-dev-t04-12",
+        "destination" : "0.0.0.0/0",
+        "next_hop" : "198.51.100.130",
+        "interface_name" : "eth3",
+        "protocol" : "static",
+        "next_hop_kind" : "IP",
+        "ecmp_branch" : false
+      },
+      "nat" : {
+        "nat_status" : "NO_TRANSLATION",
+        "nat_reason" : "NAT_NO_RULE_MATCHED",
+        "applied" : false,
+        "nat_rules" : [ ],
+        "nat_undecidable_rules" : [ ]
+      },
+      "security" : {
+        "security_verdict" : "ALLOWED",
+        "security_reason" : "FIRST_MATCHING_RULE",
+        "deciding_rule" : {
+          "rule_id" : "r1",
+          "rule_number" : 1,
+          "rule_name" : "RULE-r1",
+          "section_id" : "6a3ac089-2b81-338d-bc84-329529dfbc0a",
+          "section_name" : "OBJ-SECTION-01",
+          "action" : "Accept"
+        },
+        "undecidable_rules" : [ ]
+      },
+      "post_nat_security" : null,
+      "policy_stale" : false,
+      "policy_collected_at" : "2026-11-04T05:00:00Z",
+      "own_verdict" : "ALLOWED",
+      "verdict" : "ALLOWED",
+      "verdict_reason" : "FIRST_MATCHING_RULE",
+      "reasons" : [ "FIRST_MATCHING_RULE" ],
+      "caveats" : [ ],
+      "notes" : [ "CP_IMPLIED_RULES_NOT_MODELED" ],
+      "flags" : [ ]
+    } ],
+    "return_path" : {
+      "return_status" : "NOT_COMPUTED",
+      "return_reason" : "RETURN_NOT_COMPUTED_AT_EDGE",
+      "branches" : [ ]
+    }
+  } ],
+  "limitations" : "Management intent only (stored inventory and policy), not observed traffic. IPv4 only; source port not modelled; Check Point implied rules and anti-spoofing not evaluated; return traffic is traced by routing only."
+}
+== {"src":"198.51.100.20","dst":"203.0.113.70","protocol":"tcp","port":443}
+{
+  "status" : "COMPUTED",
+  "snapshot_id" : "SNAPSHOT",
+  "computed_at" : "2026-11-04T08:00:00Z",
+  "query" : {
+    "src" : "198.51.100.20",
+    "dst" : "203.0.113.70",
+    "protocol" : "tcp",
+    "port" : 443,
+    "ingress_node_id" : null,
+    "ingress_interface_name" : null,
+    "edge_mode" : false
+  },
+  "verdict" : "DENIED",
+  "verdict_reason" : "DENIED_AT_HOP",
+  "plain" : false,
+  "caveats" : [ ],
+  "warnings" : [ ],
+  "ecmp_truncated" : false,
+  "asymmetric" : false,
+  "blocking_hop" : {
+    "branch_id" : "b1",
+    "hop_index" : 1
+  },
+  "ingress" : {
+    "ingress_mode" : "INFERRED",
+    "ingress_status" : "RESOLVED",
+    "candidates" : [ {
+      "node_id" : "FW-TANGO-04/physical/main",
+      "attachment_id" : "ATTACHMENT-FW-TANGO-04/physical/main-eth1",
+      "segment_id" : "SEGMENT-198.51.100.0/26"
+    } ]
+  },
+  "executive_summary" : {
+    "headline" : "Traffic is DENIED at hop 1 by a discard route",
+    "blocking_hops" : [ {
+      "branch_id" : "b1",
+      "hop_index" : 1
+    } ],
+    "unknown_hops" : [ ],
+    "asymmetry_detected" : false,
+    "ecmp_branch_count" : 1,
+    "ecmp_truncated" : false,
+    "freshness_status" : "CURRENT"
+  },
+  "branches" : [ {
+    "branch_id" : "b1",
+    "verdict" : "DENIED",
+    "verdict_reason" : "DENIED_AT_HOP",
+    "termination" : "BLOCKED",
+    "blocking_hop_index" : 1,
+    "caveats" : [ ],
+    "warnings" : [ ],
+    "hops" : [ {
+      "hop_index" : 1,
+      "node_id" : "FW-TANGO-04/physical/main",
+      "node_kind" : "ROUTING_CONTEXT",
+      "vendor" : "check_point",
+      "context" : "physical",
+      "routing_context" : "main",
+      "device_id" : "dev-t04",
+      "ingress" : {
+        "attachment_id" : "ATTACHMENT-FW-TANGO-04/physical/main-eth1",
+        "segment_id" : "SEGMENT-198.51.100.0/26",
+        "interface_name" : "eth1",
+        "zone" : null
+      },
+      "egress" : {
+        "attachment_id" : null,
+        "segment_id" : null,
+        "interface_name" : null,
+        "zone" : null
+      },
+      "packet_in" : {
+        "src" : "198.51.100.20",
+        "dst" : "203.0.113.70",
+        "protocol" : "tcp",
+        "port" : 443
+      },
+      "packet_out" : {
+        "src" : "198.51.100.20",
+        "dst" : "203.0.113.70",
+        "protocol" : "tcp",
+        "port" : 443
+      },
+      "route" : {
+        "route_id" : "route-dev-t04-11",
+        "destination" : "203.0.113.64/26",
+        "next_hop" : null,
+        "interface_name" : null,
+        "protocol" : "static",
+        "next_hop_kind" : "DISCARD",
+        "ecmp_branch" : false
+      },
+      "nat" : {
+        "nat_status" : "NO_TRANSLATION",
+        "nat_reason" : "NAT_NO_RULE_MATCHED",
+        "applied" : false,
+        "nat_rules" : [ ],
+        "nat_undecidable_rules" : [ ]
+      },
+      "security" : {
+        "security_verdict" : "ALLOWED",
+        "security_reason" : "FIRST_MATCHING_RULE",
+        "deciding_rule" : {
+          "rule_id" : "r1",
+          "rule_number" : 1,
+          "rule_name" : "RULE-r1",
+          "section_id" : "6a3ac089-2b81-338d-bc84-329529dfbc0a",
+          "section_name" : "OBJ-SECTION-01",
+          "action" : "Accept"
+        },
+        "undecidable_rules" : [ ]
+      },
+      "post_nat_security" : null,
+      "policy_stale" : false,
+      "policy_collected_at" : "2026-11-04T05:00:00Z",
+      "own_verdict" : "DENIED",
+      "verdict" : "DENIED",
+      "verdict_reason" : "ROUTE_DISCARD",
+      "reasons" : [ "ROUTE_DISCARD" ],
+      "caveats" : [ ],
+      "notes" : [ "CP_IMPLIED_RULES_NOT_MODELED" ],
+      "flags" : [ ]
+    } ],
+    "return_path" : {
+      "return_status" : "NOT_COMPUTED",
+      "return_reason" : "BLOCKED",
+      "branches" : [ ]
+    }
+  } ],
+  "limitations" : "Management intent only (stored inventory and policy), not observed traffic. IPv4 only; source port not modelled; Check Point implied rules and anti-spoofing not evaluated; return traffic is traced by routing only."
+}

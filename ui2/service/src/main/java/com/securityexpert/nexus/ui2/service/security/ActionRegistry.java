@@ -213,6 +213,13 @@ public final class ActionRegistry {
     /** D-8: synchronous, bounded rebuild of the in-memory topology from stored inventory (no device contact);
      * {@code role:security_admin} only, never aiview even with an admin role. */
     public static final String TOPOLOGY_REBUILD = "topology_rebuild";
+    /**
+     * D-8 (path analysis stage A5a): {@code POST /api/v2/path-analysis/query}, a read-only computation over the held
+     * topology and stored policy. Same gate as the inventory read ({@link #DEVICE_READ}): roles that see inventory raw
+     * see the path result raw; the replay viewer (aiview) may query with masked values only (D-3) and always receives
+     * the masked projection. A read-only POST, so an aiview machine session may send it.
+     */
+    public static final String PATH_ANALYSIS_READ = "path_analysis_read";
 
     public static final String HTTPS_CERTIFICATE_ACCEPT = "https_certificate_accept";
     public static final String HTTPS_CERTIFICATE_STRICT = "https_certificate_strict";
@@ -352,6 +359,8 @@ public final class ActionRegistry {
         register(new ActionDescriptor(TOPOLOGY_READ, true, Optional.empty()));
         register(new ActionDescriptor(TOPOLOGY_OVERRIDE_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(TOPOLOGY_REBUILD, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        // D-8 (A5a): the path query follows the inventory read, like the topology read.
+        register(new ActionDescriptor(PATH_ANALYSIS_READ, true, Optional.empty()));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without
