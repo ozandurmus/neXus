@@ -29,7 +29,7 @@ import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun;
  * stable text keyed by fixture labels (hostname, context, table, network), never by the salted ids, so a golden file
  * reads as the topology it asserts.
  */
-final class TopologyFixtures {
+public final class TopologyFixtures {
 
     static final byte[] SALT = "synthetic-topology-golden-salt-0001".getBytes(StandardCharsets.UTF_8);
     static final Instant BUILT_AT = Instant.parse("2026-11-04T07:00:00Z");
@@ -38,7 +38,7 @@ final class TopologyFixtures {
     private TopologyFixtures() {
     }
 
-    static JsonNode resource(String name) {
+    public static JsonNode resource(String name) {
         try (InputStream in = TopologyFixtures.class.getResourceAsStream("/pathanalysis/topology/" + name)) {
             if (in == null) {
                 throw new IllegalStateException("missing fixture " + name);
@@ -57,7 +57,7 @@ final class TopologyFixtures {
         }
     }
 
-    static List<TopologyInput.DeviceFacts> devices(JsonNode estate) {
+    public static List<TopologyInput.DeviceFacts> devices(JsonNode estate) {
         List<TopologyInput.DeviceFacts> out = new ArrayList<>();
         for (JsonNode d : estate.get("devices")) {
             out.add(new TopologyInput.DeviceFacts(d.get("device_id").asText(), d.get("vendor").asText(),
@@ -67,7 +67,7 @@ final class TopologyFixtures {
         return out;
     }
 
-    static List<TopologyLinkOverride> overrides(JsonNode file) {
+    public static List<TopologyLinkOverride> overrides(JsonNode file) {
         List<TopologyLinkOverride> out = new ArrayList<>();
         for (JsonNode o : file.get("overrides")) {
             out.add(new TopologyLinkOverride(o.get("override_id").asText(), o.get("action").asText(),

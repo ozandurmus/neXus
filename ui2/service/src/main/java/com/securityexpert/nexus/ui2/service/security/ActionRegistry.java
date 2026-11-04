@@ -200,6 +200,20 @@ public final class ActionRegistry {
             java.util.Set.of(RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN);
     public static final java.util.Set<String> DATA_SANITIZE_REVERT_ANY_JOB_ROLES = java.util.Set.of(RoleToken.SECURITY_ADMIN);
 
+    /**
+     * PO decision record 2026-11-03 D-8 (path analysis Phase A, stage A3): {@code GET /api/v2/topology} and its
+     * override list. Same gate as the inventory read ({@link #DEVICE_READ}, any authenticated session): roles that see
+     * inventory raw see the topology raw, and the replay viewer (aiview) always receives the masked projection; the
+     * override note never reaches aiview.
+     */
+    public static final String TOPOLOGY_READ = "topology_read";
+    /** D-8: create or revoke a topology link override; {@code role:security_admin} only, never aiview (the controller
+     * also refuses a replay viewer holding an admin role). */
+    public static final String TOPOLOGY_OVERRIDE_WRITE = "topology_override_write";
+    /** D-8: synchronous, bounded rebuild of the in-memory topology from stored inventory (no device contact);
+     * {@code role:security_admin} only, never aiview even with an admin role. */
+    public static final String TOPOLOGY_REBUILD = "topology_rebuild";
+
     public static final String HTTPS_CERTIFICATE_ACCEPT = "https_certificate_accept";
     public static final String HTTPS_CERTIFICATE_STRICT = "https_certificate_strict";
 
@@ -334,6 +348,10 @@ public final class ActionRegistry {
         register(new ActionDescriptor(PACKET_ANALYSIS_RAW_VIEW, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(PACKET_ANALYSIS_READ, true, Optional.of(RoleToken.OPERATOR),
                 java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER)));
+        // D-8: the topology read follows the inventory read; override writes and rebuilds are security_admin only.
+        register(new ActionDescriptor(TOPOLOGY_READ, true, Optional.empty()));
+        register(new ActionDescriptor(TOPOLOGY_OVERRIDE_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(TOPOLOGY_REBUILD, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without

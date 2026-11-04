@@ -115,7 +115,8 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                         || "client_ip".equals(key) || "server_ip".equals(key)
                         || "pre_nat_src".equals(key) || "pre_nat_dst".equals(key)
                         || "post_nat_src".equals(key) || "post_nat_dst".equals(key)
-                        || "translated_src".equals(key) || "translated_dst".equals(key)) && val instanceof String s) {
+                        || "translated_src".equals(key) || "translated_dst".equals(key)
+                        || "assumed_subnet".equals(key)) && val instanceof String s) {
                     ipMasker.registerSubnet(s);
                 } else if (("observed_addresses".equals(key) || "matched_addresses".equals(key)
                         || "interface_addresses".equals(key)) && val instanceof List<?> addrList) {
@@ -406,8 +407,18 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                         "src", "dst", "client_ip", "server_ip", "client_cidrs", "source_cidr", "answers",
                         "observed_addresses", "matched_addresses", "interface_addresses",
                         "pre_nat_src", "pre_nat_dst", "post_nat_src", "post_nat_dst",
-                        "translated_src", "translated_dst" ->
+                        "translated_src", "translated_dst", "assumed_subnet" ->
                     result.put(key, maskAddressValue(value, clusterRef));
+                // Path analysis A3 (PO record 2026-11-03 D-8): an override's free-text note is never shown to aiview. The
+                // topology controller already leaves it out of a masked body; this is the second, independent barrier.
+                case "override_note" -> result.put(key, null);
+                // Path analysis A3: topology ids are keyed hashes under a per-snapshot secret (no address or name
+                // inside), and the closed topology vocabularies are product facts, not identities.
+                case "snapshot_id", "node_id", "segment_id", "attachment_id", "conflict_id", "override_id",
+                        "peer_device_id", "active_member_device_id", "from_node_id", "to_node_id", "node_ids",
+                        "member_device_ids", "node_kind", "segment_kind", "conflict_kind", "resolution", "link_kind",
+                        "override_action", "reason_code", "override_status", "no_match_reason", "flags" ->
+                    result.put(key, value);
                 case "terminal_reason", "latest_job_terminal_reason", "peer_follow_reason", "observed_value", "observedValue", "message" -> {
                     if (value instanceof String s) {
                         result.put(key, topologyPseudonymizer.maskText(ipMasker.maskText(s)));
