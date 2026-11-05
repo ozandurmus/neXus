@@ -1,20 +1,22 @@
 # NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY
 
-## Snapshot (2026-11-05 12:30)
+## Snapshot (2026-11-05 17:45)
 Development mode: scheduled jobs are off, except the system-log collection, which runs on its own switch.
-Shipped today: the UI night batch (PR 741), the aiview CSV masking fix, and the new sign-in page with the new logo (PR 743).
-24 cloud branches await integration. `CURRENT_STATE.md` and `project/QUEUE.md` win over this file.
+All cloud branches of `docs/design/PO_SESSION_HANDOVER_2026_11_05.md` §5 are on main and live (PRs 745-749); none remain on origin.
+Schema V191. Reports R1 is REAL_ENV_VALIDATED (masked, aiview). `CURRENT_STATE.md` and `project/QUEUE.md` win over this file.
 
 ## What changed this session
-- Path analysis A6, G6, the diagram and the pseudonym fixes; VSX cluster_virtual addresses; CP group members resolved from the inventory (definite shadow results 9,349 → 12,964).
-- Backup size deviation alerts; a whole-list sort plus a server-side sort; the Collect menu and the system-log schedule; the UI review fixes.
-- Decisions recorded: the analysis-container direction; the HEALTHY/AT RISK/UNKNOWN amendment to the design language; the Reports R1 contract (FROZEN).
+- Docs batch (PR 745): reports R1/R2 contracts, designs, plans, briefs; R2 D1-D4 recorded; exec-home 0.1/0.2 closed.
+- Code batch (PR 746): IA restructure, screens, executive home verdict, Reports R1 (roles per amendment A1), security fixes M-1..M-8, path and policy UNKNOWN work, test speed.
+- CP NAT UID probe with review fixes, gate migration V191 (PR 747); not yet exercised on a device.
+- aiview machine session may send the report preview and generate POSTs (PR 748).
+- Report files on their own volume `ui2-report-store` at `UI2_REPORT_STORE_ROOT` in service and worker (PR 749); the recovery volume stays read-only in the service (BK-17).
 
 ## Exact next action
-Integrate the cloud branches per `docs/design/PO_SESSION_HANDOVER_2026_11_05.md` §5: the docs batch first, then the code batch in the listed order.
+Run a CP policy collection to measure the NAT UID probe outcome (approved literal only), then the other measurements in the 11-05 handover §6.
 
 ## Test delta
-The last ships passed: Java 4037, vitest about 1388, prod e2e 31/31.
+Java 4107 / 0 failures, vitest 1496, prod e2e 39/39.
 
 ## New risks
-8 security MEDIUM findings stay open until the secfix branches ship (handover §6). Notification e-mails carry raw hostnames.
+The PR 749 deploy took the site down for about 10 minutes: the service manifest mounting `ui2-report-store` was applied before the claim existed. A new claim must exist before the ship that mounts it. The deploy applies the service manifest, not the worker's (applied by hand). Notification e-mails still carry raw hostnames.
