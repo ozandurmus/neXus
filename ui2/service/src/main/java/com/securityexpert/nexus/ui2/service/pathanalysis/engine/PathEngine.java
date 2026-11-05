@@ -38,6 +38,7 @@ import com.securityexpert.nexus.ui2.service.pathanalysis.topology.TopologyGraph.
 import com.securityexpert.nexus.ui2.service.pathanalysis.topology.TopologyGraph.NodeFlag;
 import com.securityexpert.nexus.ui2.service.pathanalysis.topology.TopologyGraph.NodeKind;
 import com.securityexpert.nexus.ui2.service.pathanalysis.topology.TopologyGraph.Segment;
+import com.securityexpert.nexus.ui2.service.pathanalysis.topology.TopologyGraph.SegmentKind;
 import com.securityexpert.nexus.ui2.service.pathanalysis.topology.TopologyInput;
 import com.securityexpert.nexus.ui2.service.policy.HopNatEvaluator;
 import com.securityexpert.nexus.ui2.service.policy.HopPolicyEvaluator;
@@ -62,7 +63,9 @@ import com.securityexpert.nexus.ui2.service.policy.HopPolicyEvaluator.Tuple;
  * every hop ALLOWED is ALLOWED (caveats carried: a caveated allow is never plain); an exit into a cloud is UNKNOWN
  * ({@code EXITS_KNOWN_TOPOLOGY}) or {@code ALLOWED_TO_EDGE} in edge mode (D-4). Branches (ingress candidates, ECMP: 8 per
  * hop, 16 in total, {@code ecmpTruncated}) combine to the overall verdict; allowed and denied branches make PARTIAL; an
- * unexplored (truncated) branch counts as UNKNOWN.</p>
+ * unexplored (truncated) branch counts as UNKNOWN. Candidates on equally specific unjoined source segments (design §4
+ * amendment 2026-11-05) are all traced: their verdict stands only when every candidate gives the same decided one
+ * ({@code INGRESS_CANDIDATES_AGREE}), else UNKNOWN ({@code AMBIGUOUS_INGRESS}).</p>
  *
  * <p><b>Return path.</b> A delivered branch is walked back by routing only, undoing the forward NAT at the units that
  * applied it. If the return crosses a stateful unit (every Phase A unit is one) the forward path did not, or skips one
@@ -149,6 +152,8 @@ public final class PathEngine {
         private int work;
         private int branchesStarted;
         private boolean truncated;
+        /** Equally specific unjoined source segments: every candidate is traced, a verdict only when they all agree. */
+        private boolean candidatesMustAgree;
 
         Run(TopologyGraph graph, HopPolicySource policies, PathQuery query, Instant computedAt) {
             this.graph = graph;
@@ -170,19 +175,28 @@ public final class PathEngine {
             Ingress ingress = ingress(starts);
             Tuple tuple = new Tuple(query.source(), query.destination(), query.protocol(), query.destinationPort());
             List<Finished> finished = new ArrayList<>();
-            for (Start start : starts) {
+            List<Integer> origin = new ArrayList<>();
+            for (int s = 0; s < starts.size(); s++) {
                 if (branchesStarted >= limits.maxBranches()) {
                     truncated = true;
                     break;
                 }
                 branchesStarted++;
-                finished.addAll(explore(new Prefix(List.of(), Set.of(), false), start.node(), start.ingress(), tuple));
+                Start start = starts.get(s);
+                List<Finished> fromStart = explore(new Prefix(List.of(), Set.of(), false), start.node(), start.ingress(), tuple);
+                finished.addAll(fromStart);
+                for (int i = 0; i < fromStart.size(); i++) {
+                    origin.add(s);
+                }
             }
             List<Branch> branches = new ArrayList<>();
-            for (Finished f : finished) {
-                branches.add(branch("b" + (branches.size() + 1), f));
+            Map<String, Integer> startOf = new HashMap<>();
+            for (int i = 0; i < finished.size(); i++) {
+                Branch b = branch("b" + (branches.size() + 1), finished.get(i));
+                branches.add(b);
+                startOf.put(b.branchId(), origin.get(i));
             }
-            return result(ingress, branches);
+            return result(ingress, branches, startOf, starts.size());
         }
 
         // ---- ingress (F§4.2) ---------------------------------------------------------------------------------------
@@ -229,6 +243,11 @@ public final class PathEngine {
                 found.sort(Comparator.comparing((Start st) -> st.node().nodeId()));
                 List<IngressCandidate> candidates = found.stream().map(st -> candidate(st.node(), st.ingress())).toList();
                 if (longest.size() > 1) {
+                    // Equally specific segments that were never joined (duplicate private prefix, design §4): which one
+                    // the source sits on is not known. Nothing is joined and nothing is guessed -- every candidate is
+                    // traced, and result() keeps the verdict only when every candidate gives the same decided one.
+                    starts.addAll(found);
+                    candidatesMustAgree = true;
                     return new Ingress(INFERRED, AMBIGUOUS_INGRESS, candidates);
                 }
                 starts.addAll(found);
@@ -463,6 +482,15 @@ public final class PathEngine {
             }
             if (stale) {
                 reasons.add(STALE_OR_OUT_OF_SYNC_POLICY);
+            }
+            if (step instanceof Exit exit) {
+                // Why the branch leaves the known topology (informational: the exit itself stays UNKNOWN / edge).
+                if (route.flatMap(r -> Ipv4Prefix.parse(r.destination().strip())).filter(p -> p.length() == 0).isPresent()) {
+                    notes.add(EXIT_VIA_DEFAULT_ROUTE);
+                }
+                if (exit.via().map(a -> segments.get(a.segmentId())).filter(s -> s.kind() == SegmentKind.VSX_WARP).isPresent()) {
+                    notes.add(EXIT_VIA_VSX_WARP);
+                }
             }
             reasons.addAll(ctx.nodeReasons());
             // UNKNOWN causes in order: stale policy, unit facts, policy, routing.
@@ -704,6 +732,19 @@ public final class PathEngine {
             return bySegment.getOrDefault(segmentId, List.of());
         }
 
+        /** True when a segment an enrolled (non-cloud) unit is attached to contains the address. */
+        private boolean onKnownSegment(long address) {
+            return graph.segments().stream().filter(s -> s.network().filter(p -> p.contains(address)).isPresent())
+                    .anyMatch(s -> attachmentsOn(s.segmentId()).stream().anyMatch(a -> !cloud(a.nodeId())));
+        }
+
+        /** True when an enrolled (non-cloud) unit holds exactly this address on one of its attachments. */
+        private boolean unitAddress(String address) {
+            Optional<String> wanted = Ipv4Prefix.parseHost(address).map(Ipv4Prefix.HostAddress::hostText);
+            return wanted.isPresent() && graph.attachments().stream().filter(a -> !cloud(a.nodeId()))
+                    .anyMatch(a -> a.address().flatMap(Ipv4Prefix::parseHost).map(Ipv4Prefix.HostAddress::hostText).equals(wanted));
+        }
+
         private boolean cloud(String nodeId) {
             Node n = nodes.get(nodeId);
             return n == null || n.kind() == NodeKind.CLOUD;
@@ -758,10 +799,22 @@ public final class PathEngine {
                         reason = EXITS_KNOWN_TOPOLOGY;
                     }
                     returnPath = ReturnPath.notComputed(RETURN_NOT_COMPUTED_AT_EDGE);
+                    if (onKnownSegment(host(hops.get(hops.size() - 1).packetOut().destination()))) {
+                        warnings.add(DESTINATION_IN_KNOWN_TOPOLOGY);
+                    }
                 }
                 default -> {
                     verdict = UNKNOWN;
                     reason = f.termination();
+                    if (NO_ROUTE.equals(reason) && !hops.isEmpty()) {
+                        // Say why the table had nothing: withheld on an unproven active member, or nothing collected.
+                        Node last = nodes.get(hops.get(hops.size() - 1).nodeId());
+                        if (last.flags().contains(NodeFlag.ACTIVE_MEMBER_UNPROVEN)) {
+                            reason = ACTIVE_MEMBER_UNPROVEN;
+                        } else if (last.routes().isEmpty()) {
+                            reason = ROUTE_TABLE_EMPTY;
+                        }
+                    }
                     returnPath = ReturnPath.notComputed(f.termination());
                 }
             }
@@ -887,39 +940,71 @@ public final class PathEngine {
 
         // ---- overall -------------------------------------------------------------------------------------------------
 
-        private PathResult result(Ingress ingress, List<Branch> branches) {
+        /** The overall verdict and reason of a set of branches (§5 lattice); {@code [verdict, reason]}. */
+        private static String[] combine(List<Branch> branches, boolean truncated) {
+            Set<String> verdicts = new LinkedHashSet<>();
+            branches.forEach(b -> verdicts.add(b.verdict()));
+            if (truncated) {
+                verdicts.add(UNKNOWN);
+            }
+            boolean allowed = verdicts.contains(ALLOWED) || verdicts.contains(ALLOWED_TO_EDGE);
+            if (verdicts.size() == 1) {
+                return new String[] {verdicts.iterator().next(), branches.get(0).reason()};
+            }
+            if (allowed && verdicts.contains(DENIED)) {
+                return new String[] {PARTIAL, MIXED_BRANCH_VERDICTS};
+            }
+            if (verdicts.contains(UNKNOWN)) {
+                return new String[] {UNKNOWN, branches.stream().filter(b -> UNKNOWN.equals(b.verdict())).map(Branch::reason)
+                        .findFirst().orElse(ECMP_TRUNCATED)};
+            }
+            return new String[] {ALLOWED_TO_EDGE, MIXED_BRANCH_VERDICTS};
+        }
+
+        private PathResult result(Ingress ingress, List<Branch> branches, Map<String, Integer> startOf, int startCount) {
             String verdict;
             String reason;
+            boolean candidatesAgree = false;
             if (branches.isEmpty()) {
                 verdict = UNKNOWN;
                 reason = "RESOLVED".equals(ingress.status()) ? (truncated ? ECMP_TRUNCATED : ANALYSIS_BUDGET) : ingress.status();
-            } else {
-                Set<String> verdicts = new LinkedHashSet<>();
-                branches.forEach(b -> verdicts.add(b.verdict()));
-                if (truncated) {
-                    verdicts.add(UNKNOWN);
+            } else if (candidatesMustAgree) {
+                // Each candidate first hop answers on its own; the verdict stands only when every candidate was traced in
+                // full and all of them give the same decided verdict. Anything else stays UNKNOWN (AMBIGUOUS_INGRESS).
+                Set<String> perCandidate = new LinkedHashSet<>();
+                for (int s = 0; s < startCount; s++) {
+                    final int start = s;
+                    List<Branch> own = branches.stream().filter(b -> startOf.get(b.branchId()) == start).toList();
+                    perCandidate.add(own.isEmpty() ? UNKNOWN : combine(own, false)[0]);
                 }
-                boolean allowed = verdicts.contains(ALLOWED) || verdicts.contains(ALLOWED_TO_EDGE);
-                if (verdicts.size() == 1) {
-                    verdict = verdicts.iterator().next();
-                    reason = branches.get(0).reason();
-                } else if (allowed && verdicts.contains(DENIED)) {
-                    verdict = PARTIAL;
-                    reason = MIXED_BRANCH_VERDICTS;
-                } else if (verdicts.contains(UNKNOWN)) {
-                    verdict = UNKNOWN;
-                    reason = branches.stream().filter(b -> UNKNOWN.equals(b.verdict())).map(Branch::reason).findFirst()
-                            .orElse(ECMP_TRUNCATED);
+                if (!truncated && perCandidate.size() == 1 && !perCandidate.contains(UNKNOWN)) {
+                    String[] all = combine(branches, false);
+                    verdict = all[0];
+                    reason = all[1];
+                    candidatesAgree = true;
                 } else {
-                    verdict = ALLOWED_TO_EDGE;
-                    reason = MIXED_BRANCH_VERDICTS;
+                    verdict = UNKNOWN;
+                    reason = AMBIGUOUS_INGRESS;
                 }
+            } else {
+                String[] all = combine(branches, truncated);
+                verdict = all[0];
+                reason = all[1];
             }
             List<String> caveats = new ArrayList<>(), warnings = new ArrayList<>();
             branches.forEach(b -> {
                 caveats.addAll(b.caveats());
                 warnings.addAll(b.warnings());
             });
+            if (candidatesAgree) {
+                caveats.add(INGRESS_CANDIDATES_AGREE);
+            }
+            if (unitAddress(query.source())) {
+                caveats.add(SOURCE_IS_UNIT_ADDRESS);
+            }
+            if (unitAddress(query.destination())) {
+                caveats.add(DESTINATION_IS_UNIT_ADDRESS);
+            }
             if (truncated) {
                 warnings.add(ECMP_TRUNCATED);
             }

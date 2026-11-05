@@ -132,4 +132,49 @@ class JobLogControllerTest {
                 new String(response.getBody(), java.nio.charset.StandardCharsets.UTF_8));
         org.mockito.Mockito.verifyNoInteractions(masking);
     }
+
+    @Test
+    void theMaskedViewIsRefusedASortByTargetWithAMessageAndItsQueryIsMarkedMasked() {
+        // Security review 2026-11-05 M-2: for aiview a sort by target would order the pseudonyms by the real names.
+        var jobs = mock(JobLogQueryService.class);
+        var masking = mock(PrivacyMaskingResponseBodyAdvice.class);
+        when(masking.maskObject(any(), any())).thenAnswer(invocation -> invocation.getArgument(0));
+        var controller = new JobLogController(jobs, masking, new ActionRegistry(), mock(RbacEvaluator.class));
+        when(jobs.query(any())).thenReturn(new JobPage(List.of(), 1, 50, 0));
+        when(jobs.exportRows(any())).thenReturn(List.of());
+        var replay = new MockHttpServletRequest();
+        replay.setAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE, true);
+
+        var listRefusal = org.junit.jupiter.api.Assertions.assertThrows(JobLogQueryService.MaskedSortRefused.class,
+                () -> controller.listJobs(null, null, null, null, null, null, 1, 50, "device", "asc", replay));
+        org.junit.jupiter.api.Assertions.assertThrows(JobLogQueryService.MaskedSortRefused.class,
+                () -> controller.exportCsv(null, null, null, null, null, null, "device_name", "desc", replay));
+        org.mockito.Mockito.verifyNoInteractions(jobs);
+        var answer = controller.maskedSortRefused(listRefusal);
+        org.junit.jupiter.api.Assertions.assertEquals(400, answer.getStatusCode().value());
+        org.junit.jupiter.api.Assertions.assertEquals(JobLogQueryService.MASKED_SORT_REFUSED, answer.getBody().get("code"));
+        assertTrue(answer.getBody().get("error").contains("masked (aiview) view"), answer.getBody().toString());
+
+        // Another sort passes, and the query the service gets says masked, so the search keeps to the ids.
+        var captor = org.mockito.ArgumentCaptor.forClass(JobLogQueryService.JobQuery.class);
+        org.junit.jupiter.api.Assertions.assertEquals(200,
+                controller.listJobs(null, null, null, null, null, "edge", 1, 50, "state", "asc", replay).getStatusCode().value());
+        controller.exportCsv(null, null, null, null, null, "edge", null, null, replay);
+        org.mockito.Mockito.verify(jobs).query(captor.capture());
+        assertTrue(captor.getValue().masked());
+        var exportCaptor = org.mockito.ArgumentCaptor.forClass(JobLogQueryService.JobQuery.class);
+        org.mockito.Mockito.verify(jobs).exportRows(exportCaptor.capture());
+        assertTrue(exportCaptor.getValue().masked());
+
+        // Not masked: the target sort stays, and the query is not marked.
+        var other = mock(JobLogQueryService.class);
+        when(other.query(any())).thenReturn(new JobPage(List.of(), 1, 50, 0));
+        var unmasked = new JobLogController(other, mock(PrivacyMaskingResponseBodyAdvice.class), new ActionRegistry(),
+                mock(RbacEvaluator.class));
+        org.junit.jupiter.api.Assertions.assertEquals(200, unmasked.listJobs(null, null, null, null, null, null, 1, 50,
+                "device", "asc", new MockHttpServletRequest()).getStatusCode().value());
+        var plainCaptor = org.mockito.ArgumentCaptor.forClass(JobLogQueryService.JobQuery.class);
+        org.mockito.Mockito.verify(other).query(plainCaptor.capture());
+        assertFalse(plainCaptor.getValue().masked());
+    }
 }

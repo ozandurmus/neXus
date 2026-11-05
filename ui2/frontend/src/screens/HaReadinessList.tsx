@@ -28,6 +28,8 @@ import type { CpFailoverSummary, DeviceSummary } from "../auth/adminApi";
 import { Icon, type IconName } from "../shell/Icon";
 import { StatePanel, VendorBadge, vendorDisplayName } from "../shell/States";
 import { formatStamp, relativeAge } from "../shell/time";
+import { FRESH_UNDER_MS, isPastFresh } from "../shell/freshness";
+import { urlParam } from "../shell/urlParams";
 import { m3 } from "../theme/m3Theme";
 import { ReadinessChecksTable, readinessStopReason } from "./ReadinessChecksTable";
 import { PanConfigSyncAction } from "./PanConfigSyncAction";
@@ -43,11 +45,10 @@ const statuses: Record<Status, { label: string; icon: IconName; bg: string; ink:
 };
 
 /**
- * A readiness evaluation older than this is flagged as stale. The repo defines no readiness freshness
- * constant elsewhere; the Overview's 24 h job window is the closest existing convention. Presentation only:
- * the status value itself is never changed by age.
+ * A readiness evaluation this old is flagged as stale: the edge of "fresh" on the product's one freshness scale
+ * (`shell/freshness.ts`, UI review 2026-11-05 B1). Presentation only: the status value itself is never changed by age.
  */
-export const READINESS_STALE_AFTER_MS = 24 * 3600_000;
+export const READINESS_STALE_AFTER_MS = FRESH_UNDER_MS;
 
 function evaluationAgeMs(at: string | null | undefined, now: Date): number | null {
   if (!at) return null;
@@ -107,7 +108,7 @@ export function readinessFreshness(items: ReturnType<typeof haReadinessItems>, n
   const evaluatedAts = items.filter(item => item.status !== "UNSUPPORTED")
     .map(item => item.base?.readiness?.observedAt)
     .filter((at): at is string => evaluationAgeMs(at, now) !== null);
-  const staleAts = evaluatedAts.filter(at => evaluationAgeMs(at, now)! > READINESS_STALE_AFTER_MS);
+  const staleAts = evaluatedAts.filter(at => isPastFresh(at, now));
   return { evaluatedAts, staleAts, mostlyStale: staleAts.length > 0 && staleAts.length * 2 > evaluatedAts.length, newestStale: staleAts.slice().sort().at(-1) };
 }
 
@@ -144,7 +145,11 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
   /** After a server-offered row action (the PAN config sync) has finished: reload the summary. */
   onChanged?: () => void;
 }) {
-  const [filter, setFilter] = useState<Status | null>(null);
+  // `?readiness=NOT_READY` (the Overview's "needs attention" line) opens the list on that status.
+  const [filter, setFilter] = useState<Status | null>(() => {
+    const wanted = urlParam("readiness");
+    return wanted === "READY" || wanted === "NOT_READY" || wanted === "UNKNOWN" || wanted === "UNSUPPORTED" ? wanted : null;
+  });
   const [countBy, setCountBy] = useState<"clusters" | "records">("clusters");
   const [search, setSearch] = useState("");
   const [vendorFilter, setVendorFilter] = useState("");
@@ -254,7 +259,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
         <TableCell><Presented label={primaryReasonWord(row)} raw={primaryReason(row)} /></TableCell>
         <TableCell>{at ? <>
           <Box component="time" dateTime={at} title={`${formatStamp(at)} · ${at}`}>{relativeAge(at, now)}</Box>
-          {(evaluationAgeMs(at, now) ?? 0) > READINESS_STALE_AFTER_MS && <Tooltip title="Evaluated more than 24 h ago; the status may no longer hold">
+          {isPastFresh(at, now) && <Tooltip title="Evaluated more than 24 h ago; the status may no longer hold">
             <Chip size="small" label="Stale" data-stale-evaluation sx={{ ml: 0.75, height: 20, fontSize: 11, bgcolor: m3.warningContainer, color: m3.onWarningContainer }} />
           </Tooltip>}
         </> : "Not evaluated"}</TableCell>

@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -30,13 +31,20 @@ class FailoverScheduleServiceTest {
     private static final String DEV_ACTIVE = "dev-cp-1";
     private static final String DEV_STANDBY = "dev-cp-2";
 
+    /**
+     * One frozen instant drives the evidence timestamps and the clock-health check, so neither host
+     * wall-clock/monotonic drift nor scheduling delay under contention can flip the freshness gates.
+     */
+    private static final Instant T0 = Instant.parse("2030-01-01T00:00:00Z");
+    private static final Clock FIXED = Clock.fixed(T0, java.time.ZoneOffset.UTC);
+
     private static final byte[] TEST_MASTER_SECRET = "test-master-secret-at-least-32-bytes-long".getBytes();
 
     @BeforeEach
     void setUp() {
         preflightService = new StubPreflightService();
         scheduleLedger = new FailoverScheduleLedger();
-        FailoverBookingAdmissionControl admissionControl = new FailoverBookingAdmissionControl();
+        FailoverBookingAdmissionControl admissionControl = new FailoverBookingAdmissionControl(FIXED);
         FailoverAuthorizationService authzService = new FailoverAuthorizationService(preflightService);
 
         pilotAllowlist = new FailoverPilotAllowlist();
@@ -51,14 +59,14 @@ class FailoverScheduleServiceTest {
 
         scheduleService = new FailoverScheduleService(
             preflightService, authzService, executionService, scheduleLedger, admissionControl,
-            keyManagementService, null
+            keyManagementService, null, new FailoverDriftEngine(), new ClockHealthCheck(FIXED, () -> 0L)
         );
     }
 
     @Test
     @DisplayName("Scheduling enforces 4-eyes dual control, reason length, and lead time caps")
     void schedulingValidationsTest() {
-        Instant now = Instant.now();
+        Instant now = T0;
         Instant windowStart = now.plus(Duration.ofHours(2));
         Instant windowEnd = windowStart.plus(Duration.ofHours(1));
 
@@ -119,7 +127,7 @@ class FailoverScheduleServiceTest {
     @Test
     @DisplayName("Cancellation transitions schedule to CANCELLED and writes to hash-chained ledger")
     void cancelScheduleTest() {
-        Instant windowStart = Instant.now().plus(Duration.ofHours(2));
+        Instant windowStart = T0.plus(Duration.ofHours(2));
         Instant windowEnd = windowStart.plus(Duration.ofHours(1));
 
         FailoverScheduleRecord record = scheduleService.scheduleMaintenanceWindow(new FailoverScheduleService.ScheduleWindowRequest(
@@ -151,15 +159,15 @@ class FailoverScheduleServiceTest {
         var original = preflightService.snapshot;
         preflightService.snapshot = new ClusterEvidenceSnapshot(original.snapshotId(), original.clusterId(),
             original.maskedClusterName(), original.vendor(), original.haMode(), null,
-            original.memberA(), original.memberB(), Instant.now().minusSeconds(301));
-        Instant start = Instant.now().plusSeconds(3600);
+            original.memberA(), original.memberB(), T0.minusSeconds(301));
+        Instant start = T0.plusSeconds(3600);
         var request = new FailoverScheduleService.ScheduleWindowRequest(CLUSTER_REF,
             FailoverActionKind.CONTROLLED_FAILOVER, start, start.plusSeconds(3600), 15,
             "synthetic-requester", "synthetic-approver", "Synthetic maintenance", "nonce-fresh");
         assertThrows(IllegalStateException.class, () -> scheduleService.scheduleMaintenanceWindow(request));
         preflightService.snapshot = new ClusterEvidenceSnapshot(original.snapshotId(), "other-cluster",
             original.maskedClusterName(), original.vendor(), original.haMode(), null,
-            original.memberA(), original.memberB(), Instant.now());
+            original.memberA(), original.memberB(), T0);
         assertThrows(IllegalStateException.class, () -> scheduleService.scheduleMaintenanceWindow(request));
     }
 
@@ -170,7 +178,7 @@ class FailoverScheduleServiceTest {
 
         public StubPreflightService() {
             super(null, null, null);
-            Instant now = Instant.now();
+            Instant now = T0;
             ClusterMemberEvidence active = new ClusterMemberEvidence(
                 DEV_ACTIVE, "FW-TANGO-01", "ACTIVE", "STANDBY", "ClusterXL",
                 "SYNCHRONIZED", 0L, true, 0, true, List.of(),

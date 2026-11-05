@@ -373,3 +373,14 @@ it("says in the chip tooltip whether clusters or readiness records are counted",
   fireEvent.mouseOver(screen.getByRole("button", { name: "Ready: 1 readiness records" }));
   expect(await screen.findByRole("tooltip")).toHaveTextContent("each VSX chassis and each of its Virtual Systems count separately");
 });
+
+it("opens on the status named by ?readiness= (the Overview's needs-attention line, UI review 2026-11-05 C1)", () => {
+  window.history.replaceState(null, "", "/?screen=operations&readiness=NOT_READY");
+  try {
+    setup();
+    expect(within(table()).queryByRole("row", { name: "CLS-ALPHA-01" })).toBeNull();
+    expect(row("CLS-BRAVO-02")).toBeInTheDocument();
+  } finally {
+    window.history.replaceState(null, "", "/");
+  }
+});

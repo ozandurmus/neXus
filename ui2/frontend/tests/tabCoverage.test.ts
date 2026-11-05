@@ -38,10 +38,12 @@ it("covers each screen/tab-list/label pair in the actual navigation definitions"
         }
       }
       if (path.endsWith("/AdministrationScreen.tsx") && ts.isObjectLiteralExpression(node)) {
+        // Administration's pages (UI review 2026-11-05, C4): each page object names the navigation list it sits in (`nav`)
+        // and its own tab label; its sections are headings inside the page, not tabs.
         const props = node.properties.filter(ts.isPropertyAssignment);
-        const tabs = props.find(p => p.name.getText(file) === "tabs");
+        const nav = props.find(p => p.name.getText(file) === "nav");
         const name = props.find(p => p.name.getText(file) === "label");
-        if (tabs && name) add(labels(name.initializer)[0], panelLabels(tabs.initializer));
+        if (nav && name && props.some(p => p.name.getText(file) === "sections")) add(labels(nav.initializer)[0], labels(name.initializer));
       }
       ts.forEachChild(node, walk);
     };

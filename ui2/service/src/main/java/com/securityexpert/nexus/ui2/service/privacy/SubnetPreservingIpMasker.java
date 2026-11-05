@@ -105,6 +105,25 @@ public class SubnetPreservingIpMasker {
         return computeMaskedIp(cidr.trim(), false);
     }
 
+    /**
+     * The raw values already handed out as exactly this pseudonym, read back from the cache; reading it changes nothing.
+     * Path analysis (security review 2026-11-05 M-4) uses it to find every raw host a masked response rendered as a value
+     * aiview submits, so two of them are refused as ambiguous instead of one being picked. Never logged or returned to a
+     * caller outside the service.
+     */
+    public java.util.List<String> handedOutAs(String pseudonym) {
+        if (pseudonym == null || pseudonym.isBlank()) {
+            return java.util.List.of();
+        }
+        java.util.List<String> raw = new java.util.ArrayList<>();
+        cache.forEach((value, masked) -> {
+            if (pseudonym.equals(masked)) {
+                raw.add(value);
+            }
+        });
+        return raw;
+    }
+
     /** The subnets registered so far ({@code a.b.c.d/len}), a copy; reading it changes nothing. */
     public java.util.List<String> registeredSubnets() {
         return java.util.List.copyOf(registeredSubnets.keySet());

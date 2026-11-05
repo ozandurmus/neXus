@@ -287,4 +287,108 @@ class JobLogQueryServiceTest {
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
                 () -> JobLogQueryService.orderByOf("", "asc"));
     }
+
+    private static JobQuery masked(Optional<String> text, Optional<String> sort) {
+        return new JobQuery(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                text, 1, 50, sort, Optional.empty(), true);
+    }
+
+    @Test
+    void theMaskedSearchMatchesTheOpaqueIdsOnlyNeverAHostnameOrReason() {
+        // Security review 2026-11-05 M-2: q on d.observed_hostname (or on a reason text that carries raw names and
+        // addresses) answers "does a real name contain X" for aiview, which is shown pseudonyms only.
+        Where where = JobLogQueryService.whereOf(masked(Optional.of("Edge_1"), Optional.empty()));
+
+        assertEquals(" where (lower(j.job_id) like ? or lower(j.target_device_id) like ?)", where.sql());
+        assertEquals(List.of("%edge\\_1%", "%edge\\_1%"), where.bindings());
+        assertTrue(!where.sql().contains("observed_hostname") && !where.sql().contains("terminal_reason"), where.sql());
+        // The unmasked search is unchanged.
+        Where full = JobLogQueryService.whereOf(new JobQuery(Optional.empty(), Optional.empty(), Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.of("edge"), 1, 50));
+        assertTrue(full.sql().contains("d.observed_hostname") && full.sql().contains("j.terminal_reason"), full.sql());
+    }
+
+    @Test
+    void theMaskedViewCannotSortByTargetEveryOtherSortStays() {
+        for (String sort : List.of("device", "device_name")) {
+            var refused = org.junit.jupiter.api.Assertions.assertThrows(JobLogQueryService.MaskedSortRefused.class,
+                    () -> masked(Optional.empty(), Optional.of(sort)));
+            assertTrue(refused.getMessage().startsWith("Sorting by target is not available in the masked (aiview) view"),
+                    refused.getMessage());
+            org.junit.jupiter.api.Assertions.assertThrows(JobLogQueryService.MaskedSortRefused.class,
+                    () -> JobLogQueryService.orderByOf(sort, "desc", true));
+            // Not masked: allowed, as before.
+            assertEquals(" order by lower(nullif(d.observed_hostname, '')) asc nulls last, j.job_id asc",
+                    JobLogQueryService.orderByOf(sort, "asc", false));
+        }
+        for (String sort : JobLogQueryService.SORT_COLUMNS.keySet()) {
+            if (!JobLogQueryService.RAW_NAME_SORTS.contains(sort)) {
+                assertEquals(JobLogQueryService.orderByOf(sort, "asc", false), JobLogQueryService.orderByOf(sort, "asc", true), sort);
+            }
+        }
+        // Every sort expression that reads a name is in the refused set: only d.observed_hostname is a raw name here.
+        JobLogQueryService.SORT_COLUMNS.forEach((key, expression) -> assertEquals(expression.contains("observed_hostname"),
+                JobLogQueryService.RAW_NAME_SORTS.contains(key), key));
+        // An unknown sort is still an unknown sort for the masked view, not the masked-view message.
+        var unknown = org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> masked(Optional.empty(), Optional.of("nope")));
+        assertTrue(!(unknown instanceof JobLogQueryService.MaskedSortRefused));
+    }
+
+    @Test
+    void thePageIsChosenBeforeAnyTargetJoinRuns() {
+        // Security review 2026-11-05 M-5: the five target laterals sat beside the sort, so every non-indexed sort and the
+        // export evaluated them for every filtered job before the limit. The inner query now picks the page from
+        // jobs/devices alone; the outer query resolves the target labels for those job ids only.
+        JobQuery query = new JobQuery(Optional.of("failed"), Optional.empty(), Optional.empty(), Optional.empty(),
+                Optional.empty(), Optional.of("x"), 2, 25, Optional.of("result"), Optional.of("desc"));
+        Where where = JobLogQueryService.whereOf(query);
+        String orderBy = JobLogQueryService.orderByOf(query);
+        String sql = JobLogQueryService.pagedSelect(where, orderBy, " limit ? offset ?");
+
+        int innerStart = sql.indexOf(" from (select j.job_id, row_number() over (");
+        int innerEnd = sql.indexOf(") page_ids");
+        assertTrue(innerStart > 0 && innerEnd > innerStart, sql);
+        String inner = sql.substring(innerStart, innerEnd);
+        String outer = sql.substring(innerEnd);
+        assertTrue(!inner.contains("lateral") && !inner.contains("discovery_candidate") && !inner.contains("policy_snapshot")
+                && !inner.contains("system_log_chunk"), "no target resolution before the limit: " + inner);
+        assertTrue(inner.contains(where.sql() + orderBy + " limit ? offset ?"), inner);
+        assertTrue(inner.contains("row_number() over (" + orderBy.strip() + ") as ord"), inner);
+        assertTrue(outer.contains(" join jobs j on j.job_id = page_ids.job_id") && outer.contains("left join lateral"), outer);
+        assertTrue(outer.endsWith(" order by page_ids.ord"), outer);
+        assertEquals(sql.indexOf("?"), sql.indexOf("?", innerStart), "every binding is inside the inner query");
+        assertTrue(sql.lastIndexOf("?") < innerEnd, "every binding is inside the inner query");
+
+        // The inner query may read only j and d: every filter clause and every sort expression must keep to them, or the
+        // page could not be chosen before the joins.
+        java.util.regex.Pattern alias = java.util.regex.Pattern.compile("\\b([a-z_][a-z0-9_]*)\\.[a-z_]");
+        List<String> expressions = new java.util.ArrayList<>(JobLogQueryService.SORT_COLUMNS.values());
+        expressions.add(JobLogQueryService.whereOf(new JobQuery(Optional.of("a,b"), Optional.of("t"), Optional.of("d"),
+                Optional.of(Instant.EPOCH), Optional.of(Instant.EPOCH), Optional.of("x"), 1, 1)).sql());
+        expressions.add(JobLogQueryService.whereOf(masked(Optional.of("x"), Optional.empty())).sql());
+        for (String expression : expressions) {
+            var m = alias.matcher(expression);
+            while (m.find()) {
+                assertTrue(m.group(1).equals("j") || m.group(1).equals("d"), m.group(1) + " in " + expression);
+            }
+        }
+    }
+
+    @Test
+    void thePageSaysWhatTheMaskedViewMaySortAndSearchAndEveryCopyKeepsIt() throws Exception {
+        var event = new JobEvent("job-1", "cp_gateway_backup", "dev-1", "FW-TANGO-04", "COMPLETED", "SUCCESS", null,
+                Instant.parse("2026-11-05T10:00:00Z"), null, null, true);
+        var maskedPage = new JobLogQueryService.JobPage(List.of(event), 1, 50, 1, false, false, JobLogQueryService.SEARCH_SCOPE_IDS);
+        String json = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules().writeValueAsString(maskedPage);
+        assertTrue(json.contains("\"target_sortable\":false") && json.contains("\"search_scope\":\"ids\""), json);
+        var copy = maskedPage.withTranscriptAccess(false).withCancellationAccess(true).withItems(List.of(event));
+        assertEquals(false, copy.targetSortable());
+        assertEquals("ids", copy.searchScope());
+        assertEquals(true, copy.canCancel());
+        // The default page (every unmasked caller) offers both.
+        var plain = new JobLogQueryService.JobPage(List.of(), 1, 50, 0);
+        assertEquals(true, plain.targetSortable());
+        assertEquals("full", plain.searchScope());
+    }
 }

@@ -262,6 +262,11 @@ public final class PolicyHygiene {
      * later rule whose source is disjoint from it is no longer kept UNKNOWN by it. The bound only proves disjointness;
      * an access-role rule still never covers. Snapshots whose access roles carry no networks values (every snapshot
      * mapped before the mapper read them) answer exactly as before.</li>
+     * <li>Palo Alto Panorama targets (PolicyNormalization#targetNarrows): a rule pushed to a subset of the device group's
+     * firewalls (devices, tags, virtual systems, negate) used to be no partial prior at all, and so an earlier unknown
+     * for every later rule of its scope. It is now a partial prior with all the dimensions that resolve, so a later rule
+     * disjoint from it on one of them is no longer kept UNKNOWN by it. A targeted rule still never covers. Snapshots
+     * without such targets, and rules with a target shape nobody parsed, answer exactly as before.</li>
      * </ul>
      * Every other verdict stays the scan's.
      */

@@ -79,7 +79,7 @@ describe("the summary itself", () => {
     expect(screen.getByText(/^3 registered · 2 enrolled\. Choose one on the left to see its interfaces/)).toBeInTheDocument();
     expect(await screen.findByText("Policy installed")).toBeInTheDocument();
     expect(screen.getByText("Software and hardware")).toBeInTheDocument();
-    expect(screen.getByText("Inventory evidence age")).toBeInTheDocument();
+    expect(screen.getByText("Data freshness per device")).toBeInTheDocument();
     // hardware models and software versions are the slices of the per-vendor figures
     expect(screen.getByText("MAJOR VERSION")).toBeInTheDocument();
     expect(screen.getByText("PAN-OS MAJOR")).toBeInTheDocument();
@@ -102,7 +102,7 @@ describe("the summary itself", () => {
   it("is the same component the Overview discloses as Estate details", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("/compliance/controls") ? json({ total_controls: 0, controls: [] }) : json(overview())));
     mount(<OverviewScreen />);
-    fireEvent.click(await screen.findByRole("button", { name: /Estate details: policy installed · hardware models · inventory evidence age/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Estate details: policies installed · hardware models · data freshness per device/ }));
     expect(await screen.findByText("Policy installed")).toBeInTheDocument();
     expect(screen.getByText("Software and hardware")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open Configuration" })).toHaveAttribute("href", "?screen=inventory");

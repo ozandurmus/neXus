@@ -339,6 +339,25 @@ class PrivacyMaskingResponseBodyAdviceTest {
     }
 
     @Test
+    void theMaskedJobLogPageKeepsWhatItTellsTheUiAboutSortAndSearch() {
+        // Security review 2026-11-05 M-2: the masked page says Target is not sortable and search matches ids only; the
+        // advice rebuilt the page from four fields and would have dropped both. Cancellation stays off, as before.
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        JobEvent event = new JobEvent("job-1", "cp_inventory_collect", "148bd45b-e5b4-490b-95c5-54862e2d63d0",
+                "real-gateway-name-7", "COMPLETED", "SUCCESS", null, Instant.now(), null, null);
+        var page = new com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobPage(List.of(event), 1, 50, 1, true,
+                false, com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.SEARCH_SCOPE_IDS);
+
+        var result = (com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobPage)
+                advice.beforeBodyWrite(page, null, null, null, serverRequest, null);
+
+        assertThat(result.targetSortable()).isFalse();
+        assertThat(result.searchScope()).isEqualTo("ids");
+        assertThat(result.canCancel()).isFalse();
+        assertThat(result.items().get(0).deviceName()).isNotEqualTo("real-gateway-name-7");
+    }
+
+    @Test
     void keepsTheStoredLineCountOfAMaskedJobEvent() {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
         JobEvent event = new JobEvent("job-2", "cp_system_log_collect", "148bd45b-e5b4-490b-95c5-54862e2d63d0",

@@ -427,7 +427,9 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
   const members = useMemo(() => orderMembers(unorderedMembers), [unorderedMembers]);
   const [state, setState] = useState<{ cluster: ClusterProjection | null; missing: string[]; error: string | null; loading: boolean; textForbidden: boolean }>({ cluster: null, missing: [], error: null, loading: true, textForbidden: false });
   const [query, setQuery] = useState("");
-  // Review §3: "Differences only" is ON by default when the cluster has differences (set once per load).
+  // Review §3: "Differences only" is ON by default when the cluster has differences (set once per load). UI review
+  // 2026-11-05, B5: "differences" are the counted ones; expected member-specific values neither switch it on nor show
+  // under it, so the view opens on the drift itself and not on a 0-diff section of EXPECTED rows.
   const [diffOnly, setDiffOnly] = useState(false);
   const [open, setOpen] = useState<ReadonlySet<string> | null>(null);
   const [pendingJump, setPendingJump] = useState<string | null>(null);
@@ -473,7 +475,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
   useEffect(() => {
     if (!cluster || defaultedFor.current === cluster) return;
     defaultedFor.current = cluster;
-    setDiffOnly(cluster.diffCount > 0 || cluster.memberDiffCount > 0);
+    setDiffOnly(cluster.diffCount > 0);
   }, [cluster]);
 
   const nameOf = (id: string) => members.find((m) => m.device_id === id)?.hostname ?? id;
@@ -493,7 +495,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
     return allSections
       .map((s) => ({
         ...s,
-        rows: s.rows.filter((r) => (!diffOnly || r.diff || r.memberDiff) && (!q || r.setting.toLowerCase().includes(q) || s.label.toLowerCase().includes(q)
+        rows: s.rows.filter((r) => (!diffOnly || r.diff) && (!q || r.setting.toLowerCase().includes(q) || s.label.toLowerCase().includes(q)
           || Object.values(r.values).some((v) => v.toLowerCase().includes(q)))),
       }))
       .filter((s) => s.rows.length > 0);

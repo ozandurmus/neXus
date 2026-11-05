@@ -55,6 +55,10 @@ describe("member rows", () => {
 
   it("keeps a cluster with virtual systems as it was: its virtual systems, no member rows", () => {
     mount(<DeviceList devices={devices} {...props} />);
+    // UI review 2026-11-05, C5: collapsed by default, the count on the row
+    expect(screen.queryByText("VS-SYNTH-01")).toBeNull();
+    expect(within(clusterRow("CLS-VSX-01")).getByText("2 VS")).toBeInTheDocument();
+    fireEvent.click(within(clusterRow("CLS-VSX-01")).getByTitle("Expand virtual systems"));
     expect(screen.getByText("VS-SYNTH-01")).toBeInTheDocument();
     expect(screen.queryByText("FW-VSX-01-M1")).toBeNull();
     expect(within(clusterRow("CLS-VSX-01")).getByTitle("Collapse virtual systems")).toBeInTheDocument();

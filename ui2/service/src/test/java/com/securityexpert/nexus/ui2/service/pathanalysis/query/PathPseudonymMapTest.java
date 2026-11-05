@@ -123,6 +123,11 @@ class PathPseudonymMapTest {
             }
 
             @Override
+            public List<String> handedOutAs(String pseudonym) {
+                return List.of();
+            }
+
+            @Override
             public Optional<String> peekInterface(String rawInterfaceName) {
                 return Optional.of("OBJ-SAME-01"); // every interface carries the same label
             }
@@ -132,6 +137,84 @@ class PathPseudonymMapTest {
         assertEquals(new PathPseudonymMap.Refused(PathPseudonymMap.AMBIGUOUS_PSEUDONYM),
                 map.resolveInterface(tango().nodeId(), "OBJ-SAME-01"));
         // Never "last write wins" (the TopologyNamePseudonymizer.resolveClusterName behaviour D-3 rules out).
+    }
+
+    /**
+     * Security review 2026-11-05 M-4: the topology showed exactly one raw host for a masked value, so step 1 decided and
+     * the cross-host check never ran. A second raw host that aiview can hold bare as the same value -- one a masked
+     * response handed out (a policy object, an IP search, a reason text) or a route next hop of the snapshot -- must make
+     * the value ambiguous, not resolve silently to the shown host and compute a path for what may be the wrong one
+     * (D-3: two raw values, refused).
+     */
+    @Test
+    void aShownHostIsAmbiguousWhenAnotherRawHostAiviewCanHoldBareRendersTheSameValue() {
+        // 198.51.100.1/26 is shown as 245.1.1.1/26. 203.0.113.65 was handed out bare as the same 245.1.1.1 -- a
+        // collision of the masked network bits, as a /28 attachment's four kept host bits make likely.
+        var handedOut = PathPseudonymMap.build(chain, collidingBare("203.0.113.65", null));
+        assertEquals(new PathPseudonymMap.Refused(PathPseudonymMap.AMBIGUOUS_PSEUDONYM), handedOut.resolveAddress("245.1.1.1"));
+        // 198.51.100.130 is a route next hop of the snapshot whose bare form is 245.1.1.1 now.
+        var nextHop = PathPseudonymMap.build(chain, collidingBare(null, "198.51.100.130"));
+        assertEquals(new PathPseudonymMap.Refused(PathPseudonymMap.AMBIGUOUS_PSEUDONYM), nextHop.resolveAddress("245.1.1.1"));
+
+        // Control: no competitor, and the shown host still resolves (step 1 still decides).
+        assertEquals(new PathPseudonymMap.Resolved("198.51.100.1"),
+                PathPseudonymMap.build(chain, collidingBare(null, null)).resolveAddress("245.1.1.1"));
+        // A host no response rendered (neither handed out nor a next hop) whose bare form would collide is not a
+        // competitor: aiview cannot have meant a host it never saw, and counting such hosts under a registered summary
+        // brought back the 2026-11-04 false refusals (PathPseudonymOverlapTest).
+        assertEquals(new PathPseudonymMap.Resolved("198.51.100.1"),
+                PathPseudonymMap.build(chain, collidingBare(null, "203.0.113.65")).resolveAddress("245.1.1.1"));
+    }
+
+    @Test
+    void theMaskerReadsBackWhatItHandedOutWithoutChangingIt() {
+        String masked = ips.mask("198.51.100.20");
+        List<String> registeredBefore = ips.registeredSubnets();
+        assertEquals(List.of("198.51.100.20"), ips.handedOutAs(masked));
+        assertEquals(List.of(), ips.handedOutAs("250.1.2.3"));
+        assertEquals(List.of(), ips.handedOutAs(null));
+        assertEquals(registeredBefore, ips.registeredSubnets());
+        assertEquals(masked, ips.peek("198.51.100.20"));
+    }
+
+    /**
+     * A masker over the chain estate where 198.51.100.0/26 and 203.0.113.64/26 share the masked network 245.1.1.0/26 and
+     * 198.51.100.1/26 renders as 245.1.1.1/26. {@code handedOutTwin} (if not null) was handed out bare as 245.1.1.1;
+     * {@code peekTwin} (if not null) renders bare as 245.1.1.1 now without having been handed out.
+     */
+    private static PathPseudonymMap.Masking collidingBare(String handedOutTwin, String peekTwin) {
+        return new PathPseudonymMap.Masking() {
+            @Override
+            public String peek(String host) {
+                return host.equals("198.51.100.1") || host.equals(handedOutTwin) || host.equals(peekTwin)
+                        ? "245.1.1.1" : "[REDACTED_IP]";
+            }
+
+            @Override
+            public String maskNetwork(String cidr) {
+                return cidr.equals("198.51.100.0/26") || cidr.equals("203.0.113.64/26") ? "245.1.1.0/26" : "[REDACTED_IP]";
+            }
+
+            @Override
+            public String maskPrefixed(String hostWithLength) {
+                return hostWithLength.equals("198.51.100.1/26") ? "245.1.1.1/26" : "[REDACTED_IP]";
+            }
+
+            @Override
+            public List<String> registeredSubnets() {
+                return List.of();
+            }
+
+            @Override
+            public List<String> handedOutAs(String pseudonym) {
+                return handedOutTwin != null && pseudonym.equals("245.1.1.1") ? List.of(handedOutTwin) : List.of();
+            }
+
+            @Override
+            public Optional<String> peekInterface(String rawInterfaceName) {
+                return Optional.empty();
+            }
+        };
     }
 
     @Test

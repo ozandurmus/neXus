@@ -10,12 +10,15 @@ afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState(null, "", "
 
 describe("headline lines (review 4.3): number · noun · denominator · age, UNKNOWN when absent", () => {
   it("Compliance", () => {
-    expect(complianceHeadline({ evaluated_firewalls: 118, total_firewalls: 123, critical_deficiencies: 164, data_gaps: 496, control_checks: 2491 }, 0, "loaded"))
-      .toBe("2,491 checks · 118 of 123 firewalls · 164 critical failing · 496 data gaps · re-check time not recorded");
-    // Without the service's own total the checks are summed from the controls the screen read.
-    expect(complianceHeadline({ evaluated_firewalls: 2, total_firewalls: 3, critical_deficiencies: 0, data_gaps: 0 }, 186, "loaded")).toMatch(/^186 checks · 2 of 3 firewalls · 0 critical failing · 0 data gaps/);
+    // B4 (UI review 2026-11-05): the pass share of evidenced checks and the no-evidence share; unevidenced never counts as failed.
+    expect(complianceHeadline({ evaluated_firewalls: 118, total_firewalls: 123, critical_deficiencies: 164, data_gaps: 496, control_checks: 2491,
+      observed_compliance_pct: 37.5, evidence_coverage_pct: 80.1 }, 0, "loaded"))
+      .toBe("37.5% of evidenced controls pass, 19.9% have no evidence · 2,491 checks · 118 of 123 firewalls · 164 critical failing · re-check time not recorded");
+    // Without the service's own total the checks are summed from the controls the screen read; absent shares say UNKNOWN.
+    expect(complianceHeadline({ evaluated_firewalls: 2, total_firewalls: 3, critical_deficiencies: 0, data_gaps: 0 }, 186, "loaded"))
+      .toBe("UNKNOWN of evidenced controls pass, UNKNOWN have no evidence · 186 checks · 2 of 3 firewalls · 0 critical failing · re-check time not recorded");
     expect(complianceHeadline({ evaluated_firewalls: 0, total_firewalls: 3, critical_deficiencies: 0, data_gaps: 0 }, 0, "loaded")).toBe("No framework assigned · nothing assessed yet");
-    expect(complianceHeadline(null, 0, "failed")).toBe("checks UNKNOWN · firewalls UNKNOWN · critical failing UNKNOWN · data gaps UNKNOWN");
+    expect(complianceHeadline(null, 0, "failed")).toBe("UNKNOWN of evidenced controls pass, UNKNOWN have no evidence · checks UNKNOWN · firewalls UNKNOWN · critical failing UNKNOWN");
     expect(complianceHeadline(null, 0, "loading")).toBe("Reading the compliance evaluation…");
   });
 
@@ -42,9 +45,9 @@ describe("headline lines (review 4.3): number · noun · denominator · age, UNK
     expect(policyHeadline({ catalog: [], sources: 0, loading: false, now })).toBe("0 containers · 0 sources · 0 rules · collected UNKNOWN");
   });
 
-  it("keeps the seven Policy tabs, grouped Browse · Judge · Trace · Ask", () => {
-    expect(POLICY_TAB_GROUPS.map((g) => g.group)).toEqual(["Browse", "Judge", "Trace", "Ask"]);
-    expect(POLICY_TAB_GROUPS.flatMap((g) => g.tabs)).toEqual(["Rules", "Objects", "Installation", "Hygiene", "Changes", "Lookup", "Offline analysis"]);
+  it("has four Policy tabs, grouped Browse · Judge · Trace (UI review 2026-11-05, C2)", () => {
+    expect(POLICY_TAB_GROUPS.map((g) => g.group)).toEqual(["Browse", "Judge", "Trace"]);
+    expect(POLICY_TAB_GROUPS.flatMap((g) => g.tabs)).toEqual(["Rules & Containers", "Objects", "Hygiene", "Changes"]);
   });
 });
 
@@ -73,7 +76,7 @@ describe("Compliance control drawer is addressable (roadmap 3.6)", () => {
     expect(await screen.findByRole("button", { name: "Close control detail" })).toBeInTheDocument();
     expect(await screen.findByText("Too low")).toBeInTheDocument();
     expect(document.querySelector(".MuiDrawer-paper")?.textContent).toContain("Control c2");
-    expect(screen.getByText("2,448 checks · 102 of 105 firewalls · 172 critical failing · 428 data gaps · re-check time not recorded")).toBeInTheDocument();
+    expect(screen.getByText("34.7% of evidenced controls pass, 17.5% have no evidence · 2,448 checks · 102 of 105 firewalls · 172 critical failing · re-check time not recorded")).toBeInTheDocument();
   });
 
   it("writes ?control= when a row opens, removes it on close, and closes on the browser's Back", async () => {

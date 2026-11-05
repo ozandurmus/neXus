@@ -3,9 +3,11 @@ package com.securityexpert.nexus.ui2.jobs.failover.checks;
 import com.securityexpert.nexus.ui2.jobs.failover.model.*;
 import com.securityexpert.nexus.ui2.jobs.failover.spi.PreflightCheck;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.function.LongSupplier;
 
 /**
  * Pre-flight Check #13: Host & Evidence Clock Health Verification.
@@ -21,6 +23,35 @@ public class ClockHealthCheck implements PreflightCheck {
 
     private static final long PROCESS_START_NANO = System.nanoTime();
     private static final Instant PROCESS_START_WALL = Instant.now();
+
+    private final Clock wallClock;
+    private final LongSupplier nanoSource;
+    private final long startNano;
+    private final Instant startWall;
+
+    /** Production form: the JVM-wide process-start anchors and the system clock. */
+    public ClockHealthCheck() {
+        this.wallClock = Clock.systemUTC();
+        this.nanoSource = System::nanoTime;
+        this.startNano = PROCESS_START_NANO;
+        this.startWall = PROCESS_START_WALL;
+    }
+
+    /**
+     * Deterministic form for tests: wall and monotonic sources are injected and the anchors are taken
+     * from them at construction, so the drift/staleness arithmetic is exercised without reading the host clock.
+     */
+    public ClockHealthCheck(Clock wallClock, LongSupplier nanoSource) {
+        this.wallClock = Objects.requireNonNull(wallClock, "wallClock must not be null");
+        this.nanoSource = Objects.requireNonNull(nanoSource, "nanoSource must not be null");
+        this.startNano = nanoSource.getAsLong();
+        this.startWall = wallClock.instant();
+    }
+
+    /** The wall-clock instant this check evaluates against. */
+    public Instant now() {
+        return wallClock.instant();
+    }
 
     @Override
     public String id() {
@@ -52,18 +83,18 @@ public class ClockHealthCheck implements PreflightCheck {
         Objects.requireNonNull(snapshot, "snapshot must not be null");
 
         // 1. Monotonic Cross-Check within host process
-        long elapsedNanos = System.nanoTime() - PROCESS_START_NANO;
+        long elapsedNanos = nanoSource.getAsLong() - startNano;
         long elapsedMonotonicMillis = elapsedNanos / 1_000_000L;
 
-        Instant currentWall = Instant.now();
-        Duration wallElapsed = Duration.between(PROCESS_START_WALL, currentWall);
+        Instant currentWall = wallClock.instant();
+        Duration wallElapsed = Duration.between(startWall, currentWall);
         if (wallElapsed.isNegative()) {
             return CheckResult.fail(
                 CHECK_ID,
                 name(),
                 category(),
                 defaultPolicy(),
-                "Host wall-clock stepped backward relative to process start (" + currentWall + " < " + PROCESS_START_WALL + ")",
+                "Host wall-clock stepped backward relative to process start (" + currentWall + " < " + startWall + ")",
                 "ERR_CLOCK_BACKWARD_STEP"
             );
         }

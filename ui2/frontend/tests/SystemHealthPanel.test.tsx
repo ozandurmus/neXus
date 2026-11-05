@@ -2,7 +2,7 @@ import { act, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { COMPUTING_POLL_MS, MAX_COMPUTING_POLLS, SystemHealthPanel, logsHref, reasonWords, sparklineWords } from "../src/screens/SystemHealthPanel";
+import { COMPUTING_POLL_MS, MAX_COMPUTING_POLLS, SLOW_COMPUTING_POLL_MS, SystemHealthPanel, logsHref, reasonWords, sparklineWords } from "../src/screens/SystemHealthPanel";
 import type { SystemHealth, SystemHealthDevice } from "../src/auth/adminApi";
 
 // Synthetic data only: pseudonym device names, opaque ids, invented counters.
@@ -201,6 +201,45 @@ describe("SystemHealthPanel", () => {
     render(withTheme(<SystemHealthPanel now={NOW} />));
     expect(await screen.findByText("System health computation failed")).toBeInTheDocument();
     expect(screen.getAllByText(/COMPUTATION_FAILED: IllegalStateException/).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("past the bounded wait it says 'still computing' and keeps a slower poll unless the server reports scheduling off", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    for (const scheduling of [{ scheduling_enabled: true }, {}]) {
+      let computing = true;
+      const calls = stub(() => ({ status: 200, body: computing
+        ? body({ computation: { state: "COMPUTING", computed_at: null, duration_ms: null, snapshot_ttl_seconds: 600, store_available: true, ...scheduling },
+                 kpis: { monitored: null, crash_alerts: null, cpu_over_threshold: null, collection_not_ok: null }, devices: [] })
+        : body() }));
+      const { unmount } = render(withTheme(<SystemHealthPanel now={NOW} />));
+      expect(await screen.findByText("First computation running")).toBeInTheDocument();
+      for (let i = 0; i < MAX_COMPUTING_POLLS; i++) {
+        await act(async () => { await vi.advanceTimersByTimeAsync(COMPUTING_POLL_MS + 50); });
+      }
+      expect(await screen.findByText("Still computing")).toBeInTheDocument();
+      expect(screen.queryByText(/scheduled computation is off/i)).toBeNull();
+      expect(screen.queryByText("First computation running")).toBeNull();
+      const countAfterBoundedWait = calls.length;
+      // No fast poll any more, but the slower one goes on.
+      await act(async () => { await vi.advanceTimersByTimeAsync(COMPUTING_POLL_MS + 50); });
+      expect(calls.length).toBe(countAfterBoundedWait);
+      computing = false;
+      await act(async () => { await vi.advanceTimersByTimeAsync(SLOW_COMPUTING_POLL_MS); });
+      expect(calls.length).toBeGreaterThan(countAfterBoundedWait);
+      expect(await screen.findByText("FW-TANGO-04")).toBeInTheDocument();
+      expect(screen.queryByText("Still computing")).toBeNull();
+      unmount();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("a read that times out says so without claiming scheduled computation is off", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
+    render(withTheme(<SystemHealthPanel now={NOW} />));
+    await act(async () => { await vi.advanceTimersByTimeAsync(20_050); });
+    expect(await screen.findByText("System health could not be read")).toBeInTheDocument();
+    expect(screen.queryByText(/scheduled computation is off/i)).toBeNull();
   });
 
   it("helpers: the deep link, the reason words and the sparkline words", () => {

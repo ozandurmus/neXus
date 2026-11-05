@@ -23,7 +23,7 @@ export const EXEC = {
 
 export const CONDITION: Record<EstateCondition, { label: string; bg: string; order: number }> = {
   critical: { label: "Critical finding", bg: EXEC.red, order: 0 },
-  ageing: { label: "Evidence ageing", bg: EXEC.amber, order: 1 },
+  ageing: { label: "Data ageing", bg: EXEC.amber, order: 1 },
   partly_assessed: { label: "Partly assessed", bg: EXEC.hatch, order: 2 },
   not_assessed: { label: "Not assessed", bg: EXEC.hatchLight, order: 3 },
   clear: { label: "Clear", bg: EXEC.green, order: 4 },

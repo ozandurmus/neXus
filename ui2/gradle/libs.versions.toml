@@ -20,6 +20,9 @@ jackson = "2.21.7"
 poi = "5.5.1"
 # Packet Analysis store: must equal the DuckDB engine version of the frozen reference (1.5.6).
 duckdb = "1.5.6.0"
+# Reports R1 PDF renderer (REPORTS_R1_CONTRACT.md "Renderers"): one pure-Java jar, no mandatory dependency. The 2.2 line
+# keeps the com.lowagie packages; 3.x adds a mandatory brotli4j dependency that ships native binaries (not allowed).
+openpdf = "2.2.5"
 
 [libraries]
 # Already supplied by the service JDBC starter (Spring Boot 4.0.8: 7.0.2); reused by the worker.
@@ -54,6 +57,7 @@ jsch = { module = "com.jcraft:jsch", version.ref = "jsch" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind" }
 poi-ooxml = { module = "org.apache.poi:poi-ooxml", version.ref = "poi" }
 duckdb-jdbc = { module = "org.duckdb:duckdb_jdbc", version.ref = "duckdb" }
+openpdf = { module = "com.github.librepdf:openpdf", version.ref = "openpdf" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springboot" }

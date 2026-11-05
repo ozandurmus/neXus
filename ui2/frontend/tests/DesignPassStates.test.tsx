@@ -80,7 +80,8 @@ describe("the shared Select a container card", () => {
   const row = (n: number): ContainerSummary => ({ key: `k${n}`, sourceId: "s", sourceName: "MGR-ALPHA-01", vendor: "PAN", containerId: `c${n}`,
     containerName: `DG-ALPHA-0${n}`, policyIds: ["p"], rules: 12 * n, gateways: ["FW-TANGO-04"], collectedAt: "2026-10-18T03:00:00Z" });
 
-  it.each([["Objects", "Select a policy container to see its objects"], ["Installation", "Select a policy container to see where its packages are installed"],
+  // Installation is a column and a section of Rules & Containers now (UI review 2026-11-05, C2), not a prompt of its own.
+  it.each([["Objects", "Select a policy container to see its objects"],
     ["Hygiene", "Select a policy container to see its hygiene findings"]] as const)("%s names what it needs and counts the containers", (tab, title) => {
     const open = vi.fn();
     render(themed(<PolicyContainerPrompt tab={tab} now={new Date("2026-10-18T04:00:00Z")} rows={[row(1), row(2), row(3)]} open={open} />));

@@ -21,8 +21,9 @@ import java.util.UUID;
  *   <li>Backup size anomaly (V180, PO decision 2026-10-30): while a device has an unresolved size anomaly its last
  *       good backup and its newest anomalous copy are kept whatever their age, and its older anomalous copies are
  *       pruned even inside the age window (counted in {@code backupsPruned}).</li>
+ *   <li>A generated report (Reports R1, V190) is pruned once its {@code expires_at} has passed (30 days).</li>
  *   <li>A removal is a {@code removed} row in {@code artefact_retention_ledger}; the {@code backup_artefact} row stays.
- *       {@code expires_at} plays no part.</li>
+ *       {@code expires_at} plays no part for the device classes; it is the report rule.</li>
  * </ul>
  * The days always come from the policy row; this class has no built-in horizon.
  */
@@ -54,8 +55,14 @@ public final class RetentionPruningService {
             int snapshotsPruned,
             int configurationsPruned,
             long bytesReclaimed,
-            List<String> prunedArtefactIds
-    ) {}
+            List<String> prunedArtefactIds,
+            int reportsPruned
+    ) {
+        public PruningSummary(int backupsPruned, int snapshotsPruned, int configurationsPruned, long bytesReclaimed,
+                List<String> prunedArtefactIds) {
+            this(backupsPruned, snapshotsPruned, configurationsPruned, bytesReclaimed, prunedArtefactIds, 0);
+        }
+    }
 
     public interface RetentionStorePort {
         List<ArtefactRecord> findExpiredStandardBackups(int days);
@@ -71,6 +78,11 @@ public final class RetentionPruningService {
 
         /** Configuration archives older than {@code days}; the default (none) keeps stores that predate V164 working. */
         default List<ArtefactRecord> findExpiredConfigurationArchives(int days) {
+            return List.of();
+        }
+
+        /** Reports R1 (V190): report files past their {@code expires_at}; the default (none) keeps older stores working. */
+        default List<ArtefactRecord> findExpiredReports() {
             return List.of();
         }
         void recordTombstone(String ledgerId, String artefactId, String retentionTier);
@@ -200,6 +212,18 @@ public final class RetentionPruningService {
             }
         }
 
-        return new PruningSummary(backupsPruned, snapshotsPruned, configurationsPruned, bytesReclaimed, prunedIds);
+        // 4. Generated reports past their expiry (Reports R1: 30 days). No device rule applies: an expired report goes.
+        int reportsPruned = 0;
+        for (ArtefactRecord rec : storePort.findExpiredReports()) {
+            if (storePort.deleteArtefact(rec)) {
+                bytesReclaimed += rec.ciphertextBytes();
+                storePort.recordTombstone(UUID.randomUUID().toString(), rec.artefactId(), rec.retentionTier());
+                reportsPruned++;
+                prunedIds.add(rec.artefactId());
+            }
+        }
+
+        return new PruningSummary(backupsPruned, snapshotsPruned, configurationsPruned, bytesReclaimed, prunedIds,
+                reportsPruned);
     }
 }

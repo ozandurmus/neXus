@@ -103,14 +103,16 @@ describe("Devices screen after the Fable review", () => {
     expect(screen.getByText("FW-TANGO-02: down")).toBeInTheDocument();
     expect(screen.getByText("192.0.2.21/24")).toHaveAttribute("title", "FW-TANGO-01 link state: up");
 
-    // Cluster members tab: the same role chips, the same order.
-    fireEvent.click(screen.getByRole("tab", { name: "Cluster members" }));
-    const rows = screen.getAllByRole("row").slice(1);
+    // Members & Identity (UI review 2026-11-05, B5): one tab for the former Cluster members and Identity tabs.
+    expect(screen.queryByRole("tab", { name: "Cluster members" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Identity" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Members & Identity" }));
+    // the member table: the same role chips, the same order
+    const rows = within(screen.getByRole("table", { name: "Cluster members" })).getAllByRole("row").slice(1);
     expect(within(rows[0]).getByText("FW-TANGO-01")).toBeInTheDocument();
     expect(within(rows[1]).getByText("ACTIVE")).toHaveAttribute("data-role", "ACTIVE");
 
-    // Identity: the per-member identity table.
-    fireEvent.click(screen.getByRole("tab", { name: "Identity" }));
+    // the per-member identity table, on the same tab
     const table = screen.getByRole("table", { name: "Member identity" });
     const idRows = within(table).getAllByRole("row").slice(1);
     expect(within(idRows[0]).getByText("FW-TANGO-01")).toBeInTheDocument();

@@ -4,10 +4,13 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -59,7 +62,8 @@ public final class JobLogController {
             @RequestParam(name = "page_size", defaultValue = "50") int pageSize,
             @RequestParam(required = false) String sort, @RequestParam(required = false) String order,
             HttpServletRequest request) {
-        Optional<JobQuery> query = parse(state, jobType, deviceId, since, until, q, page, pageSize, sort, order);
+        Optional<JobQuery> query = parse(state, jobType, deviceId, since, until, q, page, pageSize, sort, order,
+                PrivacyMaskingResponseBodyAdvice.isReplayViewer(request));
         if (query.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
@@ -95,7 +99,8 @@ public final class JobLogController {
             @RequestParam(required = false) String since, @RequestParam(required = false) String until,
             @RequestParam(required = false) String q, @RequestParam(required = false) String sort,
             @RequestParam(required = false) String order, HttpServletRequest request) {
-        Optional<JobQuery> query = parse(state, jobType, deviceId, since, until, q, 1, 1, sort, order);
+        Optional<JobQuery> query = parse(state, jobType, deviceId, since, until, q, 1, 1, sort, order,
+                PrivacyMaskingResponseBodyAdvice.isReplayViewer(request));
         if (query.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
@@ -120,8 +125,20 @@ public final class JobLogController {
                 .body(body);
     }
 
+    /**
+     * The masked view asked to sort by target (security review 2026-11-05 M-2): a 400 that says why, so the UI can show
+     * it. The body carries no value from the request.
+     */
+    @ExceptionHandler(JobLogQueryService.MaskedSortRefused.class)
+    public ResponseEntity<Map<String, String>> maskedSortRefused(JobLogQueryService.MaskedSortRefused refusal) {
+        Map<String, String> body = new LinkedHashMap<>();
+        body.put("error", refusal.getMessage());
+        body.put("code", JobLogQueryService.MASKED_SORT_REFUSED);
+        return ResponseEntity.badRequest().body(body);
+    }
+
     private static Optional<JobQuery> parse(String state, String jobType, String deviceId, String since, String until,
-            String q, int page, int pageSize, String sort, String order) {
+            String q, int page, int pageSize, String sort, String order, boolean masked) {
         try {
             Optional<Instant> s = instant(since);
             Optional<Instant> u = instant(until);
@@ -130,7 +147,9 @@ public final class JobLogController {
             }
             return Optional.of(new JobQuery(Optional.ofNullable(state), Optional.ofNullable(jobType),
                     Optional.ofNullable(deviceId), s, u, Optional.ofNullable(q), page, pageSize,
-                    Optional.ofNullable(sort), Optional.ofNullable(order)));
+                    Optional.ofNullable(sort), Optional.ofNullable(order), masked));
+        } catch (JobLogQueryService.MaskedSortRefused refused) {
+            throw refused; // answered with its message by maskedSortRefused, not as a bare 400
         } catch (DateTimeParseException | IllegalArgumentException e) {
             return Optional.empty();
         }

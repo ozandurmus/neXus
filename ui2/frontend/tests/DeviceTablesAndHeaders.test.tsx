@@ -218,7 +218,7 @@ describe("F-7: one suffix rule and one Collect now per device", () => {
     expect(screen.getByRole("button", { name: "Read configuration, all · Role: not permitted" })).toBeDisabled();
   });
 
-  it("keeps one Collect per cluster page: in the header with M1 / M2 pills, the last read age in the Cluster members tab", async () => {
+  it("keeps one Collect per cluster page: in the header with M1 / M2 pills, the last read age in the Members & Identity tab", async () => {
     const members: DeviceSummary[] = ["m1", "m2"].map((id, i) => ({ ...cp, device_id: id, hostname: `FW-SYNTH-0${i + 1}`, ha_role: i ? "STANDBY" : "ACTIVE", cluster_member_ref: "CLS-SYNTH-01",
       inventory_collected_at: "2026-10-18T03:00:00Z" }));
     vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("/clusters/CLS-SYNTH-01/inventory")
@@ -234,10 +234,27 @@ describe("F-7: one suffix rule and one Collect now per device", () => {
     fireEvent.click(m2);
     expect(m2).toHaveAttribute("aria-pressed", "true");
     expect(screen.getAllByRole("button", { name: "Collect" })).toHaveLength(1);
-    fireEvent.click(screen.getByRole("tab", { name: "Cluster members" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Members & Identity" }));
     expect(screen.getAllByRole("button", { name: "Collect" })).toHaveLength(1);
     expect(screen.getByRole("columnheader", { name: "Last read" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Action" })).toBeNull();
+  });
+});
+
+describe("Members & Identity (UI review 2026-11-05, B5)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const members: DeviceSummary[] = ["m1", "m2"].map((id, i) => ({ device_id: id, vendor_hint: "check_point", role: "gateway", enrollment_state: "ENROLLED",
+    hostname: `FW-SYNTH-0${i + 1}`, model: "Quantum", software_version: "R81.20", ha_role: i ? "STANDBY" : "ACTIVE", cluster_member_ref: "CLS-SYNTH-01" }));
+  const stub = () => vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("/clusters/CLS-SYNTH-01/inventory")
+    ? json({ cluster_member_ref: "CLS-SYNTH-01", members, contexts: [{ context: "physical", interfaces: [], routes: [] }], virtual_systems: [] })
+    : json({})));
+
+  it.each(["identity", "Cluster members", "members & identity"])("opens the merged tab for a link that names %s", async (initialTab) => {
+    stub();
+    render(as(adminPlanes, <ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={members} initialTab={initialTab} />));
+    expect(await screen.findByRole("tab", { name: "Members & Identity", selected: true })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Cluster members" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Member identity" })).toBeInTheDocument();
   });
 });
 
@@ -277,7 +294,7 @@ describe("P0-3B: a selected virtual system scopes the pane", () => {
     expect(onSelectVs).toHaveBeenCalledWith(null);
     // F-21: the title is the cluster's name, without the `CLS >` prefix; the badge and tree keep the kind.
     expect(await screen.findByRole("heading", { name: "CLS-SYNTH-01" })).toBeInTheDocument();
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Interfaces", "Routing", "Cluster members", "Configuration", "Logs", "Identity", "Failover"].filter((name) => name !== "Configuration"));
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Interfaces", "Routing", "Members & Identity", "Configuration", "Logs", "Failover"].filter((name) => name !== "Configuration"));
     expect(screen.queryByRole("combobox", { name: "Switch virtual system" })).toBeNull();
   });
 

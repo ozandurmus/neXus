@@ -4,6 +4,9 @@ import { JobLogsPanel, JOB_PILLS, pillCount, pillForState, resultWords } from ".
 import { operationsHeadline, tabFromUrl } from "../src/screens/OperationsScreen";
 import { jobOutcomeWord, outcomeEchoesState } from "../src/shell/presenters";
 
+/** The Failed state opens on the last seven days (UI review 2026-11-05, B6): its page request carries a `since`. */
+const failedWindowRequest = (url: string) => /^\/api\/v2\/jobs\?state=FAILED&since=[^&]+&page=1&page_size=50$/.test(url);
+
 afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState(null, "", "/"); });
 
 const BY_STATE = { COMPLETED: 870, FAILED: 27, EXECUTING: 1, REQUESTED: 2, OUTCOME_UNKNOWN: 3 };
@@ -60,7 +63,7 @@ describe("Jobs state pills (roadmap 2.4)", () => {
     expect(within(pills).getByRole("button", { name: "Queued / Running · 3" })).toBeInTheDocument();
     expect(within(pills).getByRole("button", { name: "Other outcome · 3" })).toBeInTheDocument();
     fireEvent.click(within(pills).getByRole("button", { name: "Failed · 27" }));
-    await waitFor(() => expect(calls.some((c) => c === "/api/v2/jobs?state=FAILED&page=1&page_size=50")).toBe(true));
+    await waitFor(() => expect(calls.some((c) => failedWindowRequest(c))).toBe(true));
     expect(within(pills).getByRole("button", { name: "Failed · 27" })).toHaveAttribute("aria-pressed", "true");
     // The State dropdown still names the same filter: the pills are presets of it, not a second filter.
     expect(screen.getByLabelText("State")).toHaveValue("FAILED");
@@ -81,7 +84,7 @@ describe("Jobs state pills (roadmap 2.4)", () => {
     const { rerender } = render(<JobLogsPanel pillRequest={{ pill: "active", seq: 0 }} />);
     await waitFor(() => expect(calls.some((c) => c.includes("state=REQUESTED%2CCLAIMED%2CEXECUTING"))).toBe(true));
     rerender(<JobLogsPanel pillRequest={{ pill: "failed", seq: 1 }} />);
-    await waitFor(() => expect(calls.some((c) => c === "/api/v2/jobs?state=FAILED&page=1&page_size=50")).toBe(true));
+    await waitFor(() => expect(calls.some((c) => failedWindowRequest(c))).toBe(true));
   });
 });
 
@@ -176,9 +179,11 @@ describe("Operations routes and headline", () => {
     expect(tabFromUrl("queue")).toEqual({ tab: 1, pill: "active" });
     expect(tabFromUrl("history")).toEqual({ tab: 1, pill: "finished" });
     expect(tabFromUrl("jobs")).toEqual({ tab: 1, pill: null });
-    expect(tabFromUrl("diagnostics")).toEqual({ tab: 2, pill: null });
-    expect(tabFromUrl("health")).toEqual({ tab: 3, pill: null });
-    expect(tabFromUrl("changes")).toEqual({ tab: 4, pill: null });
+    // Diagnostics (Tools) and the Change feed (Changes) left Operations; their old slugs land on the first tab here and are
+    // rewritten to the new screens before this reads them (legacyRoutes).
+    expect(tabFromUrl("health")).toEqual({ tab: 2, pill: null });
+    expect(tabFromUrl("diagnostics")).toEqual({ tab: 0, pill: null });
+    expect(tabFromUrl("changes")).toEqual({ tab: 0, pill: null });
     expect(tabFromUrl(null)).toEqual({ tab: 0, pill: null });
   });
 

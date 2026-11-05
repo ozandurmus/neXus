@@ -1,6 +1,7 @@
 import { SshHostKeyPanel } from "./SshHostKeyPanel";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { urlParam } from "../shell/urlParams";
+import { inFreshnessBucket } from "../shell/freshness";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import Drawer from "@mui/material/Drawer";
@@ -79,6 +80,19 @@ function collectionFailure(device: DeviceSummary): string | null {
 
 function hasFailedCollection(device: DeviceSummary): boolean {
   return device.latest_job_state?.toUpperCase() === "FAILED";
+}
+
+/** What "Problems only" keeps (UI review 2026-11-05, C5): the latest job failed, or the device is Degraded or Unreachable. */
+export const PROBLEM_DEFINITION = "Latest job failed, or the device is Degraded or Unreachable; a cluster is kept whole when one of its members is.";
+export function isProblemDevice(device: DeviceSummary): boolean {
+  return hasFailedCollection(device) || device.enrollment_state === "DEGRADED" || device.enrollment_state === "UNREACHABLE";
+}
+
+/** The devices "Problems only" keeps: each problem device, and every member of a cluster that has one. */
+export function problemDeviceIds(devices: readonly DeviceSummary[]): ReadonlySet<string> {
+  const refs = new Set(devices.filter(isProblemDevice).map((d) => d.cluster_member_ref).filter((r): r is string => Boolean(r)));
+  return new Set(devices.filter((d) => isProblemDevice(d) || (d.cluster_member_ref !== null && d.cluster_member_ref !== undefined && refs.has(d.cluster_member_ref)))
+    .map((d) => d.device_id));
 }
 
 // The sidebar's cluster row keeps only what tells the operator whether this cluster is worth a
@@ -272,16 +286,7 @@ export function clusterCounts(devices: readonly DeviceSummary[]): { enrolled: nu
 /** The Overview's inventory evidence age buckets, over the device's newest inventory run. */
 export function inAgeBucket(device: DeviceSummary, bucket: string, now: number = Date.now()): boolean {
   if (device.enrollment_state !== "ENROLLED") return false;
-  const at = device.inventory_collected_at ? new Date(device.inventory_collected_at).getTime() : null;
-  const hours = at === null ? null : (now - at) / 3_600_000;
-  switch (bucket) {
-    case "stale": return hours === null || hours >= 24;
-    case "lt24h": return hours !== null && hours < 24;
-    case "24h_72h": return hours !== null && hours >= 24 && hours <= 72;
-    case "gt72h": return hours !== null && hours > 72;
-    case "never": return hours === null;
-    default: return true;
-  }
+  return inFreshnessBucket(device.inventory_collected_at, bucket, now);
 }
 
 /** The device list's view: flat (default) or nested under each management server (PO, 2026-09-23). Remembered per browser. */
@@ -530,8 +535,9 @@ function FlatDeviceList({
 }) {
   const [openMembers, setOpenMembers] = useState<ReadonlySet<string>>(new Set());
   const listRef = useRef<HTMLDivElement>(null);
-  const [expandedRefs, setExpandedRefs] = useState<ReadonlySet<string>>(new Set());
-  const [collapsedRefs, setCollapsedRefs] = useState<ReadonlySet<string>>(new Set());
+  // UI review 2026-11-05, C5: every cluster's children start collapsed (a count badge on the row says how many); a
+  // cluster opens when it is selected or holds the selected virtual system.
+  const [expandedRefs, setExpandedRefs] = useState<ReadonlySet<string>>(() => new Set(selectedClusterRef ? [selectedClusterRef] : []));
   const [expandedStandaloneRefs, setExpandedStandaloneRefs] = useState<ReadonlySet<string>>(new Set());
 
   const groups = new Map<string, DeviceSummary[]>();
@@ -552,35 +558,29 @@ function FlatDeviceList({
   useEffect(() => {
     if (selectedClusterOfDevice) setOpenMembers((prev) => (prev.has(selectedClusterOfDevice) ? prev : new Set(prev).add(selectedClusterOfDevice)));
   }, [selectedClusterOfDevice]);
-  // The open cluster or virtual system scrolls into view too; the member rows are mounted by then (the effect follows openMembers).
+  // The open cluster or virtual system scrolls into view too; the member rows are mounted by then (the effect follows openMembers),
+  // and so are its virtual systems: the scroll runs again once the selected cluster has opened (its children start collapsed).
+  const selectedOpen = selectedClusterRef ? expandedRefs.has(selectedClusterRef) : false;
   useEffect(() => {
     if (!selectedClusterRef) return;
     const marked = listRef.current?.querySelectorAll('[data-selected="true"]');
     marked?.[marked.length - 1]?.scrollIntoView?.({ block: "nearest" });
-  }, [selectedClusterRef, selectedVs]);
+  }, [selectedClusterRef, selectedVs, selectedOpen]);
   const toggleMembers = (ref: string) => setOpenMembers((prev) => {
     const next = new Set(prev);
     if (next.has(ref)) next.delete(ref); else next.add(ref);
     return next;
   });
 
-  const toggle = (ref: string) => {
-    if (clusterOnly) {
-      setExpandedRefs((prev) => {
-        const next = new Set(prev);
-        if (next.has(ref)) next.delete(ref);
-        else next.add(ref);
-        return next;
-      });
-    } else {
-      setCollapsedRefs((prev) => {
-        const next = new Set(prev);
-        if (next.has(ref)) next.delete(ref);
-        else next.add(ref);
-        return next;
-      });
-    }
-  };
+  useEffect(() => {
+    if (selectedClusterRef) setExpandedRefs((prev) => (prev.has(selectedClusterRef) ? prev : new Set(prev).add(selectedClusterRef)));
+  }, [selectedClusterRef]);
+  const toggle = (ref: string) => setExpandedRefs((prev) => {
+    const next = new Set(prev);
+    if (next.has(ref)) next.delete(ref);
+    else next.add(ref);
+    return next;
+  });
   const toggleStandalone = (id: string) => setExpandedStandaloneRefs((prev) => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id);
@@ -591,7 +591,7 @@ function FlatDeviceList({
   return (
     <Stack spacing={1.25} ref={listRef}>
       {[...groups.entries()].map(([ref, members]) => {
-        const isCollapsed = clusterOnly ? !expandedRefs.has(ref) : collapsedRefs.has(ref);
+        const isCollapsed = !expandedRefs.has(ref);
         const firstMember = members[0];
         const isPaloAlto = firstMember?.vendor_hint === "palo_alto";
         const isSelected = selectedClusterRef === ref;
@@ -668,6 +668,12 @@ function FlatDeviceList({
                       label={clusterHealthLabel(members)}
                       dense
                     />
+                  )}
+                  {hasChevron && (
+                    <span data-testid="tree-child-count">
+                      <StatusChip tone="neutral" dense
+                        label={memberMode ? `${members.length} ${members.length === 1 ? "member" : "members"}` : `${clusterVsList.length} ${isPaloAlto ? "VSYS" : "VS"}`} />
+                    </span>
                   )}
                   {hasChevron && (
                   <Box
@@ -1053,6 +1059,7 @@ export function InventoryScreen() {
   // Form (Fleet summary quick filters): clusters, standalone gateways, management servers, appliances; `?form=` carries it.
   const [scopeFilter, setScopeFilter] = useState<FormFilter>(() => formFromUrl(urlParam("form"), urlParam("scope")));
   const [stateFilter, setStateFilter] = useState<"all" | "draft" | "failed" | "stale">("all");
+  const [problemsOnly, setProblemsOnly] = useState<boolean>(() => urlParam("problems") === "1");
   // Cross-screen links (global search, cluster context strip): preselect a cluster or a device once the list is in.
   const [pendingClusterRef, setPendingClusterRef] = useState<string | null>(() => urlParam("cluster_ref"));
   const [pendingDeviceId, setPendingDeviceId] = useState<string | null>(() => urlParam("device_id"));
@@ -1165,7 +1172,9 @@ export function InventoryScreen() {
     manager: devices?.filter((d) => matchesForm(d, "manager")).length ?? 0,
     appliance: devices?.filter((d) => matchesForm(d, "appliance")).length ?? 0,
   };
+  const problemIds = useMemo(() => problemDeviceIds(devices ?? []), [devices]);
   const filteredDevices = (devices ?? []).filter((device) => {
+    if (problemsOnly && !problemIds.has(device.device_id)) return false;
     if (!matchesForm(device, scopeFilter)) return false;
     if (vendorFilter !== "all" && device.vendor_hint !== vendorFilter) return false;
     if (stateFilter === "draft" && device.enrollment_state !== "DRAFT") return false;
@@ -1311,10 +1320,19 @@ export function InventoryScreen() {
               ]}
             />
             </FilterBar>
-            <Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}
-              title="A device row shows a state chip only when the device is not Live">
-              {devices === null ? "" : `${filteredCountLabel} · ${liveCount} Live`}
-            </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, flexWrap: "wrap" }}>
+              <Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}
+                title="A device row shows a state chip only when the device is not Live">
+                {devices === null ? "" : `${filteredCountLabel} · ${liveCount} Live`}
+              </Typography>
+              {/* UI review 2026-11-05, C5: one click to the devices that need a look. */}
+              {devices !== null && (
+                <Chip size="small" clickable aria-pressed={problemsOnly} onClick={() => setProblemsOnly((v) => !v)} title={PROBLEM_DEFINITION}
+                  label={`Problems only · ${devices.filter(isProblemDevice).length}`}
+                  sx={{ height: 24, fontSize: 12, borderRadius: "8px", border: `1px solid ${problemsOnly ? m3.primary : m3.outlineVar}`,
+                    bgcolor: problemsOnly ? m3.secondaryContainer : m3.scLow, color: problemsOnly ? m3.onSecondaryContainer : m3.onSurface }} />
+              )}
+            </Box>
             {error && (
               <EmptyPanel title="Inventory unavailable" body={error}>
                 <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
@@ -1366,7 +1384,7 @@ export function InventoryScreen() {
         <Box sx={{ px: 3, pb: 2 }}>
           <Typography variant="body2" sx={{ color: m3.primary }}>
             Bulk collect admitted {bulkResult.admitted} of {bulkResult.enrolled_devices} enrolled devices.
-            {bulkResult.refused > 0 && ` (${bulkResult.refused} refused.)`} View Administration &gt; Job Logs for progress.
+            {bulkResult.refused > 0 && ` (${bulkResult.refused} refused.)`} View Operations &gt; Jobs for progress.
           </Typography>
         </Box>
       )}

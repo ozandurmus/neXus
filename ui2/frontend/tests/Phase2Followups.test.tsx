@@ -12,7 +12,7 @@ import { InventoryScreen, formFromUrl, matchesForm } from "../src/screens/Invent
 import { HttpsCertificateCard, hasCertificateRecord } from "../src/screens/HttpsCertificatePanel";
 import { JobLogsPanel, resultWords } from "../src/screens/JobLogsPanel";
 import { OperationsScreen, tabFromUrl } from "../src/screens/OperationsScreen";
-import { AdministrationScreen } from "../src/screens/AdministrationScreen";
+import { rewriteLegacyRoute } from "../src/shell/legacyRoutes";
 import type { DeviceSummary, OverviewView } from "../src/auth/adminApi";
 
 /**
@@ -128,11 +128,12 @@ const diffOverview = (over: Partial<OverviewView["exceptions"]["cluster_diff"]> 
 describe("the cluster header's Members compared pill (item 3)", () => {
   it("words the setting count for a listed cluster, 'differ' for one named without its count, 'no differences' only when every cluster was comparable", () => {
     const listed = clusterCompareFact(diffOverview(), "CLS-APOLLO-01")!;
-    expect(listed).toMatchObject({ label: "Members compared · 7 settings differ", tone: "neutral", href: "?screen=inventory&cluster_ref=CLS-APOLLO-01&tab=configuration" });
+    expect(listed).toMatchObject({ label: "Members compared · 7 settings differ", tone: "warn", href: "?screen=inventory&cluster_ref=CLS-APOLLO-01&tab=configuration" });
     expect(listed.title).toMatch(/^2 sections: DNS · NTP · compared 2026-10-18/);
     expect(clusterCompareFact(diffOverview({ rows: [{ cluster_ref: "CLS-APOLLO-01", diff_section_count: 1, diff_setting_count: 1, diff_sections: ["DNS"], computed_at: "2026-10-18T03:00:00Z" }] }), "CLS-APOLLO-01")!.label).toBe("Members compared · 1 setting differs");
-    expect(clusterCompareFact(diffOverview(), "CLS-ZULU-09")).toMatchObject({ label: "Members compared · differ" });
-    expect(clusterCompareFact(diffOverview(), "CLS-ROMEO-01")).toMatchObject({ label: "Members compared · no differences" });
+    // UI review 2026-11-05, B5: a difference is amber, agreement stays grey
+    expect(clusterCompareFact(diffOverview(), "CLS-ZULU-09")).toMatchObject({ label: "Members compared · differ", tone: "warn" });
+    expect(clusterCompareFact(diffOverview(), "CLS-ROMEO-01")).toMatchObject({ label: "Members compared · no differences", tone: "neutral" });
     // one cluster was not comparable: a cluster the Overview does not name may be that one, so nothing is claimed
     expect(clusterCompareFact(diffOverview({}, 1), "CLS-ROMEO-01")).toBeNull();
     expect(clusterCompareFact(null, "CLS-APOLLO-01")).toBeNull();
@@ -287,7 +288,7 @@ describe("the addressable job detail (item 5)", () => {
   it("lands on Jobs when only ?job= is given, and keeps the tab slug when both are", () => {
     expect(tabFromUrl(null, "job-1")).toEqual({ tab: 1, pill: null });
     expect(tabFromUrl("ha", "job-1")).toEqual({ tab: 0, pill: null });
-    expect(tabFromUrl("diagnostics", "job-1")).toEqual({ tab: 2, pill: null });
+    expect(tabFromUrl("health", "job-1")).toEqual({ tab: 2, pill: null });
     expect(tabFromUrl(null, null)).toEqual({ tab: 0, pill: null });
   });
 
@@ -303,13 +304,15 @@ describe("the addressable job detail (item 5)", () => {
     await waitFor(() => expect(screen.queryByRole("row", { expanded: true })).toBeNull());
   });
 
-  it("Administration › Job Logs: ?job= lands on Job Logs with that job open, from a link naming no tab", async () => {
-    window.history.replaceState(null, "", "/?screen=administration&job=job-logs");
+  it("Administration › Job Logs is Operations › Jobs now (B6): the old address, with or without a tab, lands there with the job open", async () => {
+    expect(rewriteLegacyRoute("?screen=administration&job=job-logs")).toBe("screen=operations&job=job-logs&tab=jobs");
+    expect(rewriteLegacyRoute("?screen=administration&tab=job-logs&job=job-logs")).toBe("screen=operations&tab=jobs&job=job-logs");
+    // The rewritten address is what the Operations screen reads.
+    window.history.replaceState(null, "", "/?screen=operations&job=job-logs&tab=jobs");
     stubJobs();
-    mount(<AdministrationScreen />);
+    mount(<OperationsScreen />);
     const row = await screen.findByRole("row", { expanded: true });
     expect(row).toHaveAttribute("data-job-id", "job-logs");
-    expect(screen.getByText("Same records as Operations › Jobs.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy link to this job" })).toBeInTheDocument();
   });
 });

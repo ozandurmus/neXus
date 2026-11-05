@@ -286,6 +286,10 @@ describe("InventoryScreen device list", () => {
     render(withTheme(<InventoryScreen />));
 
     await waitFor(() => expect(screen.getByText("FW-CKP-EXAMPLEBANKDMZAPP-CLS-AA")).toBeInTheDocument());
+    // UI review 2026-11-05, C5: children start collapsed, with their count on the cluster row
+    expect(screen.queryByText("ExamplebankBetaAA")).toBeNull();
+    expect(screen.getByTestId("tree-child-count")).toHaveTextContent("2 VS");
+    fireEvent.click(screen.getByTitle("Expand virtual systems"));
     expect(screen.getByText("ExamplebankBetaAA")).toBeInTheDocument();
     expect(screen.getByText("ExamplebankPosAppAA")).toBeInTheDocument();
 
@@ -569,6 +573,8 @@ describe("InventoryScreen device list", () => {
     render(withTheme(<InventoryScreen />));
 
     await waitFor(() => expect(screen.getByText("PA-HA-PAIR")).toBeInTheDocument());
+    expect(screen.getByTestId("tree-child-count")).toHaveTextContent("2 VSYS");
+    fireEvent.click(screen.getByTitle("Expand virtual systems"));
     expect(screen.getByText("default (vsys1)")).toBeInTheDocument();
     expect(screen.getByText("VR-DMZ (vsys2)")).toBeInTheDocument();
   });

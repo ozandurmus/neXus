@@ -1566,6 +1566,10 @@ export interface JobPageView {
   readonly page: number;
   readonly page_size: number;
   readonly total: number;
+  /** False for the masked (aiview) view: a sort by target would follow the real names (security review 2026-11-05 M-2). */
+  readonly target_sortable?: boolean;
+  /** "ids" for the masked view: the search matches job id and device id only, never a name or reason text. */
+  readonly search_scope?: "full" | "ids";
 }
 
 export interface JobFacetsView {
@@ -4012,3 +4016,115 @@ export const validatePath = (request: PathQueryRequest, branchId?: string) =>
   call<PathValidation>("/api/v2/path-analysis/validate", "POST", branchId ? { ...request, branch_id: branchId } : request);
 export const getPathValidation = (validationId: string) =>
   call<PathValidation>(`/api/v2/path-analysis/validate/${encodeURIComponent(validationId)}`, "GET");
+
+// -------------------------------------------------------------------------------------------------------------------
+// Reports R1 (docs/design/REPORTS_R1_CONTRACT.md): catalogue, on-screen preview, generated files and history. Every
+// body arrives already projected by the server (MASKED for aiview); the screen only renders it.
+// -------------------------------------------------------------------------------------------------------------------
+
+export type ReportFormat = "PDF" | "XLSX" | "CSV";
+export type ReportProjection = "MASKED" | "RAW";
+
+export interface ReportTemplateCard {
+  readonly template_id: string;
+  readonly title: string;
+  readonly audience: string;
+  readonly question: string;
+  readonly formats: readonly ReportFormat[];
+  readonly framework_parameter: boolean;
+  /** Underlying domain reads this session lacks; non-empty means the report is refused. */
+  readonly missing_reads: readonly string[];
+}
+
+export interface ReportPermissions {
+  readonly masked: boolean;
+  readonly raw_view: boolean;
+}
+
+export interface ReportCatalogue {
+  readonly templates: readonly ReportTemplateCard[];
+  readonly frameworks: readonly string[];
+  readonly permissions: ReportPermissions;
+  readonly retention_days: number;
+}
+
+export interface ReportPlaneAsOf {
+  readonly plane: string;
+  readonly newest: string | null;
+  readonly oldest: string | null;
+  readonly covered: number;
+  readonly total: number;
+  readonly stale: number;
+  readonly unit: string;
+}
+
+export interface ReportCell {
+  readonly text: string;
+  readonly kind: string;
+}
+
+export interface ReportTableView {
+  readonly id: string;
+  readonly title: string;
+  readonly columns: readonly { readonly key: string; readonly label: string }[];
+  readonly rows: readonly (readonly ReportCell[])[];
+  readonly empty_text: string | null;
+}
+
+export interface ReportSectionView {
+  readonly id: string;
+  readonly title: string;
+  readonly data_as_of: readonly ReportPlaneAsOf[];
+  readonly kpis: readonly { readonly label: string; readonly value: string; readonly tone: string }[];
+  readonly tables: readonly ReportTableView[];
+  readonly notes: readonly string[];
+}
+
+export interface ReportDocumentView {
+  readonly template_id: string;
+  readonly title: string;
+  readonly audience: string;
+  readonly question: string;
+  readonly generated_at: string;
+  readonly projection: ReportProjection;
+  readonly parameters: Readonly<Record<string, string>>;
+  readonly data_as_of: readonly ReportPlaneAsOf[];
+  readonly notices: readonly string[];
+  readonly sections: readonly ReportSectionView[];
+}
+
+export interface ReportRunView {
+  readonly run_id: string;
+  readonly template_id: string;
+  readonly title: string;
+  readonly state: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
+  readonly projection: ReportProjection;
+  readonly format: string;
+  readonly parameters: Readonly<Record<string, string>>;
+  readonly data_as_of: { readonly planes?: readonly ReportPlaneAsOf[] };
+  readonly plaintext_bytes: number | null;
+  readonly error_code: string | null;
+  readonly requested_at: string;
+  readonly finished_at: string | null;
+  readonly expires_at: string;
+  readonly downloadable: boolean;
+  readonly mine: boolean;
+}
+
+export interface ReportRequest {
+  readonly template_id: string;
+  readonly from?: string;
+  readonly to?: string;
+  readonly framework?: string;
+  readonly projection: ReportProjection;
+  readonly format?: ReportFormat;
+}
+
+export const getReportCatalogue = () => call<ReportCatalogue>("/api/v2/reports/catalogue", "GET");
+export const previewReport = (request: ReportRequest) => call<ReportDocumentView>("/api/v2/reports/preview", "POST", request);
+export const generateReport = (request: ReportRequest) => call<ReportRunView>("/api/v2/reports/runs", "POST", request);
+export const listReportRuns = () => call<{ readonly runs: readonly ReportRunView[]; readonly permissions: ReportPermissions }>(
+  "/api/v2/reports/runs", "GET");
+export const getReportRun = (runId: string) => call<ReportRunView>(`/api/v2/reports/runs/${encodeURIComponent(runId)}`, "GET");
+/** A plain GET with the session cookie: the server audits the download before the first byte. */
+export const reportDownloadHref = (runId: string) => `/api/v2/reports/runs/${encodeURIComponent(runId)}/download`;

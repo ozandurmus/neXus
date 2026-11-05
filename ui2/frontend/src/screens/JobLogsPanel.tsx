@@ -63,6 +63,11 @@ export function localInputToIso(value: string): string | undefined {
 }
 
 const PAGE_SIZES = [25, 50, 100, 200] as const;
+/** Security review 2026-11-05 M-2: the server refuses both for the masked view; the panel says so instead of failing. */
+export const MASKED_TARGET_SORT_NOTE =
+  "Masked view: Target is not sortable — the order would follow the real names, not the pseudonyms shown.";
+export const MASKED_SEARCH_NOTE =
+  "Masked view: search matches job id and device id only — names and reasons are not searched.";
 
 export { jobTypeLabel } from "../jobs/jobTypeLabel";
 
@@ -92,6 +97,31 @@ export function pillCount(byState: Readonly<Record<string, number>> | null, pill
   const def = JOB_PILLS.find((p) => p.id === pill)!;
   if (def.id === "all") return Object.values(byState).reduce((n, c) => n + c, 0);
   return def.states.split(",").reduce((n, s) => n + (byState[s] ?? 0), 0);
+}
+
+/** The Failed pill opens on the last seven days, not on every failure ever recorded (UI review 2026-11-05, B6; Fable F-7). */
+export const FAILED_DEFAULT_HOURS = 168;
+/** Failed jobs read for the reason summary: the newest of the window, in one page. */
+export const REASON_SAMPLE = 200;
+const FAILED_STATES = JOB_PILLS.find((p) => p.id === "failed")!.states;
+
+export interface FailureReason { readonly key: string; readonly label: string; readonly count: number }
+/**
+ * The most frequent failure reasons among failed jobs, most frequent first, at most `limit`. A reason is the job's recorded
+ * terminal reason with an identifier masked out (so one failure on forty devices is one reason, not forty), worded as the
+ * table words it. A failed job that recorded no reason counts as "No reason recorded", never dropped.
+ */
+export function topFailureReasons(jobs: ReadonlyArray<Pick<JobEventView, "state" | "terminal_reason">>, limit = 5): FailureReason[] {
+  const counts = new Map<string, number>();
+  for (const job of jobs) {
+    if (job.state !== "FAILED") continue;
+    const key = (job.terminal_reason ?? "").trim().replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<id>") || "";
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([key, count]) => ({ key, count, label: key === "" ? "No reason recorded" : readinessReasonLabel(key) }));
 }
 
 /**
@@ -236,7 +266,8 @@ export function JobLogsPanel({
 } = {}) {
   // `?job=<id>` is the addressable job detail (roadmap 3.6): the row is fetched by its id and opened on load.
   const [linkedJob] = useState(() => urlParam("job"));
-  const [page, setPage] = useState<{ items: readonly JobEventView[]; total: number; canCancel: boolean } | null>(null);
+  const [page, setPage] = useState<{ items: readonly JobEventView[]; total: number; canCancel: boolean;
+    targetSortable: boolean; idsOnlySearch: boolean } | null>(null);
   const [devices, setDevices] = useState<Record<string, JobDeviceEntry>>({});
   const [facets, setFacets] = useState<JobFacetsView>({ states: [], job_types: [] });
   const [byState, setByState] = useState<Readonly<Record<string, number>> | null | "failed">(null);
@@ -249,13 +280,30 @@ export function JobLogsPanel({
   const [state, setState] = useState(pillRequest ? JOB_PILLS.find((p) => p.id === pillRequest.pill)!.states : initialState);
   const [jobType, setJobType] = useState(initialJobType);
   const [deviceId, setDeviceId] = useState("");
-  const [sinceLocal, setSinceLocal] = useState(initialSinceHours ? hoursAgoLocal(initialSinceHours) : "");
+  // The Failed pill defaults to the last seven days (B6) unless the address names a window of its own.
+  const startsOnFailed = (pillRequest ? JOB_PILLS.find((p) => p.id === pillRequest.pill)!.states : initialState) === FAILED_STATES && !initialSinceHours;
+  const [sinceLocal, setSinceLocal] = useState(initialSinceHours ? hoursAgoLocal(initialSinceHours) : startsOnFailed ? hoursAgoLocal(FAILED_DEFAULT_HOURS) : "");
+  // True while the window in "From" is the Failed default rather than the viewer's own choice.
+  const [defaultWindow, setDefaultWindow] = useState(startsOnFailed);
   const [untilLocal, setUntilLocal] = useState("");
   const [text, setText] = useState(linkedJob ?? initialText);
   const [pageNumber, setPageNumber] = useState(1);
   const [pageSize, setPageSize] = useState<number>(50);
   const resetToFirstPage = useCallback(() => setPageNumber(1), []);
   const tableSort = useServerTableSort({ onChange: resetToFirstPage });
+
+  /** Selecting the Failed state opens its seven-day window; leaving it takes back a window the default set, never one the viewer typed. */
+  const applyState = (next: string) => {
+    setState(next);
+    resetToFirstPage();
+    if (next === FAILED_STATES && !sinceLocal) {
+      setSinceLocal(hoursAgoLocal(FAILED_DEFAULT_HOURS));
+      setDefaultWindow(true);
+    } else if (next !== FAILED_STATES && defaultWindow) {
+      setSinceLocal("");
+      setDefaultWindow(false);
+    }
+  };
 
   const params: JobQueryParams = {
     state: state || undefined,
@@ -275,7 +323,9 @@ export function JobLogsPanel({
     const current = JSON.parse(paramsKey) as JobQueryParams;
     listJobs(current)
       .then((data) => {
-        setPage({ items: data.items ?? [], total: data.total ?? 0, canCancel: data.can_cancel === true });
+        // What the masked view may sort and search comes from the server, never from a role (AG-J3).
+        setPage({ items: data.items ?? [], total: data.total ?? 0, canCancel: data.can_cancel === true,
+          targetSortable: data.target_sortable !== false, idsOnlySearch: data.search_scope === "ids" });
         setError(null);
       })
       .catch((err: ApiError) => setError(err));
@@ -314,11 +364,25 @@ export function JobLogsPanel({
     return () => clearInterval(interval);
   }, [fetchJobs, autoRefresh]);
 
+  // Top failure reasons (B6): while the Failed state is selected, the newest failed jobs of the same window and filters are
+  // read once per change of filter (not on the live-polling tick) and counted by reason.
+  const reasonKey = state === FAILED_STATES
+    ? JSON.stringify({ job_type: params.job_type, device_id: params.device_id, since: params.since, until: params.until, q: params.q }) : null;
+  const [reasons, setReasons] = useState<{ readonly top: readonly FailureReason[]; readonly read: number; readonly total: number } | "failed" | null>(null);
+  useEffect(() => {
+    if (reasonKey === null) { setReasons(null); return; }
+    let active = true;
+    setReasons(null);
+    listJobs({ ...(JSON.parse(reasonKey) as JobQueryParams), state: FAILED_STATES, page: 1, page_size: REASON_SAMPLE })
+      .then((data) => { if (active) setReasons({ top: topFailureReasons(data.items ?? []), read: (data.items ?? []).length, total: data.total ?? 0 }); })
+      .catch(() => { if (active) setReasons("failed"); });
+    return () => { active = false; };
+  }, [reasonKey]);
+
   // The owner asked for a pill after mount (a KPI card, a route): the filter follows; the first request is the initial state.
   useEffect(() => {
     if (!pillRequest || pillRequest.seq === 0) return;
-    setState(JOB_PILLS.find((p) => p.id === pillRequest.pill)!.states);
-    setPageNumber(1);
+    applyState(JOB_PILLS.find((p) => p.id === pillRequest.pill)!.states);
   }, [pillRequest?.pill, pillRequest?.seq]);
 
   // Back / Forward re-open or close the job detail the URL names.
@@ -396,7 +460,7 @@ export function JobLogsPanel({
           const countText = byState === "failed" ? "UNKNOWN" : count === null ? null : count.toLocaleString("en-US");
           return <Chip key={pill.id} clickable role="button" aria-pressed={selected} data-pill={pill.id}
             label={countText === null ? pill.label : `${pill.label} · ${countText}`}
-            onClick={() => { setState(pill.states); resetToFirstPage(); }}
+            onClick={() => applyState(pill.states)}
             sx={{ borderRadius: "8px", height: 28, fontSize: 13, fontWeight: 500,
               bgcolor: selected ? m3.primary : m3.scHigh, color: selected ? m3.onPrimary : m3.onSurface,
               "&:hover": { bgcolor: selected ? m3.primary : m3.scHighest } }} />;
@@ -409,7 +473,7 @@ export function JobLogsPanel({
           size="small"
           label="State"
           value={state}
-          onChange={(e) => { setState(e.target.value); resetToFirstPage(); }}
+          onChange={(e) => applyState(e.target.value)}
           SelectProps={{ native: true }}
           InputLabelProps={{ shrink: true }}
           sx={{ minWidth: 150 }}
@@ -453,7 +517,7 @@ export function JobLogsPanel({
           type="datetime-local"
           label={`From (${DISPLAY_TZ_LABEL})`}
           value={sinceLocal}
-          onChange={(e) => { setSinceLocal(e.target.value); resetToFirstPage(); }}
+          onChange={(e) => { setSinceLocal(e.target.value); setDefaultWindow(false); resetToFirstPage(); }}
           InputLabelProps={{ shrink: true }}
         />
         <TextField
@@ -467,7 +531,7 @@ export function JobLogsPanel({
         <TextField
           size="small"
           label="Search"
-          placeholder="job id, device id or reason…"
+          placeholder={page.idsOnlySearch ? "job id or device id…" : "job id, device id or reason…"}
           value={text}
           onChange={(e) => { setText(e.target.value); resetToFirstPage(); }}
           InputLabelProps={{ shrink: true }}
@@ -490,6 +554,33 @@ export function JobLogsPanel({
         />
       </Stack>
 
+      {(!page.targetSortable || page.idsOnlySearch) && (
+        <Typography variant="caption" data-masked-note sx={{ color: m3.onSurfaceVar, mt: -1 }}>
+          {[!page.targetSortable ? MASKED_TARGET_SORT_NOTE : null, page.idsOnlySearch ? MASKED_SEARCH_NOTE : null]
+            .filter(Boolean).join(" ")}
+        </Typography>
+      )}
+
+      {state === FAILED_STATES && <Box data-testid="failed-summary" sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+        <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+          {defaultWindow
+            ? <>Failed jobs of the last 7 days (the default window). <Box component="button" type="button" onClick={() => { setSinceLocal(""); setDefaultWindow(false); resetToFirstPage(); }}
+                sx={{ all: "unset", cursor: "pointer", color: m3.primary, fontWeight: 500 }}>Show all time</Box></>
+            : "Failed jobs in the window chosen below."}
+        </Typography>
+        {reasons === "failed"
+          ? <Typography variant="body2" role="status">Top failure reasons: UNKNOWN (the read failed)</Typography>
+          : reasons && reasons.top.length > 0 && <Box component="section" aria-label="Top failure reasons" sx={{ border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", p: 1.5, bgcolor: m3.scLowest }}>
+            <Typography sx={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: m3.onSurfaceVar }}>Top failure reasons</Typography>
+            <Box component="ol" sx={{ m: 0, mt: 0.5, pl: 2.5 }}>
+              {reasons.top.map((r) => <Box component="li" key={r.key} sx={{ fontSize: 13 }}><Presented label={r.label} raw={r.key || "no reason recorded"} /> · {r.count.toLocaleString("en-US")}</Box>)}
+            </Box>
+            <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
+              {reasons.total > reasons.read ? `Counted over the newest ${reasons.read.toLocaleString("en-US")} of ${reasons.total.toLocaleString("en-US")} failed jobs.` : `Counted over all ${reasons.total.toLocaleString("en-US")} failed jobs.`}
+            </Typography>
+          </Box>}
+      </Box>}
+
       {error && (
         isRestricted(error)
           ? <RestrictedPanel area="Job logs" />
@@ -509,7 +600,9 @@ export function JobLogsPanel({
             <Table size="small" aria-label="Job logs" sx={COMPACT_TABLE}>
               <TableHead>
                 <TableRow sx={{ bgcolor: "action.hover" }}>
-                  <SortHeaderCell label="Target Device" state={tableSort.header("device")} />
+                  {page.targetSortable
+                    ? <SortHeaderCell label="Target Device" state={tableSort.header("device")} />
+                    : <TableCell title={MASKED_TARGET_SORT_NOTE} data-target-sort="unavailable">Target Device</TableCell>}
                   <SortHeaderCell label="Type" state={tableSort.header("job_type")} />
                   <SortHeaderCell label="State" state={tableSort.header("state")} />
                   <SortHeaderCell label="Duration" state={tableSort.header("duration")} words={{ asc: "shortest first", desc: "longest first" }} />

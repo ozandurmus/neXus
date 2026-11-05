@@ -95,7 +95,16 @@ async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Pr
       break;
     }
     case "administration":
-      await expect(page.getByRole("tabpanel", { name: "Device management" }).getByRole("checkbox", { name: /^Select / }).nth(1)).toBeVisible();
+      // Four pages and a Product heading (UI review 2026-11-05, C4): the registry page opens its first section, Device management.
+      await expect(page.getByRole("tabpanel", { name: "Device Registry" }).getByRole("checkbox", { name: /^Select / }).nth(1)).toBeVisible();
+      break;
+    case "trace":
+      // Trace opens on the topology path; the old Path analysis form is its first mode.
+      await expect(page.getByRole("tab", { name: "Topology path", selected: true })).toBeVisible();
+      await expect(page.getByTestId("path-input-hint")).toBeVisible();
+      break;
+    case "changes":
+      await expect(page.getByRole("tab", { name: "Timeline", selected: true })).toBeVisible();
       break;
   }
 }

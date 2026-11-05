@@ -76,7 +76,7 @@ describe("Overview HA readiness (UI review 2026-10-18, F-13)", () => {
     expect(within(link).getByText("not ready")).toBeInTheDocument();
     expect(within(link).getByText("unknown")).toBeInTheDocument();
     // BACKUPS and EVIDENCE name their slivers the same way
-    expect(await screen.findByText("without an archive")).toBeInTheDocument();
+    expect(await screen.findByText("without a backup")).toBeInTheDocument();
     expect(screen.getByText("not read in 24 h")).toBeInTheDocument();
   });
 

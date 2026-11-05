@@ -35,14 +35,14 @@ Findings marked *PLAUSIBLE* were read, but their failing state could not be buil
 | # | Sev | Area | Finding | Status |
 |---|-----|------|---------|--------|
 | H-1 | HIGH | Job log CSV export | aiview CSV masked as text only; new target labels leak raw | **FIXED** (this branch) |
-| M-1 | MEDIUM (PLAUSIBLE) | module_deploy drain barrier | `CANCELLED` quarantine exempt even if a write crossed its mutation boundary | open |
-| M-2 | MEDIUM | Job log sort / search | `sort=device` and `q` act on raw hostnames for aiview (ordering / substring oracle) | open |
-| M-3 | MEDIUM | System health | unreadable sar/cpwd artefact cached for good; cpwd unreadable counts as 0 restarts | open |
-| M-4 | MEDIUM (PLAUSIBLE) | PathPseudonymMap | a step-1 "shown" hit skips the ambiguity check against other hosts | open |
-| M-5 | MEDIUM | Job log query | per-row lateral target joins run before sort/limit on non-indexed sorts and on export | open |
-| M-6 | MEDIUM | CpInventoryObjects | customer-domain / Global LRU thrash reloads whole domains under the instance lock | open |
-| M-7 | MEDIUM | Path diagram (UI) | neighbours from the current topology drawn on a path from a different snapshot | open |
-| M-8 | MEDIUM | System health (UI) | "scheduled computation is off" shown from a poll count, ignoring `scheduling_enabled` | open |
+| M-1 | MEDIUM (PLAUSIBLE) | module_deploy drain barrier | `CANCELLED` quarantine exempt even if a write crossed its mutation boundary | **FIXED** (`cloud/secfix-drain-health-1105`) |
+| M-2 | MEDIUM | Job log sort / search | `sort=device` and `q` act on raw hostnames for aiview (ordering / substring oracle) | **FIXED** (§9) |
+| M-3 | MEDIUM | System health | unreadable sar/cpwd artefact cached for good; cpwd unreadable counts as 0 restarts | **FIXED** (`cloud/secfix-drain-health-1105`) |
+| M-4 | MEDIUM (PLAUSIBLE) | PathPseudonymMap | a step-1 "shown" hit skips the ambiguity check against other hosts | **FIXED** (§9) |
+| M-5 | MEDIUM | Job log query | per-row lateral target joins run before sort/limit on non-indexed sorts and on export | **FIXED** (§9) |
+| M-6 | MEDIUM | CpInventoryObjects | customer-domain / Global LRU thrash reloads whole domains under the instance lock | **FIXED** (`cloud/secfix-cache-ui-1105`) |
+| M-7 | MEDIUM | Path diagram (UI) | neighbours from the current topology drawn on a path from a different snapshot | **FIXED** (`cloud/secfix-cache-ui-1105`) |
+| M-8 | MEDIUM | System health (UI) | "scheduled computation is off" shown from a poll count, ignoring `scheduling_enabled` | **FIXED** (`cloud/secfix-cache-ui-1105`) |
 | L-1..L-12 | LOW | various | see §4 | open |
 
 There are no CRITICAL findings:
@@ -121,6 +121,14 @@ There are no CRITICAL findings:
   against the schema first.
 - **Tests:** `tools/tests/test_policy_module_runtime.py:244` asserts SQL substrings only. Add a database-backed case for
   each holding state, including the case of a job cancelled after it crossed the boundary.
+- **Resolution (`cloud/secfix-drain-health-1105`), fail-closed:** `COMPLETED`/`FAILED` still release. `CANCELLED`
+  releases only when no `job_step_attempt` of that job, in any lease epoch, has `mutation_boundary_crossed` or a
+  non-`read` `action_class` (`module_deploy.ENDED_WITHOUT_WRITE_SQL`). Write-class attempts are counted even when not
+  crossed, because the backup path records `recovery-write` without ever flipping the flag. The proof rests on every
+  attempt insert being fenced to an owner-valid `EXECUTING` job (`JooqJobStepAttemptDao.insertPreContact`), so no new
+  attempt can appear after `CANCELLED`. A recorded `outcome` does not release. Tests: real-PostgreSQL cases per state in
+  `tools/tests/test_policy_module_runtime.py` (they skip with a reason where no `initdb` exists). They fail against the
+  2c7a08a SQL.
 
 ### M-2 — job log `sort=device` and `q` evaluate raw hostnames for aiview
 
@@ -159,6 +167,16 @@ There are no CRITICAL findings:
     concern.
   - Count unreadable chunks, and report `UNKNOWN / CPWD_UNREADABLE` when any chunk in the window could not be read.
   - Make the sar guard treat `cpuSamples() <= 0`.
+- **Resolution (`cloud/secfix-drain-health-1105`):**
+  - A failed read (store, decrypt, parse, missing ref) returns `null` and is cached only as a failure with a retry time:
+    1 min, doubling per consecutive failure, capped at 1 h (`SystemHealthService.cached`/`retryAfter`). A good read is
+    still kept for as long as the file stays in the window.
+  - An unreadable sar day stays `UNREADABLE`; with no readable CPU day the fact is `UNKNOWN / SAR_TEXT_UNREADABLE`.
+    The sar guard is `<= 0`.
+  - Unreadable cpwd chunks are counted. Any such chunk makes restarts `UNKNOWN / CPWD_UNREADABLE`, with no count shown,
+    unless the readable chunks already reach the `ATTENTION` threshold, which is a lower bound.
+  - Tests: `SystemHealthServiceTest` covers a transient failure and recovery, no re-read inside the wait, unreadable
+    cpwd, the lower-bound case and the backoff cap.
 
 ### M-4 — PathPseudonymMap: a topology-shown hit skips the cross-host ambiguity check (PLAUSIBLE)
 
@@ -205,6 +223,13 @@ There are no CRITICAL findings:
   - Cap reloads per run: once the cap is hit, further misses stay UNRESOLVED and the cap is recorded.
   - Load outside the lock.
 
+- **Fixed (`cloud/secfix-cache-ui-1105`):** the Global domain is pinned once read, and a Global read made for a
+  customer domain's fallback never evicts that customer domain. Only other domains are dropped by the LRU, so the
+  footprint is at most the larger of the bound and Global plus one domain. Test:
+  `CpInventoryResolutionTest.aCustomerDomainAndGlobalOverTheBoundDoNotEvictEachOtherAndGlobalStaysPinned` (50
+  alternating misses, one read per domain). Not done: the per-run reload cap and loading outside the lock; thrash between
+  two large *customer* domains is still possible.
+
 The rest of 43fbdc6 is sound:
 - UIDs are matched exactly, without trimming or case folding.
 - Rows are scoped by source and domain and must be `RESOLVED`.
@@ -221,6 +246,11 @@ The rest of 43fbdc6 is sound:
   silently shows no neighbours.
 - **Fix:** draw neighbours only when the snapshot ids match. Otherwise show "topology snapshot differs / unavailable —
   neighbours not shown".
+- **Fixed (`cloud/secfix-cache-ui-1105`):** `buildPathDiagramModel` uses the held topology only when its `snapshot_id`
+  equals the result's; a missing id on either side counts as a mismatch. This covers neighbours and segment prefixes. A
+  mismatch or a failed read shows a note (`diagram-neighbours-withheld`) instead of neighbours. Ingress candidates come
+  from the result itself and are still drawn. Tests: `tests/PathDiagram.test.tsx` "neighbours come only from the path's
+  own topology snapshot".
 
 ### M-8 — System health panel invents "scheduled computation is off" (UI)
 
@@ -230,6 +260,11 @@ The rest of 43fbdc6 is sound:
 - **Effect:** a first computation that simply takes longer than 20 s is presented as a known state it is not, which
   goes against the UNKNOWN law.
 - **Fix:** build the wording from `scheduling_enabled`. When it is true, say "still computing" and keep a slower poll.
+- **Fixed (`cloud/secfix-cache-ui-1105`):** the "scheduled computation is off" wording appears only when the API reports
+  `scheduling_enabled: false`. Otherwise, past the bounded wait, the panel says "Still computing" and polls every 30 s
+  (`SLOW_COMPUTING_POLL_MS`). A failure shows its reason, and a load timeout says only that it timed out. Test:
+  `tests/SystemHealthPanel.test.tsx` "past the bounded wait it says 'still computing'…" (with the field true, and with it
+  absent).
 
 ## 5. Findings: LOW
 
@@ -296,3 +331,79 @@ The rest of 43fbdc6 is sound:
   vitest/tsc did not run.
 - Real-environment validation: none. H-1 needs an aiview CSV export on the deployed build, with no raw label in the
   file, before it can be called `REAL_ENV_VALIDATED`.
+
+## 9. Follow-up fixes: M-2, M-4, M-5 (branch `cloud/secfix-aiview-sort-1105`)
+
+Brief: `docs/cloud-briefs/secfix-aiview-sort.md`. No live system was reachable; everything below is automated or local
+synthetic evidence, not real-environment evidence.
+
+### M-2 — fixed by refusing, not by sorting on the masked label
+
+- Sorting on the masked label would need every filtered row masked in memory before the limit, the cost M-5 removes.
+  The masked view is refused instead, and the UI says why.
+- `JobQuery` carries `masked`, set by `JobLogController` from `isReplayViewer` for the page and the CSV export.
+- `sort=device` / `device_name` for a masked caller throws `MaskedSortRefused`. The controller answers it with a 400
+  `{"error": "<sentence>", "code": "SORT_UNAVAILABLE_IN_MASKED_VIEW"}`. Every other sort key is unchanged.
+- A masked `q` matches `j.job_id` and `j.target_device_id` only. `d.observed_hostname` is dropped, and so is
+  `j.terminal_reason`: reason text carries raw names and addresses that are masked only on output, so it was the same
+  substring oracle.
+- `JobPage` now says `target_sortable` and `search_scope` (`full` / `ids`). `PrivacyMaskingResponseBodyAdvice` keeps
+  them through `withItems`; a masked page still never offers cancellation. `JobLogsPanel` reads these server fields,
+  never a role: the Target header is not a sort button, a caption explains both limits, and the search placeholder
+  changes.
+- Not changed: for unmasked roles `sort=device` still orders by `d.observed_hostname`, not by the coalesced label
+  (§4 M-2, last paragraph). Sorting by the full label would put the target joins back before the limit.
+- The `PolicyQueryService` value/usage sort (§4 M-2, last bullet) is out of this brief's scope and still open.
+
+### M-4 — fixed, with a narrower competitor set than §4 proposed
+
+- Reproducing test first: `PathPseudonymMapTest.aShownHostIsAmbiguousWhenAnotherRawHostAiviewCanHoldBareRendersTheSameValue`.
+  Before the fix it failed: the value resolved to the shown host.
+- The §4 proposal (add every any-prefix candidate whose bare `peek` matches) was tried. It refused 12 of 140 shown hosts
+  in `PathPseudonymOverlapTest.everyAttachmentHostTheTopologyShowedResolvesToTheHostItWasRenderedFrom`. Under a
+  registered `/8`..`/16` summary, the bare form of a host no response ever rendered follows the summary's few masked
+  networks, which brings back the 2026-11-04 false refusals.
+- Fix: a step-1 hit competes with the raw hosts aiview can actually hold bare as the same value:
+  - every bare value the IP masker handed out as it (`SubnetPreservingIpMasker.handedOutAs`, a read of the cache
+    with no side effect; next hops, policy objects, IP searches and reason text all pass through it); and
+  - every route next hop of the snapshot whose bare form is the value now.
+
+  If the union has more than one raw host, the value is `AMBIGUOUS_PSEUDONYM`. A hypothetical host nobody was shown is
+  not a competitor; the test asserts this case too.
+- Limit: `handedOutAs` sees this process only. After a service restart, a value aiview saw before the restart is no
+  longer in the cache; the next-hop check still covers route tables. The lookup is O(cache) per resolution, like the
+  registered-subnet scan (L-12).
+- The `MAX_NETWORKS` / `MAX_REGISTERED` truncation (§4 M-4, "Related, LOW") is unchanged and still open.
+
+### M-5 — fixed: the page is chosen before any target join
+
+- `JobLogQueryService.pagedSelect`: the inner query filters, sorts and limits on `jobs`/`devices` only, numbering rows
+  with `row_number() over (<same order>)`. The outer query joins the target laterals to those job ids and orders by that
+  number. `query`, `exportRows` and `recent` all use it.
+- `JobLogQueryServiceTest.thePageIsChosenBeforeAnyTargetJoinRuns` guards the shape: no lateral and no target table in
+  the inner query, every binding inside it, and every filter clause and sort expression reading only `j`/`d`.
+- Local check (scratch PostgreSQL 16 with all 188 repository migrations, 5,000 synthetic `discovery_run` jobs):
+  - for each of the 7 sort keys, with and without `q`, page 3 returned the same job ids in the same order as the old
+    statement;
+  - `EXPLAIN ANALYZE` for `result`, `duration` and the default order ran the policy lateral 50 times (the page size)
+    instead of 5,000.
+
+  The synthetic data is not estate evidence. No `EXPLAIN` guard runs in CI, because the service suite has no database.
+
+### Validation
+
+- `cd ui2 && ./gradlew :service:test :persistence:test :architecture-tests:test`: BUILD SUCCESSFUL.
+  - service: 1433 tests, 0 failures (1425 before this branch);
+  - persistence: 284 tests, 0 failures;
+  - architecture-tests: 44 tests, 0 failures.
+- Frontend (`npm ci`):
+  - `npx tsc --noEmit`: PASS;
+  - `npx vitest run`: 1384 of 1385 pass, including the 2 new `JobLogsPanel` cases.
+  - The one failure is `BackupFleetTable.test.tsx` "orders Latest archive and Latest attempt by time…": a 5 s
+    timeout under full-suite load. It fails the same way on `origin/cloud/security-review-1105` without this
+    branch's frontend changes, and passes when that file runs alone. It was there before this branch and is not
+    touched here.
+- Repository privacy gate (`tools/privacy/repository_privacy_check.py`): PASS.
+- Real-environment validation: none. M-2 needs an aiview session on the deployed build: Jobs screen, no Target sort, the
+  caption shown, and `?sort=device` answered 400 with the sentence. M-5 needs the deployed plan on estate data.
+

@@ -91,6 +91,10 @@ class PathEngineGoldenTest {
                 .bind("dev-b02", paloAlto("dev-b02", panSecurity("RULE-PUBLISH-01", "ZONE-TRANSIT", "ZONE-DMZ", "OBJ-PUBLIC-01", "SVC-HTTPS", "any", "allow")
                         + panSecurity("RULE-DENY-01", "any", "any", "any", "any", "any", "deny"), PAN_DNAT), panDevice("dev-b02"));
         Policies manyPolicies = new Policies().bind("dev-t04", cpChain("dev-t04"), cpDevice("dev-t04"));
+        // A more specific route toward part of the DMZ through the unenrolled uplink router: the branch leaves the known
+        // topology although the destination sits on FW-BRAVO-02's DMZ segment.
+        TopologyGraph detour = graph(addRoute(estate("chain.json"), "dev-t04", "{\"destination\": \"203.0.113.0/27\", "
+                + "\"next_hop\": \"198.51.100.130\", \"interface\": \"eth3\", \"protocol\": \"static\", \"kind\": \"IP\", \"active\": true}"));
         return List.of(
                 new Scenario("allowed-cp-pan-nat", chain, run(chain, chainPolicies(), https)),
                 new Scenario("denied-at-second-hop", chain, run(chain, chainPolicies(), ssh)),
@@ -104,6 +108,9 @@ class PathEngineGoldenTest {
                 new Scenario("asymmetric-return", asym, run(asym, asymPolicies,
                         PathQuery.of("198.51.100.20", "203.0.113.10", "tcp", 443).withIngress(tango, "eth1"))),
                 new Scenario("ambiguous-ingress", asym, run(asym, asymPolicies, PathQuery.of("198.51.100.20", "203.0.113.10", "tcp", 443))),
+                new Scenario("ambiguous-ingress-candidates-agree", asym, run(asym, asymPolicies,
+                        PathQuery.of("198.51.100.20", "203.0.113.10", "tcp", 22))),
+                new Scenario("exit-destination-in-known-topology", detour, run(detour, chainPolicies(), direct)),
                 new Scenario("routing-loop", asym, run(asym, asymPolicies,
                         PathQuery.of("198.51.100.20", "203.0.113.130", "tcp", 443).withIngress(tango, "eth1"))),
                 new Scenario("ecmp-truncated", many, run(many, manyPolicies,
@@ -204,11 +211,42 @@ class PathEngineGoldenTest {
         assertTrue(r.asymmetric());
         assertTrue(r.warnings().contains(OUT_OF_STATE_DROP_LIKELY));
         assertEquals(GIVEN, r.ingress().mode());
-        // The same client LAN on two gateways is never auto-joined: without a hint the ingress is ambiguous.
+    }
+
+    @Test
+    void tiedSourceSegmentsAreAllTracedAndOnlyAUnanimousVerdictStands() {
+        // The same client LAN on two gateways is never auto-joined: without a hint the ingress is ambiguous. Both
+        // candidates are traced; here one returns asymmetrically and one is allowed, so nothing is claimed.
         PathResult ambiguous = scenario("ambiguous-ingress");
+        assertEquals(UNKNOWN, ambiguous.verdict());
         assertEquals(AMBIGUOUS_INGRESS, ambiguous.reason());
+        assertEquals(AMBIGUOUS_INGRESS, ambiguous.ingress().status());
         assertEquals(2, ambiguous.ingress().candidates().size());
-        assertTrue(ambiguous.branches().isEmpty());
+        assertEquals(java.util.Set.of(UNKNOWN, ALLOWED),
+                ambiguous.branches().stream().map(PathResult.Branch::verdict).collect(java.util.stream.Collectors.toSet()));
+        assertFalse(ambiguous.caveats().contains(INGRESS_CANDIDATES_AGREE));
+        // SSH is denied at FW-BRAVO-02 whichever gateway the client sits behind: the verdict does not depend on the
+        // undecided ingress, which stays AMBIGUOUS_INGRESS and is carried as a caveat.
+        PathResult agree = scenario("ambiguous-ingress-candidates-agree");
+        assertEquals(DENIED, agree.verdict());
+        assertEquals(DENIED_AT_HOP, agree.reason());
+        assertEquals(AMBIGUOUS_INGRESS, agree.ingress().status());
+        assertEquals(2, agree.branches().size());
+        assertTrue(agree.branches().stream().allMatch(b -> DENIED.equals(b.verdict())));
+        assertTrue(agree.caveats().contains(INGRESS_CANDIDATES_AGREE));
+    }
+
+    @Test
+    void anExitSaysWhyItLeftTheKnownTopology() {
+        PathResult viaDefault = scenario("exits-known-topology");
+        var exitHop = viaDefault.branches().get(0).hops().get(0);
+        assertTrue(exitHop.notes().contains(EXIT_VIA_DEFAULT_ROUTE));
+        assertFalse(viaDefault.warnings().contains(DESTINATION_IN_KNOWN_TOPOLOGY), "203.0.113.150 is on no known segment");
+        PathResult detour = scenario("exit-destination-in-known-topology");
+        assertEquals(UNKNOWN, detour.verdict());
+        assertEquals(EXITS_KNOWN_TOPOLOGY, detour.reason());
+        assertTrue(detour.warnings().contains(DESTINATION_IN_KNOWN_TOPOLOGY));
+        assertFalse(detour.branches().get(0).hops().get(0).notes().contains(EXIT_VIA_DEFAULT_ROUTE), "a /27, not a default");
     }
 
     @Test

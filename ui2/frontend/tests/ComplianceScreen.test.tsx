@@ -57,7 +57,7 @@ describe("Compliance -- UI review 2026-09-23", () => {
     render(<ComplianceScreen />);
     expect(await screen.findByRole("button", { name: "Re-check" })).toBeInTheDocument();
     expect(screen.getByText("Not yet checked · 1")).toBeInTheDocument();
-    expect(screen.getByText("Checks passing")).toBeInTheDocument();
+    expect(screen.getByText("Evidenced controls passing")).toBeInTheDocument();
   });
 
   it("shows control families with checks, coverage and findings", async () => {
@@ -189,8 +189,47 @@ describe("KPI badges state facts, not judgements (post-release review 2026-10-18
         ],
       }), { status: 200 }))));
     render(<ComplianceScreen />);
-    expect(await screen.findByText("28.9 % of 2,448 checks")).toBeInTheDocument();
+    // B4: the headline figure is the evidenced pass share (34.7 %), never the assured share that counts unevidenced as failed
+    expect(await screen.findByText("17.5% have no evidence")).toBeInTheDocument();
+    expect(screen.getByText("34.7%")).toBeInTheDocument();
+    expect(screen.getByText("of 2,448 checks · 102 of 105 firewalls")).toBeInTheDocument();
     expect(screen.getByText("172 critical · 3 firewalls")).toBeInTheDocument();
     expect(screen.queryByText(/Improvement Needed|High Assurance|Immediate Action|Zero Critical/)).toBeNull();
+  });
+});
+
+describe("stale-data banner on Compliance (UI review 2026-11-05, B1)", () => {
+  const stubWithFleet = (lt24h: number, of: number) => vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(
+    url === "/api/v2/overview" ? { inventory_age: { lt24h, h24_72: of - lt24h, gt72h: 0, never: 0, of }, evidence: { inventory: { at: new Date().toISOString(), state: "OK" } } }
+      : url.includes("/compliance/overview") ? OVERVIEW : { controls: [control("c1", "Authentication", "FAIL", [40, 22, 0], ["FW-TANGO-04"])] }), { status: 200 }))));
+
+  it("warns that the results reflect old reads when under 80 % of active devices were read in 24 h", async () => {
+    stubWithFleet(1, 132);
+    render(<ComplianceScreen />);
+    const banner = await screen.findByRole("status", { name: "Data freshness warning" });
+    expect(banner.textContent).toContain("131 of 132 active devices were last read more than 24 h ago");
+    expect(banner.textContent).toContain("Compliance results reflect the last stored reads");
+  });
+
+  it("shows no banner when enough devices are fresh, or when the freshness could not be read", async () => {
+    stubWithFleet(120, 132);
+    const { unmount } = render(<ComplianceScreen />);
+    await screen.findByText("Evidenced controls passing");
+    expect(screen.queryByRole("status", { name: "Data freshness warning" })).toBeNull();
+    unmount();
+    stub();
+    render(<ComplianceScreen />);
+    await screen.findByText("Evidenced controls passing");
+    expect(screen.queryByRole("status", { name: "Data freshness warning" })).toBeNull();
+  });
+
+  it("lists the CIS and NIST cards first with the evidenced pass share (B4)", async () => {
+    const fw = (framework: string) => ({ framework, score_pct: 20, total_controls: 100, pass_count: 30, fail_count: 50, data_unavailable_count: 20 });
+    vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(
+      url.includes("/compliance/overview") ? { ...OVERVIEW, frameworks: [fw("Financial Baseline"), fw("NIST SP 800-53"), fw("CIS Benchmark")] } : { controls: [] }), { status: 200 }))));
+    render(<ComplianceScreen />);
+    await screen.findAllByText("37.5% of evidenced controls pass, 20% have no evidence");
+    const order = [...document.querySelectorAll("[data-framework]")].map((e) => e.getAttribute("data-framework"));
+    expect(order).toEqual(["CIS Benchmark", "NIST SP 800-53", "Financial Baseline"]);
   });
 });

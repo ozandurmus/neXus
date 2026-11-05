@@ -9,26 +9,30 @@ import { DESTINATIONS, DRAWER_GROUPS } from "../src/shell/NavigationRail";
 // unambiguous.
 const PRODUCT_MARKERS: Record<string, string> = {
   overview: "Reading the fleet…",
+  // Without a server the catalogue read fails and the screen says so; it never shows a seeded report.
+  reports: "The report catalogue could not be read: The report service could not be reached.",
   inventory: "No device to show",
   // One device screen (PO 2026-09-25): ?screen=configuration lands on Devices.
   configuration: "No device to show",
   // Without a store the overview read fails: the headline writes UNKNOWN for every figure, never a claim (review 4.3).
-  compliance: "checks UNKNOWN · firewalls UNKNOWN · critical failing UNKNOWN · data gaps UNKNOWN",
+  compliance: "UNKNOWN of evidenced controls pass, UNKNOWN have no evidence · checks UNKNOWN · firewalls UNKNOWN · critical failing UNKNOWN",
   operations: "No HA pair or cluster enrolled",
   administration: "Administration",
-  // Path analysis (A5b): nothing is evaluated until a query is sent; the screen never shows a seeded verdict.
-  path_analysis: "No path evaluated yet",
+  // Trace (C3) opens on the topology path mode, the old Path analysis (A5b): nothing is evaluated until a query is sent; the
+  // screen never shows a seeded verdict.
+  trace: "No path evaluated yet",
 };
 
 const PREVIEW_MARKERS: Record<string, string> = {
-  overview: "FW-ROMEO-01-M2",
+  overview: "2 of 45 HA clusters not ready for failover",
+  reports: "Never inventoried (192.0.2.15)",
   inventory: "FW-MIKE-08",
   configuration: "CLS-ROMEO-01",
   compliance: "CIS Benchmarks",
   backups: "FW-TANGO-04 (PA-5410)",
   operations: "Recent jobs",
   administration: "FW-JULIET-06-M2",
-  path_analysis: "Traffic is PARTIAL: 2 branch(es) disagree",
+  trace: "Traffic is PARTIAL: 2 branch(es) disagree",
 };
 
 /** jsdom has no matchMedia; this one says the viewport is narrower than the rail's drawer rule. */
@@ -52,12 +56,14 @@ describe("the UI 2.0 shell navigation", () => {
   it("renders the five-verb rail in order, Administration last", () => {
     render(<App />);
     const rail = screen.getByRole("navigation", { name: "Primary" });
-    expect(DESTINATIONS.map((d) => d.label)).toEqual(["Overview", "Devices", "Compliance", "Policy", "Path", "Backups", "Operations", "Packets", "Sanitizer", "Administration"]);
-    for (const label of ["Overview", "Devices", "Compliance", "Policy", "Path", "Backups", "Operations", "Tools", "Administration"]) {
+    // Reports R1: Reports sits directly under Overview (REPORTS_R1_CONTRACT.md "UI").
+    expect(DESTINATIONS.map((d) => d.label)).toEqual(["Overview", "Reports", "Devices", "Compliance", "Policy", "Trace", "Changes", "Backups", "Operations", "Packets", "Sanitizer", "Diagnostics", "Offline analysis", "Administration"]);
+    for (const label of ["Overview", "Reports", "Devices", "Compliance", "Policy", "Trace", "Changes", "Backups", "Operations", "Tools", "Administration"]) {
       expect(within(rail).getByText(label)).toBeInTheDocument();
     }
-    // Packets and Sanitizer live behind the one Tools entry; the wide rail has no drawer
+    // Packets, Sanitizer, Diagnostics and Offline analysis live behind the one Tools entry; the wide rail has no drawer
     expect(within(rail).queryByText("Packets")).toBeNull();
+    expect(within(rail).queryByText("Diagnostics")).toBeNull();
     expect(screen.queryByRole("button", { name: "Open navigation" })).toBeNull();
   });
 
@@ -119,6 +125,20 @@ describe("the six product screens", () => {
     }
   });
 
+  // Old addresses keep working (UI review 2026-11-05): each lands on its new home, its own parameters kept.
+  it.each([
+    ["?screen=path_analysis", "trace", "No path evaluated yet"],
+    ["?screen=operations&tab=changes", "changes", "Who changed what, and when"],
+    ["?screen=operations&tab=diagnostics", "diagnostics", "Run an approved read-only diagnostic"],
+    ["?screen=administration&tab=job-logs", "operations", "All jobs"],
+  ])("lands %s on its new screen", async (search, screenId, marker) => {
+    const { unmount } = render(<App search={search} />);
+    expect(await screen.findByText(new RegExp(marker))).toBeInTheDocument();
+    expect(new URLSearchParams(window.location.search).get("screen")).toBe(screenId);
+    unmount();
+    window.history.replaceState(null, "", "/");
+  });
+
   it("defaults to the Overview screen when no screen is named", async () => {
     render(<App search="" />);
     expect(await screen.findByText("Reading the fleet…")).toBeInTheDocument();
@@ -132,6 +152,13 @@ describe("the design preview", () => {
       expect(screen.getByText(marker)).toBeInTheDocument();
       unmount();
     }
+  });
+
+  it("keeps the old ?preview=path_analysis address: it previews Trace", () => {
+    const { unmount } = render(<App search="?preview=path_analysis" />);
+    expect(screen.getByText(PREVIEW_MARKERS.trace)).toBeInTheDocument();
+    unmount();
+    window.history.replaceState(null, "", "/");
   });
 
   it("always says a preview is synthetic", () => {

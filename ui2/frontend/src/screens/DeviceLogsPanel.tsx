@@ -22,7 +22,6 @@ import { RestrictedPanel, StatePanel, Ts, Unknown, isRestricted } from "../shell
 import { useJobWindow } from "../shell/JobWindow";
 import type { Tone } from "../shell/tone";
 import { formatStamp, formatTime, relativeAge } from "../shell/time";
-import { KpiCard } from "../shell/KpiCard";
 import { lineDeviceTime, lineSeverity, windowWords, type LineSeverity } from "./logLineTime";
 import { jobStateWord, statusWord } from "../shell/presenters";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
@@ -422,9 +421,9 @@ function jumpTo(id: string): void {
 }
 
 /** A phrase that is also the way to the panel it talks about: it opens Collection health and scrolls to that panel. */
-function JumpLink({ target, onJump, children }: { readonly target: string; readonly onJump: (id: string) => void; readonly children: React.ReactNode }) {
+function JumpLink({ target, onJump, title, children }: { readonly target: string; readonly onJump: (id: string) => void; readonly title?: string; readonly children: React.ReactNode }) {
   return (
-    <Box component="button" type="button" onClick={() => onJump(target)}
+    <Box component="button" type="button" onClick={() => onJump(target)} title={title}
       sx={{ all: "unset", cursor: "pointer", color: "inherit", textDecoration: "underline", textDecorationColor: m3.outline, textUnderlineOffset: 3,
         "&:hover": { color: m3.primary }, "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: 2 } }}>
       {children}
@@ -482,9 +481,11 @@ function LogsBody({ deviceId, data, latest, onRefresh, collectAction, outcomeBan
     // (PO 2026-10-20): one summary line, one attention sentence, then the viewer on its own tab with the room; the
     // gaps, crash files, HCP reports and other collection sit on the Collection health tab and never squeeze it.
     <Stack spacing={1.5} data-testid="device-logs" sx={{ containerType: "inline-size", minWidth: 0, flex: 1, minHeight: 0 }}>
-      <LogFacts data={data} latest={latest} crash={crash} levels={levels} loaded={vm.text.lines.length} loading={vm.text.loading} />
+      {/* UI review 2026-11-05, B5 (R-17): one status line -- the facts, the attention words and the actions -- so the
+          viewer below keeps the height; every detail is on hover or on Collection health. */}
       <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1.5, rowGap: 0.5 }}>
-        <Box sx={{ flex: "1 1 320px", minWidth: 0 }}><AttentionLine gaps={gaps} crash={crash} onJump={jump} /></Box>
+        <LogFacts data={data} latest={latest} crash={crash} levels={levels} loaded={vm.text.lines.length} loading={vm.text.loading} />
+        <Box sx={{ flex: "1 1 220px", minWidth: 0 }}><AttentionLine gaps={gaps} crash={crash} onJump={jump} /></Box>
         <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 0.5 }}>
           <TextToggle pressed={detailsOpen} expands onClick={() => setDetailsOpen((v) => !v)}>Run details <Icon name={detailsOpen ? "chevron-left" : "chevron-right"} size={14} /></TextToggle>
           {collectAction}
@@ -659,8 +660,9 @@ function AttentionLine({ gaps, crash, onJump }: {
   else if (kinds.size === 0) parts.push(<JumpLink key="g" target={SIDE_ID.gaps} onJump={onJump}>No gaps recorded</JumpLink>);
   else {
     for (const [kind, list] of kinds) {
+      // The per-file list (one entry per gap) lives on Collection health; here the kind and its count, the list on hover.
       const where = list.map((g) => `${sourceLabel(g.source_key)} ${clock(g.recorded_at)}`).join(", ");
-      parts.push(<JumpLink key={kind} target={SIDE_ID.gaps} onJump={onJump}>{gapKindLabel(kind)}{list.length > 1 ? ` ×${list.length}` : ""} ({where})</JumpLink>);
+      parts.push(<JumpLink key={kind} target={SIDE_ID.gaps} onJump={onJump} title={where}>{gapKindLabel(kind)}{list.length > 1 ? ` ×${list.length}` : ""}</JumpLink>);
     }
   }
   if (crash.error) parts.push(<span key="c">Crash and dump check unavailable</span>);
@@ -704,7 +706,7 @@ function clockFigure(at: string | null | undefined): string | null {
 }
 
 /**
- * The four facts of the mockup "Cihaz logları için dört ekran" (2026-10-17), as the product's KPI row and only as far
+ * The four facts of the 2026-10-17 device-logs mockup, as one status line (UI review 2026-11-05, B5) and only as far
  * as the stored data supports them (coordinator 2026-10-20): the last collection with its device-time window; the
  * error and warning lines counted from the level tokens the loaded lines themselves write (the previous window is not
  * loaded, so no comparison is claimed); process restarts, UNKNOWN until the contract documents a cpwd restart line
@@ -724,27 +726,45 @@ function LogFacts({ data, latest, crash, levels, loaded, loading }: {
   const newCrash = crash.data?.counts?.NEW ?? null;
   const before = crash.data?.counts?.PRESENT_BEFORE_MONITORING ?? 0;
   return (
-    // The product's KPI cards in a row of four that stays four across the object pane (the shared row's 230 px minimum
-    // would fold the fourth card under the others beside the device list at 1440 px).
-    <Box role="region" aria-label="Log summary" sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))" }}>
-      <Box data-testid="last-collection" sx={{ display: "contents" }}>
-        <KpiCard label="Last collection" value={clockFigure(job?.at)} unit={job?.at ? relativeAge(job.at) : undefined}
-          state={job?.at ? "ok" : "unknown"} reason="No collection time is recorded for the newest run."
-          detail={window ? `window ${window} device time` : "window of the newest lines not known"}
-          sentence={`${stateWord} · ${stored}`} />
-      </Box>
-      <KpiCard label="Error / warning lines" value={loaded > 0 ? `${levels.error} / ${levels.warning}` : null} unit={loaded > 0 ? "error / warning" : undefined}
-        state={loaded > 0 ? "ok" : "unknown"} reason={loading ? "Lines are still loading." : "No line of this run is loaded yet."}
-        detail={loaded > 0 ? `of ${loaded.toLocaleString("en-US")} loaded lines of this run` : undefined}
-        sentence="from the lines' own level tokens · no previous window loaded" />
-      <KpiCard label="Process restarts" value={null} state="unknown" reason="The contract documents no cpwd restart line shape yet, so nothing is counted from a guessed text."
-        sentence="cpwd.elg · line shape not documented; not counted" />
-      <KpiCard label="New crash / dump files" value={crash.error ? null : newCrash} state={crash.error || newCrash === null ? "unknown" : "ok"}
+    // One status line (UI review 2026-11-05, B5): the four facts inline, each with its figure; the window, what is
+    // stored and the denominators are on hover. The data hooks stay those of the KPI cards it replaced.
+    <Box role="region" aria-label="Log summary" sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1, rowGap: 0.5, fontSize: 13.5, minWidth: 0 }}>
+      <LogFact label="Last collection" testId="last-collection"
+        title={`${window ? `window ${window} device time` : "window of the newest lines not known"} · ${stateWord} · ${stored}`}
+        figure={clockFigure(job?.at)} unit={job?.at ? relativeAge(job.at) : undefined} reason="No collection time is recorded for the newest run." />
+      <Dot />
+      <LogFact label="Error / warning lines" figure={loaded > 0 ? `${levels.error} / ${levels.warning}` : null}
+        title={`${loaded > 0 ? `of ${loaded.toLocaleString("en-US")} loaded lines of this run · ` : ""}from the lines' own level tokens · no previous window loaded`}
+        reason={loading ? "Lines are still loading." : "No line of this run is loaded yet."} />
+      <Dot />
+      <LogFact label="Process restarts" figure={null} title="cpwd.elg · line shape not documented; not counted"
+        reason="The contract documents no cpwd restart line shape yet, so nothing is counted from a guessed text." />
+      <Dot />
+      <LogFact label="New crash / dump files" figure={crash.error || newCrash === null ? null : String(newCrash)}
+        title={crash.data ? `${before} present before monitoring · new within ${crash.data.new_window_days} days · by process and size` : "by process and size"}
         reason={crash.error ? `The crash and dump check could not be read (${crash.error}).` : "The crash and dump check has not answered yet."}
-        unit={newCrash !== null && !crash.error ? (newCrash === 1 ? "new file" : "new files") : undefined}
-        badge={newCrash !== null && newCrash > 0 && !crash.error ? <StatusChip tone="bad" label="Alarm" dense /> : undefined}
-        detail={crash.data ? `${before} present before monitoring` : undefined}
-        sentence={crash.data ? `new within ${crash.data.new_window_days} days · by process and size` : "by process and size"} />
+        badge={newCrash !== null && newCrash > 0 && !crash.error ? <StatusChip tone="bad" label="Alarm" dense /> : undefined} />
+    </Box>
+  );
+}
+
+function Dot() {
+  return <Box component="span" aria-hidden sx={{ color: m3.outline }}>·</Box>;
+}
+
+/** One fact of the status line: its label, the figure (or UNKNOWN with the reason on hover), the details on hover. */
+function LogFact({ label, figure, unit, title, reason, badge, testId }: {
+  readonly label: string; readonly figure: string | null; readonly unit?: string; readonly title: string; readonly reason: string;
+  readonly badge?: React.ReactNode; readonly testId?: string;
+}) {
+  return (
+    <Box component="span" data-kpi={label} data-testid={testId} title={title} sx={{ display: "inline-flex", alignItems: "baseline", columnGap: 0.5, whiteSpace: "nowrap", color: m3.onSurfaceVar }}>
+      {label}
+      {figure !== null
+        ? <Box component="span" data-kpi-figure sx={{ fontWeight: 600, color: m3.onSurface, fontVariantNumeric: "tabular-nums" }}>{figure}</Box>
+        : <Box component="span" title={reason} sx={{ fontWeight: 600, color: m3.neutralInk }}>UNKNOWN</Box>}
+      {figure !== null && unit ? <Box component="span">{unit}</Box> : null}
+      {badge ? <Box component="span" sx={{ alignSelf: "center" }}>{badge}</Box> : null}
     </Box>
   );
 }

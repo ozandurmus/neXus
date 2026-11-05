@@ -48,30 +48,6 @@ export const HOP_VERDICT_SIDE: Readonly<Record<string, string>> = {
 const COL_STEP = 230;
 const LANE_STEP = 190;
 
-const IPV4_TOKEN = /\b(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\b/g;
-
-/**
- * True only for documentation prefixes (RFC 5737: 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24),
- * the `SubnetPreservingIpMasker` output range (240.0.0.0/4), and the unspecified address 0.0.0.0.
- */
-export function isMaskedOrDocIpv4(ip: string): boolean {
-  const parts = ip.split(".").map(Number);
-  if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
-  const [a, b, c, d] = parts;
-  if (a === 0 && b === 0 && c === 0 && d === 0) return true;
-  if (a === 192 && b === 0 && c === 2) return true;
-  if (a === 198 && b === 51 && c === 100) return true;
-  if (a === 203 && b === 0 && c === 113) return true;
-  if (a >= 240 && a <= 255) return true;
-  return false;
-}
-
-/** Redacts any raw IPv4 address so unmasked addresses never reach the rendered diagram. */
-export function safeAddressLabel(value: string | null | undefined): string {
-  if (!value) return "";
-  return value.replace(IPV4_TOKEN, (match) => (isMaskedOrDocIpv4(match) ? match : "[masked]"));
-}
-
 /** Resolves a segment's masked network prefix from the held topology or the segment identifier. */
 export function segmentPrefix(
   segmentId: string | null | undefined,
@@ -80,13 +56,13 @@ export function segmentPrefix(
 ): string {
   if (segmentId && topology?.segments) {
     const found = topology.segments.find((s) => s.segment_id === segmentId);
-    if (found?.network) return safeAddressLabel(found.network);
+    if (found?.network) return found.network;
   }
   if (segmentId) {
     const stripped = segmentId.startsWith("SEGMENT-") ? segmentId.slice("SEGMENT-".length) : segmentId;
-    return safeAddressLabel(stripped);
+    return stripped;
   }
-  if (fallback) return safeAddressLabel(fallback);
+  if (fallback) return fallback;
   return "segment";
 }
 
@@ -153,6 +129,26 @@ export interface PathDiagramModel {
   readonly shownNeighbourCount: number;
   readonly hiddenNeighbourCount: number;
   readonly neighbourNotice: string | null;
+  /**
+   * Set when neighbours were asked for but the held topology is not the snapshot the path was computed on (snapshot ids
+   * differ, or either is missing): no attachment from it is drawn, so two collection passes are never mixed.
+   */
+  readonly neighbourSnapshotNotice: string | null;
+}
+
+/** Shown instead of neighbours when the held topology is not the path's own snapshot. */
+export const NEIGHBOUR_SNAPSHOT_MISMATCH =
+  "Neighbours not shown: the current topology snapshot differs from the one this path was computed on.";
+/** Shown instead of neighbours when the topology could not be read. */
+export const NEIGHBOUR_TOPOLOGY_UNAVAILABLE = "Neighbours not shown: the topology could not be read.";
+
+/** The held topology only when it is the snapshot this path was computed on; otherwise nothing from it is used. */
+export function sameSnapshotTopology(
+  result: PathResult,
+  topology: TopologySnapshotView | null | undefined,
+): TopologySnapshotView | null {
+  if (!topology || !result.snapshot_id || !topology.snapshot_id) return null;
+  return topology.snapshot_id === result.snapshot_id ? topology : null;
 }
 
 function EndpointLabel({ e }: { readonly e: PathEndpoint }) {
@@ -161,8 +157,8 @@ function EndpointLabel({ e }: { readonly e: PathEndpoint }) {
   }
   return (
     <>
-      {safeAddressLabel(e.interface_name ?? "interface UNKNOWN")}
-      {e.zone ? ` (${safeAddressLabel(e.zone)})` : ""}
+      {(e.interface_name ?? "interface UNKNOWN")}
+      {e.zone ? ` (${e.zone})` : ""}
     </>
   );
 }
@@ -271,11 +267,13 @@ export function buildPathDiagramModel(
     verifiedBranchId: explicitVerifiedBranchId,
     showReturn = false,
     showNeighbours = false,
-    topology = null,
+    topology: heldTopology = null,
     neighbourCap = NEIGHBOUR_CAP,
     highlightedHop = null,
     onSelectHop,
   } = options;
+  // Segment prefixes and neighbours come only from the path's own topology snapshot.
+  const topology = sameSnapshotTopology(result, heldTopology);
 
   const vBranchId = verifiedBranchId(validation, explicitVerifiedBranchId, result);
   const nodes: Node<PathDiagramNodeData>[] = [];
@@ -288,8 +286,8 @@ export function buildPathDiagramModel(
   const forwardLaneCount = Math.max(1, result.branches.length);
   const centerY = ((forwardLaneCount - 1) * LANE_STEP) / 2;
 
-  const srcHost = safeAddressLabel(result.query.src);
-  const dstHost = safeAddressLabel(result.query.dst);
+  const srcHost = result.query.src;
+  const dstHost = result.query.dst;
   const serviceLabel = `${result.query.protocol.toUpperCase()}/${result.query.port}`;
 
   const sourceNodeId = "path-source";
@@ -322,7 +320,7 @@ export function buildPathDiagramModel(
   if (result.branches.length === 0) {
     const reasonCode = result.verdict_reason || result.ingress.ingress_status || "UNKNOWN";
     const reasonText = explain(reasonCode);
-    const candidates = result.ingress.candidates.map((c) => safeAddressLabel(c.node_id)).filter(Boolean);
+    const candidates = result.ingress.candidates.map((c) => c.node_id).filter(Boolean);
     for (const c of result.ingress.candidates) {
       if (c.segment_id) pathSegmentIds.add(c.segment_id);
     }
@@ -438,7 +436,7 @@ export function buildPathDiagramModel(
       const verdictColor = HOP_VERDICT_SIDE[hop.verdict] ?? m3.outline;
       const deviceView = hopValidation(validation, vBranchId, branch, hop);
       const isHighlighted = highlightedHop?.branchId === branch.branch_id && highlightedHop?.hopIndex === hop.hop_index;
-      const safeNodeName = safeAddressLabel(hop.node_id);
+      const safeNodeName = hop.node_id;
 
       if (!pathUnitFirstDiagramNode.has(hop.node_id)) {
         pathUnitFirstDiagramNode.set(hop.node_id, {
@@ -657,7 +655,7 @@ export function buildPathDiagramModel(
         rb.hops.forEach((rh, rhIdx) => {
           const hopCol = Math.max(1, totalCols - rhIdx * 2);
           const returnHopId = `return-hop-${branch.branch_id}-${rbIdx}-${rh.hop_index}`;
-          const safeName = safeAddressLabel(rh.node_id);
+          const safeName = rh.node_id;
           const asymmetric = retStatus === "ASYMMETRIC";
 
           nodes.push({
@@ -779,6 +777,7 @@ export function buildPathDiagramModel(
   let shownNeighbourCount = 0;
   let hiddenNeighbourCount = 0;
   let neighbourNotice: string | null = null;
+  const neighbourSnapshotNotice = showNeighbours && heldTopology && !topology ? NEIGHBOUR_SNAPSHOT_MISMATCH : null;
 
   if (showNeighbours) {
     interface NeighbourCandidate {
@@ -850,7 +849,7 @@ export function buildPathDiagramModel(
       const neighbourNodeId = `neighbour-${idx}-${item.segmentId}`;
       const offsetX = (localIdx % 2 === 0 ? -1 : 1) * (40 + Math.floor(localIdx / 2) * 30);
       const offsetY = -90 - Math.floor(localIdx / 2) * 48;
-      const ifacePrefix = item.interfaceName ? `${safeAddressLabel(item.interfaceName)} · ` : "";
+      const ifacePrefix = item.interfaceName ? `${item.interfaceName} · ` : "";
 
       nodes.push({
         id: neighbourNodeId,
@@ -862,7 +861,7 @@ export function buildPathDiagramModel(
         data: {
           kind: "neighbour-segment",
           title: item.prefix,
-          subtitle: item.interfaceName ? safeAddressLabel(item.interfaceName) : null,
+          subtitle: item.interfaceName ? item.interfaceName : null,
           nodeId: item.nodeId,
           segmentId: item.segmentId,
           prefix: item.prefix,
@@ -911,6 +910,7 @@ export function buildPathDiagramModel(
     shownNeighbourCount,
     hiddenNeighbourCount,
     neighbourNotice,
+    neighbourSnapshotNotice,
   };
 }
 
@@ -935,22 +935,26 @@ export function PathDiagram({
   const [showReturn, setShowReturn] = useState(false);
   const [showNeighbours, setShowNeighbours] = useState(false);
   const [fetchedTopology, setFetchedTopology] = useState<TopologySnapshotView | null>(initialTopology);
+  const [topologyUnavailable, setTopologyUnavailable] = useState(false);
 
   useEffect(() => {
     setFetchedTopology(initialTopology);
+    setTopologyUnavailable(false);
   }, [initialTopology, result.snapshot_id]);
 
   useEffect(() => {
     if (!showNeighbours || fetchedTopology) return;
     let active = true;
+    setTopologyUnavailable(false);
     getTopology()
       .then((res) => {
-        if (active && res && Array.isArray(res.attachments)) {
-          setFetchedTopology(res);
-        }
+        if (!active) return;
+        if (res && Array.isArray(res.attachments)) setFetchedTopology(res);
+        else setTopologyUnavailable(true);
       })
       .catch(() => {
-        // Fail closed: if topology cannot be read, only the path's own segments are shown.
+        // Fail closed: if topology cannot be read, only the path's own segments are shown, and the panel says so.
+        if (active) setTopologyUnavailable(true);
       });
     return () => {
       active = false;
@@ -1021,6 +1025,11 @@ export function PathDiagram({
             {model.neighbourNotice && (
               <Typography variant="body2" data-testid="diagram-neighbours-truncated" sx={{ color: m3.onSurfaceVar, fontWeight: 600 }}>
                 {model.neighbourNotice}
+              </Typography>
+            )}
+            {showNeighbours && (model.neighbourSnapshotNotice ?? (topologyUnavailable ? NEIGHBOUR_TOPOLOGY_UNAVAILABLE : null)) && (
+              <Typography variant="body2" data-testid="diagram-neighbours-withheld" sx={{ color: m3.onSurfaceVar, fontWeight: 600 }}>
+                {model.neighbourSnapshotNotice ?? NEIGHBOUR_TOPOLOGY_UNAVAILABLE}
               </Typography>
             )}
           </Stack>

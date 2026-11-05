@@ -8,7 +8,10 @@ const OverviewScreen = lazy(() => import("./screens/OverviewScreen").then((m) =>
 const InventoryScreen = lazy(() => import("./screens/InventoryScreen").then((m) => ({ default: m.InventoryScreen })));
 const PolicyScreen = lazy(() => import("./screens/PolicyScreen").then(m => ({ default: m.PolicyScreen })));
 const PolicyPreview = lazy(() => import("./screens/PolicyScreen").then(m => ({ default: m.PolicyPreview })));
-const PathAnalysisScreen = lazy(() => import("./screens/PathAnalysisScreen").then((m) => ({ default: m.PathAnalysisScreen })));
+const TraceScreen = lazy(() => import("./screens/TraceScreen").then((m) => ({ default: m.TraceScreen })));
+const ChangesScreen = lazy(() => import("./screens/ChangesScreen").then((m) => ({ default: m.ChangesScreen })));
+const DiagnosticsScreen = lazy(() => import("./screens/DiagnosticsScreen").then((m) => ({ default: m.DiagnosticsScreen })));
+const OfflineAnalysisScreen = lazy(() => import("./screens/OfflineAnalysisScreen").then((m) => ({ default: m.OfflineAnalysisScreen })));
 const ConfigurationScreen = lazy(() => import("./screens/ConfigurationScreen").then((m) => ({ default: m.ConfigurationScreen })));
 const ComplianceScreen = lazy(() => import("./screens/ComplianceScreen").then((m) => ({ default: m.ComplianceScreen })));
 const BackupScreen = lazy(() => import("./screens/BackupScreen").then((m) => ({ default: m.BackupScreen })));
@@ -17,8 +20,10 @@ const PacketAnalysisScreen = lazy(() => import("./screens/PacketAnalysisScreen")
 const PacketAnalysisPreview = lazy(() => import("./preview/PacketAnalysisPreview").then((m) => ({ default: m.PacketAnalysisPreview })));
 const SanitizerScreen = lazy(() => import("./screens/SanitizerScreen").then((m) => ({ default: m.SanitizerScreen })));
 const SanitizerPreview = lazy(() => import("./preview/SanitizerPreview").then((m) => ({ default: m.SanitizerPreview })));
+const ReportsScreen = lazy(() => import("./screens/ReportsScreen").then((m) => ({ default: m.ReportsScreen })));
 const AdministrationScreen = lazy(() => import("./screens/AdministrationScreen").then((m) => ({ default: m.AdministrationScreen })));
 import { OverviewPreview } from "./preview/OverviewPreview";
+import { ReportsPreview } from "./preview/ReportsPreview";
 import { InventoryPreview } from "./preview/InventoryPreview";
 import { ConfigurationPreview } from "./preview/ConfigurationPreview";
 import { CompliancePreview } from "./preview/CompliancePreview";
@@ -28,6 +33,7 @@ import { AdministrationPreview } from "./preview/AdministrationPreview";
 import { PathAnalysisPreview } from "./preview/PathAnalysisPreview";
 import { DisplayModeProvider, isWall } from "./shell/displayMode";
 import { isScreenId, type ScreenId } from "./shell/types";
+import { rewriteLegacyRoute } from "./shell/legacyRoutes";
 
 /**
  * UI 2.0 shell. React + MUI on the Material 3 scheme from the Product Owner's
@@ -45,33 +51,50 @@ export type { ScreenId } from "./shell/types";
 
 const PRODUCT_SCREENS: Record<ScreenId, ComponentType> = {
   overview: OverviewScreen,
+  reports: ReportsScreen,
   inventory: InventoryScreen,
   configuration: ConfigurationScreen,
   policy: PolicyScreen,
-  path_analysis: PathAnalysisScreen,
+  trace: TraceScreen,
+  changes: ChangesScreen,
   compliance: ComplianceScreen,
   backups: BackupScreen,
   operations: OperationsScreen,
   administration: AdministrationScreen,
+  diagnostics: DiagnosticsScreen,
+  offline_analysis: OfflineAnalysisScreen,
   packet_analysis: PacketAnalysisScreen,
   sanitizer: SanitizerScreen,
 };
 
 const PREVIEW_SCREENS: Record<ScreenId, ComponentType> = {
   overview: OverviewPreview,
+  reports: ReportsPreview,
   inventory: InventoryPreview,
   configuration: ConfigurationPreview,
   policy: PolicyPreview,
-  path_analysis: PathAnalysisPreview,
+  // The design previews predate the Trace / Changes / Tools regrouping (UI review 2026-11-05): each new screen previews
+  // through the synthetic preview of the screen its content came from.
+  trace: PathAnalysisPreview,
+  changes: OperationsPreview,
   compliance: CompliancePreview,
   backups: BackupPreview,
   operations: OperationsPreview,
   administration: AdministrationPreview,
+  diagnostics: OperationsPreview,
+  offline_analysis: PolicyPreview,
   packet_analysis: PacketAnalysisPreview,
   sanitizer: SanitizerPreview,
 };
 
 export function screenFromSearch(search: string): { readonly screen: ScreenId; readonly preview: boolean } {
+  // Old addresses keep working (UI review 2026-11-05): an address written before the Trace / Changes / Tools /
+  // Administration regrouping is rewritten to its new home, its own parameters kept, so the screen reads the new shape.
+  const rewritten = rewriteLegacyRoute(search);
+  if (rewritten !== null) {
+    search = rewritten;
+    if (typeof window !== "undefined") window.history.replaceState(null, "", `?${rewritten}`);
+  }
   const params = new URLSearchParams(search);
   const preview = params.get("preview");
   if (isScreenId(preview)) return { screen: preview, preview: true };

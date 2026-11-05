@@ -17,10 +17,12 @@ import { usePreferenceFlag } from "./preference";
 
 /**
  * The rail is the product principle written down the left edge (UI product review 2026-10-18, §2.3 / roadmap 1.1):
- * Overview, then SEE Devices, VERIFY Compliance and Policy, RECOVER Backups, OPERATE Operations and Tools, with
- * Administration at the bottom. The group labels make the order explain itself. Every route keeps a home and an active
- * item; `Tools` is one rail entry whose two destinations (Packets, Sanitizer) open from a small menu, because both are
- * offline file-in/file-out tools rather than planes of the estate.
+ * Overview, then SEE Devices, VERIFY Compliance and Policy, TRACE Trace and Changes, RECOVER Backups, OPERATE Operations
+ * and Tools, with Administration at the bottom. The group labels make the order explain itself. Every route keeps a home
+ * and an active item. TRACE (UI review 2026-11-05, C3) holds the two questions "can A reach B" (Trace: topology path or
+ * policy rule lookup) and "what changed" (Changes: the feed and the policy rule revisions together). `Tools` is one rail
+ * entry whose destinations (Packets, Sanitizer, Diagnostics, Offline analysis; C4) open from a small menu, because all four
+ * are ad hoc, file-in or single-device engineering tools rather than planes of the estate.
  *
  * Width rule: from {@link DRAWER_BELOW_PX} up the rail is persistent with its labels and groups and there is no drawer
  * at all. Below that width the rail shrinks to icons and a `≡` button opens the same list as a temporary drawer -- the
@@ -31,7 +33,7 @@ import { usePreferenceFlag } from "./preference";
 export const DRAWER_BELOW_PX = 1100;
 
 /** The product groups, in the order of the principle. `null` means the item sits outside every group (Overview). */
-export type RailGroup = "SEE" | "VERIFY" | "RECOVER" | "OPERATE";
+export type RailGroup = "SEE" | "VERIFY" | "TRACE" | "RECOVER" | "OPERATE";
 
 export interface RailDestination {
   readonly id: string;
@@ -55,21 +57,29 @@ export interface RailEntry {
 
 export const PACKETS: RailDestination = { id: "packet-analysis", label: "Packets", icon: "rows", screen: "packet_analysis", requiredPlane: "PacketAnalysis" };
 export const SANITIZER: RailDestination = { id: "sanitizer", label: "Sanitizer", icon: "lock", screen: "sanitizer", requiredPlane: "Sanitizer" };
+// UI review 2026-11-05, C4: single-device diagnostics (a tab of Operations) and the SIEM-export check (a tab of Policy) are Tools.
+// Diagnostics had no plane gate as a tab of Operations; Offline analysis follows the Policy plane it was a tab of.
+export const DIAGNOSTICS: RailDestination = { id: "diagnostics", label: "Diagnostics", icon: "operations", screen: "diagnostics" };
+export const OFFLINE_ANALYSIS: RailDestination = { id: "offline-analysis", label: "Offline analysis", icon: "list", screen: "offline_analysis", requiredPlane: "Policy" };
 
 /** The rail, top to bottom; Administration is rendered last, at the bottom edge. */
 export const RAIL_ENTRIES: readonly RailEntry[] = [
   { id: "overview", label: "Overview", icon: "grid", group: null, screen: "overview" },
+  // Reports R1 (REPORTS_R1_CONTRACT.md "UI"): a top-level entry directly under Overview, because it is executive-facing.
+  { id: "reports", label: "Reports", icon: "report", group: null, screen: "reports" },
   { id: "devices", label: "Devices", icon: "devices", group: "SEE", screen: "inventory", requiredPlane: "Devices" },
   { id: "compliance", label: "Compliance", icon: "compliance", group: "VERIFY", screen: "compliance", requiredPlane: "Compliance" },
   { id: "policy", label: "Policy", icon: "policy", group: "VERIFY", screen: "policy", requiredPlane: "Policy" },
-  // Path analysis (PATH_ANALYSIS_DESIGN.md §5, stage A5b): "can A reach B". The query action follows the inventory read
-  // (open to every signed-in role, masked for aiview), so the entry carries no plane gate.
-  { id: "path", label: "Path", icon: "route", group: "VERIFY", screen: "path_analysis" },
+  // Trace (C3): Path analysis (PATH_ANALYSIS_DESIGN.md §5, stage A5b) and Policy > Lookup as two modes of one screen. The path
+  // query follows the inventory read (open to every signed-in role, masked for aiview), so the entry carries no plane gate.
+  { id: "trace", label: "Trace", icon: "route", group: "TRACE", screen: "trace" },
+  // One Changes entry for the Change feed (was Operations) and the policy rule revisions (was Policy > Changes).
+  { id: "changes", label: "Changes", icon: "rows", group: "TRACE", screen: "changes" },
   // The Product Owner's backup requirement asks for a left-hand Backup destination outright; RECOVER is its own verb.
   { id: "backups", label: "Backups", icon: "backup", group: "RECOVER", screen: "backups" },
   { id: "operations", label: "Operations", icon: "operations", group: "OPERATE", screen: "operations" },
   // PO decision record 2026-10-15 (Packet Analysis) and DATA_SANITIZER_CONTRACT.md §3.1 (Data Sanitizer).
-  { id: "tools", label: "Tools", icon: "tools", group: "OPERATE", destinations: [PACKETS, SANITIZER] },
+  { id: "tools", label: "Tools", icon: "tools", group: "OPERATE", destinations: [PACKETS, SANITIZER, DIAGNOSTICS, OFFLINE_ANALYSIS] },
 ];
 
 /**
@@ -102,7 +112,7 @@ export interface DrawerGroup {
 
 /**
  * The narrow-width drawer: the rail's own list, with the sub-views the old drawer held re-homed under their screens
- * (`Jobs` is the Jobs tab of Operations; `Device management` and `Inventory exclusions` are Administration tabs). Nothing
+ * (`Jobs` is the Jobs tab of Operations; the Administration groups are its four pages). Nothing
  * the old drawer served is dropped; `Discovery`, which never had a screen, stays a disabled leaf under Devices.
  */
 export const DRAWER_GROUPS: readonly DrawerGroup[] = [
@@ -114,7 +124,10 @@ export const DRAWER_GROUPS: readonly DrawerGroup[] = [
   { header: "VERIFY", leaves: [
     { label: "Compliance", screen: "compliance", href: "?screen=compliance", requiredPlane: "Compliance" },
     { label: "Policy", screen: "policy", href: "?screen=policy", requiredPlane: "Policy" },
-    { label: "Path", screen: "path_analysis", href: "?screen=path_analysis" },
+  ] },
+  { header: "TRACE", leaves: [
+    { label: "Trace", screen: "trace", href: "?screen=trace" },
+    { label: "Changes", screen: "changes", href: "?screen=changes" },
   ] },
   { header: "RECOVER", leaves: [
     { label: "Backups", screen: "backups", href: "?screen=backups" },
@@ -123,16 +136,18 @@ export const DRAWER_GROUPS: readonly DrawerGroup[] = [
     { label: "Operations", screen: "operations", href: "?screen=operations" },
     { label: "Jobs", href: "?screen=operations&tab=jobs", screen: "operations" },
     { label: "System health", href: "?screen=operations&tab=health", screen: "operations" },
-    // Who changed what, when (mockup 2026-10-17 screen 3, PO 2026-10-20): the Change feed tab of Operations.
-    { label: "Change feed", href: "?screen=operations&tab=changes", screen: "operations" },
     { label: "Packets", screen: "packet_analysis", href: "?screen=packet_analysis", requiredPlane: "PacketAnalysis" },
     { label: "Sanitizer", screen: "sanitizer", href: "?screen=sanitizer", requiredPlane: "Sanitizer" },
+    { label: "Diagnostics", screen: "diagnostics", href: "?screen=diagnostics" },
+    { label: "Offline analysis", screen: "offline_analysis", href: "?screen=offline_analysis", requiredPlane: "Policy" },
   ] },
+  // The four Administration groups (C4) plus the Product heading; every page is reachable, the screen shows a locked panel
+  // where the session may not use it.
   { header: "Administration", screen: "administration", leaves: [
-    { label: "Device management", href: "?screen=administration&tab=device-management", screen: "administration", requiredPlane: "Admin" },
-    { label: "Inventory exclusions", href: "?screen=administration&tab=inventory-exclusions", screen: "administration", requiredPlane: "Admin" },
-    { label: "SSH trust", href: "?screen=administration&tab=ssh-trust", screen: "administration", requiredPlane: "Admin" },
-    { label: "Job logs", href: "?screen=administration&tab=job-logs", screen: "administration", requiredPlane: "Admin" },
+    { label: "Device Registry", href: "?screen=administration&tab=registry", screen: "administration", requiredPlane: "Admin" },
+    { label: "Access & Identity", href: "?screen=administration&tab=access", screen: "administration", requiredPlane: "Admin" },
+    { label: "Platform", href: "?screen=administration&tab=platform", screen: "administration", requiredPlane: "Admin" },
+    { label: "Audit", href: "?screen=administration&tab=audit", screen: "administration", requiredPlane: "Admin" },
   ] },
 ];
 
@@ -279,6 +294,7 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
             </Box>
 
             <DrawerItem label="Overview" on={active === "overview"} navHref="?screen=overview" />
+            <DrawerItem label="Reports" on={active === "reports"} navHref="?screen=reports" />
 
             {allowedDrawerGroups.map((g) => (
               <Box key={g.header}>

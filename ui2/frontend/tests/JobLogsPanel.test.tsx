@@ -1,9 +1,12 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { JobLogsPanel, jobTargetLabel, localInputToIso } from "../src/screens/JobLogsPanel";
+import { JobLogsPanel, MASKED_SEARCH_NOTE, MASKED_TARGET_SORT_NOTE, jobTargetLabel, localInputToIso } from "../src/screens/JobLogsPanel";
 import { jobTypeLabel } from "../src/jobs/jobTypeLabel";
 
 // The panel writes `?job=<id>` when a row opens; jsdom keeps the URL between tests, so it is reset here.
+/** The Failed state opens on the last seven days (UI review 2026-11-05, B6): its page request carries a `since`. */
+const failedWindowRequest = (url: string) => /^\/api\/v2\/jobs\?state=FAILED&since=[^&]+&page=1&page_size=50$/.test(url);
+
 afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState(null, "", "/"); });
 
 function stubApi(jobsPage: unknown, calls: string[] = []) {
@@ -145,7 +148,7 @@ describe("history, filters, pages and export (PO P0, 2026-09-22)", () => {
     await waitFor(() => expect(screen.getByLabelText("State")).toBeInTheDocument());
 
     fireEvent.change(screen.getByLabelText("State"), { target: { value: "FAILED" } });
-    await waitFor(() => expect(calls.some((c) => c === "/api/v2/jobs?state=FAILED&page=1&page_size=50")).toBe(true));
+    await waitFor(() => expect(calls.some((c) => failedWindowRequest(c))).toBe(true));
   });
 
   it("exports the current filter as CSV through the export route", async () => {
@@ -157,7 +160,7 @@ describe("history, filters, pages and export (PO P0, 2026-09-22)", () => {
     fireEvent.change(screen.getByLabelText("State"), { target: { value: "FAILED" } });
     fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
 
-    await waitFor(() => expect(calls.some((c) => c === "/api/v2/jobs/export.csv?state=FAILED")).toBe(true));
+    await waitFor(() => expect(calls.some((c) => /^\/api\/v2\/jobs\/export\.csv\?state=FAILED&since=/.test(c))).toBe(true));
   });
 });
 
@@ -214,4 +217,32 @@ it("cycles server sort asc -> desc -> default on header click and resets to page
   fireEvent.click(durationHeader);
   await waitFor(() => expect(calls.some((c) => c === "/api/v2/jobs?page=1&page_size=50")).toBe(true));
   expect(screen.getByRole("columnheader", { name: /Duration/i })).not.toHaveAttribute("aria-sort");
+});
+
+// Security review 2026-11-05 M-2: the masked page says Target is not sortable and the search matches ids only.
+it("offers no Target sort and says the search keeps to ids when the server marks the page masked", async () => {
+  stubApi({ items: [{ job_id: "job-9", target_device_id: "opaque-001", job_type: "inventory", state: "FAILED" }],
+    page: 1, page_size: 50, total: 1, target_sortable: false, search_scope: "ids" });
+  render(<JobLogsPanel />);
+  await waitFor(() => expect(screen.getByText("1–1 of 1 jobs")).toBeInTheDocument());
+
+  const target = screen.getByRole("columnheader", { name: /Target Device/i });
+  expect(within(target).queryByRole("button")).toBeNull();
+  expect(target).toHaveAttribute("title", MASKED_TARGET_SORT_NOTE);
+  // The other columns still sort.
+  expect(within(screen.getByRole("columnheader", { name: /Duration/i })).getByRole("button")).toBeInTheDocument();
+  expect(screen.getByText(`${MASKED_TARGET_SORT_NOTE} ${MASKED_SEARCH_NOTE}`)).toBeInTheDocument();
+  expect(screen.getByPlaceholderText("job id or device id…")).toBeInTheDocument();
+});
+
+it("keeps the Target sort and the full search when the page is not masked", async () => {
+  const calls = stubApi({ items: [{ job_id: "job-9", target_device_id: "opaque-001", job_type: "inventory", state: "FAILED" }],
+    page: 1, page_size: 50, total: 1 });
+  render(<JobLogsPanel />);
+  await waitFor(() => expect(screen.getByText("1–1 of 1 jobs")).toBeInTheDocument());
+
+  fireEvent.click(within(screen.getByRole("columnheader", { name: /Target Device/i })).getByRole("button"));
+  await waitFor(() => expect(calls.some((c) => c === "/api/v2/jobs?page=1&page_size=50&sort=device&order=asc")).toBe(true));
+  expect(screen.queryByText(MASKED_SEARCH_NOTE, { exact: false })).toBeNull();
+  expect(screen.getByPlaceholderText("job id, device id or reason…")).toBeInTheDocument();
 });

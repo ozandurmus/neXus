@@ -81,6 +81,7 @@ import { DeviceLogsPanel, describeSystemLogCollectError, describeSystemLogCollec
 import { CpFailoverPanel } from "./CpFailoverPanel";
 import { CertificateStatePill, HttpsCertificateCard } from "./HttpsCertificatePanel";
 import { IdentityCard, identityTiles, platformFactsNote } from "./PlatformIdentity";
+import { FRESH_UNDER_MS } from "../shell/freshness";
 import {
   HeaderStateRow, READINESS_VENDORS, backupFact, backupsHref, clusterCompareFact, clusterComplianceFact, clusterConfigChangedFact, complianceFact,
   configChangedFact, readinessFact, useMemberHeaderReads,
@@ -2403,7 +2404,7 @@ export function headerConfigRead(read: { readonly collected_at: string | null } 
 }
 
 /** A configuration read this much older than the platform read is flagged amber (UI review 2026-10-18, P1-1B). */
-const CONFIG_STALE_AFTER_MS = 24 * 3_600_000;
+const CONFIG_STALE_AFTER_MS = FRESH_UNDER_MS;
 
 /** One member's read times, for the cluster header's read ages (the oldest member is the headline, each member on hover). */
 export interface MemberReadAges { readonly label: string; readonly platformAt: string | null | undefined; readonly configAt?: string | null }
@@ -2473,6 +2474,21 @@ function IdentityReference({ value }: { readonly value: string }) {
 /** Lets a panel inside the tab strip open another tab and land on an anchor in it (the Identity tab's link to the grid). */
 const DetailTabsContext = createContext<{ readonly has: (label: string) => boolean; readonly open: (label: string, anchorId?: string) => void } | null>(null);
 
+/** The cluster page's merged tab (UI review 2026-11-05, B5); the two tab names it replaced still lead to it. */
+export const MEMBERS_IDENTITY_TAB = "Members & Identity";
+const TAB_ALIASES: Readonly<Record<string, string>> = {
+  "cluster members": MEMBERS_IDENTITY_TAB.toLowerCase(),
+  identity: MEMBERS_IDENTITY_TAB.toLowerCase(),
+};
+
+/** The tab's index by its label, case-insensitive; an old name falls back to the tab that replaced it. -1 when neither. */
+function tabIndex(tabs: ReadonlyArray<{ label: string }>, label: string): number {
+  const wanted = label.toLowerCase();
+  const exact = tabs.findIndex((t) => t.label.toLowerCase() === wanted);
+  if (exact >= 0 || !TAB_ALIASES[wanted]) return exact;
+  return tabs.findIndex((t) => t.label.toLowerCase() === TAB_ALIASES[wanted]);
+}
+
 /** The detail tabs of the one device screen: the Configuration tab only when the vendor has a configuration read. */
 function DetailTabs({ ariaLabel, tabs, configuration, initialTab, selectionKey, onlyTabs }: {
   readonly ariaLabel: string;
@@ -2484,7 +2500,7 @@ function DetailTabs({ ariaLabel, tabs, configuration, initialTab, selectionKey, 
   readonly onlyTabs?: readonly string[];
 }) {
   const shown = tabs.filter((t) => (!onlyTabs || onlyTabs.includes(t.label)) && (t.label !== "Configuration" || Boolean(configuration)));
-  const wanted = initialTab ? shown.findIndex((t) => t.label.toLowerCase() === initialTab.toLowerCase()) : -1;
+  const wanted = initialTab ? tabIndex(shown, initialTab) : -1;
   return <DetailTabsBody key={`${wanted}:${selectionKey ?? ""}`} ariaLabel={ariaLabel} tabs={shown} initial={Math.max(0, wanted)} />;
 }
 
@@ -2501,9 +2517,9 @@ function DetailTabsBody({ ariaLabel, tabs, initial }: {
     setAnchor(null);
   }, [anchor, value]);
   const nav = useMemo(() => ({
-    has: (label: string) => tabs.some((t) => t.label === label),
+    has: (label: string) => tabIndex(tabs, label) >= 0,
     open: (label: string, anchorId?: string) => {
-      const index = tabs.findIndex((t) => t.label === label);
+      const index = tabIndex(tabs, label);
       if (index < 0) return;
       setValue(index);
       if (anchorId) setAnchor(anchorId);
@@ -3192,11 +3208,18 @@ export function ClusterDetailPanels({
               />
             ),
           },
+          // UI review 2026-11-05, B5: Cluster members and Identity were two tabs over the same members; one tab now.
           {
-            label: "Cluster members",
+            label: "Members & Identity",
             panel: (
-              <Stack spacing={2}>
-                <Table size="small">
+              <Stack spacing={2} sx={{ minWidth: 0 }}>
+                <IdentityReference value={clusterRef} />
+                <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
+                  {plural(orderedMembers.length, "member")} · {clusterVendorLabel(firstMember?.vendor_hint)}
+                  {virtualSystems.length > 0 ? ` · ${virtualSystems.length} ${isPaloAlto ? "VSYS" : "VSX"}: ${virtualSystems.join(", ")}` : ""}
+                  {" "}· each value is read from that member itself; a value not read is UNKNOWN.
+                </Typography>
+                <Table size="small" aria-label="Cluster members">
                   <TableHead>
                     <TableRow>
                       <TableCell sx={{ fontWeight: 600 }}>Member Hostname</TableCell>
@@ -3228,6 +3251,7 @@ export function ClusterDetailPanels({
                     ))}
                   </TableBody>
                 </Table>
+                <DeviceIdentityTable devices={orderedMembers} ariaLabel="Member identity" />
               </Stack>
             ),
           },
@@ -3240,20 +3264,6 @@ export function ClusterDetailPanels({
             label: "Logs",
             panel: <ClusterLogsPanel members={orderedMembers} allMembers={orderedMembers} vendorHint={firstMember.vendor_hint} selectedIndex={safeMemberIdx} onSelectIndex={setSelectedMemberIdx} />,
           }] : []),
-          {
-            label: "Identity",
-            panel: (
-              <Stack spacing={1} sx={{ minWidth: 0 }}>
-                <IdentityReference value={clusterRef} />
-                <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-                  {plural(orderedMembers.length, "member")} · {clusterVendorLabel(firstMember?.vendor_hint)}
-                  {virtualSystems.length > 0 ? ` · ${virtualSystems.length} ${isPaloAlto ? "VSYS" : "VSX"}: ${virtualSystems.join(", ")}` : ""}
-                  {" "}· each value is read from that member itself; a value not read is UNKNOWN.
-                </Typography>
-                <DeviceIdentityTable devices={orderedMembers} ariaLabel="Member identity" />
-              </Stack>
-            ),
-          },
           ...(firstMember && (firstMember.vendor_hint === "check_point" || firstMember.vendor_hint === "palo_alto")
             ? [{ label: "Failover", panel: <CpFailoverPanel memberDeviceId={firstMember.device_id} vendor={firstMember.vendor_hint} /> }] : []),
         ]}

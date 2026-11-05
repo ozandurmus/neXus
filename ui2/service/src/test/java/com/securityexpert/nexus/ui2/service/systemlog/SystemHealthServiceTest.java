@@ -298,6 +298,116 @@ class SystemHealthServiceTest {
     }
 
     @Test
+    void aTransientSarReadFailureIsUnknownIsRetriedAfterTheBackoffAndIsNeverCachedForGood() throws Exception {
+        storeSar(CP_CALM, LocalDate.of(2026, 10, 19), sarText(30, 6, false));
+        ran(CP_CALM, "job-c", NOW.minusSeconds(900), "cp_cpwd_elg=NO_NEW_DATA", "cp_crash_listing=COLLECTED");
+        var service = service();
+
+        fx.store.failNext.set(1);
+        service.refreshNow(NOW);
+        var cpu = part(row(service.health(NOW), CP_CALM), "cpu");
+        assertEquals("UNKNOWN", cpu.get("level"));
+        assertEquals("SAR_TEXT_UNREADABLE", cpu.get("reason"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> days = (List<Map<String, Object>>) cpu.get("days");
+        assertEquals("UNREADABLE", days.get(0).get("status"));
+        assertEquals(1, fx.store.retrievals.get());
+
+        // Bounded: no re-read before the retry time, so a broken file is not read on every refresh.
+        Instant early = NOW.plus(SystemHealthService.UNREADABLE_RETRY_MIN).minusSeconds(1);
+        service.refreshNow(early);
+        assertEquals("UNKNOWN", part(row(service.health(early), CP_CALM), "cpu").get("level"));
+        assertEquals(1, fx.store.retrievals.get());
+
+        // The store recovered: the next refresh after the retry time reads and parses the day.
+        Instant later = NOW.plus(SystemHealthService.UNREADABLE_RETRY_MIN);
+        service.refreshNow(later);
+        cpu = part(row(service.health(later), CP_CALM), "cpu");
+        assertEquals("NORMAL", cpu.get("level"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> parsed = (List<Map<String, Object>>) cpu.get("days");
+        assertEquals("PARSED", parsed.get(0).get("status"));
+        assertEquals(30.0, parsed.get(0).get("p95_percent"));
+        assertEquals(2, fx.store.retrievals.get());
+
+        // A good read is kept: immutable artefact, read once.
+        service.refreshNow(later.plusSeconds(3600));
+        assertEquals(2, fx.store.retrievals.get());
+    }
+
+    @Test
+    void anUnreadableCpwdChunkIsUnknownRestartsNeverZeroAndRecoversAfterTheBackoff() throws Exception {
+        storeSar(CP_CALM, LocalDate.of(2026, 10, 19), sarText(30, 6, false));
+        ran(CP_CALM, "job-c", NOW.minusSeconds(900), "cp_cpwd_elg=COLLECTED", "cp_crash_listing=COLLECTED");
+        var service = service();
+        service.refreshNow(NOW); // reads and keeps the sar day; no cpwd chunk yet
+        assertEquals("NORMAL", row(service.health(NOW), CP_CALM).get("state"));
+
+        // A chunk arrives and its read fails: the only retrieval of this refresh.
+        storeCpwd(CP_CALM, "c-calm", cpwdLine("05:41:14", "Restarting process FWD"));
+        fx.store.failNext.set(1);
+        int before = fx.store.retrievals.get();
+        Instant t1 = NOW.plusSeconds(10);
+        service.refreshNow(t1);
+        assertEquals(before + 1, fx.store.retrievals.get());
+        var calm = row(service.health(t1), CP_CALM);
+        var restarts = part(calm, "restarts");
+        assertEquals("UNKNOWN", restarts.get("level"));
+        assertEquals("CPWD_UNREADABLE", restarts.get("reason"));
+        assertNull(restarts.get("count"), "an unreadable chunk is no evidence, never 0 restarts");
+        assertNull(restarts.get("max_in_one_hour"));
+        assertEquals("UNKNOWN", calm.get("state"), "a COLLECTED cpwd run whose chunk cannot be read is not NORMAL");
+
+        Instant t2 = t1.plus(SystemHealthService.UNREADABLE_RETRY_MIN);
+        service.refreshNow(t2);
+        calm = row(service.health(t2), CP_CALM);
+        assertEquals("NORMAL", part(calm, "restarts").get("level"));
+        assertEquals(1, part(calm, "restarts").get("count"));
+        assertEquals("NORMAL", calm.get("state"));
+    }
+
+    @Test
+    void readableChunksAlreadyOverTheRestartThresholdStayAttentionBesideAnUnreadableOne() throws Exception {
+        storeCpwd(CP_HOT, "c-hot", cpwdLine("05:41:14", "Restarting process FWD") + cpwdLine("05:42:00", "Restarting process FWD")
+                + cpwdLine("05:43:00", "Restarting process FWD"));
+        // A second chunk whose bytes are not on the volume.
+        cpwd.get(CP_HOT).add(new CpwdChunkRef("c-missing", CP_HOT, "2026-10-19", 10, 1, NOW, null, "artefact-m",
+                root.resolve("nowhere").toString(), new byte[48]));
+        ran(CP_HOT, "job-h", NOW.minusSeconds(600), "cp_cpwd_elg=COLLECTED", "cp_crash_listing=COLLECTED");
+        var service = service();
+        service.refreshNow(NOW);
+        var restarts = part(row(service.health(NOW), CP_HOT), "restarts");
+        assertEquals("ATTENTION", restarts.get("level"), "the readable chunks are a lower bound; the threshold is already met");
+        assertEquals(3, restarts.get("max_in_one_hour"));
+    }
+
+    @Test
+    void aFailedReadIsRetriedOnADoublingWaitCappedAtTheMaximum() {
+        assertEquals(SystemHealthService.UNREADABLE_RETRY_MIN, SystemHealthService.retryAfter(1));
+        assertEquals(SystemHealthService.UNREADABLE_RETRY_MIN.multipliedBy(2), SystemHealthService.retryAfter(2));
+        assertEquals(SystemHealthService.UNREADABLE_RETRY_MIN.multipliedBy(32), SystemHealthService.retryAfter(6));
+        assertEquals(SystemHealthService.UNREADABLE_RETRY_MAX, SystemHealthService.retryAfter(7));
+        assertEquals(SystemHealthService.UNREADABLE_RETRY_MAX, SystemHealthService.retryAfter(Integer.MAX_VALUE));
+
+        Map<String, SystemHealthService.Read<String>> cache = new java.util.HashMap<>();
+        int[] reads = {0};
+        java.util.function.Supplier<String> broken = () -> {
+            reads[0]++;
+            return null;
+        };
+        assertNull(SystemHealthService.cached(cache, "f", NOW, broken));
+        assertNull(SystemHealthService.cached(cache, "f", NOW.plusSeconds(59), broken));
+        assertEquals(1, reads[0], "no re-read inside the wait");
+        assertNull(SystemHealthService.cached(cache, "f", NOW.plusSeconds(60), broken));
+        assertEquals(2, reads[0]);
+        assertEquals(2, cache.get("f").failures());
+        assertEquals(NOW.plusSeconds(60).plus(SystemHealthService.UNREADABLE_RETRY_MIN.multipliedBy(2)), cache.get("f").retryAt());
+        assertEquals("ok", SystemHealthService.cached(cache, "f", NOW.plusSeconds(180), () -> "ok"));
+        assertEquals("ok", SystemHealthService.cached(cache, "f", NOW.plusSeconds(181), broken), "a good read is kept");
+        assertEquals(2, reads[0]);
+    }
+
+    @Test
     void startupRefresherWarmsSnapshotWithoutSchedulerAndFailedBackgroundRefreshReportsFailedReason() throws Exception {
         var service = new SystemHealthService(fx.repository, fx.settings, () -> targets, fx.devices, fx.store, 85, false);
         var refresher = new SystemLogReadConfiguration.SystemHealthRefresher(service);

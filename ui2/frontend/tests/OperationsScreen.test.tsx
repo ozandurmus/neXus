@@ -42,10 +42,7 @@ afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState(null, "", "
 const TABS = [
   { label: "HA & readiness", marker: "No HA pair or cluster enrolled" },
   { label: "Jobs", marker: "All jobs" },
-  { label: "Diagnostics", marker: "Diagnostics could not be loaded or access is unavailable." },
   { label: "System health", marker: "System health could not be read" },
-  // The stub answers `{}` for the feed route: the panel's own error state is the marker (never another tab's text).
-  { label: "Change feed", marker: "Could not load the change feed" },
 ];
 
 describe("OperationsScreen tabs", () => {
@@ -63,6 +60,14 @@ describe("OperationsScreen tabs", () => {
         expect(screen.queryByText(other.marker)).toBeNull();
       }
     }
+  });
+
+  it("has three tabs: Diagnostics moved to Tools and the Change feed to Changes (UI review 2026-11-05, C3/C4)", async () => {
+    stubFetch([], null);
+    render(withTheme(<OperationsScreen />));
+    await screen.findByText("No HA pair or cluster enrolled");
+    const tablist = screen.getByRole("tablist", { name: "Operations sections" });
+    expect(within(tablist).getAllByRole("tab").map(t => t.textContent)).toEqual(["HA & readiness", "Jobs", "System health"]);
   });
 
   it("defaults to the HA & readiness tab, empty", async () => {
@@ -156,6 +161,13 @@ describe("OperationsScreen tabs", () => {
   it("links the Failed jobs KPI card to the Jobs table with its Failed pill pressed (roadmap 2.4)", async () => {
     stubFetch(MEMBERS, null);
     render(withTheme(<OperationsScreen />));
+    // UI review 2026-11-05, B3: the job cards live on the Jobs tab only, the readiness card on HA & readiness only.
+    expect(await screen.findByText("Readiness checks", { selector: "p" })).toBeInTheDocument();
+    expect(screen.queryByText("Open failed jobs")).toBeNull();
+    expect(screen.queryByText("Jobs finished (24 h)")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Jobs" }));
+    expect(screen.queryByText("Readiness checks", { selector: "p" })).toBeNull();
+    expect(screen.getByText("Jobs finished (24 h)")).toBeInTheDocument();
     // Exactly one link: the header no longer duplicates the job table with its own button.
     expect(await screen.findAllByText("Open failed jobs")).toHaveLength(1);
     fireEvent.click(screen.getByText("Open failed jobs"));
@@ -177,6 +189,9 @@ describe("job totals reconcile (review 2026-09-23)", () => {
         ? { total: 5000, total_24h: 1018, completed_24h: 971, failed_24h: 45, outcome_unknown_24h: 2, rejected_24h: 0, cancelled_24h: 0, submitted_24h: 1018, running: 0 }
         : {}), { status: url.includes("/api/v2/jobs/stats") ? 200 : 404 }))));
     render(<OperationsScreen />);
+    // UI review 2026-11-05, B3: the job cards are on the Jobs tab
+    const { fireEvent } = await import("@testing-library/react");
+    fireEvent.click(screen.getByRole("tab", { name: "Jobs" }));
     expect(await screen.findByText(/971 completed · 45 failed · 2 outcome unknown · 0 in flight/)).toBeInTheDocument();
     expect(screen.getByText(/completed of 1016 completed or failed; 2 other outcomes not counted/)).toBeInTheDocument();
     vi.unstubAllGlobals();

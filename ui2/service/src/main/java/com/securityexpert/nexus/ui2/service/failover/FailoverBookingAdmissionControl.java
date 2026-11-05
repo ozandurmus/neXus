@@ -4,6 +4,7 @@ import com.securityexpert.nexus.ui2.jobs.failover.schedule.FailoverScheduleRecor
 import com.securityexpert.nexus.ui2.jobs.failover.schedule.FailoverScheduleStatus;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -34,6 +35,17 @@ public class FailoverBookingAdmissionControl {
     public static final Duration VOLUME_ROLLING_WINDOW = Duration.ofHours(24);
     public static final int MAX_SCHEDULED_PER_24H = 10;
 
+    private final Clock clock;
+
+    public FailoverBookingAdmissionControl() {
+        this(Clock.systemUTC());
+    }
+
+    /** Deterministic form for tests: lead-time checks read this clock, not the host wall clock. */
+    public FailoverBookingAdmissionControl(Clock clock) {
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
+    }
+
     public synchronized void validateBookingAdmission(
         Instant windowStart,
         Instant windowEnd,
@@ -46,7 +58,7 @@ public class FailoverBookingAdmissionControl {
         Objects.requireNonNull(clusterRef, "clusterRef must not be null");
         Objects.requireNonNull(existingSchedules, "existingSchedules must not be null");
 
-        Instant now = Instant.now();
+        Instant now = clock.instant();
 
         // 1. Minimum start time (must be in future)
         if (!windowStart.isAfter(now)) {

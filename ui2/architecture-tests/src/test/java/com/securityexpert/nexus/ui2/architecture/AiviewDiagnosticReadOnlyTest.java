@@ -62,7 +62,12 @@ class AiviewDiagnosticReadOnlyTest {
                 // Packet Analysis: read, and run (PO decision 2026-10-18)
                 ActionRegistry.PACKET_ANALYSIS_READ, ActionRegistry.PACKET_ANALYSIS_RUN,
                 // path analysis A6: CLASS_0 vendor matchers under the 2026-10-04 CLASS_0 diagnostic allowance
-                ActionRegistry.PATH_ANALYSIS_VALIDATE)), held);
+                ActionRegistry.PATH_ANALYSIS_VALIDATE,
+                // Reports R1 (docs/design/REPORTS_R1_CONTRACT.md, FROZEN 2026-11-05): catalogue, preview, history and
+                // generate, always in the masked projection; never report_raw_view
+                ActionRegistry.REPORT_READ, ActionRegistry.REPORT_GENERATE)), held);
+        assertFalse(all.get(ActionRegistry.REPORT_RAW_VIEW).requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER));
+        assertFalse(ActionRegistry.REPORT_RAW_ROLES.contains(RoleToken.REPLAY_VIEWER));
         assertFalse(all.get(ActionRegistry.PACKET_ANALYSIS_RAW_VIEW).requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER));
         assertFalse(ActionRegistry.PACKET_ANALYSIS_RAW_ROLES.contains(RoleToken.REPLAY_VIEWER));
         assertTrue(ActionRegistry.PACKET_ANALYSIS_RUN_ROLES.contains(RoleToken.REPLAY_VIEWER));

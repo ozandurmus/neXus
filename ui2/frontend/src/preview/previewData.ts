@@ -14,19 +14,36 @@
  * different thing from a labelled design preview.
  */
 
-export interface PostureCard {
-  readonly title: string;
-  readonly value: string;
-  readonly sub: string;
-  readonly tone: "neutral" | "ok" | "warn" | "bad";
-}
-
-export const POSTURE: readonly PostureCard[] = [
-  { title: "Network inventory", value: "42 / 46", sub: "live · 4 stale, last-known-good", tone: "warn" },
-  { title: "Configuration", value: "40 / 42", sub: "evidence · 2 partial, SSH timeout", tone: "warn" },
-  { title: "Local overrides", value: "6", sub: "intentional · 5 expected member differences", tone: "neutral" },
-  { title: "Effective drift", value: "2", sub: "unexplained · 1 Panorama out of sync", tone: "bad" },
-];
+/**
+ * The executive home preview (UI review 2026-11-05, C1): synthetic estate figures in the shape the Overview's reads
+ * return, run through the same verdict, freshness and attention logic as the live screen. Counts only: the home names
+ * no device, so no identity can leak from it; the one control title is a generic benchmark wording.
+ */
+export const EXEC_HOME = {
+  devices: 132,
+  clusters: 45,
+  security: { failing: 97, of: 118 },
+  backups: { archived: 126, of: 130 },
+  ha: { total: 45, ready: 35, notReady: 2, unknown: 3, unsupported: 5 },
+  freshness: { fresh: 1, of: 132, never: 0 },
+  newestReadHoursAgo: 0.3,
+  oldestReadHoursAgo: 31,
+  backupRunHoursAgo: 47,
+  complianceHoursAgo: 31,
+  readinessHoursAgo: 31,
+  topControl: { id: "PREVIEW-CTL-01", title: "Account lockout after failed logins", failing: 62, of: 62 },
+  frameworks: [
+    { name: "Financial Baseline", pass: 640, fail: 1010, unavailable: 625 },
+    { name: "PCI-DSS v4.0.1", pass: 520, fail: 1040, unavailable: 600 },
+    { name: "NIST SP 800-53", pass: 700, fail: 1140, unavailable: 455 },
+    { name: "CIS Benchmark", pass: 749, fail: 1246, unavailable: 496 },
+  ],
+  pulse: [
+    { label: "Configuration changed", hint: "since each device's previous read", value: "42 of 124 devices" },
+    { label: "Cluster member differences", hint: "a review signal, not a fault", value: "3 of 45 clusters" },
+    { label: "Policies installed today", hint: "as each gateway reports it", value: "1 of 122 gateways" },
+  ],
+} as const;
 
 export type AlignmentState =
   | "Aligned"
