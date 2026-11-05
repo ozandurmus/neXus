@@ -171,12 +171,22 @@ public final class PolicyPrivacy {
         out.put("class", HYGIENE_REASONS.contains(cls) ? cls : "UNKNOWN");
         out.put("cell", PolicyBlockerSplit.CELLS.contains(cell) || cell.matches("extra:[a-z0-9/_-]{1,60}") || cell.equals("extra:UNKNOWN") ? cell : "UNKNOWN");
         out.put("status", PolicyBlockerSplit.STATUSES.contains(status) ? status : "UNKNOWN");
-        out.put("type", ENUMS.contains(type) || Set.of("NONE", "MISSING").contains(type) ? type : "UNKNOWN");
-        out.put("nativeType", nativeType.matches("[A-Za-z][A-Za-z0-9_-]{0,39}") || Set.of("NONE", "UNKNOWN").contains(nativeType) ? nativeType : "UNKNOWN");
+        out.put("type", splitTypeToken(type) || "MISSING".equals(type) ? type : "UNKNOWN");
+        out.put("nativeType", splitTypeToken(nativeType) ? nativeType : "UNKNOWN");
         out.put("partialPrior", row.get("partialPrior") instanceof Boolean b ? b : "UNKNOWN");
         out.put("blockers", row.get("blockers") instanceof Number n ? n : 0);
         out.put("blockedRules", row.get("blockedRules") instanceof Number n ? n : 0);
         return out;
+    }
+    /**
+     * A vendor schema type token the AIView split may show: a known enum, a Check Point {@code Cpmi*} class name, or a
+     * lowercase word list joined by hyphens with no digits (e.g. {@code external-list}, {@code access-role}). A token
+     * with a digit, a dot, a space or an upper-case letter outside {@code Cpmi*} (the shape of a hostname or a
+     * pseudonym such as FW-TANGO-04) reads UNKNOWN.
+     */
+    private static boolean splitTypeToken(String token) {
+        return ENUMS.contains(token) || "NONE".equals(token) || "UNKNOWN".equals(token)
+            || token.matches("Cpmi[A-Za-z]{1,36}") || token.matches("[a-z]{1,20}(?:-[a-z]{1,20}){0,3}");
     }
     private static String objectNameType(String type) {
         return switch (type) {
