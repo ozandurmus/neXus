@@ -120,4 +120,24 @@ class MachineGateTest {
         assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "DELETE", now, ActionRegistry.REPORT_GENERATE).isPresent());
         assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.REPORT_RAW_VIEW).isPresent());
     }
+
+    @Test
+    void inventoryCollectPostPassesTheMachineGuardButConfigurationCollectAndRegisterStayRefused() {
+        // PO 2026-11-05 evening, item 5: aiview starts the read-only inventory collection (one device or all).
+        String cookie = "synthetic-cookie";
+        Instant now = Instant.parse("2026-11-05T21:00:00Z");
+        var sessions = mock(SessionRepository.class);
+        var machine = new SessionRecord(SessionHasher.hash(cookie), "synthetic-actor", "synthetic-csrf",
+                SessionState.ACTIVE, now.minusSeconds(10), now.minusSeconds(10), now.plusSeconds(600),
+                now.plusSeconds(1800), Optional.empty(), Optional.empty(), Optional.empty(), true);
+        when(sessions.findBySessionId(anyString(), eq(now))).thenReturn(Optional.of(machine));
+        var registry = new ActionRegistry();
+        var gate = new GateChain(sessions, registry, mock(RbacEvaluator.class),
+                mock(com.securityexpert.nexus.ui2.persistence.identity.AuthzDecisionRepository.class));
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.DEVICE_INVENTORY_COLLECT).isEmpty());
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "PUT", now, ActionRegistry.DEVICE_INVENTORY_COLLECT).isPresent());
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.DEVICE_CONFIGURATION_COLLECT).isPresent());
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.DEVICE_REGISTER).isPresent());
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.DEVICE_DELETE).isPresent());
+    }
 }
