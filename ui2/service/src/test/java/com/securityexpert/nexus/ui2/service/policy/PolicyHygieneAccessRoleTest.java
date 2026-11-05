@@ -3,7 +3,6 @@ package com.securityexpert.nexus.ui2.service.policy;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
 import static com.securityexpert.nexus.ui2.policy.PolicySnapshot.*;
 import static com.securityexpert.nexus.ui2.service.policy.PolicyHygieneTest.*;
-import static com.securityexpert.nexus.ui2.service.policy.PolicyHygieneCheckPointScopeTest.assertUnknown;
 import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
 import java.util.*;
@@ -18,6 +17,21 @@ import java.util.*;
  * Synthetic fixtures: documentation addresses and masked names only.
  */
 class PolicyHygieneAccessRoleTest {
+    // This class pins the disjointness bound of an access role. X1 (pass-over by non-containment) would also release some
+    // of its fixtures for a different reason, so every verdict here is read with X1 off; X1 over access roles is in
+    // PolicyHygieneNonContainmentTest.
+    static PolicyHygiene.Assessment assessment(PolicySnapshot snapshot, String id) { return PolicyHygieneTest.assessmentWithoutX1(snapshot, id); }
+    static void assertUnknown(PolicySnapshot snapshot, String id, String reason) {
+        var result = assessment(snapshot, id);
+        assertEquals("UNKNOWN", result.shadowStatus(), id + " " + result);
+        assertEquals(reason, result.shadowReason(), id);
+        assertNull(result.coveringRuleId(), id);
+    }
+    static void assertClean(PolicySnapshot snapshot, String id) {
+        var result = assessment(snapshot, id);
+        assertEquals("NOT_SHADOWED", result.shadowStatus(), id + " " + result);
+        assertNull(result.shadowReason()); assertNull(result.coveringRuleId());
+    }
     static final String UNSUPPORTED = PolicyHygiene.EARLIER_UNSUPPORTED;
     static PolicyObject role(String id, String... networks) {
         return new PolicyObject(id, "OBJ-ROLE-" + id, "access-role", List.of(), Arrays.stream(networks).map(n -> "networks: " + n).toList(), "DYNAMIC");
@@ -55,8 +69,8 @@ class PolicyHygieneAccessRoleTest {
     }
     /** Every rule against the snapshot as mapped before (no networks values), each change confirmed by the oracle. */
     static int assertOracle(PolicySnapshot snapshot) {
-        var former = PolicyHygiene.analyze(SyntheticPolicies.withoutNetworks(snapshot), 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
-        var actual = PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
+        var former = PolicyHygieneTest.withoutX1(SyntheticPolicies.withoutNetworks(snapshot), 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
+        var actual = PolicyHygieneTest.withoutX1(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
         assertEquals(former.keySet(), actual.keySet());
         var universe = new PartialPriorOracle.Universe(snapshot);
         int released = 0;
@@ -70,7 +84,7 @@ class PolicyHygieneAccessRoleTest {
         var before = assessment(SyntheticPolicies.withoutNetworks(snapshot), id);
         assertEquals(UNSUPPORTED, before.shadowReason(), id + " " + before);
         assertEquals(blocker, before.blockingRuleId());
-        PolicyHygienePartialPriorTest.assertClean(snapshot, id);
+        assertClean(snapshot, id);
         assertEquals(1, assertOracle(snapshot));
         PartialPriorOracle.assertNoCover(new PartialPriorOracle.Universe(snapshot), id, id);
     }
@@ -180,7 +194,7 @@ class PolicyHygieneAccessRoleTest {
             var snapshot = SyntheticPolicies.accessRoles(base, seed);
             if (!snapshot.metadata().vendor().equals("CP")) continue;
             released += assertOracle(snapshot);
-            var after = PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
+            var after = PolicyHygieneTest.withoutX1(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
             kept += (int) after.values().stream().filter(a -> UNSUPPORTED.equals(a.shadowReason())).count();
             rules += after.size();
         }

@@ -20,12 +20,12 @@ import java.util.*;
 class PolicyHygieneContentApplicationTest {
     static final String OVERLAP = PolicyHygiene.APPLICATION_OVERLAP_UNKNOWN, UNRESOLVED = "unresolved object";
     static PolicyHygiene.Assessment formerly(PolicySnapshot snapshot, String id) {
-        return PolicyHygieneTest.assessment(SyntheticPolicies.unrecognisedApplications(snapshot), id);
+        return PolicyHygieneTest.assessmentWithoutX1(SyntheticPolicies.unrecognisedApplications(snapshot), id);
     }
     /** Every rule against the former treatment, each change confirmed for every overlap and every default-port world. */
     static void assertOracle(PolicySnapshot snapshot) {
-        var former = PolicyHygiene.analyze(SyntheticPolicies.unrecognisedApplications(snapshot), 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
-        var actual = PolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
+        var former = PolicyHygieneTest.withoutX1(SyntheticPolicies.unrecognisedApplications(snapshot), 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
+        var actual = PolicyHygieneTest.withoutX1(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
         var universe = new PartialPriorOracle.Universe(snapshot);
         for (var entry : former.entrySet())
             PartialPriorOracle.assertContentApplicationChangeIsSafe(universe, entry.getValue(), actual.get(entry.getKey()), entry.getKey(), entry.getKey());
@@ -121,7 +121,7 @@ class PolicyHygieneContentApplicationTest {
         // A partial prior (a user constraint) naming A: other applications never prove disjointness, other addresses do.
         var prior = PolicyHygienePartialPriorTest.with(rule("r1", "host", "port", "deny", A), Map.of("source-user", List.of("OBJ-USER-01")));
         for (String[] apps : List.of(new String[]{B}, new String[]{A}, new String[0])) {
-            var overlapping = pan(prior, rule("r2", "net", "port", "allow", apps));
+            var overlapping = pan(prior, rule("r2", "host", "port", "allow", apps));
             assertEquals("user or category constraint", at(overlapping, "r1").shadowReason());
             unknown(overlapping, "r2", UNSUPPORTED);
             assertEquals("r1", at(overlapping, "r2").blockingRuleId());

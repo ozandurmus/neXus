@@ -90,6 +90,19 @@ every item below. Risk: none beyond the privacy gate.
 
 ### X1 — partial-prior pass-over by non-containment (single-rule cover)
 
+Status: IMPLEMENTED (pending live measurement), 2026-11-05. Ratified by the PO on 2026-11-05 evening
+(`PO_DECISION_RECORD_2026_11_05_EVENING_BATCH.md`). Implementation note: `PolicyNormalization#cannotCover` is consulted by
+`Earlier#partialOverlap` (the only question X1 changes: may a partial prior be the single rule that covers this rule;
+the CONFLICT/REDUNDANT cover search, "zone or install-on coverage is unproven", application default-port/overlap
+reasons and the no-partial-prior blocker `Earlier.unknown` are untouched). A prior is passed over when its resolved
+source or destination does not contain the rule's, or, with neither service application-default, its service, or, with
+no opaque application identity on either side, its application -- exactly where `holds` answers FALSE; an unresolved
+dimension or a token in play gives no verdict, and an access-role bound counts as an upper bound. A package-private
+`PolicyHygiene.analyze(..., nonContainment)` overload switches it off as the reference. The blocker named for a rule that
+stays blocked may move to a later prior. Verified by `PolicyHygieneNonContainmentTest` (unit cases plus a differential
+over ~6,800 seeded snapshots with `PartialPriorOracle.assertNoCover`); the older partial-prior oracles now run with X1 off.
+Live effect is not measured.
+
 Semantics already in the engine: `NOT_SHADOWED` claims that **no single earlier rule fully covers** the rule
 (`zonesCannotCover`, `Earlier#undecidedMayCover`, the A0 2026-11-04 amendment: "which is all a single-rule
 NOT_SHADOWED verdict claims"). A fully resolved earlier rule that only partly overlaps a later rule is passed over;
@@ -319,7 +332,7 @@ Ranked by expected effect over risk and cost; each step is its own build with di
 |---|---|---|---|---|
 | 1 | E1 PAN targets as narrowing partial priors | High for PAN (2,484 blockers stop blocking every later rule) | LOW | **IMPLEMENTED** (A0 §4d, FROZEN) |
 | 2 | X0 counter split per class | Enables sizing; no verdict change | none | none |
-| 3 | X1 partial-prior pass-over by non-containment | Highest, all classes | MEDIUM (governance) | PO ratification |
+| 3 | X1 partial-prior pass-over by non-containment | Highest, all classes | MEDIUM (governance) | **IMPLEMENTED** 2026-11-05 (PO ratified; live measurement pending) |
 | 4 | E1b/E1c targeted rules' own verdict | High for PAN (2,484 own UNKNOWNs) | LOW-MEDIUM | A0 note on descendant groups; oracle firewall dimension |
 | 5 | U1 PAN application groups as identities | Medium-high (share of 4,475, size via X0) | LOW | review |
 | 6 | N1 CP Ask/Inform as first-match | Medium (share of 1,335) | MEDIUM | page-level citation + A6 + A0 amendment |
