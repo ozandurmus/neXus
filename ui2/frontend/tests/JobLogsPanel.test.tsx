@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { JobLogsPanel, localInputToIso } from "../src/screens/JobLogsPanel";
+import { JobLogsPanel, jobTargetLabel, localInputToIso } from "../src/screens/JobLogsPanel";
 import { jobTypeLabel } from "../src/jobs/jobTypeLabel";
 
 // The panel writes `?job=<id>` when a row opens; jsdom keeps the URL between tests, so it is reset here.
@@ -59,15 +59,59 @@ it("keeps job and device UUIDs in the expandable details", async () => {
   const deviceId = "00000000-0000-4000-8000-000000000002";
   stubApi({ items: [{ job_id: jobId, target_device_id: deviceId, job_type: "asa_inventory_collect", state: "FAILED", terminal_reason: "COLLECTION_FAILED" }], page: 1, page_size: 50, total: 1 });
   render(<JobLogsPanel />);
-  await screen.findByText("Unknown device");
+  await screen.findByText("No target recorded");
   expect(screen.getByText("Cisco ASA inventory read")).toBeInTheDocument();
   // the reason in words, the raw code on hover (post-release review 2026-10-18, R8)
   expect(screen.getByText("Collection failed")).toHaveAttribute("data-raw", "COLLECTION_FAILED");
   expect(screen.queryByText(jobId)).toBeNull();
   expect(screen.queryByText(deviceId)).toBeNull();
-  fireEvent.click(screen.getByText("Unknown device").closest("tr")!);
+  fireEvent.click(screen.getByText("No target recorded").closest("tr")!);
   expect(await screen.findByText(jobId)).toBeInTheDocument();
   expect(screen.getByText(deviceId)).toBeInTheDocument();
+});
+
+it("names every job target in masked form (device, cluster/failover unit, policy source/container, fleet) and says No target recorded only when none exists", async () => {
+  expect(jobTargetLabel({ job_type: "cp_inventory_collect", target_device_id: "d1", device_name: "FW-TANGO-04" })).toBe("FW-TANGO-04");
+  expect(jobTargetLabel({ job_type: "cp_failover_readiness", target_device_id: "d1" }, { d1: { name: "FW-ROMEO-M1", cluster: "CLS-ROMEO-01", vendor: "check_point" } })).toBe("CLS-ROMEO-01");
+  expect(jobTargetLabel({ job_type: "cp_cluster_failover", target_device_id: "d1", device_name: "VS-ROMEO-01-V1", target_kind: "failover_unit" })).toBe("VS-ROMEO-01-V1");
+  expect(jobTargetLabel({ job_type: "cp_policy_collect", target_device_id: null, device_name: "DOM-ALPHA-01", target_kind: "policy_container" })).toBe("DOM-ALPHA-01");
+  expect(jobTargetLabel({ job_type: "pan_policy_collect", target_device_id: "mgr-1", device_name: "FW-BRAVO-02", target_kind: "policy_source" })).toBe("FW-BRAVO-02");
+  expect(jobTargetLabel({ job_type: "cp_system_log_collect", target_device_id: null, target_device_count: 24, target_kind: "fleet" })).toBe("Fleet (24 devices)");
+  expect(jobTargetLabel({ job_type: "cp_policy_collect", target_device_id: null, device_name: null })).toBe("No target recorded");
+
+  vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.startsWith("/api/v2/jobs/facets")) return Promise.resolve(new Response(JSON.stringify({ states: ["COMPLETED"], job_types: [] })));
+    if (url.startsWith("/api/v2/jobs")) {
+      return Promise.resolve(new Response(JSON.stringify({
+        items: [
+          { job_id: "j-del", target_device_id: "deleted-dev", device_name: "FW-JULIET-06", target_kind: "device", job_type: "cp_inventory_collect", state: "COMPLETED", submitted_at: "2026-10-18T03:00:00Z", has_transcript: false },
+          { job_id: "j-cls", target_device_id: "member-01", job_type: "pan_failover_readiness", state: "COMPLETED", submitted_at: "2026-10-18T03:01:00Z", has_transcript: false },
+          { job_id: "j-dom", target_device_id: "mgr-01", device_name: "DOM-ALPHA-01", target_kind: "policy_container", job_type: "cp_policy_collect", state: "COMPLETED", submitted_at: "2026-10-18T03:02:00Z", has_transcript: false },
+          { job_id: "j-flt", target_device_id: null, device_name: "Fleet (12 devices)", target_kind: "fleet", job_type: "cp_system_log_collect", state: "COMPLETED", submitted_at: "2026-10-18T03:03:00Z", has_transcript: false },
+          { job_id: "j-non", target_device_id: null, device_name: null, job_type: "cp_policy_collect", state: "FAILED", submitted_at: "2026-10-18T03:04:00Z", has_transcript: false },
+        ],
+        page: 1,
+        page_size: 50,
+        total: 5,
+      })));
+    }
+    if (url === "/devices") {
+      return Promise.resolve(new Response(JSON.stringify({
+        devices: [{ device_id: "member-01", hostname: "FW-ROMEO-M1", cluster_member_ref: "CLS-ROMEO-01", vendor_hint: "palo_alto" }],
+      })));
+    }
+    return Promise.resolve(new Response("{}", { status: 404 }));
+  }));
+
+  render(<JobLogsPanel />);
+  const table = await screen.findByRole("table", { name: "Job logs" });
+  await waitFor(() => expect(within(table).getByText("CLS-ROMEO-01")).toBeInTheDocument());
+  expect(within(table).getByText("FW-JULIET-06")).toBeInTheDocument();
+  expect(within(table).getByText("DOM-ALPHA-01")).toBeInTheDocument();
+  expect(within(table).getByText("Fleet (12 devices)")).toBeInTheDocument();
+  expect(within(table).getByText("No target recorded")).toBeInTheDocument();
+  expect(within(table).queryByText("Unknown device")).toBeNull();
 });
 
 describe("history, filters, pages and export (PO P0, 2026-09-22)", () => {
@@ -147,4 +191,27 @@ it("hides cancellation when the server has not granted it", async () => {
   render(<JobLogsPanel />);
   await screen.findByText("Running");
   expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+});
+
+it("cycles server sort asc -> desc -> default on header click and resets to page 1", async () => {
+  const calls = stubApi({ items: [{ job_id: "job-9", target_device_id: "opaque-001", job_type: "inventory", state: "FAILED" }], page: 1, page_size: 50, total: 120 });
+  render(<JobLogsPanel />);
+  await waitFor(() => expect(screen.getByText("1–50 of 120 jobs")).toBeInTheDocument());
+
+  fireEvent.click(within(screen.getByTestId("pagination-footer")).getByRole("button", { name: "Go to next page" }));
+  await waitFor(() => expect(calls.some((c) => c === "/api/v2/jobs?page=2&page_size=50")).toBe(true));
+
+  const durationHeader = within(screen.getByRole("columnheader", { name: /Duration/i })).getByRole("button");
+  fireEvent.click(durationHeader);
+  await waitFor(() => expect(calls.some((c) => c === "/api/v2/jobs?page=1&page_size=50&sort=duration&order=asc")).toBe(true));
+  expect(screen.getByRole("columnheader", { name: /Duration/i })).toHaveAttribute("aria-sort", "ascending");
+
+  fireEvent.click(durationHeader);
+  await waitFor(() => expect(calls.some((c) => c === "/api/v2/jobs?page=1&page_size=50&sort=duration&order=desc")).toBe(true));
+  expect(screen.getByRole("columnheader", { name: /Duration/i })).toHaveAttribute("aria-sort", "descending");
+
+  calls.length = 0;
+  fireEvent.click(durationHeader);
+  await waitFor(() => expect(calls.some((c) => c === "/api/v2/jobs?page=1&page_size=50")).toBe(true));
+  expect(screen.getByRole("columnheader", { name: /Duration/i })).not.toHaveAttribute("aria-sort");
 });

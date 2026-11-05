@@ -77,7 +77,8 @@ export function readinessUnits(items: ReturnType<typeof haReadinessItems>) {
     ...(item.status === "UNSUPPORTED" ? [] : item.units.filter(unit => unit.unitId !== unit.clusterId)
       .map(unit => ({ item, status: (unit.readiness?.status ?? "UNKNOWN") as Status })))]);
 }
-export const UNIT_COUNT_NOTE = "Counts failover units: each cluster, each VSX chassis and each of its Virtual Systems count separately";
+export const CLUSTER_COUNT_NOTE = "Counts enrolled clusters: each cluster counts once";
+export const UNIT_COUNT_NOTE = "Counts readiness records (failover units): each cluster, each VSX chassis and each of its Virtual Systems count separately";
 
 /** The enrolled clusters from the device list (cluster reference -> members); the grouping the Operations screen and the Overview share. */
 export function groupClusters(devices: readonly DeviceSummary[]): Cluster[] {
@@ -144,6 +145,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
   onChanged?: () => void;
 }) {
   const [filter, setFilter] = useState<Status | null>(null);
+  const [countBy, setCountBy] = useState<"clusters" | "records">("clusters");
   const [search, setSearch] = useState("");
   const [vendorFilter, setVendorFilter] = useState("");
   const [showUnsupported, setShowUnsupported] = useState(false);
@@ -157,10 +159,15 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
     return () => window.clearInterval(timer);
   }, []);
   const items = haReadinessItems(clusters, rows);
+  const clustersByStatus = items.map(item => ({ item, status: item.status }));
   const unitsByStatus = readinessUnits(items);
+  const activeCountsByStatus = countBy === "records" ? unitsByStatus : clustersByStatus;
+  const countNoun = countBy === "records" ? "readiness records" : "clusters";
   const query = search.trim().toLowerCase();
-  // A chip filters the clusters that hold a unit with its word (the chassis or any of its Virtual Systems).
-  const visible = items.filter(item => (!filter || unitsByStatus.some(unit => unit.item === item && unit.status === filter)))
+  // By default a chip counts and filters clusters; in Readiness records view it counts and filters every unit (chassis + Virtual Systems).
+  const visible = items.filter(item => (!filter || (countBy === "records"
+      ? unitsByStatus.some(unit => unit.item === item && unit.status === filter)
+      : item.status === filter || unitsByStatus.some(unit => unit.item === item && unit.status === filter))))
     .filter(({ cluster, units, vendor }) => (!vendorFilter || vendor === vendorFilter)
     && [cluster.title, ...cluster.members.map(m => m.hostname ?? ""), ...units.map(row => row.virtual_system ?? "")]
       .some(name => name.toLowerCase().includes(query)))
@@ -272,7 +279,9 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
     </Fragment>;
   };
   return <Box className="ha-readiness-full-width" sx={{ width: "100%", minWidth: 0 }}>
-    <Typography variant="subtitle1" sx={{ mb: 1 }}>{clusters.length} clusters enrolled</Typography>
+    <Typography variant="subtitle1" sx={{ mb: 1 }}>
+      {clusters.length} clusters enrolled{countBy === "records" ? ` · showing ${unitsByStatus.length} readiness records` : ""}
+    </Typography>
     {/* A notice, not an Alert: the status values are unchanged and nothing failed to load. */}
     {mostlyStale && <Box role="status" data-readiness-stale-notice sx={{ mb: 1.5, px: 1.5, py: 1, borderRadius: 1,
       bgcolor: m3.warningContainer, color: m3.onWarningContainer, fontSize: 14 }}>
@@ -283,14 +292,15 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
     </Box>}
     {/* One legend line (R6): the four status counts and the rule that tells the words apart, side by side. */}
     <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 2, rowGap: 1, mb: 1.5 }}>
-    <Box aria-label="Readiness summary" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+    <Box aria-label="Readiness summary" sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
       {(Object.keys(statuses) as Status[]).map(status => {
         const s = statuses[status];
-        const matches = unitsByStatus.filter(unit => unit.status === status);
+        const matches = activeCountsByStatus.filter(entry => entry.status === status);
         const vendors = new Map<string, number>();
         matches.forEach(({ item }) => { const name = vendorDisplayName(item.vendor); vendors.set(name, (vendors.get(name) ?? 0) + 1); });
-        return <Tooltip key={status} title={`${UNIT_COUNT_NOTE}. ${[...vendors].map(([name, count]) => `${name} ${count}`).join(" · ") || "No units"}`}>
-          <Button size="small" aria-label={`${s.label}: ${matches.length} units`} aria-pressed={filter === status}
+        const note = countBy === "records" ? UNIT_COUNT_NOTE : CLUSTER_COUNT_NOTE;
+        return <Tooltip key={status} title={`${note}. ${[...vendors].map(([name, count]) => `${name} ${count}`).join(" · ") || `No ${countNoun}`}`}>
+          <Button size="small" aria-label={`${s.label}: ${matches.length} ${countNoun}`} aria-pressed={filter === status}
             onClick={() => setFilter(filter === status ? null : status)}
             // Zero is neutral, never green (or red): a status word with no cluster behind it carries no status colour.
             sx={{ bgcolor: matches.length === 0 ? m3.scHigh : s.bg, color: matches.length === 0 ? m3.onSurfaceVar : s.ink,
@@ -299,6 +309,22 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
           </Button>
         </Tooltip>;
       })}
+      <Box role="group" aria-label="Readiness count unit" sx={{ display: "inline-flex", gap: 0.5, alignItems: "center", ml: 0.5 }}>
+        <Button size="small" aria-pressed={countBy === "clusters"} onClick={() => setCountBy("clusters")}
+          sx={{ textTransform: "none", fontSize: 12, px: 1, py: 0.25, borderRadius: 1.5,
+            bgcolor: countBy === "clusters" ? m3.secondaryContainer : "transparent",
+            color: countBy === "clusters" ? m3.onSecondaryContainer : m3.onSurfaceVar,
+            border: `1px solid ${countBy === "clusters" ? m3.primary : m3.outlineVar}` }}>
+          Clusters ({items.length})
+        </Button>
+        <Button size="small" aria-pressed={countBy === "records"} onClick={() => setCountBy("records")}
+          sx={{ textTransform: "none", fontSize: 12, px: 1, py: 0.25, borderRadius: 1.5,
+            bgcolor: countBy === "records" ? m3.secondaryContainer : "transparent",
+            color: countBy === "records" ? m3.onSecondaryContainer : m3.onSurfaceVar,
+            border: `1px solid ${countBy === "records" ? m3.primary : m3.outlineVar}` }}>
+          Readiness records ({unitsByStatus.length})
+        </Button>
+      </Box>
     </Box>
     <Typography variant="caption" data-readiness-rule sx={{ color: m3.onSurfaceVar }}>{READINESS_RULE}</Typography>
     </Box>

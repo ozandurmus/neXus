@@ -1,10 +1,11 @@
 import { JobButton, jobWindowUsable, useJobWindow } from "../shell/JobWindow";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, Tabs, Tab, Checkbox, Chip, Drawer, IconButton, InputAdornment, Menu, MenuItem, type MenuItemProps, Table, TableBody, TableCell, TableHead, TableRow, Tooltip, FormControl, InputLabel, Select, Stack, TextField, Typography } from "@mui/material";
 import { ScreenRoot, ScreenHeader, EmptyPanel } from "../shell/ScreenLayout";
 import { Ts, VendorBadge } from "../shell/States";
 import { Icon } from "../shell/Icon";
 import { relativeAge } from "../shell/time";
+import { useServerTableSort } from "../shell/tableSort";
 import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
 import { m3 } from "../theme/m3Theme";
 import { cancelJob, listPolicies, getPolicyCollectionStatus, type PolicyCollectionMode, type PolicyCollectionStatus, listPolicySources, collectPolicies, type PolicyCollectionSource, getPolicy, getPolicyObject, type PolicyTarget, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage, getPolicyRule, type PolicyRuleDetail } from "../auth/adminApi";
@@ -339,6 +340,10 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [hitDays, setHitDays] = useState(90);
   const [hygieneClass, setHygieneClass] = useState("");
   const [page, setPage] = useState(0);
+  const resetPage = useCallback(() => setPage(0), []);
+  const ruleSort = useServerTableSort({ onChange: resetPage });
+  const ruleSortKey = ruleSort.sort?.key ?? "";
+  const ruleSortOrder = ruleSort.sort?.direction ?? "";
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [data, setData] = useState<PolicyPage | null>(null);
@@ -399,18 +404,20 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     return () => window.clearTimeout(timer);
   }, [search]);
   const visible = useMemo(() => (catalog ?? []).filter(p => !device || p.targets.some(t => t.deviceId === device)), [catalog, device]);
+  const fetchPolicy = (p: number, q: string, hitFilter: string, days: number) =>
+    ruleSortKey ? getPolicy(selected, p, q, hitFilter, days, ruleSortKey, ruleSortOrder) : getPolicy(selected, p, q, hitFilter, days);
   useEffect(() => {
     let active = true;
     policyRequest.current++;
     setScrollTop(0); if (content.current) content.current.scrollTop = 0; setData(null); setDrawer(null); drawerRequest.current++; setError(""); setErrorCode("");
     const request = usageRequest(usage, hitDays, query);
-    if (selected) getPolicy(selected, page, request.q, request.hitFilter, request.days).then(result => {
+    if (selected) fetchPolicy(page, request.q, request.hitFilter, request.days).then(result => {
       if (!result?.metadata || !Array.isArray(result.sections)) throw new Error("Empty policy response");
       if (active) setData(result);
     })
       .catch(error => { if (active) { setErrorCode(reportPolicyLoadError("rules", error)); setError(policyFailureText(error, "Policy rules could not be loaded.")); } });
     return () => { active = false; };
-  }, [selected, page, query, revision, usage, hitDays]);
+  }, [selected, page, query, revision, usage, hitDays, ruleSortKey, ruleSortOrder]);
   useEffect(() => () => { drawerRequest.current++; }, []);
   const scheduleMinute = Math.floor(now.getTime() / 60000);
   // Refresh derived schedule status from stored evidence; never triggers collection.
@@ -418,7 +425,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     if (!selected || !data) return;
     const request = policyRequest.current; let active = true;
     const usageQuery = usageRequest(usage, hitDays, query);
-    getPolicy(selected, page, usageQuery.q, usageQuery.hitFilter, usageQuery.days).then(result => {
+    fetchPolicy(page, usageQuery.q, usageQuery.hitFilter, usageQuery.days).then(result => {
       if (active && request === policyRequest.current) setData(result);
     }).catch(() => { /* Retain the last stored projection on a transient read failure. */ });
     return () => { active = false; };
@@ -452,7 +459,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
       const ids = new Set<string>();
       for (let index = 0; index * data.pageSize < data.total; index++) {
         const usageQuery = usageRequest(usage, hitDays, query);
-        const result = index === page ? data : await getPolicy(selected, index, usageQuery.q, usageQuery.hitFilter, usageQuery.days);
+        const result = index === page ? data : await fetchPolicy(index, usageQuery.q, usageQuery.hitFilter, usageQuery.days);
         if (request !== ruleSelectionRequest.current) return;
         result.sections.forEach(section => section.rules.forEach(rule => ids.add(rule.id)));
       }
@@ -817,7 +824,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
               {/* Not a scroll container itself: sticky headers need the pane to be the nearest scrolling ancestor. */}
               <Box role="region" aria-label="Policy rulebase" ref={rulebase} sx={{ flexShrink: 0, minWidth: 0 }}>
                 <PolicyRuleTable key={data.metadata.id} sections={data.sections} collapsed={collapsed} scrollTop={scrollTop} viewportHeight={viewport} stickyTop={stickyTop}
-                  metadata={data.metadata} objects={objects} openObject={openObject} openRuleId={id => void openRuleId(id)} now={now}
+                  metadata={data.metadata} objects={objects} openObject={openObject} openRuleId={id => void openRuleId(id)} sort={ruleSort} now={now}
                   openHygiene={findingClass => { setHygieneClass(findingClass); setTab("Hygiene"); setDrawer(null); drawerRequest.current++; }}
                   selected={selectedRules} onSelect={id => setSelectedRules(previous => toggle(previous, id))}
                   toggle={id => setCollapsed(previous => toggle(previous, id))}

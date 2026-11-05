@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.service.changes;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -62,9 +63,12 @@ public final class ChunkTextReader {
         List<String> cached = cache.get(chunk.chunkId());
         if (cached != null) return cached;
         if (chunk.bytes() > MAX_CHUNK_BYTES) throw new IllegalStateException("chunk larger than " + MAX_CHUNK_BYTES + " bytes");
-        if (chunk.artefactRef() == null || chunk.wrappedDataKey() == null) throw new IOException("artefact not recorded");
+        String ref = chunk.recoveryVolumePath() != null && !chunk.recoveryVolumePath().isBlank()
+                ? chunk.recoveryVolumePath() : chunk.artefactRef();
+        if (ref == null || chunk.wrappedDataKey() == null) throw new IOException("artefact not recorded");
         List<String> lines = new ArrayList<>();
-        try (InputStream in = store.retrieve(new ArtefactRef(chunk.artefactRef()), chunk.wrappedDataKey(), true);
+        try (InputStream in = new BufferedInputStream(
+                store.retrieve(new ArtefactRef(ref), chunk.wrappedDataKey(), true), 64 * 1024);
                 BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8), 64 * 1024)) {
             String line;
             long read = 0;

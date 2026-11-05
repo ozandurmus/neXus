@@ -18,7 +18,15 @@ import { PathResultView } from "./pathanalysis/PathResultView";
 import { classifyPathFailure, pathFormMissing, type PathFailure, type PathFormValues } from "./pathanalysis/pathWords";
 import { usePathValidation } from "./pathanalysis/usePathValidation";
 
-export { PathResultView } from "./pathanalysis/PathResultView";
+export {
+  HOP_VERDICT_SIDE,
+  NEIGHBOUR_CAP,
+  PathDiagram,
+  PathResultView,
+  buildPathDiagramModel,
+  safeAddressLabel,
+  segmentPrefix,
+} from "./pathanalysis/PathResultView";
 export { classifyPathFailure, pathFormMissing } from "./pathanalysis/pathWords";
 
 /**

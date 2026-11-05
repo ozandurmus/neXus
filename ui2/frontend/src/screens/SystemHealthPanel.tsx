@@ -1,10 +1,19 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
 import Typography from "@mui/material/Typography";
 
-import { getSystemHealth, type HealthState, type SystemHealth, type SystemHealthDevice } from "../auth/adminApi";
+import {
+  getSystemHealth, requestSystemLogCollect, type ApiError, type HealthState, type SystemHealth, type SystemHealthDevice,
+  type SystemLogCollectOutcome,
+} from "../auth/adminApi";
 import { DataTable, type DataColumn } from "../shell/DataTable";
 import { KpiCard, KpiRow } from "../shell/KpiCard";
+import { M3Button } from "../shell/M3Widgets";
+import { PLANE_OPERATIONS, useRoleAllows } from "../shell/actionAccess";
 import { StatePanel, isRestricted } from "../shell/States";
 import { StatusPill } from "../shell/StatusPill";
 import { Timestamp } from "../shell/Timestamp";
@@ -12,6 +21,7 @@ import { vendorLabel } from "../shell/presenters";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { m3 } from "../theme/m3Theme";
 import { TYPE, type StateRole } from "../theme/tokens";
+import { describeSystemLogCollectError, explainSystemLogRefusalCode, type SystemLogCollectMessage } from "./DeviceLogsPanel";
 
 /**
  * Operations › System health ("who in the fleet is struggling"; mockup screen 2 of 2026-10-17, realised with stored data
@@ -23,6 +33,10 @@ import { TYPE, type StateRole } from "../theme/tokens";
 
 /** How often the panel asks again while the server's first snapshot is still being computed. */
 export const COMPUTING_POLL_MS = 5_000;
+/** Maximum number of COMPUTING poll retries before stopping and showing a plain bounded-wait state (20 s total). */
+export const MAX_COMPUTING_POLLS = 4;
+/** Bounded wait for the initial read before showing a plain timeout state. */
+export const LOAD_TIMEOUT_MS = 20_000;
 
 const STATE_WORD: Record<HealthState, { readonly tone: StateRole; readonly word: string }> = {
   CRITICAL: { tone: "bad", word: "Critical" },
@@ -111,36 +125,125 @@ function FactValue({ level, value, title }: { readonly level: string; readonly v
 
 export function describeHealthError(err: unknown): string {
   if (isRestricted(err)) return "restricted";
-  const body = (err as { body?: { code?: string; message?: string } })?.body;
-  return body?.message ?? body?.code ?? "The system health read failed.";
+  const e = err as { status?: number; name?: string; body?: { code?: string; message?: string; reason?: string; error?: string } };
+  if (e?.status === 0 || e?.name === "AbortError" || e?.body?.error === "TIMEOUT") {
+    return "The system health read timed out after 20 s.";
+  }
+  const body = e?.body;
+  return body?.message ?? body?.reason ?? body?.error ?? body?.code ?? "The system health read failed.";
+}
+
+export function describeFleetSystemLogCollectOutcome(outcome: Partial<SystemLogCollectOutcome>): SystemLogCollectMessage {
+  const targets = outcome.targets ?? 0;
+  const admitted = outcome.admitted ?? 0;
+  const deduplicated = outcome.deduplicated ?? 0;
+  const refused = outcome.refused ?? 0;
+  const base = `${targets} supported ${targets === 1 ? "device" : "devices"}: ${admitted} admitted, ${deduplicated} already running (deduplicated), ${refused} refused.`;
+  const codes = Array.isArray(outcome.refusal_codes) ? outcome.refusal_codes.filter((c): c is string => typeof c === "string") : [];
+  const text = codes.length > 0 ? `${base} ${codes.map((c) => explainSystemLogRefusalCode(c)).join(" · ")}` : base;
+  const tone: SystemLogCollectMessage["tone"] = admitted > 0 ? "ok" : deduplicated > 0 ? "warn" : "bad";
+  return { tone, text };
 }
 
 export function SystemHealthPanel({ now = new Date() }: { readonly now?: Date }) {
   const { data, error, rawError, refresh } = useFetchOnMount<SystemHealth>(getSystemHealth, describeHealthError);
-  const computing = data?.computation.state === "COMPUTING";
+  const canCollect = useRoleAllows(PLANE_OPERATIONS);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [collecting, setCollecting] = useState(false);
+  const [fleetMessage, setFleetMessage] = useState<SystemLogCollectMessage | null>(null);
+  const [polls, setPolls] = useState(0);
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
+
+  const serverComputing = data?.computation.state === "COMPUTING";
+  const computationFailed = data?.computation.state === "FAILED";
+  const apiReason = data?.computation.reason ?? data?.computation.error ?? null;
+  const boundedWaitReached = serverComputing && (polls >= MAX_COMPUTING_POLLS || apiReason !== null);
+  const computing = serverComputing && !boundedWaitReached;
+  const notComputedYet = boundedWaitReached || computationFailed;
+
+  useEffect(() => {
+    if (data || error) {
+      setLoadTimedOut(false);
+      return;
+    }
+    const handle = window.setTimeout(() => setLoadTimedOut(true), LOAD_TIMEOUT_MS);
+    return () => window.clearTimeout(handle);
+  }, [data, error]);
+
+  useEffect(() => {
+    if (data && data.computation.state !== "COMPUTING") {
+      setPolls(0);
+    }
+  }, [data]);
+
   useEffect(() => {
     if (!computing) return;
-    const handle = window.setTimeout(refresh, COMPUTING_POLL_MS);
+    const handle = window.setTimeout(() => {
+      setPolls((n) => n + 1);
+      refresh();
+    }, COMPUTING_POLL_MS);
     return () => window.clearTimeout(handle);
   }, [computing, data, refresh]);
+
+  const retry = () => {
+    setPolls(0);
+    setLoadTimedOut(false);
+    refresh();
+  };
+
+  const handleFleetCollectConfirm = async () => {
+    setCollecting(true);
+    try {
+      const outcome = await requestSystemLogCollect();
+      setFleetMessage(describeFleetSystemLogCollectOutcome(outcome));
+      refresh();
+    } catch (err) {
+      const e = err as Partial<ApiError> | null;
+      const body = (e?.body ?? {}) as Record<string, unknown>;
+      if (typeof body.targets === "number") {
+        setFleetMessage(describeFleetSystemLogCollectOutcome(body as Partial<SystemLogCollectOutcome>));
+      } else {
+        setFleetMessage(describeSystemLogCollectError(err));
+      }
+    } finally {
+      setCollecting(false);
+    }
+  };
 
   if (error && isRestricted(rawError)) {
     return <StatePanel variant="restricted" title="System health is not available for this role" announce="status"
       body="The fleet health view needs the system-log read permission (operator and above, aiview included)." />;
   }
   if (error) {
-    return <StatePanel variant="error" title="System health could not be read" body={error} announce="status" code="SYSTEM_HEALTH_READ_FAILED" />;
+    const errCode = (rawError as { body?: { code?: string; error?: string } } | null)?.body?.code
+      ?? (rawError as { body?: { error?: string } } | null)?.body?.error
+      ?? "SYSTEM_HEALTH_READ_FAILED";
+    return <StatePanel variant="error" title="System health could not be read" body={error} announce="status"
+      code={errCode} action={<M3Button emphasis="outlined" onClick={retry}>Retry</M3Button>} />;
+  }
+  if (!data && loadTimedOut) {
+    return <StatePanel variant="error" title="System health could not be read"
+      body="Not computed yet (scheduled computation is off) · the read timed out after 20 s."
+      announce="status" code="TIMEOUT" action={<M3Button emphasis="outlined" onClick={retry}>Retry</M3Button>} />;
   }
   if (!data) return <StatePanel variant="empty" title="Reading system health…" announce="status" />;
 
   const today = now.toISOString().slice(0, 10);
   const k = data.kpis;
+  const supportedCount = k.monitored?.devices ?? data.devices.length;
   const threshold = data.cpu_p95_threshold_percent;
   const computedAt = data.computation.computed_at;
   const byVendor = k.monitored ? Object.entries(k.monitored.by_vendor).map(([v, n]) => `${vendorLabel(v)} ${n}`).join(" · ") : "";
   const byState = k.collection_not_ok ? Object.entries(k.collection_not_ok.by_state).map(([s, n]) => `${n} ${collectionWord(s).toLowerCase()}`).join(" · ") : "";
-  const asOf = computedAt ? `computed ${new Date(computedAt).toISOString().slice(11, 16)} UTC` : "not computed yet";
-  const noFigure = { state: computing ? "not_evaluated" as const : undefined, reason: computing ? "the first computation is running" : undefined };
+  const notComputedLabel = apiReason ?? "not computed yet (scheduled computation is off)";
+  const asOf = computedAt
+    ? `computed ${new Date(computedAt).toISOString().slice(11, 16)} UTC`
+    : notComputedYet ? notComputedLabel : "not computed yet";
+  const noFigure = computing
+    ? { state: "not_evaluated" as const, reason: "the first computation is running" }
+    : notComputedYet
+      ? { state: (computationFailed ? "unknown" : "not_evaluated") as "unknown" | "not_evaluated", reason: notComputedLabel }
+      : {};
 
   const columns: ReadonlyArray<DataColumn<SystemHealthDevice>> = [
     { key: "device", header: "Device", width: 220, mono: true, title: (d) => `${deviceName(d)} · ${vendorLabel(d.vendor_hint)}${d.cluster_member_ref ? ` · ${d.cluster_member_ref}` : ""}`,
@@ -184,7 +287,72 @@ export function SystemHealthPanel({ now = new Date() }: { readonly now?: Date })
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {computing ? <StatePanel variant="not_evaluated" title="First computation running" announce="status"
         body="The server is reading the stored sar texts and watchdog logs of every monitored device for the first time since it started; this panel asks again every few seconds." /> : null}
+      {notComputedYet ? <StatePanel variant={computationFailed ? "error" : "not_evaluated"}
+        title={computationFailed ? "System health computation failed" : "Not computed yet (scheduled computation is off)"}
+        announce="status"
+        body={apiReason ?? "The first computation did not finish within the bounded wait: not computed yet (scheduled computation is off)."}
+        code={apiReason ?? undefined}
+        action={<M3Button emphasis="outlined" onClick={retry}>Retry</M3Button>} /> : null}
       {data.computation.state === "REFRESHING" ? <Typography role="status" sx={{ ...TYPE.label, color: m3.onSurfaceVar }}>Snapshot older than {Math.round(data.computation.snapshot_ttl_seconds / 60)} min; a refresh is running in the background.</Typography> : null}
+      {canCollect && (
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, flexWrap: "wrap" }}>
+          <M3Button
+            deviceJob
+            plane={PLANE_OPERATIONS}
+            emphasis="tonal"
+            icon="download"
+            disabled={collecting}
+            onClick={() => {
+              setFleetMessage(null);
+              setConfirmOpen(true);
+            }}
+          >
+            Collect logs (all supported devices)
+          </M3Button>
+          {fleetMessage && (
+            <Typography
+              variant="body2"
+              data-testid="fleet-system-log-collect-outcome"
+              color={fleetMessage.tone === "bad" ? "error" : fleetMessage.tone === "warn" ? "warning.main" : "success.main"}
+            >
+              {fleetMessage.text}
+            </Typography>
+          )}
+        </Box>
+      )}
+      <Dialog open={confirmOpen} onClose={() => { if (!collecting) setConfirmOpen(false); }}>
+        <DialogTitle>Collect logs (all supported devices)</DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          <Typography variant="body2">
+            Start system-log collection across all {supportedCount} supported {supportedCount === 1 ? "device" : "devices"}?
+          </Typography>
+          {fleetMessage && (
+            <Typography
+              variant="body2"
+              data-testid="fleet-system-log-collect-dialog-outcome"
+              color={fleetMessage.tone === "bad" ? "error" : fleetMessage.tone === "warn" ? "warning.main" : "success.main"}
+            >
+              {fleetMessage.text}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <M3Button emphasis="text" disabled={collecting} onClick={() => setConfirmOpen(false)}>
+            {fleetMessage ? "Close" : "Cancel"}
+          </M3Button>
+          {!fleetMessage && (
+            <M3Button
+              deviceJob
+              plane={PLANE_OPERATIONS}
+              emphasis="filled"
+              disabled={collecting}
+              onClick={handleFleetCollectConfirm}
+            >
+              Confirm
+            </M3Button>
+          )}
+        </DialogActions>
+      </Dialog>
       <KpiRow ariaLabel="System health summary">
         <KpiCard label="Monitored devices" value={k.monitored?.devices ?? null} {...noFigure}
           detail={k.monitored ? byVendor : undefined}
@@ -205,7 +373,7 @@ export function SystemHealthPanel({ now = new Date() }: { readonly now?: Date })
         {" "}Normal: {data.rules.normal}. UNKNOWN: {data.rules.unknown}. p95: {data.rules.p95}. Restart rule {data.rules.restart_rule.id} ({data.rules.restart_rule.status}): {data.rules.restart_rule.text}.
       </Typography>
       <DataTable ariaLabel="System health devices" columns={columns} rows={data.devices} rowKey={(d) => d.device_id} maxHeight="calc(100vh - 420px)"
-        emptyText={computing ? "No row until the first computation finishes." : "No Check Point or Palo Alto gateway is enrolled for system-log collection."}
+        emptyText={computing ? "No row until the first computation finishes." : notComputedYet ? `Not computed yet (${apiReason ?? "scheduled computation is off"}).` : "No Check Point or Palo Alto gateway is enrolled for system-log collection."}
         onRowClick={(d) => window.location.assign(logsHref(d))} testId="system-health-table" />
     </Box>
   );

@@ -125,3 +125,13 @@ it("does not offer Run for a non-runnable command even when the session can exec
   expect(screen.queryByRole("button", { name: "Run read" })).not.toBeInTheDocument();
   expect(calls.some(c => c.url === "/api/v2/diagnostics")).toBe(false);
 });
+
+it("sorts diagnostic history on the server through sortable column headers", async () => {
+  const calls = setup();
+  await screen.findByRole("button", { name: "FW-TANGO-04" });
+  const durationHeader = within(screen.getByRole("columnheader", { name: "Duration" })).getByRole("button");
+  fireEvent.click(durationHeader);
+  await waitFor(() => expect(calls.some(c => c.url.includes("/api/v2/diagnostics/history") && c.url.includes("sort=duration&order=asc"))).toBe(true));
+  fireEvent.click(durationHeader);
+  await waitFor(() => expect(calls.some(c => c.url.includes("/api/v2/diagnostics/history") && c.url.includes("sort=duration&order=desc"))).toBe(true));
+});

@@ -384,8 +384,10 @@ describe("InventoryScreen device selection and panels", () => {
     await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
     fireEvent.click(screen.getByText("fw-edge-1"));
 
-    const collectButton = await screen.findByRole("button", { name: "Collect now" });
+    const collectButton = await screen.findByRole("button", { name: "Collect" });
     fireEvent.click(collectButton);
+    const inventoryItem = await screen.findByRole("menuitem", { name: /Inventory:/ });
+    fireEvent.click(inventoryItem);
 
     await waitFor(() =>
       expect(fetchMock.mock.calls.some((call) => String(call[0]) === "/devices/dev-1/inventory/collect")).toBe(true),

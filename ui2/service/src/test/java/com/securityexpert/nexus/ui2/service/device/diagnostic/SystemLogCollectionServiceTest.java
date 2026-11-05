@@ -173,6 +173,54 @@ class SystemLogCollectionServiceTest {
                 .run(context -> assertThat(context).hasSingleBean(SystemLogCollectionScheduler.class));
     }
 
+    @Test
+    void theIndependentTickerRunsWithGlobalSchedulingOffAndNeverStartsWhenDisabledOrNotIndependent() {
+        var runner = new ApplicationContextRunner().withUserConfiguration(
+                com.securityexpert.nexus.ui2.service.boot.SchedulingConfiguration.class,
+                SchedulerFixture.class);
+
+        // 1. Collection disabled + independent=true -> bean absent and ticker never starts.
+        runner.withPropertyValues(
+                "ui2.scheduling.enabled=false",
+                "ui2.system-log.scheduled-collection.enabled=false",
+                "ui2.system-log.scheduled-collection.independent=true").run(context -> {
+                    assertThat(context).doesNotHaveBean(SystemLogCollectionScheduler.class);
+                    verifyNoInteractions(context.getBean(SystemLogCollectionService.class));
+                });
+        var directService = mock(SystemLogCollectionService.class);
+        var disabledDirect = new SystemLogCollectionScheduler(directService, false, true);
+        disabledDirect.start();
+        assertFalse(disabledDirect.isRunning());
+        verifyNoInteractions(directService);
+
+        // 2. Collection enabled + independent=false (default) + scheduling off -> bean present, independent ticker off.
+        runner.withPropertyValues(
+                "ui2.scheduling.enabled=false",
+                "ui2.system-log.scheduled-collection.enabled=true",
+                "ui2.system-log.scheduled-collection.independent=false").run(context -> {
+                    var scheduler = context.getBean(SystemLogCollectionScheduler.class);
+                    assertFalse(scheduler.isRunning());
+                    verifyNoInteractions(context.getBean(SystemLogCollectionService.class));
+                });
+
+        // 3. Collection enabled + independent=true + scheduling off -> independent ticker starts, ticks, and stops on close.
+        final SystemLogCollectionScheduler[] holder = new SystemLogCollectionScheduler[1];
+        runner.withPropertyValues(
+                "ui2.scheduling.enabled=false",
+                "ui2.system-log.scheduled-collection.enabled=true",
+                "ui2.system-log.scheduled-collection.independent=true").run(context -> {
+                    assertThat(context).doesNotHaveBean(
+                            org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor.class);
+                    var scheduler = context.getBean(SystemLogCollectionScheduler.class);
+                    var service = context.getBean(SystemLogCollectionService.class);
+                    holder[0] = scheduler;
+                    assertTrue(scheduler.isRunning());
+                    verify(service, timeout(2_000).atLeastOnce())
+                            .admitDue(any(Instant.class), eq(SystemLogCollectionScheduler.ACTOR));
+                });
+        assertFalse(holder[0].isRunning(), "the independent executor shuts down when the context closes");
+    }
+
     @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
     @org.springframework.context.annotation.Import(SystemLogCollectionScheduler.class)
     static class SchedulerFixture {

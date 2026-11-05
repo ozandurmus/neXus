@@ -346,12 +346,14 @@ it("summarizes the same cluster readiness counts in the KPI and chips without do
   const card = screen.getByText("Readiness checks", { selector: "p" }).closest("[data-kpi]") as HTMLElement;
   expect(card.querySelector("[data-kpi-figure]")).toHaveTextContent(/^1$/);
   expect(within(card).getByText("ready of 4 clusters")).toBeInTheDocument();
-  // The KPI counts clusters; the list's chips count units: the ready cluster's own unit and its ready Virtual System.
-  expect(screen.getByRole("button", { name: "Ready: 2 units" })).toBeInTheDocument();
-  for (const name of ["Not ready", "UNKNOWN", "Not supported"]) expect(screen.getByRole("button", { name: `${name}: 1 units` })).toBeInTheDocument();
+  // R-13: Both the KPI and the chips count clusters by default; switching to Readiness records labels the records view explicitly.
+  for (const name of ["Ready", "Not ready", "UNKNOWN", "Not supported"]) expect(screen.getByRole("button", { name: `${name}: 1 clusters` })).toBeInTheDocument();
   expect(screen.queryByText("NOT EVALUATED")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Ready: 2 units" }));
+  fireEvent.click(screen.getByRole("button", { name: "Ready: 1 clusters" }));
   expect(screen.getByText("1 not ready · 1 unknown")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Readiness records (5)" }));
+  expect(screen.getByText("4 clusters enrolled · showing 5 readiness records")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Ready: 2 readiness records" })).toBeInTheDocument();
 });
 
 it("lets aiview start read-only readiness when the server allows it, and locks the controls when it does not", async () => {

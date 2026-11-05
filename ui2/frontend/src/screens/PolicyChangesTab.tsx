@@ -14,6 +14,17 @@ const initialFilters: PolicyChangeFilters = { from: "", to: "", policy: "", devi
 const columns = ["When", "Policy / device", "Rule", "Change", "Actor", "Before / after"];
 /** After this long the loading line says the estate-wide read is still running (it is given up at the 20 s client timeout). */
 export const SLOW_AFTER_MS = 5_000;
+/** Component-level bounded wait so the panel never stays in "reading the period" / "Loading changes…" forever. */
+export const LOAD_TIMEOUT_MS = 20_000;
+
+function describeChangesFailure(failure: unknown): string {
+  if (isPolicyBusy(failure)) return POLICY_BUSY_MESSAGE;
+  const f = failure as { status?: number; name?: string; body?: { message?: string; reason?: string; error?: string; code?: string } } | null;
+  const timedOut = f?.status === 0 || f?.name === "AbortError" || f?.body?.error === "TIMEOUT";
+  if (timedOut) return "Could not load changes · the read timed out after 20 s";
+  const reason = f?.body?.message ?? f?.body?.reason ?? f?.body?.error ?? f?.body?.code;
+  return typeof reason === "string" && reason.trim() ? `Could not load changes · ${reason.trim()}` : "Could not load changes";
+}
 
 /** One collection of one policy: the rows a single snapshot publication recorded, in page order. */
 export interface ChangeGroup { key: string; policyName: string; collectedAt: string; rows: PolicyChangeRow[]; initialCapture: boolean }
@@ -48,14 +59,20 @@ export function PolicyChangesTab({ policies, devices, openRule }: { policies: Po
   useEffect(() => {
     let active = true; setData(null); setError(""); setSlow(false);
     const slowTimer = window.setTimeout(() => { if (active) setSlow(true); }, SLOW_AFTER_MS);
+    const timeoutTimer = window.setTimeout(() => {
+      if (!active) return;
+      active = false;
+      window.clearTimeout(slowTimer);
+      setSlow(false);
+      setError("Could not load changes · the read timed out after 20 s");
+    }, LOAD_TIMEOUT_MS);
     getPolicyChanges({ ...filters, ...range.current }, cursor).then(result => {
       if (!Array.isArray(result.rows) || !result.summary) throw new Error("Invalid changes response");
       if (active) { range.current = { from: result.rangeStart, to: result.rangeEnd }; setData(result); }
-    }).catch((failure: { status?: number; name?: string }) => {
-      const timedOut = failure?.status === 0 || failure?.name === "AbortError";
-      if (active) setError(isPolicyBusy(failure) ? POLICY_BUSY_MESSAGE : timedOut ? "Could not load changes · the read timed out after 20 s" : "Could not load changes");
-    }).finally(() => { window.clearTimeout(slowTimer); if (active) setSlow(false); });
-    return () => { active = false; window.clearTimeout(slowTimer); };
+    }).catch((failure: unknown) => {
+      if (active) setError(describeChangesFailure(failure));
+    }).finally(() => { window.clearTimeout(slowTimer); window.clearTimeout(timeoutTimer); if (active) setSlow(false); });
+    return () => { active = false; window.clearTimeout(slowTimer); window.clearTimeout(timeoutTimer); };
   }, [filters, cursor, revision]);
   const update = (field: keyof PolicyChangeFilters, value: string) => setDraft(previous => ({ ...previous, [field]: value }));
   const includeInitial = (value: boolean) => {

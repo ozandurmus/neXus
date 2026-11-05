@@ -169,7 +169,7 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                     jobEvent.jobId(),
                     jobEvent.jobType(),
                     jobEvent.targetDeviceId(),
-                    topologyPseudonymizer.maskDeviceName(jobEvent.deviceName(), null, jobEvent.targetDeviceId()),
+                    maskJobTargetName(jobEvent),
                     jobEvent.state(),
                     jobEvent.outcome(),
                     maskedReason,
@@ -177,7 +177,9 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                     jobEvent.finishedAt(),
                     jobEvent.durationMs(),
                     false,
-                    jobEvent.linesStored());
+                    jobEvent.linesStored(),
+                    jobEvent.targetKind(),
+                    null);
         }
         // The job log page (Operations > Jobs) is a record, not a Map: before 2026-09-25 it passed through unmasked and
         // showed real device names to the aiview persona.
@@ -483,6 +485,88 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             return result;
         }
         return maskObject(value, parentContextRef);
+    }
+
+    private String maskJobTargetName(JobEvent jobEvent) {
+        String name = jobEvent.deviceName();
+        String kind = jobEvent.targetKind();
+        String jobType = jobEvent.jobType();
+        String deviceId = jobEvent.targetDeviceId() != null && !jobEvent.targetDeviceId().isBlank()
+                ? jobEvent.targetDeviceId().strip()
+                : null;
+        String clusterRef = jobEvent.clusterRef() != null && !jobEvent.clusterRef().isBlank()
+                ? jobEvent.clusterRef().strip()
+                : null;
+
+        if ("fleet".equals(kind)) {
+            return name;
+        }
+        if (name != null) {
+            String trimmed = name.strip();
+            if ("No target recorded".equals(trimmed) || trimmed.matches("Fleet \\(\\d+ devices?\\)")) {
+                return trimmed;
+            }
+        }
+        if ("cluster".equals(kind)) {
+            String rawCluster = name != null && !name.isBlank() ? name : (clusterRef != null ? clusterRef : deviceId);
+            return rawCluster != null ? topologyPseudonymizer.maskClusterName(rawCluster) : null;
+        }
+        if ("failover_unit".equals(kind)) {
+            if (clusterRef != null) {
+                topologyPseudonymizer.maskClusterName(clusterRef);
+            }
+            String rawUnit = name != null && !name.isBlank() ? name : (clusterRef != null ? clusterRef : deviceId);
+            return rawUnit != null ? topologyPseudonymizer.maskVirtualSystem(rawUnit, clusterRef) : null;
+        }
+        if ("policy_container".equals(kind)) {
+            String rawContainer = name != null && !name.isBlank() ? name : (clusterRef != null ? clusterRef : deviceId);
+            return rawContainer != null ? topologyPseudonymizer.maskDomainName(rawContainer) : null;
+        }
+        if ("packet_analysis_case".equals(kind) || "packet_analysis_run".equals(jobType)) {
+            String rawCase = name != null && !name.isBlank() ? name : (clusterRef != null ? clusterRef : deviceId);
+            return rawCase != null ? topologyPseudonymizer.maskPolicyName("packet_case", rawCase) : null;
+        }
+        if ("policy_source".equals(kind)) {
+            String fallbackId = deviceId != null ? deviceId : clusterRef;
+            if (name != null && !name.isBlank()) {
+                String masked = topologyPseudonymizer.maskDeviceName(name, null, deviceId);
+                if (masked != null && !"Unknown".equals(masked)) {
+                    return masked;
+                }
+                if (fallbackId == null) {
+                    return topologyPseudonymizer.maskDeviceName("source:" + name.strip(), null, null);
+                }
+            }
+            return fallbackId != null ? topologyPseudonymizer.maskDeviceName(fallbackId, null, fallbackId) : null;
+        }
+        if (kind == null && jobType != null
+                && com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.FAILOVER_JOB_TYPES.contains(jobType)
+                && (clusterRef != null || (name != null && name.startsWith("VSID ")))) {
+            if (name != null && name.startsWith("VSID ")) {
+                if (clusterRef != null) {
+                    topologyPseudonymizer.maskClusterName(clusterRef);
+                }
+                return topologyPseudonymizer.maskVirtualSystem(name, clusterRef);
+            }
+            return topologyPseudonymizer.maskClusterName(clusterRef != null ? clusterRef : name);
+        }
+        if (kind == null && ("cp_policy_collect".equals(jobType) || "pan_policy_collect".equals(jobType))
+                && deviceId == null && name != null && !name.isBlank()) {
+            return topologyPseudonymizer.maskDomainName(name);
+        }
+        if (name != null && !name.isBlank()) {
+            String masked = topologyPseudonymizer.maskDeviceName(name, clusterRef, deviceId);
+            if (masked != null && !"Unknown".equals(masked)) {
+                return masked;
+            }
+            if (deviceId == null) {
+                return topologyPseudonymizer.maskDeviceName("device:" + name.strip(), clusterRef, null);
+            }
+        }
+        if (deviceId != null) {
+            return topologyPseudonymizer.maskDeviceName(deviceId, clusterRef, deviceId);
+        }
+        return null;
     }
 
     private List<Object> maskList(List<?> list, String parentContextRef) {

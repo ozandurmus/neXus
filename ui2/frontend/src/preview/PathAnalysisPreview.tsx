@@ -5,7 +5,7 @@ import { PathResultView } from "../screens/pathanalysis/PathResultView";
 import type { PathVerification } from "../screens/pathanalysis/usePathValidation";
 import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 import { TYPE } from "../theme/tokens";
-import { PATH_ALLOWED, PATH_DENIED, PATH_PARTIAL, PATH_VALIDATION_COMPLETE } from "./pathPreviewData";
+import { PATH_ALLOWED, PATH_DENIED, PATH_PARTIAL, PATH_TOPOLOGY_PREVIEW, PATH_VALIDATION_COMPLETE } from "./pathPreviewData";
 
 /** A finished verification for the preview: no request leaves the page. */
 const VERIFIED: PathVerification = {
@@ -21,15 +21,15 @@ export function PathAnalysisPreview() {
       <ScreenHeader title="Path analysis" subtitle="Can A reach B? · synthetic preview of the verdict lattice" />
       <Stack spacing={1}>
         <Typography component="h3" sx={{ ...TYPE.section, m: 0 }}>Verified on the devices: the route agrees on both units, the Palo Alto NAT match disagrees</Typography>
-        <PathResultView result={PATH_ALLOWED} verification={VERIFIED} now={now} />
+        <PathResultView result={PATH_ALLOWED} verification={VERIFIED} defaultView="diagram" topology={PATH_TOPOLOGY_PREVIEW} now={now} />
       </Stack>
       <Stack spacing={1}>
         <Typography component="h3" sx={{ ...TYPE.section, m: 0 }}>Equal-cost branches, an UNKNOWN hop, a conditional hop, an asymmetric return</Typography>
-        <PathResultView result={PATH_PARTIAL} now={now} />
+        <PathResultView result={PATH_PARTIAL} defaultView="diagram" topology={PATH_TOPOLOGY_PREVIEW} now={now} />
       </Stack>
       <Stack spacing={1}>
         <Typography component="h3" sx={{ ...TYPE.section, m: 0 }}>Denied at a named rule</Typography>
-        <PathResultView result={PATH_DENIED} now={now} />
+        <PathResultView result={PATH_DENIED} topology={PATH_TOPOLOGY_PREVIEW} now={now} />
       </Stack>
     </ScreenRoot>
   );

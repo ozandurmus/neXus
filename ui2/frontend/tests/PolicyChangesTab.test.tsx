@@ -126,3 +126,21 @@ it("never leaves Loading… standing: a timed-out read ends in 'Could not load c
     expect(screen.getAllByText("UNKNOWN")).toHaveLength(6);
   } finally { vi.useRealTimers(); }
 });
+
+it("stops waiting at the component bounded timeout even if fetch never settles and shows the API failure reason when given", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    const { unmount } = render(<ThemeProvider theme={m3Theme}><PolicyChangesTab policies={[]} devices={[]} openRule={vi.fn()} /></ThemeProvider>);
+    expect(screen.getByText("Loading changes…")).toBeInTheDocument();
+    await act(async () => { vi.advanceTimersByTime(20_100); });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load changes · the read timed out after 20 s");
+    expect(screen.queryByText(/Loading changes/)).toBeNull();
+    expect(screen.getAllByText("UNKNOWN")).toHaveLength(6);
+    unmount();
+  } finally { vi.useRealTimers(); }
+
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ message: "Stored policy history is unavailable" }), { status: 500 })));
+  mount();
+  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load changes · Stored policy history is unavailable");
+});

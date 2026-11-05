@@ -374,6 +374,43 @@ class PrivacyMaskingResponseBodyAdviceTest {
     }
 
     @Test
+    void masksEveryJobTargetKindForReplayViewerWithoutLeakingRawValues() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+
+        var deletedDevice = new JobEvent("j-del", "cp_inventory_collect", "148bd45b-e5b4-490b-95c5-54862e2d63d0",
+                null, "COMPLETED", "SUCCESS", null, Instant.now(), null, null, false, null, "device", null);
+        var clusterJob = new JobEvent("j-cls", "pan_failover_readiness", "148bd45b-e5b4-490b-95c5-54862e2d63d0",
+                "raw-cluster-01", "COMPLETED", "READY", null, Instant.now(), null, null, false, null, "cluster", "raw-cluster-01");
+        var failoverUnitJob = new JobEvent("j-vs", "cp_cluster_failover", "148bd45b-e5b4-490b-95c5-54862e2d63d0",
+                "VSID 2", "COMPLETED", "SUCCESS", null, Instant.now(), null, null, false, null, "failover_unit", "raw-cluster-01");
+        var containerJob = new JobEvent("j-dom", "cp_policy_collect", "mgr-uuid-1",
+                "raw-domain-alpha", "COMPLETED", "SUCCESS", null, Instant.now(), null, null, false, null, "policy_container", "run-1");
+        var sourceJob = new JobEvent("j-src", "pan_policy_collect", "mgr-uuid-2",
+                "192.0.2.50", "COMPLETED", "SUCCESS", null, Instant.now(), null, null, false, null, "policy_source", "run-2");
+        var packetJob = new JobEvent("j-pkt", "packet_analysis_run", null,
+                "raw-packet-case-title", "COMPLETED", "SUCCESS", null, Instant.now(), null, null, false, null, "packet_analysis_case", "case-1");
+        var fleetJob = new JobEvent("j-flt", "cp_system_log_collect", null,
+                "Fleet (24 devices)", "COMPLETED", "SUCCESS", null, Instant.now(), null, null, false, null, "fleet", null);
+        var targetlessJob = new JobEvent("j-non", "cp_policy_collect", null,
+                null, "FAILED", "FAILURE", null, Instant.now(), null, null, false, null, null, null);
+
+        var page = new com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobPage(
+                List.of(deletedDevice, clusterJob, failoverUnitJob, containerJob, sourceJob, packetJob, fleetJob, targetlessJob),
+                1, 50, 8);
+        var result = (com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobPage)
+                advice.beforeBodyWrite(page, null, null, null, serverRequest, null);
+
+        assertThat(result.items().get(0).deviceName()).startsWith("FW-");
+        assertThat(result.items().get(1).deviceName()).startsWith("CLS-").doesNotContain("raw-cluster-01");
+        assertThat(result.items().get(2).deviceName()).startsWith("VS-");
+        assertThat(result.items().get(3).deviceName()).startsWith("DOM-").doesNotContain("raw-domain-alpha");
+        assertThat(result.items().get(4).deviceName()).startsWith("FW-").doesNotContain("192.0.2.50");
+        assertThat(result.items().get(5).deviceName()).startsWith("OBJ-").doesNotContain("raw-packet-case-title");
+        assertThat(result.items().get(6).deviceName()).isEqualTo("Fleet (24 devices)");
+        assertThat(result.items().get(7).deviceName()).isNull();
+    }
+
+    @Test
     void masksJobFailureWithBothIpAndRawHostname() {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
 

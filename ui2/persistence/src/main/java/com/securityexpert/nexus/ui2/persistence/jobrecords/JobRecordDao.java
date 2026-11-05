@@ -47,6 +47,7 @@ public interface JobRecordDao {
     default DiagnosticAdmission insertDiagnosticRead(String jobId, String idempotencyKey, String deviceId,
             String gateId, String command, String actor) { return new DiagnosticAdmission("UNSUPPORTED", null); }
     default java.util.List<DiagnosticJob> diagnosticHistory(String deviceId, int offset) { return java.util.List.of(); }
+    default java.util.List<DiagnosticJob> diagnosticHistory(String deviceId, int offset, String sort, String order) { return diagnosticHistory(deviceId, offset); }
     default Optional<DiagnosticOutputRef> diagnosticOutput(String jobId, String actor) { return Optional.empty(); }
     default boolean writeDiagnosticOutput(String jobId, String reference, byte[] key, int exitStatus, int lines) { return false; }
 

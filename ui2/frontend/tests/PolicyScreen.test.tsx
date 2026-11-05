@@ -950,3 +950,26 @@ it("maps usage presets onto the server hit filter and the query grammar without 
   expect(usageRequest("recent30", 30, "")).toEqual({ hitFilter: "", days: 30, q: "lasthit.days<30" });
   expect(usageRequest("recent30", 30, " action='Accept' ")).toEqual({ hitFilter: "", days: 30, q: "(action='Accept') AND lasthit.days<30" });
 });
+
+it("sends sort and order to the policy rules API, resets to page 1, and shows non-evaluation order notice", async () => {
+  const fetch = mockFetch({ ...page, total: 400 });
+  mount();
+  await navigate();
+  const table = await screen.findByRole("table", { name: "Policy rules" });
+  expect(screen.queryByText(/not evaluation order/)).toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.includes("page=1"))).toBe(true));
+
+  const actionHeader = () => within(within(screen.getByRole("table", { name: "Policy rules" })).getByRole("columnheader", { name: "Action" })).getByRole("button");
+  fireEvent.click(actionHeader());
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.includes("page=0") && url.includes("sort=action&order=asc"))).toBe(true));
+  expect(screen.getByText("sorted by Action, not evaluation order")).toBeInTheDocument();
+
+  fireEvent.click(actionHeader());
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.includes("page=0") && url.includes("sort=action&order=desc"))).toBe(true));
+  expect(screen.getByText("sorted by Action, not evaluation order")).toBeInTheDocument();
+
+  fireEvent.click(actionHeader());
+  await waitFor(() => expect(screen.queryByText(/not evaluation order/)).toBeNull());
+});

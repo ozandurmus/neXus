@@ -94,19 +94,22 @@ async function csrfToken(): Promise<string | undefined> {
   }
 }
 
-function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
+function withTimeout<T>(work: Promise<T>, timeoutMs: number, onTimeout?: () => void): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const request = fetch(input, { ...init, signal: controller.signal });
   const timeout = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => {
-      controller.abort();
+      onTimeout?.();
       reject({ status: 0, body: { error: "TIMEOUT" } } satisfies ApiError);
     }, timeoutMs);
   });
-  return Promise.race([request, timeout]).finally(() => {
+  return Promise.race([work, timeout]).finally(() => {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
   });
+}
+
+function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  return withTimeout(fetch(input, { ...init, signal: controller.signal }), timeoutMs, () => controller.abort());
 }
 
 /**
@@ -158,14 +161,15 @@ async function call<T>(path: string, method: "GET" | "POST" | "PUT", body?: unkn
     if (token) headers["X-CSRF-Token"] = token;
     if (businessHoursAck) headers[BUSINESS_HOURS_ACK_HEADER] = "true";
   }
+  const timeoutMs = method === "GET" ? 20_000 : 60_000;
   const response = await fetchWithTimeout(path, {
     method,
     credentials: "include",
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
-  }, method === "GET" ? 20_000 : 60_000);
+  }, timeoutMs);
   noteMasking(response);
-  const parsed = await response.json().catch(() => ({}));
+  const parsed = await withTimeout(response.json().catch(() => ({})), timeoutMs);
   if (!response.ok) {
     if (response.status === 409 && parsed.code === BUSINESS_HOURS_CONFIRM_REQUIRED && method !== "GET" && !businessHoursAck) {
       if (await confirmBusinessHours(typeof parsed.message === "string" ? parsed.message : BUSINESS_HOURS_DEFAULT_MESSAGE, scope)) {
@@ -1082,8 +1086,9 @@ export interface DiagnosticHistoryRow {
   submittedAt: string; state: string; exitStatus: number | null;
   description?: string; startedAt?: string | null; finishedAt?: string | null; durationMs?: number | null;
 }
-export function diagnosticHistory(deviceId: string, page: number): Promise<{ runs: DiagnosticHistoryRow[] }> {
-  return call(`/api/v2/diagnostics/history?page=${page}${deviceId ? `&device_id=${encodeURIComponent(deviceId)}` : ""}`, "GET");
+export function diagnosticHistory(deviceId: string, page: number, sort = "", order = ""): Promise<{ runs: DiagnosticHistoryRow[] }> {
+  const sortQuery = sort ? `&sort=${encodeURIComponent(sort)}${order ? `&order=${encodeURIComponent(order)}` : ""}` : "";
+  return call(`/api/v2/diagnostics/history?page=${page}${deviceId ? `&device_id=${encodeURIComponent(deviceId)}` : ""}${sortQuery}`, "GET");
 }
 export function runDiagnostic(deviceId: string, gateId: string, parameter: string | undefined, requestId: string): Promise<{ job_id: string }> {
   return call("/api/v2/diagnostics", "POST", { device_id: deviceId, gate_id: gateId,
@@ -1495,9 +1500,17 @@ export function listAuditEvents(): Promise<{ events: AuditEventView[] }> {
 export interface JobEventView {
   readonly job_id: string;
   readonly job_type: string;
-  readonly target_device_id: string;
-  /** Observed hostname at read time; absent when the device has none recorded. */
+  readonly target_device_id?: string | null;
+  /** Resolved target label at read time; absent when no target is recorded. */
   readonly device_name?: string | null;
+  readonly target_kind?: string | null;
+  readonly target_name?: string | null;
+  readonly target_ref?: string | null;
+  readonly cluster_member_ref?: string | null;
+  readonly container_name?: string | null;
+  readonly source_name?: string | null;
+  readonly target_device_count?: number | null;
+  readonly device_count?: number | null;
   readonly state: string;
   readonly outcome?: string | null;
   readonly terminal_reason?: string;
@@ -1541,6 +1554,8 @@ export interface JobQueryParams {
   readonly q?: string;
   readonly page?: number;
   readonly page_size?: number;
+  readonly sort?: string;
+  readonly order?: "asc" | "desc";
 }
 
 export const cancelJob = (id: string) => call<{ jobId: string; state: string; cancelRequested: boolean }>(`/api/v2/jobs/${encodeURIComponent(id)}/cancel`, "POST");
@@ -2086,7 +2101,10 @@ export interface PolicyRule {
 export interface PolicySection { id: string; name: string; source: string; parentRuleId: string | null; rules: PolicyRule[]; total: number }
 export interface PolicyPage { failures?: { layerRef: string; reason: string; layerName?: string; offset?: number }[]; policyKind?: "LOCAL_FIREWALL" | "MANAGEMENT"; metadata: PolicyMetadata; sections: PolicySection[]; objects: PolicyObject[]; page: number; pageSize: number; total: number }
 export const listPolicies = () => call<{ policies: PolicyMetadata[]; devices: PolicyTarget[] }>("/api/v2/policy/devices", "GET");
-export const getPolicy = (id: string, page: number, q: string, hitFilter = "", days = 90) => call<PolicyPage>(`/api/v2/policy/policies/${encodeURIComponent(id)}?page=${page}&q=${encodeURIComponent(q)}${hitFilter ? `&hitFilter=${hitFilter}&days=${days}` : ""}`, "GET");
+const policySortParam = (sort = "", order = "") =>
+  sort ? `&sort=${encodeURIComponent(sort)}${order ? `&order=${encodeURIComponent(order)}` : ""}` : "";
+export const getPolicy = (id: string, page: number, q: string, hitFilter = "", days = 90, sort = "", order = "") =>
+  call<PolicyPage>(`/api/v2/policy/policies/${encodeURIComponent(id)}?page=${page}&q=${encodeURIComponent(q)}${hitFilter ? `&hitFilter=${hitFilter}&days=${days}` : ""}${policySortParam(sort, order)}`, "GET");
 export const getPolicyObject = (id: string, policy: string) => call<{ object: PolicyObject }>(`/api/v2/policy/objects/${encodeURIComponent(id)}?policy=${encodeURIComponent(policy)}`, "GET");
 
 export interface PolicyInventoryObject extends Omit<PolicyObject, "status"> {
@@ -2109,12 +2127,12 @@ export interface PolicyInstallation {
 export interface PolicyInstallationPage { installations: PolicyInstallation[]; total: number; page: number; pageSize: number; types: PolicyTypeState[] }
 const policyDomainPath = (source: string, domain: string, view: string, page: number, q = "") =>
   `/api/v2/policy/domains/${encodeURIComponent(domain)}/${view}?source=${encodeURIComponent(source)}&page=${page}&q=${encodeURIComponent(q)}`;
-export const getPolicyObjects = (source: string, domain: string, page = 0, q = "", type = "", hygiene = "") =>
-  call<PolicyObjectPage>(`${policyDomainPath(source, domain, "objects", page, q)}&type=${encodeURIComponent(type)}&hygiene=${encodeURIComponent(hygiene)}`, "GET");
-export const getPolicyUsage = (source: string, domain: string, uid: string, page = 0) =>
-  call<PolicyUsage>(`${policyDomainPath(source, domain, "object-usage", page)}&uid=${encodeURIComponent(uid)}`, "GET");
-export const getPolicyInstallations = (source: string, domain: string, page = 0, q = "", policy = "") =>
-  call<PolicyInstallationPage>(`${policyDomainPath(source, domain, "installation", page, q)}&policy=${encodeURIComponent(policy)}`, "GET");
+export const getPolicyObjects = (source: string, domain: string, page = 0, q = "", type = "", hygiene = "", sort = "", order = "") =>
+  call<PolicyObjectPage>(`${policyDomainPath(source, domain, "objects", page, q)}&type=${encodeURIComponent(type)}&hygiene=${encodeURIComponent(hygiene)}${policySortParam(sort, order)}`, "GET");
+export const getPolicyUsage = (source: string, domain: string, uid: string, page = 0, sort = "", order = "") =>
+  call<PolicyUsage>(`${policyDomainPath(source, domain, "object-usage", page)}&uid=${encodeURIComponent(uid)}${policySortParam(sort, order)}`, "GET");
+export const getPolicyInstallations = (source: string, domain: string, page = 0, q = "", policy = "", sort = "", order = "") =>
+  call<PolicyInstallationPage>(`${policyDomainPath(source, domain, "installation", page, q)}&policy=${encodeURIComponent(policy)}${policySortParam(sort, order)}`, "GET");
 
 export type PolicyCollectionSource = { sourceId: string; sourceName: string; vendor: string; collection?: PolicyCollectionStatus };
 export const listPolicySources = () => call<{ sources: PolicyCollectionSource[]; canCollect: boolean; canCancel?: boolean }>("/api/v2/policy/sources", "GET");
@@ -3647,7 +3665,16 @@ export interface SystemHealthDevice {
 }
 
 export interface SystemHealth {
-  readonly computation: { readonly state: "COMPUTING" | "REFRESHING" | "READY"; readonly computed_at: string | null; readonly duration_ms: number | null; readonly snapshot_ttl_seconds: number; readonly store_available: boolean };
+  readonly computation: {
+    readonly state: "COMPUTING" | "REFRESHING" | "READY" | "FAILED";
+    readonly computed_at: string | null;
+    readonly duration_ms: number | null;
+    readonly snapshot_ttl_seconds: number;
+    readonly store_available: boolean;
+    readonly scheduling_enabled?: boolean;
+    readonly reason?: string | null;
+    readonly error?: string | null;
+  };
   readonly window_days: number;
   readonly cpu_p95_threshold_percent: number;
   readonly time_basis: string;
@@ -3704,6 +3731,22 @@ export type SystemLogSettingsPatch = Partial<Pick<SystemLogSettingsView, SystemL
 export const getSystemLogSettings = () => call<SystemLogSettingsView>("/api/v2/config/system-logs", "GET");
 export const saveSystemLogSettings = (patch: SystemLogSettingsPatch) =>
   call<SystemLogSettingsView>("/api/v2/config/system-logs", "PUT", patch);
+
+export interface SystemLogCollectOutcome {
+  readonly targets: number;
+  readonly admitted: number;
+  readonly deduplicated: number;
+  readonly refused: number;
+  readonly refusal_codes: readonly string[];
+  readonly job_ids?: readonly string[];
+}
+
+export const requestSystemLogCollect = (deviceId?: string) =>
+  call<SystemLogCollectOutcome>(
+    "/api/v2/system-logs/collect",
+    "POST",
+    deviceId ? { device_id: deviceId } : {},
+  );
 
 /**
  * One page of a chunk's text. The page is `text/plain` with its paging facts in `X-Syslog-*` headers; a response
@@ -3874,6 +3917,46 @@ export interface PathResult {
  * `PATH_QUERY_RATE_LIMIT`, 503 `POLICY_BUSY` (`error`) or `AUDIT_UNAVAILABLE` (`code`).
  */
 export const queryPath = (request: PathQueryRequest) => call<PathResult>("/api/v2/path-analysis/query", "POST", request);
+
+export interface TopologyNodeView {
+  readonly node_id: string;
+  readonly node_kind: string;
+  readonly vendor: string;
+  readonly cluster_member_ref?: string | null;
+  readonly context?: string | null;
+  readonly routing_context?: string | null;
+  readonly active_member_device_id?: string | null;
+  readonly flags?: readonly string[];
+}
+export interface TopologySegmentView {
+  readonly segment_id: string;
+  readonly segment_kind: string;
+  readonly network: string | null;
+  readonly override_id?: string | null;
+}
+export interface TopologyAttachmentView {
+  readonly attachment_id: string;
+  readonly node_id: string;
+  readonly segment_id: string;
+  readonly interface_name: string | null;
+  readonly address: string | null;
+  readonly address_role?: string | null;
+  readonly zone: string | null;
+  readonly corroborated?: boolean;
+  readonly source?: string;
+  readonly evidence_grade?: string | null;
+}
+export interface TopologySnapshotView {
+  readonly status: "BUILT" | "NOT_BUILT" | string;
+  readonly snapshot_id?: string;
+  readonly built_at?: string;
+  readonly nodes: readonly TopologyNodeView[];
+  readonly segments: readonly TopologySegmentView[];
+  readonly attachments: readonly TopologyAttachmentView[];
+}
+
+/** Reads the held topology (`GET /api/v2/topology`, masked for aiview) to resolve neighbour segments attached to path nodes. */
+export const getTopology = () => call<TopologySnapshotView>("/api/v2/topology", "GET");
 
 // ---- Path analysis stage A6: real-environment validation of a computed result ---------------------------------------
 

@@ -1,9 +1,10 @@
 import { JobButton } from "../shell/JobWindow";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Chip, Divider, List, ListItemButton, ListItemText, ListSubheader,
   Paper, Stack, Step, StepLabel, Stepper, Table, TableBody, TableCell, TableContainer, TableHead,
   TableRow, TextField, Typography } from "@mui/material";
 import { PaginationFooter } from "../shell/DataTable";
+import { SortHeaderCell, useServerTableSort } from "../shell/tableSort";
 import { Presented, Stamp } from "../shell/PresentedText";
 import { formatDuration, formatStamp } from "../shell/time";
 import { actorLabel, jobStateWord, vendorLabel } from "../shell/presenters";
@@ -55,6 +56,10 @@ export function DiagnosticPanel() {
   const [running, setRunning] = useState(false);
   const [history, setHistory] = useState<DiagnosticHistoryRow[]>([]);
   const [page, setPage] = useState(0);
+  const resetHistoryPage = useCallback(() => { setPage(0); setHistory([]); }, []);
+  const historySort = useServerTableSort({ onChange: resetHistoryPage });
+  const sortKey = historySort.sort?.key ?? "";
+  const sortOrder = historySort.sort?.direction ?? "";
   const [refresh, setRefresh] = useState(0);
   const [copied, setCopied] = useState(false);
   const requestId = useRef<string | null>(null);
@@ -85,10 +90,11 @@ export function DiagnosticPanel() {
   useEffect(() => {
     if (!allowed) return;
     let active = true;
-    diagnosticHistory(deviceId, page).then(r => { if (active) setHistory(Array.isArray(r.runs) ? r.runs : []); })
+    const req = sortKey ? diagnosticHistory(deviceId, page, sortKey, sortOrder) : diagnosticHistory(deviceId, page);
+    req.then(r => { if (active) setHistory(Array.isArray(r.runs) ? r.runs : []); })
       .catch(() => { if (active) setMessage("Could not load execution history."); });
     return () => { active = false; };
-  }, [allowed, deviceId, page, refresh]);
+  }, [allowed, deviceId, page, refresh, sortKey, sortOrder]);
   useEffect(() => {
     if (!jobId) return;
     let active = true;
@@ -242,7 +248,15 @@ export function DiagnosticPanel() {
           <Button onClick={() => setRefresh(v => v + 1)}>Refresh history</Button>
         </Stack>
         <TableContainer><Table size="small" aria-label="Execution history">
-          <TableHead><TableRow>{["Time", "Actor", ...(!deviceId ? ["Device"] : []), "Command", "Status", "Duration", "Output"].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+          <TableHead><TableRow>
+            <SortHeaderCell label="Time" state={historySort.header("submitted_at")} words={{ asc: "oldest first", desc: "newest first" }} />
+            <SortHeaderCell label="Actor" state={historySort.header("actor")} />
+            {!deviceId && <SortHeaderCell label="Device" state={historySort.header("device")} />}
+            <SortHeaderCell label="Command" state={historySort.header("command")} />
+            <SortHeaderCell label="Status" state={historySort.header("state")} />
+            <SortHeaderCell label="Duration" state={historySort.header("duration")} words={{ asc: "shortest first", desc: "longest first" }} />
+            <TableCell>Output</TableCell>
+          </TableRow></TableHead>
           <TableBody>{history.filter(row => !deviceId || row.targetDeviceId === deviceId).map(row => <TableRow key={row.jobId} hover>
             <TableCell sx={{ whiteSpace: "nowrap" }}><Stamp at={row.submittedAt} /></TableCell><TableCell><ActorCell actor={row.actor} /></TableCell>
             {!deviceId && <TableCell>{row.target}</TableCell>}<TableCell sx={{ maxWidth: 400, overflowWrap: "anywhere" }}>{row.description ?? row.command}</TableCell>

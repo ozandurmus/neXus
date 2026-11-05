@@ -119,4 +119,25 @@ class PolicyChangesServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.changes(request("", "x".repeat(1001), "", 100), false));
         verifyNoInteractions(repository);
     }
+    @Test void unscannedPageProjectsOnlyReturnedPageRowsAndDomainPseudonymsAreCached() {
+        Row unvisitedTrailingRow = new Row(1, "p1", "r1", "uuid:opaque-001", "modified", "2026-10-09T00:00:00Z", false, "Synthetic actor",
+            "not-parsed-beyond-page-limit", "not-parsed", "Synthetic rule", 7, false);
+        stub(List.of(row(3, "Synthetic actor", false), row(2, "Synthetic actor", false), unvisitedTrailingRow));
+        var page = service.changes(request("", "", "", 1), true).body();
+        var json = mapper.valueToTree(page);
+        assertEquals(1, json.path("rows").size());
+        assertFalse(json.path("nextCursor").asText().isEmpty());
+
+        var claims = new java.util.concurrent.atomic.AtomicInteger();
+        PseudonymRegistry inner = PseudonymRegistry.inMemory();
+        var localNames = new TopologyNamePseudonymizer(new byte[32]);
+        localNames.setRegistry((kind, rawKey, candidates) -> {
+            claims.incrementAndGet();
+            return inner.claim(kind, rawKey, candidates);
+        });
+        String first = localNames.maskDomainName("CMA-CORP");
+        String second = localNames.maskDomainName("CMA-CORP");
+        assertEquals(first, second);
+        assertEquals(1, claims.get(), "domain pseudonyms are cached in memory across repeated calls");
+    }
 }

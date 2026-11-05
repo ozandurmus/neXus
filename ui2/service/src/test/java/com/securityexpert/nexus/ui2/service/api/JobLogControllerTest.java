@@ -54,4 +54,28 @@ class JobLogControllerTest {
         assertFalse(controller.listJobs(null, null, null, null, null, null, 1, 50, replayAdmin)
                 .getBody().items().get(0).hasTranscript());
     }
+
+    @Test
+    void listJobsAndExportRejectUnknownSortOrOrderWith400AndPassAllowListedSort() {
+        var jobs = mock(JobLogQueryService.class);
+        var rbac = mock(RbacEvaluator.class);
+        var controller = new JobLogController(jobs, mock(PrivacyMaskingResponseBodyAdvice.class),
+                new ActionRegistry(), rbac);
+        when(jobs.query(any())).thenReturn(new JobPage(List.of(), 1, 50, 0));
+        when(jobs.exportCsv(any())).thenReturn("");
+        var request = new MockHttpServletRequest();
+
+        org.junit.jupiter.api.Assertions.assertEquals(400,
+                controller.listJobs(null, null, null, null, null, null, 1, 50, "drop table", "asc", request).getStatusCode().value());
+        org.junit.jupiter.api.Assertions.assertEquals(400,
+                controller.listJobs(null, null, null, null, null, null, 1, 50, "state", "sideways", request).getStatusCode().value());
+        org.junit.jupiter.api.Assertions.assertEquals(400,
+                controller.listJobs(null, null, null, null, null, null, 1, 50, null, "desc", request).getStatusCode().value());
+        org.junit.jupiter.api.Assertions.assertEquals(400,
+                controller.exportCsv(null, null, null, null, null, null, "unknown", "asc", request).getStatusCode().value());
+        org.junit.jupiter.api.Assertions.assertEquals(200,
+                controller.listJobs(null, null, null, null, null, null, 1, 50, "duration", "desc", request).getStatusCode().value());
+        org.junit.jupiter.api.Assertions.assertEquals(200,
+                controller.exportCsv(null, null, null, null, null, null, "device", "asc", request).getStatusCode().value());
+    }
 }

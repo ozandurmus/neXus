@@ -10,17 +10,18 @@ import Typography from "@mui/material/Typography";
 
 import {
   getSystemLogChunks, getSystemLogCrashFiles, getSystemLogGaps, getSystemLogHcp, getSystemLogSources, getSystemLogSpikeData,
-  getSystemLogText, listJobs, type ApiError, type SystemLogChunk, type SystemLogCrashFiles, type SystemLogGap, type SystemLogHcp,
-  type SystemLogSource, type SystemLogSources, type SystemLogSpikeData,
+  getSystemLogText, listJobs, requestSystemLogCollect, type ApiError, type SystemLogChunk, type SystemLogCollectOutcome,
+  type SystemLogCrashFiles, type SystemLogGap, type SystemLogHcp, type SystemLogSource, type SystemLogSources, type SystemLogSpikeData,
 } from "../auth/adminApi";
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { Icon } from "../shell/Icon";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
+import { PLANE_OPERATIONS, useRoleAllows } from "../shell/actionAccess";
 import { usePreferenceFlag } from "../shell/preference";
 import { RestrictedPanel, StatePanel, Ts, Unknown, isRestricted } from "../shell/States";
 import { useJobWindow } from "../shell/JobWindow";
 import type { Tone } from "../shell/tone";
-import { formatTime, relativeAge } from "../shell/time";
+import { formatStamp, formatTime, relativeAge } from "../shell/time";
 import { KpiCard } from "../shell/KpiCard";
 import { lineDeviceTime, lineSeverity, windowWords, type LineSeverity } from "./logLineTime";
 import { jobStateWord, statusWord } from "../shell/presenters";
@@ -218,14 +219,76 @@ function nextWindowWords(label: string | null): string | null {
   return time ? `next window ${time}` : null;
 }
 
-function CollectionStateCard({ state, data, latest, onRefresh }: {
+export function explainSystemLogRefusalCode(code: string, nextWindowStart?: string | null): string {
+  switch (code) {
+    case "OUTSIDE_JOB_WINDOW": {
+      const next = nextWindowStart ? formatStamp(nextWindowStart.replace(/\[.*\]$/, "")) : null;
+      return next && next !== "UNKNOWN"
+        ? `Refused: outside the job window (next window at ${next})`
+        : "Refused: outside the job window";
+    }
+    case "SYSTEM_LOG_VENDOR_UNSUPPORTED":
+      return "Refused: unsupported vendor (system logs are collected from Check Point and Palo Alto gateways only)";
+    case "SYSTEM_LOG_DISABLED_ON_MANAGEMENT":
+      return "Refused: system-log collection is disabled on management servers";
+    case "DEVICE_NOT_FOUND":
+      return "Refused: device not found";
+    default:
+      return `Refused: ${code}`;
+  }
+}
+
+export interface SystemLogCollectMessage {
+  readonly tone: "ok" | "warn" | "bad";
+  readonly text: string;
+}
+
+export function describeSystemLogCollectOutcome(
+  outcome: Partial<SystemLogCollectOutcome> & { readonly next_window_start?: string | null },
+): SystemLogCollectMessage {
+  if ((outcome.admitted ?? 0) > 0) {
+    return { tone: "ok", text: "System-log collection admitted." };
+  }
+  if ((outcome.deduplicated ?? 0) > 0) {
+    return { tone: "warn", text: "System-log collection is already running for this device (deduplicated)." };
+  }
+  const codes = Array.isArray(outcome.refusal_codes) ? outcome.refusal_codes.filter((c): c is string => typeof c === "string") : [];
+  if (codes.length > 0) {
+    return { tone: "bad", text: codes.map((c) => explainSystemLogRefusalCode(c, outcome.next_window_start)).join(" · ") };
+  }
+  return { tone: "bad", text: "System-log collection refused." };
+}
+
+export function describeSystemLogCollectError(err: unknown): SystemLogCollectMessage {
+  const e = err as Partial<ApiError> | null;
+  const body = (e?.body ?? {}) as Record<string, unknown>;
+  const nextWindow = typeof body.next_window_start === "string" ? body.next_window_start : null;
+  const refusalCodes = Array.isArray(body.refusal_codes)
+    ? body.refusal_codes.filter((c): c is string => typeof c === "string")
+    : [];
+  const code = typeof body.code === "string" ? body.code : typeof body.error === "string" ? body.error : "";
+  const codes = refusalCodes.length > 0 ? refusalCodes : code ? [code] : [];
+  if (codes.length > 0) {
+    return { tone: "bad", text: codes.map((c) => explainSystemLogRefusalCode(c, nextWindow)).join(" · ") };
+  }
+  const reason = typeof body.reason === "string" ? body.reason : "";
+  return { tone: "bad", text: reason ? `Refused: ${reason}` : describe(err) };
+}
+
+function CollectionStateCard({ state, data, latest, onRefresh, collectAction }: {
   readonly state: Exclude<CollectionSubState, { kind: "stored" }>;
   readonly data: SystemLogSources;
   readonly latest: LatestCollection | null;
   readonly onRefresh: () => void;
+  readonly collectAction?: React.ReactNode;
 }) {
   const window = useJobWindow();
-  const refresh = <M3Button emphasis="outlined" onClick={onRefresh}>Refresh</M3Button>;
+  const refresh = (
+    <Box sx={{ display: "inline-flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+      {collectAction}
+      <M3Button emphasis="outlined" onClick={onRefresh}>Refresh</M3Button>
+    </Box>
+  );
   const lastAt = data.last_job?.at ?? latest?.at ?? null;
   const zone = "Times are Europe/Istanbul (GMT+3).";
   if (state.kind === "none") {
@@ -258,6 +321,51 @@ export function DeviceLogsPanel({ deviceId, vendorHint }: { readonly deviceId: s
   // Wrapped so "no job on record" (null) is told apart from "not read yet" (no data).
   const latestJob = useFetchOnMount<{ readonly job: LatestCollection | null }>(() => latestCollection(deviceId, vendorHint).then((job) => ({ job })), describe);
   const refreshAll = () => { sources.refresh(); latestJob.refresh(); };
+  const canCollect = useRoleAllows(PLANE_OPERATIONS);
+  const [collecting, setCollecting] = useState(false);
+  const [collectMessage, setCollectMessage] = useState<SystemLogCollectMessage | null>(null);
+
+  useEffect(() => {
+    setCollectMessage(null);
+    setCollecting(false);
+  }, [deviceId]);
+
+  const handleCollectNow = async () => {
+    setCollecting(true);
+    setCollectMessage(null);
+    try {
+      const outcome = await requestSystemLogCollect(deviceId);
+      setCollectMessage(describeSystemLogCollectOutcome(outcome));
+    } catch (err) {
+      setCollectMessage(describeSystemLogCollectError(err));
+    } finally {
+      setCollecting(false);
+      refreshAll();
+    }
+  };
+
+  const collectButton = canCollect ? (
+    <M3Button
+      deviceJob
+      plane={PLANE_OPERATIONS}
+      emphasis="tonal"
+      icon="download"
+      disabled={collecting}
+      onClick={handleCollectNow}
+    >
+      Collect logs now
+    </M3Button>
+  ) : null;
+
+  const outcomeBanner = collectMessage ? (
+    <Typography
+      variant="body2"
+      data-testid="system-log-collect-outcome"
+      color={collectMessage.tone === "bad" ? "error" : collectMessage.tone === "warn" ? "warning.main" : "success.main"}
+    >
+      {collectMessage.text}
+    </Typography>
+  ) : null;
 
   if (sources.error) {
     if (isRestricted(sources.rawError)) return <RestrictedPanel area="System logs" />;
@@ -269,22 +377,38 @@ export function DeviceLogsPanel({ deviceId, vendorHint }: { readonly deviceId: s
   // A device the collection does not cover is an answer of the read (200 with a state), not a refusal.
   if (sources.data?.collection_state === "DISABLED_ON_MANAGEMENT") {
     return (
-      <StatePanel variant="empty" title="Collection disabled for management servers"
-        body="System logs are not collected from management servers (the setting that allows it is off). Gateways managed by this server are collected on their own."
-        code="SYSTEM_LOG_DISABLED_ON_MANAGEMENT" />
+      <Stack spacing={1}>
+        <StatePanel variant="empty" title="Collection disabled for management servers"
+          body="System logs are not collected from management servers (the setting that allows it is off). Gateways managed by this server are collected on their own."
+          code="SYSTEM_LOG_DISABLED_ON_MANAGEMENT"
+          action={collectButton ?? undefined} />
+        {outcomeBanner}
+      </Stack>
     );
   }
   if (sources.data?.collection_state === "VENDOR_UNSUPPORTED") {
-    return <StatePanel variant="empty" title="Logs are not collected for this device" body="System-log collection covers Check Point and Palo Alto gateways." code="SYSTEM_LOG_VENDOR_UNSUPPORTED" />;
+    return (
+      <Stack spacing={1}>
+        <StatePanel variant="empty" title="Logs are not collected for this device" body="System-log collection covers Check Point and Palo Alto gateways." code="SYSTEM_LOG_VENDOR_UNSUPPORTED"
+          action={collectButton ?? undefined} />
+        {outcomeBanner}
+      </Stack>
+    );
   }
   // The latest job read has no say until it has landed or failed (a failed read is unknown, not an error banner).
   if (!sources.data || (latestJob.data === null && latestJob.error === null)) return <EmptyPanel title="Logs" body="Loading…" />;
   const latest = latestJob.data?.job ?? null;
   const sub = classifyCollection(sources.data, latest);
   if (sub.kind !== "stored" && sources.data.collection_state === "NO_COLLECTION_YET") {
-    return <CollectionStateCard state={sub} data={sources.data} latest={latest} onRefresh={refreshAll} />;
+    return (
+      <Stack spacing={1}>
+        <CollectionStateCard state={sub} data={sources.data} latest={latest} onRefresh={refreshAll} collectAction={collectButton} />
+        {outcomeBanner}
+      </Stack>
+    );
   }
   return <LogsBody key={deviceId} deviceId={deviceId} data={sources.data} latest={latest} onRefresh={refreshAll}
+    collectAction={collectButton} outcomeBanner={outcomeBanner}
     emptyState={sub.kind === "stored" ? undefined : <CollectionStateCard state={sub} data={sources.data} latest={latest} onRefresh={refreshAll} />} />;
 }
 
@@ -327,8 +451,10 @@ function TextToggle({ pressed, label, onClick, expands = false, children }: {
   );
 }
 
-function LogsBody({ deviceId, data, latest, onRefresh, emptyState }: {
+function LogsBody({ deviceId, data, latest, onRefresh, collectAction, outcomeBanner, emptyState }: {
   readonly deviceId: string; readonly data: SystemLogSources; readonly latest: LatestCollection | null; readonly onRefresh: () => void;
+  readonly collectAction?: React.ReactNode;
+  readonly outcomeBanner?: React.ReactNode;
   /** Collected but nothing stored, or every source failed: this card takes the place of the line viewer. */
   readonly emptyState?: React.ReactNode;
 }) {
@@ -361,9 +487,11 @@ function LogsBody({ deviceId, data, latest, onRefresh, emptyState }: {
         <Box sx={{ flex: "1 1 320px", minWidth: 0 }}><AttentionLine gaps={gaps} crash={crash} onJump={jump} /></Box>
         <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 0.5 }}>
           <TextToggle pressed={detailsOpen} expands onClick={() => setDetailsOpen((v) => !v)}>Run details <Icon name={detailsOpen ? "chevron-left" : "chevron-right"} size={14} /></TextToggle>
+          {collectAction}
           <M3Button emphasis="text" onClick={onRefresh}>Refresh</M3Button>
         </Box>
       </Box>
+      {outcomeBanner}
       {detailsOpen && <RunDetails data={data} />}
       <M3Tabs ariaLabel="Logs view" value={view} onChange={setView} tabs={[
         { label: "Lines", panel: emptyState ?? <LogViewer vm={vm} sources={lineSources} canViewUnmasked={data.can_view_unmasked} maxPageBytes={data.max_page_bytes} gaps={gaps.data?.gaps ?? []} onJump={jump} /> },

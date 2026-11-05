@@ -42,14 +42,21 @@ public final class JobLogController {
         this.rbacEvaluator = rbacEvaluator;
     }
 
+    public ResponseEntity<JobPage> listJobs(String state, String jobType, String deviceId, String since, String until,
+            String q, int page, int pageSize, HttpServletRequest request) {
+        return listJobs(state, jobType, deviceId, since, until, q, page, pageSize, null, null, request);
+    }
+
     @GetMapping("/api/v2/jobs")
     public ResponseEntity<JobPage> listJobs(@RequestParam(required = false) String state,
             @RequestParam(name = "job_type", required = false) String jobType,
             @RequestParam(name = "device_id", required = false) String deviceId,
             @RequestParam(required = false) String since, @RequestParam(required = false) String until,
             @RequestParam(required = false) String q, @RequestParam(defaultValue = "1") int page,
-            @RequestParam(name = "page_size", defaultValue = "50") int pageSize, HttpServletRequest request) {
-        Optional<JobQuery> query = parse(state, jobType, deviceId, since, until, q, page, pageSize);
+            @RequestParam(name = "page_size", defaultValue = "50") int pageSize,
+            @RequestParam(required = false) String sort, @RequestParam(required = false) String order,
+            HttpServletRequest request) {
+        Optional<JobQuery> query = parse(state, jobType, deviceId, since, until, q, page, pageSize, sort, order);
         if (query.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
@@ -73,13 +80,19 @@ public final class JobLogController {
         return jobLogQueryService.facets();
     }
 
+    public ResponseEntity<byte[]> exportCsv(String state, String jobType, String deviceId, String since, String until,
+            String q, HttpServletRequest request) {
+        return exportCsv(state, jobType, deviceId, since, until, q, null, null, request);
+    }
+
     @GetMapping(value = "/api/v2/jobs/export.csv", produces = "text/csv")
     public ResponseEntity<byte[]> exportCsv(@RequestParam(required = false) String state,
             @RequestParam(name = "job_type", required = false) String jobType,
             @RequestParam(name = "device_id", required = false) String deviceId,
             @RequestParam(required = false) String since, @RequestParam(required = false) String until,
-            @RequestParam(required = false) String q, HttpServletRequest request) {
-        Optional<JobQuery> query = parse(state, jobType, deviceId, since, until, q, 1, 1);
+            @RequestParam(required = false) String q, @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String order, HttpServletRequest request) {
+        Optional<JobQuery> query = parse(state, jobType, deviceId, since, until, q, 1, 1, sort, order);
         if (query.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
@@ -97,11 +110,17 @@ public final class JobLogController {
     }
 
     private static Optional<JobQuery> parse(String state, String jobType, String deviceId, String since, String until,
-            String q, int page, int pageSize) {
+            String q, int page, int pageSize, String sort, String order) {
         try {
+            Optional<Instant> s = instant(since);
+            Optional<Instant> u = instant(until);
+            if (s.isPresent() && u.isPresent() && s.get().isAfter(u.get())) {
+                return Optional.empty();
+            }
             return Optional.of(new JobQuery(Optional.ofNullable(state), Optional.ofNullable(jobType),
-                    Optional.ofNullable(deviceId), instant(since), instant(until), Optional.ofNullable(q), page, pageSize));
-        } catch (DateTimeParseException e) {
+                    Optional.ofNullable(deviceId), s, u, Optional.ofNullable(q), page, pageSize,
+                    Optional.ofNullable(sort), Optional.ofNullable(order)));
+        } catch (DateTimeParseException | IllegalArgumentException e) {
             return Optional.empty();
         }
     }
