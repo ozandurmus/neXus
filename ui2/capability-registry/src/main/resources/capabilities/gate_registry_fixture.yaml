@@ -4823,3 +4823,21 @@ gates:
     secret_output_risk: "output carries addresses, zone and rule names; parsed in memory to a MATCH / MISMATCH / NOT_EVALUABLE comparison only; never stored, transcribed or logged (raw-evidence law)"
     safe_telemetry_fields: ["result", "reason"]
     source_document_pointer: "docs/design/PATH_ANALYSIS_A6_COMMAND_PROPOSAL.md row 5 (RATIFIED; PO chat approval 2026-11-04: \"1-5 onaylı devam\")"
+
+  # Check Point NAT rulebase one-off probe by package UID on VENDOR_NAME_NOT_UNIQUE (PO_DECISION_RECORD_2026_11_05_CP_NAT_UID_PROBE.md, RATIFIED 2026-11-05), V191.
+  - gate_id: "cp_policy_nat_rulebase_uid_probe"
+    vendor: "check_point"
+    platform_role_scope: "cp_multi_domain_server"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "mgmt_cli -r true -d '<DOMAIN>' -f json show-nat-rulebase package '<PACKAGE_UID>' limit 1 offset 0 details-level standard use-object-dictionary true"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "only packages whose NAT read by name failed with VENDOR_NAME_NOT_UNIQUE; once per package per collection run; never polled"
+    session_reuse_rule: "one interactive SSH session per job; same session as the failed NAT read; serial; no retry"
+    unsupported_behavior_ref: "vendor error -> UID_REJECTED; transport error or unexpected shape -> NOT_EVALUABLE; NAT section stays UNKNOWN (VENDOR_NAME_NOT_UNIQUE)"
+    secret_output_risk: "rule content discarded in memory (raw-evidence law); enum outcome only (UID_ACCEPTED, UID_REJECTED, NOT_EVALUABLE)"
+    safe_telemetry_fields: ["outcome"]
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_11_05_CP_NAT_UID_PROBE.md (RATIFIED; PO chat approval 2026-11-05: \"NAT için komut ok deneyebilirsin\")"

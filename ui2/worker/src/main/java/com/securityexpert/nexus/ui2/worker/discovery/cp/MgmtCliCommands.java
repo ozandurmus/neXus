@@ -54,6 +54,11 @@ public final class MgmtCliCommands {
                 + " limit 500 offset " + quote(Integer.toString(offset)) + " details-level standard use-object-dictionary true";
     }
 
+    public static String showNatRulebaseByUidProbe(String domain, String uid) {
+        return "mgmt_cli -r true -d " + quote(domain) + " -f json show-nat-rulebase package " + quote(uid)
+                + " limit 1 offset 0 details-level standard use-object-dictionary true";
+    }
+
     public static String showPolicyObjects(String domain, String type, int offset) {
         int index = com.securityexpert.nexus.ui2.jobs.policy.CpPolicyGates.OBJECT_TYPES.indexOf(type);
         if (index < 0 || offset < 0) throw new IllegalArgumentException("Invalid object page");
