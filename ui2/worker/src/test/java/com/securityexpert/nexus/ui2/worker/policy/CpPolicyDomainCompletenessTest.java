@@ -152,47 +152,87 @@ class CpPolicyDomainCompletenessTest {
         }
     }
 
-    @Test void natNameNotUniqueIsAnExplicitUnknownPartAndTheDomainCompletesInBothCollectors() throws Exception {
+    /** A NAT page with {@code count} rules numbered from {@code first}; the dictionary stays empty. */
+    private static String natPage(int from, int to, int total, int first, int count) {
+        StringBuilder rules = new StringBuilder();
+        for (int i = 0; i < count; i++) {
+            if (i > 0) rules.append(',');
+            rules.append("{\"uid\":\"nr").append(first + i).append("\",\"type\":\"nat-rule\",\"rule-number\":").append(first + i)
+                .append(",\"enabled\":true,\"method\":\"hide\"}");
+        }
+        return "{\"from\":" + from + ",\"to\":" + to + ",\"total\":" + total + ",\"rulebase\":[" + rules + "],\"objects-dictionary\":[]}";
+    }
+
+    private static List<String> ruleIds(PolicySnapshot snapshot) {
+        return snapshot.sections().stream().flatMap(s -> s.rules().stream()).map(PolicySnapshot.Rule::uuid).toList();
+    }
+
+    private static ExecSpec spec(String command) { return new ExecSpec(command, false, 120_000); }
+
+    @Test void natReadByNameThatSucceedsNeverIssuesTheUidReadInBothCollectors() throws Exception {
         for (int sessions : List.of(1, 4)) {
             reset(transport, repository);
             var collector = collector(sessions, false, command -> base(command,
                 access -> ok(page("layer", 1, 1, 1, rule(1))),
-                nat -> new ExecResult.Completed(NOT_UNIQUE, 1)));
+                nat -> ok(natPage(1, 1, 1, 1, 1))));
             var transcript = new JobTranscript();
             List<PolicySnapshot> snapshots;
             try (var scope = JobTranscriptScope.open(transcript)) { snapshots = collector.collect(run, leased, () -> true); }
             String label = "sessions=" + sessions;
-            var failures = snapshots.get(0).failures();
-            assertEquals(List.of(new PolicySnapshot.CollectionFailure(PolicySnapshot.ref("cp-nat", PolicySnapshot.ref("mds-1", "domain-01"), "pkg-01"),
-                PolicySnapshot.VENDOR_NAME_NOT_UNIQUE, "NAT", 0, PolicySnapshot.UID_REJECTED)), failures, label);
-            assertTrue(PolicySnapshot.unknownPart(failures.get(0)));
-            assertEquals(List.of("r1"), snapshots.get(0).sections().stream().flatMap(s -> s.rules().stream()).map(PolicySnapshot.Rule::uuid).toList());
-            verify(repository, atLeastOnce()).saveDomain(eq(leased), anyString(), eq("COLLECTED"), eq(true), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString());
-            verify(repository, never()).saveDomain(eq(leased), anyString(), eq("COLLECTED"), eq(false), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString());
-            // The by-name NAT read and the one PO-approved UID probe were each issued once on the same session.
-            verify(transport, times(1)).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showNatRulebase(DOMAIN, "Package", 0), false, 120_000)), any());
-            verify(transport, times(1)).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showNatRulebaseByUidProbe(DOMAIN, "pkg-01"), false, 120_000)), any());
-            verify(transport, times(2)).execInteractive(any(), argThat(spec -> spec.command().contains("show-nat-rulebase")), any());
-            String notes = transcript(transcript);
-            assertEquals(1, notes.lines().filter(line -> line.contains("[CP_NAME_NOT_UNIQUE]")).count(), label);
-            assertTrue(notes.contains("[CP_NAME_NOT_UNIQUE] kind=nat messagePackage=MATCH messageDomain=NO installTargetNames=1 "
-                + "installTargetNamesInMessage=1 packagesWithRequestedName=1"), notes);
-            assertTrue(notes.contains("[CP_NAT_UID_PROBE] packages=1 accepted=0 rejected=1 not_evaluable=0"), notes);
-            assertFalse(notes.contains("Synthetic-private"), label);
-            assertFalse(notes.contains(GATEWAY), label);
+            assertEquals(1, snapshots.size(), label);
+            assertTrue(snapshots.get(0).failures().isEmpty(), label + " " + snapshots.get(0).failures());
+            assertTrue(ruleIds(snapshots.get(0)).contains("nr1"), label);
+            verify(transport, times(1)).execInteractive(any(), argThat(spec -> spec.command().contains("show-nat-rulebase")), any());
+            verify(transport, never()).execInteractive(any(), argThat(spec -> spec.command().contains("package 'pkg-01'")), any());
+            assertFalse(transcript(transcript).contains("[CP_NAT_UID_READ]"), label);
         }
     }
 
-    @Test void natUidProbeRecordsAcceptedRejectedAndNotEvaluableOncePerPackageAndDiscardsContent() throws Exception {
-        String packages = "{\"from\":1,\"to\":3,\"total\":3,\"packages\":["
-            + "{\"uid\":\"pkg-acc\",\"name\":\"SharedPkg\",\"access\":false,\"installation-targets\":\"all\"},"
+    @Test void natNameNotUniqueWithKnownUidIsReadByUidAcrossPagesAndNoPartStaysUnknownInBothCollectors() throws Exception {
+        for (int sessions : List.of(1, 4)) {
+            reset(transport, repository);
+            var collector = collector(sessions, false, command -> base(command,
+                access -> ok(page("layer", 1, 1, 1, rule(1))),
+                nat -> {
+                    if (nat.equals(MgmtCliCommands.showNatRulebase(DOMAIN, "Package", 0))) return new ExecResult.Completed(NOT_UNIQUE, 1);
+                    if (nat.equals(MgmtCliCommands.showNatRulebaseByUid(DOMAIN, "pkg-01", 0))) return ok(natPage(1, 2, 3, 1, 2));
+                    if (nat.equals(MgmtCliCommands.showNatRulebaseByUid(DOMAIN, "pkg-01", 2))) return ok(natPage(3, 3, 3, 3, 1));
+                    throw new AssertionError("Unexpected NAT command: " + nat);
+                }));
+            var transcript = new JobTranscript();
+            List<PolicySnapshot> snapshots;
+            try (var scope = JobTranscriptScope.open(transcript)) { snapshots = collector.collect(run, leased, () -> true); }
+            String label = "sessions=" + sessions;
+            assertEquals(1, snapshots.size(), label);
+            var snapshot = snapshots.get(0);
+            assertTrue(snapshot.failures().isEmpty(), label + " " + snapshot.failures());
+            assertTrue(snapshot.failures().stream().noneMatch(PolicySnapshot::unknownPart), label);
+            var ids = ruleIds(snapshot);
+            assertTrue(ids.containsAll(List.of("r1", "nr1", "nr2", "nr3")), label + " " + ids);
+            verify(repository, atLeastOnce()).saveDomain(eq(leased), anyString(), eq("COLLECTED"), eq(true), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString());
+            // By-name once, then exactly the two UID pages (500-wide paging, literal per offset); never the retired probe literal.
+            verify(transport, times(1)).execInteractive(eq(session), eq(spec(MgmtCliCommands.showNatRulebase(DOMAIN, "Package", 0))), any());
+            verify(transport, times(1)).execInteractive(eq(session), eq(spec(
+                "mgmt_cli -r true -d '" + DOMAIN + "' -f json show-nat-rulebase package 'pkg-01' limit 500 offset '0' details-level standard use-object-dictionary true")), any());
+            verify(transport, times(1)).execInteractive(eq(session), eq(spec(
+                "mgmt_cli -r true -d '" + DOMAIN + "' -f json show-nat-rulebase package 'pkg-01' limit 500 offset '2' details-level standard use-object-dictionary true")), any());
+            verify(transport, times(3)).execInteractive(any(), argThat(spec -> spec.command().contains("show-nat-rulebase")), any());
+            verify(transport, never()).execInteractive(any(), argThat(spec -> spec.command().contains("limit 1 offset 0")), any());
+            String notes = transcript(transcript);
+            assertEquals(1, notes.lines().filter(line -> line.contains("[CP_NAME_NOT_UNIQUE]")).count(), label);
+            assertTrue(notes.contains("[CP_NAT_UID_READ] packages=1 read=1 rejected=0 not_evaluable=0"), notes);
+            assertFalse(notes.contains("pkg-01"), label);
+            assertFalse(notes.contains("Synthetic-private"), label);
+        }
+    }
+
+    @Test void natUidReadFailuresKeepNatUnknownWithAClosedEnumAndReadsAreCountedOnly() throws Exception {
+        String packages = "{\"from\":1,\"to\":4,\"total\":4,\"packages\":["
+            + "{\"uid\":\"pkg-ok\",\"name\":\"SharedPkg\",\"access\":false,\"installation-targets\":\"all\"},"
             + "{\"uid\":\"pkg-rej\",\"name\":\"SharedPkg\",\"access\":false,\"installation-targets\":\"all\"},"
-            + "{\"uid\":\"pkg-nev\",\"name\":\"SharedPkg\",\"access\":false,\"installation-targets\":\"all\"}"
+            + "{\"uid\":\"pkg-nev\",\"name\":\"SharedPkg\",\"access\":false,\"installation-targets\":\"all\"},"
+            + "{\"uid\":\"pkg-bad\",\"name\":\"SharedPkg\",\"access\":false,\"installation-targets\":\"all\"}"
             + "]}";
-        String probePage = "{\"from\":1,\"to\":1,\"total\":5,\"rulebase\":[{\"uid\":\"probe-rule-uid\",\"name\":\"SecretProbeRule\","
-            + "\"type\":\"nat-rule\",\"method\":\"hide\",\"original-source\":\"obj-secret-src\",\"original-destination\":\"obj-secret-dst\","
-            + "\"original-service\":\"obj-secret-svc\",\"translated-source\":\"obj-secret-xlate\",\"install-on\":[\"target-01\"]}],"
-            + "\"objects-dictionary\":[{\"uid\":\"obj-secret-src\",\"name\":\"SecretHostName\",\"type\":\"host\",\"ipv4-address\":\"192.0.2.99\"}]}";
         for (int sessions : List.of(1, 4)) {
             reset(transport, repository);
             var collector = collector(sessions, false, command -> {
@@ -202,51 +242,74 @@ class CpPolicyDomainCompletenessTest {
                 if (command.contains("show-packages")) return ok(packages);
                 if (command.equals(MgmtCliCommands.showNatRulebase(DOMAIN, "SharedPkg", 0)))
                     return new ExecResult.Completed(NOT_UNIQUE, 1);
-                if (command.equals(MgmtCliCommands.showNatRulebaseByUidProbe(DOMAIN, "pkg-acc")))
-                    return ok(probePage);
-                if (command.equals(MgmtCliCommands.showNatRulebaseByUidProbe(DOMAIN, "pkg-rej")))
+                if (command.equals(MgmtCliCommands.showNatRulebaseByUid(DOMAIN, "pkg-ok", 0)))
+                    return ok(natPage(1, 1, 1, 7, 1));
+                if (command.equals(MgmtCliCommands.showNatRulebaseByUid(DOMAIN, "pkg-rej", 0)))
                     return new ExecResult.Completed("{\"code\":\"generic_err_object_not_found\",\"message\":\"PrivatePkgName not found\"}", 1);
-                if (command.equals(MgmtCliCommands.showNatRulebaseByUidProbe(DOMAIN, "pkg-nev")))
-                    return new ExecResult.TimedOut(false);
+                if (command.equals(MgmtCliCommands.showNatRulebaseByUid(DOMAIN, "pkg-nev", 0)))
+                    throw new IllegalStateException("synthetic channel closed");
+                if (command.equals(MgmtCliCommands.showNatRulebaseByUid(DOMAIN, "pkg-bad", 0)))
+                    return ok("{\"from\":1,\"to\":2,\"total\":2,\"rulebase\":[{\"uid\":\"only-one\"}],\"objects-dictionary\":[]}");
                 throw new AssertionError("Unexpected command: " + command);
             });
             var transcript = new JobTranscript();
             List<PolicySnapshot> snapshots;
             try (var scope = JobTranscriptScope.open(transcript)) { snapshots = collector.collect(run, leased, () -> true); }
             String label = "sessions=" + sessions;
-            assertEquals(3, snapshots.size(), label);
-            Map<String, PolicySnapshot.CollectionFailure> byPolicy = new LinkedHashMap<>();
-            for (PolicySnapshot snapshot : snapshots) {
-                assertTrue(snapshot.sections().isEmpty(), label + " probe NAT rules must never be mapped into sections");
-                assertTrue(snapshot.objects().isEmpty(), label + " probe dictionary objects must never be mapped into objects");
+            assertEquals(4, snapshots.size(), label);
+            Map<String, PolicySnapshot> byPolicy = new LinkedHashMap<>();
+            for (PolicySnapshot snapshot : snapshots) byPolicy.put(snapshot.metadata().id(), snapshot);
+            String ok = PolicySnapshot.ref("mds-1", "domain-01", "pkg-ok");
+            assertTrue(byPolicy.get(ok).failures().isEmpty(), label);
+            assertEquals(List.of("nr7"), ruleIds(byPolicy.get(ok)), label);
+            Map<String, String> expected = Map.of("pkg-rej", PolicySnapshot.UID_REJECTED, "pkg-nev", PolicySnapshot.NOT_EVALUABLE,
+                "pkg-bad", PolicySnapshot.NOT_EVALUABLE);
+            expected.forEach((uid, outcome) -> {
+                var snapshot = byPolicy.get(PolicySnapshot.ref("mds-1", "domain-01", uid));
+                assertTrue(snapshot.sections().isEmpty(), label + " no NAT content may be mapped for " + uid);
                 assertEquals(1, snapshot.failures().size(), label);
-                PolicySnapshot.CollectionFailure failure = snapshot.failures().get(0);
+                var failure = snapshot.failures().get(0);
                 assertTrue(PolicySnapshot.unknownPart(failure), label);
                 assertEquals(PolicySnapshot.VENDOR_NAME_NOT_UNIQUE, failure.reason(), label);
-                byPolicy.put(snapshot.metadata().id(), failure);
-            }
-            String container = PolicySnapshot.ref("mds-1", "domain-01");
-            assertEquals(PolicySnapshot.UID_ACCEPTED, byPolicy.get(PolicySnapshot.ref("mds-1", "domain-01", "pkg-acc")).natUidProbe(), label);
-            assertEquals(PolicySnapshot.UID_REJECTED, byPolicy.get(PolicySnapshot.ref("mds-1", "domain-01", "pkg-rej")).natUidProbe(), label);
-            assertEquals(PolicySnapshot.NOT_EVALUABLE, byPolicy.get(PolicySnapshot.ref("mds-1", "domain-01", "pkg-nev")).natUidProbe(), label);
-            assertEquals(PolicySnapshot.ref("cp-nat", container, "pkg-acc"), byPolicy.get(PolicySnapshot.ref("mds-1", "domain-01", "pkg-acc")).layerRef(), label);
-            for (String uid : List.of("pkg-acc", "pkg-rej", "pkg-nev")) {
-                verify(transport, times(1)).execInteractive(eq(session),
-                    eq(new ExecSpec(MgmtCliCommands.showNatRulebaseByUidProbe(DOMAIN, uid), false, 120_000)), any());
-            }
+                assertEquals(outcome, failure.natUidProbe(), label + " " + uid);
+            });
             String notes = transcript(transcript);
-            assertEquals(1, notes.lines().filter(line -> line.contains("[CP_NAT_UID_PROBE]")).count(), label);
-            assertTrue(notes.contains("[CP_NAT_UID_PROBE] packages=3 accepted=1 rejected=1 not_evaluable=1"), notes);
-            for (String forbidden : List.of("probe-rule-uid", "SecretProbeRule", "SecretHostName", "192.0.2.99", "PrivatePkgName", "SharedPkg", "pkg-acc", "pkg-rej", "pkg-nev")) {
+            assertEquals(1, notes.lines().filter(line -> line.contains("[CP_NAT_UID_READ]")).count(), label);
+            assertTrue(notes.contains("[CP_NAT_UID_READ] packages=4 read=1 rejected=1 not_evaluable=2"), notes);
+            for (String forbidden : List.of("PrivatePkgName", "SharedPkg", "pkg-ok", "pkg-rej", "pkg-nev", "pkg-bad", "only-one")) {
                 assertFalse(notes.contains(forbidden), label + " leaked " + forbidden);
-                for (PolicySnapshot snapshot : snapshots) {
+                for (PolicySnapshot snapshot : snapshots)
                     assertFalse(String.valueOf(snapshot.failures()).contains(forbidden), label + " failure leaked " + forbidden);
-                }
             }
+            // Each UID read is issued once per package; nothing else is tried after a failure.
+            for (String uid : List.of("pkg-ok", "pkg-rej", "pkg-nev", "pkg-bad"))
+                verify(transport, times(1)).execInteractive(eq(session), eq(spec(MgmtCliCommands.showNatRulebaseByUid(DOMAIN, uid, 0))), any());
         }
     }
 
-    @Test void natUidProbeNeverRunsForOtherNatFailuresAndMalformedProbeShapeIsNotEvaluable() throws Exception {
+    @Test void natUidReadFailingAfterTheFirstPageIsAGapWithItsRealReasonNotAnUnknownPart() throws Exception {
+        for (int sessions : List.of(1, 4)) {
+            reset(transport, repository);
+            var collector = collector(sessions, false, command -> base(command,
+                access -> ok(page("layer", 1, 1, 1, rule(1))),
+                nat -> {
+                    if (nat.equals(MgmtCliCommands.showNatRulebase(DOMAIN, "Package", 0))) return new ExecResult.Completed(NOT_UNIQUE, 1);
+                    if (nat.equals(MgmtCliCommands.showNatRulebaseByUid(DOMAIN, "pkg-01", 0))) return ok(natPage(1, 2, 3, 1, 2));
+                    return new ExecResult.Completed("{\"code\":\"generic_err_invalid_parameter\",\"message\":\"bad\"}", 1);
+                }));
+            List<PolicySnapshot> snapshots = collector.collect(run, leased, () -> true);
+            String label = "sessions=" + sessions;
+            var failure = snapshots.get(0).failures().get(0);
+            assertNull(failure.natUidProbe(), label);
+            assertFalse(PolicySnapshot.unknownPart(failure), label);
+            assertEquals("NAT", failure.layerName(), label);
+            assertEquals(2, failure.offset(), label);
+            assertTrue(failure.reason().endsWith(": API_RESPONSE_ERROR"), label + " " + failure.reason());
+            assertFalse(ruleIds(snapshots.get(0)).contains("nr1"), label + " a partial NAT read must not be mapped");
+        }
+    }
+
+    @Test void natUidReadNeverRunsForOtherNatFailureCodesInBothCollectors() throws Exception {
         for (int sessions : List.of(1, 4)) {
             for (ExecResult otherFailure : List.<ExecResult>of(
                     new ExecResult.TimedOut(false),
@@ -261,56 +324,24 @@ class CpPolicyDomainCompletenessTest {
                 try (var scope = JobTranscriptScope.open(transcript)) { snapshots = collector.collect(run, leased, () -> true); }
                 assertEquals(1, snapshots.size());
                 assertNull(snapshots.get(0).failures().get(0).natUidProbe());
-                verify(transport, never()).execInteractive(any(), argThat(spec -> spec.command().contains("limit 1 offset 0")), any());
-                assertFalse(transcript(transcript).contains("[CP_NAT_UID_PROBE]"));
+                assertFalse(PolicySnapshot.unknownPart(snapshots.get(0).failures().get(0)));
+                verify(transport, never()).execInteractive(any(), argThat(spec -> spec.command().contains("package 'pkg-01'")), any());
+                assertFalse(transcript(transcript).contains("[CP_NAT_UID_READ]"));
             }
-            reset(transport, repository);
-            var collector = collector(sessions, false, command -> base(command,
-                access -> ok(page("layer", 1, 1, 1, rule(1))),
-                nat -> nat.contains("limit 1 offset 0")
-                    ? ok("{\"from\":1,\"to\":2,\"total\":2,\"rulebase\":[{\"uid\":\"only-one\"}],\"objects-dictionary\":[]}")
-                    : new ExecResult.Completed(NOT_UNIQUE, 1)));
-            var transcript = new JobTranscript();
-            List<PolicySnapshot> snapshots;
-            try (var scope = JobTranscriptScope.open(transcript)) { snapshots = collector.collect(run, leased, () -> true); }
-            assertEquals(PolicySnapshot.NOT_EVALUABLE, snapshots.get(0).failures().get(0).natUidProbe());
-            assertTrue(transcript(transcript).contains("[CP_NAT_UID_PROBE] packages=1 accepted=0 rejected=0 not_evaluable=1"));
         }
     }
 
-    @Test void natUidProbeTransportFailureIsNotEvaluableKeepsNatUnknownAndWaitsAtMostTheGateTimeout() throws Exception {
-        for (int sessions : List.of(1, 4)) {
-            reset(transport, repository);
-            var collector = collector(sessions, false, command -> base(command,
-                access -> ok(page("layer", 1, 1, 1, rule(1))),
-                nat -> {
-                    if (nat.contains("limit 1 offset 0")) throw new IllegalStateException("synthetic channel closed");
-                    return new ExecResult.Completed(NOT_UNIQUE, 1);
-                }));
-            var transcript = new JobTranscript();
-            List<PolicySnapshot> snapshots;
-            try (var scope = JobTranscriptScope.open(transcript)) { snapshots = collector.collect(run, leased, () -> true); }
-            String label = "sessions=" + sessions;
-            assertEquals(1, snapshots.size(), label);
-            var failure = snapshots.get(0).failures().get(0);
-            assertEquals(PolicySnapshot.VENDOR_NAME_NOT_UNIQUE, failure.reason(), label);
-            assertTrue(PolicySnapshot.unknownPart(failure), label);
-            assertEquals(PolicySnapshot.NOT_EVALUABLE, failure.natUidProbe(), label);
-            assertTrue(transcript(transcript).contains("[CP_NAT_UID_PROBE] packages=1 accepted=0 rejected=0 not_evaluable=1"), label);
-            var timeouts = org.mockito.ArgumentCaptor.forClass(Duration.class);
-            verify(transport, times(1)).execInteractive(eq(session), argThat(spec -> spec.command().contains("limit 1 offset 0")), timeouts.capture());
-            assertTrue(timeouts.getValue().compareTo(Duration.ofSeconds(60)) <= 0, label + " probe timeout " + timeouts.getValue());
-        }
-    }
-
-    @Test void natUidProbeOutcomeIsAnEnumOnANameNotUniqueFailureOnly() {
+    @Test void natUidOutcomeIsAClosedEnumOnANameNotUniqueFailureOnly() {
         assertThrows(IllegalArgumentException.class, () -> new PolicySnapshot.CollectionFailure("nat-1",
             PolicySnapshot.VENDOR_NAME_NOT_UNIQUE, "NAT", 0, "raw vendor text"));
         assertThrows(IllegalArgumentException.class, () -> new PolicySnapshot.CollectionFailure("nat-1",
-            "TIMEOUT", "NAT", 0, PolicySnapshot.UID_ACCEPTED));
+            "TIMEOUT", "NAT", 0, PolicySnapshot.UID_REJECTED));
+        assertEquals(java.util.Set.of(PolicySnapshot.UID_REJECTED, PolicySnapshot.NOT_EVALUABLE), PolicySnapshot.NAT_UID_PROBE_OUTCOMES);
         for (String outcome : PolicySnapshot.NAT_UID_PROBE_OUTCOMES)
             assertEquals(outcome, new PolicySnapshot.CollectionFailure("nat-1", PolicySnapshot.VENDOR_NAME_NOT_UNIQUE, "NAT", 0, outcome).natUidProbe());
         assertNull(new PolicySnapshot.CollectionFailure("nat-1", "TIMEOUT", "NAT", 0).natUidProbe());
+        // A snapshot stored while the one-off probe was live carries UID_ACCEPTED; it must still load, as an absent outcome.
+        assertNull(new PolicySnapshot.CollectionFailure("nat-1", PolicySnapshot.VENDOR_NAME_NOT_UNIQUE, "NAT", 0, "UID_ACCEPTED").natUidProbe());
     }
 
     @Test void nameNotUniqueOnTheHitsReadFallsBackToThePlainReadWithoutRetryInBothCollectors() throws Exception {

@@ -24,12 +24,15 @@ class CpPolicyGatesTest {
             assertThrows(IllegalStateException.class, () -> CpPolicyGates.requireAccessUid(duplicate, hits));
         }
         assertDoesNotThrow(() -> CpPolicyGates.requireAll(gates));
-        assertTrue(rows.stream().anyMatch(row -> row.gateId().equals(CpPolicyGates.NAT_UID_PROBE_GATE)
-            && row.canonicalCommandKey().equals(CpPolicyGates.NAT_UID_PROBE_COMMAND)));
-        assertDoesNotThrow(() -> CpPolicyGates.requireNatUidProbe(gates));
-        assertThrows(IllegalStateException.class, () -> CpPolicyGates.requireNatUidProbe(key -> List.of()));
+        assertTrue(rows.stream().anyMatch(row -> row.gateId().equals(CpPolicyGates.NAT_BY_UID_GATE)
+            && row.canonicalCommandKey().equals(CpPolicyGates.NAT_BY_UID_COMMAND)));
+        assertDoesNotThrow(() -> CpPolicyGates.requireNatByUid(gates));
+        assertThrows(IllegalStateException.class, () -> CpPolicyGates.requireNatByUid(key -> List.of()));
+        // The retired V191 probe row stays seeded but is no longer required or issued by the collector.
+        assertTrue(rows.stream().anyMatch(row -> row.gateId().equals(CpPolicyGates.NAT_UID_PROBE_GATE)));
         assertTrue(DiagnosticRead.commands("check_point", "management_server", null, gates).stream()
             .noneMatch(command -> command.gateId().startsWith("cp_policy_access_rulebase_uid")
-                || command.gateId().equals(CpPolicyGates.NAT_UID_PROBE_GATE)));
+                || command.gateId().equals(CpPolicyGates.NAT_UID_PROBE_GATE)
+                || command.gateId().equals(CpPolicyGates.NAT_BY_UID_GATE)));
     }
 }

@@ -44,11 +44,15 @@ public final class CpPolicyGates {
     public static void requireAccessUid(GateRegistryPort registry, boolean hits) {
         require(registry, accessUidCommand(hits), 300, hits ? "none" : "once on timeout with limit 50");
     }
+    /** Retired one-off probe (V191, {@code limit 1 offset 0}); the gate row stays but nothing issues it any more. */
     public static final String NAT_UID_PROBE_GATE = "cp_policy_nat_rulebase_uid_probe";
-    public static final String NAT_UID_PROBE_COMMAND =
-        "mgmt_cli -r true -d '<DOMAIN>' -f json show-nat-rulebase package '<PACKAGE_UID>' limit 1 offset 0 details-level standard use-object-dictionary true";
-    public static void requireNatUidProbe(GateRegistryPort registry) {
-        require(registry, NAT_UID_PROBE_COMMAND, 60, "none");
+    public static final String NAT_BY_UID_GATE = "cp_policy_nat_rulebase_by_uid";
+    public static final String NAT_BY_UID_COMMAND =
+        "mgmt_cli -r true -d '<DOMAIN>' -f json show-nat-rulebase package '<PACKAGE_UID>' limit 500 offset '<N>' details-level standard use-object-dictionary true";
+    /** Pseudo gate index of the NAT read by package UID; behaves as gate 2 (NAT) everywhere except its own gate row. */
+    public static final int NAT_BY_UID = 102;
+    public static void requireNatByUid(GateRegistryPort registry) {
+        require(registry, NAT_BY_UID_COMMAND, 60, "none");
     }
     public static final int PACKAGES_50 = 4;
     public static final int OBJECT_BASE = 5;
@@ -64,7 +68,7 @@ public final class CpPolicyGates {
         }
         steps.add(new CapabilityStep(StepKind.EXEC, "expert", ACCESS_UID_COMMAND, false,
             java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty()));
-        steps.add(new CapabilityStep(StepKind.EXEC, "expert", NAT_UID_PROBE_COMMAND, false,
+        steps.add(new CapabilityStep(StepKind.EXEC, "expert", NAT_BY_UID_COMMAND, false,
             java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty()));
         var disconnect = new CapabilityStep(StepKind.DISCONNECT, "not_applicable", null, false,
                 java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty());
@@ -86,6 +90,6 @@ public final class CpPolicyGates {
     public static void requireAll(GateRegistryPort registry) {
         for (int i = 0; i < COMMANDS.size(); i++) if (i != 3) require(registry, i);
         requireAccessUid(registry, false);
-        requireNatUidProbe(registry);
+        requireNatByUid(registry);
     }
 }

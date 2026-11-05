@@ -60,7 +60,7 @@ class PolicyQueryServiceTest {
         var base = snapshot();
         var partial = new PolicySnapshot(base.metadata(), base.sections(), base.objects(),
             List.of(new CollectionFailure("layer-1", "access target=layer-1: TIMEOUT", "Synthetic layer", 4000),
-                new CollectionFailure("nat-1", VENDOR_NAME_NOT_UNIQUE, "NAT", 0, UID_ACCEPTED)));
+                new CollectionFailure("nat-1", VENDOR_NAME_NOT_UNIQUE, "NAT", 0, UID_REJECTED)));
         // The record refuses a non-enum probe outcome; the AIView mask still turns any stray value into UNKNOWN.
         assertThrows(IllegalArgumentException.class, () -> new CollectionFailure("nat-2", VENDOR_NAME_NOT_UNIQUE, "NAT", 0, "unexpected-raw-text"));
         var body = query.page(partial, 0, "", true).body();
@@ -71,7 +71,7 @@ class PolicyQueryServiceTest {
         assertEquals(names.maskPolicyName("layerName", "Synthetic layer"), masked.path("failures").get(0).path("layerName").asText());
         assertEquals("access target=layer-1: TIMEOUT", masked.path("failures").get(0).path("reason").asText());
         assertTrue(masked.path("failures").get(0).path("natUidProbe").isNull());
-        assertEquals(UID_ACCEPTED, masked.path("failures").get(1).path("natUidProbe").asText());
+        assertEquals(UID_REJECTED, masked.path("failures").get(1).path("natUidProbe").asText());
         var stray = mapper.valueToTree(PolicyPrivacy.mask(Map.of("natUidProbe", "unexpected-raw-text"), "", names,
             new com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker(new byte[32])));
         assertEquals("UNKNOWN", stray.path("natUidProbe").asText());

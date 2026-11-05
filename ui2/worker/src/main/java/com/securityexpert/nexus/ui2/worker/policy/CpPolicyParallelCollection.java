@@ -21,7 +21,7 @@ import static com.securityexpert.nexus.ui2.worker.policy.CheckPointPolicyCollect
 final class CpPolicyParallelCollection {
     private final CheckPointPolicyCollector collector;
     private final CpDomainReuse reuse;
-    private final NatUidProbes probes;
+    private final NatUidReads reads;
     private final List<PolicySnapshot> reused = new ArrayList<>();
     private final PolicyCollectionRepository repository;
     private final DiscoveryRun run;
@@ -48,8 +48,8 @@ final class CpPolicyParallelCollection {
     CpPolicyParallelCollection(CheckPointPolicyCollector collector, PolicyCollectionRepository repository,
             int maximum, LongSupplier clock, DiscoveryRun run, PolicyCollectionRepository.Request request,
             long deadline, BooleanSupplier lease, Consumer<PolicySnapshot> publish, Consumer<CollectionFailure> domainFailure,
-            CpDomainReuse reuse, NatUidProbes probes) {
-        this.reuse = reuse; this.probes = probes; this.collector = collector; this.repository = repository; this.clock = clock; this.run = run;
+            CpDomainReuse reuse, NatUidReads reads) {
+        this.reuse = reuse; this.reads = reads; this.collector = collector; this.repository = repository; this.clock = clock; this.run = run;
         this.request = request; this.deadline = deadline; this.lease = lease; this.publish = publish; this.domainFailure = domainFailure;
         safety = new Safety(maximum);
         inventory = CpInventoryObjects.enabled() ? new CpInventoryObjects(repository, request.sourceId()) : null;
@@ -207,17 +207,11 @@ final class CpPolicyParallelCollection {
         } catch (RuntimeException error) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(error);
             try {
-                if (work.layer != null && work.layer == work.layer.policy.nat && nameNotUnique(error) != null && session.get() != null) {
-                    synchronized (work.layer) {
-                        collector.probeNatByUid(session.get(), work.layer.policy.domain, work.layer.uid, work.layer.ref, probes, deadline, lease);
-                    }
-                }
-            } catch (RuntimeException probeError) {
-                com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(probeError);
-                error = probeError;
-            } finally {
-                // An unhealthy shell must not carry the retried page or any sibling read.
+                // The next read may follow on a fresh session; an unhealthy shell must not carry the retried page or any sibling read.
                 closeSession();
+            } catch (RuntimeException closing) {
+                com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(closing);
+                error = closing;
             }
             if (closeFailed.get()) error = PolicyCollectionTrace.failure("SESSION_CLEANUP_FAILED");
             return new Result(work, null, error, clock.getAsLong() - started);
@@ -361,6 +355,7 @@ final class CpPolicyParallelCollection {
         }
         if (next != total) return;
         layer.done = true;
+        if (layer.gate == CpPolicyGates.NAT_BY_UID) reads.record(NatUidReads.READ);
         Policy policy = layer.policy;
         if (layer.gate == 1 || layer.gate == 3) {
             Map<String, JsonNode> dictionary = new HashMap<>();
@@ -428,12 +423,28 @@ final class CpPolicyParallelCollection {
 
     private void fail(Layer layer, RuntimeException error, int offset) {
         if (layer.failure != null) return;
-        if (layer == layer.policy.nat && nameNotUnique(error) != null) {
+        if (layer == layer.policy.nat && layer.gate == 2 && nameNotUnique(error) != null) {
             layer.policy.names.diagnose("nat", error);
-            layer.failure = new CollectionFailure(layer.ref, VENDOR_NAME_NOT_UNIQUE, "NAT", 0, probes.outcome(layer.ref));
+            if (MgmtCliCommands.validPackageUid(layer.uid)) { switchToUid(layer); return; }
+            layer.failure = new CollectionFailure(layer.ref, VENDOR_NAME_NOT_UNIQUE, "NAT", 0);
+        } else if (layer == layer.policy.nat && layer.gate == CpPolicyGates.NAT_BY_UID && offset == 0 && layer.pages.isEmpty()) {
+            // First page of the read by UID failed: the part stays UNKNOWN with the closed outcome enum; nothing else is tried.
+            layer.failure = natUidUnknown(layer.ref, error, reads);
+        } else if (layer == layer.policy.nat && nameNotUnique(error) != null) {
+            layer.failure = new CollectionFailure(layer.ref, VENDOR_NAME_NOT_UNIQUE, "NAT", 0);
         } else layer.failure = new CollectionFailure(layer.ref, PolicyCollectionTrace.reason(error), layer.name, offset);
         layer.pages.clear();
         checkpoint(layer.policy, layer);
+    }
+
+    /** The by-name NAT read answered VENDOR_NAME_NOT_UNIQUE: the same paged read by package UID replaces it (PO 2026-11-05 evening). */
+    private void switchToUid(Layer layer) {
+        layer.gate = CpPolicyGates.NAT_BY_UID;
+        String domain = layer.policy.domain, uid = layer.uid;
+        layer.command = offset -> MgmtCliCommands.showNatRulebaseByUid(domain, uid, offset);
+        layer.generation++;
+        layer.pages.clear(); layer.rulePages.clear(); layer.total = -1; layer.issued = 0; layer.rulesFetched = 0; layer.done = false;
+        enqueue(layer, 0, 0);
     }
 
     static Duration configuredCheckpointInterval() {

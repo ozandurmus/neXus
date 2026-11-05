@@ -4841,3 +4841,21 @@ gates:
     secret_output_risk: "rule content discarded in memory (raw-evidence law); enum outcome only (UID_ACCEPTED, UID_REJECTED, NOT_EVALUABLE)"
     safe_telemetry_fields: ["outcome"]
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_11_05_CP_NAT_UID_PROBE.md (RATIFIED; PO chat approval 2026-11-05: \"NAT için komut ok deneyebilirsin\")"
+
+  # Check Point NAT rulebase read by package UID after VENDOR_NAME_NOT_UNIQUE (docs/design/PO_DECISION_RECORD_2026_11_05_EVENING_BATCH.md, PO 2026-11-05 evening), V192.
+  - gate_id: "cp_policy_nat_rulebase_by_uid"
+    vendor: "check_point"
+    platform_role_scope: "cp_multi_domain_server"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "mgmt_cli -r true -d '<DOMAIN>' -f json show-nat-rulebase package '<PACKAGE_UID>' limit 500 offset '<N>' details-level standard use-object-dictionary true"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "only packages whose NAT read by name failed with VENDOR_NAME_NOT_UNIQUE; same frequency as the by-name NAT read (manual admin request; automatic at most once per domain per 6 hours)"
+    session_reuse_rule: "one interactive SSH session per job; same session as the failed by-name NAT read; serial"
+    unsupported_behavior_ref: "vendor error, transport failure or unexpected shape -> NAT section stays UNKNOWN (VENDOR_NAME_NOT_UNIQUE); never any other fallback"
+    secret_output_risk: "sensitive policy data; parse in memory"
+    safe_telemetry_fields: ["outcome", "packageCount", "ruleCount"]
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_11_05_EVENING_BATCH.md (PO chat approval 2026-11-05 evening)"
