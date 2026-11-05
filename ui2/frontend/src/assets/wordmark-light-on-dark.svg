@@ -1,9 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 424 128" role="img" aria-label="neXus">
-<path fill="#0E2944" d="M0 0H424V128H0Z"/>
-<g transform="translate(-55 -623)" fill="#FEFEFE"><path d="M73 735V665H94V672C101 665 107 662 116 663C134 663 143 674 143 693V735H122V698C122 687 118 682 110 682C100 682 94 689 94 700V735Z"/>
-<path fill-rule="evenodd" d="M224 706H170C173 716 180 721 189 721C196 721 201 718 207 713L220 725C212 734 202 738 188 738C165 738 149 723 149 701C149 679 164 663 187 663C211 663 225 680 224 706ZM170 693H204C202 685 196 680 187 680C179 680 173 685 170 693Z"/>
-<path d="M330 667H350V705C350 715 355 721 363 721C373 721 379 714 379 703V667H399V737H379V730C373 736 366 739 357 739C339 739 330 728 330 709Z"/>
-<path d="M464 673L453 688C447 683 440 680 434 680C429 680 426 682 426 686C426 690 431 692 440 694C457 698 466 704 466 716C466 731 454 739 435 739C423 739 412 735 404 728L416 713C422 719 430 722 437 722C443 722 446 720 446 716C446 712 441 710 432 708C416 704 407 699 407 686C407 672 419 663 436 663C447 663 457 667 464 673Z"/>
-<path fill="#077D93" d="M215 635H248L338 740H305Z"/>
-<path fill="#1353E2" d="M308 635H341L253 740H220Z"/></g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 200 44" role="img" aria-label="neXus">
+<defs><mask id="wm-d" maskUnits="userSpaceOnUse" x="80" y="-2" width="48" height="44"><rect x="80" y="-2" width="48" height="44" fill="#fff"/><circle cx="104" cy="20" r="5.6" fill="#000"/></mask></defs>
+<g fill="none" stroke="#eaf1f8" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+<path d="M3.5 36.5V16A12 12 0 0 1 27.5 16V36.5"/>
+<path transform="translate(38 0)" d="M3.5 20H36.5A16.5 16.5 0 1 0 31.67 31.67"/>
+<path transform="translate(130 0)" d="M3.5 3.5V24A12 12 0 0 0 27.5 24V3.5"/>
+<path transform="translate(168 0)" d="M24 8.5C21.5 5 18 3.5 14 3.5C8.5 3.5 4.5 6.5 4.5 11C4.5 15.5 8 17.5 14 19.5C20 21.5 24.5 23.5 24.5 28.5C24.5 33.5 20 36.5 14 36.5C9.5 36.5 5.5 35 3.5 31.5"/>
+</g>
+<g mask="url(#wm-d)" stroke-width="6.6" stroke-linecap="round"><path d="M90 4L118 36" stroke="#56c7dc"/><path d="M118 4L90 36" stroke="#6f9bff"/></g>
+<g fill="#eaf1f8"><circle cx="90" cy="4" r="4.3"/><circle cx="118" cy="4" r="4.3"/><circle cx="90" cy="36" r="4.3"/><circle cx="118" cy="36" r="4.3"/></g>
+<circle cx="104" cy="20" r="5.6" fill="none" stroke="#eaf1f8" stroke-width="2.8"/>
 </svg>
