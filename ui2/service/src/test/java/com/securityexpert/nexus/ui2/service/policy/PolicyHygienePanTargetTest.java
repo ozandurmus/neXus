@@ -38,7 +38,7 @@ class PolicyHygienePanTargetTest {
                 + "<application><member>any</member></application>";
     }
     private static Map<String, PolicyHygiene.Assessment> byName(PolicySnapshot snapshot) {
-        var result = PolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
+        var result = PolicyHygieneTest.withoutX1(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
         Map<String, PolicyHygiene.Assessment> out = new HashMap<>();
         for (var section : snapshot.sections()) for (var rule : section.rules()) out.put(rule.name(), result.get(rule.id()));
         return out;
@@ -108,7 +108,7 @@ class PolicyHygienePanTargetTest {
             assertNull(later.shadowReason(), target); assertNull(later.blockingRuleId(), target);
             // The former reading of the same snapshot (the target as a field of unknown meaning) kept it UNKNOWN.
             var former = SyntheticPolicies.opaqueTargets(snapshot);
-            var formerLater = PolicyHygiene.analyze(former, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules().get(snapshot.sections().get(0).rules().get(1).id());
+            var formerLater = PolicyHygieneTest.withoutX1(former, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules().get(snapshot.sections().get(0).rules().get(1).id());
             assertEquals(PartialPriorOracle.UNSUPPORTED, formerLater.shadowReason(), target);
             assertEquals(1, PolicyHygienePanTargetTest.assertOracle(snapshot), target);
         }
@@ -125,8 +125,8 @@ class PolicyHygienePanTargetTest {
      * number of released rules.
      */
     static int assertOracle(PolicySnapshot snapshot) {
-        var former = PolicyHygiene.analyze(SyntheticPolicies.opaqueTargets(snapshot), 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
-        var actual = PolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
+        var former = PolicyHygieneTest.withoutX1(SyntheticPolicies.opaqueTargets(snapshot), 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
+        var actual = PolicyHygieneTest.withoutX1(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
         assertEquals(former.keySet(), actual.keySet());
         var universe = new PartialPriorOracle.Universe(snapshot);
         int released = 0;
@@ -143,7 +143,7 @@ class PolicyHygienePanTargetTest {
             if (!snapshot.metadata().vendor().equals("PAN")) continue;
             snapshots++;
             released += assertOracle(snapshot);
-            var after = PolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
+            var after = PolicyHygieneTest.withoutX1(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
             kept += (int) after.values().stream().filter(a -> PartialPriorOracle.UNSUPPORTED.equals(a.shadowReason())).count();
             rules += after.size();
         }

@@ -420,6 +420,29 @@ final class PolicyNormalization {
         }
         return true;
     }
+    /**
+     * X1: the partial prior provably cannot be the single earlier rule that covers the match. The prior's match lies
+     * inside the product of its resolved selectors (unresolved dimensions are the universe; narrowing constraints, an
+     * unknown action or enabled state and a placement only shrink it; a Check Point access-role bound is an upper
+     * bound), and the match is a full match, a product of non-empty dimensions. A value of the match outside the prior's
+     * selector on one dimension is a packet of the match the prior cannot match, in any placement and whatever the
+     * unresolved dimensions are. "Outside" counts only where {@link #holds} would answer FALSE, so it is the evidence a
+     * full prior's non-containment gives: source and destination always; service only when neither service is
+     * application-default; application only when neither service is application-default and neither application
+     * selector carries an opaque identity. An unresolved dimension, or one with a token in play, gives no verdict.
+     * The work is spent from {@code budget}; running out of it throws {@link Unknown}.
+     */
+    static boolean cannotCover(Partial prior, Match match, Budget budget) {
+        var outer = prior.selectors(); var inner = match.selectors();
+        for (int i = 0; i < 2; i++) if (outer.get(i) != null && !contains(outer.get(i), inner.get(i), budget)) return true;
+        var service = outer.get(2); var laterService = inner.get(2);
+        // Without a resolved prior service the prior might be application-default; with one on either side no
+        // default-port or application dimension decides (holds answers null there, never FALSE).
+        if (service == null || service.applicationDefault() || laterService.applicationDefault()) return false;
+        if (!contains(service, laterService, budget)) return true;
+        var application = outer.get(3); var laterApplication = inner.get(3);
+        return application != null && application.tokens().isEmpty() && laterApplication.tokens().isEmpty() && !contains(application, laterApplication, budget);
+    }
     static boolean disjoint(Match a, Match b, Map<String, PolicyObject> objects) {
         return disjoint(a.placements(), b.placements(), objects);
     }

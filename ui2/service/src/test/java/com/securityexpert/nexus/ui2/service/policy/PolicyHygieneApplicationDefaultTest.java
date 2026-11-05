@@ -48,12 +48,12 @@ class PolicyHygieneApplicationDefaultTest {
     static PolicySnapshot pan(Rule... rules) { return PolicyHygieneTest.snapshot(List.of(rules), appObjects()); }
     static PolicyHygiene.Assessment at(PolicySnapshot snapshot, String id) { return PolicyHygieneTest.assessment(snapshot, id); }
     static PolicyHygiene.Assessment former(PolicySnapshot snapshot, String id) {
-        return PolicyHygieneTest.assessment(SyntheticPolicies.unrecognisedDefault(snapshot), id);
+        return PolicyHygieneTest.assessmentWithoutX1(SyntheticPolicies.unrecognisedDefault(snapshot), id);
     }
     /** Every rule against the former treatment, each change confirmed in every default-port world. */
     static void assertOracle(PolicySnapshot snapshot) {
-        var former = PolicyHygiene.analyze(SyntheticPolicies.unrecognisedDefault(snapshot), 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
-        var actual = PolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
+        var former = PolicyHygieneTest.withoutX1(SyntheticPolicies.unrecognisedDefault(snapshot), 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
+        var actual = PolicyHygieneTest.withoutX1(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
         var universe = new PartialPriorOracle.Universe(snapshot);
         for (var entry : former.entrySet())
             PartialPriorOracle.assertDefaultPortsChangeIsSafe(universe, entry.getValue(), actual.get(entry.getKey()), entry.getKey(), entry.getKey());
@@ -144,14 +144,14 @@ class PolicyHygieneApplicationDefaultTest {
         var user = Map.of("source-user", List.of("OBJ-USER-01"));
         var prior = PolicyHygienePartialPriorTest.with(rule("r1", "host", APPDEF, "deny", A), user);
         for (String service : List.of("port", "dns", "any", APPDEF)) {
-            var overlapping = pan(prior, rule("r2", "net", service, "allow", service.equals(APPDEF) ? new String[]{B} : new String[0]));
+            var overlapping = pan(prior, rule("r2", "host", service, "allow", service.equals(APPDEF) ? new String[]{B} : new String[0]));
             assertEquals("user or category constraint", at(overlapping, "r1").shadowReason());
             assertReason(overlapping, "r2", UNSUPPORTED);
             assertEquals("r1", at(overlapping, "r2").blockingRuleId());
             assertClean(pan(prior, rule("r2", "other-net", service, "allow", service.equals(APPDEF) ? new String[]{B} : new String[0])), "r2");
         }
         // Unresolvable applications (a dynamic filter) leave the service token and the addresses of the partial prior.
-        var filter = pan(rule("r1", "host", APPDEF, "deny", FILTER), rule("r2", "net", "port", "allow"));
+        var filter = pan(rule("r1", "host", APPDEF, "deny", FILTER), rule("r2", "host", "port", "allow"));
         assertEquals("unresolved object", at(filter, "r1").shadowReason());
         assertReason(filter, "r2", UNSUPPORTED);
         assertClean(pan(rule("r1", "host", APPDEF, "deny", FILTER), rule("r2", "other-net", "port", "allow")), "r2");

@@ -33,7 +33,7 @@ class PolicyHygieneDifferentialTest {
             var snapshot = SyntheticPolicies.legacyComparable(SyntheticPolicies.random(seed, seed < SNAPSHOTS ? 1 + (int) (seed % 60) : 150 + (int) (seed % 150)));
             var reference = LegacyPolicyHygiene.analyze(snapshot, 90, NOW, Integer.MAX_VALUE);
             var legacyDefault = LegacyPolicyHygiene.analyze(snapshot, 90, NOW, 250_000);
-            var actual = PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK);
+            var actual = PolicyHygieneTest.withoutX1(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK);
             assertFalse(reference.budgetReached(), "seed " + seed);
             assertFalse(actual.budgetReached(), "seed " + seed);
             assertEquals(reference.rules().keySet(), actual.rules().keySet());
@@ -81,7 +81,7 @@ class PolicyHygieneDifferentialTest {
             flat = new PolicySnapshot(flat.metadata(), flat.sections().stream().map(s -> new PolicySnapshot.Section(s.id(), s.name(), s.source(), null, s.rules())).toList(),
                 flat.objects(), flat.failures());
             if (seed % 2 == 1) flat = SyntheticPolicies.policyTargets(flat);
-            var actual = PolicyHygiene.analyze(flat, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
+            var actual = PolicyHygieneTest.withoutX1(flat, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
             var expected = LegacyPolicyHygiene.analyze(SyntheticPolicies.resolvedTargets(flat), 90, NOW, Integer.MAX_VALUE).rules();
             var former = LegacyPolicyHygiene.analyze(flat, 90, NOW, Integer.MAX_VALUE).rules();
             assertEquals(expected.keySet(), actual.keySet(), "seed " + seed);
@@ -113,7 +113,7 @@ class PolicyHygieneDifferentialTest {
         for (long seed = 0; seed < 2500; seed++) {
             var snapshot = SyntheticPolicies.inline(seed + 300_000, 5 + (int) (seed % 70));
             if (seed % 2 == 1) snapshot = SyntheticPolicies.policyTargets(snapshot);
-            var actual = PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
+            var actual = PolicyHygieneTest.withoutX1(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
             var former = LegacyPolicyHygiene.analyze(snapshot, 90, NOW, Integer.MAX_VALUE).rules();
             var universe = new PartialPriorOracle.Universe(snapshot);
             Map<String, List<PolicySnapshot.Section>> layers = new LinkedHashMap<>();
@@ -216,8 +216,8 @@ class PolicyHygieneDifferentialTest {
             if (!base.metadata().vendor().equals("PAN")) continue;
             var snapshot = SyntheticPolicies.unrecognisedApplications(SyntheticPolicies.applicationDefault(base, seed));
             var unrecognised = SyntheticPolicies.unrecognisedApplications(SyntheticPolicies.unrecognisedDefault(snapshot));
-            var former = PolicyHygiene.analyze(unrecognised, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
-            var actual = PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
+            var former = PolicyHygieneTest.withoutX1(unrecognised, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
+            var actual = PolicyHygieneTest.withoutX1(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
             // The reference is the former treatment: still the legacy scan's answer up to the known, oracle-checked changes.
             var legacy = LegacyPolicyHygiene.analyze(unrecognised, 90, NOW, Integer.MAX_VALUE).rules();
             var formerUniverse = new PartialPriorOracle.Universe(unrecognised);
@@ -260,8 +260,8 @@ class PolicyHygieneDifferentialTest {
             var base = SyntheticPolicies.legacyComparable(SyntheticPolicies.random(seed + 500_000, 2 + (int) (seed % 70)));
             if (!base.metadata().vendor().equals("PAN")) continue;
             var snapshot = SyntheticPolicies.contentApplications(SyntheticPolicies.applicationDefault(base, seed), seed);
-            var reference = PolicyHygiene.analyze(SyntheticPolicies.unrecognisedApplications(snapshot), 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
-            var actual = PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
+            var reference = PolicyHygieneTest.withoutX1(SyntheticPolicies.unrecognisedApplications(snapshot), 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
+            var actual = PolicyHygieneTest.withoutX1(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
             var universe = new PartialPriorOracle.Universe(snapshot);
             assertEquals(reference.keySet(), actual.keySet());
             for (var entry : reference.entrySet()) {
@@ -292,7 +292,7 @@ class PolicyHygieneDifferentialTest {
             var snapshot = SyntheticPolicies.legacyComparable(SyntheticPolicies.random(seed + 50_000, 20 + (int) (seed % 120)));
             int limit = random.nextInt(4000);
             var legacy = LegacyPolicyHygiene.analyze(snapshot, 90, NOW, limit);
-            var actual = PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK);
+            var actual = PolicyHygieneTest.withoutX1(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK);
             var universe = new PartialPriorOracle.Universe(snapshot);
             for (var entry : legacy.rules().entrySet()) {
                 if ("analysis budget".equals(entry.getValue().shadowReason())) { legacyBudget++; continue; }
@@ -311,9 +311,9 @@ class PolicyHygieneDifferentialTest {
             var snapshot = SyntheticPolicies.legacyComparable(SyntheticPolicies.random(seed + 90_000, 10 + (int) (seed % 90)));
             // The reference is the unlimited production analysis (itself compared with the legacy scan above): budgets
             // may only push a rule towards UNKNOWN, partial priors included.
-            var reference = PolicyHygiene.analyze(snapshot, 90, NOW, Integer.MAX_VALUE, Integer.MAX_VALUE, snapshot.objects()).rules();
+            var reference = PolicyHygieneTest.withoutX1(snapshot, 90, NOW, Integer.MAX_VALUE, Integer.MAX_VALUE, snapshot.objects()).rules();
             int total = random.nextInt(4) == 0 ? random.nextInt(3000) : Integer.MAX_VALUE, rule = 1 + random.nextInt(120);
-            var actual = PolicyHygiene.analyze(snapshot, 90, NOW, total, rule, snapshot.objects());
+            var actual = PolicyHygieneTest.withoutX1(snapshot, 90, NOW, total, rule, snapshot.objects());
             boolean afterBudget = false;
             for (var section : snapshot.sections()) for (var r : section.rules()) {
                 var want = reference.get(r.id()); var got = actual.rules().get(r.id());
@@ -343,7 +343,7 @@ class PolicyHygieneDifferentialTest {
         for (String vendor : List.of("CP", "PAN")) {
             PolicySnapshot snapshot = SyntheticPolicies.large(vendor, 2500, 5);
             var reference = LegacyPolicyHygiene.analyze(snapshot, 90, NOW, Integer.MAX_VALUE);
-            var actual = PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK);
+            var actual = PolicyHygieneTest.withoutX1(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK);
             assertFalse(actual.budgetReached());
             assertEquals(reference.rules(), actual.rules());
         }

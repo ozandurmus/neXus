@@ -43,7 +43,7 @@ class PolicyHygieneZoneSupersetTest {
     /** Every rule's verdict against the former analysis, through the brute-force oracle. */
     static void assertOracle(PolicySnapshot snapshot) {
         var expected = LegacyPolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, Integer.MAX_VALUE).rules();
-        var actual = PolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
+        var actual = PolicyHygieneTest.withoutX1(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules();
         var universe = new PartialPriorOracle.Universe(snapshot);
         for (var entry : expected.entrySet())
             PartialPriorOracle.assertSameOrSafelyReleased(universe, entry.getValue(), actual.get(entry.getKey()), entry.getKey(), entry.getKey());
@@ -165,7 +165,7 @@ class PolicyHygieneZoneSupersetTest {
         // Check Point has no zones; install-on "any" versus a gateway is still unproven, as before.
         var snapshot = cp(cp("r1", 1, "Accept", "any", "any", "any"), with(cp("r2", 2, "Accept", "host", "any", "port"), Map.of("install-on", List.of("gw-a"))));
         assertEquals(LegacyPolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, Integer.MAX_VALUE).rules(),
-            PolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules());
+            PolicyHygieneTest.withoutX1(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK).rules());
     }
 
     /**
@@ -181,7 +181,7 @@ class PolicyHygieneZoneSupersetTest {
             pans++;
             var snapshot = SyntheticPolicies.legacyComparable(ruleTypes(base, seed));
             var reference = LegacyPolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, Integer.MAX_VALUE).rules();
-            var actual = PolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK);
+            var actual = PolicyHygieneTest.withoutX1(snapshot, 90, PolicyHygieneTest.NOW, PolicyHygiene.TOTAL_WORK);
             assertFalse(actual.budgetReached());
             var universe = new PartialPriorOracle.Universe(snapshot);
             for (var entry : reference.entrySet()) {

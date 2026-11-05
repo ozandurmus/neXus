@@ -88,6 +88,14 @@ public final class PolicyHygiene {
     }
     /** {@code workLimit} caps the whole snapshot's shadowing work, {@code ruleLimit} each rule's own. */
     static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit, int ruleLimit, Map<String, PolicyObject> breadthObjects) {
+        return analyze(snapshot, days, now, workLimit, ruleLimit, breadthObjects, true);
+    }
+    /**
+     * {@code nonContainment} switches X1 (POLICY_UNKNOWN_REDUCTION_PLAN_2026_11_05.md): a partial prior is also passed over
+     * when a resolved dimension provably does not contain the rule's ({@link PolicyNormalization#cannotCover}). Production
+     * always passes true; false is the reference the differential test compares against.
+     */
+    static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit, int ruleLimit, Map<String, PolicyObject> breadthObjects, boolean nonContainment) {
         if (days < 1 || days > 36500 || workLimit < 0 || ruleLimit < 0) throw new IllegalArgumentException("Invalid hygiene limits");
         Budget budget = new Budget(workLimit), side = budget.side();
         // Covering Palo Alto intrazone/interzone rules is work of its own pool (same total, same per-rule window): it only
@@ -105,7 +113,7 @@ public final class PolicyHygiene {
         boolean pan = snapshot.metadata().vendor().equals("PAN");
         Map<String, Assessment> results = new LinkedHashMap<>();
         // One Earlier per evaluation scope; a Check Point parent layer's Earlier resumes after its inline layers.
-        var scope = new EvaluationScope<Earlier>(snapshot.metadata(), () -> new Earlier(snapshot.objects(), pan));
+        var scope = new EvaluationScope<Earlier>(snapshot.metadata(), () -> new Earlier(snapshot.objects(), pan, nonContainment));
         boolean budgetReached = false;
         for (Section section : snapshot.sections()) {
             if (PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) {
@@ -353,7 +361,11 @@ public final class PolicyHygiene {
         private final Map<Map<String, Set<String>>, byte[][]> placementMemo = new HashMap<>();
         /** Per later-rule dimensions: partial priors proven disjoint so far, and whether one was not; the answer only grows. */
         private final Map<List<Object>, int[]> partialState = new HashMap<>();
-        Earlier(Map<String, PolicyObject> objects, boolean zoneSupersets) { this.objects = objects; this.zoneSupersets = zoneSupersets; }
+        /** X1: a partial prior whose resolved dimension does not contain the rule's is passed over ({@link PolicyNormalization#cannotCover}). */
+        private final boolean nonContainment;
+        Earlier(Map<String, PolicyObject> objects, boolean zoneSupersets, boolean nonContainment) {
+            this.objects = objects; this.zoneSupersets = zoneSupersets; this.nonContainment = nonContainment;
+        }
         private static Key key(Match m) { return new Key(m.placements().get("from"), m.placements().get("to"), m.placements().get("install-on")); }
         void add(Match match) {
             var bucket = buckets.computeIfAbsent(key(match), k -> {
@@ -449,7 +461,9 @@ public final class PolicyHygiene {
             partials.add(partial);
         }
         /**
-         * True unless every partial prior of this scope is proven {@code disjoint} from the match. The work is spent from
+         * True unless every partial prior of this scope is proven {@code disjoint} from the match or (X1) provably unable
+         * to cover it ({@link PolicyNormalization#cannotCover}). This is the only question X1 changes: "may some partial
+         * prior be the single earlier rule that covers this rule", never whether an earlier rule overlaps it. The work is spent from
          * {@code side} (the rule's own window, a separate pool); running out of it is "not proven", never a budget verdict.
          */
         boolean partialOverlap(Match match, Budget side) {
@@ -464,7 +478,8 @@ public final class PolicyHygiene {
                     side.spend();
                     var prior = partials.get(state[0]); int key = partialKey[state[0]];
                     if (placed[key] == 0) placed[key] = (byte) (PolicyNormalization.disjoint(prior.placements(), match.placements(), objects) ? 1 : 2);
-                    if (placed[key] == 2 && !disjoint(prior, match, side)) state[1] = 1;
+                    // X1: a prior that provably cannot cover the rule is passed over whatever its placement, as a full prior is.
+                    if (placed[key] == 2 && !disjoint(prior, match, side) && !(nonContainment && PolicyNormalization.cannotCover(prior, match, side))) state[1] = 1;
                     else state[0]++;
                 }
             } catch (Unknown limit) { return true; }

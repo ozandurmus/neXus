@@ -122,6 +122,20 @@ class PolicyHygieneTest {
     static PolicyHygiene.Assessment assessment(PolicySnapshot snapshot, String id) {
         return PolicyHygiene.analyze(snapshot, 90, NOW, 250000).rules().get(id);
     }
+    /**
+     * The same analysis with X1 (partial-prior pass-over by non-containment) off: the reference the older partial-prior
+     * oracles and fixtures were written against (they demand that a released rule shares no packet with any partial
+     * prior, which X1 deliberately no longer proves). X1 has its own tests: PolicyHygieneNonContainmentTest.
+     */
+    static PolicyHygiene.Result withoutX1(PolicySnapshot snapshot, int days, java.time.Instant now, int workLimit) {
+        return withoutX1(snapshot, days, now, workLimit, PolicyHygiene.RULE_WORK, snapshot.objects());
+    }
+    static PolicyHygiene.Result withoutX1(PolicySnapshot snapshot, int days, java.time.Instant now, int workLimit, int ruleLimit, Map<String, PolicyObject> breadth) {
+        return PolicyHygiene.analyze(snapshot, days, now, workLimit, ruleLimit, breadth, false);
+    }
+    static PolicyHygiene.Assessment assessmentWithoutX1(PolicySnapshot snapshot, String id) {
+        return withoutX1(snapshot, 90, NOW, 250000).rules().get(id);
+    }
     @Test void checkPointConsecutiveSectionsCarryCoverageAndConflicts() {
         for (String action : List.of("Accept", "Drop")) {
             var snapshot = sections("CP", cpSection("s1", null, cpRule("r1", action)),

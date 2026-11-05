@@ -6,6 +6,7 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.service.privacy.*;
 import static com.securityexpert.nexus.ui2.service.policy.PolicyHygienePartialPriorTest.*;
 import static com.securityexpert.nexus.ui2.service.policy.PolicyHygieneTest.assessment;
+import static com.securityexpert.nexus.ui2.service.policy.PolicyHygieneTest.assessmentWithoutX1;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 import org.junit.jupiter.api.Test;
@@ -23,13 +24,18 @@ class PolicyHygieneBlockingRuleTest {
 
     @Test void theEarliestUnprovenPartialPriorIsNamedAndProvenOnesAreSkipped() {
         // r1 is disjoint from r4 (destination 198.51.100.0/24 against 192.0.2.0/24); r2 and r3 both overlap it; r2 is earlier.
+        // With X1 off (the reference) r2 is the blocker; with X1 r2 (destination one host, which does not contain r4's
+        // network) can no longer cover r4 and is passed over, so the earliest prior that may cover it is r3.
         var snapshot = cp(cp("r1", 1, "Accept", "role", "other-net", "port"), cp("r2", 2, "Drop", "role", "host", "port"),
             cp("r3", 3, "Accept", "role", "net", "port"), cp("r4", 4, "Accept", "any", "net", "port"));
+        var reference = assessmentWithoutX1(snapshot, "r4");
+        assertEquals(UNSUPPORTED, reference.shadowReason());
+        assertEquals("r2", reference.blockingRuleId()); assertEquals(2, reference.blockingRuleNumber());
         var r4 = assessment(snapshot, "r4");
         assertEquals(UNSUPPORTED, r4.shadowReason());
-        assertEquals("r2", r4.blockingRuleId()); assertEquals(2, r4.blockingRuleNumber());
+        assertEquals("r3", r4.blockingRuleId()); assertEquals(3, r4.blockingRuleNumber());
         // Deterministic: the same answer on a repeated run.
-        assertEquals("r2", assessment(cp(cp("r1", 1, "Accept", "role", "other-net", "port"), cp("r2", 2, "Drop", "role", "host", "port"),
+        assertEquals("r3", assessment(cp(cp("r1", 1, "Accept", "role", "other-net", "port"), cp("r2", 2, "Drop", "role", "host", "port"),
             cp("r3", 3, "Accept", "role", "net", "port"), cp("r4", 4, "Accept", "any", "net", "port")), "r4").blockingRuleId());
         // The partial priors themselves are not blocked by a later rule, and carry no blocker.
         assertNull(assessment(snapshot, "r1").blockingRuleId()); assertNull(assessment(snapshot, "r2").blockingRuleId());

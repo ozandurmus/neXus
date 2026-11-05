@@ -62,13 +62,20 @@ class PolicyHygienePartialPriorTest {
         }
     }
     @Test void accessRolePriorWithOverlappingDestinationKeepsTheLaterRuleUnknown() {
-        // 192.0.2.8 lies inside 192.0.2.0/24; the source is the unresolved access role, so nothing is disjoint.
-        for (String destination : List.of("host", "net", "any", "group")) {
-            var snapshot = cp(cp("r1", 1, "Accept", "role", "net", "port"), cp("r2", 2, "Accept", "other-net", destination, "ports"));
+        // 192.0.2.8 lies inside 192.0.2.0/24; the source is the unresolved access role, so nothing is disjoint. The prior
+        // also contains the later destination and service, so X1 (non-containment) passes nothing over either.
+        for (String destination : List.of("host", "net", "group")) {
+            var snapshot = cp(cp("r1", 1, "Accept", "role", "net", "port"), cp("r2", 2, "Accept", "other-net", destination, "port"));
             assertUnknown(snapshot, "r2", UNSUPPORTED);
         }
+        // A later destination or service the prior does not contain is released by X1 only; without X1 it stays unknown.
+        for (var later : List.of(cp("r2", 2, "Accept", "other-net", "any", "port"), cp("r2", 2, "Accept", "other-net", "net", "ports"))) {
+            var snapshot = cp(cp("r1", 1, "Accept", "role", "net", "port"), later);
+            assertEquals(UNSUPPORTED, assessmentWithoutX1(snapshot, "r2").shadowReason());
+            assertClean(snapshot, "r2");
+        }
         // Every partial prior must be disjoint: one overlapping prior among disjoint ones keeps the rule unknown.
-        var mixed = cp(cp("r1", 1, "Accept", "role", "other-net", "port"), cp("r2", 2, "Drop", "role", "host", "port"),
+        var mixed = cp(cp("r1", 1, "Accept", "role", "other-net", "port"), cp("r2", 2, "Drop", "role", "net", "port"),
             cp("r3", 3, "Accept", "any", "net", "port"));
         assertUnknown(mixed, "r3", UNSUPPORTED);
     }
