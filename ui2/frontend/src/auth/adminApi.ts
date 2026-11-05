@@ -2077,7 +2077,8 @@ export interface PolicyHygienePage {
   /** Every `unknown` evidence string counted over the whole policy (rules carrying it), most frequent first. */
   unknownReasons?: { evidence: string; rules: number }[];
   /** Policy-wide: how many distinct earlier rules keep others from being proven, and the five that block the most (ids, numbers, counts). Absent from an older service. */
-  blockers?: { distinct: number; top: { ruleId: string; number: number; blocks: number }[] };
+  blockers?: { distinct: number; top: { ruleId: string; number: number; blocks: number }[];
+    split?: { class: string; cell: string; status: string; type: string; nativeType: string; partialPrior: boolean | "UNKNOWN"; blockers: number; blockedRules: number }[] };
 }
 export interface PolicyRuleDetail { metadata: PolicyMetadata; rule: PolicyRule; section: PolicySection; objects: PolicyObject[] }
 const hygieneParams = (findingClass: string, severity: string, days: number) => new URLSearchParams({ findingClass, severity, days: String(days) });
