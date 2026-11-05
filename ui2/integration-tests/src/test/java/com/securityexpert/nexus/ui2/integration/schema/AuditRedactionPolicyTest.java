@@ -327,6 +327,7 @@ class AuditRedactionPolicyTest {
             "notification_settings.audit_watermark",
             "notification_settings.forward_audit_to_syslog",
             "notification_settings.job_failure_watermark",
+            "notification_settings.notification_identity",
             "notification_settings.notify_job_failure", "notification_settings.settings_id",
             "notification_settings.smtp_enabled", "notification_settings.smtp_port",
             "notification_settings.smtp_starttls", "notification_settings.syslog_enabled",

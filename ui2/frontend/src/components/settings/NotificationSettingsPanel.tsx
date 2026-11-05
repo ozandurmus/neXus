@@ -4,6 +4,8 @@ import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import MenuItem from "@mui/material/MenuItem";
+import Radio from "@mui/material/Radio";
+import RadioGroup from "@mui/material/RadioGroup";
 import Stack from "@mui/material/Stack";
 import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
@@ -45,7 +47,7 @@ function problemsOf(err: unknown): string {
  * Administration › Notifications: remote logging (syslog, RFC 5424 over UDP/TCP) and an internal SMTP relay,
  * per-type routes, and a test send using the current form values.
  */
-export function NotificationSettingsPanel() {
+export function NotificationSettingsPanel({ canChangeIdentity = true }: { readonly canChangeIdentity?: boolean } = {}) {
   const [s, setS] = useState<NotificationSettingsView | null>(null);
   const [message, setMessage] = useState<Message | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -101,6 +103,24 @@ export function NotificationSettingsPanel() {
   return (
     <Stack spacing={2} sx={{ maxWidth: 900 }}>
       {message && <Alert severity={message.type}>{message.text}</Alert>}
+      <Card variant="outlined" data-testid="notification-identity"><CardContent><Stack spacing={1}>
+        <Typography variant="h6">Device names in messages</Typography>
+        <Typography variant="body2" color="text.secondary">
+          Applies to mail digests and syslog lines. Masked messages carry the same pseudonyms the masked views show, and
+          names, addresses and device identifiers in free text are replaced. Raw messages carry real device names.
+        </Typography>
+        <RadioGroup
+          aria-label="Device names in messages"
+          value={s.notification_identity ?? "masked"}
+          onChange={(e) => change("notification_identity", e.target.value === "raw" ? "raw" : "masked")}
+        >
+          <FormControlLabel value="masked" disabled={!canChangeIdentity} control={<Radio />} label="Masked (recommended)" />
+          <FormControlLabel value="raw" disabled={!canChangeIdentity} control={<Radio />} label="Raw" />
+        </RadioGroup>
+        {!canChangeIdentity && <Typography variant="caption" color="text.secondary">Only a Security Admin can change this setting.</Typography>}
+        {s.notification_identity === "raw" && <Alert severity="warning">Raw: real hostnames leave this appliance in mail and syslog. Saving this choice is recorded in the audit log.</Alert>}
+      </Stack></CardContent></Card>
+
       <Card variant="outlined"><CardContent><Stack spacing={2}>
         <Typography variant="h6">Remote logging (syslog)</Typography>
         <FormControlLabel control={<Switch checked={s.syslog_enabled} onChange={(e) => change("syslog_enabled", e.target.checked)} />} label="Send to a syslog server" />

@@ -31,8 +31,8 @@ final class NotificationMailRouter {
 
     private NotificationMailRouter() {}
 
-    static void tick(DSLContext dsl, NotificationSettings settings) {
-        tick(dsl, settings, SmtpRelaySender::send);
+    static void tick(DSLContext dsl, NotificationSettings settings, NotificationIdentity identity) {
+        tick(dsl, settings, identity, SmtpRelaySender::send);
     }
 
     @FunctionalInterface
@@ -40,7 +40,8 @@ final class NotificationMailRouter {
         void send(NotificationSettings settings, List<String> recipients, String subject, String body) throws IOException;
     }
 
-    static void tick(DSLContext dsl, NotificationSettings settings, Mailer mailer) {
+    static void tick(DSLContext dsl, NotificationSettings settings, NotificationIdentity identity, Mailer mailer) {
+        identity.warm(dsl);
         for (Record row : dsl.fetch("select * from notification_routes order by type")) {
             if (!Boolean.TRUE.equals(row.get("enabled", Boolean.class))) continue;
             String type = row.get("type", String.class);
@@ -56,7 +57,7 @@ final class NotificationMailRouter {
                 long audit = row.get("watermark_audit", Long.class) == null ? 0 : row.get("watermark_audit", Long.class);
                 Timestamp watermark = row.get("watermark_time", Timestamp.class);
                 Instant from = watermark == null ? Instant.EPOCH : watermark.toInstant();
-                Batch batch = collect(dsl, type, audit, from);
+                Batch batch = collect(dsl, type, audit, from, identity);
                 if (batch.lines().isEmpty()) {
                     applyState(dsl, batch.state());
                     continue;
@@ -100,7 +101,8 @@ final class NotificationMailRouter {
 
     record Batch(List<String> lines, long audit, Instant time, Map<String, String> state) {}
 
-    static Batch collect(DSLContext dsl, String type, long audit, Instant from) throws IOException {
+    static Batch collect(DSLContext dsl, String type, long audit, Instant from, NotificationIdentity identity)
+            throws IOException {
         List<String> lines = new ArrayList<>();
         Map<String, String> state = new LinkedHashMap<>();
         long newestAudit = audit;
@@ -118,8 +120,12 @@ final class NotificationMailRouter {
                         + "order by audit_id", audit);
                 for (Record r : rows) {
                     newestAudit = Math.max(newestAudit, r.get("audit_id", Long.class));
-                    lines.add(at(r, "occurred_at") + "  " + r.get("action_id", String.class)
-                            + "  " + safe(r.get("row_pk", String.class)));
+                    String action = r.get("action_id", String.class);
+                    // device_register / device_delete key the row by the device id: a pseudonym derived from it, not the id.
+                    String rowPk = "device_register".equals(action) || "device_delete".equals(action)
+                            ? identity.deviceKey(r.get("row_pk", String.class))
+                            : identity.text(r.get("row_pk", String.class));
+                    lines.add(at(r, "occurred_at") + "  " + action + "  " + safe(rowPk));
                 }
             }
             case "backup_failure", "job_failure" -> {
@@ -129,40 +135,42 @@ final class NotificationMailRouter {
                         : "not " + backup + " and (j.state = 'FAILED' or "
                             + "(j.job_type in ('cp_cluster_failover','pan_cluster_failover') and j.state = 'OUTCOME_UNKNOWN'))";
                 rows = dsl.fetch("select j.job_id, j.job_type, j.terminal_reason, j.finished_at, "
-                        + "coalesce(d.observed_hostname, j.target_device_id) as device_name from jobs j "
+                        + "coalesce(d.observed_hostname, j.target_device_id) as device_name, d.observed_hostname as observed_hostname, "
+                        + "j.target_device_id as target_device_id from jobs j "
                         + "left join devices d on d.device_id = j.target_device_id where j.finished_at > {0} and "
                         + predicate + " order by j.finished_at, j.job_id", Timestamp.from(from));
                 for (Record r : rows) {
                     newestTime = max(newestTime, at(r, "finished_at"));
                     String deviceName = "cp_cluster_failover".equals(r.get("job_type", String.class))
                             ? "CP failover unit" : "pan_cluster_failover".equals(r.get("job_type", String.class))
-                            ? "PAN failover unit" : safe(r.get("device_name", String.class));
+                            ? "PAN failover unit" : safe(identity.device(r, "target_device_id"));
                     lines.add(at(r, "finished_at") + "  " + deviceName + "  "
-                            + r.get("job_type", String.class) + ": " + safe(r.get("terminal_reason", String.class))
+                            + r.get("job_type", String.class) + ": " + safe(identity.text(r.get("terminal_reason", String.class)))
                             + "  /operations/jobs/" + r.get("job_id", String.class));
                 }
             }
             case "config_change" -> {
                 rows = dsl.fetch("select n.notification_id, n.kind, n.summary, n.created_at, "
-                        + "coalesce(d.observed_hostname, n.device_id) as device_name "
+                        + "coalesce(d.observed_hostname, n.device_id) as device_name, d.observed_hostname as observed_hostname, "
+                        + "n.device_id as device_id "
                         + "from configuration_notification n left join devices d on d.device_id = n.device_id "
                         + "where n.created_at > {0} order by n.created_at, n.notification_id", Timestamp.from(from));
                 for (Record r : rows) {
                     newestTime = max(newestTime, at(r, "created_at"));
-                    lines.add(at(r, "created_at") + "  " + safe(r.get("device_name", String.class)) + "  "
-                            + r.get("kind", String.class) + ": " + safe(r.get("summary", String.class))
+                    lines.add(at(r, "created_at") + "  " + safe(identity.device(r, "device_id")) + "  "
+                            + r.get("kind", String.class) + ": " + safe(identity.text(r.get("summary", String.class)))
                             + "  (notification " + r.get("notification_id", String.class) + ")");
                 }
             }
             case "device_crash_file" -> {
                 // One alert row per (device, run, process); the route watermark is the alert creation time (contract §7).
-                rows = dsl.fetch("select a.alert_id, a.process, a.file_count, a.newest_mtime, a.job_id, a.created_at, "
-                        + "coalesce(d.observed_hostname, a.device_id) as device_name "
+                rows = dsl.fetch("select a.alert_id, a.device_id, a.process, a.file_count, a.newest_mtime, a.job_id, a.created_at, "
+                        + "coalesce(d.observed_hostname, a.device_id) as device_name, d.observed_hostname as observed_hostname "
                         + "from device_crash_alert a left join devices d on d.device_id = a.device_id "
                         + "where a.created_at > {0} order by a.created_at, a.alert_id", Timestamp.from(from));
                 for (Record r : rows) {
                     newestTime = max(newestTime, at(r, "created_at"));
-                    lines.add(at(r, "created_at") + "  " + safe(r.get("device_name", String.class)) + "  "
+                    lines.add(at(r, "created_at") + "  " + safe(identity.device(r, "device_id")) + "  "
                             + r.get("file_count", Integer.class) + " new crash/dump file(s), process "
                             + safe(r.get("process", String.class)) + ", newest at device time "
                             + Instant.ofEpochSecond(r.get("newest_mtime", Long.class))
@@ -173,21 +181,23 @@ final class NotificationMailRouter {
                 // One row per alert (PO 2026-11-04): own-history size_anomaly, fleet_large, firewall_logs. The summary
                 // is generated from sizes, ratios and percentages only; the route watermark is the row's detected_at.
                 rows = dsl.fetch("select d.deviation_id, d.deviation_class, d.summary, d.detected_at, "
-                        + "coalesce(v.observed_hostname, d.device_id) as device_name "
+                        + "coalesce(v.observed_hostname, d.device_id) as device_name, v.observed_hostname as observed_hostname, "
+                        + "d.device_id as device_id "
                         + "from backup_deviation_record d left join devices v on v.device_id = d.device_id "
                         + "where d.deviation_class in ('size_anomaly', 'fleet_large', 'firewall_logs') "
                         + "and d.detected_at > {0} order by d.detected_at, d.deviation_id", Timestamp.from(from));
                 for (Record r : rows) {
                     newestTime = max(newestTime, at(r, "detected_at"));
-                    lines.add(at(r, "detected_at") + "  " + safe(r.get("device_name", String.class)) + "  "
-                            + r.get("deviation_class", String.class) + ": " + safe(r.get("summary", String.class))
+                    lines.add(at(r, "detected_at") + "  " + safe(identity.device(r, "device_id")) + "  "
+                            + r.get("deviation_class", String.class) + ": " + safe(identity.text(r.get("summary", String.class)))
                             + "  /backups");
                 }
             }
             case "compliance_regression" -> {
                 Map<String, String> previous = states(dsl, "c:");
                 rows = dsl.fetch("select e.device_id, e.evaluated_at, e.result::text as result, "
-                        + "coalesce(d.observed_hostname, e.device_id) as device_name from compliance_evaluation e "
+                        + "coalesce(d.observed_hostname, e.device_id) as device_name, d.observed_hostname as observed_hostname "
+                        + "from compliance_evaluation e "
                         + "left join devices d on d.device_id = e.device_id");
                 for (Record r : rows) {
                     JsonNode items = JSON.readTree(r.get("result", String.class)).path("items");
@@ -198,7 +208,7 @@ final class NotificationMailRouter {
                         if (control.isEmpty() || status.isEmpty()) continue;
                         String key = "c:" + r.get("device_id", String.class) + ":" + control;
                         if ("PASS".equals(previous.get(key)) && "FAIL".equals(status)) {
-                            lines.add(at(r, "evaluated_at") + "  " + safe(r.get("device_name", String.class))
+                            lines.add(at(r, "evaluated_at") + "  " + safe(identity.device(r, "device_id"))
                                     + "  " + safe(control) + " PASS -> FAIL (" + safe(item.path("severity").asText())
                                     + ")  /compliance");
                         }
@@ -209,7 +219,7 @@ final class NotificationMailRouter {
             case "device_health" -> {
                 Map<String, String> previous = states(dsl, "h:");
                 rows = dsl.fetch("select j.job_id, j.target_device_id, j.state, j.terminal_reason, j.finished_at, "
-                        + "coalesce(d.observed_hostname, j.target_device_id) as device_name from ("
+                        + "coalesce(d.observed_hostname, j.target_device_id) as device_name, d.observed_hostname as observed_hostname from ("
                         + "select job_id, target_device_id, state, terminal_reason, finished_at, "
                         + "row_number() over (partition by target_device_id order by finished_at desc, job_id desc) as rn "
                         + "from jobs where finished_at is not null) j "
@@ -222,12 +232,13 @@ final class NotificationMailRouter {
                     if (recent.size() < 3) recent.add(r);
                 }
                 for (Record r : dsl.fetch("select j.job_id, j.finished_at, "
-                        + "coalesce(d.observed_hostname, j.target_device_id) as device_name from jobs j "
+                        + "coalesce(d.observed_hostname, j.target_device_id) as device_name, d.observed_hostname as observed_hostname, "
+                        + "j.target_device_id as target_device_id from jobs j "
                         + "left join devices d on d.device_id = j.target_device_id "
                         + "where j.finished_at > {0} and j.state = 'FAILED' "
                         + "and j.terminal_reason ilike '%host key mismatch%' order by j.finished_at, j.job_id",
                         Timestamp.from(from))) {
-                    lines.add(at(r, "finished_at") + "  " + safe(r.get("device_name", String.class))
+                    lines.add(at(r, "finished_at") + "  " + safe(identity.device(r, "target_device_id"))
                             + "  SSH host key mismatch  /operations/jobs/" + r.get("job_id", String.class));
                     newestTime = max(newestTime, at(r, "finished_at"));
                 }
@@ -244,11 +255,11 @@ final class NotificationMailRouter {
                     String key = "h:" + entry.getKey();
                     String old = previous.get(key);
                     if (failed && !"unreachable".equals(old)) {
-                        lines.add(at(latest, "finished_at") + "  " + safe(latest.get("device_name", String.class))
+                        lines.add(at(latest, "finished_at") + "  " + safe(identity.device(latest, "target_device_id"))
                                 + "  unreachable after three transport failures  /operations/jobs/" + latest.get("job_id", String.class));
                         state.put(key, "unreachable");
                     } else if ("unreachable".equals(old) && "COMPLETED".equals(latest.get("state", String.class))) {
-                        lines.add(at(latest, "finished_at") + "  " + safe(latest.get("device_name", String.class))
+                        lines.add(at(latest, "finished_at") + "  " + safe(identity.device(latest, "target_device_id"))
                                 + "  reachable again  /operations/jobs/" + latest.get("job_id", String.class));
                         state.put(key, "reachable");
                     } else if (old == null && !failed) {

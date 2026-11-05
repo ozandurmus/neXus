@@ -1,6 +1,9 @@
 # Notification identity exposure audit — 2026-11-05
 
-Status: DRAFT (audit + proposal; not a frozen contract, authorizes no implementation).
+Status: IMPLEMENTED (pending live check). PO approved the Proposed option 2026-11-05 evening
+(`docs/design/PO_DECISION_RECORD_2026_11_05_EVENING_BATCH.md` item 4); implemented on branch
+`feat/notification-identity-masked-1105`: V193 `notification_identity`, `NotificationIdentity`, masked/raw control in
+Administration > Notifications.
 Scope: outbound notification e-mail (`NotificationMailRouter`, `SmtpRelaySender`) and syslog forwarding
 (`SyslogSender`, `NotificationForwarder`). Paths are under
 `ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/`. Read-only audit of source; no live system touched.

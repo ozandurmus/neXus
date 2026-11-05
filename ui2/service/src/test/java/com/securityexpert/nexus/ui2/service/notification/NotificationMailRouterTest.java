@@ -102,7 +102,7 @@ class NotificationMailRouterTest {
             if (ctx.sql().contains("certificate changed")) assertFalse(ctx.sql().contains("state = 'FAILED'"));
             return new MockResult[]{new MockResult(result.size(), result)};
         }), SQLDialect.POSTGRES);
-        var batch = NotificationMailRouter.collect(dsl, "device_health", 0, FROM);
+        var batch = NotificationMailRouter.collect(dsl, "device_health", 0, FROM, NotificationIdentity.raw());
         assertEquals(1, batch.lines().size());
         assertTrue(batch.lines().getFirst().contains("HTTPS certificate changed"));
         assertTrue(batch.lines().getFirst().contains("/operations/jobs/discovery-job"));
@@ -113,24 +113,24 @@ class NotificationMailRouterTest {
         DSLContext dsl = fixture();
         for (String type : NotificationRoute.TYPES) {
             if (type.equals("security_scan")) continue; // File-backed source covered by SecurityScanSummaryTest.
-            NotificationMailRouter.Batch batch = NotificationMailRouter.collect(dsl, type, 10, FROM);
+            NotificationMailRouter.Batch batch = NotificationMailRouter.collect(dsl, type, 10, FROM, NotificationIdentity.raw());
             assertFalse(batch.lines().isEmpty(), type);
         }
-        String crash = NotificationMailRouter.collect(dsl, "device_crash_file", 10, FROM).lines().getFirst();
+        String crash = NotificationMailRouter.collect(dsl, "device_crash_file", 10, FROM, NotificationIdentity.raw()).lines().getFirst();
         assertTrue(crash.contains("FW-TANGO-04") && crash.contains("2 new crash/dump file(s), process fwk")
                 && crash.contains("/operations/jobs/job-5"), crash);
         assertTrue(NotificationMailRouter.subject("device_crash_file", 1).contains("Device crash and dump files"));
-        assertEquals(11, NotificationMailRouter.collect(dsl, "admin_event", 10, FROM).audit());
-        assertEquals("FAIL", NotificationMailRouter.collect(dsl, "compliance_regression", 10, FROM)
+        assertEquals(11, NotificationMailRouter.collect(dsl, "admin_event", 10, FROM, NotificationIdentity.raw()).audit());
+        assertEquals("FAIL", NotificationMailRouter.collect(dsl, "compliance_regression", 10, FROM, NotificationIdentity.raw())
                 .state().get("c:device-a:CTRL-1"));
-        assertEquals("unreachable", NotificationMailRouter.collect(dsl, "device_health", 10, FROM)
+        assertEquals("unreachable", NotificationMailRouter.collect(dsl, "device_health", 10, FROM, NotificationIdentity.raw())
                 .state().get("h:device-a"));
     }
 
     @Test
     void backupSizeAnomalyDigestsTheThreeAlertKindsWithSizesOnlyAndAdvancesTheWatermarkToTheNewestRow() throws Exception {
         NotificationMailRouter.Batch batch = NotificationMailRouter.collect(fixture(), "backup_size_anomaly", 0,
-                Instant.parse("2026-09-26T00:00:00Z"));
+                Instant.parse("2026-09-26T00:00:00Z"), NotificationIdentity.raw());
         assertEquals(3, batch.lines().size());
         assertTrue(batch.lines().get(0).contains("FW-TANGO-04  size_anomaly: Backup size anomaly: grew 26.0x (1.1 GB -> 28.6 GB")
                 && batch.lines().get(0).endsWith("  /backups"), batch.lines().get(0));
@@ -180,7 +180,7 @@ class NotificationMailRouterTest {
             }
             return new MockResult[] { new MockResult(result.size(), result) };
         }), SQLDialect.POSTGRES);
-        NotificationMailRouter.tick(dsl, settings(25), (settings, recipients, subject, body) -> {
+        NotificationMailRouter.tick(dsl, settings(25), NotificationIdentity.raw(), (settings, recipients, subject, body) -> {
             if (subject.contains("Other job failures")) throw new IOException("synthetic refusal");
         });
         assertEquals(1, updates.stream().filter(s -> s.contains("watermark_audit")).count());
@@ -210,13 +210,13 @@ class NotificationMailRouterTest {
         }), SQLDialect.POSTGRES);
         NotificationMailRouter.resetWarnedTypesForTest();
         for (int i = 0; i < 2; i++) {
-            NotificationMailRouter.tick(dsl, settings(25), (s, r, subject, body) -> sent.add(subject));
+            NotificationMailRouter.tick(dsl, settings(25), NotificationIdentity.raw(), (s, r, subject, body) -> sent.add(subject));
         }
         assertEquals(2, sent.size());
         assertTrue(updates.stream().noneMatch(u -> u.contains("last_error = ?") && u.contains("where type")
                 && !u.contains("last_error = null")), updates.toString());
         assertThrows(NotificationMailRouter.UnhandledTypeException.class,
-                () -> NotificationMailRouter.collect(dsl, "scheduled_report", 0, FROM));
+                () -> NotificationMailRouter.collect(dsl, "scheduled_report", 0, FROM, NotificationIdentity.raw()));
         assertTrue(NotificationMailRouter.subject("scheduled_report", 1).contains("scheduled_report"));
     }
 
