@@ -35,6 +35,8 @@ describe("LoginScreen", () => {
     expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
     expect(screen.getByText("neXus · on-premises")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(screen.queryByText(/Every firewall/)).toBeNull();
   });
 
   it("reveals the password only while the toggle is pressed", () => {
