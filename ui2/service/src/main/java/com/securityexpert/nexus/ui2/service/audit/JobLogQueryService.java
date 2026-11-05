@@ -352,15 +352,23 @@ public final class JobLogQueryService {
 
     /** The filtered history as CSV, newest first, at most {@link #MAX_EXPORT_ROWS} rows; the last line says so when cut. */
     public String exportCsv(JobQuery query) {
+        return toCsv(exportRows(query));
+    }
+
+    /**
+     * The rows {@link #exportCsv} renders, at most {@link #MAX_EXPORT_ROWS} + 1 (the extra row marks truncation).
+     * A masked caller maps each row through the record masking before {@link #toCsv}: the target label can be a cluster,
+     * container, policy source or packet case name that text masking alone does not know (security review 2026-11-05).
+     */
+    public List<JobEvent> exportRows(JobQuery query) {
         Where where = whereOf(query);
         String orderBy = orderByOf(query);
-        List<JobEvent> rows = transactionBoundary.inTransaction(dsl -> {
+        return transactionBoundary.inTransaction(dsl -> {
             List<Object> bindings = new ArrayList<>(where.bindings());
             bindings.add(MAX_EXPORT_ROWS + 1);
             return dsl.fetch(SELECT + where.sql() + orderBy + " limit ?", bindings.toArray())
                     .map(JobLogQueryService::toEvent);
         });
-        return toCsv(rows);
     }
 
     static Where whereOf(JobQuery query) {
@@ -409,7 +417,7 @@ public final class JobLogQueryService {
         return new Where(clauses.isEmpty() ? "" : " where " + String.join(" and ", clauses), bindings);
     }
 
-    static String toCsv(List<JobEvent> rows) {
+    public static String toCsv(List<JobEvent> rows) {
         StringBuilder csv = new StringBuilder("job_id,job_type,device_name,target_device_id,state,outcome,submitted_at,finished_at,duration_ms,terminal_reason\r\n");
         int emitted = 0;
         for (JobEvent row : rows) {

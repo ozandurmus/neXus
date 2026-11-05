@@ -3,6 +3,8 @@ package com.securityexpert.nexus.ui2.service.api;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.http.ResponseEntity;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService;
 import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.Facets;
+import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobEvent;
 import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobPage;
 import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobQuery;
 import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAdvice;
@@ -96,10 +99,18 @@ public final class JobLogController {
         if (query.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
-        String csv = jobLogQueryService.exportCsv(query.get());
-        // The body advice masks objects, not a byte body: the AIView persona's CSV is masked here, as text.
+        String csv;
+        // The body advice masks objects, not a byte body: the AIView persona's CSV is masked here. Each row goes through
+        // the same record masking as the JSON page first (the target label may be a cluster, container, policy source or
+        // packet case name that text masking has never registered), then the rendered text is masked once more.
         if (PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)) {
-            csv = (String) masking.maskObject(csv, null);
+            List<JobEvent> masked = new ArrayList<>();
+            for (JobEvent row : jobLogQueryService.exportRows(query.get())) {
+                masked.add((JobEvent) masking.maskObject(row, null));
+            }
+            csv = (String) masking.maskObject(JobLogQueryService.toCsv(masked), null);
+        } else {
+            csv = jobLogQueryService.exportCsv(query.get());
         }
         byte[] body = csv.getBytes(StandardCharsets.UTF_8);
         return ResponseEntity.ok()
