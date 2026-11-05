@@ -107,6 +107,20 @@ def request_drain(target, snapshot):
     return int(generations[0])
 
 
+# When a QUARANTINED admission's job `t` no longer holds the drain. COMPLETED and FAILED are outcomes the worker
+# recorded itself. CANCELLED is not: the reconciler moves a cancel-requested EXECUTING job whose lease expired to
+# CANCELLED without asking whether a device write began, and the stalled worker thread may still be inside that device
+# session (SECURITY_REVIEW_2026_11_05 M-1). Fail closed: a CANCELLED job releases the drain only when its durable
+# attempt record proves no write began. Every device-contacting write path commits a pre-contact job_step_attempt row
+# first, fenced to an owner-valid EXECUTING job, so after CANCELLED no new attempt can appear. A job releases only if
+# none of its attempts, in any lease epoch, crossed a mutation boundary or carries a non-read action class. A
+# write-class attempt is counted even when uncrossed, because the backup path records CLASS 1 without ever flipping the
+# flag. Every other state (OUTCOME_UNKNOWN, EXECUTING, a missing job, a null job_id) still holds, as before.
+ENDED_WITHOUT_WRITE_SQL = (
+    "(t.state in ('COMPLETED','FAILED') or (t.state='CANCELLED' and not exists(select 1 from job_step_attempt a"
+    " where a.job_id=t.job_id and (a.mutation_boundary_crossed or a.action_class<>'read'))))")
+
+
 def barrier_conditions(target, generation):
     """The drain barrier's conditions as (name, SQL boolean), evaluated on the target's module_runtime_control row."""
     role = ROLES[target]
@@ -124,7 +138,7 @@ def barrier_conditions(target, generation):
         # OWNER_GONE, so counting it here waits on itself (2026-11-04: a failed policy collection held a deploy).
         ("admissions", "select count(*) from endpoint_admission where " + admission_scope +
          " and (state='LEASED' or (state='QUARANTINED' and not exists(select 1 from jobs t where t.job_id="
-         "endpoint_admission.job_id and t.state in ('COMPLETED','FAILED','CANCELLED'))))"),
+         "endpoint_admission.job_id and " + ENDED_WITHOUT_WRITE_SQL + ")))"),
         ("task_leases", "select count(*) from runtime_task_lease where owner_role=" + literal(role) +
          " and state='LEASED'"),
         ("quarantined_task_leases", "select count(*) from runtime_task_lease where owner_role=" + literal(role) +
