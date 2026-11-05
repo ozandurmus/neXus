@@ -200,6 +200,7 @@ public final class GateChain {
                 || ActionRegistry.PACKET_ANALYSIS_RUN.equals(actionId)
                 || ActionRegistry.CP_READINESS_START.equals(actionId)
                 || ActionRegistry.POLICY_COLLECT.equals(actionId)
+                || ActionRegistry.DEVICE_INVENTORY_COLLECT.equals(actionId)
                 || ActionRegistry.SYSTEM_LOG_MEASURE_START.equals(actionId)
                 || ActionRegistry.POLICY_READ.equals(actionId)
                 || ActionRegistry.PATH_ANALYSIS_READ.equals(actionId)
