@@ -190,7 +190,10 @@ public final class GateChain {
     /**
      * The POST actions a machine session (aiview) may still send. Packet Analysis run is here (PO 2026-10-18): create a
      * case, upload a capture or telemetry file, request an analysis. Its PUT and DELETE routes stay refused to a machine
-     * session, which is read-only for every other method.
+     * session, which is read-only for every other method. Reports R1 (REPORTS_R1_CONTRACT.md, FROZEN, amendment A1:
+     * replay_viewer holds report_read and report_generate, always masked): the on-screen preview and generating a
+     * report file are POSTs; they read stored evidence only, touch no device, and the report service still refuses a
+     * RAW projection to a replay viewer.
      */
     private static boolean isReadOnlyPost(String method, String actionId) {
         return "POST".equalsIgnoreCase(method) && (ActionRegistry.FMG_DIAGNOSTIC_RUN.equals(actionId)
@@ -200,7 +203,9 @@ public final class GateChain {
                 || ActionRegistry.SYSTEM_LOG_MEASURE_START.equals(actionId)
                 || ActionRegistry.POLICY_READ.equals(actionId)
                 || ActionRegistry.PATH_ANALYSIS_READ.equals(actionId)
-                || ActionRegistry.PATH_ANALYSIS_VALIDATE.equals(actionId));
+                || ActionRegistry.PATH_ANALYSIS_VALIDATE.equals(actionId)
+                || ActionRegistry.REPORT_READ.equals(actionId)
+                || ActionRegistry.REPORT_GENERATE.equals(actionId));
     }
 
     private static boolean isReadMethod(String method) {

@@ -101,4 +101,23 @@ class MachineGateTest {
                 ActionRegistry.PACKET_ANALYSIS_RUN, Optional.empty());
         assertEquals("MACHINE_SESSION_READ_ONLY", ((GateOutcome.Refused) gate.evaluate(put, now)).body().get("error"));
     }
+
+    @Test
+    void reportPreviewAndGeneratePostsPassTheMachineGuardButNothingElseOpens() {
+        // Reports R1 (FROZEN, amendment A1): aiview previews and generates masked reports; RAW is refused by the service.
+        String cookie = "synthetic-cookie";
+        Instant now = Instant.parse("2026-11-05T12:00:00Z");
+        var sessions = mock(SessionRepository.class);
+        var machine = new SessionRecord(SessionHasher.hash(cookie), "synthetic-actor", "synthetic-csrf",
+                SessionState.ACTIVE, now.minusSeconds(10), now.minusSeconds(10), now.plusSeconds(600),
+                now.plusSeconds(1800), Optional.empty(), Optional.empty(), Optional.empty(), true);
+        when(sessions.findBySessionId(anyString(), eq(now))).thenReturn(Optional.of(machine));
+        var gate = new GateChain(sessions, new ActionRegistry(), mock(RbacEvaluator.class),
+                mock(com.securityexpert.nexus.ui2.persistence.identity.AuthzDecisionRepository.class));
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.REPORT_READ).isEmpty());
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.REPORT_GENERATE).isEmpty());
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "PUT", now, ActionRegistry.REPORT_GENERATE).isPresent());
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "DELETE", now, ActionRegistry.REPORT_GENERATE).isPresent());
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.REPORT_RAW_VIEW).isPresent());
+    }
 }
