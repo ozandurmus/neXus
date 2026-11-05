@@ -333,6 +333,9 @@ Stays UNKNOWN (no safe extension from collected data): FQDN addresses, dynamic a
 lists, predefined regions, application filters, CP dynamic objects / DNS domains / updatable objects / security
 zones, CP gateway objects as addresses, CP applications in the service column, `service-other`, unknown and legacy
 actions, unparsed Panorama target shapes, truly empty groups.
+CP gateway objects: reviewed 2026-11-05 in `CP_GATEWAY_OBJECT_BOUND_REVIEW_2026_11_05.md` (DRAFT) — no official
+statement of the address set a gateway/cluster object matches, and the object's interface list is not collected, so no
+sound upper bound exists; stays UNKNOWN pending an A0 amendment and a PO decision on collecting gateway interfaces.
 
 ## 4. Open issues
 
