@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>neXus — Sign in (Proposal 1: Constellation Pulse)</title>
+  <style>
+    /* ==========================================================================
+       neXus Design Tokens (from ui2/frontend/src/theme/m3Theme.ts & tokens.ts)
+       No external fonts or CDN assets — 100% self-contained for air-gapped bank LAN
+       ========================================================================== */
+    :root,
+    :root[data-theme="light"] {
+      --nx-primary: #3457d5;
+      --nx-primary-hover: #2947b8;
+      --nx-on-primary: #ffffff;
+      --nx-primary-container: #eaeefb;
+      --nx-on-primary-container: #1e2f7a;
+      --nx-surface: #f5f6f8;
+      --nx-surface-dim: #e3e7ec;
+      --nx-sc-lowest: #ffffff;
+      --nx-sc-low: #fafbfc;
+      --nx-sc: #f1f3f6;
+      --nx-sc-high: #e3e7ec;
+      --nx-sc-highest: #cfd5dd;
+      --nx-on-surface: #171b22;
+      --nx-on-surface-var: #5f6978;
+      --nx-outline: #9aa3b0;
+      --nx-outline-var: #e3e7ec;
+      --nx-error: #d03b3b;
+      --nx-on-error: #ffffff;
+      --nx-error-container: #fbe7e7;
+      --nx-on-error-container: #8f1f1f;
+      --nx-success-container: #e3f5e3;
+      --nx-on-success-container: #087a08;
+      --nx-warning-container: #fdf1d6;
+      --nx-on-warning-container: #8a5a00;
+      --nx-neutral-ink: #5b6473;
+      --nx-brand-teal: #1f8f7c;
+      --nx-brand-blue: #3b63d1;
+      --nx-cp: #c2338a;
+      --nx-vsx: #4a3aa7;
+      --nx-pan: #d9731a;
+      --nx-e2: 0 12px 36px rgba(15, 23, 42, 0.08), 0 2px 8px rgba(15, 23, 42, 0.04);
+      --nx-hero-bg: radial-gradient(circle at 28% 35%, rgba(52, 87, 213, 0.10), transparent 55%),
+                    radial-gradient(circle at 72% 70%, rgba(31, 143, 124, 0.10), transparent 50%),
+                    linear-gradient(160deg, #eef2f8 0%, #e4eaf3 100%);
+      --nx-grid-line: rgba(23, 27, 34, 0.055);
+      --nx-card-glass: rgba(255, 255, 255, 0.92);
+      --nx-node-bg: rgba(255, 255, 255, 0.92);
+      color-scheme: light;
+    }
+
+    :root[data-theme="dark"] {
+      --nx-primary: #7b9cff;
+      --nx-primary-hover: #96b0ff;
+      --nx-on-primary: #0f1216;
+      --nx-primary-container: #1f2a4d;
+      --nx-on-primary-container: #c9d5ff;
+      --nx-surface: #0f1216;
+      --nx-surface-dim: #0b0e11;
+      --nx-sc-lowest: #161a20;
+      --nx-sc-low: #181d24;
+      --nx-sc: #1c2129;
+      --nx-sc-high: #272e38;
+      --nx-sc-highest: #333b47;
+      --nx-on-surface: #eef1f5;
+      --nx-on-surface-var: #a5adba;
+      --nx-outline: #5b6473;
+      --nx-outline-var: #272e38;
+      --nx-error: #ef6a6a;
+      --nx-on-error: #0f1216;
+      --nx-error-container: #3a1d1f;
+      --nx-on-error-container: #ffb4b4;
+      --nx-success-container: #16301a;
+      --nx-on-success-container: #7ee07e;
+      --nx-warning-container: #3a2f12;
+      --nx-on-warning-container: #ffd98a;
+      --nx-neutral-ink: #a5adba;
+      --nx-brand-teal: #28b59e;
+      --nx-brand-blue: #5a82f7;
+      --nx-cp: #e06ab0;
+      --nx-vsx: #9a8fe0;
+      --nx-pan: #f0a060;
+      --nx-e2: 0 20px 50px rgba(0, 0, 0, 0.55), 0 2px 10px rgba(0, 0, 0, 0.35);
+      --nx-hero-bg: radial-gradient(circle at 26% 32%, rgba(59, 99, 209, 0.18), transparent 55%),
+                    radial-gradient(circle at 68% 74%, rgba(31, 143, 124, 0.14), transparent 52%),
+                    linear-gradient(160deg, #090c10 0%, #0f1319 55%, #121821 100%);
+      --nx-grid-line: rgba(238, 241, 245, 0.04);
+      --nx-card-glass: rgba(22, 26, 32, 0.90);
+      --nx-node-bg: rgba(24, 29, 36, 0.88);
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 20px;
+      background-color: var(--nx-surface);
+      color: var(--nx-on-surface);
+      font-variant-numeric: tabular-nums;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .mono {
+      font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 18px;
+    }
+
+    /* Skip link for keyboard accessibility */
+    .skip-link {
+      position: absolute;
+      top: -48px;
+      left: 16px;
+      z-index: 999;
+      padding: 8px 16px;
+      background: var(--nx-primary);
+      color: var(--nx-on-primary);
+      font-weight: 600;
+      border-radius: 8px;
+      text-decoration: none;
+    }
+    .skip-link:focus {
+      top: 12px;
+    }
+
+    /* Visible WCAG AA focus states */
+    :focus-visible {
+      outline: 2px solid var(--nx-primary);
+      outline-offset: 2px;
+    }
+
+    /* ==========================================================================
+       Prototype Review Bar (Theme Switch + Error State Toggle + Logo Specimen)
+       ========================================================================== */
+    .proto-bar {
+      position: fixed;
+      top: 16px;
+      right: 24px;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      background: var(--nx-sc-lowest);
+      border: 1px solid var(--nx-outline-var);
+      border-radius: 10px;
+      box-shadow: var(--nx-e2);
+      font-size: 12px;
+      line-height: 16px;
+    }
+
+    .proto-bar-label {
+      color: var(--nx-on-surface-var);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 0 4px;
+    }
+
+    .proto-btn {
+      appearance: none;
+      border: 1px solid var(--nx-outline-var);
+      background: var(--nx-sc);
+      color: var(--nx-on-surface);
+      padding: 5px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 140ms ease, border-color 140ms ease;
+    }
+
+    .proto-btn:hover {
+      background: var(--nx-sc-high);
+    }
+
+    .proto-btn[aria-pressed="true"] {
+      background: var(--nx-primary-container);
+      color: var(--nx-on-primary-container);
+      border-color: var(--nx-primary);
+      font-weight: 600;
+    }
+
+    .proto-btn.error-toggle[aria-pressed="true"] {
+      background: var(--nx-error-container);
+      color: var(--nx-on-error-container);
+      border-color: var(--nx-error);
+    }
+
+    /* ==========================================================================
+       Main Layout (Works cleanly at 1280, 1440×900, and 1920)
+       ========================================================================== */
+    .viewport {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(520px, 1.28fr) minmax(440px, 0.92fr);
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Left Column: Animated Constellation Topology Hero */
+    .hero-pane {
+      position: relative;
+      background: var(--nx-hero-bg);
+      border-right: 1px solid var(--nx-outline-var);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: clamp(24px, 3.2vw, 44px);
+      overflow: hidden;
+    }
+
+    .hero-grid-overlay {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(to right, var(--nx-grid-line) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--nx-grid-line) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+    }
+
+    #constellation-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .hero-top {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand-lockup {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .principle-strip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 8px;
+      background: var(--nx-sc-lowest);
+      border: 1px solid var(--nx-outline-var);
+      width: fit-content;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--nx-on-surface-var);
+    }
+
+    .principle-strip .active-step {
+      color: var(--nx-primary);
+    }
+
+    /* Floating Estate Telemetry Overlay Cards (AIView Masked Identities Only) */
+    .topology-stage {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(210px, 270px));
+      gap: 12px;
+      align-content: center;
+      margin: auto 0;
+      pointer-events: none;
+    }
+
+    .node-card {
+      background: var(--nx-node-bg);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--nx-outline-var);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+      animation: nodeFloat 6s ease-in-out infinite alternate;
+    }
+
+    .node-card:nth-child(2) {
+      animation-delay: -2.2s;
+      transform: translateY(12px);
+    }
+    .node-card:nth-child(3) {
+      animation-delay: -4.1s;
+    }
+    .node-card:nth-child(4) {
+      animation-delay: -1.3s;
+      transform: translateY(12px);
+    }
+
+    @keyframes nodeFloat {
+      0% { border-color: var(--nx-outline-var); }
+      100% { border-color: var(--nx-primary); }
+    }
+
+    .node-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .node-id {
+      font-weight: 600;
+      color: var(--nx-on-surface);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .vendor-swatch {
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    .role-chip {
+      font-size: 11px;
+      line-height: 14px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 6px;
+      border: 1px solid var(--nx-outline);
+      color: var(--nx-on-surface);
+      letter-spacing: 0.03em;
+    }
+
+    .node-meta {
+      color: var(--nx-on-surface-var);
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Status Pill per UI_DESIGN_LANGUAGE.md: word with a colour, never colour alone */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 8px;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 500;
+      width: fit-content;
+    }
+    .status-pill.ok {
+      background: var(--nx-success-container);
+      color: var(--nx-on-success-container);
+    }
+    .status-pill.neutral {
+      background: var(--nx-sc-high);
+      color: var(--nx-neutral-ink);
+    }
+    .status-pill.brand {
+      background: var(--nx-primary-container);
+      color: var(--nx-on-primary-container);
+    }
+
+    /* Bottom Hero Section: New Logo Light & Dark Specimen Strip */
+    .hero-bottom {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .hero-caption {
+      max-width: 540px;
+    }
+    .hero-caption h1 {
+      font-size: 22px;
+      line-height: 28px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--nx-on-surface);
+    }
+    .hero-caption p {
+      color: var(--nx-on-surface-var);
+      font-size: 14px;
+      line-height: 20px;
+    }
+
+    .logo-specimen-bar {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      background: var(--nx-sc-lowest);
+      border: 1px solid var(--nx-outline-var);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+
+    .specimen-cell {
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .specimen-cell.light-chip {
+      background: #f5f6f8;
+      color: #171b22;
+      border: 1px solid #cfd5dd;
+    }
+
+    .specimen-cell.dark-chip {
+      background: #0f1216;
+      color: #eef1f5;
+      border: 1px solid #272e38;
+    }
+
+    .specimen-tag {
+      font-size: 11px;
+      line-height: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      opacity: 0.72;
+      text-align: right;
+    }
+
+    /* ==========================================================================
+       Right Column: Authentication Console + Second Panel (Error State Preview)
+       ========================================================================== */
+    .auth-pane {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      padding: clamp(24px, 3vw, 44px) clamp(20px, 3vw, 40px);
+      background: var(--nx-surface);
+      position: relative;
+    }
+
+    .auth-stack {
+      width: 100%;
+      max-width: 400px;
+      margin: auto 0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .login-card {
+      background: var(--nx-sc-lowest);
+      border: 1px solid var(--nx-outline-var);
+      border-radius: 10px;
+      padding: 28px 28px 24px;
+      box-shadow: var(--nx-e2);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      position: relative;
+    }
+
+    .login-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 20px;
+      right: 20px;
+      height: 2px;
+      background: linear-gradient(90deg, var(--nx-brand-teal), var(--nx-primary));
+      border-radius: 2px;
+    }
+
+    .card-header {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .card-header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-title {
+      font-size: 22px;
+      line-height: 28px;
+      font-weight: 600;
+      color: var(--nx-on-surface);
+    }
+
+    .card-subtitle {
+      font-size: 14px;
+      line-height: 20px;
+      color: var(--nx-on-surface-var);
+    }
+
+    /* Field Group */
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    label.field-label {
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--nx-on-surface-var);
+    }
+
+    .field-hint {
+      font-size: 12px;
+      line-height: 16px;
+      color: var(--nx-on-surface-var);
+    }
+
+    /* Segmented Auth Mechanism Selector + Native Select Sync */
+    .auth-selector {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      background: var(--nx-sc);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--nx-outline-var);
+    }
+
+    .auth-option {
+      appearance: none;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--nx-on-surface-var);
+      font-size: 13px;
+      line-height: 18px;
+      font-weight: 600;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 140ms ease;
+    }
+
+    .auth-option:hover {
+      color: var(--nx-on-surface);
+    }
+
+    .auth-option[aria-checked="true"] {
+      background: var(--nx-sc-lowest);
+      color: var(--nx-on-surface);
+      border-color: var(--nx-outline-var);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    }
+
+    .auth-option[aria-checked="true"] .auth-dot {
+      background: var(--nx-primary);
+    }
+
+    .auth-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--nx-outline);
+    }
+
+    .input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .text-input {
+      width: 100%;
+      height: 40px;
+      padding: 8px 12px;
+      font-size: 14px;
+      line-height: 20px;
+      color: var(--nx-on-surface);
+      background: var(--nx-sc-low);
+      border: 1px solid var(--nx-outline);
+      border-radius: 8px;
+      transition: border-color 140ms ease, background 140ms ease;
+    }
+
+    .text-input:hover {
+      border-color: var(--nx-on-surface);
+    }
+
+    .text-input:focus {
+      background: var(--nx-sc-lowest);
+      border-color: var(--nx-primary);
+      outline: 2px solid var(--nx-primary);
+      outline-offset: 1px;
+    }
+
+    .text-input[aria-invalid="true"] {
+      border-color: var(--nx-error);
+    }
+
+    .pw-toggle {
+      position: absolute;
+      right: 6px;
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--nx-on-surface-var);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .pw-toggle:hover {
+      color: var(--nx-on-surface);
+      background: var(--nx-sc-high);
+    }
+
+    /* Generic Security Error Banner (C3A §5.3 & Security UX Rule) */
+    .error-banner {
+      display: none;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: var(--nx-error-container);
+      color: var(--nx-on-error-container);
+      border: 1px solid var(--nx-error);
+      font-size: 13px;
+      line-height: 18px;
+      font-weight: 500;
+    }
+
+    .error-banner.visible {
+      display: flex;
+    }
+
+    .error-icon {
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      margin-top: 1px;
+    }
+
+    /* Primary Button: RADIUS.button = 20px at 40px height */
+    .submit-btn {
+      width: 100%;
+      height: 40px;
+      border: none;
+      border-radius: 20px;
+      background: var(--nx-primary);
+      color: var(--nx-on-primary);
+      font-size: 14px;
+      line-height: 20px;
+      font-weight: 600;
+      letter-spacing: 0.1px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 140ms ease, transform 100ms ease;
+    }
+
+    .submit-btn:hover {
+      background: var(--nx-primary-hover);
+    }
+
+    .submit-btn:active {
+      transform: translateY(1px);
+    }
+
+    /* Second Panel: Static/Interactive Error State Reference Card in the Same File */
+    .error-state-panel {
+      background: var(--nx-sc-low);
+      border: 1px dashed var(--nx-outline);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .error-state-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--nx-on-surface-var);
+    }
+
+    .error-banner-static {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: var(--nx-error-container);
+      color: var(--nx-on-error-container);
+      border: 1px solid var(--nx-error);
+      font-size: 13px;
+      line-height: 18px;
+      font-weight: 500;
+    }
+
+    /* Footer Line */
+    .page-footer {
+      width: 100%;
+      max-width: 400px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      line-height: 16px;
+      color: var(--nx-on-surface-var);
+      padding-top: 12px;
+      border-top: 1px solid var(--nx-outline-var);
+    }
+
+    @media (max-width: 1180px) {
+      .viewport {
+        grid-template-columns: 1fr;
+      }
+      .hero-pane {
+        border-right: none;
+        border-bottom: 1px solid var(--nx-outline-var);
+        min-height: 420px;
+      }
+    }
+
+    /* Respect prefers-reduced-motion: zero animation */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a href="#login-form" class="skip-link">Skip to sign-in form</a>
+
+  <!-- Interactive Prototype Bar for Product Owner Review -->
+  <nav class="proto-bar" aria-label="Proposal display controls">
+    <span class="proto-bar-label">Proposal 1</span>
+    <button type="button" class="proto-btn" id="theme-dark-btn" aria-pressed="true">Dark</button>
+    <button type="button" class="proto-btn" id="theme-light-btn" aria-pressed="false">Light</button>
+    <button type="button" class="proto-btn error-toggle" id="error-toggle-btn" aria-pressed="false">
+      Error state
+    </button>
+  </nav>
+
+  <div class="viewport">
+    <!-- ======================================================================
+         LEFT HERO: Constellation Pulse (Multi-Vendor Estate Topology)
+         ====================================================================== -->
+    <section class="hero-pane" aria-label="Estate operational topology">
+      <div class="hero-grid-overlay" aria-hidden="true"></div>
+      <canvas id="constellation-canvas" aria-hidden="true"></canvas>
+
+      <div class="hero-top">
+        <div class="brand-lockup">
+          <!-- Primary Hero Logo (evolves the X motif: The Corroborated Vector X) -->
+          <svg width="248" height="52" viewBox="0 0 248 52" role="img" aria-label="neXus — Evolved Corroborated X Mark and Wordmark">
+            <defs>
+              <linearGradient id="p1-teal-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#28b59e" />
+                <stop offset="100%" stop-color="#1f8f7c" />
+              </linearGradient>
+              <linearGradient id="p1-blue-grad" x1="100%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#7b9cff" />
+                <stop offset="100%" stop-color="#3457d5" />
+              </linearGradient>
+            </defs>
+            <!-- App Mark: Interlocked Vector X with Central Verification Diamond -->
+            <rect x="2" y="2" width="48" height="48" rx="12" fill="var(--nx-sc-lowest)" stroke="var(--nx-outline-var)" stroke-width="1.5" />
+            <!-- Subtle inner octagon guide -->
+            <polygon points="26,7 40,12 45,26 40,40 26,45 12,40 7,26 12,12" fill="none" stroke="var(--nx-outline-var)" stroke-width="1" stroke-dasharray="2 2" />
+            <!-- Left-to-right conduit (Teal) -->
+            <path d="M13 13 L21 13 L39 39 L31 39 Z" fill="url(#p1-teal-grad)" />
+            <!-- Right-to-left conduit (Blue) -->
+            <path d="M39 13 L31 13 L13 39 L21 39 Z" fill="url(#p1-blue-grad)" />
+            <!-- Central Corroboration Core -->
+            <polygon points="26,20 32,26 26,32 20,26" fill="var(--nx-sc-lowest)" stroke="var(--nx-on-surface)" stroke-width="1.5" />
+            <circle cx="26" cy="26" r="2.5" fill="var(--nx-primary)" />
+            <!-- 4 Endpoint Terminal Nodes -->
+            <circle cx="15" cy="13" r="2" fill="var(--nx-on-surface)" />
+            <circle cx="37" cy="13" r="2" fill="var(--nx-on-surface)" />
+            <circle cx="15" cy="39" r="2" fill="var(--nx-on-surface)" />
+            <circle cx="37" cy="39" r="2" fill="var(--nx-on-surface)" />
+
+            <!-- Custom Geometric Wordmark: neXus -->
+            <g transform="translate(64, 11)" fill="var(--nx-on-surface)">
+              <!-- 'n' -->
+              <path d="M0 26 V8 H4.5 V10.8 C6.1 8.7 8.4 7.6 11.2 7.6 C15.8 7.6 18.6 10.6 18.6 15.6 V26 H14.1 V16.4 C14.1 13.1 12.4 11.4 9.7 11.4 C6.8 11.4 4.5 13.4 4.5 16.8 V26 H0 Z" />
+              <!-- 'e' -->
+              <path fill-rule="evenodd" d="M33.2 26.4 C27.2 26.4 23.2 22.4 23.2 17.0 C23.2 11.5 27.1 7.6 33.0 7.6 C38.8 7.6 42.4 11.4 42.4 16.8 C42.4 17.5 42.3 18.1 42.2 18.4 H27.7 C28.1 21.2 30.2 22.8 33.3 22.8 C35.6 22.8 37.3 21.9 38.4 20.3 L41.8 22.3 C40.1 24.9 37.1 26.4 33.2 26.4 Z M27.8 15.2 H37.8 C37.5 12.6 35.6 11.1 33.0 11.1 C30.3 11.1 28.3 12.6 27.8 15.2 Z" />
+              <!-- Stylized 'X' in Wordmark -->
+              <path d="M46.5 2 L52.2 2 L68.5 26 L62.8 26 Z" fill="url(#p1-teal-grad)" />
+              <path d="M68.5 2 L62.8 2 L46.5 26 L52.2 26 Z" fill="url(#p1-blue-grad)" />
+              <polygon points="57.5,10.5 61,14 57.5,17.5 54,14" fill="var(--nx-sc-lowest)" stroke="var(--nx-on-surface)" stroke-width="1.2" />
+              <!-- 'u' -->
+              <path d="M73.5 8 H78.0 V17.6 C78.0 20.9 79.7 22.6 82.4 22.6 C85.3 22.6 87.5 20.6 87.5 17.2 V8 H92.0 V26 H87.5 V23.3 C85.9 25.3 83.6 26.4 80.9 26.4 C76.3 26.4 73.5 23.4 73.5 18.4 V8 Z" />
+              <!-- 's' -->
+              <path d="M104.8 26.4 C100.5 26.4 97.4 24.7 96.1 21.8 L99.9 19.9 C100.8 21.9 102.6 22.9 105.0 22.9 C107.3 22.9 108.8 22.0 108.8 20.7 C108.8 19.5 107.6 18.9 104.4 18.2 C99.7 17.2 97.0 15.7 97.0 12.6 C97.0 9.5 99.9 7.6 104.4 7.6 C108.2 7.6 111.0 9.0 112.4 11.6 L108.7 13.5 C107.9 11.9 106.4 11.0 104.4 11.0 C102.4 11.0 101.2 11.8 101.2 12.9 C101.2 14.0 102.4 14.6 105.5 15.2 C110.2 16.2 113.0 17.7 113.0 20.9 C113.0 24.3 109.8 26.4 104.8 26.4 Z" />
+            </g>
+          </svg>
+
+          <div class="principle-strip" aria-label="neXus operational lifecycle">
+            <span class="active-step">SEE</span> →
+            <span class="active-step">VERIFY</span> →
+            <span>TRACE</span> →
+            <span>RECOVER</span> →
+            <span>OPERATE</span>
+          </div>
+        </div>
+
+        <span class="status-pill ok">Live · Corroborated mesh</span>
+      </div>
+
+      <!-- Center Floating Masked Nodes (AIView Pseudonyms Only) -->
+      <div class="topology-stage" aria-hidden="true">
+        <div class="node-card">
+          <div class="node-header">
+            <span class="node-id mono">
+              <span class="vendor-swatch" style="background: var(--nx-cp)"></span>
+              CLS-ROMEO-01
+            </span>
+            <span class="role-chip">ACTIVE / STANDBY</span>
+          </div>
+          <div class="node-meta mono">
+            <span>192.0.2.10</span>
+            <span>ClusterXL · R81.20</span>
+          </div>
+          <span class="status-pill ok">Identity verified · 2 peers</span>
+        </div>
+
+        <div class="node-card">
+          <div class="node-header">
+            <span class="node-id mono">
+              <span class="vendor-swatch" style="background: var(--nx-pan)"></span>
+              FW-TANGO-04
+            </span>
+            <span class="role-chip">PRIMARY</span>
+          </div>
+          <div class="node-meta mono">
+            <span>192.0.2.44</span>
+            <span>PA-5250 · 11.1</span>
+          </div>
+          <span class="status-pill ok">Compliant · Effective running</span>
+        </div>
+
+        <div class="node-card">
+          <div class="node-header">
+            <span class="node-id mono">
+              <span class="vendor-swatch" style="background: var(--nx-vsx)"></span>
+              FW-JULIET-06
+            </span>
+            <span class="role-chip">VSX GATEWAY</span>
+          </div>
+          <div class="node-meta mono">
+            <span>192.0.2.62</span>
+            <span>14 Virtual Systems</span>
+          </div>
+          <span class="status-pill brand">Stored backup · 02:04</span>
+        </div>
+
+        <div class="node-card">
+          <div class="node-header">
+            <span class="node-id mono">
+              <span class="vendor-swatch" style="background: var(--nx-brand-teal)"></span>
+              FW-BRAVO-02
+            </span>
+            <span class="role-chip">STANDBY</span>
+          </div>
+          <div class="node-meta mono">
+            <span>192.0.2.28</span>
+            <span>HA Readiness · Gated</span>
+          </div>
+          <span class="status-pill neutral">Readiness · 0 drift</span>
+        </div>
+      </div>
+
+      <!-- Bottom Hero Caption + Light & Dark New Logo Variants Specimen -->
+      <div class="hero-bottom">
+        <div class="hero-caption">
+          <h1>Direct-device evidence across the firewall estate</h1>
+          <p>
+            Inventory, configuration alignment, encrypted backups, policy hygiene, and HA failover readiness—corroborated on-premises without external cloud dependencies.
+          </p>
+        </div>
+
+        <div class="logo-specimen-bar" aria-label="New logo concept in dark and light variants">
+          <!-- Dark Variant Specimen -->
+          <div class="specimen-cell dark-chip">
+            <svg width="154" height="34" viewBox="0 0 248 52" role="img" aria-label="neXus logo dark variant">
+              <rect x="2" y="2" width="48" height="48" rx="12" fill="#161a20" stroke="#333b47" stroke-width="1.5" />
+              <path d="M13 13 L21 13 L39 39 L31 39 Z" fill="#28b59e" />
+              <path d="M39 13 L31 13 L13 39 L21 39 Z" fill="#7b9cff" />
+              <polygon points="26,20 32,26 26,32 20,26" fill="#0f1216" stroke="#eef1f5" stroke-width="1.5" />
+              <circle cx="26" cy="26" r="2.5" fill="#7b9cff" />
+              <g transform="translate(64, 11)" fill="#eef1f5">
+                <path d="M0 26 V8 H4.5 V10.8 C6.1 8.7 8.4 7.6 11.2 7.6 C15.8 7.6 18.6 10.6 18.6 15.6 V26 H14.1 V16.4 C14.1 13.1 12.4 11.4 9.7 11.4 C6.8 11.4 4.5 13.4 4.5 16.8 V26 H0 Z" />
+                <path fill-rule="evenodd" d="M33.2 26.4 C27.2 26.4 23.2 22.4 23.2 17.0 C23.2 11.5 27.1 7.6 33.0 7.6 C38.8 7.6 42.4 11.4 42.4 16.8 C42.4 17.5 42.3 18.1 42.2 18.4 H27.7 C28.1 21.2 30.2 22.8 33.3 22.8 C35.6 22.8 37.3 21.9 38.4 20.3 L41.8 22.3 C40.1 24.9 37.1 26.4 33.2 26.4 Z M27.8 15.2 H37.8 C37.5 12.6 35.6 11.1 33.0 11.1 C30.3 11.1 28.3 12.6 27.8 15.2 Z" />
+                <path d="M46.5 2 L52.2 2 L68.5 26 L62.8 26 Z" fill="#28b59e" />
+                <path d="M68.5 2 L62.8 2 L46.5 26 L52.2 26 Z" fill="#7b9cff" />
+                <polygon points="57.5,10.5 61,14 57.5,17.5 54,14" fill="#0f1216" stroke="#eef1f5" stroke-width="1.2" />
+                <path d="M73.5 8 H78.0 V17.6 C78.0 20.9 79.7 22.6 82.4 22.6 C85.3 22.6 87.5 20.6 87.5 17.2 V8 H92.0 V26 H87.5 V23.3 C85.9 25.3 83.6 26.4 80.9 26.4 C76.3 26.4 73.5 23.4 73.5 18.4 V8 Z" />
+                <path d="M104.8 26.4 C100.5 26.4 97.4 24.7 96.1 21.8 L99.9 19.9 C100.8 21.9 102.6 22.9 105.0 22.9 C107.3 22.9 108.8 22.0 108.8 20.7 C108.8 19.5 107.6 18.9 104.4 18.2 C99.7 17.2 97.0 15.7 97.0 12.6 C97.0 9.5 99.9 7.6 104.4 7.6 C108.2 7.6 111.0 9.0 112.4 11.6 L108.7 13.5 C107.9 11.9 106.4 11.0 104.4 11.0 C102.4 11.0 101.2 11.8 101.2 12.9 C101.2 14.0 102.4 14.6 105.5 15.2 C110.2 16.2 113.0 17.7 113.0 20.9 C113.0 24.3 109.8 26.4 104.8 26.4 Z" />
+              </g>
+            </svg>
+            <span class="specimen-tag">Dark Variant<br/>Evolved X</span>
+          </div>
+
+          <!-- Light Variant Specimen -->
+          <div class="specimen-cell light-chip">
+            <svg width="154" height="34" viewBox="0 0 248 52" role="img" aria-label="neXus logo light variant">
+              <rect x="2" y="2" width="48" height="48" rx="12" fill="#ffffff" stroke="#cfd5dd" stroke-width="1.5" />
+              <path d="M13 13 L21 13 L39 39 L31 39 Z" fill="#1f8f7c" />
+              <path d="M39 13 L31 13 L13 39 L21 39 Z" fill="#3457d5" />
+              <polygon points="26,20 32,26 26,32 20,26" fill="#ffffff" stroke="#171b22" stroke-width="1.5" />
+              <circle cx="26" cy="26" r="2.5" fill="#3457d5" />
+              <g transform="translate(64, 11)" fill="#171b22">
+                <path d="M0 26 V8 H4.5 V10.8 C6.1 8.7 8.4 7.6 11.2 7.6 C15.8 7.6 18.6 10.6 18.6 15.6 V26 H14.1 V16.4 C14.1 13.1 12.4 11.4 9.7 11.4 C6.8 11.4 4.5 13.4 4.5 16.8 V26 H0 Z" />
+                <path fill-rule="evenodd" d="M33.2 26.4 C27.2 26.4 23.2 22.4 23.2 17.0 C23.2 11.5 27.1 7.6 33.0 7.6 C38.8 7.6 42.4 11.4 42.4 16.8 C42.4 17.5 42.3 18.1 42.2 18.4 H27.7 C28.1 21.2 30.2 22.8 33.3 22.8 C35.6 22.8 37.3 21.9 38.4 20.3 L41.8 22.3 C40.1 24.9 37.1 26.4 33.2 26.4 Z M27.8 15.2 H37.8 C37.5 12.6 35.6 11.1 33.0 11.1 C30.3 11.1 28.3 12.6 27.8 15.2 Z" />
+                <path d="M46.5 2 L52.2 2 L68.5 26 L62.8 26 Z" fill="#1f8f7c" />
+                <path d="M68.5 2 L62.8 2 L46.5 26 L52.2 26 Z" fill="#3457d5" />
+                <polygon points="57.5,10.5 61,14 57.5,17.5 54,14" fill="#ffffff" stroke="#171b22" stroke-width="1.2" />
+                <path d="M73.5 8 H78.0 V17.6 C78.0 20.9 79.7 22.6 82.4 22.6 C85.3 22.6 87.5 20.6 87.5 17.2 V8 H92.0 V26 H87.5 V23.3 C85.9 25.3 83.6 26.4 80.9 26.4 C76.3 26.4 73.5 23.4 73.5 18.4 V8 Z" />
+                <path d="M104.8 26.4 C100.5 26.4 97.4 24.7 96.1 21.8 L99.9 19.9 C100.8 21.9 102.6 22.9 105.0 22.9 C107.3 22.9 108.8 22.0 108.8 20.7 C108.8 19.5 107.6 18.9 104.4 18.2 C99.7 17.2 97.0 15.7 97.0 12.6 C97.0 9.5 99.9 7.6 104.4 7.6 C108.2 7.6 111.0 9.0 112.4 11.6 L108.7 13.5 C107.9 11.9 106.4 11.0 104.4 11.0 C102.4 11.0 101.2 11.8 101.2 12.9 C101.2 14.0 102.4 14.6 105.5 15.2 C110.2 16.2 113.0 17.7 113.0 20.9 C113.0 24.3 109.8 26.4 104.8 26.4 Z" />
+              </g>
+            </svg>
+            <span class="specimen-tag">Light Variant<br/>Evolved X</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         RIGHT PANE: Sign-in Card + Error State Reference Panel + Footer
+         ====================================================================== -->
+    <main class="auth-pane">
+      <div class="auth-stack">
+        <form id="login-form" class="login-card" novalidate>
+          <div class="card-header">
+            <div class="card-header-top">
+              <h2 class="card-title">Sign in</h2>
+              <span class="status-pill neutral mono">Air-gapped node</span>
+            </div>
+            <p class="card-subtitle">Authenticate to the neXus operator console.</p>
+          </div>
+
+          <!-- Authentication Selector (Local account / LDAP) -->
+          <div class="field-group">
+            <div class="field-label-row">
+              <label class="field-label" id="auth-mode-label" for="auth-select-fallback">Authentication</label>
+              <span class="field-hint mono" id="auth-mode-hint">Local credential store</span>
+            </div>
+            <div class="auth-selector" role="radiogroup" aria-labelledby="auth-mode-label">
+              <button
+                type="button"
+                class="auth-option"
+                role="radio"
+                aria-checked="true"
+                data-mechanism="local"
+              >
+                <span class="auth-dot" aria-hidden="true"></span>
+                Local account
+              </button>
+              <button
+                type="button"
+                class="auth-option"
+                role="radio"
+                aria-checked="false"
+                data-mechanism="ldap"
+              >
+                <span class="auth-dot" aria-hidden="true"></span>
+                LDAP
+              </button>
+            </div>
+            <!-- Screen-reader & native form fallback -->
+            <select id="auth-select-fallback" name="mechanism_id" hidden aria-hidden="true">
+              <option value="local" selected>Local account</option>
+              <option value="ldap">LDAP</option>
+            </select>
+          </div>
+
+          <!-- Username Field -->
+          <div class="field-group">
+            <label class="field-label" for="username-input">Username</label>
+            <div class="input-wrap">
+              <input
+                id="username-input"
+                name="username"
+                type="text"
+                class="text-input mono"
+                autocomplete="username"
+                placeholder="operator"
+                required
+                aria-required="true"
+                aria-invalid="false"
+              />
+            </div>
+          </div>
+
+          <!-- Password Field -->
+          <div class="field-group">
+            <label class="field-label" for="password-input">Password</label>
+            <div class="input-wrap">
+              <input
+                id="password-input"
+                name="password"
+                type="password"
+                class="text-input"
+                autocomplete="current-password"
+                placeholder="••••••••••••"
+                required
+                aria-required="true"
+                aria-invalid="false"
+              />
+              <button
+                type="button"
+                class="pw-toggle"
+                id="pw-toggle-btn"
+                aria-label="Show password"
+                aria-pressed="false"
+              >
+                Show
+              </button>
+            </div>
+          </div>
+
+          <!-- Live Generic Error State Banner -->
+          <div id="live-error-banner" class="error-banner" role="alert" aria-live="assertive">
+            <svg class="error-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+            </svg>
+            <span>Sign-in failed. Check your details.</span>
+          </div>
+
+          <!-- Sign in Button -->
+          <button type="submit" class="submit-btn">
+            <span>Sign in</span>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M3 8h10M9 4l4 4-4 4" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+        </form>
+
+        <!-- Second Panel: Error State Specification & Instant Toggle -->
+        <aside class="error-state-panel" aria-label="Error state preview panel">
+          <div class="error-state-panel-header">
+            <span>Error state specification (C3A §5.3)</span>
+            <button type="button" class="proto-btn" id="inline-error-trigger">Toggle on form</button>
+          </div>
+          <div class="error-banner-static" role="status">
+            <svg class="error-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+            </svg>
+            <span>Sign-in failed. Check your details.</span>
+          </div>
+        </aside>
+      </div>
+
+      <!-- Mandatory Footer Line -->
+      <footer class="page-footer">
+        <span class="mono">neXus · on-premises · version x.y</span>
+        <span>Role-gated console</span>
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      // 1. Authentication selector (Local account / LDAP)
+      const authButtons = document.querySelectorAll('.auth-option');
+      const authFallback = document.getElementById('auth-select-fallback');
+      const authHint = document.getElementById('auth-mode-hint');
+
+      function selectMechanism(mech) {
+        authButtons.forEach((btn) => {
+          const active = btn.getAttribute('data-mechanism') === mech;
+          btn.setAttribute('aria-checked', active ? 'true' : 'false');
+        });
+        if (authFallback) authFallback.value = mech;
+        if (authHint) {
+          authHint.textContent = mech === 'ldap' ? 'Corporate directory · LDAPS' : 'Local credential store';
+        }
+      }
+
+      authButtons.forEach((btn) => {
+        btn.addEventListener('click', () => selectMechanism(btn.getAttribute('data-mechanism')));
+        btn.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+            e.preventDefault();
+            const next = btn.getAttribute('data-mechanism') === 'local' ? 'ldap' : 'local';
+            selectMechanism(next);
+            document.querySelector(`.auth-option[data-mechanism="${next}"]`).focus();
+          }
+        });
+      });
+
+      // 2. Password visibility toggle
+      const pwInput = document.getElementById('password-input');
+      const pwToggle = document.getElementById('pw-toggle-btn');
+      pwToggle.addEventListener('click', () => {
+        const isPw = pwInput.type === 'password';
+        pwInput.type = isPw ? 'text' : 'password';
+        pwToggle.textContent = isPw ? 'Hide' : 'Show';
+        pwToggle.setAttribute('aria-pressed', isPw ? 'true' : 'false');
+        pwToggle.setAttribute('aria-label', isPw ? 'Hide password' : 'Show password');
+      });
+
+      // 3. Error state toggle & form submit
+      const errorBanner = document.getElementById('live-error-banner');
+      const errorToggleBtn = document.getElementById('error-toggle-btn');
+      const inlineErrorTrigger = document.getElementById('inline-error-trigger');
+      const userInput = document.getElementById('username-input');
+      let errorActive = false;
+
+      function setErrorState(active) {
+        errorActive = active;
+        errorBanner.classList.toggle('visible', active);
+        errorToggleBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        userInput.setAttribute('aria-invalid', active ? 'true' : 'false');
+        pwInput.setAttribute('aria-invalid', active ? 'true' : 'false');
+      }
+
+      errorToggleBtn.addEventListener('click', () => setErrorState(!errorActive));
+      inlineErrorTrigger.addEventListener('click', () => setErrorState(!errorActive));
+      document.getElementById('login-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        setErrorState(true);
+      });
+
+      // 4. Theme switcher (Dark / Light)
+      const darkBtn = document.getElementById('theme-dark-btn');
+      const lightBtn = document.getElementById('theme-light-btn');
+      function setTheme(mode) {
+        document.documentElement.setAttribute('data-theme', mode);
+        darkBtn.setAttribute('aria-pressed', mode === 'dark' ? 'true' : 'false');
+        lightBtn.setAttribute('aria-pressed', mode === 'light' ? 'true' : 'false');
+        drawConstellationStatic();
+      }
+      darkBtn.addEventListener('click', () => setTheme('dark'));
+      lightBtn.addEventListener('click', () => setTheme('light'));
+
+      // 5. Lightweight Constellation Topology Canvas (respects prefers-reduced-motion)
+      const canvas = document.getElementById('constellation-canvas');
+      const ctx = canvas.getContext('2d');
+      const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+      const nodes = [
+        { x: 0.14, y: 0.22, r: 4.5 },
+        { x: 0.32, y: 0.18, r: 5.5 },
+        { x: 0.56, y: 0.24, r: 4.5 },
+        { x: 0.78, y: 0.19, r: 5.0 },
+        { x: 0.22, y: 0.46, r: 6.0 },
+        { x: 0.48, y: 0.44, r: 6.5 },
+        { x: 0.74, y: 0.48, r: 5.5 },
+        { x: 0.16, y: 0.72, r: 4.5 },
+        { x: 0.42, y: 0.70, r: 5.5 },
+        { x: 0.68, y: 0.74, r: 5.0 },
+        { x: 0.86, y: 0.66, r: 4.0 }
+      ];
+
+      const edges = [
+        [0, 1], [1, 2], [2, 3],
+        [0, 4], [1, 4], [1, 5], [2, 5], [2, 6], [3, 6],
+        [4, 5], [5, 6],
+        [4, 7], [4, 8], [5, 8], [5, 9], [6, 9], [6, 10],
+        [7, 8], [8, 9], [9, 10]
+      ];
+
+      const pulses = edges.map((edge, idx) => ({
+        edge,
+        t: (idx * 0.17) % 1,
+        speed: 0.0022 + (idx % 4) * 0.0005,
+        teal: idx % 2 === 0
+      }));
+
+      function resizeCanvas() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawFrame(false);
+      }
+
+      function drawFrame(advance) {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        const w = rect.width;
+        const h = rect.height;
+        const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+
+        ctx.clearRect(0, 0, w, h);
+
+        const edgeStroke = isDark ? 'rgba(123, 156, 255, 0.16)' : 'rgba(52, 87, 213, 0.15)';
+        const nodeFill = isDark ? '#7b9cff' : '#3457d5';
+        const tealFill = isDark ? '#28b59e' : '#1f8f7c';
+
+        // Draw edges
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = edgeStroke;
+        edges.forEach(([i, j]) => {
+          const a = nodes[i];
+          const b = nodes[j];
+          ctx.beginPath();
+          ctx.moveTo(a.x * w, a.y * h);
+          ctx.lineTo(b.x * w, b.y * h);
+          ctx.stroke();
+        });
+
+        // Draw telemetry pulses along edges
+        pulses.forEach((p) => {
+          if (advance) {
+            p.t = (p.t + p.speed) % 1;
+          }
+          const a = nodes[p.edge[0]];
+          const b = nodes[p.edge[1]];
+          const px = (a.x + (b.x - a.x) * p.t) * w;
+          const py = (a.y + (b.y - a.y) * p.t) * h;
+
+          ctx.beginPath();
+          ctx.arc(px, py, 2.6, 0, Math.PI * 2);
+          ctx.fillStyle = p.teal ? tealFill : nodeFill;
+          ctx.fill();
+        });
+
+        // Draw nodes
+        nodes.forEach((n, idx) => {
+          const nx = n.x * w;
+          const ny = n.y * h;
+          ctx.beginPath();
+          ctx.arc(nx, ny, n.r + 4, 0, Math.PI * 2);
+          ctx.fillStyle = isDark ? 'rgba(123, 156, 255, 0.10)' : 'rgba(52, 87, 213, 0.10)';
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.arc(nx, ny, n.r, 0, Math.PI * 2);
+          ctx.fillStyle = idx % 3 === 0 ? tealFill : nodeFill;
+          ctx.fill();
+        });
+      }
+
+      function drawConstellationStatic() {
+        drawFrame(false);
+      }
+
+      let rafId = null;
+      function animate() {
+        if (reducedMotionQuery.matches || document.hidden) {
+          rafId = null;
+          return;
+        }
+        drawFrame(true);
+        rafId = requestAnimationFrame(animate);
+      }
+
+      window.addEventListener('resize', resizeCanvas);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && !reducedMotionQuery.matches && !rafId) {
+          rafId = requestAnimationFrame(animate);
+        }
+      });
+      reducedMotionQuery.addEventListener('change', () => {
+        if (reducedMotionQuery.matches && rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+          drawFrame(false);
+        } else if (!reducedMotionQuery.matches && !rafId) {
+          rafId = requestAnimationFrame(animate);
+        }
+      });
+
+      resizeCanvas();
+      if (!reducedMotionQuery.matches) {
+        rafId = requestAnimationFrame(animate);
+      }
+    })();
+  </script>
+</body>
+</html>

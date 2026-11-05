@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>neXus — Sign in (Proposal 2: Deterministic Trace)</title>
+  <style>
+    /* ==========================================================================
+       neXus Design Tokens (ui2/frontend/src/theme/m3Theme.ts & tokens.ts)
+       Self-contained — no external fonts, CDNs, or network assets
+       ========================================================================== */
+    :root,
+    :root[data-theme="light"] {
+      --nx-primary: #3457d5;
+      --nx-primary-hover: #2645b8;
+      --nx-on-primary: #ffffff;
+      --nx-primary-container: #eaeefb;
+      --nx-on-primary-container: #1e2f7a;
+      --nx-surface: #f5f6f8;
+      --nx-surface-dim: #e3e7ec;
+      --nx-sc-lowest: #ffffff;
+      --nx-sc-low: #fafbfc;
+      --nx-sc: #f1f3f6;
+      --nx-sc-high: #e3e7ec;
+      --nx-sc-highest: #cfd5dd;
+      --nx-on-surface: #171b22;
+      --nx-on-surface-var: #5f6978;
+      --nx-outline: #9aa3b0;
+      --nx-outline-var: #e3e7ec;
+      --nx-error: #d03b3b;
+      --nx-on-error: #ffffff;
+      --nx-error-container: #fbe7e7;
+      --nx-on-error-container: #8f1f1f;
+      --nx-success-container: #e3f5e3;
+      --nx-on-success-container: #087a08;
+      --nx-warning-container: #fdf1d6;
+      --nx-on-warning-container: #8a5a00;
+      --nx-member-container: #fbf4dc;
+      --nx-on-member-container: #7a5c12;
+      --nx-neutral-ink: #5b6473;
+      --nx-brand-teal: #1f8f7c;
+      --nx-brand-blue: #3b63d1;
+      --nx-cp: #c2338a;
+      --nx-vsx: #4a3aa7;
+      --nx-pan: #d9731a;
+      --nx-e2: 0 10px 30px rgba(15, 23, 42, 0.08), 0 1px 4px rgba(15, 23, 42, 0.04);
+      --nx-blueprint-dot: rgba(23, 27, 34, 0.10);
+      --nx-track-stroke: #cfd5dd;
+      color-scheme: light;
+    }
+
+    :root[data-theme="dark"] {
+      --nx-primary: #7b9cff;
+      --nx-primary-hover: #96b0ff;
+      --nx-on-primary: #0f1216;
+      --nx-primary-container: #1f2a4d;
+      --nx-on-primary-container: #c9d5ff;
+      --nx-surface: #0f1216;
+      --nx-surface-dim: #0b0e11;
+      --nx-sc-lowest: #161a20;
+      --nx-sc-low: #181d24;
+      --nx-sc: #1c2129;
+      --nx-sc-high: #272e38;
+      --nx-sc-highest: #333b47;
+      --nx-on-surface: #eef1f5;
+      --nx-on-surface-var: #a5adba;
+      --nx-outline: #5b6473;
+      --nx-outline-var: #272e38;
+      --nx-error: #ef6a6a;
+      --nx-on-error: #0f1216;
+      --nx-error-container: #3a1d1f;
+      --nx-on-error-container: #ffb4b4;
+      --nx-success-container: #16301a;
+      --nx-on-success-container: #7ee07e;
+      --nx-warning-container: #3a2f12;
+      --nx-on-warning-container: #ffd98a;
+      --nx-member-container: #33291a;
+      --nx-on-member-container: #f0d68e;
+      --nx-neutral-ink: #a5adba;
+      --nx-brand-teal: #28b59e;
+      --nx-brand-blue: #5a82f7;
+      --nx-cp: #e06ab0;
+      --nx-vsx: #9a8fe0;
+      --nx-pan: #f0a060;
+      --nx-e2: 0 18px 42px rgba(0, 0, 0, 0.50), 0 2px 8px rgba(0, 0, 0, 0.35);
+      --nx-blueprint-dot: rgba(238, 241, 245, 0.08);
+      --nx-track-stroke: #272e38;
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 20px;
+      background-color: var(--nx-surface);
+      color: var(--nx-on-surface);
+      font-variant-numeric: tabular-nums;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .mono {
+      font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 18px;
+    }
+
+    .skip-link {
+      position: absolute;
+      top: -48px;
+      left: 16px;
+      z-index: 999;
+      padding: 8px 16px;
+      background: var(--nx-primary);
+      color: var(--nx-on-primary);
+      font-weight: 600;
+      border-radius: 8px;
+      text-decoration: none;
+    }
+    .skip-link:focus {
+      top: 12px;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--nx-primary);
+      outline-offset: 2px;
+    }
+
+    /* ==========================================================================
+       Top Technical Telemetry Strip + Prototype Controls
+       ========================================================================== */
+    .top-bar {
+      height: 56px;
+      padding: 0 clamp(20px, 3vw, 40px);
+      background: var(--nx-sc-lowest);
+      border-bottom: 1px solid var(--nx-outline-var);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .top-brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .top-divider {
+      width: 1px;
+      height: 24px;
+      background: var(--nx-outline-var);
+    }
+
+    .top-subtitle {
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--nx-on-surface-var);
+    }
+
+    .proto-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .proto-btn {
+      appearance: none;
+      border: 1px solid var(--nx-outline-var);
+      background: var(--nx-sc);
+      color: var(--nx-on-surface);
+      padding: 5px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .proto-btn:hover {
+      background: var(--nx-sc-high);
+    }
+    .proto-btn[aria-pressed="true"] {
+      background: var(--nx-primary-container);
+      color: var(--nx-on-primary-container);
+      border-color: var(--nx-primary);
+      font-weight: 600;
+    }
+    .proto-btn.error-toggle[aria-pressed="true"] {
+      background: var(--nx-error-container);
+      color: var(--nx-on-error-container);
+      border-color: var(--nx-error);
+    }
+
+    /* ==========================================================================
+       Main Workspace Grid (1280, 1440×900, 1920)
+       ========================================================================== */
+    .workspace {
+      min-height: calc(100vh - 56px);
+      display: grid;
+      grid-template-columns: minmax(420px, 470px) 1fr;
+      background-image: radial-gradient(var(--nx-blueprint-dot) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+
+    /* Left Pane: Sign-In Control Unit */
+    .auth-column {
+      background: var(--nx-sc-lowest);
+      border-right: 1px solid var(--nx-outline-var);
+      padding: clamp(24px, 3vw, 40px);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .auth-box {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      margin: auto 0;
+    }
+
+    .section-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--nx-brand-teal);
+    }
+
+    .auth-title {
+      font-size: 22px;
+      line-height: 28px;
+      font-weight: 600;
+      color: var(--nx-on-surface);
+    }
+
+    .auth-desc {
+      font-size: 14px;
+      line-height: 20px;
+      color: var(--nx-on-surface-var);
+    }
+
+    .form-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    label.field-label {
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--nx-on-surface-var);
+    }
+
+    .mech-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .mech-tab {
+      appearance: none;
+      background: var(--nx-sc);
+      border: 1px solid var(--nx-outline-var);
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-size: 13px;
+      line-height: 18px;
+      font-weight: 600;
+      color: var(--nx-on-surface-var);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 140ms ease;
+    }
+
+    .mech-tab:hover {
+      background: var(--nx-sc-high);
+      color: var(--nx-on-surface);
+    }
+
+    .mech-tab[aria-checked="true"] {
+      background: var(--nx-primary-container);
+      color: var(--nx-on-primary-container);
+      border-color: var(--nx-primary);
+    }
+
+    .input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .text-input {
+      width: 100%;
+      height: 40px;
+      padding: 8px 12px;
+      font-size: 14px;
+      line-height: 20px;
+      color: var(--nx-on-surface);
+      background: var(--nx-sc-low);
+      border: 1px solid var(--nx-outline);
+      border-radius: 8px;
+    }
+    .text-input:hover {
+      border-color: var(--nx-on-surface);
+    }
+    .text-input:focus {
+      background: var(--nx-sc-lowest);
+      border-color: var(--nx-primary);
+      outline: 2px solid var(--nx-primary);
+      outline-offset: 1px;
+    }
+    .text-input[aria-invalid="true"] {
+      border-color: var(--nx-error);
+    }
+
+    .pw-toggle {
+      position: absolute;
+      right: 6px;
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--nx-on-surface-var);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .error-banner {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: var(--nx-error-container);
+      color: var(--nx-on-error-container);
+      border: 1px solid var(--nx-error);
+      font-size: 13px;
+      line-height: 18px;
+      font-weight: 500;
+    }
+    .error-banner.visible {
+      display: flex;
+    }
+
+    .submit-btn {
+      width: 100%;
+      height: 40px;
+      border: none;
+      border-radius: 20px;
+      background: var(--nx-primary);
+      color: var(--nx-on-primary);
+      font-size: 14px;
+      line-height: 20px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 140ms ease;
+    }
+    .submit-btn:hover {
+      background: var(--nx-primary-hover);
+    }
+
+    /* Second Panel inside Left Column: Error State Reference */
+    .state-inspector {
+      background: var(--nx-sc);
+      border: 1px solid var(--nx-outline-var);
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .state-inspector-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--nx-on-surface-var);
+    }
+
+    .error-preview-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--nx-error-container);
+      color: var(--nx-on-error-container);
+      font-size: 13px;
+      line-height: 18px;
+      font-weight: 500;
+    }
+
+    .page-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      line-height: 16px;
+      color: var(--nx-on-surface-var);
+      padding-top: 12px;
+      border-top: 1px solid var(--nx-outline-var);
+    }
+
+    /* ==========================================================================
+       Right Hero: Animated 5-Plane Policy & Packet Flow Pipeline
+       ========================================================================== */
+    .pipeline-hero {
+      padding: clamp(24px, 3vw, 40px);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 20px;
+      overflow: hidden;
+    }
+
+    .pipeline-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .pipeline-title-block h2 {
+      font-size: 22px;
+      line-height: 28px;
+      font-weight: 600;
+      color: var(--nx-on-surface);
+      margin-bottom: 4px;
+    }
+    .pipeline-title-block p {
+      font-size: 14px;
+      line-height: 20px;
+      color: var(--nx-on-surface-var);
+      max-width: 600px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 500;
+    }
+    .status-pill.ok {
+      background: var(--nx-success-container);
+      color: var(--nx-on-success-container);
+    }
+    .status-pill.brand {
+      background: var(--nx-primary-container);
+      color: var(--nx-on-primary-container);
+    }
+    .status-pill.mem {
+      background: var(--nx-member-container);
+      color: var(--nx-on-member-container);
+    }
+    .status-pill.neutral {
+      background: var(--nx-sc-high);
+      color: var(--nx-neutral-ink);
+    }
+
+    /* Animated SVG Pipeline Card */
+    .pipeline-board {
+      background: var(--nx-sc-lowest);
+      border: 1px solid var(--nx-outline-var);
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: var(--nx-e2);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin: auto 0;
+    }
+
+    .pipeline-lanes {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .lane-row {
+      display: grid;
+      grid-template-columns: 112px 1fr 196px;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 14px;
+      background: var(--nx-sc-low);
+      border: 1px solid var(--nx-outline-var);
+      border-radius: 8px;
+    }
+
+    .lane-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--nx-on-surface);
+    }
+
+    .lane-index {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      background: var(--nx-primary-container);
+      color: var(--nx-on-primary-container);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .lane-svg-wrap {
+      width: 100%;
+      height: 32px;
+      overflow: hidden;
+    }
+
+    /* CSS Keyframe Packet Stream Animations */
+    .stream-line {
+      stroke-dasharray: 8 10;
+      animation: packetDash 3.2s linear infinite;
+    }
+    .stream-line.fast {
+      animation-duration: 2.4s;
+    }
+    .stream-line.slow {
+      animation-duration: 4.2s;
+    }
+
+    .packet-token {
+      animation: packetSlide 5.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+    .lane-row:nth-child(2) .packet-token { animation-delay: -1.1s; }
+    .lane-row:nth-child(3) .packet-token { animation-delay: -2.4s; }
+    .lane-row:nth-child(4) .packet-token { animation-delay: -3.7s; }
+    .lane-row:nth-child(5) .packet-token { animation-delay: -4.6s; }
+
+    @keyframes packetDash {
+      from { stroke-dashoffset: 72; }
+      to { stroke-dashoffset: 0; }
+    }
+
+    @keyframes packetSlide {
+      0% { transform: translateX(0px); opacity: 0.2; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { transform: translateX(340px); opacity: 0.2; }
+    }
+
+    /* Logo Comparison Strip (Light & Dark Variants of the New Five-Plane Conduit Shield) */
+    .logo-showcase {
+      background: var(--nx-sc-lowest);
+      border: 1px solid var(--nx-outline-var);
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .logo-showcase-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--nx-on-surface-var);
+    }
+
+    .logo-variants-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .variant-card {
+      padding: 12px 16px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .variant-card.on-light {
+      background: #f5f6f8;
+      border: 1px solid #cfd5dd;
+      color: #171b22;
+    }
+    .variant-card.on-dark {
+      background: #0f1216;
+      border: 1px solid #272e38;
+      color: #eef1f5;
+    }
+
+    .variant-meta {
+      font-size: 11px;
+      line-height: 15px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      opacity: 0.75;
+      text-align: right;
+    }
+
+    @media (max-width: 1150px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+      .auth-column {
+        border-right: none;
+        border-bottom: 1px solid var(--nx-outline-var);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a href="#login-form" class="skip-link">Skip to sign-in form</a>
+
+  <!-- Top Bar with New Logo Lockup + Prototype Controls -->
+  <header class="top-bar">
+    <div class="top-brand">
+      <!-- New Logo Concept: Five-Plane Conduit Shield + Technical Wordmark -->
+      <svg width="205" height="38" viewBox="0 0 230 44" role="img" aria-label="neXus — Five-Plane Conduit Shield logo">
+        <!-- Hexagonal Chamfered Shield Container -->
+        <path d="M6 10 L22 3 L38 10 V27 C38 34 30 39 22 41 C14 39 6 34 6 27 Z" fill="var(--nx-primary-container)" stroke="var(--nx-primary)" stroke-width="1.8" />
+        <!-- 5 Parallel Conduit Tracks (SEE, VERIFY, TRACE, RECOVER, OPERATE) -->
+        <path d="M12 14 H20 L28 22" fill="none" stroke="var(--nx-on-primary-container)" stroke-width="2" stroke-linecap="round" />
+        <path d="M12 19 H22 L31 28" fill="none" stroke="var(--nx-brand-teal)" stroke-width="2.2" stroke-linecap="round" />
+        <path d="M12 24 H24 L32 32" fill="none" stroke="var(--nx-primary)" stroke-width="2.4" stroke-linecap="round" />
+        <path d="M14 29 H22 L27 34" fill="none" stroke="var(--nx-brand-teal)" stroke-width="2" stroke-linecap="round" />
+        <circle cx="28" cy="22" r="2" fill="var(--nx-on-primary-container)" />
+        <circle cx="31" cy="28" r="2.2" fill="var(--nx-brand-teal)" />
+        <circle cx="32" cy="32" r="2.2" fill="var(--nx-primary)" />
+
+        <!-- Clean Technical Wordmark (No oversized X distortion) -->
+        <g transform="translate(50, 9)" fill="var(--nx-on-surface)">
+          <!-- n -->
+          <path d="M0 24 V7 H4.2 V9.6 C5.7 7.6 7.9 6.6 10.6 6.6 C15.0 6.6 17.6 9.4 17.6 14.2 V24 H13.4 V14.9 C13.4 11.8 11.8 10.2 9.2 10.2 C6.4 10.2 4.2 12.1 4.2 15.3 V24 H0 Z" />
+          <!-- e -->
+          <path fill-rule="evenodd" d="M31.4 24.4 C25.7 24.4 21.9 20.6 21.9 15.5 C21.9 10.3 25.6 6.6 31.2 6.6 C36.7 6.6 40.1 10.2 40.1 15.3 C40.1 16.0 40.0 16.5 39.9 16.8 H26.2 C26.6 19.5 28.6 21.0 31.5 21.0 C33.7 21.0 35.3 20.1 36.3 18.6 L39.5 20.5 C37.9 23.0 35.1 24.4 31.4 24.4 Z M26.3 13.8 H35.8 C35.5 11.3 33.7 9.9 31.2 9.9 C28.6 9.9 26.8 11.3 26.3 13.8 Z" />
+          <!-- X (Balanced Architectural Cap-Height X with Teal Core) -->
+          <path d="M43.8 2 H48.8 L54.8 11.2 L60.8 2 H65.8 L57.5 13.2 L66.2 24 H61.2 L54.8 15.2 L48.4 24 H43.4 L52.1 13.2 Z" fill="var(--nx-primary)" />
+          <circle cx="54.8" cy="13.2" r="2.3" fill="var(--nx-brand-teal)" />
+          <!-- u -->
+          <path d="M70.4 7 H74.6 V16.1 C74.6 19.2 76.2 20.8 78.8 20.8 C81.5 20.8 83.6 18.9 83.6 15.7 V7 H87.8 V24 H83.6 V21.5 C82.1 23.4 79.9 24.4 77.4 24.4 C73.0 24.4 70.4 21.6 70.4 16.8 V7 Z" />
+          <!-- s -->
+          <path d="M100.0 24.4 C95.9 24.4 93.0 22.8 91.8 20.0 L95.4 18.2 C96.2 20.1 97.9 21.1 100.2 21.1 C102.4 21.1 103.8 20.2 103.8 19.0 C103.8 17.9 102.7 17.3 99.6 16.6 C95.2 15.7 92.6 14.3 92.6 11.3 C92.6 8.4 95.4 6.6 99.6 6.6 C103.2 6.6 105.9 7.9 107.2 10.4 L103.7 12.2 C102.9 10.7 101.5 9.8 99.6 9.8 C97.7 9.8 96.6 10.6 96.6 11.6 C96.6 12.6 97.7 13.2 100.7 13.8 C105.1 14.7 107.8 16.2 107.8 19.2 C107.8 22.4 104.7 24.4 100.0 24.4 Z" />
+        </g>
+      </svg>
+      <div class="top-divider" aria-hidden="true"></div>
+      <span class="top-subtitle">On-Premises Firewall Operations</span>
+    </div>
+
+    <nav class="proto-controls" aria-label="Proposal 2 display controls">
+      <button type="button" class="proto-btn" id="theme-light-btn" aria-pressed="true">Light</button>
+      <button type="button" class="proto-btn" id="theme-dark-btn" aria-pressed="false">Dark</button>
+      <button type="button" class="proto-btn error-toggle" id="error-toggle-btn" aria-pressed="false">
+        Error state
+      </button>
+    </nav>
+  </header>
+
+  <div class="workspace">
+    <!-- ======================================================================
+         LEFT COLUMN: Operator Authentication Unit + Error State Inspector
+         ====================================================================== -->
+    <main class="auth-column">
+      <div class="auth-box">
+        <div>
+          <span class="section-tag">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M8 1l6 2.5v4.8c0 3.7-2.6 6.1-6 6.7-3.4-.6-6-3-6-6.7V3.5L8 1z" />
+            </svg>
+            Operator Session Gate
+          </span>
+          <h1 class="auth-title" style="margin-top: 4px;">Sign in</h1>
+          <p class="auth-desc">Select an authentication authority to access estate evidence.</p>
+        </div>
+
+        <form id="login-form" class="form-stack" novalidate>
+          <!-- Authentication Selector (Local account / LDAP) -->
+          <div class="field-group">
+            <div class="field-label-row">
+              <label class="field-label" id="auth-label" for="auth-select">Authentication</label>
+              <span class="mono" style="font-size: 12px; color: var(--nx-on-surface-var);" id="mech-badge">mechanism: local</span>
+            </div>
+            <div class="mech-tabs" role="radiogroup" aria-labelledby="auth-label">
+              <button type="button" class="mech-tab" role="radio" aria-checked="true" data-mech="local">
+                <span>Local account</span>
+                <span class="mono" style="font-size: 11px;">DB</span>
+              </button>
+              <button type="button" class="mech-tab" role="radio" aria-checked="false" data-mech="ldap">
+                <span>LDAP</span>
+                <span class="mono" style="font-size: 11px;">DIR</span>
+              </button>
+            </div>
+            <select id="auth-select" name="mechanism_id" hidden aria-hidden="true">
+              <option value="local" selected>Local account</option>
+              <option value="ldap">LDAP</option>
+            </select>
+          </div>
+
+          <!-- Username -->
+          <div class="field-group">
+            <label class="field-label" for="username-input">Username</label>
+            <div class="input-wrap">
+              <input
+                id="username-input"
+                name="username"
+                type="text"
+                class="text-input mono"
+                autocomplete="username"
+                placeholder="sec.operator"
+                required
+                aria-required="true"
+                aria-invalid="false"
+              />
+            </div>
+          </div>
+
+          <!-- Password -->
+          <div class="field-group">
+            <label class="field-label" for="password-input">Password</label>
+            <div class="input-wrap">
+              <input
+                id="password-input"
+                name="password"
+                type="password"
+                class="text-input"
+                autocomplete="current-password"
+                placeholder="••••••••••••"
+                required
+                aria-required="true"
+                aria-invalid="false"
+              />
+              <button type="button" class="pw-toggle" id="pw-toggle-btn" aria-label="Show password" aria-pressed="false">
+                Show
+              </button>
+            </div>
+          </div>
+
+          <!-- Live Generic Error Banner -->
+          <div id="live-error-banner" class="error-banner" role="alert" aria-live="assertive">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" style="flex-shrink: 0;">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+            </svg>
+            <span>Sign-in failed. Check your details.</span>
+          </div>
+
+          <button type="submit" class="submit-btn">
+            <span>Sign in</span>
+          </button>
+        </form>
+
+        <!-- Second Panel: Error State Specification Card -->
+        <aside class="state-inspector" aria-label="Error state reference panel">
+          <div class="state-inspector-head">
+            <span>Error state panel</span>
+            <button type="button" class="proto-btn" id="panel-error-btn">Toggle live error</button>
+          </div>
+          <div class="error-preview-row" role="status">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" style="flex-shrink: 0;">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+            </svg>
+            <span>Sign-in failed. Check your details.</span>
+          </div>
+        </aside>
+      </div>
+
+      <footer class="page-footer">
+        <span class="mono">neXus · on-premises · version x.y</span>
+        <span class="mono">CLASS 0–1 Gated</span>
+      </footer>
+    </main>
+
+    <!-- ======================================================================
+         RIGHT HERO: Deterministic Policy & Packet Flow Pipeline
+         ====================================================================== -->
+    <section class="pipeline-hero" aria-label="Five-plane evidence pipeline">
+      <div class="pipeline-header">
+        <div class="pipeline-title-block">
+          <h2>SEE → VERIFY → TRACE → RECOVER → OPERATE</h2>
+          <p>
+            Every plane separates configured intent from direct-device runtime truth. Trace packets, audit rule hygiene, and verify HA peer readiness across masked estate endpoints.
+          </p>
+        </div>
+        <span class="status-pill ok mono">123 of 130 targets · Identity verified</span>
+      </div>
+
+      <!-- 5 Animated Horizontal Operational Lanes -->
+      <div class="pipeline-board" aria-hidden="true">
+        <div class="pipeline-lanes">
+          <!-- 1. SEE -->
+          <div class="lane-row">
+            <div class="lane-name">
+              <span class="lane-index">1</span>
+              <span>SEE</span>
+            </div>
+            <div class="lane-svg-wrap">
+              <svg width="100%" height="32" viewBox="0 0 420 32" preserveAspectRatio="none">
+                <line x1="0" y1="16" x2="420" y2="16" stroke="var(--nx-track-stroke)" stroke-width="2" />
+                <line class="stream-line" x1="0" y1="16" x2="420" y2="16" stroke="var(--nx-primary)" stroke-width="2" />
+                <g class="packet-token">
+                  <rect x="10" y="7" width="66" height="18" rx="9" fill="var(--nx-primary)" />
+                  <text x="43" y="19" text-anchor="middle" fill="var(--nx-on-primary)" font-size="10" font-family="monospace" font-weight="600">FW-TANGO-04</text>
+                </g>
+              </svg>
+            </div>
+            <span class="status-pill ok mono">Live · 192.0.2.44</span>
+          </div>
+
+          <!-- 2. VERIFY -->
+          <div class="lane-row">
+            <div class="lane-name">
+              <span class="lane-index">2</span>
+              <span>VERIFY</span>
+            </div>
+            <div class="lane-svg-wrap">
+              <svg width="100%" height="32" viewBox="0 0 420 32" preserveAspectRatio="none">
+                <line x1="0" y1="16" x2="420" y2="16" stroke="var(--nx-track-stroke)" stroke-width="2" />
+                <line class="stream-line fast" x1="0" y1="16" x2="420" y2="16" stroke="var(--nx-brand-teal)" stroke-width="2" />
+                <g class="packet-token">
+                  <rect x="10" y="7" width="66" height="18" rx="9" fill="var(--nx-brand-teal)" />
+                  <text x="43" y="19" text-anchor="middle" fill="#ffffff" font-size="10" font-family="monospace" font-weight="600">CLS-ROMEO-01</text>
+                </g>
+              </svg>
+            </div>
+            <span class="status-pill mem mono">Member-specific · 0 drift</span>
+          </div>
+
+          <!-- 3. TRACE -->
+          <div class="lane-row">
+            <div class="lane-name">
+              <span class="lane-index">3</span>
+              <span>TRACE</span>
+            </div>
+            <div class="lane-svg-wrap">
+              <svg width="100%" height="32" viewBox="0 0 420 32" preserveAspectRatio="none">
+                <line x1="0" y1="16" x2="420" y2="16" stroke="var(--nx-track-stroke)" stroke-width="2" />
+                <line class="stream-line" x1="0" y1="16" x2="420" y2="16" stroke="var(--nx-primary)" stroke-width="2" />
+                <g class="packet-token">
+                  <rect x="10" y="7" width="66" height="18" rx="9" fill="var(--nx-primary)" />
+                  <text x="43" y="19" text-anchor="middle" fill="var(--nx-on-primary)" font-size="10" font-family="monospace" font-weight="600">TCP :443</text>
+                </g>
+              </svg>
+            </div>
+            <span class="status-pill brand mono">Rule #42 · Matched</span>
+          </div>
+
+          <!-- 4. RECOVER -->
+          <div class="lane-row">
+            <div class="lane-name">
+              <span class="lane-index">4</span>
+              <span>RECOVER</span>
+            </div>
+            <div class="lane-svg-wrap">
+              <svg width="100%" height="32" viewBox="0 0 420 32" preserveAspectRatio="none">
+                <line x1="0" y1="16" x2="420" y2="16" stroke="var(--nx-track-stroke)" stroke-width="2" />
+                <line class="stream-line slow" x1="0" y1="16" x2="420" y2="16" stroke="var(--nx-brand-teal)" stroke-width="2" />
+                <g class="packet-token">
+                  <rect x="10" y="7" width="66" height="18" rx="9" fill="var(--nx-brand-teal)" />
+                  <text x="43" y="19" text-anchor="middle" fill="#ffffff" font-size="10" font-family="monospace" font-weight="600">CAS SHA256</text>
+                </g>
+              </svg>
+            </div>
+            <span class="status-pill ok mono">Completed · 02:04</span>
+          </div>
+
+          <!-- 5. OPERATE -->
+          <div class="lane-row">
+            <div class="lane-name">
+              <span class="lane-index">5</span>
+              <span>OPERATE</span>
+            </div>
+            <div class="lane-svg-wrap">
+              <svg width="100%" height="32" viewBox="0 0 420 32" preserveAspectRatio="none">
+                <line x1="0" y1="16" x2="420" y2="16" stroke="var(--nx-track-stroke)" stroke-width="2" />
+                <line class="stream-line fast" x1="0" y1="16" x2="420" y2="16" stroke="var(--nx-primary)" stroke-width="2" />
+                <g class="packet-token">
+                  <rect x="10" y="7" width="66" height="18" rx="9" fill="var(--nx-primary)" />
+                  <text x="43" y="19" text-anchor="middle" fill="var(--nx-on-primary)" font-size="10" font-family="monospace" font-weight="600">FW-JULIET-06</text>
+                </g>
+              </svg>
+            </div>
+            <span class="status-pill neutral mono">Ready · HA Gated</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- New Logo Concept Specimen (Light & Dark Variants) -->
+      <div class="logo-showcase" aria-label="New Five-Plane Conduit Shield logo variants">
+        <div class="logo-showcase-head">
+          <span>New Logo Concept — The Five-Plane Conduit Shield (replaces the X motif)</span>
+          <span class="mono">Inline SVG · Light &amp; Dark</span>
+        </div>
+        <div class="logo-variants-grid">
+          <!-- Light Variant -->
+          <div class="variant-card on-light">
+            <svg width="175" height="34" viewBox="0 0 230 44" role="img" aria-label="neXus Conduit Shield light variant">
+              <path d="M6 10 L22 3 L38 10 V27 C38 34 30 39 22 41 C14 39 6 34 6 27 Z" fill="#eaeefb" stroke="#3457d5" stroke-width="1.8" />
+              <path d="M12 14 H20 L28 22" fill="none" stroke="#1e2f7a" stroke-width="2" stroke-linecap="round" />
+              <path d="M12 19 H22 L31 28" fill="none" stroke="#1f8f7c" stroke-width="2.2" stroke-linecap="round" />
+              <path d="M12 24 H24 L32 32" fill="none" stroke="#3457d5" stroke-width="2.4" stroke-linecap="round" />
+              <path d="M14 29 H22 L27 34" fill="none" stroke="#1f8f7c" stroke-width="2" stroke-linecap="round" />
+              <circle cx="28" cy="22" r="2" fill="#1e2f7a" />
+              <circle cx="31" cy="28" r="2.2" fill="#1f8f7c" />
+              <circle cx="32" cy="32" r="2.2" fill="#3457d5" />
+              <g transform="translate(50, 9)" fill="#171b22">
+                <path d="M0 24 V7 H4.2 V9.6 C5.7 7.6 7.9 6.6 10.6 6.6 C15.0 6.6 17.6 9.4 17.6 14.2 V24 H13.4 V14.9 C13.4 11.8 11.8 10.2 9.2 10.2 C6.4 10.2 4.2 12.1 4.2 15.3 V24 H0 Z" />
+                <path fill-rule="evenodd" d="M31.4 24.4 C25.7 24.4 21.9 20.6 21.9 15.5 C21.9 10.3 25.6 6.6 31.2 6.6 C36.7 6.6 40.1 10.2 40.1 15.3 C40.1 16.0 40.0 16.5 39.9 16.8 H26.2 C26.6 19.5 28.6 21.0 31.5 21.0 C33.7 21.0 35.3 20.1 36.3 18.6 L39.5 20.5 C37.9 23.0 35.1 24.4 31.4 24.4 Z M26.3 13.8 H35.8 C35.5 11.3 33.7 9.9 31.2 9.9 C28.6 9.9 26.8 11.3 26.3 13.8 Z" />
+                <path d="M43.8 2 H48.8 L54.8 11.2 L60.8 2 H65.8 L57.5 13.2 L66.2 24 H61.2 L54.8 15.2 L48.4 24 H43.4 L52.1 13.2 Z" fill="#3457d5" />
+                <circle cx="54.8" cy="13.2" r="2.3" fill="#1f8f7c" />
+                <path d="M70.4 7 H74.6 V16.1 C74.6 19.2 76.2 20.8 78.8 20.8 C81.5 20.8 83.6 18.9 83.6 15.7 V7 H87.8 V24 H83.6 V21.5 C82.1 23.4 79.9 24.4 77.4 24.4 C73.0 24.4 70.4 21.6 70.4 16.8 V7 Z" />
+                <path d="M100.0 24.4 C95.9 24.4 93.0 22.8 91.8 20.0 L95.4 18.2 C96.2 20.1 97.9 21.1 100.2 21.1 C102.4 21.1 103.8 20.2 103.8 19.0 C103.8 17.9 102.7 17.3 99.6 16.6 C95.2 15.7 92.6 14.3 92.6 11.3 C92.6 8.4 95.4 6.6 99.6 6.6 C103.2 6.6 105.9 7.9 107.2 10.4 L103.7 12.2 C102.9 10.7 101.5 9.8 99.6 9.8 C97.7 9.8 96.6 10.6 96.6 11.6 C96.6 12.6 97.7 13.2 100.7 13.8 C105.1 14.7 107.8 16.2 107.8 19.2 C107.8 22.4 104.7 24.4 100.0 24.4 Z" />
+              </g>
+            </svg>
+            <span class="variant-meta">Light Variant<br/>New Shield Motif</span>
+          </div>
+
+          <!-- Dark Variant -->
+          <div class="variant-card on-dark">
+            <svg width="175" height="34" viewBox="0 0 230 44" role="img" aria-label="neXus Conduit Shield dark variant">
+              <path d="M6 10 L22 3 L38 10 V27 C38 34 30 39 22 41 C14 39 6 34 6 27 Z" fill="#1f2a4d" stroke="#7b9cff" stroke-width="1.8" />
+              <path d="M12 14 H20 L28 22" fill="none" stroke="#c9d5ff" stroke-width="2" stroke-linecap="round" />
+              <path d="M12 19 H22 L31 28" fill="none" stroke="#28b59e" stroke-width="2.2" stroke-linecap="round" />
+              <path d="M12 24 H24 L32 32" fill="none" stroke="#7b9cff" stroke-width="2.4" stroke-linecap="round" />
+              <path d="M14 29 H22 L27 34" fill="none" stroke="#28b59e" stroke-width="2" stroke-linecap="round" />
+              <circle cx="28" cy="22" r="2" fill="#c9d5ff" />
+              <circle cx="31" cy="28" r="2.2" fill="#28b59e" />
+              <circle cx="32" cy="32" r="2.2" fill="#7b9cff" />
+              <g transform="translate(50, 9)" fill="#eef1f5">
+                <path d="M0 24 V7 H4.2 V9.6 C5.7 7.6 7.9 6.6 10.6 6.6 C15.0 6.6 17.6 9.4 17.6 14.2 V24 H13.4 V14.9 C13.4 11.8 11.8 10.2 9.2 10.2 C6.4 10.2 4.2 12.1 4.2 15.3 V24 H0 Z" />
+                <path fill-rule="evenodd" d="M31.4 24.4 C25.7 24.4 21.9 20.6 21.9 15.5 C21.9 10.3 25.6 6.6 31.2 6.6 C36.7 6.6 40.1 10.2 40.1 15.3 C40.1 16.0 40.0 16.5 39.9 16.8 H26.2 C26.6 19.5 28.6 21.0 31.5 21.0 C33.7 21.0 35.3 20.1 36.3 18.6 L39.5 20.5 C37.9 23.0 35.1 24.4 31.4 24.4 Z M26.3 13.8 H35.8 C35.5 11.3 33.7 9.9 31.2 9.9 C28.6 9.9 26.8 11.3 26.3 13.8 Z" />
+                <path d="M43.8 2 H48.8 L54.8 11.2 L60.8 2 H65.8 L57.5 13.2 L66.2 24 H61.2 L54.8 15.2 L48.4 24 H43.4 L52.1 13.2 Z" fill="#7b9cff" />
+                <circle cx="54.8" cy="13.2" r="2.3" fill="#28b59e" />
+                <path d="M70.4 7 H74.6 V16.1 C74.6 19.2 76.2 20.8 78.8 20.8 C81.5 20.8 83.6 18.9 83.6 15.7 V7 H87.8 V24 H83.6 V21.5 C82.1 23.4 79.9 24.4 77.4 24.4 C73.0 24.4 70.4 21.6 70.4 16.8 V7 Z" />
+                <path d="M100.0 24.4 C95.9 24.4 93.0 22.8 91.8 20.0 L95.4 18.2 C96.2 20.1 97.9 21.1 100.2 21.1 C102.4 21.1 103.8 20.2 103.8 19.0 C103.8 17.9 102.7 17.3 99.6 16.6 C95.2 15.7 92.6 14.3 92.6 11.3 C92.6 8.4 95.4 6.6 99.6 6.6 C103.2 6.6 105.9 7.9 107.2 10.4 L103.7 12.2 C102.9 10.7 101.5 9.8 99.6 9.8 C97.7 9.8 96.6 10.6 96.6 11.6 C96.6 12.6 97.7 13.2 100.7 13.8 C105.1 14.7 107.8 16.2 107.8 19.2 C107.8 22.4 104.7 24.4 100.0 24.4 Z" />
+              </g>
+            </svg>
+            <span class="variant-meta">Dark Variant<br/>New Shield Motif</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+      // Authentication Mechanism Switch
+      const tabs = document.querySelectorAll('.mech-tab');
+      const select = document.getElementById('auth-select');
+      const badge = document.getElementById('mech-badge');
+
+      function setMech(m) {
+        tabs.forEach((t) => {
+          t.setAttribute('aria-checked', t.getAttribute('data-mech') === m ? 'true' : 'false');
+        });
+        select.value = m;
+        badge.textContent = `mechanism: ${m}`;
+      }
+
+      tabs.forEach((t) => {
+        t.addEventListener('click', () => setMech(t.getAttribute('data-mech')));
+        t.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+            e.preventDefault();
+            const next = t.getAttribute('data-mech') === 'local' ? 'ldap' : 'local';
+            setMech(next);
+            document.querySelector(`.mech-tab[data-mech="${next}"]`).focus();
+          }
+        });
+      });
+
+      // Show/Hide Password
+      const pwInput = document.getElementById('password-input');
+      const pwToggle = document.getElementById('pw-toggle-btn');
+      pwToggle.addEventListener('click', () => {
+        const isPw = pwInput.type === 'password';
+        pwInput.type = isPw ? 'text' : 'password';
+        pwToggle.textContent = isPw ? 'Hide' : 'Show';
+        pwToggle.setAttribute('aria-pressed', isPw ? 'true' : 'false');
+      });
+
+      // Error State Toggle
+      const errorBanner = document.getElementById('live-error-banner');
+      const errorToggleBtn = document.getElementById('error-toggle-btn');
+      const panelErrorBtn = document.getElementById('panel-error-btn');
+      const userInput = document.getElementById('username-input');
+      let hasError = false;
+
+      function updateError(state) {
+        hasError = state;
+        errorBanner.classList.toggle('visible', state);
+        errorToggleBtn.setAttribute('aria-pressed', state ? 'true' : 'false');
+        userInput.setAttribute('aria-invalid', state ? 'true' : 'false');
+        pwInput.setAttribute('aria-invalid', state ? 'true' : 'false');
+      }
+
+      errorToggleBtn.addEventListener('click', () => updateError(!hasError));
+      panelErrorBtn.addEventListener('click', () => updateError(!hasError));
+      document.getElementById('login-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        updateError(true);
+      });
+
+      // Theme Toggle
+      const lightBtn = document.getElementById('theme-light-btn');
+      const darkBtn = document.getElementById('theme-dark-btn');
+      function setTheme(mode) {
+        document.documentElement.setAttribute('data-theme', mode);
+        lightBtn.setAttribute('aria-pressed', mode === 'light' ? 'true' : 'false');
+        darkBtn.setAttribute('aria-pressed', mode === 'dark' ? 'true' : 'false');
+      }
+      lightBtn.addEventListener('click', () => setTheme('light'));
+      darkBtn.addEventListener('click', () => setTheme('dark'));
+    })();
+  </script>
+</body>
+</html>

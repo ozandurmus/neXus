@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>neXus — Sign in (Proposal 4: Quiet Authority)</title>
+  <style>
+    /* ==========================================================================
+       neXus Design Tokens (ui2/frontend/src/theme/m3Theme.ts & tokens.ts)
+       Zero external assets — built for isolated bank network
+       ========================================================================== */
+    :root,
+    :root[data-theme="light"] {
+      --nx-primary: #3457d5;
+      --nx-primary-hover: #2645b8;
+      --nx-on-primary: #ffffff;
+      --nx-primary-container: #eaeefb;
+      --nx-on-primary-container: #1e2f7a;
+      --nx-surface: #f5f6f8;
+      --nx-surface-dim: #e3e7ec;
+      --nx-sc-lowest: #ffffff;
+      --nx-sc-low: #fafbfc;
+      --nx-sc: #f1f3f6;
+      --nx-sc-high: #e3e7ec;
+      --nx-sc-highest: #cfd5dd;
+      --nx-on-surface: #171b22;
+      --nx-on-surface-var: #5f6978;
+      --nx-outline: #9aa3b0;
+      --nx-outline-var: #e3e7ec;
+      --nx-error: #d03b3b;
+      --nx-on-error: #ffffff;
+      --nx-error-container: #fbe7e7;
+      --nx-on-error-container: #8f1f1f;
+      --nx-success-container: #e3f5e3;
+      --nx-on-success-container: #087a08;
+      --nx-neutral-ink: #5b6473;
+      --nx-brand-teal: #1f8f7c;
+      --nx-brand-blue: #3b63d1;
+      --nx-e2: 0 8px 28px rgba(15, 23, 42, 0.06);
+      --nx-aurora-a: rgba(52, 87, 213, 0.09);
+      --nx-aurora-b: rgba(31, 143, 124, 0.08);
+      color-scheme: light;
+    }
+
+    :root[data-theme="dark"] {
+      --nx-primary: #7b9cff;
+      --nx-primary-hover: #96b0ff;
+      --nx-on-primary: #0f1216;
+      --nx-primary-container: #1f2a4d;
+      --nx-on-primary-container: #c9d5ff;
+      --nx-surface: #0f1216;
+      --nx-surface-dim: #0b0e11;
+      --nx-sc-lowest: #161a20;
+      --nx-sc-low: #181d24;
+      --nx-sc: #1c2129;
+      --nx-sc-high: #272e38;
+      --nx-sc-highest: #333b47;
+      --nx-on-surface: #eef1f5;
+      --nx-on-surface-var: #a5adba;
+      --nx-outline: #5b6473;
+      --nx-outline-var: #272e38;
+      --nx-error: #ef6a6a;
+      --nx-on-error: #0f1216;
+      --nx-error-container: #3a1d1f;
+      --nx-on-error-container: #ffb4b4;
+      --nx-success-container: #16301a;
+      --nx-on-success-container: #7ee07e;
+      --nx-neutral-ink: #a5adba;
+      --nx-brand-teal: #28b59e;
+      --nx-brand-blue: #5a82f7;
+      --nx-e2: 0 16px 40px rgba(0, 0, 0, 0.45);
+      --nx-aurora-a: rgba(123, 156, 255, 0.12);
+      --nx-aurora-b: rgba(40, 181, 158, 0.10);
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 20px;
+      background-color: var(--nx-surface);
+      color: var(--nx-on-surface);
+      font-variant-numeric: tabular-nums;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .mono {
+      font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 18px;
+    }
+
+    .skip-link {
+      position: absolute;
+      top: -48px;
+      left: 16px;
+      z-index: 999;
+      padding: 8px 16px;
+      background: var(--nx-primary);
+      color: var(--nx-on-primary);
+      font-weight: 600;
+      border-radius: 8px;
+      text-decoration: none;
+    }
+    .skip-link:focus {
+      top: 12px;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--nx-primary);
+      outline-offset: 2px;
+    }
+
+    /* ==========================================================================
+       Swiss Architectural Frame Grid (Works cleanly at 1280, 1440×900, 1920)
+       ========================================================================== */
+    .swiss-frame {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: 56px 1fr 48px;
+    }
+
+    /* Top Architectural Bar */
+    .swiss-header {
+      border-bottom: 1px solid var(--nx-outline-var);
+      background: var(--nx-sc-lowest);
+      padding: 0 clamp(24px, 3.5vw, 48px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header-index {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--nx-on-surface-var);
+    }
+
+    .proto-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .proto-btn {
+      appearance: none;
+      border: 1px solid var(--nx-outline-var);
+      background: var(--nx-sc);
+      color: var(--nx-on-surface);
+      padding: 5px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .proto-btn:hover {
+      background: var(--nx-sc-high);
+    }
+    .proto-btn[aria-pressed="true"] {
+      background: var(--nx-primary-container);
+      color: var(--nx-on-primary-container);
+      border-color: var(--nx-primary);
+      font-weight: 600;
+    }
+    .proto-btn.error-toggle[aria-pressed="true"] {
+      background: var(--nx-error-container);
+      color: var(--nx-on-error-container);
+      border-color: var(--nx-error);
+    }
+
+    /* Center Split Body */
+    .swiss-body {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+    }
+
+    /* Left Pane: Subtle Kinetic Alignment Dial + Logo Light/Dark Specimen */
+    .instrument-pane {
+      position: relative;
+      border-right: 1px solid var(--nx-outline-var);
+      padding: clamp(28px, 3.5vw, 48px);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      background: var(--nx-sc-low);
+    }
+
+    /* Subtle Ambient Aurora Glow */
+    .ambient-orb {
+      position: absolute;
+      width: 480px;
+      height: 480px;
+      border-radius: 50%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, var(--nx-aurora-a) 0%, var(--nx-aurora-b) 45%, transparent 72%);
+      filter: blur(24px);
+      pointer-events: none;
+      animation: ambientBreathe 14s ease-in-out infinite alternate;
+    }
+
+    @keyframes ambientBreathe {
+      0% { transform: translate(-52%, -48%) scale(0.94); opacity: 0.75; }
+      100% { transform: translate(-48%, -52%) scale(1.08); opacity: 1; }
+    }
+
+    .instrument-top {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 500;
+    }
+    .status-pill.ok {
+      background: var(--nx-success-container);
+      color: var(--nx-on-success-container);
+    }
+    .status-pill.neutral {
+      background: var(--nx-sc-high);
+      color: var(--nx-neutral-ink);
+    }
+
+    /* Horological / Vernier Alignment Dial */
+    .dial-stage {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: auto 0;
+      padding: 12px 0;
+    }
+
+    .vernier-outer {
+      transform-origin: 150px 150px;
+      animation: slowTurnCW 64s linear infinite;
+    }
+
+    .vernier-inner {
+      transform-origin: 150px 150px;
+      animation: slowTurnCCW 48s linear infinite;
+    }
+
+    @keyframes slowTurnCW {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes slowTurnCCW {
+      from { transform: rotate(360deg); }
+      to { transform: rotate(0deg); }
+    }
+
+    .instrument-bottom {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .editorial-quote h1 {
+      font-size: 22px;
+      line-height: 28px;
+      font-weight: 600;
+      color: var(--nx-on-surface);
+      margin-bottom: 4px;
+    }
+    .editorial-quote p {
+      font-size: 14px;
+      line-height: 20px;
+      color: var(--nx-on-surface-var);
+      max-width: 520px;
+    }
+
+    /* Light & Dark Logo Variant Cards */
+    .logo-specimen-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .logo-card {
+      padding: 12px 14px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .logo-card.light-surface {
+      background: #ffffff;
+      border: 1px solid #cfd5dd;
+      color: #171b22;
+    }
+    .logo-card.dark-surface {
+      background: #0f1216;
+      border: 1px solid #272e38;
+      color: #eef1f5;
+    }
+    .logo-card-tag {
+      font-size: 11px;
+      line-height: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      opacity: 0.72;
+      text-align: right;
+    }
+
+    /* Right Pane: Minimal Premium Authentication Console */
+    .console-pane {
+      background: var(--nx-sc-lowest);
+      padding: clamp(28px, 3.5vw, 48px);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .console-inner {
+      width: 100%;
+      max-width: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    .console-head {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--nx-outline-var);
+    }
+
+    .console-title {
+      font-size: 22px;
+      line-height: 28px;
+      font-weight: 600;
+      color: var(--nx-on-surface);
+    }
+
+    .console-sub {
+      font-size: 14px;
+      line-height: 20px;
+      color: var(--nx-on-surface-var);
+    }
+
+    .form-fields {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    label.field-label {
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--nx-on-surface-var);
+    }
+
+    .minimal-auth-switch {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border: 1px solid var(--nx-outline);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--nx-sc-low);
+    }
+
+    .switch-opt {
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--nx-on-surface-var);
+      font-size: 13px;
+      line-height: 18px;
+      font-weight: 600;
+      padding: 9px 12px;
+      cursor: pointer;
+      transition: background 140ms ease, color 140ms ease;
+    }
+    .switch-opt:first-child {
+      border-right: 1px solid var(--nx-outline-var);
+    }
+    .switch-opt[aria-checked="true"] {
+      background: var(--nx-primary);
+      color: var(--nx-on-primary);
+    }
+
+    .input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .text-input {
+      width: 100%;
+      height: 40px;
+      padding: 8px 12px;
+      font-size: 14px;
+      line-height: 20px;
+      color: var(--nx-on-surface);
+      background: var(--nx-sc-low);
+      border: 1px solid var(--nx-outline);
+      border-radius: 8px;
+    }
+    .text-input:focus {
+      background: var(--nx-sc-lowest);
+      border-color: var(--nx-primary);
+      outline: 2px solid var(--nx-primary);
+      outline-offset: 1px;
+    }
+    .text-input[aria-invalid="true"] {
+      border-color: var(--nx-error);
+    }
+
+    .pw-toggle {
+      position: absolute;
+      right: 6px;
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--nx-on-surface-var);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .error-banner {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: var(--nx-error-container);
+      color: var(--nx-on-error-container);
+      border: 1px solid var(--nx-error);
+      font-size: 13px;
+      line-height: 18px;
+      font-weight: 500;
+    }
+    .error-banner.visible {
+      display: flex;
+    }
+
+    .submit-btn {
+      width: 100%;
+      height: 40px;
+      border: none;
+      border-radius: 20px;
+      background: var(--nx-primary);
+      color: var(--nx-on-primary);
+      font-size: 14px;
+      line-height: 20px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .submit-btn:hover {
+      background: var(--nx-primary-hover);
+    }
+
+    /* Second Panel: Minimal Error Specification Drawer */
+    .second-panel {
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: var(--nx-sc);
+      border: 1px solid var(--nx-outline-var);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .second-panel-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--nx-on-surface-var);
+    }
+
+    .error-sample {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--nx-error-container);
+      color: var(--nx-on-error-container);
+      font-size: 13px;
+      line-height: 18px;
+      font-weight: 500;
+    }
+
+    /* Bottom Architectural Footer */
+    .swiss-footer {
+      border-top: 1px solid var(--nx-outline-var);
+      background: var(--nx-sc-lowest);
+      padding: 0 clamp(24px, 3.5vw, 48px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      line-height: 16px;
+      color: var(--nx-on-surface-var);
+    }
+
+    @media (max-width: 1120px) {
+      .swiss-body {
+        grid-template-columns: 1fr;
+      }
+      .instrument-pane {
+        border-right: none;
+        border-bottom: 1px solid var(--nx-outline-var);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a href="#login-form" class="skip-link">Skip to sign-in form</a>
+
+  <div class="swiss-frame">
+    <!-- Top Bar -->
+    <header class="swiss-header">
+      <div class="header-index">
+        <span>SEE → VERIFY → TRACE → RECOVER → OPERATE</span>
+        <span class="mono" style="text-transform: none;">Alignment &amp; Evidence Plane</span>
+      </div>
+
+      <nav class="proto-controls" aria-label="Proposal 4 display controls">
+        <button type="button" class="proto-btn" id="theme-light-btn" aria-pressed="true">Light</button>
+        <button type="button" class="proto-btn" id="theme-dark-btn" aria-pressed="false">Dark</button>
+        <button type="button" class="proto-btn error-toggle" id="error-toggle-btn" aria-pressed="false">
+          Error state
+        </button>
+      </nav>
+    </header>
+
+    <!-- Main Split Stage -->
+    <div class="swiss-body">
+      <!-- LEFT PANE: Kinetic Vernier Alignment Dial + Evolved Ribbon X Logo Variants -->
+      <section class="instrument-pane" aria-label="Brand instrument and logo variants">
+        <div class="ambient-orb" aria-hidden="true"></div>
+
+        <div class="instrument-top">
+          <!-- Primary Logo Lockup (Evolved Continuous Ribbon X) -->
+          <svg width="216" height="42" viewBox="0 0 236 46" role="img" aria-label="neXus — Continuous Alignment Ribbon X logo">
+            <rect x="2" y="2" width="42" height="42" rx="10" fill="var(--nx-sc-lowest)" stroke="var(--nx-outline-var)" stroke-width="1.5" />
+            <!-- Continuous Ribbon X Mark (Intent <-> Runtime Alignment) -->
+            <path d="M12 13 C18 13, 28 33, 34 33" fill="none" stroke="var(--nx-primary)" stroke-width="4.2" stroke-linecap="round" />
+            <path d="M34 13 C28 13, 18 33, 12 33" fill="none" stroke="var(--nx-brand-teal)" stroke-width="4.2" stroke-linecap="round" />
+            <circle cx="12" cy="13" r="2.6" fill="var(--nx-primary)" />
+            <circle cx="34" cy="33" r="2.6" fill="var(--nx-primary)" />
+            <circle cx="34" cy="13" r="2.6" fill="var(--nx-brand-teal)" />
+            <circle cx="12" cy="33" r="2.6" fill="var(--nx-brand-teal)" />
+            <circle cx="23" cy="23" r="3" fill="var(--nx-sc-lowest)" stroke="var(--nx-on-surface)" stroke-width="1.6" />
+
+            <!-- Swiss Neo-Grotesque Wordmark with Ribbon X -->
+            <g transform="translate(56, 10)" fill="var(--nx-on-surface)">
+              <path d="M0 24 V7 H4.2 V9.6 C5.7 7.6 7.9 6.6 10.6 6.6 C15.0 6.6 17.6 9.4 17.6 14.2 V24 H13.4 V14.9 C13.4 11.8 11.8 10.2 9.2 10.2 C6.4 10.2 4.2 12.1 4.2 15.3 V24 H0 Z" />
+              <path fill-rule="evenodd" d="M31.4 24.4 C25.7 24.4 21.9 20.6 21.9 15.5 C21.9 10.3 25.6 6.6 31.2 6.6 C36.7 6.6 40.1 10.2 40.1 15.3 C40.1 16.0 40.0 16.5 39.9 16.8 H26.2 C26.6 19.5 28.6 21.0 31.5 21.0 C33.7 21.0 35.3 20.1 36.3 18.6 L39.5 20.5 C37.9 23.0 35.1 24.4 31.4 24.4 Z M26.3 13.8 H35.8 C35.5 11.3 33.7 9.9 31.2 9.9 C28.6 9.9 26.8 11.3 26.3 13.8 Z" />
+              <!-- Smooth Ribbon X in Wordmark -->
+              <path d="M45 3 C51 3, 59 23, 65 23" fill="none" stroke="var(--nx-primary)" stroke-width="4" stroke-linecap="round" />
+              <path d="M65 3 C59 3, 51 23, 45 23" fill="none" stroke="var(--nx-brand-teal)" stroke-width="4" stroke-linecap="round" />
+              <circle cx="55" cy="13" r="2.2" fill="var(--nx-sc-lowest)" stroke="var(--nx-on-surface)" stroke-width="1.3" />
+              <path d="M71.4 7 H75.6 V16.1 C75.6 19.2 77.2 20.8 79.8 20.8 C82.5 20.8 84.6 18.9 84.6 15.7 V7 H88.8 V24 H84.6 V21.5 C83.1 23.4 80.9 24.4 78.4 24.4 C74.0 24.4 71.4 21.6 71.4 16.8 V7 Z" />
+              <path d="M101.0 24.4 C96.9 24.4 94.0 22.8 92.8 20.0 L96.4 18.2 C97.2 20.1 98.9 21.1 101.2 21.1 C103.4 21.1 104.8 20.2 104.8 19.0 C104.8 17.9 103.7 17.3 100.6 16.6 C96.2 15.7 93.6 14.3 93.6 11.3 C93.6 8.4 96.4 6.6 100.6 6.6 C104.2 6.6 106.9 7.9 108.2 10.4 L104.7 12.2 C103.9 10.7 102.5 9.8 100.6 9.8 C98.7 9.8 97.6 10.6 97.6 11.6 C97.6 12.6 98.7 13.2 101.7 13.8 C106.1 14.7 108.8 16.2 108.8 19.2 C108.8 22.4 105.7 24.4 101.0 24.4 Z" />
+            </g>
+          </svg>
+
+          <span class="status-pill ok mono">Compliant · Effective state</span>
+        </div>
+
+        <!-- Center Subtle Kinetic Vernier Instrument -->
+        <div class="dial-stage" aria-hidden="true">
+          <svg width="260" height="260" viewBox="0 0 300 300">
+            <!-- Outer Fixed Calibration Ring -->
+            <circle cx="150" cy="150" r="136" fill="none" stroke="var(--nx-outline-var)" stroke-width="1" />
+            <!-- Slowly Rotating Outer Vernier Ring (Configured Intent) -->
+            <g class="vernier-outer">
+              <circle cx="150" cy="150" r="120" fill="none" stroke="var(--nx-primary)" stroke-width="1.5" stroke-dasharray="4 14" />
+              <circle cx="150" cy="30" r="4" fill="var(--nx-primary)" />
+              <circle cx="150" cy="270" r="4" fill="var(--nx-primary)" />
+            </g>
+            <!-- Slowly Counter-Rotating Inner Vernier Ring (Effective Runtime Truth) -->
+            <g class="vernier-inner">
+              <circle cx="150" cy="150" r="92" fill="none" stroke="var(--nx-brand-teal)" stroke-width="1.5" stroke-dasharray="18 10" />
+              <circle cx="242" cy="150" r="4" fill="var(--nx-brand-teal)" />
+              <circle cx="58" cy="150" r="4" fill="var(--nx-brand-teal)" />
+            </g>
+            <!-- Central Ribbon X Emblem -->
+            <circle cx="150" cy="150" r="54" fill="var(--nx-sc-lowest)" stroke="var(--nx-outline-var)" stroke-width="1.5" />
+            <path d="M130 132 C142 132, 158 168, 170 168" fill="none" stroke="var(--nx-primary)" stroke-width="5.5" stroke-linecap="round" />
+            <path d="M170 132 C158 132, 142 168, 130 168" fill="none" stroke="var(--nx-brand-teal)" stroke-width="5.5" stroke-linecap="round" />
+            <circle cx="150" cy="150" r="4.5" fill="var(--nx-sc-lowest)" stroke="var(--nx-on-surface)" stroke-width="2" />
+          </svg>
+        </div>
+
+        <!-- Bottom Description + Light & Dark Variants Specimen -->
+        <div class="instrument-bottom">
+          <div class="editorial-quote">
+            <h1>Precision alignment between intent and runtime truth</h1>
+            <p>
+              Quiet, high-contrast clarity for banking firewall operations. Continuous corroboration across Check Point, Palo Alto, F5, and Citrix estates.
+            </p>
+          </div>
+
+          <div class="logo-specimen-row" aria-label="New Continuous Ribbon X logo in light and dark variants">
+            <!-- Light Variant -->
+            <div class="logo-card light-surface">
+              <svg width="162" height="32" viewBox="0 0 236 46" role="img" aria-label="Ribbon X logo light variant">
+                <rect x="2" y="2" width="42" height="42" rx="10" fill="#f5f6f8" stroke="#cfd5dd" stroke-width="1.5" />
+                <path d="M12 13 C18 13, 28 33, 34 33" fill="none" stroke="#3457d5" stroke-width="4.2" stroke-linecap="round" />
+                <path d="M34 13 C28 13, 18 33, 12 33" fill="none" stroke="#1f8f7c" stroke-width="4.2" stroke-linecap="round" />
+                <circle cx="23" cy="23" r="3" fill="#ffffff" stroke="#171b22" stroke-width="1.6" />
+                <g transform="translate(56, 10)" fill="#171b22">
+                  <path d="M0 24 V7 H4.2 V9.6 C5.7 7.6 7.9 6.6 10.6 6.6 C15.0 6.6 17.6 9.4 17.6 14.2 V24 H13.4 V14.9 C13.4 11.8 11.8 10.2 9.2 10.2 C6.4 10.2 4.2 12.1 4.2 15.3 V24 H0 Z" />
+                  <path fill-rule="evenodd" d="M31.4 24.4 C25.7 24.4 21.9 20.6 21.9 15.5 C21.9 10.3 25.6 6.6 31.2 6.6 C36.7 6.6 40.1 10.2 40.1 15.3 C40.1 16.0 40.0 16.5 39.9 16.8 H26.2 C26.6 19.5 28.6 21.0 31.5 21.0 C33.7 21.0 35.3 20.1 36.3 18.6 L39.5 20.5 C37.9 23.0 35.1 24.4 31.4 24.4 Z M26.3 13.8 H35.8 C35.5 11.3 33.7 9.9 31.2 9.9 C28.6 9.9 26.8 11.3 26.3 13.8 Z" />
+                  <path d="M45 3 C51 3, 59 23, 65 23" fill="none" stroke="#3457d5" stroke-width="4" stroke-linecap="round" />
+                  <path d="M65 3 C59 3, 51 23, 45 23" fill="none" stroke="#1f8f7c" stroke-width="4" stroke-linecap="round" />
+                  <circle cx="55" cy="13" r="2.2" fill="#ffffff" stroke="#171b22" stroke-width="1.3" />
+                  <path d="M71.4 7 H75.6 V16.1 C75.6 19.2 77.2 20.8 79.8 20.8 C82.5 20.8 84.6 18.9 84.6 15.7 V7 H88.8 V24 H84.6 V21.5 C83.1 23.4 80.9 24.4 78.4 24.4 C74.0 24.4 71.4 21.6 71.4 16.8 V7 Z" />
+                  <path d="M101.0 24.4 C96.9 24.4 94.0 22.8 92.8 20.0 L96.4 18.2 C97.2 20.1 98.9 21.1 101.2 21.1 C103.4 21.1 104.8 20.2 104.8 19.0 C104.8 17.9 103.7 17.3 100.6 16.6 C96.2 15.7 93.6 14.3 93.6 11.3 C93.6 8.4 96.4 6.6 100.6 6.6 C104.2 6.6 106.9 7.9 108.2 10.4 L104.7 12.2 C103.9 10.7 102.5 9.8 100.6 9.8 C98.7 9.8 97.6 10.6 97.6 11.6 C97.6 12.6 98.7 13.2 101.7 13.8 C106.1 14.7 108.8 16.2 108.8 19.2 C108.8 22.4 105.7 24.4 101.0 24.4 Z" />
+                </g>
+              </svg>
+              <span class="logo-card-tag">Light Variant<br/>Evolved Ribbon X</span>
+            </div>
+
+            <!-- Dark Variant -->
+            <div class="logo-card dark-surface">
+              <svg width="162" height="32" viewBox="0 0 236 46" role="img" aria-label="Ribbon X logo dark variant">
+                <rect x="2" y="2" width="42" height="42" rx="10" fill="#161a20" stroke="#272e38" stroke-width="1.5" />
+                <path d="M12 13 C18 13, 28 33, 34 33" fill="none" stroke="#7b9cff" stroke-width="4.2" stroke-linecap="round" />
+                <path d="M34 13 C28 13, 18 33, 12 33" fill="none" stroke="#28b59e" stroke-width="4.2" stroke-linecap="round" />
+                <circle cx="23" cy="23" r="3" fill="#0f1216" stroke="#eef1f5" stroke-width="1.6" />
+                <g transform="translate(56, 10)" fill="#eef1f5">
+                  <path d="M0 24 V7 H4.2 V9.6 C5.7 7.6 7.9 6.6 10.6 6.6 C15.0 6.6 17.6 9.4 17.6 14.2 V24 H13.4 V14.9 C13.4 11.8 11.8 10.2 9.2 10.2 C6.4 10.2 4.2 12.1 4.2 15.3 V24 H0 Z" />
+                  <path fill-rule="evenodd" d="M31.4 24.4 C25.7 24.4 21.9 20.6 21.9 15.5 C21.9 10.3 25.6 6.6 31.2 6.6 C36.7 6.6 40.1 10.2 40.1 15.3 C40.1 16.0 40.0 16.5 39.9 16.8 H26.2 C26.6 19.5 28.6 21.0 31.5 21.0 C33.7 21.0 35.3 20.1 36.3 18.6 L39.5 20.5 C37.9 23.0 35.1 24.4 31.4 24.4 Z M26.3 13.8 H35.8 C35.5 11.3 33.7 9.9 31.2 9.9 C28.6 9.9 26.8 11.3 26.3 13.8 Z" />
+                  <path d="M45 3 C51 3, 59 23, 65 23" fill="none" stroke="#7b9cff" stroke-width="4" stroke-linecap="round" />
+                  <path d="M65 3 C59 3, 51 23, 45 23" fill="none" stroke="#28b59e" stroke-width="4" stroke-linecap="round" />
+                  <circle cx="55" cy="13" r="2.2" fill="#0f1216" stroke="#eef1f5" stroke-width="1.3" />
+                  <path d="M71.4 7 H75.6 V16.1 C75.6 19.2 77.2 20.8 79.8 20.8 C82.5 20.8 84.6 18.9 84.6 15.7 V7 H88.8 V24 H84.6 V21.5 C83.1 23.4 80.9 24.4 78.4 24.4 C74.0 24.4 71.4 21.6 71.4 16.8 V7 Z" />
+                  <path d="M101.0 24.4 C96.9 24.4 94.0 22.8 92.8 20.0 L96.4 18.2 C97.2 20.1 98.9 21.1 101.2 21.1 C103.4 21.1 104.8 20.2 104.8 19.0 C104.8 17.9 103.7 17.3 100.6 16.6 C96.2 15.7 93.6 14.3 93.6 11.3 C93.6 8.4 96.4 6.6 100.6 6.6 C104.2 6.6 106.9 7.9 108.2 10.4 L104.7 12.2 C103.9 10.7 102.5 9.8 100.6 9.8 C98.7 9.8 97.6 10.6 97.6 11.6 C97.6 12.6 98.7 13.2 101.7 13.8 C106.1 14.7 108.8 16.2 108.8 19.2 C108.8 22.4 105.7 24.4 101.0 24.4 Z" />
+                </g>
+              </svg>
+              <span class="logo-card-tag">Dark Variant<br/>Evolved Ribbon X</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT PANE: Minimal Premium Sign-In Console + Error State Second Panel -->
+      <main class="console-pane">
+        <div class="console-inner">
+          <div class="console-head">
+            <h2 class="console-title">Sign in</h2>
+            <p class="console-sub">Enter your operator credentials to continue.</p>
+          </div>
+
+          <form id="login-form" class="form-fields" novalidate>
+            <!-- Authentication Selector -->
+            <div class="field-group">
+              <div class="field-label-row">
+                <label class="field-label" id="auth-switch-label" for="auth-select">Authentication</label>
+                <span class="mono" style="font-size: 12px; color: var(--nx-on-surface-var);" id="auth-caption">Local store</span>
+              </div>
+              <div class="minimal-auth-switch" role="radiogroup" aria-labelledby="auth-switch-label">
+                <button type="button" class="switch-opt" role="radio" aria-checked="true" data-mech="local">
+                  Local account
+                </button>
+                <button type="button" class="switch-opt" role="radio" aria-checked="false" data-mech="ldap">
+                  LDAP
+                </button>
+              </div>
+              <select id="auth-select" name="mechanism_id" hidden aria-hidden="true">
+                <option value="local" selected>Local account</option>
+                <option value="ldap">LDAP</option>
+              </select>
+            </div>
+
+            <!-- Username -->
+            <div class="field-group">
+              <label class="field-label" for="username-input">Username</label>
+              <div class="input-wrap">
+                <input
+                  id="username-input"
+                  name="username"
+                  type="text"
+                  class="text-input mono"
+                  autocomplete="username"
+                  placeholder="operator"
+                  required
+                  aria-required="true"
+                  aria-invalid="false"
+                />
+              </div>
+            </div>
+
+            <!-- Password -->
+            <div class="field-group">
+              <label class="field-label" for="password-input">Password</label>
+              <div class="input-wrap">
+                <input
+                  id="password-input"
+                  name="password"
+                  type="password"
+                  class="text-input"
+                  autocomplete="current-password"
+                  placeholder="••••••••••••"
+                  required
+                  aria-required="true"
+                  aria-invalid="false"
+                />
+                <button type="button" class="pw-toggle" id="pw-toggle-btn" aria-label="Show password" aria-pressed="false">
+                  Show
+                </button>
+              </div>
+            </div>
+
+            <!-- Live Error Banner -->
+            <div id="live-error-banner" class="error-banner" role="alert" aria-live="assertive">
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" style="flex-shrink: 0;">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+              </svg>
+              <span>Sign-in failed. Check your details.</span>
+            </div>
+
+            <button type="submit" class="submit-btn">
+              <span>Sign in</span>
+            </button>
+          </form>
+
+          <!-- Second Panel: Error State Specification -->
+          <aside class="second-panel" aria-label="Error state preview panel">
+            <div class="second-panel-top">
+              <span>Error state panel</span>
+              <button type="button" class="proto-btn" id="inline-err-btn">Toggle on form</button>
+            </div>
+            <div class="error-sample" role="status">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" style="flex-shrink: 0;">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+              </svg>
+              <span>Sign-in failed. Check your details.</span>
+            </div>
+          </aside>
+        </div>
+      </main>
+    </div>
+
+    <!-- Mandatory Footer -->
+    <footer class="swiss-footer">
+      <span class="mono">neXus · on-premises · version x.y</span>
+      <span class="mono">FW-TANGO-04 · 192.0.2.1 · Identity verified</span>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      // Auth Switch
+      const opts = document.querySelectorAll('.switch-opt');
+      const select = document.getElementById('auth-select');
+      const caption = document.getElementById('auth-caption');
+
+      function setMech(m) {
+        opts.forEach((o) => {
+          o.setAttribute('aria-checked', o.getAttribute('data-mech') === m ? 'true' : 'false');
+        });
+        select.value = m;
+        caption.textContent = m === 'ldap' ? 'Corporate LDAPS' : 'Local store';
+      }
+
+      opts.forEach((o) => {
+        o.addEventListener('click', () => setMech(o.getAttribute('data-mech')));
+        o.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+            e.preventDefault();
+            const next = o.getAttribute('data-mech') === 'local' ? 'ldap' : 'local';
+            setMech(next);
+            document.querySelector(`.switch-opt[data-mech="${next}"]`).focus();
+          }
+        });
+      });
+
+      // Password Visibility
+      const pwInput = document.getElementById('password-input');
+      const pwToggle = document.getElementById('pw-toggle-btn');
+      pwToggle.addEventListener('click', () => {
+        const isPw = pwInput.type === 'password';
+        pwInput.type = isPw ? 'text' : 'password';
+        pwToggle.textContent = isPw ? 'Hide' : 'Show';
+        pwToggle.setAttribute('aria-pressed', isPw ? 'true' : 'false');
+      });
+
+      // Error State Toggle
+      const errorBanner = document.getElementById('live-error-banner');
+      const errorToggleBtn = document.getElementById('error-toggle-btn');
+      const inlineErrBtn = document.getElementById('inline-err-btn');
+      const userInput = document.getElementById('username-input');
+      let err = false;
+
+      function setErr(state) {
+        err = state;
+        errorBanner.classList.toggle('visible', state);
+        errorToggleBtn.setAttribute('aria-pressed', state ? 'true' : 'false');
+        userInput.setAttribute('aria-invalid', state ? 'true' : 'false');
+        pwInput.setAttribute('aria-invalid', state ? 'true' : 'false');
+      }
+
+      errorToggleBtn.addEventListener('click', () => setErr(!err));
+      inlineErrBtn.addEventListener('click', () => setErr(!err));
+      document.getElementById('login-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        setErr(true);
+      });
+
+      // Theme Toggle
+      const lightBtn = document.getElementById('theme-light-btn');
+      const darkBtn = document.getElementById('theme-dark-btn');
+      function setTheme(mode) {
+        document.documentElement.setAttribute('data-theme', mode);
+        lightBtn.setAttribute('aria-pressed', mode === 'light' ? 'true' : 'false');
+        darkBtn.setAttribute('aria-pressed', mode === 'dark' ? 'true' : 'false');
+      }
+      lightBtn.addEventListener('click', () => setTheme('light'));
+      darkBtn.addEventListener('click', () => setTheme('dark'));
+    })();
+  </script>
+</body>
+</html>

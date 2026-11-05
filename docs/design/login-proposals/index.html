@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>neXus login proposals</title>
+<style>
+  :root { --bg:#0f141b; --card:#161d27; --ink:#e4e9f0; --muted:#98a3b3; --line:#273142; --accent:#7fb2ec; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font: 14px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; padding: 24px 32px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.lede { color: var(--muted); margin: 0 0 20px; }
+  h2 { font-size: 16px; margin: 28px 0 12px; color: var(--accent); letter-spacing: .04em; text-transform: uppercase; }
+  .grid { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 16px; }
+  .tile { background:var(--card); border:1px solid var(--line); border-radius: 10px; overflow:hidden; cursor:pointer; transition: border-color .15s; }
+  .tile:hover, .tile:focus-visible { border-color: var(--accent); outline: none; }
+  .frame { position:relative; width:100%; aspect-ratio: 16/10; overflow:hidden; background:#000; }
+  .frame iframe { position:absolute; top:0; left:0; width:1440px; height:900px; border:0; transform-origin: 0 0; pointer-events:none; }
+  .missing { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:13px; }
+  .cap { padding: 8px 12px; display:flex; justify-content:space-between; gap:8px; }
+  .cap b { font-weight:600; }
+  .cap span { color: var(--muted); }
+  dialog { width: 96vw; height: 94vh; max-width: none; padding:0; border:1px solid var(--line); border-radius: 10px; background: var(--bg); }
+  dialog::backdrop { background: rgba(0,0,0,.7); }
+  dialog header { display:flex; justify-content:space-between; align-items:center; padding: 8px 12px; color: var(--ink); }
+  dialog iframe { width:100%; height: calc(100% - 44px); border:0; background:#fff; }
+  dialog button { background: var(--card); color: var(--ink); border:1px solid var(--line); border-radius:6px; padding:4px 12px; cursor:pointer; }
+  @media (max-width: 1200px) { .grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+</style>
+</head>
+<body>
+<h1>neXus sign-in and logo proposals</h1>
+<p class="lede">Twelve proposals: 4 from Fable, 4 from Opus and 4 from Argon. Each preview runs live. Click a tile to open it full size; each proposal also has its own preview buttons for the error state and the logo sheet.</p>
+<div id="groups"></div>
+<dialog id="dlg"><header><b id="dlgTitle"></b><button id="dlgClose" type="button">Close</button></header><iframe id="dlgFrame" title="Proposal full view"></iframe></dialog>
+<script>
+  const groups = [["fable","Fable"],["opus","Opus"],["argon","Argon"]];
+  const root = document.getElementById("groups");
+  for (const [dir, label] of groups) {
+    const h = document.createElement("h2"); h.textContent = label; root.appendChild(h);
+    const grid = document.createElement("div"); grid.className = "grid"; root.appendChild(grid);
+    for (let i = 1; i <= 4; i++) {
+      const src = `${dir}/proposal-${i}.html`;
+      const tile = document.createElement("div"); tile.className = "tile"; tile.tabIndex = 0;
+      tile.innerHTML = `<div class="frame"><div class="missing">Not ready yet</div></div><div class="cap"><b>${label} ${i}</b><span>${src}</span></div>`;
+      grid.appendChild(tile);
+      const frame = tile.querySelector(".frame");
+      { const f = document.createElement("iframe"); f.src = src; f.title = `${label} ${i}`; f.setAttribute("tabindex","-1"); frame.querySelector(".missing").remove(); frame.appendChild(f); const fit = () => f.style.transform = `scale(${frame.clientWidth / 1440})`; fit(); new ResizeObserver(fit).observe(frame); }
+      const open = () => { document.getElementById("dlgTitle").textContent = `${label} ${i}`; document.getElementById("dlgFrame").src = src; document.getElementById("dlg").showModal(); };
+      tile.addEventListener("click", open); tile.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+    }
+  }
+  document.getElementById("dlgClose").addEventListener("click", () => { document.getElementById("dlg").close(); document.getElementById("dlgFrame").src = "about:blank"; });
+</script>
+</body>
+</html>

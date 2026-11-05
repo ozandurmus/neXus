@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en" data-proposal="4">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>neXus · Sign in · Proposal 4 "Quiet"</title>
+<style>
+  /* ------------------------------------------------------------------
+     Proposal 4 · QUIET
+     Concept: premium restraint. Warm paper, a serif voice, a lot of air.
+     Motion is almost nothing: a soft light that breathes in the corner
+     over 24 s, the mark that draws itself once on load, and the five verbs
+     that pass emphasis from one to the next. No card; the form sits on
+     the page like print.
+     Logo: "Scribe X" – a calligraphic X: one hairline stroke, one heavy
+     stroke, single ink. The weight contrast replaces the two colours.
+     ------------------------------------------------------------------ */
+  :root {
+    --paper: #f7f5f1;
+    --paper-2: #efece6;
+    --ink: #15181d;
+    --ink-2: #5b6068;
+    --ink-3: #8a8f98;
+    --line: #dcd8d0;
+    --line-2: #c5c0b6;
+    --accent: #1e2f7a;
+    --accent-soft: #e9ecf7;
+    --bad: #8f1f1f;
+    --bad-bg: #fbe7e7;
+    --bad-line: #e7b3b3;
+    --focus: #1e2f7a;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font-family: var(--sans); color: var(--ink); background: var(--paper); -webkit-font-smoothing: antialiased; overflow: hidden; }
+
+  /* ---------- Light ---------- */
+  .light { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
+  .light i { position: absolute; border-radius: 50%; filter: blur(70px); opacity: .55; }
+  .light .a { width: 56vw; height: 56vw; left: -14vw; top: -12vw; background: radial-gradient(circle, #dfe4f6 0%, rgba(223,228,246,0) 65%); animation: breathe 24s ease-in-out infinite; }
+  .light .b { width: 36vw; height: 36vw; left: 18vw; bottom: -18vw; background: radial-gradient(circle, #e8ddd0 0%, rgba(232,221,208,0) 65%); animation: breathe 30s ease-in-out -9s infinite reverse; }
+  @keyframes breathe { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(5vw, 3vw) scale(1.12); } }
+  .grain { position: fixed; inset: 0; pointer-events: none; opacity: .5; mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .05 0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>"); }
+
+  /* ---------- Layout ---------- */
+  .page { position: relative; min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; }
+  .left { padding: 56px 72px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid var(--line); }
+  .right { padding: 56px 72px; display: flex; align-items: center; justify-content: center; }
+  @media (min-width: 1800px) { .left, .right { padding: 72px 128px; } }
+  @media (max-width: 1300px) { .left { padding: 44px 48px; } .right { padding: 44px 48px; } }
+
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand .draw { stroke-dasharray: 60; stroke-dashoffset: 60; animation: draw 1.4s cubic-bezier(.6,0,.2,1) .3s forwards; }
+  .brand .draw.second { animation-delay: .9s; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+
+  .verse { max-width: 560px; }
+  .verse h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(44px, 4vw, 64px); line-height: 1.08; letter-spacing: -0.015em; margin: 0 0 28px; }
+  .verse h1 em { font-style: italic; }
+  .verse p { font-size: 16px; line-height: 1.6; color: var(--ink-2); margin: 0; max-width: 460px; }
+  .verbs { list-style: none; margin: 44px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .verbs li { font-family: var(--serif); font-size: 22px; line-height: 1.3; color: var(--ink-3); display: flex; align-items: baseline; gap: 16px; animation: emphasis 15s ease-in-out infinite; animation-delay: var(--d); }
+  .verbs li small { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--line-2); width: 22px; }
+  @keyframes emphasis { 0%, 16%, 100% { color: #8a8f98; transform: translateX(0); } 4%, 12% { color: #15181d; transform: translateX(6px); } }
+  .colophon { font-family: var(--mono); font-size: 12px; color: var(--ink-3); letter-spacing: .02em; display: flex; gap: 24px; }
+
+  form { width: 100%; max-width: 380px; }
+  form h2 { font-family: var(--serif); font-weight: 400; font-size: 34px; letter-spacing: -0.01em; margin: 0 0 8px; }
+  form .sub { font-size: 14px; color: var(--ink-2); margin: 0 0 32px; }
+
+  .seg { display: inline-flex; gap: 0; border-bottom: 1px solid var(--line); margin-bottom: 28px; width: 100%; }
+  .seg input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .seg label { position: relative; padding: 0 0 10px; margin-right: 28px; font-size: 14px; color: var(--ink-3); cursor: pointer; transition: color .2s; }
+  .seg label::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--ink); transform: scaleX(0); transform-origin: left; transition: transform .3s cubic-bezier(.2,.7,.2,1); }
+  .seg input:checked + label { color: var(--ink); }
+  .seg input:checked + label::after { transform: scaleX(1); }
+  .seg input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: 2px; }
+
+  .field { margin-bottom: 22px; }
+  .field label { display: block; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); margin-bottom: 6px; font-weight: 600; }
+  .field .hint { font-size: 12px; color: var(--ink-3); margin-top: 6px; min-height: 16px; }
+  .control { position: relative; display: flex; align-items: center; }
+  .control input { width: 100%; font: inherit; font-size: 17px; color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--line-2); border-radius: 0; padding: 8px 0 10px; outline: 0; transition: border-color .2s, box-shadow .2s; }
+  .control input:hover { border-color: var(--ink-3); }
+  .control input:focus-visible { border-color: var(--ink); box-shadow: 0 1px 0 var(--ink); }
+  .control input[aria-invalid="true"] { border-color: #c96060; }
+  .control .eye { position: absolute; right: 0; height: 30px; padding: 0 2px; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink-2); background: transparent; border: 0; cursor: pointer; }
+  .control .eye:hover { color: var(--ink); }
+  .control .eye:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
+
+  .alert { display: none; gap: 10px; align-items: flex-start; margin: 0 0 22px; padding: 11px 12px; border-radius: 6px; background: var(--bad-bg); border: 1px solid var(--bad-line); color: var(--bad); font-size: 14px; line-height: 20px; }
+  .alert svg { flex: 0 0 auto; margin-top: 2px; }
+  form.is-error .alert { display: flex; }
+
+  .btn { width: 100%; margin-top: 10px; font: inherit; font-size: 15px; font-weight: 600; color: var(--paper); background: var(--ink); border: 0; border-radius: 999px; padding: 15px 20px; cursor: pointer; transition: background .2s, transform .1s; display: flex; justify-content: space-between; align-items: center; }
+  .btn span:last-child { transition: transform .25s cubic-bezier(.2,.7,.2,1); }
+  .btn:hover { background: #000; }
+  .btn:hover span:last-child { transform: translateX(4px); }
+  .btn:active { transform: translateY(1px); }
+  .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+  .btn[aria-busy="true"] { opacity: .7; cursor: progress; }
+  .help { margin-top: 20px; font-size: 13px; color: var(--ink-2); }
+  .foot { margin-top: 48px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+
+  /* Preview controls */
+  .preview { position: fixed; right: 24px; bottom: 20px; display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--ink-3); z-index: 5; }
+  .preview button { font: inherit; font-size: 12px; color: var(--ink-2); background: var(--paper); border: 1px solid var(--line-2); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  .preview button:hover { color: var(--ink); border-color: var(--ink-3); }
+  .preview button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .preview button[aria-pressed="true"] { color: var(--bad); border-color: var(--bad-line); background: var(--bad-bg); }
+
+  dialog { border: 0; padding: 0; background: transparent; max-width: 1100px; width: calc(100% - 64px); }
+  dialog::backdrop { background: rgba(21,24,29,.5); backdrop-filter: blur(6px); }
+  .sheet { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--line-2); display: grid; grid-template-columns: 1fr 1fr; }
+  .sheet > div { padding: 40px; display: flex; flex-direction: column; gap: 28px; }
+  .sheet .on-light { background: var(--paper); color: var(--ink); }
+  .sheet .on-dark { background: #15181d; color: #f7f5f1; }
+  .sheet h3 { margin: 0; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; opacity: .6; }
+  .sheet .marks { display: flex; align-items: center; gap: 28px; }
+  .sheet p { margin: 0; font-size: 14px; line-height: 1.55; opacity: .85; max-width: 440px; }
+  .sheet .close { position: absolute; top: 12px; right: 12px; font: inherit; font-size: 13px; color: var(--ink); background: var(--paper); border: 1px solid var(--line-2); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  .sheet .close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  @keyframes shake { 10%, 90% { transform: translateX(-1px);} 20%, 80% { transform: translateX(2px);} 30%, 50%, 70% { transform: translateX(-3px);} 40%, 60% { transform: translateX(3px);} }
+  form.shake { animation: shake .5s cubic-bezier(.36,.07,.19,.97) both; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  .verse, form, .colophon { animation: fade 1s ease both; }
+  form { animation-delay: .25s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .brand .draw { stroke-dashoffset: 0 !important; }
+    .verbs li:first-child { color: var(--ink) !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="light" aria-hidden="true"><i class="a"></i><i class="b"></i></div>
+<div class="grain" aria-hidden="true"></div>
+
+<main class="page">
+  <section class="left" aria-label="About neXus">
+    <div class="brand">
+      <!-- NEW MARK: "Scribe X" — hairline + heavy stroke, one ink, draws itself once -->
+      <svg width="40" height="40" viewBox="0 0 48 48" role="img" aria-label="neXus mark">
+        <path class="draw" d="M9 9 L39 39" stroke="#15181d" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+        <path class="draw second" d="M39 9 L9 39" stroke="#15181d" stroke-width="7" stroke-linecap="round" fill="none"/>
+      </svg>
+      <svg width="130" height="40" viewBox="0 0 130 40" role="img" aria-label="neXus">
+        <text x="0" y="30" font-family="'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif" font-size="34" font-weight="400" letter-spacing="-.5" fill="#15181d">ne</text>
+        <g transform="translate(41 7)"><path d="M3 3 L21 21" stroke="#15181d" stroke-width="1.1" stroke-linecap="round"/><path d="M21 3 L3 21" stroke="#15181d" stroke-width="5" stroke-linecap="round"/></g>
+        <text x="70" y="30" font-family="'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif" font-size="34" font-weight="400" letter-spacing="-.5" fill="#15181d">us</text>
+      </svg>
+    </div>
+
+    <div class="verse">
+      <h1>What is true<br>of the estate, <em>now</em>.</h1>
+      <p>neXus keeps the record of every firewall you run: what it is, how it is configured, whether it complies, whether it can be recovered, and whether it is ready to fail over. Only what was observed, and when.</p>
+      <ol class="verbs" aria-label="Principle">
+        <li style="--d:0s"><small>01</small>See</li>
+        <li style="--d:3s"><small>02</small>Verify</li>
+        <li style="--d:6s"><small>03</small>Trace</li>
+        <li style="--d:9s"><small>04</small>Recover</li>
+        <li style="--d:12s"><small>05</small>Operate</li>
+      </ol>
+    </div>
+
+    <div class="colophon"><span>On premises</span><span>No outbound connections</span><span>Evidence stays with you</span></div>
+  </section>
+
+  <section class="right">
+    <form id="form" novalidate autocomplete="off" aria-labelledby="title">
+      <h2 id="title">Sign in</h2>
+      <p class="sub">Operator access to the console.</p>
+
+      <div class="seg" role="radiogroup" aria-label="Authentication method">
+        <input type="radio" name="auth" id="auth-local" value="local" checked><label for="auth-local">Local account</label>
+        <input type="radio" name="auth" id="auth-ldap" value="ldap"><label for="auth-ldap">LDAP</label>
+      </div>
+
+      <div class="alert" id="alert" role="alert" aria-live="assertive">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v4.2M8 11.3v.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Sign-in failed. Check your details.</span>
+      </div>
+
+      <div class="field">
+        <label for="user">Username</label>
+        <div class="control"><input id="user" name="username" type="text" autocomplete="username" spellcheck="false" required></div>
+        <div class="hint" id="user-hint"></div>
+      </div>
+      <div class="field">
+        <label for="pass">Password</label>
+        <div class="control">
+          <input id="pass" name="password" type="password" autocomplete="current-password" required>
+          <button type="button" class="eye" id="eye" aria-pressed="false" aria-controls="pass">Show</button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn" id="submit"><span id="submit-label">Sign in</span><span aria-hidden="true">→</span></button>
+      <p class="help">Trouble signing in? Ask your administrator.</p>
+      <div class="foot">neXus · on-premises · version 2.6</div>
+    </form>
+  </section>
+</main>
+
+<div class="preview" aria-label="Design preview controls">
+  <span>Preview</span>
+  <button type="button" id="toggle-error" aria-pressed="false">Error state</button>
+  <button type="button" id="open-logo">Logo sheet</button>
+</div>
+
+<dialog id="logo-sheet" aria-labelledby="sheet-title">
+  <div class="sheet">
+    <button class="close" id="close-logo" type="button">Close</button>
+    <div class="on-light">
+      <h3 id="sheet-title">Logo · on light</h3>
+      <div class="marks">
+        <svg width="96" height="96" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M9 9 L39 39" stroke="#15181d" stroke-width="1.4" stroke-linecap="round"/><path d="M39 9 L9 39" stroke="#15181d" stroke-width="7" stroke-linecap="round"/>
+        </svg>
+        <svg width="260" height="80" viewBox="0 0 130 40" aria-hidden="true">
+          <text x="0" y="30" font-family="'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif" font-size="34" fill="#15181d" letter-spacing="-.5">ne</text>
+          <g transform="translate(41 7)"><path d="M3 3 L21 21" stroke="#15181d" stroke-width="1.1" stroke-linecap="round"/><path d="M21 3 L3 21" stroke="#15181d" stroke-width="5" stroke-linecap="round"/></g>
+          <text x="70" y="30" font-family="'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif" font-size="34" fill="#15181d" letter-spacing="-.5">us</text>
+        </svg>
+      </div>
+      <p><strong>Scribe X.</strong> A new mark that keeps only the letter: an X written with a broad nib, one hairline up-stroke and one heavy down-stroke, in a single ink. The weight contrast does the work the two colours used to do, so the mark survives engraving, embossing and a one-colour print, and never fights the status colours inside the product. The wordmark sets "neXus" in a classic old-style serif that ships with every operating system.</p>
+    </div>
+    <div class="on-dark">
+      <h3>Logo · on dark</h3>
+      <div class="marks">
+        <svg width="96" height="96" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M9 9 L39 39" stroke="#f7f5f1" stroke-width="1.4" stroke-linecap="round"/><path d="M39 9 L9 39" stroke="#f7f5f1" stroke-width="7" stroke-linecap="round"/>
+        </svg>
+        <svg width="260" height="80" viewBox="0 0 130 40" aria-hidden="true">
+          <text x="0" y="30" font-family="'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif" font-size="34" fill="#f7f5f1" letter-spacing="-.5">ne</text>
+          <g transform="translate(41 7)"><path d="M3 3 L21 21" stroke="#f7f5f1" stroke-width="1.1" stroke-linecap="round"/><path d="M21 3 L3 21" stroke="#f7f5f1" stroke-width="5" stroke-linecap="round"/></g>
+          <text x="70" y="30" font-family="'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif" font-size="34" fill="#f7f5f1" letter-spacing="-.5">us</text>
+        </svg>
+      </div>
+      <p>On dark the ink becomes paper. Nothing else changes, which is the point: one shape, two inks, no gradients, no tile. If a brand colour is wanted for the app icon, the heavy stroke can take the primary blue while the hairline stays ink.</p>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  'use strict';
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var form = document.getElementById('form'), user = document.getElementById('user'), pass = document.getElementById('pass');
+  var submit = document.getElementById('submit'), label = document.getElementById('submit-label'), toggle = document.getElementById('toggle-error'), hint = document.getElementById('user-hint');
+  function setError(on) {
+    form.classList.toggle('is-error', on); toggle.setAttribute('aria-pressed', String(on));
+    user.setAttribute('aria-invalid', String(on)); pass.setAttribute('aria-invalid', String(on));
+    if (on && !reduce.matches) { form.classList.remove('shake'); void form.offsetWidth; form.classList.add('shake'); }
+  }
+  toggle.addEventListener('click', function () { setError(!form.classList.contains('is-error')); });
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault(); setError(false);
+    submit.setAttribute('aria-busy', 'true'); label.textContent = 'Signing in…';
+    setTimeout(function () { submit.removeAttribute('aria-busy'); label.textContent = 'Sign in'; setError(true); pass.value = ''; pass.focus(); }, 700);
+  });
+  document.querySelectorAll('input[name=auth]').forEach(function (r) {
+    r.addEventListener('change', function () { hint.textContent = r.value === 'ldap' ? 'Your directory account name, without the domain.' : ''; });
+  });
+  var eye = document.getElementById('eye');
+  eye.addEventListener('click', function () { var show = pass.type === 'password'; pass.type = show ? 'text' : 'password'; eye.textContent = show ? 'Hide' : 'Show'; eye.setAttribute('aria-pressed', String(show)); });
+  var dlg = document.getElementById('logo-sheet');
+  document.getElementById('open-logo').addEventListener('click', function () { dlg.showModal(); });
+  document.getElementById('close-logo').addEventListener('click', function () { dlg.close(); });
+  dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+})();
+</script>
+</body>
+</html>

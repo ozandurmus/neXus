@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en" data-proposal="3">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>neXus · Sign in · Proposal 3 "Lattice"</title>
+<style>
+  /* ------------------------------------------------------------------
+     Proposal 3 · LATTICE
+     Concept: a security mesh. A full-bleed hexagonal lattice breathes in
+     slow concentric waves from a focal point behind the panel; a few
+     cells are "verified" and hold a steady light. Graphite, ice, industrial.
+     DOM built once by a tiny script; all motion is CSS with per-cell delay.
+     Logo: "Hex X" – the X cut into a hexagonal cell, with a hollow core.
+     ------------------------------------------------------------------ */
+  :root {
+    --bg: #0a0c11;
+    --panel: #10131a;
+    --panel-2: #151923;
+    --ink: #eef1f5;
+    --ink-2: #a5adba;
+    --ink-3: #6b7484;
+    --line: #1f2531;
+    --line-2: #2b3342;
+    --ice: #9fd7ff;
+    --ice-deep: #4fa8e8;
+    --blue: #7b9cff;
+    --teal: #38d2e6;
+    --bad: #ffb4b4;
+    --bad-bg: #3a1d1f;
+    --bad-line: #6b2f33;
+    --focus: #9fd7ff;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font-family: var(--sans); color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; overflow: hidden; }
+
+  /* ---------- Lattice ---------- */
+  .lattice { position: fixed; inset: 0; overflow: hidden; }
+  .lattice svg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .cell { fill: none; stroke: #1b2130; stroke-width: 1; }
+  .cell.w { stroke: var(--ice-deep); animation: wave 7s ease-in-out infinite; animation-delay: var(--d); opacity: 0; }
+  @keyframes wave { 0% { opacity: 0; } 8% { opacity: .55; } 22% { opacity: 0; } 100% { opacity: 0; } }
+  .cell.v { fill: rgba(56,210,230,.08); stroke: var(--teal); stroke-opacity: .7; animation: hold 9s ease-in-out infinite; animation-delay: var(--d); }
+  @keyframes hold { 0%, 100% { fill-opacity: .4; stroke-opacity: .35; } 50% { fill-opacity: 1; stroke-opacity: .9; } }
+  .lattice::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(900px 700px at 50% 50%, rgba(10,12,17,0) 0%, rgba(10,12,17,.35) 45%, rgba(10,12,17,.92) 100%); }
+
+  /* ---------- Layout ---------- */
+  .page { position: relative; min-height: 100vh; display: grid; place-items: center; padding: 48px; }
+  .top { position: fixed; top: 32px; left: 48px; right: 48px; display: flex; justify-content: space-between; align-items: center; z-index: 2; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .top .env { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; color: var(--ink-3); display: flex; align-items: center; gap: 10px; }
+  .top .env i { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 10px var(--teal); display: inline-block; }
+
+  .slab { position: relative; width: 480px; background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line-2); border-radius: 4px; padding: 40px 44px 28px; z-index: 1;
+          box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 40px 100px -20px rgba(0,0,0,.8); }
+  @media (min-width: 1800px) { .slab { width: 520px; } }
+  .slab::before { content: ""; position: absolute; left: -1px; top: 24px; bottom: 24px; width: 3px; background: linear-gradient(180deg, var(--ice), var(--blue) 60%, transparent); }
+  .slab .corner { position: absolute; width: 10px; height: 10px; border-color: var(--ice-deep); border-style: solid; opacity: .7; }
+  .slab .c1 { right: -1px; top: -1px; border-width: 1px 1px 0 0; } .slab .c2 { right: -1px; bottom: -1px; border-width: 0 1px 1px 0; }
+
+  .slab .mark { margin-bottom: 26px; }
+  .slab h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 6px; }
+  .slab .sub { font-size: 14px; color: var(--ink-2); margin: 0 0 26px; }
+
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 22px; }
+  .seg input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+  .seg label { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--ink-2); background: rgba(255,255,255,.02); border: 1px solid var(--line-2); border-radius: 3px; padding: 10px 12px; cursor: pointer; transition: border-color .2s, color .2s, background .2s; }
+  .seg label i { width: 8px; height: 8px; border: 1px solid var(--ink-3); border-radius: 50%; transition: all .2s; flex: 0 0 auto; }
+  .seg label:hover { border-color: #3a4456; }
+  .seg input:checked + label { color: var(--ink); border-color: var(--ice-deep); background: rgba(79,168,232,.08); }
+  .seg input:checked + label i { background: var(--ice); border-color: var(--ice); box-shadow: 0 0 8px var(--ice); }
+  .seg input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); margin-bottom: 8px; }
+  .field .hint { font-size: 12px; color: var(--ink-3); margin-top: 6px; min-height: 16px; }
+  .control { position: relative; display: flex; align-items: center; }
+  .control input { width: 100%; font: inherit; font-size: 15px; color: var(--ink); background: #0b0e14; border: 1px solid var(--line-2); border-radius: 3px; padding: 12px 14px; outline: 0; transition: border-color .15s, box-shadow .15s; }
+  .control input:hover { border-color: #3a4456; }
+  .control input:focus-visible { border-color: var(--ice-deep); box-shadow: 0 0 0 3px rgba(79,168,232,.22), inset 0 0 0 1px rgba(159,215,255,.15); }
+  .control input[aria-invalid="true"] { border-color: #8f3b3f; }
+  .control .eye { position: absolute; right: 6px; height: 32px; padding: 0 10px; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); background: transparent; border: 0; border-radius: 3px; cursor: pointer; }
+  .control .eye:hover { color: var(--ink); background: rgba(255,255,255,.06); }
+  .control .eye:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+  .alert { display: none; gap: 10px; align-items: flex-start; margin: 0 0 16px; padding: 11px 12px; border-radius: 3px; background: var(--bad-bg); border: 1px solid var(--bad-line); color: var(--bad); font-size: 14px; line-height: 20px; }
+  .alert svg { flex: 0 0 auto; margin-top: 2px; }
+  .slab.is-error .alert { display: flex; }
+
+  .btn { position: relative; width: 100%; margin-top: 8px; font: inherit; font-size: 14px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #06121c; background: var(--ice); border: 0; border-radius: 3px; padding: 14px 18px; cursor: pointer; overflow: hidden; transition: filter .15s, transform .1s; }
+  .btn::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,.55) 50%, transparent 70%); transform: translateX(-120%); }
+  .btn:hover { filter: brightness(1.06); }
+  .btn:hover::after { animation: sheen .9s ease forwards; }
+  @keyframes sheen { to { transform: translateX(120%); } }
+  .btn:active { transform: translateY(1px); }
+  .btn:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+  .btn[aria-busy="true"] { opacity: .7; cursor: progress; }
+  .help { margin-top: 18px; font-size: 13px; color: var(--ink-2); }
+  .foot { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--ink-3); letter-spacing: .02em; display: flex; justify-content: space-between; }
+
+  .principle { position: fixed; left: 48px; bottom: 44px; display: flex; gap: 0; align-items: center; z-index: 2; }
+  .principle span { font-family: var(--mono); font-size: 11px; letter-spacing: .18em; color: var(--ink-3); }
+  .principle b { width: 24px; height: 1px; background: var(--line-2); margin: 0 10px; }
+  .principle span.on { color: var(--ice); }
+
+  /* Preview controls */
+  .preview { position: fixed; right: 48px; bottom: 40px; display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--ink-3); z-index: 5; }
+  .preview button { font: inherit; font-size: 12px; color: var(--ink-2); background: var(--panel); border: 1px solid var(--line-2); border-radius: 3px; padding: 6px 12px; cursor: pointer; }
+  .preview button:hover { color: var(--ink); border-color: #3a4456; }
+  .preview button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .preview button[aria-pressed="true"] { color: var(--bad); border-color: var(--bad-line); background: var(--bad-bg); }
+
+  dialog { border: 0; padding: 0; background: transparent; max-width: 1100px; width: calc(100% - 64px); }
+  dialog::backdrop { background: rgba(3,5,10,.75); backdrop-filter: blur(6px); }
+  .sheet { position: relative; border-radius: 4px; overflow: hidden; border: 1px solid var(--line-2); display: grid; grid-template-columns: 1fr 1fr; }
+  .sheet > div { padding: 40px; display: flex; flex-direction: column; gap: 28px; }
+  .sheet .on-dark { background: var(--panel); color: var(--ink); }
+  .sheet .on-light { background: #f5f6f8; color: #171b22; }
+  .sheet h3 { margin: 0; font-family: var(--mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; font-weight: 600; opacity: .6; }
+  .sheet .marks { display: flex; align-items: center; gap: 28px; }
+  .sheet p { margin: 0; font-size: 14px; line-height: 1.5; opacity: .85; max-width: 440px; }
+  .sheet .close { position: absolute; top: 12px; right: 12px; font: inherit; font-size: 13px; color: var(--ink); background: rgba(255,255,255,.1); border: 1px solid var(--line-2); border-radius: 3px; padding: 6px 12px; cursor: pointer; }
+  .sheet .close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  @keyframes shake { 10%, 90% { transform: translateX(-1px);} 20%, 80% { transform: translateX(2px);} 30%, 50%, 70% { transform: translateX(-3px);} 40%, 60% { transform: translateX(3px);} }
+  .slab.shake { animation: shake .5s cubic-bezier(.36,.07,.19,.97) both; }
+  @keyframes reveal { from { opacity: 0; transform: translateY(8px) scale(.99);} to { opacity: 1; transform: none; } }
+  .slab { animation: reveal .6s cubic-bezier(.2,.7,.2,1) .15s both; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .cell.w { opacity: .18 !important; }
+    .cell.v { fill-opacity: .8 !important; stroke-opacity: .7 !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="lattice" id="lattice" aria-hidden="true"></div>
+
+<header class="top">
+  <div class="brand">
+    <!-- NEW MARK: "Hex X" — the X cut inside a hexagonal cell; the core is left open -->
+    <svg width="36" height="36" viewBox="0 0 48 48" role="img" aria-label="neXus mark">
+      <path d="M24 3 L42 13.5 V34.5 L24 45 L6 34.5 V13.5 Z" fill="none" stroke="#9fd7ff" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M14 14 L20.5 20.5 M27.5 27.5 L34 34 M34 14 L27.5 20.5 M20.5 27.5 L14 34" stroke="#eef1f5" stroke-width="3.4" stroke-linecap="round"/>
+    </svg>
+    <svg width="120" height="22" viewBox="0 0 120 22" role="img" aria-label="NEXUS">
+      <text x="0" y="18" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif" font-size="21" font-weight="700" letter-spacing="5" fill="#eef1f5">NEXUS</text>
+    </svg>
+  </div>
+  <div class="env"><i></i>ISOLATED NETWORK</div>
+</header>
+
+<main class="page">
+  <form class="slab" id="slab" novalidate autocomplete="off" aria-labelledby="title">
+    <span class="corner c1" aria-hidden="true"></span><span class="corner c2" aria-hidden="true"></span>
+    <div class="mark">
+      <svg width="52" height="52" viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M24 3 L42 13.5 V34.5 L24 45 L6 34.5 V13.5 Z" fill="rgba(159,215,255,.05)" stroke="#9fd7ff" stroke-width="2.2" stroke-linejoin="round"/>
+        <path d="M14 14 L20.5 20.5 M27.5 27.5 L34 34 M34 14 L27.5 20.5 M20.5 27.5 L14 34" stroke="#eef1f5" stroke-width="3.4" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <h1 id="title">Sign in</h1>
+    <p class="sub">Operations console for the firewall estate.</p>
+
+    <div class="seg" role="radiogroup" aria-label="Authentication method">
+      <input type="radio" name="auth" id="auth-local" value="local" checked><label for="auth-local"><i></i>Local account</label>
+      <input type="radio" name="auth" id="auth-ldap" value="ldap"><label for="auth-ldap"><i></i>LDAP</label>
+    </div>
+
+    <div class="alert" id="alert" role="alert" aria-live="assertive">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v4.2M8 11.3v.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span>Sign-in failed. Check your details.</span>
+    </div>
+
+    <div class="field">
+      <label for="user">Username</label>
+      <div class="control"><input id="user" name="username" type="text" autocomplete="username" spellcheck="false" required></div>
+      <div class="hint" id="user-hint"></div>
+    </div>
+    <div class="field">
+      <label for="pass">Password</label>
+      <div class="control">
+        <input id="pass" name="password" type="password" autocomplete="current-password" required>
+        <button type="button" class="eye" id="eye" aria-pressed="false" aria-controls="pass">Show</button>
+      </div>
+    </div>
+
+    <button type="submit" class="btn" id="submit">Sign in</button>
+    <p class="help">Trouble signing in? Ask your administrator.</p>
+    <div class="foot"><span>neXus · on-premises · version 2.6</span><span>TLS · local</span></div>
+  </form>
+</main>
+
+<div class="principle" aria-label="Principle">
+  <span class="on">SEE</span><b></b><span>VERIFY</span><b></b><span>TRACE</span><b></b><span>RECOVER</span><b></b><span>OPERATE</span>
+</div>
+
+<div class="preview" aria-label="Design preview controls">
+  <span>Preview</span>
+  <button type="button" id="toggle-error" aria-pressed="false">Error state</button>
+  <button type="button" id="open-logo">Logo sheet</button>
+</div>
+
+<dialog id="logo-sheet" aria-labelledby="sheet-title">
+  <div class="sheet">
+    <button class="close" id="close-logo" type="button">Close</button>
+    <div class="on-dark">
+      <h3 id="sheet-title">Logo · on dark</h3>
+      <div class="marks">
+        <svg width="96" height="96" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M24 3 L42 13.5 V34.5 L24 45 L6 34.5 V13.5 Z" fill="rgba(159,215,255,.05)" stroke="#9fd7ff" stroke-width="2.2" stroke-linejoin="round"/>
+          <path d="M14 14 L20.5 20.5 M27.5 27.5 L34 34 M34 14 L27.5 20.5 M20.5 27.5 L14 34" stroke="#eef1f5" stroke-width="3.4" stroke-linecap="round"/>
+        </svg>
+        <svg width="240" height="44" viewBox="0 0 120 22" aria-hidden="true">
+          <text x="0" y="18" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif" font-size="21" font-weight="700" letter-spacing="5" fill="#eef1f5">NEXUS</text>
+        </svg>
+      </div>
+      <p><strong>Hex X.</strong> A new mark rather than an evolution: the X sits inside a hexagonal cell, the unit of the lattice, and its centre is left open, a deliberate gap where the two strokes would meet. The gap is the point of the product: neXus does not assume the crossing, it verifies it. The wordmark is NEXUS in wide-tracked capitals, which gives the identity an engineered, hardware-adjacent tone.</p>
+    </div>
+    <div class="on-light">
+      <h3>Logo · on light</h3>
+      <div class="marks">
+        <svg width="96" height="96" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M24 3 L42 13.5 V34.5 L24 45 L6 34.5 V13.5 Z" fill="rgba(52,87,213,.06)" stroke="#3457d5" stroke-width="2.2" stroke-linejoin="round"/>
+          <path d="M14 14 L20.5 20.5 M27.5 27.5 L34 34 M34 14 L27.5 20.5 M20.5 27.5 L14 34" stroke="#0e2944" stroke-width="3.4" stroke-linecap="round"/>
+        </svg>
+        <svg width="240" height="44" viewBox="0 0 120 22" aria-hidden="true">
+          <text x="0" y="18" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif" font-size="21" font-weight="700" letter-spacing="5" fill="#0e2944">NEXUS</text>
+        </svg>
+      </div>
+      <p>On light the cell takes the primary blue and the strokes the product navy. The mark is single-weight and survives one-colour reproduction (a stamp, an engraved badge, a 16 px favicon) because the hexagon alone already identifies it.</p>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  'use strict';
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  /* ---------- Build the hex lattice once ---------- */
+  function hexPoints(cx, cy, r) {
+    var pts = [];
+    for (var i = 0; i < 6; i++) { var a = Math.PI / 180 * (60 * i - 30); pts.push((cx + r * Math.cos(a)).toFixed(1) + ',' + (cy + r * Math.sin(a)).toFixed(1)); }
+    return pts.join(' ');
+  }
+  function build() {
+    var host = document.getElementById('lattice'); host.innerHTML = '';
+    var R = 34, w = Math.sqrt(3) * R, h = 1.5 * R;
+    var cols = Math.ceil(innerWidth / w) + 3, rows = Math.ceil(innerHeight / h) + 3;
+    var W = cols * w, H = rows * h;
+    var svg = document.createElementNS(SVGNS, 'svg');
+    svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    var fx = W / 2, fy = H / 2, maxD = Math.hypot(fx, fy);
+    var seed = 7;
+    function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+    for (var r = 0; r < rows; r++) for (var c = 0; c < cols; c++) {
+      var cx = c * w + (r % 2 ? w / 2 : 0), cy = r * h;
+      var p = document.createElementNS(SVGNS, 'polygon');
+      p.setAttribute('points', hexPoints(cx, cy, R - 1.5));
+      var d = Math.hypot(cx - fx, cy - fy) / maxD;    // 0 centre .. 1 corner
+      var roll = rnd();
+      if (roll < 0.045 && d > 0.12) { p.setAttribute('class', 'cell v'); p.style.setProperty('--d', (-rnd() * 9).toFixed(2) + 's'); }
+      else if (roll < 0.55) { p.setAttribute('class', 'cell w'); p.style.setProperty('--d', (d * 5.5 + rnd() * .4).toFixed(2) + 's'); }
+      else p.setAttribute('class', 'cell');
+      svg.appendChild(p);
+    }
+    host.appendChild(svg);
+  }
+  var rt; addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(build, 200); });
+  build();
+
+  /* ---------- Principle word cycles (CSS-free so it stops under reduced motion) ---------- */
+  var words = document.querySelectorAll('.principle span'), wi = 0;
+  if (!reduce.matches) setInterval(function () { words[wi].classList.remove('on'); wi = (wi + 1) % words.length; words[wi].classList.add('on'); }, 2400);
+
+  /* ---------- Form behaviour (mock) ---------- */
+  var slab = document.getElementById('slab'), user = document.getElementById('user'), pass = document.getElementById('pass');
+  var submit = document.getElementById('submit'), toggle = document.getElementById('toggle-error'), hint = document.getElementById('user-hint');
+  function setError(on) {
+    slab.classList.toggle('is-error', on); toggle.setAttribute('aria-pressed', String(on));
+    user.setAttribute('aria-invalid', String(on)); pass.setAttribute('aria-invalid', String(on));
+    if (on && !reduce.matches) { slab.classList.remove('shake'); void slab.offsetWidth; slab.classList.add('shake'); }
+  }
+  toggle.addEventListener('click', function () { setError(!slab.classList.contains('is-error')); });
+  slab.addEventListener('submit', function (ev) {
+    ev.preventDefault(); setError(false);
+    submit.setAttribute('aria-busy', 'true'); submit.textContent = 'Signing in…';
+    setTimeout(function () { submit.removeAttribute('aria-busy'); submit.textContent = 'Sign in'; setError(true); pass.value = ''; pass.focus(); }, 700);
+  });
+  document.querySelectorAll('input[name=auth]').forEach(function (r) {
+    r.addEventListener('change', function () { hint.textContent = r.value === 'ldap' ? 'Your directory account name, without the domain.' : ''; });
+  });
+  var eye = document.getElementById('eye');
+  eye.addEventListener('click', function () { var show = pass.type === 'password'; pass.type = show ? 'text' : 'password'; eye.textContent = show ? 'Hide' : 'Show'; eye.setAttribute('aria-pressed', String(show)); });
+  var dlg = document.getElementById('logo-sheet');
+  document.getElementById('open-logo').addEventListener('click', function () { dlg.showModal(); });
+  document.getElementById('close-logo').addEventListener('click', function () { dlg.close(); });
+  dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+})();
+</script>
+</body>
+</html>

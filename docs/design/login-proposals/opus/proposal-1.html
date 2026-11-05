@@ -1,0 +1,827 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>neXus · Sign in · Proposal 1 · Constellation</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%230b1b2e'/%3E%3Cpath d='M18 18L46 46' stroke='%2356c7dc' stroke-width='5.5' stroke-linecap='round'/%3E%3Cpath d='M46 18L18 46' stroke='%236f9bff' stroke-width='5.5' stroke-linecap='round'/%3E%3Cg fill='%23eaf1f8'%3E%3Ccircle cx='18' cy='18' r='4.6'/%3E%3Ccircle cx='46' cy='18' r='4.6'/%3E%3Ccircle cx='18' cy='46' r='4.6'/%3E%3Ccircle cx='46' cy='46' r='4.6'/%3E%3C/g%3E%3Ccircle cx='32' cy='32' r='7' fill='%230b1b2e' stroke='%23eaf1f8' stroke-width='3'/%3E%3C/svg%3E">
+<!--
+  Proposal 1 · "Constellation"
+  Concept: the estate as a living topology. Nodes are firewalls, managers and HA pairs; pulses are reads travelling
+  between them. The new mark is the X rebuilt as a hub: four nodes joined through one central node.
+  Self-contained: no external fonts, scripts or images. Opens by double-click.
+-->
+<style>
+  :root {
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    --radius-input: 8px;
+    --radius-card: 10px;
+    --panel-w: clamp(440px, 33vw, 580px);
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #07111f;
+    --bg-2: #0a1a2e;
+    --panel: #0c1a2c;
+    --panel-edge: #1a2c44;
+    --ink: #e8eef6;
+    --muted: #9fb3c8;
+    --faint: #7f93ab;
+    --field: #091524;
+    --field-edge: #5f7896;
+    --field-edge-hover: #8aa3c0;
+    --accent: #56c7dc;
+    --accent-2: #6f9bff;
+    --btn: #56c7dc;
+    --btn-ink: #04121f;
+    --btn-hover: #7ad6e7;
+    --focus: #9fe3f2;
+    --seg: #091524;
+    --seg-on: #1c3350;
+    --err-bg: #3a1d1f;
+    --err-ink: #ffb4b4;
+    --err-edge: #ef6a6a;
+    --scrim: rgba(7, 17, 31, 0.86);
+    /* canvas */
+    --c-edge: rgba(128, 170, 210, 0.15);
+    --c-node: rgba(196, 220, 240, 0.62);
+    --c-node-dim: rgba(196, 220, 240, 0.18);
+    --c-pulse: #56c7dc;
+    --c-pulse-2: #6f9bff;
+    /* logo */
+    --logo-ink: #eaf1f8;
+    --logo-a: #56c7dc;
+    --logo-b: #6f9bff;
+    --logo-bg: #07111f;
+    --tile: #0b1b2e;
+    --tile-ink: #eaf1f8;
+    --tile-edge: #24405f;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #eef3f8;
+    --bg-2: #e3ebf4;
+    --panel: #ffffff;
+    --panel-edge: #d6dfe9;
+    --ink: #0c1a2b;
+    --muted: #4d5d70;
+    --faint: #5c6b7d;
+    --field: #ffffff;
+    --field-edge: #7b8a9c;
+    --field-edge-hover: #4d5d70;
+    --accent: #07687b;
+    --accent-2: #1f5fe0;
+    --btn: #0b5f8a;
+    --btn-ink: #ffffff;
+    --btn-hover: #094d70;
+    --focus: #0b5f8a;
+    --seg: #eef3f8;
+    --seg-on: #ffffff;
+    --err-bg: #fbe7e7;
+    --err-ink: #8f1f1f;
+    --err-edge: #d03b3b;
+    --scrim: rgba(238, 243, 248, 0.88);
+    --c-edge: rgba(40, 80, 120, 0.16);
+    --c-node: rgba(20, 50, 80, 0.55);
+    --c-node-dim: rgba(20, 50, 80, 0.14);
+    --c-pulse: #0a7f96;
+    --c-pulse-2: #1f5fe0;
+    --logo-ink: #0c1a2b;
+    --logo-a: #0a7f96;
+    --logo-b: #1f5fe0;
+    --logo-bg: #eef3f8;
+    --tile: #0b1b2e;
+    --tile-ink: #eaf1f8;
+    --tile-edge: #0b1b2e;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font: 400 14px/20px var(--font);
+    color: var(--ink);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  /* ------------------------------------------------------------------ layout */
+  .page {
+    display: grid;
+    grid-template-columns: 1fr var(--panel-w);
+    min-height: 100vh;
+  }
+  .hero {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(1200px 700px at 30% 40%, var(--bg-2), transparent 70%),
+      var(--bg);
+    isolation: isolate;
+  }
+  .hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; display: block; }
+  .hero::after {
+    /* soft fade into the panel and the bottom edge */
+    content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      linear-gradient(90deg, transparent 70%, var(--bg) 100%),
+      linear-gradient(0deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 75%, transparent) 9%, transparent 24%);
+  }
+  .hero-inner {
+    position: relative;
+    height: 100%;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    padding: clamp(32px, 4vw, 64px) clamp(40px, 5vw, 96px);
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand .mark { width: 40px; height: 40px; flex: none; }
+  .brand .wordmark { height: 24px; width: auto; }
+
+  .copy {
+    align-self: center;
+    max-width: 620px;
+    padding: 28px 32px 28px 0;
+  }
+  .copy::before {
+    /* a quiet scrim behind the copy so text never fights a pulse */
+    content: ""; position: absolute; z-index: -1; pointer-events: none;
+    inset: auto; width: 760px; height: 420px; margin: -120px 0 0 -160px;
+    background: radial-gradient(closest-side, var(--scrim), transparent);
+  }
+  .eyebrow {
+    font: 600 12px/16px var(--font);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 18px;
+  }
+  .headline {
+    font: 650 clamp(34px, 3.3vw, 52px)/1.08 var(--font);
+    letter-spacing: -0.022em;
+    margin: 0 0 20px;
+    text-wrap: balance;
+  }
+  .headline em { font-style: normal; color: var(--accent); }
+  .lede {
+    font: 400 16px/26px var(--font);
+    color: var(--muted);
+    margin: 0 0 32px;
+    max-width: 520px;
+  }
+  .planes { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
+  .planes li {
+    font: 600 11px/16px var(--font);
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    border: 1px solid var(--panel-edge);
+    background: color-mix(in srgb, var(--bg) 70%, transparent);
+    padding: 6px 10px 6px 8px;
+    border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .planes li b { font: 500 11px/16px var(--mono); color: var(--accent); letter-spacing: 0; }
+  .planes li + li::before { content: none; }
+
+  .hero-foot { display: flex; justify-content: space-between; align-items: end; gap: 24px; }
+  .legend { display: flex; gap: 18px; color: var(--faint); font: 400 12px/16px var(--font); }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .legend i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--c-node); }
+  .legend i.pair { width: 14px; background: radial-gradient(circle at 3.5px 50%, var(--c-node) 3.4px, transparent 3.6px), radial-gradient(circle at 10.5px 50%, var(--c-node) 3.4px, transparent 3.6px); border-radius: 0; }
+  .legend i.mgr { background: transparent; border: 1.6px solid var(--c-node); width: 9px; height: 9px; }
+  .legend i.pulse { background: var(--c-pulse); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-pulse) 25%, transparent); }
+  .disclaimer { color: var(--faint); font: 400 12px/16px var(--font); }
+
+  /* ------------------------------------------------------------------ panel */
+  .panel {
+    background: var(--panel);
+    border-left: 1px solid var(--panel-edge);
+    display: grid;
+    grid-template-rows: 1fr auto;
+    padding: clamp(32px, 4vw, 64px) clamp(36px, 3.6vw, 72px) 28px;
+    position: relative;
+  }
+  .panel-body { align-self: center; width: 100%; max-width: 400px; margin: 0 auto; }
+  .panel h1 { font: 650 28px/34px var(--font); letter-spacing: -0.015em; margin: 0 0 8px; }
+  .panel .sub { color: var(--muted); margin: 0 0 32px; font-size: 14px; line-height: 20px; }
+
+  form { display: grid; gap: 20px; }
+  .field { display: grid; gap: 8px; }
+  .label { font: 600 13px/16px var(--font); color: var(--ink); }
+  .hint { font: 400 12px/16px var(--font); color: var(--muted); min-height: 16px; }
+
+  /* segmented auth selector: a real radio group */
+  fieldset.seg { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 8px; }
+  fieldset.seg legend { padding: 0; margin-bottom: 8px; }
+  .seg-track {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+    padding: 4px;
+    background: var(--seg);
+    border: 1px solid var(--field-edge);
+    border-radius: 12px;
+  }
+  .seg-track input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .seg-track label {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    height: 38px; border-radius: 8px;
+    font: 600 13px/16px var(--font); color: var(--muted);
+    cursor: pointer; user-select: none;
+    transition: background-color .18s ease, color .18s ease, box-shadow .18s ease;
+  }
+  .seg-track label svg { width: 15px; height: 15px; flex: none; }
+  .seg-track label:hover { color: var(--ink); }
+  .seg-track input:checked + label {
+    background: var(--seg-on); color: var(--ink);
+    box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 1px 3px rgba(0,0,0,.25);
+  }
+  :root[data-theme="light"] .seg-track input:checked + label { box-shadow: 0 1px 3px rgba(12,26,43,.16), 0 0 0 1px var(--panel-edge); }
+  .seg-track input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .input-wrap { position: relative; }
+  .input {
+    width: 100%; height: 46px;
+    padding: 0 14px;
+    font: 400 15px/20px var(--font); color: var(--ink);
+    background: var(--field);
+    border: 1px solid var(--field-edge);
+    border-radius: var(--radius-input);
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .input:hover { border-color: var(--field-edge-hover); }
+  .input:focus { outline: none; }
+  .input:focus-visible { border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 35%, transparent); }
+  .input[aria-invalid="true"] { border-color: var(--err-edge); }
+  .input.has-toggle { padding-right: 76px; }
+  .reveal {
+    position: absolute; right: 6px; top: 6px; height: 34px; padding: 0 12px;
+    font: 600 12px/16px var(--font); color: var(--muted);
+    background: transparent; border: 0; border-radius: 6px; cursor: pointer;
+  }
+  .reveal:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+  .reveal:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
+  .caps { color: var(--err-ink); }
+  :root[data-theme="dark"] .caps { color: #ffd98a; }
+  :root[data-theme="light"] .caps { color: #8a5a00; }
+
+  .error {
+    display: none;
+    grid-template-columns: 20px 1fr; gap: 10px; align-items: start;
+    padding: 12px 14px;
+    background: var(--err-bg); color: var(--err-ink);
+    border-radius: var(--radius-input);
+    border-left: 3px solid var(--err-edge);
+    font: 500 14px/20px var(--font);
+  }
+  .error.on { display: grid; animation: shake .36s cubic-bezier(.36,.07,.19,.97) both; }
+  .error svg { width: 20px; height: 20px; }
+  .error p { margin: 0; }
+  .error small { display: block; font-weight: 400; font-size: 12px; line-height: 16px; opacity: .92; margin-top: 2px; }
+  @keyframes shake { 10%, 90% { transform: translateX(-1px); } 20%, 80% { transform: translateX(2px); } 30%, 50%, 70% { transform: translateX(-3px); } 40%, 60% { transform: translateX(3px); } }
+
+  .submit {
+    height: 48px; border: 0; border-radius: 24px;
+    font: 650 15px/20px var(--font); letter-spacing: .01em;
+    color: var(--btn-ink); background: var(--btn);
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    transition: background-color .15s ease, transform .15s ease;
+    margin-top: 4px;
+  }
+  .submit:hover { background: var(--btn-hover); }
+  .submit:active { transform: translateY(1px); }
+  .submit:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+  .submit[aria-disabled="true"] { cursor: progress; }
+  .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; display: none; animation: spin .8s linear infinite; }
+  .busy .spinner { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .notice { font: 400 12px/18px var(--font); color: var(--muted); margin: 8px 0 0; display: flex; gap: 8px; }
+  .notice svg { flex: none; width: 14px; height: 14px; margin-top: 2px; }
+
+  .foot {
+    font: 400 12px/16px var(--font); color: var(--faint);
+    display: flex; justify-content: space-between; gap: 12px; padding-top: 24px;
+    max-width: 400px; width: 100%; margin: 0 auto;
+  }
+  .foot .ver { font-family: var(--mono); }
+
+  /* ------------------------------------------------------------------ logo animation */
+  .x-line { stroke-dasharray: 60; stroke-dashoffset: 0; }
+  [data-motion="on"] .brand .x-line { animation: draw 1.4s cubic-bezier(.6,.0,.2,1) both; }
+  [data-motion="on"] .brand .x-line.b { animation-delay: .18s; }
+  [data-motion="on"] .brand .hub-ring { transform-box: fill-box; transform-origin: center; animation: hub 3.6s ease-in-out 1.4s infinite; }
+  @keyframes draw { from { stroke-dashoffset: 60; } to { stroke-dashoffset: 0; } }
+  @keyframes hub { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.18); opacity: .85; } }
+  [data-motion="on"] .brand .hub-halo { transform-box: fill-box; transform-origin: center; animation: halo 3.6s ease-out 1.4s infinite; }
+  @keyframes halo { 0% { transform: scale(.6); opacity: .55; } 70%, 100% { transform: scale(2.4); opacity: 0; } }
+  .hub-halo { opacity: 0; }
+
+  /* ------------------------------------------------------------------ review bar */
+  .review {
+    position: fixed; top: 16px; right: 16px; z-index: 20;
+    display: flex; gap: 6px; align-items: center;
+    padding: 6px; border-radius: 12px;
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    border: 1px solid var(--panel-edge);
+    box-shadow: 0 6px 24px rgba(0,0,0,.18);
+    font: 500 12px/16px var(--font);
+  }
+  .review .tag { color: var(--faint); padding: 0 6px 0 4px; white-space: nowrap; }
+  .review button {
+    font: 600 12px/16px var(--font); color: var(--ink);
+    background: transparent; border: 1px solid var(--panel-edge);
+    border-radius: 8px; height: 28px; padding: 0 10px; cursor: pointer;
+  }
+  .review button[aria-pressed="true"] { background: var(--seg-on); border-color: var(--field-edge); }
+  .review button:hover { border-color: var(--field-edge-hover); }
+  .review button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .review button:disabled { opacity: .55; cursor: not-allowed; }
+
+  /* ------------------------------------------------------------------ brand sheet */
+  dialog.sheet {
+    width: min(980px, calc(100vw - 48px)); max-height: calc(100vh - 48px);
+    padding: 0; border: 1px solid var(--panel-edge); border-radius: 14px;
+    background: var(--panel); color: var(--ink);
+    box-shadow: 0 30px 80px rgba(0,0,0,.4);
+  }
+  dialog.sheet::backdrop { background: rgba(4, 10, 20, .6); }
+  .sheet header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid var(--panel-edge); }
+  .sheet h2 { font: 650 18px/24px var(--font); margin: 0; }
+  .sheet .close { font: 600 13px/16px var(--font); background: transparent; color: var(--ink); border: 1px solid var(--panel-edge); border-radius: 8px; height: 32px; padding: 0 12px; cursor: pointer; }
+  .sheet .close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .sheet .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 24px; }
+  .swatch { border-radius: 12px; padding: 36px 32px; display: grid; gap: 28px; align-content: start; min-height: 260px; }
+  .swatch .cap { font: 600 11px/16px var(--font); letter-spacing: .1em; text-transform: uppercase; }
+  .swatch .lockup { display: flex; align-items: center; gap: 16px; }
+  .swatch .lockup .mark { width: 56px; height: 56px; }
+  .swatch .lockup .wordmark { height: 34px; width: auto; }
+  .swatch .icons { display: flex; align-items: end; gap: 18px; }
+  .on-light { background: #ffffff; color: #4d5d70; border: 1px solid #d6dfe9;
+    --logo-ink: #0c1a2b; --logo-a: #0a7f96; --logo-b: #1f5fe0; --logo-bg: #ffffff; --tile: #0b1b2e; --tile-ink: #eaf1f8; --tile-edge: #0b1b2e; }
+  .on-dark { background: #07111f; color: #9fb3c8; border: 1px solid #1a2c44;
+    --logo-ink: #eaf1f8; --logo-a: #56c7dc; --logo-b: #6f9bff; --logo-bg: #07111f; --tile: #0b1b2e; --tile-ink: #eaf1f8; --tile-edge: #24405f; }
+  .sheet .notes { padding: 0 24px 24px; color: var(--muted); display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .sheet .notes h3 { font: 600 13px/18px var(--font); color: var(--ink); margin: 0 0 4px; }
+  .sheet .notes p { margin: 0; font-size: 13px; line-height: 19px; }
+
+  /* ------------------------------------------------------------------ responsive */
+  @media (max-width: 1100px) {
+    :root { --panel-w: 440px; }
+    .legend { display: none; }
+  }
+  @media (max-width: 880px) {
+    .page { grid-template-columns: 1fr; }
+    .hero { min-height: 300px; }
+    .copy { display: none; }
+    .panel { border-left: 0; border-top: 1px solid var(--panel-edge); }
+    .review .tag { display: none; }
+    .sheet .grid, .sheet .notes { grid-template-columns: 1fr; }
+  }
+
+  /* motion off: explicit toggle or the OS setting */
+  [data-motion="off"] *, [data-motion="off"] *::before, [data-motion="off"] *::after { animation: none !important; transition: none !important; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Logo symbols, defined once and reused (mark tile + wordmark) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <!-- The mark: four nodes joined through one hub. Evolves the current X. -->
+    <symbol id="p1-mark" viewBox="0 0 64 64">
+      <rect x=".75" y=".75" width="62.5" height="62.5" rx="15" fill="var(--tile)" stroke="var(--tile-edge)" stroke-width="1.5"/>
+      <path class="x-line" d="M18 18 L46 46" stroke="var(--logo-a)" stroke-width="5.5" stroke-linecap="round" fill="none"/>
+      <path class="x-line b" d="M46 18 L18 46" stroke="var(--logo-b)" stroke-width="5.5" stroke-linecap="round" fill="none"/>
+      <g fill="var(--tile-ink)">
+        <circle cx="18" cy="18" r="4.6"/><circle cx="46" cy="18" r="4.6"/>
+        <circle cx="18" cy="46" r="4.6"/><circle cx="46" cy="46" r="4.6"/>
+      </g>
+      <circle class="hub-halo" cx="32" cy="32" r="7" fill="none" stroke="var(--logo-a)" stroke-width="2"/>
+      <circle class="hub-ring" cx="32" cy="32" r="7" fill="var(--tile)" stroke="var(--tile-ink)" stroke-width="3"/>
+    </symbol>
+    <!-- The wordmark: geometric monoline, n and u mirror each other around the hub X. -->
+    <symbol id="p1-wordmark" viewBox="-2 -2 200 44">
+      <g fill="none" stroke="var(--logo-ink)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3.5 36.5 V16 A12 12 0 0 1 27.5 16 V36.5"/>
+        <path transform="translate(38 0)" d="M3.5 20 H36.5 A16.5 16.5 0 1 0 31.67 31.67"/>
+        <path transform="translate(130 0)" d="M3.5 3.5 V24 A12 12 0 0 0 27.5 24 V3.5"/>
+        <path transform="translate(168 0)" d="M24 8.5 C21.5 5 18 3.5 14 3.5 C8.5 3.5 4.5 6.5 4.5 11 C4.5 15.5 8 17.5 14 19.5 C20 21.5 24.5 23.5 24.5 28.5 C24.5 33.5 20 36.5 14 36.5 C9.5 36.5 5.5 35 3.5 31.5"/>
+      </g>
+      <path d="M90 4 L118 36" stroke="var(--logo-a)" stroke-width="6.6" stroke-linecap="round"/>
+      <path d="M118 4 L90 36" stroke="var(--logo-b)" stroke-width="6.6" stroke-linecap="round"/>
+      <g fill="var(--logo-ink)"><circle cx="90" cy="4" r="4.3"/><circle cx="118" cy="4" r="4.3"/><circle cx="90" cy="36" r="4.3"/><circle cx="118" cy="36" r="4.3"/></g>
+      <circle cx="104" cy="20" r="5.6" fill="var(--logo-bg)" stroke="var(--logo-ink)" stroke-width="2.8"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="page">
+  <section class="hero" id="hero" aria-label="neXus">
+    <canvas id="topo" aria-hidden="true"></canvas>
+    <div class="hero-inner">
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 64 64" role="img" aria-label="neXus mark"><use href="#p1-mark"/></svg>
+        <svg class="wordmark" viewBox="-2 -2 200 44" role="img" aria-label="neXus"><use href="#p1-wordmark"/></svg>
+      </div>
+
+      <div class="copy" id="quiet">
+        <p class="eyebrow">Firewall estate operations</p>
+        <h2 class="headline">Every firewall in the estate, <em>seen and verified.</em></h2>
+        <p class="lede">Inventory, configuration, compliance, backups, path analysis and failover readiness across Check Point, Palo Alto, F5, Citrix and more. Observed, never assumed.</p>
+        <ol class="planes" aria-label="Operating principle">
+          <li><b>01</b>SEE</li><li><b>02</b>VERIFY</li><li><b>03</b>TRACE</li><li><b>04</b>RECOVER</li><li><b>05</b>OPERATE</li>
+        </ol>
+      </div>
+
+      <div class="hero-foot">
+        <div class="legend" aria-hidden="true">
+          <span><i></i>Gateway</span><span><i class="pair"></i>HA pair</span><span><i class="mgr"></i>Manager</span><span><i class="pulse"></i>Read in flight</span>
+        </div>
+        <p class="disclaimer">Illustration. Not live estate data.</p>
+      </div>
+    </div>
+  </section>
+
+  <main class="panel">
+    <div class="panel-body">
+      <h1 id="title">Sign in</h1>
+      <p class="sub">Use your neXus account or your directory account.</p>
+
+      <form id="signin" novalidate aria-labelledby="title">
+        <fieldset class="seg">
+          <legend class="label">Authentication</legend>
+          <div class="seg-track">
+            <input type="radio" name="mechanism" id="m-local" value="local" checked>
+            <label for="m-local">
+              <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>
+              Local account
+            </label>
+            <input type="radio" name="mechanism" id="m-ldap" value="ldap">
+            <label for="m-ldap">
+              <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="3.5" r="2"/><circle cx="3.5" cy="12.5" r="2"/><circle cx="12.5" cy="12.5" r="2"/><path d="M8 5.5v3M8 8.5 4.5 11M8 8.5l3.5 2.5"/></svg>
+              LDAP directory
+            </label>
+          </div>
+          <span class="hint" id="mech-hint">Accounts created in neXus by an administrator.</span>
+        </fieldset>
+
+        <div class="field">
+          <label class="label" for="username">Username</label>
+          <input class="input" id="username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required aria-describedby="username-hint err-msg">
+          <span class="hint" id="username-hint"></span>
+        </div>
+
+        <div class="field">
+          <label class="label" for="password">Password</label>
+          <div class="input-wrap">
+            <input class="input has-toggle" id="password" name="password" type="password" autocomplete="current-password" required aria-describedby="password-hint err-msg">
+            <button class="reveal" type="button" id="reveal" aria-controls="password" aria-pressed="false">Show</button>
+          </div>
+          <span class="hint" id="password-hint"></span>
+        </div>
+
+        <div id="err-live" aria-live="assertive" aria-atomic="true">
+          <div class="error" id="err">
+            <svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="10" cy="10" r="8"/><path d="M10 5.8v5.2M10 13.6v.2" stroke-linecap="round"/></svg>
+            <p id="err-msg"><span class="err-text"></span><small>Repeated failures may lock the account for a short time.</small></p>
+          </div>
+        </div>
+
+        <button class="submit" type="submit" id="submit"><span class="spinner" aria-hidden="true"></span><span class="btn-label">Sign in</span></button>
+
+        <p class="notice">
+          <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1.5 2.5 3.6v4.1c0 3.2 2.3 5.9 5.5 6.8 3.2-.9 5.5-3.6 5.5-6.8V3.6Z"/></svg>
+          Authorised users only. Sign-ins and sessions are recorded in the audit log.
+        </p>
+      </form>
+    </div>
+
+    <footer class="foot">
+      <span>neXus · on-premises · version <span class="ver">2.6</span></span>
+      <span aria-hidden="true">P1 · Constellation</span>
+    </footer>
+  </main>
+</div>
+
+<aside class="review" aria-label="Design review controls">
+  <span class="tag">Review</span>
+  <button type="button" id="t-theme" aria-pressed="true">Dark</button>
+  <button type="button" id="t-error" aria-pressed="false">Error state</button>
+  <button type="button" id="t-motion" aria-pressed="true">Motion</button>
+  <button type="button" id="t-brand">Brand sheet</button>
+</aside>
+
+<dialog class="sheet" id="sheet" aria-labelledby="sheet-title">
+  <header>
+    <h2 id="sheet-title">Brand sheet · Constellation</h2>
+    <button class="close" type="button" id="sheet-close">Close</button>
+  </header>
+  <div class="grid">
+    <div class="swatch on-light">
+      <span class="cap">Light variant</span>
+      <div class="lockup">
+        <svg class="mark" viewBox="0 0 64 64" role="img" aria-label="neXus mark, light variant"><use href="#p1-mark"/></svg>
+        <svg class="wordmark" viewBox="-2 -2 200 44" role="img" aria-label="neXus wordmark, light variant"><use href="#p1-wordmark"/></svg>
+      </div>
+      <div class="icons" aria-hidden="true">
+        <svg width="64" height="64" viewBox="0 0 64 64"><use href="#p1-mark"/></svg>
+        <svg width="32" height="32" viewBox="0 0 64 64"><use href="#p1-mark"/></svg>
+        <svg width="20" height="20" viewBox="0 0 64 64"><use href="#p1-mark"/></svg>
+      </div>
+    </div>
+    <div class="swatch on-dark">
+      <span class="cap">Dark variant</span>
+      <div class="lockup">
+        <svg class="mark" viewBox="0 0 64 64" role="img" aria-label="neXus mark, dark variant"><use href="#p1-mark"/></svg>
+        <svg class="wordmark" viewBox="-2 -2 200 44" role="img" aria-label="neXus wordmark, dark variant"><use href="#p1-wordmark"/></svg>
+      </div>
+      <div class="icons" aria-hidden="true">
+        <svg width="64" height="64" viewBox="0 0 64 64"><use href="#p1-mark"/></svg>
+        <svg width="32" height="32" viewBox="0 0 64 64"><use href="#p1-mark"/></svg>
+        <svg width="20" height="20" viewBox="0 0 64 64"><use href="#p1-mark"/></svg>
+      </div>
+    </div>
+  </div>
+  <div class="notes">
+    <div><h3>Evolves the X</h3><p>The two-colour X stays (teal and blue, as today) but becomes a hub: four nodes joined through one central node. A nexus is a connection point; the mark now says so.</p></div>
+    <div><h3>Wordmark</h3><p>Drawn monoline on one 7-unit stroke. The n and the u mirror each other around the X, so the name is symmetric about its own hub.</p></div>
+    <div><h3>Small sizes</h3><p>At 20 px the nodes merge into a clean X on the navy tile. The hub ring is the only detail that must survive; it does at 16 px.</p></div>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  "use strict";
+  const root = document.documentElement;
+  // inline the brand lockup (a <use> shadow tree cannot be targeted by page CSS, so the logo motion needs real nodes)
+  document.querySelectorAll(".brand svg > use").forEach((u) => {
+    const sym = document.querySelector(u.getAttribute("href"));
+    if (sym) u.replaceWith(...Array.from(sym.childNodes, (n) => n.cloneNode(true)));
+  });
+  const params = new URLSearchParams(location.search);
+  const reduceQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  // ---------------------------------------------------------------- state
+  let motionOn = !reduceQuery.matches;
+  if (params.get("theme") === "light" || params.get("theme") === "dark") root.dataset.theme = params.get("theme");
+  root.dataset.motion = motionOn ? "on" : "off";
+
+  const $ = (id) => document.getElementById(id);
+  const form = $("signin"), user = $("username"), pass = $("password"), submit = $("submit");
+  const err = $("err"), errText = err.querySelector(".err-text");
+  const GENERIC = "Sign-in failed. Check your details.";
+
+  // ---------------------------------------------------------------- auth selector
+  const mechHint = $("mech-hint");
+  const HINTS = { local: "Accounts created in neXus by an administrator.", ldap: "Your directory username and password. neXus does not store the password." };
+  form.addEventListener("change", (e) => {
+    if (e.target.name === "mechanism") mechHint.textContent = HINTS[e.target.value];
+  });
+
+  // ---------------------------------------------------------------- password reveal + caps lock
+  const reveal = $("reveal");
+  reveal.addEventListener("click", () => {
+    const show = pass.type === "password";
+    pass.type = show ? "text" : "password";
+    reveal.textContent = show ? "Hide" : "Show";
+    reveal.setAttribute("aria-pressed", String(show));
+    pass.focus();
+  });
+  const pHint = $("password-hint");
+  const caps = (e) => {
+    if (!e.getModifierState) return;
+    const on = e.getModifierState("CapsLock");
+    pHint.textContent = on ? "Caps Lock is on." : "";
+    pHint.classList.toggle("caps", on);
+  };
+  pass.addEventListener("keydown", caps); pass.addEventListener("keyup", caps);
+
+  // ---------------------------------------------------------------- error state
+  const errToggle = $("t-error");
+  function setError(on) {
+    err.classList.remove("on");
+    if (on) { void err.offsetWidth; err.classList.add("on"); errText.textContent = GENERIC; }
+    else { errText.textContent = ""; }
+    [user, pass].forEach((i) => i.setAttribute("aria-invalid", on ? "true" : "false"));
+    errToggle.setAttribute("aria-pressed", String(on));
+  }
+  errToggle.addEventListener("click", () => setError(errToggle.getAttribute("aria-pressed") !== "true"));
+
+  // ---------------------------------------------------------------- submit (mock-up: always the generic failure)
+  let busy = false;
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (busy) return;
+    const uHint = $("username-hint");
+    uHint.textContent = ""; if (!pHint.classList.contains("caps")) pHint.textContent = "";
+    if (!user.value.trim()) { uHint.textContent = "Enter a username."; user.focus(); return; }
+    if (!pass.value) { pHint.textContent = "Enter a password."; pHint.classList.remove("caps"); pass.focus(); return; }
+    busy = true; setError(false);
+    submit.classList.add("busy"); submit.setAttribute("aria-disabled", "true");
+    submit.querySelector(".btn-label").textContent = "Signing in…";
+    form.setAttribute("aria-busy", "true");
+    setTimeout(() => {
+      busy = false;
+      submit.classList.remove("busy"); submit.removeAttribute("aria-disabled");
+      submit.querySelector(".btn-label").textContent = "Sign in";
+      form.removeAttribute("aria-busy");
+      pass.value = "";               // never keep a failed password in the field
+      setError(true);
+      pass.focus();
+    }, 900);
+  });
+
+  // ---------------------------------------------------------------- theme
+  const themeBtn = $("t-theme");
+  function syncTheme() {
+    const dark = root.dataset.theme === "dark";
+    themeBtn.textContent = dark ? "Dark" : "Light";
+    themeBtn.setAttribute("aria-pressed", String(dark));
+    readColors(); if (!motionOn) drawStatic();
+  }
+  themeBtn.addEventListener("click", () => { root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark"; syncTheme(); });
+
+  // ---------------------------------------------------------------- motion
+  const motionBtn = $("t-motion");
+  function setMotion(on) {
+    motionOn = on && !reduceQuery.matches;
+    root.dataset.motion = motionOn ? "on" : "off";
+    motionBtn.setAttribute("aria-pressed", String(motionOn));
+    motionBtn.disabled = reduceQuery.matches;
+    motionBtn.title = reduceQuery.matches ? "Reduced motion is set by the system" : "";
+    if (motionOn) start(); else { stop(); drawStatic(); }
+  }
+  motionBtn.addEventListener("click", () => setMotion(!motionOn));
+  reduceQuery.addEventListener?.("change", () => setMotion(!reduceQuery.matches));
+
+  // ---------------------------------------------------------------- brand sheet
+  const sheet = $("sheet");
+  $("t-brand").addEventListener("click", () => sheet.showModal());
+  $("sheet-close").addEventListener("click", () => sheet.close());
+  sheet.addEventListener("click", (e) => { if (e.target === sheet) sheet.close(); });
+
+  // ---------------------------------------------------------------- topology canvas
+  const hero = $("hero"), cvs = $("topo"), ctx = cvs.getContext("2d");
+  const quiet = $("quiet");
+  let W = 0, H = 0, nodes = [], edges = [], adj = [], pulses = [], colors = {};
+  let raf = 0, last = 0, spawnAcc = 0;
+
+  function mulberry(seed) {
+    return () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  let rand = mulberry(20261105);
+
+  function readColors() {
+    const cs = getComputedStyle(root);
+    colors = { edge: cs.getPropertyValue("--c-edge").trim(), node: cs.getPropertyValue("--c-node").trim(), dim: cs.getPropertyValue("--c-node-dim").trim(), p1: cs.getPropertyValue("--c-pulse").trim(), p2: cs.getPropertyValue("--c-pulse-2").trim() };
+  }
+
+  function build() {
+    const r = hero.getBoundingClientRect();
+    W = r.width; H = r.height;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    cvs.width = Math.round(W * dpr); cvs.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const q = quiet.getBoundingClientRect();
+    const qz = q.width ? { x: q.left - r.left - 40, y: q.top - r.top - 40, w: q.width + 80, h: q.height + 80 } : { x: -1, y: -1, w: 0, h: 0 };
+    rand = mulberry(20261105);
+    nodes = []; edges = []; pulses = [];
+    const step = Math.max(92, Math.min(136, W / 10));
+    for (let y = step * 0.45; y < H + step * 0.2; y += step * 0.8) {
+      for (let x = step * 0.4; x < W + step * 0.2; x += step) {
+        if (rand() < 0.22) continue;
+        const nx = x + (rand() - 0.5) * step * 0.85, ny = y + (rand() - 0.5) * step * 0.7;
+        const inQuiet = nx > qz.x && nx < qz.x + qz.w && ny > qz.y && ny < qz.y + qz.h;
+        if (inQuiet && rand() < 0.7) continue;
+        const roll = rand();
+        nodes.push({ x: nx, y: ny, kind: roll < 0.07 ? 2 : roll < 0.24 ? 1 : 0, flash: 0, dim: inQuiet });
+      }
+    }
+    adj = nodes.map(() => []);
+    const seen = new Set();
+    nodes.forEach((a, i) => {
+      const near = nodes.map((b, j) => ({ j, d: Math.hypot(a.x - b.x, a.y - b.y) })).filter((o) => o.j !== i).sort((p, q2) => p.d - q2.d);
+      const k = rand() < 0.3 ? 3 : 2;
+      for (let n = 0; n < k && n < near.length; n++) {
+        const { j, d } = near[n];
+        if (d > step * 1.9) continue;
+        const key = i < j ? i + ":" + j : j + ":" + i;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const e = { a: i, b: j, len: d, dim: a.dim || nodes[j].dim };
+        edges.push(e); adj[i].push(edges.length - 1); adj[j].push(edges.length - 1);
+      }
+    });
+  }
+
+  function spawn(from, hops) {
+    if (from == null) { from = Math.floor(rand() * nodes.length); while (nodes[from] && nodes[from].dim && rand() < 0.9) from = Math.floor(rand() * nodes.length); }
+    const list = adj[from]; if (!list || !list.length) return;
+    const ei = list[Math.floor(rand() * list.length)], e = edges[ei];
+    const to = e.a === from ? e.b : e.a;
+    pulses.push({ from, to, len: e.len, t: 0, v: 70 + rand() * 50, hops: hops ?? 0, c: rand() < 0.62 ? 1 : 2 });
+  }
+
+  function update(dt) {
+    spawnAcc += dt;
+    if (spawnAcc > 0.42 && pulses.length < 16) { spawnAcc = 0; spawn(); }
+    for (let i = pulses.length - 1; i >= 0; i--) {
+      const p = pulses[i];
+      p.t += (p.v * dt) / p.len;
+      if (p.t >= 1) {
+        nodes[p.to].flash = 1;
+        pulses.splice(i, 1);
+        if (p.hops < 4 && rand() < 0.62) spawn(p.to, p.hops + 1);
+      }
+    }
+    for (const n of nodes) if (n.flash > 0) n.flash = Math.max(0, n.flash - dt * 1.1);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    // edges
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = colors.edge;
+    ctx.beginPath();
+    for (const e of edges) { if (e.dim) continue; const a = nodes[e.a], b = nodes[e.b]; ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); }
+    ctx.stroke();
+    ctx.globalAlpha = 0.4; ctx.beginPath();
+    for (const e of edges) { if (!e.dim) continue; const a = nodes[e.a], b = nodes[e.b]; ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); }
+    ctx.stroke(); ctx.globalAlpha = 1;
+
+    // pulses: a short comet along the edge
+    for (const p of pulses) {
+      const a = nodes[p.from], b = nodes[p.to];
+      const t0 = Math.max(0, p.t - 40 / p.len), t1 = Math.min(1, p.t);
+      const x0 = a.x + (b.x - a.x) * t0, y0 = a.y + (b.y - a.y) * t0;
+      const x1 = a.x + (b.x - a.x) * t1, y1 = a.y + (b.y - a.y) * t1;
+      const col = p.c === 1 ? colors.p1 : colors.p2;
+      const g = ctx.createLinearGradient(x0, y0, x1, y1);
+      g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, col);
+      ctx.strokeStyle = g; ctx.lineWidth = 2; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.globalAlpha = 0.18; ctx.beginPath(); ctx.arc(x1, y1, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(x1, y1, 2.2, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // nodes
+    for (const n of nodes) {
+      const col = n.dim ? colors.dim : colors.node;
+      if (n.flash > 0) {
+        ctx.strokeStyle = colors.p1; ctx.lineWidth = 1.2;
+        ctx.globalAlpha = n.flash * 0.7;
+        ctx.beginPath(); ctx.arc(n.x, n.y, 4 + (1 - n.flash) * 14, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+      ctx.fillStyle = n.flash > 0.4 ? colors.p1 : col;
+      if (n.kind === 1) {               // HA pair: two members side by side
+        ctx.beginPath(); ctx.arc(n.x - 3.6, n.y, 2.4, 0, Math.PI * 2); ctx.arc(n.x + 3.6, n.y, 2.4, 0, Math.PI * 2); ctx.fill();
+      } else if (n.kind === 2) {        // manager: ring + core
+        ctx.strokeStyle = n.flash > 0.4 ? colors.p1 : col; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(n.x, n.y, 5.5, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(n.x, n.y, 2, 0, Math.PI * 2); ctx.fill();
+      } else {
+        ctx.beginPath(); ctx.arc(n.x, n.y, 2, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+
+  function drawStatic() {
+    if (!nodes.length) return;
+    // a frozen, composed frame: a handful of pulses mid-edge, no movement
+    pulses = []; rand = mulberry(77);
+    for (let i = 0; i < 9; i++) { spawn(); const p = pulses[pulses.length - 1]; if (p) p.t = 0.35 + rand() * 0.5; }
+    nodes.forEach((n) => (n.flash = 0));
+    draw();
+  }
+
+  function frame(now) {
+    raf = requestAnimationFrame(frame);
+    const elapsed = now - last;
+    if (elapsed < 33) return;          // ~30 fps is plenty for ambient motion
+    last = now;
+    update(Math.min(0.05, elapsed / 1000));
+    draw();
+  }
+  function start() { if (!raf && motionOn && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(frame); } }
+  function stop() { cancelAnimationFrame(raf); raf = 0; }
+  document.addEventListener("visibilitychange", () => (document.hidden ? stop() : start()));
+
+  let resizeT = 0;
+  window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => { build(); if (!motionOn) drawStatic(); }, 120); });
+
+  // ---------------------------------------------------------------- boot
+  readColors(); build(); syncTheme();
+  setMotion(motionOn);
+  if (params.get("error") === "1") setError(true);
+  user.focus({ preventScroll: true });
+})();
+</script>
+</body>
+</html>

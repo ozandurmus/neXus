@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en" data-proposal="1">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>neXus · Sign in · Proposal 1 "Constellation"</title>
+<style>
+  /* ------------------------------------------------------------------
+     Proposal 1 · CONSTELLATION
+     Concept: the estate as a living topology. Nodes drift, pulses travel
+     along links, a node glows when a pulse arrives. Dark, calm, alive.
+     Logo: "Node X" – the X evolved into two links crossing at a hub.
+     ------------------------------------------------------------------ */
+  :root {
+    --bg: #070b14;
+    --bg-2: #0b1222;
+    --ink: #eef1f5;
+    --ink-2: #a5adba;
+    --ink-3: #6b7484;
+    --line: rgba(255,255,255,.08);
+    --line-2: rgba(255,255,255,.14);
+    --blue: #7b9cff;
+    --blue-deep: #3457d5;
+    --teal: #38d2e6;
+    --teal-deep: #077d93;
+    --panel: rgba(13,18,30,.72);
+    --field: rgba(255,255,255,.04);
+    --field-focus: rgba(255,255,255,.07);
+    --bad: #ffb4b4;
+    --bad-bg: rgba(143,31,31,.28);
+    --bad-line: rgba(255,120,120,.45);
+    --focus: #9fd7ff;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background: radial-gradient(1200px 800px at 25% 40%, var(--bg-2), var(--bg) 70%);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  canvas#sky { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .vignette {
+    position: fixed; inset: 0; pointer-events: none;
+    background:
+      linear-gradient(90deg, rgba(7,11,20,0) 55%, rgba(7,11,20,.55) 75%, rgba(7,11,20,.85) 100%),
+      linear-gradient(180deg, rgba(7,11,20,.5), rgba(7,11,20,0) 25%, rgba(7,11,20,0) 75%, rgba(7,11,20,.6));
+  }
+
+  .page {
+    position: relative; min-height: 100vh;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(420px, 520px);
+    padding: 48px 64px; gap: 48px;
+  }
+  @media (min-width: 1800px) { .page { padding: 64px 120px; grid-template-columns: minmax(0,1fr) 560px; } }
+  @media (max-width: 1300px) { .page { padding: 40px 48px; grid-template-columns: minmax(0,1fr) 440px; gap: 32px; } }
+
+  /* Left: brand and statement */
+  .hero { display: flex; flex-direction: column; justify-content: space-between; min-height: calc(100vh - 96px); }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand svg { display: block; }
+  .statement { max-width: 640px; }
+  .statement h1 {
+    font-size: clamp(40px, 3.6vw, 56px); line-height: 1.05; letter-spacing: -0.025em; font-weight: 600; margin: 0 0 20px;
+  }
+  .statement h1 em { font-style: normal; color: var(--teal); }
+  .statement p { font-size: 17px; line-height: 1.55; color: var(--ink-2); margin: 0; max-width: 520px; }
+  .verbs { display: flex; gap: 10px; align-items: center; margin-top: 36px; flex-wrap: wrap; }
+  .verbs span {
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: var(--ink-2);
+    padding: 7px 12px; border: 1px solid var(--line-2); border-radius: 999px;
+  }
+  .verbs i { width: 14px; height: 1px; background: var(--line-2); display: inline-block; }
+  .meta { font-family: var(--mono); font-size: 12px; color: var(--ink-3); letter-spacing: .02em; }
+
+  /* Right: the panel */
+  .panel-wrap { display: flex; align-items: center; }
+  .panel {
+    width: 100%; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 36px 36px 28px;
+    backdrop-filter: blur(18px) saturate(1.2); -webkit-backdrop-filter: blur(18px) saturate(1.2);
+    box-shadow: 0 30px 80px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .panel h2 { font-size: 24px; letter-spacing: -0.01em; font-weight: 600; margin: 0 0 6px; }
+  .panel .sub { font-size: 14px; color: var(--ink-2); margin: 0 0 26px; }
+
+  .seg { display: grid; grid-template-columns: 1fr 1fr; background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 10px; padding: 3px; position: relative; margin-bottom: 20px; }
+  .seg input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+  .seg label { position: relative; z-index: 1; text-align: center; font-size: 14px; font-weight: 500; padding: 9px 10px; border-radius: 7px; cursor: pointer; color: var(--ink-2); transition: color .2s; }
+  .seg .thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); background: rgba(123,156,255,.18); border: 1px solid rgba(123,156,255,.35); border-radius: 7px; transition: transform .28s cubic-bezier(.4,0,.2,1); }
+  .seg input:nth-of-type(2):checked ~ .thumb { transform: translateX(100%); }
+  .seg input:nth-of-type(1):checked ~ label[for=auth-local], .seg input:nth-of-type(2):checked ~ label[for=auth-ldap] { color: var(--ink); }
+  .seg input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); margin-bottom: 8px; }
+  .field .hint { font-size: 12px; color: var(--ink-3); margin-top: 6px; min-height: 16px; }
+  .control { position: relative; display: flex; align-items: center; }
+  .control input {
+    width: 100%; font: inherit; font-size: 15px; color: var(--ink); background: var(--field);
+    border: 1px solid var(--line-2); border-radius: 10px; padding: 12px 14px; outline: none;
+    transition: border-color .2s, background .2s, box-shadow .2s;
+  }
+  .control input::placeholder { color: var(--ink-3); }
+  .control input:hover { border-color: rgba(255,255,255,.22); }
+  .control input:focus-visible { border-color: var(--blue); background: var(--field-focus); box-shadow: 0 0 0 3px rgba(123,156,255,.25); }
+  .control input[aria-invalid="true"] { border-color: var(--bad-line); }
+  .control .eye { position: absolute; right: 6px; height: 34px; padding: 0 10px; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink-2); background: transparent; border: 0; border-radius: 7px; cursor: pointer; }
+  .control .eye:hover { color: var(--ink); background: rgba(255,255,255,.06); }
+  .control .eye:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+  .alert {
+    display: none; align-items: flex-start; gap: 10px; margin: 0 0 16px;
+    padding: 11px 12px; border-radius: 10px; background: var(--bad-bg); border: 1px solid var(--bad-line); color: var(--bad); font-size: 14px; line-height: 20px;
+  }
+  .alert svg { flex: 0 0 auto; margin-top: 2px; }
+  .panel.is-error .alert { display: flex; }
+
+  .btn {
+    width: 100%; margin-top: 6px; font: inherit; font-size: 15px; font-weight: 600; color: #fff; cursor: pointer;
+    background: linear-gradient(180deg, #4a6cf0, var(--blue-deep)); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 999px; padding: 13px 18px; letter-spacing: .01em;
+    box-shadow: 0 10px 30px rgba(52,87,213,.35), inset 0 1px 0 rgba(255,255,255,.2);
+    transition: transform .15s, box-shadow .2s, filter .2s;
+  }
+  .btn:hover { filter: brightness(1.08); box-shadow: 0 14px 36px rgba(52,87,213,.45), inset 0 1px 0 rgba(255,255,255,.2); }
+  .btn:active { transform: translateY(1px); }
+  .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+  .btn[aria-busy="true"] { opacity: .75; cursor: progress; }
+
+  .links { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; font-size: 13px; color: var(--ink-2); }
+  .links a { color: var(--blue); text-decoration: none; border-radius: 4px; }
+  .links a:hover { text-decoration: underline; }
+  .links a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .foot { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--ink-3); text-align: center; }
+
+  /* Preview controls (design-review only) */
+  .preview { position: fixed; left: 20px; bottom: 16px; display: flex; gap: 6px; align-items: center; z-index: 5; font-size: 12px; color: var(--ink-3); }
+  .preview button { font: inherit; font-size: 12px; color: var(--ink-2); background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  .preview button:hover { color: var(--ink); background: rgba(255,255,255,.1); }
+  .preview button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .preview button[aria-pressed="true"] { color: var(--bad); border-color: var(--bad-line); }
+
+  /* Logo sheet */
+  dialog { border: 0; padding: 0; background: transparent; max-width: 1100px; width: calc(100% - 64px); }
+  dialog::backdrop { background: rgba(3,5,10,.7); backdrop-filter: blur(6px); }
+  .sheet { border-radius: 16px; overflow: hidden; border: 1px solid var(--line-2); display: grid; grid-template-columns: 1fr 1fr; font-family: var(--sans); }
+  .sheet > div { padding: 40px; display: flex; flex-direction: column; gap: 28px; }
+  .sheet .on-dark { background: #0b1222; color: var(--ink); }
+  .sheet .on-light { background: #f5f6f8; color: #171b22; }
+  .sheet h3 { margin: 0; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; opacity: .6; }
+  .sheet .marks { display: flex; align-items: center; gap: 28px; }
+  .sheet p { margin: 0; font-size: 14px; line-height: 1.5; opacity: .8; max-width: 440px; }
+  .sheet .close { position: absolute; top: 12px; right: 12px; font: inherit; font-size: 13px; color: var(--ink); background: rgba(255,255,255,.1); border: 1px solid var(--line-2); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  .sheet .close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  @keyframes shake { 10%, 90% { transform: translateX(-1px);} 20%, 80% { transform: translateX(2px);} 30%, 50%, 70% { transform: translateX(-3px);} 40%, 60% { transform: translateX(3px);} }
+  .panel.shake { animation: shake .5s cubic-bezier(.36,.07,.19,.97) both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(12px);} to { opacity: 1; transform: none; } }
+  .panel, .statement, .brand { animation: rise .7s cubic-bezier(.2,.7,.2,1) both; }
+  .statement { animation-delay: .1s; } .panel { animation-delay: .2s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="sky" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<main class="page">
+  <section class="hero" aria-label="About neXus">
+    <div class="brand">
+      <!-- NEW MARK: "Node X" — evolved from the current two-stroke X. Two links cross at a hub; four endpoints are nodes. -->
+      <svg width="44" height="44" viewBox="0 0 48 48" role="img" aria-label="neXus mark">
+        <path d="M10 10 L38 38" stroke="#38d2e6" stroke-width="3.2" stroke-linecap="round"/>
+        <path d="M38 10 L10 38" stroke="#7b9cff" stroke-width="3.2" stroke-linecap="round"/>
+        <circle cx="10" cy="10" r="3.4" fill="#eef1f5"/><circle cx="38" cy="38" r="3.4" fill="#eef1f5"/>
+        <circle cx="38" cy="10" r="3.4" fill="#eef1f5"/><circle cx="10" cy="38" r="3.4" fill="#eef1f5"/>
+        <circle cx="24" cy="24" r="5.6" fill="#070b14" stroke="#eef1f5" stroke-width="2.2"/>
+      </svg>
+      <svg width="118" height="34" viewBox="0 0 118 34" role="img" aria-label="neXus">
+        <text x="0" y="26" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-1" fill="#eef1f5">ne</text>
+        <g transform="translate(38 4)">
+          <path d="M3 3 L21 21" stroke="#38d2e6" stroke-width="2.6" stroke-linecap="round"/>
+          <path d="M21 3 L3 21" stroke="#7b9cff" stroke-width="2.6" stroke-linecap="round"/>
+          <circle cx="3" cy="3" r="2.3" fill="#eef1f5"/><circle cx="21" cy="21" r="2.3" fill="#eef1f5"/><circle cx="21" cy="3" r="2.3" fill="#eef1f5"/><circle cx="3" cy="21" r="2.3" fill="#eef1f5"/>
+          <circle cx="12" cy="12" r="3.6" fill="#070b14" stroke="#eef1f5" stroke-width="1.8"/>
+        </g>
+        <text x="66" y="26" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-1" fill="#eef1f5">us</text>
+      </svg>
+    </div>
+
+    <div class="statement">
+      <h1>Every firewall.<br>One <em>picture</em>.</h1>
+      <p>Inventory, configuration, compliance, backups and failover readiness for the whole estate, verified on your own network and never anywhere else.</p>
+      <div class="verbs" aria-label="Principle">
+        <span>See</span><i></i><span>Verify</span><i></i><span>Trace</span><i></i><span>Recover</span><i></i><span>Operate</span>
+      </div>
+    </div>
+
+    <div class="meta">Isolated network · no outbound connections · all evidence stays on premises</div>
+  </section>
+
+  <section class="panel-wrap">
+    <form class="panel" id="panel" novalidate autocomplete="off" aria-labelledby="title">
+      <h2 id="title">Sign in</h2>
+      <p class="sub">Use your operator account to continue.</p>
+
+      <fieldset class="seg" style="border:0;margin:0 0 20px;padding:3px" aria-label="Authentication method">
+        <input type="radio" name="auth" id="auth-local" value="local" checked>
+        <input type="radio" name="auth" id="auth-ldap" value="ldap">
+        <span class="thumb" aria-hidden="true"></span>
+        <label for="auth-local">Local account</label>
+        <label for="auth-ldap">LDAP</label>
+      </fieldset>
+
+      <div class="alert" id="alert" role="alert" aria-live="assertive">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v4.2M8 11.3v.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Sign-in failed. Check your details.</span>
+      </div>
+
+      <div class="field">
+        <label for="user">Username</label>
+        <div class="control"><input id="user" name="username" type="text" autocomplete="username" spellcheck="false" placeholder="" required></div>
+        <div class="hint" id="user-hint"></div>
+      </div>
+      <div class="field">
+        <label for="pass">Password</label>
+        <div class="control">
+          <input id="pass" name="password" type="password" autocomplete="current-password" required>
+          <button type="button" class="eye" id="eye" aria-pressed="false" aria-controls="pass">Show</button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn" id="submit">Sign in</button>
+
+      <div class="links">
+        <span>Trouble signing in? Ask your administrator.</span>
+      </div>
+      <div class="foot">neXus · on-premises · version 2.6</div>
+    </form>
+  </section>
+</main>
+
+<div class="preview" aria-label="Design preview controls">
+  <span>Preview</span>
+  <button type="button" id="toggle-error" aria-pressed="false">Error state</button>
+  <button type="button" id="open-logo">Logo sheet</button>
+</div>
+
+<dialog id="logo-sheet" aria-labelledby="sheet-title">
+  <div class="sheet" style="position:relative">
+    <button class="close" id="close-logo" type="button">Close</button>
+    <div class="on-dark">
+      <h3 id="sheet-title">Logo · on dark</h3>
+      <div class="marks">
+        <svg width="96" height="96" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M10 10 L38 38" stroke="#38d2e6" stroke-width="3.2" stroke-linecap="round"/><path d="M38 10 L10 38" stroke="#7b9cff" stroke-width="3.2" stroke-linecap="round"/>
+          <circle cx="10" cy="10" r="3.4" fill="#eef1f5"/><circle cx="38" cy="38" r="3.4" fill="#eef1f5"/><circle cx="38" cy="10" r="3.4" fill="#eef1f5"/><circle cx="10" cy="38" r="3.4" fill="#eef1f5"/>
+          <circle cx="24" cy="24" r="5.6" fill="#0b1222" stroke="#eef1f5" stroke-width="2.2"/>
+        </svg>
+        <svg width="236" height="68" viewBox="0 0 118 34" aria-hidden="true">
+          <text x="0" y="26" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-1" fill="#eef1f5">ne</text>
+          <g transform="translate(38 4)"><path d="M3 3 L21 21" stroke="#38d2e6" stroke-width="2.6" stroke-linecap="round"/><path d="M21 3 L3 21" stroke="#7b9cff" stroke-width="2.6" stroke-linecap="round"/><circle cx="3" cy="3" r="2.3" fill="#eef1f5"/><circle cx="21" cy="21" r="2.3" fill="#eef1f5"/><circle cx="21" cy="3" r="2.3" fill="#eef1f5"/><circle cx="3" cy="21" r="2.3" fill="#eef1f5"/><circle cx="12" cy="12" r="3.6" fill="#0b1222" stroke="#eef1f5" stroke-width="1.8"/></g>
+          <text x="66" y="26" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-1" fill="#eef1f5">us</text>
+        </svg>
+      </div>
+      <p><strong>Node X.</strong> An evolution of the current mark: the two strokes keep their teal and blue, but become links, and the four ends and the crossing become nodes. The hub is hollow, a ring, which reads as "a place things pass through" rather than a solid point. Works at 16 px (favicon) because the geometry is four dots, two lines, one ring.</p>
+    </div>
+    <div class="on-light">
+      <h3>Logo · on light</h3>
+      <div class="marks">
+        <svg width="96" height="96" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M10 10 L38 38" stroke="#077d93" stroke-width="3.2" stroke-linecap="round"/><path d="M38 10 L10 38" stroke="#3457d5" stroke-width="3.2" stroke-linecap="round"/>
+          <circle cx="10" cy="10" r="3.4" fill="#0e2944"/><circle cx="38" cy="38" r="3.4" fill="#0e2944"/><circle cx="38" cy="10" r="3.4" fill="#0e2944"/><circle cx="10" cy="38" r="3.4" fill="#0e2944"/>
+          <circle cx="24" cy="24" r="5.6" fill="#f5f6f8" stroke="#0e2944" stroke-width="2.2"/>
+        </svg>
+        <svg width="236" height="68" viewBox="0 0 118 34" aria-hidden="true">
+          <text x="0" y="26" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-1" fill="#0e2944">ne</text>
+          <g transform="translate(38 4)"><path d="M3 3 L21 21" stroke="#077d93" stroke-width="2.6" stroke-linecap="round"/><path d="M21 3 L3 21" stroke="#3457d5" stroke-width="2.6" stroke-linecap="round"/><circle cx="3" cy="3" r="2.3" fill="#0e2944"/><circle cx="21" cy="21" r="2.3" fill="#0e2944"/><circle cx="21" cy="3" r="2.3" fill="#0e2944"/><circle cx="3" cy="21" r="2.3" fill="#0e2944"/><circle cx="12" cy="12" r="3.6" fill="#f5f6f8" stroke="#0e2944" stroke-width="1.8"/></g>
+          <text x="66" y="26" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif" font-size="30" font-weight="600" letter-spacing="-1" fill="#0e2944">us</text>
+        </svg>
+      </div>
+      <p>On light surfaces the nodes take the product navy and the strokes return to the existing teal (#077D93) and primary blue (#3457D5), so the mark sits in the same palette as every status pill and link in the product.</p>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  'use strict';
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  /* ---------- Topology canvas ---------- */
+  var cv = document.getElementById('sky'), ctx = cv.getContext('2d');
+  var W, H, dpr, nodes = [], edges = [], pulses = [], last = 0, running = true;
+  var N = 64, RADIUS = 190, MAXDEG = 4;
+
+  function rand(a, b) { return a + Math.random() * (b - a); }
+
+  function build() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = cv.width = Math.floor(innerWidth * dpr); H = cv.height = Math.floor(innerHeight * dpr);
+    nodes = []; edges = []; pulses = [];
+    // Nodes live mostly in the left two-thirds; two loose clusters so it looks like sites, not noise.
+    for (var i = 0; i < N; i++) {
+      var c = Math.random() < .5 ? [0.28, 0.42] : [0.52, 0.62];
+      var x = (c[0] + rand(-.24, .24)) * innerWidth, y = (c[1] + rand(-.36, .36)) * innerHeight;
+      nodes.push({ x: x, y: y, vx: rand(-.05, .05), vy: rand(-.05, .05), r: Math.random() < .12 ? 3.2 : 1.8, glow: 0, deg: 0 });
+    }
+    for (var a = 0; a < N; a++) {
+      var cand = [];
+      for (var b = 0; b < N; b++) if (a !== b) {
+        var dx = nodes[a].x - nodes[b].x, dy = nodes[a].y - nodes[b].y, d = Math.hypot(dx, dy);
+        if (d < RADIUS) cand.push([d, b]);
+      }
+      cand.sort(function (p, q) { return p[0] - q[0]; });
+      for (var k = 0; k < cand.length && nodes[a].deg < MAXDEG; k++) {
+        var b2 = cand[k][1];
+        if (b2 > a && nodes[b2].deg < MAXDEG) { edges.push([a, b2]); nodes[a].deg++; nodes[b2].deg++; }
+      }
+    }
+  }
+
+  function spawn() {
+    if (!edges.length) return;
+    var e = edges[Math.floor(Math.random() * edges.length)];
+    var dir = Math.random() < .5;
+    pulses.push({ a: dir ? e[0] : e[1], b: dir ? e[1] : e[0], t: 0, speed: rand(.35, .7), teal: Math.random() < .5 });
+  }
+
+  function step(ts) {
+    if (!running) return;
+    requestAnimationFrame(step);
+    if (ts - last < 33) return;            // ~30 fps is plenty
+    var dt = Math.min(0.1, (ts - last) / 1000); last = ts;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+
+    // drift
+    for (var i = 0; i < N; i++) {
+      var n = nodes[i]; n.x += n.vx; n.y += n.vy;
+      if (n.x < 20 || n.x > innerWidth * .78) n.vx *= -1;
+      if (n.y < 20 || n.y > innerHeight - 20) n.vy *= -1;
+      n.glow = Math.max(0, n.glow - dt * 1.4);
+    }
+    // edges
+    ctx.lineWidth = 1;
+    for (var j = 0; j < edges.length; j++) {
+      var p = nodes[edges[j][0]], q = nodes[edges[j][1]];
+      ctx.strokeStyle = 'rgba(123,156,255,0.11)';
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+    }
+    // pulses
+    if (Math.random() < dt * 9) spawn();
+    for (var k = pulses.length - 1; k >= 0; k--) {
+      var u = pulses[k]; u.t += dt * u.speed;
+      var A = nodes[u.a], B = nodes[u.b];
+      if (u.t >= 1) { B.glow = 1; pulses.splice(k, 1); continue; }
+      var x = A.x + (B.x - A.x) * u.t, y = A.y + (B.y - A.y) * u.t;
+      var col = u.teal ? '56,210,230' : '123,156,255';
+      // trailing segment
+      var t0 = Math.max(0, u.t - .18);
+      var g = ctx.createLinearGradient(A.x + (B.x - A.x) * t0, A.y + (B.y - A.y) * t0, x, y);
+      g.addColorStop(0, 'rgba(' + col + ',0)'); g.addColorStop(1, 'rgba(' + col + ',.8)');
+      ctx.strokeStyle = g; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(A.x + (B.x - A.x) * t0, A.y + (B.y - A.y) * t0); ctx.lineTo(x, y); ctx.stroke();
+      ctx.fillStyle = 'rgba(' + col + ',1)'; ctx.beginPath(); ctx.arc(x, y, 1.8, 0, 6.283); ctx.fill();
+    }
+    // nodes
+    for (var m = 0; m < N; m++) {
+      var nd = nodes[m];
+      if (nd.glow > 0) {
+        var rg = ctx.createRadialGradient(nd.x, nd.y, 0, nd.x, nd.y, 18);
+        rg.addColorStop(0, 'rgba(56,210,230,' + (0.35 * nd.glow) + ')'); rg.addColorStop(1, 'rgba(56,210,230,0)');
+        ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(nd.x, nd.y, 18, 0, 6.283); ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(238,241,245,' + (0.45 + 0.55 * nd.glow) + ')';
+      ctx.beginPath(); ctx.arc(nd.x, nd.y, nd.r, 0, 6.283); ctx.fill();
+    }
+  }
+
+  function staticFrame() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, innerWidth, innerHeight);
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(123,156,255,0.11)';
+    edges.forEach(function (e) { var p = nodes[e[0]], q = nodes[e[1]]; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke(); });
+    ctx.fillStyle = 'rgba(238,241,245,.55)';
+    nodes.forEach(function (n) { ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, 6.283); ctx.fill(); });
+  }
+
+  function start() {
+    build();
+    if (reduce.matches) { running = false; staticFrame(); }
+    else { running = true; last = 0; requestAnimationFrame(step); }
+  }
+  var rt; addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(start, 150); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) running = false; else if (!reduce.matches) { running = true; last = 0; requestAnimationFrame(step); } });
+  reduce.addEventListener && reduce.addEventListener('change', start);
+  start();
+
+  /* ---------- Form behaviour (mock) ---------- */
+  var panel = document.getElementById('panel'), user = document.getElementById('user'), pass = document.getElementById('pass');
+  var submit = document.getElementById('submit'), toggle = document.getElementById('toggle-error'), hint = document.getElementById('user-hint');
+  function setError(on) {
+    panel.classList.toggle('is-error', on);
+    toggle.setAttribute('aria-pressed', String(on));
+    user.setAttribute('aria-invalid', String(on)); pass.setAttribute('aria-invalid', String(on));
+    if (on && !reduce.matches) { panel.classList.remove('shake'); void panel.offsetWidth; panel.classList.add('shake'); }
+  }
+  toggle.addEventListener('click', function () { setError(!panel.classList.contains('is-error')); });
+  panel.addEventListener('submit', function (ev) {
+    ev.preventDefault(); setError(false);
+    submit.setAttribute('aria-busy', 'true'); submit.textContent = 'Signing in…';
+    setTimeout(function () { submit.removeAttribute('aria-busy'); submit.textContent = 'Sign in'; setError(true); pass.value = ''; pass.focus(); }, 700);
+  });
+  document.querySelectorAll('input[name=auth]').forEach(function (r) {
+    r.addEventListener('change', function () { hint.textContent = r.value === 'ldap' ? 'Your directory account name, without the domain.' : ''; });
+  });
+  var eye = document.getElementById('eye');
+  eye.addEventListener('click', function () { var show = pass.type === 'password'; pass.type = show ? 'text' : 'password'; eye.textContent = show ? 'Hide' : 'Show'; eye.setAttribute('aria-pressed', String(show)); });
+
+  /* ---------- Logo sheet ---------- */
+  var dlg = document.getElementById('logo-sheet');
+  document.getElementById('open-logo').addEventListener('click', function () { dlg.showModal(); });
+  document.getElementById('close-logo').addEventListener('click', function () { dlg.close(); });
+  dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+})();
+</script>
+</body>
+</html>

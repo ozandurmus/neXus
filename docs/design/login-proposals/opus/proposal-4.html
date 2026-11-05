@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>neXus · Sign in · Proposal 4 · Meridian</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='9' fill='%231b1d22'/%3E%3Cg fill='none' stroke='%23f4f1ea' stroke-width='3.2' stroke-linecap='round'%3E%3Cpath d='M9.5 7A16 16 0 0 1 9.5 33'/%3E%3Cpath d='M30.5 7A16 16 0 0 0 30.5 33'/%3E%3C/g%3E%3Ccircle cx='20' cy='20' r='2.6' fill='%23c9a56b'/%3E%3C/svg%3E">
+<!--
+  Proposal 4 · "Meridian"
+  Concept: quiet premium. Paper, ink and one brass accent. The art is a family of circles that all touch at one
+  point: two sides (active and standby, intent and runtime) meeting at a single point of truth. Two small markers
+  travel the main arcs and meet at that point, slowly. The new mark is the X redrawn as two arcs back to back, )(,
+  with the meeting point as a brass dot.
+  Self-contained: system serif + sans stacks, inline SVG + SMIL, no external resources.
+-->
+<style>
+  :root {
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f4f1ea;
+    --art-bg: #eeeae1;
+    --ink: #1b1d22;
+    --muted: #5d6068;
+    --hair: #d6d0c3;
+    --line: rgba(27, 29, 34, 0.16);
+    --line-strong: rgba(27, 29, 34, 0.42);
+    --accent: #8a6a3b;      /* decorative and large text only */
+    --accent-dot: #a07a3f;
+    --field: #fffdf9;
+    --field-edge: #7c786f;
+    --field-hover: #3d3f45;
+    --btn: #1b1d22;
+    --btn-ink: #f4f1ea;
+    --btn-hover: #33363d;
+    --focus: #1b1d22;
+    --glow: rgba(160, 122, 63, 0.16);
+    --err-bg: #fbe7e7; --err-ink: #8f1f1f; --err-edge: #d03b3b;
+    --logo-ink: #1b1d22; --logo-dot: #a07a3f;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #121314;
+    --art-bg: #0d0e0f;
+    --ink: #ece8df;
+    --muted: #a29e95;
+    --hair: #2b2c2e;
+    --line: rgba(236, 232, 223, 0.12);
+    --line-strong: rgba(236, 232, 223, 0.38);
+    --accent: #c9a56b;
+    --accent-dot: #c9a56b;
+    --field: #17181a;
+    --field-edge: #6f6c66;
+    --field-hover: #a29e95;
+    --btn: #ece8df;
+    --btn-ink: #121314;
+    --btn-hover: #ffffff;
+    --focus: #ece8df;
+    --glow: rgba(201, 165, 107, 0.12);
+    --err-bg: #3a1d1f; --err-ink: #ffb4b4; --err-edge: #ef6a6a;
+    --logo-ink: #ece8df; --logo-dot: #c9a56b;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font: 400 14px/20px var(--sans); color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; min-height: 100vh; }
+
+  .page { display: grid; grid-template-columns: clamp(460px, 38vw, 640px) 1fr; min-height: 100vh; }
+
+  /* --------------------------------------------------------------- form column */
+  .side { display: grid; grid-template-rows: auto 1fr auto; padding: clamp(36px, 4.4vw, 72px) clamp(40px, 5vw, 96px) 32px; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand .wordmark { height: 34px; width: auto; overflow: visible; }
+
+  .form-wrap { align-self: center; width: 100%; max-width: 380px; padding: 40px 0; }
+  .kicker { font: 600 11px/16px var(--sans); letter-spacing: .18em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+  h1 { font: 400 40px/44px var(--serif); letter-spacing: -.01em; margin: 0 0 36px; }
+
+  form { display: grid; gap: 22px; }
+  .label { font: 600 11px/16px var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .f { display: grid; gap: 8px; }
+  .hint { font: 400 12px/16px var(--sans); color: var(--muted); min-height: 16px; }
+
+  /* auth selector: editorial tabs on a radio group */
+  fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  legend { padding: 0; margin-bottom: 6px; }
+  .tabs { position: relative; display: flex; gap: 28px; border-bottom: 1px solid var(--hair); }
+  .tabs input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .tabs label { position: relative; padding: 10px 0 12px; font: 500 15px/20px var(--sans); color: var(--muted); cursor: pointer; }
+  .tabs label::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--ink); transform: scaleX(0); transform-origin: left; transition: transform .3s cubic-bezier(.2,.7,.2,1); }
+  .tabs label:hover { color: var(--ink); }
+  .tabs input:checked + label { color: var(--ink); }
+  .tabs input:checked + label::after { transform: scaleX(1); }
+  .tabs input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: 2px; }
+
+  .input { width: 100%; height: 48px; padding: 0 14px; background: var(--field); color: var(--ink); border: 1px solid var(--field-edge); border-radius: 2px; font: 400 16px/20px var(--sans); transition: border-color .2s, box-shadow .2s; }
+  .input:hover { border-color: var(--field-hover); }
+  .input:focus { outline: none; }
+  .input:focus-visible { border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus); }
+  .input[aria-invalid="true"] { border-color: var(--err-edge); box-shadow: 0 0 0 1px var(--err-edge); }
+  .pw { position: relative; }
+  .pw .input { padding-right: 72px; }
+  .reveal { position: absolute; right: 6px; top: 7px; height: 34px; padding: 0 10px; background: transparent; border: 0; color: var(--ink); font: 500 13px/16px var(--sans); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--field-edge); cursor: pointer; border-radius: 2px; }
+  .reveal:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
+  .caps { color: #8a5a00; }
+  :root[data-theme="dark"] .caps { color: #ffd98a; }
+
+  .error { display: none; gap: 12px; grid-template-columns: 2px 1fr; padding: 14px 16px 14px 0; background: var(--err-bg); color: var(--err-ink); font: 500 14px/20px var(--sans); border-radius: 2px; }
+  .error::before { content: ""; background: var(--err-edge); border-radius: 0 2px 2px 0; }
+  .error.on { display: grid; animation: fade .4s ease both; }
+  .error p { margin: 0; }
+  .error small { display: block; font: 400 12px/16px var(--sans); margin-top: 2px; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+  .submit { height: 52px; border: 0; border-radius: 2px; background: var(--btn); color: var(--btn-ink); font: 600 15px/20px var(--sans); letter-spacing: .02em; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; cursor: pointer; transition: background-color .2s; margin-top: 6px; }
+  .submit:hover { background: var(--btn-hover); }
+  .submit:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+  .submit svg { width: 20px; height: 20px; transition: transform .25s; }
+  .submit:hover svg { transform: translateX(4px); }
+  .submit.busy svg { animation: nudge 1s ease-in-out infinite; }
+  @keyframes nudge { 50% { transform: translateX(6px); opacity: .5; } }
+
+  .legal { margin: 26px 0 0; font: 400 12px/18px var(--sans); color: var(--muted); }
+
+  .foot { display: flex; justify-content: space-between; gap: 12px; font: 400 12px/16px var(--sans); color: var(--muted); padding-top: 24px; border-top: 1px solid var(--hair); }
+  .foot .ver { font-family: var(--mono); }
+
+  /* --------------------------------------------------------------- art column */
+  .art { position: relative; overflow: hidden; background: var(--art-bg); border-left: 1px solid var(--hair); }
+  .art svg.meridian { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .art .glow { position: absolute; width: 70vmin; height: 70vmin; left: 50%; top: 50%; margin: -35vmin 0 0 -35vmin; border-radius: 50%; background: radial-gradient(closest-side, var(--glow), transparent); pointer-events: none; }
+  [data-motion="on"] .art .glow { animation: drift 28s ease-in-out infinite alternate; }
+  @keyframes drift { 0% { transform: translate(-6%, -4%) scale(1); } 100% { transform: translate(6%, 5%) scale(1.12); } }
+  .c { fill: none; stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .c.main { stroke: var(--line-strong); stroke-width: 1.25; }
+  .mover { fill: var(--accent-dot); }
+  .meet { fill: none; stroke: var(--accent-dot); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .point { fill: var(--accent-dot); }
+
+  .statement { position: absolute; left: clamp(40px, 5vw, 96px); bottom: clamp(40px, 6vh, 80px); right: clamp(40px, 5vw, 96px); max-width: 680px; }
+  .statement h2 { font: 400 clamp(36px, 3.4vw, 56px)/1.08 var(--serif); letter-spacing: -.015em; margin: 0 0 16px; text-wrap: balance; }
+  .statement h2 i { color: var(--accent); }
+  .statement p { font: 400 16px/26px var(--sans); color: var(--muted); margin: 0; max-width: 460px; }
+  .principle { position: absolute; top: clamp(36px, 4.4vw, 72px); right: clamp(40px, 5vw, 96px); font: 500 11px/16px var(--sans); letter-spacing: .18em; color: var(--muted); display: flex; gap: 14px; }
+  .principle span:nth-child(even) { color: var(--hair); }
+  .caption { position: absolute; right: clamp(40px, 5vw, 96px); bottom: clamp(40px, 6vh, 80px); font: 400 12px/16px var(--sans); color: var(--muted); }
+
+  /* logo: the meeting point breathes once on load */
+  [data-motion="on"] .brand .logo-dot { transform-box: fill-box; transform-origin: center; animation: dotin 1.6s cubic-bezier(.2,.8,.2,1) .3s both; }
+  [data-motion="on"] .brand .arc { stroke-dasharray: 40; animation: arcin 1.4s cubic-bezier(.6,0,.2,1) both; }
+  @keyframes dotin { 0% { transform: scale(0); } 60% { transform: scale(1.5); } 100% { transform: scale(1); } }
+  @keyframes arcin { from { stroke-dashoffset: 40; } to { stroke-dashoffset: 0; } }
+
+  /* --------------------------------------------------------------- review controls + sheet */
+  .review { position: fixed; top: 16px; right: 16px; z-index: 30; display: flex; align-items: center; gap: 6px; padding: 6px; background: var(--bg); border: 1px solid var(--hair); border-radius: 4px; }
+  .review .tag { font: 500 12px/16px var(--sans); color: var(--muted); padding: 0 6px 0 4px; }
+  .review button { height: 28px; padding: 0 10px; background: transparent; color: var(--ink); border: 1px solid var(--hair); border-radius: 2px; font: 600 12px/16px var(--sans); cursor: pointer; }
+  .review button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .review button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .review button:disabled { opacity: .55; cursor: not-allowed; }
+
+  dialog.sheet { width: min(960px, calc(100vw - 48px)); padding: 0; border: 1px solid var(--hair); border-radius: 4px; background: var(--bg); color: var(--ink); box-shadow: 0 30px 80px rgba(0,0,0,.25); }
+  dialog.sheet::backdrop { background: rgba(18, 19, 20, .45); }
+  .sheet header { display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; border-bottom: 1px solid var(--hair); }
+  .sheet h2 { margin: 0; font: 400 22px/28px var(--serif); }
+  .sheet .close { height: 32px; padding: 0 12px; background: transparent; color: var(--ink); border: 1px solid var(--hair); border-radius: 2px; font: 600 13px/16px var(--sans); cursor: pointer; }
+  .sheet .close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .sheet .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 24px; }
+  .sw { border-radius: 2px; padding: 36px 32px; display: grid; gap: 28px; }
+  .sw .cap { font: 600 11px/16px var(--sans); letter-spacing: .14em; text-transform: uppercase; }
+  .sw .lock .wordmark { height: 52px; width: auto; overflow: visible; }
+  .sw .icons { display: flex; gap: 16px; align-items: end; }
+  .on-light { background: #fbf9f4; color: #5d6068; border: 1px solid #d6d0c3; --logo-ink: #1b1d22; --logo-dot: #a07a3f; --tile: #1b1d22; --tile-ink: #f4f1ea; }
+  .on-dark { background: #121314; color: #a29e95; border: 1px solid #2b2c2e; --logo-ink: #ece8df; --logo-dot: #c9a56b; --tile: #ece8df; --tile-ink: #121314; }
+  .sheet .notes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 0 24px 24px; color: var(--muted); }
+  .sheet .notes h3 { margin: 0 0 4px; font: 600 13px/18px var(--sans); color: var(--ink); }
+  .sheet .notes p { margin: 0; font-size: 13px; line-height: 19px; }
+
+  @media (max-width: 980px) {
+    .page { grid-template-columns: 1fr; }
+    .art { min-height: 420px; border-left: 0; border-top: 1px solid var(--hair); order: 2; }
+    .principle { display: none; }
+    .review .tag { display: none; }
+    .sheet .grid, .sheet .notes { grid-template-columns: 1fr; }
+  }
+  @media (min-width: 1800px) { h1 { font-size: 46px; line-height: 50px; } }
+
+  [data-motion="off"] *, [data-motion="off"] *::before, [data-motion="off"] *::after { animation: none !important; transition: none !important; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <!-- Mark: two arcs back to back, )( . They touch at one point, marked in brass. -->
+    <symbol id="p4-x" viewBox="0 0 40 40">
+      <g fill="none" stroke="var(--logo-ink)" stroke-width="3.2" stroke-linecap="round">
+        <path class="arc" d="M9.5 7 A16 16 0 0 1 9.5 33"/>
+        <path class="arc" d="M30.5 7 A16 16 0 0 0 30.5 33"/>
+      </g>
+      <circle class="logo-dot" cx="20" cy="20" r="2.6" fill="var(--logo-dot)"/>
+    </symbol>
+    <symbol id="p4-tile" viewBox="0 0 40 40">
+      <rect width="40" height="40" rx="9" fill="var(--tile)"/>
+      <g fill="none" stroke="var(--tile-ink)" stroke-width="3.2" stroke-linecap="round">
+        <path d="M9.5 7 A16 16 0 0 1 9.5 33"/><path d="M30.5 7 A16 16 0 0 0 30.5 33"/>
+      </g>
+      <circle cx="20" cy="20" r="2.6" fill="var(--logo-dot)"/>
+    </symbol>
+    <!-- Wordmark: book serif from the system stack; the X is the mark at x-height.
+         Production would outline these letters to paths so the logo never depends on installed fonts. -->
+    <symbol id="p4-wordmark" viewBox="0 0 176 48">
+      <g fill="var(--logo-ink)" font-family="Iowan Old Style, Palatino Linotype, Palatino, Book Antiqua, Georgia, serif" font-size="50" letter-spacing="0.5">
+        <text x="67" y="40" text-anchor="end">ne</text>
+        <text x="93" y="40" text-anchor="start">us</text>
+      </g>
+      <g transform="translate(62.8 11) scale(0.86)">
+        <g fill="none" stroke="var(--logo-ink)" stroke-width="4.8" stroke-linecap="round">
+          <path class="arc" d="M9.5 7 A16 16 0 0 1 9.5 33"/>
+          <path class="arc" d="M30.5 7 A16 16 0 0 0 30.5 33"/>
+        </g>
+        <circle class="logo-dot" cx="20" cy="20" r="3.1" fill="var(--logo-dot)"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="page">
+  <main class="side">
+    <div class="brand">
+      <svg class="wordmark" viewBox="0 0 176 48" role="img" aria-label="neXus"><use href="#p4-wordmark"/></svg>
+    </div>
+
+    <div class="form-wrap">
+      <p class="kicker">Firewall estate operations</p>
+      <h1 id="title">Sign in</h1>
+
+      <form id="signin" novalidate aria-labelledby="title">
+        <fieldset>
+          <legend class="label">Authentication</legend>
+          <div class="tabs">
+            <input type="radio" name="mechanism" id="m-local" value="local" checked>
+            <label for="m-local">Local account</label>
+            <input type="radio" name="mechanism" id="m-ldap" value="ldap">
+            <label for="m-ldap">LDAP directory</label>
+          </div>
+        </fieldset>
+
+        <div class="f">
+          <label class="label" for="username">Username</label>
+          <input class="input" id="username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required aria-describedby="username-hint err-msg">
+          <span class="hint" id="username-hint"></span>
+        </div>
+        <div class="f">
+          <label class="label" for="password">Password</label>
+          <div class="pw">
+            <input class="input" id="password" name="password" type="password" autocomplete="current-password" required aria-describedby="password-hint err-msg">
+            <button class="reveal" id="reveal" type="button" aria-controls="password" aria-pressed="false">Show</button>
+          </div>
+          <span class="hint" id="password-hint"></span>
+        </div>
+
+        <div aria-live="assertive" aria-atomic="true">
+          <div class="error" id="err">
+            <p id="err-msg"><span class="err-text"></span><small>Repeated failures may lock the account for a short time.</small></p>
+          </div>
+        </div>
+
+        <button class="submit" id="submit" type="submit">
+          <span class="btn-label">Sign in</span>
+          <svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h14M12 5l5 5-5 5"/></svg>
+        </button>
+      </form>
+      <p class="legal">Authorised users only. Every sign-in is recorded in the audit log.</p>
+    </div>
+
+    <footer class="foot">
+      <span>neXus · on-premises · version <span class="ver">2.6</span></span>
+      <span aria-hidden="true">P4 · Meridian</span>
+    </footer>
+  </main>
+
+  <section class="art" aria-label="About neXus">
+    <div class="glow" aria-hidden="true"></div>
+    <!-- Circles of growing radius, all tangent at one point. Two markers travel the main pair and meet there. -->
+    <svg class="meridian" id="meridian" viewBox="0 0 800 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <g>
+        <circle class="c" cx="320" cy="400" r="80"/>   <circle class="c" cx="480" cy="400" r="80"/>
+        <circle class="c" cx="250" cy="400" r="150"/>  <circle class="c" cx="550" cy="400" r="150"/>
+        <circle class="c main" cx="160" cy="400" r="240"/> <circle class="c main" cx="640" cy="400" r="240"/>
+        <circle class="c" cx="40" cy="400" r="360"/>   <circle class="c" cx="760" cy="400" r="360"/>
+        <circle class="c" cx="-120" cy="400" r="520"/> <circle class="c" cx="920" cy="400" r="520"/>
+        <circle class="c" cx="-340" cy="400" r="740"/> <circle class="c" cx="1140" cy="400" r="740"/>
+        <circle class="c" cx="-640" cy="400" r="1040"/><circle class="c" cx="1440" cy="400" r="1040"/>
+      </g>
+      <path id="arcL" d="M160 160 A240 240 0 0 1 160 640" fill="none"/>
+      <path id="arcR" d="M640 640 A240 240 0 0 1 640 160" fill="none"/>
+
+      <circle class="meet" cx="400" cy="400" r="4" opacity="0">
+        <animate attributeName="r" values="4;4;26;26;4;26;26" keyTimes="0;0.24;0.34;0.5;0.74;0.84;1" dur="18s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0;0;.9;0;0;0;.9;0;0" keyTimes="0;0.245;0.25;0.34;0.5;0.745;0.75;0.84;1" dur="18s" repeatCount="indefinite"/>
+      </circle>
+      <circle class="point" cx="400" cy="400" r="3.5"/>
+
+      <circle class="mover" r="4.5">
+        <animateMotion dur="18s" repeatCount="indefinite" keyPoints="0;1;0" keyTimes="0;0.5;1" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"><mpath href="#arcL"/></animateMotion>
+      </circle>
+      <circle class="mover" r="4.5">
+        <animateMotion dur="18s" repeatCount="indefinite" keyPoints="0;1;0" keyTimes="0;0.5;1" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"><mpath href="#arcR"/></animateMotion>
+      </circle>
+    </svg>
+
+    <p class="principle" aria-label="Operating principle: see, verify, trace, recover, operate"><span>SEE</span><span>/</span><span>VERIFY</span><span>/</span><span>TRACE</span><span>/</span><span>RECOVER</span><span>/</span><span>OPERATE</span></p>
+
+    <div class="statement">
+      <h2>Every firewall, <i>accounted for.</i></h2>
+      <p>Inventory, configuration, compliance, backups and failover readiness for the whole estate. Observed, dated and on record.</p>
+    </div>
+  </section>
+</div>
+
+<aside class="review" aria-label="Design review controls">
+  <span class="tag">Review · P4</span>
+  <button type="button" id="t-theme" aria-pressed="false">Light</button>
+  <button type="button" id="t-error" aria-pressed="false">Error state</button>
+  <button type="button" id="t-motion" aria-pressed="true">Motion</button>
+  <button type="button" id="t-brand">Brand sheet</button>
+</aside>
+
+<dialog class="sheet" id="sheet" aria-labelledby="sheet-title">
+  <header><h2 id="sheet-title">Brand sheet · Meridian</h2><button class="close" id="sheet-close" type="button">Close</button></header>
+  <div class="grid">
+    <div class="sw on-light">
+      <span class="cap">Light variant</span>
+      <div class="lock"><svg class="wordmark" viewBox="0 0 176 48" role="img" aria-label="neXus wordmark, light variant"><use href="#p4-wordmark"/></svg></div>
+      <div class="icons" aria-hidden="true">
+        <svg width="64" height="64" viewBox="0 0 40 40"><use href="#p4-tile"/></svg>
+        <svg width="32" height="32" viewBox="0 0 40 40"><use href="#p4-tile"/></svg>
+        <svg width="20" height="20" viewBox="0 0 40 40"><use href="#p4-tile"/></svg>
+        <svg width="48" height="48" viewBox="0 0 40 40"><use href="#p4-x"/></svg>
+      </div>
+    </div>
+    <div class="sw on-dark">
+      <span class="cap">Dark variant</span>
+      <div class="lock"><svg class="wordmark" viewBox="0 0 176 48" role="img" aria-label="neXus wordmark, dark variant"><use href="#p4-wordmark"/></svg></div>
+      <div class="icons" aria-hidden="true">
+        <svg width="64" height="64" viewBox="0 0 40 40"><use href="#p4-tile"/></svg>
+        <svg width="32" height="32" viewBox="0 0 40 40"><use href="#p4-tile"/></svg>
+        <svg width="20" height="20" viewBox="0 0 40 40"><use href="#p4-tile"/></svg>
+        <svg width="48" height="48" viewBox="0 0 40 40"><use href="#p4-x"/></svg>
+      </div>
+    </div>
+  </div>
+  <div class="notes">
+    <div><h3>A new X</h3><p>Not an evolution: the straight two-colour X is replaced by two arcs back to back, )( . Two sides, active and standby, intent and runtime, meet at exactly one point. That point is the brass dot.</p></div>
+    <div><h3>Wordmark</h3><p>A book serif from the system stack, set in ink, with the arc X at x-height. For release the letters are outlined to paths, so the logo never depends on installed fonts.</p></div>
+    <div><h3>Colour</h3><p>Ink and paper, one brass accent used only for the meeting point and large display words. Brass is decoration, never a state: the state colours stay in the product's role table.</p></div>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  "use strict";
+  const root = document.documentElement;
+  // inline the brand lockup (a <use> shadow tree cannot be targeted by page CSS, so the logo motion needs real nodes)
+  document.querySelectorAll(".brand svg > use").forEach((u) => {
+    const sym = document.querySelector(u.getAttribute("href"));
+    if (sym) u.replaceWith(...Array.from(sym.childNodes, (n) => n.cloneNode(true)));
+  });
+  const params = new URLSearchParams(location.search);
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)");
+  const $ = (id) => document.getElementById(id);
+  const form = $("signin"), user = $("username"), pass = $("password"), submit = $("submit");
+  const err = $("err"), errText = err.querySelector(".err-text");
+  const art = $("meridian");
+  const GENERIC = "Sign-in failed. Check your details.";
+  if (params.get("theme") === "dark" || params.get("theme") === "light") root.dataset.theme = params.get("theme");
+
+  const reveal = $("reveal"), pHint = $("password-hint");
+  reveal.addEventListener("click", () => { const s = pass.type === "password"; pass.type = s ? "text" : "password"; reveal.textContent = s ? "Hide" : "Show"; reveal.setAttribute("aria-pressed", String(s)); pass.focus(); });
+  const caps = (e) => { if (!e.getModifierState) return; const on = e.getModifierState("CapsLock"); pHint.textContent = on ? "Caps Lock is on." : ""; pHint.classList.toggle("caps", on); };
+  pass.addEventListener("keydown", caps); pass.addEventListener("keyup", caps);
+
+  const errBtn = $("t-error");
+  function setError(on) {
+    err.classList.remove("on");
+    if (on) { void err.offsetWidth; err.classList.add("on"); errText.textContent = GENERIC; } else errText.textContent = "";
+    [user, pass].forEach((i) => i.setAttribute("aria-invalid", on ? "true" : "false"));
+    errBtn.setAttribute("aria-pressed", String(on));
+  }
+  errBtn.addEventListener("click", () => setError(errBtn.getAttribute("aria-pressed") !== "true"));
+
+  let busy = false;
+  form.addEventListener("submit", (e) => {
+    e.preventDefault(); if (busy) return;
+    const uHint = $("username-hint"); uHint.textContent = "";
+    if (!user.value.trim()) { uHint.textContent = "Enter a username."; user.focus(); return; }
+    if (!pass.value) { pHint.textContent = "Enter a password."; pHint.classList.remove("caps"); pass.focus(); return; }
+    busy = true; setError(false);
+    submit.classList.add("busy"); submit.setAttribute("aria-disabled", "true"); form.setAttribute("aria-busy", "true");
+    submit.querySelector(".btn-label").textContent = "Signing in…";
+    setTimeout(() => {
+      busy = false; submit.classList.remove("busy"); submit.removeAttribute("aria-disabled"); form.removeAttribute("aria-busy");
+      submit.querySelector(".btn-label").textContent = "Sign in";
+      pass.value = ""; setError(true); pass.focus();
+    }, 1000);
+  });
+
+  const themeBtn = $("t-theme");
+  const syncTheme = () => { const d = root.dataset.theme === "dark"; themeBtn.textContent = d ? "Dark" : "Light"; themeBtn.setAttribute("aria-pressed", String(d)); };
+  themeBtn.addEventListener("click", () => { root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark"; syncTheme(); });
+
+  const motionBtn = $("t-motion");
+  let motionOn = !reduce.matches;
+  function setMotion(on) {
+    motionOn = on && !reduce.matches;
+    root.dataset.motion = motionOn ? "on" : "off";
+    motionBtn.setAttribute("aria-pressed", String(motionOn));
+    motionBtn.disabled = reduce.matches;
+    motionBtn.title = reduce.matches ? "Reduced motion is set by the system" : "";
+    try {
+      if (motionOn) art.unpauseAnimations();
+      else { art.pauseAnimations(); art.setCurrentTime(3.2); }   // markers part-way along, composed
+    } catch (_) {}
+  }
+  motionBtn.addEventListener("click", () => setMotion(!motionOn));
+  reduce.addEventListener?.("change", () => setMotion(!reduce.matches));
+  document.addEventListener("visibilitychange", () => { try { if (document.hidden) art.pauseAnimations(); else if (motionOn) art.unpauseAnimations(); } catch (_) {} });
+
+  const sheet = $("sheet");
+  $("t-brand").addEventListener("click", () => sheet.showModal());
+  $("sheet-close").addEventListener("click", () => sheet.close());
+  sheet.addEventListener("click", (e) => { if (e.target === sheet) sheet.close(); });
+
+  syncTheme(); setMotion(motionOn);
+  if (params.get("error") === "1") setError(true);
+  user.focus({ preventScroll: true });
+})();
+</script>
+</body>
+</html>

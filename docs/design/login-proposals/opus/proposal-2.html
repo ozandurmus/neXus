@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>neXus · Sign in · Proposal 2 · Throughput</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%233457d5'/%3E%3Cpath d='M46 18L18 46' stroke='%23a8f0e0' stroke-width='7' stroke-linecap='round'/%3E%3Cpath d='M18 18L46 46' stroke='%233457d5' stroke-width='15'/%3E%3Cpath d='M18 18L46 46' stroke='%23fff' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E">
+<!--
+  Proposal 2 · "Throughput"
+  Concept: policy as a gate. Packets flow from the left, are evaluated at one policy column, and either pass
+  or stop. The new mark is the X redrawn as an interchange: one path crosses over the other without touching,
+  the way a policy decision separates flows. Uses the product's own colour tokens (m3Theme LIGHT / DARK).
+  Self-contained: no external fonts, scripts or images. Opens by double-click.
+-->
+<style>
+  :root {
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f5f6f8;            /* m3 surface */
+    --dot: #d5dbe3;
+    --card: #ffffff;          /* scLowest */
+    --card-edge: #e3e7ec;     /* outlineVar */
+    --ink: #171b22;           /* onSurface */
+    --muted: #5f6978;         /* onSurfaceVar */
+    --field-edge: #7d8796;
+    --field-hover: #5f6978;
+    --primary: #3457d5;
+    --on-primary: #ffffff;
+    --primary-hover: #2a48b8;
+    --primary-soft: #eaeefb;  /* primaryContainer */
+    --on-primary-soft: #1e2f7a;
+    --teal: #1f8f7c;          /* brandTeal */
+    --focus: #3457d5;
+    --lane: rgba(23, 27, 34, 0.15);
+    --lane-strong: rgba(23, 27, 34, 0.28);
+    --pkt-pass: #3457d5;
+    --pkt-pass-2: #1f8f7c;
+    --pkt-drop: #8a93a1;
+    --gate: #ffffff;
+    --gate-edge: #9aa3b0;
+    --gate-lit: #eaeefb;
+    --label: #5f6978;
+    --err-bg: #fbe7e7; --err-ink: #8f1f1f; --err-edge: #d03b3b;
+    --shadow: 0 1px 2px rgba(15,23,42,.06), 0 12px 40px rgba(15,23,42,.10);
+    --logo-ink: #171b22; --logo-a: #3457d5; --logo-b: #1f8f7c; --logo-bg: #f5f6f8;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0f1216;
+    --dot: #232a33;
+    --card: #161a20;
+    --card-edge: #272e38;
+    --ink: #eef1f5;
+    --muted: #a5adba;
+    --field-edge: #6b7686;
+    --field-hover: #a5adba;
+    --primary: #7b9cff;
+    --on-primary: #0f1216;
+    --primary-hover: #9db5ff;
+    --primary-soft: #1f2a4d;
+    --on-primary-soft: #c9d5ff;
+    --teal: #4fd1b8;
+    --focus: #9db5ff;
+    --lane: rgba(238, 241, 245, 0.12);
+    --lane-strong: rgba(238, 241, 245, 0.2);
+    --pkt-pass: #7b9cff;
+    --pkt-pass-2: #4fd1b8;
+    --pkt-drop: #6b7686;
+    --gate: #161a20;
+    --gate-edge: #5b6473;
+    --gate-lit: #1f2a4d;
+    --label: #a5adba;
+    --err-bg: #3a1d1f; --err-ink: #ffb4b4; --err-edge: #ef6a6a;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 18px 50px rgba(0,0,0,.45);
+    --logo-ink: #eef1f5; --logo-a: #7b9cff; --logo-b: #4fd1b8; --logo-bg: #0f1216;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font: 400 14px/20px var(--font); color: var(--ink);
+    background-color: var(--bg);
+    background-image: radial-gradient(var(--dot) 1px, transparent 1.2px);
+    background-size: 24px 24px;
+    background-position: 12px 12px;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* --------------------------------------------------------------- stage */
+  .stage { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  .stage svg { width: 100%; height: 100%; display: block; }
+  .lane { fill: none; stroke: var(--lane); stroke-width: 1.25; }
+  .lane.strong { stroke: var(--lane-strong); }
+  .gate-body { fill: var(--gate); stroke: var(--gate-edge); stroke-width: 1.25; }
+  .rule { fill: var(--gate); stroke: var(--gate-edge); stroke-width: 1; }
+  .rule-lit { fill: var(--primary); opacity: 0; }
+  [data-motion="on"] .rule-lit { animation: evaluate 2.6s ease-in-out infinite; }
+  @keyframes evaluate { 0%, 70%, 100% { opacity: 0; } 78% { opacity: .9; } 88% { opacity: .15; } }
+  .glabel { font: 600 11px/1 var(--mono); fill: var(--label); letter-spacing: .08em; }
+  .pkt-pass { fill: var(--pkt-pass); }
+  .pkt-pass.alt { fill: var(--pkt-pass-2); }
+  .pkt-drop { fill: var(--pkt-drop); }
+  .stop { stroke: var(--pkt-drop); stroke-width: 1.6; stroke-linecap: round; fill: none; }
+
+  /* --------------------------------------------------------------- layout */
+  .layout {
+    position: relative; z-index: 1;
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(420px, 31vw, 500px);
+    grid-template-rows: auto 1fr auto;
+    column-gap: clamp(32px, 5vw, 120px);
+    padding: clamp(28px, 3.4vw, 56px) clamp(40px, 6.6vw, 128px);
+  }
+  .brand { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; height: 40px; }
+  .brand .mark { width: 36px; height: 36px; }
+  .brand .wordmark { height: 22px; width: auto; }
+  .brand .sep { width: 1px; height: 20px; background: var(--card-edge); margin: 0 6px; }
+  .brand .product { font: 500 13px/16px var(--font); color: var(--muted); }
+
+  .intro { grid-column: 1; grid-row: 2; align-self: start; padding-top: clamp(40px, 9vh, 120px); max-width: 600px; }
+  .principle { font: 500 12px/16px var(--mono); color: var(--muted); letter-spacing: .04em; margin: 0 0 20px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+  .principle b { font-weight: 600; color: var(--ink); }
+  .principle .arr { color: var(--primary); }
+  .intro h2 { font: 700 clamp(36px, 3.4vw, 54px)/1.06 var(--font); letter-spacing: -0.028em; margin: 0 0 20px; text-wrap: balance; }
+  .intro h2 .hl { color: var(--primary); }
+  .intro p { font: 400 16px/26px var(--font); color: var(--muted); margin: 0; max-width: 500px; }
+
+  /* --------------------------------------------------------------- card */
+  .card {
+    grid-column: 2; grid-row: 2; align-self: center;
+    background: var(--card);
+    border: 1px solid var(--card-edge);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 36px 36px 28px;
+  }
+  .card h1 { font: 650 24px/30px var(--font); letter-spacing: -0.012em; margin: 0 0 6px; }
+  .card .sub { color: var(--muted); margin: 0 0 28px; }
+  form { display: grid; gap: 20px; }
+  .label { font: 600 13px/16px var(--font); }
+  .hint { font: 400 12px/16px var(--font); color: var(--muted); min-height: 16px; }
+  .field { display: grid; gap: 8px; }
+
+  /* auth selector: two radio tiles */
+  fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  legend { padding: 0; margin-bottom: 8px; }
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .choice { position: relative; }
+  .choice input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  .choice label {
+    display: grid; grid-template-columns: 18px 1fr; gap: 2px 10px; align-items: start;
+    padding: 12px 12px 12px 12px; border-radius: 8px;
+    border: 1px solid var(--field-edge); background: var(--card);
+    cursor: pointer; transition: border-color .15s, background-color .15s;
+  }
+  .choice .dot { grid-row: 1 / span 2; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--field-edge); margin-top: 1px; display: grid; place-items: center; }
+  .choice .dot::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); transform: scale(0); transition: transform .15s; }
+  .choice .t { font: 600 13px/18px var(--font); }
+  .choice .d { font: 400 12px/16px var(--font); color: var(--muted); }
+  .choice label:hover { border-color: var(--field-hover); }
+  .choice input:checked + label { border-color: var(--primary); background: var(--primary-soft); box-shadow: 0 0 0 1px var(--primary) inset; }
+  .choice input:checked + label .dot { border-color: var(--primary); }
+  .choice input:checked + label .dot::after { transform: scale(1); }
+  .choice input:checked + label .d { color: var(--on-primary-soft); }
+  .choice input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .input {
+    width: 100%; height: 44px; padding: 0 12px;
+    font: 400 15px/20px var(--font); color: var(--ink);
+    background: var(--card); border: 1px solid var(--field-edge); border-radius: 8px;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .input:hover { border-color: var(--field-hover); }
+  .input:focus { outline: none; }
+  .input:focus-visible { border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 28%, transparent); }
+  .input[aria-invalid="true"] { border-color: var(--err-edge); }
+  .pw { position: relative; }
+  .pw .input { padding-right: 72px; }
+  .reveal { position: absolute; top: 5px; right: 5px; height: 34px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--primary); font: 600 12px/16px var(--font); cursor: pointer; }
+  .reveal:hover { background: var(--primary-soft); }
+  .reveal:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
+  .caps { color: #8a5a00; }
+  :root[data-theme="dark"] .caps { color: #ffd98a; }
+
+  .error { display: none; gap: 10px; grid-template-columns: 20px 1fr; padding: 12px 14px; border-radius: 8px; background: var(--err-bg); color: var(--err-ink); border: 1px solid color-mix(in srgb, var(--err-edge) 40%, transparent); font: 500 14px/20px var(--font); }
+  .error.on { display: grid; animation: drop-in .28s ease-out both; }
+  .error svg { width: 20px; height: 20px; }
+  .error p { margin: 0; }
+  .error small { display: block; font: 400 12px/16px var(--font); margin-top: 2px; }
+  @keyframes drop-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+  .submit {
+    height: 44px; border: 0; border-radius: 22px;
+    background: var(--primary); color: var(--on-primary);
+    font: 650 15px/20px var(--font); cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    position: relative; overflow: hidden;
+    transition: background-color .15s;
+  }
+  .submit:hover { background: var(--primary-hover); }
+  .submit:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+  .submit .arrow { width: 16px; height: 16px; transition: transform .2s; }
+  .submit:hover .arrow { transform: translateX(3px); }
+  .submit .bar { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: color-mix(in srgb, var(--on-primary) 70%, transparent); }
+  .submit.busy .bar { animation: progress .9s linear forwards; }
+  .submit.busy .arrow { display: none; }
+  @keyframes progress { to { width: 100%; } }
+
+  .legal { margin: 22px 0 0; padding-top: 18px; border-top: 1px solid var(--card-edge); font: 400 12px/18px var(--font); color: var(--muted); }
+
+  .foot { grid-column: 1 / -1; grid-row: 3; display: flex; justify-content: space-between; align-items: end; font: 400 12px/16px var(--font); color: var(--muted); padding-top: 24px; }
+  .foot .ver { font-family: var(--mono); }
+  .foot .cap { display: inline-flex; align-items: center; gap: 14px; }
+  .key { display: inline-flex; align-items: center; gap: 6px; }
+  .key i { width: 12px; height: 5px; border-radius: 3px; display: inline-block; background: var(--pkt-pass); }
+  .key i.drop { background: var(--pkt-drop); }
+
+  /* logo motion: the packet dot rides the over-path once on load */
+  .logo-pkt { opacity: 0; }
+  [data-motion="on"] .brand .logo-pkt { animation: ride 2.4s cubic-bezier(.5,0,.3,1) .4s 1 both; offset-path: path("M83 1 L113 39"); }
+  @keyframes ride { 0% { offset-distance: 0%; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { offset-distance: 100%; opacity: 0; } }
+
+  /* --------------------------------------------------------------- review controls + sheet */
+  .review { position: fixed; z-index: 30; top: 16px; right: 16px; display: flex; gap: 6px; align-items: center; padding: 6px; background: var(--card); border: 1px solid var(--card-edge); border-radius: 12px; box-shadow: var(--shadow); }
+  .review .tag { font: 500 12px/16px var(--font); color: var(--muted); padding: 0 6px 0 4px; }
+  .review button { height: 28px; padding: 0 10px; font: 600 12px/16px var(--font); color: var(--ink); background: transparent; border: 1px solid var(--card-edge); border-radius: 8px; cursor: pointer; }
+  .review button[aria-pressed="true"] { background: var(--primary-soft); color: var(--on-primary-soft); border-color: transparent; }
+  .review button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .review button:disabled { opacity: .55; cursor: not-allowed; }
+
+  dialog.sheet { width: min(960px, calc(100vw - 48px)); padding: 0; border: 1px solid var(--card-edge); border-radius: 12px; background: var(--card); color: var(--ink); box-shadow: var(--shadow); }
+  dialog.sheet::backdrop { background: rgba(15, 18, 22, .5); }
+  .sheet header { display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; border-bottom: 1px solid var(--card-edge); }
+  .sheet h2 { margin: 0; font: 650 17px/22px var(--font); }
+  .sheet .close { height: 32px; padding: 0 12px; border: 1px solid var(--card-edge); border-radius: 8px; background: transparent; color: var(--ink); font: 600 13px/16px var(--font); cursor: pointer; }
+  .sheet .close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .sheet .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 24px; }
+  .sw { border-radius: 10px; padding: 32px; display: grid; gap: 26px; }
+  .sw .cap { font: 600 11px/16px var(--font); letter-spacing: .1em; text-transform: uppercase; }
+  .sw .lock { display: flex; align-items: center; gap: 14px; }
+  .sw .lock .mark { width: 52px; height: 52px; }
+  .sw .lock .wordmark { height: 32px; width: auto; }
+  .sw .icons { display: flex; gap: 16px; align-items: end; }
+  .on-light { background: #ffffff; color: #5f6978; border: 1px solid #e3e7ec; --logo-ink: #171b22; --logo-a: #3457d5; --logo-b: #1f8f7c; --logo-bg: #ffffff; }
+  .on-dark { background: #0f1216; color: #a5adba; border: 1px solid #272e38; --logo-ink: #eef1f5; --logo-a: #7b9cff; --logo-b: #4fd1b8; --logo-bg: #0f1216; }
+  .sheet .notes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 0 24px 24px; color: var(--muted); }
+  .sheet .notes h3 { margin: 0 0 4px; font: 600 13px/18px var(--font); color: var(--ink); }
+  .sheet .notes p { margin: 0; font-size: 13px; line-height: 19px; }
+
+  @media (max-width: 1080px) {
+    .layout { grid-template-columns: 1fr; padding: 28px 24px; }
+    .intro { grid-row: 2; padding-top: 32px; }
+    .intro h2 { font-size: 34px; }
+    .card { grid-column: 1; grid-row: 3; margin-top: 32px; max-width: 480px; }
+    .foot { grid-row: 4; }
+    .review .tag { display: none; }
+    .sheet .grid, .sheet .notes { grid-template-columns: 1fr; }
+  }
+
+  [data-motion="off"] *, [data-motion="off"] *::before, [data-motion="off"] *::after { animation: none !important; transition: none !important; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <!-- Mark: the interchange X. One path passes over the other; they never touch. -->
+    <symbol id="p2-mark" viewBox="0 0 64 64">
+      <rect width="64" height="64" rx="14" fill="#3457d5"/>
+      <path d="M46 18 L18 46" stroke="#a8f0e0" stroke-width="7" stroke-linecap="round"/>
+      <path d="M18 18 L46 46" stroke="#3457d5" stroke-width="15"/>
+      <path d="M18 18 L46 46" stroke="#ffffff" stroke-width="7" stroke-linecap="round"/>
+    </symbol>
+    <clipPath id="p2-xclip"><rect x="78" y="0" width="40" height="40"/></clipPath>
+    <!-- Wordmark: soft-cornered instrument lettering on a 6-unit stroke. -->
+    <symbol id="p2-wordmark" viewBox="-2 -2 194 44">
+      <g fill="none" stroke="var(--logo-ink)" stroke-width="6" stroke-linejoin="round" stroke-linecap="butt">
+        <path d="M3 40 V11 Q3 3 11 3 H19 Q27 3 27 11 V40"/>
+        <path transform="translate(37 0)" d="M3 20 H33 V11 Q33 3 25 3 H11 Q3 3 3 11 V29 Q3 37 11 37 H33"/>
+        <path transform="translate(123 0)" d="M3 0 V29 Q3 37 11 37 H19 Q27 37 27 29 V0"/>
+        <path transform="translate(160 0)" d="M28 3 H10 Q3 3 3 10 V13 Q3 20 10 20 H20 Q27 20 27 27 V30 Q27 37 20 37 H1"/>
+      </g>
+      <g clip-path="url(#p2-xclip)" fill="none">
+        <path d="M115 -2 L81 42" stroke="var(--logo-b)" stroke-width="6.2"/>
+        <path d="M81 -2 L115 42" stroke="var(--logo-bg)" stroke-width="14"/>
+        <path d="M81 -2 L115 42" stroke="var(--logo-a)" stroke-width="6.2"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- Animated stage: lanes converge into one policy column, then fan out. SMIL keeps it in one SVG that scales. -->
+<div class="stage" aria-hidden="true">
+  <svg id="flow" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+    <defs>
+      <path id="l0" d="M-40 470 C 260 470, 380 590, 626 590 L 654 590 C 820 590, 900 420, 1480 420"/>
+      <path id="l1" d="M-40 540 C 260 540, 380 618, 626 618 L 654 618 C 820 618, 900 510, 1480 510"/>
+      <path id="l2" d="M-40 610 C 260 610, 380 646, 626 646 L 654 646 C 820 646, 900 600, 1480 600"/>
+      <path id="l3" d="M-40 680 C 260 680, 380 674, 626 674 L 654 674 C 820 674, 900 690, 1480 690"/>
+      <path id="l4" d="M-40 750 C 260 750, 380 702, 626 702 L 654 702 C 820 702, 900 780, 1480 780"/>
+      <path id="l5" d="M-40 820 C 260 820, 380 730, 626 730 L 654 730 C 820 730, 900 870, 1480 870"/>
+      <path id="d1" d="M-40 540 C 260 540, 380 618, 618 618"/>
+      <path id="d4" d="M-40 750 C 260 750, 380 702, 618 702"/>
+      <path id="d2" d="M-40 610 C 260 610, 380 646, 618 646"/>
+      <g id="cap"><rect x="-9" y="-3" width="18" height="6" rx="3"/></g>
+    </defs>
+
+    <g>
+      <use href="#l0" class="lane"/><use href="#l1" class="lane strong"/><use href="#l2" class="lane"/>
+      <use href="#l3" class="lane strong"/><use href="#l4" class="lane"/><use href="#l5" class="lane"/>
+    </g>
+
+    <!-- the policy column -->
+    <g>
+      <rect class="gate-body" x="618" y="560" width="44" height="200" rx="8"/>
+      <g>
+        <rect class="rule" x="626" y="584" width="28" height="12" rx="3"/><rect class="rule-lit" x="626" y="584" width="28" height="12" rx="3" style="animation-delay:-.4s"/>
+        <rect class="rule" x="626" y="612" width="28" height="12" rx="3"/><rect class="rule-lit" x="626" y="612" width="28" height="12" rx="3" style="animation-delay:-1.9s;animation-duration:3.1s"/>
+        <rect class="rule" x="626" y="640" width="28" height="12" rx="3"/><rect class="rule-lit" x="626" y="640" width="28" height="12" rx="3" style="animation-delay:-1.1s;animation-duration:2.2s"/>
+        <rect class="rule" x="626" y="668" width="28" height="12" rx="3"/><rect class="rule-lit" x="626" y="668" width="28" height="12" rx="3" style="animation-delay:-2.3s;animation-duration:3.4s"/>
+        <rect class="rule" x="626" y="696" width="28" height="12" rx="3"/><rect class="rule-lit" x="626" y="696" width="28" height="12" rx="3" style="animation-delay:-.8s;animation-duration:2.8s"/>
+        <rect class="rule" x="626" y="724" width="28" height="12" rx="3"/><rect class="rule-lit" x="626" y="724" width="28" height="12" rx="3" style="animation-delay:-1.6s"/>
+      </g>
+      <text class="glabel" x="640" y="544" text-anchor="middle">POLICY</text>
+      <text class="glabel" x="150" y="456">INGRESS</text>
+    </g>
+
+    <!-- packets that pass -->
+    <g class="pkts">
+      <use href="#cap" class="pkt-pass"><animateMotion dur="9s" begin="-1s" repeatCount="indefinite" rotate="auto"><mpath href="#l0"/></animateMotion></use>
+      <use href="#cap" class="pkt-pass alt"><animateMotion dur="9s" begin="-5.5s" repeatCount="indefinite" rotate="auto"><mpath href="#l0"/></animateMotion></use>
+      <use href="#cap" class="pkt-pass"><animateMotion dur="8s" begin="-3s" repeatCount="indefinite" rotate="auto"><mpath href="#l1"/></animateMotion></use>
+      <use href="#cap" class="pkt-pass"><animateMotion dur="10s" begin="-2s" repeatCount="indefinite" rotate="auto"><mpath href="#l2"/></animateMotion></use>
+      <use href="#cap" class="pkt-pass alt"><animateMotion dur="10s" begin="-7s" repeatCount="indefinite" rotate="auto"><mpath href="#l2"/></animateMotion></use>
+      <use href="#cap" class="pkt-pass"><animateMotion dur="7.5s" begin="-4.2s" repeatCount="indefinite" rotate="auto"><mpath href="#l3"/></animateMotion></use>
+      <use href="#cap" class="pkt-pass alt"><animateMotion dur="7.5s" begin="-0.6s" repeatCount="indefinite" rotate="auto"><mpath href="#l3"/></animateMotion></use>
+      <use href="#cap" class="pkt-pass"><animateMotion dur="9.5s" begin="-6s" repeatCount="indefinite" rotate="auto"><mpath href="#l4"/></animateMotion></use>
+      <use href="#cap" class="pkt-pass alt"><animateMotion dur="8.5s" begin="-2.8s" repeatCount="indefinite" rotate="auto"><mpath href="#l5"/></animateMotion></use>
+      <use href="#cap" class="pkt-pass"><animateMotion dur="8.5s" begin="-7.1s" repeatCount="indefinite" rotate="auto"><mpath href="#l5"/></animateMotion></use>
+    </g>
+
+    <!-- packets that stop at the policy, with the stop mark -->
+    <g class="drops">
+      <g>
+        <use href="#cap" class="pkt-drop">
+          <animateMotion dur="6s" begin="-2s" repeatCount="indefinite" rotate="auto" keyPoints="0;1;1" keyTimes="0;0.86;1" calcMode="linear"><mpath href="#d1"/></animateMotion>
+          <animate attributeName="opacity" dur="6s" begin="-2s" repeatCount="indefinite" values="0;1;1;0" keyTimes="0;0.08;0.86;1"/>
+        </use>
+        <path class="stop" d="M604 612 l6 6 m0 -6 l-6 6" opacity="0">
+          <animate attributeName="opacity" dur="6s" begin="-2s" repeatCount="indefinite" values="0;0;1;1;0" keyTimes="0;0.85;0.88;0.97;1"/>
+        </path>
+      </g>
+      <g>
+        <use href="#cap" class="pkt-drop">
+          <animateMotion dur="7s" begin="-4.5s" repeatCount="indefinite" rotate="auto" keyPoints="0;1;1" keyTimes="0;0.86;1" calcMode="linear"><mpath href="#d4"/></animateMotion>
+          <animate attributeName="opacity" dur="7s" begin="-4.5s" repeatCount="indefinite" values="0;1;1;0" keyTimes="0;0.08;0.86;1"/>
+        </use>
+        <path class="stop" d="M604 696 l6 6 m0 -6 l-6 6" opacity="0">
+          <animate attributeName="opacity" dur="7s" begin="-4.5s" repeatCount="indefinite" values="0;0;1;1;0" keyTimes="0;0.85;0.88;0.97;1"/>
+        </path>
+      </g>
+      <g>
+        <use href="#cap" class="pkt-drop">
+          <animateMotion dur="11s" begin="-8s" repeatCount="indefinite" rotate="auto" keyPoints="0;1;1" keyTimes="0;0.86;1" calcMode="linear"><mpath href="#d2"/></animateMotion>
+          <animate attributeName="opacity" dur="11s" begin="-8s" repeatCount="indefinite" values="0;1;1;0" keyTimes="0;0.08;0.86;1"/>
+        </use>
+        <path class="stop" d="M604 640 l6 6 m0 -6 l-6 6" opacity="0">
+          <animate attributeName="opacity" dur="11s" begin="-8s" repeatCount="indefinite" values="0;0;1;1;0" keyTimes="0;0.85;0.88;0.97;1"/>
+        </path>
+      </g>
+    </g>
+  </svg>
+</div>
+
+<div class="layout">
+  <header class="brand">
+    <svg class="mark" viewBox="0 0 64 64" role="img" aria-label="neXus mark"><use href="#p2-mark"/></svg>
+    <svg class="wordmark" viewBox="-2 -2 194 44" role="img" aria-label="neXus">
+      <use href="#p2-wordmark"/>
+      <rect class="logo-pkt" x="-3" y="-1.5" width="6" height="3" rx="1.5" fill="var(--logo-ink)"/>
+    </svg>
+    <span class="sep" aria-hidden="true"></span>
+    <span class="product">Firewall estate operations</span>
+  </header>
+
+  <section class="intro" aria-label="About neXus">
+    <p class="principle"><b>SEE</b><span class="arr" aria-hidden="true">→</span><b>VERIFY</b><span class="arr" aria-hidden="true">→</span><b>TRACE</b><span class="arr" aria-hidden="true">→</span><b>RECOVER</b><span class="arr" aria-hidden="true">→</span><b>OPERATE</b></p>
+    <h2>From the inventory to <span class="hl">the rule that decided it.</span></h2>
+    <p>One view of the firewall estate: what is installed, how it is configured, whether it complies, which path a packet takes, and what you can recover.</p>
+  </section>
+
+  <main class="card">
+    <h1 id="title">Sign in</h1>
+    <p class="sub">Choose how your account is managed.</p>
+    <form id="signin" novalidate aria-labelledby="title">
+      <fieldset>
+        <legend class="label">Authentication</legend>
+        <div class="choices">
+          <div class="choice">
+            <input type="radio" name="mechanism" id="m-local" value="local" checked aria-describedby="m-local-d">
+            <label for="m-local"><span class="dot" aria-hidden="true"></span><span class="t">Local account</span><span class="d" id="m-local-d">Created in neXus</span></label>
+          </div>
+          <div class="choice">
+            <input type="radio" name="mechanism" id="m-ldap" value="ldap" aria-describedby="m-ldap-d">
+            <label for="m-ldap"><span class="dot" aria-hidden="true"></span><span class="t">LDAP</span><span class="d" id="m-ldap-d">Directory account</span></label>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="field">
+        <label class="label" for="username">Username</label>
+        <input class="input" id="username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required aria-describedby="username-hint err-msg">
+        <span class="hint" id="username-hint"></span>
+      </div>
+      <div class="field">
+        <label class="label" for="password">Password</label>
+        <div class="pw">
+          <input class="input" id="password" name="password" type="password" autocomplete="current-password" required aria-describedby="password-hint err-msg">
+          <button class="reveal" id="reveal" type="button" aria-controls="password" aria-pressed="false">Show</button>
+        </div>
+        <span class="hint" id="password-hint"></span>
+      </div>
+
+      <div aria-live="assertive" aria-atomic="true">
+        <div class="error" id="err">
+          <svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 2.5 18 17H2Z" stroke-linejoin="round"/><path d="M10 8v4M10 14.5v.2" stroke-linecap="round"/></svg>
+          <p id="err-msg"><span class="err-text"></span><small>If this keeps happening, contact a neXus administrator.</small></p>
+        </div>
+      </div>
+
+      <button class="submit" id="submit" type="submit">
+        <span class="btn-label">Sign in</span>
+        <svg class="arrow" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+        <span class="bar" aria-hidden="true"></span>
+      </button>
+    </form>
+    <p class="legal">Authorised users only. Every sign-in is recorded in the audit log.</p>
+  </main>
+
+  <footer class="foot">
+    <span>neXus · on-premises · version <span class="ver">2.6</span></span>
+    <span class="cap" aria-hidden="true"><span class="key"><i></i>passes policy</span><span class="key"><i class="drop"></i>stops at policy</span><span>Illustration. Not live traffic.</span></span>
+  </footer>
+</div>
+
+<aside class="review" aria-label="Design review controls">
+  <span class="tag">Review · P2</span>
+  <button type="button" id="t-theme" aria-pressed="false">Light</button>
+  <button type="button" id="t-error" aria-pressed="false">Error state</button>
+  <button type="button" id="t-motion" aria-pressed="true">Motion</button>
+  <button type="button" id="t-brand">Brand sheet</button>
+</aside>
+
+<dialog class="sheet" id="sheet" aria-labelledby="sheet-title">
+  <header><h2 id="sheet-title">Brand sheet · Throughput</h2><button class="close" id="sheet-close" type="button">Close</button></header>
+  <div class="grid">
+    <div class="sw on-light">
+      <span class="cap">Light variant</span>
+      <div class="lock">
+        <svg class="mark" viewBox="0 0 64 64" role="img" aria-label="neXus mark"><use href="#p2-mark"/></svg>
+        <svg class="wordmark" viewBox="-2 -2 194 44" role="img" aria-label="neXus wordmark, light variant"><use href="#p2-wordmark"/></svg>
+      </div>
+      <div class="icons" aria-hidden="true"><svg width="64" height="64" viewBox="0 0 64 64"><use href="#p2-mark"/></svg><svg width="32" height="32" viewBox="0 0 64 64"><use href="#p2-mark"/></svg><svg width="20" height="20" viewBox="0 0 64 64"><use href="#p2-mark"/></svg></div>
+    </div>
+    <div class="sw on-dark">
+      <span class="cap">Dark variant</span>
+      <div class="lock">
+        <svg class="mark" viewBox="0 0 64 64" role="img" aria-label="neXus mark"><use href="#p2-mark"/></svg>
+        <svg class="wordmark" viewBox="-2 -2 194 44" role="img" aria-label="neXus wordmark, dark variant"><use href="#p2-wordmark"/></svg>
+      </div>
+      <div class="icons" aria-hidden="true"><svg width="64" height="64" viewBox="0 0 64 64"><use href="#p2-mark"/></svg><svg width="32" height="32" viewBox="0 0 64 64"><use href="#p2-mark"/></svg><svg width="20" height="20" viewBox="0 0 64 64"><use href="#p2-mark"/></svg></div>
+    </div>
+  </div>
+  <div class="notes">
+    <div><h3>Evolves the X</h3><p>Same two strokes as today, but one passes over the other with a cut, like a road interchange. Two flows cross and stay separate: that is what a policy decision does.</p></div>
+    <div><h3>Wordmark</h3><p>Soft-cornered instrument lettering on one 6-unit stroke, the kind of label engraved on a rack panel. The X is clipped flat to the x-height so it sits in the word, not on it.</p></div>
+    <div><h3>Colour</h3><p>Built only from the product tokens: primary blue and brand teal. The tile is primary blue in both modes, so the app icon never changes.</p></div>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  "use strict";
+  const root = document.documentElement;
+  // inline the brand lockup (a <use> shadow tree cannot be targeted by page CSS, so the logo motion needs real nodes)
+  document.querySelectorAll(".brand svg > use").forEach((u) => {
+    const sym = document.querySelector(u.getAttribute("href"));
+    if (sym) u.replaceWith(...Array.from(sym.childNodes, (n) => n.cloneNode(true)));
+  });
+  const params = new URLSearchParams(location.search);
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)");
+  const $ = (id) => document.getElementById(id);
+  const form = $("signin"), user = $("username"), pass = $("password"), submit = $("submit");
+  const err = $("err"), errText = err.querySelector(".err-text");
+  const flow = $("flow");
+  const GENERIC = "Sign-in failed. Check your details.";
+  if (params.get("theme") === "dark" || params.get("theme") === "light") root.dataset.theme = params.get("theme");
+
+  // password reveal + caps lock
+  const reveal = $("reveal"), pHint = $("password-hint");
+  reveal.addEventListener("click", () => { const s = pass.type === "password"; pass.type = s ? "text" : "password"; reveal.textContent = s ? "Hide" : "Show"; reveal.setAttribute("aria-pressed", String(s)); pass.focus(); });
+  const caps = (e) => { if (!e.getModifierState) return; const on = e.getModifierState("CapsLock"); pHint.textContent = on ? "Caps Lock is on." : ""; pHint.classList.toggle("caps", on); };
+  pass.addEventListener("keydown", caps); pass.addEventListener("keyup", caps);
+
+  // error
+  const errBtn = $("t-error");
+  function setError(on) {
+    err.classList.remove("on");
+    if (on) { void err.offsetWidth; err.classList.add("on"); errText.textContent = GENERIC; } else errText.textContent = "";
+    [user, pass].forEach((i) => i.setAttribute("aria-invalid", on ? "true" : "false"));
+    errBtn.setAttribute("aria-pressed", String(on));
+  }
+  errBtn.addEventListener("click", () => setError(errBtn.getAttribute("aria-pressed") !== "true"));
+
+  // submit: a mock-up, so it always ends in the generic failure
+  let busy = false;
+  form.addEventListener("submit", (e) => {
+    e.preventDefault(); if (busy) return;
+    const uHint = $("username-hint"); uHint.textContent = "";
+    if (!user.value.trim()) { uHint.textContent = "Enter a username."; user.focus(); return; }
+    if (!pass.value) { pHint.textContent = "Enter a password."; pHint.classList.remove("caps"); pass.focus(); return; }
+    busy = true; setError(false);
+    submit.classList.add("busy"); submit.setAttribute("aria-disabled", "true"); form.setAttribute("aria-busy", "true");
+    submit.querySelector(".btn-label").textContent = "Signing in…";
+    setTimeout(() => {
+      busy = false; submit.classList.remove("busy"); submit.removeAttribute("aria-disabled"); form.removeAttribute("aria-busy");
+      submit.querySelector(".btn-label").textContent = "Sign in";
+      pass.value = ""; setError(true); pass.focus();
+    }, 900);
+  });
+
+  // theme
+  const themeBtn = $("t-theme");
+  const syncTheme = () => { const d = root.dataset.theme === "dark"; themeBtn.textContent = d ? "Dark" : "Light"; themeBtn.setAttribute("aria-pressed", String(d)); };
+  themeBtn.addEventListener("click", () => { root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark"; syncTheme(); });
+
+  // motion: SMIL is paused on a composed frame when motion is off
+  const motionBtn = $("t-motion");
+  let motionOn = !reduce.matches;
+  function setMotion(on) {
+    motionOn = on && !reduce.matches;
+    root.dataset.motion = motionOn ? "on" : "off";
+    motionBtn.setAttribute("aria-pressed", String(motionOn));
+    motionBtn.disabled = reduce.matches;
+    motionBtn.title = reduce.matches ? "Reduced motion is set by the system" : "";
+    try {
+      if (motionOn) flow.unpauseAnimations();
+      else { flow.pauseAnimations(); flow.setCurrentTime(3.4); }
+    } catch (_) { /* SMIL unsupported: the static lanes still render */ }
+  }
+  motionBtn.addEventListener("click", () => setMotion(!motionOn));
+  reduce.addEventListener?.("change", () => setMotion(!reduce.matches));
+  document.addEventListener("visibilitychange", () => { try { if (document.hidden) flow.pauseAnimations(); else if (motionOn) flow.unpauseAnimations(); } catch (_) {} });
+
+  // brand sheet
+  const sheet = $("sheet");
+  $("t-brand").addEventListener("click", () => sheet.showModal());
+  $("sheet-close").addEventListener("click", () => sheet.close());
+  sheet.addEventListener("click", (e) => { if (e.target === sheet) sheet.close(); });
+
+  syncTheme();
+  setMotion(motionOn);
+  if (params.get("error") === "1") setError(true);
+  user.focus({ preventScroll: true });
+})();
+</script>
+</body>
+</html>
