@@ -31,6 +31,16 @@ This single read-only literal is approved as a `CLASS_0` (`read`) gate (`cp_poli
 - **Raw-evidence law:** the probe's rule and object content is discarded immediately in memory and is never mapped, persisted, logged, or transcribed. The package's NAT section remains `UNKNOWN` (`VENDOR_NAME_NOT_UNIQUE`) exactly as before.
 - **Telemetry and metadata:** the collector records a counts/enum-only summary note in the job transcript (`[CP_NAT_UID_PROBE] packages=<total> accepted=<N> rejected=<M> not_evaluable=<K>`) and attaches the opaque enum outcome (`natUidProbe`) to the package's `VENDOR_NAME_NOT_UNIQUE` failure entry in snapshot metadata, with no package, domain, or rule names.
 
+## Real-environment outcome (2026-11-05)
+One FULL Check Point policy collection (started as aiview, 34 minutes, `COMPLETED`, partial snapshot as before) issued
+the probe for the 2 packages whose by-name NAT read fails with `VENDOR_NAME_NOT_UNIQUE`. Both outcomes are
+`UID_ACCEPTED` (counted from the opaque `natUidProbe` enum on the snapshot failure entries; no content read). The
+two NAT sections stay `UNKNOWN` (`VENDOR_NAME_NOT_UNIQUE`), as this record requires.
+
+Consequence: the Management API accepts a package UID in `show-nat-rulebase package '<PACKAGE_UID>'` on this MDS.
+Replacing the failing by-name read with a full paged read by UID needs a separate PO approval of that literal
+(`... show-nat-rulebase package '<PACKAGE_UID>' limit 500 offset '<N>' ...`), as stated above.
+
 ## Cross-references
 - `docs/design/PO_DECISION_RECORD_2026_10_01_CP_POLICY_READS.md`
 - `docs/design/POLICY_COLLECTION_COMPLETENESS_PLAN.md` §3d

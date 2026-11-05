@@ -41,6 +41,42 @@ Two levers follow from this: give a blocker more resolved dimensions (or sound b
 widen what a partial prior may prove. Bounds are only ever used where an *upper* bound suffices: to prove that a
 partial prior cannot match, or cannot cover, a later rule. A bound never makes a rule a coverage candidate.
 
+## 0.1 Live X0 split (2026-11-05 evening, aiview, PR 751)
+
+All 99 stored policies answered (HTTP 200, no analysis budget reached): 111,003 rules, 97,391 with an UNKNOWN shadow
+status, 60,217 of them "earlier rule has unsupported constraints". Rows: blockers / later rules they block (every
+row with at least 100 blocked rules; status UNKNOWN on a PAN object is precedence UNKNOWN).
+
+| Vendor | Blocker class, cell, stored status, stored type | Partial prior | Blockers | Blocked rules |
+|---|---|---|---:|---:|
+| CP | unresolved object, source, DYNAMIC, access-role | yes | 502 | 16,081 |
+| PAN | user or category constraint, extra:source-user | yes | 208 | 15,106 |
+| CP | dynamic or unsupported object type, source, RESOLVED, gateway | yes | 18 | 13,589 |
+| CP | dynamic or unsupported object type, destination, RESOLVED, gateway | yes | 5 | 5,035 |
+| PAN | unresolved object, source, UNKNOWN, address | yes | 81 | 1,935 |
+| PAN | unsupported address representation, destination, RESOLVED, address | yes | 11 | 1,580 |
+| CP | non-terminal or unknown action, action | no | 1 | 1,472 |
+| PAN | unresolved object, destination, UNKNOWN, address | yes | 38 | 1,338 |
+| CP | empty or dynamic group, source, RESOLVED, group | yes | 9 | 1,021 |
+| PAN | unresolved object, destination, UNKNOWN, address-group | yes | 13 | 497 |
+| CP | missing service values, service | yes | 39 | 466 |
+| CP | unsupported service constraint, service | yes | 45 | 439 |
+| PAN | unresolved object, source, UNKNOWN, address-group | yes | 18 | 408 |
+| CP | unsupported port expression, service | yes | 17 | 316 |
+| PAN | unresolved object, destination, DYNAMIC, external-list | yes | 1 | 180 |
+| PAN | unresolved object, service, UNKNOWN, service | yes | 9 | 100 |
+| PAN | negated selector, destination, RESOLVED, address | yes | 1 | 100 |
+
+Reading:
+- 58,745 of the 60,217 blocked rules sit behind a **partial prior**, so X1 (pass-over by non-containment) is the
+  lever for almost all of them; the only no-partial-prior blocker is one CP rule with an unknown action (1,472 rules).
+- Three rows hold 74 % of the blocked rules: CP source access roles (16,081), PAN source-user (15,106) and CP
+  **gateway objects** as source or destination (23 blockers, 18,624 rules). "Stays UNKNOWN" below lists CP gateway
+  objects as addresses; with 23 blockers behind 18,624 rules, a sound upper bound for a gateway object (its
+  collected interface addresses) deserves its own vendor-semantics review.
+- The PAN "unresolved object" rows are mostly precedence UNKNOWN (U2), not names missing from every scope.
+- Check Point `native-type` is absent on these failing objects (UNKNOWN in the split), so it gives no sub-split.
+
 ## 1. Cross-cutting items
 
 ### X0 — diagnostic split of each class (counters only)

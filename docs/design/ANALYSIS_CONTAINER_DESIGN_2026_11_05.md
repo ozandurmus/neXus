@@ -587,6 +587,16 @@ leaves HOST-A, and no heap dump is written at all: it would contain raw policy d
 | M10 | ui2-service restart and OOM history | `kubectl -n ui2 get pod -l app.kubernetes.io/component=service -o jsonpath` restart count and last termination reason | failure-isolation justification |
 | M11 | Longest in-flight analysis request (offline CSV at the 2M-row limit, largest hygiene CSV) | duration logs | grace period, client timeouts |
 
+### 11.1 Results so far (2026-11-05 evening, HOST-A, counts only)
+
+| # | Result |
+|---|---|
+| M1 (partial) | `jcmd` is in the image but cannot attach: the target JVM must create its attach socket in `/tmp`, which is read-only (FS-3 of the FROZEN B1-01C contract declares only `/app/tmp` and `HOME` writable; not amended for a measurement). A `SIGQUIT` heap summary works without attach: ui2-service G1 heap committed 1,192 MiB, used 721 MiB (about 300 MiB of it young), metaspace 91 MiB, RSS 1,586 MiB; ui2-policy during a FULL CP collection: committed 1,144 MiB, used 610 MiB. The earlier 5.3 GiB figure was a high-water mark. Still needed: the same after a heavy hygiene and path run, and a class histogram (needs `-XX:+PrintClassHistogram` on one restart, then `SIGQUIT`, no attach). |
+| M6 | NetworkPolicy is enforced: from a pod without the e2e label, the service's port 8080 connects and the machine port 8086 (e2e and security-scan only) is refused; the e2e-labelled pod reaches 8086. |
+| M7 | Postgres `max_connections` 100; 16 connections in use, 1 active (idle period). |
+| M8 | Node allocatable: 16 CPU, about 60.8 GiB memory. Requests: 3.75 CPU (23 %), 9.1 GiB (15 %). Limits: 24 CPU (150 %), 70.2 GiB (115 %): limits are already overcommitted. |
+| M10 | ui2-service and ui2-policy: 0 restarts, no OOM termination since their last rollout; ui2-db: 8 restarts (earlier host reboots). |
+
 ## 12. Open PO questions
 
 - **Q1 — Name.** Keep `ui2-analysis` (as directed), or use `ui2-policy-analysis` to avoid confusion with Packet
