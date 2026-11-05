@@ -109,4 +109,18 @@ class PolicyHygieneBlockerSplitTest {
         // "updatable-object" is in the closed type vocabulary, so the row is identical.
         assertEquals(plain, masked);
     }
+    @Test void theAiviewSplitShowsLiveSchemaTypesButNoHostOrPseudonymShapedToken() {
+        for (String token : List.of("unresolved", "schedule", "external-list", "application-filter", "access-role", "CpmiHostCkp")) {
+            Map<String, Object> row = new LinkedHashMap<>(Map.of("class", "UNKNOWN", "cell", "source", "status", "UNRESOLVED",
+                "type", token, "nativeType", token, "partialPrior", true, "blockers", 1, "blockedRules", 1));
+            var masked = mapper.valueToTree(PolicyPrivacy.mask(Map.of("blockers", Map.of("split", List.of(row))), "", names, ips)).path("blockers").path("split").get(0);
+            assertEquals(token, masked.path("type").asText(), token); assertEquals(token, masked.path("nativeType").asText(), token);
+        }
+        for (String token : List.of("FW-TANGO-04", "fw-tango-04", "fwtango04", "host.example", "Core-Switch", "a b")) {
+            Map<String, Object> row = new LinkedHashMap<>(Map.of("class", "UNKNOWN", "cell", "source", "status", "UNRESOLVED",
+                "type", token, "nativeType", token, "partialPrior", true, "blockers", 1, "blockedRules", 1));
+            var masked = mapper.valueToTree(PolicyPrivacy.mask(Map.of("blockers", Map.of("split", List.of(row))), "", names, ips)).path("blockers").path("split").get(0);
+            assertEquals("UNKNOWN", masked.path("type").asText(), token); assertEquals("UNKNOWN", masked.path("nativeType").asText(), token);
+        }
+    }
 }
