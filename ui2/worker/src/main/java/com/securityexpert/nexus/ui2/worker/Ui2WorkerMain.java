@@ -540,10 +540,12 @@ public final class Ui2WorkerMain {
                             new com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService.PruningPolicy(
                                     policy.backupRetentionDays(), policy.snapshotRetentionDepth(),
                                     policy.configurationRetentionDays()));
-                    if (summary.backupsPruned() > 0 || summary.snapshotsPruned() > 0 || summary.configurationsPruned() > 0) {
+                    if (summary.backupsPruned() > 0 || summary.snapshotsPruned() > 0 || summary.configurationsPruned() > 0
+                            || summary.reportsPruned() > 0) {
                         System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.INFO,
                                 "[RETENTION] pruned backups=" + summary.backupsPruned() + " snapshots=" + summary.snapshotsPruned()
                                         + " configurations=" + summary.configurationsPruned()
+                                        + " reports=" + summary.reportsPruned()
                                         + " bytes=" + summary.bytesReclaimed() + " (retention " + policy.backupRetentionDays()
                                         + " d, depth " + policy.snapshotRetentionDepth() + ", configuration "
                                         + policy.configurationRetentionDays() + " d)");

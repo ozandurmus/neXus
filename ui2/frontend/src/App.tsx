@@ -17,8 +17,10 @@ const PacketAnalysisScreen = lazy(() => import("./screens/PacketAnalysisScreen")
 const PacketAnalysisPreview = lazy(() => import("./preview/PacketAnalysisPreview").then((m) => ({ default: m.PacketAnalysisPreview })));
 const SanitizerScreen = lazy(() => import("./screens/SanitizerScreen").then((m) => ({ default: m.SanitizerScreen })));
 const SanitizerPreview = lazy(() => import("./preview/SanitizerPreview").then((m) => ({ default: m.SanitizerPreview })));
+const ReportsScreen = lazy(() => import("./screens/ReportsScreen").then((m) => ({ default: m.ReportsScreen })));
 const AdministrationScreen = lazy(() => import("./screens/AdministrationScreen").then((m) => ({ default: m.AdministrationScreen })));
 import { OverviewPreview } from "./preview/OverviewPreview";
+import { ReportsPreview } from "./preview/ReportsPreview";
 import { InventoryPreview } from "./preview/InventoryPreview";
 import { ConfigurationPreview } from "./preview/ConfigurationPreview";
 import { CompliancePreview } from "./preview/CompliancePreview";
@@ -45,6 +47,7 @@ export type { ScreenId } from "./shell/types";
 
 const PRODUCT_SCREENS: Record<ScreenId, ComponentType> = {
   overview: OverviewScreen,
+  reports: ReportsScreen,
   inventory: InventoryScreen,
   configuration: ConfigurationScreen,
   policy: PolicyScreen,
@@ -59,6 +62,7 @@ const PRODUCT_SCREENS: Record<ScreenId, ComponentType> = {
 
 const PREVIEW_SCREENS: Record<ScreenId, ComponentType> = {
   overview: OverviewPreview,
+  reports: ReportsPreview,
   inventory: InventoryPreview,
   configuration: ConfigurationPreview,
   policy: PolicyPreview,

@@ -1,20 +1,22 @@
 # NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY
 
-## Snapshot (2026-10-21)
-`origin/main` at `87efd9b`, schema V167. Active build `NXS-LOCAL-0374` (device system logs phase B) is IN_PROGRESS.
-Nothing is REAL_ENV_VALIDATED and no failover trial has run. `CURRENT_STATE.md` and `project/QUEUE.md` win over this file.
+## Snapshot (2026-11-05)
+Branch `cloud/reports-r1-1105` off `cloud-base/1105`: Reports R1 implemented per `docs/design/REPORTS_R1_CONTRACT.md`
+(FROZEN), schema V190. Queue item `reports_r1` is IN_PROGRESS (AUTOMATED_VALIDATED in substance; REAL_ENV pending).
+Nothing here is REAL_ENV_VALIDATED. `CURRENT_STATE.md` and `project/QUEUE.md` win over this file.
 
 ## What changed this session
-- `cloud/project-state-compaction`: `backlog.json` 40,882 -> 40,322 B (28 titles/targets shortened through `project_queue.py retitle`; the full text is already in each `docs/history/backlog/<id>.md` heading). `feature_registry.json` 71,670 -> 69,643 B: criteria lines reformatted with compact separators (content unchanged), and the one free-text field over 400 chars (`framework_mappings.early_foundation`) was truncated, with the full text moved to its `docs/history/features/` file (GOV.ORCH.8 §2.1).
-- `cloud/spike-listing-chunking-design`: `docs/design/SPIKE_LISTING_CHUNKING_PROPOSAL.md` (DRAFT) gives three options for the 256 KiB C4 spike-listing bound, plus five PO questions.
+- V190: `report_run`; `backup_artefact` admits class `report` (vendor `nexus`, 30-day `expires_at`); one audit row per generate (terminal-state trigger) and per download (`audit_report_download`, before the first byte).
+- `report_read` / `report_generate` (CLASS_0, all roles incl. aiview) and `report_raw_view` (CLASS_1, security_admin, never aiview); domain reads checked per template.
+- Builders RPT-01/02/03/05, one masking pass, OpenPDF 2.2.5 / POI / RFC 4180 CSV renderers, 25 MiB cap, bounded executor (2), worker retention step for expired reports, Overview backup freshness excludes reports.
+- UI: Reports rail entry under Overview with Catalogue, Run & preview, History. Decisions and open items: `docs/history/backlog/reports_r1.md`.
 
 ## Exact next action
-PO answers the spike-listing questions. Before the next feature row, decide the budget levers below.
+Engineer: dry-run V190 in BEGIN/ROLLBACK on the live DB, run the dependency/CVE scan on OpenPDF 2.2.5, deploy, then generate all four reports as aiview (REAL_ENV gate).
 
 ## Test delta
-Governance, queue, budget, render-equivalence and cold-start tests pass (63); `project_queue.py check` and the privacy gate are clean.
++47 service tests (builders, byte-level masking PDF/XLSX/CSV, golden renderers, RBAC, audit, retention, size cap), +1 worker, +5 frontend; rail/App tests and the aiview action allow-list updated for the new entry and actions.
 
 ## New risks
-- Remaining headroom: backlog about 0.6 KiB, feature registry about 2 KiB. The bulk is untouchable under FROZEN GOV.ORCH.8 (criteria are data) and GOV.ORCH.5 (`note: ""` on 127 rows). More room needs a PO decision.
-- `project/archive/backlog_terminal.json` is 60,108 of 61,440 B: a few more terminal transitions will fail its budget.
-- `project/README.md` names `scripts/project_queue.py`; the tool lives at `tools/delivery/project_queue.py`.
+- `project/backlog.json` is 17 bytes under its GOV.ORCH.9 budget.
+- Integration-test registers (audit classification) were updated but not run here (no Docker).

@@ -3,6 +3,8 @@ import type { ScreenId } from "./types";
 // Read-only navigation contract, kept beside NavigationRail. The unit test compares
 // this list with the actual tab definitions; the full E2E suite consumes it.
 export const TAB_COVERAGE: readonly { screen: ScreenId; tabList: string; labels: readonly string[] }[] = [
+  // Reports R1 (REPORTS_R1_CONTRACT.md "UI"): three tabs.
+  { screen: "reports", tabList: "Reports sections", labels: ["Catalogue", "Run & preview", "History"] },
   { screen: "inventory", tabList: "Lifecycle view", labels: ["Fleet", "Catalog"] },
   { screen: "operations", tabList: "Operations sections", labels: ["HA & readiness", "Jobs", "Diagnostics", "System health", "Change feed"] },
   // SSH trust is a per-device trust setting: Registry, not Access (post-release review 2026-10-18, 2.7); its route slug is unchanged.
@@ -22,7 +24,7 @@ export const TAB_COVERAGE: readonly { screen: ScreenId; tabList: string; labels:
 ];
 export const BACKUP_SECTIONS = ["Backup-capable", "Targets", "Targets without archive", "Large backups"] as const;
 export const SCREEN_HEADINGS: Record<ScreenId, string> = {
-  policy: "Policy", overview: "Overview", inventory: "Devices", configuration: "Devices", compliance: "Compliance",
+  policy: "Policy", overview: "Overview", reports: "Reports", inventory: "Devices", configuration: "Devices", compliance: "Compliance",
   backups: "Backups", operations: "Operations", administration: "Administration", packet_analysis: "Packet Analysis",
   sanitizer: "Data Sanitizer", path_analysis: "Path analysis",
 };

@@ -108,6 +108,17 @@ public final class JooqRetentionQueries {
                 artefactId).map(row -> Boolean.TRUE.equals(row.get(0, Boolean.class))).orElse(true));
     }
 
+    /**
+     * Reports R1 (V190): generated report files whose {@code expires_at} (30 days after generation) has passed. Unlike
+     * the device classes, a report has no "latest one is kept" rule: an expired report is gone, and its run row says so.
+     */
+    public List<Candidate> expiredReports() {
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(COLUMNS
+                + "from backup_artefact a where a.artefact_class = 'report' and a.expires_at is not null "
+                + "and a.expires_at < now()" + NOT_REMOVED + " order by a.expires_at, a.artefact_id")
+                .map(JooqRetentionQueries::toCandidate));
+    }
+
     public List<Candidate> snapshotsBeyondDepth(int depth) {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(COLUMNS
                 + "from (select *, row_number() over (partition by device_id order by created_at desc) as rank "

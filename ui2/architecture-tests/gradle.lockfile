@@ -11,6 +11,7 @@ com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.21.7=testRuntimeClasspath
 com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.21.7=testRuntimeClasspath
 com.fasterxml.jackson.module:jackson-module-parameter-names:2.21.7=testRuntimeClasspath
 com.fasterxml.jackson:jackson-bom:2.21.7=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+com.github.librepdf:openpdf:2.2.5=testRuntimeClasspath
 com.github.virtuald:curvesapi:1.08=testRuntimeClasspath
 com.google.code.gson:gson:2.10.1=testRuntimeClasspath
 com.jcraft:jsch:0.1.55=testRuntimeClasspath

@@ -230,6 +230,27 @@ public final class ActionRegistry {
      */
     public static final String PATH_ANALYSIS_VALIDATE = "path_analysis_validate";
 
+    /**
+     * Reports R1 (docs/design/REPORTS_R1_CONTRACT.md, FROZEN 2026-11-05). {@link #REPORT_READ} (CLASS_0): catalogue,
+     * on-screen preview and history -- every signed-in role, the replay viewer (aiview) included, whose projection is
+     * always masked. {@link #REPORT_GENERATE} (CLASS_0): create and download a report file -- the same roles. Both also
+     * need the read action of each underlying domain a report uses ({@code ReportTemplate#domainReadActions}); the
+     * report service checks that, since one route serves every template.
+     *
+     * <p>{@link #REPORT_RAW_VIEW} (CLASS_1): a RAW (unmasked) report. It is never a route action of its own (E3 refuses
+     * a class-1 action as a route outright); the report controller evaluates its roles as the projection gate, and
+     * never grants it to a replay viewer even when that session also holds an admin role. R1 holders: security_admin.
+     * The contract also admits roles that already hold a raw view of the underlying data; no R1 domain (compliance,
+     * backups, failover readiness) has a named raw-view action today, so none is added.</p>
+     */
+    public static final String REPORT_READ = "report_read";
+    public static final String REPORT_GENERATE = "report_generate";
+    public static final String REPORT_RAW_VIEW = "report_raw_view";
+    public static final java.util.Set<String> REPORT_USER_ROLES = java.util.Set.of(RoleToken.VIEWER, RoleToken.OPERATOR,
+            RoleToken.ONBOARDING_ADMIN, RoleToken.BACKUP_ADMIN, RoleToken.COMPLIANCE_ADMIN, RoleToken.SECURITY_ADMIN,
+            RoleToken.OPERATION_ADMIN, RoleToken.REPLAY_VIEWER);
+    public static final java.util.Set<String> REPORT_RAW_ROLES = java.util.Set.of(RoleToken.SECURITY_ADMIN);
+
     public static final String HTTPS_CERTIFICATE_ACCEPT = "https_certificate_accept";
     public static final String HTTPS_CERTIFICATE_STRICT = "https_certificate_strict";
 
@@ -373,6 +394,10 @@ public final class ActionRegistry {
         // A6: CLASS_0 vendor matchers on PO-chosen samples; aiview per the 2026-10-04 CLASS_0 diagnostic allowance.
         register(new ActionDescriptor(PATH_ANALYSIS_VALIDATE, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.REPLAY_VIEWER)));
+        // Reports R1: read and generate for every role (aiview masked); RAW is class 1, evaluated by the controller.
+        register(new ActionDescriptor(REPORT_READ, true, Optional.of(RoleToken.SECURITY_ADMIN), REPORT_USER_ROLES));
+        register(new ActionDescriptor(REPORT_GENERATE, true, Optional.of(RoleToken.SECURITY_ADMIN), REPORT_USER_ROLES));
+        register(new ActionDescriptor(REPORT_RAW_VIEW, false, Optional.of(RoleToken.SECURITY_ADMIN)));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without

@@ -33,6 +33,7 @@ no real-environment acceptance. Authority:
 
 Same period, one line each (detail in `project/build_history.json`):
 
+- `reports_r1` IN_PROGRESS — Reports R1 (RPT-01/02/03/05, V190 `report_run`, masked by default); automated tests green, live aiview generation pending ([contract](docs/design/REPORTS_R1_CONTRACT.md)).
 - `NXS-LOCAL-0373` AUTOMATED_VALIDATED — policy completeness (V163), CP hit dates, Policy Changes speed, rule view redesign, permissiveness scoring ([decision](docs/design/PO_DECISION_RECORD_2026_10_20_POLICY_PERMISSIVENESS_SCORING.md)).
 - `NXS-LOCAL-0372` AUTOMATED_VALIDATED — UI design language and the 2026-10-18 product review items D1/D2/P2/P3 ([doc](docs/design/UI_DESIGN_LANGUAGE.md)).
 - `NXS-LOCAL-0371` AUTOMATED_VALIDATED — Packet Analysis real engine, first production run fixed ([decision](docs/design/PO_DECISION_RECORD_2026_10_15_PACKETBREAKER_PORTED_INTO_NEXUS.md)).

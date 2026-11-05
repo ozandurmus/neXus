@@ -9,6 +9,8 @@ import { DESTINATIONS, DRAWER_GROUPS } from "../src/shell/NavigationRail";
 // unambiguous.
 const PRODUCT_MARKERS: Record<string, string> = {
   overview: "Reading the fleet…",
+  // Without a server the catalogue read fails and the screen says so; it never shows a seeded report.
+  reports: "The report catalogue could not be read: The report service could not be reached.",
   inventory: "No device to show",
   // One device screen (PO 2026-09-25): ?screen=configuration lands on Devices.
   configuration: "No device to show",
@@ -22,6 +24,7 @@ const PRODUCT_MARKERS: Record<string, string> = {
 
 const PREVIEW_MARKERS: Record<string, string> = {
   overview: "FW-ROMEO-01-M2",
+  reports: "Never inventoried (192.0.2.15)",
   inventory: "FW-MIKE-08",
   configuration: "CLS-ROMEO-01",
   compliance: "CIS Benchmarks",
@@ -52,8 +55,9 @@ describe("the UI 2.0 shell navigation", () => {
   it("renders the five-verb rail in order, Administration last", () => {
     render(<App />);
     const rail = screen.getByRole("navigation", { name: "Primary" });
-    expect(DESTINATIONS.map((d) => d.label)).toEqual(["Overview", "Devices", "Compliance", "Policy", "Path", "Backups", "Operations", "Packets", "Sanitizer", "Administration"]);
-    for (const label of ["Overview", "Devices", "Compliance", "Policy", "Path", "Backups", "Operations", "Tools", "Administration"]) {
+    // Reports R1: Reports sits directly under Overview (REPORTS_R1_CONTRACT.md "UI").
+    expect(DESTINATIONS.map((d) => d.label)).toEqual(["Overview", "Reports", "Devices", "Compliance", "Policy", "Path", "Backups", "Operations", "Packets", "Sanitizer", "Administration"]);
+    for (const label of ["Overview", "Reports", "Devices", "Compliance", "Policy", "Path", "Backups", "Operations", "Tools", "Administration"]) {
       expect(within(rail).getByText(label)).toBeInTheDocument();
     }
     // Packets and Sanitizer live behind the one Tools entry; the wide rail has no drawer

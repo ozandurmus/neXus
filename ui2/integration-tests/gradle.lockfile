@@ -15,6 +15,7 @@ com.fasterxml.jackson:jackson-bom:2.21.7=compileClasspath,runtimeClasspath,testC
 com.github.docker-java:docker-java-api:3.4.0=testCompileClasspath,testRuntimeClasspath
 com.github.docker-java:docker-java-transport-zerodep:3.4.0=testCompileClasspath,testRuntimeClasspath
 com.github.docker-java:docker-java-transport:3.4.0=testCompileClasspath,testRuntimeClasspath
+com.github.librepdf:openpdf:2.2.5=testRuntimeClasspath
 com.github.virtuald:curvesapi:1.08=testRuntimeClasspath
 com.google.code.gson:gson:2.10.1=testCompileClasspath,testRuntimeClasspath
 com.google.errorprone:error_prone_annotations:2.38.0=testCompileClasspath

@@ -29,6 +29,32 @@ public final class ReportProjectionMasker implements ReportMasker {
         return names.maskText(scrubbed);
     }
 
+    /**
+     * Reports R1 (REPORTS_R1_CONTRACT.md "One masking pass"): a device name with its cluster reference and device id, so
+     * a report names a device exactly as every other masked screen does ({@code FW-...-M1} for a cluster member).
+     */
+    public String device(String raw, String clusterRef, String deviceId) {
+        return names.maskDeviceName(raw, clusterRef, deviceId);
+    }
+
+    /** Reports R1: a cluster reference as its pseudonym ({@code CLS-...}). */
+    public String cluster(String raw) {
+        return names.maskClusterName(raw);
+    }
+
+    /** Reports R1: an address or CIDR through the subnet-preserving masker; without one, the address is withheld. */
+    public String address(String raw) {
+        if (raw == null || raw.isBlank()) return raw;
+        if (addresses == null) return "MASKED";
+        addresses.registerSubnet(raw);
+        return addresses.mask(raw);
+    }
+
+    /** Reports R1: a serial number as its keyed token ({@code SN-...}). */
+    public String serial(String raw) {
+        return names.maskSerial(raw);
+    }
+
     @Override
     public boolean masking() {
         return true;

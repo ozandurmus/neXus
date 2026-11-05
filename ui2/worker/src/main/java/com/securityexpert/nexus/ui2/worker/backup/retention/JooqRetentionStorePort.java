@@ -50,6 +50,11 @@ public final class JooqRetentionStorePort implements RetentionPruningService.Ret
     }
 
     @Override
+    public List<RetentionPruningService.ArtefactRecord> findExpiredReports() {
+        return queries.expiredReports().stream().map(JooqRetentionStorePort::toRecord).toList();
+    }
+
+    @Override
     public boolean isLatestConfigurationArchive(String artefactId) {
         return queries.isLatestLiveConfigurationArchive(artefactId);
     }

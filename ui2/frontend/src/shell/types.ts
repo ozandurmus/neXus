@@ -1,6 +1,7 @@
 /** The six product screens this build routes, named for their M3 frame. */
 export type ScreenId =
   | "overview"
+  | "reports"
   | "inventory"
   | "configuration"
   | "policy"
@@ -14,6 +15,7 @@ export type ScreenId =
 
 export const SCREEN_IDS: readonly ScreenId[] = [
   "overview",
+  "reports",
   "inventory",
   "configuration",
   "policy",

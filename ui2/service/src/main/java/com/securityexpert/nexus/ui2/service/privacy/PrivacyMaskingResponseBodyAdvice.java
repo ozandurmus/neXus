@@ -86,6 +86,15 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             }
             return deviceEvents.body();
         }
+        if (body instanceof com.securityexpert.nexus.ui2.service.report.ReportResponse report) {
+            // Reports R1: the report document was projected once by ReportDocumentMasker before any renderer; the body
+            // passes through, and an unmasked body never reaches aiview.
+            if (Boolean.TRUE.equals(isReplayViewer)) {
+                if (!report.masked()) throw new IllegalStateException("report projection required");
+                if (response != null) response.getHeaders().set(MASKED_HEADER, "true");
+            }
+            return report.body();
+        }
         if (body instanceof com.securityexpert.nexus.ui2.service.policy.PolicyResponse policy) {
             if (!Boolean.TRUE.equals(isReplayViewer)) return policy.body();
             if (response != null) response.getHeaders().set(MASKED_HEADER, "true");

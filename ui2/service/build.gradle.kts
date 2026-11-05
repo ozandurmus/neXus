@@ -16,6 +16,9 @@ dependencies {
     // Data Sanitizer engine (docs/design/DATA_SANITIZER_CONTRACT.md §4).
     implementation(project(":sanitizer"))
     implementation(project(":packet-analysis"))
+    // Reports R1 (REPORTS_R1_CONTRACT.md "Renderers"): XLSX with the existing Apache POI, PDF with OpenPDF.
+    implementation(libs.poi.ooxml)
+    implementation(libs.openpdf)
 
     // Spring Boot 4 defaults Spring MVC's JSON conversion to Jackson 3 (tools.jackson). Every DTO,
     // annotation and JsonNode in this code base is Jackson 2, so the Jackson 3 starter is excluded and

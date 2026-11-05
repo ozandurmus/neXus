@@ -59,6 +59,8 @@ export const SANITIZER: RailDestination = { id: "sanitizer", label: "Sanitizer",
 /** The rail, top to bottom; Administration is rendered last, at the bottom edge. */
 export const RAIL_ENTRIES: readonly RailEntry[] = [
   { id: "overview", label: "Overview", icon: "grid", group: null, screen: "overview" },
+  // Reports R1 (REPORTS_R1_CONTRACT.md "UI"): a top-level entry directly under Overview, because it is executive-facing.
+  { id: "reports", label: "Reports", icon: "report", group: null, screen: "reports" },
   { id: "devices", label: "Devices", icon: "devices", group: "SEE", screen: "inventory", requiredPlane: "Devices" },
   { id: "compliance", label: "Compliance", icon: "compliance", group: "VERIFY", screen: "compliance", requiredPlane: "Compliance" },
   { id: "policy", label: "Policy", icon: "policy", group: "VERIFY", screen: "policy", requiredPlane: "Policy" },
@@ -279,6 +281,7 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
             </Box>
 
             <DrawerItem label="Overview" on={active === "overview"} navHref="?screen=overview" />
+            <DrawerItem label="Reports" on={active === "reports"} navHref="?screen=reports" />
 
             {allowedDrawerGroups.map((g) => (
               <Box key={g.header}>

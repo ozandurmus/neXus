@@ -39,7 +39,8 @@ export type IconName =
   | "expand"
   | "collapse"
   | "list"
-  | "route";
+  | "route"
+  | "report";
 
 const common: SVGProps<SVGSVGElement> = {
   viewBox: "0 0 24 24",
@@ -200,6 +201,13 @@ export function Icon({ name, size = 20 }: { readonly name: IconName; readonly si
           <circle cx="5" cy="18" r="2.5" />
           <circle cx="19" cy="6" r="2.5" />
           <path d="M7.5 18H14a3 3 0 0 0 0-6h-4a3 3 0 0 1 0-6h6.5" />
+        </svg>
+      );
+    case "report":
+      return (
+        <svg {...props}>
+          <path d="M6 3h9l4 4v14H6z" />
+          <path d="M9 17v-3M12 17v-6M15 17v-4" />
         </svg>
       );
     case "rows":
