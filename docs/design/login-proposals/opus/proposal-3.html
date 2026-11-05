@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>neXus · Sign in · Proposal 3 · Lattice</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath fill='%233fd0c9' d='M3.5 0H36.5L20 16.5ZM3.5 40H36.5L20 23.5Z'/%3E%3Cpath fill='%235b8cff' d='M40 3.5V36.5L23.5 20ZM0 3.5V36.5L16.5 20Z'/%3E%3C/svg%3E">
+<!--
+  Proposal 3 · "Lattice"
+  Concept: verification as a field of cells. A perspective grid advances toward the viewer; cells light as they
+  are checked. The new mark is a negative-space X: four triangles of a square, the X is the gap between them.
+  Self-contained: pure CSS motion (transform and opacity only, GPU-composited), no canvas, no external resources.
+-->
+<style>
+  :root {
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    --cell: 40px;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #050d14;
+    --bg-top: #0b2230;
+    --grid: rgba(63, 208, 201, 0.20);
+    --lit: rgba(63, 208, 201, 0.34);
+    --lit-2: rgba(91, 140, 255, 0.34);
+    --horizon: #3fd0c9;
+    --card: #0a1720;
+    --card-edge: #1e3a47;
+    --ink: #e6f3f4;
+    --muted: #94b3ba;
+    --faint: #7d9aa1;
+    --field: #06111a;
+    --field-edge: #4f7682;
+    --field-hover: #7fa3ad;
+    --btn: #3fd0c9;
+    --btn-ink: #04161a;
+    --btn-hover: #6fe0da;
+    --focus: #8ff0ea;
+    --track: #06111a;
+    --thumb: #163442;
+    --err-bg: #3a1d1f; --err-ink: #ffb4b4; --err-edge: #ef6a6a;
+    --logo-ink: #e6f3f4; --logo-a: #3fd0c9; --logo-b: #5b8cff;
+    --tick-on: #3fd0c9;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #e9f1f3;
+    --bg-top: #ffffff;
+    --grid: rgba(11, 110, 116, 0.22);
+    --lit: rgba(11, 110, 116, 0.20);
+    --lit-2: rgba(31, 85, 216, 0.18);
+    --horizon: #0b6e74;
+    --card: #ffffff;
+    --card-edge: #cfdfe2;
+    --ink: #0a1f24;
+    --muted: #4a6268;
+    --faint: #566e74;
+    --field: #ffffff;
+    --field-edge: #6f8a90;
+    --field-hover: #4a6268;
+    --btn: #0b6e74;
+    --btn-ink: #ffffff;
+    --btn-hover: #085a5f;
+    --focus: #0b6e74;
+    --track: #eef4f5;
+    --thumb: #ffffff;
+    --err-bg: #fbe7e7; --err-ink: #8f1f1f; --err-edge: #d03b3b;
+    --logo-ink: #0a1f24; --logo-a: #0a7f8a; --logo-b: #1f55d8;
+    --tick-on: #0b6e74;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font: 400 14px/20px var(--font); color: var(--ink);
+    background: radial-gradient(120% 70% at 50% 0%, var(--bg-top) 0%, var(--bg) 62%), var(--bg);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh; overflow-x: hidden;
+  }
+
+  /* --------------------------------------------------------------- the field */
+  .field-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  .horizon {
+    position: absolute; left: 0; right: 0; top: 56%; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--horizon) 30%, var(--horizon) 70%, transparent);
+    opacity: .55;
+  }
+  .horizon::after {
+    content: ""; position: absolute; left: 10%; right: 10%; top: -60px; height: 120px;
+    background: radial-gradient(50% 50% at 50% 50%, color-mix(in srgb, var(--horizon) 22%, transparent), transparent 70%);
+  }
+  [data-motion="on"] .horizon::after { animation: breathe 7s ease-in-out infinite; }
+  @keyframes breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+
+  .floor {
+    position: absolute; left: 0; right: 0; top: 56%; bottom: 0;
+    perspective: 420px; perspective-origin: 50% 0%;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 30%);
+            mask-image: linear-gradient(to bottom, transparent 0%, #000 30%);
+  }
+  .plane {
+    position: absolute; left: -100%; width: 300%; top: 0; height: 1400px;
+    transform-origin: 50% 0;
+    transform: rotateX(76deg);
+  }
+  .grid {
+    position: absolute; left: 0; right: 0; top: calc(var(--cell) * -1); bottom: 0;
+    background-image:
+      linear-gradient(var(--grid) 1.5px, transparent 1.5px),
+      linear-gradient(90deg, var(--grid) 1.5px, transparent 1.5px);
+    background-size: var(--cell) var(--cell);
+    background-position: center top;
+    will-change: transform;
+  }
+  [data-motion="on"] .grid { animation: advance 4s linear infinite; }
+  @keyframes advance { from { transform: translateY(0); } to { transform: translateY(var(--cell)); } }
+
+  /* lit cells ride the grid. Their 20 s cycle is five grid cycles; each lights only inside one grid cycle,
+     and their delays are whole grid cycles, so the 1-cell loop of the grid never shows a jump. */
+  .lit { position: absolute; width: var(--cell); height: var(--cell); background: var(--lit); opacity: 0; }
+  .lit.b { background: var(--lit-2); }
+  [data-motion="on"] .lit { animation: check 20s linear infinite; }
+  @keyframes check { 0%, 2% { opacity: 0; } 7% { opacity: 1; } 18%, 100% { opacity: 0; } }
+  [data-motion="off"] .lit.still { opacity: .7; }
+
+  .sky-tiles { position: absolute; inset: 0 0 44% 0; }
+  .sky-tiles span {
+    position: absolute; width: 6px; height: 6px; background: var(--horizon); opacity: 0;
+    clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  }
+  [data-motion="on"] .sky-tiles span { animation: spark 9s ease-in-out infinite; }
+  @keyframes spark { 0%, 100% { opacity: 0; } 50% { opacity: .5; } }
+
+  /* --------------------------------------------------------------- composition */
+  .wrap {
+    position: relative; z-index: 1;
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: 1fr auto auto 1fr auto;
+    justify-items: center;
+    padding: 32px 24px 24px;
+  }
+  .brand { grid-row: 2; display: flex; flex-direction: column; align-items: center; gap: 18px; margin-bottom: 28px; }
+  .brand .mark { width: 56px; height: 56px; }
+  .brand .wordmark { height: 42px; width: auto; overflow: visible; }
+  .brand .tag { font: 600 11px/16px var(--font); letter-spacing: .22em; text-transform: uppercase; color: var(--muted); }
+
+  .card {
+    grid-row: 3;
+    width: min(440px, 100%);
+    background: var(--card);
+    border: 1px solid var(--card-edge);
+    border-radius: 6px;
+    padding: 32px 32px 26px;
+    position: relative;
+    box-shadow: 0 24px 60px rgba(0,0,0,.35);
+  }
+  :root[data-theme="light"] .card { box-shadow: 0 1px 2px rgba(10,31,36,.06), 0 24px 60px rgba(10,31,36,.12); }
+  .card::before {
+    /* corner ticks: a nod to registration marks on a drawing */
+    content: ""; position: absolute; inset: -1px; pointer-events: none; border-radius: 6px;
+    background:
+      linear-gradient(var(--horizon), var(--horizon)) left top / 14px 2px no-repeat,
+      linear-gradient(var(--horizon), var(--horizon)) left top / 2px 14px no-repeat,
+      linear-gradient(var(--horizon), var(--horizon)) right top / 14px 2px no-repeat,
+      linear-gradient(var(--horizon), var(--horizon)) right top / 2px 14px no-repeat,
+      linear-gradient(var(--horizon), var(--horizon)) left bottom / 14px 2px no-repeat,
+      linear-gradient(var(--horizon), var(--horizon)) left bottom / 2px 14px no-repeat,
+      linear-gradient(var(--horizon), var(--horizon)) right bottom / 14px 2px no-repeat,
+      linear-gradient(var(--horizon), var(--horizon)) right bottom / 2px 14px no-repeat;
+  }
+  .card h1 { font: 650 20px/26px var(--font); margin: 0 0 4px; letter-spacing: -.01em; }
+  .card .sub { margin: 0 0 24px; color: var(--muted); }
+  form { display: grid; gap: 18px; }
+  .label { font: 600 12px/16px var(--font); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .f { display: grid; gap: 8px; }
+  .hint { font: 400 12px/16px var(--font); color: var(--muted); min-height: 16px; }
+
+  /* auth selector: a sliding switch built on a radio group */
+  fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+  legend { padding: 0; margin-bottom: 8px; }
+  .switch { position: relative; display: grid; grid-template-columns: 1fr 1fr; background: var(--track); border: 1px solid var(--field-edge); border-radius: 4px; padding: 3px; }
+  .switch .thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); background: var(--thumb); border: 1px solid var(--card-edge); border-radius: 2px; transition: transform .25s cubic-bezier(.4,0,.2,1); }
+  .switch:has(#m-ldap:checked) .thumb { transform: translateX(100%); }
+  .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .switch label { position: relative; z-index: 1; height: 36px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 600 13px/16px var(--font); color: var(--muted); cursor: pointer; }
+  .switch input:checked + label { color: var(--ink); }
+  .switch input:checked + label .led { background: var(--tick-on); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tick-on) 25%, transparent); }
+  .switch .led { width: 6px; height: 6px; border-radius: 1px; background: var(--field-edge); }
+  .switch input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 2px; }
+
+  .input { width: 100%; height: 44px; padding: 0 12px; background: var(--field); color: var(--ink); border: 1px solid var(--field-edge); border-radius: 4px; font: 400 15px/20px var(--font); transition: border-color .15s, box-shadow .15s; }
+  .input.mono { font-family: var(--mono); font-size: 14px; }
+  .input:hover { border-color: var(--field-hover); }
+  .input:focus { outline: none; }
+  .input:focus-visible { border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
+  .input[aria-invalid="true"] { border-color: var(--err-edge); }
+  .pw { position: relative; }
+  .pw .input { padding-right: 70px; }
+  .reveal { position: absolute; right: 5px; top: 5px; height: 34px; padding: 0 10px; background: transparent; border: 0; border-radius: 3px; color: var(--muted); font: 600 11px/16px var(--font); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+  .reveal:hover { color: var(--ink); }
+  .reveal:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
+  .caps { color: #ffd98a; }
+  :root[data-theme="light"] .caps { color: #8a5a00; }
+
+  .error { display: none; grid-template-columns: 18px 1fr; gap: 10px; padding: 11px 12px; background: var(--err-bg); color: var(--err-ink); border-radius: 4px; border: 1px solid color-mix(in srgb, var(--err-edge) 45%, transparent); font: 500 14px/20px var(--font); }
+  .error.on { display: grid; animation: glitch .4s steps(2, end) both; }
+  .error svg { width: 18px; height: 18px; margin-top: 1px; }
+  .error p { margin: 0; }
+  .error small { display: block; font: 400 12px/16px var(--font); margin-top: 2px; }
+  @keyframes glitch { 0% { opacity: 0; transform: translateX(-4px); } 50% { opacity: 1; transform: translateX(2px); } 100% { transform: none; } }
+
+  .submit { height: 46px; border: 0; border-radius: 4px; background: var(--btn); color: var(--btn-ink); font: 700 14px/20px var(--font); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 10px; transition: background-color .15s; position: relative; }
+  .submit:hover { background: var(--btn-hover); }
+  .submit:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+  .submit .cells { display: none; gap: 3px; }
+  .submit .cells i { width: 6px; height: 6px; background: currentColor; opacity: .3; }
+  .submit.busy .cells { display: inline-flex; }
+  .submit.busy .cells i { animation: cellrun .9s steps(1) infinite; }
+  .submit.busy .cells i:nth-child(2) { animation-delay: .3s; }
+  .submit.busy .cells i:nth-child(3) { animation-delay: .6s; }
+  @keyframes cellrun { 0% { opacity: 1; } 33% { opacity: .3; } }
+
+  .legal { margin: 18px 0 0; font: 400 12px/18px var(--font); color: var(--muted); text-align: center; }
+
+  .planes { grid-row: 4; align-self: start; margin-top: 28px; display: flex; gap: 6px; list-style: none; padding: 0; }
+  .planes li { font: 600 11px/16px var(--mono); letter-spacing: .12em; color: var(--faint); padding: 6px 10px; border: 1px solid transparent; border-radius: 3px; display: inline-flex; align-items: center; gap: 8px; }
+  .planes li::before { content: ""; width: 6px; height: 6px; background: currentColor; opacity: .5; }
+  [data-motion="on"] .planes li { animation: plane 10s linear infinite; }
+  .planes li:nth-child(2) { animation-delay: 2s !important; }
+  .planes li:nth-child(3) { animation-delay: 4s !important; }
+  .planes li:nth-child(4) { animation-delay: 6s !important; }
+  .planes li:nth-child(5) { animation-delay: 8s !important; }
+  @keyframes plane { 0%, 20% { color: var(--ink); border-color: var(--card-edge); background: color-mix(in srgb, var(--card) 80%, transparent); } 20.1%, 100% { color: var(--faint); border-color: transparent; background: transparent; } }
+  [data-motion="on"] .planes li { animation-delay: 0s; }
+
+  .foot { grid-row: 5; display: flex; gap: 18px; font: 400 12px/16px var(--font); color: var(--muted); padding: 4px 12px; border-radius: 3px; background: color-mix(in srgb, var(--bg) 88%, transparent); }
+  .foot .ver { font-family: var(--mono); }
+
+  /* mark assembly on load */
+  [data-motion="on"] .brand .tri { animation: assemble 1.1s cubic-bezier(.2,.8,.2,1) both; }
+  [data-motion="on"] .brand .tri.t { --dx: 0px; --dy: -6px; }
+  [data-motion="on"] .brand .tri.r { --dx: 6px; --dy: 0px; animation-delay: .08s; }
+  [data-motion="on"] .brand .tri.bt { --dx: 0px; --dy: 6px; animation-delay: .16s; }
+  [data-motion="on"] .brand .tri.l { --dx: -6px; --dy: 0px; animation-delay: .24s; }
+  @keyframes assemble { from { transform: translate(var(--dx), var(--dy)); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  /* --------------------------------------------------------------- review controls + sheet */
+  .review { position: fixed; top: 16px; right: 16px; z-index: 30; display: flex; gap: 6px; align-items: center; padding: 6px; background: var(--card); border: 1px solid var(--card-edge); border-radius: 6px; }
+  .review .tag { font: 500 12px/16px var(--font); color: var(--faint); padding: 0 6px 0 4px; }
+  .review button { height: 28px; padding: 0 10px; background: transparent; color: var(--ink); border: 1px solid var(--card-edge); border-radius: 4px; font: 600 12px/16px var(--font); cursor: pointer; }
+  .review button[aria-pressed="true"] { background: var(--thumb); border-color: var(--field-edge); }
+  .review button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .review button:disabled { opacity: .55; cursor: not-allowed; }
+
+  dialog.sheet { width: min(960px, calc(100vw - 48px)); padding: 0; border: 1px solid var(--card-edge); border-radius: 8px; background: var(--card); color: var(--ink); box-shadow: 0 30px 80px rgba(0,0,0,.45); }
+  dialog.sheet::backdrop { background: rgba(3, 8, 12, .6); }
+  .sheet header { display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; border-bottom: 1px solid var(--card-edge); }
+  .sheet h2 { margin: 0; font: 650 17px/22px var(--font); }
+  .sheet .close { height: 32px; padding: 0 12px; background: transparent; color: var(--ink); border: 1px solid var(--card-edge); border-radius: 4px; font: 600 13px/16px var(--font); cursor: pointer; }
+  .sheet .close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .sheet .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 24px; }
+  .sw { border-radius: 6px; padding: 32px; display: grid; gap: 26px; }
+  .sw .cap { font: 600 11px/16px var(--font); letter-spacing: .1em; text-transform: uppercase; }
+  .sw .lock { display: flex; align-items: center; gap: 16px; }
+  .sw .lock .mark { width: 48px; height: 48px; }
+  .sw .lock .wordmark { height: 44px; width: auto; }
+  .sw .icons { display: flex; align-items: end; gap: 16px; }
+  .sw .tile { display: grid; place-items: center; border-radius: 12px; }
+  .on-light { background: #ffffff; color: #4a6268; border: 1px solid #cfdfe2; --logo-ink: #0a1f24; --logo-a: #0a7f8a; --logo-b: #1f55d8; }
+  .on-dark { background: #050d14; color: #94b3ba; border: 1px solid #1e3a47; --logo-ink: #e6f3f4; --logo-a: #3fd0c9; --logo-b: #5b8cff; }
+  .on-light .tile { background: #0a1f24; --logo-a: #3fd0c9; --logo-b: #5b8cff; }
+  .on-dark .tile { background: #0e2430; }
+  .sheet .notes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 0 24px 24px; color: var(--muted); }
+  .sheet .notes h3 { margin: 0 0 4px; font: 600 13px/18px var(--font); color: var(--ink); }
+  .sheet .notes p { margin: 0; font-size: 13px; line-height: 19px; }
+
+  @media (max-width: 760px) {
+    .planes { flex-wrap: wrap; justify-content: center; }
+    .review .tag { display: none; }
+    .sheet .grid2, .sheet .notes { grid-template-columns: 1fr; }
+  }
+  @media (min-width: 1800px) { :root { --cell: 46px; } .brand .wordmark { height: 48px; } }
+
+  [data-motion="off"] *, [data-motion="off"] *::before, [data-motion="off"] *::after { animation: none !important; transition: none !important; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <!-- Mark: four triangles of a square. The X is the gap: what is verified is what is left standing. -->
+    <symbol id="p3-mark" viewBox="0 0 40 40">
+      <path class="tri t"  fill="var(--logo-a)" d="M3.5 0 H36.5 L20 16.5 Z"/>
+      <path class="tri r"  fill="var(--logo-b)" d="M40 3.5 V36.5 L23.5 20 Z"/>
+      <path class="tri bt" fill="var(--logo-a)" d="M36.5 40 H3.5 L20 23.5 Z"/>
+      <path class="tri l"  fill="var(--logo-b)" d="M0 36.5 V3.5 L16.5 20 Z"/>
+    </symbol>
+    <!-- Wordmark: lattice lettering, only horizontals and verticals on one 7-unit stroke; the X is the mark itself. -->
+    <symbol id="p3-wordmark" viewBox="-1 -1 186 42">
+      <g fill="none" stroke="var(--logo-ink)" stroke-width="7" stroke-linejoin="miter" stroke-linecap="butt">
+        <path d="M3.5 40 V3.5 H26.5 V40"/>
+        <path transform="translate(36 0)" d="M30 36.5 H3.5 V3.5 H26.5 V20 H3.5"/>
+        <path transform="translate(118 0)" d="M3.5 0 V36.5 H26.5 V0"/>
+        <path transform="translate(154 0)" d="M30 3.5 H3.5 V20 H26.5 V36.5 H0"/>
+      </g>
+      <g transform="translate(72 0)">
+        <path class="tri t"  fill="var(--logo-a)" d="M3.5 0 H36.5 L20 16.5 Z"/>
+        <path class="tri r"  fill="var(--logo-b)" d="M40 3.5 V36.5 L23.5 20 Z"/>
+        <path class="tri bt" fill="var(--logo-a)" d="M36.5 40 H3.5 L20 23.5 Z"/>
+        <path class="tri l"  fill="var(--logo-b)" d="M0 36.5 V3.5 L16.5 20 Z"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="field-bg" aria-hidden="true">
+  <div class="sky-tiles">
+    <span style="left:12%;top:22%;animation-delay:-1s"></span>
+    <span style="left:22%;top:48%;animation-delay:-4s"></span>
+    <span style="left:34%;top:14%;animation-delay:-7s"></span>
+    <span style="left:68%;top:30%;animation-delay:-2.5s"></span>
+    <span style="left:79%;top:12%;animation-delay:-5.5s"></span>
+    <span style="left:88%;top:44%;animation-delay:-8s"></span>
+  </div>
+  <div class="horizon"></div>
+  <div class="floor">
+    <div class="plane">
+      <div class="grid" id="grid"></div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="brand">
+    <svg class="wordmark" viewBox="-1 -1 186 42" role="img" aria-label="neXus"><use href="#p3-wordmark"/></svg>
+    <span class="tag">Firewall estate operations</span>
+  </div>
+
+  <main class="card">
+    <h1 id="title">Sign in</h1>
+    <p class="sub">Your session is checked on every request.</p>
+    <form id="signin" novalidate aria-labelledby="title">
+      <fieldset>
+        <legend class="label">Authentication</legend>
+        <div class="switch">
+          <span class="thumb" aria-hidden="true"></span>
+          <input type="radio" name="mechanism" id="m-local" value="local" checked>
+          <label for="m-local"><span class="led" aria-hidden="true"></span>Local account</label>
+          <input type="radio" name="mechanism" id="m-ldap" value="ldap">
+          <label for="m-ldap"><span class="led" aria-hidden="true"></span>LDAP</label>
+        </div>
+      </fieldset>
+
+      <div class="f">
+        <label class="label" for="username">Username</label>
+        <input class="input mono" id="username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required aria-describedby="username-hint err-msg">
+        <span class="hint" id="username-hint"></span>
+      </div>
+      <div class="f">
+        <label class="label" for="password">Password</label>
+        <div class="pw">
+          <input class="input mono" id="password" name="password" type="password" autocomplete="current-password" required aria-describedby="password-hint err-msg">
+          <button class="reveal" id="reveal" type="button" aria-controls="password" aria-pressed="false">Show</button>
+        </div>
+        <span class="hint" id="password-hint"></span>
+      </div>
+
+      <div aria-live="assertive" aria-atomic="true">
+        <div class="error" id="err">
+          <svg viewBox="0 0 18 18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1.5" y="1.5" width="15" height="15" rx="2"/><path d="M6 6l6 6M12 6l-6 6" stroke-linecap="round"/></svg>
+          <p id="err-msg"><span class="err-text"></span><small>Repeated failures lock the account for a short time.</small></p>
+        </div>
+      </div>
+
+      <button class="submit" id="submit" type="submit"><span class="btn-label">Sign in</span><span class="cells" aria-hidden="true"><i></i><i></i><i></i></span></button>
+    </form>
+    <p class="legal">Authorised users only. Every sign-in is recorded in the audit log.</p>
+  </main>
+
+  <ol class="planes" aria-label="Operating principle">
+    <li>SEE</li><li>VERIFY</li><li>TRACE</li><li>RECOVER</li><li>OPERATE</li>
+  </ol>
+
+  <footer class="foot">
+    <span>neXus · on-premises · version <span class="ver">2.6</span></span>
+  </footer>
+</div>
+
+<aside class="review" aria-label="Design review controls">
+  <span class="tag">Review · P3</span>
+  <button type="button" id="t-theme" aria-pressed="true">Dark</button>
+  <button type="button" id="t-error" aria-pressed="false">Error state</button>
+  <button type="button" id="t-motion" aria-pressed="true">Motion</button>
+  <button type="button" id="t-brand">Brand sheet</button>
+</aside>
+
+<dialog class="sheet" id="sheet" aria-labelledby="sheet-title">
+  <header><h2 id="sheet-title">Brand sheet · Lattice</h2><button class="close" id="sheet-close" type="button">Close</button></header>
+  <div class="grid2">
+    <div class="sw on-light">
+      <span class="cap">Light variant</span>
+      <div class="lock">
+        <svg class="wordmark" viewBox="-1 -1 186 42" role="img" aria-label="neXus wordmark, light variant"><use href="#p3-wordmark"/></svg>
+      </div>
+      <div class="icons" aria-hidden="true">
+        <span class="tile" style="width:64px;height:64px"><svg width="34" height="34" viewBox="0 0 40 40"><use href="#p3-mark"/></svg></span>
+        <span class="tile" style="width:32px;height:32px;border-radius:7px"><svg width="18" height="18" viewBox="0 0 40 40"><use href="#p3-mark"/></svg></span>
+        <svg width="16" height="16" viewBox="0 0 40 40"><use href="#p3-mark"/></svg>
+      </div>
+    </div>
+    <div class="sw on-dark">
+      <span class="cap">Dark variant</span>
+      <div class="lock">
+        <svg class="wordmark" viewBox="-1 -1 186 42" role="img" aria-label="neXus wordmark, dark variant"><use href="#p3-wordmark"/></svg>
+      </div>
+      <div class="icons" aria-hidden="true">
+        <span class="tile" style="width:64px;height:64px"><svg width="34" height="34" viewBox="0 0 40 40"><use href="#p3-mark"/></svg></span>
+        <span class="tile" style="width:32px;height:32px;border-radius:7px"><svg width="18" height="18" viewBox="0 0 40 40"><use href="#p3-mark"/></svg></span>
+        <svg width="16" height="16" viewBox="0 0 40 40"><use href="#p3-mark"/></svg>
+      </div>
+    </div>
+  </div>
+  <div class="notes">
+    <div><h3>Evolves the X, inverted</h3><p>Today's teal and blue X strokes become the four triangles around it; the X itself is now negative space. Same colours, same two-tone logic, read the other way round.</p></div>
+    <div><h3>Wordmark</h3><p>Lattice lettering: only horizontals and verticals, one 7-unit stroke, square ends. The X is not a letter but the mark itself, set at x-height.</p></div>
+    <div><h3>Small sizes</h3><p>Four solid shapes, no strokes: it survives 16 px without hinting and reads as an X even in one colour (useful for print and PDF reports).</p></div>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  "use strict";
+  const root = document.documentElement;
+  // inline the brand lockup (a <use> shadow tree cannot be targeted by page CSS, so the logo motion needs real nodes)
+  document.querySelectorAll(".brand svg > use").forEach((u) => {
+    const sym = document.querySelector(u.getAttribute("href"));
+    if (sym) u.replaceWith(...Array.from(sym.childNodes, (n) => n.cloneNode(true)));
+  });
+  const params = new URLSearchParams(location.search);
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)");
+  const $ = (id) => document.getElementById(id);
+  const form = $("signin"), user = $("username"), pass = $("password"), submit = $("submit");
+  const err = $("err"), errText = err.querySelector(".err-text");
+  const GENERIC = "Sign-in failed. Check your details.";
+  if (params.get("theme") === "dark" || params.get("theme") === "light") root.dataset.theme = params.get("theme");
+
+  // lit cells, laid on the grid with a fixed seed so the field is the same every time
+  const grid = $("grid");
+  let s = 1105;
+  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < 46; i++) {
+    const el = document.createElement("i");
+    el.className = "lit" + (rnd() < 0.35 ? " b" : "") + (i % 4 === 0 ? " still" : "");
+    // columns around the centre of a 300%-wide plane; rows from the horizon toward the viewer
+    const col = Math.floor(rnd() * 64) - 32, row = 1 + Math.floor(rnd() * 6);
+    el.style.left = `calc(50% + ${col} * var(--cell))`;
+    el.style.top = `calc(${row} * var(--cell))`;
+    el.style.animationDelay = `${-4 * Math.floor(rnd() * 5)}s`;   // whole grid cycles only
+    frag.appendChild(el);
+  }
+  grid.appendChild(frag);
+
+  // password reveal + caps lock
+  const reveal = $("reveal"), pHint = $("password-hint");
+  reveal.addEventListener("click", () => { const sh = pass.type === "password"; pass.type = sh ? "text" : "password"; reveal.textContent = sh ? "Hide" : "Show"; reveal.setAttribute("aria-pressed", String(sh)); pass.focus(); });
+  const caps = (e) => { if (!e.getModifierState) return; const on = e.getModifierState("CapsLock"); pHint.textContent = on ? "Caps Lock is on." : ""; pHint.classList.toggle("caps", on); };
+  pass.addEventListener("keydown", caps); pass.addEventListener("keyup", caps);
+
+  // error
+  const errBtn = $("t-error");
+  function setError(on) {
+    err.classList.remove("on");
+    if (on) { void err.offsetWidth; err.classList.add("on"); errText.textContent = GENERIC; } else errText.textContent = "";
+    [user, pass].forEach((i) => i.setAttribute("aria-invalid", on ? "true" : "false"));
+    errBtn.setAttribute("aria-pressed", String(on));
+  }
+  errBtn.addEventListener("click", () => setError(errBtn.getAttribute("aria-pressed") !== "true"));
+
+  // submit: mock-up, always the generic failure
+  let busy = false;
+  form.addEventListener("submit", (e) => {
+    e.preventDefault(); if (busy) return;
+    const uHint = $("username-hint"); uHint.textContent = "";
+    if (!user.value.trim()) { uHint.textContent = "Enter a username."; user.focus(); return; }
+    if (!pass.value) { pHint.textContent = "Enter a password."; pHint.classList.remove("caps"); pass.focus(); return; }
+    busy = true; setError(false);
+    submit.classList.add("busy"); submit.setAttribute("aria-disabled", "true"); form.setAttribute("aria-busy", "true");
+    submit.querySelector(".btn-label").textContent = "Checking";
+    setTimeout(() => {
+      busy = false; submit.classList.remove("busy"); submit.removeAttribute("aria-disabled"); form.removeAttribute("aria-busy");
+      submit.querySelector(".btn-label").textContent = "Sign in";
+      pass.value = ""; setError(true); pass.focus();
+    }, 1000);
+  });
+
+  // theme
+  const themeBtn = $("t-theme");
+  const syncTheme = () => { const d = root.dataset.theme === "dark"; themeBtn.textContent = d ? "Dark" : "Light"; themeBtn.setAttribute("aria-pressed", String(d)); };
+  themeBtn.addEventListener("click", () => { root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark"; syncTheme(); });
+
+  // motion (all motion is CSS; off removes every animation so the field stands still on a composed frame)
+  const motionBtn = $("t-motion");
+  let motionOn = !reduce.matches;
+  function setMotion(on) {
+    motionOn = on && !reduce.matches;
+    root.dataset.motion = motionOn ? "on" : "off";
+    motionBtn.setAttribute("aria-pressed", String(motionOn));
+    motionBtn.disabled = reduce.matches;
+    motionBtn.title = reduce.matches ? "Reduced motion is set by the system" : "";
+  }
+  motionBtn.addEventListener("click", () => setMotion(!motionOn));
+  reduce.addEventListener?.("change", () => setMotion(!reduce.matches));
+
+  // brand sheet
+  const sheet = $("sheet");
+  $("t-brand").addEventListener("click", () => sheet.showModal());
+  $("sheet-close").addEventListener("click", () => sheet.close());
+  sheet.addEventListener("click", (e) => { if (e.target === sheet) sheet.close(); });
+
+  syncTheme(); setMotion(motionOn);
+  if (params.get("error") === "1") setError(true);
+  user.focus({ preventScroll: true });
+})();
+</script>
+</body>
+</html>

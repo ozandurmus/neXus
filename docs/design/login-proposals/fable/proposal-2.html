@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en" data-proposal="2">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>neXus · Sign in · Proposal 2 "Throughput"</title>
+<style>
+  /* ------------------------------------------------------------------
+     Proposal 2 · THROUGHPUT
+     Concept: policy as a readable gate. Packets travel left→right across
+     lanes; at the gate they are inspected: most pass and turn teal, some
+     stop. Light, editorial, daylight. Pure CSS animation, no JS motion.
+     Logo: "Gate X" – one solid stroke (policy) crossed by a dashed stroke
+     (traffic): the X is literally where traffic meets the rule.
+     ------------------------------------------------------------------ */
+  :root {
+    --paper: #f4f6f9;
+    --paper-2: #ffffff;
+    --ink: #171b22;
+    --ink-2: #5f6978;
+    --ink-3: #8d96a5;
+    --line: #e3e7ec;
+    --line-2: #cfd5dd;
+    --blue: #3457d5;
+    --blue-ink: #1e2f7a;
+    --blue-soft: #eaeefb;
+    --teal: #077d93;
+    --teal-soft: #d8f0f3;
+    --slate: #9aa3b0;
+    --bad: #8f1f1f;
+    --bad-bg: #fbe7e7;
+    --bad-line: #e7b3b3;
+    --focus: #1e2f7a;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font-family: var(--sans); color: var(--ink); background: var(--paper); -webkit-font-smoothing: antialiased; overflow: hidden; }
+
+  /* ---------- Flow field ---------- */
+  .flow { position: fixed; inset: 0; overflow: hidden; pointer-events: none; opacity: .62; }
+  .flow svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  .lane { stroke: var(--line); stroke-width: 1; }
+  .gate { stroke: var(--blue); stroke-width: 2; stroke-dasharray: 2 6; opacity: .55; }
+  .gate-label { font-family: var(--mono); font-size: 11px; fill: var(--blue-ink); letter-spacing: .12em; }
+
+  /* Packets: a rounded rect per lane, translated across the full width. The gate sits at 62% of the width.
+     Position and colour share one timeline, so colour changes exactly where the packet crosses the gate. */
+  .pk { fill: var(--slate); rx: 3; ry: 3; animation: travel var(--d) linear infinite; animation-delay: var(--s); transform: translateX(-60px); }
+  @keyframes travel {
+    0%   { transform: translateX(-60px); fill: #9aa3b0; opacity: .9; }
+    61%  { transform: translateX(61vw);  fill: #9aa3b0; opacity: .9; }
+    63%  { transform: translateX(63vw);  fill: #077d93; opacity: 1; }
+    100% { transform: translateX(104vw); fill: #077d93; opacity: 1; }
+  }
+  .pk.deny { animation-name: denied; }
+  @keyframes denied {
+    0%   { transform: translateX(-60px) scaleX(1); fill: #9aa3b0; opacity: .9; }
+    60%  { transform: translateX(60vw)  scaleX(1); fill: #9aa3b0; opacity: .9; }
+    62%  { transform: translateX(62vw)  scaleX(.35); fill: #b0421a; opacity: .9; }
+    68%  { transform: translateX(62vw)  scaleX(.35); fill: #b0421a; opacity: 0; }
+    100% { transform: translateX(62vw)  scaleX(.35); opacity: 0; }
+  }
+  .pk.slow { opacity: .55; }
+  /* The flow fades under the form so text stays AA. */
+  .flow::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(244,246,249,0) 55%, rgba(244,246,249,.6) 66%, rgba(244,246,249,.92) 78%); }
+
+  /* ---------- Layout ---------- */
+  .page { position: relative; min-height: 100vh; display: grid; grid-template-columns: 1fr 460px; padding: 44px 72px; column-gap: 64px; }
+  @media (min-width: 1800px) { .page { grid-template-columns: 1fr 500px; padding: 56px 140px; } }
+  @media (max-width: 1300px) { .page { grid-template-columns: 1fr 420px; padding: 36px 48px; column-gap: 40px; } }
+
+  .left { display: flex; flex-direction: column; justify-content: space-between; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .headline { max-width: 620px; }
+  .kicker { font-family: var(--mono); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--teal); margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }
+  .kicker::before { content: ""; width: 28px; height: 2px; background: var(--teal); }
+  h1 { font-size: clamp(40px, 3.5vw, 54px); line-height: 1.04; letter-spacing: -0.03em; font-weight: 700; margin: 0 0 22px; }
+  h1 span { color: var(--blue); }
+  .headline p { font-size: 17px; line-height: 1.55; color: var(--ink-2); margin: 0; max-width: 500px; text-shadow: 0 0 10px var(--paper), 0 0 18px var(--paper); }
+  h1 { text-shadow: 0 0 12px var(--paper), 0 0 24px var(--paper); }
+  .stats { display: flex; gap: 36px; margin-top: 40px; }
+  .stats div { font-family: var(--mono); font-size: 12px; color: var(--ink-3); letter-spacing: .02em; }
+  .stats b { display: block; font-family: var(--sans); font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: 0; margin-bottom: 4px; }
+  .legend { display: flex; gap: 20px; font-size: 12px; color: var(--ink-2); align-items: center; }
+  .legend i { display: inline-block; width: 18px; height: 6px; border-radius: 2px; margin-right: 8px; vertical-align: middle; }
+
+  .right { display: flex; align-items: center; }
+  .card { position: relative; width: 100%; background: var(--paper-2); border: 1px solid var(--line); border-radius: 14px; padding: 36px 36px 24px;
+          box-shadow: 0 1px 2px rgba(23,27,34,.04), 0 24px 60px -24px rgba(23,27,34,.25); }
+  .card::before { content: ""; position: absolute; left: 36px; right: 36px; top: 0; height: 3px; border-radius: 0 0 3px 3px; background: linear-gradient(90deg, var(--teal), var(--blue)); }
+  .card h2 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 4px; }
+  .card .sub { color: var(--ink-2); font-size: 14px; margin: 0 0 24px; }
+
+  .tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--line); margin-bottom: 22px; position: relative; }
+  .tabs input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .tabs label { position: relative; padding: 0 2px 12px; font-size: 14px; font-weight: 600; color: var(--ink-3); cursor: pointer; }
+  .tabs label::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--blue); transform: scaleX(0); transition: transform .22s cubic-bezier(.2,.7,.2,1); }
+  .tabs input:checked + label { color: var(--ink); }
+  .tabs input:checked + label::after { transform: scaleX(1); }
+  .tabs input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 3px; }
+
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 7px; }
+  .field .hint { font-size: 12px; color: var(--ink-2); margin-top: 6px; min-height: 16px; }
+  .control { position: relative; display: flex; align-items: center; }
+  .control input { width: 100%; font: inherit; font-size: 15px; color: var(--ink); background: #fff; border: 1px solid var(--line-2); border-radius: 8px; padding: 11px 13px; outline: 0; transition: border-color .15s, box-shadow .15s; }
+  .control input:hover { border-color: var(--slate); }
+  .control input:focus-visible { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+  .control input[aria-invalid="true"] { border-color: #c96060; }
+  .control .eye { position: absolute; right: 6px; height: 32px; padding: 0 10px; font: inherit; font-size: 12px; font-weight: 600; color: var(--blue-ink); background: transparent; border: 0; border-radius: 6px; cursor: pointer; }
+  .control .eye:hover { background: var(--blue-soft); }
+  .control .eye:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+  .alert { display: none; gap: 10px; align-items: flex-start; margin: 0 0 16px; padding: 11px 12px; border-radius: 8px; background: var(--bad-bg); border: 1px solid var(--bad-line); color: var(--bad); font-size: 14px; line-height: 20px; }
+  .alert svg { flex: 0 0 auto; margin-top: 2px; }
+  .card.is-error .alert { display: flex; }
+
+  .btn { width: 100%; margin-top: 8px; font: inherit; font-size: 15px; font-weight: 600; color: #fff; background: var(--blue); border: 0; border-radius: 999px; padding: 13px 18px; cursor: pointer; transition: background .15s, transform .1s, box-shadow .2s; box-shadow: 0 8px 24px -8px rgba(52,87,213,.6); }
+  .btn:hover { background: #2a49bf; }
+  .btn:active { transform: translateY(1px); }
+  .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+  .btn[aria-busy="true"] { opacity: .7; cursor: progress; }
+  .help { margin-top: 18px; font-size: 13px; color: var(--ink-2); }
+  .foot { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--ink-3); display: flex; justify-content: space-between; }
+
+  /* Preview controls */
+  .preview { position: fixed; right: 24px; bottom: 16px; display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--ink-3); z-index: 5; }
+  .preview button { font: inherit; font-size: 12px; color: var(--ink-2); background: #fff; border: 1px solid var(--line-2); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  .preview button:hover { color: var(--ink); border-color: var(--slate); }
+  .preview button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .preview button[aria-pressed="true"] { color: var(--bad); border-color: var(--bad-line); background: var(--bad-bg); }
+
+  dialog { border: 0; padding: 0; background: transparent; max-width: 1100px; width: calc(100% - 64px); }
+  dialog::backdrop { background: rgba(23,27,34,.5); backdrop-filter: blur(6px); }
+  .sheet { position: relative; border-radius: 14px; overflow: hidden; border: 1px solid var(--line-2); display: grid; grid-template-columns: 1fr 1fr; }
+  .sheet > div { padding: 40px; display: flex; flex-direction: column; gap: 28px; }
+  .sheet .on-light { background: #fff; color: var(--ink); }
+  .sheet .on-dark { background: #0f1216; color: #eef1f5; }
+  .sheet h3 { margin: 0; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; opacity: .6; }
+  .sheet .marks { display: flex; align-items: center; gap: 28px; }
+  .sheet p { margin: 0; font-size: 14px; line-height: 1.5; opacity: .85; max-width: 440px; }
+  .sheet .close { position: absolute; top: 12px; right: 12px; font: inherit; font-size: 13px; color: var(--ink); background: #fff; border: 1px solid var(--line-2); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  .sheet .close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  @keyframes shake { 10%, 90% { transform: translateX(-1px);} 20%, 80% { transform: translateX(2px);} 30%, 50%, 70% { transform: translateX(-3px);} 40%, 60% { transform: translateX(3px);} }
+  .card.shake { animation: shake .5s cubic-bezier(.36,.07,.19,.97) both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px);} to { opacity: 1; transform: none; } }
+  .card, .headline, .brand, .stats { animation: rise .6s cubic-bezier(.2,.7,.2,1) both; }
+  .headline { animation-delay: .08s; } .stats { animation-delay: .16s; } .card { animation-delay: .2s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    /* Packets rest in a readable static distribution. */
+    .pk { transform: translateX(var(--rest)) !important; }
+    .pk.pass-rest { fill: #077d93 !important; }
+    .pk.deny { opacity: 0 !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="flow" aria-hidden="true">
+  <svg viewBox="0 0 1440 900" preserveAspectRatio="none">
+    <!-- lanes -->
+    <g class="lane">
+      <line x1="0" y1="150" x2="1440" y2="150"/><line x1="0" y1="240" x2="1440" y2="240"/><line x1="0" y1="330" x2="1440" y2="330"/>
+      <line x1="0" y1="420" x2="1440" y2="420"/><line x1="0" y1="510" x2="1440" y2="510"/><line x1="0" y1="600" x2="1440" y2="600"/>
+      <line x1="0" y1="690" x2="1440" y2="690"/><line x1="0" y1="780" x2="1440" y2="780"/>
+    </g>
+  </svg>
+  <!-- the gate: a dashed vertical rule at 62% -->
+  <svg style="left:62%; width:2px; top:0; height:100%; overflow:visible" viewBox="0 0 2 900" preserveAspectRatio="none">
+    <line class="gate" x1="1" y1="0" x2="1" y2="900"/>
+  </svg>
+  <svg style="left:calc(62% + 10px); top:72px; width:160px; height:20px" viewBox="0 0 160 20"><text class="gate-label" x="0" y="14">POLICY · INSPECT</text></svg>
+  <!-- packets: one svg per lane, so vw-based translate is simple -->
+  <svg style="height:100%">
+    <rect class="pk"           y="144" width="44" height="12" style="--d:14s; --s:-2s;  --rest:12vw"/>
+    <rect class="pk slow"      y="144" width="26" height="12" style="--d:19s; --s:-9s;  --rest:70vw" />
+    <rect class="pk pass-rest" y="234" width="60" height="12" style="--d:16s; --s:-11s; --rest:78vw"/>
+    <rect class="pk deny"      y="234" width="36" height="12" style="--d:17s; --s:-4s"/>
+    <rect class="pk"           y="324" width="30" height="12" style="--d:12s; --s:-6s;  --rest:30vw"/>
+    <rect class="pk slow"      y="324" width="52" height="12" style="--d:21s; --s:-15s; --rest:50vw"/>
+    <rect class="pk pass-rest" y="414" width="40" height="12" style="--d:15s; --s:-13s; --rest:88vw"/>
+    <rect class="pk"           y="414" width="22" height="12" style="--d:13s; --s:-1s;  --rest:22vw"/>
+    <rect class="pk deny"      y="504" width="48" height="12" style="--d:18s; --s:-10s"/>
+    <rect class="pk"           y="504" width="34" height="12" style="--d:14s; --s:-7s;  --rest:42vw"/>
+    <rect class="pk slow"      y="594" width="28" height="12" style="--d:22s; --s:-3s;  --rest:8vw"/>
+    <rect class="pk pass-rest" y="594" width="56" height="12" style="--d:16s; --s:-8s;  --rest:72vw"/>
+    <rect class="pk"           y="684" width="38" height="12" style="--d:13s; --s:-12s; --rest:36vw"/>
+    <rect class="pk deny"      y="684" width="30" height="12" style="--d:19s; --s:-16s"/>
+    <rect class="pk slow"      y="774" width="46" height="12" style="--d:20s; --s:-5s;  --rest:56vw"/>
+    <rect class="pk"           y="774" width="24" height="12" style="--d:15s; --s:-14s; --rest:18vw"/>
+  </svg>
+</div>
+
+<main class="page">
+  <section class="left" aria-label="About neXus">
+    <div class="brand">
+      <!-- NEW MARK: "Gate X" — solid stroke = the rule, dashed stroke = the traffic that meets it -->
+      <svg width="40" height="40" viewBox="0 0 48 48" role="img" aria-label="neXus mark">
+        <rect width="48" height="48" rx="11" fill="#0e2944"/>
+        <path d="M13 13 L35 35" stroke="#7b9cff" stroke-width="4" stroke-linecap="round"/>
+        <path d="M35 13 L13 35" stroke="#38d2e6" stroke-width="4" stroke-linecap="round" stroke-dasharray="6 5"/>
+      </svg>
+      <svg width="124" height="34" viewBox="0 0 124 34" role="img" aria-label="nexus">
+        <text x="0" y="26" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif" font-size="30" font-weight="700" letter-spacing="-1.2" fill="#171b22">ne</text>
+        <g transform="translate(40 6)">
+          <path d="M2 2 L18 18" stroke="#3457d5" stroke-width="3.2" stroke-linecap="round"/>
+          <path d="M18 2 L2 18" stroke="#077d93" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="4.5 3.6"/>
+        </g>
+        <text x="66" y="26" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif" font-size="30" font-weight="700" letter-spacing="-1.2" fill="#171b22">us</text>
+      </svg>
+    </div>
+
+    <div class="headline">
+      <div class="kicker">Firewall operations · on premises</div>
+      <h1>Policy you can read.<br>Traffic you can <span>trace</span>.</h1>
+      <p>neXus inspects the estate the way a firewall inspects a packet: every claim passes a rule, every rule leaves evidence. Nothing here leaves your network.</p>
+      <div class="stats" aria-label="Scope">
+        <div><b>Check Point · Palo Alto · F5 · Citrix</b>one inventory</div>
+        <div><b>See · Verify · Trace · Recover · Operate</b>one sequence</div>
+      </div>
+    </div>
+
+    <div class="legend" aria-hidden="true">
+      <span><i style="background:#9aa3b0"></i>observed</span>
+      <span><i style="background:#077d93"></i>verified</span>
+      <span><i style="background:#b0421a;width:7px"></i>refused</span>
+    </div>
+  </section>
+
+  <section class="right">
+    <form class="card" id="card" novalidate autocomplete="off" aria-labelledby="title">
+      <h2 id="title">Sign in</h2>
+      <p class="sub">Continue to the operations console.</p>
+
+      <div class="tabs" role="radiogroup" aria-label="Authentication method">
+        <input type="radio" name="auth" id="auth-local" value="local" checked><label for="auth-local">Local account</label>
+        <input type="radio" name="auth" id="auth-ldap" value="ldap"><label for="auth-ldap">LDAP</label>
+      </div>
+
+      <div class="alert" id="alert" role="alert" aria-live="assertive">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v4.2M8 11.3v.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Sign-in failed. Check your details.</span>
+      </div>
+
+      <div class="field">
+        <label for="user">Username</label>
+        <div class="control"><input id="user" name="username" type="text" autocomplete="username" spellcheck="false" required></div>
+        <div class="hint" id="user-hint"></div>
+      </div>
+      <div class="field">
+        <label for="pass">Password</label>
+        <div class="control">
+          <input id="pass" name="password" type="password" autocomplete="current-password" required>
+          <button type="button" class="eye" id="eye" aria-pressed="false" aria-controls="pass">Show</button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn" id="submit">Sign in</button>
+      <p class="help">Trouble signing in? Ask your administrator.</p>
+      <div class="foot"><span>neXus · on-premises · version 2.6</span><span>no outbound connections</span></div>
+    </form>
+  </section>
+</main>
+
+<div class="preview" aria-label="Design preview controls">
+  <span>Preview</span>
+  <button type="button" id="toggle-error" aria-pressed="false">Error state</button>
+  <button type="button" id="open-logo">Logo sheet</button>
+</div>
+
+<dialog id="logo-sheet" aria-labelledby="sheet-title">
+  <div class="sheet">
+    <button class="close" id="close-logo" type="button">Close</button>
+    <div class="on-light">
+      <h3 id="sheet-title">Logo · on light</h3>
+      <div class="marks">
+        <svg width="96" height="96" viewBox="0 0 48 48" aria-hidden="true">
+          <rect width="48" height="48" rx="11" fill="#0e2944"/>
+          <path d="M13 13 L35 35" stroke="#7b9cff" stroke-width="4" stroke-linecap="round"/>
+          <path d="M35 13 L13 35" stroke="#38d2e6" stroke-width="4" stroke-linecap="round" stroke-dasharray="6 5"/>
+        </svg>
+        <svg width="248" height="68" viewBox="0 0 124 34" aria-hidden="true">
+          <text x="0" y="26" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif" font-size="30" font-weight="700" letter-spacing="-1.2" fill="#171b22">ne</text>
+          <g transform="translate(40 6)"><path d="M2 2 L18 18" stroke="#3457d5" stroke-width="3.2" stroke-linecap="round"/><path d="M18 2 L2 18" stroke="#077d93" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="4.5 3.6"/></g>
+          <text x="66" y="26" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif" font-size="30" font-weight="700" letter-spacing="-1.2" fill="#171b22">us</text>
+        </svg>
+      </div>
+      <p><strong>Gate X.</strong> The current X kept as an X, but the two strokes now mean two things: the solid blue stroke is the rule, the dashed teal stroke is the traffic that meets it. The wordmark is the product name in a heavy lowercase sans, with the X of "nexus" drawn as the mark itself, so word and mark are one object. The navy tile stays, so it still reads as the same app in a browser tab.</p>
+    </div>
+    <div class="on-dark">
+      <h3>Logo · on dark</h3>
+      <div class="marks">
+        <svg width="96" height="96" viewBox="0 0 48 48" aria-hidden="true">
+          <rect width="48" height="48" rx="11" fill="#eef1f5"/>
+          <path d="M13 13 L35 35" stroke="#3457d5" stroke-width="4" stroke-linecap="round"/>
+          <path d="M35 13 L13 35" stroke="#077d93" stroke-width="4" stroke-linecap="round" stroke-dasharray="6 5"/>
+        </svg>
+        <svg width="248" height="68" viewBox="0 0 124 34" aria-hidden="true">
+          <text x="0" y="26" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif" font-size="30" font-weight="700" letter-spacing="-1.2" fill="#eef1f5">ne</text>
+          <g transform="translate(40 6)"><path d="M2 2 L18 18" stroke="#7b9cff" stroke-width="3.2" stroke-linecap="round"/><path d="M18 2 L2 18" stroke="#38d2e6" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="4.5 3.6"/></g>
+          <text x="66" y="26" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif" font-size="30" font-weight="700" letter-spacing="-1.2" fill="#eef1f5">us</text>
+        </svg>
+      </div>
+      <p>On dark the tile inverts to the light surface tone and the strokes take the deeper product colours; in the wordmark the strokes brighten to the dark-mode primary and teal so they clear AA on #0f1216.</p>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  'use strict';
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var card = document.getElementById('card'), user = document.getElementById('user'), pass = document.getElementById('pass');
+  var submit = document.getElementById('submit'), toggle = document.getElementById('toggle-error'), hint = document.getElementById('user-hint');
+  function setError(on) {
+    card.classList.toggle('is-error', on); toggle.setAttribute('aria-pressed', String(on));
+    user.setAttribute('aria-invalid', String(on)); pass.setAttribute('aria-invalid', String(on));
+    if (on && !reduce.matches) { card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake'); }
+  }
+  toggle.addEventListener('click', function () { setError(!card.classList.contains('is-error')); });
+  card.addEventListener('submit', function (ev) {
+    ev.preventDefault(); setError(false);
+    submit.setAttribute('aria-busy', 'true'); submit.textContent = 'Signing in…';
+    setTimeout(function () { submit.removeAttribute('aria-busy'); submit.textContent = 'Sign in'; setError(true); pass.value = ''; pass.focus(); }, 700);
+  });
+  document.querySelectorAll('input[name=auth]').forEach(function (r) {
+    r.addEventListener('change', function () { hint.textContent = r.value === 'ldap' ? 'Your directory account name, without the domain.' : ''; });
+  });
+  var eye = document.getElementById('eye');
+  eye.addEventListener('click', function () { var show = pass.type === 'password'; pass.type = show ? 'text' : 'password'; eye.textContent = show ? 'Hide' : 'Show'; eye.setAttribute('aria-pressed', String(show)); });
+  var dlg = document.getElementById('logo-sheet');
+  document.getElementById('open-logo').addEventListener('click', function () { dlg.showModal(); });
+  document.getElementById('close-logo').addEventListener('click', function () { dlg.close(); });
+  dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+})();
+</script>
+</body>
+</html>
