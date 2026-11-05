@@ -33,7 +33,10 @@
 @media (max-width: 1300px) { .lx-page { padding: 40px 48px; grid-template-columns: minmax(0,1fr) 440px; gap: 32px; } }
 @media (max-width: 900px) {
   .lx-page { grid-template-columns: minmax(0, 1fr); padding: 24px 16px; }
-  .lx-hero { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: calc(100vh - 96px); }
+  .lx-hero { display: none; }
+}
+.lx-hero { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: calc(100vh - 96px); }
+@media (max-width: 900px) { .lx-hero { display: none; } }
 .lx-logo { display: flex; flex-direction: column; align-items: center; gap: clamp(18px, 2vw, 30px); width: clamp(240px, 27vw, 420px); position: relative; }
 .lx-logo::before {
   content: ""; position: absolute; inset: -30% -25%; z-index: -1; pointer-events: none;
