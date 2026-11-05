@@ -202,10 +202,11 @@ public final class CheckPointPolicyCollector {
         PolicyCollectionTrace.timeout(readTimeout);
         long deadline = nanoTime.getAsLong() + jobTimeout.toNanos();
         long started = nanoTime.getAsLong();
+        var probes = new NatUidProbes();
         if (maxSessions > 1) {
             try { return new CpPolicyParallelCollection(this, repository, maxSessions, nanoTime,
-                run, request, deadline, lease, domainPublish, domainGap, reuse).collect(); }
-            finally { reuse.record(); PolicyCollectionTrace.elapsed(nanoTime.getAsLong() - started); reuse.observe(observations); }
+                run, request, deadline, lease, domainPublish, domainGap, reuse, probes).collect(); }
+            finally { probes.recordTranscript(); reuse.record(); PolicyCollectionTrace.elapsed(nanoTime.getAsLong() - started); reuse.observe(observations); }
         }
         TransportSession session = connect(run, deadline, lease);
         try {
@@ -297,7 +298,7 @@ public final class CheckPointPolicyCollector {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(incomplete);
                         if (PolicyCollectionTrace.fatal(incomplete)) throw incomplete;
                         failures.removeIf(f -> f.layerRef().equals(natRef));
-                        failures.add(natFailure(natRef, incomplete, names));
+                        failures.add(natFailure(session, domainName, uid, natRef, incomplete, names, probes, deadline, lease));
                     }
                     PolicySnapshot snapshot;
                     try { snapshot = snapshot(metadata, access, nat, failures, lookup(inventory, container)); }
@@ -326,6 +327,7 @@ public final class CheckPointPolicyCollector {
             return List.copyOf(snapshots);
         } finally {
             if (session != null) transport.disconnect(session);
+            probes.recordTranscript();
             reuse.record();
             PolicyCollectionTrace.elapsed(nanoTime.getAsLong() - started);
             reuse.observe(observations);
@@ -574,12 +576,101 @@ public final class CheckPointPolicyCollector {
 
     private static int reached(RuntimeException error) { return error instanceof PageFailure page ? page.offset : 0; }
 
+    /** Timeout approved on the cp_policy_nat_rulebase_uid_probe gate row (timeout_s 60). */
+    static final Duration NAT_UID_PROBE_TIMEOUT = Duration.ofSeconds(60);
+
+    /** Per-run tracker for the one-off NAT rulebase probe by package UID when a package's name read returns VENDOR_NAME_NOT_UNIQUE. */
+    static final class NatUidProbes {
+        private final Map<String, String> outcomes = new java.util.concurrent.ConcurrentHashMap<>();
+        boolean begin(String packageKey) {
+            return packageKey != null && !packageKey.isBlank() && outcomes.putIfAbsent(packageKey, "") == null;
+        }
+        String finish(String packageKey, String outcome) {
+            outcomes.put(packageKey, outcome);
+            return outcome;
+        }
+        String outcome(String packageKey) {
+            String value = packageKey == null ? null : outcomes.get(packageKey);
+            return value == null || value.isEmpty() ? null : value;
+        }
+        void recordTranscript() {
+            int accepted = 0, rejected = 0, notEvaluable = 0;
+            for (String outcome : outcomes.values()) {
+                if (UID_ACCEPTED.equals(outcome)) accepted++;
+                else if (UID_REJECTED.equals(outcome)) rejected++;
+                else if (NOT_EVALUABLE.equals(outcome)) notEvaluable++;
+            }
+            int total = accepted + rejected + notEvaluable;
+            if (total == 0) return;
+            String note = "[CP_NAT_UID_PROBE] packages=" + total + " accepted=" + accepted
+                + " rejected=" + rejected + " not_evaluable=" + notEvaluable;
+            com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", note);
+            System.getLogger(CheckPointPolicyCollector.class.getName()).log(System.Logger.Level.INFO, note);
+        }
+    }
+
     /** NAT that the vendor cannot address uniquely is UNKNOWN (fixed reason); every other NAT failure stays a gap. */
-    static CollectionFailure natFailure(String natRef, RuntimeException error, NameContext names) {
+    CollectionFailure natFailure(TransportSession session, String domain, String packageUid, String natRef,
+            RuntimeException error, NameContext names, NatUidProbes probes, long deadline, BooleanSupplier lease) {
         if (nameNotUnique(error) == null)
             return new CollectionFailure(natRef, PolicyCollectionTrace.reason(error), "NAT", reached(error));
         names.diagnose("nat", error);
-        return new CollectionFailure(natRef, VENDOR_NAME_NOT_UNIQUE, "NAT", 0);
+        String probe = probeNatByUid(session, domain, packageUid, natRef, probes, deadline, lease);
+        return new CollectionFailure(natRef, VENDOR_NAME_NOT_UNIQUE, "NAT", 0, probe);
+    }
+
+    /**
+     * One-off probe by package UID after a package's by-name NAT read fails with VENDOR_NAME_NOT_UNIQUE.
+     * Rule content is discarded in memory (raw-evidence law); only the enum outcome is recorded.
+     */
+    String probeNatByUid(TransportSession session, String domain, String uid, String natRef, NatUidProbes probes, long deadline, BooleanSupplier lease) {
+        if (uid == null || uid.isBlank()) return null;
+        if (!probes.begin(natRef)) return probes.outcome(natRef);
+        String command = MgmtCliCommands.showNatRulebaseByUidProbe(domain, uid);
+        PolicyCollectionTrace.step(CpPolicyGates.NAT_UID_PROBE_COMMAND, ref("cp-policy-read", command));
+        checkActive(deadline, lease);
+        try {
+            CpPolicyGates.requireNatUidProbe(gates);
+        } catch (IllegalStateException unavailable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unavailable);
+            if (!"POLICY_GATE_UNAVAILABLE".equals(unavailable.getMessage())) throw unavailable;
+            throw PolicyCollectionTrace.failure("POLICY_GATE_UNAVAILABLE");
+        }
+        long remaining = deadline - nanoTime.getAsLong();
+        if (remaining <= 0) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
+        long started = System.nanoTime();
+        // The gate row approves a 60 s timeout for this literal; never wait longer than that or the configured read timeout.
+        long timeoutNanos = Math.min(Math.min(NAT_UID_PROBE_TIMEOUT.toNanos(), readTimeout.toNanos()), remaining);
+        long extensionMs = Math.min(120_000, Duration.ofNanos(remaining - timeoutNanos).toMillis());
+        ExecResult result;
+        try {
+            result = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(() -> transport.execInteractive(session,
+                    new ExecSpec(command, false, extensionMs), Duration.ofNanos(timeoutNanos)));
+        } catch (RuntimeException transportFailure) {
+            // A transport failure is NOT_EVALUABLE (decision record); the NAT section stays UNKNOWN. Fatal run states still abort.
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(transportFailure);
+            if (PolicyCollectionTrace.fatal(transportFailure)) throw transportFailure;
+            PolicyCollectionTrace.result(started, -1, "TransportFailure");
+            if (Thread.currentThread().isInterrupted()) throw PolicyCollectionTrace.failure("INTERRUPTED");
+            if (nanoTime.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
+            return probes.finish(natRef, NOT_EVALUABLE);
+        }
+        PolicyCollectionTrace.result(started, result instanceof ExecResult.Completed c ? c.output().getBytes(java.nio.charset.StandardCharsets.UTF_8).length : -1,
+                result == null ? "NullResult" : result.getClass().getSimpleName());
+        if (Thread.currentThread().isInterrupted()) throw PolicyCollectionTrace.failure("INTERRUPTED");
+        if (nanoTime.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
+        if (!(result instanceof ExecResult.Completed completed)) return probes.finish(natRef, NOT_EVALUABLE);
+        try {
+            JsonNode root = json.readTree(jsonBody(completed.output()));
+            if (root != null && root.isObject() && (root.has("code") || (root.has("message") && !root.has("objects") && !root.has("packages") && !root.has("rulebase"))))
+                return probes.finish(natRef, UID_REJECTED);
+            if (completed.exitStatus() != 0 || root == null || !root.isObject())
+                return probes.finish(natRef, NOT_EVALUABLE);
+            pageTotal(root, 0, -1, 2);
+            return probes.finish(natRef, UID_ACCEPTED);
+        } catch (PolicyCollectionTrace.Failure | java.io.IOException invalid) {
+            return probes.finish(natRef, NOT_EVALUABLE);
+        }
     }
 
     private List<JsonNode> access(TransportSession session, String domain, JsonNode roots, long deadline, BooleanSupplier lease,

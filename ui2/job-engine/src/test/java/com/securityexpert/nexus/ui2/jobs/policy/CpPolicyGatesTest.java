@@ -24,7 +24,12 @@ class CpPolicyGatesTest {
             assertThrows(IllegalStateException.class, () -> CpPolicyGates.requireAccessUid(duplicate, hits));
         }
         assertDoesNotThrow(() -> CpPolicyGates.requireAll(gates));
+        assertTrue(rows.stream().anyMatch(row -> row.gateId().equals(CpPolicyGates.NAT_UID_PROBE_GATE)
+            && row.canonicalCommandKey().equals(CpPolicyGates.NAT_UID_PROBE_COMMAND)));
+        assertDoesNotThrow(() -> CpPolicyGates.requireNatUidProbe(gates));
+        assertThrows(IllegalStateException.class, () -> CpPolicyGates.requireNatUidProbe(key -> List.of()));
         assertTrue(DiagnosticRead.commands("check_point", "management_server", null, gates).stream()
-            .noneMatch(command -> command.gateId().startsWith("cp_policy_access_rulebase_uid")));
+            .noneMatch(command -> command.gateId().startsWith("cp_policy_access_rulebase_uid")
+                || command.gateId().equals(CpPolicyGates.NAT_UID_PROBE_GATE)));
     }
 }

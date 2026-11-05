@@ -21,6 +21,7 @@ import static com.securityexpert.nexus.ui2.worker.policy.CheckPointPolicyCollect
 final class CpPolicyParallelCollection {
     private final CheckPointPolicyCollector collector;
     private final CpDomainReuse reuse;
+    private final NatUidProbes probes;
     private final List<PolicySnapshot> reused = new ArrayList<>();
     private final PolicyCollectionRepository repository;
     private final DiscoveryRun run;
@@ -46,8 +47,9 @@ final class CpPolicyParallelCollection {
 
     CpPolicyParallelCollection(CheckPointPolicyCollector collector, PolicyCollectionRepository repository,
             int maximum, LongSupplier clock, DiscoveryRun run, PolicyCollectionRepository.Request request,
-            long deadline, BooleanSupplier lease, Consumer<PolicySnapshot> publish, Consumer<CollectionFailure> domainFailure, CpDomainReuse reuse) {
-        this.reuse = reuse; this.collector = collector; this.repository = repository; this.clock = clock; this.run = run;
+            long deadline, BooleanSupplier lease, Consumer<PolicySnapshot> publish, Consumer<CollectionFailure> domainFailure,
+            CpDomainReuse reuse, NatUidProbes probes) {
+        this.reuse = reuse; this.probes = probes; this.collector = collector; this.repository = repository; this.clock = clock; this.run = run;
         this.request = request; this.deadline = deadline; this.lease = lease; this.publish = publish; this.domainFailure = domainFailure;
         safety = new Safety(maximum);
         inventory = CpInventoryObjects.enabled() ? new CpInventoryObjects(repository, request.sourceId()) : null;
@@ -204,8 +206,19 @@ final class CpPolicyParallelCollection {
             return new Result(work, collector.read(session.get(), work.command, work.gate, deadline, lease, work.layer == null ? -1 : work.layer.total, work.layer == null ? "ABSENT" : work.layer.domainType), null, clock.getAsLong() - started);
         } catch (RuntimeException error) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(error);
-            // An unhealthy shell must not carry the retried page or any sibling read.
-            closeSession();
+            try {
+                if (work.layer != null && work.layer == work.layer.policy.nat && nameNotUnique(error) != null && session.get() != null) {
+                    synchronized (work.layer) {
+                        collector.probeNatByUid(session.get(), work.layer.policy.domain, work.layer.uid, work.layer.ref, probes, deadline, lease);
+                    }
+                }
+            } catch (RuntimeException probeError) {
+                com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(probeError);
+                error = probeError;
+            } finally {
+                // An unhealthy shell must not carry the retried page or any sibling read.
+                closeSession();
+            }
             if (closeFailed.get()) error = PolicyCollectionTrace.failure("SESSION_CLEANUP_FAILED");
             return new Result(work, null, error, clock.getAsLong() - started);
         }
@@ -301,7 +314,7 @@ final class CpPolicyParallelCollection {
                 roots.put(layerKey(scoped), scoped);
             }
             roots.values().forEach(layer -> addLayer(policy, layer));
-            policy.nat = new Layer(policy, "", "NAT", ref("cp-nat", container, uid), 2,
+            policy.nat = new Layer(policy, uid, "NAT", ref("cp-nat", container, uid), 2,
                 offset -> MgmtCliCommands.showNatRulebase(domain, name, offset));
             enqueue(policy.nat, 0, 0);
         }
@@ -417,7 +430,7 @@ final class CpPolicyParallelCollection {
         if (layer.failure != null) return;
         if (layer == layer.policy.nat && nameNotUnique(error) != null) {
             layer.policy.names.diagnose("nat", error);
-            layer.failure = new CollectionFailure(layer.ref, VENDOR_NAME_NOT_UNIQUE, "NAT", 0);
+            layer.failure = new CollectionFailure(layer.ref, VENDOR_NAME_NOT_UNIQUE, "NAT", 0, probes.outcome(layer.ref));
         } else layer.failure = new CollectionFailure(layer.ref, PolicyCollectionTrace.reason(error), layer.name, offset);
         layer.pages.clear();
         checkpoint(layer.policy, layer);

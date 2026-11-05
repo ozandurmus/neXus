@@ -44,6 +44,12 @@ public final class CpPolicyGates {
     public static void requireAccessUid(GateRegistryPort registry, boolean hits) {
         require(registry, accessUidCommand(hits), 300, hits ? "none" : "once on timeout with limit 50");
     }
+    public static final String NAT_UID_PROBE_GATE = "cp_policy_nat_rulebase_uid_probe";
+    public static final String NAT_UID_PROBE_COMMAND =
+        "mgmt_cli -r true -d '<DOMAIN>' -f json show-nat-rulebase package '<PACKAGE_UID>' limit 1 offset 0 details-level standard use-object-dictionary true";
+    public static void requireNatUidProbe(GateRegistryPort registry) {
+        require(registry, NAT_UID_PROBE_COMMAND, 60, "none");
+    }
     public static final int PACKAGES_50 = 4;
     public static final int OBJECT_BASE = 5;
     public static final int LAST_PUBLISHED_SESSION = COMMANDS.size() - 1;
@@ -57,6 +63,8 @@ public final class CpPolicyGates {
                 java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty()));
         }
         steps.add(new CapabilityStep(StepKind.EXEC, "expert", ACCESS_UID_COMMAND, false,
+            java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty()));
+        steps.add(new CapabilityStep(StepKind.EXEC, "expert", NAT_UID_PROBE_COMMAND, false,
             java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty()));
         var disconnect = new CapabilityStep(StepKind.DISCONNECT, "not_applicable", null, false,
                 java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty());
@@ -78,5 +86,6 @@ public final class CpPolicyGates {
     public static void requireAll(GateRegistryPort registry) {
         for (int i = 0; i < COMMANDS.size(); i++) if (i != 3) require(registry, i);
         requireAccessUid(registry, false);
+        requireNatUidProbe(registry);
     }
 }

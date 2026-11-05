@@ -72,8 +72,8 @@ How `SystemLogCollectionScheduler` implements the independent switch:
 
 ## 3. Schema
 
-The migration is **one** file: the next free V number after R1's `report_run` migration (expected V191 if R1 takes
-V190 and nothing else lands first). As in R1, it is dry-run in BEGIN/ROLLBACK on the live database before deploy
+The migration is **one** file: the next free V number after R1's `report_run` migration (expected V192: R1 takes
+V190 and the CP NAT UID probe gate takes V191). As in R1, it is dry-run in BEGIN/ROLLBACK on the live database before deploy
 (engineer step). Conventions follow V185/V186:
 - `TEXT` with length checks;
 - `TIMESTAMPTZ`;

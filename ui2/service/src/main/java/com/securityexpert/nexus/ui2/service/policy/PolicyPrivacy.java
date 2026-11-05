@@ -123,6 +123,7 @@ public final class PolicyPrivacy {
         if (key.equals("unitFailureCodes")) return failureCode(text);
         if (key.equals("part")) return text.equals("NAT") ? text : "UNKNOWN";
         if (key.equals("reasonCode")) return com.securityexpert.nexus.ui2.policy.PolicySnapshot.UNKNOWN_PART_REASONS.contains(text) ? text : "UNKNOWN";
+        if (key.equals("natUidProbe")) return com.securityexpert.nexus.ui2.policy.PolicySnapshot.NAT_UID_PROBE_OUTCOMES.contains(text) ? text : "UNKNOWN";
         if (key.equals("reason")) return text.equals("COLLECTION_SKIPPED") ? text : safeReason(text);
         if (Set.of("firstHit", "lastHit", "createdAt", "modifiedAt", "startedAt", "lastActivityAt", "publishTime", "hitsCollectedAt", "rangeStart", "rangeEnd").contains(key)) {
             try { return java.time.Instant.parse(text).toString(); } catch (RuntimeException invalid) { return null; }

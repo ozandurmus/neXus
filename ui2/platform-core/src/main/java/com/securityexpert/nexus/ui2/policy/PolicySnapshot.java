@@ -10,11 +10,22 @@ public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<Stri
     public PolicySnapshot(Metadata metadata, List<Section> sections, Map<String, PolicyObject> objects) {
         this(metadata, sections, objects, List.of());
     }
-    public record CollectionFailure(String layerRef, String reason, String layerName, int offset) {
-        public CollectionFailure(String layerRef, String reason) { this(layerRef, reason, "", 0); }
+    public record CollectionFailure(String layerRef, String reason, String layerName, int offset, String natUidProbe) {
+        /** The probe outcome is an opaque enum, and only a name-not-unique NAT failure may carry one. */
+        public CollectionFailure {
+            if (natUidProbe != null && (!NAT_UID_PROBE_OUTCOMES.contains(natUidProbe) || !VENDOR_NAME_NOT_UNIQUE.equals(reason)))
+                throw new IllegalArgumentException("POLICY_NAT_UID_PROBE_OUTCOME_INVALID");
+        }
+        public CollectionFailure(String layerRef, String reason, String layerName, int offset) {
+            this(layerRef, reason, layerName, offset, null);
+        }
+        public CollectionFailure(String layerRef, String reason) { this(layerRef, reason, "", 0, null); }
     }
     /** The vendor answered with a name-not-unique API error; the part is explicitly UNKNOWN, not missing. */
     public static final String VENDOR_NAME_NOT_UNIQUE = "VENDOR_NAME_NOT_UNIQUE";
+    /** Outcomes of the one-off Check Point NAT rulebase probe by package UID when the package name is not unique. */
+    public static final String UID_ACCEPTED = "UID_ACCEPTED", UID_REJECTED = "UID_REJECTED", NOT_EVALUABLE = "NOT_EVALUABLE";
+    public static final java.util.Set<String> NAT_UID_PROBE_OUTCOMES = java.util.Set.of(UID_ACCEPTED, UID_REJECTED, NOT_EVALUABLE);
     /** Fixed list of reasons that mark a readable-but-unanswerable part as UNKNOWN instead of incomplete. */
     public static final java.util.Set<String> UNKNOWN_PART_REASONS = java.util.Set.of(VENDOR_NAME_NOT_UNIQUE);
     /** Only the collector's fixed NAT part may carry an UNKNOWN reason; every other failure stays a gap. */

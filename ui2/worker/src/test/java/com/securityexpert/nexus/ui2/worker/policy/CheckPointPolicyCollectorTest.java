@@ -766,6 +766,18 @@ class CheckPointPolicyCollectorTest {
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showAccessRulebase("DOM", "", "LAYER", 0));
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showAccessRulebase("DOM", "synthetic-uid", "LAYER", -1));
         assertEquals("mgmt_cli -r true -d 'DOM' -f json show-nat-rulebase package 'PKG' limit 500 offset '0' details-level standard use-object-dictionary true", MgmtCliCommands.showNatRulebase("DOM", "PKG", 0));
+        assertEquals("mgmt_cli -r true -d '<DOMAIN>' -f json show-nat-rulebase package '<PACKAGE_UID>' limit 1 offset 0 details-level standard use-object-dictionary true",
+            MgmtCliCommands.showNatRulebaseByUidProbe("<DOMAIN>", "<PACKAGE_UID>"));
+        assertEquals(CpPolicyGates.NAT_UID_PROBE_COMMAND.replace("<DOMAIN>", "DOM").replace("<PACKAGE_UID>", "pkg-01"),
+            MgmtCliCommands.showNatRulebaseByUidProbe("DOM", "pkg-01"));
+        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showNatRulebaseByUidProbe("DOM", ""));
+        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showNatRulebaseByUidProbe("DOM", null));
+        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showNatRulebaseByUidProbe("DOM", "pkg\n01"));
+        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showNatRulebaseByUidProbe("", "pkg-01"));
+        var probeRows = gates.findByCanonicalKey(new CanonicalCommandKey("check_point", "cp_multi_domain_server",
+            "expert", "SSH_EXEC", CpPolicyGates.NAT_UID_PROBE_COMMAND));
+        assertEquals(1, probeRows.size());
+        assertEquals(CpPolicyGates.NAT_UID_PROBE_GATE, probeRows.get(0).gateId());
         assertTrue(MgmtCliCommands.showPackages("O'Brien; $(false)").contains("'O'\\''Brien; $(false)'"));
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showAccessRulebase("DOM", "Layer", -1));
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showPackages("DOM\nnext"));
