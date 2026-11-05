@@ -766,18 +766,26 @@ class CheckPointPolicyCollectorTest {
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showAccessRulebase("DOM", "", "LAYER", 0));
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showAccessRulebase("DOM", "synthetic-uid", "LAYER", -1));
         assertEquals("mgmt_cli -r true -d 'DOM' -f json show-nat-rulebase package 'PKG' limit 500 offset '0' details-level standard use-object-dictionary true", MgmtCliCommands.showNatRulebase("DOM", "PKG", 0));
-        assertEquals("mgmt_cli -r true -d '<DOMAIN>' -f json show-nat-rulebase package '<PACKAGE_UID>' limit 1 offset 0 details-level standard use-object-dictionary true",
-            MgmtCliCommands.showNatRulebaseByUidProbe("<DOMAIN>", "<PACKAGE_UID>"));
-        assertEquals(CpPolicyGates.NAT_UID_PROBE_COMMAND.replace("<DOMAIN>", "DOM").replace("<PACKAGE_UID>", "pkg-01"),
-            MgmtCliCommands.showNatRulebaseByUidProbe("DOM", "pkg-01"));
-        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showNatRulebaseByUidProbe("DOM", ""));
-        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showNatRulebaseByUidProbe("DOM", null));
-        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showNatRulebaseByUidProbe("DOM", "pkg\n01"));
-        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showNatRulebaseByUidProbe("", "pkg-01"));
-        var probeRows = gates.findByCanonicalKey(new CanonicalCommandKey("check_point", "cp_multi_domain_server",
-            "expert", "SSH_EXEC", CpPolicyGates.NAT_UID_PROBE_COMMAND));
-        assertEquals(1, probeRows.size());
-        assertEquals(CpPolicyGates.NAT_UID_PROBE_GATE, probeRows.get(0).gateId());
+        assertEquals("mgmt_cli -r true -d '<DOMAIN>' -f json show-nat-rulebase package '<PACKAGE_UID>' limit 500 offset '0' details-level standard use-object-dictionary true",
+            MgmtCliCommands.showNatRulebaseByUid("<DOMAIN>", "<PACKAGE_UID>", 0));
+        assertEquals("mgmt_cli -r true -d 'DOM' -f json show-nat-rulebase package 'pkg-01' limit 500 offset '1000' details-level standard use-object-dictionary true",
+            MgmtCliCommands.showNatRulebaseByUid("DOM", "pkg-01", 1000));
+        assertEquals(CpPolicyGates.NAT_BY_UID_COMMAND.replace("<DOMAIN>", "DOM").replace("<PACKAGE_UID>", "pkg-01").replace("<N>", "500"),
+            MgmtCliCommands.showNatRulebaseByUid("DOM", "pkg-01", 500));
+        assertTrue(MgmtCliCommands.showNatRulebaseByUid("DOM", "a'b; $(x)", 0).contains("package 'a'\\''b; $(x)' limit 500"));
+        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showNatRulebaseByUid("DOM", "", 0));
+        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showNatRulebaseByUid("DOM", null, 0));
+        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showNatRulebaseByUid("DOM", "pkg\n01", 0));
+        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showNatRulebaseByUid("", "pkg-01", 0));
+        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showNatRulebaseByUid("DOM", "pkg-01", -1));
+        assertFalse(MgmtCliCommands.validPackageUid(null));
+        assertFalse(MgmtCliCommands.validPackageUid(" "));
+        assertFalse(MgmtCliCommands.validPackageUid("a\tb"));
+        assertTrue(MgmtCliCommands.validPackageUid("0a1b2c3d-0000-4000-8000-000000000001"));
+        var uidRows = gates.findByCanonicalKey(new CanonicalCommandKey("check_point", "cp_multi_domain_server",
+            "expert", "SSH_EXEC", CpPolicyGates.NAT_BY_UID_COMMAND));
+        assertEquals(1, uidRows.size());
+        assertEquals(CpPolicyGates.NAT_BY_UID_GATE, uidRows.get(0).gateId());
         assertTrue(MgmtCliCommands.showPackages("O'Brien; $(false)").contains("'O'\\''Brien; $(false)'"));
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showAccessRulebase("DOM", "Layer", -1));
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showPackages("DOM\nnext"));

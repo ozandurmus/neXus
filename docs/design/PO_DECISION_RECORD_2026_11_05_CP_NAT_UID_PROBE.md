@@ -2,6 +2,12 @@
 
 **Status: RATIFIED - PO DECISION (chat, 2026-11-05).** Backed by automated validation; real-environment probe outcome recorded as enum only.
 
+**Superseded in use by** the full paged NAT read by package UID, gate `cp_policy_nat_rulebase_by_uid` (migration
+`V192__cp_nat_rulebase_by_uid_gate.sql`), approved in `docs/design/PO_DECISION_RECORD_2026_11_05_EVENING_BATCH.md`
+(PO chat 2026-11-05 evening). The collector no longer issues the `limit 1 offset 0` probe literal. The gate row
+`cp_policy_nat_rulebase_uid_probe` (V191) stays seeded until a later migration retires it; this record remains the
+historical evidence that the Management API accepts a package UID on this MDS.
+
 ## Context
 Check Point policy collection reads each package's NAT rulebase by package name using:
 

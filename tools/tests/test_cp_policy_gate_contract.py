@@ -112,6 +112,43 @@ class PolicyGateContractTest(unittest.TestCase):
         for outcome in ("UID_ACCEPTED", "UID_REJECTED", "NOT_EVALUABLE"):
             self.assertIn(outcome, decision)
 
+    def test_nat_by_uid_gate_matches_migration_fixture_and_evening_batch_record(self):
+        fixture = (ROOT / "ui2/capability-registry/src/main/resources/capabilities/gate_registry_fixture.yaml").read_text()
+        sql = (ROOT / "ui2/service/src/main/resources/db/migration/V192__cp_nat_rulebase_by_uid_gate.sql").read_text()
+        expected_command = (
+            "mgmt_cli -r true -d '<DOMAIN>' -f json show-nat-rulebase package '<PACKAGE_UID>' "
+            "limit 500 offset '<N>' details-level standard use-object-dictionary true"
+        )
+        rows = {}
+        for block in fixture.split("  - gate_id: ")[1:]:
+            gate = block.splitlines()[0].strip().strip('"')
+            if gate in ("cp_policy_nat_rulebase", "cp_policy_nat_rulebase_by_uid"):
+                rows[gate] = dict(
+                    line.strip().split(": ", 1) for line in block.splitlines()[1:] if ": " in line
+                )
+        self.assertEqual(set(rows), {"cp_policy_nat_rulebase", "cp_policy_nat_rulebase_by_uid"})
+        nat_row = rows["cp_policy_nat_rulebase"]
+        by_uid = rows["cp_policy_nat_rulebase_by_uid"]
+        for shared in ("vendor", "platform_role_scope", "shell_context", "transport_kind", "action_class", "sign_off_state", "timeout_s", "retry_rule"):
+            self.assertEqual(by_uid[shared], nat_row[shared], shared)
+        self.assertEqual(json.loads(by_uid["canonical_command_key"]), expected_command)
+        self.assertEqual(json.loads(by_uid["safe_telemetry_fields"]), json.loads(nat_row["safe_telemetry_fields"]))
+        self.assertIn("VENDOR_NAME_NOT_UNIQUE", json.loads(by_uid["max_frequency"]))
+        self.assertIn(json.loads(nat_row["max_frequency"]), json.loads(by_uid["max_frequency"]))
+        self.assertIn("PO_DECISION_RECORD_2026_11_05_EVENING_BATCH.md", json.loads(by_uid["source_document_pointer"]))
+        self.assertEqual(sql.count("INSERT INTO gate_registry"), 1)
+        self.assertNotIn("UPDATE gate_registry", sql)
+        self.assertNotIn("DELETE FROM gate_registry", sql)
+        self.assertIn("migration:V192_cp_nat_rulebase_by_uid_gate", sql)
+        self.assertIn("gate_registry_update_by_migration", sql)
+        self.assertIn("'cp_policy_nat_rulebase_by_uid'", sql)
+        self.assertIn("'" + expected_command.replace("'", "''") + "'", sql)
+        for field in ("max_frequency", "session_reuse_rule", "unsupported_behavior_ref", "secret_output_risk", "source_document_pointer"):
+            self.assertIn("'" + json.loads(by_uid[field]).replace("'", "''") + "'", sql, field)
+        superseded = (ROOT / "docs/design/PO_DECISION_RECORD_2026_11_05_CP_NAT_UID_PROBE.md").read_text()
+        self.assertIn("Superseded in use by", superseded)
+        self.assertIn("cp_policy_nat_rulebase_by_uid", superseded)
+
 
 if __name__ == "__main__":
     unittest.main()

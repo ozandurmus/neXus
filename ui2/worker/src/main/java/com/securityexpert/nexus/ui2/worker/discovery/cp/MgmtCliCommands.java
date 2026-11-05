@@ -54,9 +54,17 @@ public final class MgmtCliCommands {
                 + " limit 500 offset " + quote(Integer.toString(offset)) + " details-level standard use-object-dictionary true";
     }
 
-    public static String showNatRulebaseByUidProbe(String domain, String uid) {
+    /** Same shape rule as every quoted management argument: non-blank, no control characters (UIDs are opaque tokens). */
+    public static boolean validPackageUid(String uid) {
+        return uid != null && !uid.isBlank() && uid.chars().noneMatch(Character::isISOControl);
+    }
+
+    /** NAT rulebase of a package addressed by UID (PO 2026-11-05 evening batch); same paging as the by-name read. */
+    public static String showNatRulebaseByUid(String domain, String uid, int offset) {
+        if (offset < 0) throw new IllegalArgumentException("Invalid policy offset");
+        if (!validPackageUid(uid)) throw new IllegalArgumentException("Invalid package uid");
         return "mgmt_cli -r true -d " + quote(domain) + " -f json show-nat-rulebase package " + quote(uid)
-                + " limit 1 offset 0 details-level standard use-object-dictionary true";
+                + " limit 500 offset " + quote(Integer.toString(offset)) + " details-level standard use-object-dictionary true";
     }
 
     public static String showPolicyObjects(String domain, String type, int offset) {
