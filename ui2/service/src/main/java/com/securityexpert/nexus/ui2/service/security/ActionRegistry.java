@@ -293,7 +293,10 @@ public final class ActionRegistry {
         // session, like the other read controllers -- empty means
         // NO_APPLICABLE_AUTHORITY at E4 (open to any authenticated session).
         register(new ActionDescriptor(DEVICE_READ, true, Optional.empty()));
-        register(new ActionDescriptor(DEVICE_INVENTORY_COLLECT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
+        // PO 2026-11-05 evening (PO_DECISION_RECORD_2026_11_05_EVENING_BATCH.md item 5): aiview (replay_viewer) may start
+        // the read-only inventory collection itself, as it may start a policy collection (POLICY_COLLECT above).
+        register(new ActionDescriptor(DEVICE_INVENTORY_COLLECT, true, Optional.of(RoleToken.ONBOARDING_ADMIN),
+                java.util.Set.of(RoleToken.REPLAY_VIEWER)));
         // Controller restricts reads to administrators or the masked AIView projection.
         register(new ActionDescriptor(FMG_DIAGNOSTIC_READ, true, Optional.empty()));
         register(new ActionDescriptor(FMG_DIAGNOSTIC_RUN, true, Optional.of(RoleToken.SECURITY_ADMIN),
