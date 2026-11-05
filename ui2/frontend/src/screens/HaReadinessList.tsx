@@ -309,6 +309,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
           </Button>
         </Tooltip>;
       })}
+    </Box>
       <Box role="group" aria-label="Readiness count unit" sx={{ display: "inline-flex", gap: 0.5, alignItems: "center", ml: 0.5 }}>
         <Button size="small" aria-pressed={countBy === "clusters"} onClick={() => setCountBy("clusters")}
           sx={{ textTransform: "none", fontSize: 12, px: 1, py: 0.25, borderRadius: 1.5,
@@ -325,7 +326,6 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
           Readiness records ({unitsByStatus.length})
         </Button>
       </Box>
-    </Box>
     <Typography variant="caption" data-readiness-rule sx={{ color: m3.onSurfaceVar }}>{READINESS_RULE}</Typography>
     </Box>
     <Box role="toolbar" aria-label="Readiness filters" sx={{ display: "flex", gap: 1.5, mb: 1.5, flexWrap: "wrap", alignItems: "center" }}>
