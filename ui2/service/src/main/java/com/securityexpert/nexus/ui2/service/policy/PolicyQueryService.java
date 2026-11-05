@@ -764,7 +764,7 @@ public final class PolicyQueryService {
         body.put("rows", rows.stream().skip((long) page * 200).limit(200).toList()); body.put("total", rows.size());
         body.put("page", page); body.put("pageSize", 200); body.put("counts", counts); body.put("budgetReached", analysis.budgetReached()); body.put("days", days);
         body.put("coverage", coverage); body.put("unknownReasons", unknownReasons);
-        body.put("blockers", blockers(blocked, blockerNumbers));
+        body.put("blockers", blockersWithSplit(snapshot, blocked, blockerNumbers));
         return new PolicyResponse(body);
     }
     /** How many rules each earlier rule keeps from being proven ("earlier rule has unsupported constraints"): the distinct count and the five biggest, ids, rule numbers and counts only. */
@@ -775,6 +775,12 @@ public final class PolicyQueryService {
                 .thenComparing(e -> numbers.getOrDefault(e.getKey(), Integer.MAX_VALUE)).thenComparing(Map.Entry::getKey))
             .limit(TOP_BLOCKERS).map(e -> Map.<String, Object>of("ruleId", e.getKey(), "number", numbers.getOrDefault(e.getKey(), 0), "blocks", e.getValue()[0])).toList();
         return Map.of("distinct", blocked.size(), "top", top);
+    }
+    /** {@link #blockers} plus the counters-only split by blocking class (X0); a failure of the diagnostic never fails the page. */
+    private static Map<String, Object> blockersWithSplit(PolicySnapshot snapshot, Map<String, int[]> blocked, Map<String, Integer> numbers) {
+        Map<String, Object> out = new LinkedHashMap<>(blockers(blocked, numbers));
+        try { out.put("split", PolicyBlockerSplit.split(snapshot, blocked)); } catch (RuntimeException diagnosticFailed) { /* split is optional */ }
+        return out;
     }
     public byte[] hygieneCsv(PolicySnapshot snapshot, String cls, String severity, int days, boolean masked) {
         var analysis = analysis(snapshot, days);

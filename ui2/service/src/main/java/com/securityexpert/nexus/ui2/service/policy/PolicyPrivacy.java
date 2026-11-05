@@ -51,6 +51,7 @@ public final class PolicyPrivacy {
                     "reasons", reasons.stream().filter(r -> r instanceof String s && (s.matches("(?:Any |Large CIDR in |Negated )(source|destination|service|application)(?: needs analysis)?")
                             || PolicyRuleMetrics.FIXED_REASONS.contains(s))).toList());
         }
+        if (value instanceof Map<?, ?> row && row.containsKey("blockedRules") && row.containsKey("partialPrior")) return blockerSplitRow(row);
         if (value instanceof Map<?, ?> map) {
             Map<String, Object> out = new LinkedHashMap<>();
             map.forEach((k, v) -> {
@@ -161,6 +162,21 @@ public final class PolicyPrivacy {
         if (key.equals("values") && text.matches("(?:(?:ipv4-address|ipv4-address-first|ipv4-address-last|subnet4|subnet-mask|ip-netmask|ip-range|ip-address-first|ip-address-last): )?[0-9./ -]+"))
             return ips.maskText(text);
         return names.maskPolicyName(key, text);
+    }
+    /** A blocker-split row (PolicyBlockerSplit): numbers and fixed schema tokens only; each token is re-checked against its closed vocabulary or pattern. */
+    private static Map<String, Object> blockerSplitRow(Map<?, ?> row) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        String cls = String.valueOf(row.get("class")), cell = String.valueOf(row.get("cell")), status = String.valueOf(row.get("status")),
+            type = String.valueOf(row.get("type")), nativeType = String.valueOf(row.get("nativeType"));
+        out.put("class", HYGIENE_REASONS.contains(cls) ? cls : "UNKNOWN");
+        out.put("cell", PolicyBlockerSplit.CELLS.contains(cell) || cell.matches("extra:[a-z0-9/_-]{1,60}") || cell.equals("extra:UNKNOWN") ? cell : "UNKNOWN");
+        out.put("status", PolicyBlockerSplit.STATUSES.contains(status) ? status : "UNKNOWN");
+        out.put("type", ENUMS.contains(type) || Set.of("NONE", "MISSING").contains(type) ? type : "UNKNOWN");
+        out.put("nativeType", nativeType.matches("[A-Za-z][A-Za-z0-9_-]{0,39}") || Set.of("NONE", "UNKNOWN").contains(nativeType) ? nativeType : "UNKNOWN");
+        out.put("partialPrior", row.get("partialPrior") instanceof Boolean b ? b : "UNKNOWN");
+        out.put("blockers", row.get("blockers") instanceof Number n ? n : 0);
+        out.put("blockedRules", row.get("blockedRules") instanceof Number n ? n : 0);
+        return out;
     }
     private static String objectNameType(String type) {
         return switch (type) {
