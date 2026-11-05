@@ -152,6 +152,9 @@ spec:
               value: /run/secrets/ui2-artefact-store/key
             - name: UI2_ARTEFACT_STORE_ROOT
               value: /app/artefact-store
+            # Reports R1: report files, same encrypted store format, on their own volume (37-report-store-pvc.yaml).
+            - name: UI2_REPORT_STORE_ROOT
+              value: /app/report-store
             # NXS-LOCAL-0170 / BK-16: the backup_artefact manifest's
             # hostname_fingerprint HMAC key -- its own purpose, its own key
             # (C1 §6.1), worker-only exactly like the artefact-store key.
@@ -225,6 +228,9 @@ spec:
             # (tools/tests/test_ui2_deployment_manifests.py asserts both halves).
             - name: artefact-store
               mountPath: /app/artefact-store
+            # Reports R1: the report claim (UI2_REPORT_STORE_ROOT), so the 30-day report pruner reaches the files.
+            - name: report-store
+              mountPath: /app/report-store
             - name: cc-inbox
               mountPath: /app/cc-inbox
       volumes:
@@ -255,6 +261,10 @@ spec:
         - name: artefact-store
           persistentVolumeClaim:
             claimName: ui2-artefact-store
+        # Reports R1: report files only (37-report-store-pvc.yaml).
+        - name: report-store
+          persistentVolumeClaim:
+            claimName: ui2-report-store
         # OS-3a: Radware Cyber Controller push inbox (RADWARE_CYBER_CONTROLLER_OWN_BACKUP_RECEIVER.md).
         - name: cc-inbox
           hostPath:

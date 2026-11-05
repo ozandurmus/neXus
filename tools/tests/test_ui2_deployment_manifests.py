@@ -253,10 +253,11 @@ def test_manifest_set_contains_every_kind_the_contract_names():
         "(NXS-LOCAL-0165: 23-secret-artefact-store-key.yaml; "
         "NXS-LOCAL-0170: 24-secret-hostname-fingerprint-key.yaml)"
     )
-    assert kinds.count("PersistentVolumeClaim") == 3, (
+    assert kinds.count("PersistentVolumeClaim") == 4, (
         "§5.2 plus BK-17: the database data claim, the worker-only recovery volume claim "
-        "(NXS-LOCAL-0170: 35-artefact-store-pvc.yaml) and the Packet Analysis volume "
-        "(PO decision record 2026-10-15 §5: 36-packet-analysis-pvc.yaml), and never a fourth"
+        "(NXS-LOCAL-0170: 35-artefact-store-pvc.yaml), the Packet Analysis volume "
+        "(PO decision record 2026-10-15 §5: 36-packet-analysis-pvc.yaml) and the Reports R1 report-file claim "
+        "(37-report-store-pvc.yaml), and never a fifth"
     )
 
 
@@ -479,7 +480,7 @@ def test_the_recovery_volume_is_separate_and_only_the_worker_can_write():
     }
     assert "ui2-db-data" in pvc_names, "the database's own data claim must still exist"
     assert "ui2-artefact-store" in pvc_names, "BK-17: the recovery volume claim is missing"
-    assert pvc_names == {"ui2-db-data", "ui2-artefact-store", "ui2-packet-analysis-data"}, (
+    assert pvc_names == {"ui2-db-data", "ui2-artefact-store", "ui2-packet-analysis-data", "ui2-report-store"}, (
         f"unexpected PersistentVolumeClaim set: {sorted(pvc_names)}"
     )
 
@@ -506,6 +507,35 @@ def test_the_recovery_volume_is_separate_and_only_the_worker_can_write():
                 assert volumes[name]["persistentVolumeClaim"].get("readOnly") is True
         else:
             assert not recovery_volume_names, f"{owner}: unexpected recovery volume"
+
+
+
+def test_report_files_have_their_own_claim_and_the_service_writes_nothing_else_of_the_artefact_store():
+    """Reports R1: report files sit on ui2-report-store at UI2_REPORT_STORE_ROOT; BK-17 stays intact."""
+    seen = {}
+    for _, owner, spec in _pod_specs():
+        volumes = {volume.get("name"): volume for volume in spec.get("volumes") or []}
+        report_names = {
+            name for name, volume in volumes.items()
+            if (volume.get("persistentVolumeClaim") or {}).get("claimName") == "ui2-report-store"
+        }
+        mounts = [
+            mount for container in spec.get("containers") or []
+            for mount in container.get("volumeMounts") or [] if mount["name"] in report_names
+        ]
+        if not report_names:
+            continue
+        seen[owner] = mounts
+        assert all(m["mountPath"] == "/app/report-store" and not m.get("subPath") for m in mounts), (
+            f"{owner}: the report claim must be mounted at /app/report-store"
+        )
+        env = {e["name"]: e.get("value") for c in spec.get("containers") or [] for e in c.get("env") or []}
+        assert env.get("UI2_REPORT_STORE_ROOT") == "/app/report-store", f"{owner}: UI2_REPORT_STORE_ROOT must name it"
+        assert all(m.get("readOnly") is not True for m in mounts), f"{owner}: the report claim must be writable"
+    assert set(seen) == {"Deployment/ui2-service", "Deployment/ui2-worker"}, (
+        f"only the service and the worker mount the report claim, got {sorted(seen)}"
+    )
+    assert all(seen.values()), "both the service and the worker must mount the report claim"
 
 
 def test_packet_analysis_worker_is_low_priority_bounded_and_isolated():

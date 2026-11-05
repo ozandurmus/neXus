@@ -23,10 +23,23 @@ public final class JooqRetentionStorePort implements RetentionPruningService.Ret
 
     private final JooqRetentionQueries queries;
     private final Path storeRoot;
+    /** Reports R1: report files live on their own volume (UI2_REPORT_STORE_ROOT); null means the store root. */
+    private final Path reportRoot;
 
     public JooqRetentionStorePort(JooqRetentionQueries queries, Path storeRoot) {
+        this(queries, storeRoot, null);
+    }
+
+    public JooqRetentionStorePort(JooqRetentionQueries queries, Path storeRoot, Path reportRootOrNull) {
         this.queries = Objects.requireNonNull(queries, "queries");
         this.storeRoot = Objects.requireNonNull(storeRoot, "storeRoot").toAbsolutePath().normalize();
+        this.reportRoot = reportRootOrNull == null ? this.storeRoot : reportRootOrNull.toAbsolutePath().normalize();
+    }
+
+    /** The root a record's file lives under: a generated report on the report volume, everything else on the store. */
+    Path rootFor(RetentionPruningService.ArtefactRecord record) {
+        return com.securityexpert.nexus.ui2.persistence.artefact.ArtefactClass.REPORT_DEVICE_ID.equals(record.deviceId())
+                ? reportRoot : storeRoot;
     }
 
     @Override
@@ -69,8 +82,9 @@ public final class JooqRetentionStorePort implements RetentionPruningService.Ret
         if (record.recoveryVolumePath() == null || record.recoveryVolumePath().isBlank()) {
             return false;
         }
-        Path file = storeRoot.resolve(record.recoveryVolumePath()).normalize();
-        if (!file.startsWith(storeRoot)) {
+        Path root = rootFor(record);
+        Path file = root.resolve(record.recoveryVolumePath()).normalize();
+        if (!file.startsWith(root)) {
             LOG.warning("[RETENTION] refusing to delete a path outside the store root");
             return false;
         }

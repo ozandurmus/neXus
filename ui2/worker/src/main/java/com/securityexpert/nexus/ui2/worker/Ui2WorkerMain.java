@@ -532,7 +532,7 @@ public final class Ui2WorkerMain {
                 new com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService(
                         new com.securityexpert.nexus.ui2.worker.backup.retention.JooqRetentionStorePort(
                                 new com.securityexpert.nexus.ui2.persistence.artefact.JooqRetentionQueries(transactionBoundary),
-                                artefactStoreRoot));
+                                artefactStoreRoot, reportStoreRootOrNull()));
         reconcilerExecutor.scheduleWithFixedDelay(() -> {
             try {
                 moduleRuntime.runTask(role, instance, "RetentionPruningService.prune", () -> backupPolicyRepository.find().ifPresent(policy -> {
@@ -748,5 +748,11 @@ public final class Ui2WorkerMain {
             throw new IllegalStateException(name + " is not set");
         }
         return value;
+    }
+
+    /** Reports R1: the report files' own volume (UI2_REPORT_STORE_ROOT); unset means they share the store root. */
+    static Path reportStoreRootOrNull() {
+        String root = System.getenv().getOrDefault("UI2_REPORT_STORE_ROOT", "");
+        return root.isBlank() ? null : Path.of(root);
     }
 }

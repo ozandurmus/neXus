@@ -45,7 +45,7 @@ public class ReportConfiguration {
             ActionRegistry registry, ReportExecutor executor) {
         ReportService service = new ReportService(
                 new JooqReportData(new JooqReportReadRepository(transactionBoundary), deviceRepository, failover.getIfAvailable()),
-                new JooqReportRunStore(transactionBoundary), artefactStoreAccess.storeOrNull(),
+                new JooqReportRunStore(transactionBoundary), reportStore(artefactStoreAccess),
                 new ReportDocumentMasker(new ReportProjectionMasker(names, addresses)), executor,
                 new ReportAccess(rbac, registry), Clock.systemUTC());
         try {
@@ -55,5 +55,21 @@ public class ReportConfiguration {
             LOG.warning("[REPORTS] could not close runs left open by a restart: " + e.getMessage());
         }
         return service;
+    }
+
+    /**
+     * Reports R1: report files go through the same encrypted {@code FileArtefactStore} (same key, same envelope) as
+     * backups, rooted at {@code UI2_REPORT_STORE_ROOT} -- their own volume, because the service mounts the recovery
+     * volume read-only (BK-17). Without that variable (tests, local runs) the artefact store itself is used.
+     */
+    static com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore reportStore(
+            DeviceCompositionConfiguration.ArtefactStoreAccess artefactStoreAccess) {
+        String root = System.getenv().getOrDefault("UI2_REPORT_STORE_ROOT", "");
+        String keyFile = System.getenv().getOrDefault("UI2_ARTEFACT_STORE_KEY_FILE", "");
+        if (root.isBlank() || keyFile.isBlank()) return artefactStoreAccess.storeOrNull();
+        String keyBase64 = com.securityexpert.nexus.ui2.platform.SecretFile.readRequired(
+                java.nio.file.Path.of(keyFile), "artefact_store_key");
+        return new com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore(java.nio.file.Path.of(root),
+                com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher.fromBase64Key(keyBase64));
     }
 }
