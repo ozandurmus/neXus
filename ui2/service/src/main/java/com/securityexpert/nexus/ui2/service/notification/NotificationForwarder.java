@@ -11,6 +11,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
+import com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker;
+import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
 
 /**
  * Syslog forwarding and seven independent SMTP routes, every 60 s:
@@ -30,10 +32,16 @@ public class NotificationForwarder {
 
     private final NotificationSettingsStore store;
     private final TransactionBoundary transactionBoundary;
+    private final TopologyNamePseudonymizer names;
+    private final SubnetPreservingIpMasker ips;
 
-    public NotificationForwarder(NotificationSettingsStore store, TransactionBoundary transactionBoundary) {
+    /** {@code names} / {@code ips} may be null (unavailable): masked mode then sends fixed labels only. */
+    public NotificationForwarder(NotificationSettingsStore store, TransactionBoundary transactionBoundary,
+            TopologyNamePseudonymizer names, SubnetPreservingIpMasker ips) {
         this.store = Objects.requireNonNull(store, "store");
         this.transactionBoundary = Objects.requireNonNull(transactionBoundary, "transactionBoundary");
+        this.names = names;
+        this.ips = ips;
     }
 
     @Scheduled(fixedDelay = 60_000, initialDelay = 60_000)
@@ -47,8 +55,9 @@ public class NotificationForwarder {
         transactionBoundary.inTransaction(dsl -> {
             if (!Boolean.TRUE.equals(dsl.fetchValue("select pg_try_advisory_xact_lock(10010051)", Boolean.class))) return null;
             if (settings.syslogEnabled() && settings.forwardAuditToSyslog()) forwardAudit(settings);
-            if (settings.notifyJobFailure() && settings.syslogEnabled()) forwardJobFailures(settings);
-            NotificationMailRouter.tick(dsl, settings);
+            NotificationIdentity identity = NotificationIdentity.of(settings, names, ips);
+            if (settings.notifyJobFailure() && settings.syslogEnabled()) forwardJobFailures(settings, identity);
+            NotificationMailRouter.tick(dsl, settings, identity);
             return null;
         });
     }
@@ -76,15 +85,18 @@ public class NotificationForwarder {
         }
     }
 
-    void forwardJobFailures(NotificationSettings settings) {
+    void forwardJobFailures(NotificationSettings settings, NotificationIdentity identity) {
         Instant from = store.jobFailureWatermark();
-        List<Record> rows = transactionBoundary.inTransaction(dsl -> dsl.fetch(
+        List<Record> rows = transactionBoundary.inTransaction(dsl -> {
+            identity.warm(dsl);
+            return dsl.fetch(
                 "select j.job_id, j.job_type, j.target_device_id, d.observed_hostname, j.terminal_reason, j.finished_at "
                         + "from jobs j left join devices d on d.device_id = j.target_device_id "
                         + "where (j.state = 'FAILED' or (j.job_type in ('cp_cluster_failover','pan_cluster_failover') "
                         + "and j.state = 'OUTCOME_UNKNOWN')) and j.finished_at > {0} "
                         + "order by j.finished_at limit 200",
-                Timestamp.from(from)));
+                Timestamp.from(from));
+        });
         if (rows.isEmpty()) {
             return;
         }
@@ -97,9 +109,11 @@ public class NotificationForwarder {
             }
             String device = "cp_cluster_failover".equals(r.get("job_type", String.class)) ? "CP failover unit"
                     : "pan_cluster_failover".equals(r.get("job_type", String.class)) ? "PAN failover unit"
-                    : r.get("observed_hostname", String.class) != null ? r.get("observed_hostname", String.class)
-                    : r.get("target_device_id", String.class);
-            String reason = r.get("terminal_reason", String.class);
+                    : identity.isRaw() ? (r.get("observed_hostname", String.class) != null
+                            ? r.get("observed_hostname", String.class) : r.get("target_device_id", String.class))
+                    : identity.device(r, "target_device_id");
+            // Mask first, then clamp: clamping first could leave a half hostname that no longer matches.
+            String reason = identity.text(r.get("terminal_reason", String.class));
             lines.add(finished + "  " + r.get("job_type", String.class) + "  " + device + "  "
                     + (reason == null ? "" : reason.length() > 300 ? reason.substring(0, 300) + "..." : reason)
                     + "  (job " + r.get("job_id", String.class) + ")");

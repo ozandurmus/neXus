@@ -21,13 +21,44 @@ public record NotificationSettings(
         @JsonProperty("forward_audit_to_syslog") boolean forwardAuditToSyslog,
         @JsonProperty("notify_job_failure") boolean notifyJobFailure,
         @JsonProperty("updated_at") Instant updatedAt,
-        List<NotificationRoute> routes) {
+        List<NotificationRoute> routes,
+        @JsonProperty("notification_identity") String notificationIdentity) {
+
+    /** V193 values: device identities in outbound mail and syslog are pseudonyms, or today's raw values. */
+    public static final String IDENTITY_MASKED = "masked";
+    public static final String IDENTITY_RAW = "raw";
+
+    /** A missing value (an older client, a legacy row) is the safe default, never raw. */
+    public NotificationSettings {
+        if (notificationIdentity == null) {
+            notificationIdentity = IDENTITY_MASKED;
+        }
+    }
+
+    public NotificationSettings(boolean syslogEnabled, String syslogHost, int syslogPort, String syslogProtocol,
+            int syslogFacility, boolean smtpEnabled, String smtpHost, int smtpPort, boolean smtpStarttls,
+            String smtpFrom, String smtpTo, boolean forwardAuditToSyslog, boolean notifyJobFailure, Instant updatedAt,
+            List<NotificationRoute> routes) {
+        this(syslogEnabled, syslogHost, syslogPort, syslogProtocol, syslogFacility, smtpEnabled, smtpHost,
+                smtpPort, smtpStarttls, smtpFrom, smtpTo, forwardAuditToSyslog, notifyJobFailure, updatedAt, routes,
+                IDENTITY_MASKED);
+    }
 
     public NotificationSettings(boolean syslogEnabled, String syslogHost, int syslogPort, String syslogProtocol,
             int syslogFacility, boolean smtpEnabled, String smtpHost, int smtpPort, boolean smtpStarttls,
             String smtpFrom, String smtpTo, boolean forwardAuditToSyslog, boolean notifyJobFailure, Instant updatedAt) {
         this(syslogEnabled, syslogHost, syslogPort, syslogProtocol, syslogFacility, smtpEnabled, smtpHost,
-                smtpPort, smtpStarttls, smtpFrom, smtpTo, forwardAuditToSyslog, notifyJobFailure, updatedAt, List.of());
+                smtpPort, smtpStarttls, smtpFrom, smtpTo, forwardAuditToSyslog, notifyJobFailure, updatedAt, List.of(), IDENTITY_MASKED);
+    }
+
+    public boolean rawIdentity() {
+        return IDENTITY_RAW.equals(notificationIdentity);
+    }
+
+    public NotificationSettings withNotificationIdentity(String value) {
+        return new NotificationSettings(syslogEnabled, syslogHost, syslogPort, syslogProtocol, syslogFacility,
+                smtpEnabled, smtpHost, smtpPort, smtpStarttls, smtpFrom, smtpTo, forwardAuditToSyslog,
+                notifyJobFailure, updatedAt, routes, value);
     }
 
     public List<String> recipients() {
@@ -48,6 +79,9 @@ public record NotificationSettings(
         }
         if (!"udp".equals(syslogProtocol) && !"tcp".equals(syslogProtocol)) {
             problems.add("syslog protocol must be udp or tcp");
+        }
+        if (!IDENTITY_MASKED.equals(notificationIdentity) && !IDENTITY_RAW.equals(notificationIdentity)) {
+            problems.add("notification identity must be masked or raw");
         }
         if (syslogFacility < 0 || syslogFacility > 23) {
             problems.add("syslog facility must be between 0 and 23");

@@ -34,11 +34,13 @@ public class NotificationSettingsStore {
             dsl.execute("update notification_settings set "
                 + "syslog_enabled = {0}, syslog_host = {1}, syslog_port = {2}, syslog_protocol = {3}, syslog_facility = {4}, "
                 + "smtp_enabled = {5}, smtp_host = {6}, smtp_port = {7}, smtp_starttls = {8}, smtp_from = {9}, smtp_to = {10}, "
-                + "forward_audit_to_syslog = {11}, notify_job_failure = {12}, updated_at = now(), updated_by = {13} "
+                + "forward_audit_to_syslog = {11}, notify_job_failure = {12}, notification_identity = {14}, "
+                + "updated_at = now(), updated_by = {13} "
                 + "where settings_id = 'default'",
                 s.syslogEnabled(), blankToNull(s.syslogHost()), s.syslogPort(), s.syslogProtocol(), s.syslogFacility(),
                 s.smtpEnabled(), blankToNull(s.smtpHost()), s.smtpPort(), s.smtpStarttls(), blankToNull(s.smtpFrom()),
-                blankToNull(s.smtpTo()), s.forwardAuditToSyslog(), s.notifyJobFailure(), actorFingerprint);
+                blankToNull(s.smtpTo()), s.forwardAuditToSyslog(), s.notifyJobFailure(), actorFingerprint,
+                s.notificationIdentity());
             for (NotificationRoute route : s.routes()) {
                 dsl.execute("update notification_routes set enabled = {0}, recipients = {1}, updated_at = now(), "
                         + "updated_by = {2} where type = {3}", route.enabled(), blankToNull(route.recipients()),
@@ -88,6 +90,8 @@ public class NotificationSettingsStore {
                 r.get("smtp_from", String.class), r.get("smtp_to", String.class),
                 Boolean.TRUE.equals(r.get("forward_audit_to_syslog", Boolean.class)),
                 Boolean.TRUE.equals(r.get("notify_job_failure", Boolean.class)),
-                instant(updated), routes);
+                instant(updated), routes,
+                "raw".equals(r.get("notification_identity", String.class)) ? NotificationSettings.IDENTITY_RAW
+                        : NotificationSettings.IDENTITY_MASKED);
     }
 }

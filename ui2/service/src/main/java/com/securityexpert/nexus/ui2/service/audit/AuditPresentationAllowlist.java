@@ -195,7 +195,7 @@ public final class AuditPresentationAllowlist {
                     "watermark_audit", "watermark_time")),
             Map.entry("notification_settings", Set.of(
                     "audit_watermark", "forward_audit_to_syslog", "job_failure_watermark",
-                    "notify_job_failure", "settings_id", "smtp_enabled", "smtp_port",
+                    "notification_identity", "notify_job_failure", "settings_id", "smtp_enabled", "smtp_port",
                     "smtp_starttls", "syslog_enabled", "syslog_facility", "syslog_port",
                     "syslog_protocol", "updated_at", "updated_by")),
             // V154: title, display_name, sha256 and storage_key are tier-2 redacted.

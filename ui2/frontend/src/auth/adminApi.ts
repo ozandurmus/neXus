@@ -1772,6 +1772,8 @@ export interface NotificationSettingsView {
   smtp_to: string | null;
   forward_audit_to_syslog: boolean;
   notify_job_failure: boolean;
+  /** V193: "masked" (default) sends the AIView pseudonyms in mail and syslog; "raw" sends real device names. */
+  notification_identity: "masked" | "raw";
   updated_at?: string | null;
   routes: NotificationRouteView[];
 }
