@@ -65,7 +65,9 @@ class AiviewDiagnosticReadOnlyTest {
                 ActionRegistry.PATH_ANALYSIS_VALIDATE,
                 // Reports R1 (docs/design/REPORTS_R1_CONTRACT.md, FROZEN 2026-11-05): catalogue, preview, history and
                 // generate, always in the masked projection; never report_raw_view
-                ActionRegistry.REPORT_READ, ActionRegistry.REPORT_GENERATE)), held);
+                ActionRegistry.REPORT_READ, ActionRegistry.REPORT_GENERATE,
+                // inventory collection start, read-only (PO_DECISION_RECORD_2026_11_05_EVENING_BATCH.md item 5)
+                ActionRegistry.DEVICE_INVENTORY_COLLECT)), held);
         assertFalse(all.get(ActionRegistry.REPORT_RAW_VIEW).requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER));
         assertFalse(ActionRegistry.REPORT_RAW_ROLES.contains(RoleToken.REPLAY_VIEWER));
         assertFalse(all.get(ActionRegistry.PACKET_ANALYSIS_RAW_VIEW).requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER));
