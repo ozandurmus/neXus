@@ -1,0 +1,19 @@
+# Reports R1 (REPORTS_R1_CONTRACT.md "Storage"): generated report files, class `report`, vendor `nexus`, written
+# through the same encrypted FileArtefactStore as backups. The service generates reports, so it needs a writable
+# path; BK-17 keeps the recovery volume (35-artefact-store-pvc.yaml) read-only in the service. This claim is mounted
+# at /app/report-store (UI2_REPORT_STORE_ROOT) in the service (read-write) and in the worker (read-write, for the
+# 30-day report pruner), so report bytes never land on the recovery volume and the service still cannot write a backup.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ui2-report-store
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: service
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

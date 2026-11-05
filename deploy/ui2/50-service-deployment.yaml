@@ -150,6 +150,9 @@ spec:
               value: /run/secrets/ui2-artefact-store/key
             - name: UI2_ARTEFACT_STORE_ROOT
               value: /app/artefact-store
+            # Reports R1: report files, same encrypted store format, on their own volume (37-report-store-pvc.yaml).
+            - name: UI2_REPORT_STORE_ROOT
+              value: /app/report-store
             # The AIView pseudonymizer's key (25-secret-privacy-hmac-key.yaml):
             # durable, so a pseudonym never moves across pod restarts.
             - name: UI2_PRIVACY_HMAC_KEY_FILE
@@ -227,6 +230,10 @@ spec:
             - name: artefact-store
               mountPath: /app/artefact-store
               readOnly: true
+            # Reports R1: report files on their own claim (UI2_REPORT_STORE_ROOT); the recovery volume above stays
+            # read-only here (BK-17).
+            - name: report-store
+              mountPath: /app/report-store
             - name: packet-analysis-data
               mountPath: /app/packet-analysis
       volumes:
@@ -260,6 +267,10 @@ spec:
           persistentVolumeClaim:
             claimName: ui2-artefact-store
             readOnly: true
+        # Reports R1: report files only (37-report-store-pvc.yaml).
+        - name: report-store
+          persistentVolumeClaim:
+            claimName: ui2-report-store
         # The analysis volume: the service writes uploaded captures; ui2-packet-analysis writes run output.
         - name: packet-analysis-data
           persistentVolumeClaim:

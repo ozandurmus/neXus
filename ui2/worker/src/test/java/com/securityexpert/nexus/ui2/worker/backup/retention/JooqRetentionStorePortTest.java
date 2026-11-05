@@ -75,4 +75,27 @@ class JooqRetentionStorePortTest {
         // an unknown artefact answers "latest": the pruner keeps what it cannot place
         assertTrue(port.isLatestConfigurationArchive("unknown"));
     }
+
+    @Test
+    void aReportIsDeletedFromTheReportRootAndABackupWithTheSamePathStaysOnTheStore(@TempDir Path base) throws IOException {
+        // Reports R1: report files live on their own volume; the store root keeps the backups.
+        Path store = Files.createDirectories(base.resolve("store"));
+        Path reports = Files.createDirectories(base.resolve("reports"));
+        Files.createDirectories(store.resolve("nexus/platform_reports"));
+        Files.createDirectories(reports.resolve("nexus/platform_reports"));
+        Path onStore = Files.writeString(store.resolve("nexus/platform_reports/a.enc"), "backup-volume");
+        Path onReports = Files.writeString(reports.resolve("nexus/platform_reports/a.enc"), "report-volume");
+        var dsl = DSL.using(new MockConnection(ctx -> new MockResult[] {new MockResult(0, DSL.using(SQLDialect.POSTGRES).newResult())}),
+                SQLDialect.POSTGRES);
+        var port = new JooqRetentionStorePort(new JooqRetentionQueries(new JooqTransactionBoundary(dsl)), store, reports);
+        var report = new RetentionPruningService.ArtefactRecord("report-1", "platform:reports", "nexus/platform_reports/a.enc",
+                10L, "report_30d", "standard");
+
+        assertTrue(port.deleteArtefact(report));
+        assertFalse(Files.exists(onReports), "the report file on the report volume is removed");
+        assertTrue(Files.exists(onStore), "nothing on the store root is touched by a report prune");
+        assertFalse(port.deleteArtefact(new RetentionPruningService.ArtefactRecord("report-2", "platform:reports",
+                "../store/nexus/platform_reports/a.enc", 10L, "report_30d", "standard")), "no escape from the report root");
+        assertTrue(Files.exists(onStore));
+    }
 }
