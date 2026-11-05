@@ -77,6 +77,13 @@ Reading:
 - The PAN "unresolved object" rows are mostly precedence UNKNOWN (U2), not names missing from every scope.
 - Check Point `native-type` is absent on these failing objects (UNKNOWN in the split), so it gives no sub-split.
 
+**After X1 (PR 759, measured 2026-11-06 00:45 on the same 99 policies):** "earlier rule has unsupported constraints"
+60,217 -> 56,085 (-4,132, -6.9 %); UNKNOWN shadow status 97,391 -> 93,259. The three large rows remain: PAN
+source-user 15,094, CP gateway objects 22,298 (source and destination; blockers can now be reported later in the
+rulebase, which moved rules between rows), CP source access roles 10,985. Most later rules sit inside the blocker's
+resolved dimensions, so X1 cannot pass over those blockers; the gateway rows need the bound in
+`CP_GATEWAY_OBJECT_BOUND_REVIEW_2026_11_05.md`, and the access-role and source-user rows need identity-dimension bounds.
+
 ## 1. Cross-cutting items
 
 ### X0 — diagnostic split of each class (counters only)

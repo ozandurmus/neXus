@@ -47,6 +47,17 @@ below. It approves each item exactly as listed and nothing beyond it.
   (23 blockers behind 18,624 rules, plan §0.1). Review only, no semantics change without its own decision.
 - Analysis-container M1 under load and M9.
 
+## Outcomes (2026-11-06 night, counts only)
+1. PR 757 live (V192). A FULL Check Point policy collection (00:31-01:17) completed with no UNKNOWN NAT part and no
+   `VENDOR_NAME_NOT_UNIQUE` failure: the first CP collection with outcome `COMPLETED`, not `PARTIAL`.
+2. PR 759 live. Over the same 99 stored policies, "earlier rule has unsupported constraints" fell from 60,217 to
+   56,085 rules (-4,132) and UNKNOWN shadow status from 97,391 to 93,259
+   (`POLICY_UNKNOWN_REDUCTION_PLAN_2026_11_05.md` §0.1).
+3. First A6 validation: `MATCH` on a Check Point route hop (`PATH_ANALYSIS_A6_COMMAND_PROPOSAL.md`).
+4. PR 758 live (V193); the live setting reads `masked`.
+5. PR 756 live. aiview started an inventory collection of all 132 enrolled devices: 131 completed, 1 Check Point job
+   failed on an SSH connect timeout to the device.
+
 ## Cross-references
 - `docs/design/PO_DECISION_RECORD_2026_11_05_CP_NAT_UID_PROBE.md`
 - `docs/design/POLICY_UNKNOWN_REDUCTION_PLAN_2026_11_05.md`

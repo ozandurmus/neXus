@@ -597,6 +597,13 @@ leaves HOST-A, and no heap dump is written at all: it would contain raw policy d
 | M8 | Node allocatable: 16 CPU, about 60.8 GiB memory. Requests: 3.75 CPU (23 %), 9.1 GiB (15 %). Limits: 24 CPU (150 %), 70.2 GiB (115 %): limits are already overcommitted. |
 | M10 | ui2-service and ui2-policy: 0 restarts, no OOM termination since their last rollout; ui2-db: 8 restarts (earlier host reboots). |
 
+Added 2026-11-06 night:
+
+| # | Result |
+|---|---|
+| M1 (under load) | Right after a sweep of the hygiene analysis over all 99 policies: ui2-service CPU 1.77 cores, RSS 3.5 GiB, G1 heap committed 3,676 MiB, used 1,934 MiB, metaspace 73 MiB (idle: RSS 1.6 GiB, used 721 MiB). The analysis load roughly doubles the service's memory. A class histogram still needs `-XX:+PrintClassHistogram` on one restart. |
+| M9 | Masked digests of 12 fixed policy pages: 0 of 12 changed between two reads, 7 of 12 changed across a ui2-service restart. Split by token kind on a second restart: name pseudonyms changed on 8 of 12 pages (same counts, different values), masked addresses on 0 of 12. P0 (§3.2, masking must not depend on process-local history) is confirmed live for names, and it also affects every pseudonym used outside the UI (chat, docs, notifications). |
+
 ## 12. Open PO questions
 
 - **Q1 — Name.** Keep `ui2-analysis` (as directed), or use `ui2-policy-analysis` to avoid confusion with Packet
