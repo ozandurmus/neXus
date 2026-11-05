@@ -35,9 +35,9 @@ Findings marked *PLAUSIBLE* were read, but their failing state could not be buil
 | # | Sev | Area | Finding | Status |
 |---|-----|------|---------|--------|
 | H-1 | HIGH | Job log CSV export | aiview CSV masked as text only; new target labels leak raw | **FIXED** (this branch) |
-| M-1 | MEDIUM (PLAUSIBLE) | module_deploy drain barrier | `CANCELLED` quarantine exempt even if a write crossed its mutation boundary | open |
+| M-1 | MEDIUM (PLAUSIBLE) | module_deploy drain barrier | `CANCELLED` quarantine exempt even if a write crossed its mutation boundary | **FIXED** (`cloud/secfix-drain-health-1105`) |
 | M-2 | MEDIUM | Job log sort / search | `sort=device` and `q` act on raw hostnames for aiview (ordering / substring oracle) | open |
-| M-3 | MEDIUM | System health | unreadable sar/cpwd artefact cached for good; cpwd unreadable counts as 0 restarts | open |
+| M-3 | MEDIUM | System health | unreadable sar/cpwd artefact cached for good; cpwd unreadable counts as 0 restarts | **FIXED** (`cloud/secfix-drain-health-1105`) |
 | M-4 | MEDIUM (PLAUSIBLE) | PathPseudonymMap | a step-1 "shown" hit skips the ambiguity check against other hosts | open |
 | M-5 | MEDIUM | Job log query | per-row lateral target joins run before sort/limit on non-indexed sorts and on export | open |
 | M-6 | MEDIUM | CpInventoryObjects | customer-domain / Global LRU thrash reloads whole domains under the instance lock | open |
@@ -121,6 +121,14 @@ There are no CRITICAL findings:
   against the schema first.
 - **Tests:** `tools/tests/test_policy_module_runtime.py:244` asserts SQL substrings only. Add a database-backed case for
   each holding state, including the case of a job cancelled after it crossed the boundary.
+- **Resolution (`cloud/secfix-drain-health-1105`), fail-closed:** `COMPLETED`/`FAILED` still release. `CANCELLED`
+  releases only when no `job_step_attempt` of that job, in any lease epoch, has `mutation_boundary_crossed` or a
+  non-`read` `action_class` (`module_deploy.ENDED_WITHOUT_WRITE_SQL`). Write-class attempts are counted even when not
+  crossed, because the backup path records `recovery-write` without ever flipping the flag. The proof rests on every
+  attempt insert being fenced to an owner-valid `EXECUTING` job (`JooqJobStepAttemptDao.insertPreContact`), so no new
+  attempt can appear after `CANCELLED`. A recorded `outcome` does not release. Tests: real-PostgreSQL cases per state in
+  `tools/tests/test_policy_module_runtime.py` (they skip with a reason where no `initdb` exists). They fail against the
+  2c7a08a SQL.
 
 ### M-2 — job log `sort=device` and `q` evaluate raw hostnames for aiview
 
@@ -159,6 +167,16 @@ There are no CRITICAL findings:
     concern.
   - Count unreadable chunks, and report `UNKNOWN / CPWD_UNREADABLE` when any chunk in the window could not be read.
   - Make the sar guard treat `cpuSamples() <= 0`.
+- **Resolution (`cloud/secfix-drain-health-1105`):**
+  - A failed read (store, decrypt, parse, missing ref) returns `null` and is cached only as a failure with a retry time:
+    1 min, doubling per consecutive failure, capped at 1 h (`SystemHealthService.cached`/`retryAfter`). A good read is
+    still kept for as long as the file stays in the window.
+  - An unreadable sar day stays `UNREADABLE`; with no readable CPU day the fact is `UNKNOWN / SAR_TEXT_UNREADABLE`.
+    The sar guard is `<= 0`.
+  - Unreadable cpwd chunks are counted. Any such chunk makes restarts `UNKNOWN / CPWD_UNREADABLE`, with no count shown,
+    unless the readable chunks already reach the `ATTENTION` threshold, which is a lower bound.
+  - Tests: `SystemHealthServiceTest` covers a transient failure and recovery, no re-read inside the wait, unreadable
+    cpwd, the lower-bound case and the backoff cap.
 
 ### M-4 — PathPseudonymMap: a topology-shown hit skips the cross-host ambiguity check (PLAUSIBLE)
 
