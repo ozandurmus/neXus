@@ -15,8 +15,8 @@ import java.util.*;
  * share a packet exactly when every dimension's intersection is non-empty; the witness packet is one member of each.
  * <p>Everything the oracle cannot interpret -- an unresolved, dynamic, unsupported, negated, cyclic or empty cell, a
  * zone rule type, an unknown placement -- matches the whole universe; an earlier rule with a field of unknown meaning
- * matches the whole universe in every dimension. Narrowing constraints (time, schedule, VPN, content, user, category)
- * are ignored, which only enlarges the earlier rule's match. The oracle is therefore never more willing to call two
+ * matches the whole universe in every dimension. Narrowing constraints (time, schedule, VPN, content, user, category,
+ * a Palo Alto Panorama target) are ignored, which only enlarges the earlier rule's match. The oracle is therefore never more willing to call two
  * rules disjoint than the real policy is.
  * <p>Palo Alto zone supersets: a rule that leaves "zone or install-on coverage is unproven" (or, for an intrazone or
  * interzone rule, "zone rule type constraint") for REDUNDANT or CONFLICT must be covered, by brute force, by the rule
@@ -484,11 +484,21 @@ final class PartialPriorOracle {
             }
             return out;
         }
+        /**
+         * Fields the oracle may ignore: they say nothing about what matches, or only narrow it. A Palo Alto Panorama target
+         * (devices, tags, virtual systems, negate yes or no) only restricts which firewalls of the device group get the
+         * rule (PATH_ANALYSIS_VENDOR_SEMANTICS.md 4d), so ignoring it reads the rule as present on every firewall: a
+         * larger match, never a smaller one. A target shape nobody parsed and any other negate value stay unknown.
+         * That is conservative only for an earlier rule: a targeted rule is never a released or covered later rule today
+         * (it stays "unsupported rule constraint"); judging one as a later rule would need a firewall dimension instead.
+         */
         private static boolean known(String key, Rule rule, boolean cp) {
             return Set.of("time", "schedule", "vpn", "content", "source-user", "category", "from", "to", "install-on", "rule-type",
                     "tag", "layer-name", "last-modified", "last-modifier", "log-setting").contains(key)
                 || key.startsWith("track-") || key.startsWith("profile-setting/")
-                || key.equals("inline-layer") && cp && rule.action().equals("Apply Layer");
+                || key.equals("inline-layer") && cp && rule.action().equals("Apply Layer")
+                || !cp && Set.of("target-selectors", "target-tags", "target-vsys").contains(key)
+                || !cp && key.equals("target/negate") && Set.of(List.of("yes"), List.of("no")).contains(rule.extras().get(key));
         }
         private BitSet cell(Cell cell, String family) {
             int size = family.equals("address") ? ADDRESS_SIZE : family.equals("service") ? SERVICE_SIZE : apps.size();

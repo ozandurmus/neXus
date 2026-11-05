@@ -262,17 +262,17 @@ it("summarizes every stored container until one is opened, using only loaded dat
   expect(screen.queryByText("No assigned policy snapshot")).toBeNull();
   expect(screen.queryByRole("status", { name: /policy snapshot|collected policy/i })).toBeNull();
   expect(within(summary).getByText("3 stored containers from 2 sources. Open one to browse its rules; nothing is collected from here.")).toBeInTheDocument();
-  expect(within(summary).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Container", "Source", "Policies", "Rules", "Assigned gateways", "Last collected", ""]);
+  expect(within(summary).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Container", "Source", "Policies", "Rules", "Installation targets", "Installation status", "Last collected", ""]);
   // Fixed layout with whole header words (post-release review 2026-10-20, N7): `POLICIES` and `RULES` never wrap mid-word.
   const containerTable = within(summary).getByRole("table", { name: "Stored policy containers" });
   expect(containerTable).toHaveStyle({ tableLayout: "fixed" });
-  expect(containerTable.querySelectorAll("colgroup col")).toHaveLength(7);
+  expect(containerTable.querySelectorAll("colgroup col")).toHaveLength(8);
   within(summary).getAllByRole("columnheader").forEach(cell => expect(getComputedStyle(cell).whiteSpace).toBe("nowrap"));
   const rows = within(summary).getAllByRole("row").slice(1);
   expect(rows).toHaveLength(3);
   expect(rows[0]).toHaveTextContent("DOM-TANGO-01MGR-BRAVO-01Panorama11FW-TANGO-04");
   expect(rows[0]).toHaveTextContent(/3 h ago/);
-  expect(rows[2]).toHaveTextContent("DOM-ROMEO-03MGR-ROMEO-02MDS17Unassigned6 h ago");
+  expect(rows[2]).toHaveTextContent("DOM-ROMEO-03MGR-ROMEO-02MDS17UnassignedNo target6 h ago");
   fireEvent.click(within(summary).getByRole("button", { name: "Open DOM-TANGO-02" }));
   expect(await screen.findByRole("region", { name: "Policy rulebase" })).toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "Stored policy containers" })).toBeNull();

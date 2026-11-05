@@ -170,7 +170,7 @@ export function ConfigurationScreen() {
         <Box sx={{ px: 3, pb: 2 }}>
           <Typography variant="body2" sx={{ color: m3.primary }}>
             Bulk configuration collect admitted {bulkResult.admitted} of {bulkResult.enrolled_devices} enrolled devices.
-            {bulkResult.refused > 0 && ` (${bulkResult.refused} refused.)`} View Administration &gt; Job Logs for progress.
+            {bulkResult.refused > 0 && ` (${bulkResult.refused} refused.)`} View Operations &gt; Jobs for progress.
           </Typography>
         </Box>
       )}

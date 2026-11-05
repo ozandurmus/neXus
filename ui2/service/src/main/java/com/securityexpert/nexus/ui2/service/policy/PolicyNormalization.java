@@ -290,6 +290,23 @@ final class PolicyNormalization {
             && TARGET_SHAPES.stream().noneMatch(rule.extras()::containsKey);
     }
     private static final Set<String> TARGET_SHAPES = Set.of("target-selectors", "target-tags", "target-vsys", "target-unrecognized");
+    /**
+     * A Palo Alto Panorama target field that can only restrict the firewalls a rule is pushed to, never widen what it
+     * matches on a firewall (PATH_ANALYSIS_VENDOR_SEMANTICS.md 4d, FROZEN; PA-TGT, PA-SUB): with no firewall selected the
+     * rule goes to every firewall of the device group; selected devices and tags restrict it to those; negate pushes it
+     * "to all managed firewalls associated with the device group except for the selected device(s) and tag(s)"; negate
+     * with nothing selected adds it to no firewall. Every form is therefore a subset of the device group's firewalls, and
+     * on each firewall that has the rule it matches exactly its selectors. Only {@link #partial} reads this, as one more
+     * narrowing condition: a targeted rule is still no full match, so it never covers a later rule (which firewalls it
+     * reaches is not compared). The device entries restricted to virtual systems ({@code target-vsys}, a shape known from
+     * the repository parser only) select fewer contexts still. {@code target-unrecognized} (a shape nobody parsed) and a
+     * negate value other than yes or no stay of unknown meaning: such a rule is no partial prior.
+     */
+    static boolean targetNarrows(PolicySnapshot snapshot, Rule rule, String key) {
+        if (!"PAN".equals(snapshot.metadata().vendor())) return false;
+        if (key.equals("target/negate")) return rule.extras().get(key).equals(List.of("yes")) || rule.extras().get(key).equals(List.of("no"));
+        return Set.of("target-selectors", "target-tags", "target-vsys").contains(key);
+    }
     private static final Set<String> INERT = Set.of("tag", "layer-name", "last-modified", "last-modifier", "log-setting");
     /**
      * The partial prior of a rule {@link #normalize} could not fully resolve, or {@code null} when nothing of it may be
@@ -302,8 +319,12 @@ final class PolicyNormalization {
      * widen it, so whatever the rule matches still lies inside its resolved selectors and a dimension disjoint from a
      * later rule still proves that no packet matches both. The same holds for an unknown or non-terminal action and an
      * unknown enabled state: they change what the rule does with a match or whether it is active, not what it matches.</li>
-     * <li>A field whose meaning is not known (anything {@link #normalize} calls an "unsupported rule constraint", e.g. a
-     * target negation) might widen or invert the match, so such a rule is no partial prior at all.</li>
+     * <li>A Palo Alto Panorama target (devices, tags, virtual systems, negate yes or no; {@link #targetNarrows}) only
+     * restricts which firewalls of the device group get the rule, so on every firewall the rule matches within its
+     * selectors or not at all: the same kind of narrowing condition. It is still an "unsupported rule constraint" for
+     * {@link #normalize}, so a targeted rule never covers.</li>
+     * <li>A field whose meaning is not known (anything else {@link #normalize} calls an "unsupported rule constraint",
+     * e.g. a target shape nobody parsed) might widen or invert the match, so such a rule is no partial prior at all.</li>
      * <li>A Check Point source naming an access role is resolved, where it can be, to an upper bound of what it matches:
      * the role's networks ({@link Resolver#accessRoleBound}). The identity the role also requires only narrows the match
      * further, so the bound may prove disjointness and nothing else; a partial prior never covers, so an access-role rule
@@ -323,7 +344,8 @@ final class PolicyNormalization {
             String key = entry.getKey();
             resolver.budget.spend();
             if (NARROWING.contains(key) || INERT.contains(key) || Set.of("from", "to", "install-on").contains(key)
-                    || key.startsWith("track-") || key.startsWith("profile-setting/") || untargeted(snapshot, rule, key)) continue;
+                    || key.startsWith("track-") || key.startsWith("profile-setting/") || untargeted(snapshot, rule, key)
+                    || targetNarrows(snapshot, rule, key)) continue;
             if (key.equals("rule-type")) { zones &= entry.getValue().equals(List.of("universal")); continue; }
             // The inline layer an "Apply Layer" rule hands its match to; it is no condition on the match itself.
             if (key.equals("inline-layer") && cp && rule.action().equals("Apply Layer")) continue;

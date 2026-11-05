@@ -12,10 +12,31 @@ export function syncStatusWords(vendor: string | null | undefined, status: strin
   if (raw === "IN_SYNC") return { word: "In sync", tone: "good", reported: true, reason: "The management server reports this target in sync with the stored policy." };
   if (raw === "OUT_OF_SYNC") return { word: "Out of sync", tone: "warn", reported: true, reason: "The management server reports this target out of sync with the stored policy." };
   if (!raw || raw === "UNKNOWN") {
-    if (vendor === "CP") return { word: "Sync not reported by Check Point", tone: "neutral", reported: false, reason: "Check Point does not report a sync state the product can prove; this is not a fault of the target. Installation evidence is on the Installation tab." };
+    if (vendor === "CP") return { word: "Sync not reported by Check Point", tone: "neutral", reported: false, reason: "Check Point does not report a sync state the product can prove; this is not a fault of the target. Installation evidence is under Rules & Containers › Installation." };
     return { word: "Sync UNKNOWN", tone: "neutral", reported: false, reason: "The management server did not report a sync state for this target." };
   }
   return { word: statusWord(raw), tone: "neutral", reported: true, reason: `Reported by the management server as ${raw}.` };
+}
+
+/**
+ * The Installation status of a container in one line (UI review 2026-11-05, C2): the management server's reported sync
+ * state over every (package, target) pair, counted by word. It states what the server reported and nothing more -- a target
+ * the server made no claim about is "not reported" (neutral, with the vendor's reason on hover), never a fault of the target,
+ * and the line is management-plane evidence, not proof of what a device enforces.
+ */
+export function installationSummary(vendor: string | null | undefined, states: readonly string[]): { text: string; tone: "good" | "warn" | "neutral"; reason: string } {
+  if (states.length === 0) return { text: "No target", tone: "neutral", reason: "No installation target is recorded for the packages of this container." };
+  let inSync = 0, outOfSync = 0, other = 0, unreported = 0;
+  for (const state of states) {
+    const words = syncStatusWords(vendor, state);
+    if (!words.reported) unreported++;
+    else if (words.word === "In sync") inSync++;
+    else if (words.word === "Out of sync") outOfSync++;
+    else other++;
+  }
+  const parts = [inSync && `${inSync} in sync`, outOfSync && `${outOfSync} out of sync`, other && `${other} other`, unreported && `${unreported} not reported`].filter(Boolean) as string[];
+  const reason = unreported ? syncStatusWords(vendor, "UNKNOWN").reason : "As reported by the management server; installation is intent, not runtime enforcement.";
+  return { text: parts.join(" · "), tone: outOfSync ? "warn" : unreported || other || !inSync ? "neutral" : "good", reason };
 }
 
 /**

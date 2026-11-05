@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.service.notification;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.BufferedReader;
@@ -184,6 +185,48 @@ class NotificationMailRouterTest {
         });
         assertEquals(1, updates.stream().filter(s -> s.contains("watermark_audit")).count());
         assertTrue(updates.stream().anyMatch(s -> s.contains("last_error") && s.contains("job_failure")));
+    }
+
+    @Test
+    void unknownAndHandlerlessTypesAreSkippedWithoutRouteErrorAndTheOtherRoutesStillSend() {
+        DSLContext create = DSL.using(SQLDialect.POSTGRES);
+        List<String> updates = new ArrayList<>();
+        List<String> sent = new ArrayList<>();
+        DSLContext dsl = DSL.using(new MockConnection(ctx -> {
+            String sql = ctx.sql();
+            Result<Record> result;
+            if (sql.contains("from notification_routes order by type")) {
+                result = rows(create, new String[] { "type", "enabled", "recipients", "watermark_audit", "watermark_time" },
+                        new String[] { "admin_event", "true", "admin@example.test", "10", AT },
+                        new String[] { "scheduled_report", "true", "", "0", AT });
+            } else if (sql.contains("from audit_log")) {
+                result = rows(create, new String[] { "audit_id", "action_id", "row_pk", "occurred_at" },
+                        new String[] { "11", "role_binding_create", "synthetic-role", "2026-09-27 10:01:00" });
+            } else {
+                if (sql.startsWith("update notification_routes")) updates.add(sql);
+                result = rows(create, new String[] { "empty" });
+            }
+            return new MockResult[] { new MockResult(result.size(), result) };
+        }), SQLDialect.POSTGRES);
+        NotificationMailRouter.resetWarnedTypesForTest();
+        for (int i = 0; i < 2; i++) {
+            NotificationMailRouter.tick(dsl, settings(25), (s, r, subject, body) -> sent.add(subject));
+        }
+        assertEquals(2, sent.size());
+        assertTrue(updates.stream().noneMatch(u -> u.contains("last_error = ?") && u.contains("where type")
+                && !u.contains("last_error = null")), updates.toString());
+        assertThrows(NotificationMailRouter.UnhandledTypeException.class,
+                () -> NotificationMailRouter.collect(dsl, "scheduled_report", 0, FROM));
+        assertTrue(NotificationMailRouter.subject("scheduled_report", 1).contains("scheduled_report"));
+    }
+
+    @Test
+    void typesAndDigestTitlesComeFromOneSource() {
+        assertEquals(NotificationRoute.TITLES.size(), NotificationRoute.TYPES.size());
+        assertEquals(List.copyOf(NotificationRoute.TITLES.keySet()), NotificationRoute.TYPES);
+        for (String type : NotificationRoute.TYPES) {
+            assertTrue(NotificationMailRouter.subject(type, 1).contains(NotificationRoute.TITLES.get(type)), type);
+        }
     }
 
     @Test

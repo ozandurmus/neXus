@@ -45,6 +45,11 @@ public final class PathReasons {
     public static final String INGRESS_NOT_FOUND = "INGRESS_NOT_FOUND";
     public static final String INGRESS_HINT_NOT_FOUND = "INGRESS_HINT_NOT_FOUND";
     public static final String INGRESS_INTERFACE_NOT_FOUND = "INGRESS_INTERFACE_NOT_FOUND";
+    /**
+     * A branch ended {@code NO_ROUTE} on a unit whose route table holds no route at all in that context (nothing was
+     * collected or attributed there): a collection or attribution gap, not a proven absence of a route. Still UNKNOWN.
+     */
+    public static final String ROUTE_TABLE_EMPTY = "ROUTE_TABLE_EMPTY";
 
     // ---- hop reasons the engine adds (A2 reasons are carried as they are) ----------------------------------------
     public static final String POLICY_BINDING_UNPROVEN = "POLICY_BINDING_UNPROVEN";
@@ -80,12 +85,35 @@ public final class PathReasons {
     public static final String PBR_PRESENT = "PBR_PRESENT";
     /** The return walk ended before reaching the source side without showing asymmetry: symmetry is unproven. */
     public static final String RETURN_PATH_UNPROVEN = "RETURN_PATH_UNPROVEN";
+    /**
+     * The source segment's prefix is held by several unjoined segments (duplicate private prefix): every candidate
+     * first hop was traced and all of them gave the same decided verdict, so the verdict does not depend on which one
+     * the source sits behind. The ingress itself stays {@code AMBIGUOUS_INGRESS}.
+     */
+    public static final String INGRESS_CANDIDATES_AGREE = "INGRESS_CANDIDATES_AGREE";
+    /**
+     * The query source is an address an enrolled unit holds itself: traffic the unit originates is not transit traffic,
+     * and the rules that govern it (implied rules, management-plane handling) are not modelled. The result traces a
+     * packet entering on that segment.
+     */
+    public static final String SOURCE_IS_UNIT_ADDRESS = "SOURCE_IS_UNIT_ADDRESS";
+    /** The query destination is an address an enrolled unit holds itself (to-the-box traffic, not modelled as such). */
+    public static final String DESTINATION_IS_UNIT_ADDRESS = "DESTINATION_IS_UNIT_ADDRESS";
 
     // ---- notes / warnings ----------------------------------------------------------------------------------------
     public static final String HA_ROUTE_DRIFT = "HA_ROUTE_DRIFT";
     public static final String OUT_OF_STATE_DROP_LIKELY = "OUT_OF_STATE_DROP_LIKELY";
     public static final String INGRESS_INFERRED = "INGRESS_INFERRED";
     public static final String RETURN_NOT_COMPUTED_AT_EDGE = "RETURN_NOT_COMPUTED_AT_EDGE";
+    /** Hop note: the route that left the known topology is a default route ({@code 0.0.0.0/0}). */
+    public static final String EXIT_VIA_DEFAULT_ROUTE = "EXIT_VIA_DEFAULT_ROUTE";
+    /** Hop note: the route left through a VSX warp link, kept as a cloud segment until a measured fixture proves it. */
+    public static final String EXIT_VIA_VSX_WARP = "EXIT_VIA_VSX_WARP";
+    /**
+     * Branch warning: the branch left the known topology although the destination lies on a segment an enrolled unit
+     * is attached to. The unit in between is not enrolled (or not attached); the path beyond the exit is not evaluated.
+     */
+    public static final String DESTINATION_IN_KNOWN_TOPOLOGY = "DESTINATION_IN_KNOWN_TOPOLOGY";
 
     // ---- ingress modes and return statuses -----------------------------------------------------------------------
     public static final String GIVEN = "GIVEN";

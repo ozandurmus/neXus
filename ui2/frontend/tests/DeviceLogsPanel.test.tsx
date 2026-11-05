@@ -172,13 +172,12 @@ describe("summary strip, source pills and side panel", () => {
     const strip = await screen.findByRole("region", { name: "Log summary" });
     const sentence = within(strip).getByTestId("last-collection");
     expect(sentence).toHaveTextContent("Last collection");
-    // the state in sentence case (R7), the raw state on hover
-    expect(sentence).toHaveTextContent("Completed");
-    expect(sentence).not.toHaveTextContent("COMPLETED");
-    // the window of the newest lines, device time, as a short range
-    expect(sentence).toHaveTextContent("window 08:00–08:59 device time");
-    // what is stored now is the card's denominator sentence; the run's per-source outcomes open on demand
-    expect(sentence).toHaveTextContent("Completed · 320 lines · 32 KiB in 8 chunks");
+    // UI review 2026-11-05, B5: one status line; the state (sentence case, R7), the device-time window and what is
+    // stored are on hover; the run's per-source outcomes open on demand
+    expect(sentence.getAttribute("title")).toContain("Completed");
+    expect(sentence.getAttribute("title")).not.toContain("COMPLETED");
+    expect(sentence.getAttribute("title")).toContain("window 08:00–08:59 device time");
+    expect(sentence.getAttribute("title")).toContain("Completed · 320 lines · 32 KiB in 8 chunks");
     expect(within(strip).queryByText("collected 2")).toBeNull();
     const details = await openRunDetails();
     expect(within(details).getByText("collected 2")).toBeInTheDocument();
@@ -260,8 +259,8 @@ describe("summary strip, source pills and side panel", () => {
     // three loaded lines, none writes a level: a counted zero, grey, never a guess
     const levels = strip.querySelector('[data-kpi="Error / warning lines"]') as HTMLElement;
     expect(within(levels).getByText("0 / 0")).toHaveAttribute("data-kpi-figure");
-    expect(levels).toHaveTextContent("of 3 loaded lines of this run");
-    expect(levels).toHaveTextContent("no previous window loaded");
+    expect(levels.getAttribute("title")).toContain("of 3 loaded lines of this run");
+    expect(levels.getAttribute("title")).toContain("no previous window loaded");
     // no level chip appears for levels no line writes
     expect(screen.queryByRole("group", { name: "Severity" })).toBeNull();
     // a counted zero of new crash files, grey, no alarm word
@@ -278,8 +277,8 @@ describe("summary strip, source pills and side panel", () => {
     const crash = strip.querySelector('[data-kpi="New crash / dump files"]') as HTMLElement;
     expect(await within(crash).findByText("2")).toHaveAttribute("data-kpi-figure");
     expect(within(crash).getByText("Alarm").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.errorContainer });
-    expect(crash).toHaveTextContent("1 present before monitoring");
-    expect(crash).toHaveTextContent("new within 7 days");
+    expect(crash.getAttribute("title")).toContain("1 present before monitoring");
+    expect(crash.getAttribute("title")).toContain("new within 7 days");
   });
 
   it("words every gap kind and formats byte counts", () => {
@@ -431,15 +430,17 @@ describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
     stub({ summary: panSummary(), job: { state: "COMPLETED" } });
     render(<DeviceLogsPanel deviceId={DEVICE} vendorHint="palo_alto" />);
     const sentence = await screen.findByTestId("last-collection");
-    // the KPI card: the clock as the figure, the age beside it, the device-time window, then the state and what is stored
-    expect(sentence).toHaveTextContent(/^Last collection06:13.+ ago.*window 00:15–06:11 device time.*Completed · 13 lines · 9\.5 KiB in 8 chunks$/);
+    // one status fact (UI review 2026-11-05, B5): the clock as the figure and the age beside it; the device-time window,
+    // the state and what is stored on hover
+    expect(sentence).toHaveTextContent(/^Last collection06:13.+ ago$/);
+    expect(sentence.getAttribute("title")).toMatch(/^window 00:15–06:11 device time · Completed · 13 lines · 9\.5 KiB in 8 chunks$/);
     expect(within(sentence).getByText("06:13")).toHaveAttribute("data-kpi-figure");
   });
 
   it("says the job state is UNKNOWN when the Jobs list has none, and never invents COMPLETED", async () => {
     stub({ summary: panSummary() });
     render(<DeviceLogsPanel deviceId={DEVICE} vendorHint="palo_alto" />);
-    expect(await screen.findByTestId("last-collection")).toHaveTextContent("job state UNKNOWN");
+    expect((await screen.findByTestId("last-collection")).getAttribute("title")).toContain("job state UNKNOWN");
   });
 
   it("gives each line source its status word and stored line count once, on the selector (R7): counts in grey and only OK in green", async () => {
@@ -473,8 +474,10 @@ describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
     stub({ gaps: [seq, first], crashNew: 0 });
     render(<DeviceLogsPanel deviceId={DEVICE} />);
     const line = await screen.findByRole("region", { name: "Attention" });
-    const gapLink = await within(line).findByRole("button", { name: /Sequence gap suspected \(fwk\.elg 00:15\)/ });
-    expect(within(line).getByRole("button", { name: /First collection: older content not fetched \(messages 00:15\)/ })).toBeInTheDocument();
+    // UI review 2026-11-05, B5: the kind on the line, the per-file list on hover and on Collection health
+    const gapLink = await within(line).findByRole("button", { name: "Sequence gap suspected" });
+    expect(gapLink).toHaveAttribute("title", "fwk.elg 00:15");
+    expect(within(line).getByRole("button", { name: "First collection: older content not fetched" })).toHaveAttribute("title", "messages 00:15");
     expect(within(line).getByRole("button", { name: "No new crash or dump files" })).toBeInTheDocument();
     // jargon and red-tinted "initial baseline" pills are gone
     expect(screen.queryByText(/initial baseline/i)).toBeNull();
@@ -499,7 +502,8 @@ describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
     stub({ gaps: [a, b], crashNew: 2 });
     render(<DeviceLogsPanel deviceId={DEVICE} />);
     const line = await screen.findByRole("region", { name: "Attention" });
-    expect(await within(line).findByRole("button", { name: /Sequence gap suspected ×2 \(messages 00:15, fwk\.elg 00:15\)/ })).toBeInTheDocument();
+    expect(await within(line).findByRole("button", { name: "Sequence gap suspected ×2" })).toHaveAttribute("title", "messages 00:15, fwk.elg 00:15");
+    expect(line).not.toHaveTextContent("fwk.elg");
     expect(within(line).getByText("2 new crash or dump files").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.errorContainer });
   });
 
@@ -725,7 +729,7 @@ describe("the lines are the content (PO 2026-10-20)", () => {
     const strip = screen.getByRole("region", { name: "Log summary" });
     const levels = strip.querySelector('[data-kpi="Error / warning lines"]') as HTMLElement;
     expect(within(levels).getByText("2 / 1")).toHaveAttribute("data-kpi-figure");
-    expect(levels).toHaveTextContent("of 5 loaded lines of this run");
+    expect(levels.getAttribute("title")).toContain("of 5 loaded lines of this run");
     const chips = screen.getByRole("group", { name: "Severity" });
     expect(within(chips).getAllByRole("button").map((b) => b.textContent)).toEqual(["All", "Error 2", "Warning 1"]);
     expect(within(chips).getByRole("button", { name: /All/ })).toHaveAttribute("aria-pressed", "true");

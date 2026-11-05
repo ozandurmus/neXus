@@ -4,7 +4,7 @@ import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { PolicyScreen } from "../src/screens/PolicyScreen";
 import { PolicyDomainTab } from "../src/screens/PolicyDomainTabs";
-import type { PolicyMetadata, PolicyLookupResult } from "../src/auth/adminApi";
+import type { PolicyMetadata } from "../src/auth/adminApi";
 
 const metadata: PolicyMetadata = { id: "policy-1", sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "CP",
   containerId: "domain-1", containerName: "DOM-TANGO-01", name: "POL-TANGO-01", collectedAt: "2026-10-05T00:00:00Z", artefactRef: "artifact-1", targets: [] };
@@ -21,7 +21,7 @@ function mock(result: unknown = objectPage) {
 }
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-it("opens all three tabs, retains Rules and sends hit filters alongside the existing query", async () => {
+it("opens the tabs and the Installation section, retains Rules and sends hit filters alongside the existing query", async () => {
   const request = vi.fn(async (url: string) => {
     const body = url.endsWith("/sources") ? { sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: "CP" }], canCollect: false }
       : url.endsWith("/devices") ? { policies: [metadata], devices: [] }
@@ -34,11 +34,13 @@ it("opens all three tabs, retains Rules and sends hit filters alongside the exis
   fireEvent.click(screen.getByRole("button", { name: metadata.containerName }));
   fireEvent.click(screen.getByRole("button", { name: `Policy ${metadata.name}` }));
   await screen.findByRole("region", { name: "Policy rulebase" });
-  expect(screen.getByRole("tab", { name: "Rules" })).toHaveAttribute("aria-selected", "true");
-  // Grouped tab bar (roadmap 2.5): seven tabs, each still named by its own label, grouped Browse · Judge · Trace · Ask.
+  expect(screen.getByRole("tab", { name: "Rules & Containers" })).toHaveAttribute("aria-selected", "true");
+  // Four tabs (UI review 2026-11-05, C2), each named by its own label, grouped Browse · Judge · Trace.
   const tabs = within(screen.getByRole("tablist", { name: "Policy tabs" })).getAllByRole("tab");
-  expect(tabs.map(t => t.getAttribute("aria-label"))).toEqual(["Rules", "Objects", "Installation", "Hygiene", "Changes", "Lookup", "Offline analysis"]);
-  expect(tabs.map(t => t.getAttribute("data-tab-group"))).toEqual(["Browse", "Browse", "Browse", "Judge", "Trace", "Ask", "Ask"]);
+  expect(tabs.map(t => t.getAttribute("aria-label"))).toEqual(["Rules & Containers", "Objects", "Hygiene", "Changes"]);
+  expect(tabs.map(t => t.getAttribute("data-tab-group"))).toEqual(["Browse", "Browse", "Judge", "Trace"]);
+  // The deep link to Trace > Policy rule lookup, scoped to the open policy.
+  expect(screen.getByRole("link", { name: "Search in this policy" })).toHaveAttribute("href", "?screen=trace&mode=lookup&policy_id=policy-1");
   fireEvent.mouseDown(screen.getByLabelText("Usage filter")); fireEvent.click(await screen.findByRole("option", { name: "No hits recorded (0 hits)" }));
   await waitFor(() => expect(request.mock.calls.some(([url]) => url.includes("hitFilter=never"))).toBe(true));
   fireEvent.mouseDown(screen.getByLabelText("Usage filter")); fireEvent.click(await screen.findByRole("option", { name: "Unused 90 d" }));
@@ -52,9 +54,9 @@ it("opens all three tabs, retains Rules and sends hit filters alongside the exis
   await waitFor(() => expect(request.mock.calls.some(([url]) => url.includes("q=(action%3D'Accept')%20AND%20lasthit.days%3C30") && !url.includes("hitFilter="))).toBe(true));
   fireEvent.click(screen.getByRole("tab", { name: "Objects" }));
   expect(await screen.findByRole("table", { name: "Policy objects" })).toHaveTextContent("240.12.0.8");
-  fireEvent.click(screen.getByRole("tab", { name: "Installation" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Rules & Containers" }));
+  fireEvent.click(within(screen.getByRole("region", { name: "Installation" })).getByRole("button", { name: /Installation: where/ }));
   expect(await screen.findByRole("table", { name: "Policy installation" })).toHaveTextContent("FW-TANGO-04");
-  fireEvent.click(screen.getByRole("tab", { name: "Rules" }));
   expect(screen.getByLabelText("Rule query")).toHaveValue("action='Accept'");
   expect(screen.getByRole("region", { name: "Policy rulebase" })).toBeVisible();
 }, 15_000);
@@ -160,38 +162,21 @@ it("opens the estate Changes tab and links a rule from another policy into the r
   expect(within(dialog).getByRole("button", { name: "Rule history" })).toBeInTheDocument();
 });
 
-it("keeps Lookup inputs and results when switching to Changes and Offline analysis and back", async () => {
-  const lookup: PolicyLookupResult = {
-    policyId: metadata.id, collectedAt: metadata.collectedAt, verdict: "DENIED", lookupReason: "implicit default deny",
-    decidingRule: null, undecidableRules: [], parts: [],
-    query: { querySource: "192.0.2.8", queryDestination: "198.51.100.8", queryService: "tcp/443" },
-    limitations: "Policy intent only. NAT, routing and anti-spoofing are not evaluated; IPv6 is unsupported.",
-  };
+it("keeps the Changes tab inline, linked to the estate-wide Changes screen, and Lookup and Offline analysis are no Policy tabs", async () => {
   const request = vi.fn(async (url: string) => {
-    const body = url.endsWith("/lookup") ? lookup
-      : url.includes("/changes?") ? { rows: [], summary: { total: 0, actors: 0, rules: 0, counts: {} }, nextCursor: "", rangeStart: "", rangeEnd: "" }
-      : url.includes("/offline-analyses?") ? { analyses: [], canManage: false }
+    const body = url.includes("/changes?") ? { rows: [], summary: { total: 0, actors: 0, rules: 0, counts: {} }, nextCursor: "", rangeStart: "", rangeEnd: "" }
       : url.endsWith("/devices") ? { policies: [metadata], devices: [] }
       : url.endsWith("/tree") ? { sources: [] }
       : { metadata, sections: [], objects: [], total: 0, page: 0, pageSize: 200 };
     return new Response(JSON.stringify(body), { status: 200, headers: { "X-Nexus-Masked": "true" } });
   });
   vi.stubGlobal("fetch", request); mount(<PolicyScreen />);
-  fireEvent.click(screen.getByRole("tab", { name: "Lookup" }));
-  fireEvent.mouseDown(screen.getByLabelText(/Lookup policy/));
-  fireEvent.click(await screen.findByRole("option", { name: metadata.name }));
-  fireEvent.change(screen.getByLabelText(/^Source\s*\*?$/), { target: { value: lookup.query.querySource } });
-  fireEvent.change(screen.getByLabelText(/^Destination\s*\*?$/), { target: { value: lookup.query.queryDestination } });
-  fireEvent.click(screen.getByRole("button", { name: "Look up policy intent" }));
-  expect(await screen.findByLabelText("Lookup result 1")).toHaveTextContent("Denied");
+  expect(screen.queryByRole("tab", { name: "Lookup" })).toBeNull();
+  expect(screen.queryByRole("tab", { name: "Offline analysis" })).toBeNull();
   fireEvent.click(screen.getByRole("tab", { name: "Changes" }));
   expect(await screen.findByText("No rule changes match these filters.")).toBeVisible();
-  expect(screen.getByLabelText("Lookup result 1")).not.toBeVisible();
-  fireEvent.click(screen.getByRole("tab", { name: "Offline analysis" }));
-  await waitFor(() => expect(request).toHaveBeenCalledWith(expect.stringContaining("/policy/policies/policy-1/offline-analyses?page=0"), expect.anything()));
-  expect(screen.getByLabelText("Lookup result 1")).not.toBeVisible();
-  fireEvent.click(screen.getByRole("tab", { name: "Lookup" }));
-  expect(screen.getByLabelText(/^Source\s*\*?$/)).toHaveValue(lookup.query.querySource);
-  expect(screen.getByLabelText("Lookup result 1")).toBeVisible();
-  expect(request.mock.calls.filter(([url]) => url.endsWith("/lookup"))).toHaveLength(1);
+  expect(screen.getByRole("link", { name: "Changes" })).toHaveAttribute("href", "?screen=changes&view=feed");
+  // The tab is part of the address.
+  expect(new URLSearchParams(window.location.search).get("tab")).toBe("changes");
+  window.history.replaceState(null, "", "/");
 });

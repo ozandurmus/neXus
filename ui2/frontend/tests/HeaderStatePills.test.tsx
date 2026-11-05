@@ -100,10 +100,13 @@ describe("the fact words", () => {
     // a virtual system's unit never stands in for the cluster's own
     const vs = { ...summaryRow("NOT_READY"), unitId: "vs-13" };
     expect(readinessFact([vs, summaryRow("READY")], "CLS-SYNTH-01")?.label).toBe("Readiness Ready · 4 h ago");
-    // R-04: a Ready evaluation older than 24 h is stale and uses warn tone instead of ok (green)
+    // R-04 / B1: a Ready evaluation takes the one freshness scale's colour: amber 24-72 h, red over 72 h
     const staleReady = readinessFact([summaryRow("READY", ago(31 * H))], "CLS-SYNTH-01")!;
     expect(staleReady).toMatchObject({ label: "Readiness Ready · 31 h ago", tone: "warn", href: "?screen=operations&cluster_ref=CLS-SYNTH-01" });
-    expect(staleReady.title).toContain("Stale (> 24 h)");
+    expect(staleReady.title).toContain("Stale (over 24 h)");
+    const veryStale = readinessFact([summaryRow("READY", ago(80 * H))], "CLS-SYNTH-01")!;
+    expect(veryStale).toMatchObject({ tone: "bad" });
+    expect(veryStale.title).toContain("Stale (over 72 h)");
   });
 
   it("renders the pills in the order given, as links, and leaves absent facts out", () => {

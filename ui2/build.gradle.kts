@@ -49,6 +49,21 @@ subprojects {
 
         tasks.named<Test>("test") {
             useJUnitPlatform()
+            // Test speed (docs/design/TEST_SPEED_2026_11_05.md): classes are isolated JVM-wise per fork,
+            // so several forks run side by side. Override with -Pui2.test.forks=N (1 restores serial runs).
+            val forks = (findProperty("ui2.test.forks") as String?)?.toIntOrNull()
+                ?: (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 4)
+            maxParallelForks = forks
+            maxHeapSize = "768m"
+            // Short-lived test JVMs share a few cores: a single serial GC thread avoids GC-thread oversubscription.
+            jvmArgs("-XX:+UseSerialGC", "-Xshare:auto")
+            // JUnit parallelism is opt-in per class (@Execution(CONCURRENT)); everything else stays same-thread.
+            systemProperty("junit.jupiter.execution.parallel.enabled", "true")
+            systemProperty("junit.jupiter.execution.parallel.mode.default", "same_thread")
+            systemProperty("junit.jupiter.execution.parallel.mode.classes.default", "same_thread")
+            // Collector layer-restart pause (production default 3000 ms) has no purpose in tests; the
+            // restart logic and its assertions are unchanged, only the real-time wait is removed.
+            systemProperty("ui2.policy.cp.layer-restart-backoff-ms", "0")
         }
 
         repositories {

@@ -60,6 +60,12 @@ class AuditRedactionPolicyTest {
             "artefact_retention_ledger.artefact_id", "artefact_retention_ledger.event",
             "artefact_retention_ledger.ledger_id", "artefact_retention_ledger.occurred_at",
             "artefact_retention_ledger.retention_tier",
+            // report_run (V190 Reports R1): template, format, projection, parameters (date range, framework), per-plane
+            // evidence times and coverage counts, artefact id, actor fingerprint -- no identity value
+            "report_run.artefact_id", "report_run.data_as_of_json", "report_run.error_code", "report_run.expires_at",
+            "report_run.finished_at", "report_run.format", "report_run.parameters_json", "report_run.plaintext_bytes",
+            "report_run.projection_mode", "report_run.requested_at", "report_run.requested_by", "report_run.run_id",
+            "report_run.state", "report_run.template_id",
             // backup_artefact
             "backup_artefact.artefact_class", "backup_artefact.artefact_id",
             "backup_artefact.backup_type", "backup_artefact.ciphertext_bytes",

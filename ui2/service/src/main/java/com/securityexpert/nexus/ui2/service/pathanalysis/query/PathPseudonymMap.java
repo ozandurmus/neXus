@@ -28,7 +28,9 @@ import com.securityexpert.nexus.ui2.service.pathanalysis.topology.TopologyGraph;
  *   purely from {@code "h/len"}, or the bare-host form for an address written without a length, such as a cluster
  *   VIP). A value aiview took from {@code GET /api/v2/topology} resolves to the host it was rendered from. The same
  *   raw address on several attachments (a VIP on both members, one range in two VRFs) is one raw value; which unit or
- *   VRF is meant is the engine's call. Two different raw hosts shown the same way are {@code AMBIGUOUS_PSEUDONYM}.</li>
+ *   VRF is meant is the engine's call. Two different raw hosts shown the same way are {@code AMBIGUOUS_PSEUDONYM}, and
+ *   so is a shown host together with any other raw host the masker renders bare as the same value (security review
+ *   2026-11-05 M-4): aiview may have seen that one bare elsewhere.</li>
  *   <li>Otherwise any form a response can render (below), for values aiview saw elsewhere or a host offset it picked
  *   inside a masked network it was shown.</li>
  * </ol>
@@ -91,6 +93,12 @@ public final class PathPseudonymMap {
         /** The subnets registered with the masker so far (a copy). */
         List<String> registeredSubnets();
 
+        /**
+         * The raw values the masker has already handed out as exactly {@code pseudonym} (a reverse read of what it
+         * cached; changes nothing). A bare host here is one some masked response rendered bare.
+         */
+        List<String> handedOutAs(String pseudonym);
+
         /** The interface label already handed out for this raw name, or empty; never claims one. */
         Optional<String> peekInterface(String rawInterfaceName);
     }
@@ -125,6 +133,8 @@ public final class PathPseudonymMap {
     private final Map<Long, Set<Long>> shownPrefixed = new HashMap<>();
     /** Attachment addresses written without a length (a VIP as the cluster reports it): shown as the bare-host form. */
     private final Set<Long> shownBare = new TreeSet<>();
+    /** The snapshot's route next hops: a route table response renders each bare (competitors of a shown value, M-4). */
+    private final Set<Long> nextHops = new TreeSet<>();
     private final int networks;
 
     private PathPseudonymMap(TopologyGraph graph, Masking masking) {
@@ -138,6 +148,10 @@ public final class PathPseudonymMap {
         for (TopologyGraph.Node n : graph.nodes()) {
             for (InventoryRoute r : n.routes()) {
                 Ipv4Prefix.parse(r.destination()).ifPresent(own::add);
+                if (nextHops.size() < MAX_NETWORKS) {
+                    r.nextHop().flatMap(Ipv4Prefix::parseHost).filter(h -> h.length().isEmpty())
+                            .filter(h -> !maskedSpace(h.host())).ifPresent(h -> nextHops.add(h.host()));
+                }
             }
         }
         own.removeIf(p -> p.length() < 4);
@@ -222,7 +236,16 @@ public final class PathPseudonymMap {
                 shown.add(bare);
             }
         }
-        List<Long> accepted = shown.isEmpty() ? acceptedUnderAnyPrefix(value, submitted) : List.copyOf(shown);
+        List<Long> accepted;
+        if (shown.isEmpty()) {
+            accepted = acceptedUnderAnyPrefix(value, submitted);
+        } else {
+            // A shown hit still competes with every other raw host aiview can hold bare as the same value (security
+            // review 2026-11-05 M-4): two raw values are AMBIGUOUS_PSEUDONYM across both steps (D-3).
+            Set<Long> union = new TreeSet<>(shown);
+            union.addAll(seenBareAs(submitted));
+            accepted = List.copyOf(union);
+        }
         if (accepted.size() > 1) {
             return new Refused(AMBIGUOUS_PSEUDONYM);
         }
@@ -278,6 +301,29 @@ public final class PathPseudonymMap {
             }
         }
         return accepted;
+    }
+
+    /**
+     * The raw hosts aiview can hold bare as {@code submitted}: every bare value the masker actually handed out as it (a
+     * next hop, a policy object, an IP search, an address in a reason text -- whatever a masked response rendered), and
+     * every route next hop of this snapshot whose bare form is it now (a route table aiview may read next).
+     *
+     * <p>Deliberately not "every any-prefix candidate whose bare form matches": under a registered summary
+     * ({@code /8} .. {@code /16}) the bare form of a host no response ever rendered follows the summary's few masked
+     * networks, and counting those hypothetical hosts brings back the 2026-11-04 false refusals
+     * ({@code PathPseudonymOverlapTest}). A host aiview never saw cannot be the one it meant.</p>
+     */
+    private Set<Long> seenBareAs(String submitted) {
+        Set<Long> out = new TreeSet<>();
+        for (String raw : masking.handedOutAs(submitted)) {
+            Ipv4Prefix.parseHost(raw).filter(h -> h.length().isEmpty()).ifPresent(h -> out.add(h.host()));
+        }
+        for (long hop : nextHops) {
+            if (submitted.equals(masking.peek(text(hop)))) {
+                out.add(hop);
+            }
+        }
+        return out;
     }
 
     /** Resolves a masked interface label among the interfaces of one unit of this snapshot. */
@@ -360,6 +406,11 @@ public final class PathPseudonymMap {
             @Override
             public List<String> registeredSubnets() {
                 return ips.registeredSubnets();
+            }
+
+            @Override
+            public List<String> handedOutAs(String pseudonym) {
+                return ips.handedOutAs(pseudonym);
             }
 
             @Override

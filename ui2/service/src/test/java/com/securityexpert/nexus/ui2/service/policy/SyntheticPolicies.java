@@ -329,6 +329,63 @@ final class SyntheticPolicies {
         objects.replaceAll((id, o) -> o.type().equals("access-role") ? new PolicyObject(o.id(), o.name(), o.type(), o.members(), List.of(), o.status()) : o);
         return new PolicySnapshot(snapshot.metadata(), snapshot.sections(), objects, snapshot.failures());
     }
+    /** The Panorama target fields PanoramaPolicyMapper stores (PolicyNormalization#untargeted, #targetNarrows). */
+    static final List<String> TARGET_KEYS = List.of("target/negate", "target-selectors", "target-tags", "target-vsys", "target-unrecognized");
+    /**
+     * A Palo Alto snapshot with Panorama targets, in the shapes PanoramaPolicyMapper stores: devices, devices restricted to
+     * virtual systems, tags, negate yes (with or without a selection), devices with negate no, and two shapes of unknown
+     * meaning (an element nobody parsed, a negate value other than yes or no). About a third of the rules get one.
+     * Masked serials and tags only. Draws from its own seeded random; other vendors are returned unchanged.
+     */
+    static PolicySnapshot panTargets(PolicySnapshot snapshot, long seed) {
+        if (!snapshot.metadata().vendor().equals("PAN")) return snapshot;
+        var random = new Random(seed * 37 + 11);
+        List<Map<String, List<String>>> shapes = List.of(
+            Map.of("target-selectors", List.of("SERIAL-ALPHA-01")),
+            Map.of("target-selectors", List.of("SERIAL-ALPHA-01", "SERIAL-BRAVO-02"), "target/negate", List.of("no")),
+            Map.of("target-selectors", List.of("SERIAL-ALPHA-01"), "target-vsys", List.of("SERIAL-ALPHA-01/vsys2")),
+            Map.of("target-tags", List.of("TAG-ALPHA-01")),
+            Map.of("target/negate", List.of("yes")),
+            Map.of("target-selectors", List.of("SERIAL-BRAVO-02"), "target/negate", List.of("yes")),
+            Map.of("target-unrecognized", List.of("unexpected")),
+            Map.of("target/negate", List.of("maybe")));
+        List<Section> sections = new ArrayList<>();
+        for (Section section : snapshot.sections()) {
+            List<Rule> rules = new ArrayList<>();
+            for (Rule r : section.rules()) {
+                if (random.nextInt(3) != 0) { rules.add(r); continue; }
+                // A targeted rule carries no other field normalization rejects, so its own reason is the target whatever
+                // order the stored extras are read in (Rule copies them into an unordered map).
+                Map<String, List<String>> extras = new HashMap<>(shapes.get(random.nextInt(shapes.size())));
+                extras.put("unexpected-field", null);
+                if (!List.of("any").equals(r.extras().getOrDefault("source-user", List.of("any")))) extras.put("source-user", null);
+                rules.add(withExtras(r, r.action(), extras));
+            }
+            sections.add(new Section(section.id(), section.name(), section.source(), section.parentRuleId(), rules));
+        }
+        return new PolicySnapshot(snapshot.metadata(), sections, snapshot.objects(), snapshot.failures());
+    }
+    /**
+     * The snapshot as the former analysis read a targeted rule: every target field folded into one field of unknown
+     * meaning ({@code target-unrecognized}), so the rule stays "unsupported rule constraint" and is no partial prior.
+     * Rules whose only target field is {@code target/negate} no (untargeted, a full match before and after) are kept.
+     */
+    static PolicySnapshot opaqueTargets(PolicySnapshot snapshot) {
+        List<Section> sections = new ArrayList<>();
+        for (Section section : snapshot.sections()) {
+            List<Rule> rules = new ArrayList<>();
+            for (Rule r : section.rules()) {
+                var keys = TARGET_KEYS.stream().filter(r.extras()::containsKey).toList();
+                if (keys.isEmpty() || keys.equals(List.of("target/negate")) && r.extras().get("target/negate").equals(List.of("no"))) { rules.add(r); continue; }
+                Map<String, List<String>> extras = new HashMap<>();
+                for (String key : keys) extras.put(key, null);
+                extras.put("target-unrecognized", keys);
+                rules.add(withExtras(r, r.action(), extras));
+            }
+            sections.add(new Section(section.id(), section.name(), section.source(), section.parentRuleId(), rules));
+        }
+        return new PolicySnapshot(snapshot.metadata(), sections, snapshot.objects(), snapshot.failures());
+    }
     static Rule withExtras(Rule rule, String action, Map<String, List<String>> extras) {
         var merged = new HashMap<>(rule.extras()); merged.putAll(extras);
         merged.keySet().removeIf(key -> merged.get(key) == null);

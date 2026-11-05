@@ -41,7 +41,7 @@ class CpPolicyDomainCompletenessTest {
     }
     @AfterEach void restore() {
         System.clearProperty("ui2.policy.cp.collect-objects");
-        System.clearProperty("ui2.policy.cp.layer-restart-backoff-ms");
+        System.setProperty("ui2.policy.cp.layer-restart-backoff-ms", "0");
     }
 
     private GateRegistryPort gates(boolean hits) {

@@ -40,12 +40,23 @@ export function PolicyLookupTab({ policies, policy, selectPolicy, openRule }: {
           onChange={e => selectPolicy(e.target.value)}>
           {policies.map(p => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
         </TextField>
-        {([['source', 'Source', 'IPv4 or CIDR'], ['destination', 'Destination', 'IPv4 or CIDR'], ['service', 'Service', 'tcp/443, udp/53 or any'],
-          ['sourceZone', 'Source zone', 'Optional · zone or interface'], ['destinationZone', 'Destination zone', 'Optional · zone or interface'],
-          ['target', 'Install-on target', 'Optional · target reference'], ['context', 'Device context', 'Optional']] as const).map(([field, label, help]) =>
-          <TextField key={field} label={label} value={query[field] ?? ""} required={["source", "destination", "service"].includes(field)} fullWidth
+        {([['source', 'Source', 'IPv4 or CIDR'], ['destination', 'Destination', 'IPv4 or CIDR'], ['service', 'Service', 'tcp/443, udp/53 or any']] as const).map(([field, label, help]) =>
+          <TextField key={field} label={label} value={query[field] ?? ""} required fullWidth
             helperText={help} inputProps={{ maxLength: 200 }}
             onChange={e => setQuery(previous => ({ ...previous, [field]: e.target.value }))} />)}
+      </Box>
+      {/* Advanced fields (UI review 2026-11-05, C3): the four optional narrowing fields sit behind one disclosure, so the
+          form a reader meets first is policy, source, destination and service. A filled one keeps the disclosure open. */}
+      <Box component="details" data-testid="lookup-advanced" sx={{ mt: 2 }}
+        open={Boolean(query.sourceZone || query.destinationZone || query.target || query.context) || undefined}>
+        <Box component="summary" sx={{ cursor: "pointer", color: "primary.main", fontSize: 13, fontWeight: 500 }}>Advanced fields</Box>
+        <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", alignItems: "start", mt: 1.5 }}>
+          {([['sourceZone', 'Source zone', 'Optional · zone or interface'], ['destinationZone', 'Destination zone', 'Optional · zone or interface'],
+            ['target', 'Install-on target', 'Optional · target reference'], ['context', 'Device context', 'Optional']] as const).map(([field, label, help]) =>
+            <TextField key={field} label={label} value={query[field] ?? ""} fullWidth
+              helperText={help} inputProps={{ maxLength: 200 }}
+              onChange={e => setQuery(previous => ({ ...previous, [field]: e.target.value }))} />)}
+        </Box>
       </Box>
       <Stack direction="row" gap={1.5} alignItems="center" flexWrap="wrap" sx={{ mt: 2 }}>
         {/* A real button even when it cannot run, with its reason beside the label (the suffix rule used on every gated control). */}

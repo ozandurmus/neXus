@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import Dialog from "@mui/material/Dialog";
+import Drawer from "@mui/material/Drawer";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -86,7 +87,39 @@ function comparedSentence(deviations: BackupDeviations): string {
     : `${n} device${n === 1 ? "" : "s"} compared · last ${days} days`;
 }
 
-export function BackupDeviationCard({ deviations }: { readonly deviations: BackupDeviations | null }) {
+/** Minute key in UTC ("2026-10-20T06:00"); the raw value when it is not a date, so nothing unequal is merged. */
+function minuteKey(at: string): string {
+  const t = new Date(at);
+  return Number.isNaN(t.getTime()) ? at : t.toISOString().slice(0, 16);
+}
+
+export type DeviationLine = ReturnType<typeof majorDeviationsByDevice>[number];
+
+/** One line of the list: a single device, or several devices with the same change in the same minute. */
+export type DeviationGroup = { readonly key: string; readonly devices: readonly DeviationLine[] };
+
+/**
+ * UI review 2026-11-05, B2: simultaneous identical events are one event. Devices whose newest major change falls in
+ * the same minute with the same categories and sections are one line ("21 devices, same minute, Admin access: users");
+ * a device alone stays a line of its own. Order follows the per-device order (newest first).
+ */
+export function groupSimultaneousDeviations(lines: readonly DeviationLine[]): DeviationGroup[] {
+  const groups = new Map<string, DeviationLine[]>();
+  for (const line of lines) {
+    const key = [minuteKey(line.changedAt), [...line.categories].sort().join("|"), [...line.sections].sort().join("|")].join("#");
+    const group = groups.get(key);
+    if (group) group.push(line); else groups.set(key, [line]);
+  }
+  return Array.from(groups.entries()).map(([key, devices]) => ({ key, devices }));
+}
+
+/** "Admin access: users" -- the change words of a group line. */
+export function changeWords(line: Pick<DeviationLine, "categories" | "sections">): string {
+  const sections = line.sections.join(", ");
+  return sections ? `${line.categories.join(", ")}: ${sections}` : line.categories.join(", ");
+}
+
+export function BackupDeviationCard({ deviations, onOpen }: { readonly deviations: BackupDeviations | null; readonly onOpen?: () => void }) {
   // An open size anomaly is known without any configuration comparison, so it alone makes the figure known.
   const compared = deviations !== null && (deviations.total_deviations_checked > 0 || (deviations.size_anomalies ?? []).length > 0);
   const count = majorDeviceIds(deviations).size;
@@ -102,6 +135,7 @@ export function BackupDeviationCard({ deviations }: { readonly deviations: Backu
       note={deviations ? comparedSentence(deviations) : "Deviation state unavailable"}
       href={compared && count > 0 ? "#major-deviations" : undefined}
       linkLabel="Which devices →"
+      onLinkClick={onOpen}
     />
   );
 }
@@ -119,20 +153,71 @@ export function MajorDeviationList({ deviations, onChanged }: { readonly deviati
         Major configuration changes · last {deviations?.window_days ?? 7} days
       </Typography>}
       {rows.length > 0 && <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 0.75 }}>
-        {rows.map((row) => (
-          <Box component="li" key={row.deviceId} sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-            <Link href={configChangesHref(row.deviceId)} underline="hover" sx={{ fontWeight: 600, color: m3.primary }}
-              aria-label={`${row.name}: open the configuration changes`}>
-              {row.name}
-            </Link>
-            {row.categories.map((c) => <StatusChip key={c} tone="bad" label={c} dense />)}
-            <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-              {row.sections.join(", ")} · changed <Stamp at={row.changedAt} />
-            </Typography>
-          </Box>
-        ))}
+        {groupSimultaneousDeviations(rows).map((group) => group.devices.length === 1
+          ? <DeviceLine key={group.key} row={group.devices[0]} />
+          : <GroupLine key={group.key} devices={group.devices} />)}
       </Box>}
     </Card>
+  );
+}
+
+function DeviceLink({ row }: { readonly row: DeviationLine }) {
+  return (
+    <Link href={configChangesHref(row.deviceId)} underline="hover" sx={{ fontWeight: 600, color: m3.primary }}
+      aria-label={`${row.name}: open the configuration changes`}>
+      {row.name}
+    </Link>
+  );
+}
+
+function DeviceLine({ row }: { readonly row: DeviationLine }) {
+  return (
+    <Box component="li" sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+      <DeviceLink row={row} />
+      {row.categories.map((c) => <StatusChip key={c} tone="bad" label={c} dense />)}
+      <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+        {row.sections.join(", ")} · changed <Stamp at={row.changedAt} />
+      </Typography>
+    </Box>
+  );
+}
+
+/** Several devices, one change, one minute: one line, the devices behind a disclosure. */
+function GroupLine({ devices }: { readonly devices: readonly DeviationLine[] }) {
+  const [open, setOpen] = useState(false);
+  const first = devices[0];
+  return (
+    <Box component="li" data-testid="deviation-group" sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+        <Typography sx={{ fontWeight: 600 }}>{devices.length} devices, same minute, {changeWords(first)}</Typography>
+        {first.categories.map((c) => <StatusChip key={c} tone="bad" label={c} dense />)}
+        <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>changed <Stamp at={first.changedAt} /></Typography>
+        <Link component="button" type="button" underline="hover" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+          sx={{ color: m3.primary, fontSize: 13 }}>
+          {open ? "Hide devices" : `Show ${devices.length} devices`}
+        </Link>
+      </Box>
+      {open && <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", pl: 1 }}>
+        {devices.map((row) => <DeviceLink key={row.deviceId} row={row} />)}
+      </Box>}
+    </Box>
+  );
+}
+
+/**
+ * The devices behind the card in a right-hand drawer (UI review 2026-11-05, B2): the backups table stays above the
+ * fold and the list stays on Backups, one click from the card.
+ */
+export function MajorDeviationDrawer({ open, onClose, deviations, onChanged }: { readonly open: boolean; readonly onClose: () => void;
+  readonly deviations: BackupDeviations | null; readonly onChanged?: () => void }) {
+  return (
+    <Drawer anchor="right" open={open} onClose={onClose} PaperProps={{ sx: { width: { xs: "100%", md: 720 }, p: 2, bgcolor: m3.surface } }}>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
+        <Typography component="h2" sx={{ fontSize: 18, fontWeight: 600 }}>Active major deviations</Typography>
+        <M3Button emphasis="text" onClick={onClose}>Close</M3Button>
+      </Box>
+      <MajorDeviationList deviations={deviations} onChanged={onChanged} />
+    </Drawer>
   );
 }
 

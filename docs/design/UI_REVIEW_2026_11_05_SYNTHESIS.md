@@ -60,3 +60,26 @@ Fable agrees with Argon's diagnosis: the problem is data priority, not data volu
 4. C3 and C4 together, since they share the routing and e2e selector changes.
 5. C5.
 6. C6 and C7 after the executive home settles.
+
+## Implementation record: C2, C3, C4, B6, B7 (branch `cloud/ia-restructure-1105`)
+
+PO approved C2, C3, C4, B6 and B7 (cloud brief `docs/cloud-briefs/ia.md`). Frontend only; no API, schema or device command changed. Automated validation only: the screens are not yet checked in the real environment under the `aiview` persona.
+
+| ID | What shipped | Where |
+|---|---|---|
+| C2 | Policy has four tabs: Rules & Containers (Installation is two columns of the container table, targets and status, and an on-demand section once a container is open), Objects (search across containers, a bounded client-side fan-out over the existing per-container read), Hygiene (fleet summary before a container is open; finding counts are **Not evaluated** there, never 0), Changes. "Search in this policy" opens Trace in lookup mode scoped to the policy. | `PolicyScreen.tsx`, `PolicyObjectSearch.tsx`, `PolicyHygieneFleet.tsx` |
+| C3 | Rail section TRACE: **Trace** (modes Topology path and Policy rule lookup; advanced fields collapsed) and **Changes** (views Timeline and Policy rule revisions). | `TraceScreen.tsx`, `ChangesScreen.tsx`, `NavigationRail.tsx` |
+| C4 | Diagnostics and Offline analysis are Tools destinations. Administration is four pages (Device Registry, Access & Identity, Platform, Audit) plus a Product heading holding Delivery plan; each former page is a section that mounts only while open. A section the session may not read keeps its place and opens to the Restricted state; it is never hidden. | `AdministrationScreen.tsx`, `DiagnosticsScreen.tsx`, `OfflineAnalysisScreen.tsx` |
+| B6 | Job Logs is gone; its address lands on Operations > Jobs. The Failed pill opens on the last 7 days (a visible "From" window, "Show all time" drops it) with the top 5 failure reasons. | `JobLogsPanel.tsx`, `legacyRoutes.ts` |
+| B7 | The `aiview` persona is worded "aiview · read-only", not "Compliance Admin". The build stamp and the time-zone note moved into the account menu. | `roleLabel.ts`, `TopAppBar.tsx` |
+
+Old addresses keep working through one pure rewrite (`shell/legacyRoutes.ts`, tested): `path_analysis`, `policy&tab=lookup|offline|installation`, `operations&tab=changes|diagnostics`, `administration&tab=job-logs` and every former Administration tab slug.
+
+Interpretations and open points for the PO:
+
+1. **Product heading visibility.** The frontend may not branch on a role token (`NoRoleConditionalRenderingInFrontendTest`), so "visible to PO and engineer roles" is the presentation-only Admin-plane check the other role affordances use. Every session sees the Product heading; a session without the Admin plane gets the Restricted panel instead of the plan. The server still allows `GET /project-plan` to any signed-in session. A dedicated plane for the delivery plan would make this exact.
+2. **Cross-container object search** is a client-side fan-out (3 at a time, at most 100 containers, 5 matches shown per container); a container that cannot be read is counted as not searched, never as "no match". A server endpoint would replace it without changing the screen's words.
+3. **Hygiene fleet summary** states only what the loaded catalog proves (containers, packages, stale snapshots, containers without a gateway). Per-container finding counts need a server aggregate and are not shown.
+4. **Failure reasons** are counted over the newest 200 failed jobs of the window and the card says so when there are more.
+5. **Design previews** (`?preview=`) of the new screens reuse the preview of the screen their content came from; the dedicated previews were not redrawn.
+6. Not done here: `project/*.json` and `CURRENT_STATE.md` were not updated (the delivery queue tool is not part of this cloud task); the Product Owner or the next engineering session records the build there.

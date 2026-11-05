@@ -127,12 +127,19 @@ export function M3Tabs({
   initial = 0,
   value: controlledValue,
   onChange: onControlledChange,
+  keepMounted = false,
 }: {
   readonly tabs: readonly M3TabDef[];
   readonly ariaLabel: string;
   readonly initial?: number;
   readonly value?: number;
   readonly onChange?: (next: number) => void;
+  /**
+   * Keep a panel mounted (hidden) after it has been shown, so what the viewer typed or computed in one tab survives a trip
+   * to another (the Trace modes: a lookup result stays when the viewer checks a path). A panel nobody opened is never
+   * mounted, so a tab's read is still made only when asked for. Default: the active panel alone, remounted per switch.
+   */
+  readonly keepMounted?: boolean;
 }) {
   const [internalValue, setInternalValue] = useState(initial);
   const value = controlledValue !== undefined ? controlledValue : internalValue;
@@ -140,6 +147,8 @@ export function M3Tabs({
   const panelId = `${slug}-panel`;
   const tabId = (index: number) => `${slug}-tab-${index}`;
   const safeValue = value >= 0 && value < tabs.length ? value : 0;
+  const [shown, setShown] = useState<ReadonlySet<number>>(() => new Set([safeValue]));
+  if (keepMounted && !shown.has(safeValue)) setShown(new Set(shown).add(safeValue));
   return (
     <>
       <Tabs
@@ -178,15 +187,30 @@ export function M3Tabs({
           />
         ))}
       </Tabs>
-      <Box
-        key={value}
-        role="tabpanel"
-        id={panelId}
-        aria-labelledby={tabId(value)}
-        sx={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minHeight: 0, minWidth: 0 }}
-      >
-        {tabs[value]?.panel}
-      </Box>
+      {keepMounted
+        ? tabs.map((t, index) => (shown.has(index) || index === safeValue) ? (
+          <Box
+            key={t.label}
+            role="tabpanel"
+            id={index === safeValue ? panelId : `${panelId}-${index}`}
+            aria-labelledby={tabId(index)}
+            hidden={index !== safeValue}
+            sx={{ display: index === safeValue ? "flex" : "none", flexDirection: "column", gap: 2, flex: 1, minHeight: 0, minWidth: 0 }}
+          >
+            {t.panel}
+          </Box>
+        ) : null)
+        : (
+          <Box
+            key={value}
+            role="tabpanel"
+            id={panelId}
+            aria-labelledby={tabId(value)}
+            sx={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minHeight: 0, minWidth: 0 }}
+          >
+            {tabs[value]?.panel}
+          </Box>
+        )}
     </>
   );
 }

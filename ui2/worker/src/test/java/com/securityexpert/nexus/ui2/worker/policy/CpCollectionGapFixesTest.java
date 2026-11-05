@@ -41,7 +41,7 @@ class CpCollectionGapFixesTest {
     private final List<CpObjectInventory> stored = Collections.synchronizedList(new ArrayList<>());
 
     @BeforeEach void fastRestarts() { System.setProperty("ui2.policy.cp.layer-restart-backoff-ms", "0"); }
-    @AfterEach void restore() { System.clearProperty("ui2.policy.cp.layer-restart-backoff-ms"); }
+    @AfterEach void restore() { System.setProperty("ui2.policy.cp.layer-restart-backoff-ms", "0"); }
 
     @Test void emptyListsWithoutCountersAreCompleteButMalformedEmptyPagesStayRejected() throws Exception {
         assertEquals(36, EMPTY_OBJECTS.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);

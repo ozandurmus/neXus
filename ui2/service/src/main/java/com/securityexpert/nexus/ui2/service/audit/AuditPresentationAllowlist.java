@@ -232,6 +232,12 @@ public final class AuditPresentationAllowlist {
                     "permission_id", "role_id")),
             Map.entry("rbac_roles", Set.of(
                     "id", "is_system", "name", "token_string")),
+            // V190 Reports R1: template, format, projection, parameters (date range, framework), per-plane evidence
+            // times and coverage counts, the artefact id and the actor fingerprint -- no identity value, audited in full.
+            Map.entry("report_run", Set.of(
+                    "artefact_id", "data_as_of_json", "error_code", "expires_at", "finished_at", "format",
+                    "parameters_json", "plaintext_bytes", "projection_mode", "requested_at", "requested_by", "run_id",
+                    "state", "template_id")),
             Map.entry("role_bindings", Set.of(
                     "binding_id", "binding_kind", "created_at", "created_by_actor_fingerprint",
                     "directory_profile_id", "group_reference_key_id", "revoked_at",

@@ -45,6 +45,8 @@ public final class SystemLogReadFixture {
     public static final class CountingStore implements ArtefactStore {
         private final ArtefactStore delegate;
         public final AtomicInteger retrievals = new AtomicInteger();
+        /** How many of the next retrievals fail as a transient store or decrypt failure would (counted as attempts). */
+        public final AtomicInteger failNext = new AtomicInteger();
 
         CountingStore(ArtefactStore delegate) {
             this.delegate = delegate;
@@ -58,6 +60,7 @@ public final class SystemLogReadFixture {
         @Override
         public InputStream retrieve(ArtefactRef ref, byte[] wrappedDataKey, boolean gzip) throws IOException {
             retrievals.incrementAndGet();
+            if (failNext.getAndUpdate(n -> n > 0 ? n - 1 : 0) > 0) throw new IOException("synthetic transient store failure");
             return delegate.retrieve(ref, wrappedDataKey, gzip);
         }
     }

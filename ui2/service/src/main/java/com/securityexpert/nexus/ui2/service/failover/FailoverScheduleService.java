@@ -145,7 +145,7 @@ public class FailoverScheduleService {
     }
 
     private void requireFreshEvidence(String clusterRef, ClusterEvidenceSnapshot snapshot) {
-        Instant now = Instant.now();
+        Instant now = clockHealthCheck.now();
         if (!clusterRef.equals(snapshot.clusterId()) || !snapshot.bothMembersDirectlyObserved()
             || clockHealthCheck.evaluate(snapshot).isBlockingFailure()) {
             throw new IllegalStateException("BASELINE_EVIDENCE_UNAVAILABLE");
@@ -210,7 +210,7 @@ public class FailoverScheduleService {
         String commandFamilyId = vendor.contains("PAN") ? "PAN_HA_MUTATION_GATE" : "CP_CLUSTERXL_MUTATION_GATE";
         String grantId = "grant-" + UUID.randomUUID();
         String scheduleId = "sched-" + UUID.randomUUID();
-        Instant now = FailoverScheduleEnvelope.storageTime(Instant.now());
+        Instant now = FailoverScheduleEnvelope.storageTime(clockHealthCheck.now());
 
         // 4. Durable Signing Key Resolution (CF-P0.5): fail cleanly rather than sign with a key
         // that will not durably verify after a restart.
@@ -291,7 +291,7 @@ public class FailoverScheduleService {
             throw new IllegalStateException("Schedule " + scheduleId + " is in terminal state " + record.status() + " and cannot be cancelled");
         }
 
-        FailoverScheduleRecord cancelled = record.withCancellation(operatorId, Instant.now());
+        FailoverScheduleRecord cancelled = record.withCancellation(operatorId, clockHealthCheck.now());
         transition(record, cancelled, null, operatorId, "Schedule cancelled by operator: " + reason, false);
         return cancelled;
     }

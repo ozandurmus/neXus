@@ -175,6 +175,66 @@ class PathEngineTest {
         assertEquals(ACTIVE_MEMBER_UNPROVEN, hop.reason());
         assertTrue(hop.caveats().contains(CLUSTER_UNCORROBORATED));
         assertEquals(NO_ROUTE, r.branches().get(0).termination(), "nothing is routed on an unproven table");
+        assertEquals(ACTIVE_MEMBER_UNPROVEN, r.branches().get(0).reason(), "the cause, not the symptom");
+        assertEquals(ACTIVE_MEMBER_UNPROVEN, r.reason());
+    }
+
+    // ---- why a branch is UNKNOWN (diagnostics only: no verdict changes) --------------------------------------------
+
+    /** A copy of the estate without the routes of one device that match {@code drop}. */
+    static JsonNode withoutRoutes(JsonNode estate, String deviceId, java.util.function.Predicate<JsonNode> drop) {
+        JsonNode copy = estate.deepCopy();
+        for (JsonNode d : copy.get("devices")) {
+            if (d.get("device_id").asText().equals(deviceId)) {
+                for (JsonNode c : d.get("run").get("contexts")) {
+                    var routes = (com.fasterxml.jackson.databind.node.ArrayNode) c.get("routes");
+                    for (int i = routes.size() - 1; i >= 0; i--) {
+                        if (drop.test(routes.get(i))) {
+                            routes.remove(i);
+                        }
+                    }
+                }
+            }
+        }
+        return copy;
+    }
+
+    @Test
+    void noRouteOnAnEmptyTableIsReportedAsAnEmptyTable() {
+        // FW-BRAVO-02 keeps its interfaces (and its corroborated transit link) but no route was collected for it.
+        PathResult r = run(graph(withoutRoutes(estate("chain.json"), "dev-b02", x -> true)), chain(), TO_SERVER);
+        assertEquals(UNKNOWN, r.verdict());
+        assertEquals(NO_ROUTE, r.branches().get(0).termination());
+        assertEquals(ROUTE_TABLE_EMPTY, r.reason());
+        // A table that has routes, none of them covering the destination, is still plain NO_ROUTE.
+        JsonNode noDefault = withoutRoutes(estate("chain.json"), "dev-t04", x -> "0.0.0.0/0".equals(x.get("destination").asText()));
+        PathResult none = run(graph(noDefault), chain(), PathQuery.of("198.51.100.20", "203.0.113.150", "tcp", 443));
+        assertEquals(UNKNOWN, none.verdict());
+        assertEquals(NO_ROUTE, none.reason());
+    }
+
+    @Test
+    void anExitThroughAVsxWarpLinkIsNamed() {
+        JsonNode estate = addRoute(estate("chain.json"), "dev-t04", route("203.0.113.128/26", "192.0.2.18", "wrp0", null));
+        ObjectNode tango = (ObjectNode) estate.get("devices").get(0).get("run").get("contexts").get(0);
+        ObjectNode warp = ((com.fasterxml.jackson.databind.node.ArrayNode) tango.get("interfaces")).addObject().put("name", "wrp0");
+        warp.putArray("addresses").addObject().put("address", "192.0.2.17/30").put("role", "member");
+        PathResult r = run(graph(estate), chain(), PathQuery.of("198.51.100.20", "203.0.113.150", "tcp", 443));
+        assertEquals(EXITS_KNOWN_TOPOLOGY, r.reason());
+        var hop = r.branches().get(0).hops().get(0);
+        assertTrue(hop.notes().contains(EXIT_VIA_VSX_WARP));
+        assertFalse(hop.notes().contains(EXIT_VIA_DEFAULT_ROUTE));
+    }
+
+    @Test
+    void anAddressAUnitHoldsItselfIsACaveatNeverAPlainAnswer() {
+        TopologyGraph g = graph("chain.json");
+        // FW-TANGO-04's client-LAN address to FW-BRAVO-02's DMZ address: to- and from-the-box traffic is not modelled.
+        PathResult r = run(g, chain(), PathQuery.of("198.51.100.1", "203.0.113.1", "tcp", 443));
+        assertEquals(DENIED, r.verdict(), "the verdict itself is unchanged");
+        assertTrue(r.caveats().containsAll(List.of(SOURCE_IS_UNIT_ADDRESS, DESTINATION_IS_UNIT_ADDRESS)));
+        PathResult host = run(g, chain(), TO_SERVER);
+        assertTrue(host.plain(), "a host address is not a unit address");
     }
 
     // ---- bounds ----------------------------------------------------------------------------------------------------

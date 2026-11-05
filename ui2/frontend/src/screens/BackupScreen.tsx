@@ -1,9 +1,10 @@
 import { useGate } from "../shell/JobWindow";
 import { BackupAttempts, LatestAttemptCell, latestAttemptTime, useLatestBackupAttempts } from "./BackupAttempts";
 import { DeviationChip, ValidationChip, deviationState } from "./backupWords";
-import { BackupDeviationCard, MajorDeviationList, majorDeviceIds } from "./BackupDeviationCard";
+import { BackupDeviationCard, MajorDeviationDrawer, majorDeviceIds } from "./BackupDeviationCard";
 import { bytesTitle, formatBytes } from "../shell/bytes";
 import { urlParam } from "../shell/urlParams";
+import { relativeAge } from "../shell/time";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -144,6 +145,20 @@ export function backupsHeadline(counts: Pick<BackupFleetCounts, "targets" | "tar
   return `${targets} · ${schedule} · ${without} · ${retention}`;
 }
 
+/** A daily schedule is overdue once its last run is older than a day plus the start window and a margin (UI review 2026-11-05, R-03). */
+export const SCHEDULE_STALE_HOURS = 26;
+
+/**
+ * "Stale · 47 h ago" when the scheduled fleet backup is on and its last run is older than {@link SCHEDULE_STALE_HOURS};
+ * null when it is off, never ran (the card says "never") or the stamp is unreadable: no badge is claimed without a stamp.
+ */
+export function scheduledBackupStaleWords(policy: Pick<BackupPolicy, "schedule_enabled" | "last_scheduled_run_at"> | null, now: Date = new Date()): string | null {
+  if (!policy?.schedule_enabled || !policy.last_scheduled_run_at) return null;
+  const at = new Date(policy.last_scheduled_run_at).getTime();
+  if (Number.isNaN(at) || now.getTime() - at <= SCHEDULE_STALE_HOURS * 3600_000) return null;
+  return `Stale · ${relativeAge(policy.last_scheduled_run_at, now)}`;
+}
+
 export function BackupScreen() {
   const roleAllowed = useRoleAllows(PLANE_OPERATIONS);
   const [loading, setLoading] = useState(false);
@@ -201,6 +216,8 @@ export function BackupScreen() {
   const [policy, setPolicy] = useState<BackupPolicy | null>(null);
   const [deviations, setDeviations] = useState<BackupDeviations | null>(null);
   const fleetRows = useMemo(() => withMajorDeviations(devices, deviations), [devices, deviations]);
+  const staleWords = scheduledBackupStaleWords(policy);
+  const [deviationsOpen, setDeviationsOpen] = useState(false);
   const [fleetOpen, setFleetOpen] = useState(false);
   const [fleetReason, setFleetReason] = useState("");
   const [fleetBusy, setFleetBusy] = useState(false);
@@ -214,7 +231,7 @@ export function BackupScreen() {
       const outcome = await requestFleetBackup(fleetReason.trim());
       setSuccessMessage(
         `Fleet backup: ${outcome.admitted} of ${outcome.targets} backup target${outcome.targets === 1 ? "" : "s"} admitted` +
-          (outcome.refused > 0 ? ` (${outcome.refused} refused -- see Administration > Job Logs).` : "."),
+          (outcome.refused > 0 ? ` (${outcome.refused} refused -- see Operations > Jobs).` : "."),
       );
       setFleetOpen(false);
       setFleetReason("");
@@ -544,7 +561,10 @@ export function BackupScreen() {
           state={storeCounts ? "ok" : "unknown"} reason={listError ?? (listLoaded && !fleetDevices ? "The device list could not be read" : undefined)}
           note={listError ? "Store unreadable" : "Counted from the artefact store, not from inventory"} />
         <Card sx={{ p: 2.25, borderRadius: "10px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, boxShadow: "none", display: "flex", flexDirection: "column", gap: 1 }}>
-          <Typography sx={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: m3.onSurfaceVar }}>Scheduled fleet backup</Typography>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+            <Typography sx={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: m3.onSurfaceVar }}>Scheduled fleet backup</Typography>
+            {staleWords && <StatusChip tone="warn" label={staleWords} dense />}
+          </Box>
           {!policy ? (
             <Typography sx={{ fontSize: 22, lineHeight: "40px", fontWeight: 650, color: m3.neutralInk }}>UNKNOWN</Typography>
           ) : policy.schedule_enabled ? (
@@ -565,9 +585,10 @@ export function BackupScreen() {
         <MetricCard title="Retention policy" value={policy ? `${policy.backup_retention_days} days` : null} state={policy ? "ok" : "unknown"}
           note={policy ? retentionNote(policy) : "Policy unavailable"} />
         {/* Zero deviations found and zero comparisons run look identical and mean opposite things: UNKNOWN until a device is compared. */}
-        <BackupDeviationCard deviations={deviations} />
+        <BackupDeviationCard deviations={deviations} onOpen={() => setDeviationsOpen(true)} />
       </MetricGrid>
-      <MajorDeviationList deviations={deviations}
+      {/* UI review 2026-11-05, B2: the list opens from the card in a drawer, so the table below stays above the fold. */}
+      <MajorDeviationDrawer open={deviationsOpen} onClose={() => setDeviationsOpen(false)} deviations={deviations}
         onChanged={() => { getBackupDeviations().then(setDeviations).catch(() => setDeviations(null)); }} />
 
       {/* One table per device (UI review 2026-09-23): target switch, latest archive, validation, deviation, latest attempt, every action in the row menu. */}

@@ -5,10 +5,11 @@ import { m3Theme } from "../src/theme/m3Theme";
 import {
   HOP_VERDICT_SIDE,
   NEIGHBOUR_CAP,
+  NEIGHBOUR_SNAPSHOT_MISMATCH,
+  NEIGHBOUR_TOPOLOGY_UNAVAILABLE,
   PathDiagram,
   PathResultView,
   buildPathDiagramModel,
-  safeAddressLabel,
 } from "../src/screens/pathanalysis/PathResultView";
 import { explain } from "../src/screens/pathanalysis/pathWords";
 import { PathAnalysisPreview } from "../src/preview/PathAnalysisPreview";
@@ -300,6 +301,54 @@ describe("the neighbour cap", () => {
   });
 });
 
+describe("neighbours come only from the path's own topology snapshot", () => {
+  const newer: TopologySnapshotView = { ...PATH_TOPOLOGY_PREVIEW, snapshot_id: "SNAPSHOT-NEWER" };
+
+  it("draws no attachment from a topology whose snapshot id differs from the path's, and says why", () => {
+    const matched = buildPathDiagramModel(PATH_ALLOWED, { showNeighbours: true, topology: PATH_TOPOLOGY_PREVIEW });
+    expect(matched.nodes.some((n) => n.data.kind === "neighbour-segment")).toBe(true);
+    expect(matched.neighbourSnapshotNotice).toBeNull();
+
+    for (const topology of [newer, { ...PATH_TOPOLOGY_PREVIEW, snapshot_id: undefined }]) {
+      const model = buildPathDiagramModel(PATH_ALLOWED, { showNeighbours: true, topology });
+      const fromTopology = model.nodes.filter(
+        (n) => n.data.kind === "neighbour-segment" && topology.attachments.some((a) => a.segment_id === n.data.segmentId),
+      );
+      expect(fromTopology).toHaveLength(0);
+      expect(model.neighbourSnapshotNotice).toBe(NEIGHBOUR_SNAPSHOT_MISMATCH);
+    }
+    // A path result without a snapshot id cannot be matched either.
+    const unknown = buildPathDiagramModel({ ...PATH_ALLOWED, snapshot_id: "" }, { showNeighbours: true, topology: PATH_TOPOLOGY_PREVIEW });
+    expect(unknown.neighbourSnapshotNotice).toBe(NEIGHBOUR_SNAPSHOT_MISMATCH);
+    // Neighbours off: no notice.
+    expect(buildPathDiagramModel(PATH_ALLOWED, { topology: newer }).neighbourSnapshotNotice).toBeNull();
+  });
+
+  it("a fetched topology from a newer snapshot shows the notice in place of neighbours", async () => {
+    getTopology.mockResolvedValue(newer);
+    render(
+      <ThemeProvider theme={m3Theme}>
+        <PathDiagram result={PATH_ALLOWED} />
+      </ThemeProvider>,
+    );
+    fireEvent.click(screen.getByTestId("diagram-toggle-neighbours"));
+    expect(await screen.findByTestId("diagram-neighbours-withheld")).toHaveTextContent(NEIGHBOUR_SNAPSHOT_MISMATCH);
+    expect(screen.queryByTestId("diagram-neighbour-0")).toBeNull();
+  });
+
+  it("a failed topology read says neighbours are not shown instead of silently drawing none", async () => {
+    getTopology.mockRejectedValue(new Error("unavailable"));
+    render(
+      <ThemeProvider theme={m3Theme}>
+        <PathDiagram result={PATH_ALLOWED} />
+      </ThemeProvider>,
+    );
+    fireEvent.click(screen.getByTestId("diagram-toggle-neighbours"));
+    expect(await screen.findByTestId("diagram-neighbours-withheld")).toHaveTextContent(NEIGHBOUR_TOPOLOGY_UNAVAILABLE);
+    expect(screen.queryByTestId("diagram-neighbour-0")).toBeNull();
+  });
+});
+
 describe("click-to-row between the diagram and the hop-by-hop list", () => {
   it("defaults to the hop-by-hop list, switches to Diagram on toggle, and clicking a hop scrolls to and highlights its row", () => {
     const scrollSpy = vi.fn();
@@ -366,40 +415,19 @@ describe("masked values only (no raw IPs in the rendered output)", () => {
     expect(container.textContent).not.toMatch(RAW_PRIVATE_IP);
   });
 
-  it("redacts any raw IPv4 address before it can enter the diagram model or DOM", () => {
-    expect(safeAddressLabel("10.24.8.12")).toBe("[masked]");
-    expect(safeAddressLabel("192.168.10.0/24")).toBe("[masked]/24");
-    expect(safeAddressLabel("172.16.4.1")).toBe("[masked]");
-    expect(safeAddressLabel("192.0.2.10")).toBe("192.0.2.10");
-    expect(safeAddressLabel("240.12.34.56/30")).toBe("240.12.34.56/30");
-
-    const dirtyResult: PathResult = {
+  it("renders values exactly as the API returns them (server projection is the masking authority)", () => {
+    const rawViewResult: PathResult = {
       ...PATH_ALLOWED,
       query: { ...PATH_ALLOWED.query, src: "10.10.1.5", dst: "192.168.20.99" },
-      branches: [
-        {
-          ...PATH_ALLOWED.branches[0],
-          hops: [
-            {
-              ...tangoHop(),
-              ingress: { ...tangoHop().ingress, segment_id: "SEGMENT-10.10.1.0/24" },
-              egress: { ...tangoHop().egress, segment_id: "SEGMENT-172.16.9.0/30" },
-            },
-          ],
-        },
-      ],
     };
 
     const { container } = render(
       <ThemeProvider theme={m3Theme}>
-        <PathDiagram result={dirtyResult} />
+        <PathDiagram result={rawViewResult} />
       </ThemeProvider>,
     );
-    expect(container.textContent).not.toContain("10.10.1.5");
-    expect(container.textContent).not.toContain("192.168.20.99");
-    expect(container.textContent).not.toContain("10.10.1.0");
-    expect(container.textContent).not.toContain("172.16.9.0");
-    expect(container.textContent).not.toMatch(RAW_PRIVATE_IP);
-    expect(container.textContent).toContain("[masked]");
+    expect(container.textContent).toContain("10.10.1.5");
+    expect(container.textContent).toContain("192.168.20.99");
+    expect(container.textContent).not.toContain("[masked]");
   });
 });

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { AdministrationScreen } from "../src/screens/AdministrationScreen";
+import { AdministrationScreen, resolveAdminRoute } from "../src/screens/AdministrationScreen";
 import { SessionContext } from "../src/auth/SessionContext";
 import { CredentialsPanel } from "../src/screens/CredentialsPanel";
 
@@ -79,11 +79,13 @@ const UNCONFIGURED_PROJECT_PLAN = {
   },
 };
 
-const TABS = [
-  { label: "Device management", marker: "Device registry · 0 entries" },
-  { label: "Inventory exclusions", marker: "No device excluded" },
-  { label: "Credentials", marker: "No credential stored" },
-  { label: "Delivery plan", marker: "Declared roadmap completion" },
+// Administration is four pages and a Product heading (UI review 2026-11-05, C4); a page opens its first section, and the
+// others open on a click. Each entry: the page tab, the section to open (null = the one the page opens), its marker.
+const PAGE_SECTIONS = [
+  { page: "Device Registry", section: null, marker: "Device registry · 0 entries" },
+  { page: "Device Registry", section: "Inventory exclusions", marker: "No device excluded" },
+  { page: "Device Registry", section: "Credentials", marker: "No credential stored" },
+  { page: "Delivery plan", section: null, marker: "Declared roadmap completion" },
 ];
 
 function credential(kind: "ssh_password" | "ssh_private_key" | "api_password") {
@@ -144,37 +146,54 @@ describe("AdministrationScreen tabs", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders each tab's own panel, and no other tab's panel, tab by tab", async () => {
+  it("renders each page's own sections, and no other page's, page by page", async () => {
     vi.stubGlobal(
       "fetch",
       routedFetch({ ...NO_DEVICES, ...EMPTY_PROJECT_PLAN, "/credentials": { body: { credentials: [] } } }),
     );
     render(withTheme(<AdministrationScreen />));
 
-    for (const tab of TABS) {
-      fireEvent.click(screen.getByRole("tab", { name: tab.label }));
-      await waitFor(() => expect(screen.getByText(tab.marker)).toBeInTheDocument());
-      for (const other of TABS) {
-        if (other.label === tab.label) continue;
-        expect(screen.queryByText(other.marker)).toBeNull();
-      }
+    for (const entry of PAGE_SECTIONS) {
+      fireEvent.click(screen.getByRole("tab", { name: entry.page }));
+      if (entry.section) fireEvent.click(screen.getByRole("button", { name: entry.section }));
+      await waitFor(() => expect(screen.getByText(entry.marker)).toBeInTheDocument());
     }
+    // Another page's panel is not mounted: the Product page shows the plan and no registry.
+    expect(screen.queryByText("Device registry · 0 entries")).toBeNull();
+    expect(screen.queryByText("No credential stored")).toBeNull();
   });
 
-  it("every group's sub-navigation stays reachable, and the header buttons show only for Registry", async () => {
+  it("is four pages and a Product heading: no former sub-page is a tab of its own, and Job Logs is gone", () => {
+    vi.stubGlobal("fetch", routedFetch({ ...NO_DEVICES, ...EMPTY_PROJECT_PLAN }));
+    render(withTheme(<AdministrationScreen />));
+    expect(within(screen.getByRole("tablist", { name: "Administration pages" })).getAllByRole("tab").map(t => t.textContent))
+      .toEqual(["Device Registry", "Access & Identity", "Platform", "Audit"]);
+    expect(within(screen.getByRole("tablist", { name: "Product" })).getAllByRole("tab").map(t => t.textContent)).toEqual(["Delivery plan"]);
+    expect(screen.queryByRole("tab", { name: /Job Logs/i })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "SSH trust" })).toBeNull();
+  });
+
+  it("every group's page stays reachable, and the header buttons show only for Device Registry", async () => {
     vi.stubGlobal("fetch", routedFetch({ ...NO_DEVICES, ...EMPTY_PROJECT_PLAN }));
     render(withTheme(<AdministrationScreen />));
 
-    expect(screen.getByRole("tablist", { name: "Registry" })).toBeInTheDocument();
-    expect(screen.getByRole("tablist", { name: "Access" })).toBeInTheDocument();
-    expect(screen.getByRole("tablist", { name: "Platform" })).toBeInTheDocument();
-    expect(screen.getByRole("tablist", { name: "Records" })).toBeInTheDocument();
+    expect(screen.getByRole("tablist", { name: "Administration pages" })).toBeInTheDocument();
+    expect(screen.getByRole("tablist", { name: "Product" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Import from manager" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add device" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("tab", { name: "System" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Platform" }));
     expect(screen.queryByRole("button", { name: "Import from manager" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Add device" })).toBeNull();
+  });
+
+  it("keeps every former Administration address: an old tab slug lands on its group with that section open", () => {
+    expect(resolveAdminRoute("ssh-trust", null)).toMatchObject({ page: { slug: "registry" }, section: "ssh-trust" });
+    expect(resolveAdminRoute("sessions", null)).toMatchObject({ page: { slug: "access" }, section: "sessions" });
+    expect(resolveAdminRoute("system-logs", null)).toMatchObject({ page: { slug: "platform" }, section: "system-logs" });
+    expect(resolveAdminRoute("delivery-plan", null)).toMatchObject({ page: { slug: "product" } });
+    expect(resolveAdminRoute("audit", "audit-logs")).toMatchObject({ page: { slug: "audit" }, section: "audit-logs" });
+    expect(resolveAdminRoute(null, null).page.slug).toBe("registry");
   });
 
   it("Delivery plan renders the real roadmap, not the earlier empty placeholder", async () => {
@@ -357,7 +376,7 @@ describe("AdministrationScreen Local identities tab", () => {
     vi.stubGlobal("fetch", routedFetch({ ...NO_DEVICES, "/local-identities": { body: { identities: [] } } }));
     render(withTheme(<AdministrationScreen />));
 
-    fireEvent.click(screen.getByRole("tab", { name: "Local identities" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Access & Identity" }));
 
     await waitFor(() => expect(screen.getByText("No local identity yet")).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Create identity" })).toBeInTheDocument();
@@ -386,7 +405,7 @@ describe("AdministrationScreen Local identities tab", () => {
     );
     render(withTheme(<AdministrationScreen />));
 
-    fireEvent.click(screen.getByRole("tab", { name: "Local identities" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Access & Identity" }));
 
     await waitFor(() => expect(screen.getByText("alice")).toBeInTheDocument());
     expect(screen.getByText("Enabled")).toBeInTheDocument();
@@ -398,7 +417,7 @@ describe("AdministrationScreen Local identities tab", () => {
     vi.stubGlobal("fetch", routedFetch({ ...NO_DEVICES, "/local-identities": { status: 403, body: { error: "ACTION_REFUSED" } } }));
     render(withTheme(<AdministrationScreen />));
 
-    fireEvent.click(screen.getByRole("tab", { name: "Local identities" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Access & Identity" }));
 
     await waitFor(() => expect(screen.getByText(/This account can not view or change it/)).toBeInTheDocument());
     expect(screen.getByText(/This needs the Security Admin role/)).toBeInTheDocument();
@@ -463,7 +482,8 @@ describe("AdministrationScreen Sessions tab", () => {
     }));
 
     render(withTheme(<AdministrationScreen />));
-    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Access & Identity" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sessions" }));
 
     await waitFor(() => expect(screen.getByText("2 active sessions")).toBeInTheDocument());
     expect(screen.getAllByText("alice · 2 active")).toHaveLength(2);
@@ -489,7 +509,9 @@ describe("restricted Administration reads", () => {
         permissions: [], canReadAdministration: false, onSignOut: () => {} }}>
         <AdministrationScreen />
       </SessionContext.Provider>));
-      expect(screen.getByText("Available to administrators")).toBeInTheDocument();
+      // Locked, not hidden (C4): the section keeps its place and opens to the shared Restricted state.
+      expect(await screen.findByText(/This account can not view or change it/)).toBeInTheDocument();
+      expect(document.querySelector("[data-locked='true'] [data-lock-badge]")).not.toBeNull();
       await waitFor(() => expect(fetch).not.toHaveBeenCalled());
     });
   it("mounts Credentials when the server permits its read", async () => {

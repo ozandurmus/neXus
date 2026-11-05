@@ -86,6 +86,15 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             }
             return deviceEvents.body();
         }
+        if (body instanceof com.securityexpert.nexus.ui2.service.report.ReportResponse report) {
+            // Reports R1: the report document was projected once by ReportDocumentMasker before any renderer; the body
+            // passes through, and an unmasked body never reaches aiview.
+            if (Boolean.TRUE.equals(isReplayViewer)) {
+                if (!report.masked()) throw new IllegalStateException("report projection required");
+                if (response != null) response.getHeaders().set(MASKED_HEADER, "true");
+            }
+            return report.body();
+        }
         if (body instanceof com.securityexpert.nexus.ui2.service.policy.PolicyResponse policy) {
             if (!Boolean.TRUE.equals(isReplayViewer)) return policy.body();
             if (response != null) response.getHeaders().set(MASKED_HEADER, "true");
@@ -190,8 +199,9 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                     items.add((JobEvent) maskObject(event, parentContextRef));
                 }
             }
-            return new com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobPage(items, page.page(),
-                    page.pageSize(), page.total());
+            // withItems keeps target_sortable / search_scope (they tell the masked UI what it may do); a masked page
+            // never offers cancellation, as before.
+            return page.withItems(items).withCancellationAccess(false);
         }
         if (obj instanceof Map<?, ?> map) {
             return maskMap((Map<?, ?>) map, parentContextRef);

@@ -13,13 +13,29 @@ import { PillRow, StatusPill } from "../../shell/StatusPill";
 import { Timestamp } from "../../shell/Timestamp";
 import { MONO, m3 } from "../../theme/m3Theme";
 import { LABEL_UPPER, RADIUS, TYPE } from "../../theme/tokens";
-import { HOP_VERDICT_SIDE, NEIGHBOUR_CAP, PathDiagram, buildPathDiagramModel, safeAddressLabel, segmentPrefix } from "./PathDiagram";
+import {
+  HOP_VERDICT_SIDE,
+  NEIGHBOUR_CAP,
+  NEIGHBOUR_SNAPSHOT_MISMATCH,
+  NEIGHBOUR_TOPOLOGY_UNAVAILABLE,
+  PathDiagram,
+  buildPathDiagramModel,
+  segmentPrefix,
+} from "./PathDiagram";
 import { HopDeviceBadge, HopDeviceCheck, PathValidationPanel } from "./PathValidationPanel";
 import { hopValidation, verifiedBranchId, type ValidationHopView } from "./pathValidationWords";
 import { VERDICT_SENTENCE, dependsOn, explain, ruleLabel, ruleWithheld, verdictTone, verdictWord } from "./pathWords";
 import type { PathVerification } from "./usePathValidation";
 
-export { HOP_VERDICT_SIDE, NEIGHBOUR_CAP, PathDiagram, buildPathDiagramModel, safeAddressLabel, segmentPrefix };
+export {
+  HOP_VERDICT_SIDE,
+  NEIGHBOUR_CAP,
+  NEIGHBOUR_SNAPSHOT_MISMATCH,
+  NEIGHBOUR_TOPOLOGY_UNAVAILABLE,
+  PathDiagram,
+  buildPathDiagramModel,
+  segmentPrefix,
+};
 
 /** The verification shown beside the hops: the record and the branch it covers. */
 interface DeviceView { readonly validation: PathValidation | null; readonly branchId: string | undefined }

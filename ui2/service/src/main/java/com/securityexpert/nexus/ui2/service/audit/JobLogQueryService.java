@@ -78,14 +78,25 @@ public final class JobLogQueryService {
         }
     }
 
-    /** Every filter optional; {@code text} matches job id, device id and terminal reason (case-insensitive substring). */
+    /**
+     * Every filter optional; {@code text} matches job id, device id, device hostname and terminal reason
+     * (case-insensitive substring). {@code masked} is true for the AIView persona (security review 2026-11-05 M-2):
+     * its search matches the opaque job and device ids only, and a sort by target is refused, because both would
+     * otherwise be evaluated on the real names behind the pseudonyms it is shown (an ordering and a substring oracle).
+     */
     public record JobQuery(Optional<String> state, Optional<String> jobType, Optional<String> deviceId,
             Optional<Instant> since, Optional<Instant> until, Optional<String> text, int page, int pageSize,
-            Optional<String> sort, Optional<String> order) {
+            Optional<String> sort, Optional<String> order, boolean masked) {
 
         public JobQuery(Optional<String> state, Optional<String> jobType, Optional<String> deviceId,
                 Optional<Instant> since, Optional<Instant> until, Optional<String> text, int page, int pageSize) {
-            this(state, jobType, deviceId, since, until, text, page, pageSize, Optional.empty(), Optional.empty());
+            this(state, jobType, deviceId, since, until, text, page, pageSize, Optional.empty(), Optional.empty(), false);
+        }
+
+        public JobQuery(Optional<String> state, Optional<String> jobType, Optional<String> deviceId,
+                Optional<Instant> since, Optional<Instant> until, Optional<String> text, int page, int pageSize,
+                Optional<String> sort, Optional<String> order) {
+            this(state, jobType, deviceId, since, until, text, page, pageSize, sort, order, false);
         }
 
         public JobQuery {
@@ -93,28 +104,59 @@ public final class JobLogQueryService {
             pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, pageSize));
             sort = sort == null ? Optional.empty() : sort.map(String::strip).filter(s -> !s.isEmpty());
             order = order == null ? Optional.empty() : order.map(String::strip).filter(s -> !s.isEmpty());
-            orderByOf(sort.orElse(""), order.orElse(""));
+            orderByOf(sort.orElse(""), order.orElse(""), masked);
         }
     }
+
+    /**
+     * A sort the masked view cannot have: the order would follow the real target names, not the pseudonyms shown.
+     * The controller answers it with a 400 carrying {@link #MASKED_SORT_REFUSED} and {@link #getMessage()}.
+     */
+    public static final class MaskedSortRefused extends IllegalArgumentException {
+        private static final long serialVersionUID = 1L;
+
+        MaskedSortRefused() {
+            super("Sorting by target is not available in the masked (aiview) view: the order would follow the real "
+                    + "target names, not the pseudonyms shown. Sort by another column, or filter by device.");
+        }
+    }
+
+    public static final String MASKED_SORT_REFUSED = "SORT_UNAVAILABLE_IN_MASKED_VIEW";
+    /** Sort keys that order by a raw target name; refused for a masked caller. */
+    static final java.util.Set<String> RAW_NAME_SORTS = java.util.Set.of("device", "device_name");
+    /** What the search box matches, as {@link JobPage#searchScope()} tells the UI. */
+    public static final String SEARCH_SCOPE_FULL = "full";
+    public static final String SEARCH_SCOPE_IDS = "ids";
 
     public record JobPage(
             @JsonProperty("items") List<JobEvent> items,
             @JsonProperty("page") int page,
             @JsonProperty("page_size") int pageSize,
             @JsonProperty("total") long total,
-            @JsonProperty("can_cancel") boolean canCancel) {
+            @JsonProperty("can_cancel") boolean canCancel,
+            /** False for the masked view: the Target column is not sortable there (M-2); the UI says why. */
+            @JsonProperty("target_sortable") boolean targetSortable,
+            /** {@link #SEARCH_SCOPE_FULL} or {@link #SEARCH_SCOPE_IDS} (masked view: job id and device id only). */
+            @JsonProperty("search_scope") String searchScope) {
         public JobPage(List<JobEvent> items, int page, int pageSize, long total) {
             this(items, page, pageSize, total, false);
         }
+        public JobPage(List<JobEvent> items, int page, int pageSize, long total, boolean canCancel) {
+            this(items, page, pageSize, total, canCancel, true, SEARCH_SCOPE_FULL);
+        }
         public JobPage withCancellationAccess(boolean allowed) {
-            return new JobPage(items, page, pageSize, total, allowed);
+            return new JobPage(items, page, pageSize, total, allowed, targetSortable, searchScope);
+        }
+        /** The same page with other (masked) items; every other field is kept. */
+        public JobPage withItems(List<JobEvent> replaced) {
+            return new JobPage(replaced, page, pageSize, total, canCancel, targetSortable, searchScope);
         }
         public JobPage withTranscriptAccess(boolean allowed) {
             if (allowed) return this;
-            return new JobPage(items.stream().map(event -> new JobEvent(event.jobId(), event.jobType(),
+            return withItems(items.stream().map(event -> new JobEvent(event.jobId(), event.jobType(),
                     event.targetDeviceId(), event.deviceName(), event.state(), event.outcome(), event.terminalReason(),
                     event.submittedAt(), event.finishedAt(), event.durationMs(), false, event.linesStored(),
-                    event.targetKind(), event.clusterRef())).toList(), page, pageSize, total, canCancel);
+                    event.targetKind(), event.clusterRef())).toList());
         }
     }
 
@@ -265,7 +307,11 @@ public final class JobLogQueryService {
             + "    where pcr.job_id is not null or dr.run_id is not null limit 1 "
             + ") pol on j.target_kind = 'discovery_run' or j.job_type in ('cp_policy_collect', 'pan_policy_collect') "
             + "left join packet_analysis_case pac on j.target_kind = 'packet_analysis_case' and pac.case_id = j.target_ref";
-    static final String SELECT = "select j.job_id, j.job_type, "
+    /**
+     * The row columns. Read only through {@link #pagedSelect}: the target joins run for the page's job ids alone,
+     * never for every filtered row (security review 2026-11-05 M-5).
+     */
+    static final String COLUMNS = "select j.job_id, j.job_type, "
             + "coalesce(j.target_device_id, pol.source_device_id) as target_device_id, "
             + "coalesce(nullif(btrim(d.observed_hostname), ''), nullif(btrim(dc.display_name), ''), "
             + "(select nullif(btrim(split_part(e.address_ref, ':', 1)), '') from endpoints e where e.device_id = d.device_id order by e.created_at asc limit 1)) as device_name, "
@@ -281,7 +327,28 @@ public final class JobLogQueryService {
             + "j.transcript_artefact_ref is not null as has_transcript, "
             + "case when j.finished_at is not null then extract(epoch from (j.finished_at - j.submitted_at)) * 1000 "
             + "     else extract(epoch from (now() - j.submitted_at)) * 1000 end as duration_ms, "
-            + LINES_STORED_SQL + FROM + TARGET_JOINS;
+            + LINES_STORED_SQL;
+
+    /**
+     * Two steps in one statement (M-5). The inner query filters, sorts and limits on {@code jobs}/{@code devices}
+     * columns only -- every {@link #whereOf} clause and every {@link #SORT_COLUMNS} expression reads {@code j} or
+     * {@code d} -- and numbers the page's rows. The outer query joins the target laterals to those job ids alone and
+     * keeps the inner order. Before, the laterals sat in the same {@code FROM} as the sort, so a sort by target, result,
+     * duration or outcome, and the export, ran every lateral for every filtered job before the limit.
+     *
+     * @param where the filter ({@link #whereOf})
+     * @param orderBy the order ({@link #orderByOf}), reused as the window order so {@code ord} follows it exactly
+     * @param limitSql {@code " limit ?"} or {@code " limit ? offset ?"}; its values are the caller's last bindings
+     */
+    static String pagedSelect(Where where, String orderBy, String limitSql) {
+        return COLUMNS
+                + " from (select j.job_id, row_number() over (" + orderBy.strip() + ") as ord" + FROM + where.sql()
+                + orderBy + limitSql + ") page_ids"
+                + " join jobs j on j.job_id = page_ids.job_id"
+                + " left join devices d on d.device_id = j.target_device_id"
+                + TARGET_JOINS
+                + " order by page_ids.ord";
+    }
 
     /** Closed allow-list of sortable columns mapped to constant SQL expressions; client text is never interpolated. */
     static final Map<String, String> SORT_COLUMNS = Map.ofEntries(
@@ -300,10 +367,14 @@ public final class JobLogQueryService {
             Map.entry("finished_at", "j.finished_at"));
 
     static String orderByOf(JobQuery query) {
-        return orderByOf(query.sort().orElse(""), query.order().orElse(""));
+        return orderByOf(query.sort().orElse(""), query.order().orElse(""), query.masked());
     }
 
     static String orderByOf(String sort, String order) {
+        return orderByOf(sort, order, false);
+    }
+
+    static String orderByOf(String sort, String order, boolean masked) {
         String s = sort == null ? "" : sort.strip();
         String o = order == null ? "" : order.strip();
         if (s.isEmpty()) {
@@ -312,6 +383,7 @@ public final class JobLogQueryService {
         }
         String column = SORT_COLUMNS.get(s);
         if (column == null) throw new IllegalArgumentException("Unknown sort column: " + s);
+        if (masked && RAW_NAME_SORTS.contains(s)) throw new MaskedSortRefused();
         String dir = o.isEmpty() ? "asc" : o.toLowerCase(java.util.Locale.ROOT);
         if (!dir.equals("asc") && !dir.equals("desc")) throw new IllegalArgumentException("Unknown sort order: " + o);
         return " order by " + column + " " + dir + " nulls last, j.job_id asc";
@@ -324,7 +396,8 @@ public final class JobLogQueryService {
     }
 
     public List<JobEvent> recent() {
-        return transactionBoundary.inTransaction(dsl -> dsl.fetch(SELECT + " order by j.submitted_at desc limit {0}", RECENT_LIMIT)
+        Where none = new Where("", List.of());
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(pagedSelect(none, orderByOf("", ""), " limit ?"), RECENT_LIMIT)
                 .map(JobLogQueryService::toEvent));
     }
 
@@ -338,9 +411,10 @@ public final class JobLogQueryService {
             List<Object> pageBindings = new ArrayList<>(where.bindings());
             pageBindings.add(query.pageSize());
             pageBindings.add(offset);
-            List<JobEvent> items = dsl.fetch(SELECT + where.sql() + orderBy + " limit ? offset ?",
+            List<JobEvent> items = dsl.fetch(pagedSelect(where, orderBy, " limit ? offset ?"),
                     pageBindings.toArray()).map(JobLogQueryService::toEvent);
-            return new JobPage(items, query.page(), query.pageSize(), total);
+            return new JobPage(items, query.page(), query.pageSize(), total, false, !query.masked(),
+                    query.masked() ? SEARCH_SCOPE_IDS : SEARCH_SCOPE_FULL);
         });
     }
 
@@ -366,7 +440,7 @@ public final class JobLogQueryService {
         return transactionBoundary.inTransaction(dsl -> {
             List<Object> bindings = new ArrayList<>(where.bindings());
             bindings.add(MAX_EXPORT_ROWS + 1);
-            return dsl.fetch(SELECT + where.sql() + orderBy + " limit ?", bindings.toArray())
+            return dsl.fetch(pagedSelect(where, orderBy, " limit ?"), bindings.toArray())
                     .map(JobLogQueryService::toEvent);
         });
     }
@@ -407,6 +481,14 @@ public final class JobLogQueryService {
         });
         query.text().filter(s -> !s.isBlank()).ifPresent(s -> {
             String like = "%" + s.strip().toLowerCase(java.util.Locale.ROOT).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
+            if (query.masked()) {
+                // The masked view matches the opaque ids only: the hostname and the reason text are raw values behind
+                // what aiview is shown, and a substring match on them answers "does a real name contain X" (M-2).
+                clauses.add("(lower(j.job_id) like ? or lower(j.target_device_id) like ?)");
+                bindings.add(like);
+                bindings.add(like);
+                return;
+            }
             clauses.add("(lower(j.job_id) like ? or lower(j.target_device_id) like ? or lower(coalesce(d.observed_hostname, '')) like ? "
                     + "or lower(coalesce(j.terminal_reason, '')) like ?)");
             bindings.add(like);

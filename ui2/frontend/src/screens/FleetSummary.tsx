@@ -9,6 +9,7 @@ import { vendorLabel } from "../shell/presenters";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { m3 } from "../theme/m3Theme";
 import { EstateDetails } from "./OverviewScreen";
+import { FRESHNESS_LABEL } from "../shell/freshness";
 
 export interface QuickFilterChip { readonly label: string; readonly href: string; readonly title?: string }
 export interface QuickFilterGroup {
@@ -50,10 +51,10 @@ export function fleetQuickFilters(fleet: readonly DeviceSummary[] | undefined, o
   const age = overview?.inventory_age;
   groups.push(age
     ? { label: "Evidence age", chips: [
-        { label: `under 24 h · ${n(age.lt24h ?? 0)}`, href: q({ inventory_age: "lt24h" }), title: "Newest inventory read under 24 hours ago" },
-        { label: `24–72 h · ${n(age.h24_72 ?? 0)}`, href: q({ inventory_age: "24h_72h" }) },
-        { label: `over 72 h · ${n(age.gt72h ?? 0)}`, href: q({ inventory_age: "gt72h" }) },
-        { label: `never read · ${n(age.never ?? 0)}`, href: q({ inventory_age: "never" }) },
+        { label: `${FRESHNESS_LABEL.fresh} · ${n(age.lt24h ?? 0)}`, href: q({ inventory_age: "lt24h" }), title: "Newest inventory read under 24 hours ago" },
+        { label: `${FRESHNESS_LABEL.ageing} · ${n(age.h24_72 ?? 0)}`, href: q({ inventory_age: "24h_72h" }) },
+        { label: `${FRESHNESS_LABEL.stale} · ${n(age.gt72h ?? 0)}`, href: q({ inventory_age: "gt72h" }) },
+        { label: `${FRESHNESS_LABEL.unknown} · ${n(age.never ?? 0)}`, href: q({ inventory_age: "never" }) },
       ] }
     : { label: "Evidence age", chips: [], unknown: "UNKNOWN · the estate summary did not return the evidence ages" });
   const changed = overview?.attention?.config_changed;

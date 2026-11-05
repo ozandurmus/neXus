@@ -101,13 +101,17 @@ class PolicyHygienePartialPriorTest {
         assertClean(icmp, "r2");
     }
     @Test void constraintsOfUnknownMeaningAreNoPartialPriors() {
-        // A field the analysis does not understand (here a Panorama target negation) might widen the match: no partial prior.
-        for (String key : List.of("target/negate", "unexpected-field")) {
-            var unknown = with(pan("r1", "any", "net", "port", "allow"), Map.of(key, List.of("yes")));
+        // A field the analysis does not understand (a Panorama target shape nobody parsed, a negate value other than yes or
+        // no, an unknown field) might widen the match: no partial prior. A documented target only narrows
+        // (PolicyNormalization#targetNarrows, PolicyHygienePanTargetTest).
+        for (var field : List.of(Map.entry("target-unrecognized", "unexpected"), Map.entry("target/negate", "maybe"), Map.entry("unexpected-field", "yes"))) {
+            var unknown = with(pan("r1", "any", "net", "port", "allow"), Map.of(field.getKey(), List.of(field.getValue())));
             var snapshot = pan(unknown, pan("r2", "any", "other-net", "port", "allow"));
             assertUnknown(snapshot, "r1", "unsupported rule constraint");
             assertUnknown(snapshot, "r2", UNSUPPORTED);
         }
+        // The same rule with a documented target (negate yes) is a partial prior: its destination is disjoint from r2's.
+        assertClean(pan(with(pan("r1", "any", "net", "port", "allow"), Map.of("target/negate", List.of("yes"))), pan("r2", "any", "other-net", "port", "allow")), "r2");
         // A Check Point rule record without its time column is not relied on either.
         var r1 = cp("r1", 1, "Accept", "role", "net", "port");
         var extras = new HashMap<String, List<String>>(); extras.put("time", null);

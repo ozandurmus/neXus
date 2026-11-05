@@ -24,7 +24,6 @@ export {
   PathDiagram,
   PathResultView,
   buildPathDiagramModel,
-  safeAddressLabel,
   segmentPrefix,
 } from "./pathanalysis/PathResultView";
 export { classifyPathFailure, pathFormMissing } from "./pathanalysis/pathWords";
@@ -67,7 +66,13 @@ export function toRequest(values: PathFormValues): PathQueryRequest {
   return request;
 }
 
-export function PathAnalysisScreen() {
+/**
+ * The Path query and its answer without the screen frame, so the Trace screen (UI review 2026-11-05, C3) can host it as
+ * its "Topology path" mode and `PathAnalysisScreen` can keep wrapping it. Advanced fields (ingress unit and interface,
+ * the up-to-the-edge mode) sit behind one disclosure: the form a first-time reader sees is source, destination, protocol
+ * and port.
+ */
+export function PathAnalysisPanel() {
   const [values, setValues] = useState<PathFormValues>(EMPTY_FORM);
   const [result, setResult] = useState<PathResult | null>(null);
   const [failure, setFailure] = useState<PathFailure | null>(null);
@@ -105,9 +110,7 @@ export function PathAnalysisScreen() {
   const submit = (event: FormEvent) => { event.preventDefault(); void run(); };
 
   return (
-    <ScreenRoot screenType="tool">
-      <ScreenHeader title="Path analysis"
-        subtitle="Can A reach B on a port, and if not, where and why? Computed from the held topology and the stored policies, hop by hop: management intent, not observed traffic." />
+    <>
       <Card component="form" onSubmit={submit} aria-label="Path query"
         sx={{ border: `1px solid ${m3.outlineVar}`, boxShadow: "none", borderRadius: `${RADIUS.card}px`, p: 2.5, bgcolor: m3.scLowest }}>
         <Stack spacing={2}>
@@ -127,15 +130,20 @@ export function PathAnalysisScreen() {
             </TextField>
             <TextField label="Port" value={values.port} required fullWidth helperText="Destination port, 1–65535" inputProps={{ maxLength: 5, inputMode: "numeric" }}
               onChange={(e) => set("port", e.target.value.replace(/[^\d]/g, ""))} />
-            <TextField label="Ingress unit" value={values.ingressNode} fullWidth helperText="Optional · the unit the traffic enters, when the source could belong to several" inputProps={{ maxLength: 128 }}
-              onChange={(e) => set("ingressNode", e.target.value)} />
-            <TextField label="Ingress interface" value={values.ingressInterface} fullWidth helperText="Optional · needs the ingress unit" inputProps={{ maxLength: 128 }}
-              onChange={(e) => set("ingressInterface", e.target.value)} />
           </Box>
-          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
-            <FormControlLabel control={<Checkbox checked={values.edge} onChange={(e) => set("edge", e.target.checked)} />}
-              label="Up to the edge: accept the answer where the path leaves the known topology (ALLOWED_TO_EDGE), instead of UNKNOWN" />
-          </Stack>
+          <Box component="details" data-testid="path-advanced" open={Boolean(values.ingressNode || values.ingressInterface || values.edge) || undefined}>
+            <Box component="summary" sx={{ cursor: "pointer", color: m3.primary, fontSize: 13, fontWeight: 500 }}>Advanced options</Box>
+            <Stack spacing={2} sx={{ mt: 1.5 }}>
+              <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", alignItems: "start" }}>
+                <TextField label="Ingress unit" value={values.ingressNode} fullWidth helperText="Optional · the unit the traffic enters, when the source could belong to several" inputProps={{ maxLength: 128 }}
+                  onChange={(e) => set("ingressNode", e.target.value)} />
+                <TextField label="Ingress interface" value={values.ingressInterface} fullWidth helperText="Optional · needs the ingress unit" inputProps={{ maxLength: 128 }}
+                  onChange={(e) => set("ingressInterface", e.target.value)} />
+              </Box>
+              <FormControlLabel control={<Checkbox checked={values.edge} onChange={(e) => set("edge", e.target.checked)} />}
+                label="Up to the edge: accept the answer where the path leaves the known topology (ALLOWED_TO_EDGE), instead of UNKNOWN" />
+            </Stack>
+          </Box>
           <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
             <Box component="button" type="submit" disabled={busy || reason !== null} data-testid="path-submit"
               sx={{ font: "inherit", fontWeight: 500, fontSize: 14, border: 0, cursor: busy || reason ? "default" : "pointer", borderRadius: `${RADIUS.button}px`, px: 3, height: 40,
@@ -153,6 +161,17 @@ export function PathAnalysisScreen() {
         <EmptyPanel title="No path evaluated yet"
           body="Enter a source, a destination and a service, then evaluate. The answer is the verdict first, then every unit on the path with its route, NAT, matched rule and reasons; nothing is sent to a device." />
       ) : null}
+    </>
+  );
+}
+
+/** Path analysis as its own screen (kept for the design previews and for callers that want the frame; the rail's Trace screen hosts the panel). */
+export function PathAnalysisScreen() {
+  return (
+    <ScreenRoot screenType="tool">
+      <ScreenHeader title="Path analysis"
+        subtitle="Can A reach B on a port, and if not, where and why? Computed from the held topology and the stored policies, hop by hop: management intent, not observed traffic." />
+      <PathAnalysisPanel />
     </ScreenRoot>
   );
 }

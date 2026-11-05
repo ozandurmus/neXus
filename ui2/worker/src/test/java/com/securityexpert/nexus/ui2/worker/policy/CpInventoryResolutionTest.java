@@ -258,6 +258,40 @@ class CpInventoryResolutionTest {
         verify(repository, never()).readInventories(eq(SOURCE), eq(GLOBAL), any());
     }
 
+    @Test void aCustomerDomainAndGlobalOverTheBoundDoNotEvictEachOtherAndGlobalStaysPinned() throws Exception {
+        Instant at = COLLECTED.minus(Duration.ofHours(1));
+        String other = ref(SOURCE, "domain-uid-02");
+        store(DOMAIN, "hosts", at, "RESOLVED", item("host-01", "FW-TANGO-04", "host", List.of(), "ipv4-address: 192.0.2.10"),
+            item("host-02", "FW-JULIET-06", "host", List.of(), "ipv4-address: 192.0.2.11"));
+        store(GLOBAL, "networks", at, "RESOLVED", item("net-01", "OBJ-GLOBAL-NET", "network", List.of(), "subnet4: 198.51.100.0", "mask-length4: 25"),
+            item("net-02", "OBJ-GLOBAL-NET-02", "network", List.of(), "subnet4: 198.51.100.128", "mask-length4: 25"));
+        store(other, "hosts", at, "RESOLVED", item("host-03", "FW-BRAVO-02", "host", List.of(), "ipv4-address: 192.0.2.12"),
+            item("host-04", "FW-BRAVO-03", "host", List.of(), "ipv4-address: 192.0.2.13"));
+        // The customer domain and Global hold 4 objects together, over a bound of 3.
+        var resolver = new CpInventoryObjects(repository, SOURCE, () -> COLLECTED, 3);
+        resolver.domains(json.readTree("""
+            {"total":3,"objects":[{"uid":"domain-uid-01","name":"DOM-TANGO-01"},{"uid":"domain-uid-global","name":"Global"},
+              {"uid":"domain-uid-02","name":"DOM-BRAVO-02"}]}
+            """));
+        for (int i = 0; i < 50; i++) {
+            assertEquals("OBJ-GLOBAL-NET", resolver.find(DOMAIN, "net-01").node().path("name").asText());
+            assertEquals("FW-TANGO-04", resolver.find(DOMAIN, "host-01").node().path("name").asText());
+            assertNull(resolver.find(DOMAIN, "absent-01"));
+        }
+        // One read each, however often a miss alternates between the customer domain and Global.
+        assertEquals(2, resolver.domainReads);
+        verify(repository, times(1)).readInventories(eq(SOURCE), eq(DOMAIN), any());
+        verify(repository, times(1)).readInventories(eq(SOURCE), eq(GLOBAL), any());
+        // A further domain drops the least recently used customer domain, never Global.
+        assertEquals("FW-BRAVO-02", resolver.find(other, "host-03").node().path("name").asText());
+        assertEquals("OBJ-GLOBAL-NET-02", resolver.find(other, "net-02").node().path("name").asText());
+        assertEquals(3, resolver.domainReads);
+        verify(repository, times(1)).readInventories(eq(SOURCE), eq(GLOBAL), any());
+        assertNotNull(resolver.find(DOMAIN, "host-02"));
+        assertEquals(4, resolver.domainReads);
+        verify(repository, times(1)).readInventories(eq(SOURCE), eq(GLOBAL), any());
+    }
+
     @Test void aDeepInventoryChainStopsAtTheNestingLimitInsteadOfFailingTheMapping() throws Exception {
         List<CpObjectInventory.Item> chain = new ArrayList<>();
         chain.add(item("group-02", "OBJ-CHAIN-00", "group", List.of("chain-01")));

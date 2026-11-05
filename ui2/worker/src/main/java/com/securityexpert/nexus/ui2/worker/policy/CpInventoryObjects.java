@@ -19,7 +19,9 @@ import java.util.function.Supplier;
  * document is used only when it is the published manifest's complete listing (status RESOLVED), names the same source and
  * domain, and its whole chunk set reads back; otherwise none of that type is used (fail closed). Projections are kept for at
  * most {@link #MAX_RETAINED_OBJECTS} objects across domains: beyond that the least recently used domain is dropped and
- * read again if it is needed again, so memory stays bounded at the cost of a second read.
+ * read again if it is needed again, so memory stays bounded at the cost of a second read. The MDS Global domain, once
+ * read, is never dropped (every customer domain falls back to it), and neither is the domain just read; so the footprint
+ * is at most the larger of the bound and Global plus one domain.
  * <p>A customer domain's miss is looked up in that domain first, then in the MDS Global domain when the run's domain
  * listing names one; uids are compared exactly, never normalized.
  */
@@ -82,13 +84,14 @@ final class CpInventoryObjects {
 
     synchronized CheckPointPolicyMapper.InventoryObject find(String container, String uid) {
         if (uid == null || uid.isEmpty()) return null;
-        var found = lookup(container, uid);
-        if (found == null && globalDomain != null && !globalDomain.isEmpty() && !globalDomain.equals(container)) found = lookup(globalDomain, uid);
+        var found = lookup(container, uid, container);
+        // Reading Global for this fallback must not drop the customer domain it serves.
+        if (found == null && globalDomain != null && !globalDomain.isEmpty() && !globalDomain.equals(container)) found = lookup(globalDomain, uid, container);
         return found;
     }
 
-    private CheckPointPolicyMapper.InventoryObject lookup(String container, String uid) {
-        Domain domain = domain(container);
+    private CheckPointPolicyMapper.InventoryObject lookup(String container, String uid, String serving) {
+        Domain domain = domain(container, serving);
         if (domain.ambiguous().contains(uid)) return null;
         Entry entry = domain.objects().get(uid);
         if (entry == null || !entry.uid().equals(uid)) return null;
@@ -104,21 +107,29 @@ final class CpInventoryObjects {
         return new CheckPointPolicyMapper.InventoryObject(entry.uid(), node, entry.schedule(), entry.collectedAt());
     }
 
-    private Domain domain(String container) {
+    private Domain domain(String container, String serving) {
         Domain cached = domains.get(container);
         if (cached != null) return cached;
         Domain loaded = load(container);
         domains.put(container, loaded);
         retained += loaded.size();
-        // Keep the newest domain even when it alone exceeds the bound; drop the least recently used others.
+        // Keep the newest domain even when it alone exceeds the bound, and never drop the Global domain: every customer
+        // domain's miss falls back to Global, so evicting either of the pair would reload it on the very next miss
+        // (customer <-> Global thrash). Drop the least recently used other domains; the pair may overshoot the bound.
         var oldest = domains.entrySet().iterator();
-        while (retained > maxRetained && domains.size() > 1) {
+        while (retained > maxRetained && oldest.hasNext()) {
             var evicted = oldest.next();
-            if (evicted.getKey().equals(container)) continue;
+            String key = evicted.getKey();
+            if (key.equals(container) || key.equals(serving) || pinned(key)) continue;
             retained -= evicted.getValue().size();
             oldest.remove();
         }
         return loaded;
+    }
+
+    /** The run's Global domain is never evicted once read. */
+    private boolean pinned(String container) {
+        return globalDomain != null && !globalDomain.isEmpty() && globalDomain.equals(container);
     }
 
     private Domain load(String container) {

@@ -88,12 +88,13 @@ test("policy local: 54 containers, three tabs, rule table with inline details, r
   const objectTable = page.getByRole("table", { name: "Policy objects" });
   await expect(objectTable.getByText("ADDR-ROMEO-01")).toBeVisible();
   await expect(objectTable.getByText("ipv4-address: 240.12.0.8")).toBeVisible();
-  await page.getByRole("tab", { name: "Installation", exact: true }).click();
+  // Installation is a section of Rules & Containers (UI review 2026-11-05, C2), opened on demand.
+  await page.getByRole("tab", { name: "Rules & Containers", exact: true }).click();
+  await page.getByRole("region", { name: "Installation" }).getByRole("button", { name: /Installation: where/ }).click();
   const installation = page.getByRole("table", { name: "Policy installation" });
   await expect(installation.getByRole("link", { name: "FW-TANGO-04" })).toHaveAttribute("href", "/?screen=inventory&device_id=device-1");
   await expect(installation.getByText("ALL", { exact: true })).toBeVisible();
   await expect(installation.getByText("UNKNOWN", { exact: true })).toBeVisible();
-  await page.getByRole("tab", { name: "Rules", exact: true }).click();
   await expect(page.getByRole("region", { name: "Policy rulebase" })).toBeVisible();
   await page.getByRole("checkbox", { name: "Select DOM-TANGO-53" }).check();
   await page.getByRole("button", { name: "Selection actions" }).click();

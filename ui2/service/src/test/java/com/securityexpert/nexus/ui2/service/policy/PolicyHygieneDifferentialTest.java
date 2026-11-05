@@ -3,6 +3,8 @@ package com.securityexpert.nexus.ui2.service.policy;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
 import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 import java.time.Instant;
 import java.util.*;
 
@@ -20,6 +22,7 @@ import java.util.*;
  * or "snapshot collection incomplete" when collection failed), and then {@link PartialPriorOracle} must confirm by brute
  * force that it shares no packet with any unresolved earlier rule of its scope.
  */
+@Execution(ExecutionMode.CONCURRENT) // methods are independent oracles over local, immutable data
 class PolicyHygieneDifferentialTest {
     static final Instant NOW = PolicyHygieneTest.NOW;
     static final int SNAPSHOTS = 4000, LARGE = 120;

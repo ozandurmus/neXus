@@ -18,9 +18,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /** One independent SMTP digest and watermark per configured notification type. */
 final class NotificationMailRouter {
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final String[] TITLES = {"Administration changes", "Sign-in and access", "Backup failures",
-            "Other job failures", "Configuration changes", "Compliance regressions", "Device reachability", "Security scans",
-            "Device crash and dump files", "Backup size deviations"};
+    private static final System.Logger LOG = System.getLogger(NotificationMailRouter.class.getName());
+    private static final java.util.Set<String> WARNED_TYPES = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private static final String ADMIN_ACTIONS = "'local_credential_create', 'local_password_change', "
             + "'local_credential_admin_password_reset', "
             + "'local_credential_enable', 'local_credential_disable', 'role_binding_create', 'role_binding_revoke', "
@@ -45,6 +44,10 @@ final class NotificationMailRouter {
         for (Record row : dsl.fetch("select * from notification_routes order by type")) {
             if (!Boolean.TRUE.equals(row.get("enabled", Boolean.class))) continue;
             String type = row.get("type", String.class);
+            if (!NotificationRoute.TYPES.contains(type)) {
+                warnSkippedOnce(type);
+                continue;
+            }
             NotificationRoute route = new NotificationRoute(type, true, row.get("recipients", String.class), null, null);
             List<String> recipients = route.effectiveRecipients(settings);
             if (!settings.smtpEnabled() || settings.smtpHost() == null || settings.smtpHost().isBlank()) continue;
@@ -63,6 +66,8 @@ final class NotificationMailRouter {
                 dsl.execute("update notification_routes set watermark_audit = {0}, watermark_time = {1}, "
                         + "last_sent_at = now(), last_error = null where type = {2}", batch.audit(),
                         Timestamp.from(batch.time()), type);
+            } catch (UnhandledTypeException e) {
+                warnSkippedOnce(type);
             } catch (Exception e) {
                 dsl.execute("update notification_routes set last_error = {0} where type = {1}",
                         e instanceof IOException ? "SMTP relay rejected or unavailable" : "event collection failed", type);
@@ -70,9 +75,22 @@ final class NotificationMailRouter {
         }
     }
 
+    /** A route type without a collector: skipped, never an error on the route. */
+    static final class UnhandledTypeException extends RuntimeException {
+        UnhandledTypeException() { super("no collector for this notification type", null, false, false); }
+    }
+
+    private static void warnSkippedOnce(String type) {
+        if (WARNED_TYPES.add(String.valueOf(type))) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "[NOTIFY_ROUTE_TYPE_SKIPPED] notification type {0} has no handler; skipped", type);
+        }
+    }
+
+    static void resetWarnedTypesForTest() { WARNED_TYPES.clear(); }
+
     static String subject(String type, int count) {
-        int index = NotificationRoute.TYPES.indexOf(type);
-        return "neXus – " + (index < 0 ? type : TITLES[index]) + ": " + count + " event(s)";
+        return "neXus – " + NotificationRoute.TITLES.getOrDefault(type, type) + ": " + count + " event(s)";
     }
 
     static String digest(List<String> lines) {
@@ -238,7 +256,7 @@ final class NotificationMailRouter {
                     }
                 }
             }
-            default -> throw new IllegalArgumentException("unknown notification type");
+            default -> throw new UnhandledTypeException();
         }
         return new Batch(lines, newestAudit, newestTime, state);
     }

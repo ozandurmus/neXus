@@ -21,3 +21,10 @@ it("uses AIView names throughout the shared preview data", () => {
   expect(JSON.stringify({ ALIGNMENT, INVENTORY, CONFIG_DEVICES, CONFIG_SETTINGS, COMPLIANCE_FINDINGS, OPERATIONS_JOBS, OPERATIONS_READINESS, ADMIN_DEVICES }))
     .not.toMatch(/\b(?:fw|pan|cp|vsx|pano)-[a-z]|\b(?:ist|izm|ank|brs)\b/);
 });
+
+it("keeps the executive home preview to counts: no device or cluster name, no address (UI review 2026-11-05, C1)", async () => {
+  const { EXEC_HOME } = await import("../src/preview/previewData");
+  const text = JSON.stringify(EXEC_HOME);
+  expect(text).not.toMatch(/\b(?:FW|CLS|VS)-[A-Z]+-\d{2}\b/);
+  expect(text).not.toMatch(/\b\d{1,3}(?:\.\d{1,3}){3}\b/);
+});

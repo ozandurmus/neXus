@@ -2,20 +2,28 @@ import { Fragment, useState, useMemo, useEffect, useCallback, useRef } from "rea
 import { ComplianceGuidance, observedValue } from "./ComplianceGuidance";
 import { downloadRemediationReport } from "./complianceReport";
 import { urlParam, useUrlParamSync, writeUrlParams } from "../shell/urlParams";
+import { evidencedHeadline, evidencedShares, noEvidenceFromCoverage, primaryFrameworksFirst } from "./overview/executiveHome";
+import { StaleEvidenceBanner } from "../shell/StaleEvidenceBanner";
+import type { FleetFreshness } from "../shell/freshness";
 
 /**
- * The one-line headline under the title (UI review 2026-10-18 §4.3): `2491 checks · 118 of 123 firewalls · 164 critical
- * failing · 496 data gaps`, from the overview the screen already loads. The service records no evaluation time, so the
- * age the review asked for is stated as not recorded rather than invented. A failed read says UNKNOWN, never 0.
+ * The one-line headline under the title (UI review 2026-11-05, B4 / Fable F-1): `37.5% of evidenced controls pass, 19.9%
+ * have no evidence · 2,491 checks · 118 of 123 firewalls · 164 critical failing`. A check without evidence is never
+ * counted as failed: the pass share is taken over the checks that could be judged (pass + fail, the service's
+ * `observed_compliance_pct`), and the checks without evidence are their own share (100 % minus `evidence_coverage_pct`).
+ * The service records no evaluation time, so that age is stated as not recorded rather than invented. A failed read
+ * says UNKNOWN, never 0.
  */
 export function complianceHeadline(overview: { readonly evaluated_firewalls: number; readonly total_firewalls: number; readonly critical_deficiencies: number;
-  readonly data_gaps: number; readonly control_checks?: number } | null, checksFromControls: number, state: "loading" | "failed" | "loaded"): string {
+  readonly data_gaps: number; readonly control_checks?: number; readonly observed_compliance_pct?: number; readonly evidence_coverage_pct?: number } | null,
+  checksFromControls: number, state: "loading" | "failed" | "loaded"): string {
   if (state === "loading") return "Reading the compliance evaluation…";
-  if (state === "failed" || !overview) return "checks UNKNOWN · firewalls UNKNOWN · critical failing UNKNOWN · data gaps UNKNOWN";
+  if (state === "failed" || !overview) return `${evidencedHeadline(null, null)} · checks UNKNOWN · firewalls UNKNOWN · critical failing UNKNOWN`;
   if (overview.evaluated_firewalls === 0) return "No framework assigned · nothing assessed yet";
   const checks = overview.control_checks ?? checksFromControls;
-  return `${checks.toLocaleString("en-US")} checks · ${overview.evaluated_firewalls} of ${overview.total_firewalls} firewalls · `
-    + `${overview.critical_deficiencies} critical failing · ${overview.data_gaps} data gaps · re-check time not recorded`;
+  return `${evidencedHeadline(overview.observed_compliance_pct, noEvidenceFromCoverage(overview.evidence_coverage_pct))} · `
+    + `${checks.toLocaleString("en-US")} checks · ${overview.evaluated_firewalls} of ${overview.total_firewalls} firewalls · `
+    + `${overview.critical_deficiencies} critical failing · re-check time not recorded`;
 }
 
 /**
@@ -79,6 +87,7 @@ import {
   getDeviceCompliance,
   getComplianceOverview,
   getComplianceControls,
+  getOverview,
   getComplianceControlDetail,
   triggerComplianceEvaluation,
   type ComplianceOverview,
@@ -178,6 +187,17 @@ export function ComplianceScreen() {
   const [sortMode, setSortMode] = useState<SortMode>("SEVERITY");
   const controlsRef = useRef<HTMLDivElement>(null);
   const [loadError, setLoadError] = useState<{ message: string; restricted: boolean } | null>(null);
+  // B1: the fleet's data freshness for the stale-evidence banner, from the Overview read; a failed read shows no banner.
+  const [fleetFreshness, setFleetFreshness] = useState<{ readonly freshness: FleetFreshness; readonly newestAt: string | null } | null>(null);
+  useEffect(() => {
+    let active = true;
+    getOverview().then((o) => {
+      const age = o?.inventory_age;
+      if (!active || !age || typeof age.of !== "number" || typeof age.lt24h !== "number" || (age.state && age.state !== "OK")) return;
+      setFleetFreshness({ freshness: { fresh: age.lt24h, of: age.of, never: age.never }, newestAt: o.evidence?.inventory?.at ?? null });
+    }).catch(() => { if (active) setFleetFreshness(null); });
+    return () => { active = false; };
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -409,6 +429,8 @@ export function ComplianceScreen() {
         }
       />
 
+      <StaleEvidenceBanner freshness={fleetFreshness?.freshness ?? null} newestAt={fleetFreshness?.newestAt} what="Compliance results" />
+
       {/* 4 Top KPI Cards */}
       {/* Evaluation scope (Astra review 2026-09-23): the headline is every control on every evaluated firewall, not one
           framework; every control maps to CIS, which is why the CIS card carries the same totals. */}
@@ -422,23 +444,26 @@ export function ComplianceScreen() {
         </Typography>
       )}
       <MetricGrid>
+        {/* B4 (UI review 2026-11-05): the pass share over the checks that have evidence; no-evidence is its own share, never a fail. */}
         <ComplianceMetricCard
-          title="Checks passing"
-          count={overview ? `${overview.assured_compliance_pct}%` : null}
+          title="Evidenced controls passing"
+          count={overview ? `${overview.observed_compliance_pct}%` : null}
           badge={{
-            label: !overview ? "UNKNOWN" : totalChecks !== null ? `${overview.assured_compliance_pct} % of ${totalChecks.toLocaleString("en-US")} checks` : `${overview.assured_compliance_pct} % of all checks`,
-            tone: "neutral",
+            label: !overview ? "UNKNOWN" : `${noEvidenceFromCoverage(overview.evidence_coverage_pct)}% have no evidence`,
+            tone: !overview ? "neutral" : overview.evidence_coverage_pct < 100 ? "warn" : "neutral",
           }}
-          note="Passing checks among all assigned checks (a check without evidence counts against)"
+          note="Passing checks among the checks with evidence (pass + fail); a check without evidence is not counted as failed"
         />
         <ComplianceMetricCard
-          title="Evidence Coverage"
+          title="Checks with evidence"
           count={overview ? `${overview.evidence_coverage_pct}%` : null}
           badge={{
-            label: overview ? `${overview.evaluated_firewalls} of ${overview.total_firewalls} firewalls` : "UNKNOWN",
+            label: !overview ? "UNKNOWN" : totalChecks !== null
+              ? `of ${totalChecks.toLocaleString("en-US")} checks · ${overview.evaluated_firewalls} of ${overview.total_firewalls} firewalls`
+              : `${overview.evaluated_firewalls} of ${overview.total_firewalls} firewalls`,
             tone: "neutral",
           }}
-          note={overview ? `Checks with collected evidence · observed ${overview.observed_compliance_pct}% (pass among judged checks)` : "Checks with collected evidence"}
+          note={overview ? `Checks whose data was collected · ${overview.assured_compliance_pct}% of all checks are evidenced and pass` : "Checks whose data was collected"}
         />
         <ComplianceMetricCard
           title="Critical failing checks"
@@ -470,13 +495,19 @@ export function ComplianceScreen() {
 
       {/* Framework cards: the same stacked Pass / Fail / Unavailable bar as the Overview (review §3) */}
       <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))" }}>
-        {overview?.frameworks.map((f) => (
-          <Card key={f.framework} sx={{ bgcolor: m3.scLowest, boxShadow: "none", borderRadius: "10px", p: 2, display: "flex",
+        {/* The PO's primary frameworks first (CIS, then NIST); the figure is the evidenced pass share (B4). */}
+        {primaryFrameworksFirst(overview?.frameworks ?? [], (f) => f.framework).map((f) => {
+          const shares = evidencedShares(f.pass_count, f.fail_count, f.data_unavailable_count);
+          return (
+          <Card key={f.framework} data-framework={f.framework} sx={{ bgcolor: m3.scLowest, boxShadow: "none", borderRadius: "10px", p: 2, display: "flex",
                                          flexDirection: "column", gap: 1, border: "1px solid", borderColor: m3.outlineVar }}>
             <Stack direction="row" justifyContent="space-between" alignItems="baseline">
               <Typography sx={{ fontSize: 14, fontWeight: 600, color: m3.onSurface }}>{f.framework}</Typography>
-              <Typography sx={{ fontSize: 15, fontWeight: 700, color: m3.onSurface }}>{f.score_pct}%</Typography>
+              <Typography sx={{ fontSize: 15, fontWeight: 700, color: m3.onSurface }}>{shares.passPct === null ? "UNKNOWN" : `${shares.passPct}%`}</Typography>
             </Stack>
+            <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
+              {evidencedHeadline(shares.passPct, shares.noEvidencePct)}
+            </Typography>
             <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>{f.total_controls} control checks (control × firewall)</Typography>
             <StackedBar parts={[
               { label: "Pass", count: f.pass_count, color: STATUS.good },
@@ -486,10 +517,11 @@ export function ComplianceScreen() {
             <Stack direction="row" spacing={2} sx={{ mt: 0.25 }}>
               <Typography variant="body2" sx={{ color: m3.goodInk, fontWeight: 500 }}>{f.pass_count} pass</Typography>
               <Typography variant="body2" sx={{ color: m3.criticalInk, fontWeight: 500 }}>{f.fail_count} fail</Typography>
-              <Typography variant="body2" sx={{ color: m3.neutralInk, fontWeight: 500 }}>{f.data_unavailable_count} unavailable</Typography>
+              <Typography variant="body2" sx={{ color: m3.neutralInk, fontWeight: 500 }}>{f.data_unavailable_count} no evidence</Typography>
             </Stack>
           </Card>
-        ))}
+          );
+        })}
       </Box>
 
       {/* Control families (review §3, from the M3 study): where an audit reviewer starts */}

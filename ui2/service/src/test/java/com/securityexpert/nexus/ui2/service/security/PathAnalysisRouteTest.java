@@ -373,6 +373,11 @@ class PathAnalysisRouteTest {
             }
 
             @Override
+            public List<String> handedOutAs(String pseudonym) {
+                return real.handedOutAs(pseudonym);
+            }
+
+            @Override
             public Optional<String> peekInterface(String rawInterfaceName) {
                 return real.peekInterface(rawInterfaceName);
             }

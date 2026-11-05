@@ -29,13 +29,15 @@ export interface KpiCardProps {
   /** The one link: where the figure's rows are. */
   readonly href?: string;
   readonly linkLabel?: string;
+  /** Opens the rows in place (a drawer) instead of following `href`; the link keeps its href for a new tab. */
+  readonly onLinkClick?: () => void;
   /** A status pill beside the label (`No data gaps`): a word with a colour, never the figure itself. */
   readonly badge?: ReactNode;
   /** Replaces the figure block entirely (a small chart, a sentence); the label and the sentence stay. */
   readonly children?: ReactNode;
 }
 
-export function KpiCard({ label, value, unit, detail, sentence, state, reason, href, linkLabel, badge, children }: KpiCardProps) {
+export function KpiCard({ label, value, unit, detail, sentence, state, reason, href, linkLabel, onLinkClick, badge, children }: KpiCardProps) {
   const word = state === "not_evaluated" ? statusWord("NOT_EVALUATED") : (state === "unknown" || value === null || value === undefined) ? "UNKNOWN" : null;
   return (
     <Card data-kpi={label} sx={{ bgcolor: m3.scLowest, boxShadow: "none", border: `1px solid ${m3.outlineVar}`, borderRadius: `${RADIUS.card}px`, p: 2,
@@ -53,7 +55,8 @@ export function KpiCard({ label, value, unit, detail, sentence, state, reason, h
           </Box>)}
       {detail && !word ? <Typography component="p" sx={{ ...TYPE.label, color: m3.neutralInk, m: 0 }}>{detail}</Typography> : null}
       <Typography component="p" sx={{ ...TYPE.label, color: m3.onSurfaceVar, m: 0 }}>{sentence}</Typography>
-      {href ? <Link href={href} underline="hover" sx={{ ...TYPE.label, fontWeight: 500, color: m3.primary, alignSelf: "flex-start" }}>{linkLabel ?? "All →"}</Link> : null}
+      {href ? <Link href={href} underline="hover"
+        onClick={onLinkClick ? (e) => { e.preventDefault(); onLinkClick(); } : undefined} sx={{ ...TYPE.label, fontWeight: 500, color: m3.primary, alignSelf: "flex-start" }}>{linkLabel ?? "All →"}</Link> : null}
     </Card>
   );
 }

@@ -33,8 +33,10 @@ import { describeSystemLogCollectError, explainSystemLogRefusalCode, type System
 
 /** How often the panel asks again while the server's first snapshot is still being computed. */
 export const COMPUTING_POLL_MS = 5_000;
-/** Maximum number of COMPUTING poll retries before stopping and showing a plain bounded-wait state (20 s total). */
+/** Fast COMPUTING polls (20 s total) before the panel says the first computation is taking longer. */
 export const MAX_COMPUTING_POLLS = 4;
+/** How often the panel asks again after the bounded wait while the server still reports COMPUTING with scheduling on. */
+export const SLOW_COMPUTING_POLL_MS = 30_000;
 /** Bounded wait for the initial read before showing a plain timeout state. */
 export const LOAD_TIMEOUT_MS = 20_000;
 
@@ -157,9 +159,13 @@ export function SystemHealthPanel({ now = new Date() }: { readonly now?: Date })
   const serverComputing = data?.computation.state === "COMPUTING";
   const computationFailed = data?.computation.state === "FAILED";
   const apiReason = data?.computation.reason ?? data?.computation.error ?? null;
+  // "Scheduled computation is off" is said only when the server reports it; an absent field is not a reported state.
+  const schedulingOff = data?.computation.scheduling_enabled === false;
   const boundedWaitReached = serverComputing && (polls >= MAX_COMPUTING_POLLS || apiReason !== null);
   const computing = serverComputing && !boundedWaitReached;
-  const notComputedYet = boundedWaitReached || computationFailed;
+  // Past the bounded wait the server still says COMPUTING and does not report scheduling off: keep asking, slower.
+  const stillComputing = boundedWaitReached && apiReason === null && !schedulingOff;
+  const notComputedYet = (boundedWaitReached && !stillComputing) || computationFailed;
 
   useEffect(() => {
     if (data || error) {
@@ -177,13 +183,13 @@ export function SystemHealthPanel({ now = new Date() }: { readonly now?: Date })
   }, [data]);
 
   useEffect(() => {
-    if (!computing) return;
+    if (!computing && !stillComputing) return;
     const handle = window.setTimeout(() => {
       setPolls((n) => n + 1);
       refresh();
-    }, COMPUTING_POLL_MS);
+    }, computing ? COMPUTING_POLL_MS : SLOW_COMPUTING_POLL_MS);
     return () => window.clearTimeout(handle);
-  }, [computing, data, refresh]);
+  }, [computing, stillComputing, data, refresh]);
 
   const retry = () => {
     setPolls(0);
@@ -223,7 +229,7 @@ export function SystemHealthPanel({ now = new Date() }: { readonly now?: Date })
   }
   if (!data && loadTimedOut) {
     return <StatePanel variant="error" title="System health could not be read"
-      body="Not computed yet (scheduled computation is off) · the read timed out after 20 s."
+      body="The system health read timed out after 20 s."
       announce="status" code="TIMEOUT" action={<M3Button emphasis="outlined" onClick={retry}>Retry</M3Button>} />;
   }
   if (!data) return <StatePanel variant="empty" title="Reading system health…" announce="status" />;
@@ -235,11 +241,12 @@ export function SystemHealthPanel({ now = new Date() }: { readonly now?: Date })
   const computedAt = data.computation.computed_at;
   const byVendor = k.monitored ? Object.entries(k.monitored.by_vendor).map(([v, n]) => `${vendorLabel(v)} ${n}`).join(" · ") : "";
   const byState = k.collection_not_ok ? Object.entries(k.collection_not_ok.by_state).map(([s, n]) => `${n} ${collectionWord(s).toLowerCase()}`).join(" · ") : "";
-  const notComputedLabel = apiReason ?? "not computed yet (scheduled computation is off)";
+  const notComputedLabel = apiReason
+    ?? (schedulingOff ? "not computed yet (scheduled computation is off)" : computationFailed ? "computation failed" : "not computed yet");
   const asOf = computedAt
     ? `computed ${new Date(computedAt).toISOString().slice(11, 16)} UTC`
     : notComputedYet ? notComputedLabel : "not computed yet";
-  const noFigure = computing
+  const noFigure = computing || stillComputing
     ? { state: "not_evaluated" as const, reason: "the first computation is running" }
     : notComputedYet
       ? { state: (computationFailed ? "unknown" : "not_evaluated") as "unknown" | "not_evaluated", reason: notComputedLabel }
@@ -287,10 +294,15 @@ export function SystemHealthPanel({ now = new Date() }: { readonly now?: Date })
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {computing ? <StatePanel variant="not_evaluated" title="First computation running" announce="status"
         body="The server is reading the stored sar texts and watchdog logs of every monitored device for the first time since it started; this panel asks again every few seconds." /> : null}
+      {stillComputing ? <StatePanel variant="not_evaluated" title="Still computing" announce="status"
+        body={`The first computation has not finished within ${(MAX_COMPUTING_POLLS * COMPUTING_POLL_MS) / 1000} s; the server still reports it running. This panel asks again every ${SLOW_COMPUTING_POLL_MS / 1000} s.`}
+        action={<M3Button emphasis="outlined" onClick={retry}>Retry</M3Button>} /> : null}
       {notComputedYet ? <StatePanel variant={computationFailed ? "error" : "not_evaluated"}
-        title={computationFailed ? "System health computation failed" : "Not computed yet (scheduled computation is off)"}
+        title={computationFailed ? "System health computation failed" : schedulingOff ? "Not computed yet (scheduled computation is off)" : "Not computed yet"}
         announce="status"
-        body={apiReason ?? "The first computation did not finish within the bounded wait: not computed yet (scheduled computation is off)."}
+        body={apiReason ?? (computationFailed
+          ? "The computation failed; the server gave no reason."
+          : "The first computation did not finish within the bounded wait and the server reports scheduled computation is off.")}
         code={apiReason ?? undefined}
         action={<M3Button emphasis="outlined" onClick={retry}>Retry</M3Button>} /> : null}
       {data.computation.state === "REFRESHING" ? <Typography role="status" sx={{ ...TYPE.label, color: m3.onSurfaceVar }}>Snapshot older than {Math.round(data.computation.snapshot_ttl_seconds / 60)} min; a refresh is running in the background.</Typography> : null}

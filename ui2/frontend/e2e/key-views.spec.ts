@@ -19,7 +19,7 @@ test("Inventory: opens a device and every available detail tab including Interfa
   const names = await tabs.getByRole("tab").allTextContents();
   for (const name of names) {
     // These are navigation tabs only; no action inside a panel is clicked.
-    expect(["Interfaces", "Routing", "Managed estate", "Cluster members", "Configuration", "Backup", "Logs", "Identity"].includes(name)).toBe(true);
+    expect(["Interfaces", "Routing", "Managed estate", "Members & Identity", "Configuration", "Backup", "Logs", "Identity"].includes(name)).toBe(true);
     await test.step(`Read ${name} tab`, async () => {
       await tabs.getByRole("tab", { name, exact: true }).click();
       await expect(page.getByRole("tabpanel", { name, exact: true })).toBeVisible();

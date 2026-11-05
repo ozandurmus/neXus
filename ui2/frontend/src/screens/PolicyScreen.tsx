@@ -11,7 +11,7 @@ import { m3 } from "../theme/m3Theme";
 import { cancelJob, listPolicies, getPolicyCollectionStatus, type PolicyCollectionMode, type PolicyCollectionStatus, listPolicySources, collectPolicies, type PolicyCollectionSource, getPolicy, getPolicyObject, type PolicyTarget, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage, getPolicyRule, type PolicyRuleDetail } from "../auth/adminApi";
 
 import { PolicyRuleTable, RuleDetailPanel, RuleHistory, SnapshotFreshnessChip, freshnessColor, scheduleLabel, sectionLabel, snapshotFreshness, reportPolicyLoadError, policyFailureText, type FreshnessState } from "./PolicyRuleViewer";
-import { syncStatusWords } from "./policyFirewalls";
+import { installationSummary, syncStatusWords } from "./policyFirewalls";
 export { collectedLabel, snapshotFreshness } from "./PolicyRuleViewer";
 import { PaginationFooter } from "../shell/DataTable";
 
@@ -28,12 +28,14 @@ export function usageRequest(preset: UsagePreset, days: number, query: string): 
   return { hitFilter: "", days, q: query };
 }
 
-import { PolicyOfflineTab } from "./PolicyOfflineTab";
-import { PolicyLookupTab } from "./PolicyLookupTab";
 import { PolicyChangesTab } from "./PolicyChangesTab";
 import { PolicyHygieneTab } from "./PolicyHygieneTab";
 import { PolicyDomainTab } from "./PolicyDomainTabs";
 import { PolicyContainerPrompt } from "./PolicyContainerPrompt";
+import { PolicyHygieneFleet } from "./PolicyHygieneFleet";
+import { PolicyObjectSearch } from "./PolicyObjectSearch";
+import { changesHref, lookupInPolicyHref } from "../shell/legacyRoutes";
+import { writeUrlParams } from "../shell/urlParams";
 import { statusWord } from "../shell/presenters";
 
 // The policy page API returns a fixed 200 rules per page (PolicyQueryService.page); the client does not choose it.
@@ -204,6 +206,8 @@ function SelectionMenu({ canCollect, collectDisabled, exporting, nothingSelected
 export interface ContainerSummary {
   key: string; sourceId: string; sourceName: string; vendor: string; containerId: string; containerName: string;
   policyIds: string[]; rules?: number; gateways: string[]; collectedAt: string;
+  /** The management server's reported sync state of every (package, target) pair, raw (UNKNOWN when it made no claim). */
+  syncStates?: string[];
 }
 export function summarizeContainers(policies: readonly PolicyMetadata[]): ContainerSummary[] {
   const groups = new Map<string, PolicyMetadata[]>();
@@ -216,6 +220,7 @@ export function summarizeContainers(policies: readonly PolicyMetadata[]): Contai
     const gateways = [...new Map(items.flatMap(p => p.targets).map(t => [t.deviceId, displayName(t.name, "Device")])).values()];
     return { key, sourceId: items[0].sourceId, sourceName: items[0].sourceName, vendor: items[0].vendor, containerId: items[0].containerId,
       containerName: items[0].containerName, policyIds: items.map(p => p.id), gateways,
+      syncStates: items.flatMap(p => p.targets.map(t => t.syncStatus)),
       rules: items.every(p => p.ruleCount !== undefined) ? items.reduce((sum, p) => sum + p.ruleCount!, 0) : undefined,
       collectedAt: stamps.length ? new Date(Math.max(...stamps)).toISOString() : "" };
   });
@@ -223,17 +228,24 @@ export function summarizeContainers(policies: readonly PolicyMetadata[]): Contai
 const GATEWAYS_SHOWN = 3;
 const vendorLabel = (vendor: string) => vendor === "PAN" ? "Panorama" : vendor === "CP" ? "MDS" : "Management server";
 
-type PolicyTab = "Rules" | "Objects" | "Installation" | "Hygiene" | "Changes" | "Lookup" | "Offline analysis";
+type PolicyTab = "Rules & Containers" | "Objects" | "Hygiene" | "Changes";
 /**
- * The seven tabs in their four kinds (UI review 2026-10-18 §2.1, roadmap 2.5): browse the stored policy, judge it,
- * trace its changes, ask it a question. A visual grouping only -- every tab, filter and route stays as it was.
+ * The four tabs in their three kinds (UI review 2026-11-05, C2; Argon R-16): browse the stored policy (the rules, with the
+ * containers and their installation, and the objects, searchable across containers), judge it (hygiene, with a fleet
+ * summary until one container is open), trace its changes. The seven tabs of the 2026-10-18 layout are not lost: Installation is a
+ * column and a section of Rules & Containers, Lookup is Trace > Policy rule lookup (reached from the "Search in this
+ * policy" link), and Offline analysis is under Tools. `?tab=` takes the slug of a tab; the old slugs are rewritten in
+ * `legacyRoutes`.
  */
 export const POLICY_TAB_GROUPS: ReadonlyArray<{ readonly group: string; readonly tabs: readonly PolicyTab[] }> = [
-  { group: "Browse", tabs: ["Rules", "Objects", "Installation"] },
+  { group: "Browse", tabs: ["Rules & Containers", "Objects"] },
   { group: "Judge", tabs: ["Hygiene"] },
   { group: "Trace", tabs: ["Changes"] },
-  { group: "Ask", tabs: ["Lookup", "Offline analysis"] },
 ];
+const POLICY_TAB_SLUG: Readonly<Record<PolicyTab, string>> = { "Rules & Containers": "rules", Objects: "objects", Hygiene: "hygiene", Changes: "changes" };
+export function policyTabFromSlug(slug: string | null): PolicyTab {
+  return (Object.entries(POLICY_TAB_SLUG).find(([, value]) => value === slug)?.[0] as PolicyTab | undefined) ?? "Rules & Containers";
+}
 
 /**
  * The one-line headline under the title (review §4.3): `59 containers · 2 sources · 69,000 rules · newest snapshot 4 h
@@ -269,7 +281,7 @@ export function snapshotDot(collectedAt: string | null | undefined, now: Date): 
 }
 /** The container table's columns and their share of the width at 1440; the two count columns keep their whole header. */
 const CONTAINER_COLUMNS: ReadonlyArray<readonly [string, string]> = [
-  ["Container", "22%"], ["Source", "18%"], ["Policies", "9%"], ["Rules", "9%"], ["Assigned gateways", "22%"], ["Last collected", "12%"], ["", "8%"],
+  ["Container", "18%"], ["Source", "14%"], ["Policies", "8%"], ["Rules", "8%"], ["Installation targets", "20%"], ["Installation status", "14%"], ["Last collected", "10%"], ["", "8%"],
 ];
 function ContainerSummaryTable({ rows, sourceCount, now, open }: { rows: ContainerSummary[]; sourceCount: number; now: Date; open: (row: ContainerSummary) => void }) {
   return <Box component="section" aria-label="Stored policy containers">
@@ -295,6 +307,11 @@ function ContainerSummaryTable({ rows, sourceCount, now, open }: { rows: Contain
               <TableCell>{row.rules ?? "UNKNOWN"}</TableCell>
               <TableCell>{row.gateways.length === 0 ? "Unassigned"
                 : <Tooltip title={row.gateways.join(", ")}><span>{row.gateways.slice(0, GATEWAYS_SHOWN).join(", ")}{row.gateways.length > GATEWAYS_SHOWN ? ` +${row.gateways.length - GATEWAYS_SHOWN} more` : ""}</span></Tooltip>}</TableCell>
+              {/* Installation as a column with its status (UI review 2026-11-05, C2): what the management server reports per
+                  target, in one line; a target it made no claim about is "not reported", never a fault of the target. */}
+              <TableCell>{(() => { const status = installationSummary(row.vendor, row.syncStates ?? []);
+                return <Tooltip title={status.reason}><Box component="span" data-installation={status.tone}
+                  sx={{ color: status.tone === "warn" ? m3.warning : status.tone === "good" ? m3.success : m3.onSurfaceVar, fontWeight: status.tone === "warn" ? 600 : undefined }}>{status.text}</Box></Tooltip>; })()}</TableCell>
               {/* The age in freshness ink: a snapshot the refresh has not touched for a day, or a week, is visible before it is opened. */}
               <TableCell title={row.collectedAt ? `${row.collectedAt} · ${fresh.reason}` : undefined}>
                 <Box component="span" data-freshness={fresh.state} sx={{ color: freshnessColor(fresh.state), fontWeight: fresh.state === "old" ? 600 : undefined }}>
@@ -335,7 +352,10 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [collectionStatus, setCollectionStatus] = useState("");
   const [selected, setSelected] = useState(() => new URLSearchParams(window.location.search).get("policy_id") ?? "");
   const [device, setDevice] = useState(() => new URLSearchParams(window.location.search).get("device_id") ?? "");
-  const [tab, setTab] = useState<PolicyTab>(() => new URLSearchParams(window.location.search).get("tab") === "objects" ? "Objects" : "Rules");
+  const [tab, setTabState] = useState<PolicyTab>(() => policyTabFromSlug(new URLSearchParams(window.location.search).get("tab")));
+  // The tab is part of the address (a shared link opens on it); replaced, never pushed.
+  const setTab = useCallback((next: PolicyTab) => { setTabState(next); writeUrlParams({ tab: next === "Rules & Containers" ? null : POLICY_TAB_SLUG[next] }); }, []);
+  const [installationOpen, setInstallationOpen] = useState(false);
   const [usage, setUsage] = useState<UsagePreset>("");
   const [hitDays, setHitDays] = useState(90);
   const [hygieneClass, setHygieneClass] = useState("");
@@ -477,7 +497,12 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     }
     catch (error) { if (request === drawerRequest.current) setDrawer({ error: policyFailureText(error, "Object details could not be loaded."), errorCode: reportPolicyLoadError("object", error) }); }
   };
-  const [lookupRule, setLookupRule] = useState<{ policy: string; rule: string } | null>(null);
+  // A deep link (`?screen=policy&policy_id=<id>&rule=<id>`, from Trace and Changes) opens the rule once its policy is selected.
+  const [lookupRule, setLookupRule] = useState<{ policy: string; rule: string } | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const policy = params.get("policy_id"), rule = params.get("rule");
+    return policy && rule ? { policy, rule } : null;
+  });
   const openRuleId = async (id: string, days = 90, policy = selected) => {
     const request = ++drawerRequest.current; setDrawer({ loading: true });
     try {
@@ -513,6 +538,8 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   // The summary follows the same device scope and tree search as the tree, so the two never disagree.
   const summaries = useMemo(() => summarizeContainers(visible.filter(p => !treeTerm
     || [p.sourceName, p.containerName, p.name].some(text => text.toLowerCase().includes(treeTerm)))), [visible, treeTerm]);
+  // The container rows with display names resolved, as every container list on this screen shows them.
+  const policyRows = useMemo(() => summaries.map(row => ({ ...row, containerName: displayName(row.containerName, "Policy container"), sourceName: displayName(row.sourceName, "Management server") })), [summaries]);
   const openContainer = (row: ContainerSummary) => {
     const first = catalog.find(p => p.id === row.policyIds[0]);
     if (!first) return;
@@ -713,9 +740,14 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         })}
         </Box>
       </Box>
-      <Box component="section" aria-label="Policy content" ref={content} onScroll={tab === "Rules" ? syncRuleWindow : undefined} sx={{ minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflowY: "auto", overflowX: "hidden", bgcolor: m3.scLowest, borderRadius: 3, p: 2, border: `1px solid ${m3.outlineVar}`, '& > :not([role="region"])': { flexShrink: 0 } }}>
+      <Box component="section" aria-label="Policy content" ref={content} onScroll={tab === "Rules & Containers" ? syncRuleWindow : undefined} sx={{ minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflowY: "auto", overflowX: "hidden", bgcolor: m3.scLowest, borderRadius: 3, p: 2, border: `1px solid ${m3.outlineVar}`, '& > :not([role="region"])': { flexShrink: 0 } }}>
         <Stack direction="row" justifyContent="space-between" flexWrap="wrap" gap={2} sx={{ mb: 2 }}>
-          <Typography variant="h6">{data ? displayName(data.metadata.name, "Policy") : "Stored policies"}</Typography>
+          <Stack direction="row" alignItems="center" gap={1.5} flexWrap="wrap">
+            <Typography variant="h6">{data ? displayName(data.metadata.name, "Policy") : "Stored policies"}</Typography>
+            {/* Lookup is Trace > Policy rule lookup (C2/C3); this link opens it scoped to the policy open here. */}
+            {selected && <Button size="small" variant="outlined" component="a" href={lookupInPolicyHref(selected)} sx={{ textTransform: "none", borderRadius: "16px" }}
+              title="Opens Trace, policy rule lookup, scoped to this policy">Search in this policy</Button>}
+          </Stack>
           <FormControl size="small" sx={{ minWidth: 240 }}>
             <InputLabel id="policy-device-label">Jump to device's policy</InputLabel>
             <Select labelId="policy-device-label" label="Jump to device's policy" value={device} onChange={e => {
@@ -752,7 +784,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         {collectionStatus && <Typography role="status" sx={{ mb: 1 }}>{collectionStatus}</Typography>}
         {/* Grouped tab bar (roadmap 2.5): the group word sits above the first tab of its group behind a hairline; the
             accessible name of every tab stays its own label. */}
-        {<Tabs value={tab} onChange={(_, value) => { setTab(value); setDrawer(null); drawerRequest.current++; }} aria-label="Policy tabs" sx={{ mb: 2, minHeight: 56 }}>
+        {<Tabs value={tab} onChange={(_, value: PolicyTab) => { setTab(value); setDrawer(null); drawerRequest.current++; }} aria-label="Policy tabs" sx={{ mb: 2, minHeight: 56 }}>
           {POLICY_TAB_GROUPS.flatMap((g, gi) => g.tabs.map((label, ti) => <Tab key={label} value={label} aria-label={label} data-tab-group={g.group}
             sx={{ minHeight: 56, alignItems: "flex-start", pt: 0.75, ...(ti === 0 && gi > 0 ? { ml: 1.5, borderLeft: `1px solid ${m3.outlineVar}`, pl: 2 } : {}) }}
             label={<Box component="span" sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 0.25 }}>
@@ -760,22 +792,39 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
               <Box component="span">{label}</Box>
             </Box>} />))}
         </Tabs>}
-        {(tab === "Objects" || tab === "Installation") && objectMetadata && <PolicyDomainTab
-          key={`${tab}:${objectMetadata.sourceId}:${objectMetadata.containerId}:${revision}`}
-          tab={tab} metadata={objectMetadata} policies={catalog} />}
-        {(tab === "Objects" || tab === "Installation") && !objectMetadata && !loadingTree && !error && <PolicyContainerPrompt tab={tab} now={now} open={openContainer}
-          rows={summaries.map(row => ({ ...row, containerName: displayName(row.containerName, "Policy container"), sourceName: displayName(row.sourceName, "Management server") }))} />}
-        <Box hidden={tab !== "Lookup"}>
-          <PolicyLookupTab policies={catalog} policy={selected} selectPolicy={setSelected}
-            openRule={(policy, rule) => { setSelected(policy); setLookupRule({ policy, rule }); }} />
-        </Box>
-        {tab === "Changes" && <PolicyChangesTab key={revision} policies={catalog} devices={targets} openRule={(policy, rule) => void openRuleId(rule, 90, policy)} />}
-        {tab === "Offline analysis" && <PolicyOfflineTab key={selected} policy={selected} openRule={id => void openRuleId(id, 90)} />}
+        {tab === "Objects" && <>
+          {/* Cross-container search (C2): find an object by name or value over every stored container, without opening one first. */}
+          <PolicyObjectSearch containers={policyRows} open={openContainer} />
+          {objectMetadata && <PolicyDomainTab
+            key={`Objects:${objectMetadata.sourceId}:${objectMetadata.containerId}:${revision}`}
+            tab="Objects" metadata={objectMetadata} policies={catalog} />}
+          {!objectMetadata && !loadingTree && !error && <PolicyContainerPrompt tab="Objects" now={now} open={openContainer} rows={policyRows} />}
+        </>}
+        {tab === "Changes" && <>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            The stored rule revisions of every policy, with filters and a CSV export. The estate-wide timeline of user changes, neXus jobs and device events is on{" "}
+            <Box component="a" href={changesHref("feed")} sx={{ color: m3.primary }}>Changes</Box>.
+          </Typography>
+          <PolicyChangesTab key={revision} policies={catalog} devices={targets} openRule={(policy, rule) => void openRuleId(rule, 90, policy)} />
+        </>}
         {tab === "Hygiene" && (selected || loadingTree || error
           ? <PolicyHygieneTab key={`${selected}:${revision}:${hygieneClass}`} policy={selected} initialClass={hygieneClass} openRule={(id, days) => void openRuleId(id, days)} openObject={openObject} />
-          : <PolicyContainerPrompt tab="Hygiene" now={now} open={openContainer}
-            rows={summaries.map(row => ({ ...row, containerName: displayName(row.containerName, "Policy container"), sourceName: displayName(row.sourceName, "Management server") }))} />)}
-        <Box role="tabpanel" aria-label="Rules" hidden={tab !== "Rules"} sx={{ display: tab === "Rules" ? "contents" : "none" }}>
+          : <>
+            {/* No container open: the fleet first (C2), then the containers to open. */}
+            {!loadingTree && !error && <PolicyHygieneFleet rows={policyRows} now={now} />}
+            <PolicyContainerPrompt tab="Hygiene" now={now} open={openContainer} rows={policyRows} />
+          </>)}
+        <Box role="tabpanel" aria-label="Rules & Containers" hidden={tab !== "Rules & Containers"} sx={{ display: tab === "Rules & Containers" ? "contents" : "none" }}>
+        {/* Installation (C2): the old tab is a section of this one, opened on demand so its read is made only when asked for. */}
+        {selected && objectMetadata && <Box component="section" aria-label="Installation" sx={{ mb: 1.5 }}>
+          <Box component="button" type="button" aria-expanded={installationOpen} onClick={() => setInstallationOpen(open => !open)}
+            sx={{ all: "unset", cursor: "pointer", color: m3.primary, fontSize: 13, fontWeight: 500, display: "inline-flex", alignItems: "center", gap: 0.75,
+                  "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: 2 } }}>
+            <Icon name={installationOpen ? "collapse" : "expand"} size={16} />Installation: where this container's packages are installed
+          </Box>
+          {installationOpen && <PolicyDomainTab key={`Installation:${objectMetadata.sourceId}:${objectMetadata.containerId}:${revision}`}
+            tab="Installation" metadata={objectMetadata} policies={catalog} />}
+        </Box>}
         {error && <Box data-error-code={errorCode}><EmptyPanel title="Policy unavailable" body={error}><Button onClick={() => setRevision(n => n + 1)}>Retry</Button></EmptyPanel></Box>}
         {loadingTree && !error && <Typography role="status">Loading policies…</Typography>}
         {!selected && !loadingTree && !error && (sources.length === 0

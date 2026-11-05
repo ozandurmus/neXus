@@ -312,6 +312,13 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /api/v2/backups/deviations/size-anomalies/*/accept", ActionRegistry.BACKUP_SIZE_ANOMALY_ACCEPT),
             // WORKER.md (movement NXS-LOCAL-0174): body-only, no path variable,
             // same shape as /notifications' own route.
+            // Reports R1 (REPORTS_R1_CONTRACT.md): catalogue, preview and history read; generate and download.
+            Map.entry("GET /api/v2/reports/catalogue", ActionRegistry.REPORT_READ),
+            Map.entry("POST /api/v2/reports/preview", ActionRegistry.REPORT_READ),
+            Map.entry("GET /api/v2/reports/runs", ActionRegistry.REPORT_READ),
+            Map.entry("GET /api/v2/reports/runs/*", ActionRegistry.REPORT_READ),
+            Map.entry("POST /api/v2/reports/runs", ActionRegistry.REPORT_GENERATE),
+            Map.entry("GET /api/v2/reports/runs/*/download", ActionRegistry.REPORT_GENERATE),
             Map.entry("GET /project-plan", ActionRegistry.PROJECT_PLAN_READ));
 
     /**

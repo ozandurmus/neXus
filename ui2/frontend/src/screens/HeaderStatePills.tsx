@@ -6,7 +6,7 @@ import { StatusPill } from "../shell/StatusPill";
 import { formatStamp, relativeAge } from "../shell/time";
 import { readinessReasonLabel } from "../shell/presenters";
 import { backupDisplayWord } from "./backupWords";
-import { READINESS_STALE_AFTER_MS } from "./HaReadinessList";
+import { FRESHNESS_ROLE, freshnessOf } from "../shell/freshness";
 import {
   getDeviceCompliance,
   getDeviceConfiguration,
@@ -177,7 +177,8 @@ type ClusterDiffOverview = Pick<OverviewView, "exceptions" | "attention">;
  * comparison time on hover); `· differ` when the Overview names it among the differing clusters without its count
  * (it carries the count for the five most different only); `· no differences` only when every cluster was comparable,
  * so a cluster the Overview does not name is known to agree. A cluster that could be the not-comparable one, or a
- * failed Overview read, gets no pill: nothing is claimed. A difference is a review signal, not a fault: grey.
+ * failed Overview read, gets no pill: nothing is claimed. A difference is a finding to review, not a fault: amber
+ * (UI review 2026-11-05, B5; it was grey); "no differences" stays grey.
  */
 export function clusterCompareFact(overview: ClusterDiffOverview | null | undefined, clusterRef: string): HeaderFact | null {
   const diff = overview?.exceptions?.cluster_diff;
@@ -189,13 +190,13 @@ export function clusterCompareFact(overview: ClusterDiffOverview | null | undefi
     return {
       key: "members-compared",
       label: `Members compared · ${n} ${n === 1 ? "setting differs" : "settings differ"}`,
-      tone: "neutral",
+      tone: "warn",
       href,
       title: `${row.diff_section_count} ${row.diff_section_count === 1 ? "section" : "sections"}: ${(row.diff_sections ?? []).join(" · ") || "not listed"} · compared ${formatStamp(row.computed_at)}`,
     };
   }
   if ((diff.all_refs ?? []).includes(clusterRef)) {
-    return { key: "members-compared", label: "Members compared · differ", tone: "neutral", href,
+    return { key: "members-compared", label: "Members compared · differ", tone: "warn", href,
       title: "The members' newest configuration reads differ; the setting count is listed for the five most different clusters only. The Configuration tab compares the members side by side." };
   }
   const tile = overview?.attention?.cluster_diff;
@@ -261,17 +262,17 @@ export function readinessFact(rows: readonly CpFailoverSummary[] | null | undefi
       title: row?.refusalReason ? readinessReasonLabel(row.refusalReason) : "No readiness check has been recorded for this cluster." };
   }
   const { word, tone } = READINESS_WORDS[row.readiness.status] ?? { word: row.readiness.status, tone: "neutral" as Tone };
-  const observedMs = row.readiness.observedAt ? new Date(row.readiness.observedAt).getTime() : Number.NaN;
-  const ageMs = Number.isNaN(observedMs) ? null : Math.max(0, now.getTime() - observedMs);
-  const stale = ageMs !== null && ageMs > READINESS_STALE_AFTER_MS;
-  const effectiveTone: Tone = tone === "ok" && stale ? "warn" : tone;
+  // A Ready word takes the age's colour from the one freshness scale (B1): amber 24-72 h, red over 72 h.
+  const level = freshnessOf(row.readiness.observedAt, now);
+  const stale = level === "ageing" || level === "stale";
+  const effectiveTone: Tone = tone === "ok" && stale ? FRESHNESS_ROLE[level] : tone;
   const reason = row.readiness.status === "NOT_READY" ? readinessReasonLabel(row.readiness.stopCode ?? row.readiness.failedCheck) : null;
   return {
     key: "readiness",
     label: `Readiness ${word} · ${relativeAge(row.readiness.observedAt, now)}`,
     tone: effectiveTone,
     href,
-    title: `${formatStamp(row.readiness.observedAt)}${stale && tone === "ok" ? " · Stale (> 24 h)" : ""}${reason ? ` · ${reason}` : ""}`,
+    title: `${formatStamp(row.readiness.observedAt)}${stale && tone === "ok" ? ` · Stale (${level === "stale" ? "over 72 h" : "over 24 h"})` : ""}${reason ? ` · ${reason}` : ""}`,
   };
 }
 

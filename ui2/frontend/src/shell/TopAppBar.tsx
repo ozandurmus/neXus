@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import Link from "@mui/material/Link";
+import Menu from "@mui/material/Menu";
 import Typography from "@mui/material/Typography";
 import Tooltip from "@mui/material/Tooltip";
 import { MONO, m3 } from "../theme/m3Theme";
@@ -14,6 +15,7 @@ import { useSession } from "../auth/SessionContext";
 import { NexusWordmark } from "../brand/NexusWordmark";
 import { useFetchOnMount } from "./useFetchOnMount";
 import { listNotifications, getProjectPlan, responsesAreMasked } from "../auth/adminApi";
+import { primaryRoleLabel, roleTokenLabel } from "./roleLabel";
 
 /**
  * The minimal notification badge NXS-LOCAL-0165 adds (WORKER.md
@@ -79,6 +81,43 @@ function BuildBadge() {
         <StatusChip tone="neutral" label={label} dense />
       </Box>
     </Tooltip>
+  );
+}
+
+/**
+ * The account menu (UI review 2026-11-05, B7): who is signed in and with which roles, the zone every time is shown in, and
+ * the running build. The build stamp and the time-zone note used to sit in the bar on every screen, where they read as part of
+ * the page; they are facts about the session and the deployment, so they live here, one click away. The build is read only when
+ * the menu is opened.
+ */
+function AccountMenu({ initials, displayName, roles, onSignOut }: {
+  readonly initials: string; readonly displayName: string; readonly roles: readonly string[]; readonly onSignOut: () => void;
+}) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  return (
+    <>
+      <Tooltip title="Account: roles, time zone, build">
+        <IconButton aria-label="Account menu" aria-haspopup="menu" aria-expanded={Boolean(anchor)} onClick={(e: MouseEvent<HTMLElement>) => setAnchor(e.currentTarget)}
+          sx={{ width: 34, height: 34, bgcolor: m3.primaryContainer, color: m3.onPrimaryContainer, fontWeight: 600, fontSize: 13, flexShrink: 0,
+                "&:hover": { bgcolor: m3.primaryContainer } }}>
+          {initials}
+        </IconButton>
+      </Tooltip>
+      <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)} MenuListProps={{ "aria-label": "Account", dense: true }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }}>
+        <Box sx={{ px: 2, py: 1, minWidth: 260, display: "flex", flexDirection: "column", gap: 0.75, color: m3.onSurface }}>
+          <Typography sx={{ fontWeight: 600 }}>{displayName}</Typography>
+          <Typography variant="body2">{roles.length > 0 ? roles.map(roleTokenLabel).join(" · ") : "No Role"}</Typography>
+          <Tooltip title="Every time on every screen is Turkey time (Europe/Istanbul). Hover a time for the UTC value; exports carry UTC.">
+            <Typography variant="caption" sx={{ color: m3.onSurfaceVar, width: "fit-content" }}>Times in {DISPLAY_TZ_LABEL}</Typography>
+          </Tooltip>
+          {anchor && <Box sx={{ display: "inline-flex" }}><BuildBadge /></Box>}
+        </Box>
+        <Box sx={{ borderTop: `1px solid ${m3.outlineVar}`, mt: 0.5, pt: 0.5, px: 1 }}>
+          <M3Button emphasis="text" onClick={() => { setAnchor(null); onSignOut(); }}>Sign out</M3Button>
+        </Box>
+      </Menu>
+    </>
   );
 }
 
@@ -215,8 +254,6 @@ export function TopAppBar() {
           beside every time on hover and the build in Administration › System. */}
       <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: { xs: 1, lg: 2 }, color: m3.onSurfaceVar, minWidth: 0, flex: "0 1 auto" }}>
         <MaskChip />
-        <Tooltip title="Every time on every screen is Turkey time (Europe/Istanbul). Hover a time for the UTC value; exports carry UTC."><Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap", display: { xs: "none", lg: "block" } }}>Times in {DISPLAY_TZ_LABEL}</Typography></Tooltip>
-        <Box sx={{ display: { xs: "none", lg: "inline-flex" } }}><BuildBadge /></Box>
         <DisplayControls />
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
           <Icon name="bell" size={20} />
@@ -224,32 +261,14 @@ export function TopAppBar() {
         </Box>
         {session ? (
           <>
-            <Box
-              sx={{
-                width: 34,
-                height: 34,
-                borderRadius: "50%",
-                bgcolor: m3.primaryContainer,
-                color: m3.onPrimaryContainer,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 600,
-                fontSize: 13,
-                flexShrink: 0,
-              }}
-            >
-              {userInitials}
-            </Box>
+            <AccountMenu initials={userInitials} displayName={session.displayName} roles={displayedRoles} onSignOut={session.onSignOut} />
             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.2, whiteSpace: "nowrap" }}>
               <Typography variant="body1" sx={{ fontWeight: 500, color: m3.onSurface }}>
                 {session.displayName}
               </Typography>
-              <Tooltip title={displayedRoles.join(", ")}>
+              <Tooltip title={displayedRoles.map(roleTokenLabel).join(", ")}>
                 <Typography variant="body2" sx={{ cursor: "default", whiteSpace: "nowrap" }}>
-                  {displayedRoles.length > 0
-                    ? displayedRoles[0].replace("role:", "").replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())
-                    : "No Role"}
+                  {primaryRoleLabel(displayedRoles)}
                 </Typography>
               </Tooltip>
             </Box>

@@ -87,6 +87,17 @@ DENIED when routing is uncertain (access does not use routing), a PAN deny does 
 source segment shared by two firewalls starts one branch at each; one-member clusters, config-derived interfaces and
 `PBR_PRESENT` are caveats.
 
+Amendment 2026-11-05 (engineer decision under the PO freeze delegation; analysis in
+`PATH_UNKNOWN_REDUCTION_PLAN_2026_11_05.md`, DRAFT for its proposed items): when several equally specific unjoined
+segments contain the source (duplicate private prefix), every candidate first hop is traced; the verdict stands only
+when every candidate is traced in full and all give the same decided verdict (caveat `INGRESS_CANDIDATES_AGREE`,
+ingress status stays `AMBIGUOUS_INGRESS`), otherwise `UNKNOWN (AMBIGUOUS_INGRESS)`. Nothing is joined and no candidate
+is chosen; the behind-a-cloud tie of F§4.2 is unchanged. A `NO_ROUTE` branch names its cause when known
+(`ACTIVE_MEMBER_UNPROVEN`, `ROUTE_TABLE_EMPTY`). Diagnostics only: hop notes `EXIT_VIA_DEFAULT_ROUTE` /
+`EXIT_VIA_VSX_WARP`, branch warning `DESTINATION_IN_KNOWN_TOPOLOGY`; a source or destination address held by an
+enrolled unit is the caveat `SOURCE_IS_UNIT_ADDRESS` / `DESTINATION_IS_UNIT_ADDRESS` (to/from-the-box traffic is not
+modelled).
+
 ## 5. Path engine
 
 Query, ingress, output contract: F§4.1, F§4.2, F§4.7, plus A's `executive_summary` block. IPv4 only. Source port not

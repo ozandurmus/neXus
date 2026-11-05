@@ -118,6 +118,33 @@ describe("Configuration cluster detail after the Fable review", () => {
     expect(screen.getByRole("button", { name: /^▾\s*NTP/ })).toHaveAttribute("aria-expanded", "true");
   });
 
+  it("shows only counted differences under Differences only, never the expected member-specific rows (UI review 2026-11-05, B5)", async () => {
+    stubConfigs();
+    render(withTheme(<ClusterConfigurationDetail clusterRef="CLS-ROMEO-01" members={MEMBERS} />));
+    await waitFor(() => expect(screen.getByText("1 difference")).toBeInTheDocument());
+    expect(screen.getByRole("checkbox", { name: "Differences only" })).toBeChecked();
+    expect(screen.queryByText("EXPECTED")).toBeNull();
+    expect(screen.queryByText("Hostname", { selector: "td *, td" })).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Differences only" }));
+    expect(screen.getAllByText("EXPECTED").length).toBeGreaterThan(0);
+  });
+
+  it("opens on the full view when members hold only expected member-specific values", async () => {
+    const same = CP_A.replace("FW-TANGO-01", "FW-TANGO-02");
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      const cfg = { collected_at: "2026-09-22T22:57:54Z", vendor: "check_point", read_kind: "show_configuration", canonical_hash: "h", text_readable: true,
+        change_state: "unchanged", withheld_line_count: 0, sanitized_text_available: true, index: [], overrides: [], supplementary_runs: [] };
+      if (url === "/devices/m1/configuration" || url === "/devices/m2/configuration") return Promise.resolve(jsonResponse(200, { ...cfg, device_id: url.split("/")[2] }));
+      if (url === "/devices/m1/configuration/text") return Promise.resolve(new Response(CP_A, { status: 200 }));
+      if (url === "/devices/m2/configuration/text") return Promise.resolve(new Response(same, { status: 200 }));
+      return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
+    }));
+    render(withTheme(<ClusterConfigurationDetail clusterRef="CLS-ROMEO-01" members={MEMBERS} />));
+    await waitFor(() => expect(screen.getByText("no differences")).toBeInTheDocument());
+    expect(screen.getByRole("checkbox", { name: "Differences only" })).not.toBeChecked();
+  });
+
   it("renders the per-member identity table with virtual systems collapsed to the cluster", async () => {
     stubConfigs();
     render(withTheme(<ClusterConfigurationDetail clusterRef="CLS-ROMEO-01" members={MEMBERS} />));

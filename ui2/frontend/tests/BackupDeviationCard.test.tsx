@@ -77,6 +77,8 @@ describe("the Backups screen with comparisons (2026-10-23)", () => {
       return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
     }));
     render(<BackupScreen />);
+    // UI review 2026-11-05, B2: the device list opens from the card in a drawer
+    fireEvent.click(await screen.findByRole("link", { name: "Which devices →" }));
     expect(await screen.findByRole("link", { name: "FW-TANGO-04-M1: open the configuration changes" })).toHaveAttribute("href", configChangesHref("d1"));
     const card = screen.getByText("Active major deviations", { selector: "[data-kpi] p" }).closest("[data-kpi]")!;
     expect(card.querySelector("[data-kpi-figure]")?.textContent).toBe("2");

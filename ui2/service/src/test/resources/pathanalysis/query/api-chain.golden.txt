@@ -619,7 +619,7 @@
       "verdict_reason" : "FIRST_MATCHING_RULE",
       "reasons" : [ "FIRST_MATCHING_RULE" ],
       "caveats" : [ ],
-      "notes" : [ "CP_IMPLIED_RULES_NOT_MODELED" ],
+      "notes" : [ "CP_IMPLIED_RULES_NOT_MODELED", "EXIT_VIA_DEFAULT_ROUTE" ],
       "flags" : [ ]
     } ],
     "return_path" : {

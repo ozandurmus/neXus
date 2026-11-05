@@ -74,17 +74,18 @@ describe("Overview -- executive (EXEC_OVERVIEW_DESIGN_2026_09_25_FABLE.md)", () 
     render(<OverviewScreen />);
     expect(await screen.findByText("Estate map")).toBeInTheDocument();
     expect(screen.getByLabelText("FW-TANGO-01: Critical finding").getAttribute("href")).toBe("?screen=inventory&device_id=d1");
-    expect(screen.getByLabelText("FW-ROMEO-01: Evidence ageing")).toBeInTheDocument();
+    expect(screen.getByLabelText("FW-ROMEO-01: Data ageing")).toBeInTheDocument();
     expect(screen.getByText("No archive")).toBeInTheDocument();
   });
 
-  it("states the three facts over their own populations", async () => {
+  it("states the four pillars over their own populations, in plain words (C1, C7)", async () => {
     stubWithControls(overview({ estate: ESTATE } as Partial<OverviewView>));
     render(<OverviewScreen />);
-    expect(await screen.findByText("Critical failures")).toBeInTheDocument();
+    for (const pillar of ["Security posture", "Backup coverage", "HA readiness", "Data freshness"]) expect(await screen.findByText(pillar)).toBeInTheDocument();
     expect(screen.getByText("of 2 firewalls")).toBeInTheDocument();
-    expect(screen.getByText("19 backup targets have no stored archive")).toBeInTheDocument();
-    expect(screen.getByText("98 of 105 active devices read in the last 24 h · 3 never read")).toBeInTheDocument();
+    expect(screen.getByText("19 backup targets have no stored backup")).toBeInTheDocument();
+    expect(screen.getByText("read in the last 24 h · 3 never read")).toBeInTheDocument();
+    expect(screen.getByText("of 105 devices")).toBeInTheDocument();
   });
 
   it("keeps job failures and connection errors off the executive summary", async () => {
@@ -108,7 +109,9 @@ describe("Overview -- executive (EXEC_OVERVIEW_DESIGN_2026_09_25_FABLE.md)", () 
     expect(screen.getByText("CP")).toBeInTheDocument();
     expect(screen.getByText("PAN")).toBeInTheDocument();
     expect(screen.queryByText("High only")).toBeNull();
-    expect(screen.getByText("29.2%")).toBeInTheDocument();
+    // B4: 708 / (708 + 1312) = 35.0 % of evidenced checks pass; the assured 29.2 % is not the headline
+    expect(screen.getByText("35%")).toBeInTheDocument();
+    expect(screen.queryByText("29.2%")).toBeNull();
     expect(screen.getByText("Technical checks. Not an audit certification.")).toBeInTheDocument();
   });
 
@@ -155,16 +158,86 @@ describe("Overview counts reconcile (UI review 2026-10-17)", () => {
     expect(estateDevicesLabel({ active_devices: 105 })).toBe("105 enrolled devices");
   });
 
-  it("shows the same framework percentage the Compliance card computes from the same parts", async () => {
-    // 749 / (749 + 1266 + 500) = 29.78 % -> 29.8; the Compliance card's score_pct uses the same total and rounding
+  it("shows the same framework shares the Compliance card computes from the same parts (B4)", async () => {
+    // 749 / (749 + 1266) = 37.17 % -> 37.2 of evidenced checks pass; 500 / 2515 = 19.88 % -> 19.9 have no evidence
     stubWithControls(overview({ estate: ESTATE, compliance: { state: "OK", reason: null, evaluated: 119, of_firewalls: 123, observed_pct: 37.2,
       assured_pct: 29.8, coverage_pct: 80.1, critical_deficiencies: 166, data_gaps: 500,
       frameworks: [{ name: "CIS Benchmark", pass: 749, fail: 1266, unavailable: 500, total: 2515, score_pct: 29.8 }] } } as Partial<OverviewView>));
     render(<OverviewScreen />);
     expect(await screen.findByText("Compliance by framework")).toBeInTheDocument();
-    const line = screen.getByText(/demonstrated pass/).textContent ?? "";
-    expect(line).toContain("29.8% demonstrated pass");
-    expect(line).toContain("80.1% assessed");
+    const line = screen.getByText(/of evidenced controls pass/).textContent ?? "";
+    expect(line).toBe("37.2% of evidenced controls pass · 19.9% have no evidence");
+    expect(document.body.textContent).not.toMatch(/demonstrated pass/);
+  });
+
+  it("lists CIS and NIST first, whatever order the service returns (PO 2026-11-05)", async () => {
+    const fw = (name: string) => ({ name, pass: 10, fail: 10, unavailable: 0, total: 20, score_pct: 50 });
+    stubWithControls(overview({ estate: ESTATE, compliance: { state: "OK", reason: null, evaluated: 2, of_firewalls: 2, observed_pct: 50, assured_pct: 50,
+      coverage_pct: 100, critical_deficiencies: 0, data_gaps: 0,
+      frameworks: [fw("Financial Baseline"), fw("PCI-DSS v4.0.1"), fw("NIST SP 800-53"), fw("CIS Benchmark")] } } as Partial<OverviewView>));
+    render(<OverviewScreen />);
+    await screen.findByText("Compliance by framework");
+    const order = [...document.querySelectorAll("[data-framework]")].map((e) => e.getAttribute("data-framework"));
+    expect(order).toEqual(["CIS Benchmark", "NIST SP 800-53", "Financial Baseline", "PCI-DSS v4.0.1"]);
   });
 });
 
+
+describe("Executive home (UI review 2026-11-05, C1 / B1)", () => {
+  const HOURS_AGO = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+  const staleEstate = { ...ESTATE, facts: { critical: { k: 0, n: 2 }, backups: { a: 102, b: 102 }, evidence: { r: 1, d: 105, never: 0 } },
+    devices: ESTATE.devices.map((x, i) => ({ ...x, last_read_at: HOURS_AGO(30 + i) })) };
+
+  it("says AT RISK with the reason when the last reads show a known defect, and lists at most five lines with ages and links", async () => {
+    stubWithControls(overview({ estate: ESTATE, compliance: { state: "OK", reason: null, evaluated: 2, of_firewalls: 2, observed_pct: 50, assured_pct: 40,
+      coverage_pct: 80, critical_deficiencies: 3, data_gaps: 1, frameworks: [] } } as Partial<OverviewView>), [
+      { control_id: "cp1", title: "Account lockout", severity: "CRITICAL", fail_count: 2, target_device_count: 2, data_unavailable_count: 0, vendors: ["check_point"], status: "FAIL" },
+    ]);
+    render(<OverviewScreen />);
+    const word = await screen.findByLabelText(/^Estate verdict: AT RISK$/);
+    expect(word).toHaveTextContent("AT RISK");
+    expect(screen.getByText(/1 firewall fails a critical check, 19 backup targets have no stored backup/)).toBeInTheDocument();
+    const list = screen.getByTestId("needs-attention");
+    const lines = [...list.querySelectorAll("[data-attention]")];
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.length).toBeLessThanOrEqual(5);
+    const backup = list.querySelector('[data-attention="backup-missing"] a')!;
+    expect(backup).toHaveAttribute("href", "?screen=backups&artefact=none");
+    expect(backup.textContent).toMatch(/19 of 102 backup targets have no stored backup/);
+    expect(backup.textContent).toMatch(/last backup run just now/);
+    expect(list.querySelector('[data-attention="critical-failing"] a')).toHaveAttribute("href", "?screen=compliance&severity=critical&result=fail");
+    expect(list.querySelector('[data-attention="top-control"] a')).toHaveAttribute("href", "?screen=compliance&q=cp1");
+    // counts only: the attention lines never carry a device name
+    expect(list.textContent).not.toMatch(/FW-|CLS-/);
+  });
+
+  it("shows the stale-data banner and the freshness sentence when under 80 % of active devices were read in 24 h (B1)", async () => {
+    stubWithControls(overview({ estate: staleEstate } as Partial<OverviewView>));
+    render(<OverviewScreen />);
+    const banner = await screen.findByRole("status", { name: "Data freshness warning" });
+    expect(banner.textContent).toContain("104 of 105 active devices were last read more than 24 h ago");
+    expect(banner.querySelector("a")).toHaveAttribute("href", "?screen=inventory&inventory_age=stale");
+    expect(screen.getByTestId("freshness-sentence").textContent).toMatch(/^Data is out of date: 104 of 105 active devices were last read more than 24 h ago · newest read just now · oldest 32 h ago\.$/);
+    // no known defect, but stale data: the verdict is UNKNOWN, never HEALTHY
+    expect(await screen.findByLabelText("Estate verdict: UNKNOWN")).toBeInTheDocument();
+  });
+
+  it("shows no banner when the data is fresh enough", async () => {
+    stubWithControls(overview({ estate: ESTATE } as Partial<OverviewView>));
+    render(<OverviewScreen />);
+    await screen.findByTestId("executive-verdict");
+    expect(screen.queryByRole("status", { name: "Data freshness warning" })).toBeNull();
+  });
+
+  it("keeps the framework bars and the change pulse below the attention list", async () => {
+    stubWithControls(overview({ estate: ESTATE, policy_install: { state: "OK", of: 103, today: 4, yesterday: 1, days_2_7: 60, older: 30, unknown: 8 } } as Partial<OverviewView>));
+    render(<OverviewScreen />);
+    const pulse = await screen.findByTestId("change-pulse");
+    const attention = screen.getByTestId("needs-attention");
+    expect(attention.compareDocumentPosition(pulse) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(pulse.querySelector('[data-pulse="config"]')?.textContent).toContain("5 of 103 devices");
+    expect(pulse.querySelector('[data-pulse="cluster"]')?.textContent).toContain("3 of 31 clusters · 8 not comparable");
+    expect(pulse.querySelector('[data-pulse="policy"]')?.textContent).toContain("4 of 103 gateways");
+    expect(pulse.querySelector('[data-pulse="policy"]')?.textContent).toContain("Policies installed today");
+  });
+});

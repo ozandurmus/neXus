@@ -107,8 +107,8 @@ public final class SystemHealthService {
     private final ArtefactStore store; // null when the service has no store mounted
     private final int threshold;
     private final boolean schedulingEnabled;
-    private final Map<String, SarDailyText.Summary> sarByFile = new ConcurrentHashMap<>();
-    private final Map<String, CpwdRestartLines.Summary> cpwdByChunk = new ConcurrentHashMap<>();
+    private final Map<String, Read<SarDailyText.Summary>> sarByFile = new ConcurrentHashMap<>();
+    private final Map<String, Read<CpwdRestartLines.Summary>> cpwdByChunk = new ConcurrentHashMap<>();
     private final AtomicBoolean computing = new AtomicBoolean();
     private final ExecutorService executor = Executors.newSingleThreadExecutor(task -> {
         Thread t = new Thread(task, "system-health-refresh");
@@ -118,8 +118,22 @@ public final class SystemHealthService {
     private volatile Snapshot latest;
     private volatile String lastFailureReason;
 
-    private static final SarDailyText.Summary UNREADABLE_SAR =
-            new SarDailyText.Summary(-1, 0, null, null, 0, null, 0, false);
+    /**
+     * A failed read (store, decrypt or parse) is never cached for good: it is retried on a later refresh, first after
+     * {@link #UNREADABLE_RETRY_MIN}, the wait doubling per consecutive failure up to {@link #UNREADABLE_RETRY_MAX}, so a
+     * transient failure clears within one refresh and a permanently broken artefact costs one read per hour at most.
+     * Until a read succeeds the file or chunk counts as unreadable (UNKNOWN), never as an empty or zero result.
+     */
+    static final Duration UNREADABLE_RETRY_MIN = Duration.ofMinutes(1);
+    static final Duration UNREADABLE_RETRY_MAX = Duration.ofHours(1);
+
+    /** A cached read of one immutable artefact: its summary, or (summary null) a failed read and when it may be retried. */
+    record Read<T>(T summary, int failures, Instant retryAt) {
+    }
+
+    /** The cpwd chunks of a device's window: the sum of the readable ones and how many could not be read. */
+    record CpwdWindow(CpwdRestartLines.Summary total, int unreadable) {
+    }
 
     public SystemHealthService(SystemLogReadRepository repository, SystemLogCollectionRepository settings,
             Supplier<List<DeviceSummaryRecord>> targets, DeviceRepository devices, ArtefactStore store, int thresholdPercent) {
@@ -223,7 +237,7 @@ public final class SystemHealthService {
             boolean target = targetIds.contains(d.deviceId());
             Map<String, FleetRunRow> deviceRuns = runs.getOrDefault(d.deviceId(), Map.of());
             out.add(one(d, target, includeManagement, deviceRuns, alertsByDevice.getOrDefault(d.deviceId(), List.of()),
-                    today, since, sarSeen, cpwdSeen));
+                    now, today, since, sarSeen, cpwdSeen));
         }
         sarByFile.keySet().retainAll(sarSeen);
         cpwdByChunk.keySet().retainAll(cpwdSeen);
@@ -235,7 +249,7 @@ public final class SystemHealthService {
     }
 
     private DeviceHealth one(DeviceSummaryRecord d, boolean target, boolean includeManagement, Map<String, FleetRunRow> runs,
-            List<CrashAlertRow> alerts, LocalDate today, LocalDate since, Set<String> sarSeen, Set<String> cpwdSeen) {
+            List<CrashAlertRow> alerts, Instant now, LocalDate today, LocalDate since, Set<String> sarSeen, Set<String> cpwdSeen) {
         boolean checkPoint = "check_point".equals(d.vendorHint());
         boolean management = "management_server".equals(d.role());
 
@@ -290,13 +304,15 @@ public final class SystemHealthService {
         } else if (store == null) {
             cpu = new Fact("UNKNOWN", "SYSTEM_LOG_STORE_UNAVAILABLE");
         } else {
-            sarDays = sarDays(d.deviceId(), since, today, sarSeen);
+            sarDays = sarDays(d.deviceId(), now, since, today, sarSeen);
             if (sarDays.isEmpty()) {
                 cpu = new Fact("UNKNOWN", "NO_SAR_DAY_STORED");
             } else {
                 int streak = 0, longest = 0;
                 boolean anyP95 = false;
+                boolean anyUnreadable = false;
                 for (SarDay day : sarDays) {
+                    if ("UNREADABLE".equals(day.status())) anyUnreadable = true;
                     Double p95 = day.summary() == null ? null : day.summary().cpuBusyP95();
                     if (p95 == null) {
                         streak = 0;
@@ -315,7 +331,7 @@ public final class SystemHealthService {
                 SarDay newest = sarDays.get(sarDays.size() - 1);
                 newestP95 = newest.summary() == null ? null : newest.summary().cpuBusyP95();
                 memP95 = newest.summary() == null ? null : newest.summary().memUsedP95();
-                if (!anyP95) cpu = new Fact("UNKNOWN", "SAR_TEXT_WITHOUT_CPU_SAMPLES");
+                if (!anyP95) cpu = new Fact("UNKNOWN", anyUnreadable ? "SAR_TEXT_UNREADABLE" : "SAR_TEXT_WITHOUT_CPU_SAMPLES");
                 else if (consecutive >= CPU_DAYS_CRITICAL) cpu = new Fact("CRITICAL", "CPU_P95_OVER_THRESHOLD_" + consecutive + "_DAYS_IN_A_ROW");
                 else if (daysOver > 0) cpu = new Fact("ATTENTION", "CPU_P95_OVER_THRESHOLD_" + daysOver + "_DAYS");
                 else cpu = new Fact("NORMAL", null);
@@ -334,13 +350,19 @@ public final class SystemHealthService {
             } else if (store == null) {
                 restarts = new Fact("UNKNOWN", "SYSTEM_LOG_STORE_UNAVAILABLE");
             } else {
-                cpwd = cpwdSummary(d.deviceId(), since, cpwdSeen);
+                CpwdWindow window = cpwdSummary(d.deviceId(), now, since, cpwdSeen);
+                cpwd = window.total();
                 boolean ran = "COLLECTED".equals(cpwdRun.outcome()) || "NO_NEW_DATA".equals(cpwdRun.outcome())
                         || "BACKLOG".equals(cpwdRun.outcome()) || "GAP".equals(cpwdRun.outcome());
-                if (!ran && cpwd.lines() == 0) {
+                if (!ran && cpwd.lines() == 0 && window.unreadable() == 0) {
                     restarts = new Fact("UNKNOWN", "CPWD_LAST_OUTCOME_" + cpwdRun.outcome());
                 } else if (cpwd.maxRestartsInOneHour() >= RESTARTS_PER_HOUR_ATTENTION) {
+                    // The readable chunks alone already reach the threshold: a lower bound, so an unreadable chunk
+                    // cannot make it less true.
                     restarts = new Fact("ATTENTION", "RESTARTS_" + cpwd.maxRestartsInOneHour() + "_IN_ONE_HOUR");
+                } else if (window.unreadable() > 0) {
+                    // An unreadable chunk is absent evidence, never zero restarts.
+                    restarts = new Fact("UNKNOWN", "CPWD_UNREADABLE");
                 } else {
                     restarts = new Fact("NORMAL", null);
                 }
@@ -386,7 +408,7 @@ public final class SystemHealthService {
     }
 
     /** The stored sar days of the window, oldest first, one per calendar day (the newest fetch of a day wins). */
-    private List<SarDay> sarDays(String deviceId, LocalDate since, LocalDate today, Set<String> seen) {
+    private List<SarDay> sarDays(String deviceId, Instant now, LocalDate since, LocalDate today, Set<String> seen) {
         Map<LocalDate, SarDay> byDay = new TreeMap<>();
         for (SarFileRef ref : repository.sarFileRefs(deviceId, 2 * WINDOW_DAYS)) {
             if (ref.prunedAt() != null) continue;
@@ -395,46 +417,72 @@ public final class SystemHealthService {
             seen.add(ref.fileId());
             SarDailyText.Summary summary = null;
             if ("STORED".equals(ref.status())) {
-                summary = sarByFile.computeIfAbsent(ref.fileId(), id -> parseSar(ref));
-                if (summary != null && summary.cpuSamples() == 0 && !summary.headerSeen()) summary = null;
+                summary = cached(sarByFile, ref.fileId(), now, () -> parseSar(ref));
+                if (summary != null && summary.cpuSamples() <= 0 && !summary.headerSeen()) summary = null;
             }
             byDay.put(day, new SarDay(day, ref.fileId(), summary, summary == null ? ("STORED".equals(ref.status()) ? "UNREADABLE" : ref.status()) : "PARSED"));
         }
         return List.copyOf(byDay.values());
     }
 
+    /**
+     * The summary of one immutable artefact, read at most once while it reads, and (null) unreadable otherwise. A failed
+     * read is retried once its {@link Read#retryAt()} has passed, never on every refresh and never cached for good.
+     */
+    static <T> T cached(Map<String, Read<T>> cache, String id, Instant now, Supplier<T> read) {
+        Read<T> held = cache.get(id);
+        if (held != null && (held.summary() != null || now.isBefore(held.retryAt()))) return held.summary();
+        T value = read.get();
+        if (value != null) {
+            cache.put(id, new Read<>(value, 0, null));
+        } else {
+            int failures = held == null ? 1 : held.failures() + 1;
+            cache.put(id, new Read<>(null, failures, now.plus(retryAfter(failures))));
+        }
+        return value;
+    }
+
+    /** {@link #UNREADABLE_RETRY_MIN} doubled per earlier consecutive failure, capped at {@link #UNREADABLE_RETRY_MAX}. */
+    static Duration retryAfter(int failures) {
+        Duration wait = UNREADABLE_RETRY_MIN;
+        for (int i = 1; i < failures && wait.compareTo(UNREADABLE_RETRY_MAX) < 0; i++) wait = wait.multipliedBy(2);
+        return wait.compareTo(UNREADABLE_RETRY_MAX) > 0 ? UNREADABLE_RETRY_MAX : wait;
+    }
+
+    /** The parsed sar text, or null when it cannot be read or parsed (UNREADABLE; retried later, see {@link #cached}). */
     private SarDailyText.Summary parseSar(SarFileRef ref) {
-        if (ref.artefactRef() == null || ref.wrappedDataKey() == null) return UNREADABLE_SAR;
+        if (ref.artefactRef() == null || ref.wrappedDataKey() == null) return null;
         try (InputStream in = new BufferedInputStream(
                 store.retrieve(new ArtefactRef(ref.artefactRef()), ref.wrappedDataKey(), true), 64 * 1024)) {
-            SarDailyText.Summary parsed = SarDailyText.parse(in);
-            return parsed == null ? UNREADABLE_SAR : parsed;
+            return SarDailyText.parse(in);
         } catch (IOException | RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "sar text unreadable file={0} cause={1}", ref.fileId(), e.getClass().getSimpleName());
-            return UNREADABLE_SAR;
+            return null;
         }
     }
 
-    private CpwdRestartLines.Summary cpwdSummary(String deviceId, LocalDate since, Set<String> seen) {
+    private CpwdWindow cpwdSummary(String deviceId, Instant now, LocalDate since, Set<String> seen) {
         CpwdRestartLines.Summary total = CpwdRestartLines.Summary.EMPTY;
+        int unreadable = 0;
         for (CpwdChunkRef ref : repository.cpwdChunkRefs(deviceId, since.toString(), 1000)) {
             if (ref.prunedAt() != null) continue;
             seen.add(ref.chunkId());
-            CpwdRestartLines.Summary one = cpwdByChunk.computeIfAbsent(ref.chunkId(), id -> parseCpwd(ref));
+            CpwdRestartLines.Summary one = cached(cpwdByChunk, ref.chunkId(), now, () -> parseCpwd(ref));
             if (one != null) total = total.plus(one);
+            else unreadable++;
         }
-        return total;
+        return new CpwdWindow(total, unreadable);
     }
 
+    /** The chunk's restart counters, or null when it cannot be read (never an empty summary: that would be 0 restarts). */
     private CpwdRestartLines.Summary parseCpwd(CpwdChunkRef ref) {
-        if (ref.artefactRef() == null || ref.wrappedDataKey() == null) return CpwdRestartLines.Summary.EMPTY;
+        if (ref.artefactRef() == null || ref.wrappedDataKey() == null) return null;
         try (InputStream in = new BufferedInputStream(
                 store.retrieve(new ArtefactRef(ref.artefactRef()), ref.wrappedDataKey(), true), 64 * 1024)) {
-            CpwdRestartLines.Summary parsed = CpwdRestartLines.count(in);
-            return parsed == null ? CpwdRestartLines.Summary.EMPTY : parsed;
+            return CpwdRestartLines.count(in);
         } catch (IOException | RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cpwd chunk unreadable chunk={0} cause={1}", ref.chunkId(), e.getClass().getSimpleName());
-            return CpwdRestartLines.Summary.EMPTY;
+            return null;
         }
     }
 
@@ -467,7 +515,7 @@ public final class SystemHealthService {
         rules.put("attention", List.of("CPU p95 above " + threshold + " % on 1 or 2 stored sar days",
                 RESTARTS_PER_HOUR_ATTENTION + " or more cpwd process restarts in one hour"));
         rules.put("normal", "every applicable fact evidenced and none of the above");
-        rules.put("unknown", "a fact with no evidence (no sar day, cpwd not collected, crash listing not run) outranks Normal; a device with no applicable fact is UNKNOWN");
+        rules.put("unknown", "a fact with no evidence (no sar day, cpwd not collected or a cpwd chunk unreadable, crash listing not run) outranks Normal; a device with no applicable fact is UNKNOWN");
         rules.put("state_order", STATE_ORDER);
         rules.put("p95", "nearest rank over the day's samples of the sar \"all\" CPU row, busy = 100 - %idle");
         Map<String, Object> restartRule = new LinkedHashMap<>();

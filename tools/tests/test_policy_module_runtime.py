@@ -245,4 +245,147 @@ def test_a_quarantine_left_by_an_ended_job_does_not_hold_the_drain():
     # Stopping the old pod is what releases it (OWNER_GONE); counting it would wait on itself.
     sql = dict(deploy.barrier_conditions("policy", 7))["admissions"]
     assert "state='LEASED'" in sql and "state='QUARANTINED'" in sql
-    assert "'COMPLETED','FAILED','CANCELLED'" in sql and "OUTCOME_UNKNOWN" not in sql
+    assert "t.state in ('COMPLETED','FAILED')" in sql and "OUTCOME_UNKNOWN" not in sql
+    # CANCELLED is not an outcome the worker recorded: it releases only when the attempt record proves no write began.
+    assert "'COMPLETED','FAILED','CANCELLED'" not in sql
+    assert "t.state='CANCELLED' and not exists(select 1 from job_step_attempt a" in sql
+    assert "a.mutation_boundary_crossed or a.action_class<>'read'" in sql
+
+
+# --- Database-backed drain barrier admissions (SECURITY_REVIEW_2026_11_05 M-1) ---------------------------------------
+# The admissions condition runs against a throwaway local PostgreSQL cluster holding only the columns the condition
+# reads, with the production CHECK and foreign-key shape. Skipped, with a reason, where no PostgreSQL server binaries
+# exist; never touches a host or the release database.
+
+def _pg_bin():
+    import glob
+    import shutil
+    found = shutil.which("initdb")
+    if found:
+        return Path(found).parent
+    candidates = sorted(glob.glob("/usr/lib/postgresql/*/bin/initdb"))
+    return Path(candidates[-1]).parent if candidates else None
+
+
+@pytest.fixture(scope="module")
+def scratch_pg():
+    import os
+    import pwd
+    import shutil
+    import subprocess
+    import tempfile
+    bin_dir = _pg_bin()
+    if bin_dir is None:
+        pytest.skip("no PostgreSQL server binaries (initdb) available")
+    # Its own directory, not pytest's tmp root: that root is private to the invoking user, and the cluster may run as
+    # another account.
+    base = Path(tempfile.mkdtemp(prefix="drain_pg_"))
+    prefix = []
+    if os.geteuid() == 0:
+        # initdb refuses to run as root; run the scratch cluster as the packaged service account when one exists.
+        try:
+            account = pwd.getpwnam("postgres")
+        except KeyError:
+            pytest.skip("running as root with no postgres account for initdb")
+        if not shutil.which("runuser"):
+            pytest.skip("running as root without runuser for initdb")
+        os.chown(base, account.pw_uid, account.pw_gid)
+        prefix = ["runuser", "-u", "postgres", "--"]
+    data, sock = base / "data", base
+
+    def sh(*args, **kw):
+        return subprocess.run(prefix + [str(a) for a in args], capture_output=True, text=True, timeout=60, **kw)
+
+    init = sh(bin_dir / "initdb", "-A", "trust", "-U", "drain", "-D", data)
+    if init.returncode:
+        shutil.rmtree(base, ignore_errors=True)
+        pytest.skip("initdb unavailable here: exit " + str(init.returncode))
+    start = sh(bin_dir / "pg_ctl", "-D", data, "-w", "-l", base / "log",
+               "-o", "-c listen_addresses='' -k " + str(sock) + " -c fsync=off", "start")
+    if start.returncode:
+        shutil.rmtree(base, ignore_errors=True)
+        pytest.skip("scratch PostgreSQL did not start: exit " + str(start.returncode))
+
+    def psql(sql):
+        result = sh(bin_dir / "psql", "-v", "ON_ERROR_STOP=1", "-h", sock, "-U", "drain", "-d", "postgres", "-Atc", sql)
+        assert result.returncode == 0, result.stderr
+        return result.stdout.strip()
+
+    psql("""
+        create table jobs (job_id text primary key, state text not null);
+        create table job_step_attempt (attempt_id text primary key, job_id text not null references jobs(job_id),
+            lease_epoch bigint not null, action_class text not null,
+            mutation_boundary_crossed boolean not null default false, outcome text);
+        create table endpoint_admission (request_id text primary key, purpose_class text not null,
+            job_id text references jobs(job_id), job_epoch bigint, operation_ref text, operation_epoch bigint,
+            owner_role text not null, state text not null check (state in ('WAITING','LEASED','QUARANTINED')),
+            check ((job_id is not null and job_epoch is not null and operation_ref is null and operation_epoch is null)
+                or (job_id is null and job_epoch is null and operation_ref is not null and operation_epoch is not null)));
+    """)
+    try:
+        yield psql
+    finally:
+        sh(bin_dir / "pg_ctl", "-D", data, "-m", "immediate", "-w", "stop")
+        shutil.rmtree(base, ignore_errors=True)
+
+
+# (job state, [(lease_epoch, action_class, mutation_boundary_crossed, outcome)], holds the drain?)
+ADMISSION_CASES = {
+    "completed": ("COMPLETED", [(1, "recovery-write", True, "SUCCESS")], False),
+    "failed": ("FAILED", [(1, "read", False, None)], False),
+    "cancelled_before_any_attempt": ("CANCELLED", [], False),
+    "cancelled_after_read_steps_only": ("CANCELLED", [(1, "read", False, "SUCCESS"), (2, "read", False, None)], False),
+    # The M-1 scenario: a CLASS 1 write crossed its boundary, cancel was requested, the lease expired.
+    "cancelled_after_crossing_the_boundary": ("CANCELLED", [(1, "read", False, "SUCCESS"),
+                                                            (1, "recovery-write", True, None)], True),
+    # A recorded outcome does not prove the device session ended cleanly; crossing alone holds.
+    "cancelled_after_a_write_with_an_outcome": ("CANCELLED", [(1, "recovery-write", True, "SUCCESS")], True),
+    # The backup path records CLASS 1 and never flips the flag; it still contacts the device.
+    "cancelled_with_an_uncrossed_write_class_attempt": ("CANCELLED", [(1, "recovery-write", False, None)], True),
+    "cancelled_with_a_failover_attempt": ("CANCELLED", [(1, "operational-state-change", False, None)], True),
+    # Any lease epoch counts, not only the current one.
+    "cancelled_with_a_crossing_in_an_earlier_epoch": ("CANCELLED", [(1, "recovery-write", True, None),
+                                                                     (2, "read", False, None)], True),
+    "outcome_unknown": ("OUTCOME_UNKNOWN", [(1, "read", False, None)], True),
+    "executing": ("EXECUTING", [], True),
+    "claimed": ("CLAIMED", [], True),
+}
+
+
+def _admissions_count(psql, target="worker"):
+    return int(psql(dict(deploy.barrier_conditions(target, 7))["admissions"]))
+
+
+@pytest.mark.parametrize("case", sorted(ADMISSION_CASES))
+def test_a_quarantine_holds_the_drain_unless_its_job_provably_ended_without_a_write(scratch_pg, case):
+    state, attempts, holds = ADMISSION_CASES[case]
+    psql = scratch_pg
+    psql("truncate endpoint_admission, job_step_attempt, jobs")
+    rows = ["insert into jobs values ('job-1', " + deploy.literal(state) + ")"]
+    for n, (epoch, action, crossed, outcome) in enumerate(attempts):
+        rows.append("insert into job_step_attempt values ('att-%d', 'job-1', %d, %s, %s, %s)" % (
+            n, epoch, deploy.literal(action), "true" if crossed else "false",
+            deploy.literal(outcome) if outcome else "null"))
+    rows.append("insert into endpoint_admission values ('req-1', 'BACKUP', 'job-1', 1, null, null, 'general', 'QUARANTINED')")
+    psql(";".join(rows))
+    assert _admissions_count(psql) == (1 if holds else 0)
+
+
+def test_a_leased_or_job_less_quarantine_always_holds_and_other_owners_never_count(scratch_pg):
+    psql = scratch_pg
+    psql("truncate endpoint_admission, job_step_attempt, jobs")
+    psql("insert into jobs values ('job-1', 'COMPLETED');"
+         "insert into endpoint_admission values ('req-1', 'INVENTORY', 'job-1', 1, null, null, 'general', 'LEASED')")
+    assert _admissions_count(psql) == 1
+    psql("truncate endpoint_admission;"
+         "insert into endpoint_admission values ('req-2', 'INVENTORY', null, null, 'op-1', 1, 'general', 'QUARANTINED')")
+    assert _admissions_count(psql) == 1
+    # A general quarantine never holds the policy module's drain, and a released state is never counted.
+    psql("truncate endpoint_admission;"
+         "insert into jobs values ('job-2', 'CANCELLED');"
+         "insert into job_step_attempt values ('att-1', 'job-2', 1, 'recovery-write', true, null);"
+         "insert into endpoint_admission values ('req-3', 'BACKUP', 'job-2', 1, null, null, 'general', 'QUARANTINED')")
+    assert _admissions_count(psql, "policy") == 0
+    assert _admissions_count(psql, "worker") == 1
+    psql("update endpoint_admission set state='WAITING'")
+    assert _admissions_count(psql, "worker") == 0

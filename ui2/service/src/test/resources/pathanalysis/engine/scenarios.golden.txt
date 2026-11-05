@@ -90,7 +90,7 @@ BRANCH b1 UNKNOWN reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY b
   HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
     in=eth1/- out=eth3/- packet=198.51.100.20>203.0.113.150:443 => 198.51.100.20>203.0.113.150:443
     route=0.0.0.0/0 via 198.51.100.130 dev eth3 IP nat=NO_TRANSLATION[] rule=RULE-r1
-    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED, EXIT_VIA_DEFAULT_ROUTE] flags=[]
   RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
 
 == edge-mode: 198.51.100.20 -> 203.0.113.150 tcp/443 edge
@@ -101,7 +101,7 @@ BRANCH b1 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TO
   HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
     in=eth1/- out=eth3/- packet=198.51.100.20>203.0.113.150:443 => 198.51.100.20>203.0.113.150:443
     route=0.0.0.0/0 via 198.51.100.130 dev eth3 IP nat=NO_TRANSLATION[] rule=RULE-r1
-    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED, EXIT_VIA_DEFAULT_ROUTE] flags=[]
   RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
 
 == discard-route: 198.51.100.20 -> 203.0.113.70 tcp/443
@@ -162,9 +162,71 @@ BRANCH b1 UNKNOWN reason=ASYMMETRIC_RETURN termination=DELIVERED blocking=- cave
       RHOP 2 FW-JULIET-06/physical/main 203.0.113.10>198.51.100.20 route=198.51.100.0/26 reasons=[]
 
 == ambiguous-ingress: 198.51.100.20 -> 203.0.113.10 tcp/443
-VERDICT UNKNOWN reason=AMBIGUOUS_INGRESS plain=false truncated=false asymmetric=false caveats=[] warnings=[]
+VERDICT UNKNOWN reason=AMBIGUOUS_INGRESS plain=false truncated=false asymmetric=true caveats=[] warnings=[OUT_OF_STATE_DROP_LIKELY]
 INGRESS INFERRED AMBIGUOUS_INGRESS [FW-JULIET-06/physical/main, FW-TANGO-04/physical/main]
-SUMMARY "Verdict is UNKNOWN (AMBIGUOUS_INGRESS)" blocking=[] unknown=[] branches=0 freshness=CURRENT
+SUMMARY "Verdict is UNKNOWN (AMBIGUOUS_INGRESS)" blocking=[] unknown=[] branches=2 freshness=CURRENT
+BRANCH b1 ALLOWED reason=ALL_HOPS_ALLOWED termination=DELIVERED blocking=- caveats=[] warnings=[]
+  HOP 1 FW-JULIET-06/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.10:443 => 198.51.100.20>203.0.113.10:443
+    route=203.0.113.0/26 via 192.0.2.2 dev eth2 IP nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  HOP 2 FW-BRAVO-02/vsys1/vr-main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=ethernet1/1/ZONE-TRANSIT out=ethernet1/2/ZONE-DMZ packet=198.51.100.20>203.0.113.10:443 => 198.51.100.20>203.0.113.10:443
+    route=203.0.113.0/26 dev ethernet1/2 CONNECTED nat=NO_TRANSLATION[] rule=RULE-WEB-01
+    caveats=[] notes=[] flags=[]
+  RETURN SYMMETRIC reason=DELIVERED
+    RBRANCH DELIVERED SYMMETRIC
+      RHOP 1 FW-BRAVO-02/vsys1/vr-main 203.0.113.10>198.51.100.20 route=198.51.100.0/26 via 192.0.2.3 reasons=[]
+      RHOP 2 FW-JULIET-06/physical/main 203.0.113.10>198.51.100.20 route=198.51.100.0/26 reasons=[]
+BRANCH b2 UNKNOWN reason=ASYMMETRIC_RETURN termination=DELIVERED blocking=- caveats=[] warnings=[OUT_OF_STATE_DROP_LIKELY]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.10:443 => 198.51.100.20>203.0.113.10:443
+    route=203.0.113.0/26 via 192.0.2.2 dev eth2 IP nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  HOP 2 FW-BRAVO-02/vsys1/vr-main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=ethernet1/1/ZONE-TRANSIT out=ethernet1/2/ZONE-DMZ packet=198.51.100.20>203.0.113.10:443 => 198.51.100.20>203.0.113.10:443
+    route=203.0.113.0/26 dev ethernet1/2 CONNECTED nat=NO_TRANSLATION[] rule=RULE-WEB-01
+    caveats=[] notes=[] flags=[]
+  RETURN ASYMMETRIC reason=DELIVERED
+    RBRANCH DELIVERED ASYMMETRIC
+      RHOP 1 FW-BRAVO-02/vsys1/vr-main 203.0.113.10>198.51.100.20 route=198.51.100.0/26 via 192.0.2.3 reasons=[]
+      RHOP 2 FW-JULIET-06/physical/main 203.0.113.10>198.51.100.20 route=198.51.100.0/26 reasons=[]
+
+== ambiguous-ingress-candidates-agree: 198.51.100.20 -> 203.0.113.10 tcp/22
+VERDICT DENIED reason=DENIED_AT_HOP plain=false truncated=false asymmetric=false caveats=[INGRESS_CANDIDATES_AGREE] warnings=[]
+INGRESS INFERRED AMBIGUOUS_INGRESS [FW-JULIET-06/physical/main, FW-TANGO-04/physical/main]
+SUMMARY "Traffic is DENIED at hop 2 by rule 2" blocking=[b1:2, b2:2] unknown=[] branches=2 freshness=CURRENT
+BRANCH b1 DENIED reason=DENIED_AT_HOP termination=BLOCKED blocking=2 caveats=[] warnings=[]
+  HOP 1 FW-JULIET-06/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.10:22 => 198.51.100.20>203.0.113.10:22
+    route=203.0.113.0/26 via 192.0.2.2 dev eth2 IP nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  HOP 2 FW-BRAVO-02/vsys1/vr-main own=DENIED path=DENIED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=ethernet1/1/ZONE-TRANSIT out=ethernet1/2/ZONE-DMZ packet=198.51.100.20>203.0.113.10:22 => 198.51.100.20>203.0.113.10:22
+    route=203.0.113.0/26 dev ethernet1/2 CONNECTED nat=NO_TRANSLATION[] rule=RULE-DENY-01
+    caveats=[] notes=[] flags=[]
+  RETURN NOT_COMPUTED reason=BLOCKED
+BRANCH b2 DENIED reason=DENIED_AT_HOP termination=BLOCKED blocking=2 caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.10:22 => 198.51.100.20>203.0.113.10:22
+    route=203.0.113.0/26 via 192.0.2.2 dev eth2 IP nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  HOP 2 FW-BRAVO-02/vsys1/vr-main own=DENIED path=DENIED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=ethernet1/1/ZONE-TRANSIT out=ethernet1/2/ZONE-DMZ packet=198.51.100.20>203.0.113.10:22 => 198.51.100.20>203.0.113.10:22
+    route=203.0.113.0/26 dev ethernet1/2 CONNECTED nat=NO_TRANSLATION[] rule=RULE-DENY-01
+    caveats=[] notes=[] flags=[]
+  RETURN NOT_COMPUTED reason=BLOCKED
+
+== exit-destination-in-known-topology: 198.51.100.20 -> 203.0.113.10 tcp/443
+VERDICT UNKNOWN reason=EXITS_KNOWN_TOPOLOGY plain=false truncated=false asymmetric=false caveats=[] warnings=[DESTINATION_IN_KNOWN_TOPOLOGY]
+INGRESS INFERRED RESOLVED [FW-TANGO-04/physical/main]
+SUMMARY "Verdict is UNKNOWN (EXITS_KNOWN_TOPOLOGY)" blocking=[] unknown=[] branches=1 freshness=CURRENT
+BRANCH b1 UNKNOWN reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[DESTINATION_IN_KNOWN_TOPOLOGY]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth3/- packet=198.51.100.20>203.0.113.10:443 => 198.51.100.20>203.0.113.10:443
+    route=203.0.113.0/27 via 198.51.100.130 dev eth3 IP nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
 
 == routing-loop: 198.51.100.20 -> 203.0.113.130 tcp/443 from FW-TANGO-04/physical/main:eth1
 VERDICT UNKNOWN reason=ROUTING_LOOP plain=false truncated=false asymmetric=false caveats=[] warnings=[]
@@ -189,48 +251,48 @@ BRANCH b1 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TO
   HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
     in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.150:53 => 198.51.100.20>203.0.113.150:53
     route=0.0.0.0/0 via 192.0.2.11 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
-    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED, EXIT_VIA_DEFAULT_ROUTE] flags=[]
   RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
 BRANCH b2 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[]
   HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
     in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.150:53 => 198.51.100.20>203.0.113.150:53
     route=0.0.0.0/0 via 192.0.2.12 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
-    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED, EXIT_VIA_DEFAULT_ROUTE] flags=[]
   RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
 BRANCH b3 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[]
   HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
     in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.150:53 => 198.51.100.20>203.0.113.150:53
     route=0.0.0.0/0 via 192.0.2.13 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
-    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED, EXIT_VIA_DEFAULT_ROUTE] flags=[]
   RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
 BRANCH b4 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[]
   HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
     in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.150:53 => 198.51.100.20>203.0.113.150:53
     route=0.0.0.0/0 via 192.0.2.14 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
-    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED, EXIT_VIA_DEFAULT_ROUTE] flags=[]
   RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
 BRANCH b5 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[]
   HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
     in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.150:53 => 198.51.100.20>203.0.113.150:53
     route=0.0.0.0/0 via 192.0.2.15 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
-    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED, EXIT_VIA_DEFAULT_ROUTE] flags=[]
   RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
 BRANCH b6 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[]
   HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
     in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.150:53 => 198.51.100.20>203.0.113.150:53
     route=0.0.0.0/0 via 192.0.2.16 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
-    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED, EXIT_VIA_DEFAULT_ROUTE] flags=[]
   RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
 BRANCH b7 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[]
   HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
     in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.150:53 => 198.51.100.20>203.0.113.150:53
     route=0.0.0.0/0 via 192.0.2.17 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
-    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED, EXIT_VIA_DEFAULT_ROUTE] flags=[]
   RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
 BRANCH b8 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[]
   HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
     in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.150:53 => 198.51.100.20>203.0.113.150:53
     route=0.0.0.0/0 via 192.0.2.18 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
-    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED, EXIT_VIA_DEFAULT_ROUTE] flags=[]
   RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
 

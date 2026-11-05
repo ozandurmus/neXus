@@ -21,14 +21,18 @@ function viewport(width: number) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("the rail (UI product review 2026-10-18, §2.3 / roadmap 1.1)", () => {
-  it("reads Overview · SEE Devices · VERIFY Compliance, Policy, Path · RECOVER Backups · OPERATE Operations, Tools, with Administration last", () => {
+  // Reports R1 (REPORTS_R1_CONTRACT.md "UI"): Reports is a top-level entry directly under Overview.
+  it("reads Overview · Reports · SEE Devices · VERIFY Compliance, Policy · TRACE Trace, Changes · RECOVER Backups · OPERATE Operations, Tools, with Administration last", () => {
     rail("overview");
     expect(RAIL_ENTRIES.map((e) => [e.group, e.label])).toEqual([
-      [null, "Overview"], ["SEE", "Devices"], ["VERIFY", "Compliance"], ["VERIFY", "Policy"], ["VERIFY", "Path"], ["RECOVER", "Backups"], ["OPERATE", "Operations"], ["OPERATE", "Tools"],
+      [null, "Overview"], [null, "Reports"], ["SEE", "Devices"], ["VERIFY", "Compliance"], ["VERIFY", "Policy"], ["TRACE", "Trace"], ["TRACE", "Changes"], ["RECOVER", "Backups"], ["OPERATE", "Operations"], ["OPERATE", "Tools"],
     ]);
     expect(ADMINISTRATION.label).toBe("Administration");
     const text = nav().textContent ?? "";
-    for (const word of ["SEE", "VERIFY", "RECOVER", "OPERATE"]) expect(text).toContain(word);
+    for (const word of ["SEE", "VERIFY", "TRACE", "RECOVER", "OPERATE"]) expect(text).toContain(word);
+    expect(text.indexOf("TRACE")).toBeLessThan(text.indexOf("Changes"));
+    expect(text.indexOf("VERIFY")).toBeLessThan(text.indexOf("TRACE"));
+    expect(text.indexOf("TRACE")).toBeLessThan(text.indexOf("RECOVER"));
     expect(text.indexOf("SEE")).toBeLessThan(text.indexOf("Devices"));
     expect(text.indexOf("VERIFY")).toBeLessThan(text.indexOf("Compliance"));
     expect(text.indexOf("RECOVER")).toBeLessThan(text.indexOf("Backups"));
@@ -45,8 +49,8 @@ describe("the rail (UI product review 2026-10-18, §2.3 / roadmap 1.1)", () => {
   });
 
   it.each<[ScreenId, string]>([
-    ["overview", "Overview"], ["inventory", "Devices"], ["compliance", "Compliance"], ["policy", "Policy"], ["path_analysis", "Path"], ["backups", "Backups"],
-    ["operations", "Operations"], ["packet_analysis", "Tools"], ["sanitizer", "Tools"], ["administration", "Administration"],
+    ["overview", "Overview"], ["reports", "Reports"], ["inventory", "Devices"], ["compliance", "Compliance"], ["policy", "Policy"], ["trace", "Trace"], ["changes", "Changes"], ["backups", "Backups"],
+    ["operations", "Operations"], ["packet_analysis", "Tools"], ["sanitizer", "Tools"], ["diagnostics", "Tools"], ["offline_analysis", "Tools"], ["administration", "Administration"],
   ])("marks exactly one active item for %s", (screenId, label) => {
     rail(screenId);
     const active = current();
@@ -54,12 +58,14 @@ describe("the rail (UI product review 2026-10-18, §2.3 / roadmap 1.1)", () => {
     expect(active[0]).toHaveTextContent(label);
   });
 
-  it("opens Packets and Sanitizer from the one Tools entry, marking the open one", () => {
+  it("opens Packets, Sanitizer, Diagnostics and Offline analysis from the one Tools entry, marking the open one", () => {
     rail("sanitizer");
     fireEvent.click(within(nav()).getByRole("button", { name: "Tools" }));
     const menu = screen.getByRole("menu", { name: "Tools" });
     const items = within(menu).getAllByRole("menuitem");
-    expect(items.map((i) => [i.textContent, i.getAttribute("href")])).toEqual([["Packets", "?screen=packet_analysis"], ["Sanitizer", "?screen=sanitizer"]]);
+    expect(items.map((i) => [i.textContent, i.getAttribute("href")])).toEqual([
+      ["Packets", "?screen=packet_analysis"], ["Sanitizer", "?screen=sanitizer"], ["Diagnostics", "?screen=diagnostics"], ["Offline analysis", "?screen=offline_analysis"],
+    ]);
     expect(items[1]).toHaveAttribute("aria-current", "page");
     expect(items[0]).not.toHaveAttribute("aria-current");
   });
@@ -71,7 +77,7 @@ describe("the rail (UI product review 2026-10-18, §2.3 / roadmap 1.1)", () => {
     expect(within(nav()).queryByText("Devices")).toBeNull();
     expect(within(nav()).getByRole("link", { name: "Administration" })).toHaveAttribute("href", "?screen=administration");
     fireEvent.click(within(nav()).getByRole("button", { name: "Tools" }));
-    expect(within(screen.getByRole("menu", { name: "Tools" })).getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Packets"]);
+    expect(within(screen.getByRole("menu", { name: "Tools" })).getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Packets", "Diagnostics", "Offline analysis"]);
   });
 
   it("still shows Administration, active, while it is the open screen for a session without that plane", () => {
@@ -103,7 +109,7 @@ describe("the rail (UI product review 2026-10-18, §2.3 / roadmap 1.1)", () => {
     const menu = screen.getByRole("menu", { name: "Tools" });
     expect(tools).toHaveAttribute("aria-expanded", "true");
     const items = within(menu).getAllByRole("menuitem");
-    expect(items.map((i) => i.textContent)).toEqual(["Packets", "Sanitizer"]);
+    expect(items.map((i) => i.textContent)).toEqual(["Packets", "Sanitizer", "Diagnostics", "Offline analysis"]);
     for (const item of items) expect(item.tagName).toBe("A");
     // the menu takes focus when it opens, so Arrow keys and Enter move between and follow the links
     expect(menu.contains(document.activeElement)).toBe(true);
@@ -125,14 +131,21 @@ describe("the rail (UI product review 2026-10-18, §2.3 / roadmap 1.1)", () => {
     expect(within(drawer).getAllByRole("link").filter((a) => a.getAttribute("aria-current") === "page")).toHaveLength(1);
   });
 
-  it("re-homes what the old drawer held: Jobs, Device management and Inventory exclusions are deep links; Discovery stays a disabled leaf", () => {
+  it("re-homes what the old drawer held: Jobs, the four Administration pages, Trace, Changes and the Tools are deep links; Discovery stays a disabled leaf", () => {
     const leaves = DRAWER_GROUPS.flatMap((g) => g.leaves);
     const by = (label: string) => leaves.find((l) => l.label === label);
     expect(by("Jobs")?.href).toBe("?screen=operations&tab=jobs");
-    expect(by("Device management")?.href).toBe("?screen=administration&tab=device-management");
-    expect(by("Inventory exclusions")?.href).toBe("?screen=administration&tab=inventory-exclusions");
+    expect(by("Device Registry")?.href).toBe("?screen=administration&tab=registry");
+    expect(by("Access & Identity")?.href).toBe("?screen=administration&tab=access");
+    expect(by("Platform")?.href).toBe("?screen=administration&tab=platform");
+    expect(by("Audit")?.href).toBe("?screen=administration&tab=audit");
+    expect(by("Job logs")).toBeUndefined();
     expect(by("Packets")?.href).toBe("?screen=packet_analysis");
-    expect(by("Change feed")?.href).toBe("?screen=operations&tab=changes");
+    expect(by("Diagnostics")?.href).toBe("?screen=diagnostics");
+    expect(by("Offline analysis")?.href).toBe("?screen=offline_analysis");
+    expect(by("Trace")?.href).toBe("?screen=trace");
+    expect(by("Changes")?.href).toBe("?screen=changes");
+    expect(by("Change feed")).toBeUndefined();
     expect(by("Sanitizer")?.href).toBe("?screen=sanitizer");
     expect(by("Backups")?.href).toBe("?screen=backups");
     expect(by("Discovery")?.href).toBeUndefined();
