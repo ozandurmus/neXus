@@ -31,6 +31,13 @@ PO answer (verbatim): "1-5 onaylı devam".
   history. V187 must be dry-run (BEGIN/ROLLBACK) on the live ui2 database before rollout.
 - Rows 2-5 (A6) are not implemented by this change.
 
+- First real-environment A6 validation (2026-11-06 00:50, aiview; sample chosen by the PO assistant under the PO
+  delegation of 2026-11-05 evening, `PO_DECISION_RECORD_2026_11_05_EVENING_BATCH.md` item 3): one computed TCP/443 path
+  between two masked topology addresses with one Check Point unit hop; `CP_ROUTE` = `MATCH`
+  (`SAME_INTERFACE_AND_NEXT_HOP`), validation result `MATCH`. A first candidate whose only hop was a multi-vsys Palo
+  Alto firewall was refused before any device job (`VSYS_TARGET_NOT_APPROVED`; no command issued): the approved PAN
+  literals carry no vsys target, so multi-vsys PAN hops stay `NOT_EVALUABLE` until a vsys-targeted literal is approved.
+
 Engineer decision 2026-11-04 (under the PO delegation of the same day): the former per-VS composite
 `vsenv N && fw getifs && ip -4 route show` is split into the approved route literal (row 1) and its unchanged
 `fw getifs` part, issued in the same session with the same timeout and frequency. Splitting an already-gated composite

@@ -1,28 +1,23 @@
 # NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY
 
-## Snapshot (2026-11-05 21:15)
-Development mode: scheduled jobs are off, except the system-log collection (own switch).
-All 11-05 handover §5 cloud branches are on main and live (PRs 745-749); PR 751 (policy blocker split X0) is live.
-Schema V191. `CURRENT_STATE.md` and `project/QUEUE.md` win over this file.
+## Snapshot (2026-11-06 01:40)
+Development mode: scheduled jobs are off, except the system-log collection (own switch, 00/06/12/18).
+PRs 745-759 are live; the PO's 2026-11-05 evening batch (five decisions) is implemented and measured.
+Schema V193. `CURRENT_STATE.md` and `project/QUEUE.md` win over this file.
 
 ## What changed this session
-- Docs batch (745), code batch (746: IA, screens, executive home, Reports R1, security M-1..M-8, path/policy UNKNOWN, test speed).
-- CP NAT UID probe, V191 (747); live: 2 of 2 packages UID_ACCEPTED.
-- aiview may send report preview/generate POSTs (748); report files on volume `ui2-report-store` (749).
-- X0 blocker split (751), measured over 99 policies (unknown-reduction plan §0.1); other evening measurements in `CURRENT_STATE.md`.
+- 11-05 cloud integration (745-749); X0 blocker split (751); evening docs (753, 755).
+- Evening batch record and aiview inventory start (756); CP NAT read by package UID, V192 (757); notification identity masked, V193 (758); X1 (759).
+- Live: first complete CP policy collection; earlier-rule UNKNOWN 60,217 -> 56,085; first A6 `MATCH`; fleet inventory and topology rebuild.
 
 ## Exact next action
-Open PO decisions (none blocking):
-1. full paged NAT read by package UID;
-2. ratify X1 (58,745 of 60,217 blocked rules sit behind a partial prior);
-3. the A6 sample flow;
-4. notification identity default `masked`;
-5. a fleet CP inventory collection (aiview cannot start one) to measure the VSX fix.
+1. Root-cause the name-pseudonym instability across restarts (M9: 8 of 12 pages; analysis-container design §3.2 P0).
+2. Root-cause the topology conflict rise after the fleet inventory (254 -> 300).
 
-Without PO input: analysis-container M1 under load, and M9.
+Then the remaining UNKNOWN levers (plan §0.1: CP gateway objects, access roles, PAN source-user).
 
 ## Test delta
-Java 4122 / 0 failures, vitest 1496, prod e2e 39/39.
+Java about 4,140 / 0 failures, vitest 1497, tools 1876, prod e2e 39/39.
 
 ## New risks
-A new claim must exist before the ship that mounts it (PR 749 outage, about 10 minutes). The deploy applies the service manifest, not the worker's. Notification e-mails still carry raw hostnames.
+Pseudonyms in chat and docs may not stay stable across ui2-service restarts until M9 is fixed. Multi-vsys PAN hops stay NOT_EVALUABLE in A6 (no vsys-targeted literal). Ship pretests (`jt.sh`) do not run tools/tests.
