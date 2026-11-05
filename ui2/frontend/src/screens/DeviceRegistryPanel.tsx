@@ -21,7 +21,7 @@ import { PaginationFooter } from "../shell/DataTable";
 import { SortHeaderCell, useTableSort, type SortColumn } from "../shell/tableSort";
 import { CapabilityMenu, M3Button, StatusChip } from "../shell/M3Widgets";
 import { ChangeCredentialsDialog } from "../shell/ChangeCredentialsDialog";
-import { RestrictedPanel, StatePanel, VendorBadge, isRestricted } from "../shell/States";
+import { RestrictedPanel, StatePanel, isRestricted } from "../shell/States";
 import { Stamp } from "../shell/PresentedText";
 import { Icon } from "../shell/Icon";
 import { vendorLabel } from "../shell/presenters";
@@ -197,7 +197,32 @@ export function DeviceManagementPane() {
           <M3Button emphasis="filled" onClick={() => confirmBackupDisposition("REMOVE")}>Remove artefacts</M3Button>
         </DialogActions>
       </Dialog>
-      <Box sx={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 260px", gap: 2 }}>
+      <Box sx={{ flex: 1, minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "repeat(2, minmax(0, 1fr))" }, gap: 2 }}>
+        <EmptyPanel title="Enrollment" body="Enrolling a device grants read collection only. Each count filters the registry.">
+          <Box role="group" aria-label="Registry filters" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+            {([
+              ["ENROLLED", "Enrolled", enrolledCount],
+              ["LAST_FAILED", "Last collection failed (enrolled)", degradedCount],
+              ["DRAFT", "Draft · not collected", draftCount],
+            ] as const).map(([key, label, count]) => (
+              <Box key={key} component="button" type="button" aria-pressed={filter === key} onClick={() => setFilter(filter === key ? "ALL" : key)}
+                sx={{ display: "inline-flex", justifyContent: "space-between", alignItems: "center", gap: 1, textAlign: "left", cursor: "pointer",
+                  font: "inherit", color: "inherit", px: 1.25, py: 0.625, borderRadius: "8px", border: "1px solid",
+                  borderColor: filter === key ? m3.primary : m3.outlineVar, bgcolor: filter === key ? m3.secondaryContainer : "transparent",
+                  "&:hover": { bgcolor: filter === key ? m3.secondaryContainer : m3.scLow } }}>
+                <Typography variant="body2" component="span" sx={{ whiteSpace: "nowrap" }}>{label}</Typography>
+                {/* A count is neutral, never green or red (colour-role table): the filter's label carries the meaning. */}
+                <StatusChip tone="neutral" label={`${count} device${count === 1 ? "" : "s"}`} dense />
+              </Box>
+            ))}
+          </Box>
+        </EmptyPanel>
+        <EmptyPanel
+          title="Collection scope"
+          body={`Inventory and configuration are read from every enrolled device (Bulk Collect, Collect All). Backups run only for the ${backupTargetCount} device${backupTargetCount === 1 ? "" : "s"} switched on as backup targets on the Backups screen.`}
+        />
+      </Box>
       <DeviceRegistryCard
         devices={devices}
         deleteError={deleteError}
@@ -210,31 +235,6 @@ export function DeviceManagementPane() {
         onSearch={setSearch}
         onFilter={setFilter}
       />
-      <Stack spacing={2}>
-        <EmptyPanel title="Enrollment" body="Enrolling a device grants read collection only. Each count filters the registry.">
-          <Stack spacing={0.5} role="group" aria-label="Registry filters">
-            {([
-              ["ENROLLED", "Enrolled", enrolledCount],
-              ["LAST_FAILED", "Last collection failed (enrolled)", degradedCount],
-              ["DRAFT", "Draft · not collected", draftCount],
-            ] as const).map(([key, label, count]) => (
-              <Box key={key} component="button" type="button" aria-pressed={filter === key} onClick={() => setFilter(filter === key ? "ALL" : key)}
-                sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1, width: "100%", textAlign: "left", cursor: "pointer",
-                  font: "inherit", color: "inherit", px: 1, py: 0.75, borderRadius: "8px", border: "1px solid",
-                  borderColor: filter === key ? m3.primary : "transparent", bgcolor: filter === key ? m3.secondaryContainer : "transparent",
-                  "&:hover": { bgcolor: filter === key ? m3.secondaryContainer : m3.scLow } }}>
-                <Typography variant="body2" component="span">{label}</Typography>
-                {/* A count is neutral, never green or red (colour-role table): the filter's label carries the meaning. */}
-                <StatusChip tone="neutral" label={`${count} device${count === 1 ? "" : "s"}`} dense />
-              </Box>
-            ))}
-          </Stack>
-        </EmptyPanel>
-        <EmptyPanel
-          title="Collection scope"
-          body={`Inventory and configuration are read from every enrolled device (Bulk Collect, Collect All). Backups run only for the ${backupTargetCount} device${backupTargetCount === 1 ? "" : "s"} switched on as backup targets on the Backups screen.`}
-        />
-      </Stack>
       </Box>
     </>
   );
@@ -431,24 +431,26 @@ function DeviceRegistryCard({
         </Box>
       )}
       {total > 0 && (
-        <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
-          <Box sx={{ flex: "1 1 260px", display: "flex", alignItems: "center", gap: 1, px: 1.5, py: 0.5, bgcolor: m3.scLow, border: "1px solid",
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, flexWrap: "wrap", mt: 1, minWidth: 0 }}>
+          <Box sx={{ flex: "1 1 260px", minWidth: 200, display: "flex", alignItems: "center", gap: 1, px: 1.5, py: 0.5, bgcolor: m3.scLow, border: "1px solid",
             borderColor: m3.outlineVar, borderRadius: "10px" }}>
             <Icon name="search" size={18} />
             <InputBase fullWidth placeholder="Search by hostname, vendor or state" value={search} onChange={(e) => { onSearch(e.target.value); setPage(0); }}
-              inputProps={{ "aria-label": "Search registry" }} sx={{ fontSize: 14 }} />
+              inputProps={{ "aria-label": "Search registry" }} sx={{ fontSize: 14, minWidth: 0 }} />
           </Box>
-          {(filter !== "ALL" || search.trim()) && (
-            <M3Button emphasis="text" onClick={() => { onFilter("ALL"); onSearch(""); setPage(0); }}>Clear filters</M3Button>
-          )}
-          <Typography variant="body2" color="text.secondary" role="status">
-            {matching.length === total ? `${total} of ${total}` : `${matching.length} of ${total} match`}
-          </Typography>
-        </Stack>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexShrink: 0, ml: "auto" }}>
+            {(filter !== "ALL" || search.trim()) && (
+              <M3Button emphasis="text" onClick={() => { onFilter("ALL"); onSearch(""); setPage(0); }}>Clear filters</M3Button>
+            )}
+            <Typography variant="body2" color="text.secondary" role="status" sx={{ whiteSpace: "nowrap", flexShrink: 0 }}>
+              {matching.length === total ? `${total} of ${total}` : `${matching.length} of ${total} match`}
+            </Typography>
+          </Box>
+        </Box>
       )}
       {total > 0 && (
-        <TableContainer sx={{ mt: 1, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "10px", overflowX: "auto" }}>
-          <Table size="small" aria-label="Device registry" sx={{ tableLayout: "fixed", minWidth: 620, "& td, & th": { px: 1 } }}>
+        <TableContainer sx={{ mt: 1, width: "100%", maxWidth: "100%", minWidth: 0, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "10px", overflowX: "auto" }}>
+          <Table size="small" aria-label="Device registry" sx={{ tableLayout: "fixed", minWidth: 680, "& td, & th": { px: 1 } }}>
             <TableHead>
               <TableRow sx={{ "& th": { color: "text.secondary", fontSize: "0.75rem", fontWeight: 600, whiteSpace: "nowrap" } }}>
                 <TableCell padding="checkbox" sx={{ width: 44 }}>
@@ -461,10 +463,10 @@ function DeviceRegistryCard({
                     inputProps={{ "aria-label": "Select all devices" }}
                   />
                 </TableCell>
-                <SortHeaderCell state={sort.header("vendor")} label="VENDOR" sx={{ width: 130 }} />
+                <SortHeaderCell state={sort.header("vendor")} label="VENDOR" sx={{ width: 160 }} />
                 <SortHeaderCell state={sort.header("hostname")} label="DEVICE / HOSTNAME" />
-                <SortHeaderCell state={sort.header("state")} label="ENROLLMENT STATE" sx={{ width: 150 }} />
-                <SortHeaderCell state={sort.header("collected")} label="LAST COLLECTION" words={{ asc: "oldest first", desc: "newest first" }} sx={{ width: 170 }} />
+                <SortHeaderCell state={sort.header("state")} label="ENROLLMENT STATE" sx={{ width: 170 }} />
+                <SortHeaderCell state={sort.header("collected")} label="LAST COLLECTION" words={{ asc: "oldest first", desc: "newest first" }} sx={{ width: 240 }} />
                 <TableCell sx={{ width: 48 }} align="right">&nbsp;</TableCell>
               </TableRow>
             </TableHead>
@@ -480,14 +482,13 @@ function DeviceRegistryCard({
                       inputProps={{ "aria-label": `Select ${deviceNameLabel(device.hostname)}` }}
                     />
                   </TableCell>
-                  <TableCell>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <VendorBadge vendor={device.vendor_hint} size={24} />
-                      <Typography variant="body2" title={device.vendor_hint} sx={{ whiteSpace: "nowrap" }}>{vendorLabel(device.vendor_hint)}</Typography>
-                    </Stack>
+                  <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <Typography variant="body2" title={device.vendor_hint} sx={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {vendorLabel(device.vendor_hint)}
+                    </Typography>
                   </TableCell>
-                  <TableCell><HostnameCell device={device} /></TableCell>
-                  <TableCell>
+                  <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis" }}><HostnameCell device={device} /></TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>
                     {(() => {
                       const chip = onboardingChip(device.onboarding);
                       return chip
@@ -495,7 +496,7 @@ function DeviceRegistryCard({
                         : <StatusChip tone={enrollmentStateTone(device.enrollment_state)} label={enrollmentStateLabel(device.enrollment_state)} dense />;
                     })()}
                   </TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}><Stamp at={device.inventory_collected_at} stacked /></TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}><Stamp at={device.inventory_collected_at} /></TableCell>
                   <TableCell align="right">
                     <CapabilityMenu
                       ariaLabel={`${deviceNameLabel(device.hostname)} actions`}

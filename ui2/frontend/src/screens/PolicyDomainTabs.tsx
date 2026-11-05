@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Box, Button, Chip, Drawer, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from "@mui/material";
 import { getPolicyObjects, getPolicyUsage, getPolicyInstallations, type PolicyInventoryObject, type PolicyMetadata, type PolicyObjectPage, type PolicyInstallationPage, type PolicyUsage } from "../auth/adminApi";
 import { scheduleLabel, reportPolicyLoadError, policyFailureText } from "./PolicyRuleViewer";
 import { statusWord } from "../shell/presenters";
+import { SortHeaderCell, useServerTableSort } from "../shell/tableSort";
 
 const objectTypes = ["host", "network", "range", "group", "service", "service-group", "time", "access-role", "dynamic", "dns-domain", "zone"];
 const hygieneFilters = { "": "All objects", unused: "Unused", duplicates: "Duplicates", empty: "Empty groups", single: "Single-member groups" };
@@ -34,29 +35,45 @@ export function PolicyDomainTab({ tab, metadata, policies }: { tab: "Objects" | 
   const [data, setData] = useState<PolicyObjectPage | PolicyInstallationPage | null>(null);
   const [error, setError] = useState(""), [retry, setRetry] = useState(0);
   const [uid, setUid] = useState(""), [usagePage, setUsagePage] = useState(0), [usage, setUsage] = useState<PolicyUsage | null>(null), [usageError, setUsageError] = useState("");
+  const resetPage = useCallback(() => setPage(0), []);
+  const resetUsagePage = useCallback(() => setUsagePage(0), []);
+  const sort = useServerTableSort({ onChange: resetPage });
+  const usageSort = useServerTableSort({ onChange: resetUsagePage });
+  const sortKey = sort.sort?.key ?? "";
+  const sortOrder = sort.sort?.direction ?? "";
+  const usageSortKey = usageSort.sort?.key ?? "";
+  const usageSortOrder = usageSort.sort?.direction ?? "";
   useEffect(() => {
     const timer = window.setTimeout(() => { setQuery(search); setPage(0); }, 250);
     return () => window.clearTimeout(timer);
   }, [search]);
   useEffect(() => {
     let active = true; setData(null); setError("");
-    const request = tab === "Objects" ? getPolicyObjects(metadata.sourceId, metadata.containerId, page, query, type, hygiene)
-      : getPolicyInstallations(metadata.sourceId, metadata.containerId, page, query, policy);
+    const request = tab === "Objects"
+      ? (sortKey
+          ? getPolicyObjects(metadata.sourceId, metadata.containerId, page, query, type, hygiene, sortKey, sortOrder)
+          : getPolicyObjects(metadata.sourceId, metadata.containerId, page, query, type, hygiene))
+      : (sortKey
+          ? getPolicyInstallations(metadata.sourceId, metadata.containerId, page, query, policy, sortKey, sortOrder)
+          : getPolicyInstallations(metadata.sourceId, metadata.containerId, page, query, policy));
     request.then(result => {
       if (!result || !("objects" in result ? Array.isArray(result.objects) : Array.isArray(result.installations)) || !Array.isArray(result.types)) throw new Error("Invalid object response");
       if (active) setData(result);
     }).catch(failure => { if (active) { reportPolicyLoadError("inventory", failure); setError(policyFailureText(failure, `${tab} could not be loaded.`)); } });
     return () => { active = false; };
-  }, [tab, metadata.sourceId, metadata.containerId, page, query, type, hygiene, policy, retry]);
+  }, [tab, metadata.sourceId, metadata.containerId, page, query, type, hygiene, policy, retry, sortKey, sortOrder]);
   useEffect(() => {
     if (!uid) return;
     let active = true; setUsage(null); setUsageError("");
-    getPolicyUsage(metadata.sourceId, metadata.containerId, uid, usagePage).then(result => {
+    const request = usageSortKey
+      ? getPolicyUsage(metadata.sourceId, metadata.containerId, uid, usagePage, usageSortKey, usageSortOrder)
+      : getPolicyUsage(metadata.sourceId, metadata.containerId, uid, usagePage);
+    request.then(result => {
       if (!Array.isArray(result.rules) || !Array.isArray(result.groups)) throw new Error("Invalid object response");
       if (active) setUsage(result);
     }).catch(failure => { if (active) { reportPolicyLoadError("usage", failure); setUsageError(policyFailureText(failure, "Object usage could not be loaded.")); } });
     return () => { active = false; };
-  }, [metadata.sourceId, metadata.containerId, uid, usagePage]);
+  }, [metadata.sourceId, metadata.containerId, uid, usagePage, usageSortKey, usageSortOrder]);
   const duplicates = data && "objects" in data ? [...new Set(data.objects.map(o => o.duplicateId).filter(Boolean))] : [];
   return <Box role="tabpanel" aria-label={tab} sx={{ minWidth: 0 }}>
     <Typography variant="subtitle2">Domain: {metadata.containerName}</Typography>
@@ -85,8 +102,10 @@ export function PolicyDomainTab({ tab, metadata, policies }: { tab: "Objects" | 
         </Box>}
         {tab === "Installation" && <Typography variant="caption" display="block">Targets are package intent; reported installation is management-plane evidence, not direct runtime enforcement.</Typography>}
         <Box sx={{ overflowX: "auto", mt: 1 }}><Table size="small" aria-label={`Policy ${tab.toLowerCase()}`}>
-          <TableHead><TableRow>{(tab === "Objects" ? ["Name", "Type", "Value / schedule", "Members", "Hygiene", "Where used"]
-            : ["Package", "Gateway / cluster", "Installation target", "Reported installed"]).map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+          <TableHead><TableRow>{(tab === "Objects"
+            ? [["Name", "name"], ["Type", "type"], ["Value / schedule", "value"], ["Members", "members"], ["Hygiene", "hygiene"], ["Where used", "where_used"]] as const
+            : [["Package", "policy"], ["Gateway / cluster", "name"], ["Installation target", "targeted"], ["Reported installed", "installed"]] as const
+          ).map(([label, key]) => <SortHeaderCell key={label} label={label} state={sort.header(key)} />)}</TableRow></TableHead>
           <TableBody>{"objects" in data ? data.objects.map(object => <TableRow key={object.id}>
             <TableCell>{object.name}</TableCell><TableCell>{object.type}</TableCell>
             <TableCell sx={{ overflowWrap: "anywhere", maxWidth: 320 }}>{object.schedule ? scheduleLabel(object.schedule) : object.values?.join("; ") || "—"}</TableCell>
@@ -120,7 +139,7 @@ export function PolicyDomainTab({ tab, metadata, policies }: { tab: "Objects" | 
           {usage.usageComplete !== true && <Box aria-label="Usage evidence gaps">
             {(usage.usageReasons?.length ? usage.usageReasons : ["Where-used evidence is incomplete."]).map(r => <Typography key={r} variant="caption" display="block">• {r}</Typography>)}
           </Box>}
-          <Table size="small" aria-label="Rules using object"><TableHead><TableRow>{["Package", "Layer", "Rule number"].map(t => <TableCell key={t}>{t}</TableCell>)}</TableRow></TableHead>
+          <Table size="small" aria-label="Rules using object"><TableHead><TableRow>{([["Package", "policy"], ["Layer", "layer"], ["Rule number", "number"]] as const).map(([label, key]) => <SortHeaderCell key={label} label={label} state={usageSort.header(key)} />)}</TableRow></TableHead>
             <TableBody>{usage.rules.map(r => <TableRow key={`${r.policyId}:${r.layerRef}:${r.ruleId}`}><TableCell>{r.policyName}</TableCell><TableCell>{r.layerName}</TableCell><TableCell>{r.number}</TableCell></TableRow>)}</TableBody></Table>
           <Typography variant="subtitle2" sx={{ mt: 2 }}>Groups referencing object</Typography>
           {usage.groups.map(g => <Typography key={g.id}>{g.name}</Typography>)}

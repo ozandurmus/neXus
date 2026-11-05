@@ -176,4 +176,42 @@ class PolicyQueryServiceTest {
         assertEquals("Drop", masked.path("revisions").get(0).path("changes").get(1).path("after").asText());
     }
 
+    @Test void ruleSortOrdersAcrossPagesWithNullsLastPrimaryKeyTiebreakAndRejectsUnknownColumns() {
+        var meta = snapshot().metadata();
+        var empty = new Cell(List.of(), false);
+        var r1 = new Rule("rule-b", "u-b", 1, "Bravo", true, empty, empty, empty, empty, "Accept", "Log", "",
+                Map.of(), new HitCounts(10L, "2026-10-01T00:00:00Z", "2026-10-02T00:00:00Z", "mds", "2026-10-05T00:00:00Z", "low", List.of()));
+        var r2 = new Rule("rule-a", "u-a", 2, "Bravo", true, empty, empty, empty, empty, "Drop", "Log", "",
+                Map.of(), new HitCounts(50L, "2026-10-01T00:00:00Z", "2026-10-03T00:00:00Z", "mds", "2026-10-05T00:00:00Z", "medium", List.of()));
+        var r3 = new Rule("rule-c", "u-c", 3, "", true, empty, empty, empty, empty, "Accept", "None", "",
+                Map.of(), null);
+        var snap = new PolicySnapshot(meta, List.of(new Section("s-1", "Access", "Layer", null, List.of(r1, r2, r3))), Map.of());
+
+        // Default preserves evaluation order (rule-b #1, rule-a #2, rule-c #3).
+        var defaultRules = mapper.valueToTree(query.page(snap, 0, "", false, "", 90, "", "").body()).path("sections").get(0).path("rules");
+        assertEquals(List.of("rule-b", "rule-a", "rule-c"),
+                List.of(defaultRules.get(0).path("id").asText(), defaultRules.get(1).path("id").asText(), defaultRules.get(2).path("id").asText()));
+
+        // Name asc: equal "Bravo" rules tiebreak by primary key (rule-a before rule-b), blank name is null and goes last.
+        var nameAsc = mapper.valueToTree(query.page(snap, 0, "", false, "", 90, "name", "asc").body()).path("sections").get(0).path("rules");
+        assertEquals(List.of("rule-a", "rule-b", "rule-c"),
+                List.of(nameAsc.get(0).path("id").asText(), nameAsc.get(1).path("id").asText(), nameAsc.get(2).path("id").asText()));
+
+        // Usage asc and desc both keep null hitCounts last (rule-c last in both directions).
+        var usageAsc = mapper.valueToTree(query.page(snap, 0, "", false, "", 90, "usage", "asc").body()).path("sections").get(0).path("rules");
+        assertEquals(List.of("rule-b", "rule-a", "rule-c"),
+                List.of(usageAsc.get(0).path("id").asText(), usageAsc.get(1).path("id").asText(), usageAsc.get(2).path("id").asText()));
+        var usageDesc = mapper.valueToTree(query.page(snap, 0, "", false, "", 90, "usage", "desc").body()).path("sections").get(0).path("rules");
+        assertEquals(List.of("rule-a", "rule-b", "rule-c"),
+                List.of(usageDesc.get(0).path("id").asText(), usageDesc.get(1).path("id").asText(), usageDesc.get(2).path("id").asText()));
+
+        // Sorting spans the whole 5000-rule snapshot before paging: number desc puts rule-4999 (#5000) first on page 0.
+        var fullDesc = mapper.valueToTree(query.page(snapshot(), 0, "", false, "", 90, "number", "desc").body()).path("sections").get(0).path("rules");
+        assertEquals("rule-4999", fullDesc.get(0).path("id").asText());
+
+        assertThrows(IllegalArgumentException.class, () -> query.page(snap, 0, "", false, "", 90, "unknown", "asc"));
+        assertThrows(IllegalArgumentException.class, () -> query.page(snap, 0, "", false, "", 90, "name", "sideways"));
+        assertThrows(IllegalArgumentException.class, () -> query.page(snap, 0, "", false, "", 90, "", "asc"));
+    }
+
 }

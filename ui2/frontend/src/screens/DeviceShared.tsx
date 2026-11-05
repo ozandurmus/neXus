@@ -313,7 +313,7 @@ export function DeviceIdentityTable({ devices, ariaLabel = "Member identity" }: 
   const headers = ["MEMBER", "SERIAL", "MODEL", "SOFTWARE VERSION", levelHeader, "UPTIME", "HA ROLE", "MANAGEMENT ADDRESS",
     vsHeader, "ENROLLMENT", "PLATFORM FACTS OBSERVED", "LAST INVENTORY READ", "EVIDENCE SOURCE"];
   return (
-    <TableContainer sx={{ overflowX: "auto", "& th:first-of-type, & td:first-of-type": { position: "sticky", left: 0, zIndex: 1, bgcolor: m3.scLowest, boxShadow: `1px 0 0 ${m3.outlineVar}` } }}>
+    <TableContainer sx={{ width: "100%", maxWidth: "100%", minWidth: 0, overflowX: "auto", "& th:first-of-type, & td:first-of-type": { position: "sticky", left: 0, zIndex: 1, bgcolor: m3.scLowest, boxShadow: `1px 0 0 ${m3.outlineVar}` } }}>
       <Table size="small" aria-label={ariaLabel} sx={{ "& th, & td": { px: 1 } }}>
         <TableHead>
           <TableRow>{headers.map((h) => <TableCell key={h} sx={{ ...HEAD, minWidth: COLUMN_MIN_WIDTH[h] }}>{h}</TableCell>)}</TableRow>

@@ -54,11 +54,26 @@ public final class DiagnosticController {
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", "DIAGNOSTIC_TARGET_UNAVAILABLE")));
     }
 
+    public ResponseEntity<?> history(String deviceId, int page, HttpServletRequest request) {
+        return history(deviceId, page, "", "", request);
+    }
+
     @GetMapping("/api/v2/diagnostics/history")
     public ResponseEntity<?> history(@RequestParam(value="device_id",required=false) String deviceId,
-            @RequestParam(value="page",defaultValue="0") int page,HttpServletRequest request) {
+            @RequestParam(value="page",defaultValue="0") int page,
+            @RequestParam(value="sort",defaultValue="") String sort,
+            @RequestParam(value="order",defaultValue="") String order,
+            HttpServletRequest request) {
         requireReadAccess(request);
-        return ResponseEntity.ok(Map.of("runs",service.history(deviceId,page,isMasked(request))));
+        try {
+            com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao.diagnosticOrderBy(sort, order);
+            var runs = (sort == null || sort.isBlank()) && (order == null || order.isBlank())
+                    ? service.history(deviceId,page,isMasked(request))
+                    : service.history(deviceId,page,isMasked(request),sort,order);
+            return ResponseEntity.ok(Map.of("runs",runs));
+        } catch (IllegalArgumentException invalid) {
+            return ResponseEntity.badRequest().body(Map.of("code", "INVALID_DIAGNOSTIC_QUERY"));
+        }
     }
 
     @PostMapping("/api/v2/diagnostics")

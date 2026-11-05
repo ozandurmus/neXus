@@ -123,6 +123,20 @@ describe("Devices screen after the Fable review", () => {
     const clusterReference = screen.getByText("Reference").parentElement as HTMLElement;
     expect(within(clusterReference).getByText("CLS-ROMEO-01")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
+
+    // R-06: the Member identity table container scrolls horizontally inside a minWidth: 0 tabpanel instead of clipping the last column.
+    expect(within(table).getByRole("columnheader", { name: "LAST INVENTORY READ" })).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "EVIDENCE SOURCE" })).toBeInTheDocument();
+    const tableContainer = table.closest(".MuiTableContainer-root") as HTMLElement;
+    expect(tableContainer).toHaveStyle({ overflowX: "auto", maxWidth: "100%", minWidth: "0" });
+    const tabpanel = screen.getByRole("tabpanel");
+    expect(tabpanel).toHaveStyle({ minWidth: "0" });
+
+    // R-04: clicking a member card selects that member on the Devices screen.
+    const card2 = container.querySelector('[data-member-card="tango-02"]') as HTMLElement;
+    fireEvent.click(card2);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "FW-TANGO-02" })).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Check Point ClusterXL · CLS-ROMEO-01" })).toBeInTheDocument();
   });
 
   it("opens the device named by ?device_id=", async () => {

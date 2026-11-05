@@ -183,19 +183,22 @@ def test_backup_polling_is_every_30_seconds_in_the_worker():
 
 
 def test_scheduled_system_log_collection_is_enabled_for_the_fleet_in_the_service_only(monkeypatch):
-    """PO decision 2026-10-18: SystemLogCollectionScheduler is a Spring bean of the service process, so only the service
-    deployment carries the switch; the code default stays off and a preview candidate never schedules (scheduling off)."""
+    """PO decision 2026-10-18 and PO 2026-11-05: SystemLogCollectionScheduler is a Spring bean of the service process,
+    so only the service deployment carries the switches; the code defaults stay off."""
     monkeypatch.syspath_prepend(str(REPO_ROOT / "tools" / "e2e"))
     import hosta_preview_e2e as preview
 
-    name = "UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_ENABLED"
-    for path, owner, spec in _pod_specs():
-        for container in spec.get("containers") or []:
-            entries = [e for e in container.get("env") or [] if e["name"] == name]
-            if owner == "Deployment/ui2-service":
-                assert entries == [{"name": name, "value": "true"}], f"{owner}: scheduled collection must be on"
-            else:
-                assert not entries, f"{owner}: the scheduler does not run here; the switch belongs to the service only"
+    for name in (
+        "UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_ENABLED",
+        "UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_INDEPENDENT",
+    ):
+        for path, owner, spec in _pod_specs():
+            for container in spec.get("containers") or []:
+                entries = [e for e in container.get("env") or [] if e["name"] == name]
+                if owner == "Deployment/ui2-service":
+                    assert entries == [{"name": name, "value": "true"}], f"{owner}: {name} must be on"
+                else:
+                    assert not entries, f"{owner}: the scheduler does not run here; {name} belongs to the service only"
 
     service = next(doc for doc in load_documents((MANIFEST_DIR / "50-service-deployment.yaml").read_text())
                    if doc["kind"] == "Deployment")
@@ -208,7 +211,8 @@ def test_scheduled_system_log_collection_is_enabled_for_the_fleet_in_the_service
     assert {"name": "UI2_SCHEDULING_ENABLED", "value": "false"} in container["env"]
 
     application = (REPO_ROOT / "ui2/service/src/main/resources/application.yml").read_text(encoding="utf-8")
-    assert "enabled: ${" + name + ":false}" in application, "the code default stays false"
+    assert "enabled: ${UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_ENABLED:false}" in application, "the code default stays false"
+    assert "independent: ${UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_INDEPENDENT:false}" in application, "the code default stays false"
 
 
 def test_the_rule_checks_below_have_something_to_check():

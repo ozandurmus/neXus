@@ -183,7 +183,7 @@ export function M3Tabs({
         role="tabpanel"
         id={panelId}
         aria-labelledby={tabId(value)}
-        sx={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minHeight: 0 }}
+        sx={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minHeight: 0, minWidth: 0 }}
       >
         {tabs[value]?.panel}
       </Box>

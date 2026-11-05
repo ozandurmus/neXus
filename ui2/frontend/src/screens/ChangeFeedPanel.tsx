@@ -35,6 +35,8 @@ export const KINDS: readonly { readonly id: ChangeKind; readonly label: string }
 const VENDORS = [["", "All vendors"], ["check_point", "Check Point"], ["palo_alto", "Palo Alto"]] as const;
 /** After this long the loading line says the estate-wide read is still running (it is given up at the 20 s client timeout). */
 export const SLOW_AFTER_MS = 5_000;
+/** Component-level bounded wait so the panel never stays in "Loading changes…" forever. */
+export const LOAD_TIMEOUT_MS = 20_000;
 
 const SOURCE_LABELS: Readonly<Record<string, string>> = {
   policy_rule_history: "Policy rule history",
@@ -109,14 +111,21 @@ export function ChangeFeedPanel({ initialDevice = "", initialVendor = "" }: { re
     let active = true;
     setData(null); setError(null); setSlow(false);
     const slowTimer = window.setTimeout(() => { if (active) setSlow(true); }, SLOW_AFTER_MS);
+    const timeoutTimer = window.setTimeout(() => {
+      if (!active) return;
+      active = false;
+      window.clearTimeout(slowTimer);
+      setSlow(false);
+      setError({ status: 0, body: { error: "TIMEOUT" } });
+    }, LOAD_TIMEOUT_MS);
     getChangeFeed({ ...range, kinds: filters.kinds, vendor: filters.vendor, device: filters.device, cursor, limit: 50 })
       .then((page) => {
         if (!Array.isArray(page.events) || !Array.isArray(page.coverage)) throw new Error("Invalid change feed response");
         if (active) { setRange({ from: page.range_start, to: page.range_end }); setData(page); }
       })
       .catch((failure: unknown) => { if (active) setError(failure ?? new Error("Could not load the change feed")); })
-      .finally(() => { window.clearTimeout(slowTimer); if (active) setSlow(false); });
-    return () => { active = false; window.clearTimeout(slowTimer); };
+      .finally(() => { window.clearTimeout(slowTimer); window.clearTimeout(timeoutTimer); if (active) setSlow(false); });
+    return () => { active = false; window.clearTimeout(slowTimer); window.clearTimeout(timeoutTimer); };
     // `range` is set from the response so the pages of one read share one window; it must not retrigger the read.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, cursor, revision]);
@@ -139,8 +148,13 @@ export function ChangeFeedPanel({ initialDevice = "", initialVendor = "" }: { re
   );
 
   const failed = error !== null;
-  const timedOut = (error as { status?: number } | null)?.status === 0;
-  const errorCode = (error as { body?: { code?: string; error?: string } } | null)?.body?.code ?? (error as { body?: { error?: string } } | null)?.body?.error ?? null;
+  const errorBody = (error as { body?: { code?: string; error?: string; message?: string; reason?: string } } | null)?.body;
+  const timedOut = (error as { status?: number; name?: string } | null)?.status === 0
+    || (error as { name?: string } | null)?.name === "AbortError"
+    || errorBody?.error === "TIMEOUT";
+  const errorCode = errorBody?.code ?? errorBody?.error ?? null;
+  const errorReason = errorBody?.message ?? errorBody?.reason
+    ?? (error instanceof Error && error.message !== "Could not load the change feed" ? error.message : null);
 
   return (
     <Box role="region" aria-label="Change feed" data-testid="change-feed" sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -185,7 +199,7 @@ export function ChangeFeedPanel({ initialDevice = "", initialVendor = "" }: { re
       {failed && isRestricted(error) && <RestrictedPanel area="Change feed" role="Security Administrator" nextStep="Policy > Changes is gated the same way." />}
       {failed && !isRestricted(error) && (
         <StatePanel variant="error" announce="status" title={timedOut ? "Could not load the change feed · the read timed out after 20 s" : "Could not load the change feed"}
-          code={errorCode} action={<M3Button emphasis="outlined" onClick={() => setRevision((n) => n + 1)}>Retry</M3Button>} />
+          body={errorReason} code={errorCode} action={<M3Button emphasis="outlined" onClick={() => setRevision((n) => n + 1)}>Retry</M3Button>} />
       )}
       {!data && !failed && (
         <Typography role="status" variant="body2">{slow ? "Loading changes… the estate-wide read is still running (given up after 20 s)." : "Loading changes…"}</Typography>

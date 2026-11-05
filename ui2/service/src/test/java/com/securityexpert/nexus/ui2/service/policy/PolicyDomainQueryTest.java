@@ -188,4 +188,53 @@ class PolicyDomainQueryTest {
         assertEquals(1, missing.path("total").asInt()); assertTrue(missing.path("installations").get(0).path("installed").isNull());
         assertTrue(missing.path("installations").get(0).path("allTargets").asBoolean());
     }
+
+    @Test void domainObjectsInstallationsAndUsageSupportAllowListedSortNullsLastAndTiebreak() {
+        var hostB = item("uid-b", "Bravo", "host", List.of(), "ipv4-address: 192.0.2.20");
+        var hostA = item("uid-a", "Bravo", "host", List.of(), "ipv4-address: 192.0.2.10");
+        var hostNoVal = item("uid-c", "Alpha", "host", List.of());
+        inventories.add(inventory("hosts", "RESOLVED", hostB, hostA, hostNoVal));
+        var gwInstalled = new CpObjectInventory.Item("gw-1", "gateway-uid", "Gateway Z", "simple-gateway", List.of(), List.of(), null,
+            List.of(new CpObjectInventory.Installation("Synthetic package", true)));
+        var gwUnknown = new CpObjectInventory.Item("gw-2", "other-uid", "Gateway A", "simple-gateway", List.of(), List.of(), null,
+            List.of(new CpObjectInventory.Installation("Synthetic package", null)));
+        inventories.add(inventory("gateways-and-servers", "RESOLVED", gwInstalled, gwUnknown));
+        var meta = new Metadata("policy-1", "source-1", "Synthetic manager", "CP", "domain-1", "Synthetic domain", "Synthetic package",
+            "2026-10-05T00:00:00Z", "artifact-1", List.of(new Target("all-reference", "ALL", "", "UNKNOWN")));
+        var empty = new Cell(List.of(), false);
+        var usedCell = new Cell(List.of(ref("source-1", "domain-1", "object", "uid-a")), false);
+        var r1 = new Rule("r-2", "u-2", 10, "Zeta", true, usedCell, empty, empty, empty, "Accept", "Log", "", Map.of());
+        var r2 = new Rule("r-1", "u-1", 2, "Alpha", true, usedCell, empty, empty, empty, "Drop", "Log", "", Map.of());
+        snapshots.add(new PolicySnapshot(meta, List.of(new Section("s-1", "Layer", "CP access layer", null, List.of(r1, r2))), Map.of()));
+
+        var q = query();
+        // Domain objects sorted by name asc: Alpha first, then equal "Bravo" rows tiebreak stably by primary key id.
+        var expectedTiebreak = hostA.id().compareTo(hostB.id()) < 0
+            ? List.of("uid-c", "uid-a", "uid-b")
+            : List.of("uid-c", "uid-b", "uid-a");
+        var byName = mapper.valueToTree(q.domainObjects("source-1", "domain-1", 0, "", "", "", false, "name", "asc").orElseThrow().body()).path("objects");
+        assertEquals(expectedTiebreak,
+            List.of(byName.get(0).path("uid").asText(), byName.get(1).path("uid").asText(), byName.get(2).path("uid").asText()));
+        // Domain objects sorted by value asc and desc: empty values (uid-c) stay last in both directions.
+        var valAsc = mapper.valueToTree(q.domainObjects("source-1", "domain-1", 0, "", "", "", false, "value", "asc").orElseThrow().body()).path("objects");
+        var valDesc = mapper.valueToTree(q.domainObjects("source-1", "domain-1", 0, "", "", "", false, "value", "desc").orElseThrow().body()).path("objects");
+        assertEquals("uid-c", valAsc.get(2).path("uid").asText());
+        assertEquals("uid-c", valDesc.get(2).path("uid").asText());
+
+        // Installations sorted by installed asc and desc: null installed status stays last in both directions.
+        var instAsc = mapper.valueToTree(q.installations("source-1", "domain-1", 0, "", "", false, "installed", "asc").orElseThrow().body()).path("installations");
+        var instDesc = mapper.valueToTree(q.installations("source-1", "domain-1", 0, "", "", false, "installed", "desc").orElseThrow().body()).path("installations");
+        assertTrue(instAsc.get(1).path("installed").isNull());
+        assertTrue(instDesc.get(1).path("installed").isNull());
+
+        // Object usage rules sorted by number asc vs desc.
+        var usageAsc = mapper.valueToTree(q.objectUsage("source-1", "domain-1", "uid-a", 0, "number", "asc").orElseThrow().body()).path("rules");
+        var usageDesc = mapper.valueToTree(q.objectUsage("source-1", "domain-1", "uid-a", 0, "number", "desc").orElseThrow().body()).path("rules");
+        assertEquals(2, usageAsc.get(0).path("number").asInt());
+        assertEquals(10, usageDesc.get(0).path("number").asInt());
+
+        assertThrows(IllegalArgumentException.class, () -> q.domainObjects("source-1", "domain-1", 0, "", "", "", false, "bogus", "asc"));
+        assertThrows(IllegalArgumentException.class, () -> q.installations("source-1", "domain-1", 0, "", "", false, "gateway", "bogus"));
+        assertThrows(IllegalArgumentException.class, () -> q.objectUsage("source-1", "domain-1", "uid-a", 0, "bogus", "asc"));
+    }
 }

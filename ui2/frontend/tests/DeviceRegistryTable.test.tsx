@@ -34,6 +34,14 @@ describe("Administration device registry (UI review 2026-10-18, F-22)", () => {
     expect(within(table()).getAllByRole("row")).toHaveLength(1 + FLEET.length);
     expect(screen.getAllByText("Fortinet").length).toBeGreaterThan(0);
     expect(screen.queryByText("fortinet")).toBeNull();
+    // R-05: one vendor label per row (no duplicate short-code VendorBadge), single-line LAST COLLECTION stamp, non-overlapping search counter.
+    const firstRowCells = within(within(table()).getAllByRole("row")[1]).getAllByRole("cell");
+    expect(firstRowCells[1].textContent).toBe("Check Point");
+    expect(firstRowCells[4]).toHaveStyle({ whiteSpace: "nowrap" });
+    expect(within(firstRowCells[4]).getByText(/2026-10-18/)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("6 of 6");
+    expect(screen.getByRole("status")).toHaveStyle({ whiteSpace: "nowrap" });
+    expect(screen.getByRole("status").parentElement).toHaveStyle({ flexShrink: "0" });
   });
 
   it("filters by the Enrollment card counts, and a second click on the same count clears the filter", async () => {

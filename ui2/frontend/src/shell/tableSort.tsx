@@ -138,11 +138,43 @@ export function useTableSort<T>(columns: ReadonlyArray<SortColumn<T>>, options: 
   return useMemo(() => ({ sort, setSort, toggle, apply, header }), [sort, setSort, toggle, apply, header]);
 }
 
+export interface ServerTableSortState {
+  readonly sort: TableSort | null;
+  readonly setSort: (sort: TableSort | null) => void;
+  readonly toggle: (key: string, firstDirection?: SortDirection) => void;
+  readonly header: (key: string, firstDirection?: SortDirection) => SortHeaderState;
+}
+
+/**
+ * Sort state for a server-paged table: the same `asc -> desc -> default` header cycle and `SortHeaderCell` props,
+ * while the query endpoint applies the order across all pages before slicing.
+ */
+export function useServerTableSort(options: { readonly onChange?: () => void; readonly initial?: TableSort | null } = {}): ServerTableSortState {
+  const { onChange, initial = null } = options;
+  const [sort, setSortState] = useState<TableSort | null>(initial);
+  const setSort = useCallback((next: TableSort | null) => { setSortState(next); onChange?.(); }, [onChange]);
+  const toggle = useCallback((key: string, firstDirection: SortDirection = "asc") => {
+    setSortState((current) => nextTableSort(current, key, firstDirection));
+    onChange?.();
+  }, [onChange]);
+  const header = useCallback((key: string, firstDirection: SortDirection = "asc"): SortHeaderState => {
+    const active = sort !== null && sort.key === key;
+    return {
+      active,
+      direction: active ? sort.direction : firstDirection,
+      firstDirection,
+      sortDirection: active ? sort.direction : false,
+      onClick: () => toggle(key, firstDirection),
+    };
+  }, [sort, toggle]);
+  return useMemo(() => ({ sort, setSort, toggle, header }), [sort, setSort, toggle, header]);
+}
+
 function capitalise(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export interface SortHeaderCellProps extends Omit<TableCellProps, "sortDirection" | "title"> {
+export interface SortHeaderCellProps extends Omit<TableCellProps, "sortDirection"> {
   readonly state: SortHeaderState;
   /** The header text; also the accessible name of the sort button. */
   readonly label: string;
@@ -157,14 +189,20 @@ export interface SortHeaderCellProps extends Omit<TableCellProps, "sortDirection
  */
 export function SortHeaderCell({ state, label, words = { asc: "A to Z", desc: "Z to A" }, children, ...cell }: SortHeaderCellProps) {
   const word = (d: SortDirection) => (d === "asc" ? words.asc : words.desc);
-  const title = !state.active
+  const sortTitle = !state.active
     ? `Sort by ${label.toLowerCase()}, ${word(state.direction)}`
     : state.direction === state.firstDirection
       ? `${capitalise(word(state.direction))} · click for ${word(state.direction === "asc" ? "desc" : "asc")}`
       : `${capitalise(word(state.direction))} · click for the default order`;
   return (
     <TableCell {...cell} sortDirection={state.sortDirection}>
-      <TableSortLabel active={state.active} direction={state.direction} onClick={state.onClick} title={title}>
+      <TableSortLabel
+        active={state.active}
+        direction={state.direction}
+        onClick={state.onClick}
+        title={sortTitle}
+        aria-label={cell["aria-label"]}
+      >
         {children ?? label}
       </TableSortLabel>
     </TableCell>

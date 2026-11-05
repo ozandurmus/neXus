@@ -276,13 +276,17 @@ public class TopologyNamePseudonymizer {
             return rawDomainName;
         }
         String trimmed = rawDomainName.trim();
-        byte[] hash = hmacSha256("DOMAIN:" + trimmed.toUpperCase());
-        int dictIndex = (hash[0] & 0xFF) % DICTIONARY.size();
-        int suffixNum = ((hash[1] & 0xFF) % 9) + 1;
-        String masked = registry.claim("domain", rawKey("domain", trimmed), candidates("DOM", dictIndex, suffixNum));
+        String masked = domainCache.computeIfAbsent(trimmed.toUpperCase(java.util.Locale.ROOT), upper -> {
+            byte[] hash = hmacSha256("DOMAIN:" + upper);
+            int dictIndex = (hash[0] & 0xFF) % DICTIONARY.size();
+            int suffixNum = ((hash[1] & 0xFF) % 9) + 1;
+            return registry.claim("domain", rawKey("domain", trimmed), candidates("DOM", dictIndex, suffixNum));
+        });
         registerTextName(trimmed, masked);
         return masked;
     }
+
+    private final Map<String, String> domainCache = new ConcurrentHashMap<>();
 
     public String maskVirtualSystem(String rawVsName, String parentRef) {
         if (rawVsName == null || rawVsName.isBlank()) {

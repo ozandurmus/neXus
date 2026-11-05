@@ -42,6 +42,7 @@ ui2:
     # the service deployment manifest turns it on for the fleet (PO 2026-10-18). Manual syslog-collect-start works regardless.
     scheduled-collection:
       enabled: ${UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_ENABLED:false}
+      independent: ${UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_INDEPENDENT:false}
   db:
     url: ${UI2_DB_URL:jdbc:postgresql://localhost:5432/ui2}
     user-file: ${UI2_DB_APP_USER_FILE:/run/secrets/ui2_db_app_user}

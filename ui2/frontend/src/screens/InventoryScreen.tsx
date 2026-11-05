@@ -18,7 +18,7 @@ import { PLANE_ADMIN, PLANE_COLLECT } from "../shell/actionAccess";
 import { plural } from "../shell/plural";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip } from "../shell/States";
-import { FilterBar, FilterRow, ListSettingsMenu, contentVersionText, downloadText, isDeviceLive, knownHaRole, orderMembers, toCsv } from "./DeviceShared";
+import { FilterBar, FilterRow, ListSettingsMenu, contentVersionText, downloadText, isDeviceLive, knownHaRole, orderMembers, toCsv, vsListOf } from "./DeviceShared";
 export { isDeviceLive } from "./DeviceShared";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { useListSearch } from "../shell/listSearch";
@@ -1391,7 +1391,7 @@ export function InventoryScreen() {
           </Box>
         }
         detail={
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minHeight: 0 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minHeight: 0, minWidth: 0 }}>
             {/* The way back to the landing (P1-1) is in the compact header row above while an object is open. */}
             {selectedCluster ? (
               <ClusterDetailPanels
@@ -1400,6 +1400,12 @@ export function InventoryScreen() {
                 members={selectedCluster.members}
                 initialVs={selectedCluster.initialVs}
                 onSelectVs={(vs) => setSelectedCluster((current) => current ? { ...current, initialVs: vs ?? undefined } : current)}
+                onSelectMember={(member) => {
+                  const vs = selectedCluster.initialVs && vsListOf(member).includes(selectedCluster.initialVs) ? selectedCluster.initialVs : null;
+                  setSelectedCluster(null);
+                  setSelectedDeviceVs(vs);
+                  setSelectedDevice(member);
+                }}
                 cache={clusterCacheRef.current}
                 onCacheUpdate={(ref, inv) => clusterCacheRef.current.set(ref, inv)}
                 initialTab={initialTab}

@@ -6,6 +6,7 @@ import { StatusPill } from "../shell/StatusPill";
 import { formatStamp, relativeAge } from "../shell/time";
 import { readinessReasonLabel } from "../shell/presenters";
 import { backupDisplayWord } from "./backupWords";
+import { READINESS_STALE_AFTER_MS } from "./HaReadinessList";
 import {
   getDeviceCompliance,
   getDeviceConfiguration,
@@ -260,13 +261,17 @@ export function readinessFact(rows: readonly CpFailoverSummary[] | null | undefi
       title: row?.refusalReason ? readinessReasonLabel(row.refusalReason) : "No readiness check has been recorded for this cluster." };
   }
   const { word, tone } = READINESS_WORDS[row.readiness.status] ?? { word: row.readiness.status, tone: "neutral" as Tone };
+  const observedMs = row.readiness.observedAt ? new Date(row.readiness.observedAt).getTime() : Number.NaN;
+  const ageMs = Number.isNaN(observedMs) ? null : Math.max(0, now.getTime() - observedMs);
+  const stale = ageMs !== null && ageMs > READINESS_STALE_AFTER_MS;
+  const effectiveTone: Tone = tone === "ok" && stale ? "warn" : tone;
   const reason = row.readiness.status === "NOT_READY" ? readinessReasonLabel(row.readiness.stopCode ?? row.readiness.failedCheck) : null;
   return {
     key: "readiness",
     label: `Readiness ${word} · ${relativeAge(row.readiness.observedAt, now)}`,
-    tone,
+    tone: effectiveTone,
     href,
-    title: `${formatStamp(row.readiness.observedAt)}${reason ? ` · ${reason}` : ""}`,
+    title: `${formatStamp(row.readiness.observedAt)}${stale && tone === "ok" ? " · Stale (> 24 h)" : ""}${reason ? ` · ${reason}` : ""}`,
   };
 }
 

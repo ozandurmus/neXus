@@ -296,5 +296,12 @@ class PolicyApiTest {
         when(query.catalog()).thenReturn(List.of());
         assertEquals(200, controller.device("missing", "", 0, "", new org.springframework.mock.web.MockHttpServletRequest()).getStatusCode().value());
         assertEquals(404, controller.object("object-1", "missing", "policy-1").getStatusCode().value());
+        assertEquals(400, controller.filteredPage("policy-1", 0, "", "", 90, "bogus", "asc", request).getStatusCode().value());
+        assertEquals(400, controller.filteredPage("policy-1", 0, "", "", 90, "name", "sideways", request).getStatusCode().value());
+        assertEquals(400, controller.filteredPage("policy-1", 0, "", "", 90, "", "asc", request).getStatusCode().value());
+        assertEquals(400, controller.objects("domain-1", "source-1", 0, "", "", "", "bogus", "asc", request).getStatusCode().value());
+        assertEquals(400, controller.objects("domain-1", "source-1", 0, "", "", "", "name", "sideways", request).getStatusCode().value());
+        assertEquals(400, controller.usage("domain-1", "uid-1", "source-1", 0, "bogus", "asc").getStatusCode().value());
+        assertEquals(400, controller.installation("domain-1", "source-1", 0, "", "", "bogus", "asc", request).getStatusCode().value());
     }
 }

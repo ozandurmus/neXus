@@ -152,8 +152,16 @@ public final class DiagnosticService {
     }
 
     public java.util.List<java.util.Map<String,Object>> history(String deviceId,int page,boolean masked) {
-        return jobs.diagnosticHistory(deviceId,Math.min(Math.max(0,page),100_000)*50).stream()
-            .map(j -> summary(j,masked)).toList();
+        return history(deviceId,page,masked,"","");
+    }
+
+    public java.util.List<java.util.Map<String,Object>> history(String deviceId,int page,boolean masked,String sort,String order) {
+        com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao.diagnosticOrderBy(sort, order);
+        int offset = Math.min(Math.max(0,page),100_000)*50;
+        var rows = (sort == null || sort.isBlank()) && (order == null || order.isBlank())
+                ? jobs.diagnosticHistory(deviceId,offset)
+                : jobs.diagnosticHistory(deviceId,offset,sort,order);
+        return rows.stream().map(j -> summary(j,masked)).toList();
     }
 
     private java.util.Map<String,Object> summary(JobRecordDao.DiagnosticJob job,boolean masked) {

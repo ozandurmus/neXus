@@ -424,3 +424,21 @@ it("draws no header for a section whose rules are on other pages", () => {
   expect(container.querySelectorAll("[data-policy-section]")).toHaveLength(1);
   expect(screen.queryByText(/OBJ-SECTION-02/)).toBeNull();
 });
+
+it("cycles rule table headers asc -> desc -> default and warns when order is not evaluation order", () => {
+  mount(ruleTable());
+  expect(screen.queryByText(/not evaluation order/)).toBeNull();
+
+  const ruleHeader = within(screen.getByRole("columnheader", { name: "Rule" })).getByRole("button");
+  fireEvent.click(ruleHeader);
+  expect(screen.getByRole("columnheader", { name: "Rule" })).toHaveAttribute("aria-sort", "ascending");
+  expect(screen.getByRole("status")).toHaveTextContent("sorted by Rule, not evaluation order");
+
+  fireEvent.click(ruleHeader);
+  expect(screen.getByRole("columnheader", { name: "Rule" })).toHaveAttribute("aria-sort", "descending");
+  expect(screen.getByRole("status")).toHaveTextContent("sorted by Rule, not evaluation order");
+
+  fireEvent.click(ruleHeader);
+  expect(screen.getByRole("columnheader", { name: "Rule" })).not.toHaveAttribute("aria-sort");
+  expect(screen.queryByText(/not evaluation order/)).toBeNull();
+});

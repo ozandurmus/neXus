@@ -6,6 +6,7 @@ import { m3 } from "../theme/m3Theme";
 import { UNKNOWN_HATCH } from "../theme/tokens";
 import { getPolicyHistory, type PolicyCell, type PolicyHygieneAssessment, type PolicyMetadata, type PolicyObject, type PolicyPage, type PolicyRevision, type PolicyRule, type PolicySchedule, type PolicySection } from "../auth/adminApi";
 import { statusWord } from "../shell/presenters";
+import { SortHeaderCell, useServerTableSort, type ServerTableSortState } from "../shell/tableSort";
 import { firewallLabels, firewallSerialTitle, withFirewallNames } from "./policyFirewalls";
 
 /**
@@ -528,11 +529,13 @@ const WITHHELD = "Withheld in AIView";
  * SERVICES · ACTION as the reading order, objects as named chips), section groups as collapsible header rows, and an
  * inline detail panel per expanded row holding everything the rule carries. Only rows inside the scroll window render.
  */
-export function PolicyRuleTable({ sections, collapsed, scrollTop, viewportHeight = 0, stickyTop = 0, toggle, objects, metadata, openObject, selected, onSelect, openRuleId, openHygiene, headerSelect, now = new Date() }: {
+export function PolicyRuleTable({ sections, collapsed, scrollTop, viewportHeight = 0, stickyTop = 0, toggle, objects, metadata, openObject, selected, onSelect, openRuleId, openHygiene, headerSelect, sort, now = new Date() }: {
   sections: PolicyPage["sections"]; collapsed: Set<string>; scrollTop: number; viewportHeight?: number; stickyTop?: number; toggle: (id: string) => void;
   objects: Map<string, PolicyObject>; metadata: PolicyMetadata; openObject: (id: string) => void;
-  selected: Set<string>; onSelect: (id: string) => void; openRuleId?: (id: string) => void; openHygiene?: (findingClass: string) => void; headerSelect?: React.ReactNode; now?: Date;
+  selected: Set<string>; onSelect: (id: string) => void; openRuleId?: (id: string) => void; openHygiene?: (findingClass: string) => void; headerSelect?: React.ReactNode; sort?: ServerTableSortState; now?: Date;
 }) {
+  const fallbackSort = useServerTableSort();
+  const activeSort = sort ?? fallbackSort;
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showEmpty, setShowEmpty] = useState(false);
   const [heights, setHeights] = useState<Record<string, number>>({});
@@ -663,15 +666,26 @@ export function PolicyRuleTable({ sections, collapsed, scrollTop, viewportHeight
     }
   }
   const spacer = (height: number, name: string) => <TableRow key={name} aria-hidden><TableCell colSpan={span} sx={{ height, p: 0, border: 0 }} /></TableRow>;
-  return <Table stickyHeader size="small" aria-label="Policy rules" sx={{ tableLayout: "fixed", width: "100%" }}>
-    <colgroup><col style={{ width: 40 }} /><col style={{ width: 46 }} />{columns.map(column => <col key={column.key} style={{ width: column.width }} />)}</colgroup>
-    <TableHead><TableRow sx={{ "& > th": { top: stickyTop, bgcolor: m3.scLow, color: m3.onSurfaceVar, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", py: 0.75, px: 1,
-      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", zIndex: 3, borderBottom: `1px solid ${m3.outlineVar}` }, "& > th:first-of-type": { px: 0.5, textOverflow: "clip" } }}>
-      <TableCell padding="checkbox">{headerSelect}</TableCell><TableCell>#</TableCell>
-      {columns.map(column => <TableCell key={column.key} title={column.label} aria-label={column.short ? column.label : undefined} sx={column.key === "destination" ? { pl: "18px !important" } : undefined}>{column.short ?? column.label}</TableCell>)}
-    </TableRow></TableHead>
-    <TableBody>{top > 0 && spacer(top, "spacer-top")}{rows}{bottom > 0 && spacer(bottom, "spacer-bottom")}</TableBody>
-  </Table>;
+  const activeSortLabel = activeSort.sort
+    ? columns.find(c => c.key === activeSort.sort?.key)?.label ?? (activeSort.sort.key === "number" ? "#" : activeSort.sort.key)
+    : null;
+  return <>
+    {activeSortLabel && (
+      <Typography role="status" variant="caption" data-sort-notice sx={{ display: "block", px: 1, py: 0.5, color: m3.warningInk, fontWeight: 600 }}>
+        {`sorted by ${activeSortLabel}, not evaluation order`}
+      </Typography>
+    )}
+    <Table stickyHeader size="small" aria-label="Policy rules" sx={{ tableLayout: "fixed", width: "100%" }}>
+      <colgroup><col style={{ width: 40 }} /><col style={{ width: 46 }} />{columns.map(column => <col key={column.key} style={{ width: column.width }} />)}</colgroup>
+      <TableHead><TableRow sx={{ "& > th": { top: stickyTop, bgcolor: m3.scLow, color: m3.onSurfaceVar, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", py: 0.75, px: 1,
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", zIndex: 3, borderBottom: `1px solid ${m3.outlineVar}` }, "& > th:first-of-type": { px: 0.5, textOverflow: "clip" } }}>
+        <TableCell padding="checkbox">{headerSelect}</TableCell>
+        <SortHeaderCell label="#" state={activeSort.header("number")} words={{ asc: "lowest first", desc: "highest first" }}>#</SortHeaderCell>
+        {columns.map(column => <SortHeaderCell key={column.key} label={column.label} state={activeSort.header(column.key)} title={column.label} aria-label={column.short ? column.label : undefined} sx={column.key === "destination" ? { pl: "18px !important" } : undefined}>{column.short ?? column.label}</SortHeaderCell>)}
+      </TableRow></TableHead>
+      <TableBody>{top > 0 && spacer(top, "spacer-top")}{rows}{bottom > 0 && spacer(bottom, "spacer-bottom")}</TableBody>
+    </Table>
+  </>;
 }
 function valueText(value: unknown): string {
   if (value == null) return "—";

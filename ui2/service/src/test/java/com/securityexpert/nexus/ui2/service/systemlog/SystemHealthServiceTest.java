@@ -296,4 +296,27 @@ class SystemHealthServiceTest {
         assertNotNull(cpu.get("day_basis"));
         assertFalse(days.get(0).containsValue("artefact-y"), "no artefact reference leaves the service");
     }
+
+    @Test
+    void startupRefresherWarmsSnapshotWithoutSchedulerAndFailedBackgroundRefreshReportsFailedReason() throws Exception {
+        var service = new SystemHealthService(fx.repository, fx.settings, () -> targets, fx.devices, fx.store, 85, false);
+        var refresher = new SystemLogReadConfiguration.SystemHealthRefresher(service);
+        refresher.onApplicationReady();
+        for (int i = 0; i < 100 && !"READY".equals(part(service.health(NOW), "computation").get("state")); i++) {
+            Thread.sleep(10);
+        }
+        assertEquals("READY", part(service.health(NOW), "computation").get("state"));
+        assertEquals(false, part(service.health(NOW), "computation").get("scheduling_enabled"));
+
+        var failing = new SystemHealthService(fx.repository, fx.settings, () -> {
+            throw new IllegalStateException("database unreachable");
+        }, fx.devices, fx.store, 85, false);
+        assertEquals("COMPUTING", part(failing.health(NOW), "computation").get("state"));
+        for (int i = 0; i < 100 && !"FAILED".equals(part(failing.health(NOW), "computation").get("state")); i++) {
+            Thread.sleep(10);
+        }
+        var failedComp = part(failing.health(NOW), "computation");
+        assertEquals("FAILED", failedComp.get("state"));
+        assertEquals("COMPUTATION_FAILED: IllegalStateException", failedComp.get("reason"));
+    }
 }

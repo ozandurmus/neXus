@@ -69,6 +69,10 @@ spec:
             # process only; the code default (application.yml) stays "false". Set to "false" to stop it (restart required).
             - name: UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_ENABLED
               value: "true"
+            # PO 2026-11-05 ("turn system log collection on"): tick system-log scheduled collection on its own
+            # single-thread executor while global UI2_SCHEDULING_ENABLED is false in development mode.
+            - name: UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_INDEPENDENT
+              value: "true"
             # Development mode (PO 2026-11-03, "keşif politika vs vs bunları askıya alabiliriz, bir süre geliştirme moduna
             # geçebiliriz"): every @Scheduled task of this process is off (SchedulingConfiguration). Manual jobs still run.
             # Set to "true" (restart required) to resume discovery, inventory, configuration, readiness and backup schedules.

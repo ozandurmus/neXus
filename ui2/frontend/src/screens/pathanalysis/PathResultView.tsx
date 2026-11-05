@@ -1,34 +1,65 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import Collapse from "@mui/material/Collapse";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 
-import type { PathBranch, PathHop, PathResult, PathReturnHop, PathRoute, PathSecurity, PathTuple, PathValidation } from "../../auth/adminApi";
+import type { PathBranch, PathHop, PathResult, PathReturnHop, PathRoute, PathSecurity, PathTuple, PathValidation, TopologySnapshotView } from "../../auth/adminApi";
 import { M3Button } from "../../shell/M3Widgets";
 import { VendorBadge } from "../../shell/States";
 import { PillRow, StatusPill } from "../../shell/StatusPill";
 import { Timestamp } from "../../shell/Timestamp";
 import { MONO, m3 } from "../../theme/m3Theme";
 import { LABEL_UPPER, RADIUS, TYPE } from "../../theme/tokens";
+import { HOP_VERDICT_SIDE, NEIGHBOUR_CAP, PathDiagram, buildPathDiagramModel, safeAddressLabel, segmentPrefix } from "./PathDiagram";
 import { HopDeviceBadge, HopDeviceCheck, PathValidationPanel } from "./PathValidationPanel";
 import { hopValidation, verifiedBranchId, type ValidationHopView } from "./pathValidationWords";
 import { VERDICT_SENTENCE, dependsOn, explain, ruleLabel, ruleWithheld, verdictTone, verdictWord } from "./pathWords";
 import type { PathVerification } from "./usePathValidation";
+
+export { HOP_VERDICT_SIDE, NEIGHBOUR_CAP, PathDiagram, buildPathDiagramModel, safeAddressLabel, segmentPrefix };
 
 /** The verification shown beside the hops: the record and the branch it covers. */
 interface DeviceView { readonly validation: PathValidation | null; readonly branchId: string | undefined }
 
 /**
  * The answer to "can A reach B on this port, and if not, where and why" (PATH_ANALYSIS_DESIGN.md §5; Fable design §5):
- * the overall verdict first with the executive summary, then every branch as a hop-by-hop list -- branches side by side
- * when the route splits -- and the return path folded under each branch. Every code the engine wrote is shown with its
- * one-line meaning and never dropped; a hop that is only CONDITIONAL says which earlier UNKNOWN hop it depends on.
- * With a `verification` (stage A6) the "Verify on devices" action follows the verdict and each hop of the verified
- * branch carries the device's MATCH / MISMATCH / NOT_EVALUABLE beside the neXus verdict.
+ * the overall verdict first with the executive summary, then a toggle between the hop-by-hop list (default) and the
+ * computed-path topology diagram, and every branch as a hop-by-hop list -- branches side by side when the route splits --
+ * with the return path folded under each branch. Clicking a hop in the diagram scrolls to and highlights that hop's row
+ * in the hop-by-hop list. With a `verification` (stage A6) the "Verify on devices" action follows the verdict and each
+ * hop of the verified branch carries the device's MATCH / MISMATCH / NOT_EVALUABLE beside the neXus verdict.
  */
-export function PathResultView({ result, verification, now = new Date() }: { readonly result: PathResult; readonly verification?: PathVerification; readonly now?: Date }) {
+export function PathResultView({
+  result,
+  verification,
+  now = new Date(),
+  defaultView = "list",
+  topology = null,
+}: {
+  readonly result: PathResult;
+  readonly verification?: PathVerification;
+  readonly now?: Date;
+  readonly defaultView?: "list" | "diagram";
+  readonly topology?: TopologySnapshotView | null;
+}) {
+  const [view, setView] = useState<"list" | "diagram">(defaultView);
+  const [highlightedHop, setHighlightedHop] = useState<{ readonly branchId: string; readonly hopIndex: number } | null>(null);
+
+  useEffect(() => {
+    setHighlightedHop(null);
+  }, [result]);
+
+  const selectHop = (branchId: string, hopIndex: number) => {
+    setHighlightedHop({ branchId, hopIndex });
+    if (typeof document !== "undefined") {
+      const row = document.querySelector<HTMLElement>(`[data-hop-row="${branchId}-${hopIndex}"]`);
+      row?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    }
+  };
+
   const multi = result.branches.length > 1;
   const device: DeviceView = verification
     ? { validation: verification.state.validation, branchId: verifiedBranchId(verification.state.validation, verification.state.branchId, result) }
@@ -37,8 +68,60 @@ export function PathResultView({ result, verification, now = new Date() }: { rea
     <Stack spacing={2} data-testid="path-result">
       <VerdictCard result={result} now={now} />
       {verification && <PathValidationPanel result={result} verification={verification} now={now} />}
+      <Stack direction="row" spacing={1} alignItems="center" role="group" aria-label="Path result view" data-testid="path-view-toggle">
+        <Button
+          size="small"
+          variant={view === "list" ? "contained" : "outlined"}
+          aria-pressed={view === "list"}
+          data-testid="path-view-list"
+          onClick={() => setView("list")}
+          sx={{
+            height: 36,
+            px: 2.5,
+            borderRadius: `${RADIUS.pill}px`,
+            textTransform: "none",
+            fontWeight: 500,
+          }}
+        >
+          Hop-by-hop
+        </Button>
+        <Button
+          size="small"
+          variant={view === "diagram" ? "contained" : "outlined"}
+          aria-pressed={view === "diagram"}
+          data-testid="path-view-diagram"
+          onClick={() => setView("diagram")}
+          sx={{
+            height: 36,
+            px: 2.5,
+            borderRadius: `${RADIUS.pill}px`,
+            textTransform: "none",
+            fontWeight: 500,
+          }}
+        >
+          Diagram
+        </Button>
+      </Stack>
+      {view === "diagram" && (
+        <PathDiagram
+          result={result}
+          verification={verification}
+          topology={topology}
+          highlightedHop={highlightedHop}
+          onSelectHop={selectHop}
+        />
+      )}
       <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: multi ? "repeat(auto-fit, minmax(380px, 1fr))" : "minmax(0, 1fr)", alignItems: "start" }}>
-        {result.branches.map((branch) => <BranchColumn key={branch.branch_id} branch={branch} multi={multi} result={result} device={device} />)}
+        {result.branches.map((branch) => (
+          <BranchColumn
+            key={branch.branch_id}
+            branch={branch}
+            multi={multi}
+            result={result}
+            device={device}
+            highlightedHopIndex={highlightedHop?.branchId === branch.branch_id ? highlightedHop.hopIndex : null}
+          />
+        ))}
       </Box>
       {result.branches.length === 0 && (
         <Typography variant="body1" sx={{ color: m3.onSurfaceVar }}>No branch was traced: the ingress could not be resolved (see the verdict reason above).</Typography>
@@ -111,7 +194,19 @@ function HopPointer({ label, result, branchId, hopIndex }: { readonly label: str
   );
 }
 
-function BranchColumn({ branch, multi, result, device }: { readonly branch: PathBranch; readonly multi: boolean; readonly result: PathResult; readonly device: DeviceView }) {
+function BranchColumn({
+  branch,
+  multi,
+  result,
+  device,
+  highlightedHopIndex = null,
+}: {
+  readonly branch: PathBranch;
+  readonly multi: boolean;
+  readonly result: PathResult;
+  readonly device: DeviceView;
+  readonly highlightedHopIndex?: number | null;
+}) {
   const notices = [...new Set([...branch.warnings, ...branch.caveats])];
   const ret = branch.return_path;
   const asymmetric = ret.return_status === "ASYMMETRIC";
@@ -134,6 +229,7 @@ function BranchColumn({ branch, multi, result, device }: { readonly branch: Path
       <Stack spacing={1} component="ol" sx={{ listStyle: "none", m: 0, p: 0 }} aria-label={`Hops of branch ${branch.branch_id}`}>
         {branch.hops.map((hop) => (
           <HopCard key={hop.hop_index} hop={hop} branch={branch} blocking={branch.blocking_hop_index === hop.hop_index}
+            highlighted={highlightedHopIndex === hop.hop_index}
             device={hopValidation(device.validation, device.branchId, branch, hop)} />
         ))}
       </Stack>
@@ -145,19 +241,30 @@ function BranchColumn({ branch, multi, result, device }: { readonly branch: Path
   );
 }
 
-const HOP_VERDICT_SIDE: Record<string, string> = {
-  ALLOWED: m3.success, DENIED: m3.error, UNKNOWN: m3.neutralInk, CONDITIONAL: m3.attention,
-};
-
-export function HopCard({ hop, branch, blocking, device = { kind: "none" } }: { readonly hop: PathHop; readonly branch: PathBranch; readonly blocking: boolean; readonly device?: ValidationHopView }) {
+export function HopCard({
+  hop,
+  branch,
+  blocking,
+  highlighted = false,
+  device = { kind: "none" },
+}: {
+  readonly hop: PathHop;
+  readonly branch: PathBranch;
+  readonly blocking: boolean;
+  readonly highlighted?: boolean;
+  readonly device?: ValidationHopView;
+}) {
   const upstream = dependsOn(branch, hop);
   const stale = hop.policy_stale || hop.reasons.includes("STALE_OR_OUT_OF_SYNC_POLICY");
   const codes = [...new Set([...hop.reasons.filter((r) => r !== hop.verdict_reason || hop.verdict === "UNKNOWN"), ...hop.caveats, ...hop.notes, ...hop.flags])];
   const sideColor = HOP_VERDICT_SIDE[hop.verdict] ?? m3.outline;
   return (
-    <Card component="li" data-testid={`path-hop-${hop.hop_index}`} data-hop-verdict={hop.verdict} data-blocking={blocking ? "true" : undefined}
+    <Card component="li" id={`path-hop-${branch.branch_id}-${hop.hop_index}`} data-hop-row={`${branch.branch_id}-${hop.hop_index}`}
+      data-testid={`path-hop-${hop.hop_index}`} data-hop-verdict={hop.verdict} data-blocking={blocking ? "true" : undefined}
+      data-highlighted={highlighted ? "true" : undefined}
       data-device={device.kind === "validated" ? device.hop.result : device.kind === "beyond_cap" ? "NOT_ASKED" : undefined}
-      sx={{ border: `1px solid ${blocking ? m3.error : m3.outlineVar}`, borderLeft: `4px solid ${sideColor}`, boxShadow: "none",
+      sx={{ border: `1px solid ${blocking ? m3.error : highlighted ? m3.primary : m3.outlineVar}`, borderLeft: `4px solid ${sideColor}`,
+            outline: highlighted ? `2px solid ${m3.primary}` : "none", boxShadow: "none",
             borderRadius: `${RADIUS.card}px`, p: 2, bgcolor: m3.scLowest, display: "flex", flexDirection: "column", gap: 1.25 }}>
       <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap>
         <Box component="span" sx={{ width: 28, height: 28, borderRadius: "14px", display: "grid", placeItems: "center", bgcolor: m3.secondaryContainer, color: m3.onSecondaryContainer, fontWeight: 700, fontSize: 13, flex: "none" }} aria-label={`Hop ${hop.hop_index}`}>

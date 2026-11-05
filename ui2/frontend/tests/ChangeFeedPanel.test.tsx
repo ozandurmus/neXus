@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
@@ -166,6 +166,30 @@ describe("ChangeFeedPanel", () => {
     expect(screen.getByText("FEED_DOWN")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByRole("list", { name: "Change timeline" })).toBeInTheDocument();
+  });
+
+  it("stops waiting at the bounded timeout even when the feed request never settles and shows API failure reason", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url === "/devices") return Promise.resolve(response({ devices: [] }));
+        return new Promise(() => {});
+      }));
+      const { unmount } = mount();
+      expect(screen.getByText("Loading changes…")).toBeInTheDocument();
+      await act(async () => { vi.advanceTimersByTime(20_100); });
+      expect(await screen.findByText("Could not load the change feed · the read timed out after 20 s")).toBeInTheDocument();
+      expect(screen.queryByText(/Loading changes/)).toBeNull();
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+    stub(() => response({ code: "FEED_DOWN", message: "History index offline" }, 500));
+    mount();
+    expect(await screen.findByText("Could not load the change feed")).toBeInTheDocument();
+    expect(screen.getByText("History index offline")).toBeInTheDocument();
+    expect(screen.getByText("FEED_DOWN")).toBeInTheDocument();
   });
 });
 

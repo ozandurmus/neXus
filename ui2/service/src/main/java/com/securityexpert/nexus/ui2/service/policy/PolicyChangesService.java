@@ -116,6 +116,21 @@ public final class PolicyChangesService {
         while (true) {
             var batch = repository.rows(rowsFilter, cursor.ceiling(), scan);
             for (Row row : batch) {
+                if (!scannedSummary) {
+                    if (row.initialCapture() && !request.includeInitial()) continue;
+                    Position position = new Position(Instant.parse(row.time()), row.revision());
+                    boolean after = cursor.position() == null || position.time().isBefore(cursor.position().time())
+                        || position.time().equals(cursor.position().time()) && position.revision() < cursor.position().revision();
+                    if (!after) continue;
+                    if (rows.size() < request.limit()) {
+                        rows.add(project(row, false));
+                        next = position;
+                    } else {
+                        more = true;
+                        break;
+                    }
+                    continue;
+                }
                 var view = project(row, masked);
                 if (!matches(view, request)) continue;
                 if (row.initialCapture()) initial++;

@@ -110,12 +110,16 @@ public class SystemLogReadConfiguration {
             DeviceRepository devices, ArtefactStoreAccess artefacts,
             com.securityexpert.nexus.ui2.service.device.diagnostic.SystemLogCollectionService collection,
             @org.springframework.beans.factory.annotation.Value("${ui2.system-health.cpu-p95-threshold-percent:"
-                    + SystemHealthService.DEFAULT_CPU_P95_THRESHOLD_PERCENT + "}") int thresholdPercent) {
+                    + SystemHealthService.DEFAULT_CPU_P95_THRESHOLD_PERCENT + "}") int thresholdPercent,
+            @org.springframework.beans.factory.annotation.Value("${ui2.scheduling.enabled:false}") boolean schedulingEnabled) {
         return new SystemHealthService(repository, new JooqSystemLogCollectionRepository(transactions), collection::targets, devices,
-                artefacts.storeOrNull(), thresholdPercent);
+                artefacts.storeOrNull(), thresholdPercent, schedulingEnabled);
     }
 
-    /** Keeps the System health snapshot warm: a first computation shortly after start, then one per snapshot TTL. */
+    /**
+     * Keeps the System health snapshot warm: an initial computation at startup independent of
+     * {@code ui2.scheduling.enabled} (uses no scheduler), plus a periodic refresh per snapshot TTL when scheduling is on.
+     */
     @Bean
     public SystemHealthRefresher systemHealthRefresher(SystemHealthService service) {
         return new SystemHealthRefresher(service);
@@ -126,6 +130,11 @@ public class SystemLogReadConfiguration {
 
         SystemHealthRefresher(SystemHealthService service) {
             this.service = service;
+        }
+
+        @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
+        public void onApplicationReady() {
+            refresh();
         }
 
         @org.springframework.scheduling.annotation.Scheduled(initialDelayString = "PT45S", fixedDelayString = "PT10M")

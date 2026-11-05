@@ -2,7 +2,7 @@ import { act, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { COMPUTING_POLL_MS, SystemHealthPanel, logsHref, reasonWords, sparklineWords } from "../src/screens/SystemHealthPanel";
+import { COMPUTING_POLL_MS, MAX_COMPUTING_POLLS, SystemHealthPanel, logsHref, reasonWords, sparklineWords } from "../src/screens/SystemHealthPanel";
 import type { SystemHealth, SystemHealthDevice } from "../src/auth/adminApi";
 
 // Synthetic data only: pseudonym device names, opaque ids, invented counters.
@@ -164,6 +164,43 @@ describe("SystemHealthPanel", () => {
     expect(await screen.findByText("System health could not be read")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.getByRole("status")).toBeInTheDocument();
+  });
+
+  it("stops polling after bounded wait when COMPUTING never finishes and shows plain state or API failure reason", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const calls = stub(() => ({
+      status: 200,
+      body: body({
+        computation: { state: "COMPUTING", computed_at: null, duration_ms: null, snapshot_ttl_seconds: 600, store_available: true, scheduling_enabled: false },
+        kpis: { monitored: null, crash_alerts: null, cpu_over_threshold: null, collection_not_ok: null },
+        devices: [],
+      }),
+    }));
+    const { unmount } = render(withTheme(<SystemHealthPanel now={NOW} />));
+    expect(await screen.findByText("First computation running")).toBeInTheDocument();
+    for (let i = 0; i < MAX_COMPUTING_POLLS; i++) {
+      await act(async () => { await vi.advanceTimersByTimeAsync(COMPUTING_POLL_MS + 50); });
+    }
+    expect(await screen.findByText("Not computed yet (scheduled computation is off)")).toBeInTheDocument();
+    expect(screen.queryByText("First computation running")).toBeNull();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    const countAfterStop = calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(COMPUTING_POLL_MS * 3); });
+    expect(calls.length).toBe(countAfterStop);
+    unmount();
+
+    vi.unstubAllGlobals();
+    stub(() => ({
+      status: 200,
+      body: body({
+        computation: { state: "FAILED", computed_at: null, duration_ms: null, snapshot_ttl_seconds: 600, store_available: true, reason: "COMPUTATION_FAILED: IllegalStateException" },
+        kpis: { monitored: null, crash_alerts: null, cpu_over_threshold: null, collection_not_ok: null },
+        devices: [],
+      }),
+    }));
+    render(withTheme(<SystemHealthPanel now={NOW} />));
+    expect(await screen.findByText("System health computation failed")).toBeInTheDocument();
+    expect(screen.getAllByText(/COMPUTATION_FAILED: IllegalStateException/).length).toBeGreaterThanOrEqual(1);
   });
 
   it("helpers: the deep link, the reason words and the sparkline words", () => {

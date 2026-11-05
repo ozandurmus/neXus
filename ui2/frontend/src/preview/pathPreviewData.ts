@@ -1,4 +1,4 @@
-import type { PathBranch, PathHop, PathResult, PathValidation } from "../auth/adminApi";
+import type { PathBranch, PathHop, PathResult, PathValidation, TopologySnapshotView } from "../auth/adminApi";
 
 /**
  * Synthetic path results for the design preview and the tests. Shaped exactly like the A5a golden
@@ -183,4 +183,33 @@ export const PATH_VALIDATION_COMPLETE: PathValidation = {
 export const PATH_VALIDATION_PENDING: PathValidation = {
   ...PATH_VALIDATION_COMPLETE, result: "PENDING",
   hops: [PATH_VALIDATION_COMPLETE.hops[0], { ...PATH_VALIDATION_COMPLETE.hops[1], job_state: "EXECUTING", result: "PENDING", checks: [], reasons: [], evaluated_at: null }],
+};
+
+/** Synthetic topology snapshot for the Path diagram preview (pseudonyms and documentation addresses only). */
+export const PATH_TOPOLOGY_PREVIEW: TopologySnapshotView = {
+  status: "BUILT",
+  snapshot_id: "SNAPSHOT",
+  built_at: "2026-11-04T07:55:00Z",
+  nodes: [
+    { node_id: "FW-TANGO-04/physical/main", node_kind: "ROUTING_CONTEXT", vendor: "check_point", context: "physical", routing_context: "main" },
+    { node_id: "FW-BRAVO-02/vsys1/vr-main", node_kind: "ROUTING_CONTEXT", vendor: "palo_alto", context: "vsys1", routing_context: "vr-main" },
+    { node_id: "FW-JULIET-06/physical/main", node_kind: "ROUTING_CONTEXT", vendor: "check_point", context: "physical", routing_context: "main" },
+  ],
+  segments: [
+    { segment_id: "SEGMENT-198.51.100.0/26", segment_kind: "LAN", network: "198.51.100.0/26" },
+    { segment_id: "SEGMENT-192.0.2.0/30", segment_kind: "POINT_TO_POINT", network: "192.0.2.0/30" },
+    { segment_id: "SEGMENT-203.0.113.0/26", segment_kind: "LAN", network: "203.0.113.0/26" },
+    { segment_id: "SEGMENT-192.0.2.64/26", segment_kind: "LAN", network: "192.0.2.64/26" },
+    { segment_id: "SEGMENT-198.51.100.64/26", segment_kind: "LAN", network: "198.51.100.64/26" },
+    { segment_id: "SEGMENT-203.0.113.64/26", segment_kind: "LAN", network: "203.0.113.64/26" },
+  ],
+  attachments: [
+    { attachment_id: "ATTACHMENT-FW-TANGO-04/physical/main-eth1", node_id: "FW-TANGO-04/physical/main", segment_id: "SEGMENT-198.51.100.0/26", interface_name: "eth1", address: "198.51.100.1/26", zone: null },
+    { attachment_id: "ATTACHMENT-FW-TANGO-04/physical/main-eth2", node_id: "FW-TANGO-04/physical/main", segment_id: "SEGMENT-192.0.2.0/30", interface_name: "eth2", address: "192.0.2.1/30", zone: null },
+    { attachment_id: "ATTACHMENT-FW-TANGO-04/physical/main-eth3", node_id: "FW-TANGO-04/physical/main", segment_id: "SEGMENT-192.0.2.64/26", interface_name: "eth3", address: "192.0.2.65/26", zone: null },
+    { attachment_id: "ATTACHMENT-FW-TANGO-04/physical/main-eth5", node_id: "FW-TANGO-04/physical/main", segment_id: "SEGMENT-198.51.100.64/26", interface_name: "eth5", address: "198.51.100.65/26", zone: null },
+    { attachment_id: "ATTACHMENT-FW-BRAVO-02/vsys1/vr-main-ethernet1/1", node_id: "FW-BRAVO-02/vsys1/vr-main", segment_id: "SEGMENT-192.0.2.0/30", interface_name: "ethernet1/1", address: "192.0.2.2/30", zone: "ZONE-TRANSIT" },
+    { attachment_id: "ATTACHMENT-FW-BRAVO-02/vsys1/vr-main-ethernet1/2", node_id: "FW-BRAVO-02/vsys1/vr-main", segment_id: "SEGMENT-203.0.113.0/26", interface_name: "ethernet1/2", address: "203.0.113.1/26", zone: "ZONE-DMZ" },
+    { attachment_id: "ATTACHMENT-FW-BRAVO-02/vsys1/vr-main-ethernet1/4", node_id: "FW-BRAVO-02/vsys1/vr-main", segment_id: "SEGMENT-203.0.113.64/26", interface_name: "ethernet1/4", address: "203.0.113.65/26", zone: "ZONE-APP" },
+  ],
 };

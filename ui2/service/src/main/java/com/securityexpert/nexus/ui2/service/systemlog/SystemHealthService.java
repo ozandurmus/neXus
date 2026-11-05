@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.service.systemlog;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Duration;
@@ -105,6 +106,7 @@ public final class SystemHealthService {
     private final DeviceRepository devices;
     private final ArtefactStore store; // null when the service has no store mounted
     private final int threshold;
+    private final boolean schedulingEnabled;
     private final Map<String, SarDailyText.Summary> sarByFile = new ConcurrentHashMap<>();
     private final Map<String, CpwdRestartLines.Summary> cpwdByChunk = new ConcurrentHashMap<>();
     private final AtomicBoolean computing = new AtomicBoolean();
@@ -114,33 +116,45 @@ public final class SystemHealthService {
         return t;
     });
     private volatile Snapshot latest;
+    private volatile String lastFailureReason;
+
+    private static final SarDailyText.Summary UNREADABLE_SAR =
+            new SarDailyText.Summary(-1, 0, null, null, 0, null, 0, false);
 
     public SystemHealthService(SystemLogReadRepository repository, SystemLogCollectionRepository settings,
             Supplier<List<DeviceSummaryRecord>> targets, DeviceRepository devices, ArtefactStore store, int thresholdPercent) {
+        this(repository, settings, targets, devices, store, thresholdPercent, true);
+    }
+
+    public SystemHealthService(SystemLogReadRepository repository, SystemLogCollectionRepository settings,
+            Supplier<List<DeviceSummaryRecord>> targets, DeviceRepository devices, ArtefactStore store, int thresholdPercent,
+            boolean schedulingEnabled) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.settings = Objects.requireNonNull(settings, "settings");
         this.targets = Objects.requireNonNull(targets, "targets");
         this.devices = Objects.requireNonNull(devices, "devices");
         this.store = store;
         this.threshold = thresholdPercent > 0 && thresholdPercent <= 100 ? thresholdPercent : DEFAULT_CPU_P95_THRESHOLD_PERCENT;
+        this.schedulingEnabled = schedulingEnabled;
     }
 
     // ---------------------------------------------------------------- serving
 
-    /** The JSON-shaped answer: the newest snapshot (refreshed in the background when stale) or COMPUTING. */
+    /** The JSON-shaped answer: the newest snapshot (refreshed in the background when stale), COMPUTING, or FAILED. */
     public Map<String, Object> health(Instant now) {
         Snapshot snapshot = latest;
+        String failure = lastFailureReason;
         String computation;
         if (snapshot == null) {
             refreshAsync(now);
-            computation = "COMPUTING";
+            computation = failure != null ? "FAILED" : "COMPUTING";
         } else if (Duration.between(snapshot.computedAt(), now).compareTo(SNAPSHOT_TTL) > 0) {
             refreshAsync(now);
             computation = "REFRESHING";
         } else {
             computation = "READY";
         }
-        return render(snapshot, computation, now);
+        return render(snapshot, computation, failure, now);
     }
 
     /** Starts a background refresh unless one is running. */
@@ -149,7 +163,9 @@ public final class SystemHealthService {
         executor.execute(() -> {
             try {
                 latest = compute(now);
-            } catch (RuntimeException e) {
+                lastFailureReason = null;
+            } catch (Throwable e) {
+                lastFailureReason = "COMPUTATION_FAILED: " + e.getClass().getSimpleName();
                 LOG.log(System.Logger.Level.WARNING, "system health refresh failed cause={0}", e.getClass().getSimpleName());
             } finally {
                 computing.set(false);
@@ -161,6 +177,7 @@ public final class SystemHealthService {
     public Snapshot refreshNow(Instant now) {
         Snapshot snapshot = compute(now);
         latest = snapshot;
+        lastFailureReason = null;
         return snapshot;
     }
 
@@ -387,12 +404,14 @@ public final class SystemHealthService {
     }
 
     private SarDailyText.Summary parseSar(SarFileRef ref) {
-        if (ref.artefactRef() == null || ref.wrappedDataKey() == null) return null;
-        try (InputStream in = store.retrieve(new ArtefactRef(ref.artefactRef()), ref.wrappedDataKey(), true)) {
-            return SarDailyText.parse(in);
+        if (ref.artefactRef() == null || ref.wrappedDataKey() == null) return UNREADABLE_SAR;
+        try (InputStream in = new BufferedInputStream(
+                store.retrieve(new ArtefactRef(ref.artefactRef()), ref.wrappedDataKey(), true), 64 * 1024)) {
+            SarDailyText.Summary parsed = SarDailyText.parse(in);
+            return parsed == null ? UNREADABLE_SAR : parsed;
         } catch (IOException | RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "sar text unreadable file={0} cause={1}", ref.fileId(), e.getClass().getSimpleName());
-            return null;
+            return UNREADABLE_SAR;
         }
     }
 
@@ -408,18 +427,24 @@ public final class SystemHealthService {
     }
 
     private CpwdRestartLines.Summary parseCpwd(CpwdChunkRef ref) {
-        if (ref.artefactRef() == null || ref.wrappedDataKey() == null) return null;
-        try (InputStream in = store.retrieve(new ArtefactRef(ref.artefactRef()), ref.wrappedDataKey(), true)) {
-            return CpwdRestartLines.count(in);
+        if (ref.artefactRef() == null || ref.wrappedDataKey() == null) return CpwdRestartLines.Summary.EMPTY;
+        try (InputStream in = new BufferedInputStream(
+                store.retrieve(new ArtefactRef(ref.artefactRef()), ref.wrappedDataKey(), true), 64 * 1024)) {
+            CpwdRestartLines.Summary parsed = CpwdRestartLines.count(in);
+            return parsed == null ? CpwdRestartLines.Summary.EMPTY : parsed;
         } catch (IOException | RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cpwd chunk unreadable chunk={0} cause={1}", ref.chunkId(), e.getClass().getSimpleName());
-            return null;
+            return CpwdRestartLines.Summary.EMPTY;
         }
     }
 
     // ---------------------------------------------------------------- rendering
 
     Map<String, Object> render(Snapshot snapshot, String computation, Instant now) {
+        return render(snapshot, computation, lastFailureReason, now);
+    }
+
+    Map<String, Object> render(Snapshot snapshot, String computation, String failureReason, Instant now) {
         Map<String, Object> body = new LinkedHashMap<>();
         Map<String, Object> comp = new LinkedHashMap<>();
         comp.put("state", computation);
@@ -427,6 +452,11 @@ public final class SystemHealthService {
         comp.put("duration_ms", snapshot == null ? null : snapshot.durationMs());
         comp.put("snapshot_ttl_seconds", SNAPSHOT_TTL.toSeconds());
         comp.put("store_available", snapshot == null ? store != null : snapshot.storeAvailable());
+        comp.put("scheduling_enabled", schedulingEnabled);
+        if (snapshot == null && failureReason != null) {
+            comp.put("reason", failureReason);
+            comp.put("error", failureReason);
+        }
         body.put("computation", comp);
         body.put("window_days", WINDOW_DAYS);
         body.put("cpu_p95_threshold_percent", threshold);

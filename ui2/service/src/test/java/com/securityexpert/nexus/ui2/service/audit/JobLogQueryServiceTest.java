@@ -158,4 +158,133 @@ class JobLogQueryServiceTest {
         assertTrue(json.contains("\"by_state\":{\"COMPLETED\":870,\"FAILED\":28}"), json);
         assertTrue(json.contains("\"total_24h\":879"), json);
     }
+
+    @Test
+    void toEventResolvesDeviceClusterFailoverUnitPolicySourceContainerFleetAndNoTarget() {
+        var ctx = org.jooq.impl.DSL.using(org.jooq.SQLDialect.POSTGRES);
+        var fJobId = org.jooq.impl.DSL.field("job_id", String.class);
+        var fType = org.jooq.impl.DSL.field("job_type", String.class);
+        var fDevice = org.jooq.impl.DSL.field("target_device_id", String.class);
+        var fName = org.jooq.impl.DSL.field("device_name", String.class);
+        var fCluster = org.jooq.impl.DSL.field("cluster_ref", String.class);
+        var fVsId = org.jooq.impl.DSL.field("failover_vs_id", String.class);
+        var fDomain = org.jooq.impl.DSL.field("policy_domain_ref", String.class);
+        var fContainer = org.jooq.impl.DSL.field("policy_container_name", String.class);
+        var fSource = org.jooq.impl.DSL.field("policy_source_name", String.class);
+        var fPacket = org.jooq.impl.DSL.field("packet_case_title", String.class);
+        var fTargetKind = org.jooq.impl.DSL.field("job_target_kind", String.class);
+        var fTargetRef = org.jooq.impl.DSL.field("job_target_ref", String.class);
+        var fFleetCount = org.jooq.impl.DSL.field("target_device_count", Integer.class);
+        var fState = org.jooq.impl.DSL.field("state", String.class);
+        var fOutcome = org.jooq.impl.DSL.field("outcome", String.class);
+        var fReason = org.jooq.impl.DSL.field("terminal_reason", String.class);
+        var fSubmitted = org.jooq.impl.DSL.field("submitted_at", Timestamp.class);
+        var fFinished = org.jooq.impl.DSL.field("finished_at", Timestamp.class);
+        var fTranscript = org.jooq.impl.DSL.field("has_transcript", Boolean.class);
+        var fDuration = org.jooq.impl.DSL.field("duration_ms", Double.class);
+
+        java.util.function.Consumer<org.jooq.Record> defaults = r -> {
+            r.set(fJobId, "job-x");
+            r.set(fState, "COMPLETED");
+            r.set(fOutcome, "SUCCESS");
+            r.set(fSubmitted, Timestamp.from(Instant.parse("2026-10-18T03:05:00Z")));
+            r.set(fTranscript, false);
+        };
+
+        var clusterRow = ctx.newRecord(fJobId, fType, fDevice, fName, fCluster, fVsId, fState, fOutcome, fReason, fSubmitted, fFinished, fTranscript, fDuration);
+        defaults.accept(clusterRow);
+        clusterRow.set(fType, "pan_failover_readiness");
+        clusterRow.set(fDevice, "dev-m1");
+        clusterRow.set(fName, "FW-ROMEO-M1");
+        clusterRow.set(fCluster, "CLS-ROMEO-01");
+        JobEvent clusterEvent = JobLogQueryService.toEvent(clusterRow);
+        assertEquals("CLS-ROMEO-01", clusterEvent.deviceName());
+        assertEquals("cluster", clusterEvent.targetKind());
+
+        var unitRow = ctx.newRecord(fJobId, fType, fDevice, fName, fCluster, fVsId, fState, fOutcome, fReason, fSubmitted, fFinished, fTranscript, fDuration);
+        defaults.accept(unitRow);
+        unitRow.set(fType, "cp_cluster_failover");
+        unitRow.set(fDevice, "dev-m1");
+        unitRow.set(fCluster, "CLS-ROMEO-01");
+        unitRow.set(fVsId, "2");
+        JobEvent unitEvent = JobLogQueryService.toEvent(unitRow);
+        assertEquals("VSID 2", unitEvent.deviceName());
+        assertEquals("failover_unit", unitEvent.targetKind());
+        assertEquals("CLS-ROMEO-01", unitEvent.clusterRef());
+
+        var containerRow = ctx.newRecord(fJobId, fType, fDevice, fName, fDomain, fContainer, fSource, fState, fOutcome, fReason, fSubmitted, fFinished, fTranscript, fDuration);
+        defaults.accept(containerRow);
+        containerRow.set(fType, "cp_policy_collect");
+        containerRow.set(fDevice, "mgr-1");
+        containerRow.set(fDomain, "dom-uid-1");
+        containerRow.set(fContainer, "DOM-ALPHA-01");
+        JobEvent containerEvent = JobLogQueryService.toEvent(containerRow);
+        assertEquals("DOM-ALPHA-01", containerEvent.deviceName());
+        assertEquals("policy_container", containerEvent.targetKind());
+
+        var sourceRow = ctx.newRecord(fJobId, fType, fDevice, fName, fDomain, fContainer, fSource, fTargetKind, fTargetRef, fState, fOutcome, fReason, fSubmitted, fFinished, fTranscript, fDuration);
+        defaults.accept(sourceRow);
+        sourceRow.set(fType, "pan_policy_collect");
+        sourceRow.set(fDevice, "mgr-2");
+        sourceRow.set(fSource, "FW-BRAVO-02");
+        sourceRow.set(fTargetKind, "discovery_run");
+        sourceRow.set(fTargetRef, "run-1");
+        JobEvent sourceEvent = JobLogQueryService.toEvent(sourceRow);
+        assertEquals("FW-BRAVO-02", sourceEvent.deviceName());
+        assertEquals("policy_source", sourceEvent.targetKind());
+
+        var packetRow = ctx.newRecord(fJobId, fType, fDevice, fName, fPacket, fTargetKind, fTargetRef, fState, fOutcome, fReason, fSubmitted, fFinished, fTranscript, fDuration);
+        defaults.accept(packetRow);
+        packetRow.set(fType, "packet_analysis_run");
+        packetRow.set(fPacket, "OBJ-CASE-01");
+        packetRow.set(fTargetKind, "packet_analysis_case");
+        packetRow.set(fTargetRef, "case-1");
+        JobEvent packetEvent = JobLogQueryService.toEvent(packetRow);
+        assertEquals("OBJ-CASE-01", packetEvent.deviceName());
+        assertEquals("packet_analysis_case", packetEvent.targetKind());
+
+        var fleetRow = ctx.newRecord(fJobId, fType, fDevice, fName, fFleetCount, fState, fOutcome, fReason, fSubmitted, fFinished, fTranscript, fDuration);
+        defaults.accept(fleetRow);
+        fleetRow.set(fType, "cp_system_log_collect");
+        fleetRow.set(fFleetCount, 18);
+        JobEvent fleetEvent = JobLogQueryService.toEvent(fleetRow);
+        assertEquals("Fleet (18 devices)", fleetEvent.deviceName());
+        assertEquals("fleet", fleetEvent.targetKind());
+
+        var emptyRow = ctx.newRecord(fJobId, fType, fDevice, fName, fState, fOutcome, fReason, fSubmitted, fFinished, fTranscript, fDuration);
+        defaults.accept(emptyRow);
+        emptyRow.set(fType, "cp_policy_collect");
+        JobEvent emptyEvent = JobLogQueryService.toEvent(emptyRow);
+        assertEquals(null, emptyEvent.deviceName());
+        assertEquals(null, emptyEvent.targetKind());
+    }
+
+    @Test
+    void orderByMapsAllowListedColumnsWithNullsLastAndPrimaryKeyTiebreakAndRejectsUnknowns() {
+        assertEquals(" order by j.submitted_at desc nulls last, j.job_id desc",
+                JobLogQueryService.orderByOf(null, null));
+        assertEquals(" order by j.submitted_at desc nulls last, j.job_id desc",
+                JobLogQueryService.orderByOf("", ""));
+        assertEquals(" order by lower(nullif(d.observed_hostname, '')) asc nulls last, j.job_id asc",
+                JobLogQueryService.orderByOf("device", "asc"));
+        assertEquals(" order by lower(nullif(d.observed_hostname, '')) desc nulls last, j.job_id asc",
+                JobLogQueryService.orderByOf("device_name", "desc"));
+        assertEquals(" order by case when j.finished_at is not null then extract(epoch from (j.finished_at - j.submitted_at)) * 1000 else extract(epoch from (now() - j.submitted_at)) * 1000 end asc nulls last, j.job_id asc",
+                JobLogQueryService.orderByOf("duration", "asc"));
+        assertEquals(" order by case when j.finished_at is not null then extract(epoch from (j.finished_at - j.submitted_at)) * 1000 else extract(epoch from (now() - j.submitted_at)) * 1000 end desc nulls last, j.job_id asc",
+                JobLogQueryService.orderByOf("duration_ms", "desc"));
+        assertEquals(" order by j.submitted_at asc nulls last, j.job_id asc",
+                JobLogQueryService.orderByOf("submitted_at", ""));
+
+        for (String badSort : List.of("job_id; drop table job_records", "unknown", "1")) {
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                    () -> JobLogQueryService.orderByOf(badSort, "asc"));
+        }
+        for (String badOrder : List.of("sideways", "asc; --", "random")) {
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                    () -> JobLogQueryService.orderByOf("state", badOrder));
+        }
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> JobLogQueryService.orderByOf("", "asc"));
+    }
 }

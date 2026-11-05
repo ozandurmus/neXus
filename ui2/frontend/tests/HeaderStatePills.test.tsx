@@ -100,6 +100,10 @@ describe("the fact words", () => {
     // a virtual system's unit never stands in for the cluster's own
     const vs = { ...summaryRow("NOT_READY"), unitId: "vs-13" };
     expect(readinessFact([vs, summaryRow("READY")], "CLS-SYNTH-01")?.label).toBe("Readiness Ready · 4 h ago");
+    // R-04: a Ready evaluation older than 24 h is stale and uses warn tone instead of ok (green)
+    const staleReady = readinessFact([summaryRow("READY", ago(31 * H))], "CLS-SYNTH-01")!;
+    expect(staleReady).toMatchObject({ label: "Readiness Ready · 31 h ago", tone: "warn", href: "?screen=operations&cluster_ref=CLS-SYNTH-01" });
+    expect(staleReady.title).toContain("Stale (> 24 h)");
   });
 
   it("renders the pills in the order given, as links, and leaves absent facts out", () => {
@@ -269,11 +273,11 @@ describe("the cluster header's state row and its one Collect now", () => {
     expect(fetchMock.mock.calls.some(([u]) => u === "/api/v2/cp-failover/summary")).toBe(false);
   });
 
-  it("has exactly one Collect now, in the header, aimed at the member the M1 / M2 pills pick; the member cards carry none", async () => {
+  it("has exactly one Collect button, in the header, aimed at the member the M1 / M2 pills pick; the member cards carry none", async () => {
     stub({ "/clusters/CLS-SYNTH-01/inventory": inventory });
     mount(<ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={members} />);
     const header = await screen.findByTestId("entity-header");
-    expect(screen.getAllByRole("button", { name: "Collect now" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Collect" })).toHaveLength(1);
     const pills = within(header).getByRole("group", { name: "Collect from member" });
     const [m1, m2] = within(pills).getAllByRole("button");
     expect(m1).toHaveAttribute("aria-pressed", "true");
@@ -282,7 +286,32 @@ describe("the cluster header's state row and its one Collect now", () => {
     expect(m2).toHaveAttribute("aria-pressed", "true");
     expect(m2).toHaveAttribute("title", "FW-SYNTH-M2");
     for (const card of Array.from(header.querySelectorAll("[data-member-card]"))) {
-      expect(within(card as HTMLElement).queryByRole("button", { name: /Collect now/ })).toBeNull();
+      expect(within(card as HTMLElement).queryByRole("button", { name: /^Collect$/ })).toBeNull();
     }
+  });
+
+  it("wires member cards and M1 / M2 pills to select that member and renders stale Ready in warning tone (R-04)", async () => {
+    stub({
+      "/clusters/CLS-SYNTH-01/inventory": inventory,
+      "/api/v2/cp-failover/summary": () => json([summaryRow("READY", ago(31 * H))]),
+    });
+    const onSelectMember = vi.fn();
+    mount(<ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={members} onSelectMember={onSelectMember} />);
+    const r = await row();
+    await waitFor(() => expect(within(r).getByText("Readiness Ready · 31 h ago")).toHaveStyle({ backgroundColor: m3.warningContainer }));
+    const header = screen.getByTestId("entity-header");
+    const cards = Array.from(header.querySelectorAll("[data-member-card]")) as HTMLElement[];
+    expect(cards[0]).toHaveAttribute("aria-pressed", "true");
+    expect(cards[1]).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(cards[1]);
+    expect(cards[1]).toHaveAttribute("aria-pressed", "true");
+    expect(onSelectMember).toHaveBeenCalledWith(members[1]);
+    const pills = within(header).getByRole("group", { name: "Collect from member" });
+    const [m1, m2] = within(pills).getAllByRole("button");
+    expect(m2).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(m1);
+    expect(m1).toHaveAttribute("aria-pressed", "true");
+    expect(cards[0]).toHaveAttribute("aria-pressed", "true");
+    expect(onSelectMember).toHaveBeenLastCalledWith(members[0]);
   });
 });

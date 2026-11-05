@@ -17,6 +17,7 @@ import FormControlLabel from "@mui/material/FormControlLabel";
 import Switch from "@mui/material/Switch";
 import { StatePanel, RestrictedPanel, isRestricted } from "../shell/States";
 import { PaginationFooter } from "../shell/DataTable";
+import { SortHeaderCell, useServerTableSort } from "../shell/tableSort";
 import { StatusPill } from "../shell/StatusPill";
 import type { Tone } from "../shell/tone";
 import { Presented, Stamp } from "../shell/PresentedText";
@@ -133,6 +134,85 @@ const COMPACT_TABLE = {
   "& th": { fontWeight: 600 },
 } as const;
 
+export interface JobDeviceEntry {
+  readonly name?: string;
+  readonly cluster?: string;
+  readonly vendor: string;
+}
+
+const FAILOVER_JOB_TYPES = new Set([
+  "cp_failover_readiness",
+  "pan_failover_readiness",
+  "cp_cluster_failover",
+  "pan_cluster_failover",
+  "cp_failover_resume",
+  "pan_failover_config_sync",
+]);
+
+function cleanTargetWord(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "Unknown device" || trimmed === "Unknown") return null;
+  return trimmed;
+}
+
+/**
+ * Names what a job row acted on: a device, a cluster or failover unit, a policy source or container,
+ * `Fleet (N devices)`, or `No target recorded` when the record truly has no target.
+ */
+export function jobTargetLabel(
+  job: Pick<
+    JobEventView,
+    | "job_type"
+    | "target_device_id"
+    | "device_name"
+    | "target_kind"
+    | "target_name"
+    | "target_ref"
+    | "cluster_member_ref"
+    | "container_name"
+    | "source_name"
+    | "target_device_count"
+    | "device_count"
+  >,
+  devices: Readonly<Record<string, JobDeviceEntry>> = {},
+): string {
+  const count = typeof job.target_device_count === "number" && job.target_device_count > 0
+    ? job.target_device_count
+    : typeof job.device_count === "number" && job.device_count > 0
+      ? job.device_count
+      : job.target_kind === "fleet" && job.target_ref && /^\d+$/.test(job.target_ref.trim())
+        ? Number(job.target_ref.trim())
+        : null;
+  if (count !== null && count > 0) {
+    return cleanTargetWord(job.device_name) ?? `Fleet (${count} devices)`;
+  }
+
+  const targetId = job.target_device_id?.trim() ?? "";
+  const device = targetId ? devices[targetId] : undefined;
+  const isClusterJob = job.target_kind === "cluster"
+    || job.target_kind === "failover_unit"
+    || FAILOVER_JOB_TYPES.has(job.job_type);
+
+  if (isClusterJob) {
+    return cleanTargetWord(job.device_name)
+      ?? cleanTargetWord(job.target_name)
+      ?? cleanTargetWord(job.cluster_member_ref)
+      ?? cleanTargetWord(device?.cluster)
+      ?? cleanTargetWord(device?.name)
+      ?? "No target recorded";
+  }
+
+  return cleanTargetWord(job.device_name)
+    ?? cleanTargetWord(job.target_name)
+    ?? cleanTargetWord(job.container_name)
+    ?? cleanTargetWord(job.source_name)
+    ?? cleanTargetWord(device?.name)
+    ?? cleanTargetWord(job.cluster_member_ref)
+    ?? cleanTargetWord(device?.cluster)
+    ?? "No target recorded";
+}
+
 export function JobLogsPanel({
   initialState = "",
   initialJobType = "",
@@ -157,7 +237,7 @@ export function JobLogsPanel({
   // `?job=<id>` is the addressable job detail (roadmap 3.6): the row is fetched by its id and opened on load.
   const [linkedJob] = useState(() => urlParam("job"));
   const [page, setPage] = useState<{ items: readonly JobEventView[]; total: number; canCancel: boolean } | null>(null);
-  const [devices, setDevices] = useState<Record<string, { name: string; vendor: string }>>({});
+  const [devices, setDevices] = useState<Record<string, JobDeviceEntry>>({});
   const [facets, setFacets] = useState<JobFacetsView>({ states: [], job_types: [] });
   const [byState, setByState] = useState<Readonly<Record<string, number>> | null | "failed">(null);
   const [error, setError] = useState<ApiError | string | null>(null);
@@ -174,6 +254,8 @@ export function JobLogsPanel({
   const [text, setText] = useState(linkedJob ?? initialText);
   const [pageNumber, setPageNumber] = useState(1);
   const [pageSize, setPageSize] = useState<number>(50);
+  const resetToFirstPage = useCallback(() => setPageNumber(1), []);
+  const tableSort = useServerTableSort({ onChange: resetToFirstPage });
 
   const params: JobQueryParams = {
     state: state || undefined,
@@ -184,6 +266,8 @@ export function JobLogsPanel({
     q: text.trim() || undefined,
     page: pageNumber,
     page_size: pageSize,
+    sort: tableSort.sort?.key,
+    order: tableSort.sort?.direction,
   };
   const paramsKey = JSON.stringify(params);
 
@@ -202,12 +286,15 @@ export function JobLogsPanel({
   const fetchDeviceNames = useCallback(() => {
     listDevices()
       .then(({ devices }) => {
-        // A device with no recorded hostname contributes no entry, so its rows
-        // read as unknown rather than carrying an empty name beside the identifier.
         setDevices(Object.fromEntries(
-          (devices ?? [])
-            .filter((device): device is typeof device & { hostname: string } => Boolean(device.hostname))
-            .map((device) => [device.device_id, { name: device.hostname, vendor: device.vendor_hint }]),
+          (devices ?? []).map((device) => [
+            device.device_id,
+            {
+              name: cleanTargetWord(device.hostname) ?? cleanTargetWord(device.management_ip) ?? undefined,
+              cluster: cleanTargetWord(device.cluster_member_ref) ?? undefined,
+              vendor: device.vendor_hint,
+            },
+          ]),
         ));
       })
       // The identifier is the record; a name we could not read stays unknown
@@ -226,8 +313,6 @@ export function JobLogsPanel({
     const interval = setInterval(fetchJobs, 4000);
     return () => clearInterval(interval);
   }, [fetchJobs, autoRefresh]);
-
-  const resetToFirstPage = () => setPageNumber(1);
 
   // The owner asked for a pill after mount (a KPI card, a route): the filter follows; the first request is the initial state.
   useEffect(() => {
@@ -292,7 +377,9 @@ export function JobLogsPanel({
   if (page === null) return <StatePanel variant="empty" title="Job logs" body="Loading…" />;
 
   const pageCount = Math.max(1, Math.ceil(page.total / pageSize));
-  const deviceOptions = Object.entries(devices).sort((a, b) => a[1].name.localeCompare(b[1].name));
+  const deviceOptions = Object.entries(devices)
+    .filter((entry): entry is [string, JobDeviceEntry & { name: string }] => Boolean(entry[1].name))
+    .sort((a, b) => a[1].name.localeCompare(b[1].name));
   const isDefaultFilter = state === initialState && !jobType && !deviceId && !sinceLocal && !untilLocal && !text.trim();
   const activePill = pillForState(state);
   const counts = byState === "failed" ? null : byState;
@@ -422,12 +509,12 @@ export function JobLogsPanel({
             <Table size="small" aria-label="Job logs" sx={COMPACT_TABLE}>
               <TableHead>
                 <TableRow sx={{ bgcolor: "action.hover" }}>
-                  <TableCell>Target Device</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>State</TableCell>
-                  <TableCell>Duration</TableCell>
-                  <TableCell>Result</TableCell>
-                  <TableCell>Submitted At</TableCell>
+                  <SortHeaderCell label="Target Device" state={tableSort.header("device")} />
+                  <SortHeaderCell label="Type" state={tableSort.header("job_type")} />
+                  <SortHeaderCell label="State" state={tableSort.header("state")} />
+                  <SortHeaderCell label="Duration" state={tableSort.header("duration")} words={{ asc: "shortest first", desc: "longest first" }} />
+                  <SortHeaderCell label="Result" state={tableSort.header("result")} />
+                  <SortHeaderCell label="Submitted At" state={tableSort.header("submitted_at")} words={{ asc: "oldest first", desc: "newest first" }} />
                   {transcriptColumn && <TableCell>Transcript</TableCell>}
                   {page.canCancel && <TableCell>Actions</TableCell>}
                 </TableRow>
@@ -435,7 +522,8 @@ export function JobLogsPanel({
               <TableBody>
                 {page.items.map((job) => {
                   const isExpanded = expandedJobId === job.job_id;
-                  const vendor = devices[job.target_device_id]?.vendor;
+                  const targetId = job.target_device_id?.trim() ?? "";
+                  const vendor = targetId ? devices[targetId]?.vendor : undefined;
                   const isBackupJob = /backup|snapshot|export/i.test(job.job_type);
                   const result = resultWords(job);
                   return (
@@ -448,7 +536,7 @@ export function JobLogsPanel({
                       data-job-id={job.job_id}
                     >
                       <TableCell sx={{ fontWeight: 500 }}>
-                        {job.device_name ?? devices[job.target_device_id]?.name ?? "Unknown device"}
+                        {jobTargetLabel(job, devices)}
                       </TableCell>
                       <TableCell><Presented label={jobTypeLabel(job.job_type, vendor)} raw={job.job_type} /></TableCell>
                       <TableCell>
@@ -498,7 +586,7 @@ export function JobLogsPanel({
                           </Box>
                         </Typography>
                         <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap alignItems="center">
-                          {([["Job ID", job.job_id], ["Device ID", job.target_device_id]] as const).map(([label, value]) => (
+                          {([["Job ID", job.job_id], ...(targetId ? [["Device ID", targetId] as const] : [])] as const).map(([label, value]) => (
                             <Stack key={label} direction="row" spacing={0.5} alignItems="center">
                               <Typography variant="caption">{label}: <span style={{ fontFamily: MONO }}>{value}</span></Typography>
                               <IconButton size="small" aria-label={`Copy ${label}`} onClick={(event) => {

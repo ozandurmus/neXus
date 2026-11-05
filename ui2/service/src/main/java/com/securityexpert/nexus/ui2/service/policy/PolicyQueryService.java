@@ -195,12 +195,57 @@ public final class PolicyQueryService {
         return index.inventories.stream().map(i -> Map.<String, Object>of("type", i.type(), "status", i.status(),
             "collectedAt", i.collectedAt(), "objects", index.objectCounts.getOrDefault(i.type(), 0))).toList();
     }
+    static final Set<String> RULE_SORT_COLUMNS = Set.of("number", "name", "rule", "source", "destination", "service",
+            "application", "action", "usage", "hits", "last_hit", "lastHit", "permissiveness", "hygiene", "flags");
+    static final Set<String> OBJECT_SORT_COLUMNS = Set.of("name", "type", "value", "values", "members", "hygiene",
+            "where_used", "whereUsed", "usage");
+    static final Set<String> INSTALLATION_SORT_COLUMNS = Set.of("policy", "policyName", "name", "gateway", "targeted", "installed");
+    static final Set<String> USAGE_SORT_COLUMNS = Set.of("policy", "policyName", "package", "layer", "layerName", "number");
+    private static final Comparator<String> STRING_ORDER = String.CASE_INSENSITIVE_ORDER.thenComparing(Comparator.naturalOrder());
+
+    public static boolean validRuleSort(String sort, String order) { return validSort(sort, order, RULE_SORT_COLUMNS); }
+    public static boolean validObjectSort(String sort, String order) { return validSort(sort, order, OBJECT_SORT_COLUMNS); }
+    public static boolean validInstallationSort(String sort, String order) { return validSort(sort, order, INSTALLATION_SORT_COLUMNS); }
+    public static boolean validUsageSort(String sort, String order) { return validSort(sort, order, USAGE_SORT_COLUMNS); }
+
+    static boolean validSort(String sort, String order, Set<String> allowList) {
+        String s = sort == null ? "" : sort.strip();
+        String o = order == null ? "" : order.strip();
+        if (s.isEmpty()) return o.isEmpty();
+        if (!allowList.contains(s)) return false;
+        if (o.isEmpty()) return true;
+        String dir = o.toLowerCase(Locale.ROOT);
+        return dir.equals("asc") || dir.equals("desc");
+    }
+
+    private static <T, K> Comparator<T> sortComparator(java.util.function.Function<T, K> extractor,
+            Comparator<K> keyComparator, String order, Comparator<T> tiebreak) {
+        boolean desc = "desc".equalsIgnoreCase(order == null ? "" : order.strip());
+        Comparator<K> nonNull = desc ? keyComparator.reversed() : keyComparator;
+        return Comparator.comparing(extractor, Comparator.nullsLast(nonNull)).thenComparing(tiebreak);
+    }
+
+    private static String blankToNull(Object value) {
+        if (value == null) return null;
+        String text = String.valueOf(value).strip();
+        return text.isEmpty() ? null : text;
+    }
+
     public Optional<PolicyResponse> domainObjects(String source, String domain, int page, String q, String type, String hygiene, boolean masked) {
+        return domainObjects(source, domain, page, q, type, hygiene, masked, "", "");
+    }
+    public Optional<PolicyResponse> domainObjects(String source, String domain, int page, String q, String type, String hygiene, boolean masked, String sort, String order) {
+        if (!validObjectSort(sort, order)) throw new IllegalArgumentException("Invalid object sort");
         var index = domainIndex(source, domain);
         if (index.inventories.isEmpty() && index.snapshots.isEmpty()) return Optional.empty();
         var views = views(index, masked);
         String needle = q.toLowerCase(Locale.ROOT);
         var objects = index.objects;
+        String sortKey = sort == null ? "" : sort.strip();
+        Comparator<Integer> comparator = sortKey.isEmpty()
+            ? Comparator.comparing(i -> hygiene.equals("duplicates")
+                ? String.valueOf(objects.get(i).get("duplicateId")) + objects.get(i).get("id") : views.sortKey()[i])
+            : objectComparator(objects, views, sortKey, order);
         // The masked search/sort projection is built once per index; per request only filtering and sorting remain.
         var items = java.util.stream.IntStream.range(0, objects.size())
             .filter(i -> type.isEmpty() || objectType(String.valueOf(objects.get(i).get("type"))).equals(type))
@@ -211,10 +256,47 @@ public final class PolicyQueryService {
                 case "single" -> Boolean.TRUE.equals(objects.get(i).get("singleMember"));
                 default -> true;
             }).filter(i -> needle.isEmpty() || views.text()[i].contains(needle)).boxed()
-            .sorted(Comparator.comparing(i -> hygiene.equals("duplicates")
-                ? String.valueOf(objects.get(i).get("duplicateId")) + objects.get(i).get("id") : views.sortKey()[i])).toList();
+            .sorted(comparator).toList();
         return Optional.of(new PolicyResponse(Map.of("objects", items.stream().skip((long) page * 200).limit(200).map(objects::get).toList(),
             "total", items.size(), "page", page, "pageSize", 200, "types", typeStates(index), "usageGaps", index.usageGaps)));
+    }
+    private static Comparator<Integer> objectComparator(List<Map<String, Object>> objects, PolicyDomainIndex.Views views, String sort, String order) {
+        Comparator<Integer> tiebreak = Comparator.comparing(i -> String.valueOf(objects.get(i).get("id")));
+        return switch (sort) {
+            case "name" -> sortComparator(i -> {
+                String id = String.valueOf(objects.get(i).get("id"));
+                String full = views.sortKey()[i];
+                String name = full.endsWith(id) ? full.substring(0, full.length() - id.length()) : full;
+                return blankToNull("null".equals(name) ? null : name);
+            }, STRING_ORDER, order, tiebreak);
+            case "type" -> sortComparator(i -> blankToNull(objects.get(i).get("type")), STRING_ORDER, order, tiebreak);
+            case "value", "values" -> sortComparator(i -> {
+                var row = objects.get(i);
+                var vals = (List<?>) row.getOrDefault("values", List.of());
+                if (!vals.isEmpty()) return blankToNull(vals.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining("; ")));
+                return blankToNull(row.get("schedule"));
+            }, STRING_ORDER, order, tiebreak);
+            case "members" -> sortComparator(i -> {
+                var members = (List<?>) objects.get(i).get("members");
+                return members == null ? null : members.size();
+            }, Integer::compareTo, order, tiebreak);
+            case "hygiene" -> sortComparator(i -> {
+                var row = objects.get(i);
+                int flags = (Boolean.TRUE.equals(row.get("unused")) ? 4 : 0)
+                        + (Boolean.TRUE.equals(row.get("emptyGroup")) ? 2 : 0)
+                        + (Boolean.TRUE.equals(row.get("singleMember")) ? 1 : 0)
+                        + (row.get("duplicateId") != null ? 1 : 0);
+                if (flags == 0 && row.get("unused") == null) return null;
+                return flags;
+            }, Integer::compareTo, order, tiebreak);
+            case "where_used", "whereUsed", "usage" -> sortComparator(i -> {
+                var row = objects.get(i);
+                int count = ((Number) row.getOrDefault("ruleCount", 0)).intValue() + ((Number) row.getOrDefault("groupCount", 0)).intValue();
+                if (count == 0 && !Boolean.TRUE.equals(row.get("usageComplete"))) return null;
+                return count;
+            }, Integer::compareTo, order, tiebreak);
+            default -> throw new IllegalArgumentException("Unknown object sort: " + sort);
+        };
     }
     private PolicyDomainIndex.Views views(PolicyDomainIndex index, boolean masked) {
         // Only the searched/sorted fields are projected; name masking depends on "type", never on the other row fields.
@@ -233,10 +315,28 @@ public final class PolicyQueryService {
         };
     }
     public Optional<PolicyResponse> objectUsage(String source, String domain, String uid, int page) {
+        return objectUsage(source, domain, uid, page, "", "");
+    }
+    public Optional<PolicyResponse> objectUsage(String source, String domain, String uid, int page, String sort, String order) {
+        if (!validUsageSort(sort, order)) throw new IllegalArgumentException("Invalid usage sort");
         var index = domainIndex(source, domain);
         var object = index.objects.stream().filter(o -> o.get("uid").equals(uid)).findFirst();
         if (object.isEmpty()) return Optional.empty();
         var rules = index.rules.getOrDefault(uid, List.of()); var groups = index.groups.getOrDefault(uid, List.of());
+        String sortKey = sort == null ? "" : sort.strip();
+        if (!sortKey.isEmpty()) {
+            Comparator<Map<String, Object>> tiebreak = Comparator.comparing(r -> r.get("policyId") + ":" + r.get("layerRef") + ":" + r.get("ruleId"));
+            Comparator<Map<String, Object>> cmp = switch (sortKey) {
+                case "policy", "policyName", "package" -> sortComparator(r -> blankToNull(r.get("policyName")), STRING_ORDER, order, tiebreak);
+                case "layer", "layerName" -> sortComparator(r -> blankToNull(r.get("layerName")), STRING_ORDER, order, tiebreak);
+                case "number" -> sortComparator(r -> {
+                    Number n = (Number) r.get("number");
+                    return n == null || n.intValue() <= 0 ? null : n.intValue();
+                }, Integer::compareTo, order, tiebreak);
+                default -> throw new IllegalArgumentException("Unknown usage sort: " + sortKey);
+            };
+            rules = rules.stream().sorted(cmp).toList();
+        }
         return Optional.of(new PolicyResponse(Map.of("object", object.get(), "rules", rules.stream().skip((long) page * 200).limit(200).toList(),
             "groups", groups.stream().skip((long) page * 200).limit(200).toList(), "ruleCount", rules.size(), "groupCount", groups.size(), "page", page, "pageSize", 200,
             "usageComplete", object.get().get("usageComplete"), "usageReasons", object.get().get("usageReasons"))));
@@ -257,6 +357,10 @@ public final class PolicyQueryService {
         return Optional.of(new PolicyResponse(Map.of("duplicates", boundedGroups, "total", groups.size(), "page", page, "pageSize", 200)));
     }
     public Optional<PolicyResponse> installations(String source, String domain, int page, String q, String policy, boolean masked) {
+        return installations(source, domain, page, q, policy, masked, "", "");
+    }
+    public Optional<PolicyResponse> installations(String source, String domain, int page, String q, String policy, boolean masked, String sort, String order) {
+        if (!validInstallationSort(sort, order)) throw new IllegalArgumentException("Invalid installation sort");
         var index = domainIndex(source, domain);
         if (index.snapshots.isEmpty()) return Optional.empty();
         var links = repository.inventoryLinks(source, domain);
@@ -305,6 +409,18 @@ public final class PolicyQueryService {
             }
         }
         var matches = rows.stream().filter(r -> matches(r, q, masked)).toList();
+        String sortKey = sort == null ? "" : sort.strip();
+        if (!sortKey.isEmpty()) {
+            Comparator<Map<String, Object>> tiebreak = Comparator.comparing(r -> r.get("policyId") + ":" + r.get("id"));
+            Comparator<Map<String, Object>> cmp = switch (sortKey) {
+                case "policy", "policyName" -> sortComparator(r -> blankToNull(searchable(r, masked).get("policyName")), STRING_ORDER, order, tiebreak);
+                case "name", "gateway" -> sortComparator(r -> blankToNull(searchable(r, masked).get("name")), STRING_ORDER, order, tiebreak);
+                case "targeted" -> sortComparator(r -> Boolean.TRUE.equals(r.get("allTargets")) ? 2 : r.get("targeted") == null ? null : Boolean.TRUE.equals(r.get("targeted")) ? 1 : 0, Integer::compareTo, order, tiebreak);
+                case "installed" -> sortComparator(r -> (Boolean) r.get("installed"), Boolean::compare, order, tiebreak);
+                default -> throw new IllegalArgumentException("Unknown installation sort: " + sortKey);
+            };
+            matches = matches.stream().sorted(cmp).toList();
+        }
         return Optional.of(new PolicyResponse(Map.of("installations", matches.stream().skip((long) page * 200).limit(200).toList(),
             "total", matches.size(), "page", page, "pageSize", 200, "types", typeStates(index))));
     }
@@ -683,9 +799,13 @@ public final class PolicyQueryService {
     }
 
     public PolicyResponse page(PolicySnapshot snapshot, int page, String query, boolean masked) {
-        return page(snapshot, page, query, masked, "", 90);
+        return page(snapshot, page, query, masked, "", 90, "", "");
     }
     public PolicyResponse page(PolicySnapshot snapshot, int page, String query, boolean masked, String hitFilter, int days) {
+        return page(snapshot, page, query, masked, hitFilter, days, "", "");
+    }
+    public PolicyResponse page(PolicySnapshot snapshot, int page, String query, boolean masked, String hitFilter, int days, String sort, String order) {
+        if (!validRuleSort(sort, order)) throw new IllegalArgumentException("Invalid rule sort");
         var hygiene = analysis(snapshot, days);
         PolicySnapshot searchable = snapshot;
         if (masked) searchable = mapper.convertValue(PolicyPrivacy.mask(map(snapshot), "", names,
@@ -695,20 +815,53 @@ public final class PolicyQueryService {
                 .map(Rule::id).collect(java.util.stream.Collectors.toSet());
         List<Rule> matching = snapshot.sections().stream().flatMap(s -> s.rules().stream()).filter(r -> matches.contains(r.id()))
             .filter(r -> hitMatches(r, hitFilter, days)).toList();
-        Set<String> ids = new HashSet<>();
-        matching.stream().skip((long) page * 200).limit(200).forEach(r -> ids.add(r.id()));
+        String sortKey = sort == null ? "" : sort.strip();
         List<Map<String, Object>> sections = new ArrayList<>();
         Set<String> objectIds = new LinkedHashSet<>();
-        for (Section section : snapshot.sections()) {
-            List<Rule> rules = section.rules().stream().filter(r -> ids.contains(r.id())).toList();
-            for (Rule rule : rules) for (Cell cell : List.of(rule.source(), rule.destination(), rule.service(), rule.application()))
-                objectIds.addAll(cell.refs());
-            for (Rule rule : rules) for (String key : REF_EXTRAS)
-                objectIds.addAll(rule.extras().getOrDefault(key, List.of()));
-            Map<String, Object> view = map(new Section(section.id(), section.name(), section.source(), section.parentRuleId(), rules));
-            view.put("rules", rules.stream().map(r -> ruleView(r, snapshot, hygiene)).toList());
-            view.put("total", section.rules().size());
-            sections.add(view);
+        if (sortKey.isEmpty()) {
+            Set<String> ids = new HashSet<>();
+            matching.stream().skip((long) page * 200).limit(200).forEach(r -> ids.add(r.id()));
+            for (Section section : snapshot.sections()) {
+                List<Rule> rules = section.rules().stream().filter(r -> ids.contains(r.id())).toList();
+                collectRuleObjectIds(rules, objectIds);
+                Map<String, Object> view = map(new Section(section.id(), section.name(), section.source(), section.parentRuleId(), rules));
+                view.put("rules", rules.stream().map(r -> ruleView(r, snapshot, hygiene)).toList());
+                view.put("total", section.rules().size());
+                sections.add(view);
+            }
+        } else {
+            Map<String, Rule> searchableRules = new HashMap<>();
+            for (Section s : searchable.sections()) for (Rule r : s.rules()) searchableRules.put(r.id(), r);
+            Map<String, Section> ruleSections = new HashMap<>();
+            for (Section s : snapshot.sections()) for (Rule r : s.rules()) ruleSections.put(r.id(), s);
+            List<Rule> sortedPage = matching.stream()
+                .sorted(ruleComparator(searchableRules, searchable.objects(), hygiene, sortKey, order))
+                .skip((long) page * 200).limit(200).toList();
+            collectRuleObjectIds(sortedPage, objectIds);
+            if (sortedPage.isEmpty()) {
+                for (Section section : snapshot.sections()) {
+                    Map<String, Object> view = map(new Section(section.id(), section.name(), section.source(), section.parentRuleId(), List.of()));
+                    view.put("rules", List.of());
+                    view.put("total", section.rules().size());
+                    sections.add(view);
+                }
+            } else {
+                Set<String> seenSectionIds = new HashSet<>();
+                Section currentSection = null;
+                List<Rule> currentRules = new ArrayList<>();
+                for (Rule rule : sortedPage) {
+                    Section section = ruleSections.get(rule.id());
+                    if (currentSection != null && !currentSection.id().equals(section.id())) {
+                        sections.add(sortedSectionView(currentSection, currentRules, snapshot, hygiene, seenSectionIds, sections.size()));
+                        currentRules = new ArrayList<>();
+                    }
+                    currentSection = section;
+                    currentRules.add(rule);
+                }
+                if (currentSection != null) {
+                    sections.add(sortedSectionView(currentSection, currentRules, snapshot, hygiene, seenSectionIds, sections.size()));
+                }
+            }
         }
         List<Map<String, Object>> objects = objectIds.stream().filter(snapshot.objects()::containsKey)
                 .map(id -> { var object = snapshot.objects().get(id);
@@ -720,6 +873,69 @@ public final class PolicyQueryService {
         body.put("sections", sections); body.put("objects", objects);
         body.put("page", page); body.put("pageSize", 200); body.put("total", matching.size());
         return new PolicyResponse(body);
+    }
+    private static void collectRuleObjectIds(List<Rule> rules, Set<String> objectIds) {
+        for (Rule rule : rules) for (Cell cell : List.of(rule.source(), rule.destination(), rule.service(), rule.application()))
+            objectIds.addAll(cell.refs());
+        for (Rule rule : rules) for (String key : REF_EXTRAS)
+            objectIds.addAll(rule.extras().getOrDefault(key, List.of()));
+    }
+    private Map<String, Object> sortedSectionView(Section section, List<Rule> rules, PolicySnapshot snapshot,
+            PolicyHygiene.Result hygiene, Set<String> seenSectionIds, int index) {
+        String sectionId = seenSectionIds.add(section.id()) ? section.id() : section.id() + ":" + index;
+        Map<String, Object> view = map(new Section(sectionId, section.name(), section.source(), section.parentRuleId(), rules));
+        view.put("rules", rules.stream().map(r -> ruleView(r, snapshot, hygiene)).toList());
+        view.put("total", section.rules().size());
+        return view;
+    }
+    private static Comparator<Rule> ruleComparator(Map<String, Rule> searchableRules, Map<String, PolicyObject> objects,
+            PolicyHygiene.Result hygiene, String sort, String order) {
+        Comparator<Rule> tiebreak = Comparator.comparing(Rule::id);
+        return switch (sort) {
+            case "number" -> sortComparator(r -> r.number() <= 0 ? null : r.number(), Integer::compareTo, order, tiebreak);
+            case "name", "rule" -> sortComparator(r -> blankToNull(searchableRules.getOrDefault(r.id(), r).name()), STRING_ORDER, order, tiebreak);
+            case "source" -> sortComparator(r -> cellSortKey(searchableRules.getOrDefault(r.id(), r).source(), objects), STRING_ORDER, order, tiebreak);
+            case "destination" -> sortComparator(r -> cellSortKey(searchableRules.getOrDefault(r.id(), r).destination(), objects), STRING_ORDER, order, tiebreak);
+            case "service" -> sortComparator(r -> cellSortKey(searchableRules.getOrDefault(r.id(), r).service(), objects), STRING_ORDER, order, tiebreak);
+            case "application" -> sortComparator(r -> cellSortKey(searchableRules.getOrDefault(r.id(), r).application(), objects), STRING_ORDER, order, tiebreak);
+            case "action" -> sortComparator(r -> blankToNull(r.action()), STRING_ORDER, order, tiebreak);
+            case "usage", "hits" -> sortComparator(r -> r.hitCounts() == null ? null : r.hitCounts().hits(), Long::compareTo, order, tiebreak);
+            case "last_hit", "lastHit" -> sortComparator(r -> r.hitCounts() == null ? null : blankToNull(r.hitCounts().lastHit()), STRING_ORDER, order, tiebreak);
+            case "permissiveness" -> sortComparator(r -> {
+                var a = hygiene.rules().get(r.id());
+                if (a == null || a.permissiveness() == null) return null;
+                String level = String.valueOf(a.permissiveness().getOrDefault("level", "Unknown"));
+                if ("Unknown".equalsIgnoreCase(level)) return null;
+                Number score = (Number) a.permissiveness().get("score");
+                return score == null ? null : score.intValue();
+            }, Integer::compareTo, order, tiebreak);
+            case "hygiene", "flags" -> sortComparator(r -> ruleFlagsSortKey(r, hygiene.rules().get(r.id())), STRING_ORDER, order, tiebreak);
+            default -> throw new IllegalArgumentException("Unknown rule sort: " + sort);
+        };
+    }
+    private static String cellSortKey(Cell cell, Map<String, PolicyObject> objects) {
+        if (cell == null || cell.refs().isEmpty()) return null;
+        String joined = cell.refs().stream().map(ref -> {
+            PolicyObject o = objects.get(ref);
+            return o != null && o.name() != null && !o.name().isBlank() ? o.name() : ref;
+        }).collect(java.util.stream.Collectors.joining(", "));
+        if (joined.isBlank()) return null;
+        return cell.negated() ? "! " + joined : joined;
+    }
+    private static String ruleFlagsSortKey(Rule r, PolicyHygiene.Assessment assessment) {
+        List<String> flags = new ArrayList<>();
+        if (Boolean.FALSE.equals(r.enabled())) flags.add("disabled");
+        if (r.uuid().isEmpty()) flags.add("no-uuid");
+        if (assessment != null) {
+            if ("expired".equals(assessment.timeStatus())) flags.add("expired");
+            if (assessment.expiring()) flags.add("expiring");
+            for (var f : assessment.findings()) {
+                if (!"disabled".equals(f.findingClass()) && !"expired".equals(f.findingClass())) {
+                    flags.add(f.findingClass());
+                }
+            }
+        }
+        return flags.isEmpty() ? null : String.join(",", flags);
     }
     /**
      * The usage presets of the rules page. "Unused N days" is judged at the counters' collection time, exactly as

@@ -259,4 +259,20 @@ class ChangeFeedServiceTest {
         assertEquals(50, w.limit());
         assertEquals(3, w.kinds().size());
     }
+
+    @Test
+    void chunkTextReaderResolvesRecoveryVolumePathWhenPresent() throws Exception {
+        var requested = new java.util.concurrent.atomic.AtomicReference<String>();
+        var store = org.mockito.Mockito.mock(com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore.class);
+        when(store.retrieve(any(), any(), anyBoolean())).thenAnswer(call -> {
+            com.securityexpert.nexus.ui2.persistence.artefact.ArtefactRef ref = call.getArgument(0);
+            requested.set(ref.value());
+            return new java.io.ByteArrayInputStream("line-one\nline-two\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        });
+        var liveReader = new ChunkTextReader(store);
+        var chunk = new ChangeFeedRepository.ChunkRow("ch-vol", FeedFixtures.PAN_DEVICE, "pan_config", "j-1",
+                NOW, 32, 2, "00000000-0000-0000-0000-000000000001", new byte[8], "palo_alto/dev-pan/abc123.enc");
+        assertEquals(List.of("line-one", "line-two"), liveReader.lines(chunk));
+        assertEquals("palo_alto/dev-pan/abc123.enc", requested.get());
+    }
 }

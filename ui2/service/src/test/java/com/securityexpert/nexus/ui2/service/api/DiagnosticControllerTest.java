@@ -125,4 +125,34 @@ class DiagnosticControllerTest {
                 .thenReturn(new com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult.Refused("DIAGNOSTIC_UNAVAILABLE", "Unavailable"));
         assertEquals(409, controller.run(Map.of("device_id", "device-1", "gate_id", "cp_failover_down", "request_id", id), request).getStatusCode().value());
     }
+
+    @Test
+    void historyRejectsUnknownSortOrOrderWith400AndValidatesAllowListedSort() {
+        var service = mock(DiagnosticService.class);
+        var rbac = mock(com.securityexpert.nexus.ui2.service.security.RbacEvaluator.class);
+        var controller = new DiagnosticController(service, rbac);
+        var request = mock(HttpServletRequest.class);
+        when(request.getAttribute(com.securityexpert.nexus.ui2.service.security.GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE))
+                .thenReturn("synthetic-actor");
+        when(request.getAttribute(com.securityexpert.nexus.ui2.service.security.GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE))
+                .thenReturn(true);
+        when(service.history("device-1", 0, true, "duration", "desc")).thenReturn(java.util.List.of());
+        when(service.history("device-1", 0, true, "drop table", "asc")).thenThrow(new IllegalArgumentException("Invalid sort"));
+
+        assertEquals(200, controller.history("device-1", 0, "duration", "desc", request).getStatusCode().value());
+        assertEquals(400, controller.history("device-1", 0, "drop table", "asc", request).getStatusCode().value());
+
+        assertEquals(" order by submitted_at desc, job_id desc",
+                com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao.diagnosticOrderBy("", ""));
+        assertEquals(" order by state asc nulls last, job_id desc",
+                com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao.diagnosticOrderBy("state", "asc"));
+        assertEquals(" order by coalesce(diagnostic_command, 'diagnose fmnetwork interface detail ' || diagnostic_port) desc nulls last, job_id desc",
+                com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao.diagnosticOrderBy("command", "desc"));
+        assertThrows(IllegalArgumentException.class,
+                () -> com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao.diagnosticOrderBy("unknown", "asc"));
+        assertThrows(IllegalArgumentException.class,
+                () -> com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao.diagnosticOrderBy("time", "sideways"));
+        assertThrows(IllegalArgumentException.class,
+                () -> com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao.diagnosticOrderBy("", "asc"));
+    }
 }

@@ -1,8 +1,9 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
 import Link from "@mui/material/Link";
+import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import Stack from "@mui/material/Stack";
@@ -23,7 +24,8 @@ import { SortHeaderCell, useTableSort, type SortColumn } from "../shell/tableSor
 import { clusterModeWord, statusWord } from "../shell/presenters";
 import type { Tone } from "../shell/tone";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
-import { PLANE_COLLECT, PLANE_OPERATIONS, ROLE_REFUSAL, useRoleAllows } from "../shell/actionAccess";
+import { PLANE_COLLECT, PLANE_OPERATIONS, ROLE_REFUSAL, planeGranted, useRoleAllows } from "../shell/actionAccess";
+import { useSession } from "../auth/SessionContext";
 import { bytesTitle, formatBytes } from "../shell/bytes";
 import { formatStamp, relativeAge } from "../shell/time";
 import { plural } from "../shell/plural";
@@ -42,6 +44,8 @@ import {
   getDeviceCompliance,
   listCpFailoverSummary,
   requestInventoryCollect,
+  requestConfigurationCollect,
+  requestSystemLogCollect,
   retryDeviceConfirm,
   collectDeviceBackup,
   type ApiError,
@@ -71,8 +75,9 @@ import {
 } from "../auth/adminApi";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { BackupAttempts } from "./BackupAttempts";
+import { hasBackupMethod } from "./backupCounts";
 import { DeviationChip, ValidationChip, deviationState } from "./backupWords";
-import { DeviceLogsPanel } from "./DeviceLogsPanel";
+import { DeviceLogsPanel, describeSystemLogCollectError, describeSystemLogCollectOutcome } from "./DeviceLogsPanel";
 import { CpFailoverPanel } from "./CpFailoverPanel";
 import { CertificateStatePill, HttpsCertificateCard } from "./HttpsCertificatePanel";
 import { IdentityCard, identityTiles, platformFactsNote } from "./PlatformIdentity";
@@ -1761,22 +1766,172 @@ export function ClusterMembersMarker({ inventory }: { readonly inventory: Cluste
   );
 }
 
+export type DeviceCollectMenuKey = "inventory" | "configuration" | "backup" | "system_logs";
+
+export interface DeviceCollectMenuItem {
+  readonly key: DeviceCollectMenuKey;
+  readonly label: string;
+  readonly description: string;
+  readonly disabled: boolean;
+  readonly disabledReason: string | null;
+}
+
+const CONFIGURATION_COLLECT_VENDORS: ReadonlySet<string> = new Set([
+  "check_point",
+  "palo_alto",
+  "fortinet",
+  "cisco_asa",
+  "bluecoat",
+]);
+
+const BACKUP_COLLECT_VENDORS: ReadonlySet<string> = new Set([
+  "check_point",
+  "palo_alto",
+  "fortinet",
+  "cisco_asa",
+  "infoblox",
+  "radware",
+  "bluecoat",
+  "pulse_secure",
+]);
+
+const SYSTEM_LOG_COLLECT_VENDORS: ReadonlySet<string> = new Set([
+  "check_point",
+  "palo_alto",
+]);
+
+export function buildDeviceCollectMenuItems(input: {
+  readonly vendorHint?: string | null;
+  readonly role?: string | null;
+  readonly enrollmentState?: string | null;
+  readonly backupTarget?: boolean;
+  readonly permissions?: readonly string[];
+}): readonly DeviceCollectMenuItem[] {
+  const canCollectPlane = planeGranted(input.permissions, PLANE_COLLECT);
+  const canOperationsPlane = planeGranted(input.permissions, PLANE_OPERATIONS);
+  const vendor = input.vendorHint ?? null;
+  const role = input.role ?? null;
+  const isDraft = input.enrollmentState === "DRAFT";
+  const items: DeviceCollectMenuItem[] = [];
+
+  if (canCollectPlane) {
+    items.push({
+      key: "inventory",
+      label: "Inventory",
+      description: "reads the device's interfaces, routes and platform facts",
+      disabled: false,
+      disabledReason: null,
+    });
+
+    const configDisabledReason = (() => {
+      if (isDraft) return "Device enrollment is not confirmed yet";
+      if (vendor && !CONFIGURATION_COLLECT_VENDORS.has(vendor)) {
+        return `Unsupported vendor (${vendorDisplayName(vendor)} has no configuration collection)`;
+      }
+      if (role === "management_server" && vendor !== "check_point") {
+        return `Configuration collection is disabled on ${vendor ? vendorDisplayName(vendor) : "this"} management server (unsupported role)`;
+      }
+      if (role && role !== "gateway" && !(role === "management_server" && vendor === "check_point")) {
+        return `Unsupported role (${role}) for configuration collection`;
+      }
+      return null;
+    })();
+
+    items.push({
+      key: "configuration",
+      label: "Configuration",
+      description: "reads the device's running configuration and settings",
+      disabled: configDisabledReason !== null,
+      disabledReason: configDisabledReason,
+    });
+  }
+
+  if (canOperationsPlane) {
+    const backupDisabledReason = (() => {
+      if (isDraft) return "Device enrollment is not confirmed yet";
+      if (vendor && !BACKUP_COLLECT_VENDORS.has(vendor)) {
+        return `Unsupported vendor (${vendorDisplayName(vendor)} has no backup collection)`;
+      }
+      if (vendor && !hasBackupMethod({ role: role ?? "gateway", vendor_hint: vendor })) {
+        return role === "management_server"
+          ? `Backup is disabled on ${vendorDisplayName(vendor)} management servers (unsupported role)`
+          : `Unsupported role (${role ?? "unknown"}) for backup collection`;
+      }
+      if (input.backupTarget === false) {
+        return "Not switched on as a backup target";
+      }
+      return null;
+    })();
+
+    items.push({
+      key: "backup",
+      label: "Backup",
+      description: "reads and stores a backup archive of the device",
+      disabled: backupDisabledReason !== null,
+      disabledReason: backupDisabledReason,
+    });
+
+    const logsDisabledReason = (() => {
+      if (isDraft) return "Device enrollment is not confirmed yet";
+      if (role === "management_server") {
+        return "System-log collection is disabled on management servers";
+      }
+      if (vendor && !SYSTEM_LOG_COLLECT_VENDORS.has(vendor)) {
+        return `Unsupported vendor (${vendorDisplayName(vendor)} has no system-log collection)`;
+      }
+      if (role && role !== "gateway") {
+        return `Unsupported role (${role}) for system-log collection`;
+      }
+      return null;
+    })();
+
+    items.push({
+      key: "system_logs",
+      label: "System logs",
+      description: "reads the device's recent system log lines",
+      disabled: logsDisabledReason !== null,
+      disabledReason: logsDisabledReason,
+    });
+  }
+
+  return items;
+}
+
 /**
- * "Collect now" (WORKER.md "Frontend"): submits {@code POST /devices/{id}/
- * inventory/collect}, then polls {@code GET /devices/{id}} until its job
- * reaches a terminal state -- the same cancellable-interval pattern
- * `AddDeviceDialog` uses to watch a submitted job.
+ * Device "Collect" menu button: offers every manual collection (Inventory, Configuration,
+ * Backup, System logs) permitted by the viewer's role, showing items the device cannot run
+ * disabled with the reason in words.
  */
-export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { readonly deviceId: string; readonly onCollected: () => void; readonly enrollmentState?: string }) {
+export function CollectNowButton({
+  deviceId,
+  onCollected,
+  enrollmentState,
+  vendorHint,
+  role,
+  backupTarget,
+}: {
+  readonly deviceId: string;
+  readonly onCollected: () => void;
+  readonly enrollmentState?: string;
+  readonly vendorHint?: string | null;
+  readonly role?: string | null;
+  readonly backupTarget?: boolean;
+}) {
+  const session = useSession();
   const [phase, setPhase] = useState<"idle" | "submitting" | "polling" | "error">("idle");
   const [jobState, setJobState] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [overrideEnrolled, setOverrideEnrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const buttonWrapRef = useRef<HTMLDivElement | null>(null);
   const isDraft = !overrideEnrolled && enrollmentState === "DRAFT";
 
   useEffect(() => {
     setOverrideEnrolled(false);
     setError(null);
+    setStatusMessage(null);
+    setMenuOpen(false);
   }, [deviceId]);
 
   // Check the latest job state on mount so that past failures are immediately visible and not hanging
@@ -1844,8 +1999,9 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
     };
   }, [phase, deviceId, onCollected]);
 
-  const handleClick = async () => {
+  const handleInventoryCollect = async () => {
     setError(null);
+    setStatusMessage(null);
     setPhase("submitting");
     try {
       if (isDraft) {
@@ -1868,6 +2024,64 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
     }
   };
 
+  const handleSelectItem = async (key: DeviceCollectMenuKey) => {
+    setMenuOpen(false);
+    if (key === "inventory") {
+      await handleInventoryCollect();
+      return;
+    }
+    setError(null);
+    setStatusMessage(null);
+    setPhase("submitting");
+    try {
+      if (key === "configuration") {
+        await requestConfigurationCollect(deviceId);
+        setStatusMessage("Configuration collection admitted.");
+        setPhase("polling");
+        onCollected();
+        return;
+      }
+      if (key === "backup") {
+        await collectDeviceBackup(deviceId, "Manual backup from device Collect menu");
+        setStatusMessage("Backup request admitted.");
+        setPhase("idle");
+        onCollected();
+        return;
+      }
+      if (key === "system_logs") {
+        const outcome = await requestSystemLogCollect(deviceId);
+        const msg = describeSystemLogCollectOutcome(outcome);
+        if (msg.tone === "bad") {
+          setError(msg.text);
+          setPhase("error");
+        } else {
+          setStatusMessage(msg.text);
+          setPhase("idle");
+        }
+        onCollected();
+      }
+    } catch (err) {
+      if (key === "system_logs") {
+        setError(describeSystemLogCollectError(err).text);
+      } else {
+        setError(describeApiError(err));
+      }
+      setPhase("error");
+    }
+  };
+
+  const menuItems = useMemo(
+    () =>
+      buildDeviceCollectMenuItems({
+        vendorHint,
+        role,
+        enrollmentState: isDraft ? "DRAFT" : "ENROLLED",
+        backupTarget,
+        permissions: session?.permissions,
+      }),
+    [vendorHint, role, isDraft, backupTarget, session?.permissions],
+  );
+
   const isRunning = phase === "submitting" || phase === "polling";
   const buttonLabel = isRunning
     ? isDraft
@@ -1877,21 +2091,75 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
     ? error
       ? "Retry confirmation"
       : "Confirm enrollment"
-    : "Collect now";
+    : "Collect";
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, alignItems: "flex-start" }}>
-      <M3Button deviceJob plane={PLANE_COLLECT}
+    <Box ref={buttonWrapRef} sx={{ display: "flex", flexDirection: "column", gap: 0.5, alignItems: "flex-start" }}>
+      <M3Button
+        deviceJob
+        plane={PLANE_COLLECT}
         emphasis="outlined"
         icon="download"
-        onClick={handleClick}
+        aria-haspopup={isDraft ? undefined : "menu"}
+        aria-expanded={isDraft ? undefined : menuOpen}
+        onClick={() => {
+          if (isDraft) {
+            void handleInventoryCollect();
+          } else {
+            setMenuOpen(true);
+          }
+        }}
         disabled={isRunning}
       >
         {buttonLabel}
       </M3Button>
+      {!isDraft && (
+        <Menu
+          anchorEl={buttonWrapRef.current}
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          MenuListProps={{ "aria-label": "Collect menu" }}
+        >
+          {menuItems.map((item) => (
+            <MenuItem
+              key={item.key}
+              disabled={item.disabled || isRunning}
+              data-collect-item={item.key}
+              onClick={() => void handleSelectItem(item.key)}
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-start",
+                gap: 0.25,
+                py: 1,
+                whiteSpace: "normal",
+                maxWidth: 440,
+              }}
+            >
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {item.label}: {item.description}
+              </Typography>
+              {item.disabledReason && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  data-testid={`collect-disabled-${item.key}`}
+                >
+                  {item.disabledReason}
+                </Typography>
+              )}
+            </MenuItem>
+          ))}
+        </Menu>
+      )}
       {isDraft && !error && !isRunning && (
         <Typography variant="body2" color="text.secondary">
           Device is pending enrollment confirmation.
+        </Typography>
+      )}
+      {statusMessage && !error && (
+        <Typography variant="body2" color="success.main" data-testid="device-collect-status">
+          {statusMessage}
         </Typography>
       )}
       {error && (
@@ -2303,14 +2571,26 @@ function MemberPills({ members, allMembers, selected, onSelect, ariaLabel, capti
  * One Collect now per page (UI product review 2026-10-18, phase 1.3): the cluster header carries it, with M1 / M2 pills
  * choosing which member's inventory is read. The member cards and the Cluster members tab carry none.
  */
-function ClusterCollectNow({ members, onCollected }: { readonly members: readonly DeviceSummary[]; readonly onCollected: () => void }) {
-  const [selected, setSelected] = useState(0);
-  const member = members[Math.min(selected, members.length - 1)];
+function ClusterCollectNow({ members, selectedIndex, onSelect, onCollected }: {
+  readonly members: readonly DeviceSummary[];
+  readonly selectedIndex: number;
+  readonly onSelect: (index: number) => void;
+  readonly onCollected: () => void;
+}) {
+  const member = members[Math.min(selectedIndex, Math.max(0, members.length - 1))];
   if (!member) return null;
   return (
     <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.75 }}>
-      <MemberPills members={members} allMembers={members} selected={member} onSelect={setSelected} ariaLabel="Collect from member" caption={false} />
-      <CollectNowButton key={member.device_id} deviceId={member.device_id} onCollected={onCollected} enrollmentState={member.enrollment_state} />
+      <MemberPills members={members} allMembers={members} selected={member} onSelect={onSelect} ariaLabel="Collect from member" caption={false} />
+      <CollectNowButton
+        key={member.device_id}
+        deviceId={member.device_id}
+        onCollected={onCollected}
+        enrollmentState={member.enrollment_state}
+        vendorHint={member.vendor_hint}
+        role={member.role}
+        backupTarget={member.backup_target}
+      />
     </Box>
   );
 }
@@ -2503,7 +2783,16 @@ export function DeviceInventoryPanels({
             {!singleDeviceHasNoNetworkEvidence && <StatusChip tone="neutral" label={interfaceRouteLabel(headerCounts, device.vendor_hint)} dense />}
           </>
         }
-        action={<CollectNowButton deviceId={device.device_id} onCollected={refresh} enrollmentState={device.enrollment_state} />}
+        action={
+          <CollectNowButton
+            deviceId={device.device_id}
+            onCollected={refresh}
+            enrollmentState={device.enrollment_state}
+            vendorHint={device.vendor_hint}
+            role={device.role}
+            backupTarget={device.backup_target}
+          />
+        }
         readAges={<HeaderReadAges platformAt={device.platform_facts_observed_at}
           inventoryAt={deviceInventory?.collected_at ?? device.inventory_collected_at ?? null}
           config={headerConfigRead(configuration ? configReadFetch.data : null, configurationNotApplicable(device))} />}
@@ -2589,17 +2878,24 @@ export function DeviceInventoryPanels({
  * The cluster pane's Logs tab (UI review 2026-10-18, F-21): the member Logs panel, one member at a time, chosen with the
  * M1 / M2 pills the member cards already use. The per-member stores stay as they are; this only picks which one to read.
  */
-export function ClusterLogsPanel({ members, allMembers, vendorHint }: {
+export function ClusterLogsPanel({ members, allMembers, vendorHint, selectedIndex, onSelectIndex }: {
   readonly members: readonly DeviceSummary[];
   readonly allMembers: readonly LabeledMember[];
   readonly vendorHint: string;
+  readonly selectedIndex?: number;
+  readonly onSelectIndex?: (index: number) => void;
 }) {
-  const [selected, setSelected] = useState(0);
-  const member = members[Math.min(selected, members.length - 1)];
+  const [internalSelected, setInternalSelected] = useState(0);
+  const selected = selectedIndex !== undefined ? selectedIndex : internalSelected;
+  const handleSelect = (idx: number) => {
+    if (selectedIndex === undefined) setInternalSelected(idx);
+    onSelectIndex?.(idx);
+  };
+  const member = members[Math.min(selected, Math.max(0, members.length - 1))];
   if (!member) return <EmptyPanel title="No members" body="This cluster has no member whose logs can be read." />;
   return (
     <Stack spacing={1.5}>
-      <MemberPills members={members} allMembers={allMembers} selected={member} onSelect={setSelected} ariaLabel="Cluster member" />
+      <MemberPills members={members} allMembers={allMembers} selected={member} onSelect={handleSelect} ariaLabel="Cluster member" />
       <DeviceLogsPanel key={member.device_id} deviceId={member.device_id} vendorHint={vendorHint} />
     </Stack>
   );
@@ -2610,6 +2906,7 @@ export function ClusterDetailPanels({
   members,
   initialVs,
   onSelectVs,
+  onSelectMember,
   cache,
   onCacheUpdate,
   configuration,
@@ -2620,6 +2917,8 @@ export function ClusterDetailPanels({
   readonly initialVs?: string | null;
   /** A selected virtual system moved (switcher) or was left (parent link, null): the caller keeps the sidebar's selection in step. */
   readonly onSelectVs?: (vs: string | null) => void;
+  /** Selects a specific cluster member (opens its device screen when the host screen supports one). */
+  readonly onSelectMember?: (member: DeviceSummary) => void;
   /** One device screen (PO 2026-09-25): the members' configuration side by side, as a tab. */
   readonly configuration?: React.ReactNode;
   readonly initialTab?: string | null;
@@ -2630,12 +2929,17 @@ export function ClusterDetailPanels({
   const [clusterInventory, setClusterInventory] = useState<ClusterInventory | null>(cachedData ?? null);
   const [error, setError] = useState<string | null>(null);
   const [activeVsContext, setActiveVsContext] = useState<string | null>(initialVs ?? null);
+  const [selectedMemberIdx, setSelectedMemberIdx] = useState(0);
 
   // Re-clicking the cluster's own row (not a VS) sends initialVs=undefined -- that must clear
   // back to Physical too, not just switching to a different VS's value.
   useEffect(() => {
     setActiveVsContext(initialVs ?? null);
   }, [initialVs]);
+
+  useEffect(() => {
+    setSelectedMemberIdx(0);
+  }, [clusterRef]);
 
   const fetchInventory = useCallback(async () => {
     try {
@@ -2732,9 +3036,15 @@ export function ClusterDetailPanels({
   ];
   const fallbackLinks = clusterContextLinks(clusterRef).filter((l) =>
     (l.id === "backups" && backupFacts.every((f) => f === null)) || (l.id === "readiness" && readiness === null));
+  const safeMemberIdx = Math.min(selectedMemberIdx, Math.max(0, orderedMembers.length - 1));
+  const selectMember = (idx: number) => {
+    setSelectedMemberIdx(idx);
+    const chosen = orderedMembers[idx];
+    if (chosen) onSelectMember?.(chosen);
+  };
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={2} sx={{ minWidth: 0 }}>
       <InventoryEntityHeader
         vendorHint={firstMember?.vendor_hint ?? "check_point"}
         model={firstMember?.model}
@@ -2759,7 +3069,7 @@ export function ClusterDetailPanels({
             <StatusChip tone="neutral" label={interfaceRouteLabel(headerCounts, firstMember?.vendor_hint)} dense />
           </>
         }
-        action={<ClusterCollectNow members={orderedMembers} onCollected={() => { refresh(); setReadsVersion((v) => v + 1); }} />}
+        action={<ClusterCollectNow members={orderedMembers} selectedIndex={safeMemberIdx} onSelect={selectMember} onCollected={() => { refresh(); setReadsVersion((v) => v + 1); }} />}
         // The cluster header's read ages (R13 / 2.1): the oldest member's platform and configuration read, each member on hover.
         readAges={<HeaderReadAges
           platformAt={oldestRead(orderedMembers.map((m) => m.platform_facts_observed_at))}
@@ -2778,19 +3088,33 @@ export function ClusterDetailPanels({
         {/* `minmax(0, 1fr)` tracks (post-release review 2026-10-20, N1): a card's content shrinks inside its own column and
             never pushes the second card past the header's edge, whatever the VSYS list's length. */}
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "repeat(2, minmax(0, 1fr))" }, gap: 1.5, minWidth: 0 }}>
-          {orderedMembers.map((m) => {
+          {orderedMembers.map((m, idx) => {
             const vsysNames = isPaloAlto && m.virtual_systems ? m.virtual_systems.split(/,\s*/).filter(Boolean) : [];
+            const active = idx === safeMemberIdx;
             return (
               <Box
                 key={m.device_id}
                 data-member-card={m.device_id}
+                data-selected={active ? "true" : undefined}
+                role="button"
+                tabIndex={0}
+                aria-pressed={active}
+                aria-label={`Select member ${memberLabel(m, orderedMembers)}`}
+                onClick={() => selectMember(idx)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    selectMember(idx);
+                  }
+                }}
                 sx={{
                   px: 1.5,
                   py: 0.5,
                   borderRadius: "10px",
-                  bgcolor: m3.scLow,
+                  bgcolor: active ? m3.secondaryContainer : m3.scLow,
                   border: "1px solid",
-                  borderColor: m3.outlineVar,
+                  borderColor: active ? m3.primary : m3.outlineVar,
+                  cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   columnGap: 1,
@@ -2798,6 +3122,7 @@ export function ClusterDetailPanels({
                   flexWrap: "wrap",
                   minHeight: 34,
                   minWidth: 0,
+                  "&:hover": { bgcolor: active ? m3.secondaryContainer : m3.sc },
                 }}
               >
                 <Typography variant="body2" sx={{ fontWeight: 700, color: m3.onSurface, whiteSpace: "nowrap" }}>
@@ -2913,12 +3238,12 @@ export function ClusterDetailPanels({
           // Logs are stored per member; the cluster pane picks the member with the M1 / M2 pills (F-21).
           ...(firstMember && (firstMember.vendor_hint === "check_point" || firstMember.vendor_hint === "palo_alto") ? [{
             label: "Logs",
-            panel: <ClusterLogsPanel members={orderedMembers} allMembers={orderedMembers} vendorHint={firstMember.vendor_hint} />,
+            panel: <ClusterLogsPanel members={orderedMembers} allMembers={orderedMembers} vendorHint={firstMember.vendor_hint} selectedIndex={safeMemberIdx} onSelectIndex={setSelectedMemberIdx} />,
           }] : []),
           {
             label: "Identity",
             panel: (
-              <Stack spacing={1}>
+              <Stack spacing={1} sx={{ minWidth: 0 }}>
                 <IdentityReference value={clusterRef} />
                 <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
                   {plural(orderedMembers.length, "member")} · {clusterVendorLabel(firstMember?.vendor_hint)}

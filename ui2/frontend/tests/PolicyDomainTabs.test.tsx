@@ -85,3 +85,25 @@ it("confirms a proven zero in the usage drawer", async () => {
   expect(await within(drawer).findByText("No references; confirmed by the management unused-object report.")).toBeInTheDocument();
   expect(within(drawer).queryByLabelText("Usage evidence gaps")).toBeNull();
 });
+
+it("sorts Policy objects and Installation tables on the server with asc -> desc -> default", async () => {
+  const calls: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => { calls.push(url); return response({ ...page, total: 450 }); }));
+  const view = mount();
+  await screen.findByRole("table", { name: "Policy objects" });
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  await waitFor(() => expect(calls.some(u => u.includes("page=1"))).toBe(true));
+
+  const clickNameHeader = async () => {
+    const tbl = await screen.findByRole("table", { name: "Policy objects" });
+    fireEvent.click(within(within(tbl).getByRole("columnheader", { name: "Name" })).getByRole("button"));
+  };
+  await clickNameHeader();
+  await waitFor(() => expect(calls.some(u => u.includes("page=0") && u.includes("sort=name&order=asc"))).toBe(true));
+  await clickNameHeader();
+  await waitFor(() => expect(calls.some(u => u.includes("page=0") && u.includes("sort=name&order=desc"))).toBe(true));
+  calls.length = 0;
+  await clickNameHeader();
+  await waitFor(() => expect(calls.some(u => u.includes("page=0") && !u.includes("sort="))).toBe(true));
+  view.unmount();
+});

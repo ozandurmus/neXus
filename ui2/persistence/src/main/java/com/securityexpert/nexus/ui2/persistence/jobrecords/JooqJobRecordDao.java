@@ -155,12 +155,52 @@ public final class JooqJobRecordDao implements JobRecordDao {
                 Optional.ofNullable(r.get("finished_at", java.time.OffsetDateTime.class)).map(java.time.OffsetDateTime::toInstant).orElse(null));
     }
 
+    private static final java.util.Map<String, String> DIAGNOSTIC_SORT_COLUMNS = java.util.Map.ofEntries(
+            java.util.Map.entry("submitted_at", "submitted_at"),
+            java.util.Map.entry("time", "submitted_at"),
+            java.util.Map.entry("actor", "submitted_by_actor_fingerprint"),
+            java.util.Map.entry("device", "target_device_id"),
+            java.util.Map.entry("target", "target_device_id"),
+            java.util.Map.entry("target_device_id", "target_device_id"),
+            java.util.Map.entry("command", "coalesce(diagnostic_command, 'diagnose fmnetwork interface detail ' || diagnostic_port)"),
+            java.util.Map.entry("state", "state"),
+            java.util.Map.entry("status", "state"),
+            java.util.Map.entry("duration", "case when finished_at is not null then extract(epoch from (finished_at - coalesce((select min(created_at) from job_step_attempt a where a.job_id=jobs.job_id), submitted_at))) * 1000 end"),
+            java.util.Map.entry("duration_ms", "case when finished_at is not null then extract(epoch from (finished_at - coalesce((select min(created_at) from job_step_attempt a where a.job_id=jobs.job_id), submitted_at))) * 1000 end")
+    );
+
+    public static String diagnosticOrderBy(String sort, String order) {
+        String s = sort == null ? "" : sort.strip();
+        String o = order == null ? "" : order.strip();
+        if (s.isEmpty()) {
+            if (!o.isEmpty()) {
+                throw new IllegalArgumentException("Order parameter requires a sort column");
+            }
+            return " order by submitted_at desc, job_id desc";
+        }
+        String column = DIAGNOSTIC_SORT_COLUMNS.get(s);
+        if (column == null) {
+            throw new IllegalArgumentException("Unknown diagnostic sort column: " + s);
+        }
+        String dir = o.isEmpty() ? "asc" : o.toLowerCase(java.util.Locale.ROOT);
+        if (!dir.equals("asc") && !dir.equals("desc")) {
+            throw new IllegalArgumentException("Unknown sort order: " + o);
+        }
+        return " order by " + column + " " + dir + " nulls last, job_id desc";
+    }
+
     @Override
     public java.util.List<DiagnosticJob> diagnosticHistory(String deviceId, int offset) {
+        return diagnosticHistory(deviceId, offset, "", "");
+    }
+
+    @Override
+    public java.util.List<DiagnosticJob> diagnosticHistory(String deviceId, int offset, String sort, String order) {
+        String orderBy = diagnosticOrderBy(sort, order);
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(
                 "select jobs.*, (select min(created_at) from job_step_attempt a where a.job_id=jobs.job_id) as diagnostic_started_at "
                 + "from jobs where capability_id in ('fmg_interface_detail','diagnostic_read') "
-                + "and ({0}::text is null or target_device_id = {0}) order by submitted_at desc, job_id desc limit 50 offset {1}",
+                + "and ({0}::text is null or target_device_id = {0})" + orderBy + " limit 50 offset {1}",
                 deviceId, Math.max(0, offset)).stream().map(JooqJobRecordDao::toDiagnostic).toList());
     }
 
