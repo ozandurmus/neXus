@@ -9,3 +9,5 @@ status: in_progress · target: docs/design/REPORTS_R1_CONTRACT.md
 - Renderers: OpenPDF 2.2.5 (3.x pulls brotli4j with native binaries, refused), POI XLSX (string cells, deterministic repack), CSV RFC 4180 with formula guard. 25 MiB cap fails the run (REPORT_TOO_LARGE), nothing stored. Bounded executor: 2 concurrent builds, queue 16. Stale threshold 24 h (Operations HA banner) until B1.
 - Retention: worker RetentionPruningService step 4 prunes expired report artefacts. Overview backup freshness now excludes class 'report'.
 - Open: V190 BEGIN/ROLLBACK dry-run on the live DB; OpenPDF CVE scan before merge; integration-test classification lists not run (no Docker); REAL_ENV: generate all four as aiview.
+
+2026-11-05 REAL_ENV as aiview (masked): RPT-01/02/03/05 previewed and generated (PDF, XLSX, CSV) and downloaded; RAW refused to aiview; one audit row per generate and per download; files on the report volume (ui2-report-store, UI2_REPORT_STORE_ROOT), none on the recovery volume. Fixes on the way: machine-session report POSTs (PR 748), report files on their own volume (PR 749). RAW download by security_admin not exercised live.

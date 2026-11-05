@@ -1,12 +1,13 @@
 # neXus — Current State
 
-Hot checkpoint reconciled on 2026-10-20 against `origin/main` at `f05e7ced`.
+Hot checkpoint reconciled on 2026-10-20 against `origin/main` at `f05e7ced`; schema and the 2026-11-05 lines below
+updated on 2026-11-05.
 `project/QUEUE.md` and its tool-managed data own delivery state; repository
 source proves implementation, not the current deployment or device health.
 
 ## Product today
 
-UI2 is the maintained Java/React product; repository schema is **V167**.
+UI2 is the maintained Java/React product; repository schema is **V191**.
 Inventory, configuration, compliance, encrypted backups, Operations, Policy,
 Packet Analysis and device system logs use masked `aiview` projections. Restore
 from the UI remains disabled. Check Point policy collection is chunked by
@@ -33,7 +34,8 @@ no real-environment acceptance. Authority:
 
 Same period, one line each (detail in `project/build_history.json`):
 
-- `reports_r1` IN_PROGRESS — Reports R1 (RPT-01/02/03/05, V190 `report_run`, masked by default); automated tests green, live aiview generation pending ([contract](docs/design/REPORTS_R1_CONTRACT.md)).
+- `reports_r1` REAL_ENV_VALIDATED — Reports R1 (RPT-01/02/03/05, V190 `report_run`, masked by default); all four generated and downloaded live as aiview on 2026-11-05; report files on their own volume `ui2-report-store` (BK-17 unchanged) ([contract](docs/design/REPORTS_R1_CONTRACT.md)).
+- 2026-11-05 cloud integration — docs batch, code batch (UI review IA and screens, executive home, security MEDIUM fixes M-1..M-8, path/policy UNKNOWN work, test speed) and the CP NAT UID probe (V191) shipped; [handover](docs/design/PO_SESSION_HANDOVER_2026_11_05.md) §5.
 - `NXS-LOCAL-0373` AUTOMATED_VALIDATED — policy completeness (V163), CP hit dates, Policy Changes speed, rule view redesign, permissiveness scoring ([decision](docs/design/PO_DECISION_RECORD_2026_10_20_POLICY_PERMISSIVENESS_SCORING.md)).
 - `NXS-LOCAL-0372` AUTOMATED_VALIDATED — UI design language and the 2026-10-18 product review items D1/D2/P2/P3 ([doc](docs/design/UI_DESIGN_LANGUAGE.md)).
 - `NXS-LOCAL-0371` AUTOMATED_VALIDATED — Packet Analysis real engine, first production run fixed ([decision](docs/design/PO_DECISION_RECORD_2026_10_15_PACKETBREAKER_PORTED_INTO_NEXUS.md)).

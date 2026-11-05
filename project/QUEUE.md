@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-05T08:03:41Z
+Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-05T14:23:05Z
 
 ## Now
 - NXS-LOCAL-0374 — System logs phase B: collectors, masked view, settings route, Spike Detective data (in_progress)
@@ -29,7 +29,6 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-05T08:03:41Z
 - P1/in_progress manifest_drift_service_worker_configuration_policy — Worker still image+fallback patched; others use manifests
 - P1/in_progress module_per_pod_split — Module runtime landed; policy/configuration/compliance...
 - P1/in_progress nspm_wave1_acceptance — Policy hygiene and V144 lifecycle catalog landed
-- P1/in_progress reports_r1 — Reports R1 (V190): tests green; live aiview run of all fou
 - P1/in_progress scheduled_fleet_backup_enable_decision — Fleet backups enabled: daily 02:00 Istanbul
 - P1/in_progress ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- Gradle multi-module skeleton under ui2/
 - P1/in_progress ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind

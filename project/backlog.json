@@ -1260,15 +1260,6 @@
       "priority": "P2",
       "target": "",
       "note": ""
-    },
-    {
-      "id": "reports_r1",
-      "category": "ui2",
-      "title": "Reports R1 (V190): tests green; live aiview run of all four pending",
-      "status": "in_progress",
-      "priority": "P1",
-      "target": "REPORTS_R1_CONTRACT.md",
-      "note": ""
     }
   ]
 }
