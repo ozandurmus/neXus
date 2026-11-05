@@ -1,0 +1,5 @@
+Repo github.com/ozandurmus/neXus. Setup: git fetch origin cloud-base/1105 && git checkout -b cloud/release-notes-1105 origin/cloud-base/1105. Read AGENTS.md first (binding: masking law, English, UNKNOWN over guessing). No access to the live system. Small task: finish within about 15 minutes.
+
+TASK (document only): write docs/release/RELEASE_NOTES_2026_11_05.md, operator-facing plain-English release notes for the changes since commit ed068bbb (read the git log and diffs): device Collect menu, Collect logs now, path diagram, table sorting, job targets, stuck panels, backup size alerts, CP group members resolved from inventory, VSX cluster addresses, path pseudonym fixes.
+For each: what changed for the user, where it is in the UI, and any caveat. No raw names; masked examples only. Create the docs/release folder if missing.
+Commit (messages end with 'Co-Authored-By: Claude'), push cloud/release-notes-1105, no PR.
