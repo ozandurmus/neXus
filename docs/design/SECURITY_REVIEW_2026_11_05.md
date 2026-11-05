@@ -286,8 +286,12 @@ The rest of 43fbdc6 is sound:
 
 ## 8. Validation
 
-- `cd ui2 && ./gradlew :service:test :persistence:test :worker:test :architecture-tests:test`: result in the commit
-  message and the session close of this branch.
+- `cd ui2 && ./gradlew :service:test :persistence:test :worker:test :architecture-tests:test`: BUILD SUCCESSFUL.
+  - service: 1425 tests, 0 failures;
+  - persistence: 284 tests, 0 failures;
+  - worker: 1419 tests, 0 failures, 2 skipped (already skipped before this branch);
+  - architecture-tests: 44 tests, 0 failures.
+- Repository privacy gate (`tools/privacy/repository_privacy_check.py`): PASS, 0 findings.
 - Frontend: not touched by the fix. `ui2/frontend/node_modules` was not present in the review container, so
   vitest/tsc did not run.
 - Real-environment validation: none. H-1 needs an aiview CSV export on the deployed build, with no raw label in the
