@@ -104,3 +104,16 @@ rows toggle is gone.
 - Test hooks: `[data-pill="<role>"]`, `[data-fact]` on header pills, `[data-kpi]`, `[data-kpi-figure]`,
   `[data-kpi-word]`, `[data-state]`, `[data-state-word]`, `[data-next-step]`, `[data-stamp]`, `[data-density]`,
   `[data-testid="pagination-footer"]`, `object-title-row`, `object-identity-row`, `object-state-row`.
+
+## Amendment 2026-11-05 (PO decision C1, UI review 2026-11-05)
+
+Section 1's rule "no judgement word" now admits exactly three words, `HEALTHY` / `AT RISK` / `UNKNOWN`, and only on
+the executive home's verdict banner.
+
+The word is not a score:
+- It is derived from four observed pillar facts by the printed rule in
+  `EXEC_HOME_AND_TRACE_DESIGN_SPEC_2026_11_05.md` section 3.3, with precedence `AT RISK` > `UNKNOWN` > `HEALTHY`.
+- The rule is shown beside the word.
+
+Stale or missing evidence yields `UNKNOWN`, never `HEALTHY`. No other screen, pill or sentence may use a judgement
+word. The words stay in English like the rest of the product UI; `UNKNOWN` keeps its frozen spelling.
