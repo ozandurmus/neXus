@@ -114,32 +114,10 @@ export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () 
       <ConstellationCanvas />
       <div className="lx-vignette" aria-hidden="true" />
       <main className="lx-page">
-        <section className="lx-hero" aria-label="About neXus">
-          <div className="lx-brand">
-            <img src={markLightOnDark} alt="" width={44} height={44} />
-            <img src={wordmarkLightOnDark} alt="neXus" height={30} style={{ width: "auto" }} />
-          </div>
-          <div className="lx-statement">
-            <h1>
-              Every firewall.
-              <br />
-              One <em>picture</em>.
-            </h1>
-            <p>
-              Inventory, configuration, compliance, backups and failover readiness for the whole estate, verified on your own network and
-              never anywhere else.
-            </p>
-            <ul className="lx-verbs" aria-label="Principle">
-              <li>See</li>
-              <li className="sep" aria-hidden="true" />
-              <li>Verify</li>
-              <li className="sep" aria-hidden="true" />
-              <li>Trace</li>
-              <li className="sep" aria-hidden="true" />
-              <li>Recover</li>
-              <li className="sep" aria-hidden="true" />
-              <li>Operate</li>
-            </ul>
+        <section className="lx-hero" aria-label="neXus">
+          <div className="lx-logo">
+            <img className="lx-logo-mark" src={markLightOnDark} alt="" />
+            <img className="lx-logo-word" src={wordmarkLightOnDark} alt="neXus" />
           </div>
           <div className="lx-meta">Isolated network · no outbound connections · all evidence stays on premises</div>
         </section>
