@@ -124,7 +124,7 @@ public final class PolicyHygiene {
                 for (Rule rule : section.rules()) {
                     List<Finding> findings = Boolean.FALSE.equals(rule.enabled()) ? List.of(finding("disabled", "LOW", "Rule is disabled.")) : List.of();
                     results.put(rule.id(), new Assessment("UNKNOWN", "unsupported rulebase", null, findings,
-                        Map.of("level", "Unknown", "reasons", List.of(), "score", 0), "unknown", false,
+                        PolicyRuleMetrics.permissiveness("Unknown", List.of(), 0), "unknown", false,
                         "Counter window unknown.", "UNKNOWN", null, null, null));
                 }
                 continue;
@@ -140,7 +140,7 @@ public final class PolicyHygiene {
                 var joins = breadthObjects == snapshot.objects() ? Set.<String>of() : joined(rule, snapshot.objects(), breadthObjects);
                 if (!joins.isEmpty()) {
                     var reasons = new ArrayList<Object>((List<?>) broad.get("reasons")); reasons.addAll(joins);
-                    broad = Map.of("level", broad.get("level"), "reasons", List.copyOf(reasons), "score", broad.get("score"));
+                    broad = PolicyRuleMetrics.permissiveness(broad.get("level"), List.copyOf(reasons), broad.get("score"));
                 }
                 var time = PolicyRuleMetrics.time(rule, snapshot.objects(), now, snapshot.metadata().vendor(), new int[]{PolicyRuleMetrics.RULE_BUDGET});
                 String timeStatus = time.status(); boolean expiring = time.expiring();

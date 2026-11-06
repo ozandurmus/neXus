@@ -359,6 +359,8 @@ sound upper bound exists; stays UNKNOWN pending an A0 amendment and a PO decisio
 
 ## 4. Open issues
 
+- **Resolved 2026-11-06:** `PolicySnapshot.Rule` now keeps extras in sorted key order, so `normalize` and the X0 split
+  read extras in the same, JVM-independent order. Former note:
 - **Reason attribution is order-dependent.** `PolicySnapshot.Rule` stores extras through `Map.copyOf`, whose
   iteration order is unspecified (it can differ between JVM runs), and `normalize` reports the first failing field.
   A rule failing on two fields can therefore report either reason; verdicts are unaffected, the per-class counts are

@@ -602,7 +602,7 @@ Added 2026-11-06 night:
 | # | Result |
 |---|---|
 | M1 (under load) | Right after a sweep of the hygiene analysis over all 99 policies: ui2-service CPU 1.77 cores, RSS 3.5 GiB, G1 heap committed 3,676 MiB, used 1,934 MiB, metaspace 73 MiB (idle: RSS 1.6 GiB, used 721 MiB). The analysis load roughly doubles the service's memory. A class histogram still needs `-XX:+PrintClassHistogram` on one restart. |
-| M9 | Masked digests of 12 fixed policy pages: 0 of 12 changed between two reads, 7 of 12 changed across a ui2-service restart. Split by token kind on a second restart: name pseudonyms changed on 8 of 12 pages (same counts, different values), masked addresses on 0 of 12. P0 (§3.2, masking must not depend on process-local history) is confirmed live for names, and it also affects every pseudonym used outside the UI (chat, docs, notifications). |
+| M9 | **Corrected 2026-11-06 morning.** 12 fixed policy pages, masked tokens: an order-sensitive digest changed on 8 of 12 pages across a ui2-service restart (0 of 12 between two reads), but the sorted-multiset and distinct-set digests changed on 0 of 12, so **no pseudonym value changes across a restart**; addresses were stable too. A per-field digest located the cause: only JSON object key order changed, in a rule's `extras` (`Map.copyOf`) and in `permissiveness` (`Map.of`), whose iteration order differs per JVM start. Both now have a fixed key order (the fix PR). P0 (§3.2) still stands for the free-text map and the IP masker's response-history cache, which these pages do not exercise; M9 does not measure them. |
 
 ## 12. Open PO questions
 

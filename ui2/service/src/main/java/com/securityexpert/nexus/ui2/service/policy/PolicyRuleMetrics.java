@@ -132,7 +132,7 @@ final class PolicyRuleMetrics {
         score += (int) reasons.stream().filter(s -> s.startsWith("Large ") || s.startsWith("Broad ") || s.equals(ZONE)).count();
         if (known && score == 0 && !reasons.contains(ANY_APPLICATION_SPECIFIC_SERVICE)) reasons.add(NO_BROAD);
         reasons.addAll(gaps);
-        return Map.of("level", !known ? "Unknown" : score >= 4 ? "High" : score >= 1 ? "Medium" : "Low", "reasons", List.copyOf(reasons), "score", score);
+        return permissiveness(!known ? "Unknown" : score >= 4 ? "High" : score >= 1 ? "Medium" : "Low", List.copyOf(reasons), score);
     }
     private static boolean fail(Set<String> gaps, String reason) { gaps.add(reason); return false; }
     private static boolean breadth(String id, String field, Map<String, PolicyObject> objects, Set<String> reasons, Set<String> gaps,
@@ -199,5 +199,11 @@ final class PolicyRuleMetrics {
             known &= breadth(child, field, objects, reasons, gaps, path, budget, pan);
         }
         path.remove(id); return known;
+    }
+    /** The permissiveness metric with a fixed key order (level, reasons, score), the same in every JVM run. */
+    static Map<String, Object> permissiveness(Object level, Object reasons, Object score) {
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("level", level); out.put("reasons", reasons); out.put("score", score);
+        return java.util.Collections.unmodifiableMap(out);
     }
 }

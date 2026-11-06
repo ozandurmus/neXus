@@ -47,9 +47,10 @@ public final class PolicyPrivacy {
         if (key.equals("permissiveness") && value instanceof Map<?, ?> metric) {
             String level = String.valueOf(metric.get("level"));
             List<?> reasons = metric.get("reasons") instanceof List<?> list ? list : List.of();
-            return Map.of("score", metric.get("score") instanceof Number n ? n : 0, "level", Set.of("Low", "Medium", "High", "Unknown").contains(level) ? level : "Unknown",
-                    "reasons", reasons.stream().filter(r -> r instanceof String s && (s.matches("(?:Any |Large CIDR in |Negated )(source|destination|service|application)(?: needs analysis)?")
-                            || PolicyRuleMetrics.FIXED_REASONS.contains(s))).toList());
+            return PolicyRuleMetrics.permissiveness(Set.of("Low", "Medium", "High", "Unknown").contains(level) ? level : "Unknown",
+                    reasons.stream().filter(r -> r instanceof String s && (s.matches("(?:Any |Large CIDR in |Negated )(source|destination|service|application)(?: needs analysis)?")
+                            || PolicyRuleMetrics.FIXED_REASONS.contains(s))).toList(),
+                    metric.get("score") instanceof Number n ? n : 0);
         }
         if (value instanceof Map<?, ?> row && row.containsKey("blockedRules") && row.containsKey("partialPrior")) return blockerSplitRow(row);
         if (value instanceof Map<?, ?> map) {
