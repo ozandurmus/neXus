@@ -154,7 +154,17 @@ final class InventoryJobExecutorFakes {
         @Override
         public boolean refreshObservedFacts(String deviceId, Optional<String> hostname, Optional<String> model,
                 Optional<String> softwareVersion, String actorFingerprint, String actionId) {
+            return refreshObservedFacts(deviceId, hostname, model, softwareVersion, Optional.empty(), actorFingerprint, actionId);
+        }
+
+        /** Management-server HA roles passed with a refresh (V194). */
+        final java.util.List<String> observedHaRoles = new java.util.ArrayList<>();
+
+        @Override
+        public boolean refreshObservedFacts(String deviceId, Optional<String> hostname, Optional<String> model,
+                Optional<String> softwareVersion, Optional<String> haRole, String actorFingerprint, String actionId) {
             observedFactRefreshes.add(hostname.orElse("") + "|" + model.orElse("") + "|" + softwareVersion.orElse(""));
+            haRole.ifPresent(observedHaRoles::add);
             return true;
         }
 

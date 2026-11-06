@@ -10,17 +10,24 @@ import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryHaFact
 public sealed interface InventoryResult {
 
     /** What this read observed about the device itself (PO 2026-09-25: refreshed on every read, never filled once). */
-    record ObservedIdentity(Optional<String> hostname, Optional<String> model, Optional<String> softwareVersion) {
+    record ObservedIdentity(Optional<String> hostname, Optional<String> model, Optional<String> softwareVersion,
+            Optional<String> haRole) {
         public static final ObservedIdentity NONE = new ObservedIdentity(Optional.empty(), Optional.empty(), Optional.empty());
 
         public ObservedIdentity {
             hostname = hostname == null ? Optional.empty() : hostname.filter(v -> !v.isBlank());
             model = model == null ? Optional.empty() : model.filter(v -> !v.isBlank());
             softwareVersion = softwareVersion == null ? Optional.empty() : softwareVersion.filter(v -> !v.isBlank());
+            // A management server's own HA role (V194, show-ha-status); gateways report HA through haFacts instead.
+            haRole = haRole == null ? Optional.empty() : haRole.filter(v -> !v.isBlank());
+        }
+
+        public ObservedIdentity(Optional<String> hostname, Optional<String> model, Optional<String> softwareVersion) {
+            this(hostname, model, softwareVersion, Optional.empty());
         }
 
         public boolean isEmpty() {
-            return hostname.isEmpty() && model.isEmpty() && softwareVersion.isEmpty();
+            return hostname.isEmpty() && model.isEmpty() && softwareVersion.isEmpty() && haRole.isEmpty();
         }
     }
 

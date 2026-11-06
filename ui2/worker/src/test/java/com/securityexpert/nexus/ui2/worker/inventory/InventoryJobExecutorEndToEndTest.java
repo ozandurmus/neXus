@@ -105,6 +105,7 @@ class InventoryJobExecutorEndToEndTest {
         assertTrue(outcome instanceof JobOutcome.Completed, "expected Completed, got " + outcome);
         // 2026-11-06: cpinfo is sent with its gated 60 s (V47); every other identity read keeps 30 s.
         assertEquals(java.time.Duration.ofSeconds(60), transport.timeoutByCommand.get(InventoryReadPlan.CP_CPINFO_HOTFIXES));
+        assertTrue(transport.commands.stream().noneMatch(c -> c.contains("show-ha-status")), "a gateway is never sent the MDS HA read");
         assertEquals(java.time.Duration.ofSeconds(30), transport.timeoutByCommand.get(InventoryReadPlan.CP_SHOW_ASSET_SYSTEM));
         assertEquals(3, transport.execInteractiveCallCount(),
                 "physical cphaprob -a if plus one per VSID (2 and 5) go over the interactive shell; nothing else does");
@@ -185,6 +186,10 @@ class InventoryJobExecutorEndToEndTest {
                 Map.entry("show interfaces table", ""),
                 Map.entry("clish -c 'show interfaces all'", ""),
                 Map.entry(InventoryReadPlan.CP_IP_ROUTE_SHOW, "default via 192.0.2.1 dev Mgmt proto 7\n192.0.2.0/24 dev Mgmt proto kernel scope link src 192.0.2.30\n"),
+                // V194 (PO 2026-11-07): the management server's own HA role from show-ha-status, matched by its address.
+                Map.entry(InventoryReadPlan.CP_MDS_HA_STATUS, "{ \"domain-type\" : \"mds\", \"servers\" : [ { \"name\" : \"MDS-SYNTH-01\", "
+                        + "\"ip-address\" : \"192.0.2.30\", \"ha-state\" : \"standby\" }, { \"name\" : \"MDS-SYNTH-02\", "
+                        + "\"ip-address\" : \"192.0.2.31\", \"ha-state\" : \"active\" } ] }"),
                 Map.entry(InventoryReadPlan.CP_IP_ADDR_SHOW_STATE_ONLY,
                         "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 state UNKNOWN\n    inet 127.0.0.1/8 scope host lo\n"
                         + "2: Mgmt: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n    inet 192.0.2.30/24 brd 192.0.2.255 scope global Mgmt\n"));
@@ -201,7 +206,7 @@ class InventoryJobExecutorEndToEndTest {
                 new InventoryCapabilityExecutor(transport, ref -> { throw new IllegalStateException("not used"); });
         InventoryJobExecutor executor = new InventoryJobExecutor(leaseRepo, attemptRepo, devicePort, deviceRepository,
                 inventoryRepository, capabilityExecutor);
-        InventoryRequest request = InventoryRequest.checkPointManagementServer(new ConnectionTarget("ep-1", "mds-host", 22), "cred-1",
+        InventoryRequest request = InventoryRequest.checkPointManagementServer(new ConnectionTarget("ep-1", "192.0.2.30", 22), "cred-1",
                 "trust-1", Optional.empty());
 
         JobOutcome outcome = executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request, false);
@@ -211,6 +216,9 @@ class InventoryJobExecutorEndToEndTest {
                 "no VSX probe, cluster read or batched read on a management server: " + transport.commands);
         assertTrue(transport.commands.stream().anyMatch(c -> c.contains("fw getifs")), transport.commands.toString());
         assertTrue(transport.commands.stream().noneMatch(c -> c.contains("cpstat -f policy")), "a management server holds no policy");
+        assertTrue(transport.commands.contains("(interactive) " + InventoryReadPlan.CP_MDS_HA_STATUS), transport.commands.toString());
+        assertEquals(java.time.Duration.ofSeconds(60), transport.timeoutByCommand.get(InventoryReadPlan.CP_MDS_HA_STATUS));
+        assertEquals(java.util.List.of("STANDBY"), deviceRepository.observedHaRoles);
         InventoryRun run = inventoryRepository.lastRecordedRun;
         assertEquals(java.util.List.of("Mgmt"), run.contexts().get(0).interfaces().stream().map(i -> i.name()).toList(),
                 "interfaces from ip -4 addr show when fw getifs and clish give none; lo skipped");

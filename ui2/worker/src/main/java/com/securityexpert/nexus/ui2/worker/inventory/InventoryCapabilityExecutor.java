@@ -94,6 +94,8 @@ public final class InventoryCapabilityExecutor {
     /** The gated timeout of {@code cp_identity_cpinfo_hotfixes} (V47: 60 s). Measured 2026-11-06: the R82 management
      *  server's interactive cpinfo did not answer within 30 s, so the read used half its approved budget. */
     static final Duration CPINFO_TIMEOUT = Duration.ofSeconds(60);
+    /** The gated timeout of {@code cp_identity_mds_ha_status} (V194: 60 s). */
+    static final Duration MDS_HA_TIMEOUT = Duration.ofSeconds(60);
     private static final Pattern API_KEY = Pattern.compile("<key>([^<]+)</key>");
     private static final Pattern SERIAL_TAG = Pattern.compile("(?is)<serial>\\s*([^<]+?)\\s*</serial>");
     private static final String BATCH_TAG = "===NEXUS_SECTION:";
@@ -488,8 +490,23 @@ public final class InventoryCapabilityExecutor {
                 gaiaHostname = Optional.empty();
             }
             // The presented SSH identity is not a hostname (a host-key fingerprint on this estate): the name is read.
+            // A management server's own HA role (V194, PO approval 2026-11-07): mgmt_cli needs the interactive Expert
+            // shell's environment. Only the local server's state and the server count survive; any failure is UNKNOWN.
+            Optional<String> mdsHaRole = Optional.empty();
+            if (managementServer) {
+                try {
+                    var ha = com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointMdsHaStatusParser.parse(
+                            identityReadOutput(session, InventoryReadPlan.CP_MDS_HA_STATUS, true, MDS_HA_TIMEOUT), target.host());
+                    mdsHaRole = ha.role();
+                    LOG.log(System.Logger.Level.INFO, "[CP_MDS_HA] outcome={0} servers={1} role={2}", ha.outcome(), ha.servers(),
+                            ha.role().orElse("UNKNOWN"));
+                } catch (RuntimeException e) {
+                    com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+                    LOG.log(System.Logger.Level.WARNING, "[CP_MDS_HA] outcome=READ_FAILED {0}", e.getClass().getSimpleName());
+                }
+            }
             InventoryResult.ObservedIdentity observed = new InventoryResult.ObservedIdentity(gaiaHostname,
-                    observedModel, gaiaVersion);
+                    observedModel, gaiaVersion, mdsHaRole);
             return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString),
                     Optional.of(platformFacts), observed);
         } finally {

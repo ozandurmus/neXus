@@ -87,6 +87,9 @@ public final class InventoryReadPlan {
     public static final String CP_UPTIME = "uptime";
     /** Installed policy name and install time (V60, POLICY_INSTALL_TIME_COMMAND_GATE_ENTRIES.md #1); a login shell like cpinfo. */
     public static final String CP_CPSTAT_POLICY = "bash -lc 'cpstat -f policy fw'";
+    /** A management server's own HA role (V194 gate cp_identity_mds_ha_status, PO approval 2026-11-07): the Management
+     *  API at Multi-Domain Server level, issued in the interactive Expert shell where mgmt_cli has its environment. */
+    public static final String CP_MDS_HA_STATUS = "mgmt_cli -r true -f json show-ha-status";
     public static final String CP_SHOW_ASSET_SYSTEM = "clish -c 'show asset system'";
     /** The Gaia version (PO 2026-09-25: observed facts follow every read); the configuration path's gated literal. */
     public static final String CP_SHOW_VERSION_ALL = "clish -c 'show version all'";
