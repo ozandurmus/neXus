@@ -75,12 +75,19 @@ public final class TopologyService {
     private final DeviceInventoryRepository inventory;
     private final TopologyRepository repository;
     private final Clock clock;
+    private final ManagementVsSource managementVs;
     private final SecureRandom random = new SecureRandom();
     private final ReentrantLock rebuildLock = new ReentrantLock();
     private final AtomicReference<TopologyGraph> current = new AtomicReference<>();
 
     public TopologyService(DeviceRepository devices, DeviceInventoryRepository inventory, TopologyRepository repository,
             Clock clock) {
+        this(devices, inventory, repository, clock, ManagementVsSource.NONE);
+    }
+
+    public TopologyService(DeviceRepository devices, DeviceInventoryRepository inventory, TopologyRepository repository,
+            Clock clock, ManagementVsSource managementVs) {
+        this.managementVs = Objects.requireNonNull(managementVs, "managementVs");
         this.devices = Objects.requireNonNull(devices, "devices");
         this.inventory = Objects.requireNonNull(inventory, "inventory");
         this.repository = Objects.requireNonNull(repository, "repository");
@@ -123,7 +130,7 @@ public final class TopologyService {
             Instant builtAt = clock.instant();
             String snapshotId = "tps-" + UUID.randomUUID();
             TopologyGraph graph = TopologyBuilder.build(new TopologyInput(snapshotId, builtAt, facts,
-                    repository.listOverrides(), salt));
+                    repository.listOverrides(), salt, loadManagementVs(builtAt)));
             long millis = (System.nanoTime() - started) / 1_000_000;
             var header = new TopologyRepository.SnapshotHeader(snapshotId, builtAt, actorFingerprint,
                     graph.fingerprints(), graph.counts(), 0, millis);
@@ -133,6 +140,15 @@ public final class TopologyService {
                     graph.fingerprints(), graph.counts(), stored, millis));
         } finally {
             rebuildLock.unlock();
+        }
+    }
+
+    /** A failing management read must never fail a rebuild: no facts means every VIP prefix stays UNKNOWN. */
+    private List<TopologyInput.ManagementVs> loadManagementVs(Instant builtAt) {
+        try {
+            return managementVs.load(builtAt);
+        } catch (RuntimeException unreadable) {
+            return List.of();
         }
     }
 

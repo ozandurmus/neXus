@@ -52,6 +52,8 @@ public final class TopologyGraph {
         HA_ROUTE_DRIFT,
         /** Interfaces derived from stored configuration (PAN-OS 12, V184 CONFIG_DERIVED), not a runtime read. */
         CONFIG_DERIVED_INTERFACES,
+        /** At least one VIP prefix on this node came from Check Point management data (MANAGEMENT_DERIVED), not a runtime read. */
+        MANAGEMENT_DERIVED_PREFIX,
         /** A VSX warp-link cloud (design §4: stays a cloud until a measured fixture proves the pairing). */
         VSX_WARP_CLOUD
     }

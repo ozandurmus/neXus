@@ -23,9 +23,17 @@ public class TopologyConfiguration {
     }
 
     @Bean
+    public ManagementVsSource managementVsSource(TransactionBoundary transactionBoundary,
+            com.fasterxml.jackson.databind.ObjectMapper mapper) {
+        return new PolicyManagementVsSource(transactionBoundary, mapper);
+    }
+
+    @Bean
     public TopologyService topologyService(DeviceRepository deviceRepository,
-            DeviceInventoryRepository deviceInventoryRepository, TopologyRepository topologyRepository) {
-        return new TopologyService(deviceRepository, deviceInventoryRepository, topologyRepository, Clock.systemUTC());
+            DeviceInventoryRepository deviceInventoryRepository, TopologyRepository topologyRepository,
+            ManagementVsSource managementVsSource) {
+        return new TopologyService(deviceRepository, deviceInventoryRepository, topologyRepository, Clock.systemUTC(),
+                managementVsSource);
     }
 
     /**

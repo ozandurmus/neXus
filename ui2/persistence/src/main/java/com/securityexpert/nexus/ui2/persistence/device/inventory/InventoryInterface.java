@@ -53,6 +53,12 @@ public record InventoryInterface(String interfaceId, String name, Optional<Strin
     /** V184: the interface was derived from stored configuration (PAN-OS 12, PO 2026-10-24), not a runtime read. */
     public static final String GRADE_CONFIG_DERIVED = "CONFIG_DERIVED";
 
+    /**
+     * Topology only, never stored in {@code device_interface}: the attachment's prefix came from Check Point management
+     * data (a VS object's interface mask), configuration intent and not a runtime read (PO 2026-11-06/07).
+     */
+    public static final String GRADE_MANAGEMENT_DERIVED = "MANAGEMENT_DERIVED";
+
     public InventoryInterface {
         Objects.requireNonNull(interfaceId, "interfaceId");
         Objects.requireNonNull(name, "name");

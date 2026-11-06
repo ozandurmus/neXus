@@ -7,7 +7,35 @@ import java.util.*;
 
 /** Explicit field projection; credentials, topology and vendor blobs are never retained. */
 final class CpObjectInventoryParser {
+    /** Stage 2 of the VSX VIP prefix decision (2026-11-06): only these management objects keep interface addresses. */
+    static final Set<String> VS_TYPES = Set.of("CpmiVsClusterNetobj", "CpmiVsNetobj");
     private CpObjectInventoryParser() {}
+    /** Address + mask length only; an interface without a valid pair is dropped and the object can never bind. */
+    static CpObjectInventory.VsAddresses vsAddresses(JsonNode node) {
+        List<CpObjectInventory.VsInterface> kept = new ArrayList<>();
+        boolean complete = node.path("interfaces").isArray() && node.path("interfaces").size() > 0;
+        for (JsonNode iface : node.path("interfaces")) {
+            JsonNode address = iface.path("ipv4-address");
+            JsonNode mask = iface.path("ipv4-mask-length");
+            if (address.isTextual() && validIpv4(address.textValue()) && mask.isIntegralNumber() && mask.canConvertToInt()
+                    && mask.intValue() >= 1 && mask.intValue() <= 32) {
+                var entry = new CpObjectInventory.VsInterface(address.textValue(), mask.intValue());
+                if (kept.contains(entry)) continue;
+                if (kept.stream().anyMatch(k -> k.address().equals(entry.address()))) complete = false;
+                kept.add(entry);
+            } else complete = false;
+        }
+        return new CpObjectInventory.VsAddresses(kept, complete);
+    }
+    private static boolean validIpv4(String text) {
+        String[] parts = text.split("\\.", -1);
+        if (parts.length != 4) return false;
+        for (String part : parts) {
+            if (part.isEmpty() || part.length() > 3 || !part.chars().allMatch(c -> c >= '0' && c <= '9')) return false;
+            if (part.length() > 1 && part.startsWith("0") || Integer.parseInt(part) > 255) return false;
+        }
+        return true;
+    }
     static List<CpObjectInventory.Item> parse(String source, String domain, List<JsonNode> nodes) {
         return nodes.stream().map(node -> {
             String uid = CheckPointPolicyCollector.required(node, "uid");
@@ -45,7 +73,8 @@ final class CpObjectInventoryParser {
                         state.isBoolean() ? state.booleanValue() : null));
                 }
             return new CpObjectInventory.Item(ref(source, domain, "object", uid), uid, node.path("name").asText(""),
-                type, uids(node.path("members")), values, type.equals("time") ? CheckPointSchedule.parse(node) : null, installed);
+                type, uids(node.path("members")), values, type.equals("time") ? CheckPointSchedule.parse(node) : null, installed,
+                VS_TYPES.contains(type) ? vsAddresses(node) : null);
         }).toList();
     }
     private static String uid(JsonNode node) {

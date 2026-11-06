@@ -82,6 +82,7 @@ public final class PathReasons {
     // ---- caveats (a verdict carrying one is never plain) ---------------------------------------------------------
     public static final String CLUSTER_UNCORROBORATED = "CLUSTER_UNCORROBORATED";
     public static final String CONFIG_DERIVED_INTERFACES = "CONFIG_DERIVED_INTERFACES";
+    public static final String MANAGEMENT_DERIVED_PREFIX = "MANAGEMENT_DERIVED_PREFIX";
     public static final String PBR_PRESENT = "PBR_PRESENT";
     /** The return walk ended before reaching the source side without showing asymmetry: symmetry is unproven. */
     public static final String RETURN_PATH_UNPROVEN = "RETURN_PATH_UNPROVEN";
