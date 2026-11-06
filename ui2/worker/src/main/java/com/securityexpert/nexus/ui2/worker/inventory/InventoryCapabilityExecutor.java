@@ -421,11 +421,18 @@ public final class InventoryCapabilityExecutor {
             // Platform identity facts (contract §3): two bare Expert reads over the same session; an empty
             // answer leaves the fact UNKNOWN and never fails the inventory.
             String assetOutput = identityReadOutput(session, InventoryReadPlan.CP_SHOW_ASSET_SYSTEM, preferInteractiveShell);
+            // Measured 2026-09-25 on the MDS: cpinfo hangs over exec (30 s) and answers interactively in 4 s.
+            String cpinfoOutput = identityReadOutput(session, InventoryReadPlan.CP_CPINFO_HOTFIXES, preferInteractiveShell || managementServer);
+            Optional<String> jumbo = com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.jumboTake(cpinfoOutput);
+            if (jumbo.isEmpty()) {
+                // Shape only (vendor package tokens, digits masked); the 2026-11-06 R82 management-server gap.
+                LOG.log(System.Logger.Level.INFO, "[CP_CPINFO_NO_JUMBO] managementServer={0} interactive={1} {2}", managementServer,
+                        preferInteractiveShell || managementServer,
+                        com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.noJumboShape(cpinfoOutput));
+            }
             PlatformFactsRead platformFacts = new PlatformFactsRead(
                     com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.assetSerial(assetOutput),
-                    // Measured 2026-09-25 on the MDS: cpinfo hangs over exec (30 s) and answers interactively in 4 s.
-                    com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.jumboTake(
-                            identityReadOutput(session, InventoryReadPlan.CP_CPINFO_HOTFIXES, preferInteractiveShell || managementServer)),
+                    jumbo,
                     com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.assetFamily(assetOutput),
                     java.util.Map.of(),
                     com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.uptime(

@@ -58,4 +58,15 @@ class CheckPointPlatformFactsParserTest {
         assertEquals(Optional.of("3:04"), CheckPointPlatformFactsParser.uptime(" 09:00:01 up 3:04,  1 user,  load average: 0.00, 0.01, 0.05"));
         assertEquals(Optional.empty(), CheckPointPlatformFactsParser.uptime("bash: uptime: command not found"));
     }
+
+    @org.junit.jupiter.api.Test
+    void noJumboShapeMasksDigitsAndKeepsOnlyPackageTokens() {
+        String output = "This is Check Point CPinfo Build 914000248 for GAIA\n[MGMT]\n    HOTFIX_R82_JUMBO_HF_MAIN_X   Take:  44\n"
+            + "    HOTFIX_TEX_ENGINE_R82_AUTOUPDATE   Take:  12\n[IDA]\n    No hotfixes..\n";
+        String shape = CheckPointPlatformFactsParser.noJumboShape(output);
+        org.junit.jupiter.api.Assertions.assertTrue(shape.contains("hotfixLines=2"), shape);
+        org.junit.jupiter.api.Assertions.assertTrue(shape.contains("HOTFIX_R9_JUMBO_HF_MAIN_X Take: 9"), shape);
+        org.junit.jupiter.api.Assertions.assertFalse(shape.contains("44") || shape.contains("82") || shape.contains("914000248"), shape);
+        org.junit.jupiter.api.Assertions.assertEquals("len=0 lines=0", CheckPointPlatformFactsParser.noJumboShape(null));
+    }
 }
