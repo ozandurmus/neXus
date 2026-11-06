@@ -65,6 +65,11 @@ final class PolicyCollectionTrace implements AutoCloseable {
         JobTranscriptScope.add("job", "note", counters);
         System.getLogger(PolicyCollectionTrace.class.getName()).log(System.Logger.Level.INFO, counters);
     }
+    /** Key names and counts of the gateway listing (CpGatewayFieldPresence); log only, never a value. */
+    static void gatewayFields(java.util.List<String> lines) {
+        for (String line : lines)
+            System.getLogger(PolicyCollectionTrace.class.getName()).log(System.Logger.Level.INFO, "[CP_GATEWAY_FIELDS] " + line);
+    }
     static void concurrency(int previous, int current) {
         String counts = "policy concurrency=" + current + " previous=" + previous;
         JobTranscriptScope.add("job", "note", counts);
