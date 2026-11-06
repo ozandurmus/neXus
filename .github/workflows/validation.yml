@@ -225,7 +225,10 @@ jobs:
           distribution: temurin
           java-version: '21'
       - name: Prepare declared Chromium test runtime
-        run: python -m playwright install --with-deps chromium
+        # Measured 2026-11-07 (PR 769): the apt part of --with-deps fetched 17.9 MB at 32 kB/s and held the validate
+        # job for 9.6 min (20 s on the previous run). Bound it to 3 min; on timeout install the browser alone -- the
+        # ubuntu-latest image already carries Chromium's shared libraries, and the tests fail visibly if one is missing.
+        run: timeout 180 python -m playwright install --with-deps chromium || python -m playwright install chromium
 
       - name: Live tooling regression
         run: python -m pytest -q -n 2 --dist worksteal
@@ -281,7 +284,10 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Prepare declared Chromium test runtime
-        run: python -m playwright install --with-deps chromium
+        # Measured 2026-11-07 (PR 769): the apt part of --with-deps fetched 17.9 MB at 32 kB/s and held the validate
+        # job for 9.6 min (20 s on the previous run). Bound it to 3 min; on timeout install the browser alone -- the
+        # ubuntu-latest image already carries Chromium's shared libraries, and the tests fail visibly if one is missing.
+        run: timeout 180 python -m playwright install --with-deps chromium || python -m playwright install chromium
 
       - name: Repository privacy gate
         # Must run on the clean checkout, BEFORE the suite: a test run creates
