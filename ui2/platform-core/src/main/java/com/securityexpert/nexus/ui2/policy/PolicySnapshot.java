@@ -150,7 +150,12 @@ public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<Stri
                 String log, String comment, Map<String, List<String>> extras) {
             this(id, uuid, number, name, enabled, source, destination, service, application, action, log, comment, extras, null);
         }
-        public Rule { extras = Map.copyOf(extras); }
+        /**
+         * Extras keep a fixed (sorted) key order: {@code Map.copyOf} iterates in an order that changes with every JVM start,
+         * which made a rule's JSON key order and "the first failing field" of the shadow analysis restart-dependent
+         * (2026-11-06 M9 measurement). Null keys and values are still refused, as by {@code Map.copyOf}.
+         */
+        public Rule { extras = java.util.Collections.unmodifiableMap(new java.util.TreeMap<>(Map.copyOf(extras))); }
         public Rule withHitCounts(HitCounts counts) {
             return new Rule(id, uuid, number, name, enabled, source, destination, service, application, action, log, comment, extras, counts);
         }

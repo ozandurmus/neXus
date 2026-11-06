@@ -88,4 +88,15 @@ class PolicyPrivacyTest {
         assertEquals("EXECUTING", masked.path("sources").get(1).path("collection").path("state").asText());
         assertEquals("2026-10-02T06:06:00Z", masked.path("sources").get(0).path("collection").path("collectedAt").asText());
     }
+    @Test void permissivenessKeepsOneFixedKeyOrderInTheAiviewProjection() {
+        // 2026-11-06 M9: Map.of key order changed with every JVM start; the metric is now level, reasons, score.
+        var metric = PolicyRuleMetrics.permissiveness("High", List.of("Any source"), 5);
+        assertEquals(List.of("level", "reasons", "score"), new ArrayList<>(metric.keySet()));
+        @SuppressWarnings("unchecked")
+        var masked = (Map<String, Object>) PolicyPrivacy.mask(Map.of("permissiveness", metric), "", names, ips);
+        @SuppressWarnings("unchecked")
+        var projected = (Map<String, Object>) masked.get("permissiveness");
+        assertEquals(List.of("level", "reasons", "score"), new ArrayList<>(projected.keySet()));
+        assertEquals("High", projected.get("level")); assertEquals(5, projected.get("score"));
+    }
 }
