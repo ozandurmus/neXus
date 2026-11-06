@@ -220,6 +220,11 @@ final class InteractiveShellSession implements AutoCloseable {
             System.getLogger(InteractiveShellSession.class.getName()).log(System.Logger.Level.INFO,
                     "[SHELL] timed out: prompt shape \"{0}\"; sawData {1}; tail shape \"{2}\"",
                     shapeOf(prompt), sawData, shapeOf(tail));
+            // MEASURE (2026-11-07, the R82 management server's cpinfo: the stripped tail held only the echo): what the
+            // raw bytes after the echo were, before terminal-control stripping -- counts and a control-aware shape only.
+            System.getLogger(InteractiveShellSession.class.getName()).log(System.Logger.Level.INFO,
+                    "[SHELL] timed out raw: {0}", rawShape(raw, normalized, firstData < 0 ? -1 : firstData - started,
+                            System.currentTimeMillis() - lastData));
             return new Result(Result.Kind.TIMED_OUT, null, streamingTimedOut);
         }
 
@@ -479,6 +484,50 @@ final class InteractiveShellSession implements AutoCloseable {
             if (!part.equals(parts[0])) return line;
         }
         return parts[parts.length - 1];
+    }
+
+    /** Counts and a control-aware shape of the raw answer after the command echo; letters a, digits 9, never values. */
+    static String rawShape(CharSequence raw, String command, long firstByteMs, long idleMs) {
+        String text = raw == null ? "" : raw.toString();
+        int echo = command == null || command.isEmpty() ? -1 : text.indexOf(command);
+        String after = echo < 0 ? text : text.substring(echo + command.length());
+        long esc = after.chars().filter(c -> c == 0x1b).count();
+        long cr = after.chars().filter(c -> c == '\r').count();
+        long nl = after.chars().filter(c -> c == '\n').count();
+        long bs = after.chars().filter(c -> c == '\b').count();
+        long otherControl = after.chars().filter(c -> c < 0x20 && c != 0x1b && c != '\r' && c != '\n' && c != '\b' && c != '\t').count();
+        StringBuilder shape = new StringBuilder();
+        String head = after.substring(0, Math.min(after.length(), 160));
+        String tail = after.length() > 160 ? after.substring(Math.max(160, after.length() - 160)) : "";
+        for (String part : new String[] {head, tail}) {
+            if (part.isEmpty()) continue;
+            if (shape.length() > 0) shape.append(" ... ");
+            shape.append(controlShape(part));
+        }
+        return "bytes=" + text.length() + " echoSeen=" + (echo >= 0) + " afterEcho=" + after.length() + " esc=" + esc + " cr=" + cr
+                + " nl=" + nl + " bs=" + bs + " otherControl=" + otherControl + " firstByteMs=" + firstByteMs + " idleMs=" + idleMs
+                + " shape=\"" + shape + "\"";
+    }
+
+    static String controlShape(String value) {
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            String token;
+            if (Character.isLetter(c)) token = "a";
+            else if (Character.isDigit(c)) token = "9";
+            else if (c == 0x1b) token = "<esc>";
+            else if (c == '\r') token = "<cr>";
+            else if (c == '\n') token = "<nl>";
+            else if (c == '\b') token = "<bs>";
+            else if (c == '\t') token = "<tab>";
+            else if (c < 0x20) token = "<c" + (int) c + ">";
+            else if (c > 0x7e) token = "<u>";
+            else token = String.valueOf(c);
+            if ((token.equals("a") || token.equals("9")) && out.length() > 0 && out.charAt(out.length() - 1) == token.charAt(0)) continue;
+            out.append(token);
+        }
+        return out.toString();
     }
 
     static String shapeOf(String value) {
