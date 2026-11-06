@@ -37,6 +37,17 @@ class SparkIdentityParserTest {
     }
 
     @Test
+    void firmwareLevelIsTheSoftwareVersionAndBuild() {
+        assertEquals("R81.10.17 Build 996000000", SparkIdentityParser.firmwareLevel(
+                "\nThis is Check Point's Synthetic Appliance R81.10.17 - Build 996000000\n").orElseThrow());
+        assertEquals("R81.10.05 Build 123", SparkIdentityParser.firmwareLevel(
+                "This is Check Point's Synthetic Appliance R81.10.05 - Build 123").orElseThrow());
+        assertTrue(SparkIdentityParser.firmwareLevel("Current image version: R81.10.17").isEmpty());
+        assertTrue(SparkIdentityParser.firmwareLevel("Bad parameter").isEmpty());
+        assertTrue(SparkIdentityParser.firmwareLevel(null).isEmpty());
+    }
+
+    @Test
     void unknownOutputLeavesAllFieldsEmpty() {
         assertTrue(SparkIdentityParser.model("Serial number: SYNTHETIC-REDACTED").isEmpty());
         assertTrue(SparkIdentityParser.version("Bad parameter", "Previous image version: R80.20").isEmpty());
