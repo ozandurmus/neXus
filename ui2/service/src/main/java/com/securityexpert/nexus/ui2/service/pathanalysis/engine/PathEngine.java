@@ -358,6 +358,9 @@ public final class PathEngine {
             if (node.flags().contains(NodeFlag.CONFIG_DERIVED_INTERFACES)) {
                 caveats.add(CONFIG_DERIVED_INTERFACES);
             }
+            if (node.flags().contains(NodeFlag.MANAGEMENT_DERIVED_PREFIX)) {
+                caveats.add(MANAGEMENT_DERIVED_PREFIX);
+            }
             if (node.flags().contains(NodeFlag.PBR_PRESENT)) {
                 caveats.add(PBR_PRESENT);
             }

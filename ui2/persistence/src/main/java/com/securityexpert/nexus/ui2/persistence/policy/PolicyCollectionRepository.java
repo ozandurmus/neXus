@@ -219,16 +219,37 @@ public class PolicyCollectionRepository {
     public void readInventories(String source, String domain, java.util.function.Consumer<InventoryDocument> consume) {
         var rows = tx.inTransaction(db -> db.fetch("select object_type, collected_at, snapshot::text as snapshot, chunk_generation, chunk_count "
             + "from cp_policy_object_inventory where source_id = {0} and domain_ref = {1} order by object_type", source, domain));
-        for (var row : rows) {
-            String type = row.get("object_type", String.class);
-            String generation = row.get("chunk_generation", String.class);
-            var at = row.get("collected_at", java.time.OffsetDateTime.class);
-            try (var reader = generation == null ? new java.io.StringReader(row.get("snapshot", String.class))
-                    : new PolicyChunkStore(tx).reader(source, domain, type, "INVENTORY",
-                        new PolicyChunkStore.Manifest(generation, row.get("chunk_count", Integer.class)))) {
-                consume.accept(new InventoryDocument(type, at == null ? null : at.toInstant(), reader));
-            } catch (java.io.IOException invalid) { throw new IllegalStateException("POLICY_CHUNK_INVALID"); }
-        }
+        for (var row : rows) consumeInventory(source, domain, row, consume);
+    }
+
+    /** A published RESOLVED inventory of one object type: where it lives and when it was collected. */
+    public record InventoryRef(String sourceId, String domainRef, java.time.Instant collectedAt) {}
+
+    /** Every RESOLVED inventory of {@code type} collected at or after {@code notBefore}; nothing else is read. */
+    public List<InventoryRef> resolvedInventories(String type, java.time.Instant notBefore) {
+        return tx.inTransaction(db -> db.fetch("select source_id, domain_ref, collected_at from cp_policy_object_inventory "
+            + "where object_type = {0} and snapshot->>'status' = 'RESOLVED' and collected_at >= {1}::timestamptz "
+            + "order by source_id, domain_ref", type, notBefore.toString()).stream()
+            .map(r -> new InventoryRef(r.get("source_id", String.class), r.get("domain_ref", String.class),
+                r.get("collected_at", java.time.OffsetDateTime.class).toInstant())).toList());
+    }
+
+    /** One object type of one domain, read like {@link #readInventories}; the consumer is not called when no row exists. */
+    public void readInventory(String source, String domain, String type, java.util.function.Consumer<InventoryDocument> consume) {
+        var rows = tx.inTransaction(db -> db.fetch("select object_type, collected_at, snapshot::text as snapshot, chunk_generation, chunk_count "
+            + "from cp_policy_object_inventory where source_id = {0} and domain_ref = {1} and object_type = {2}", source, domain, type));
+        for (var row : rows) consumeInventory(source, domain, row, consume);
+    }
+
+    private void consumeInventory(String source, String domain, org.jooq.Record row, java.util.function.Consumer<InventoryDocument> consume) {
+        String type = row.get("object_type", String.class);
+        String generation = row.get("chunk_generation", String.class);
+        var at = row.get("collected_at", java.time.OffsetDateTime.class);
+        try (var reader = generation == null ? new java.io.StringReader(row.get("snapshot", String.class))
+                : new PolicyChunkStore(tx).reader(source, domain, type, "INVENTORY",
+                    new PolicyChunkStore.Manifest(generation, row.get("chunk_count", Integer.class)))) {
+            consume.accept(new InventoryDocument(type, at == null ? null : at.toInstant(), reader));
+        } catch (java.io.IOException invalid) { throw new IllegalStateException("POLICY_CHUNK_INVALID"); }
     }
 
     /** Metadata is small; object arrays are streamed into immutable bounded chunks. */

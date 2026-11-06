@@ -125,6 +125,7 @@ const WORDS: Readonly<Record<string, string>> = {
   CLUSTER_UNCORROBORATED: "The cluster relationship rests on one member's claim; the peer has not corroborated it.",
   CLUSTER_MEMBERS_DISAGREE: "The cluster members disagree about their relationship.",
   CONFIG_DERIVED_INTERFACES: "This unit's interfaces come from configuration, not from a runtime read.",
+  MANAGEMENT_DERIVED_PREFIX: "A virtual address on this unit takes its prefix length from management configuration, not from a runtime read.",
   PBR_PRESENT: "Policy-based routing is present on this unit and is not evaluated; the route shown may not be the one used.",
   HA_ROUTE_DRIFT: "The HA members' routing tables differ.",
   RETURN_PATH_UNPROVEN: "The return walk ended before the source side without showing asymmetry: symmetry is unproven.",

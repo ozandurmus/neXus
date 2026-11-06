@@ -256,6 +256,7 @@ public final class TopologyBuilder {
 
             Set<String> interfaceNames = new TreeSet<>();
             Map<String, Candidate> nodeCandidates = new TreeMap<>();
+            Map<String, Integer> managementMasks = checkPoint ? managementMasks(collected, context) : Map.of();
             for (TopologyInput.DeviceFacts d : collected) {
                 Optional<InventoryContext> ctx = contextOf(d, context);
                 if (ctx.isEmpty()) {
@@ -284,6 +285,14 @@ public final class TopologyBuilder {
                         }
                         Optional<Ipv4Prefix> prefix = host.get().prefix()
                                 .or(() -> connectedPrefix(ctx.get(), iface.name(), host.get().host()));
+                        boolean managementDerived = false;
+                        if (prefix.isEmpty() && InventoryAddress.ROLE_CLUSTER_VIRTUAL.equals(address.role())) {
+                            Integer length = managementMasks.get(host.get().hostText());
+                            if (length != null) {
+                                prefix = Optional.of(new Ipv4Prefix(host.get().host(), length));
+                                managementDerived = true;
+                            }
+                        }
                         if (prefix.isEmpty()) {
                             conflict(ConflictKind.ADDRESS_PREFIX_UNKNOWN, Optional.of(d.deviceId()), Optional.empty(),
                                     Optional.of(context), Optional.empty(), Optional.empty(), List.of(nodeId));
@@ -291,12 +300,17 @@ public final class TopologyBuilder {
                         }
                         Ipv4Prefix.HostAddress withLength = new Ipv4Prefix.HostAddress(host.get().host(),
                                 Optional.of(prefix.get().length()));
-                        boolean corroborated = ctx.get().routes().stream().anyMatch(r -> isConnected(r)
+                        final Optional<Ipv4Prefix> bound = prefix;
+                        boolean corroborated = !managementDerived && ctx.get().routes().stream().anyMatch(r -> isConnected(r)
                                 && r.interfaceName().filter(iface.name()::equals).isPresent()
-                                && Ipv4Prefix.parse(r.destination()).filter(prefix.get()::equals).isPresent());
+                                && Ipv4Prefix.parse(r.destination()).filter(bound.get()::equals).isPresent());
                         boolean warp = checkPoint && iface.name().toLowerCase(Locale.ROOT).startsWith(WARP_PREFIX);
                         Candidate c = new Candidate(nodeId, iface.name(), withLength, prefix.get(), address.role(),
-                                iface.zone(), corroborated, warp, iface.evidenceGrade());
+                                iface.zone(), corroborated, warp,
+                                managementDerived ? Optional.of(InventoryInterface.GRADE_MANAGEMENT_DERIVED) : iface.evidenceGrade());
+                        if (managementDerived) {
+                            flags.add(NodeFlag.MANAGEMENT_DERIVED_PREFIX);
+                        }
                         nodeCandidates.merge(c.key(), c, (a, b) -> a.corroborated() ? a : b);
                     }
                 }
@@ -308,6 +322,53 @@ public final class TopologyBuilder {
             nodesByKey.put(nodeKey, node);
             nodesById.put(nodeId, node);
             nodeKeyOf.put(nodeId, nodeKey);
+        }
+
+        /**
+         * Stage 2 of the VSX VIP prefix decision: the recorded cluster_virtual IPv4 host set S of this unit and
+         * context, matched against the management Virtual System objects by exact set equality. Exactly one equal
+         * object (and one mask per address) gives address -> mask length; anything else gives nothing.
+         */
+        private Map<String, Integer> managementMasks(List<TopologyInput.DeviceFacts> collected, String context) {
+            if (input.managementVs().isEmpty()) {
+                return Map.of();
+            }
+            Set<String> recorded = new TreeSet<>();
+            for (TopologyInput.DeviceFacts d : collected) {
+                contextOf(d, context).ifPresent(c -> c.interfaces().forEach(i -> i.addresses().stream()
+                        .filter(a -> InventoryAddress.FAMILY_IPV4.equals(a.family())
+                                && InventoryAddress.ROLE_CLUSTER_VIRTUAL.equals(a.role()))
+                        .map(a -> Ipv4Prefix.parseHost(a.address()).map(Ipv4Prefix.HostAddress::hostText))
+                        .forEach(h -> recorded.add(h.orElse("")))));
+            }
+            if (recorded.isEmpty() || recorded.contains("")) {
+                return Map.of();
+            }
+            Map<String, Integer> masks = null;
+            int matches = 0;
+            for (TopologyInput.ManagementVs vs : input.managementVs()) {
+                Map<String, Integer> byAddress = new TreeMap<>();
+                boolean conflicting = false;
+                for (String entry : vs.addresses()) {
+                    Optional<Ipv4Prefix.HostAddress> parsed = Ipv4Prefix.parseHost(entry);
+                    if (parsed.isEmpty() || parsed.get().length().isEmpty()) {
+                        conflicting = true;
+                        break;
+                    }
+                    Integer previous = byAddress.put(parsed.get().hostText(), parsed.get().length().get());
+                    conflicting |= previous != null && !previous.equals(parsed.get().length().get());
+                }
+                if (!conflicting && byAddress.keySet().equals(recorded)) {
+                    matches++;
+                    masks = byAddress;
+                } else if (conflicting && vs.addresses().stream().map(e -> Ipv4Prefix.parseHost(e)
+                        .map(Ipv4Prefix.HostAddress::hostText).orElse("")).collect(java.util.stream.Collectors.toSet())
+                        .equals(recorded)) {
+                    matches++; // same address set but not a single mask per address: ambiguous, never binds
+                    masks = null;
+                }
+            }
+            return matches == 1 && masks != null ? masks : Map.of();
         }
 
         private final Set<String> disagreeingClusters = new TreeSet<>();
