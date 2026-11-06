@@ -14,8 +14,9 @@ export const TAB_COVERAGE: readonly { screen: ScreenId; tabList: string; labels:
   // Trace is two modes of one screen; Changes is two views of one question (C3).
   { screen: "trace", tabList: "Trace modes", labels: ["Topology path", "Policy rule lookup"] },
   { screen: "changes", tabList: "Changes views", labels: ["Timeline", "Policy rule revisions"] },
-  // Cluster members is a cluster-page tab only (roadmap 2.2); a member page links to its cluster from the header.
-  { screen: "inventory", tabList: "Device detail", labels: ["Interfaces", "Routing", "Grid members", "Managed estate", "Configuration", "Backup", "Logs", "Identity"] },
+  // Cluster members is a cluster-page tab only (roadmap 2.2); a member page links to its cluster from the header. The
+  // device's Identity tab is gone (PO 2026-11-06): the Platform identity grid is a collapsible panel in the device header.
+  { screen: "inventory", tabList: "Device detail", labels: ["Interfaces", "Routing", "Grid members", "Managed estate", "Configuration", "Backup", "Logs"] },
   { screen: "inventory", tabList: "Cluster detail", labels: ["Interfaces", "Routing", "Members & Identity", "Configuration", "Logs", "Failover"] },
   // The Logs tab's own two views (PO 2026-10-20): the line viewer with the room, and the collection health panels beside it.
   { screen: "inventory", tabList: "Logs view", labels: ["Lines", "Collection health"] },

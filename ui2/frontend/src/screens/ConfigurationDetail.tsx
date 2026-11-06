@@ -237,7 +237,7 @@ function DeviceSectionTable({ section }: { readonly section: Section }) {
 }
 
 /**
- * A cluster's members as one row each -- the same identity table the Devices screen's Identity tab
+ * A cluster's members as one row each -- the same identity table the Devices screen's Members & Identity tab
  * renders. The platform identity line above it keeps the full virtual-system list; the table collapses it.
  */
 function ClusterMembersCard({ members }: { readonly members: readonly DeviceSummary[] }) {
@@ -311,7 +311,7 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
           Last configuration read {collectedAt ? <Ts at={collectedAt} relative /> : <Box component="span" title="No configuration read has run for this device yet." sx={{ color: m3.neutralInk, fontWeight: 600, letterSpacing: "0.02em" }}>Not read yet</Box>}
         </Typography>
       </Box>
-      {/* The grid lives on the Identity tab (roadmap 2.6); the device tab strip shows it as one line that leads there. */}
+      {/* The grid lives in the device header's Platform identity panel (PO 2026-11-06); the device tab strip shows it as one line that opens it. */}
       {embedded ? <PlatformIdentitySummary device={device} /> : <IdentityCard title={device.hostname ?? device.device_id} tiles={identityTiles(device, collectedAt)} note={platformFactsNote(device)} />}
       {error && <EmptyPanel title="Configuration unavailable" body={error} />}
       {!error && loading && <EmptyPanel title="Configuration" body="Reading the device's configuration…" />}

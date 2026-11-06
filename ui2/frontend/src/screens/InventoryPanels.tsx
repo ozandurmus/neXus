@@ -33,7 +33,7 @@ import { deviceNameLabel, jobPhaseLabel, isTerminalJobState, enrollmentStateLabe
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip, Ts, VendorBadge, vendorDisplayName } from "../shell/States";
 import { Stamp } from "../shell/PresentedText";
-import { ReferenceCell, clusterContextLinks, DeviceIdentityTable, deviceLiveWithInventory, knownHaRole, liveBasis, orderMembers, vsListOf } from "./DeviceShared";
+import { PLATFORM_IDENTITY_GRID_ID, ReferenceCell, clusterContextLinks, DeviceIdentityTable, deviceLiveWithInventory, knownHaRole, liveBasis, orderMembers, vsListOf } from "./DeviceShared";
 import { JobStatusIndicator, latestJobSentence } from "../shell/JobStatusIndicator";
 import {
   getDevice,
@@ -80,7 +80,8 @@ import { DeviationChip, ValidationChip, deviationState } from "./backupWords";
 import { DeviceLogsPanel, describeSystemLogCollectError, describeSystemLogCollectOutcome } from "./DeviceLogsPanel";
 import { CpFailoverPanel } from "./CpFailoverPanel";
 import { CertificateStatePill, HttpsCertificateCard } from "./HttpsCertificatePanel";
-import { IdentityCard, identityTiles, platformFactsNote } from "./PlatformIdentity";
+import { PLATFORM_IDENTITY_OPEN_KEY, PlatformIdentityPanel, PlatformIdentityPanelContext, identityTiles, platformFactsNote } from "./PlatformIdentity";
+import { usePreferenceFlag } from "../shell/preference";
 import { FRESH_UNDER_MS } from "../shell/freshness";
 import {
   HeaderStateRow, READINESS_VENDORS, backupFact, backupsHref, clusterCompareFact, clusterComplianceFact, clusterConfigChangedFact, complianceFact,
@@ -2283,7 +2284,7 @@ export function policyLink(device: { readonly device_id: string; readonly vendor
 
 /**
  * The pane header of a selected virtual system: `CLS-ALPHA-01 › VS-ALPHA-01-13` (UI review 2026-10-18, P0-3B). The
- * parent is a link back to the unscoped pane, whose Cluster members, Configuration, Identity and Failover tabs stay
+ * parent is a link back to the unscoped pane, whose Members & Identity, Configuration and Failover tabs stay
  * there; the switcher moves between sibling virtual systems without going through the sidebar.
  */
 function ScopeBreadcrumb({ parent, scope, onParent }: {
@@ -2471,7 +2472,7 @@ function IdentityReference({ value }: { readonly value: string }) {
   );
 }
 
-/** Lets a panel inside the tab strip open another tab and land on an anchor in it (the Identity tab's link to the grid). */
+/** Lets a panel inside the tab strip open another tab and land on an anchor in it (an old Identity link on a cluster page lands on Members & Identity). */
 const DetailTabsContext = createContext<{ readonly has: (label: string) => boolean; readonly open: (label: string, anchorId?: string) => void } | null>(null);
 
 /** The cluster page's merged tab (UI review 2026-11-05, B5); the two tab names it replaced still lead to it. */
@@ -2532,13 +2533,13 @@ function DetailTabsBody({ ariaLabel, tabs, initial }: {
   );
 }
 
-/** The tab strip's navigation for a panel inside it (the Configuration tab's identity line opens the Identity tab's grid). */
+/** The tab strip's navigation for a panel inside it (a cluster page's Identity alias). */
 export function useDetailTabs() {
   return useContext(DetailTabsContext);
 }
 
 /**
- * What the identity badge rests on, stated once on the Identity tab (UI review 2026-10-18, P0-1B; roadmap 2.6), next to
+ * What the identity badge rests on, stated once in the header's Platform identity panel (UI review 2026-10-18, P0-1B; roadmap 2.6), next to
  * the badge itself.
  */
 function IdentityBasisCard({ device }: { readonly device: DeviceSummary }) {
@@ -2656,6 +2657,20 @@ export function DeviceInventoryPanels({
     setActiveContext(initialVs ?? null);
   }, [initialVs]);
 
+  // The header's Platform identity panel (PO 2026-11-06): closed by default, the viewer's choice remembered in the
+  // browser; a "full grid" link (the Configuration tab's identity line) opens it and scrolls to it once it has rendered.
+  const [identityOpen, setIdentityOpen] = usePreferenceFlag(PLATFORM_IDENTITY_OPEN_KEY, false);
+  const [identityRevealTick, setIdentityRevealTick] = useState(0);
+  const identityPanel = useMemo(() => ({ reveal: () => { setIdentityOpen(true); setIdentityRevealTick((n) => n + 1); } }), [setIdentityOpen]);
+  useEffect(() => {
+    if (identityRevealTick === 0) return;
+    document.getElementById(PLATFORM_IDENTITY_GRID_ID)?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [identityRevealTick]);
+  // An old link into the Identity tab (`initialTab="identity"`) lands on the header panel instead of the first tab.
+  useEffect(() => {
+    if (initialTab?.toLowerCase() === "identity") identityPanel.reveal();
+  }, [initialTab, identityPanel]);
+
   const deviceInventoryFetch = useFetchOnMount<DeviceInventory>(
     () => getDeviceInventory(device.device_id),
     describeApiError,
@@ -2665,7 +2680,7 @@ export function DeviceInventoryPanels({
     describeApiError,
   );
 
-  // P0-1B (UI review 2026-10-18): one certificate read feeds the header state pill and the Identity tab card.
+  // P0-1B (UI review 2026-10-18): one certificate read feeds the header state pill and the certificate card in the header's Platform identity panel.
   const certificateFetch = useFetchOnMount(() => getHttpsCertificate(device.device_id), () => "Certificate details unavailable.");
   // F-9: the header says how long ago the configuration was read; only a vendor with a configuration read is asked, and a
   // refused or failed read makes no claim at all (the exact time stays in the Platform identity grid).
@@ -2732,6 +2747,7 @@ export function DeviceInventoryPanels({
   ];
 
   return (
+    <PlatformIdentityPanelContext.Provider value={identityPanel}>
     <Stack spacing={2}>
       <InventoryEntityHeader
         vendorHint={device.vendor_hint}
@@ -2817,7 +2833,18 @@ export function DeviceInventoryPanels({
           const link = policyLink(device, policyHref);
           return link ? <HeaderPillLink href={link.href}>{link.label}</HeaderPillLink> : undefined;
         })()}
-      />
+      >
+        {/* PO 2026-11-06: the audit grid is one click under the state row, not a tab two or three moves away. Roadmap 2.6's
+            order stays: the grid (with reference and lifecycle), the certificate block, then what the badge rests on. */}
+        <PlatformIdentityPanel title={deviceNameLabel(device.hostname)} device={device}
+          tiles={identityTiles(device, configRead?.collected_at ?? null, { configurationRead: Boolean(configuration) })}
+          note={platformFactsNote(device)} open={identityOpen} onToggle={() => setIdentityOpen(!identityOpen)}
+          haInTitleRow={Boolean(device.cluster_member_ref) || haStatement(device) !== null}>
+          <HttpsCertificateCard deviceId={device.device_id} data={certificateFetch.data}
+            error={certificateFetch.error} refresh={certificateFetch.refresh} manager={device.role === "management_server"} />
+          <IdentityBasisCard device={device} />
+        </PlatformIdentityPanel>
+      </InventoryEntityHeader>
 
       <DetailTabs
         ariaLabel="Device detail"
@@ -2872,21 +2899,11 @@ export function DeviceInventoryPanels({
             label: "Logs",
             panel: <DeviceLogsPanel key={device.device_id} deviceId={device.device_id} vendorHint={device.vendor_hint} />,
           }] : []),
-          {
-            label: "Identity",
-            // Roadmap 2.6: the audit grid (with reference and lifecycle), the certificate block and what the badge rests on, in one place.
-            panel: (
-              <Stack spacing={1.5}>
-                <IdentityCard title={deviceNameLabel(device.hostname)} tiles={identityTiles(device, configRead?.collected_at ?? null, { configurationRead: Boolean(configuration) })} note={platformFactsNote(device)} />
-                <HttpsCertificateCard deviceId={device.device_id} data={certificateFetch.data}
-                  error={certificateFetch.error} refresh={certificateFetch.refresh} manager={device.role === "management_server"} />
-                <IdentityBasisCard device={device} />
-              </Stack>
-            ),
-          },
+          // The Identity tab is gone (PO 2026-11-06): its three cards are the header's Platform identity panel above.
         ]}
       />
     </Stack>
+    </PlatformIdentityPanelContext.Provider>
   );
 }
 

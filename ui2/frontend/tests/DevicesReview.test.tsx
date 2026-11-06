@@ -2,6 +2,9 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
+
+// The header's Platform identity panel remembers open/closed in the browser store (PO 2026-11-06): one test must not leave it open for the next.
+afterEach(() => { try { window.localStorage.clear(); } catch { /* a blocked store is fine */ } });
 import { InventoryScreen, clusterCounts, inventoryCsv } from "../src/screens/InventoryScreen";
 import { contentVersionText, isReportedZero, orderMembers } from "../src/screens/DeviceShared";
 import type { DeviceSummary } from "../src/auth/adminApi";
@@ -149,7 +152,7 @@ describe("Devices screen after the Fable review", () => {
     expect(screen.getByRole("tablist", { name: "Device detail" })).toBeInTheDocument();
     expect(screen.queryByText("Select a device or cluster")).toBeNull();
     expect(screen.queryByText("bravo-02")).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "Identity" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show the Platform identity grid" }));
     const deviceReference = screen.getByText("REFERENCE").parentElement as HTMLElement;
     expect(within(deviceReference).getByText("bravo-02")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();

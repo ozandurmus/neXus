@@ -362,10 +362,10 @@ export function DeviceIdentityTable({ devices, ariaLabel = "Member identity" }: 
 // Reference (the neXus id of an entity)
 // ---------------------------------------------------------------------------------------------------------------
 
-/** The anchor the Identity tab's link scrolls to: the Platform identity grid on the Configuration tab. */
+/** The anchor a "full grid" link scrolls to: the header's Platform identity panel (PO 2026-11-06), open or collapsed. */
 export const PLATFORM_IDENTITY_GRID_ID = "platform-identity-grid";
 
-/** The neXus reference of a device or cluster, with Copy: one cell in the Platform identity grid and a row on the Identity tab. */
+/** The neXus reference of a device or cluster, with Copy: one cell in the Platform identity grid and a row of the cluster page's Members & Identity tab. */
 export function ReferenceCell({ value }: { readonly value: string }) {
   return (
     <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>

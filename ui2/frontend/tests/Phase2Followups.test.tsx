@@ -18,14 +18,19 @@ import type { DeviceSummary, OverviewView } from "../src/auth/adminApi";
 /**
  * Phase 2 follow-ups from the post-release review of 2026-10-18 (Fable, lane P4-B): the Compliance per-device filter the
  * device header's pill lands on, the cluster header's "Members compared" pill, the Fleet summary quick filters, the
- * addressable job detail from every entry point, the certificate block on a management server's Identity tab, and the
+ * addressable job detail from every entry point, the certificate block in a management server's Platform identity panel, and the
  * stored line count on log-collect RESULT cells. Masked fixtures only (FW-TANGO-04, 192.0.2.x); nothing here is real.
  */
 const H = 3_600_000;
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
 const mount = (node: React.ReactElement) => render(<ThemeProvider theme={m3Theme}>{node}</ThemeProvider>);
-afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState(null, "", "/"); });
+afterEach(() => {
+  vi.unstubAllGlobals();
+  window.history.replaceState(null, "", "/");
+  // the header's Platform identity panel remembers open/closed in the browser store (PO 2026-11-06)
+  try { window.localStorage.clear(); } catch { /* a blocked store is fine */ }
+});
 
 const device = (over: Partial<DeviceSummary> = {}): DeviceSummary => ({
   device_id: "dev-1", hostname: "FW-TANGO-04", vendor_hint: "check_point", role: "gateway", enrollment_state: "ENROLLED", model: "Quantum",
@@ -318,7 +323,7 @@ describe("the addressable job detail (item 5)", () => {
 });
 
 // ------------------------------------------------------------------------------------------------------------------
-// 6. Identity tab certificate block on a management server
+// 6. Certificate block on a management server (the header's Platform identity panel)
 // ------------------------------------------------------------------------------------------------------------------
 
 describe("the certificate block on a management server (item 6)", () => {
@@ -346,7 +351,7 @@ describe("the certificate block on a management server (item 6)", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("shows it on the manager's Identity tab", async () => {
+  it("shows it in the manager's Platform identity panel", async () => {
     const manager = device({ device_id: "d4", hostname: "MGR-BRAVO-01", vendor_hint: "palo_alto", role: "management_server" });
     vi.stubGlobal("fetch", vi.fn((url: string) => {
       if (url === "/devices/d4/inventory") return json({ device_id: "d4", collected_at: ago(H), contexts: [] });
@@ -356,7 +361,7 @@ describe("the certificate block on a management server (item 6)", () => {
       return json({ error: "NOT_FOUND" }, 404);
     }));
     mount(<DeviceInventoryPanels device={manager} configuration={<DeviceConfigurationDetail device={manager} embedded />} />);
-    fireEvent.click(await screen.findByRole("tab", { name: "Identity" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Show the Platform identity grid" }));
     expect(await screen.findByRole("status")).toHaveTextContent("No certificate on record");
   });
 });
