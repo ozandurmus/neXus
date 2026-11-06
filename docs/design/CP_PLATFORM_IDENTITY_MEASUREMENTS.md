@@ -22,6 +22,17 @@ command returns exit 0 and no output -- `cpinfo` is on PATH only after the
 login profile sources the Check Point environment. The product issues it
 through a login shell (V49), as the gated vsenv reads already are.
 
+Live finding 2026-11-06 (the one R82 management server): the interactive
+answer was empty after 31 s (`[CP_CPINFO_NO_JUMBO] len=0`), while every other
+identity read answered within 1 s. The read had been sent with the generic
+30 s read timeout instead of the gate's own 60 s (V47); it now uses 60 s. No
+command, session or frequency change.
+
+Quantum Spark (Gaia Embedded) has no `cpinfo` and no hotfix command; fixes
+ship as firmware builds. Its patch level is the version and build from the
+already-gated `show software-version` (R81.10.X Spark CLI Reference Guide,
+p. 1930), e.g. `R81.10.17 Build <N>` -- a parse-scope extension only.
+
 Shape: a build line, then `[PACKAGE]` headings each followed by indented
 hotfix names, some with `Take:  N`. The main jumbo appears under several
 headings with the same take:

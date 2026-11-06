@@ -103,6 +103,9 @@ class InventoryJobExecutorEndToEndTest {
         JobOutcome outcome = executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request, false);
 
         assertTrue(outcome instanceof JobOutcome.Completed, "expected Completed, got " + outcome);
+        // 2026-11-06: cpinfo is sent with its gated 60 s (V47); every other identity read keeps 30 s.
+        assertEquals(java.time.Duration.ofSeconds(60), transport.timeoutByCommand.get(InventoryReadPlan.CP_CPINFO_HOTFIXES));
+        assertEquals(java.time.Duration.ofSeconds(30), transport.timeoutByCommand.get(InventoryReadPlan.CP_SHOW_ASSET_SYSTEM));
         assertEquals(3, transport.execInteractiveCallCount(),
                 "physical cphaprob -a if plus one per VSID (2 and 5) go over the interactive shell; nothing else does");
         assertTrue(leaseRepo.transitions.contains("CLAIMED->EXECUTING"));
