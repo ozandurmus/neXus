@@ -47,3 +47,21 @@ command (`show-gateways-and-servers ... details-level full`). No new device comm
 ## Cross-references
 - `docs/design/TOPOLOGY_CONFLICTS_RCA_2026_11_06.md`
 - `docs/design/CP_GATEWAY_OBJECT_BOUND_REVIEW_2026_11_05.md` (the same interface retention question for policy shadowing)
+
+## Amendment 2026-11-07 - condition 2 for Virtual Systems (PO, chat)
+Stage 1 (`CP_MEASUREMENTS_2026_11_06_AFTERNOON.md` §3) found that VS objects carry `interfaces[].ipv4-address` and
+`interfaces[].ipv4-mask-length`, but no VS identifier and no reference to their VSX cluster. The official API has
+none either. The PO was offered two options: keep the VIPs UNKNOWN, or a stricter value binding.
+
+**PO answer (verbatim):** "Sıkı eşleştirme" ("Strict binding").
+
+**Amended condition 2, for a Virtual System only.** A VS management object binds to an inventory VS context when all
+of these hold:
+- its UID is a discovery `stable_identifier` of kind `VIRTUAL_SYSTEM_CLUSTER` or `STANDALONE_VIRTUAL_SYSTEM`;
+- the set of IPv4 addresses on its interfaces equals the set of `cluster_virtual` IPv4 addresses recorded for that
+  context (same unit, same context) exactly;
+- exactly one such object matches.
+
+A subset, a superset, two matching objects, or an object from an incomplete or stale inventory leaves every address
+of that context `ADDRESS_PREFIX_UNKNOWN`. Conditions 1, 3 and 4 are unchanged. The match proves the binding by the
+whole address set, never by a name.
