@@ -182,7 +182,8 @@ public final class InventoryJobExecutor {
         if (!completed.observedIdentity().isEmpty()) {
             try {
                 boolean changed = deviceRepository.refreshObservedFacts(targetDeviceId, completed.observedIdentity().hostname(),
-                        completed.observedIdentity().model(), completed.observedIdentity().softwareVersion(), ACTOR, "inventory_identity_refresh");
+                        completed.observedIdentity().model(), completed.observedIdentity().softwareVersion(),
+                        completed.observedIdentity().haRole(), ACTOR, "inventory_identity_refresh");
                 if (changed) {
                     LOG.log(System.Logger.Level.INFO, "[OBSERVED_FACTS_REFRESHED] Inventory job {0}: hostname/model/version changed on this read", jobId);
                 }
