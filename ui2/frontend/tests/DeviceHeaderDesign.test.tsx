@@ -15,7 +15,10 @@ import type { DeviceSummary, IdentityCheckView } from "../src/auth/adminApi";
 const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
 const H = 3_600_000;
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  try { window.localStorage.clear(); } catch { /* a blocked store is fine */ }
+});
 
 const device = (over: Partial<DeviceSummary> = {}): DeviceSummary => ({
   device_id: "dev-1", hostname: "FW-SYNTH-01", vendor_hint: "check_point", role: "gateway", enrollment_state: "ENROLLED", model: "Quantum",
@@ -40,6 +43,8 @@ const base = (d: DeviceSummary = device()): Record<string, () => Promise<Respons
 const mount = (node: React.ReactElement) => render(<ThemeProvider theme={m3Theme}>{node}</ThemeProvider>);
 const withGrid = (d: DeviceSummary) => <DeviceInventoryPanels device={d} policyHref="?screen=policy&device_id=dev-1"
   configuration={<DeviceConfigurationDetail device={d} embedded />} />;
+/** PO 2026-11-06: the grid is the header's collapsible Platform identity panel; this opens it the way a viewer does. */
+const openIdentity = async () => fireEvent.click(await screen.findByRole("button", { name: "Show the Platform identity grid" }));
 
 describe("read ages in the header", () => {
   it("says how long ago the platform and the configuration were read, with the exact times on hover", async () => {
@@ -198,11 +203,11 @@ describe("the identity badge follows the real match", () => {
     expect(identityBadge({}).label).toBe("Not verified yet");
   });
 
-  it("states on the Identity tab what the badge is based on, and keeps expiry out of it", async () => {
+  it("states in the header's Platform identity panel what the badge is based on, and keeps expiry out of it", async () => {
     const d = device({ identity_check: check("MISMATCH") });
     stub(base(d));
     mount(<DeviceInventoryPanels device={d} />);
-    fireEvent.click(await screen.findByRole("tab", { name: "Identity" }));
+    await openIdentity();
     expect(await screen.findByText(IDENTITY_VERIFIED_BASIS)).toBeInTheDocument();
     expect(IDENTITY_VERIFIED_BASIS).toMatch(/Certificate expiry is not part of the check/);
   });
@@ -305,7 +310,7 @@ describe("the header card", () => {
     expect(live.title).not.toMatch(/verified/i);
   });
 
-  it("has no loose Lifecycle line on any device: the cell is in the Identity tab's grid, for a device without a configuration read too", async () => {
+  it("has no loose Lifecycle line on any device: the cell is in the header panel's grid, for a device without a configuration read too", async () => {
     const withConfig = device();
     stub({ ...base(withConfig), "/devices/dev-1/configuration": () => json(configuration(ago(H))) });
     const first = mount(withGrid(withConfig));
@@ -317,7 +322,7 @@ describe("the header card", () => {
     mount(<DeviceInventoryPanels device={appliance} />);
     await screen.findByTestId("entity-header");
     expect(screen.queryByText(/^Lifecycle:/)).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "Identity" }));
+    await openIdentity();
     const lifecycle = (await screen.findByText("LIFECYCLE")).parentElement as HTMLElement;
     await waitFor(() => expect(lifecycle).toHaveTextContent("LOW · Hardware support: 2031-01-01"));
     // a vendor with no configuration read has no "Last configuration read" tile: absent, not "never"
@@ -325,9 +330,7 @@ describe("the header card", () => {
   });
 });
 
-describe("the Identity tab holds the Platform identity grid (roadmap 2.6)", () => {
-  const openIdentity = async () => fireEvent.click(await screen.findByRole("tab", { name: "Identity" }));
-
+describe("the header's Platform identity panel holds the grid (roadmap 2.6; PO 2026-11-06)", () => {
   it("has a Lifecycle cell and a Reference cell with Copy, after the certificate and the badge's basis come", async () => {
     const d = device();
     stub({ ...base(d), "/devices/dev-1/configuration": () => json(configuration(ago(H))) });
@@ -345,7 +348,7 @@ describe("the Identity tab holds the Platform identity grid (roadmap 2.6)", () =
     expect(screen.queryByRole("table", { name: "Device identity" })).toBeNull();
     const basis = screen.getByText(IDENTITY_VERIFIED_BASIS);
     expect(reference.compareDocumentPosition(basis) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // the badge word appears twice: in the header, and beside its explanation on the Identity tab
+    // the badge word appears twice: in the header's title row, and beside its explanation in the open panel
     expect(screen.getAllByText("Not verified yet")).toHaveLength(2);
   });
 
@@ -371,7 +374,7 @@ describe("the Identity tab holds the Platform identity grid (roadmap 2.6)", () =
     expect(within(software).getByText("UNKNOWN")).toBeInTheDocument();
   });
 
-  it("collapses the grid to one line on the Configuration tab, whose link opens the Identity tab on the grid", async () => {
+  it("collapses the grid to one line on the Configuration tab, whose link opens the header panel on the grid", async () => {
     const scroll = vi.fn();
     window.HTMLElement.prototype.scrollIntoView = scroll;
     const d = device({ identity_check: check("VERIFIED"), serial_number: "SN-SYNTH-01" });
@@ -381,20 +384,161 @@ describe("the Identity tab holds the Platform identity grid (roadmap 2.6)", () =
     const line = await screen.findByTestId("platform-identity-summary");
     expect(line).toHaveTextContent("Check Point · Quantum · R81.20 · serial read");
     expect(screen.queryByText("LIFECYCLE")).toBeNull();
-    fireEvent.click(within(line).getByRole("button", { name: /Full grid in Identity/ }));
-    expect(await screen.findByRole("tab", { name: "Identity", selected: true })).toBeInTheDocument();
+    // no Identity tab any more (PO 2026-11-06): the link opens the header panel in place, the Configuration tab stays selected
+    expect(screen.queryByRole("tab", { name: "Identity" })).toBeNull();
+    fireEvent.click(within(line).getByRole("button", { name: /Full grid in the header/ }));
+    expect(await screen.findByRole("button", { name: "Hide the Platform identity grid" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("tab", { name: "Configuration", selected: true })).toBeInTheDocument();
     await waitFor(() => expect(scroll).toHaveBeenCalled());
     expect((scroll.mock.contexts[0] as HTMLElement).id).toBe("platform-identity-grid");
     expect(screen.getByText("LIFECYCLE")).toBeInTheDocument();
     expect(screen.getByText(IDENTITY_VERIFIED_BASIS)).toBeInTheDocument();
   });
 
-  it("keeps the full grid on the standalone configuration view, which has no Identity tab to lead to", async () => {
+  it("keeps the full grid on the standalone configuration view, which has no header panel to lead to", async () => {
     const d = device();
     stub({ ...base(d), "/devices/dev-1/configuration": () => json(configuration(ago(H))) });
     mount(<DeviceConfigurationDetail device={d} />);
     expect(await screen.findByText("LIFECYCLE")).toBeInTheDocument();
     expect(screen.queryByTestId("platform-identity-summary")).toBeNull();
+  });
+});
+
+describe("the header's collapsible Platform identity panel (PO 2026-11-06)", () => {
+  const fact = (label: string) => screen.getByTestId("platform-identity-headline").querySelector(`[data-fact="${label}"]`) as HTMLElement;
+
+  it("is collapsed by default, under the state row, with the most-asked facts on one line and no Identity tab", async () => {
+    const d = device({ serial_number: "SN-SYNTH-01", hotfix_level: "Take 41", ha_role: "ACTIVE", inventory_collected_at: ago(14 * H), platform_facts_observed_at: ago(14 * H) });
+    stub(base(d));
+    mount(<DeviceInventoryPanels device={d} />);
+    const header = await screen.findByTestId("entity-header");
+    const panel = within(header).getByTestId("platform-identity-panel");
+    expect(panel.id).toBe("platform-identity-grid");
+    expect(panel).toHaveAttribute("data-open", "0");
+    // the state row comes first, the panel after it
+    expect(within(header).getByTestId("object-state-row").compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const toggle = within(panel).getByRole("button", { name: "Show the Platform identity grid" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(fact("Model")).toHaveTextContent("ModelQuantum");
+    expect(fact("Software version")).toHaveTextContent("Software versionR81.20");
+    expect(fact("Hotfix / Jumbo take")).toHaveTextContent("Take 41");
+    expect(fact("Serial number")).toHaveTextContent("SN-SYNTH-01");
+    expect(fact("Last inventory read")).toHaveTextContent("14 h ago");
+    // R16, one HA statement per device: the title row shows the role chip, so the collapsed line does not repeat it
+    expect(within(within(header).getByTestId("object-title-row")).getByText("ACTIVE")).toHaveAttribute("data-role", "ACTIVE");
+    expect(fact("HA role")).toBeNull();
+    expect(document.querySelectorAll('[data-role="ACTIVE"]')).toHaveLength(1);
+    // the full grid is not rendered while collapsed, and the tab is gone
+    expect(screen.queryByText("LIFECYCLE")).toBeNull();
+    expect(screen.queryByText("What an audit asks for first")).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Identity" })).toBeNull();
+    expect(within(screen.getByRole("tablist", { name: "Device detail" })).getAllByRole("tab").map((t) => t.textContent)).not.toContain("Identity");
+  });
+
+  it("opens the panel for an old link into the Identity tab (initialTab identity) and scrolls to it", async () => {
+    const scroll = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scroll;
+    const d = device();
+    stub(base(d));
+    mount(<DeviceInventoryPanels device={d} initialTab="identity" />);
+    expect(await screen.findByRole("button", { name: "Hide the Platform identity grid" })).toHaveAttribute("aria-expanded", "true");
+    await waitFor(() => expect(scroll).toHaveBeenCalled());
+    expect((scroll.mock.contexts[0] as HTMLElement).id).toBe("platform-identity-grid");
+    // the tab strip keeps its first tab (no interfaces were read here, so Backup leads)
+    expect(await screen.findByRole("tab", { name: "Backup", selected: true })).toBeInTheDocument();
+  });
+
+  it("says Standalone on the collapsed line when the title row has no HA statement to repeat", async () => {
+    const d = device({ ha_role: null });
+    stub(base(d));
+    mount(<DeviceInventoryPanels device={d} />);
+    await screen.findByTestId("platform-identity-headline");
+    expect(fact("HA role")).toHaveTextContent("HA roleStandalone");
+  });
+
+  it("opens to the full grid with its note and closes again on the chevron", async () => {
+    const d = device();
+    stub({ ...base(d), "/devices/dev-1/configuration": () => json(configuration(ago(H))) });
+    mount(withGrid(d));
+    await openIdentity();
+    const toggle = screen.getByRole("button", { name: "Hide the Platform identity grid" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("platform-identity-panel")).toHaveAttribute("data-open", "1");
+    expect(screen.getByText("What an audit asks for first")).toBeInTheDocument();
+    for (const label of ["VENDOR", "MODEL", "SERIAL NUMBER", "SOFTWARE VERSION", "HOTFIX / JUMBO TAKE", "UPTIME", "HA ROLE", "VIRTUAL SYSTEMS (VSX)",
+      "MANAGEMENT ADDRESS", "ENROLLMENT", "POLICY INSTALLED", "PLATFORM FACTS READ", "LAST CONFIGURATION READ", "LAST INVENTORY READ", "EVIDENCE SOURCE", "LIFECYCLE", "REFERENCE"]) {
+      expect(screen.getByText(label), label).toBeInTheDocument();
+    }
+    // the one grid: only the header's own card carries the anchor id
+    expect(document.querySelectorAll("#platform-identity-grid")).toHaveLength(1);
+    expect(screen.queryByTestId("platform-identity-headline")).toBeNull();
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Show the Platform identity grid" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("LIFECYCLE")).toBeNull();
+    expect(screen.getByTestId("platform-identity-headline")).toBeInTheDocument();
+  });
+
+  it("remembers open and closed per viewer in the browser", async () => {
+    const d = device();
+    stub(base(d));
+    const first = mount(<DeviceInventoryPanels device={d} />);
+    await openIdentity();
+    expect(window.localStorage.getItem("nexus.device.platform-identity.open")).toBe("1");
+    first.unmount();
+    mount(<DeviceInventoryPanels device={d} />);
+    expect(await screen.findByRole("button", { name: "Hide the Platform identity grid" })).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Hide the Platform identity grid" }));
+    expect(window.localStorage.getItem("nexus.device.platform-identity.open")).toBe("0");
+  });
+
+  it("stays collapsed and still toggles when the browser store throws", async () => {
+    const broken = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } };
+    const descriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
+    Object.defineProperty(window, "localStorage", { configurable: true, get: () => broken });
+    try {
+      const d = device();
+      stub(base(d));
+      mount(<DeviceInventoryPanels device={d} />);
+      const toggle = await screen.findByRole("button", { name: "Show the Platform identity grid" });
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      fireEvent.click(toggle);
+      expect(screen.getByRole("button", { name: "Hide the Platform identity grid" })).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByText("What an audit asks for first")).toBeInTheDocument();
+    } finally {
+      if (descriptor) Object.defineProperty(window, "localStorage", descriptor);
+    }
+  });
+
+  it("says not read yet on the collapsed line for a Check Point management server without a hotfix, as the grid does", async () => {
+    const d = device({ hostname: "MGR-SYNTH-01", role: "management_server", hotfix_level: null, serial_number: null, software_version: "R81.20", inventory_collected_at: null });
+    stub(base(d));
+    mount(<DeviceInventoryPanels device={d} />);
+    await screen.findByTestId("platform-identity-headline");
+    const hotfix = fact("Hotfix / Jumbo take");
+    expect(hotfix).toHaveTextContent("Not read yet");
+    expect(within(hotfix).getByText("Not read yet")).toHaveAttribute("title", "not collected -- needs its own gated read");
+    expect(within(fact("Serial number")).getByText("Not read yet")).toHaveAttribute("title", "not collected -- needs its own gated read");
+    // R9: a management server's HA is not a role; the tile's own wording, verbatim
+    expect(within(fact("HA role")).getByText("Not read yet")).toHaveAttribute("title", "not read -- MDS high availability needs its own read");
+    expect(within(fact("Last inventory read")).getByText("Not read yet")).toHaveAttribute("title", "never");
+    // the grid itself says the same words once opened
+    await openIdentity();
+    const tile = (await screen.findByText("HOTFIX / JUMBO TAKE")).parentElement as HTMLElement;
+    expect(within(tile).getByText("Not read yet")).toBeInTheDocument();
+    expect(within(tile).getByText("not collected -- needs its own gated read")).toBeInTheDocument();
+  });
+
+  it("keeps the vendor branches: a Palo Alto firewall has no hotfix fact and says not collected words from its own tiles", async () => {
+    const d = device({ vendor_hint: "palo_alto", model: null, software_version: null, serial_number: null, platform_facts_not_collected_reason: "retired", platform_facts_source: "pan_type_version" });
+    stub(base(d));
+    mount(<DeviceInventoryPanels device={d} />);
+    await screen.findByTestId("platform-identity-headline");
+    expect(fact("Hotfix / Jumbo take")).toBeNull();
+    expect(within(fact("Model")).getByText("UNKNOWN")).toBeInTheDocument();
+    expect(within(fact("Software version")).getByText("UNKNOWN")).toBeInTheDocument();
+    await openIdentity();
+    expect(screen.getByTestId("platform-facts-note")).toBeInTheDocument();
+    expect(screen.getByText("CONTENT VERSIONS")).toBeInTheDocument();
   });
 });
 

@@ -2,6 +2,9 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
+
+// The header's Platform identity panel remembers open/closed in the browser store (PO 2026-11-06): one test must not leave it open for the next.
+afterEach(() => { try { window.localStorage.clear(); } catch { /* a blocked store is fine */ } });
 import { InventoryScreen } from "../src/screens/InventoryScreen";
 import { BackupPanel, GridMembersPanel, buildUnifiedContextTabs } from "../src/screens/InventoryPanels";
 
@@ -92,7 +95,7 @@ describe("InventoryScreen device selection and panels", () => {
       fireEvent.click(await screen.findByText("FW-TANGO-04"));
       await screen.findByRole("tablist", { name: "Device detail" });
       await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(9));
-      // The lifecycle is a cell of the Platform identity grid (Identity tab), so the header no longer reads it; the
+      // The lifecycle is a cell of the Platform identity grid (the header's collapsible panel), so the header no longer reads it on its own; the
       // header's "Config read" age asks the small configuration summary route (F-9), and the state row (roadmap 2.1)
       // reads the backups and, for an assessed vendor, the device's compliance. No cluster inventory, no readiness.
       expect(fetchMock.mock.calls.map(([url]) => url).sort()).toEqual([
@@ -105,7 +108,7 @@ describe("InventoryScreen device selection and panels", () => {
     },
   );
 
-  it("pairs Identity verified with a red certificate pill and moves the certificate block into the Identity tab", async () => {
+  it("pairs Identity verified with a red certificate pill and keeps the certificate block in the header's Platform identity panel", async () => {
     const DAY = 86_400_000;
     const device = { ...STANDALONE_DEVICE, role: "appliance", vendor_hint: "infoblox", hostname: "FW-NOVEMBER-02",
       identity_check: { state: "VERIFIED", basis: "HTTPS_CERTIFICATE", first_use: false, checked_at: "2026-10-18T03:00:00Z" } };
@@ -125,9 +128,9 @@ describe("InventoryScreen device selection and panels", () => {
     fireEvent.click(await screen.findByText("FW-NOVEMBER-02"));
     expect(await screen.findByText("Certificate expired 7 d ago")).toBeInTheDocument();
     expect(screen.getByText("✓ Identity verified")).toBeInTheDocument();
-    // Not above the header any more: the block is the Identity tab's first card.
+    // Not loose above the header: the block is inside the header's collapsible Platform identity panel (PO 2026-11-06), after the grid.
     expect(screen.queryByText(/^SHA-256:/)).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "Identity" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show the Platform identity grid" }));
     const card = await screen.findByLabelText("HTTPS certificate");
     expect(within(card).getByText(/^SHA-256:/)).toBeInTheDocument();
     expect(within(card).getByText("Strict mode: Off")).toBeInTheDocument();
@@ -184,7 +187,7 @@ describe("InventoryScreen device selection and panels", () => {
     expect(screen.getByText("198.51.100.5/24")).toBeInTheDocument();
     expect(screen.queryByText("dev-1")).toBeNull();
 
-    fireEvent.click(screen.getByRole("tab", { name: "Identity" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show the Platform identity grid" }));
     const reference = screen.getByText("REFERENCE").parentElement as HTMLElement;
     expect(within(reference).getByText("dev-1")).toBeInTheDocument();
 

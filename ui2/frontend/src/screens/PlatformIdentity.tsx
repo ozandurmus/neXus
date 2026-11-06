@@ -1,22 +1,23 @@
-import type { ReactNode } from "react";
+import { createContext, useContext, useId, type ReactNode } from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import Link from "@mui/material/Link";
 import Typography from "@mui/material/Typography";
 
 import { RoleChip, Ts, Unknown } from "../shell/States";
+import { Timestamp } from "../shell/Timestamp";
 import { statusWord, vendorLabel } from "../shell/presenters";
 import { enrollmentStateLabel } from "../shell/deviceCopy";
 import { MONO, m3 } from "../theme/m3Theme";
 import type { DeviceSummary } from "../auth/adminApi";
 import { ContentVersions, PLATFORM_IDENTITY_GRID_ID, ReferenceCell, knownHaRole, vsListOf } from "./DeviceShared";
 import { LifecycleCell } from "./LifecycleScreen";
-import { useDetailTabs } from "./InventoryPanels";
 
 /**
- * The Platform identity grid (UI product review 2026-10-18, roadmap 2.6): the audit grid of one device, now the first
- * card of the Identity tab, with the reference and the lifecycle as cells. The Configuration tab shows it as one
- * collapsed line ({@link PlatformIdentitySummary}) that leads here, so every field is reachable exactly once in full.
+ * The Platform identity grid (UI product review 2026-10-18, roadmap 2.6): the audit grid of one device, with the
+ * reference and the lifecycle as cells. Since PO 2026-11-06 it sits in the device header as a collapsible panel
+ * ({@link PlatformIdentityPanel}) under the state row -- one click, no tab changes -- and the Configuration tab shows
+ * it as one line ({@link PlatformIdentitySummary}) that opens that panel, so every field is reachable exactly once in full.
  */
 const CARD = { borderRadius: "10px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, boxShadow: "none" } as const;
 
@@ -147,9 +148,15 @@ export function platformFactsNote(device: Pick<DeviceSummary, "vendor_hint" | "p
     + "The device name is the last one recorded and is no longer refreshed.";
 }
 
-export function IdentityCard({ title, tiles, note }: { readonly title: string; readonly tiles: readonly IdentityTile[]; readonly note?: string | null }) {
+export function IdentityCard({ title, tiles, note, anchor = true }: {
+  readonly title: string;
+  readonly tiles: readonly IdentityTile[];
+  readonly note?: string | null;
+  /** False inside {@link PlatformIdentityPanel}, which carries the grid anchor itself (it exists while the grid is collapsed). */
+  readonly anchor?: boolean;
+}) {
   return (
-    <Card id={PLATFORM_IDENTITY_GRID_ID} sx={{ p: 2, ...CARD, scrollMarginTop: 16 }}>
+    <Card id={anchor ? PLATFORM_IDENTITY_GRID_ID : undefined} sx={{ p: 2, ...CARD, scrollMarginTop: 16 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", mb: 1.5 }}>
         <Box>
           <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Platform identity</Typography>
@@ -190,22 +197,118 @@ export function identitySummaryLine(device: DeviceSummary): string {
 }
 
 /**
+ * The device header's way to the Platform identity grid: `reveal` opens the header panel and scrolls to it. Provided by
+ * the device workspace; absent outside it (the standalone configuration view shows the full grid instead).
+ */
+export const PlatformIdentityPanelContext = createContext<{ readonly reveal: () => void } | null>(null);
+export function usePlatformIdentityPanel() {
+  return useContext(PlatformIdentityPanelContext);
+}
+
+/** The per-viewer memory of the header panel's open state (a browser convenience; see `shell/preference.ts`). */
+export const PLATFORM_IDENTITY_OPEN_KEY = "nexus.device.platform-identity.open";
+
+/** The facts the collapsed header panel shows, in this order, when the device's grid has the tile. */
+const HEADLINE_LABELS = ["Model", "Software version", "Hotfix / Jumbo take", "Serial number", "HA role", "Last inventory read"] as const;
+
+/**
+ * The collapsed panel's facts: the most-asked tiles of the grid with the grid's own absent wording (UNKNOWN, Not read
+ * yet, Not applicable) -- the same tiles, filtered, never a second rule. A tile the vendor's grid lacks is simply absent.
+ * The one change of form: the last inventory read is its age only (the full stamp is one click away, in the grid).
+ */
+export function identityHeadline(tiles: readonly IdentityTile[], device: Pick<DeviceSummary, "inventory_collected_at">, options: { readonly omitHaRole?: boolean } = {}): IdentityTile[] {
+  return HEADLINE_LABELS
+    // R16, one HA statement per device: when the title row already carries the HA role or sentence, the line does not repeat it.
+    .filter((label) => !(options.omitHaRole && label === "HA role"))
+    .map((label) => tiles.find((t) => t.label === label))
+    .filter((t): t is IdentityTile => Boolean(t))
+    .map((t) => (t.label === "Last inventory read" && device.inventory_collected_at
+      ? { ...t, value: <Timestamp at={device.inventory_collected_at} compact /> }
+      : t));
+}
+
+function HeadlineValue({ tile }: { readonly tile: IdentityTile }) {
+  if (tile.value !== null && tile.value !== undefined) {
+    return <Box component="span" sx={{ fontWeight: 600, fontFamily: tile.mono ? MONO : undefined, overflowWrap: "anywhere" }}>{tile.value}</Box>;
+  }
+  return tile.absentWord
+    ? <Box component="span" title={tile.absent} sx={{ color: m3.neutralInk, fontWeight: 600, letterSpacing: "0.02em" }}>{tile.absentWord}</Box>
+    : <Unknown reason={tile.absent} />;
+}
+
+/**
+ * The header's Platform identity panel (PO 2026-11-06): one line of the most-asked facts under the state row and a
+ * chevron that opens the full grid in place. Open or closed is the viewer's own memory ({@link PLATFORM_IDENTITY_OPEN_KEY}),
+ * closed by default. The anchor {@link PLATFORM_IDENTITY_GRID_ID} is the panel itself, so a link lands here whether
+ * the grid is open or not; `children` (the certificate block, the badge's basis) follow the grid when it is open.
+ */
+export function PlatformIdentityPanel({ title, tiles, device, note, open, onToggle, haInTitleRow = false, children }: {
+  readonly title: string;
+  readonly tiles: readonly IdentityTile[];
+  readonly device: Pick<DeviceSummary, "inventory_collected_at">;
+  readonly note?: string | null;
+  readonly open: boolean;
+  readonly onToggle: () => void;
+  /** True when the header's title row already shows the HA role or HA sentence: the collapsed line then leaves it out (R16). */
+  readonly haInTitleRow?: boolean;
+  readonly children?: ReactNode;
+}) {
+  const bodyId = useId();
+  const headline = identityHeadline(tiles, device, { omitHaRole: haInTitleRow });
+  return (
+    <Box id={PLATFORM_IDENTITY_GRID_ID} data-testid="platform-identity-panel" data-open={open ? "1" : "0"}
+      sx={{ borderTop: `1px solid ${m3.outlineVar}`, mt: 0.25, pt: 0.75, scrollMarginTop: 16, minWidth: 0 }}>
+      <Box sx={{ display: "flex", alignItems: "flex-start", columnGap: 1, rowGap: 0.5, flexWrap: "wrap", minWidth: 0 }}>
+        <Box component="button" type="button" aria-expanded={open} aria-controls={bodyId}
+          aria-label={open ? "Hide the Platform identity grid" : "Show the Platform identity grid"}
+          onClick={onToggle}
+          sx={{ flex: "none", display: "inline-flex", alignItems: "center", gap: 0.75, height: 28, px: 1, ml: -1, borderRadius: "14px", border: "none",
+                bgcolor: "transparent", color: m3.onSurfaceVar, font: "inherit", cursor: "pointer",
+                "&:hover": { bgcolor: m3.scLow }, "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: 1 } }}>
+          <Box component="span" aria-hidden sx={{ width: 12, textAlign: "center", fontSize: 12 }}>{open ? "▾" : "▸"}</Box>
+          <Typography component="span" variant="overline" sx={{ letterSpacing: "0.08em", lineHeight: 1 }}>Platform identity</Typography>
+        </Box>
+        {!open && (
+          <Box data-testid="platform-identity-headline" sx={{ display: "flex", alignItems: "center", columnGap: 1.5, rowGap: 0.5, flexWrap: "wrap", minWidth: 0, flex: "1 1 320px", pt: 0.5 }}>
+            {headline.map((tile) => (
+              <Box key={tile.label} component="span" data-fact={tile.label} sx={{ display: "inline-flex", alignItems: "baseline", gap: 0.5, fontSize: 13, minWidth: 0 }}>
+                <Typography component="span" variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}>{tile.label}</Typography>
+                <HeadlineValue tile={tile} />
+              </Box>
+            ))}
+          </Box>
+        )}
+      </Box>
+      <Box id={bodyId} hidden={!open} sx={{ display: open ? "flex" : "none", flexDirection: "column", gap: 1.5, mt: 1, minWidth: 0 }}>
+        {open && (
+          <>
+            <IdentityCard title={title} tiles={tiles} note={note} anchor={false} />
+            {children}
+          </>
+        )}
+      </Box>
+    </Box>
+  );
+}
+
+/**
  * The Configuration tab's collapsed Platform identity line (roadmap 2.6): vendor · model · version · serial read, and a
- * link that opens the Identity tab on the grid. Outside the device tab strip (no tab context) the full grid is shown.
+ * link that opens the header's Platform identity panel on the grid (PO 2026-11-06). Outside the device workspace (no
+ * header panel) the full grid is shown.
  */
 export function PlatformIdentitySummary({ device }: { readonly device: DeviceSummary }) {
-  const tabs = useDetailTabs();
+  const panel = usePlatformIdentityPanel();
   return (
     <Card data-testid="platform-identity-summary" sx={{ px: 2, py: 1, ...CARD, display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
       <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em", lineHeight: 1.6 }}>Platform identity</Typography>
       <Typography variant="body2" sx={{ fontWeight: 600 }}>{identitySummaryLine(device)}</Typography>
-      {tabs?.has("Identity") ? (
-        <Link component="button" type="button" underline="hover" onClick={() => tabs.open("Identity", PLATFORM_IDENTITY_GRID_ID)}
+      {panel ? (
+        <Link component="button" type="button" underline="hover" onClick={() => panel.reveal()}
           sx={{ ml: "auto", color: m3.primary, font: "inherit", fontSize: 13 }}>
-          Full grid in Identity: serial, versions, uptime, policy installed, read times, lifecycle, reference →
+          Full grid in the header: serial, versions, uptime, policy installed, read times, lifecycle, reference →
         </Link>
       ) : (
-        <Typography variant="caption" sx={{ ml: "auto", color: m3.onSurfaceVar }}>Full grid in the Identity tab</Typography>
+        <Typography variant="caption" sx={{ ml: "auto", color: m3.onSurfaceVar }}>Full grid in the device header</Typography>
       )}
     </Card>
   );
