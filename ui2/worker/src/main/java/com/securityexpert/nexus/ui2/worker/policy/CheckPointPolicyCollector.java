@@ -446,6 +446,7 @@ public final class CheckPointPolicyCollector {
 
     void storeObjects(String source, String container, String type, List<JsonNode> nodes,
             int pages, long elapsed, String status, String reason, long deadline, BooleanSupplier lease) {
+        if (type.equals("gateways-and-servers") && !nodes.isEmpty()) PolicyCollectionTrace.gatewayFields(CpGatewayFieldPresence.summarize(nodes));
         var items = CpObjectInventoryParser.parse(source, container, nodes);
         var snapshot = new com.securityexpert.nexus.ui2.policy.CpObjectInventory(source, container, type,
             Instant.now().toString(), status, reason, items, pages, elapsed / 1_000_000_000.0);
