@@ -30,6 +30,8 @@ final class ScriptedCheckPointInventoryTransport implements DeviceTransport {
     /** Every command sent, in order (PO 2026-09-25: a management server must never be sent the VSX / cluster probes). */
     final java.util.List<String> commands = new java.util.ArrayList<>();
     private int execInteractiveCallCount;
+    /** The read timeout each command was last sent with (2026-11-06: cpinfo uses its gated 60 s). */
+    final Map<String, Duration> timeoutByCommand = new HashMap<>();
 
     ScriptedCheckPointInventoryTransport(Map<String, String> outputByCommand) {
         this.outputByCommand = outputByCommand;
@@ -80,6 +82,7 @@ final class ScriptedCheckPointInventoryTransport implements DeviceTransport {
     public ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout) {
         execCallCount++;
         commands.add(spec.command());
+        timeoutByCommand.put(spec.command(), timeout);
         if (execChannelTimesOutEntirely) {
             return new ExecResult.TimedOut();
         }
@@ -97,6 +100,7 @@ final class ScriptedCheckPointInventoryTransport implements DeviceTransport {
     public ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
         execInteractiveCallCount++;
         commands.add("(interactive) " + spec.command());
+        timeoutByCommand.put(spec.command(), timeout);
         if (!execChannelRejectedEntirely && !allowExecInteractiveAnyway) {
             throw new IllegalStateException("execInteractive called without simulating an exec-rejecting device");
         }

@@ -91,6 +91,9 @@ public final class InventoryCapabilityExecutor {
 
     private static final System.Logger LOG = System.getLogger(InventoryCapabilityExecutor.class.getName());
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(30);
+    /** The gated timeout of {@code cp_identity_cpinfo_hotfixes} (V47: 60 s). Measured 2026-11-06: the R82 management
+     *  server's interactive cpinfo did not answer within 30 s, so the read used half its approved budget. */
+    static final Duration CPINFO_TIMEOUT = Duration.ofSeconds(60);
     private static final Pattern API_KEY = Pattern.compile("<key>([^<]+)</key>");
     private static final Pattern SERIAL_TAG = Pattern.compile("(?is)<serial>\\s*([^<]+?)\\s*</serial>");
     private static final String BATCH_TAG = "===NEXUS_SECTION:";
@@ -422,7 +425,9 @@ public final class InventoryCapabilityExecutor {
             // answer leaves the fact UNKNOWN and never fails the inventory.
             String assetOutput = identityReadOutput(session, InventoryReadPlan.CP_SHOW_ASSET_SYSTEM, preferInteractiveShell);
             // Measured 2026-09-25 on the MDS: cpinfo hangs over exec (30 s) and answers interactively in 4 s.
-            String cpinfoOutput = identityReadOutput(session, InventoryReadPlan.CP_CPINFO_HOTFIXES, preferInteractiveShell || managementServer);
+            // 2026-11-06 on the R82 MDS: no interactive answer within 30 s; the read now uses its gated 60 s.
+            String cpinfoOutput = identityReadOutput(session, InventoryReadPlan.CP_CPINFO_HOTFIXES, preferInteractiveShell || managementServer,
+                    CPINFO_TIMEOUT);
             Optional<String> jumbo = com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.jumboTake(cpinfoOutput);
             if (jumbo.isEmpty()) {
                 // Shape only (vendor package tokens, digits masked); the 2026-11-06 R82 management-server gap.
@@ -1312,16 +1317,24 @@ public final class InventoryCapabilityExecutor {
      */
     /** A platform-identity read: over the interactive shell on a host that prefers it (no exec fallback -- that host was told to skip exec), plain exec otherwise; empty when the read failed. */
     private String identityReadOutput(TransportSession session, String command, boolean preferInteractiveShell) {
+        return identityReadOutput(session, command, preferInteractiveShell, READ_TIMEOUT);
+    }
+
+    private String identityReadOutput(TransportSession session, String command, boolean preferInteractiveShell, Duration timeout) {
         if (preferInteractiveShell) {
-            String interactiveOutput = interactiveFallback(session, command);
+            String interactiveOutput = interactiveFallback(session, command, timeout);
             return interactiveOutput == null ? "" : interactiveOutput;
         }
-        return execOutput(session, command, false);
+        return execOutput(session, command, false, timeout);
     }
 
     private String execOutput(TransportSession session, String command, boolean preferInteractiveShell) {
+        return execOutput(session, command, preferInteractiveShell, READ_TIMEOUT);
+    }
+
+    private String execOutput(TransportSession session, String command, boolean preferInteractiveShell, Duration timeout) {
         if (preferInteractiveShell) {
-            String interactiveOutput = interactiveFallback(session, command);
+            String interactiveOutput = interactiveFallback(session, command, timeout);
             if (interactiveOutput != null) {
                 return interactiveOutput;
             }
@@ -1329,7 +1342,7 @@ public final class InventoryCapabilityExecutor {
         long startMs = System.currentTimeMillis();
         ExecResult result;
         try {
-            result = transport.exec(session, new ExecSpec(command), READ_TIMEOUT);
+            result = transport.exec(session, new ExecSpec(command), timeout);
         } catch (Exception e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             long elapsedMs = System.currentTimeMillis() - startMs;
@@ -1494,10 +1507,14 @@ public final class InventoryCapabilityExecutor {
      * {@code null} (never blank) means "no answer from this channel either", so both callers
      * fall through to their own existing empty-output handling unchanged. */
     private String interactiveFallback(TransportSession session, String command) {
+        return interactiveFallback(session, command, READ_TIMEOUT);
+    }
+
+    private String interactiveFallback(TransportSession session, String command, Duration timeout) {
         long startMs = System.currentTimeMillis();
         ExecResult result;
         try {
-            result = transport.execInteractive(session, new ExecSpec(command), READ_TIMEOUT);
+            result = transport.execInteractive(session, new ExecSpec(command), timeout);
         } catch (Exception e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             // Mirrors execOutput's/execOutputPty's own catch around the primary exec attempt --
@@ -1518,8 +1535,8 @@ public final class InventoryCapabilityExecutor {
             return completed.output();
         }
         LOG.log(System.Logger.Level.WARNING,
-                "[INVENTORY_EXEC_INTERACTIVE_FAILED] cmd=\"{0}\" produced no usable output after {1}ms",
-                command, elapsedMs);
+                "[INVENTORY_EXEC_INTERACTIVE_FAILED] cmd=\"{0}\" produced no usable output after {1}ms (result={2})",
+                command, elapsedMs, result == null ? "null" : result.getClass().getSimpleName());
         return null;
     }
 
