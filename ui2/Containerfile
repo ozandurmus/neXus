@@ -18,7 +18,7 @@
 # its output crosses into the Java stage; Node itself never does. Grafting
 # node binaries into the JDK image was tried and fails on library
 # versions (OPENSSL_3.4.0 required by libnode, absent from the JDK base).
-FROM registry.access.redhat.com/ubi9/nodejs-22-minimal@sha256:254080e3c058143c592f708e4ca78691449349fc79f03ee678c717aa4b6222b6 AS frontend
+FROM registry.access.redhat.com/ubi9/nodejs-22-minimal@sha256:7c28182428503c3e98be630ac8d8c6582c39bb7d4bce34bb862de0cee0f00b25 AS frontend
 USER 0
 WORKDIR /build/frontend
 COPY ui2/frontend/package.json ui2/frontend/package-lock.json ./
@@ -36,7 +36,7 @@ COPY docs/design/ui2_mockups/ /build/docs/design/ui2_mockups/
 RUN npm run build
 
 # Stage 1 -- Java build.
-FROM registry.access.redhat.com/ubi9/openjdk-21@sha256:bd995811a45eb587f97a105796f8f43df466a4269411a2a1642f0f9799f885db AS build
+FROM registry.access.redhat.com/ubi9/openjdk-21@sha256:c8fcb7571677a9f6f1f2f3325c9765103ecc2834ff13ce20eb5ee6d1088f7e12 AS build
 USER 0
 ENV GRADLE_USER_HOME=/build/.gradle-home
 
@@ -67,7 +67,7 @@ RUN ./gradlew --no-daemon --console=plain -PfrontendPrebuilt=true :service:bootJ
 # ---------------------------------------------------------------------------
 # Tag 1.24-3.1792711374 (built 2026-10-22), the newest published digest on 2026-10-30
 # (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md).
-FROM registry.access.redhat.com/ubi9/openjdk-21-runtime@sha256:b924b5d15de9585902c58eea76d0c1d6120921844cbc9e79683103e01b0200fd
+FROM registry.access.redhat.com/ubi9/openjdk-21-runtime@sha256:cfa544effa28c5c57197a4c9d460812e70efc0965e6f518e1c2e787ff3cb9335
 
 # Ownership is by group 0, never by a uid: the uid this process runs as is
 # assigned at admission time and is not knowable here (§3.3). Group 0 is the

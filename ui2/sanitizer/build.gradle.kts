@@ -6,6 +6,10 @@ dependencies {
     // XLSX parts are read through POI's OOXML package model (zip-bomb limits, content types) and rewritten as
     // streams; the test suite also uses POI's SXSSF writer to build its million-row workbook.
     implementation(libs.poi.ooxml)
+    constraints {
+        // POI 5.5.1 brings log4j-api 2.24.3 (CVE-2026-49844, trivy MEDIUM); align with the 2.25.5 the rest of the build uses.
+        implementation("org.apache.logging.log4j:log4j-api:2.25.5")
+    }
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)

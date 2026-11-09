@@ -121,3 +121,25 @@ workflow or script refers to it. With the lockfile deleted, the Trivy source sca
 
 The running pods keep the old base until the rollout. Between the merge and the rollout, the daily scan of the deployed
 images reports the removed pcre2, expat and ca-certificates findings as unaccepted again. Ship and roll out promptly.
+
+## 8. Refresh 2026-11-09 (PO: "Devam et. yükleyelim")
+- **Runtime base.** `ubi9/openjdk-21-runtime` `sha256:cfa544effa28c5c57197a4c9d460812e70efc0965e6f518e1c2e787ff3cb9335`
+  (`1.24-3.1793323798`, built 2026-10-30). Red Hat catalog RPM manifest of that image (read 2026-11-09):
+  - `java-21-openjdk-headless-21.0.13.0.9-1.2.el9` (RHSA-2026:88349, fixes CVE-2026-91415);
+  - `curl-minimal-7.76.1-40.el9_8.9`;
+  - `xz-libs-5.2.5-8.el9_8.1`.
+  
+  glibc is unchanged (`2.34-283.el9_8`); its findings stay until Red Hat ships a fixed package.
+- **Build-stage bases**, refreshed to the newest digests:
+  - `ubi9/openjdk-21` `sha256:c8fcb7571677a9f6f1f2f3325c9765103ecc2834ff13ce20eb5ee6d1088f7e12` (2026-11-02), also
+    in the integration job;
+  - `ubi9/nodejs-22-minimal` `sha256:7c28182428503c3e98be630ac8d8c6582c39bb7d4bce34bb862de0cee0f00b25` (2026-11-09).
+- **log4j-api.** POI 5.5.1 brought `log4j-api` 2.24.3 into packet-analysis, sanitizer and worker (CVE-2026-49844, trivy
+  MEDIUM). A constraint now aligns them with the 2.25.5 that the rest of the build uses.
+- **CVE-2026-91403.** Red Hat marks it "Will not fix" for `java-21-openjdk`. It is the eMudhra CA distrust; RHEL's
+  OpenJDK reads the system trust store, so Red Hat's fix lives in `ca-certificates` (CVE-2026-114406). The emSign
+  blocklist step (PO 2026-10-23) already removes those roots in both images and fails the build if one is still
+  trusted. The acceptance stays, and its "remove when fixed" condition is now met by the blocklist, not by a Java
+  package.
+- **Acceptances.** Those the new image no longer reports are removed after the gate's own scan of the shipped image.
+  Decision 2 is applied in a follow-up, from that scan's counts.

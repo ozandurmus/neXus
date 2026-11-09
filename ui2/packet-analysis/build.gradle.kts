@@ -8,6 +8,11 @@ dependencies {
     implementation(libs.jackson.databind)
     // Expert report workbook (native Excel charts): POI's XSSF/XDDF writer, repacked deterministically.
     implementation(libs.poi.ooxml)
+    constraints {
+        // POI 5.5.1 brings log4j-api 2.24.3 (CVE-2026-49844, trivy MEDIUM); the rest of the build already resolves
+        // 2.25.5 through the Spring Boot BOM. Remove when POI moves past it.
+        implementation("org.apache.logging.log4j:log4j-api:2.25.5")
+    }
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
