@@ -53,6 +53,13 @@ class CpDomainServerPlacementTest {
         verify(repository).replaceDomainServerPlacement(eq("mds-1"), argThat(rows -> rows.size() == 2));
     }
 
+    @Test void aReplyWithoutAnyServerKeepsThePreviousPlacement() throws Exception {
+        var repository = mock(PolicyCollectionRepository.class);
+        CpDomainServerPlacement.record(repository, "mds-1", JSON.readTree(
+            "{\"objects\":[{\"uid\":\"00000000-0000-0000-0000-000000000001\",\"name\":\"DOM-SYNTH-01\"}]}"));
+        verify(repository, never()).replaceDomainServerPlacement(anyString(), any());
+    }
+
     // Both collection paths replace the placement from the show-domains reply and survive a failing write.
     private final GateRegistryPort gates = key -> GateRegistryFixtureLoader.loadFromStream(
         getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml")).stream().filter(r -> r.key().equals(key)).toList();
