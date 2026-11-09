@@ -436,6 +436,38 @@
       "reason": "json-glib 1.6.6 in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): published 2026-11-01, no fixed upstream release or RHEL package yet; the build cannot reach the UBI package repos to update it. CVE-2026-120194 (HIGH, Red Hat Important, CVSS 7.5 AV:N/A:H): json_path_query() loops forever on a negative-step JSONPath slice. Exposure: neXus is a JVM process and parses JSON with Java libraries; in both images the only package that requires json-glib is librhsm (package-manager subscription support), which is not run at runtime, so no untrusted JSONPath reaches it. Accepted by the PO decision 2026-11-02 ('ok yapalım'); remove when Red Hat rebuilds the base image.",
       "owner": "PO",
       "review_date": "2026-11-14"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-115506",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: expat",
+      "reason": "expat in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-09); the build cannot reach the UBI package repos to update it. CVE-2026-115506 (HIGH, Red Hat Important, CVSS 7.5 AV:N/A:H): denial of service via delayed entity amplification detection. Exposure: neXus parses XML with Java libraries in the JVM; no installed package requires expat and the packet-analysis tshark does not link it, so no neXus input reaches it. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed) and the PO's ok of 2026-11-09 ('Kabul et'); review with the base refresh due 2026-11-14; remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-14"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-118131",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: gnupg2",
+      "reason": "gnupg2 in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-09); the build cannot reach the UBI package repos to update it. CVE-2026-118131 (HIGH, Red Hat Important, CVSS 7.3 AV:L/PR:L/UI:R): code execution via insecure directory permissions. Exposure: local only; only gpgme (package-manager signature support) requires it and neXus never runs gpg. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed) and the PO's ok of 2026-11-09 ('Kabul et'); review with the base refresh due 2026-11-14; remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-14"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-119374",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: sqlite-libs",
+      "reason": "sqlite-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-09); the build cannot reach the UBI package repos to update it. CVE-2026-119374 (HIGH, Red Hat Important, CVSS 7.8 AV:L/UI:R): code execution via a corrupted FTS5 index. Exposure: local file input only; neXus stores data in PostgreSQL, no installed package requires sqlite-libs and the packet-analysis tshark does not link it. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed) and the PO's ok of 2026-11-09 ('Kabul et'); review with the base refresh due 2026-11-14; remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-14"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-119379",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: sqlite-libs",
+      "reason": "sqlite-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-09); the build cannot reach the UBI package repos to update it. CVE-2026-119379 (HIGH, Red Hat Important, CVSS 7.8 AV:L/UI:R): code execution via crafted session changesets. Exposure: as CVE-2026-119374; no neXus code opens an SQLite database. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed) and the PO's ok of 2026-11-09 ('Kabul et'); review with the base refresh due 2026-11-14; remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-14"
     }
   ]
 }
