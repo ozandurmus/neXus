@@ -217,6 +217,10 @@ class InventoryJobExecutorEndToEndTest {
         assertTrue(transport.commands.stream().anyMatch(c -> c.contains("fw getifs")), transport.commands.toString());
         assertTrue(transport.commands.stream().noneMatch(c -> c.contains("cpstat -f policy")), "a management server holds no policy");
         assertTrue(transport.commands.contains("(interactive) " + InventoryReadPlan.CP_MDS_HA_STATUS), transport.commands.toString());
+        // V195: the management server's cpinfo goes direct in the interactive shell, never through the login shell.
+        assertTrue(transport.commands.contains("(interactive) " + InventoryReadPlan.CP_CPINFO_HOTFIXES_MDS), transport.commands.toString());
+        assertTrue(transport.commands.stream().noneMatch(c -> c.contains("bash -lc 'cpinfo")), transport.commands.toString());
+        assertEquals(java.time.Duration.ofSeconds(60), transport.timeoutByCommand.get(InventoryReadPlan.CP_CPINFO_HOTFIXES_MDS));
         assertEquals(java.time.Duration.ofSeconds(60), transport.timeoutByCommand.get(InventoryReadPlan.CP_MDS_HA_STATUS));
         assertEquals(java.util.List.of("STANDBY"), deviceRepository.observedHaRoles);
         InventoryRun run = inventoryRepository.lastRecordedRun;

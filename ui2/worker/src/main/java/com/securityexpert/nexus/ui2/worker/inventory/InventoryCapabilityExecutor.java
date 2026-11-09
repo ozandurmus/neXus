@@ -428,7 +428,10 @@ public final class InventoryCapabilityExecutor {
             String assetOutput = identityReadOutput(session, InventoryReadPlan.CP_SHOW_ASSET_SYSTEM, preferInteractiveShell);
             // Measured 2026-09-25 on the MDS: cpinfo hangs over exec (30 s) and answers interactively in 4 s.
             // 2026-11-06 on the R82 MDS: no interactive answer within 30 s; the read now uses its gated 60 s.
-            String cpinfoOutput = identityReadOutput(session, InventoryReadPlan.CP_CPINFO_HOTFIXES, preferInteractiveShell || managementServer,
+            // 2026-11-07 (V195): a management server gets the direct form; its login shell answered nothing within 60 s.
+            String cpinfoOutput = identityReadOutput(session,
+                    managementServer ? InventoryReadPlan.CP_CPINFO_HOTFIXES_MDS : InventoryReadPlan.CP_CPINFO_HOTFIXES,
+                    preferInteractiveShell || managementServer,
                     CPINFO_TIMEOUT);
             Optional<String> jumbo = com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.jumboTake(cpinfoOutput);
             if (jumbo.isEmpty()) {
