@@ -34,7 +34,8 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
  * itself), never from the management server, whose connection state was measured not to be a liveness signal.</p>
  *
  * <p>Names are emitted only under keys the masking advice pseudonymizes: {@code domain}, {@code cluster_member_ref},
- * {@code hostname}, {@code virtual_system}. The acknowledgement token is a hash of the match key, never the key.</p>
+ * {@code hostname}, {@code virtual_system}; the Check Point {@code domain_ha} block uses only {@code domain} and
+ * {@code hostname} (the hosting Multi-Domain Server) for the same reason. The acknowledgement token is a hash of the match key, never the key.</p>
  */
 @Service
 public class ManagementTreeService {
@@ -85,6 +86,9 @@ public class ManagementTreeService {
         out.put("vendor", run.get().vendor());
         out.put("run_id", run.get().runId());
         out.put("discovered_at", run.get().finishedAt());
+        if ("check_point".equals(run.get().vendor())) {
+            out.put("domain_ha", domainHa(deviceId));
+        }
         if (run.get().runId() == null) {
             out.put("domains", List.of());
             out.put("counts", Map.of());
@@ -97,6 +101,49 @@ public class ManagementTreeService {
         out.put("domains", domains);
         out.put("counts", counts(candidates, linked, acks));
         return Optional.of(out);
+    }
+
+    record Placement(String domain, String server, String hostname, boolean active, OffsetDateTime observedAt) {
+    }
+
+    /** The stored Active/Standby Domain Management Server placement of this Multi-Domain Server (no device contact). */
+    private Map<String, Object> domainHa(String deviceId) {
+        return domainHa(tx.inTransaction(dsl -> dsl.fetch(
+                "select domain_name, server_name, multi_domain_server, active, observed_at "
+                        + "from cp_domain_server_placement where source_id = {0}", deviceId)).stream()
+                .map(r -> new Placement(r.get("domain_name", String.class), r.get("server_name", String.class),
+                        r.get("multi_domain_server", String.class), Boolean.TRUE.equals(r.get("active", Boolean.class)),
+                        r.get("observed_at", OffsetDateTime.class)))
+                .toList());
+    }
+
+    /** Domains by name (case-insensitive); inside a domain the Active server first, then by hostname. */
+    static Map<String, Object> domainHa(List<Placement> rows) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("observed_at", rows.stream().map(Placement::observedAt).filter(java.util.Objects::nonNull)
+                .max(Comparator.naturalOrder()).map(OffsetDateTime::toString).orElse(null));
+        Map<String, List<Placement>> byDomain = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        for (Placement p : rows) {
+            byDomain.computeIfAbsent(p.domain(), k -> new ArrayList<>()).add(p);
+        }
+        List<Map<String, Object>> domains = new ArrayList<>();
+        byDomain.forEach((name, list) -> {
+            List<Map<String, Object>> servers = list.stream()
+                    .sorted(Comparator.comparing((Placement p) -> !p.active())
+                            .thenComparing(Placement::hostname, String.CASE_INSENSITIVE_ORDER))
+                    .map(p -> {
+                        Map<String, Object> server = new LinkedHashMap<>();
+                        server.put("hostname", p.hostname());
+                        server.put("active", p.active());
+                        return server;
+                    }).collect(Collectors.toList());
+            Map<String, Object> domain = new LinkedHashMap<>();
+            domain.put("domain", name);
+            domain.put("servers", servers);
+            domains.add(domain);
+        });
+        out.put("domains", domains);
+        return out;
     }
 
     /** Gateways every enrolled management server lists that neXus does not enrol (and nobody marked not an issue). */

@@ -212,6 +212,7 @@ public final class CheckPointPolicyCollector {
         try {
             var domains = read(session, MgmtCliCommands.domainList(), -1, deadline, lease);
             completeList(domains, "objects");
+            CpDomainServerPlacement.record(repository, request.sourceId(), domains);
             CpInventoryObjects inventory = CpInventoryObjects.enabled() ? new CpInventoryObjects(repository, request.sourceId()) : null;
             if (inventory != null) inventory.domains(domains);
             PolicyCollectionTrace.domains((int) java.util.stream.StreamSupport.stream(domains.path("objects").spliterator(), false)
