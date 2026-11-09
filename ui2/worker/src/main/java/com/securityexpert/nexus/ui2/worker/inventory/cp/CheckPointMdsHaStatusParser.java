@@ -11,10 +11,32 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * {@code cp_identity_mds_ha_status}, V194, PO approval 2026-11-07). Management API reply: {@code servers[]} with
  * {@code ip-address} and {@code ha-state} ({@code active} | {@code standby}). The local server is the one whose
  * {@code ip-address} equals the device's own connection address exactly; names and addresses are compared in memory
- * and never kept. No match, several matches, an unknown state or an unexpected shape is UNKNOWN (empty role).
+ * and never kept. An MDS-level reply ({@code domain-type} mds) has no {@code servers}: every Multi-Domain Server is
+ * Active, so the role is ACTIVE ({@link #MDS_LEVEL}). No match, several matches, an unknown state or an unexpected
+ * shape is UNKNOWN (empty role).
  */
 public final class CheckPointMdsHaStatusParser {
     private static final ObjectMapper JSON = new ObjectMapper();
+
+    /**
+     * The reply's {@code domain-type} when the call ran at Multi-Domain Server level (API enum: domain | global domain
+     * | mds). R82 Multi-Domain Security Management Administration Guide, "Overview of High Availability": "Multi-Domain
+     * Server High Availability is an Active/Active redundancy solution" and "All Multi-Domain Servers are Active";
+     * Active/Standby exists only per Domain Management Server. So an MDS-level reply without {@code servers} is the
+     * documented Active/Active case, not a missing field (live R82 reply 2026-11-09; PO confirmed a secondary MDS).
+     */
+    static final String MDS_LEVEL = "mds";
+
+    /** The documented enum value, or {@code other} / {@code absent}; never free text in the log. */
+    static String domainTypeToken(String domainType) {
+        if (domainType.isEmpty()) return "absent";
+        return switch (domainType) {
+            case "domain" -> "domain";
+            case "global domain" -> "global_domain";
+            case "data domain" -> "data_domain";
+            default -> "other";
+        };
+    }
 
     /** Role {@code ACTIVE} / {@code STANDBY} or empty, the number of servers listed, and an outcome token for the log. */
     public record HaStatus(Optional<String> role, int servers, String outcome) {}
@@ -56,7 +78,11 @@ public final class CheckPointMdsHaStatusParser {
         }
         if (root.has("code") && !root.has("servers")) return new HaStatus(Optional.empty(), 0, "VENDOR_ERROR");
         JsonNode servers = root.path("servers");
-        if (!servers.isArray()) return new HaStatus(Optional.empty(), 0, "NO_SERVERS keys=" + keyShape(root));
+        if (!servers.isArray()) {
+            String domainType = root.path("domain-type").asText("");
+            if (MDS_LEVEL.equals(domainType)) return new HaStatus(Optional.of("ACTIVE"), 0, "MDS_LEVEL_ACTIVE_ACTIVE");
+            return new HaStatus(Optional.empty(), 0, "NO_SERVERS domainType=" + domainTypeToken(domainType) + " keys=" + keyShape(root));
+        }
         if (localAddress == null || localAddress.isBlank()) return new HaStatus(Optional.empty(), servers.size(), "NO_LOCAL_ADDRESS");
         JsonNode local = null;
         int matches = 0;
