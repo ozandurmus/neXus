@@ -269,6 +269,21 @@ public class PolicyCollectionRepository {
         }));
     }
 
+    /** One Domain Management Server of a Check Point domain and the Multi-Domain Server that hosts it. */
+    public record DomainServerPlacement(String domainUid, String domainName, String serverName, String multiDomainServer, boolean active) {}
+
+    /** Replace the whole stored placement of one source with one observation time, in one transaction. */
+    public void replaceDomainServerPlacement(String source, List<DomainServerPlacement> rows) {
+        tx.inTransaction(db -> {
+            db.execute("delete from cp_domain_server_placement where source_id = {0}", source);
+            for (var row : rows)
+                db.execute("insert into cp_domain_server_placement(source_id, domain_uid, domain_name, server_name, multi_domain_server, active, observed_at) "
+                    + "values ({0},{1},{2},{3},{4},{5},now())", source, row.domainUid(), row.domainName(), row.serverName(),
+                    row.multiDomainServer(), row.active());
+            return null;
+        });
+    }
+
     /** Exact stored discovery-key relation, never a display-name or address heuristic. */
     public List<Target> targets(String runId, String domainName, String targetUid) {
         return tx.inTransaction(db -> db.fetch("select distinct d.device_id, c.display_name, d.virtual_system_ref from discovery_candidate c "

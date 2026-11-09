@@ -85,4 +85,29 @@ class ManagementTreeServiceTest {
         assertThat(counts.get("not_in_nexus")).isEqualTo(0L);
         assertThat(counts.get("gateways")).isEqualTo(2L);
     }
+
+    @Test
+    void domainHaListsDomainsByNameAndActiveServerFirst() {
+        var t1 = java.time.OffsetDateTime.parse("2026-11-09T10:00:00Z");
+        var t2 = java.time.OffsetDateTime.parse("2026-11-09T11:00:00Z");
+        Map<String, Object> ha = ManagementTreeService.domainHa(List.of(
+                new ManagementTreeService.Placement("dom-b", "S1", "MDS-SYNTH-02", false, t1),
+                new ManagementTreeService.Placement("DOM-A", "S2", "MDS-SYNTH-02", false, t2),
+                new ManagementTreeService.Placement("DOM-A", "S3", "MDS-SYNTH-03", true, t2),
+                new ManagementTreeService.Placement("dom-b", "S4", "MDS-SYNTH-01", true, t1)));
+        assertThat(ha.get("observed_at")).isEqualTo(t2.toString());
+        List<Map<String, Object>> domains = (List<Map<String, Object>>) ha.get("domains");
+        assertThat(domains).extracting(d -> d.get("domain")).containsExactly("DOM-A", "dom-b");
+        assertThat((List<Map<String, Object>>) domains.get(0).get("servers")).containsExactly(
+                Map.of("hostname", "MDS-SYNTH-03", "active", true), Map.of("hostname", "MDS-SYNTH-02", "active", false));
+        assertThat(domains.get(0).keySet()).containsExactly("domain", "servers");
+        assertThat((List<Map<String, Object>>) domains.get(1).get("servers")).extracting(x -> x.get("hostname"))
+                .containsExactly("MDS-SYNTH-01", "MDS-SYNTH-02");
+    }
+
+    @Test
+    void domainHaWithoutDataIsEmptyNotAbsent() {
+        Map<String, Object> ha = ManagementTreeService.domainHa(List.of());
+        assertThat(ha).containsEntry("observed_at", null).containsEntry("domains", List.of());
+    }
 }

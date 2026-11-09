@@ -238,6 +238,7 @@ final class CpPolicyParallelCollection {
 
     private void domains(JsonNode root) {
         completeList(root, "objects");
+        CpDomainServerPlacement.record(repository, request.sourceId(), root);
         if (inventory != null) inventory.domains(root);
         PolicyCollectionTrace.domains((int) java.util.stream.StreamSupport.stream(root.path("objects").spliterator(), false)
             .filter(d -> request.domainRef().isEmpty() || ref(request.sourceId(), required(d, "uid")).equals(request.domainRef())).count());

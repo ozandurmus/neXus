@@ -317,4 +317,19 @@ class PolicyCollectionRepositoryTest {
         assertThrows(IllegalArgumentException.class, () -> repository.saveTargetBindings("policy-1",
             List.of(new PolicyCollectionRepository.TargetBinding("device-1", "", "policy-2", "ref-a")), "system:worker"));
     }
+    @Test void domainServerPlacementIsReplacedAsOneSetInOneTransaction() {
+        List<String> sql = new ArrayList<>();
+        List<Object[]> bindings = new ArrayList<>();
+        var repository = new PolicyCollectionRepository(new JooqTransactionBoundary(DSL.using(new MockConnection(context -> {
+            sql.add(context.sql()); bindings.add(context.bindings());
+            return new MockResult[] { new MockResult(1, null) };
+        }), SQLDialect.POSTGRES)));
+        repository.replaceDomainServerPlacement("mds-1", List.of(
+            new PolicyCollectionRepository.DomainServerPlacement("uid-1", "DOM-SYNTH-01", "DMS-SYNTH-01a", "MDS-SYNTH-01", true),
+            new PolicyCollectionRepository.DomainServerPlacement("uid-1", "DOM-SYNTH-01", "DMS-SYNTH-01b", "MDS-SYNTH-02", false)));
+        assertEquals(3, sql.size());
+        assertTrue(sql.get(0).contains("delete from cp_domain_server_placement where source_id"));
+        assertTrue(sql.get(1).contains("insert into cp_domain_server_placement"));
+        assertEquals("MDS-SYNTH-02", bindings.get(2)[4]); assertEquals(false, bindings.get(2)[5]);
+    }
 }
