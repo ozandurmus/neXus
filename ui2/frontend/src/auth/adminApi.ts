@@ -1144,6 +1144,24 @@ export interface ManagementTreeNode {
   readonly acknowledged_reason: string | null;
   readonly children: readonly ManagementTreeNode[];
 }
+/** One Multi-Domain Server hosting a Domain Management Server for a Domain, and whether that one is the Active one. */
+export interface DomainHaServer {
+  readonly hostname: string;
+  readonly active: boolean;
+}
+/** A Domain's Active/Standby placement across the Multi-Domain Servers (servers sorted active first by the backend). */
+export interface DomainHaEntry {
+  readonly domain: string;
+  readonly servers: readonly DomainHaServer[];
+}
+/**
+ * Per-Domain HA placement of a Check Point MDS, from the latest policy collection. `observed_at` is null when it was
+ * never collected; the list may name Domains the tree has no section for (Global, a Domain with no gateways).
+ */
+export interface DomainHa {
+  readonly observed_at: string | null;
+  readonly domains: readonly DomainHaEntry[];
+}
 export interface ManagementTree {
   readonly device_id: string;
   readonly vendor: string;
@@ -1154,6 +1172,8 @@ export interface ManagementTree {
     readonly domains?: number; readonly clusters?: number; readonly gateways?: number; readonly virtual_systems?: number;
     readonly imported?: number; readonly management_appliances?: number; readonly not_in_nexus?: number; readonly acknowledged?: number;
   };
+  /** Only for vendor check_point, and only from backends that collect it: absent otherwise. */
+  readonly domain_ha?: DomainHa;
 }
 
 export function acknowledgeManagedItem(deviceId: string, token: string, acknowledge: boolean, reason?: string): Promise<{ ok: boolean }> {
