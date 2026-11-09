@@ -349,3 +349,59 @@ its own profile), confirm no `operation="signal"` denials in
 `/usr/local/bin/k3s-killall.sh` before any reboot so Postgres shuts down cleanly.
 Look for AppArmor denials in the audit log on this host, not dmesg. Test a new
 kernel with a one-time `grub-reboot` while the default stays on the known-good one.
+
+## Entry 6 — k3s v1.36.6, kernel 7.0.0-43, packages, rwsafe removed, 2026-11-10
+
+**Ask (PO, 2026-11-09/10).** Update what the internal checks found outdated, take a backup first, and remove the
+finished rwsafe pilot from the host ("Devam et. yükleyelim. öncesinde backup da al"; "Yes, export then delete"). The
+PO waived the VMware snapshot. If the maintenance fails: troubleshoot first, restore if not recoverable.
+
+**Before.**
+- Encrypted platform backup run by hand: `nexus-platform-20261109T204750Z.tar.gz.age`, 7.8 GB, in
+  `/var/backups/nexus`.
+- AppArmor state recorded: containers ran as `cri-containerd.apparmor.d//&unconfined (enforce)` under the Entry 5
+  profile. 0 signal denials in the audit log.
+
+**Steps.**
+1. **k3s in place.**
+   - `/usr/local/bin/k3s` was kept as `k3s.v1.36.4`, and the checksum-verified v1.36.6+k3s1 binary was installed.
+   - `systemctl restart k3s`. Containers kept running and the database did not restart.
+   - Result: node Ready on v1.36.6, containerd 2.3.7-k3s1.36. The bundled Traefik chart rolled once. Site 200.
+2. **Packages.** `apt-get full-upgrade` (non-interactive, keep local config): 50 packages, including linux-generic
+   7.0.0-43, systemd, open-vm-tools, postfix and python3-pyasn1 (security). Nothing is left upgradable.
+3. **Kernel, one-time boot.**
+   - Both database StatefulSets were scaled to 0, waiting until the pods were gone.
+   - `systemctl stop k3s`, then `k3s-killall.sh`.
+   - `grub-reboot "...7.0.0-43-generic"`, then reboot at 22:04Z.
+4. **After boot.**
+   - `ui2-db-0` was scaled back and became Ready. The image's start script stops and restarts Postgres internally,
+     so the signal path was exercised and was clean. Server log: 0 "could not signal" lines. 134 devices present.
+   - Deleting a stateless pod took 1 s.
+   - 0 AppArmor denials since boot (`ausearch -m AVC -ts boot`).
+   - The label is still `cri-containerd.apparmor.d//&unconfined`: -43 keeps the stacking, so the Entry 5 profile
+     stays.
+5. **Pin.** `GRUB_DEFAULT` now names 7.0.0-43 (`/etc/default/grub.bak-20261110` keeps the -42 pin). 7.0.0-38 and -42
+   stay installed as fallbacks.
+6. **Firewall.** `nexus-host-firewall.service` reloaded `/etc/nexus/firewall.nft` at boot, including the
+   `scanner_allowed` set added 2026-11-09 for the corporate vulnerability scanner (address only on the host). The
+   unpersisted `rwsafe_pilot` table did not come back.
+7. **rwsafe removed.**
+   - Final encrypted export first: `rwsafe-final-20261109T210305Z.pgdump.age` (globals + `pg_dump -Fc`, 3.1 MB) in
+     `/var/backups/nexus`, outside the 14-file rotation.
+   - Deleted:
+     - namespaces `rwsafe`, `rwsafe-build`, `rwsafe-security` (4 PVCs, reclaim Delete, data directories gone);
+     - priority classes `rwsafe-batch`, `rwsafe-control`, `rwsafe-dataplane`;
+     - registry repositories `rwsafe-control`, `rwsafe-dataplane`, `rwsafe-mirror`. The blobs go at the next
+       registry garbage collection;
+     - `~/rwsafe` and `~/.config/rwsafe`.
+   - Nothing named rwsafe remains in the cluster or on disk.
+
+**End-to-end check.** Two full e2e runs were made:
+- the first, right after boot, gave 79/80; the one failure was an API latency budget, 3.3 s against 3.0 s, on the
+  policy screen while the caches were cold;
+- the second gave 80/80.
+
+**Rollback paths kept.**
+- Kernel: `grub-reboot` the -42 entry, or restore the grub backup.
+- k3s: reinstall `/usr/local/bin/k3s.v1.36.4` and restart k3s.
+- Data: the platform backup.
