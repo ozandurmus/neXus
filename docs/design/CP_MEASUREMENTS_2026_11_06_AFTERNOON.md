@@ -45,3 +45,23 @@ One FULL CP collection with `UI2_POLICY_CP_OBJECTS_EVERY=60`, reverted afterward
    - keep the VIPs UNKNOWN;
    - or amend condition 2 to allow a stricter value binding: every recorded VIP of a VS context must equal the
      interface addresses of exactly one UID-bound VS object.
+
+## 5. Follow-up 2026-11-07/09 (PRs 769-773)
+- **MDS hotfix level: done.** PO 2026-11-07: "the command works on this version". The raw-shape diagnostics (PR 770)
+  showed that the login-shell form answered only CR LF after the echo and then nothing for 60 s. With the PO's approval,
+  the direct literal `cpinfo -y all` (V195, management servers only) answered in 5.3 s. Live: `R82 Jumbo Take 127`.
+- **MDS HA role (V194, PR 769): live but blocked.** `mgmt_cli -r true -f json show-ha-status` stops at a
+  certificate-fingerprint prompt (`(y/n) [n] ?`) and times out.
+  - On 2026-11-09 the FULL CP policy collection failed at its first MDS-level read, `show-domains`, on the same prompt.
+    The fingerprint changed after the last COMPLETED collection (2026-11-06 16:45).
+  - neXus never answers the prompt. The PO verifies and accepts the fingerprint on the MDS by hand (PO choice
+    2026-11-07). Until then policy collection and the HA role stay blocked.
+- **VSX stage 2 (PR 770): live, not yet measured.** The condition 2 amendment (strict address-set binding) is in the
+  decision record. The measurement needs a COMPLETED policy collection that re-reads the object inventory, followed by
+  a topology rebuild. Baseline: 54 `ADDRESS_PREFIX_UNKNOWN` conflicts on the 2026-11-09 snapshot.
+- **Security gate (PR 773).** The UBI9 base reported four new no-fix HIGH CVEs: expat, gnupg2 and two sqlite. The PO
+  accepted them until 2026-11-14.
+  - On 2026-11-14 the base image must be refreshed.
+  - CVE-2026-91415 (java-21) now has a fixed package (RHSA-2026:88349) and must not be extended.
+- **CI.** The validate check had waited 8-11 min on apt downloads of Chromium dependencies. The bounded install (PR 771)
+  brought it to 96-111 s.
