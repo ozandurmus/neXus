@@ -65,3 +65,24 @@ One FULL CP collection with `UI2_POLICY_CP_OBJECTS_EVERY=60`, reverted afterward
   - CVE-2026-91415 (java-21) now has a fixed package (RHSA-2026:88349) and must not be extended.
 - **CI.** The validate check had waited 8-11 min on apt downloads of Chromium dependencies. The bounded install (PR 771)
   brought it to 96-111 s.
+
+## 6. Result 2026-11-09 afternoon (PRs 776-777)
+- **Fingerprint accepted once through neXus.** PO 2026-11-09: "fingerprint ok kabul edebilirsin", then "Yes, send it
+  once".
+  - The one-off literal `mgmt_cli -r true --unsafe-auto-accept true -f json show-ha-status` (V196) was sent in one
+    inventory run. The worker switch `UI2_CP_MDS_FINGERPRINT_ACCEPT_ONCE=1` was set for that run and removed right
+    after.
+  - The acceptance persisted: the plain read now answers in 0.5 s, and the FULL CP policy collection COMPLETED again.
+    A later certificate change will prompt again.
+- **MDS HA role: still UNKNOWN.** The reply keys are `uid, name, domain-type, successfully-synced`, with no `servers`
+  array (PR 777 key-shape log, no values).
+  - The likely meaning is that no HA peer is listed for this MDS.
+  - The absence of a field is not proof, so the role stays UNKNOWN until the PO confirms whether a secondary MDS
+    exists.
+- **VSX stage 2: measured.** After the COMPLETED collection re-read the object inventory and the service restart
+  rebuilt the topology:
+  - `ADDRESS_PREFIX_UNKNOWN` conflicts went from 54 to 30;
+  - all conflicts went from 300 to 274.
+  - The bound prefixes carry the `MANAGEMENT_DERIVED` grade and are never corroborated.
+- **Delivery note.** Twice, the re-ship of PR 775/776 produced no `pull_request` check run. Closing and reopening the
+  PR triggered the run, and the ship then reused the open PR.
