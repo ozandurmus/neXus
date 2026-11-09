@@ -12,7 +12,7 @@ import Typography from "@mui/material/Typography";
 
 import {
   acknowledgeManagedItem, getManagementTree, importDiscoveryCandidates, listCredentials, responsesAreMasked,
-  type CredentialView, type ManagementTree, type ManagementTreeNode,
+  type CredentialView, type DomainHa, type DomainHaEntry, type ManagementTree, type ManagementTreeNode,
 } from "../auth/adminApi";
 import { StatusChip } from "../shell/M3Widgets";
 import { RoleChip, StatePanel, Ts, Unknown } from "../shell/States";
@@ -80,6 +80,39 @@ export function notImported(domains: ManagementTree["domains"]): number {
   };
   domains.forEach((d) => d.nodes.forEach(walk));
   return n;
+}
+
+/** "MDS-A", "MDS-A and MDS-B", "MDS-A, MDS-B and MDS-C". */
+function joinNames(names: readonly string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/**
+ * One Domain's HA placement in the operator's words: "Active on MDS-A, standby on MDS-B". A Domain hosted on one
+ * server has no standby and the line says so; a list with no Active server says that plainly -- neither is guessed.
+ */
+export function domainHaLine(entry: Pick<DomainHaEntry, "servers">): string {
+  const active = entry.servers.filter((s) => s.active).map((s) => s.hostname);
+  const standby = entry.servers.filter((s) => !s.active).map((s) => s.hostname);
+  const head = active.length > 0 ? `Active on ${joinNames(active)}` : "No active server listed";
+  const tail = standby.length > 0 ? `standby on ${joinNames(standby)}` : "no standby";
+  return `${head}, ${tail}`;
+}
+
+/**
+ * The Domain HA entries split by whether the tree has a section for them: `bySection` keyed by Domain name, and
+ * `unsectioned` for Domains the tree does not list (Global, a Domain with no gateways), in the backend's order.
+ */
+export function splitDomainHa(ha: Pick<DomainHa, "domains"> | undefined, domains: ManagementTree["domains"]):
+  { readonly bySection: ReadonlyMap<string, DomainHaEntry>; readonly unsectioned: readonly DomainHaEntry[] } {
+  const sections = new Set(domains.map((d) => d.domain).filter((d): d is string => d !== null));
+  const bySection = new Map<string, DomainHaEntry>();
+  const unsectioned: DomainHaEntry[] = [];
+  for (const e of ha?.domains ?? []) {
+    if (sections.has(e.domain)) bySection.set(e.domain, e); else unsectioned.push(e);
+  }
+  return { bySection, unsectioned };
 }
 
 interface RowActions {
@@ -285,6 +318,10 @@ export function ManagementTreePanel({ deviceId, onOpenDevice, onOpenCluster }: {
   }
   const c = t.counts;
   const missing = c.not_in_nexus ?? notImported(t.domains);
+  // Per-Domain Active/Standby placement across the Multi-Domain Servers; only a Check Point MDS has it, and only
+  // once a policy collection has read it. Absent or never collected: one quiet line, never an invented placement.
+  const haCollected = t.vendor === "check_point" && Boolean(t.domain_ha?.observed_at);
+  const ha = haCollected ? splitDomainHa(t.domain_ha, t.domains) : null;
   const importSelected = async () => {
     if (!t.run_id) return;
     setMessage(null);
@@ -337,18 +374,44 @@ export function ManagementTreePanel({ deviceId, onOpenDevice, onOpenCluster }: {
         <Typography variant="caption" sx={{ display: "block", color: m3.onSurfaceVar, mt: 0.5 }}>
           Name, HA role and last read come from each device itself, not from the management server (its connection state is not a liveness signal).
         </Typography>
+        {t.vendor === "check_point" && (
+          ha ? (
+            <Box data-domain-ha="collected" sx={{ mt: 0.5 }}>
+              <Typography variant="caption" sx={{ display: "block", color: m3.onSurfaceVar }}>
+                Domain HA (which MDS is Active for each Domain) comes from the latest policy collection, read <Ts at={t.domain_ha!.observed_at} relative />.
+              </Typography>
+              {ha.unsectioned.length > 0 && (
+                <Box component="ul" aria-label="Domain HA of Domains with no gateways listed here" sx={{ m: 0, mt: 0.25, pl: 0, listStyle: "none" }}>
+                  {ha.unsectioned.map((e) => (
+                    <Box component="li" key={e.domain} data-domain-ha-entry={e.domain} sx={{ fontSize: 12, color: m3.onSurfaceVar, lineHeight: 1.6 }}>
+                      <Box component="span" sx={{ fontWeight: 600, color: m3.onSurface }}>{e.domain}</Box> · {domainHaLine(e)}
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Box>
+          ) : (
+            <Typography data-domain-ha="not_collected" variant="caption" sx={{ display: "block", color: m3.onSurfaceVar, mt: 0.5 }}>
+              Domain HA (which MDS is Active for each Domain) has not been collected yet; it comes with the next policy collection.
+            </Typography>
+          )
+        )}
       </Box>
       {t.domains.map((d, i) => {
         const dc = domainCounts(d.nodes);
         const expanded = open.has(i);
+        const dha = d.domain !== null ? ha?.bySection.get(d.domain) : undefined;
         return (
           <Box key={d.domain ?? `none-${i}`} data-domain={d.domain ?? ""} sx={{ borderTop: `1px solid ${m3.outlineVar}` }}>
             <Box component="button" type="button" aria-expanded={expanded}
               onClick={() => setOpen((prev) => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
-              sx={{ width: "100%", height: 44, display: "flex", alignItems: "center", gap: 1, px: 2, border: "none", bgcolor: expanded ? m3.scLow : "transparent",
+              sx={{ width: "100%", minHeight: 44, py: dha ? 0.75 : 0, display: "flex", alignItems: "center", gap: 1, px: 2, border: "none", bgcolor: expanded ? m3.scLow : "transparent",
                 font: "inherit", cursor: "pointer", color: m3.onSurface, textAlign: "left" }}>
               <Box component="span" sx={{ color: m3.onSurfaceVar, width: 12 }}>{expanded ? "▾" : "▸"}</Box>
-              <Box component="span" sx={{ fontWeight: 600, fontSize: 13.5, flex: 1 }}>{d.domain ?? (t.vendor === "palo_alto" ? "Managed firewalls" : t.vendor === "radware" ? "Managed devices" : "No domain")}</Box>
+              <Box component="span" sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 0.25 }}>
+                <Box component="span" sx={{ fontWeight: 600, fontSize: 13.5 }}>{d.domain ?? (t.vendor === "palo_alto" ? "Managed firewalls" : t.vendor === "radware" ? "Managed devices" : "No domain")}</Box>
+                {dha && <Box component="span" data-domain-ha-line sx={{ fontSize: 12, fontWeight: 400, color: m3.onSurfaceVar }}>{domainHaLine(dha)}</Box>}
+              </Box>
               {dc.missing > 0 && <StatusChip tone="warn" label={`${dc.missing} not in neXus`} dense />}
               <Box component="span" sx={{ fontSize: 12, color: m3.onSurfaceVar, fontVariantNumeric: "tabular-nums" }}>
                 {/* A Radware controller manages appliances, not clusters of gateways (P2-1B): one count in the right word. */}
