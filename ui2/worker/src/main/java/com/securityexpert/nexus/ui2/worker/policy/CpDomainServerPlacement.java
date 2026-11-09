@@ -55,6 +55,14 @@ final class CpDomainServerPlacement {
     static void record(PolicyCollectionRepository repository, String sourceId, JsonNode listing) {
         try {
             Result result = parse(listing);
+            if (result.rows().isEmpty()) {
+                // Every Check Point domain has an Active Domain Management Server, so an empty set is an unexpected reply
+                // shape, not a fact: keep the previous placement (and its older observed_at) instead of erasing it.
+                System.getLogger(CpDomainServerPlacement.class.getName()).log(System.Logger.Level.WARNING,
+                    java.text.MessageFormat.format("[CP_DOMAIN_HA] no servers parsed (domains={0} skipped={1}); previous placement kept",
+                        result.domains(), result.skipped()));
+                return;
+            }
             repository.replaceDomainServerPlacement(sourceId, result.rows().stream()
                 .map(r -> new PolicyCollectionRepository.DomainServerPlacement(r.domainUid(), r.domainName(), r.serverName(),
                     r.multiDomainServer(), r.active())).toList());
