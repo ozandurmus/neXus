@@ -30,10 +30,25 @@ class CheckPointMdsHaStatusParserTest {
         assertEquals("VENDOR_ERROR", CheckPointMdsHaStatusParser.parse("{\"code\":\"generic_err_command_not_found\",\"message\":\"x\"}", "192.0.2.10").outcome());
         assertEquals("NOT_JSON", CheckPointMdsHaStatusParser.parse("mgmt_cli: command not found", "192.0.2.10").outcome());
         assertEquals("EMPTY", CheckPointMdsHaStatusParser.parse("", "192.0.2.10").outcome());
-        assertEquals("NO_SERVERS keys=domain-type:string", CheckPointMdsHaStatusParser.parse("{\"domain-type\":\"mds\"}", "192.0.2.10").outcome());
-        assertEquals("NO_SERVERS keys=message:string,peers[2],meta{name,?}", CheckPointMdsHaStatusParser.parse(
+        assertEquals("NO_SERVERS domainType=domain keys=domain-type:string", CheckPointMdsHaStatusParser.parse("{\"domain-type\":\"domain\"}", "192.0.2.10").outcome());
+        assertEquals("NO_SERVERS domainType=other keys=domain-type:string", CheckPointMdsHaStatusParser.parse("{\"domain-type\":\"MDS-SYNTH-01\"}", "192.0.2.10").outcome());
+        assertEquals("NO_SERVERS domainType=absent keys=message:string,peers[2],meta{name,?}", CheckPointMdsHaStatusParser.parse(
                 "{\"message\":\"MDS-SYNTH-01 at 192.0.2.10\",\"peers\":[1,2],\"meta\":{\"name\":\"x\",\"192.0.2.9\":1}}",
                 "192.0.2.10").outcome());
         assertEquals("NO_LOCAL_ADDRESS", CheckPointMdsHaStatusParser.parse(TWO, "").outcome());
+    }
+
+    /** The live R82 MDS-level reply shape of 2026-11-09 (key names as logged; values synthetic). */
+    @Test
+    void anMdsLevelReplyWithoutServersIsTheDocumentedActiveActiveCase() {
+        var mds = CheckPointMdsHaStatusParser.parse("{\"uid\":\"00000000-0000-0000-0000-000000000001\",\"name\":\"System Data\","
+                + "\"domain-type\":\"mds\",\"successfully-synced\":true}", "192.0.2.10");
+        assertEquals("ACTIVE", mds.role().orElseThrow());
+        assertEquals(0, mds.servers());
+        assertEquals("MDS_LEVEL_ACTIVE_ACTIVE", mds.outcome());
+        assertTrue(CheckPointMdsHaStatusParser.parse("{\"domain-type\":\"global domain\"}", "192.0.2.10").role().isEmpty(),
+                "only the MDS level is Active/Active; a domain without servers stays unknown");
+        assertEquals("NO_SERVERS domainType=global_domain keys=domain-type:string",
+                CheckPointMdsHaStatusParser.parse("{\"domain-type\":\"global domain\"}", "192.0.2.10").outcome());
     }
 }

@@ -86,3 +86,21 @@ One FULL CP collection with `UI2_POLICY_CP_OBJECTS_EVERY=60`, reverted afterward
   - The bound prefixes carry the `MANAGEMENT_DERIVED` grade and are never corroborated.
 - **Delivery note.** Twice, the re-ship of PR 775/776 produced no `pull_request` check run. Closing and reopening the
   PR triggered the run, and the ship then reused the open PR.
+
+## 7. MDS HA role decision 2026-11-09 evening
+- **PO answer.** The MDS has a secondary ("Yes, it has a secondary").
+- **Vendor evidence.** R82 Multi-Domain Security Management Administration Guide, "Overview of High Availability":
+  - "Multi-Domain Server High Availability is an Active/Active redundancy solution";
+  - "All Multi-Domain Servers are Active";
+  - "One Domain Management Server is Active and the others are Standby" (per Domain).
+  - The Management API reference (v1.9.1 / v2 / v2.1) lists `servers` as an optional field of the `show-ha-status`
+    reply; its `domain-type` enum is `domain | global domain | mds`.
+- **Meaning.** An MDS-level reply has no `servers` because the MDS level has no Active/Standby. It is the documented
+  Active/Active case, not a missing field.
+- **Change (parse scope, no new command).**
+  - A reply with `domain-type` exactly `mds` and no `servers` gives role ACTIVE (outcome `MDS_LEVEL_ACTIVE_ACTIVE`).
+  - Any other reply without `servers` stays UNKNOWN. It logs `domainType=` as the enum token only (`domain`,
+    `global_domain`, `data_domain`, `other` or `absent`).
+- **Not covered.** The per-Domain Active/Standby placement (which Domain Management Servers are Active on this MDS)
+  is a separate fact. The already-approved `mgmt_cli -r true -f json show-domains limit 500 details-level full`
+  reply carries it (`servers[].active`, `multi-domain-server`); neXus does not parse it yet.
