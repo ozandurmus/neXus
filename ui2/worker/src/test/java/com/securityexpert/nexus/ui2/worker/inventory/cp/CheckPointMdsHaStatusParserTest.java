@@ -30,7 +30,10 @@ class CheckPointMdsHaStatusParserTest {
         assertEquals("VENDOR_ERROR", CheckPointMdsHaStatusParser.parse("{\"code\":\"generic_err_command_not_found\",\"message\":\"x\"}", "192.0.2.10").outcome());
         assertEquals("NOT_JSON", CheckPointMdsHaStatusParser.parse("mgmt_cli: command not found", "192.0.2.10").outcome());
         assertEquals("EMPTY", CheckPointMdsHaStatusParser.parse("", "192.0.2.10").outcome());
-        assertEquals("NO_SERVERS", CheckPointMdsHaStatusParser.parse("{\"domain-type\":\"mds\"}", "192.0.2.10").outcome());
+        assertEquals("NO_SERVERS keys=domain-type:string", CheckPointMdsHaStatusParser.parse("{\"domain-type\":\"mds\"}", "192.0.2.10").outcome());
+        assertEquals("NO_SERVERS keys=message:string,peers[2],meta{name,?}", CheckPointMdsHaStatusParser.parse(
+                "{\"message\":\"MDS-SYNTH-01 at 192.0.2.10\",\"peers\":[1,2],\"meta\":{\"name\":\"x\",\"192.0.2.9\":1}}",
+                "192.0.2.10").outcome());
         assertEquals("NO_LOCAL_ADDRESS", CheckPointMdsHaStatusParser.parse(TWO, "").outcome());
     }
 }

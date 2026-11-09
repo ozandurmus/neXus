@@ -21,6 +21,28 @@ public final class CheckPointMdsHaStatusParser {
 
     private CheckPointMdsHaStatusParser() {}
 
+    /**
+     * Key names only, two levels deep, with array lengths (2026-11-09: the live R82 reply had no {@code servers} array);
+     * a key that is not a plain field name is replaced, so no value can reach the log.
+     */
+    static String keyShape(JsonNode node) {
+        java.util.List<String> keys = new java.util.ArrayList<>();
+        node.fieldNames().forEachRemaining(name -> {
+            String safe = name.matches("[A-Za-z][A-Za-z0-9_-]{0,40}") ? name : "?";
+            JsonNode child = node.get(name);
+            if (child.isObject()) {
+                java.util.List<String> inner = new java.util.ArrayList<>();
+                child.fieldNames().forEachRemaining(n -> inner.add(n.matches("[A-Za-z][A-Za-z0-9_-]{0,40}") ? n : "?"));
+                keys.add(safe + "{" + String.join(",", inner) + "}");
+            } else if (child.isArray()) {
+                keys.add(safe + "[" + child.size() + "]");
+            } else {
+                keys.add(safe + ":" + child.getNodeType().name().toLowerCase(java.util.Locale.ROOT));
+            }
+        });
+        return String.join(",", keys);
+    }
+
     public static HaStatus parse(String output, String localAddress) {
         if (output == null || output.isBlank()) return new HaStatus(Optional.empty(), 0, "EMPTY");
         int start = output.indexOf('{');
@@ -34,7 +56,7 @@ public final class CheckPointMdsHaStatusParser {
         }
         if (root.has("code") && !root.has("servers")) return new HaStatus(Optional.empty(), 0, "VENDOR_ERROR");
         JsonNode servers = root.path("servers");
-        if (!servers.isArray()) return new HaStatus(Optional.empty(), 0, "NO_SERVERS");
+        if (!servers.isArray()) return new HaStatus(Optional.empty(), 0, "NO_SERVERS keys=" + keyShape(root));
         if (localAddress == null || localAddress.isBlank()) return new HaStatus(Optional.empty(), servers.size(), "NO_LOCAL_ADDRESS");
         JsonNode local = null;
         int matches = 0;
