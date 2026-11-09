@@ -16,11 +16,10 @@ CONTAINERFILES = (ROOT / "ui2/Containerfile", ROOT / "ui2/Containerfile.packet-a
 BUNDLE = "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
 BLOCKLIST = "/etc/pki/ca-trust/source/blocklist"
 EXPIRY = date(2026, 11, 14)
-ACCEPTED = {
-    "CVE-2026-91415": "java-21-openjdk-headless",
-}
+ACCEPTED = {}
 # The 2026-10-22 runtime base ships the fixed ca-certificates: the acceptance is gone, the blocklist step stays.
-RESOLVED = ("CVE-2026-114406",)
+# The 2026-10-30 runtime base ships java-21-openjdk 21.0.13 (RHSA-2026:88349): CVE-2026-91415 is no longer reported.
+RESOLVED = ("CVE-2026-114406", "CVE-2026-91415")
 
 
 def runtime_stage(path):
@@ -97,5 +96,3 @@ def test_baseline_pins_the_base_image_findings_until_2026_11_14():
             assert "PO decision 2026-10-23" in e["reason"] and "no fixed package" in e["reason"]
             assert "PO decision 2026-10-30" in e["reason"]
     assert not {e["rule"] for e in entries} & set(RESOLVED), "a finding the base no longer reports stays removed"
-    fonts = next(e for e in entries if e["rule"] == "CVE-2026-91415")
-    assert "AWT" in fonts["reason"]
