@@ -223,10 +223,60 @@ class InventoryJobExecutorEndToEndTest {
         assertEquals(java.time.Duration.ofSeconds(60), transport.timeoutByCommand.get(InventoryReadPlan.CP_CPINFO_HOTFIXES_MDS));
         assertEquals(java.time.Duration.ofSeconds(60), transport.timeoutByCommand.get(InventoryReadPlan.CP_MDS_HA_STATUS));
         assertEquals(java.util.List.of("STANDBY"), deviceRepository.observedHaRoles);
+        assertTrue(transport.commands.stream().noneMatch(c -> c.contains("--unsafe-auto-accept")),
+                "the V196 one-off flag is never sent unless the worker runs with UI2_CP_MDS_FINGERPRINT_ACCEPT_ONCE=1");
         InventoryRun run = inventoryRepository.lastRecordedRun;
         assertEquals(java.util.List.of("Mgmt"), run.contexts().get(0).interfaces().stream().map(i -> i.name()).toList(),
                 "interfaces from ip -4 addr show when fw getifs and clish give none; lo skipped");
         assertEquals("192.0.2.30/24", run.contexts().get(0).interfaces().get(0).addresses().get(0).address());
+    }
+
+    @Test
+    void theOneOffFingerprintAcceptReadIsSentOnlyWhenSwitchedOn() {
+        // Measured 2026-09-25 on the MDS: vsx stat, cphaprob and the batched read hang until their 30 s timeout there.
+        // An MDS: fw getifs answers nothing (no firewall kernel); the interfaces come from ip -4 addr show.
+        Map<String, String> outputByCommand = Map.ofEntries(
+                Map.entry(InventoryReadPlan.CP_FW_GETIFS, ""),
+                Map.entry("show interfaces all", ""),
+                Map.entry("show interfaces table", ""),
+                Map.entry("clish -c 'show interfaces all'", ""),
+                Map.entry(InventoryReadPlan.CP_IP_ROUTE_SHOW, "default via 192.0.2.1 dev Mgmt proto 7\n192.0.2.0/24 dev Mgmt proto kernel scope link src 192.0.2.30\n"),
+                // V194 (PO 2026-11-07): the management server's own HA role from show-ha-status, matched by its address.
+                Map.entry(InventoryReadPlan.CP_MDS_HA_STATUS_ACCEPT_ONCE, "{ \"domain-type\" : \"mds\", \"servers\" : [ { \"name\" : \"MDS-SYNTH-01\", "
+                        + "\"ip-address\" : \"192.0.2.30\", \"ha-state\" : \"standby\" }, { \"name\" : \"MDS-SYNTH-02\", "
+                        + "\"ip-address\" : \"192.0.2.31\", \"ha-state\" : \"active\" } ] }"),
+                Map.entry(InventoryReadPlan.CP_IP_ADDR_SHOW_STATE_ONLY,
+                        "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 state UNKNOWN\n    inet 127.0.0.1/8 scope host lo\n"
+                        + "2: Mgmt: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n    inet 192.0.2.30/24 brd 192.0.2.255 scope global Mgmt\n"));
+        ScriptedCheckPointInventoryTransport transport = new ScriptedCheckPointInventoryTransport(outputByCommand);
+        transport.allowExecInteractiveWithoutRejection();
+        InventoryJobExecutorFakes.FakeLeaseRepository leaseRepo =
+                new InventoryJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED);
+        InventoryJobExecutorFakes.FakeStepAttemptRepository attemptRepo = new InventoryJobExecutorFakes.FakeStepAttemptRepository();
+        InventoryJobExecutorFakes.FakeDeviceEnrollmentReadPort devicePort = new InventoryJobExecutorFakes.FakeDeviceEnrollmentReadPort();
+        InventoryJobExecutorFakes.FakeDeviceRepository deviceRepository = new InventoryJobExecutorFakes.FakeDeviceRepository();
+        InventoryJobExecutorFakes.FakeDeviceInventoryRepository inventoryRepository =
+                new InventoryJobExecutorFakes.FakeDeviceInventoryRepository();
+        InventoryCapabilityExecutor capabilityExecutor =
+                new InventoryCapabilityExecutor(transport, ref -> { throw new IllegalStateException("not used"); });
+        InventoryJobExecutor executor = new InventoryJobExecutor(leaseRepo, attemptRepo, devicePort, deviceRepository,
+                inventoryRepository, capabilityExecutor);
+        InventoryRequest request = InventoryRequest.checkPointManagementServer(new ConnectionTarget("ep-1", "192.0.2.30", 22), "cred-1",
+                "trust-1", Optional.empty());
+
+        System.setProperty("ui2.cp.mds.fingerprint.accept-once", "1");
+        JobOutcome outcome;
+        try {
+            outcome = executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request, false);
+        } finally {
+            System.clearProperty("ui2.cp.mds.fingerprint.accept-once");
+        }
+
+        assertTrue(outcome instanceof JobOutcome.Completed, "expected Completed, got " + outcome);
+        // V196 (PO 2026-11-09): with the switch on, the HA read goes once with --unsafe-auto-accept, never the plain one.
+        assertTrue(transport.commands.contains("(interactive) " + InventoryReadPlan.CP_MDS_HA_STATUS_ACCEPT_ONCE), transport.commands.toString());
+        assertTrue(transport.commands.stream().noneMatch(c -> c.equals("(interactive) " + InventoryReadPlan.CP_MDS_HA_STATUS)));
+        assertEquals(java.util.List.of("STANDBY"), deviceRepository.observedHaRoles);
     }
 
     @Test
