@@ -104,3 +104,15 @@ One FULL CP collection with `UI2_POLICY_CP_OBJECTS_EVERY=60`, reverted afterward
 - **Not covered.** The per-Domain Active/Standby placement (which Domain Management Servers are Active on this MDS)
   is a separate fact. The already-approved `mgmt_cli -r true -f json show-domains limit 500 details-level full`
   reply carries it (`servers[].active`, `multi-domain-server`); neXus does not parse it yet.
+
+## 8. Per-Domain Active/Standby placement 2026-11-09 evening
+- **PO request.** Show which Domain is Active on which MDS ("Yes, add it").
+- **Source.** No new command. Every CP policy collection already sends the gated `mgmt_cli -r true -f json show-domains
+  limit 500 details-level full`. Its per-domain `servers[]` (`type`, `active`, `multi-domain-server`) is now parsed.
+- **Rules.**
+  - Only `management server` entries count. Log servers and incomplete entries are skipped and counted.
+  - The set per source is replaced on each collection (table `cp_domain_server_placement`, V197).
+  - A reply with no parsed server keeps the previous set and its older time.
+  - The log carries counts only: `[CP_DOMAIN_HA] domains= servers= active= skipped=`.
+- **Display.** The management tree shows, for each Domain, "Active on <MDS>, standby on <MDS>". Domains with no
+  section (for example Global) appear in a compact list in the header, together with the time of the reading.
