@@ -94,6 +94,11 @@ public final class InventoryReadPlan {
     /** A management server's own HA role (V194 gate cp_identity_mds_ha_status, PO approval 2026-11-07): the Management
      *  API at Multi-Domain Server level, issued in the interactive Expert shell where mgmt_cli has its environment. */
     public static final String CP_MDS_HA_STATUS = "mgmt_cli -r true -f json show-ha-status";
+    /** One-off (V196 gate cp_identity_mds_ha_status_accept_once, PO approval 2026-11-09 "Yes, send it once"): the same
+     *  read once with the management API certificate fingerprint accepted automatically, after the MDS certificate changed
+     *  and every MDS-level mgmt_cli read stopped at the fingerprint prompt. Sent only while the worker runs with
+     *  UI2_CP_MDS_FINGERPRINT_ACCEPT_ONCE=1, which is set for one inventory run and removed right after. */
+    public static final String CP_MDS_HA_STATUS_ACCEPT_ONCE = "mgmt_cli -r true --unsafe-auto-accept true -f json show-ha-status";
     public static final String CP_SHOW_ASSET_SYSTEM = "clish -c 'show asset system'";
     /** The Gaia version (PO 2026-09-25: observed facts follow every read); the configuration path's gated literal. */
     public static final String CP_SHOW_VERSION_ALL = "clish -c 'show version all'";

@@ -94,6 +94,12 @@ public final class InventoryCapabilityExecutor {
     /** The gated timeout of {@code cp_identity_cpinfo_hotfixes} (V47: 60 s). Measured 2026-11-06: the R82 management
      *  server's interactive cpinfo did not answer within 30 s, so the read used half its approved budget. */
     static final Duration CPINFO_TIMEOUT = Duration.ofSeconds(60);
+    /** V196 one-off: true only while the worker runs with {@code UI2_CP_MDS_FINGERPRINT_ACCEPT_ONCE=1}. */
+    static boolean acceptFingerprintOnce() {
+        return "1".equals(System.getProperty("ui2.cp.mds.fingerprint.accept-once",
+                System.getenv().getOrDefault("UI2_CP_MDS_FINGERPRINT_ACCEPT_ONCE", "0")));
+    }
+
     /** The gated timeout of {@code cp_identity_mds_ha_status} (V194: 60 s). */
     static final Duration MDS_HA_TIMEOUT = Duration.ofSeconds(60);
     private static final Pattern API_KEY = Pattern.compile("<key>([^<]+)</key>");
@@ -499,7 +505,8 @@ public final class InventoryCapabilityExecutor {
             if (managementServer) {
                 try {
                     var ha = com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointMdsHaStatusParser.parse(
-                            identityReadOutput(session, InventoryReadPlan.CP_MDS_HA_STATUS, true, MDS_HA_TIMEOUT), target.host());
+                            identityReadOutput(session, acceptFingerprintOnce() ? InventoryReadPlan.CP_MDS_HA_STATUS_ACCEPT_ONCE
+                                    : InventoryReadPlan.CP_MDS_HA_STATUS, true, MDS_HA_TIMEOUT), target.host());
                     mdsHaRole = ha.role();
                     LOG.log(System.Logger.Level.INFO, "[CP_MDS_HA] outcome={0} servers={1} role={2}", ha.outcome(), ha.servers(),
                             ha.role().orElse("UNKNOWN"));

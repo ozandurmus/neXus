@@ -214,6 +214,24 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/CP_MEASUREMENTS_2026_11_06_AFTERNOON.md (PO chat approval 2026-11-07)"
 
+  # One-off (V196, PO approval 2026-11-09): the HA read once with the API fingerprint accepted automatically.
+  - gate_id: cp_identity_mds_ha_status_accept_once
+    vendor: check_point
+    platform_role_scope: cp_multi_domain_server
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "mgmt_cli -r true --unsafe-auto-accept true -f json show-ha-status"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 60
+    retry_rule: none
+    max_frequency: "once, one PO-approved inventory run (2026-11-09)"
+    session_reuse_rule: "the inventory session (interactive Expert shell)"
+    unsupported_behavior_ref: "as cp_identity_mds_ha_status; a vendor error or no answer leaves the HA role UNKNOWN"
+    secret_output_risk: "as cp_identity_mds_ha_status: only the local ha-state and the server count are kept"
+    safe_telemetry_fields: [outcome, servers, role]
+    source_document_pointer: "docs/design/CP_MEASUREMENTS_2026_11_06_AFTERNOON.md §5 (PO chat approval 2026-11-09)"
+
   # Management-server HA role (V194, PO approval 2026-11-07): Management API show-ha-status at MDS level.
   - gate_id: cp_identity_mds_ha_status
     vendor: check_point
