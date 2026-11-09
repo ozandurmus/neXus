@@ -196,6 +196,24 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/PLATFORM_IDENTITY_FACTS_CONTRACT.md §3 -- measured 2026-09-22"
 
+  # Management-server cpinfo, direct in the interactive Expert shell (V195, PO approval 2026-11-07).
+  - gate_id: cp_identity_cpinfo_hotfixes_mds
+    vendor: check_point
+    platform_role_scope: cp_multi_domain_server
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "cpinfo -y all"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 60
+    retry_rule: none
+    max_frequency: "once per management server per inventory run"
+    session_reuse_rule: "the inventory session (interactive Expert shell)"
+    unsupported_behavior_ref: "no jumbo line or no answer within 60 s leaves the hotfix level UNKNOWN; the inventory never fails on it"
+    secret_output_risk: "none (hotfix names and takes only)"
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_MEASUREMENTS_2026_11_06_AFTERNOON.md (PO chat approval 2026-11-07)"
+
   # Management-server HA role (V194, PO approval 2026-11-07): Management API show-ha-status at MDS level.
   - gate_id: cp_identity_mds_ha_status
     vendor: check_point
