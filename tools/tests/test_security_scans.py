@@ -307,7 +307,7 @@ def test_mirror_rejects_mutable_reference_before_cluster_contact(monkeypatch):
 
 
 @pytest.mark.parametrize("roles,called", [(["role:viewer", "role:replay_viewer"], True), (["role:security_admin"], False)])
-def test_dast_uses_read_only_session_and_baseline_without_logging_cookie(tmp_path, monkeypatch, roles, called):
+def test_dast_uses_read_only_session_and_baseline_without_logging_cookie(tmp_path, monkeypatch, capsys, roles, called):
     import io
     import os
     from types import SimpleNamespace
@@ -335,8 +335,13 @@ def test_dast_uses_read_only_session_and_baseline_without_logging_cookie(tmp_pat
         assert cookie not in json.dumps(command)
         assert "spider.processForm=false" in dast.CONFIG.read_text()
         assert "spider.postForm=false" in dast.CONFIG.read_text()
+        # zap-baseline.py writes $HOME/zap.yaml; the home directory must exist before the scan starts.
+        assert home.is_dir()
+        (tmp_path / "zap.json").write_text("{}")
         return SimpleNamespace(returncode=0)
 
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
     monkeypatch.setattr(dast.urllib.request, "build_opener", lambda *args: SimpleNamespace(open=open_request))
     monkeypatch.setattr(dast.subprocess, "run", scan)
     mask = os.umask(0o077)
@@ -344,6 +349,11 @@ def test_dast_uses_read_only_session_and_baseline_without_logging_cookie(tmp_pat
         assert dast.main() == 0
     finally:
         os.umask(mask)
+    log = capsys.readouterr().out
+    assert cookie not in log and "synthetic-machine-input" not in log
+    assert ("DAST_FAILED" in log) is (not called)
+    if not called:
+        assert "stage=session class=ValueError" in log
     assert bool(commands) is called
     assert (tmp_path / "zap.json.exit").read_text() == ("0" if called else "3")
     assert not dast.CONFIG.exists()

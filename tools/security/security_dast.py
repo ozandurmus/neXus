@@ -20,10 +20,16 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None  # A redirect must never forward the machine token to another origin.
 
 
+def failed(stage, cause):
+    # One short line in the pod log: the stage and an exception class, never a token, cookie or scanner output.
+    print("DAST_FAILED stage=%s class=%s" % (stage, cause), flush=True)
+
+
 def main():
     os.umask(0o077)
     rc = 3
     config = CONFIG
+    stage = "login"
     try:
         token = TOKEN.read_text().strip()
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
@@ -36,6 +42,7 @@ def main():
         if not re.fullmatch(r"[A-Za-z0-9_-]{43}", cookies["ui2_session"].value):
             raise ValueError("invalid session cookie")
         # Fail before scanning if the minted session cannot read the application.
+        stage = "session"
         with opener.open(urllib.request.Request(BASE + "/session/status", headers={"Cookie": cookie}), timeout=30) as response:
             status = json.load(response)
             if response.status != 200 or status.get("authenticated") is not True or set(status.get("role_tokens", [])) != {"role:viewer", "role:replay_viewer"}:
@@ -47,13 +54,21 @@ def main():
                           "replacer.full_list(0).url=http://ui2-service-internal\\.ui2\\.svc\\.cluster\\.local:8080/.*\n"
                           "spider.processForm=false\nspider.postForm=false\n")
         config.chmod(0o600)
+        stage = "scan"
         (WORK / "zap-home").mkdir(exist_ok=True)
+        # zap-baseline.py writes its automation plan to $HOME/zap.yaml. HOME (/work/home) lives on the empty work
+        # volume and nothing else creates it in the DAST pod; without it every weekly scan died before scanning
+        # (2026-10-04 to 2026-11-08, summary cause FileNotFoundError for zap.json).
+        Path(os.environ.get("HOME") or WORK / "home").mkdir(parents=True, exist_ok=True)
         # -I only makes warnings nonfatal; HIGH handling belongs to our baseline gate.
         rc = subprocess.run(["zap-baseline.py", "-t", BASE, "-m", "1", "-T", "10", "-I",
                              "-J", "zap.json", "-z", "-dir /work/zap-home -configfile " + str(config)],
                             cwd="/zap/wrk", stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                             timeout=1200).returncode
-    except (OSError, ValueError, KeyError, TypeError, AttributeError, subprocess.TimeoutExpired):
+        if not (Path("/zap/wrk") / "zap.json").exists() and not (WORK / "zap.json").exists():
+            failed(stage, "NoReport_rc%s" % rc)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, subprocess.TimeoutExpired) as error:
+        failed(stage, type(error).__name__)
         rc = 3
     finally:
         config.unlink(missing_ok=True)
