@@ -23,6 +23,10 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/lifecycle", ActionRegistry.DEVICE_READ),
             Map.entry("GET /devices/*/lifecycle", ActionRegistry.DEVICE_READ),
             Map.entry("GET /api/v2/lifecycle/catalog", ActionRegistry.DEVICE_READ),
+            // Advisory matching part 1 (ADVISORY_MATCHING_CONTRACT.md section 8): read access follows the Lifecycle view.
+            Map.entry("GET /api/v2/lifecycle/advisories", ActionRegistry.DEVICE_READ),
+            Map.entry("GET /api/v2/lifecycle/advisories/*", ActionRegistry.DEVICE_READ),
+            Map.entry("GET /api/v2/lifecycle/advisory-sources", ActionRegistry.DEVICE_READ),
             Map.entry("POST /api/v2/lifecycle/catalog", ActionRegistry.LIFECYCLE_CATALOG_WRITE),
             Map.entry("PUT /api/v2/lifecycle/catalog/*", ActionRegistry.LIFECYCLE_CATALOG_WRITE),
             Map.entry("POST /api/v2/lifecycle/catalog/*/delete", ActionRegistry.LIFECYCLE_CATALOG_WRITE),
@@ -331,18 +335,29 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
      * {@link GateChainInterceptor}; this prevents a new controller from
      * becoming open merely because its mapping was omitted here.
      */
-    static final Set<String> EXPLICITLY_UNGATED_ROUTES = Set.of(
-            "GET /",
-            "POST /login",
-            "POST /internal/machine-session",
-            "POST /auth/login",
-            "POST /login/resolve",
-            "POST /session/logout",
-            "GET /session/status",
-            "GET /error",
-            "POST /error",
-            "POST /local-credentials/change-password",
-            "GET /healthz");
+    static final Set<String> EXPLICITLY_UNGATED_ROUTES = ungated();
+
+    private static Set<String> ungated() {
+        var routes = new java.util.HashSet<>(Set.of(
+                "GET /",
+                "POST /login",
+                "POST /internal/machine-session",
+                "POST /auth/login",
+                "POST /login/resolve",
+                "POST /session/logout",
+                "GET /session/status",
+                "GET /error",
+                "POST /error",
+                "POST /local-credentials/change-password",
+                "GET /healthz"));
+        // Advisory ingest (ADVISORY_MATCHING_CONTRACT.md section 4): internal port only, authenticated by the fetcher's own
+        // token. The lookup is exact, so each source key is listed; an unknown source stays unmapped and is refused.
+        for (String source : com.securityexpert.nexus.ui2.service.advisorystore.AdvisorySources.KEYS) {
+            routes.add("POST /internal/advisories/" + source);
+            routes.add("POST /internal/advisories/" + source + "/complete");
+        }
+        return Set.copyOf(routes);
+    }
 
     private final GateChain gateChain;
     private final LocalIdentityResolver localIdentityResolver;
