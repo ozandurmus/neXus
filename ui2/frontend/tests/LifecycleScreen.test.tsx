@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { LIFECYCLE_PAGE, LifecycleScreen, DeviceLifecycleLine, lifecycleCsv } from "../src/screens/LifecycleScreen";
+import { LIFECYCLE_PAGE, LifecycleScreen, DeviceLifecycleLine, lifecycleCsv, livePatchCell } from "../src/screens/LifecycleScreen";
 import { LifecycleCatalogPanel } from "../src/screens/LifecycleCatalogPanel";
 import * as api from "../src/auth/adminApi";
 import type { LifecycleDevice } from "../src/auth/adminApi";
@@ -26,7 +26,7 @@ function themed(node: React.ReactNode) { return render(<ThemeProvider theme={m3T
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.getLifecycle).mockResolvedValue({ as_of: "2026-10-09", devices: [row("member-a"), row("member-b", "HIGH")],
-    summary: { devices: 2, no_lifecycle_data: 2, past_end_of_support: 0, within_180_days: 0, within_365_days: 0, licenses_within_60_days: 0 } });
+    summary: { devices: 2, no_lifecycle_data: 2, past_end_of_support: 0, within_180_days: 0, within_365_days: 0, licenses_within_60_days: 0, license_problems: 1, licenses_collected: 0, live_patch_not_active: 2 } });
   vi.mocked(api.getLifecycleCatalog).mockResolvedValue({ can_manage: false, entries: [] });
 });
 
@@ -38,7 +38,10 @@ describe("fleet lifecycle", () => {
     expect(within(table).getByText("FW-JULIET-06")).toBeInTheDocument();
     expect(within(table).getAllByText("CLS-ROMEO-01")).toHaveLength(2);
     expect(within(table).getAllByText("NO_LIFECYCLE_DATA")).toHaveLength(2);
-    expect(within(table).getAllByText("Support contract not collected for this vendor")).toHaveLength(2);
+    expect(within(table).getAllByText("Not collected")).toHaveLength(2);
+    expect(within(table).getAllByRole("button", { name: "Details" })).toHaveLength(2);
+    fireEvent.click(within(table).getAllByRole("button", { name: "Details" })[0]);
+    expect(within(table).getByText("Support contract not collected for this device")).toBeInTheDocument();
     expect(screen.getByText("No lifecycle data")).toBeInTheDocument();
     expect(within(table).getAllByText("No catalog match · No catalog match")).toHaveLength(2);
   });
@@ -65,8 +68,10 @@ describe("fleet lifecycle", () => {
     ], nearest_license: { label: "2026-10-20", expiry: "2026-10-20", status: "DATED" } };
     vi.mocked(api.getLifecycle).mockResolvedValue({ as_of: "2026-10-09", summary: {}, devices: [device] });
     themed(<LifecycleScreen />);
-    expect(await screen.findByText(/DNS · FW-BRAVO-02 · Never · UNKNOWN/)).toBeInTheDocument();
-    expect(screen.getByText(/DHCP · FW-BRAVO-02 · 2026-10-20 · DATED/)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Details" }));
+    expect(await screen.findByText(/^DNS · FW-BRAVO-02 · Never · UNKNOWN$/)).toBeInTheDocument();
+    expect(screen.getByText(/^DHCP · FW-BRAVO-02 · 2026-10-20$/)).toBeInTheDocument();
+    expect(screen.getAllByText("Licenses").length).toBeGreaterThanOrEqual(2);
     expect(lifecycleCsv([device])).toContain("DNS · FW-BRAVO-02 · Never · UNKNOWN");
   });
   it("shows and exports sale and engineering milestones as separate dates", async () => {
@@ -107,6 +112,90 @@ describe("fleet lifecycle", () => {
   });
 });
 
+const lic = (o: Partial<api.LifecycleLicense>): api.LifecycleLicense => ({ name: "CPSB-FW", kind: "LICENSE", category: "LICENSE", label: "Permanent", expiry: null, status: "PERMANENT", days_remaining: null, evidence: "DIRECT_DEVICE", ...o });
+const patchBlock = (o: Partial<api.LifecycleLivePatch> = {}): api.LifecycleLivePatch => ({ package_take: "42", jumbo: "Jumbo Hotfix Take 99", read_outcome: "COLLECTED", observed_at: "2026-10-09T01:00:00Z",
+  armed: 3, ready: 1, jumbofix: 1, other: 0, items: [
+    { patch: "PATCH-SYNTH-01", status: "armed", mode: "auto", running: 2, total: 2, installed_at: "2026-09-01T08:30", refs: ["sk000000"] },
+    { patch: "PATCH-SYNTH-02", status: "ready", mode: "auto", running: 0, total: 2, installed_at: null, refs: ["CVE-2026-0001", "sk000001"] }], ...o });
+
+describe("license and Live Patch view", () => {
+  const problemDevice: LifecycleDevice = { ...row("member-a"), license_status: "COLLECTED", support_contract_status: "COLLECTED", license_problem: true,
+    license_problems: [{ label: "CPSB-IPS", status: "EXPIRED" }], nearest_license: lic({ expiry: "2026-10-06", status: "EXPIRED" }),
+    licenses: [lic({}), lic({ name: "CPSB-IPS", expiry: "2026-10-06", label: "2026-10-06", status: "EXPIRED", days_remaining: -3 }),
+      lic({ name: "AV", category: "SUBSCRIPTION", kind: "SUBSCRIPTION", expiry: "2026-11-01", label: "2026-11-01", status: "DATED", days_remaining: 23 }),
+      lic({ name: "CPAP-SYNTH", category: "SUPPORT_CONTRACT", kind: "SUPPORT_CONTRACT", expiry: "2027-01-01", label: "2027-01-01", status: "DATED", days_remaining: 84 }),
+      lic({ name: "Smart Licensing", category: "SMART_LICENSING", kind: "SMART_LICENSING", label: "UNREGISTERED", status: "UNREGISTERED" }),
+      lic({ name: "Web Filter", member: "FW-BRAVO-02", evidence: "MANAGER_REPORTED", expiry: "2026-10-20", label: "2026-10-20", status: "DATED", days_remaining: 11 })],
+    live_patch: patchBlock() };
+  const cleanDevice: LifecycleDevice = { ...row("member-b"), license_status: "COLLECTED", nearest_license: lic({ expiry: "2027-02-02", status: "DATED" }), live_patch: patchBlock({ ready: 0, items: [] }) };
+  const plainDevice: LifecycleDevice = { ...row("device-3"), hostname: "FW-PAPA-03", vendor: "PALOALTO", license_status: "COLLECTED", live_patch: null };
+  const unknownDevice: LifecycleDevice = { ...row("device-4"), hostname: "FW-OSCAR-05", vendor: "FORTINET", license_status: "UNKNOWN", live_patch: null,
+    license_reads: [{ kind: "fgt_update_info_contract", outcome: "FAILED", reason: "TIMEOUT", item_count: 0, observed_at: null }] };
+  const load = (devices: LifecycleDevice[]) => vi.mocked(api.getLifecycle).mockResolvedValue({ as_of: "2026-10-09", devices,
+    summary: { devices: devices.length, license_problems: 1, live_patch_not_active: 1, licenses_collected: 3 } });
+
+  it("shows the renamed cards and the compact Licenses and Live Patch columns", async () => {
+    load([problemDevice, cleanDevice, plainDevice, unknownDevice]);
+    themed(<LifecycleScreen />);
+    const table = await screen.findByRole("table", { name: "Fleet lifecycle" });
+    expect(screen.getByText("License problems")).toBeInTheDocument();
+    expect(screen.getByText("Live Patch not active")).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "Licenses" })).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "Live Patch" })).toBeInTheDocument();
+    expect(within(table).getByText("Problem")).toBeInTheDocument();
+    expect(within(table).getAllByText("2027-02-02")).toHaveLength(2);
+    expect(within(table).getByText("Collected")).toBeInTheDocument();
+    expect(within(table).getByText("Unknown")).toBeInTheDocument();
+    expect(within(table).getAllByText("take 42 · 3 armed")).toHaveLength(2);
+    expect(within(table).getByText("· 1 not active")).toBeInTheDocument();
+    expect(within(table).getAllByText("—").length).toBeGreaterThanOrEqual(2);
+    expect(within(table).queryAllByText(/not active/)).toHaveLength(1);
+  });
+
+  it("groups the detail by category with the manager note, permanent and state words", async () => {
+    load([problemDevice]);
+    themed(<LifecycleScreen />);
+    fireEvent.click(await screen.findByRole("button", { name: "Details" }));
+    const detail = await screen.findByRole("group", { name: /Details of FW-TANGO-04/ });
+    for (const title of ["Subscriptions", "Support contracts"]) expect(within(detail).getByText(title)).toBeInTheDocument();
+    expect(within(detail).getByText("CPSB-FW · Permanent")).toBeInTheDocument();
+    expect(within(detail).getByText("CPSB-IPS · 2026-10-06 · EXPIRED · expired 3 days ago")).toBeInTheDocument();
+    expect(within(detail).getByText("AV · 2026-11-01 · 23 days remaining")).toBeInTheDocument();
+    expect(within(detail).getByText(/^Smart Licensing · UNREGISTERED$/)).toBeInTheDocument();
+    expect(within(detail).getByText(/Web Filter · FW-BRAVO-02 · 2026-10-20 · 11 days remaining/)).toBeInTheDocument();
+    expect(within(detail).getAllByText(/reported by manager/)).toHaveLength(1);
+    expect(within(detail).getByText("License problems: CPSB-IPS (EXPIRED)")).toBeInTheDocument();
+  });
+
+  it("lists the Live Patch rows with ready shown as installed, not active, and references as text", async () => {
+    load([problemDevice]);
+    themed(<LifecycleScreen />);
+    fireEvent.click(await screen.findByRole("button", { name: "Details" }));
+    const list = await screen.findByRole("table", { name: "Live Patch patches" });
+    expect(within(list).getByText("PATCH-SYNTH-02")).toBeInTheDocument();
+    expect(within(list).getByText("installed, not active")).toBeInTheDocument();
+    expect(within(list).queryByText("ready")).toBeNull();
+    expect(within(list).getByText("CVE-2026-0001, sk000001")).toBeInTheDocument();
+    expect(within(list).getByText("0 of 2")).toBeInTheDocument();
+    expect(screen.getByText(/Package take 42 · Jumbo Jumbo Hotfix Take 99 · read COLLECTED/)).toBeInTheDocument();
+  });
+
+  it("shows the read outcomes when collection is UNKNOWN", async () => {
+    load([unknownDevice]);
+    themed(<LifecycleScreen />);
+    fireEvent.click(await screen.findByRole("button", { name: "Details" }));
+    expect(await screen.findByText(/Read fgt_update_info_contract: FAILED \(TIMEOUT\)/)).toBeInTheDocument();
+  });
+
+  it("exports the license problem, the collection per kind and the Live Patch columns", () => {
+    const csv = lifecycleCsv([{ ...problemDevice, license_reads: [{ kind: "cp_cplic_print", outcome: "COLLECTED", reason: "OK", item_count: 5, observed_at: null }] }, plainDevice]);
+    const [head, first, second] = csv.trim().split("\r\n");
+    for (const h of ["License problem", "License collection by kind", "Live Patch package take", "Live Patch armed", "Live Patch ready", "Live Patch jumbofix"]) expect(head).toContain(h);
+    expect(first.endsWith(`yes,cp_cplic_print: COLLECTED,42,3,1,1`)).toBe(true);
+    expect(second.endsWith(`no,,,,,`)).toBe(true);
+  });
+});
+
 describe("catalog administration", () => {
   it("masked read-only users see no mutation controls", async () => {
     themed(<LifecycleCatalogPanel onChanged={vi.fn()} />);
@@ -144,5 +233,17 @@ describe("catalog administration", () => {
     expect(await screen.findByText("Row 3: Bad date")).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Lifecycle catalog" })).toBeInTheDocument();
     expect(changed).not.toHaveBeenCalled();
+  });
+});
+
+describe("livePatchCell", () => {
+  const patch = (over: Record<string, unknown>) => ({ live_patch: { package_take: "30", jumbo: null, read_outcome: null, observed_at: null,
+    armed: 0, ready: 0, jumbofix: 0, other: 0, items: [], ...over } }) as unknown as LifecycleDevice;
+  it("says the armed count only when the patch list was read", () => {
+    expect(livePatchCell(patch({ read_outcome: "COLLECTED", armed: 3, ready: 1 }))).toBe("take 30 · 3 armed · 1 not active");
+    expect(livePatchCell(patch({}))).toBe("take 30 · patches not read");
+    expect(livePatchCell(patch({ read_outcome: "FAILED" }))).toBe("take 30 · patches not read");
+    expect(livePatchCell(patch({ package_take: null }))).toBe("Not collected");
+    expect(livePatchCell({ live_patch: null } as unknown as LifecycleDevice)).toBe("—");
   });
 });

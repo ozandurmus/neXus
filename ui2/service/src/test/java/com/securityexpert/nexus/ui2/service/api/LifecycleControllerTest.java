@@ -78,4 +78,54 @@ class LifecycleControllerTest {
             assertTrue(response.contains(names.maskClusterName("synthetic-cluster")));
         }
     }
+
+    @Test void newLicenseAndLivePatchKeysAreServedAndTheMaskedPersonaOnlyPseudonymisesMembers() throws Exception {
+        byte[] key = "synthetic-lifecycle-mask-key".getBytes(StandardCharsets.UTF_8);
+        var names = new com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer(key);
+        var advice = new PrivacyMaskingResponseBodyAdvice(new SubnetPreservingIpMasker(key), names);
+        var seen = Instant.parse("2026-10-09T01:00:00Z");
+        var today = java.time.LocalDate.of(2026, 10, 9);
+        var items = List.of(
+                new com.securityexpert.nexus.ui2.persistence.lifecycle.DeviceLifecycleRepository.LicenseItem("mc_device_license", "LICENSE",
+                        "Web Filter", "VALID", today.plusDays(20), "valid", "synthetic-managed-gateway", "MANAGER_REPORTED", seen),
+                new com.securityexpert.nexus.ui2.persistence.lifecycle.DeviceLifecycleRepository.LicenseItem("infoblox_license_gridwide", "LICENSE",
+                        "DNS", "VALID", today.plusDays(40), null, "grid", "DIRECT_DEVICE", seen),
+                new com.securityexpert.nexus.ui2.persistence.lifecycle.DeviceLifecycleRepository.LicenseItem("cp_cplic_print", "SUPPORT_CONTRACT",
+                        "CPAP-SYNTH", "EXPIRED", null, null, null, "DIRECT_DEVICE", seen));
+        var patches = List.of(new com.securityexpert.nexus.ui2.persistence.lifecycle.DeviceLifecycleRepository.LivePatchItem(
+                "PATCH-SYNTH-01", "ready", "auto", 1, 2, java.time.LocalDateTime.of(2026, 9, 1, 8, 30), List.of("sk000000", "CVE-2026-0001"), seen));
+        var facts = new com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts("device-1", java.util.Optional.empty(),
+                java.util.Optional.of("Jumbo Hotfix Take 99"), java.util.Optional.empty(), Map.of("live_patch_package_take", "42"),
+                java.util.Optional.empty(), "synthetic", java.util.Optional.empty());
+        var row = com.securityexpert.nexus.ui2.service.lifecycle.LifecycleProjection.device(
+                new com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord("device-1", "gateway", "check_point",
+                        com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState.ENROLLED, java.util.Optional.of("synthetic-gateway"),
+                        java.util.Optional.of("Example Appliance"), java.util.Optional.empty(), java.util.Optional.empty(),
+                        java.util.Optional.of("synthetic-cluster")),
+                List.of(), new LifecycleCatalogRepository.StoredInventory(null, null, null), today,
+                new com.securityexpert.nexus.ui2.service.lifecycle.LifecycleProjection.Stored(List.of(
+                        new com.securityexpert.nexus.ui2.persistence.lifecycle.DeviceLifecycleRepository.Read("device-1", "cp_cplp_list", "COLLECTED", "OK", 1, seen)),
+                        items, patches, facts));
+        when(service.fleet(any())).thenReturn(List.of(row));
+        when(service.device("device-1")).thenReturn(java.util.Optional.of(row));
+        var mvc = MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(advice).build();
+        String maskedMember = names.maskManagedDeviceName("synthetic-managed-gateway");
+        for (String path : List.of("/api/v2/lifecycle", "/devices/device-1/lifecycle")) {
+            var raw = mvc.perform(get(path)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            for (String k : List.of("\"license_problem\":true", "\"license_problems\"", "\"license_reads\"", "\"live_patch\"",
+                    "\"package_take\":\"42\"", "\"evidence\":\"MANAGER_REPORTED\"", "synthetic-managed-gateway"))
+                assertTrue(raw.contains(k), k);
+            var json = mvc.perform(get(path).requestAttr(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE, true))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            assertFalse(json.contains("synthetic-managed-gateway")); assertFalse(json.contains("synthetic-cluster"));
+            assertTrue(json.contains("\"member\":\"" + maskedMember + "\""), json);
+            assertTrue(json.contains("\"member\":\"grid\""));
+            for (String kept : List.of("\"name\":\"Web Filter\"", "\"status\":\"DATED\"", "\"status\":\"EXPIRED\"", "\"expiry\":\"2026-10-29\"",
+                    "\"days_remaining\":20", "\"label\":\"CPAP-SYNTH\"".replace("label", "name"), "\"patch\":\"PATCH-SYNTH-01\"",
+                    "\"status\":\"ready\"", "\"refs\":[\"sk000000\",\"CVE-2026-0001\"]", "\"package_take\":\"42\"",
+                    "\"jumbo\":\"Jumbo Hotfix Take 99\"", "\"evidence\":\"MANAGER_REPORTED\"", "\"source\":\"mc_device_license\"",
+                    "\"detail\":\"valid\""))
+                assertTrue(json.contains(kept), kept + " in " + json);
+        }
+    }
 }

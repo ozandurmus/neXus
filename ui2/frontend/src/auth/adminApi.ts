@@ -215,6 +215,21 @@ export interface LifecycleLicense {
   expiry?: string | null;
   status: string;
   days_remaining?: number | null;
+  /** Stored items only (the Infoblox grid summary rows carry none of these): LICENSE, SUBSCRIPTION, SUPPORT_CONTRACT, SMART_LICENSING. */
+  category?: string;
+  evidence?: "DIRECT_DEVICE" | "MANAGER_REPORTED";
+  detail?: string | null;
+  source?: string;
+  observed_at?: string | null;
+}
+export interface LifecycleLicenseRead { kind: string; outcome: string; reason: string | null; item_count: number; observed_at: string | null; }
+export interface LifecycleLivePatchItem {
+  patch: string; status: string; mode: string | null; running: number | null; total: number | null;
+  installed_at: string | null; refs: string[];
+}
+export interface LifecycleLivePatch {
+  package_take: string | null; jumbo: string | null; read_outcome: string | null; observed_at: string | null;
+  armed: number; ready: number; jumbofix: number; other: number; items: LifecycleLivePatchItem[];
 }
 export interface LifecycleDevice {
   device_id: string;
@@ -233,6 +248,10 @@ export interface LifecycleDevice {
   licenses: LifecycleLicense[];
   license_status: string;
   support_contract_status: string;
+  license_reads?: LifecycleLicenseRead[];
+  license_problem?: boolean;
+  license_problems?: { label: string; status: string }[];
+  live_patch?: LifecycleLivePatch | null;
 }
 export interface LifecycleFleet {
   as_of: string;

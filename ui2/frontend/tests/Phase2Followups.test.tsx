@@ -254,7 +254,7 @@ describe("the Devices chrome while an object is open (item 2)", () => {
     // nothing is lost: the five controls keep their names, order and gating behind Fleet actions
     fireEvent.click(within(header).getByRole("button", { name: "Fleet actions" }));
     const group = await screen.findByRole("group", { name: "Fleet actions" });
-    expect(within(group).getAllByRole("button").map((b) => b.textContent)).toEqual(["Lifecycle", "Export inventory", "Bulk Collect", "Read configuration, all"]);
+    expect(within(group).getAllByRole("button").map((b) => b.textContent)).toEqual(["Lifecycle and security", "Export inventory", "Bulk Collect", "Read configuration, all"]);
     expect(within(group).getByRole("link", { name: "Add device" })).toHaveAttribute("href", "?screen=administration");
     fireEvent.keyDown(group, { key: "Escape" });
     fireEvent.click(within(header).getByRole("button", { name: "← Fleet summary" }));

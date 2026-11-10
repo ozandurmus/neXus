@@ -118,7 +118,7 @@ export interface DrawerGroup {
 export const DRAWER_GROUPS: readonly DrawerGroup[] = [
   { header: "SEE", leaves: [
     { label: "Devices", screen: "inventory", href: "?screen=inventory", requiredPlane: "Devices" },
-    { label: "Lifecycle", href: "?screen=inventory&view=lifecycle", screen: "inventory", requiredPlane: "Devices" },
+    { label: "Lifecycle and security", href: "?screen=inventory&view=lifecycle", screen: "inventory", requiredPlane: "Devices" },
     { label: "Discovery", requiredPlane: "Devices" },
   ] },
   { header: "VERIFY", leaves: [
