@@ -10,6 +10,8 @@ import org.springframework.stereotype.Component;
 
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.service.discovery.DiscoveryRunService;
+import com.securityexpert.nexus.ui2.service.schedule.FamilySwitch;
+import com.securityexpert.nexus.ui2.service.schedule.ScheduledJobFamily;
 
 /**
  * Re-runs discovery against every enrolled management server (Check Point MDS, Panorama) at the shared six-hour Europe/Istanbul slots
@@ -27,20 +29,29 @@ public class DiscoveryRefreshScheduler {
     private final TransactionBoundary tx;
     private final DiscoveryRunService discovery;
     private final JobWindowPolicy windows;
+    private final FamilySwitch switches;
 
     @org.springframework.beans.factory.annotation.Autowired
-    public DiscoveryRefreshScheduler(TransactionBoundary tx, DiscoveryRunService discovery) {
-        this(tx, discovery, JobWindowPolicy.SYSTEM);
+    public DiscoveryRefreshScheduler(TransactionBoundary tx, DiscoveryRunService discovery, FamilySwitch switches) {
+        this(tx, discovery, JobWindowPolicy.SYSTEM, switches);
     }
 
     DiscoveryRefreshScheduler(TransactionBoundary tx, DiscoveryRunService discovery, JobWindowPolicy windows) {
+        this(tx, discovery, windows, FamilySwitch.ALWAYS_ON);
+    }
+
+    DiscoveryRefreshScheduler(TransactionBoundary tx, DiscoveryRunService discovery, JobWindowPolicy windows,
+            FamilySwitch switches) {
         this.tx = tx;
         this.discovery = discovery;
         this.windows = windows;
+        this.switches = switches;
     }
 
     @Scheduled(cron = JobWindowPolicy.CRON, zone = JobWindowPolicy.ZONE)
     public void nightly() {
+        // V203: the family's switch, read at the start of every tick; off submits nothing.
+        if (!switches.allows(ScheduledJobFamily.DISCOVERY_REFRESH, "DISCOVERY_REFRESH")) return;
         try {
             int started = refreshAll();
             LOG.info("[DISCOVERY_REFRESH] started " + started + " run(s)");
@@ -90,6 +101,8 @@ public class DiscoveryRefreshScheduler {
         int started = 0;
         for (Record t : targets) {
             if (!windows.isOpen()) break;
+            // Switched off mid-window: stop before the next manager.
+            if (!switches.isOn(ScheduledJobFamily.DISCOVERY_REFRESH)) break;
             if (Boolean.TRUE.equals(t.get("skip_timeout", Boolean.class))) {
                 LOG.info("[DISCOVERY_REFRESH] skipped: previous run timed out");
                 continue;

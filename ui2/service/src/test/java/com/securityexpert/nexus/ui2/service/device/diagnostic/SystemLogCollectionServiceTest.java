@@ -227,6 +227,11 @@ class SystemLogCollectionServiceTest {
         @org.springframework.context.annotation.Bean SystemLogCollectionService service() {
             return mock(SystemLogCollectionService.class);
         }
+
+        /** V203: the per-family switch every scheduler reads; all families on here. */
+        @org.springframework.context.annotation.Bean com.securityexpert.nexus.ui2.service.schedule.FamilySwitch familySwitch() {
+            return com.securityexpert.nexus.ui2.service.schedule.FamilySwitch.ALWAYS_ON;
+        }
     }
 
     @Test

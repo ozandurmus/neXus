@@ -5,7 +5,7 @@ backup-target backups clusters collect collect-all compare compliance config con
 cp-failover credential credentials delete devices deviations diagnostics disable discovery download download-ticket
 enable entries evaluate events export.csv facets history https-certificate import inventory jobs local-identities
 management-tree notifications onboarding overview pan-failover pods policies ports preview project-plan readiness
-relist replace-secret retry revoke role-bindings runs search secrets sessions set-password stats storage strict
+relist replace-secret retry revoke role-bindings runs scheduled-jobs search secrets sessions set-password stats storage strict
 summary system system-logs targets text transcript units v2`.split(/\s+/));
 
 export function sanitizedPath(url: string): string {

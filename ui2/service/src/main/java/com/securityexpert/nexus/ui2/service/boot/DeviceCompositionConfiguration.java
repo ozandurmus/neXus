@@ -702,8 +702,9 @@ public class DeviceCompositionConfiguration {
     @Bean
     public com.securityexpert.nexus.ui2.service.device.backup.BackupScheduler backupScheduler(
             com.securityexpert.nexus.ui2.persistence.artefact.BackupPolicyRepository policyRepository,
-            BackupCollectService collectService) {
-        return new com.securityexpert.nexus.ui2.service.device.backup.BackupScheduler(policyRepository, collectService);
+            BackupCollectService collectService,
+            com.securityexpert.nexus.ui2.service.schedule.FamilySwitch switches) {
+        return new com.securityexpert.nexus.ui2.service.device.backup.BackupScheduler(policyRepository, collectService, switches);
     }
 
     @Bean

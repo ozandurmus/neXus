@@ -105,6 +105,10 @@ final class NexusSessionCli {
         System.out.println("  syslog-spike-data <deviceId>                   Spike Detective directories: time, member classes, sizes");
         System.out.println("  syslog-settings                                collection settings: retention, caps, the management-server and spike-data switches");
         System.out.println("  syslog-settings-set <key>=<value> ...          security_admin; e.g. spike_data_enabled=true raw_retention_days=45 (audited)");
+        System.out.println("  schedules                                      scheduled job families: ON/OFF/LOCKED, last run, next window, who changed it");
+        System.out.println("  schedule-set <family> on|off <reason>          security_admin/operation_admin; audited; inside business hours add "
+                + BUSINESS_HOURS_ACK_FLAG);
+        System.out.println("                                                 families: " + String.join(", ", SCHEDULE_FAMILIES));
         System.out.println("  syslog-measurements [deviceId] [vendor=..] [source=..] [limit=..]   recorded measurement summaries");
         System.out.println("                                                 (Palo Alto and the numeric Check Point summaries)");
         System.out.println("  pa-cases | pa-case <caseId>                    Packet Analysis cases (expiry: 7 days)");
@@ -263,6 +267,11 @@ final class NexusSessionCli {
                 case "syslog-spike-data" -> {
                     require(args, 2, "syslog-spike-data <deviceId>");
                     yield print(call("GET", SYSLOG + "/" + opaque(args[1]) + "/spike-data", null));
+                }
+                case "schedules" -> print(call("GET", SCHEDULES, null));
+                case "schedule-set" -> {
+                    require(args, 4, "schedule-set <family> on|off <reason>");
+                    yield print(call("PUT", SCHEDULES + "/" + scheduleFamily(args[1]), scheduleBody(args[2], args[3])));
                 }
                 case "syslog-settings" -> print(call("GET", SYSLOG_SETTINGS, null));
                 case "syslog-settings-set" -> {
@@ -823,6 +832,28 @@ final class NexusSessionCli {
     }
 
     // ---- tiny json (no dependency in this module) ------------------------------------------------
+
+    /** V203: Administration > Platform > Scheduled jobs, the same routes as the screen. */
+    static final String SCHEDULES = "/api/v2/config/scheduled-jobs";
+    static final java.util.List<String> SCHEDULE_FAMILIES = java.util.List.of("discovery_refresh", "nightly_inventory",
+            "configuration_refresh", "ha_readiness", "scheduled_backup", "system_log_collection");
+
+    /** One of the closed family names; anything else is a usage error before a request is sent. */
+    static String scheduleFamily(String family) {
+        if (!SCHEDULE_FAMILIES.contains(family))
+            throw new UsageException("schedule-set: family must be one of " + String.join(", ", SCHEDULE_FAMILIES) + ", got: " + family);
+        return family;
+    }
+
+    /** {@code on|off} and the reason, as the screen sends them. */
+    static String scheduleBody(String state, String reason) {
+        if (!"on".equals(state) && !"off".equals(state))
+            throw new UsageException("schedule-set <family> on|off <reason>, got: " + state);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("enabled", "on".equals(state));
+        body.put("reason", reason);
+        return json(body);
+    }
 
     static String json(Map<String, ?> fields) {
         StringBuilder sb = new StringBuilder("{");

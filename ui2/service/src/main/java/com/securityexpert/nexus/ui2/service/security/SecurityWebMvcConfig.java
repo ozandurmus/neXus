@@ -209,6 +209,9 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             // Phase B settings (section 14): the one row of retention, caps and the two switches; security_admin only.
             Map.entry("GET /api/v2/config/system-logs", ActionRegistry.SYSTEM_LOG_SETTINGS_READ),
             Map.entry("PUT /api/v2/config/system-logs", ActionRegistry.SYSTEM_LOG_SETTINGS_WRITE),
+            // V203: the per-family scheduled-job switches (Administration > Platform > Scheduled jobs).
+            Map.entry("GET /api/v2/config/scheduled-jobs", ActionRegistry.SCHEDULED_JOBS_READ),
+            Map.entry("PUT /api/v2/config/scheduled-jobs/*", ActionRegistry.SCHEDULED_JOBS_SET),
             Map.entry("POST /devices/inventory/collect-all", ActionRegistry.DEVICE_INVENTORY_COLLECT),
             Map.entry("GET /clusters/*/inventory", ActionRegistry.DEVICE_READ),
             // NXS-LOCAL-0165 "Routes": same wildcard shapes as the inventory

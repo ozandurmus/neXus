@@ -3790,6 +3790,70 @@ export const getSystemLogSettings = () => call<SystemLogSettingsView>("/api/v2/c
 export const saveSystemLogSettings = (patch: SystemLogSettingsPatch) =>
   call<SystemLogSettingsView>("/api/v2/config/system-logs", "PUT", patch);
 
+// ---------------------------------------------------------------------------------------------------------------
+// Scheduled jobs: one on/off switch per scheduled job family (Administration > Platform > Scheduled jobs)
+// ---------------------------------------------------------------------------------------------------------------
+
+export type ScheduledJobFamilyKey =
+  | "discovery_refresh" | "nightly_inventory" | "configuration_refresh" | "ha_readiness" | "scheduled_backup" | "system_log_collection";
+
+export interface ScheduledJobFamily {
+  /** One of {@link ScheduledJobFamilyKey}; kept a string so a family the server adds later still renders. */
+  readonly family: ScheduledJobFamilyKey | (string & {});
+  readonly label: string;
+  readonly description: string;
+  readonly cadence: string;
+  /** The stored on/off for this family. */
+  readonly enabled: boolean;
+  /** The effective state. LOCKED: a deployment switch stops the family whatever the stored toggle says. */
+  readonly state: "ON" | "OFF" | "LOCKED" | (string & {});
+  readonly lock_reason: string | null;
+  /**
+   * True only when the state is ON and nothing else stops the family. ON with `will_run` false is "ON, but idle"
+   * (today: scheduled backup while the backup policy schedule is off); `note` says why.
+   */
+  readonly will_run: boolean;
+  readonly note: string | null;
+  readonly window_open_now: boolean;
+  /** True when the window is open and the family admits work all through it: switched ON now, it may start within a minute. */
+  readonly resumes_in_open_window?: boolean;
+  /** ISO-8601 instant with offset: the family's next window start, also when OFF or LOCKED (the window it would use). */
+  readonly next_window_at: string | null;
+  /** The last job this family's scheduler submitted; null if never. */
+  readonly last_run_at: string | null;
+  /** Null when never changed since the seed; a USR- token under the masked view. */
+  readonly changed_by: string | null;
+  readonly changed_at: string | null;
+  /** Free text; withheld (null) under the masked view. */
+  readonly reason: string | null;
+}
+
+export interface ScheduledJobsView {
+  /** The deployment switch named by `master_env`. False locks every family. */
+  readonly master_enabled: boolean;
+  readonly master_env: string;
+  /** Decided by the server: the caller is security_admin or operation_admin and not the masked viewer. */
+  readonly can_write: boolean;
+  /** True for the aiview persona: actors are tokens and reasons are withheld. */
+  readonly masked: boolean;
+  readonly business_hours: { readonly start: string; readonly end: string; readonly zone: string; readonly inside_now: boolean } | null;
+  readonly families: readonly ScheduledJobFamily[];
+}
+
+/** The updated family plus what switching it OFF cleaned up (both 0 when it was switched ON). */
+export interface ScheduledJobFamilyUpdate extends ScheduledJobFamily {
+  readonly cancelled_jobs: number;
+  readonly closed_runs: number;
+}
+
+export const getScheduledJobs = () => call<ScheduledJobsView>("/api/v2/config/scheduled-jobs", "GET");
+/**
+ * Turns one family on or off. Inside business hours the server answers 409 BUSINESS_HOURS_CONFIRM_REQUIRED and
+ * {@link call} asks the shared confirmation, then repeats the request once with the acknowledgement header.
+ */
+export const setScheduledJobFamily = (family: string, enabled: boolean, reason: string) =>
+  call<ScheduledJobFamilyUpdate>(`/api/v2/config/scheduled-jobs/${encodeURIComponent(family)}`, "PUT", { enabled, reason });
+
 export interface SystemLogCollectOutcome {
   readonly targets: number;
   readonly admitted: number;
