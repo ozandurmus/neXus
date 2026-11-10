@@ -185,3 +185,20 @@ What the data says (the devices' own statements; judging them is for the PO):
   components in April 2027, Infoblox licenses in July 2027.
 - Three more Palo Alto firewalls answered with a PAN-OS 12 version than the stored versions said; the rule skipped
   them.
+
+## Infoblox member-level version read (measured 2026-11-10)
+
+`GET /wapi/v<ver>/upgradestatus?type=VNODE&_return_fields=current_version` (gate entries amendment B-2026-11-10),
+sent once to the one grid manager after PR 799 was live; its inventory ended `COMPLETED`.
+
+- Answer shape: `[7]{_ref:string,current_version:string}`: seven member-level entries, each with a version.
+- All seven carry the same version. It is stored as the platform fact `nios_version` of the grid manager (source
+  read `infoblox_upgradestatus_vnode`); the object references, which name the members, are not read.
+- The read stays on for the grid (it is the only Infoblox device) as part of the fleet-wide set; the worker manifest
+  lists it.
+- With this the Infoblox device has a version that can be compared with a NIOS advisory. Its software version field
+  still shows the WAPI schema version, as the storage contract says.
+
+After the Management Center fix of the same ship, its inventory was run once more: the read row is `COLLECTED` with
+48 components for four ProxySGs.
+
