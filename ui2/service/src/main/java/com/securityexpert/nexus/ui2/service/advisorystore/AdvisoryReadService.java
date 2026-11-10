@@ -102,7 +102,7 @@ public final class AdvisoryReadService {
         return estate.advisories().stream().filter(r -> r.advisory().advisoryId().equals(advisoryId)).findFirst().map(row -> {
             var body = new LinkedHashMap<String, Object>();
             body.put("advisory", advisoryJson(row));
-            body.put("devices", row.verdicts().stream().sorted(VERDICT_ORDER).map(AdvisoryReadService::verdictJson).toList());
+            body.put("devices", row.verdicts().stream().sorted(VERDICT_ORDER).map(v -> verdictJson(advisoryId, v)).toList());
             return body;
         });
     }
@@ -230,8 +230,14 @@ public final class AdvisoryReadService {
         return switch (kind) { case AFFECTED -> 0; case NOT_EVALUABLE -> 1; case FIXED -> 2; case NOT_AFFECTED -> 3; default -> 4; };
     }
 
-    static Map<String, Object> verdictJson(DeviceVerdict v) {
+    /**
+     * One device row of an advisory. It carries the advisory id so that the response masking advice lets the version and
+     * the vendor's fix text through for the masked persona (a four-part version would otherwise be masked as an address);
+     * the hostname next to the device id is pseudonymized as on every other screen.
+     */
+    static Map<String, Object> verdictJson(String advisoryId, DeviceVerdict v) {
         var body = new LinkedHashMap<String, Object>();
+        body.put("advisory_id", advisoryId);
         body.put("device_id", v.device().deviceId());
         body.put("hostname", v.device().hostname());
         body.put("vendor", v.device().vendorHint() == null ? null : LifecycleProjection.vendor(v.device().vendorHint()));
