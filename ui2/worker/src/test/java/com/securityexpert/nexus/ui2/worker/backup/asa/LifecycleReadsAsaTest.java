@@ -26,6 +26,7 @@ import com.securityexpert.nexus.ui2.jobs.transport.XmlApiResult;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiSpec;
 import com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor;
 import com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadSwitch;
+import com.securityexpert.nexus.ui2.worker.inventory.RecordingLifecycleSink;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target;
 
 /** Lifecycle read, group A, Cisco ASA (PO 2026-11-10): {@code show license all} in the inventory path only. */
@@ -141,5 +142,73 @@ class LifecycleReadsAsaTest {
         assertTrue(lines.get(1).contains("outcome=ERROR:IllegalStateException"), lines.get(1));
         assertTrue(lines.get(2).contains("outcome=ERROR:TimedOut"), lines.get(2));
         assertTrue(lines.get(3).contains("outcome=OK") && lines.get(3).contains("shape=Not applicable in standby state"), lines.get(3));
+    }
+
+    // ------------------------------------------------------------------------------------ result sink (storage contract s.3)
+
+    private static final String LICENSE_ANSWER = "Smart Licensing Status\nRegistration:\n  Status: REGISTERED\nLicense Authorization:\n  Status: AUTHORIZED\n";
+
+    @Test
+    void theResultSinkIsNeverCalledWithTheSwitchOffOrForAnotherDevice() {
+        RecordingLifecycleSink sink = new RecordingLifecycleSink();
+        Shell shell = new Shell();
+        shell.answers.put(CiscoAsaPlan.SHOW_LICENSE_ALL, LICENSE_ANSWER);
+        outcome(new CiscoAsaExecutor(shell, null).withLifecycleResults(sink), DEVICE);
+        outcome(new CiscoAsaExecutor(shell, null).withLifecycleReads(on()).withLifecycleResults(sink), "dev-2");
+        assertTrue(sink.calls.isEmpty(), sink.calls.toString());
+    }
+
+    @Test
+    void theResultSinkGetsTheAnswerOnceAndAThrowingSinkChangesNothing() {
+        Shell plainShell = new Shell();
+        plainShell.answers.put(CiscoAsaPlan.SHOW_LICENSE_ALL, LICENSE_ANSWER);
+        List<String> plainLines = new ArrayList<>();
+        String plain = outcome(new CiscoAsaExecutor(plainShell, null).withLifecycleReads(on()).withLifecycleSink(plainLines::add), DEVICE);
+
+        Shell shell = new Shell();
+        shell.answers.put(CiscoAsaPlan.SHOW_LICENSE_ALL, LICENSE_ANSWER);
+        RecordingLifecycleSink sink = new RecordingLifecycleSink();
+        List<String> lines = new ArrayList<>();
+        assertEquals(plain, outcome(new CiscoAsaExecutor(shell, null).withLifecycleReads(on()).withLifecycleSink(lines::add)
+                .withLifecycleResults(sink), DEVICE));
+        assertEquals(plainLines, lines);
+        assertEquals(1, sink.calls.size());
+        var call = sink.calls.get(0);
+        assertEquals(LifecycleReadSwitch.Kind.ASA_SHOW_LICENSE_ALL, call.kind());
+        assertEquals(DEVICE, call.deviceId());
+        assertTrue(call.isAnswer());
+        assertTrue(call.raw().contains("Status: AUTHORIZED"), call.raw());
+        assertFalse(call.raw().contains("show license all"), "the echoed command is stripped");
+
+        Shell throwingShell = new Shell();
+        throwingShell.answers.put(CiscoAsaPlan.SHOW_LICENSE_ALL, LICENSE_ANSWER);
+        RecordingLifecycleSink throwing = RecordingLifecycleSink.throwing();
+        List<String> throwingLines = new ArrayList<>();
+        assertEquals(plain, outcome(new CiscoAsaExecutor(throwingShell, null).withLifecycleReads(on()).withLifecycleSink(throwingLines::add)
+                .withLifecycleResults(throwing), DEVICE));
+        assertEquals(plainLines, throwingLines);
+        assertEquals(1, throwing.calls.size());
+    }
+
+    @Test
+    void refusalTimeoutAndThrowCallNotCollectedWithTheirTokens() {
+        Shell refused = new Shell();
+        refused.answers.put(CiscoAsaPlan.SHOW_LICENSE_ALL, "ERROR: % Invalid input detected at '^' marker.");
+        Shell threw = new Shell();
+        threw.licenseThrows = true;
+        Shell timedOut = new Shell();
+        timedOut.licenseTimesOut = true;
+        List<RecordingLifecycleSink.Call> calls = new ArrayList<>();
+        for (Shell s : List.of(refused, timedOut, threw)) {
+            RecordingLifecycleSink sink = new RecordingLifecycleSink();
+            outcome(new CiscoAsaExecutor(s, null).withLifecycleReads(on()).withLifecycleResults(sink), DEVICE);
+            assertEquals(1, sink.calls.size());
+            calls.add(sink.calls.get(0));
+        }
+        assertEquals(new RecordingLifecycleSink.Call("NOT_COLLECTED", LifecycleReadSwitch.Kind.ASA_SHOW_LICENSE_ALL, DEVICE, null, null, "REFUSED", "CliRefusal"), calls.get(0));
+        assertEquals("FAILED", calls.get(1).outcome());
+        assertEquals("TimedOut", calls.get(1).reason());
+        assertEquals("FAILED", calls.get(2).outcome());
+        assertEquals("IllegalStateException", calls.get(2).reason());
     }
 }

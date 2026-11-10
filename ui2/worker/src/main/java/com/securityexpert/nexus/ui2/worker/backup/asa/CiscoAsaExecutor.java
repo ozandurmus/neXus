@@ -57,6 +57,8 @@ public final class CiscoAsaExecutor {
     private com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadSwitch lifecycleReads =
             com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadSwitch.OFF;
     private java.util.function.Consumer<String> lifecycleSink = com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadShape::log;
+    private com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink lifecycleResults =
+            com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink.NONE;
 
     public CiscoAsaExecutor(DeviceTransport ssh, ArtefactStore artefactStore) {
         this(ssh, artefactStore, null);
@@ -70,6 +72,12 @@ public final class CiscoAsaExecutor {
 
     public CiscoAsaExecutor withLifecycleReads(com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadSwitch lifecycleReads) {
         this.lifecycleReads = Objects.requireNonNull(lifecycleReads, "lifecycleReads");
+        return this;
+    }
+
+    /** The sink of the lifecycle read's result (called only for a read the switch allowed; a failing sink changes nothing). */
+    public CiscoAsaExecutor withLifecycleResults(com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink sink) {
+        this.lifecycleResults = com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink.guarded(sink);
         return this;
     }
 
@@ -135,15 +143,27 @@ public final class CiscoAsaExecutor {
             ExecResult r = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(
                     () -> ssh.execInteractive(s, new ExecSpec(CiscoAsaPlan.SHOW_LICENSE_ALL, true), LICENSE));
             line = switch (r) {
-                case ExecResult.Completed c -> CiscoAsaPlan.isCliError(c.output())
-                        ? com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadShape.errorLine(kind, deviceId, "CliRefusal")
-                        : com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadShape.cliLine(kind, deviceId,
-                                stripEcho(c.output(), CiscoAsaPlan.SHOW_LICENSE_ALL));
-                case ExecResult.TimedOut t -> com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadShape.errorLine(kind, deviceId, "TimedOut");
-                case ExecResult.ChannelFailed f -> com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadShape.errorLine(kind, deviceId, "ChannelFailed");
+                case ExecResult.Completed c -> {
+                    if (CiscoAsaPlan.isCliError(c.output())) {
+                        lifecycleResults.notCollected(kind, deviceId, "REFUSED", "CliRefusal");
+                        yield com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadShape.errorLine(kind, deviceId, "CliRefusal");
+                    }
+                    String answer = stripEcho(c.output(), CiscoAsaPlan.SHOW_LICENSE_ALL);
+                    lifecycleResults.answer(kind, deviceId, null, answer);
+                    yield com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadShape.cliLine(kind, deviceId, answer);
+                }
+                case ExecResult.TimedOut t -> {
+                    lifecycleResults.notCollected(kind, deviceId, "FAILED", "TimedOut");
+                    yield com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadShape.errorLine(kind, deviceId, "TimedOut");
+                }
+                case ExecResult.ChannelFailed f -> {
+                    lifecycleResults.notCollected(kind, deviceId, "FAILED", "ChannelFailed");
+                    yield com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadShape.errorLine(kind, deviceId, "ChannelFailed");
+                }
             };
         } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            lifecycleResults.notCollected(kind, deviceId, "FAILED", e.getClass().getSimpleName());
             line = com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName());
         }
         try {

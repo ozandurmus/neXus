@@ -23,6 +23,7 @@ import org.junit.jupiter.api.io.TempDir;
 import com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore;
 import com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher;
 import com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadSwitch;
+import com.securityexpert.nexus.ui2.worker.inventory.RecordingLifecycleSink;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceCalls;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Credentials;
@@ -223,5 +224,102 @@ class LifecycleReadsHttpsTest {
         assertEquals("/api/devices/" + UUID_A + "/license", HttpsVendorPlan.mcDeviceLicense(UUID_A));
         assertThrows(IllegalArgumentException.class, () -> HttpsVendorPlan.mcDeviceLicense("../../x"));
         assertThrows(IllegalArgumentException.class, () -> HttpsVendorPlan.mcDeviceLicense(null));
+    }
+
+    // ------------------------------------------------------------------------------------ result sink (storage contract s.3)
+
+    private static final String MC_LICENSE_BODY = "{\"components\":[{\"componentName\":\"Proxy Edition\",\"expirationDate\":\"2030-01-01\",\"validity\":\"Valid\"}]}";
+
+    @Test
+    void theResultSinkIsNeverCalledWithTheSwitchOffOrForAnotherDevice() {
+        RecordingLifecycleSink sink = new RecordingLifecycleSink();
+        executor.withLifecycleResults(sink);
+        inventory("bluecoat_mc", LifecycleReadSwitch.OFF);
+        inventory("infoblox", LifecycleReadSwitch.OFF);
+        inventory("bluecoat_mc", LifecycleReadSwitch.from(Map.of("UI2_LIFECYCLE_READS", "mc_device_license,mc_system_version,infoblox_license_gridwide",
+                "UI2_LIFECYCLE_READ_DEVICES", "dev-9")::get));
+        assertTrue(sink.calls.isEmpty(), sink.calls.toString());
+    }
+
+    @Test
+    void managementCenterAnswersReachTheSinkOnceWithTheManagedDevicesNameAsMember() {
+        calls.replies.put("/api/devices/" + UUID_A + "/license", new TextResponse(200, Optional.of("application/json"), MC_LICENSE_BODY, false));
+        String plain = inventory("bluecoat_mc", on("mc_device_license,mc_system_version", null));
+        List<String> plainLines = new ArrayList<>(lines);
+        RecordingLifecycleSink sink = new RecordingLifecycleSink();
+        executor.withLifecycleResults(sink);
+        assertEquals(plain, inventory("bluecoat_mc", on("mc_device_license,mc_system_version", null)));
+        assertEquals(plainLines, lines, "the shape lines are exactly as before");
+        assertEquals(2, sink.calls.size(), sink.calls.toString());
+        var version = sink.of(LifecycleReadSwitch.Kind.MC_SYSTEM_VERSION);
+        assertEquals(1, version.size());
+        assertTrue(version.get(0).isAnswer() && DEVICE.equals(version.get(0).deviceId()) && version.get(0).raw().contains("\"version\""));
+        var license = sink.of(LifecycleReadSwitch.Kind.MC_DEVICE_LICENSE);
+        assertEquals(List.of(new RecordingLifecycleSink.Call("ANSWER", LifecycleReadSwitch.Kind.MC_DEVICE_LICENSE, DEVICE, "SG-A", MC_LICENSE_BODY, "ANSWER", null)), license);
+    }
+
+    @Test
+    void eachManagedDeviceReadCarriesItsOwnName() {
+        calls.replies.put("/api/devices/" + UUID_A + "/license", new TextResponse(200, Optional.empty(), MC_LICENSE_BODY, false));
+        calls.replies.put("/api/devices/" + UUID_B + "/license", new TextResponse(200, Optional.empty(), MC_LICENSE_BODY, false));
+        RecordingLifecycleSink sink = new RecordingLifecycleSink();
+        executor.withLifecycleResults(sink);
+        inventory("bluecoat_mc", on("mc_device_license", "2"));
+        assertEquals(List.of("SG-A", "SG-B"), sink.calls.stream().map(RecordingLifecycleSink.Call::member).toList());
+    }
+
+    @Test
+    void infobloxGridwideAnswerReachesTheSinkOnce() {
+        String body = "[{\"type\":\"DNS\",\"expiry_date\":1798761600,\"expiration_status\":\"NOT_EXPIRED\",\"limit\":\"100\"}]";
+        calls.replies.put(GRIDWIDE, new TextResponse(200, Optional.of("application/json"), body, false));
+        RecordingLifecycleSink sink = new RecordingLifecycleSink();
+        executor.withLifecycleResults(sink);
+        inventory("infoblox", on("infoblox_license_gridwide", null));
+        assertEquals(List.of(new RecordingLifecycleSink.Call("ANSWER", LifecycleReadSwitch.Kind.INFOBLOX_LICENSE_GRIDWIDE, DEVICE, null, body, "ANSWER", null)), sink.calls);
+    }
+
+    @Test
+    void transportErrorsAndHttpStatusesCallNotCollectedWithTheirTokens() {
+        String licensePath = "/api/devices/" + UUID_A + "/license";
+        RecordingLifecycleSink sink = new RecordingLifecycleSink();
+        executor.withLifecycleResults(sink);
+        calls.failures.put(licensePath, new IOException("synthetic"));
+        inventory("bluecoat_mc", on("mc_device_license", null));
+        calls.failures.clear();
+        calls.replies.put(licensePath, new TextResponse(500, Optional.empty(), "boom", false));
+        inventory("bluecoat_mc", on("mc_device_license", null));
+        calls.replies.put(licensePath, new TextResponse(403, Optional.empty(), "no", false));
+        inventory("bluecoat_mc", on("mc_device_license", null));
+        calls.replies.put(licensePath, new TextResponse(200, Optional.empty(), "", false));
+        inventory("bluecoat_mc", on("mc_device_license", null));
+        assertEquals(4, sink.calls.size(), sink.calls.toString());
+        assertEquals("FAILED", sink.calls.get(0).outcome());
+        assertEquals("IOException", sink.calls.get(0).reason());
+        assertEquals("FAILED", sink.calls.get(1).outcome());
+        assertEquals("Http500", sink.calls.get(1).reason());
+        assertEquals("REFUSED", sink.calls.get(2).outcome());
+        assertEquals("Http403", sink.calls.get(2).reason());
+        assertTrue(sink.calls.get(3).isAnswer(), "a blank 2xx answer is handed on; the parser calls it EMPTY");
+        assertEquals("", sink.calls.get(3).raw());
+
+        RecordingLifecycleSink grid = new RecordingLifecycleSink();
+        executor.withLifecycleResults(grid);
+        calls.failures.put(GRIDWIDE, new IOException("synthetic"));
+        inventory("infoblox", on("infoblox_license_gridwide", null));
+        assertEquals(new RecordingLifecycleSink.Call("NOT_COLLECTED", LifecycleReadSwitch.Kind.INFOBLOX_LICENSE_GRIDWIDE, DEVICE, null, null, "FAILED", "IOException"), grid.calls.get(0));
+    }
+
+    @Test
+    void aThrowingResultSinkNeverChangesTheOutcomeOrTheShapeLines() {
+        calls.replies.put("/api/devices/" + UUID_A + "/license", new TextResponse(200, Optional.empty(), MC_LICENSE_BODY, false));
+        String plain = inventory("bluecoat_mc", on("mc_device_license,mc_system_version", null));
+        List<String> plainLines = new ArrayList<>(lines);
+        List<String> plainLog = new ArrayList<>(calls.log);
+        RecordingLifecycleSink sink = RecordingLifecycleSink.throwing();
+        executor.withLifecycleResults(sink);
+        assertEquals(plain, inventory("bluecoat_mc", on("mc_device_license,mc_system_version", null)));
+        assertEquals(plainLines, lines);
+        assertEquals(plainLog, calls.log);
+        assertEquals(2, sink.calls.size());
     }
 }

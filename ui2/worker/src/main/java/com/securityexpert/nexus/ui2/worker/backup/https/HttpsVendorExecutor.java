@@ -107,9 +107,17 @@ public final class HttpsVendorExecutor {
     /** Lifecycle reads, group A (PO 2026-11-10): off unless the worker wires a switch in. See {@link LifecycleReadSwitch}. */
     private LifecycleReadSwitch lifecycleReads = LifecycleReadSwitch.OFF;
     private java.util.function.Consumer<String> lifecycleSink = LifecycleReadShape::log;
+    private com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink lifecycleResults =
+            com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink.NONE;
 
     public HttpsVendorExecutor withLifecycleReads(LifecycleReadSwitch lifecycleReads) {
         this.lifecycleReads = Objects.requireNonNull(lifecycleReads, "lifecycleReads");
+        return this;
+    }
+
+    /** The sink of the lifecycle reads' results (called only for a read the switch allowed; a failing sink changes nothing). */
+    public HttpsVendorExecutor withLifecycleResults(com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink sink) {
+        this.lifecycleResults = com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink.guarded(sink);
         return this;
     }
 
@@ -566,12 +574,33 @@ public final class HttpsVendorExecutor {
         // literal as gate bluecoat_mc_system_version), so its answer is measured, not requested a second time.
         Identity identity = managementCenterIdentity(target, creds, r.peerName(), lifecycleReads.allows(
                 LifecycleReadSwitch.Kind.MC_SYSTEM_VERSION, deviceId)
-                        ? version -> emitLifecycle(LifecycleReadShape.jsonLine(LifecycleReadSwitch.Kind.MC_SYSTEM_VERSION, deviceId,
-                                version.status(), version.body(), JSON))
+                        ? version -> {
+                            lifecycleHttpResult(LifecycleReadSwitch.Kind.MC_SYSTEM_VERSION, deviceId, null, version.status(), version.body());
+                            emitLifecycle(LifecycleReadShape.jsonLine(LifecycleReadSwitch.Kind.MC_SYSTEM_VERSION, deviceId,
+                                    version.status(), version.body(), JSON));
+                        }
                         : null);
         lifecycleMcDeviceLicenses(target, creds, list, deviceId);
         lifecycleMcShowLicenses(target, creds, list, deviceId);
         return new InventoryOutcome.Completed(List.of(), managed, names, identity);
+    }
+
+    /** The result of an HTTP lifecycle read: a 2xx answer is handed on, 401 and 403 are a refusal, any other status a failure. */
+    private void lifecycleHttpResult(LifecycleReadSwitch.Kind kind, String deviceId, String member, int status, String body) {
+        if (status >= 200 && status <= 299) {
+            lifecycleResults.answer(kind, deviceId, member, body);
+        } else {
+            lifecycleResults.notCollected(kind, deviceId, status == 401 || status == 403 ? "REFUSED" : "FAILED", "Http" + status);
+        }
+    }
+
+    /** A lifecycle GET's outcome: the answer (with the managed device's name for a Management Center license) or the failure. */
+    private void lifecycleGetResult(LifecycleReadSwitch.Kind kind, String deviceId, String member, LifecycleGet got) {
+        if (got.response() == null) {
+            lifecycleResults.notCollected(kind, deviceId, "FAILED", got.error());
+        } else {
+            lifecycleHttpResult(kind, deviceId, member, got.response().status(), got.response().body());
+        }
     }
 
     private void emitLifecycle(String line) {
@@ -616,17 +645,19 @@ public final class HttpsVendorExecutor {
         }
         try {
             int sent = 0;
-            for (String uuid : ManagementCenterDevices.uuids(list)) {
+            for (ManagementCenterDevices.Device device : ManagementCenterDevices.devices(list)) {
                 if (sent >= lifecycleReads.mcLicenseMax()) {
                     break;
                 }
                 sent++;
-                LifecycleGet got = lifecycleGet(target, creds, HttpsVendorPlan.mcDeviceLicense(uuid), TEXT_MAX);
+                LifecycleGet got = lifecycleGet(target, creds, HttpsVendorPlan.mcDeviceLicense(device.uuid()), TEXT_MAX);
+                lifecycleGetResult(kind, deviceId, device.name(), got);
                 emitLifecycle(got.response() == null ? LifecycleReadShape.errorLine(kind, deviceId, got.error())
                         : LifecycleReadShape.jsonLine(kind, deviceId, got.response().status(), got.response().body(), JSON));
             }
         } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            lifecycleResults.notCollected(kind, deviceId, "FAILED", e.getClass().getSimpleName());
             emitLifecycle(LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName()));
         }
     }
@@ -653,6 +684,7 @@ public final class HttpsVendorExecutor {
             }
         } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            lifecycleResults.notCollected(kind, deviceId, "FAILED", e.getClass().getSimpleName());
             emitLifecycle(LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName()));
         }
     }
@@ -664,17 +696,24 @@ public final class HttpsVendorExecutor {
                 try {
                     TextResponse r = client.putRaw(target, HttpsVendorPlan.mcDeviceCommand(uuid), HttpsVendorPlan.MC_CMD_SHOW_LICENSES,
                             creds, Duration.ofSeconds(120), TEXT_MAX);
-                    return r.truncated() ? LifecycleReadShape.errorLine(kind, deviceId, "Truncated")
-                            : LifecycleReadShape.commandEnvelopeLine(kind, deviceId, r.status(), r.body(), JSON);
+                    if (r.truncated()) {
+                        lifecycleResults.notCollected(kind, deviceId, "FAILED", "Truncated");
+                        return LifecycleReadShape.errorLine(kind, deviceId, "Truncated");
+                    }
+                    lifecycleHttpResult(kind, deviceId, null, r.status(), r.body());
+                    return LifecycleReadShape.commandEnvelopeLine(kind, deviceId, r.status(), r.body(), JSON);
                 } catch (IOException e) {
+                    lifecycleResults.notCollected(kind, deviceId, "FAILED", e.getClass().getSimpleName());
                     return LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName());
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
+                    lifecycleResults.notCollected(kind, deviceId, "FAILED", "InterruptedException");
                     return LifecycleReadShape.errorLine(kind, deviceId, "InterruptedException");
                 }
             });
         } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            lifecycleResults.notCollected(kind, deviceId, "FAILED", e.getClass().getSimpleName());
             return LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName());
         }
     }
@@ -687,10 +726,12 @@ public final class HttpsVendorExecutor {
         }
         try {
             LifecycleGet got = lifecycleGet(target, creds, HttpsVendorPlan.withVersion(HttpsVendorPlan.INFOBLOX_UPGRADESTATUS_GRID, version), TEXT_MAX);
+            lifecycleGetResult(kind, deviceId, null, got);
             emitLifecycle(got.response() == null ? LifecycleReadShape.errorLine(kind, deviceId, got.error())
                     : LifecycleReadShape.jsonLine(kind, deviceId, got.response().status(), got.response().body(), JSON));
         } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            lifecycleResults.notCollected(kind, deviceId, "FAILED", e.getClass().getSimpleName());
             emitLifecycle(LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName()));
         }
     }
@@ -703,10 +744,12 @@ public final class HttpsVendorExecutor {
         }
         try {
             LifecycleGet got = lifecycleGet(target, creds, HttpsVendorPlan.withVersion(HttpsVendorPlan.INFOBLOX_LICENSE_GRIDWIDE, version), TEXT_MAX);
+            lifecycleGetResult(kind, deviceId, null, got);
             emitLifecycle(got.response() == null ? LifecycleReadShape.errorLine(kind, deviceId, got.error())
                     : LifecycleReadShape.jsonLine(kind, deviceId, got.response().status(), got.response().body(), JSON));
         } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            lifecycleResults.notCollected(kind, deviceId, "FAILED", e.getClass().getSimpleName());
             emitLifecycle(LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName()));
         }
     }

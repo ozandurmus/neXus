@@ -23,6 +23,7 @@ import org.junit.jupiter.api.io.TempDir;
 import com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore;
 import com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher;
 import com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadSwitch;
+import com.securityexpert.nexus.ui2.worker.inventory.RecordingLifecycleSink;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceCalls;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Credentials;
@@ -272,5 +273,45 @@ class LifecycleReadsHttpsGroupBTest {
         calls.replies.put(UPGRADE, new TextResponse(200, Optional.empty(), "", false));
         assertEquals(off, inventory("infoblox", on("infoblox_upgradestatus_grid", null)));
         assertTrue(lines.get(0).contains("outcome=EMPTY"), lines.get(0));
+    }
+
+    // ------------------------------------------------------------------------------------ result sink (storage contract s.3)
+
+    @Test
+    void showLicensesAndUpgradeStatusReachTheSinkAndFailuresAreNotCollected() {
+        RecordingLifecycleSink off = new RecordingLifecycleSink();
+        executor.withLifecycleResults(off);
+        inventory("bluecoat_mc", LifecycleReadSwitch.OFF);
+        inventory("infoblox", LifecycleReadSwitch.OFF);
+        assertTrue(off.calls.isEmpty());
+
+        String plain = inventory("bluecoat_mc", on("mc_show_licenses", null));
+        List<String> plainLines = new ArrayList<>(lines);
+        RecordingLifecycleSink sink = new RecordingLifecycleSink();
+        executor.withLifecycleResults(sink);
+        assertEquals(plain, inventory("bluecoat_mc", on("mc_show_licenses", null)));
+        assertEquals(plainLines, lines);
+        assertEquals(1, sink.calls.size());
+        assertEquals(LifecycleReadSwitch.Kind.MC_SHOW_LICENSES, sink.calls.get(0).kind());
+        assertTrue(sink.calls.get(0).isAnswer());
+        assertTrue(sink.calls.get(0).raw().contains("License: Valid"));
+
+        RecordingLifecycleSink truncated = new RecordingLifecycleSink();
+        executor.withLifecycleResults(truncated);
+        calls.commandAnswersAreTruncated = true;
+        inventory("bluecoat_mc", on("mc_show_licenses", null));
+        assertEquals(new RecordingLifecycleSink.Call("NOT_COLLECTED", LifecycleReadSwitch.Kind.MC_SHOW_LICENSES, DEVICE, null, null, "FAILED", "Truncated"), truncated.calls.get(0));
+        calls.commandAnswersAreTruncated = false;
+
+        RecordingLifecycleSink upgrade = new RecordingLifecycleSink();
+        executor.withLifecycleResults(upgrade);
+        calls.replies.put(UPGRADE, new TextResponse(200, Optional.of("application/json"), "[{\"grid_state\":\"x\"}]", false));
+        inventory("infoblox", on("infoblox_upgradestatus_grid", null));
+        assertEquals(1, upgrade.calls.size());
+        assertEquals(LifecycleReadSwitch.Kind.INFOBLOX_UPGRADESTATUS_GRID, upgrade.calls.get(0).kind());
+        calls.failures.put(UPGRADE, new IOException("synthetic"));
+        inventory("infoblox", on("infoblox_upgradestatus_grid", null));
+        assertEquals("IOException", upgrade.calls.get(1).reason());
+        assertEquals("FAILED", upgrade.calls.get(1).outcome());
     }
 }

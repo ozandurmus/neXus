@@ -55,6 +55,19 @@ final class ManagementCenterDevices {
         return out;
     }
 
+    /** A managed device's validated identifier and its display name (null when the list gives none). */
+    record Device(String uuid, String name) {
+    }
+
+    /** The same devices as {@link #uuids}, each with its name from the same list entry. */
+    static List<Device> devices(JsonNode list) {
+        List<Device> out = new ArrayList<>();
+        for (JsonNode d : items(list)) {
+            text(d, "uuid").filter(HttpsVendorPlan::isMcDeviceUuid).ifPresent(uuid -> out.add(new Device(uuid, text(d, "name").orElse(null))));
+        }
+        return out;
+    }
+
     /** The identifiers of the ProxySGs (MC type {@link HttpsVendorPlan#MC_TYPE_PROXYSG}) in list order, each validated; others are dropped. */
     static List<String> proxySgUuids(JsonNode list) {
         List<String> out = new ArrayList<>();

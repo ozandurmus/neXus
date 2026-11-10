@@ -31,7 +31,15 @@ public final class JooqDeviceLifecycleRepository implements DeviceLifecycleRepos
         transactions.inTransaction(dsl -> {
             boolean collected = COLLECTED.equals(outcome);
             if (collected) {
-                dsl.execute("delete from device_license_item where device_id = {0} and read_kind = {1}", deviceId, readKind);
+                // One answer may cover one member only (a Management Center reports each managed device's license in its own
+                // call): then only that member's rows are replaced, so the other members' rows of the same kind stay.
+                String member = singleMember(rows);
+                if (member == null) {
+                    dsl.execute("delete from device_license_item where device_id = {0} and read_kind = {1}", deviceId, readKind);
+                } else {
+                    dsl.execute("delete from device_license_item where device_id = {0} and read_kind = {1} and member_ref = {2}",
+                            deviceId, readKind, member);
+                }
                 for (LicenseItem item : rows) {
                     dsl.execute("insert into device_license_item(item_id, device_id, read_kind, category, label, state, expires_on, "
                             + "detail, member_ref, evidence_grade, observed_at) values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, now())",
@@ -40,9 +48,22 @@ public final class JooqDeviceLifecycleRepository implements DeviceLifecycleRepos
                             item.evidenceGrade());
                 }
             }
-            upsertRead(dsl, deviceId, readKind, outcome, reason, collected ? rows.size() : 0);
+            upsertRead(dsl, deviceId, readKind, outcome, reason,
+                    "(select count(*) from device_license_item where device_id = {0} and read_kind = {1})");
             return null;
         });
+    }
+
+    /** The member every item names, or null when the items name none, several, or there are no items. */
+    private static String singleMember(List<LicenseItem> rows) {
+        String member = null;
+        for (LicenseItem item : rows) {
+            if (item.memberRef() == null || (member != null && !member.equals(item.memberRef()))) {
+                return null;
+            }
+            member = item.memberRef();
+        }
+        return member;
     }
 
     @Override
@@ -63,16 +84,21 @@ public final class JooqDeviceLifecycleRepository implements DeviceLifecycleRepos
                             item.refs() == null ? new String[0] : item.refs().toArray(new String[0]));
                 }
             }
-            upsertRead(dsl, deviceId, readKind, outcome, reason, collected ? rows.size() : 0);
+            upsertRead(dsl, deviceId, readKind, outcome, reason,
+                    "(select count(*) from device_live_patch_item where device_id = {0})");
             return null;
         });
     }
 
-    private static void upsertRead(DSLContext dsl, String deviceId, String readKind, String outcome, String reason, int itemCount) {
+    /**
+     * The read row. {@code storedCount} is a subquery counting the rows that are stored for the device after this write:
+     * the count stays true when a failed read keeps the last good answer, and when one answer replaced one member only.
+     */
+    private static void upsertRead(DSLContext dsl, String deviceId, String readKind, String outcome, String reason, String storedCount) {
         dsl.execute("insert into device_lifecycle_read(device_id, read_kind, outcome, reason, item_count, observed_at) "
-                + "values ({0}, {1}, {2}, {3}, {4}, now()) on conflict (device_id, read_kind) do update set "
+                + "values ({0}, {1}, {2}, {3}, " + storedCount + ", now()) on conflict (device_id, read_kind) do update set "
                 + "outcome = excluded.outcome, reason = excluded.reason, item_count = excluded.item_count, observed_at = now()",
-                deviceId, readKind, outcome, reason, itemCount);
+                deviceId, readKind, outcome, reason);
     }
 
     @Override

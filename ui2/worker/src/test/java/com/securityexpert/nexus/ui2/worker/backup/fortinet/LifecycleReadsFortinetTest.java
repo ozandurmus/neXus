@@ -32,6 +32,7 @@ import com.securityexpert.nexus.ui2.jobs.transport.XmlApiSpec;
 import com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor;
 import com.securityexpert.nexus.ui2.worker.inventory.InventoryReadPlan;
 import com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadSwitch;
+import com.securityexpert.nexus.ui2.worker.inventory.RecordingLifecycleSink;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceCalls;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Credentials;
@@ -346,5 +347,111 @@ class LifecycleReadsFortinetTest {
         FmgRun d = runFortiManager(empty, on("fmg_fmupdate_dbcontract"), true);
         assertEquals(off.result(), d.result());
         assertTrue(d.lines().get(0).contains("outcome=EMPTY"), d.lines().get(0));
+    }
+
+    // ------------------------------------------------------------------------------------ result sink (storage contract s.3)
+
+    private static FgtRun runFortiGate(Ssh ssh, LifecycleReadSwitch sw, RecordingLifecycleSink sink) {
+        List<String> lines = new ArrayList<>();
+        FortiGateExecutor executor = new FortiGateExecutor(ssh, null).withLifecycleReads(sw).withLifecycleSink(lines::add).withLifecycleResults(sink);
+        ssh.sent.clear();
+        HttpsVendorExecutor.InventoryOutcome outcome = executor.inventory(T, "cred", DEVICE);
+        assertTrue(outcome instanceof HttpsVendorExecutor.InventoryOutcome.Completed, String.valueOf(outcome));
+        return new FgtRun(outcome.toString(), new ArrayList<>(ssh.sent), lines, ssh);
+    }
+
+    @Test
+    void fortiGateResultSinkIsNeverCalledWithTheSwitchOff() {
+        RecordingLifecycleSink sink = new RecordingLifecycleSink();
+        runFortiGate(fortiGate(false), LifecycleReadSwitch.OFF, sink);
+        runFortiGate(fortiGate(true), LifecycleReadSwitch.from(Map.of("UI2_LIFECYCLE_READS", BOTH, "UI2_LIFECYCLE_READ_DEVICES", "dev-9")::get), sink);
+        assertTrue(sink.calls.isEmpty(), sink.calls.toString());
+    }
+
+    @Test
+    void fortiGateResultSinkGetsEachAnswerOnceWithTheEchoStrippedAndAThrowingSinkChangesNothing() {
+        FgtRun plain = runFortiGate(fortiGate(false), on(BOTH));
+        RecordingLifecycleSink sink = new RecordingLifecycleSink();
+        FgtRun with = runFortiGate(fortiGate(false), on(BOTH), sink);
+        assertEquals(plain.result(), with.result());
+        assertEquals(plain.lines(), with.lines());
+        assertEquals(2, sink.calls.size(), sink.calls.toString());
+        assertEquals(LifecycleReadSwitch.Kind.FGT_UPDATE_INFO_CONTRACT, sink.calls.get(0).kind());
+        assertEquals(LifecycleReadSwitch.Kind.FGT_AUTOUPDATE_VERSIONS, sink.calls.get(1).kind());
+        assertTrue(sink.calls.stream().allMatch(c -> c.isAnswer() && DEVICE.equals(c.deviceId())));
+        assertTrue(sink.calls.get(0).raw().contains("Contracts: FMWR COMP"), sink.calls.get(0).raw());
+        assertFalse(sink.calls.get(0).raw().contains(CONTRACT), "the echoed command is stripped");
+
+        RecordingLifecycleSink throwing = RecordingLifecycleSink.throwing();
+        FgtRun thrown = runFortiGate(fortiGate(false), on(BOTH), throwing);
+        assertEquals(plain.result(), thrown.result());
+        assertEquals(plain.lines(), thrown.lines());
+        assertEquals(plain.sent(), thrown.sent());
+        assertEquals(2, throwing.calls.size());
+    }
+
+    @Test
+    void fortiGateRefusalTimeoutChannelAndThrowCallNotCollected() {
+        Ssh refused = fortiGate(false);
+        refused.answers.put(CONTRACT, "Unknown action 0");
+        refused.timeOut.add(VERSIONS);
+        RecordingLifecycleSink a = new RecordingLifecycleSink();
+        runFortiGate(refused, on(BOTH), a);
+        assertEquals(List.of(new RecordingLifecycleSink.Call("NOT_COLLECTED", LifecycleReadSwitch.Kind.FGT_UPDATE_INFO_CONTRACT, DEVICE, null, null, "REFUSED", "CliRefusal"),
+                new RecordingLifecycleSink.Call("NOT_COLLECTED", LifecycleReadSwitch.Kind.FGT_AUTOUPDATE_VERSIONS, DEVICE, null, null, "FAILED", "TimedOut")), a.calls);
+
+        Ssh failed = fortiGate(false);
+        failed.channelFailed.add(CONTRACT);
+        failed.throwing.add(VERSIONS);
+        RecordingLifecycleSink b = new RecordingLifecycleSink();
+        runFortiGate(failed, on(BOTH), b);
+        assertEquals("ChannelFailed", b.calls.get(0).reason());
+        assertEquals("FAILED", b.calls.get(0).outcome());
+        assertEquals("IllegalStateException", b.calls.get(1).reason());
+    }
+
+    private static FmgRun runFortiManager(Ssh ssh, LifecycleReadSwitch sw, boolean withSsh, RecordingLifecycleSink sink) {
+        List<String> lines = new ArrayList<>();
+        FortiManagerExecutor executor = new FortiManagerExecutor(new Rpc(), ref -> new Credentials("user", "pw".toCharArray()))
+                .withLifecycleReads(sw).withLifecycleSink(lines::add).withLifecycleResults(sink);
+        if (withSsh) {
+            executor.withSsh(ssh);
+        }
+        HttpsVendorExecutor.InventoryOutcome outcome = executor.inventory(new Target("192.0.2.50", 443), "cred", DEVICE);
+        assertTrue(outcome instanceof HttpsVendorExecutor.InventoryOutcome.Completed, String.valueOf(outcome));
+        return new FmgRun(outcome.toString(), new ArrayList<>(ssh.sent), lines, ssh);
+    }
+
+    @Test
+    void fortiManagerResultSinkSwitchOffAnswerSkipRefusalAndThrowingSink() {
+        RecordingLifecycleSink off = new RecordingLifecycleSink();
+        runFortiManager(fortiManager(), LifecycleReadSwitch.OFF, true, off);
+        runFortiManager(fortiManager(), LifecycleReadSwitch.OFF, false, off);
+        assertTrue(off.calls.isEmpty(), off.calls.toString());
+
+        FmgRun plain = runFortiManager(fortiManager(), on("fmg_fmupdate_dbcontract"), true);
+        RecordingLifecycleSink answered = new RecordingLifecycleSink();
+        FmgRun with = runFortiManager(fortiManager(), on("fmg_fmupdate_dbcontract"), true, answered);
+        assertEquals(plain.result(), with.result());
+        assertEquals(plain.lines(), with.lines());
+        assertEquals(1, answered.calls.size());
+        assertEquals(LifecycleReadSwitch.Kind.FMG_FMUPDATE_DBCONTRACT, answered.calls.get(0).kind());
+        assertTrue(answered.calls.get(0).isAnswer());
+        assertEquals(DEVICE, answered.calls.get(0).deviceId());
+
+        RecordingLifecycleSink skipped = new RecordingLifecycleSink();
+        runFortiManager(fortiManager(), on("fmg_fmupdate_dbcontract"), false, skipped);
+        assertEquals(List.of(new RecordingLifecycleSink.Call("NOT_COLLECTED", LifecycleReadSwitch.Kind.FMG_FMUPDATE_DBCONTRACT, DEVICE, null, null, "SKIPPED", "no_ssh_session")), skipped.calls);
+
+        Ssh refusal = fortiManager();
+        refusal.answers.put(DBCONTRACT, "Unknown action 0");
+        RecordingLifecycleSink refused = new RecordingLifecycleSink();
+        runFortiManager(refusal, on("fmg_fmupdate_dbcontract"), true, refused);
+        assertEquals("REFUSED", refused.calls.get(0).outcome());
+
+        RecordingLifecycleSink throwing = RecordingLifecycleSink.throwing();
+        FmgRun thrown = runFortiManager(fortiManager(), on("fmg_fmupdate_dbcontract"), true, throwing);
+        assertEquals(plain.result(), thrown.result());
+        assertEquals(plain.lines(), thrown.lines());
     }
 }

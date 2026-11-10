@@ -105,6 +105,10 @@ class LifecycleReadsPaloAltoTest {
     }
 
     private static Run run(String version, boolean panorama, LifecycleReadSwitch sw, Map<String, Object> lifecycle) {
+        return run(version, panorama, sw, lifecycle, null);
+    }
+
+    private static Run run(String version, boolean panorama, LifecycleReadSwitch sw, Map<String, Object> lifecycle, LifecycleResultSink sink) {
         Map<String, String> script = new HashMap<>();
         script.put(InventoryReadPlan.PAN_SHOW_HA_STATE, HA);
         if (panorama) {
@@ -120,6 +124,9 @@ class LifecycleReadsPaloAltoTest {
         List<String> lines = new ArrayList<>();
         InventoryCapabilityExecutor executor = new InventoryCapabilityExecutor(spy,
                 ref -> new PanCredentialMaterial("user", "pw".toCharArray())).withLifecycleReads(sw).withLifecycleSink(lines::add);
+        if (sink != null) {
+            executor.withLifecycleResults(sink);
+        }
         InventoryRequest base = InventoryRequest.paloAlto(new ApiTarget("ep-1", "https://fw.example"), "cred");
         InventoryRequest request = panorama ? new InventoryRequest(base.vendor(), base.connectionTarget(), base.apiTarget(),
                 base.credentialRef(), base.trustRuleRef(), base.modelHint(), true) : base;
@@ -263,5 +270,55 @@ class LifecycleReadsPaloAltoTest {
         InventoryResult result = executor.collect(InventoryRequest.paloAlto(new ApiTarget("ep-1", "https://fw.example"), "cred"),
                 Optional.empty(), false, DEVICE);
         assertTrue(result instanceof InventoryResult.Completed);
+    }
+
+    // ------------------------------------------------------------------------------------ result sink (storage contract s.3)
+
+    @Test
+    void theResultSinkIsNeverCalledWithTheSwitchOffOrForAnotherDevice() {
+        RecordingLifecycleSink sink = new RecordingLifecycleSink();
+        run("11.1.4", false, LifecycleReadSwitch.OFF, bodies(), sink);
+        run("11.1.4", false, LifecycleReadSwitch.from(Map.of("UI2_LIFECYCLE_READS", BOTH, "UI2_LIFECYCLE_READ_DEVICES", "dev-9")::get), bodies(), sink);
+        assertTrue(sink.calls.isEmpty(), sink.calls.toString());
+    }
+
+    @Test
+    void theResultSinkGetsBothAnswersOnceAndAThrowingSinkChangesNothing() {
+        Run plain = run("11.1.4", false, on(BOTH), bodies());
+        RecordingLifecycleSink sink = new RecordingLifecycleSink();
+        Run with = run("11.1.4", false, on(BOTH), bodies(), sink);
+        assertEquals(plain.result(), with.result());
+        assertEquals(plain.lines(), with.lines());
+        assertEquals(2, sink.calls.size(), sink.calls.toString());
+        assertEquals(new RecordingLifecycleSink.Call("ANSWER", LifecycleReadSwitch.Kind.PAN_LICENSE_INFO, DEVICE, null, LICENSE_BODY, "ANSWER", null), sink.calls.get(0));
+        assertEquals(new RecordingLifecycleSink.Call("ANSWER", LifecycleReadSwitch.Kind.PAN_SUPPORT_INFO, DEVICE, null, SUPPORT_BODY, "ANSWER", null), sink.calls.get(1));
+
+        RecordingLifecycleSink throwing = RecordingLifecycleSink.throwing();
+        Run thrown = run("11.1.4", false, on(BOTH), bodies(), throwing);
+        assertEquals(plain.result(), thrown.result());
+        assertEquals(plain.lines(), thrown.lines());
+        assertEquals(plain.sent(), thrown.sent());
+        assertEquals(2, throwing.calls.size());
+    }
+
+    @Test
+    void skipFailureAndThrowPathsCallNotCollectedWithTheirTokens() {
+        RecordingLifecycleSink version12 = new RecordingLifecycleSink();
+        run("12.1.0", false, on(BOTH), bodies(), version12);
+        assertEquals(List.of(new RecordingLifecycleSink.Call("NOT_COLLECTED", LifecycleReadSwitch.Kind.PAN_LICENSE_INFO, DEVICE, null, null, "SKIPPED", "pan_os_12_or_unknown"),
+                new RecordingLifecycleSink.Call("NOT_COLLECTED", LifecycleReadSwitch.Kind.PAN_SUPPORT_INFO, DEVICE, null, null, "SKIPPED", "pan_os_12_or_unknown")), version12.calls);
+
+        RecordingLifecycleSink panorama = new RecordingLifecycleSink();
+        run(null, true, on(BOTH), Map.of(), panorama);
+        assertEquals(List.of("panorama", "panorama"), panorama.calls.stream().map(RecordingLifecycleSink.Call::reason).toList());
+        assertTrue(panorama.calls.stream().allMatch(c -> "SKIPPED".equals(c.outcome())));
+
+        Map<String, Object> broken = new HashMap<>();
+        broken.put(InventoryReadPlan.PAN_REQUEST_LICENSE_INFO, new XmlApiResult.Failed("synthetic"));
+        broken.put(InventoryReadPlan.PAN_REQUEST_SUPPORT_INFO, new IllegalStateException("synthetic"));
+        RecordingLifecycleSink failed = new RecordingLifecycleSink();
+        run("11.1.4", false, on(BOTH), broken, failed);
+        assertEquals(new RecordingLifecycleSink.Call("NOT_COLLECTED", LifecycleReadSwitch.Kind.PAN_LICENSE_INFO, DEVICE, null, null, "FAILED", "XmlApiFailed"), failed.calls.get(0));
+        assertEquals(new RecordingLifecycleSink.Call("NOT_COLLECTED", LifecycleReadSwitch.Kind.PAN_SUPPORT_INFO, DEVICE, null, null, "FAILED", "IllegalStateException"), failed.calls.get(1));
     }
 }

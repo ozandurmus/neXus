@@ -65,9 +65,17 @@ public final class FortiGateExecutor {
     /** Lifecycle reads, group B (PO 2026-11-10): off unless the worker wires a switch in. See {@link LifecycleReadSwitch}. */
     private LifecycleReadSwitch lifecycleReads = LifecycleReadSwitch.OFF;
     private java.util.function.Consumer<String> lifecycleSink = LifecycleReadShape::log;
+    private com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink lifecycleResults =
+            com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink.NONE;
 
     public FortiGateExecutor withLifecycleReads(LifecycleReadSwitch lifecycleReads) {
         this.lifecycleReads = Objects.requireNonNull(lifecycleReads, "lifecycleReads");
+        return this;
+    }
+
+    /** The sink of the lifecycle reads' results (called only for a read the switch allowed; a failing sink changes nothing). */
+    public FortiGateExecutor withLifecycleResults(com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink sink) {
+        this.lifecycleResults = com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink.guarded(sink);
         return this;
     }
 
@@ -363,13 +371,27 @@ public final class FortiGateExecutor {
         try {
             ExecResult r = ssh.execInteractive(s, new ExecSpec(command, true), InventoryReadPlan.LIFECYCLE_READ_TIMEOUT);
             return switch (r) {
-                case ExecResult.Completed c -> lifecycleRefused(c.output()) ? LifecycleReadShape.errorLine(kind, deviceId, "CliRefusal")
-                        : LifecycleReadShape.cliLine(kind, deviceId, stripEcho(c.output(), command));
-                case ExecResult.TimedOut t -> LifecycleReadShape.errorLine(kind, deviceId, "TimedOut");
-                case ExecResult.ChannelFailed f -> LifecycleReadShape.errorLine(kind, deviceId, "ChannelFailed");
+                case ExecResult.Completed c -> {
+                    if (lifecycleRefused(c.output())) {
+                        lifecycleResults.notCollected(kind, deviceId, "REFUSED", "CliRefusal");
+                        yield LifecycleReadShape.errorLine(kind, deviceId, "CliRefusal");
+                    }
+                    String answer = stripEcho(c.output(), command);
+                    lifecycleResults.answer(kind, deviceId, null, answer);
+                    yield LifecycleReadShape.cliLine(kind, deviceId, answer);
+                }
+                case ExecResult.TimedOut t -> {
+                    lifecycleResults.notCollected(kind, deviceId, "FAILED", "TimedOut");
+                    yield LifecycleReadShape.errorLine(kind, deviceId, "TimedOut");
+                }
+                case ExecResult.ChannelFailed f -> {
+                    lifecycleResults.notCollected(kind, deviceId, "FAILED", "ChannelFailed");
+                    yield LifecycleReadShape.errorLine(kind, deviceId, "ChannelFailed");
+                }
             };
         } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            lifecycleResults.notCollected(kind, deviceId, "FAILED", e.getClass().getSimpleName());
             return LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName());
         }
     }
