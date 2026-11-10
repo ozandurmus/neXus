@@ -5237,3 +5237,37 @@ gates:
     secret_output_risk: "member names in the object reference: never stored or logged"
     safe_telemetry_fields: ["count", "field_names"]
     source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md amendment B-2026-11-10 (PO chat approval 2026-11-10)"
+
+  - gate_id: pan_panorama_lifecycle_license_info
+    vendor: "palo_alto"
+    platform_role_scope: "panorama"
+    shell_context: "not_applicable"
+    transport_kind: "PAN_XML_API"
+    canonical_command_key: "<request><license><info/></license></request>"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per inventory"
+    session_reuse_rule: "the one key-generation session per run"
+    unsupported_behavior_ref: "an error reply or an unexpected shape: license check UNKNOWN"
+    secret_output_risk: "device serial and authcode in the reply: parsed past, never stored or logged"
+    safe_telemetry_fields: ["outcome", "reply_status", "entry_count", "element_names"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md amendment C-2026-11-10 (PO chat approval 2026-11-10)"
+
+  - gate_id: pan_panorama_lifecycle_support_info
+    vendor: "palo_alto"
+    platform_role_scope: "panorama"
+    shell_context: "not_applicable"
+    transport_kind: "PAN_XML_API"
+    canonical_command_key: "<request><support><info/></support></request>"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per inventory"
+    session_reuse_rule: "the one key-generation session per run"
+    unsupported_behavior_ref: "an error reply or an unexpected shape: support check UNKNOWN"
+    secret_output_risk: "account, contact and link fields: never stored or logged"
+    safe_telemetry_fields: ["outcome", "reply_status", "element_names"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md amendment C-2026-11-10 (PO chat approval 2026-11-10)"
