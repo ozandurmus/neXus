@@ -20,7 +20,8 @@ _CEILINGS = {
     # Since 3c7ac6da (the last ceiling update), ratified host/device-action,
     # AIView/privacy and Java-authority amendments added a net 815 words.
     # Preserve the previous 49-word headroom; do not trim binding safety law.
-    "AGENTS.md": 4343,
+    # +19 words: the 2026-11-11 aiview configuration-collect / discovery-start sentence (PO decision record).
+    "AGENTS.md": 4362,
     "AI_START_HERE.md": 2250,
     "CURRENT_STATE.md": 1050,
     "AI_HANDOVER.md": 300,
