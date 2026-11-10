@@ -33,3 +33,11 @@ without `--yes-paid-run`. Only the Claude provider imports the `anthropic` SDK (
 `results.jsonl` (one call per line with its score), `run_meta.json`, `cases_snapshot.json`, then from `report`:
 `summary.md`, `rubric_full.csv`, `rubric_blind.csv` (model and effort hidden, for the human scorer),
 `rubric_blind_key.csv`. Tests: `python3 -m pytest -q tools/tests/test_llm_trial.py`.
+
+## Committed results
+
+`results/run-2026-11-10/` holds the paid run of 2026-11-10 (record:
+`docs/design/LOG_AGENT_CLAUDE_TRIAL_2026_11_10.md`). The raw results are committed gzipped; to rebuild the report and
+`rubric_full.csv`: `gunzip -k results/run-2026-11-10/results.jsonl.gz`, then
+`python3 tools/llm_trial/run_trial.py report --in tools/llm_trial/results/run-2026-11-10`. The paid run was driven by a
+local script that reads the key with hidden input and keeps it only in that process's environment.

@@ -218,6 +218,16 @@ def test_resume_skips_done(tmp_path):
     assert rc == 0 and (out / "results.jsonl").read_text() == before
 
 
+def test_resume_counts_prior_spend_against_budget(tmp_path, capsys):
+    out = mock_run(tmp_path, ["--cases", "C01"])
+    spent = run_trial.prior_spend(out / "results.jsonl")
+    assert spent > 0
+    capsys.readouterr()
+    rc = run_trial.main(["run", "--provider", "mock", "--out", str(out), "--resume", "--budget-usd", f"{spent + 0.0001:.4f}"],
+                        cases_loader=lambda: copy.deepcopy(FIXTURE))
+    assert rc == 0 and "budget stop" in capsys.readouterr().out
+
+
 def test_budget_guard_stops(tmp_path, capsys):
     out = mock_run(tmp_path, ["--budget-usd", "0.001"])
     text = capsys.readouterr().out
