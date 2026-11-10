@@ -1,0 +1,138 @@
+# ui2-advisory-fetch: the outbound advisory fetch workload (docs/design/ADVISORY_MATCHING_CONTRACT.md section 3;
+# PO decisions D4 and D14 and docs/design/PO_DECISION_RECORD_2026_11_10_ADVISORY_INTAKE_PROXY_SOURCES_AND_FIX_RULES.md).
+# It is the only neXus workload that reaches the internet, so it holds nothing: no database account, no credential-store
+# key, no service-account token. Its one secret is its own ingest token.
+#
+# Hand-made on the host, never committed (the proxy address is deployment configuration):
+#   ConfigMap ui2-advisory-fetch       key proxy = host:port of the proxy the image build jobs use
+#   Secret    ui2-advisory-fetch-token keys token (the fetcher) and sha256 (ui2-service compares against it)
+#   NetworkPolicy ui2-advisory-fetch-proxy: egress from this pod to the proxy address and port only
+# Without the ConfigMap the program prints "not started" and exits; without the proxy policy it reaches no proxy.
+# The CronJob is committed suspended; resume it (kubectl patch) or start one run by hand
+# (kubectl create job --from=cronjob/ui2-advisory-fetch <name>). The first Cisco load needs UI2_ADVISORY_CISCO_DAYS=1100 once.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ui2-advisory-fetch
+  namespace: ui2
+automountServiceAccountToken: false
+---
+# Default deny for the pod, then only DNS and the service's internal ingest port. The proxy is allowed by the hand-made
+# policy named above; policies add up, so this file never needs the proxy address.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ui2-advisory-fetch
+  namespace: ui2
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: advisory-fetch
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress: []
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: service
+    ports:
+    - protocol: TCP
+      port: 8086
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ui2-advisory-fetch
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: advisory-fetch
+spec:
+  # Once a day (contract section 3), outside the collection windows. Its own schedule and switch.
+  schedule: "30 4 * * *"
+  timeZone: Europe/Istanbul
+  suspend: true
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 7200
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexus-ui2
+            app.kubernetes.io/component: advisory-fetch
+        spec:
+          restartPolicy: Never
+          serviceAccountName: ui2-advisory-fetch
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - name: advisory-fetch
+            image: registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:966cf85b73bc107cc4331f9967f98dfad864e0035d96ea97aa4848fd7deeb136
+            args:
+            - advisory-fetch
+            env:
+            - name: UI2_ADVISORY_PROXY
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-advisory-fetch
+                  key: proxy
+                  optional: true
+            - name: UI2_ADVISORY_FETCH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: ui2-advisory-fetch-token
+                  key: token
+                  optional: true
+            - name: UI2_ADVISORY_INGEST_URL
+              value: http://ui2-service-internal.ui2.svc.cluster.local:8086
+            - name: UI2_ADVISORY_CISCO_DAYS
+              value: "7"
+            - name: JAVA_TOOL_OPTIONS
+              value: -Xmx512m -Djava.io.tmpdir=/app/tmp
+            securityContext:
+              runAsNonRoot: true
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
+              seccompProfile:
+                type: RuntimeDefault
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                cpu: "1"
+                memory: 1Gi
+            volumeMounts:
+            - name: tmp
+              mountPath: /app/tmp
+            - name: home
+              mountPath: /app/home
+          volumes:
+          - name: tmp
+            emptyDir: {}
+          - name: home
+            emptyDir: {}

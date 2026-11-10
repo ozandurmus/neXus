@@ -31,7 +31,9 @@ public final class Ui2Launcher {
             "service", "com.securityexpert.nexus.ui2.service.boot.Ui2Application",
             "worker", "com.securityexpert.nexus.ui2.worker.Ui2WorkerMain",
             // cli_parity_for_every_ui_action: `java -jar service.jar cli <command>` in the shipped image.
-            "cli", "com.securityexpert.nexus.ui2.cli.CliEntryPoint");
+            "cli", "com.securityexpert.nexus.ui2.cli.CliEntryPoint",
+            // docs/design/ADVISORY_MATCHING_CONTRACT.md section 3: the outbound advisory fetch workload (JDK only, no keys).
+            "advisory-fetch", "com.securityexpert.nexus.ui2.platform.advisoryfetch.AdvisoryFetchMain");
 
     private Ui2Launcher() {
     }

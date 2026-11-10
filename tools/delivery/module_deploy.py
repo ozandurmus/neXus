@@ -257,6 +257,34 @@ def render_manifest(target, image, replicas=None):
     return manifest
 
 
+ADVISORY_FETCH_MANIFEST = "deploy/ui2/59-advisory-fetch-cronjob.yaml"
+
+
+def render_advisory_fetch(image, suspended=None):
+    """The advisory fetch CronJob set (docs/design/ADVISORY_MATCHING_CONTRACT.md section 3) with the candidate image.
+
+    The CronJob runs the service image with its own role, so it is applied with every forward release of the service;
+    left alone it would keep running the image of the day it was created. The committed `suspend: true` is only a
+    first-release value: with `suspended` the line is set to the live state, so a release never resumes or pauses it."""
+    manifest = (REPO / ADVISORY_FETCH_MANIFEST).read_text()
+    manifest, count = re.subn(r"(?m)^(\s*image: )\S+$", lambda match: match[1] + image, manifest)
+    if count != 1:
+        raise Blocked("advisory fetch template must contain exactly one workload image")
+    if suspended is not None:
+        manifest, count = re.subn(r"(?m)^  suspend: (true|false)$", "  suspend: " + ("true" if suspended else "false"), manifest)
+        if count != 1:
+            raise Blocked("advisory fetch template must contain exactly one suspend line")
+    return manifest
+
+
+def sync_advisory_fetch(image):
+    """Apply the advisory fetch set next to the service; the live suspend state is kept (absent CronJob: committed)."""
+    state = run("kubectl", "-n", "ui2", "get", "cronjob", "ui2-advisory-fetch", "--ignore-not-found",
+                "-o", "jsonpath={.spec.suspend}")
+    suspended = {"true": True, "false": False}.get(state)
+    run("kubectl", "-n", "ui2", "apply", "-f", "-", input=render_advisory_fetch(image, suspended))
+
+
 def live_replicas(target):
     value = run("kubectl", "-n", "ui2", "get", "deployment/ui2-" + target, "-o", "jsonpath={.spec.replicas}")
     if not value.isdigit():
@@ -368,6 +396,8 @@ def replace_image(target, image, sync_manifest=False):
         # One pod-template update installs the image together with the committed env, mounts and resources. The
         # live replica count is kept (the policy release scales the pod itself). Called only after the drain.
         run("kubectl", "-n", "ui2", "apply", "-f", "-", input=render_manifest(target, image, live_replicas(target)))
+        if target == "service":
+            sync_advisory_fetch(image)
         return
     if target != "worker":
         run("kubectl", "-n", "ui2", "set", "image", "deployment/ui2-" + target, TARGETS[target] + "=" + image)
