@@ -37,7 +37,7 @@ public final class LoginAttemptThrottle {
     private static String key(String value) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(
-                    (value == null ? "" : value).getBytes(StandardCharsets.UTF_8)));
+                    (value == null ? "" : value.strip().toLowerCase(java.util.Locale.ROOT)).getBytes(StandardCharsets.UTF_8)));
         } catch (java.security.NoSuchAlgorithmException e) { throw new IllegalStateException("login_throttle_unavailable"); }
     }
 }

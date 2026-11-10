@@ -75,6 +75,11 @@ final class NexusSessionCli {
         System.out.println("  devices");
         System.out.println("  system-pods | storage                          service view (pods, CPU, memory) and storage use");
         System.out.println("  notifications | notifications-test <syslog|mail>  remote logging / SMTP relay settings and a test send");
+        System.out.println("  ldap                                           LDAP (Active Directory) settings; never the bind password");
+        System.out.println("  ldap-set <settings.json> [--password-file <f>] save LDAP settings; the bind password is prompted");
+        System.out.println("                                                 (blank keeps the stored one for the same servers)");
+        System.out.println("  ldap-test <testUser> [settings.json] [--password-file <f>]");
+        System.out.println("                                                 service bind + user search + group check; no user bind");
         System.out.println("  backups [deviceId]                             fleet or one device's history (with baseline)");
         System.out.println("  backup-run <deviceId> <reason> [backup|snapshot]");
         System.out.println("  backup-run-all <reason>");
@@ -156,6 +161,9 @@ final class NexusSessionCli {
                 case "system-pods" -> print(call("GET", "/api/v2/system/pods", null));
                 case "storage" -> print(call("GET", "/api/v2/system/storage", null));
                 case "notifications" -> print(call("GET", "/api/v2/config/notifications", null));
+                case "ldap" -> print(call("GET", LDAP_SETTINGS, null));
+                case "ldap-set" -> ldapSet(args);
+                case "ldap-test" -> ldapTest(args);
                 case "notifications-test" -> {
                     require(args, 2, "notifications-test <syslog|mail>");
                     yield print(call("POST", "/api/v2/config/notifications/test-" + ("mail".equals(args[1]) ? "mail" : "syslog"), "{}"));
@@ -450,6 +458,56 @@ final class NexusSessionCli {
         Files.deleteIfExists(sessionFile());
         System.out.println("logged out");
         return 0;
+    }
+
+    static final String LDAP_SETTINGS = "/api/v2/config/ldap";
+
+    /** {@code ldap-set <settings.json> [--password-file <f>]}: the settings file never holds the password. */
+    private int ldapSet(String[] args) throws IOException, InterruptedException {
+        require(args, 2, "ldap-set <settings.json> [--password-file <f>]");
+        String settings = Files.readString(Path.of(args[1]), StandardCharsets.UTF_8);
+        return print(call("PUT", LDAP_SETTINGS, withBindPassword(settings, ldapBindPassword(args))));
+    }
+
+    /** {@code ldap-test <testUser> [settings.json] [--password-file <f>]}: without a file, the saved settings. */
+    private int ldapTest(String[] args) throws IOException, InterruptedException {
+        require(args, 2, "ldap-test <testUser> [settings.json] [--password-file <f>]");
+        String settings = args.length > 2 && !args[2].startsWith("--")
+                ? Files.readString(Path.of(args[2]), StandardCharsets.UTF_8)
+                : new String(call("GET", LDAP_SETTINGS, null).body(), StandardCharsets.UTF_8);
+        String password = args.length > 2 && !args[2].startsWith("--") || hasOption(args, "--password-file")
+                ? ldapBindPassword(args) : "";
+        return print(call("POST", LDAP_SETTINGS + "/test", "{\"settings\":" + withBindPassword(settings, password)
+                + ",\"testUser\":\"" + escape(args[1]) + "\"}"));
+    }
+
+    private static boolean hasOption(String[] args, String name) {
+        for (String arg : args) if (name.equals(arg)) return true;
+        return false;
+    }
+
+    /** From {@code --password-file}, else a no-echo prompt; blank keeps the stored password. */
+    private static String ldapBindPassword(String[] args) throws IOException {
+        for (int i = 0; i + 1 < args.length; i++) {
+            if ("--password-file".equals(args[i])) {
+                String value = Files.readString(Path.of(args[i + 1]), StandardCharsets.UTF_8);
+                return value.endsWith("\n") ? value.substring(0, value.length() - 1) : value;
+            }
+        }
+        java.io.Console console = System.console();
+        if (console == null) return "";
+        char[] typed = console.readPassword("LDAP bind password (blank keeps the stored one): ");
+        return typed == null ? "" : new String(typed);
+    }
+
+    /** Puts {@code bindPassword} first in a JSON object, overriding any value the file carried. */
+    static String withBindPassword(String settingsJson, String password) {
+        String trimmed = settingsJson.strip();
+        if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) throw new IllegalArgumentException("settings must be a JSON object");
+        String inner = trimmed.substring(1, trimmed.length() - 1).strip()
+                .replaceAll("\"bindPassword\"\\s*:\\s*(\"(\\\\.|[^\"\\\\])*\"|null)\\s*,?", "");
+        String field = "\"bindPassword\":\"" + escape(password) + "\"";
+        return "{" + field + (inner.isEmpty() ? "" : "," + inner) + "}";
     }
 
     private static char[] readPassword() {

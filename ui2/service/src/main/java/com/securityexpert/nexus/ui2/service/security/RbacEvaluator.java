@@ -108,6 +108,13 @@ public final class RbacEvaluator {
                 Optional.of(REASON_DIRECTORY_BINDING_NOT_EVALUABLE), Optional.empty());
     }
 
+    private volatile java.util.function.BiPredicate<String, Instant> directoryRefresh;
+
+    /** Wires the on-demand directory refresh (service-bind model); without it a stale set stays not evaluated. */
+    public void useDirectoryRefresh(java.util.function.BiPredicate<String, Instant> refresh) {
+        this.directoryRefresh = refresh;
+    }
+
     public Decision evaluate(String actorFingerprint, Optional<String> requiredToken, Instant now) {
         Optional<String> localIdentityId = localIdentityResolver == null ? Optional.empty()
                 : localIdentityResolver.resolve(actorFingerprint).map(record -> record.localIdentityId());
@@ -138,6 +145,13 @@ public final class RbacEvaluator {
             return Decision.notEvaluatedUnbound();
         }
 
+        if (authzState.isPresent() && !authzState.get().isFresh(now) && authzState.get().hasDirectoryProof()
+                && directoryRefresh != null && directoryRefresh.test(actorFingerprint, now)) {
+            // Design LDAP_SERVICE_BIND_DESIGN_2026_11_11 §6: a stale directory group set is re-read once through
+            // the service account; on failure the decision stays AUTHZ_NOT_EVALUATED (fail closed).
+            authzState = actorAuthzStateRepository.find(actorFingerprint);
+            now = Instant.now();
+        }
         if (authzState.isEmpty() || !authzState.get().isFresh(now)) {
             // actor_group_set_stale: no fresh resolved group set to
             // evaluate against -- AUTHZ_NOT_EVALUATED, never DENIED, never
@@ -182,6 +196,8 @@ public final class RbacEvaluator {
         for (String token : requiredTokens) {
             Decision decision = evaluate(actorFingerprint, Optional.of(token), now);
             if (decision.outcome().proceeds()) return decision;
+            // A stale group set already had its one refresh attempt; the other tokens cannot fare better.
+            if (decision.reasonCode().filter(REASON_ACTOR_GROUP_SET_STALE::equals).isPresent()) return decision;
             if (refused == null || ("AUTHZ_NOT_EVALUATED".equals(decision.outcome().name())
                     && !"AUTHZ_NOT_EVALUATED".equals(refused.outcome().name()))) refused = decision;
         }

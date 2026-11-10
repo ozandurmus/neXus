@@ -96,6 +96,19 @@ public final class SessionStatusController {
                     .body(body);
         }
 
+        // Evaluated first: for a directory actor this may refresh the group set through the service account, or
+        // revoke the session when the actor left both groups (design LDAP_SERVICE_BIND_DESIGN_2026_11_11 §6).
+        boolean canReadAdministration = rbacEvaluator != null && rbacEvaluator.evaluate(
+                session.get().actorFingerprint(), Optional.of(com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN),
+                Instant.now()).outcome() == com.securityexpert.nexus.ui2.platform.AuthzOutcome.PERMITTED;
+        session = rawCookie.flatMap(this::activeSession);
+        if (session.isEmpty()) {
+            body.put("authenticated", false);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .cacheControl(org.springframework.http.CacheControl.noStore())
+                    .body(body);
+        }
+
         body.put("authenticated", true);
         body.put("csrf_token", session.get().csrfSecret());
         // NXS-LOCAL-0152 AC-3: display name, resolved role tokens, and the
@@ -129,7 +142,11 @@ public final class SessionStatusController {
                 body.put("display_name", displayName);
                 body.put("must_change_password", false);
                 List<String> roleTokens = new java.util.ArrayList<>();
-                for (var binding : roleBindingRepository.findAllActive()) {
+                // Roles are listed only from a fresh group set of the same directory profile the binding names.
+                boolean fresh = state.isFresh(Instant.now()) && state.directoryProfileId() != null;
+                for (var binding : fresh ? roleBindingRepository.findAllActive()
+                        : List.<com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRecord>of()) {
+                    if (!state.directoryProfileId().equals(binding.directoryProfileId())) continue;
                     if (binding.bindingKind() == com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP) {
                         try {
                             String group = groupReferenceCipher.decryptDirectory(binding.groupReferenceEncrypted(),
@@ -148,13 +165,11 @@ public final class SessionStatusController {
                         } catch (Exception ignored) { }
                     }
                 }
-                body.put("role_tokens", roleTokens);
+                body.put("role_tokens", roleTokens.stream().distinct().toList());
                 collectPlanes(roleTokens, planes);
             }
         }
-        body.put("can_read_administration", rbacEvaluator != null && rbacEvaluator.evaluate(
-                session.get().actorFingerprint(), Optional.of(com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN),
-                Instant.now()).outcome() == com.securityexpert.nexus.ui2.platform.AuthzOutcome.PERMITTED);
+        body.put("can_read_administration", canReadAdministration);
         body.put("permissions", new java.util.ArrayList<>(planes));
         return ResponseEntity.ok()
                 .cacheControl(org.springframework.http.CacheControl.noStore())
