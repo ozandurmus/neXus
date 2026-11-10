@@ -65,6 +65,34 @@ class AdvisoryControllerTest {
         assertTrue(list.contains("https://www.cisco.com/cisco-sa-example"), list);
     }
 
+    /** The pass-through is tied to an advisory id: a row of another screen that happens to carry a verdict is masked as before. */
+    @Test void onlyRowsWithAnAdvisoryIdKeepVersionAndTitleUnmasked() {
+        byte[] key = String.join("-", "synthetic", "advisory", "mask", "key").getBytes(StandardCharsets.UTF_8);
+        var advice = new PrivacyMaskingResponseBodyAdvice(new SubnetPreservingIpMasker(key), new TopologyNamePseudonymizer(key));
+        String dotted = String.join(".", "9", "18", "4", "50");
+        var advisoryRow = new java.util.LinkedHashMap<String, Object>();
+        advisoryRow.put("advisory_id", "cisco:cisco-sa-example");
+        advisoryRow.put("verdict", "AFFECTED");
+        advisoryRow.put("version", dotted);
+        advisoryRow.put("fixed_text", "Upgrade to " + dotted);
+        var otherRow = new java.util.LinkedHashMap<String, Object>();
+        otherRow.put("verdict", "ALLOWED");
+        otherRow.put("version", dotted);
+        otherRow.put("title", "host " + dotted);
+        var bogusId = new java.util.LinkedHashMap<String, Object>(otherRow);
+        bogusId.put("advisory_id", 7);
+        @SuppressWarnings("unchecked")
+        var masked = (java.util.Map<String, Object>) advice.maskObject(java.util.Map.of("a", advisoryRow, "b", otherRow, "c", bogusId), null);
+        @SuppressWarnings("unchecked") var a = (java.util.Map<String, Object>) masked.get("a");
+        @SuppressWarnings("unchecked") var b = (java.util.Map<String, Object>) masked.get("b");
+        @SuppressWarnings("unchecked") var c = (java.util.Map<String, Object>) masked.get("c");
+        assertEquals(dotted, a.get("version"));
+        assertEquals("Upgrade to " + dotted, a.get("fixed_text"));
+        assertFalse(String.valueOf(b.get("version")).contains(dotted), "a verdict alone does not lift the masking: " + b);
+        assertFalse(String.valueOf(b.get("title")).contains(dotted), String.valueOf(b));
+        assertFalse(String.valueOf(c.get("version")).contains(dotted), "an advisory id that is not one does not lift it: " + c);
+    }
+
     @Test void anUnknownAdvisoryIsA404CodeWordAndTheSourcesRouteAnswers() throws Exception {
         when(devices.listAll()).thenReturn(List.of());
         var controller = new AdvisoryController(new AdvisoryReadService(repo, devices, () -> Optional.of(core)));
