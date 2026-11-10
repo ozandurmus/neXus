@@ -569,7 +569,15 @@ tests, real-environment validation per vendor under the aiview persona.
 | D12 | Finding history is kept for trend reporting | keep 400 days |
 | D13 | Start S1 now (no new device command) | yes |
 
-## 13. Evidence register
+## 13. Product Owner answers so far
+
+| Date | Asked | Answer (verbatim) | Recorded effect |
+|---|---|---|---|
+| 2026-11-10 | The Turkish summary of this document: the parse-scope rows, the seven grade A literals, the seven grade B literals, the decisions of section 12, and whether to fix finding F2 now | "ok abi çalıştırtırabilsin aynı zamanda da hatayı düzelt" | **F2 / IB-1:** fixed on branch `fix/infoblox-license-expiry-1110` (parser reads the WAPI timestamp; the same read also returns `expiration_status`; a permanent license is `PERMANENT`), shipped through the normal queue. **Device reads:** the answer allows neXus to run the proposed reads but names no row or group. No gate row is authored from it. The PO is asked which rows it covers: the grade A literals only, or the grade B measure-first reads as well |
+
+Until that scope is confirmed, every new read of section 4 stays `NOT_APPROVED`.
+
+## 14. Evidence register
 
 Pages opened on 2026-11-10. "Summarised" means the page was read through a summarising fetch tool; the exact strings
 must be re-read at contract freeze.
