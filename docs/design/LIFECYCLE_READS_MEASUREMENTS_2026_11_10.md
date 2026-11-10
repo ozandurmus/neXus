@@ -202,3 +202,47 @@ sent once to the one grid manager after PR 799 was live; its inventory ended `CO
 After the Management Center fix of the same ship, its inventory was run once more: the read row is `COLLECTED` with
 48 components for four ProxySGs.
 
+
+## Palo Alto reads on PAN-OS 12 firewalls and Panorama (measured 2026-11-10)
+
+Authority: `PO_DECISION_RECORD_2026_11_10_PAN_OS12_PANORAMA_LICENSE_READS.md` ("Evet, aç"); gate entries amendment
+C-2026-11-10; PR 800 live at 20:38 (schema 202). Before the setting was changed: no ship, end-to-end test, policy
+collection or other job was running.
+
+**Step 1: one passive PAN-OS 12 firewall and the Panorama** (`UI2_LIFECYCLE_PAN_EXTENDED_DEVICES` = those two ids).
+Both inventories ended `COMPLETED` in about five seconds.
+
+- `<request><license><info/></license></request>`: `response status=success`, `result/licenses/entry` with
+  `feature`, `description`, `serial`, `issued`, `expires`, `expired`, `authcode`, on the firewall (2 entries) and on
+  the Panorama (3 entries). The same shape as PAN-OS 11.1.
+- `<request><support><info/></support></request>`: `response status=success`,
+  `result/SupportInfoResponse` with `Links` and `Support` (`Contact`, `ExpiryDate`, `SupportLevel`,
+  `SupportDescription`), on both. The same shape as PAN-OS 11.1.
+- The parser needed no change: both reads were stored as `COLLECTED` on both devices.
+
+**Step 2: every device** (`UI2_LIFECYCLE_PAN_EXTENDED_DEVICES=*`, as the worker manifest records), then the inventory
+of the other eight PAN-OS 12 firewalls. All eight ended `COMPLETED`.
+
+| Read | PAN-OS 12 firewalls | Panorama | Parse failures | Refused or failed |
+| --- | --- | --- | --- | --- |
+| license info | 9 collected | 1 collected | 0 | 0 |
+| support info | 9 collected | 1 collected | 0 | 0 |
+
+- Three of the nine firewalls answer with one more child element inside an entry (an element name that is not on the
+  allow-list, so the shape line shows only its length class). The parser reads named elements only and ignores it.
+- Palo Alto in total now: 38 firewalls and the Panorama, both reads `COLLECTED` on all 39; no skipped device is left.
+- Stored rows: 232 read rows (unchanged: the skipped rows became collected), 1543 license and contract rows (was
+  1502), 468 Live Patch rows.
+
+**What the PAN-OS 12 devices state.**
+
+- Support: all ten hold a valid support entry.
+- Three of the nine firewalls list subscriptions whose latest entry has expired (the logging service entry on three;
+  URL filtering entries, the partner support entry and the software warranty on two).
+- None of the nine firewalls lists a threat prevention, WildFire or DNS security subscription at all, valid or
+  expired. Their entries are the support entry, and on some a virtual systems or web proxy license. This is the
+  devices' own statement and is worth a look by the estate owner.
+- The Panorama holds its device management license (permanent) and a valid support entry; one further license
+  expired in 2017.
+- View payload after the run: licenses collected on 121 of 134 devices (was 110); devices with a license problem 37
+  (was 33): Palo Alto 22 of 39.
