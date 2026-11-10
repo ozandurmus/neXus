@@ -1,7 +1,7 @@
 # Log anomaly agent — Claude trial on synthetic logs (Haiku 5.5, Sonnet 5.5, Opus 5.5)
 
 **Status: RECORD — automatic results complete (paid run 2026-11-10, 384 calls, USD 5.22); rubric scored by three
-LLM judges (Opus 5.5, Fable 5.2, Argon), all 36 `useful`; PO calibration of 11 items open.** This record decides nothing; §4 is a recommendation for the PO's decision A5. It answers the trial the PO
+LLM judges (Opus 5.5, Fable 5.2, Argon), all 36 `useful`; no human scoring or calibration (PO decision).** This record decides nothing; §4 is a recommendation for the PO's decision A5. It answers the trial the PO
 chose in [PO_DECISION_RECORD_2026_11_10_LOG_ANOMALY_AGENT.md](PO_DECISION_RECORD_2026_11_10_LOG_ANOMALY_AGENT.md) §1 A1
 and A5 and §2 item 1, against the DRAFT design
 [LOG_ANOMALY_AGENT_DESIGN_2026_11_10.md](LOG_ANOMALY_AGENT_DESIGN_2026_11_10.md).
@@ -175,11 +175,11 @@ Per model over all 128 calls:
 | Sonnet 5.5 cache read USD 0.20 per 1M | USD 0.10 per 1M |
 | Typical device-day (2 findings) about USD 0.05 on Opus 5.5 | About USD 0.07 per device-day on Opus 5.5 without cache (2 x 0.034); Sonnet 5.5 about 0.034; Haiku 5.5 about 0.002 |
 
-### 3.4 Rubric scoring by LLM judges, with PO calibration
+### 3.4 Rubric scoring by LLM judges (no human scoring)
 
-The PO decided on 2026-11-10 that the 36-row blind rubric is scored by external LLM judges instead of by hand, and that
-the PO checks a short calibration set. This is **not a full human scoring**. The human gate for `wrong_plausible`
-answers stays for the real-log pilot (design phase 2).
+The PO decided on 2026-11-10 that the 36-row blind rubric is scored by external LLM judges instead of by hand. When the
+judges' results were in, the PO also declined to score the calibration sample by hand. **No person scored any of the
+36 answers.** The human gate for `wrong_plausible` answers stays for the real-log pilot (design phase 2).
 
 Judges, each run independently through the host CLIs on the PO's subscriptions (no API spend; the Claude CLI was
 signed in as claude.ai Max, no `ANTHROPIC_API_KEY` was set, and the judge script refuses to run if one is):
@@ -241,14 +241,19 @@ Results:
   Four of the six are Haiku answers (Haiku wrote 12 of the 36). On this sample, that is the only difference between
   tiers. It is too small to count, but it points the same way as §4.
 
-PO calibration set (on the scoring page, same address, Turkish, judges' ratings shown only after the PO's own):
+A calibration set was prepared on the scoring page:
 
 - the 6 low-confidence items above;
 - 5 random items from the rest (seeded; `judge.py` `calibration_ids`).
 
-The rule was also to include every non-unanimous item and every item any judge rated `wrong_plausible`. There were
-none of either, so the low-confidence items were added to keep the set from being random only. **The PO's calibration
-is open.** If the PO rates a calibration item below `useful`, that argues against relying on the judges.
+The PO chose not to score it. As a result, the judges' reliability is not checked against a person. What stands in for
+that check:
+
+- three independent judges, from two vendors, agreed on every item;
+- the low-confidence items point at concrete, small slips that each judge named on its own;
+- the corpus is synthetic.
+
+The real-log pilot keeps a person deciding every `wrong_plausible`.
 
 An engineer's read of 15 answers (C07 and C27 across models, C17, C03, C25), not a substitute for the rubric: all were
 grounded and readable. Opus 5.5 added the most operator-relevant nuance (for example "possible split-brain" on C07, and
@@ -282,8 +287,8 @@ USD 30 covers about 1,750 Sonnet explanations a month (about 58 a day), three ti
 stops a runaway day at about 118 explanations. The upper-bound row applies only if an automatic digest is ever enabled,
 which A8 excludes.
 
-**Before the decision is final**, in this order: (1) the blind rubric, scored by three LLM judges with no wrong and plausible
-answer (§3.4), is confirmed by the PO's 11-item calibration; (2) the first
+**Before the decision is final**, in this order: (1) the blind rubric is scored: three LLM judges found no wrong and plausible
+answer (§3.4), with no human calibration (PO decision); (2) the first
 real pilot (design phase 2, one cluster, level 1, `security_admin` only) re-runs the same scoring on real findings, with a human, not an LLM judge, deciding every `wrong_plausible`;
 (3) if Sonnet shows wrong-and-plausible answers that Opus avoids, the tier moves up; if Haiku matches Sonnet on the
 rubric, it moves down. Prompt follow-ups that need no decision: cap list lengths to cut output tokens, and consider
@@ -302,8 +307,8 @@ write premium on 2,833 tokens is about USD 0.0014 per call on Sonnet, so either 
 - The closed cause list (design §8.3) has no class for certificate or licence lifecycle (C19, C20 were answered as
   `configuration_change`) or for security events (C31 was answered as `external_dependency`). A design question,
   not a model fault.
-- The rubric was scored by LLM judges, not people (PO decision 2026-11-10), with only an 11-item PO calibration. The
-  judges saturated as the automatic checks did, so neither measures the difference between tiers on hard cases.
+- The rubric was scored by LLM judges only, with no human scoring or calibration (PO decision 2026-11-10). The judges
+  saturated as the automatic checks did, so neither measures the difference between tiers on hard cases.
 - The automatic category check accepts a fixed set per case; the rubric sheet is the judge of usefulness and of "wrong
   and plausible".
 - Latency is measured from one development machine over the public internet, not through the corporate proxy (design
