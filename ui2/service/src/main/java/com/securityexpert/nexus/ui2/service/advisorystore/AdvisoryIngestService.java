@@ -30,7 +30,7 @@ import com.securityexpert.nexus.ui2.service.advisory.AdvisoryModel.ProductRule;
 /**
  * Ingest of one fetched document and the closing of a fetch run (contract section 4). The document is parsed in memory by
  * the parser of its source; the parsed advisories replace the stored ones with the same id; the raw document is not
- * stored (its SHA-256 and address are). Everything fetched is untrusted (rule 7): a parsed value outside what the V203
+ * stored (its SHA-256 and address are). Everything fetched is untrusted (rule 7): a parsed value outside what the V204
  * constraints allow is cleaned or the advisory is rejected, so that one bad entry never fails the batch and never reaches
  * the database as free text. The log carries counts and code words only, never document text.
  */
@@ -203,7 +203,7 @@ public final class AdvisoryIngestService {
         }
     }
 
-    /** The parsed advisory in the form the V203 constraints accept, or empty when it cannot be stored as it is. */
+    /** The parsed advisory in the form the V204 constraints accept, or empty when it cannot be stored as it is. */
     static Optional<StoredAdvisory> toStored(AdvisoryCore core, String source, String documentUrl, String sha, ParsedAdvisory a) {
         if (a == null || a.advisoryId() == null || a.advisoryId().length() < 3 || a.advisoryId().length() > 240
                 || !a.advisoryId().startsWith(source + ":") || !source.equals(a.source())

@@ -14,7 +14,7 @@ import org.jooq.Record;
 
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 
-/** Plain-SQL implementation of {@link AdvisoryRepository} over the V203 tables. */
+/** Plain-SQL implementation of {@link AdvisoryRepository} over the V204 tables. */
 public final class JooqAdvisoryRepository implements AdvisoryRepository {
 
     private static final String RUN_COLUMNS = "run_id, source, started_at, ended_at, outcome, documents_received, rejected, "
