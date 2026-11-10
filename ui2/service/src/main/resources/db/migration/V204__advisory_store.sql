@@ -1,4 +1,4 @@
--- V203 -- Advisory store, part 1 (docs/design/ADVISORY_MATCHING_CONTRACT.md section 5, FROZEN 2026-11-10).
+-- V204 -- Advisory store, part 1 (docs/design/ADVISORY_MATCHING_CONTRACT.md section 5, FROZEN 2026-11-10).
 --
 -- Four tables of public vendor security advisories, written only by the ingest endpoint of ui2-service (section 4) from
 -- documents the advisory-fetch workload hands over. They hold public data only: a title, a version rule, a date, a

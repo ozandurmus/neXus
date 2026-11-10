@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * The advisory store (V203, docs/design/ADVISORY_MATCHING_CONTRACT.md section 5): public vendor advisories with their
+ * The advisory store (V204, docs/design/ADVISORY_MATCHING_CONTRACT.md section 5): public vendor advisories with their
  * normalised version rules, the known-exploited catalog and the record of each fetch run. Written only by the ingest
  * endpoint, read by the Lifecycle read interface. The rules are kept as the JSON text the caller's codec wrote; this
  * layer does not interpret them.
