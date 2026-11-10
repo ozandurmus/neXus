@@ -16,12 +16,16 @@ public record LdapSettingsRecord(boolean enabled, String serverType, List<String
 
     public LdapSettingsRecord {
         servers = servers == null ? List.of() : List.copyOf(servers);
-        bindPasswordEncrypted = bindPasswordEncrypted == null ? null : bindPasswordEncrypted.clone();
+        bindPasswordEncrypted = copy(bindPasswordEncrypted);
+    }
+
+    private static byte[] copy(byte[] bytes) {
+        return bytes == null ? null : bytes.clone();
     }
 
     @Override
     public byte[] bindPasswordEncrypted() {
-        return bindPasswordEncrypted == null ? null : bindPasswordEncrypted.clone();
+        return copy(bindPasswordEncrypted);
     }
 
     @Override
