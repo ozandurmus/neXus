@@ -168,13 +168,14 @@ public final class DefaultAdvisoryEvaluator implements AdvisoryEvaluator {
         }
         String to = r.to();
         boolean toInclusive = r.toInclusive();
-        if (panOs && to != null && r.status() == AdvisoryModel.Status.AFFECTED) {
+        if (panOs && r.status() == AdvisoryModel.Status.AFFECTED) {
             // The vendor names the first fix as the bound and the later per-release fixes as change points; releases
             // in between that have no point of their own stay affected until the highest fix (checked against the vendor's own
-            // lists of affected versions, contract section 6 self-check).
+            // lists of affected versions, contract section 6 self-check). A range without a bound ends at its highest fix
+            // point for the same reason: the vendor's lists never name a release above it as affected.
             for (AdvisoryModel.ChangePoint cp : r.changes()) {
                 if (cp.status() == AdvisoryModel.Status.UNAFFECTED && PanOsVersion.parse(cp.at()).isPresent()
-                        && cmp.compare(cp.at(), to) >= 0) {
+                        && (to == null || cmp.compare(cp.at(), to) >= 0)) {
                     to = cp.at();
                     toInclusive = false;
                 }
