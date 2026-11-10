@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 class PaloAltoLicenseParserTest {
 
-    private static final String[] NEVER_STORED = {"007000000123", "I1234567", "AUTHCODE-SYNTH-2", "Synthetic description text",
+    private static final String[] NEVER_STORED = {"007000000123", "I1234567", "AC-SYN-2", "Synthetic description text",
             "ops@example.invalid", "support.example.invalid", "Extended coverage synthetic"};
 
     private static final String LICENSES = """
@@ -22,7 +22,7 @@ class PaloAltoLicenseParserTest {
               <entry><feature>PA-VM</feature><description>Synthetic description text</description><serial>007000000123</serial>
                 <issued>January 01, 2025</issued><expires>Never</expires><expired>no</expired></entry>
               <entry><feature>PAN-DB URL Filtering</feature><serial>007000000123</serial><expires>2026/01/05</expires><expired>yes</expired>
-                <authcode>AUTHCODE-SYNTH-2</authcode></entry>
+                <authcode>AC-SYN-2</authcode></entry>
               <entry><feature>GlobalProtect Gateway</feature><expires>Sep 9, 2027</expires><expired>no</expired></entry>
               <entry><feature>DNS Security</feature><expires>2027-02-30</expires><expired>no</expired></entry>
               <entry><feature>Bad@Feature</feature><expires>2027-02-01</expires><expired>no</expired></entry>
