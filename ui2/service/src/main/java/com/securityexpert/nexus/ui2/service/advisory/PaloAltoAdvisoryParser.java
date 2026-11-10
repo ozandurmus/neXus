@@ -124,6 +124,9 @@ public final class PaloAltoAdvisoryParser implements AdvisoryParser {
         Map<String, Set<String>> fixPoints = new LinkedHashMap<>();
         String note = null;
         boolean namesPanOs = false;
+        // True when something could not be read and the train it speaks about is not known: the advisory then counts for
+        // every train. An unreadable entry whose train is readable counts for that train only.
+        boolean trainUnknown = false;
         JsonNode affected = cna.get("affected");
         if (affected != null && affected.isArray()) {
             for (JsonNode entry : affected) {
@@ -134,6 +137,7 @@ public final class PaloAltoAdvisoryParser implements AdvisoryParser {
                 JsonNode versions = entry.get("versions");
                 if (versions == null || !versions.isArray() || versions.isEmpty()) {
                     note = note == null ? NOTE_NO_VERSIONS : note;
+                    trainUnknown = true;
                     continue;
                 }
                 for (JsonNode v : versions) {
@@ -141,6 +145,12 @@ public final class PaloAltoAdvisoryParser implements AdvisoryParser {
                         addVersionEntry(v, byTrain, fixPoints);
                     } catch (Review r) {
                         note = note == null ? r.getMessage() : note;
+                        String train = leadingTrain(text(v.get("version")));
+                        if (train == null) {
+                            trainUnknown = true;
+                        } else {
+                            byTrain.computeIfAbsent(train, key -> new ArrayList<>());
+                        }
                     }
                 }
             }
@@ -153,7 +163,8 @@ public final class PaloAltoAdvisoryParser implements AdvisoryParser {
         if (note == null && !rules.isEmpty() && !selfCheck(cna, rules)) {
             note = NOTE_SELF_CHECK_FAILED;
         }
-        if (note != null && rules.isEmpty()) {
+        if (note != null && (trainUnknown || rules.isEmpty())
+                && rules.stream().noneMatch(rule -> AdvisoryModel.ALL_TRAINS.equals(rule.train()))) {
             rules.add(new AdvisoryModel.ProductRule(AdvisoryModel.PRODUCT_PAN_OS, AdvisoryModel.ALL_TRAINS, List.of(), null));
         }
         if (namesPanOs && rules.isEmpty()) {
@@ -164,6 +175,17 @@ public final class PaloAltoAdvisoryParser implements AdvisoryParser {
         AdvisoryModel.Severity severity = severity(cna.get("metrics"), score);
         return new AdvisoryModel.ParsedAdvisory("paloalto:" + cveId, AdvisoryModel.SOURCE_PALOALTO, title, severity, score[0],
                 cveIds, published, updated, VENDOR_HOST_URL + cveId, state, note, rules);
+    }
+
+    private static final Pattern LEADING_TRAIN = Pattern.compile("^\\s*(\\d{1,2}\\.\\d{1,2})(?:[.\\s].*)?$");
+
+    /** The release train an unreadable version entry starts with ({@code 7.0.5H2} to {@code 7.0}), or null when it has none. */
+    static String leadingTrain(String version) {
+        if (version == null) {
+            return null;
+        }
+        java.util.regex.Matcher matcher = LEADING_TRAIN.matcher(version);
+        return matcher.matches() ? matcher.group(1) : null;
     }
 
     // ---- version entries ------------------------------------------------------------------------------------------
