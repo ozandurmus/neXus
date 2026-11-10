@@ -1,10 +1,10 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0383 · Track: PCP.x · Generated: 2026-11-10T06:39:52Z
+Build: NXS-LOCAL-0383 · Track: PCP.x · Generated: 2026-11-10T08:48:41Z
 
 ## Now
 - NXS-LOCAL-0383 — Enterprise stack alignment, phase 0: Spring Security sign-in, JSON logs, monitoring, secrets, scans (in_progress)
 ## Next
-- failover_pilot_preparation — Failover pilot: repeat the Check Point pilot on one cluster, then record the closure evidence under aiview (planned)
+- overview_acceptance_and_member_specific_tuning — Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
 - P0/in_progress cyber_controller_known_hosts_after_hosta_rebuild — Cyber Controller SFTP push to HOST-A fails after the... (target: HOST_A_REBUILD_RUNBOOK.md)
 - P0/in_progress hosta_rebuild_real_env_acceptance — HOST-A rebuilt 2026-09-25: PO browser acceptance under... (target: HOST_A_REBUILD_RUNBOOK.md)
@@ -24,7 +24,6 @@ Build: NXS-LOCAL-0383 · Track: PCP.x · Generated: 2026-11-10T06:39:52Z
 - P1/in_progress cp_management_server_collect_duration — Check Point management server Collect took 243 s: vsx stat
 - P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction
 - P1/in_progress failover_p0_closure_set — Failover plan implementation landed; integration gate
-- P1/in_progress failover_pilot_preparation — Failover pilot preparation (status doc lane)
 - P1/in_progress https_inventory_collect_radware — Radware Collect: Cyber Controller and DefensePro inventory
 - P1/in_progress manifest_drift_service_worker_configuration_policy — Worker still image+fallback patched; others use manifests
 - P1/in_progress module_per_pod_split — Module runtime landed; policy/configuration/compliance...

@@ -1599,6 +1599,15 @@
       "priority": "P2",
       "target": "deploy/ui2/54-*, 55-*",
       "note": ""
+    },
+    {
+      "id": "failover_pilot_preparation",
+      "category": "failover",
+      "title": "Failover pilot",
+      "status": "real_env_validated",
+      "priority": "P1",
+      "target": "",
+      "note": ""
     }
   ]
 }

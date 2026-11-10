@@ -157,18 +157,12 @@
       "contract_doc": "docs/design/PO_DECISION_RECORD_2026_11_10_ENTERPRISE_STACK_ALIGNMENT.md"
     },
     "next": {
-      "build": "failover_pilot_preparation",
-      "title": "Failover pilot: repeat the Check Point pilot on one cluster, then record the closure evidence under aiview",
+      "build": "overview_acceptance_and_member_specific_tuning",
+      "title": "Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today)",
       "status": "planned",
-      "detail": "docs/history/backlog/failover_pilot_preparation.md"
+      "detail": "docs/design/OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md"
     },
     "upcoming": [
-      {
-        "build": "overview_acceptance_and_member_specific_tuning",
-        "title": "Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today)",
-        "status": "planned",
-        "detail": "docs/design/OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md"
-      },
       {
         "build": "path_analysis_phase_b",
         "title": "Path analysis phase B: UDP matchers (command literals await PO approval), chained NAT, return path",
