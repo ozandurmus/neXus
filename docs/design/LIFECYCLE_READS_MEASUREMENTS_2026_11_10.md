@@ -124,3 +124,10 @@ comes with the next full Check Point inventory. The Spark has none, as documente
 3. Check Point contract dates come from the device; the manual register is not needed for them.
 4. The ASA finding and the full Check Point Live Patch picture are the first real results of the check and should
    be shown to the PO as soon as storage exists.
+
+## Follow-up (2026-11-10): the Infoblox version read
+
+The PO approved adding `current_version` to the return fields of the `upgradestatus` read ("Evet, ekle", relayed by
+the PO session; `LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md`, amendment A-2026-11-10). The request is now
+`GET /wapi/v<ver>/upgradestatus?type=GRID&_return_fields=current_version`. Its first answer on the grid is recorded
+here once it has been measured.

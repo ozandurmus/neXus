@@ -92,3 +92,13 @@ and patch identifiers are vendor vocabulary and are shown as they are.
 - Executor tests: switch off: no sink call; switch on: the sink receives the answer once, and a throwing sink
   leaves the inventory outcome unchanged.
 - Projection and screen tests for each state, both evidence grades, and the masked persona.
+
+## Amendment A-2026-11-10: the Infoblox NIOS version
+
+Section 2 listed `infoblox_upgradestatus_grid` as measured but not parsed, because the read did not return the
+version. With the PO's approval of the changed request (`LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md`, amendment
+A-2026-11-10) it is parsed: the `current_version` string of the grid entry is stored as the platform fact
+`nios_version` of the grid manager's device row (`device_platform_facts.content_versions`, source read
+`infoblox_upgradestatus_grid`) and shown on the device's platform identity panel as "NIOS version". Nothing else of
+the answer is read. An answer without a usable version writes nothing and leaves the last recorded version in place.
+The device's software version field keeps showing the WAPI schema version; replacing it is not part of this change.

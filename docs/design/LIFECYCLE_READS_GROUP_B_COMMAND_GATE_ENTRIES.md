@@ -76,3 +76,22 @@ each is a measure-first read on one device.
   length class; a Fortinet contract code is named only when it is in a closed list, any other upper-case token is
   `U<len>`; XML and JSON shapes name only documented element and field names.
 - V199 must be dry-run (BEGIN/ROLLBACK) on the live ui2 database before rollout.
+
+## Amendment A-2026-11-10: Infoblox `upgradestatus` returns the version only on request
+
+**Product Owner approval (chat, 2026-11-10, asked in the PO session and relayed by it to the engineering session).**
+Question: "Infoblox sürüm okumasına current_version alanı eklensin mi?" Answer (verbatim): "Evet, ekle".
+
+- **What changes:** entry 7 (`infoblox_upgradestatus_grid`) is sent with one return field. The exact request is
+  `GET /wapi/v<ver>/upgradestatus?type=GRID&_return_fields=current_version`.
+- **What does not change:** the object (`upgradestatus`), the search (`type=GRID`), the method, the gate row and its
+  canonical key (`GET /wapi/v<ver>/upgradestatus?type=GRID`; as with the other Infoblox rows, return fields are not
+  part of the key), the 60 s timeout, no retry, once per inventory, the worker switch. No other field is requested.
+- **Why:** the first measurement (`LIFECYCLE_READS_MEASUREMENTS_2026_11_10.md`) showed that the grid answers
+  `type=GRID` without `current_version` unless it is asked for.
+- **Evidence:** Infoblox WAPI 2.13.7 object reference, object `upgradestatus`, field `current_version` ("The current
+  version", a read-only string) and the `_return_fields` option of every WAPI read; read on the public mirror of the
+  vendor-generated reference (ipam.illinois.edu/wapidoc/objects/upgradestatus.html), the same pages the grid itself
+  serves under `/wapidoc/`. The object allows no create, modify or delete.
+- **What is kept:** the version string, as the platform fact `nios_version` of the grid manager's device row. The
+  object reference in the answer (it names a member) is not read.

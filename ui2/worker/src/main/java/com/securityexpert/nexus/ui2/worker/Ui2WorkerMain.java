@@ -229,7 +229,8 @@ public final class Ui2WorkerMain {
         // answer is dropped. With the switch off no executor ever calls the sink.
         com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink lifecycleResults =
                 new com.securityexpert.nexus.ui2.worker.inventory.PersistingLifecycleResultSink(
-                        new com.securityexpert.nexus.ui2.persistence.lifecycle.JooqDeviceLifecycleRepository(transactionBoundary));
+                        new com.securityexpert.nexus.ui2.persistence.lifecycle.JooqDeviceLifecycleRepository(transactionBoundary),
+                        platformFactsRepository);
         inventoryCapabilityExecutor.withLifecycleResults(lifecycleResults);
         InventoryJobExecutor inventoryJobExecutor = new InventoryJobExecutor(leaseRepository, attemptRepository,
                 deviceEnrollmentReadPort, deviceRepository, deviceInventoryRepository, inventoryCapabilityExecutor,

@@ -44,7 +44,7 @@ class LifecycleReadsHttpsGroupBTest {
     private static final String UUID_B = "B2055376-3448-4A94-82DB-D9BD30BBB422";
     private static final String UUID_CLOUD = "C3055376-3448-4A94-82DB-D9BD30BBB423";
     private static final String UUID_RE = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-    private static final String UPGRADE = "/wapi/v2.13.5/upgradestatus?type=GRID";
+    private static final String UPGRADE = "/wapi/v2.13.5/upgradestatus?type=GRID&_return_fields=current_version";
     private static final String SHOW_LICENSES_A = "PUT /api/devices/" + UUID_A + "/command show licenses 120";
     private static final String SHOW_LICENSES_B = "PUT /api/devices/" + UUID_B + "/command show licenses 120";
 
@@ -155,7 +155,7 @@ class LifecycleReadsHttpsGroupBTest {
     @Test
     void theLiteralsAreTheGateKeys() {
         assertEquals("show licenses", HttpsVendorPlan.MC_CMD_SHOW_LICENSES);
-        assertEquals("/wapi/v%s/upgradestatus?type=GRID", HttpsVendorPlan.INFOBLOX_UPGRADESTATUS_GRID);
+        assertEquals("/wapi/v%s/upgradestatus?type=GRID&_return_fields=current_version", HttpsVendorPlan.INFOBLOX_UPGRADESTATUS_GRID);
         assertTrue(HttpsVendorPlan.INFOBLOX_GATE_KEYS.contains("GET /wapi/v<ver>/upgradestatus?type=GRID"));
     }
 
