@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { saveLdapProfile } from "../../auth/adminApi";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
@@ -59,10 +60,12 @@ export function DirectorySettingsPanel() {
     if (!profile.host.trim() || profile.port < 1 || profile.port > 65535) { setMessage({ text: "Enter a directory host and a valid port.", type: "error" }); return; }
     setSaving(true); setMessage(null);
     try {
-      const response = await fetch("/api/v2/config/ldap", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profile) });
-      if (!response.ok) throw new Error();
-      setProfile(await response.json()); setMessage({ text: "LDAP settings saved.", type: "success" });
-    } catch { setMessage({ text: "Unable to save LDAP settings.", type: "error" }); } finally { setSaving(false); }
+      // The write goes through the shared API helper, which sends the CSRF token the gate chain requires on every write.
+      setProfile(await saveLdapProfile(profile)); setMessage({ text: "LDAP settings saved.", type: "success" });
+    } catch (error) {
+      const detail = error instanceof Error && error.message ? ` ${error.message}` : "";
+      setMessage({ text: `Unable to save LDAP settings.${detail}`, type: "error" });
+    } finally { setSaving(false); }
   };
   if (forbidden) return <RestrictedPanel area="LDAP Settings" role="Security Admin" />;
   if (!profile) return <Box p={3}>Loading LDAP settings…</Box>;

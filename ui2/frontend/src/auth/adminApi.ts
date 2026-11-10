@@ -354,6 +354,11 @@ export function listDeviceBackups(deviceId: string): Promise<{ backups: BackupAr
 }
 
 /** Every recorded backup artefact across the fleet, newest first as the store returns them. */
+/** Save the LDAP directory profile (security_admin). Goes through call() so the CSRF token is sent like every other write. */
+export function saveLdapProfile<T>(profile: T): Promise<T> {
+  return call<T>("/api/v2/config/ldap", "PUT", profile);
+}
+
 export function listFleetBackups(): Promise<{ backups: BackupArtefact[]; baselines?: Record<string, string> }> {
   return call("/backups", "GET");
 }
