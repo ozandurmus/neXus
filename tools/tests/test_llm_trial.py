@@ -303,3 +303,75 @@ def test_corpus_sanity():
             assert any(addr in n for n in nets), (c["case_id"], ip)
         assert re.fullmatch(r"FW-[A-Z]+-\d{2}(-M[12])?", str(c["device"].get("name", ""))), c["case_id"]
     assert injections >= 3
+
+
+# --- LLM-judge scoring (tools/llm_trial/judge.py) ---------------------------------------------------------------
+
+from tools.llm_trial import judge  # noqa: E402
+
+JUDGE_ITEMS = ROOT / "tools" / "llm_trial" / "results" / "run-2026-11-10" / "rubric_blind_items_tr.json"
+
+
+def test_judge_brief_hides_models_and_translation():
+    items = judge.load_items(JUDGE_ITEMS)
+    brief = judge.build_brief(items)
+    assert len(items) == 36 and all(f"### {it['id']}" in brief for it in items)
+    assert not re.search(r"haiku|sonnet|opus|claude-", brief, re.I)
+    assert '"tr"' not in brief and "title_tr" not in brief
+    assert items[0]["answer"]["summary"] in brief  # the original English answer is what the judge reads
+
+
+def _out(rows):
+    return "notes\n```jsonl\n" + "\n".join(json.dumps(r) for r in rows) + "\n```\n"
+
+
+def test_judge_parse_rejects_gaps_and_bad_values():
+    ids = ["B001", "B002"]
+    good = [{"id": "B001", "rating": "useful", "reason": "ok", "confidence": 0.9},
+            {"id": "B002", "rating": "wrong_plausible", "reason": "x", "confidence": 0.6}]
+    assert judge.parse_judge_output(_out(good), ids)["B002"]["rating"] == "wrong_plausible"
+    with pytest.raises(ValueError):
+        judge.parse_judge_output(_out(good[:1]), ids)
+    with pytest.raises(ValueError):
+        judge.parse_judge_output(_out([good[0], dict(good[1], rating="fine")]), ids)
+    with pytest.raises(ValueError):
+        judge.parse_judge_output(_out([good[0], dict(good[1], confidence=1.5)]), ids)
+    with pytest.raises(ValueError):
+        judge.parse_judge_output("no block", ids)
+    assert list(judge.parse_judge_output(_out(good[:1]), None)) == ["B001"]  # one part of a split brief
+
+
+def test_judge_brief_parts_cover_every_item_once():
+    items = judge.load_items(JUDGE_ITEMS)
+    size = -(-len(items) // 2)
+    parts = [judge.build_brief(items[k * size:(k + 1) * size]) for k in range(2)]
+    for it in items:
+        assert sum(f"### {it['id']}\n" in b for b in parts) == 1
+
+
+def test_cohen_kappa_known_values():
+    k = judge.cohen_kappa(["useful"] * 4, ["useful"] * 4)
+    assert k != k  # undefined (NaN) when every rating is one value, never reported as 1.0
+    assert judge.cohen_kappa(["useful", "harmless"], ["useful", "harmless"]) == 1.0
+    a = ["useful", "useful", "harmless", "harmless"]
+    b = ["useful", "harmless", "useful", "harmless"]
+    assert abs(judge.cohen_kappa(a, b)) < 1e-9  # agreement equals chance
+
+
+def test_fleiss_kappa_known_values():
+    assert judge.fleiss_kappa([["useful"] * 3, ["harmless"] * 3]) == 1.0
+    rows = [["useful", "useful", "harmless"], ["harmless", "harmless", "useful"]]
+    assert judge.fleiss_kappa(rows) < 0  # less agreement than chance
+
+
+def test_calibration_set_has_non_unanimous_wrong_plausible_low_confidence_and_five_unanimous():
+    ids = [f"B{n:03d}" for n in range(1, 13)]
+    js = {n: {i: {"rating": "useful", "confidence": 0.9} for i in ids} for n in ("opus", "argon", "fable")}
+    js["fable"]["B002"] = {"rating": "harmless", "confidence": 0.9}
+    for n in js:
+        js[n]["B003"] = {"rating": "wrong_plausible", "confidence": 0.9}
+    js["argon"]["B004"] = {"rating": "useful", "confidence": 0.8}
+    cal, why = judge.calibration_ids(ids, js)
+    assert why["B002"] == "not_unanimous" and why["B003"] == "wrong_plausible" and why["B004"] == "low_confidence"
+    assert sum(v == "random_unanimous" for v in why.values()) == 5 and len(cal) == 8
+    assert cal == sorted(cal) and judge.calibration_ids(ids, js) == (cal, why)  # seeded, stable

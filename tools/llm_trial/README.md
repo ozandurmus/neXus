@@ -41,3 +41,13 @@ without `--yes-paid-run`. Only the Claude provider imports the `anthropic` SDK (
 `rubric_full.csv`: `gunzip -k results/run-2026-11-10/results.jsonl.gz`, then
 `python3 tools/llm_trial/run_trial.py report --in tools/llm_trial/results/run-2026-11-10`. The paid run was driven by a
 local script that reads the key with hidden input and keeps it only in that process's environment.
+
+## LLM-judge scoring of the blind rubric
+
+PO decision 2026-11-10: the 36-row blind rubric is scored by external LLM judges through the host CLIs, and the PO
+calibrates a short sample on the scoring page. `judge.py brief` writes the judge brief (ground truth, the agent's exact
+input, the original English answer; no model names, no translation; `--part K/N` splits it for a CLI with an input
+limit). The judges run through `scripts/consult_claude_log_trial_judge.py` (Opus 5.5 or `--model claude-fable-5-2`,
+subscription only) and `scripts/consult_argon.py --isolated`. `judge.py analyze --judge NAME=PATH[,PATH]` (two or more
+judges) unblinds, reports distributions, pairwise and Fleiss' kappa, the self-preference check and the calibration set,
+and writes `results/run-2026-11-10/judge_summary.md` and `judge_summary.json`.

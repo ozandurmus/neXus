@@ -6,7 +6,10 @@ CLI and its full, unaltered output is written to a repository artefact.
 
 Usage:
     python3 scripts/consult_argon.py --brief BRIEF.md --output docs/design/ARGON_<TOPIC>_REVIEW.md
-        [--model gemini-4-argon-high] [--effort high]
+        [--model gemini-4-argon-high] [--effort high] [--isolated]
+
+--isolated runs the CLI in an empty temporary working directory, so the reviewer cannot read repository files (used
+for blind judging, where the repository holds the unblinding key).
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -26,6 +30,7 @@ def main() -> int:
     p.add_argument("--output", required=True, type=Path)
     p.add_argument("--model", default="gemini-4-argon-high")
     p.add_argument("--effort", default="high", choices=["low", "medium", "high", "xhigh", "max"])
+    p.add_argument("--isolated", action="store_true", help="run in an empty working directory (no repository access)")
     a = p.parse_args()
 
     out = (BASE_DIR / a.output).resolve() if not a.output.is_absolute() else a.output
@@ -35,10 +40,15 @@ def main() -> int:
     prompt = a.brief.read_text(encoding="utf-8")
     cmd = ["agy", "-p", prompt, "--model", a.model, "--effort", a.effort, "--mode", "plan", "--print-timeout", "0"]
     print(f"[*] consulting Argon ({a.model}, effort {a.effort}) via `agy -p --mode plan`...", flush=True)
-    result = subprocess.run(cmd, cwd=BASE_DIR, capture_output=True, text=True)
+    if a.isolated:
+        with tempfile.TemporaryDirectory(prefix="argon-") as empty:
+            result = subprocess.run(cmd, cwd=empty, capture_output=True, text=True)
+    else:
+        result = subprocess.run(cmd, cwd=BASE_DIR, capture_output=True, text=True)
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(f"<!-- Argon consultation {stamp}, model {a.model}, effort {a.effort}; unaltered output -->\n\n"
+    out.write_text(f"<!-- Argon consultation {stamp}, model {a.model}, effort {a.effort}"
+                   f"{', isolated working directory' if a.isolated else ''}; unaltered output -->\n\n"
                    + result.stdout + (("\n\n<!-- stderr -->\n" + result.stderr) if result.stderr.strip() else ""),
                    encoding="utf-8")
     print(f"[*] written: {out.relative_to(BASE_DIR)} (exit {result.returncode})")
