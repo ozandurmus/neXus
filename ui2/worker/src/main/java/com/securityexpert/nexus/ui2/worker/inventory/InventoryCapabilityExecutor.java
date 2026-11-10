@@ -524,8 +524,14 @@ public final class InventoryCapabilityExecutor {
                 } else {
                     gaiaVersion = com.securityexpert.nexus.ui2.worker.backup.BackupReadPlan.parseGaiaVersion(
                             identityReadOutput(session, InventoryReadPlan.CP_SHOW_VERSION_ALL, false));
+                    // 2026-11-11 measurement: counts and a shape class only, never the text (HostnameReadShape).
+                    int[] hostnameExit = {-1};
+                    String hostnameOutput = execOutput(session, InventoryReadPlan.CP_SHOW_HOSTNAME, false, READ_TIMEOUT,
+                            exit -> hostnameExit[0] = exit);
+                    LOG.log(System.Logger.Level.INFO, "[INVENTORY_HOSTNAME_SHAPE] target={0}:{1} {2}", target.host(), target.port(),
+                            HostnameReadShape.describe(hostnameOutput, hostnameExit[0]));
                     gaiaHostname = com.securityexpert.nexus.ui2.worker.configuration.ConfigurationCapabilityExecutor.parseHostname(
-                            identityReadOutput(session, InventoryReadPlan.CP_SHOW_HOSTNAME, false));
+                            hostnameOutput);
                 }
             } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
@@ -1554,6 +1560,12 @@ public final class InventoryCapabilityExecutor {
     }
 
     private String execOutput(TransportSession session, String command, boolean preferInteractiveShell, Duration timeout) {
+        return execOutput(session, command, preferInteractiveShell, timeout, null);
+    }
+
+    /** As above; {@code exitObserver}, when set, receives the exit status of a completed exec (never the output). */
+    private String execOutput(TransportSession session, String command, boolean preferInteractiveShell, Duration timeout,
+            java.util.function.IntConsumer exitObserver) {
         if (preferInteractiveShell) {
             String interactiveOutput = interactiveFallback(session, command, timeout);
             if (interactiveOutput != null) {
@@ -1578,6 +1590,9 @@ public final class InventoryCapabilityExecutor {
                 LOG.log(System.Logger.Level.INFO,
                         "[INVENTORY_EXEC] cmd=\"{0}\" took {1}ms (exit={2}, length={3})",
                         command, elapsedMs, completed.exitStatus(), completed.output().length());
+                if (exitObserver != null) {
+                    exitObserver.accept(completed.exitStatus());
+                }
                 yield completed.output();
             }
             case ExecResult.TimedOut timedOut -> {

@@ -501,16 +501,34 @@ public final class ConfigurationCapabilityExecutor {
 
     private static final java.util.regex.Pattern HOSTNAME_TOKEN = java.util.regex.Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$");
 
-    /** {@code show hostname}: one token on one line; anything else (a CLI error, a prompt) is no hostname. */
+    private static final java.util.regex.Pattern CLINFR_LINE = java.util.regex.Pattern.compile("^CLINFR[0-9]+(\\s.*)?$");
+
+    /** True for a Gaia CLI message line ({@code CLINFR<digits> ...}, an error or warning), never a hostname. */
+    public static boolean isCliMessageLine(String line) {
+        return line != null && CLINFR_LINE.matcher(line.strip()).matches();
+    }
+
+    /** True when the whole stripped line is one hostname token. */
+    public static boolean isHostnameToken(String line) {
+        return line != null && HOSTNAME_TOKEN.matcher(line.strip()).matches();
+    }
+
+    /**
+     * {@code show hostname}: one token on one line; anything else (a CLI error, a prompt) is no hostname. Known Gaia CLI
+     * message lines ({@code CLINFR<digits> ...}) are skipped wherever they stand, so a warning printed before or after the
+     * name does not hide it; the first remaining non-empty line must still be exactly one token (never an arbitrary token
+     * picked from a longer line).
+     */
     public static java.util.Optional<String> parseHostname(String output) {
         if (output == null) {
             return java.util.Optional.empty();
         }
         for (String line : output.split("\\R")) {
             String t = line.strip();
-            if (!t.isEmpty()) {
-                return HOSTNAME_TOKEN.matcher(t).matches() ? java.util.Optional.of(t) : java.util.Optional.empty();
+            if (t.isEmpty() || isCliMessageLine(t)) {
+                continue;
             }
+            return HOSTNAME_TOKEN.matcher(t).matches() ? java.util.Optional.of(t) : java.util.Optional.empty();
         }
         return java.util.Optional.empty();
     }
