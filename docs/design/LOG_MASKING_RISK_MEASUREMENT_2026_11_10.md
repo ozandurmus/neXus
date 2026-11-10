@@ -10,6 +10,9 @@ estate dictionary, as deployed on HOST-A on 2026-11-10 (the service image a conc
 
 No raw log line, word, name, address or serial left HOST-A or appears here.
 
+**Update 2026-11-10 (evening): `logmask-v5` closes gaps 1-7, 9 and 10. Re-run on the same sample: lines carrying an
+identity at p0 fall from 59,284 to 242 (§10).**
+
 ## 0. Answer in short
 
 - **36.2%** of the 2.92 million sampled lines carry at least one identity token in raw form (address, host, user,
@@ -464,3 +467,65 @@ Impact:
 
 The measurement itself then streamed the snapshots one row at a time into the JVM. Rule taken: no recursive jsonb walk
 on the live database; learn a shape from one small row.
+
+## 10. Re-run with `logmask-v5` (2026-11-10, evening)
+
+What changed (branch `feat/logmask-v5-estate-names-1110`):
+- **Estate names in the masked view's dictionary** (`EstateNameCatalog`). Administrator names (`policy_rule_history.changed_by`,
+  `last-modifier`), policy, package, layer and device-group names, rule, object and zone names, virtual-system names
+  and MDS domain and server names. They are read from the policy and device tables, the Check Point object inventory
+  and the stored snapshots. Snapshots are listed by version and read one row at a time, only when changed; the walk
+  runs in Java. Names made only of generic words are dropped (same vocabulary and rule as this measurement). A name
+  holding other characters is split into pieces at them. The catalog refreshes every 15 minutes in the background,
+  and the first load fails closed.
+- **Matching**: case-insensitive and as phrases. Names become typed one-way tokens: `USR-`, `POL-`, `RUL-`, `OBJ-`,
+  `ZON-`, `VSN-`, `DMN-`. A masked form (`FW-...`, `USR-...`, `h-...`) is never rewritten. Device identities stay
+  exact. The Data Sanitizer's exports keep the device-only dictionary.
+- **IPv4 rule**: an underscore is a delimiter.
+
+How it ran: §8 commands, with the branch build's jar copied next to the payload (`LOGRISK_JAR`, a second JVM in the
+pod). The service itself still ran the previous image. Same sample: 1,246 chunks, 2,921,511 lines; 403 s; errors
+none; line-count mismatches 0. Masking dictionary (counts): administrators 49, policies 397, rules 5,819, objects
+20,211, zones 316, virtual systems 77, domains 5, MDS hosts 14; generic values dropped 309,454; snapshot failures 0.
+
+### 10.1 Surviving occurrences, before (`logmask-v4`, §3.8) and after (`logmask-v5`)
+
+| Class | Occurrences | p0 before | p0 after | p1 before | p1 after | p2 before | p2 after | p3 before | p3 after |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `user_known` (administrator names) | 99,985 | 42,590 | **0** | 42,590 | 0 | 0 | 0 | 0 | 0 |
+| `name_policy` | 23,369 | 18,758 | **0** | 17,679 | 0 | 8,585 | 0 | 0 | 0 |
+| `name_object` | 48,634 | 6,000 | **24** | 6,000 | 24 | 2,124 | 24 | 24 | 24 |
+| `name_vs` | 6,320 | 5,820 | **0** | 5,820 | 0 | 1,076 | 0 | 0 | 0 |
+| `ipv4_private` | 603,670 | 1,479 | **0** | 0 | 0 | 0 | 0 | 0 | 0 |
+| `host_known` | 735,864 | 957 | **0** | 957 | 0 | 0 | 0 | 0 | 0 |
+| `name_domain` | 498 | 498 | **0** | 498 | 0 | 0 | 0 | 0 | 0 |
+| `user_mention` | 95,381 | 225 | 221 | 225 | 221 | 0 | 0 | 0 | 0 |
+| `name_zone` | 40 | 40 | **0** | 40 | 0 | 0 | 0 | 0 | 0 |
+| `name_rule` | 7 | 7 | **0** | 7 | 0 | 3 | 0 | 0 | 0 |
+
+The shaped classes (public IPv4, MAC, FQDN, URL host, e-mail, header hosts, serial shapes) stay at 0 surviving.
+
+### 10.2 Lines that would carry an identity
+
+| Profile | Before | After |
+|---|---:|---:|
+| p0 (Level 2, masked excerpts) | 59,284 (2.03%) | **242 (0.008%)** |
+| p1 (Level 1, plain templates) | 56,758 (1.94%) | 242 (0.008%) |
+| p2 (`egress-v1` as drafted) | 11,594 (0.40%) | 21 |
+| p3 (`egress-v1` with Argon fixes) | 21 | 21 |
+
+### 10.3 What is left
+
+- **24 object-name occurrences** (21 lines, `cp_messages`, free text). A counts-only diagnostic applied the masking's
+  own dictionary to every name this measurement knows. It leaves 9 entries unmasked (7 object, 1 policy, 1 rule
+  name). In each, every piece is a generic word; the pieces are joined by a character this measurement's generic filter
+  does not split on (for example `+` or `&`), so the measurement counts the whole as a name. They also survive p3,
+  which passes technical-vocabulary words only. These are generic names by the record's own rule, not identities.
+- **221 user mentions** in `cp_cpwd_elg`: a word right after `[` (§5 gap 8). It is no administrator name the
+  dictionary knows (`user_known` is 0). Its shape still has to be read on a sanitized copy before a rule is written.
+- Not changed: the egress profile (`egress-v1`), the planted-identity corpus (E5), and the vendor key list for the
+  PAN JSON fields that carry vsys and device-group names (the dictionary now catches those values).
+
+Recommendation update (§6): steps 2 and 3 are done. Level 1 still waits on `egress-v1` with Argon's fixes (step 4).
+At p0 the masked view alone now leaves 242 lines in 2.9 million, 221 of them the cpwd mention above.
+
