@@ -5220,3 +5220,20 @@ gates:
     secret_output_risk: "member names if present: never stored or logged"
     safe_telemetry_fields: ["count", "field_names"]
     source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: infoblox_upgradestatus_vnode
+    vendor: "infoblox"
+    platform_role_scope: "infoblox_grid_manager"
+    shell_context: "not_applicable"
+    transport_kind: "HTTPS"
+    canonical_command_key: "GET /wapi/v<ver>/upgradestatus?type=VNODE"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per inventory"
+    session_reuse_rule: "one client per run"
+    unsupported_behavior_ref: "failed object or no version: NIOS version stays UNKNOWN"
+    secret_output_risk: "member names in the object reference: never stored or logged"
+    safe_telemetry_fields: ["count", "field_names"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md amendment B-2026-11-10 (PO chat approval 2026-11-10)"

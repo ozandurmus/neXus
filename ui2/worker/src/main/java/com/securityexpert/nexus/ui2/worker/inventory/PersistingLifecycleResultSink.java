@@ -32,6 +32,8 @@ public final class PersistingLifecycleResultSink implements LifecycleResultSink 
     /** The platform facts key and source read of the Infoblox NIOS version (amendment A-2026-11-10). */
     public static final String NIOS_VERSION_KEY = "nios_version";
     public static final String NIOS_VERSION_SOURCE = "infoblox_upgradestatus_grid";
+    /** Source read of the version taken from the member-level entries (V201). */
+    public static final String NIOS_VERSION_VNODE_SOURCE = "infoblox_upgradestatus_vnode";
 
     private final DeviceLifecycleRepository repository;
     private final com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts;
@@ -56,7 +58,14 @@ public final class PersistingLifecycleResultSink implements LifecycleResultSink 
             switch (kind) {
                 case CP_CPLIC_PRINT, CP_SPARK_SHOW_LICENSE -> license(kind, deviceId, CheckPointLicenseParser.parse(kind.token(), raw));
                 case ASA_SHOW_LICENSE_ALL -> license(kind, deviceId, AsaSmartLicensingParser.parse(raw));
-                case MC_DEVICE_LICENSE -> license(kind, deviceId, ManagementCenterLicenseParser.parse(member, raw));
+                case MC_DEVICE_LICENSE -> {
+                    LicenseParse parsed = ManagementCenterLicenseParser.parse(member, raw);
+                    // One answer per managed device lands in one read row: a later device without components must not
+                    // overwrite the row of devices that had them.
+                    if (member == null || member.isBlank() || "COLLECTED".equals(parsed.outcome().name())) {
+                        license(kind, deviceId, parsed);
+                    }
+                }
                 case INFOBLOX_LICENSE_GRIDWIDE -> license(kind, deviceId, InfobloxGridwideLicenseParser.parse(raw));
                 case PAN_LICENSE_INFO -> license(kind, deviceId, PaloAltoLicenseParser.parseLicenseInfo(raw));
                 case PAN_SUPPORT_INFO -> license(kind, deviceId, PaloAltoLicenseParser.parseSupportInfo(raw));
@@ -68,6 +77,7 @@ public final class PersistingLifecycleResultSink implements LifecycleResultSink 
                             parsed.items());
                 }
                 case INFOBLOX_UPGRADESTATUS_GRID -> niosVersion(deviceId, raw);
+                case INFOBLOX_UPGRADESTATUS_VNODE -> niosVersionVnode(deviceId, raw);
                 case MC_SYSTEM_VERSION, MC_SHOW_LICENSES, FMG_FMUPDATE_DBCONTRACT -> {
                     // Measured but not parsed in the contract: their shape line is still logged by the executor.
                 }
@@ -89,7 +99,8 @@ public final class PersistingLifecycleResultSink implements LifecycleResultSink 
                         PAN_LICENSE_INFO, PAN_SUPPORT_INFO, FGT_UPDATE_INFO_CONTRACT, FGT_AUTOUPDATE_VERSIONS ->
                     repository.recordLicenseRead(deviceId, kind.token(), outcome, cleanReason, List.of());
                 case CP_CPLP_LIST -> repository.recordLivePatchRead(deviceId, kind.token(), outcome, cleanReason, List.of());
-                case MC_SYSTEM_VERSION, MC_SHOW_LICENSES, FMG_FMUPDATE_DBCONTRACT, INFOBLOX_UPGRADESTATUS_GRID -> {
+                case MC_SYSTEM_VERSION, MC_SHOW_LICENSES, FMG_FMUPDATE_DBCONTRACT, INFOBLOX_UPGRADESTATUS_GRID,
+                        INFOBLOX_UPGRADESTATUS_VNODE -> {
                     // Not parsed, so not recorded.
                 }
             }
@@ -112,6 +123,21 @@ public final class PersistingLifecycleResultSink implements LifecycleResultSink 
                         java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty(),
                         java.util.Map.of(NIOS_VERSION_KEY, version), java.util.Optional.empty(), NIOS_VERSION_SOURCE,
                         java.util.Optional.empty())));
+    }
+
+    /** The member-level versions: one distinct version as is, several joined with ", "; none writes nothing. */
+    private void niosVersionVnode(String deviceId, String raw) {
+        if (platformFacts == null) {
+            return;
+        }
+        List<String> versions = com.securityexpert.nexus.ui2.worker.inventory.lifecycle.InfobloxUpgradeStatusParser.currentVersions(raw);
+        if (versions.isEmpty()) {
+            return;
+        }
+        platformFacts.record(new com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts(deviceId,
+                java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty(),
+                java.util.Map.of(NIOS_VERSION_KEY, String.join(", ", versions)), java.util.Optional.empty(),
+                NIOS_VERSION_VNODE_SOURCE, java.util.Optional.empty()));
     }
 
     private void license(Kind kind, String deviceId, LicenseParse parsed) {

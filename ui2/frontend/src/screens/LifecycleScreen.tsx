@@ -6,7 +6,7 @@ import { M3Button, M3Tabs } from "../shell/M3Widgets";
 import { downloadText, toCsv } from "./DeviceShared";
 import { LifecycleCatalogPanel, lifecycleError } from "./LifecycleCatalogPanel";
 
-const cards = [["devices", "Devices"], ["past_end_of_support", "Past end of support"], ["within_180_days", "Within 180 days"], ["within_365_days", "Within 365 days"], ["no_lifecycle_data", "No lifecycle data"], ["licenses_within_60_days", "Licenses within 60 days"], ["license_problems", "License problems"], ["live_patch_not_active", "Live Patch not active"]];
+const cards = [["devices", "Devices"], ["past_end_of_support", "Past end of support"], ["within_180_days", "Within 180 days"], ["within_365_days", "Within 365 days"], ["no_lifecycle_data", "No lifecycle data"], ["licenses_within_60_days", "Licenses within 60 days"], ["license_problems", "License problems"], ["live_patch_not_active", "Live Patch not active"], ["live_patch_missing", "No Live Patch package"]];
 const headings = ["Device / cluster", "Vendor", "Model", "Version", "Hardware end of support", "Software end of support", "Next milestone", "Nearest license expiry", "Risk", "Match basis", "Licenses", "Live Patch"];
 const shown = (value: string | null | undefined) => value || "UNKNOWN";
 /** Rows shown before "+N more" (post-release review 2026-10-18, 1.7): the page was 22,000 px as one table. */
@@ -27,6 +27,7 @@ export function livePatchCell(d: LifecycleDevice): string {
 function livePatchBase(d: LifecycleDevice): string {
   const p = d.live_patch;
   if (!p) return "—";
+  if (p.missing) return "No Live Patch package";
   if (p.read_outcome === "COLLECTED") return `take ${p.package_take ?? "UNKNOWN"} · ${p.armed} armed`;
   return p.package_take ? `take ${p.package_take} · patches not read` : "Not collected";
 }
@@ -45,9 +46,11 @@ export function licenseLine(l: LifecycleLicense): string {
   const when = l.status === "PERMANENT" ? "Permanent" : l.expiry ?? (l.label || l.status);
   const days = l.expiry && l.days_remaining != null ? (l.days_remaining < 0 ? `expired ${-l.days_remaining} days ago` : `${l.days_remaining} days remaining`) : null;
   const word = l.status === "PERMANENT" || l.status === "DATED" || l.status === when ? null : l.status;
-  return [l.name ?? "License", l.member, when, word, days].filter(Boolean).join(" · ");
+  const earlier = l.earlier_entries ? `${l.earlier_entries} earlier ${l.earlier_entries === 1 ? "entry" : "entries"}` : null;
+  return [l.name ?? "License", l.member, when, word, days, earlier].filter(Boolean).join(" · ");
 }
-const patchStatus = (status: string) => status === "ready" ? "installed, not active" : status;
+/** A ready patch waits for its process: with none running there is nothing to patch; with one running it is not active yet. */
+const patchStatus = (x: { status: string; idle?: boolean }) => x.status !== "ready" ? x.status : x.idle ? "installed, process not running" : "installed, not active";
 const readsText = (d: LifecycleDevice) => (d.license_reads ?? []).map(r => `${r.kind}: ${r.outcome}`).join("; ");
 export function lifecycleCsv(devices: LifecycleDevice[]) {
   return toCsv([[...headings, "Hardware end of sale", "Hardware end of engineering", "Software end of sale", "Software end of engineering", "License details", "License collection", "Support contract collection",
@@ -77,9 +80,10 @@ export function LifecycleDetail({ d }: { d: LifecycleDevice }) {
     {p && <Box>
       <Typography variant="subtitle2">Live Patch</Typography>
       <Typography variant="caption" display="block">{`Package take ${p.package_take ?? "UNKNOWN"} · Jumbo ${p.jumbo ?? "UNKNOWN"} · read ${p.read_outcome ?? "not collected"}${p.observed_at ? ` · ${p.observed_at}` : ""}`}</Typography>
-      <Typography variant="caption" display="block">{`${p.armed} armed · ${p.ready} installed, not active · ${p.jumbofix} jumbofix · ${p.other} other`}</Typography>
+      <Typography variant="caption" display="block">{p.missing ? "The patch list was read and is empty, and the device names no Live Patch package."
+        : `${p.armed} armed · ${p.ready} installed, not active · ${p.idle ?? 0} installed, process not running · ${p.jumbofix} jumbofix · ${p.other} other`}</Typography>
       {p.items.length > 0 && <Table size="small" aria-label="Live Patch patches"><TableHead><TableRow>{["Patch", "Status", "Mode", "Processes", "Installed", "References"].map(h => <TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead><TableBody>
-        {p.items.map(x => <TableRow key={x.patch}><TableCell>{x.patch}</TableCell><TableCell sx={x.status === "ready" ? { color: "warning.main" } : undefined}>{patchStatus(x.status)}</TableCell>
+        {p.items.map(x => <TableRow key={x.patch}><TableCell>{x.patch}</TableCell><TableCell sx={x.status === "ready" && !x.idle ? { color: "warning.main" } : undefined}>{patchStatus(x)}</TableCell>
           <TableCell>{x.mode ?? "—"}</TableCell><TableCell>{x.running ?? "?"} of {x.total ?? "?"}</TableCell><TableCell>{x.installed_at ?? "—"}</TableCell><TableCell>{x.refs.join(", ") || "—"}</TableCell></TableRow>)}
       </TableBody></Table>}
     </Box>}
@@ -120,7 +124,7 @@ export function LifecycleScreen() {
       <TableContainer><Table size="small" aria-label="Fleet lifecycle"><TableHead><TableRow>{headings.map(h => <TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead><TableBody>
         {visible.map(d => <Fragment key={d.device_id}><TableRow>{lifecycleCells(d).map((cell, i) => <TableCell key={i}>
           {i === 10 ? <Typography variant="body2" component="span" color={d.license_problem ? "error" : "text.primary"}>{cell}</Typography>
-            : i === 11 ? (d.live_patch ? <>{livePatchBase(d)}{notActive(d) && <Typography variant="body2" component="span" sx={{ color: "warning.main" }}>{` · ${d.live_patch.ready} not active`}</Typography>}</> : cell)
+            : i === 11 ? (d.live_patch ? <>{d.live_patch.missing ? <Typography variant="body2" component="span" sx={{ color: "warning.main" }}>{livePatchBase(d)}</Typography> : livePatchBase(d)}{notActive(d) && <Typography variant="body2" component="span" sx={{ color: "warning.main" }}>{` · ${d.live_patch.ready} not active`}</Typography>}</> : cell)
             : i === 0 ? <><a href={`?screen=inventory&device_id=${encodeURIComponent(d.device_id)}`}>{shown(d.hostname)}</a>{d.cluster_member_ref && <Typography variant="caption" display="block">{d.cluster_member_ref}</Typography>}
             <M3Button emphasis="text" aria-expanded={open.has(d.device_id)} onClick={() => toggle(d.device_id)}>{open.has(d.device_id) ? "Hide details" : "Details"}</M3Button></> : cell}
           {(i === 4 || i === 5) && <Typography variant="caption" display="block">

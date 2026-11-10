@@ -1,6 +1,9 @@
 package com.securityexpert.nexus.ui2.worker.inventory.lifecycle;
 
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -15,6 +18,8 @@ public final class InfobloxUpgradeStatusParser {
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Pattern VERSION = Pattern.compile("[0-9][A-Za-z0-9._+-]{0,59}");
+
+    private static final int MAX_VERSIONS = 8;
 
     private InfobloxUpgradeStatusParser() {
     }
@@ -46,6 +51,36 @@ public final class InfobloxUpgradeStatusParser {
             return Optional.empty();
         } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException | StackOverflowError e) {
             return Optional.empty();
+        }
+    }
+
+    /** The distinct {@code current_version} strings of all entries, first-seen order, at most 8. Never throws. */
+    public static List<String> currentVersions(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        try {
+            JsonNode root = JSON.readTree(raw);
+            if (root == null) {
+                return List.of();
+            }
+            if (root.isObject() && root.path("result").isArray()) {
+                root = root.path("result");
+            }
+            Set<String> found = new LinkedHashSet<>();
+            if (root.isObject()) {
+                version(root).ifPresent(found::add);
+            } else if (root.isArray()) {
+                for (JsonNode entry : root) {
+                    version(entry).ifPresent(found::add);
+                    if (found.size() >= MAX_VERSIONS) {
+                        break;
+                    }
+                }
+            }
+            return List.copyOf(found);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException | StackOverflowError e) {
+            return List.of();
         }
     }
 

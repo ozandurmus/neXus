@@ -68,9 +68,10 @@ class LifecycleReadSwitchTest {
     @Test
     void groupBKindsAreNamedByTheirTokensAndAreOffByDefault() {
         String[] tokens = {"pan_license_info", "pan_support_info", "fgt_update_info_contract", "fgt_autoupdate_versions",
-                "fmg_fmupdate_dbcontract", "mc_show_licenses", "infoblox_upgradestatus_grid"};
+                "fmg_fmupdate_dbcontract", "mc_show_licenses", "infoblox_upgradestatus_grid", "infoblox_upgradestatus_vnode"};
         Kind[] kinds = {Kind.PAN_LICENSE_INFO, Kind.PAN_SUPPORT_INFO, Kind.FGT_UPDATE_INFO_CONTRACT, Kind.FGT_AUTOUPDATE_VERSIONS,
-                Kind.FMG_FMUPDATE_DBCONTRACT, Kind.MC_SHOW_LICENSES, Kind.INFOBLOX_UPGRADESTATUS_GRID};
+                Kind.FMG_FMUPDATE_DBCONTRACT, Kind.MC_SHOW_LICENSES, Kind.INFOBLOX_UPGRADESTATUS_GRID,
+                Kind.INFOBLOX_UPGRADESTATUS_VNODE};
         for (int i = 0; i < tokens.length; i++) {
             assertEquals(tokens[i], kinds[i].token());
             assertFalse(LifecycleReadSwitch.OFF.allows(kinds[i], "dev-1"));

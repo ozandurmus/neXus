@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { LIFECYCLE_PAGE, LifecycleScreen, DeviceLifecycleLine, lifecycleCsv, livePatchCell } from "../src/screens/LifecycleScreen";
+import { LIFECYCLE_PAGE, LifecycleScreen, DeviceLifecycleLine, lifecycleCsv, livePatchCell, licenseLine, LifecycleDetail } from "../src/screens/LifecycleScreen";
 import { LifecycleCatalogPanel } from "../src/screens/LifecycleCatalogPanel";
 import * as api from "../src/auth/adminApi";
 import type { LifecycleDevice } from "../src/auth/adminApi";
@@ -245,5 +245,37 @@ describe("livePatchCell", () => {
     expect(livePatchCell(patch({ read_outcome: "FAILED" }))).toBe("take 30 · patches not read");
     expect(livePatchCell(patch({ package_take: null }))).toBe("Not collected");
     expect(livePatchCell({ live_patch: null } as unknown as LifecycleDevice)).toBe("—");
+  });
+});
+
+describe("first fleet data (2026-11-10)", () => {
+  const cp = (over: Record<string, unknown>) => ({ hostname: "FW-TANGO-04", licenses: [], license_status: "COLLECTED", support_contract_status: "COLLECTED",
+    license_problem: false, license_problems: [], license_reads: [],
+    live_patch: { package_take: "30", jumbo: "R81.20 Jumbo Take 119", read_outcome: "COLLECTED", observed_at: null, armed: 6, ready: 0, idle: 3,
+      jumbofix: 0, other: 0, missing: false, items: [], ...over } }) as unknown as LifecycleDevice;
+
+  it("does not call a patch whose process is not running 'not active'", () => {
+    expect(livePatchCell(cp({}))).toBe("take 30 · 6 armed");
+    themed(<LifecycleDetail d={cp({ items: [
+      { patch: "PATCH-I", status: "ready", idle: true, mode: null, running: 0, total: 2, installed_at: null, refs: [] },
+      { patch: "PATCH-P", status: "ready", idle: false, mode: null, running: 1, total: 2, installed_at: null, refs: ["CVE-2026-0001"] }] })} />);
+    expect(screen.getByText("installed, process not running")).toBeInTheDocument();
+    expect(screen.getByText("installed, not active")).toBeInTheDocument();
+    expect(screen.getByText(/6 armed · 0 installed, not active · 3 installed, process not running/)).toBeInTheDocument();
+  });
+
+  it("names a Gaia device without any Live Patch package", () => {
+    const missing = cp({ package_take: null, read_outcome: "EMPTY", armed: 0, idle: 0, missing: true });
+    expect(livePatchCell(missing)).toBe("No Live Patch package");
+    themed(<LifecycleDetail d={missing} />);
+    expect(screen.getByText(/names no Live Patch package/)).toBeInTheDocument();
+  });
+
+  it("says how many earlier entries a license row stands for", () => {
+    expect(licenseLine({ name: "CPES-SS-PREMIUM", label: "2027-11-13", status: "DATED", expiry: "2027-11-13", days_remaining: 400, earlier_entries: 2 }))
+      .toBe("CPES-SS-PREMIUM · 2027-11-13 · 400 days remaining · 2 earlier entries");
+    expect(licenseLine({ name: "CPSB-FW", label: "Permanent", status: "PERMANENT", earlier_entries: 0 })).toBe("CPSB-FW · Permanent");
+    expect(licenseLine({ name: "Logging Service", label: "2026-06-02", status: "EXPIRED", expiry: "2026-06-02", days_remaining: -129, earlier_entries: 1 }))
+      .toBe("Logging Service · 2026-06-02 · EXPIRED · expired 129 days ago · 1 earlier entry");
   });
 });

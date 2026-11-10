@@ -52,6 +52,11 @@ public final class HttpsVendorPlan {
      * docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md, amendment). Nothing else is requested.
      */
     public static final String INFOBLOX_UPGRADESTATUS_GRID = "/wapi/v%s/upgradestatus?type=GRID&_return_fields=current_version";
+    /**
+     * Lifecycle read (PO chat approval 2026-11-10, "Evet, VNODE dene"; gate infoblox_upgradestatus_vnode, V201): the
+     * member-level entries of the same object, because the grid-level entry returned no version. Measured first on one grid.
+     */
+    public static final String INFOBLOX_UPGRADESTATUS_VNODE = "/wapi/v%s/upgradestatus?type=VNODE&_return_fields=current_version";
     public static final String INFOBLOX_GETGRIDDATA = "/wapi/v%s/fileop?_function=getgriddata";
     public static final String INFOBLOX_GETGRIDDATA_BODY = "{\"type\": \"BACKUP\"}";
     public static final String INFOBLOX_DOWNLOADCOMPLETE = "/wapi/v%s/fileop?_function=downloadcomplete";
@@ -118,6 +123,7 @@ public final class HttpsVendorPlan {
     public static final List<String> INFOBLOX_GATE_KEYS = List.of("GET /wapidoc/", "GET /wapi/v<ver>/grid", "GET /wapi/v<ver>/member",
             "GET /wapi/v<ver>/view", "GET /wapi/v<ver>/zone_auth", "GET /wapi/v<ver>/network",
             "GET /wapi/v<ver>/range", "GET /wapi/v<ver>/member:license", "GET /wapi/v<ver>/license:gridwide", "GET /wapi/v<ver>/upgradestatus?type=GRID",
+            "GET /wapi/v<ver>/upgradestatus?type=VNODE",
             "POST /wapi/v<ver>/fileop?_function=getgriddata", "GET <getgriddata url, same host>",
             "POST /wapi/v<ver>/fileop?_function=downloadcomplete");
     public static final List<String> RADWARE_GATE_KEYS = List.of("GET /", "POST /dynamic/File/Configuration/ReceivefromDevice");

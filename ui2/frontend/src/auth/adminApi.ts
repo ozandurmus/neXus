@@ -215,6 +215,8 @@ export interface LifecycleLicense {
   expiry?: string | null;
   status: string;
   days_remaining?: number | null;
+  /** How many earlier entries of the same label this row stands for (a device lists expired entries beside the current one). */
+  earlier_entries?: number;
   /** Stored items only (the Infoblox grid summary rows carry none of these): LICENSE, SUBSCRIPTION, SUPPORT_CONTRACT, SMART_LICENSING. */
   category?: string;
   evidence?: "DIRECT_DEVICE" | "MANAGER_REPORTED";
@@ -226,10 +228,15 @@ export interface LifecycleLicenseRead { kind: string; outcome: string; reason: s
 export interface LifecycleLivePatchItem {
   patch: string; status: string; mode: string | null; running: number | null; total: number | null;
   installed_at: string | null; refs: string[];
+  /** A ready patch with no running process of its kind: nothing to patch on this device. */
+  idle?: boolean;
 }
 export interface LifecycleLivePatch {
   package_take: string | null; jumbo: string | null; read_outcome: string | null; observed_at: string | null;
-  armed: number; ready: number; jumbofix: number; other: number; items: LifecycleLivePatchItem[];
+  /** ready: installed and its process runs, not yet applied. idle: installed, no process of that kind runs on the device. */
+  armed: number; ready: number; idle?: number; jumbofix: number; other: number; items: LifecycleLivePatchItem[];
+  /** The patch list was asked for, the device gave none, and it names no Live Patch package (never true for a Spark). */
+  missing?: boolean;
 }
 export interface LifecycleDevice {
   device_id: string;

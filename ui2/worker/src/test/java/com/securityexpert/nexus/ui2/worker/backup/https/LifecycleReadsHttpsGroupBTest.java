@@ -45,6 +45,7 @@ class LifecycleReadsHttpsGroupBTest {
     private static final String UUID_CLOUD = "C3055376-3448-4A94-82DB-D9BD30BBB423";
     private static final String UUID_RE = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
     private static final String UPGRADE = "/wapi/v2.13.5/upgradestatus?type=GRID&_return_fields=current_version";
+    private static final String VNODE = "/wapi/v2.13.5/upgradestatus?type=VNODE&_return_fields=current_version";
     private static final String SHOW_LICENSES_A = "PUT /api/devices/" + UUID_A + "/command show licenses 120";
     private static final String SHOW_LICENSES_B = "PUT /api/devices/" + UUID_B + "/command show licenses 120";
 
@@ -157,6 +158,8 @@ class LifecycleReadsHttpsGroupBTest {
         assertEquals("show licenses", HttpsVendorPlan.MC_CMD_SHOW_LICENSES);
         assertEquals("/wapi/v%s/upgradestatus?type=GRID&_return_fields=current_version", HttpsVendorPlan.INFOBLOX_UPGRADESTATUS_GRID);
         assertTrue(HttpsVendorPlan.INFOBLOX_GATE_KEYS.contains("GET /wapi/v<ver>/upgradestatus?type=GRID"));
+        assertEquals("/wapi/v%s/upgradestatus?type=VNODE&_return_fields=current_version", HttpsVendorPlan.INFOBLOX_UPGRADESTATUS_VNODE);
+        assertTrue(HttpsVendorPlan.INFOBLOX_GATE_KEYS.contains("GET /wapi/v<ver>/upgradestatus?type=VNODE"));
     }
 
     @Test
@@ -273,6 +276,65 @@ class LifecycleReadsHttpsGroupBTest {
         calls.replies.put(UPGRADE, new TextResponse(200, Optional.empty(), "", false));
         assertEquals(off, inventory("infoblox", on("infoblox_upgradestatus_grid", null)));
         assertTrue(lines.get(0).contains("outcome=EMPTY"), lines.get(0));
+    }
+
+    @Test
+    void infobloxVnodeSwitchOffSendsNothingNewAndSwitchOnSendsTheLiteralLastWithNoValueInTheShapeLine() {
+        String off = inventory("infoblox", LifecycleReadSwitch.OFF);
+        List<String> offLog = new ArrayList<>(calls.log);
+        assertTrue(offLog.stream().noneMatch(l -> l.contains("VNODE")));
+        calls.replies.put(VNODE, new TextResponse(200, Optional.of("application/json"),
+                "[{\"_ref\":\"upgradestatus/b25l:gm.corp.example\",\"current_version\":\"9.0.4-50240\"},"
+                        + "{\"_ref\":\"upgradestatus/b25m:gmc.corp.example\",\"current_version\":\"9.0.3\"}]", false));
+        String onOutcome = inventory("infoblox", on("infoblox_upgradestatus_vnode", null));
+        assertEquals(off, onOutcome);
+        assertEquals(offLog, calls.log.subList(0, offLog.size()));
+        assertEquals(List.of("GET " + VNODE + " 60"), calls.log.subList(offLog.size(), calls.log.size()));
+        assertEquals(1, lines.size());
+        assertTrue(lines.get(0).contains("kind=infoblox_upgradestatus_vnode") && lines.get(0).contains("current_version:string"), lines.get(0));
+        assertFalse(lines.get(0).contains("gm.corp") || lines.get(0).contains("gmc.") || lines.get(0).contains("9.0.4")
+                || lines.get(0).contains("9.0.3"), lines.get(0));
+    }
+
+    @Test
+    void theVnodeReadIsSentAfterTheGridReadAndAFailingOrThrowingOneChangesNothing() {
+        inventory("infoblox", on("infoblox_upgradestatus_grid,infoblox_upgradestatus_vnode", null));
+        int n = calls.log.size();
+        assertTrue(calls.log.get(n - 2).equals("GET " + UPGRADE + " 60") && calls.log.get(n - 1).equals("GET " + VNODE + " 60"), calls.log.toString());
+
+        String off = inventory("infoblox", LifecycleReadSwitch.OFF);
+        calls.failures.put(VNODE, new IOException("synthetic"));
+        assertEquals(off, inventory("infoblox", on("infoblox_upgradestatus_vnode", null)));
+        assertTrue(lines.get(0).contains("outcome=ERROR:IOException"), lines.get(0));
+        calls.failures.clear();
+        calls.replies.put(VNODE, new TextResponse(400, Optional.empty(), "", false));
+        assertEquals(off, inventory("infoblox", on("infoblox_upgradestatus_vnode", null)));
+        assertTrue(lines.get(0).contains("outcome=ERROR:Http400"), lines.get(0));
+
+        RecordingLifecycleSink sink = new RecordingLifecycleSink();
+        executor.withLifecycleResults(sink);
+        calls.replies.put(VNODE, new TextResponse(200, Optional.of("application/json"), "[{\"current_version\":\"9.0.4\"}]", false));
+        assertEquals(off, inventory("infoblox", on("infoblox_upgradestatus_vnode", null)));
+        assertEquals(LifecycleReadSwitch.Kind.INFOBLOX_UPGRADESTATUS_VNODE, sink.calls.get(0).kind());
+        assertTrue(sink.calls.get(0).isAnswer());
+        calls.failures.put(VNODE, new IOException("synthetic"));
+        inventory("infoblox", on("infoblox_upgradestatus_vnode", null));
+        assertEquals("FAILED", sink.calls.get(1).outcome());
+    }
+
+    @Test
+    void aThrowingSinkNeverChangesTheVnodeOutcome() {
+        String off = inventory("infoblox", LifecycleReadSwitch.OFF);
+        executor.withLifecycleResults(new com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink() {
+            @Override public void answer(LifecycleReadSwitch.Kind kind, String deviceId, String member, String raw) {
+                throw new IllegalStateException("synthetic sink");
+            }
+            @Override public void notCollected(LifecycleReadSwitch.Kind kind, String deviceId, String outcome, String reason) {
+                throw new IllegalStateException("synthetic sink");
+            }
+        });
+        calls.replies.put(VNODE, new TextResponse(200, Optional.of("application/json"), "[{\"current_version\":\"9.0.4\"}]", false));
+        assertEquals(off, inventory("infoblox", on("infoblox_upgradestatus_vnode", null)));
     }
 
     // ------------------------------------------------------------------------------------ result sink (storage contract s.3)

@@ -144,3 +144,44 @@ or in the running pod):
   (`type=VNODE`, `type=PNODE`) and group-level entries (`type=GROUP`) with the same field; whether one of them
   carries the version on this grid is UNKNOWN. Each is a different request and needs its own PO approval and a
   measurement; none has been sent.
+
+## First fleet-wide run (2026-11-10, after the PO's decision to switch the reads on)
+
+Record: `PO_DECISION_RECORD_2026_11_10_LIFECYCLE_READS_FLEET_WIDE.md`. Before the switch: no ship, end-to-end test,
+policy collection or other job was running. The ten stored read kinds were switched on for every device and the
+ordinary inventories were started in three batches, each checked before the next: the four smaller vendors (28
+devices), Palo Alto (39), Check Point (60). 126 of 127 inventories ended `COMPLETED`; the one that failed is a
+Quantum Spark that has been unreachable on its management port for weeks, which is unrelated to these reads.
+
+Read outcomes (devices):
+
+| Vendor | Read | Collected | Other |
+|---|---|---|---|
+| Check Point | `cplic print` | 56 | 3 skipped (Spark gets `show license`) |
+| Check Point | Spark `show license` | 3 | 1 skipped (management server) |
+| Check Point | `cplp list` | 52 | 2 empty, 2 unparsed, 3 skipped (Spark) |
+| Palo Alto | license info, support info | 29 each | 9 skipped (PAN-OS 12), 1 skipped (Panorama) |
+| Cisco ASA | `show license all` | 12 | - |
+| Fortinet | FortiGate contract, autoupdate versions | 9 each | - |
+| Symantec | Management Center device license | 7 answers for one Management Center | one managed device without components |
+| Infoblox | `license:gridwide` | 1 | - |
+
+No read was refused or timed out. Stored: 1502 license, subscription, contract and Smart Licensing rows (beside the
+44 Infoblox member licenses already held in the grid summary) and 468 Live Patch rows.
+
+What the data says (the devices' own statements; judging them is for the PO):
+
+- **Cisco ASA:** 5 authorized or in compliance, 3 standby (not applicable), 2 `EVAL EXPIRED`, 1 `OUT OF COMPLIANCE`,
+  1 `UNREGISTERED`.
+- **Palo Alto:** 18 of 29 firewalls list at least one subscription whose latest entry has expired (most often the
+  logging service entry); 2 list no valid support entry.
+- **Check Point:** every gateway lists earlier contracts next to current ones (425 expired contract rows on 43
+  devices); 50 of 59 hold at least one valid contract and 9 hold none; 2 devices have expired license lines; 14
+  have something expiring within 60 days.
+- **Check Point Live Patch:** 52 Gaia devices have package take 30 and a patch list (282 armed rows, 33 `jumbofix`).
+  All 153 `ready` rows have zero running processes: installed, nothing to patch. **Four R81.20 gateways (Jumbo take
+  119) have no Live Patch package line and an empty or unreadable patch list.**
+- **Fortinet, Infoblox, ProxySG:** nothing expired; FortiGate contracts end between March and May 2027, ProxySG
+  components in April 2027, Infoblox licenses in July 2027.
+- Three more Palo Alto firewalls answered with a PAN-OS 12 version than the stored versions said; the rule skipped
+  them.

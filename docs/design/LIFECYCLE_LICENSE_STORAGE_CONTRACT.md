@@ -102,3 +102,25 @@ A-2026-11-10) it is parsed: the `current_version` string of the grid entry is st
 `infoblox_upgradestatus_grid`) and shown on the device's platform identity panel as "NIOS version". Nothing else of
 the answer is read. An answer without a usable version writes nothing and leaves the last recorded version in place.
 The device's software version field keeps showing the WAPI schema version; replacing it is not part of this change.
+
+## Amendment B-2026-11-10: what the first fleet-wide data required
+
+The first run with the reads on for the whole estate (`LIFECYCLE_READS_MEASUREMENTS_2026_11_10.md`, "First fleet-wide
+run") showed four things the frozen text got wrong or did not foresee. Storage (section 1) is unchanged; these are
+rules of the view (section 4) and of the worker (section 3).
+
+1. **Only the latest entry of a label counts.** Devices list earlier contracts and expired subscription entries next
+   to the current ones. The view shows one row per category, label and member, the one with the latest expiry (a
+   permanent one first), and says how many earlier entries it stands for.
+2. **Support contracts are judged per device.** A device is a license problem for its support contract only when it
+   lists contracts and none of them is still valid. A license or subscription is a problem when its latest entry
+   has expired. The Smart Licensing states are unchanged.
+3. **A ready Live Patch whose process is not running is idle, not pending.** `ready` with zero running processes
+   means there is nothing to patch on that device; it is shown as "installed, process not running" and is not
+   counted as "not active". A Gaia device whose patch list was read and is empty, and whose `cpinfo` answer names no
+   Live Patch package, is shown and counted as "No Live Patch package".
+4. **Management Center read row.** Each managed device's license is its own answer; an answer without components
+   for one managed device no longer overwrites the read row of the Management Center.
+
+The Infoblox member-level version read (gate entries amendment B-2026-11-10) is stored like the grid-level one:
+platform fact `nios_version`, source read `infoblox_upgradestatus_vnode`.

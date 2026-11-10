@@ -123,20 +123,85 @@ public final class LifecycleProjection {
         return row;
     }
 
+    /**
+     * One row per category, label and member: the entry with the latest expiry (a permanent one first). A device lists its
+     * earlier contracts and expired subscription entries next to the current ones (measured 2026-11-10: 425 expired contract
+     * rows on 43 Check Point gateways that all hold a later contract); only the latest entry of a label says whether that
+     * label is covered. The kept row carries {@code earlier_entries}, the number of entries it stands for beyond itself.
+     */
+    static List<Map<String, Object>> latestPerLabel(List<Map<String, Object>> rows) {
+        var best = new LinkedHashMap<String, Map<String, Object>>();
+        var counts = new LinkedHashMap<String, Integer>();
+        for (var row : rows) {
+            String key = row.get("category") + "|" + row.get("name") + "|" + row.get("member");
+            counts.merge(key, 1, Integer::sum);
+            var kept = best.get(key);
+            if (kept == null || rank(row) > rank(kept)) best.put(key, row);
+        }
+        var result = new ArrayList<Map<String, Object>>();
+        best.forEach((key, row) -> { row.put("earlier_entries", counts.get(key) - 1); result.add(row); });
+        return result;
+    }
+
+    /** Permanent first, then the later expiry date, then an undated row. */
+    private static long rank(Map<String, Object> row) {
+        if ("PERMANENT".equals(row.get("status"))) return Long.MAX_VALUE;
+        return row.get("expiry") instanceof String expiry ? LocalDate.parse(expiry).toEpochDay() : Long.MIN_VALUE;
+    }
+
+    /**
+     * What makes a device a license problem: a Smart Licensing state the device itself reports as not in order; a license
+     * or subscription whose latest entry has expired; and support contracts only when the device lists some and none of
+     * them is still valid (an expired earlier contract beside a valid one is history, not a problem).
+     */
+    static List<Map<String, Object>> problems(List<Map<String, Object>> licenses) {
+        var problems = new ArrayList<Map<String, Object>>();
+        boolean contracts = false, validContract = false;
+        for (var row : licenses) {
+            String status = (String) row.get("status");
+            boolean contract = "SUPPORT_CONTRACT".equals(row.get("category"));
+            if (contract) {
+                contracts = true;
+                validContract |= "DATED".equals(status) || "PERMANENT".equals(status);
+                continue;
+            }
+            if (PROBLEM_STATES.contains(status)) {
+                var p = new LinkedHashMap<String, Object>();
+                p.put("label", row.get("name") != null ? row.get("name") : row.get("label")); p.put("status", status);
+                problems.add(p);
+            }
+        }
+        if (contracts && !validContract) {
+            var p = new LinkedHashMap<String, Object>();
+            p.put("label", "Support contract"); p.put("status", "EXPIRED");
+            problems.add(0, p);
+        }
+        return problems;
+    }
+
     /** The Check Point Live Patch block; null for other vendors. */
     public static Map<String, Object> livePatch(String vendor, Stored stored) {
         if (!"CHECKPOINT".equals(vendor)) return null;
         var read = stored.reads().stream().filter(r -> LIVE_PATCH_READ.equals(r.readKind())).findFirst().orElse(null);
         var facts = stored.facts();
-        long armed = 0, ready = 0, jumbofix = 0;
+        long armed = 0, ready = 0, idle = 0, jumbofix = 0;
         var items = new ArrayList<Map<String, Object>>();
         for (var p : stored.patches()) {
-            switch (p.status() == null ? "" : p.status()) { case "armed" -> armed++; case "ready" -> ready++; case "jumbofix" -> jumbofix++; default -> { } }
+            // A ready patch waits for its process. With no process of that kind running on the device there is nothing to
+            // patch (measured 2026-11-10: every ready row in the estate had 0 running processes): that is idle, not pending.
+            boolean idleRow = "ready".equals(p.status()) && p.pidsRunning() != null && p.pidsRunning() == 0;
+            switch (p.status() == null ? "" : p.status()) {
+                case "armed" -> armed++;
+                case "ready" -> { if (idleRow) idle++; else ready++; }
+                case "jumbofix" -> jumbofix++;
+                default -> { }
+            }
             var item = new LinkedHashMap<String, Object>();
             item.put("patch", p.patchId()); item.put("status", p.status()); item.put("mode", p.mode());
             item.put("running", p.pidsRunning()); item.put("total", p.pidsTotal());
             item.put("installed_at", p.installedAt() == null ? null : p.installedAt().toString());
             item.put("refs", p.refs() == null ? List.of() : p.refs());
+            item.put("idle", idleRow);
             items.add(item);
         }
         var body = new LinkedHashMap<String, Object>();
@@ -144,8 +209,12 @@ public final class LifecycleProjection {
         body.put("jumbo", facts == null ? null : facts.hotfixLevel().orElse(null));
         body.put("read_outcome", read == null ? null : read.outcome());
         body.put("observed_at", read == null || read.observedAt() == null ? null : read.observedAt().toString());
-        body.put("armed", armed); body.put("ready", ready); body.put("jumbofix", jumbofix);
-        body.put("other", items.size() - armed - ready - jumbofix); body.put("items", items);
+        body.put("armed", armed); body.put("ready", ready); body.put("idle", idle); body.put("jumbofix", jumbofix);
+        body.put("other", items.size() - armed - ready - idle - jumbofix); body.put("items", items);
+        // The patch list was asked for and the device gave none, and its cpinfo answer names no Live Patch package either.
+        boolean spark = facts != null && facts.platformFamily().filter("gaia_embedded"::equals).isPresent();
+        body.put("missing", !spark && body.get("package_take") == null && read != null
+                && ("EMPTY".equals(read.outcome()) || "UNPARSED".equals(read.outcome())));
         return body;
     }
 
@@ -165,12 +234,12 @@ public final class LifecycleProjection {
         var hw = match(vendor, "HARDWARE", model, catalog);
         var sw = match(vendor, "SOFTWARE", version, catalog);
         var licenses = new ArrayList<Map<String, Object>>(licenses(vendor, licensesJson, today));
-        stored.items().forEach(i -> licenses.add(storedLicense(i, today)));
+        licenses.addAll(latestPerLabel(stored.items().stream().map(i -> storedLicense(i, today)).toList()));
         var licenseReads = stored.reads().stream().filter(r -> !LIVE_PATCH_READ.equals(r.readKind())).toList();
         boolean infobloxSummary = "INFOBLOX".equals(vendor) && licensesJson != null;
         String licenseStatus = licenseReads.stream().anyMatch(r -> "COLLECTED".equals(r.outcome())) || infobloxSummary ? "COLLECTED"
                 : licenseReads.isEmpty() ? ("INFOBLOX".equals(vendor) ? "UNKNOWN" : "NOT_COLLECTED") : "UNKNOWN";
-        var problems = licenses.stream().filter(l -> PROBLEM_STATES.contains((String) l.get("status"))).toList();
+        var problems = problems(licenses);
         var milestones = new ArrayList<Map<String, Object>>();
         var supportDays = new ArrayList<Long>();
         for (var part : List.of(Map.entry("Hardware", hw), Map.entry("Software", sw))) {
@@ -209,14 +278,13 @@ public final class LifecycleProjection {
         body.put("support_contract_status", stored.items().stream().anyMatch(i -> "SUPPORT_CONTRACT".equals(i.category()))
                 ? "COLLECTED" : "NOT_COLLECTED");
         body.put("license_problem", !problems.isEmpty());
-        body.put("license_problems", problems.stream().limit(5).map(l -> {
-            var p = new LinkedHashMap<String, Object>();
-            p.put("label", l.get("name") != null ? l.get("name") : l.get("label")); p.put("status", l.get("status"));
-            return (Map<String, Object>) p;
-        }).toList());
+        body.put("license_problems", problems.stream().limit(5).toList());
         body.put("live_patch", livePatch(vendor, stored));
-        body.put("nearest_license", licenses.stream().filter(l -> l.get("expiry") != null)
-                .min(Comparator.comparing(l -> (String) l.get("expiry"))).orElse(null));
+        // The next expiry that is still ahead; only when nothing is ahead, the earliest date at all (as before).
+        var dated = licenses.stream().filter(l -> l.get("expiry") != null).toList();
+        var ahead = dated.stream().filter(l -> l.get("days_remaining") instanceof Long days && days >= 0)
+                .min(Comparator.comparing(l -> (String) l.get("expiry")));
+        body.put("nearest_license", ahead.orElseGet(() -> dated.stream().min(Comparator.comparing(l -> (String) l.get("expiry"))).orElse(null)));
         return body;
     }
 
