@@ -46,7 +46,7 @@ for (const screen of SCREEN_IDS) {
     await content(page);
   });
 }
-for (const label of ["Fleet", "Catalog"]) {
+for (const label of ["Fleet", "Catalog", "Vulnerabilities"]) {
   test(`full: inventory / Lifecycle / ${label}`, async ({ page, safety }) => {
     await visit(page, "screen=inventory&view=lifecycle", "Devices");
     await page.getByRole("tablist", { name: "Lifecycle view", exact: true }).getByRole("tab", { name: label, exact: true }).click();
