@@ -574,8 +574,11 @@ tests, real-environment validation per vendor under the aiview persona.
 | Date | Asked | Answer (verbatim) | Recorded effect |
 |---|---|---|---|
 | 2026-11-10 | The Turkish summary of this document: the parse-scope rows, the seven grade A literals, the seven grade B literals, the decisions of section 12, and whether to fix finding F2 now | "ok abi çalıştırtırabilsin aynı zamanda da hatayı düzelt" | **F2 / IB-1:** fixed on branch `fix/infoblox-license-expiry-1110` (parser reads the WAPI timestamp; the same read also returns `expiration_status`; a permanent license is `PERMANENT`), shipped through the normal queue. **Device reads:** the answer allows neXus to run the proposed reads but names no row or group. No gate row is authored from it. The PO is asked which rows it covers: the grade A literals only, or the grade B measure-first reads as well |
+| 2026-11-10 | "Which rows does the approval cover?" (options: grade A only; grade A and B) | "Yalnız A grubu" (grade A only) | **Approved, exactly as written in section 4:** CP-1, CP-2, CP-4, AS-2, MC-1, MC-2, IB-2, with the forms section 4.1 names for a VSX gateway and a management server. Gate rows: `LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md`. **Not approved:** every grade B row (PA-1, PA-2, FG-2, FG-3, FM-1, SG-1, IB-3) and every grade C item; they stay `NOT_APPROVED` |
 
-Until that scope is confirmed, every new read of section 4 stays `NOT_APPROVED`.
+The approval covers the literals. It does not approve a schema or the rest of this draft. Each approved read is first
+sent to one device per platform with only its masked output shape logged (section 10); storage and parsing follow
+from the measured shapes.
 
 ## 14. Evidence register
 
