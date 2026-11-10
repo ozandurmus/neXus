@@ -49,9 +49,17 @@ public final class FortiManagerExecutor {
     /** Lifecycle reads, group B (PO 2026-11-10): off unless the worker wires a switch in. See {@link LifecycleReadSwitch}. */
     private LifecycleReadSwitch lifecycleReads = LifecycleReadSwitch.OFF;
     private java.util.function.Consumer<String> lifecycleSink = LifecycleReadShape::log;
+    private com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink lifecycleResults =
+            com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink.NONE;
 
     public FortiManagerExecutor withLifecycleReads(LifecycleReadSwitch lifecycleReads) {
         this.lifecycleReads = java.util.Objects.requireNonNull(lifecycleReads, "lifecycleReads");
+        return this;
+    }
+
+    /** The sink of the lifecycle read's result (called only for a read the switch allowed; a failing sink changes nothing). */
+    public FortiManagerExecutor withLifecycleResults(com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink sink) {
+        this.lifecycleResults = com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink.guarded(sink);
         return this;
     }
 
@@ -147,6 +155,7 @@ public final class FortiManagerExecutor {
 
     private void lifecycleSkipNoSession(String deviceId) {
         if (lifecycleReads.allows(LifecycleReadSwitch.Kind.FMG_FMUPDATE_DBCONTRACT, deviceId)) {
+            lifecycleResults.notCollected(LifecycleReadSwitch.Kind.FMG_FMUPDATE_DBCONTRACT, deviceId, "SKIPPED", "no_ssh_session");
             emitLifecycle(LifecycleReadShape.skippedLine(LifecycleReadSwitch.Kind.FMG_FMUPDATE_DBCONTRACT, deviceId, "no_ssh_session"));
         }
     }
@@ -163,14 +172,27 @@ public final class FortiManagerExecutor {
             var result = JobTranscriptScope.withoutRecording(() -> ssh.execInteractive(session,
                     new com.securityexpert.nexus.ui2.jobs.transport.ExecSpec(command, true), InventoryReadPlan.LIFECYCLE_READ_TIMEOUT));
             line = switch (result) {
-                case com.securityexpert.nexus.ui2.jobs.transport.ExecResult.Completed c -> FortiGateExecutor.lifecycleRefused(c.output())
-                        ? LifecycleReadShape.errorLine(kind, deviceId, "CliRefusal")
-                        : LifecycleReadShape.cliLine(kind, deviceId, FortiGateExecutor.stripEcho(c.output(), command));
-                case com.securityexpert.nexus.ui2.jobs.transport.ExecResult.TimedOut t -> LifecycleReadShape.errorLine(kind, deviceId, "TimedOut");
-                case com.securityexpert.nexus.ui2.jobs.transport.ExecResult.ChannelFailed f -> LifecycleReadShape.errorLine(kind, deviceId, "ChannelFailed");
+                case com.securityexpert.nexus.ui2.jobs.transport.ExecResult.Completed c -> {
+                    if (FortiGateExecutor.lifecycleRefused(c.output())) {
+                        lifecycleResults.notCollected(kind, deviceId, "REFUSED", "CliRefusal");
+                        yield LifecycleReadShape.errorLine(kind, deviceId, "CliRefusal");
+                    }
+                    String answer = FortiGateExecutor.stripEcho(c.output(), command);
+                    lifecycleResults.answer(kind, deviceId, null, answer);
+                    yield LifecycleReadShape.cliLine(kind, deviceId, answer);
+                }
+                case com.securityexpert.nexus.ui2.jobs.transport.ExecResult.TimedOut t -> {
+                    lifecycleResults.notCollected(kind, deviceId, "FAILED", "TimedOut");
+                    yield LifecycleReadShape.errorLine(kind, deviceId, "TimedOut");
+                }
+                case com.securityexpert.nexus.ui2.jobs.transport.ExecResult.ChannelFailed f -> {
+                    lifecycleResults.notCollected(kind, deviceId, "FAILED", "ChannelFailed");
+                    yield LifecycleReadShape.errorLine(kind, deviceId, "ChannelFailed");
+                }
             };
         } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            lifecycleResults.notCollected(kind, deviceId, "FAILED", e.getClass().getSimpleName());
             line = LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName());
         }
         emitLifecycle(line);

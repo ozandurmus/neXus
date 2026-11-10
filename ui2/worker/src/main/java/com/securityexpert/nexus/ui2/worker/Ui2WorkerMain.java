@@ -225,6 +225,12 @@ public final class Ui2WorkerMain {
         com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadSwitch lifecycleReads =
                 com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadSwitch.fromEnvironment();
         inventoryCapabilityExecutor.withLifecycleReads(lifecycleReads);
+        // Contract LIFECYCLE_LICENSE_STORAGE_CONTRACT section 3: each answer is parsed in memory and stored as facts; the raw
+        // answer is dropped. With the switch off no executor ever calls the sink.
+        com.securityexpert.nexus.ui2.worker.inventory.LifecycleResultSink lifecycleResults =
+                new com.securityexpert.nexus.ui2.worker.inventory.PersistingLifecycleResultSink(
+                        new com.securityexpert.nexus.ui2.persistence.lifecycle.JooqDeviceLifecycleRepository(transactionBoundary));
+        inventoryCapabilityExecutor.withLifecycleResults(lifecycleResults);
         InventoryJobExecutor inventoryJobExecutor = new InventoryJobExecutor(leaseRepository, attemptRepository,
                 deviceEnrollmentReadPort, deviceRepository, deviceInventoryRepository, inventoryCapabilityExecutor,
                 platformFactsRepository)
@@ -298,17 +304,17 @@ public final class Ui2WorkerMain {
         // Cisco ASA: SSH interactive shell, through the same vendor jobs (CISCO_ASA_CONTRACT.md).
         // Fortinet (FORTINET_CONTRACT.md): FortiGate over SSH, FortiManager over JSON-RPC.
         com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerExecutor fortiManagerExecutor = httpsVendorExecutor.newFortiManagerExecutor()
-                .withSsh(sshTransport).withLifecycleReads(lifecycleReads);
+                .withSsh(sshTransport).withLifecycleReads(lifecycleReads).withLifecycleResults(lifecycleResults);
         httpsVendorExecutor.withFortinet(new com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGateExecutor(sshTransport, artefactStore)
                         .withSecrets(ref -> {
                             var m = panCredentialResolver.resolve(ref);
                             return new com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGateExecutor.LoginSecret(m.username(), m.password());
                         })
-                        .withLifecycleReads(lifecycleReads),
+                        .withLifecycleReads(lifecycleReads).withLifecycleResults(lifecycleResults),
                 fortiManagerExecutor);
-        httpsVendorExecutor.withLifecycleReads(lifecycleReads);
+        httpsVendorExecutor.withLifecycleReads(lifecycleReads).withLifecycleResults(lifecycleResults);
         httpsVendorExecutor.withCiscoAsa(new com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaExecutor(sshTransport, artefactStore, sshTransport::scpFetch)
-                .withLifecycleReads(lifecycleReads));
+                .withLifecycleReads(lifecycleReads).withLifecycleResults(lifecycleResults));
         configurationCapabilityExecutor.withHttpsVendorExecutor(httpsVendorExecutor);
         backupJobExecutor.withHttpsVendorExecutor(httpsVendorExecutor,
                 new com.securityexpert.nexus.ui2.persistence.device.JooqDeviceSecretReferenceRepository(transactionBoundary));

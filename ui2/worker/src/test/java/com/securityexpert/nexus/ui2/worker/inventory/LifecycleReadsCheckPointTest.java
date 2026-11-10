@@ -77,12 +77,20 @@ class LifecycleReadsCheckPointTest {
 
     private static Run run(Map<String, String> script, InventoryRequest request, LifecycleReadSwitch sw, Set<String> timeOut,
             boolean rejectExec) {
+        return run(script, request, sw, timeOut, rejectExec, null);
+    }
+
+    private static Run run(Map<String, String> script, InventoryRequest request, LifecycleReadSwitch sw, Set<String> timeOut,
+            boolean rejectExec, LifecycleResultSink sink) {
         ScriptedCheckPointInventoryTransport scripted = new ScriptedCheckPointInventoryTransport(script);
         scripted.allowExecInteractiveWithoutRejection();
         Spy spy = new Spy(scripted, timeOut);
         List<String> lines = new ArrayList<>();
         InventoryCapabilityExecutor executor = new InventoryCapabilityExecutor(spy, ref -> { throw new IllegalStateException("not used"); })
                 .withLifecycleReads(sw).withLifecycleSink(lines::add);
+        if (sink != null) {
+            executor.withLifecycleResults(sink);
+        }
         InventoryResult result = executor.collect(request, Optional.empty(), false, DEVICE);
         assertTrue(result instanceof InventoryResult.Completed, "expected Completed, got " + result);
         return new Run(result.toString().replaceAll(UUID_RE, "ID"), spy.sent, lines, spy.timeouts);
@@ -272,5 +280,70 @@ class LifecycleReadsCheckPointTest {
         assertTrue(on.lines().stream().allMatch(l -> l.contains("outcome=SKIPPED:no_approved_form_for_landing_shell")), on.lines().toString());
         Run off = run(clishLandingScript(), gateway(), LifecycleReadSwitch.OFF, Set.of(), false);
         assertEquals(off.result(), on.result());
+    }
+
+    // ------------------------------------------------------------------------------------ result sink (storage contract s.3)
+
+    @Test
+    void theResultSinkIsNeverCalledWithTheSwitchOffOrForAnotherDevice() {
+        RecordingLifecycleSink sink = new RecordingLifecycleSink();
+        Map<String, String> script = with(gatewayScript(), CPLIC, "x", CPLP, "x");
+        run(script, gateway(), LifecycleReadSwitch.OFF, Set.of(), false, sink);
+        run(script, gateway(), LifecycleReadSwitch.from(Map.of("UI2_LIFECYCLE_READS", "cp_cplic_print,cp_cplp_list",
+                "UI2_LIFECYCLE_READ_DEVICES", "dev-2")::get), Set.of(), false, sink);
+        assertTrue(sink.calls.isEmpty(), sink.calls.toString());
+    }
+
+    @Test
+    void theResultSinkGetsEachAnswerOnceWithTheRightKindAndDevice() {
+        String cplic = "Host Expiration Features\n192.0.2.9 never CPSB-FW CK-ABCDEF0123\n";
+        String cplp = "ID(PATCH:PROC) STATUS MODE PIDS INSTALLED COMMENT\n";
+        Map<String, String> script = with(gatewayScript(), CPLIC, cplic, CPLP, cplp);
+        Run plain = run(script, gateway(), all(), Set.of(), false);
+        RecordingLifecycleSink sink = new RecordingLifecycleSink();
+        Run withSink = run(script, gateway(), all(), Set.of(), false, sink);
+        assertEquals(plain.result(), withSink.result());
+        assertEquals(plain.lines(), withSink.lines(), "the shape lines are exactly as before");
+        assertEquals(2, sink.calls.size(), sink.calls.toString());
+        assertEquals(new RecordingLifecycleSink.Call("ANSWER", LifecycleReadSwitch.Kind.CP_CPLIC_PRINT, DEVICE, null, cplic, "ANSWER", null),
+                sink.calls.get(0));
+        assertEquals(new RecordingLifecycleSink.Call("ANSWER", LifecycleReadSwitch.Kind.CP_CPLP_LIST, DEVICE, null, cplp, "ANSWER", null),
+                sink.calls.get(1));
+    }
+
+    @Test
+    void aThrowingResultSinkChangesNothing() {
+        Map<String, String> script = with(gatewayScript(), CPLIC, "x", CPLP, "y");
+        Run plain = run(script, gateway(), all(), Set.of(), false);
+        RecordingLifecycleSink sink = RecordingLifecycleSink.throwing();
+        Run thrown = run(script, gateway(), all(), Set.of(), false, sink);
+        assertEquals(plain.result(), thrown.result());
+        assertEquals(plain.lines(), thrown.lines());
+        assertEquals(plain.sent(), thrown.sent());
+        assertEquals(2, sink.calls.size(), "the second read is still sent and handed on after the first sink call threw");
+    }
+
+    @Test
+    void timeoutThrowAndSkipPathsCallNotCollectedWithTheirTokens() {
+        RecordingLifecycleSink timedOut = new RecordingLifecycleSink();
+        run(with(gatewayScript(), CPLIC, "x", CPLP, "x"), gateway(), all(), Set.of(CPLIC, CPLP), false, timedOut);
+        assertEquals(List.of(new RecordingLifecycleSink.Call("NOT_COLLECTED", LifecycleReadSwitch.Kind.CP_CPLIC_PRINT, DEVICE, null, null, "FAILED", "TimedOut"),
+                new RecordingLifecycleSink.Call("NOT_COLLECTED", LifecycleReadSwitch.Kind.CP_CPLP_LIST, DEVICE, null, null, "FAILED", "TimedOut")), timedOut.calls);
+
+        RecordingLifecycleSink threw = new RecordingLifecycleSink();
+        run(gatewayScript(), gateway(), all(), Set.of(), false, threw);
+        assertEquals(2, threw.calls.size());
+        assertTrue(threw.calls.stream().allMatch(c -> "FAILED".equals(c.outcome()) && "IllegalStateException".equals(c.reason())), threw.calls.toString());
+
+        RecordingLifecycleSink skipped = new RecordingLifecycleSink();
+        run(with(mdsScript(), "cplic print", "x", "cplp list", "x"), mds(), all(), Set.of(), false, skipped);
+        assertEquals(new RecordingLifecycleSink.Call("NOT_COLLECTED", LifecycleReadSwitch.Kind.CP_SPARK_SHOW_LICENSE, DEVICE, null, null, "SKIPPED", "management_server"),
+                skipped.calls.get(0));
+        assertEquals(3, skipped.calls.size());
+
+        RecordingLifecycleSink landing = new RecordingLifecycleSink();
+        run(clishLandingScript(), gateway(), all(), Set.of(), false, landing);
+        assertEquals(3, landing.calls.size());
+        assertTrue(landing.calls.stream().allMatch(c -> "SKIPPED".equals(c.outcome()) && "no_approved_form_for_landing_shell".equals(c.reason())));
     }
 }

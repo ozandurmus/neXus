@@ -114,6 +114,8 @@ public final class InventoryCapabilityExecutor {
     /** Lifecycle reads, group A (PO 2026-11-10): off unless the worker wires a switch in; see {@link LifecycleReadSwitch}. */
     private LifecycleReadSwitch lifecycleReads = LifecycleReadSwitch.OFF;
     private java.util.function.Consumer<String> lifecycleSink = LifecycleReadShape::log;
+    /** Where the parsed-and-stored result of each lifecycle read goes (default: nowhere); see {@link LifecycleResultSink}. */
+    private LifecycleResultSink lifecycleResults = LifecycleResultSink.NONE;
 
     /** Inventory run tokens (device_inventory_run.not_collected) for interfaces derived from configuration (PO 2026-10-24). */
     public static final String TOKEN_INTERFACES_FROM_CONFIGURATION = "pan_interfaces_from_configuration";
@@ -147,6 +149,12 @@ public final class InventoryCapabilityExecutor {
     }
 
     /** Where the masked [LIFECYCLE_MEASURE] lines go (default: the log). */
+    /** The sink of the lifecycle reads' results (called only for a read the switch allowed; a failing sink changes nothing). */
+    public InventoryCapabilityExecutor withLifecycleResults(LifecycleResultSink sink) {
+        this.lifecycleResults = LifecycleResultSink.guarded(sink);
+        return this;
+    }
+
     public InventoryCapabilityExecutor withLifecycleSink(java.util.function.Consumer<String> sink) {
         this.lifecycleSink = Objects.requireNonNull(sink, "sink");
         return this;
@@ -588,6 +596,7 @@ public final class InventoryCapabilityExecutor {
 
     private void lifecycleSkip(LifecycleReadSwitch.Kind kind, String deviceId, String reason) {
         if (lifecycleReads.allows(kind, deviceId)) {
+            lifecycleResults.notCollected(kind, deviceId, "SKIPPED", reason);
             emitLifecycle(LifecycleReadShape.skippedLine(kind, deviceId, reason));
         }
     }
@@ -605,12 +614,22 @@ public final class InventoryCapabilityExecutor {
                     () -> interactive ? transport.execInteractive(session, spec, InventoryReadPlan.LIFECYCLE_READ_TIMEOUT)
                             : transport.exec(session, spec, InventoryReadPlan.LIFECYCLE_READ_TIMEOUT));
             line = switch (result) {
-                case ExecResult.Completed completed -> LifecycleReadShape.cliLine(kind, deviceId, completed.output());
-                case ExecResult.TimedOut timedOut -> LifecycleReadShape.errorLine(kind, deviceId, "TimedOut");
-                case ExecResult.ChannelFailed failed -> LifecycleReadShape.errorLine(kind, deviceId, "ChannelFailed");
+                case ExecResult.Completed completed -> {
+                    lifecycleResults.answer(kind, deviceId, null, completed.output());
+                    yield LifecycleReadShape.cliLine(kind, deviceId, completed.output());
+                }
+                case ExecResult.TimedOut timedOut -> {
+                    lifecycleResults.notCollected(kind, deviceId, "FAILED", "TimedOut");
+                    yield LifecycleReadShape.errorLine(kind, deviceId, "TimedOut");
+                }
+                case ExecResult.ChannelFailed failed -> {
+                    lifecycleResults.notCollected(kind, deviceId, "FAILED", "ChannelFailed");
+                    yield LifecycleReadShape.errorLine(kind, deviceId, "ChannelFailed");
+                }
             };
         } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            lifecycleResults.notCollected(kind, deviceId, "FAILED", e.getClass().getSimpleName());
             line = LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName());
         }
         emitLifecycle(line);
@@ -875,11 +894,18 @@ public final class InventoryCapabilityExecutor {
                             new XmlApiSpec("GET", "op", "", "direct_firewall", Map.of("cmd", cmd), headers),
                             InventoryReadPlan.LIFECYCLE_READ_TIMEOUT));
             line = switch (result) {
-                case XmlApiResult.Completed completed -> LifecycleReadShape.xmlLine(kind, deviceId, completed.body());
-                case XmlApiResult.Failed failed -> LifecycleReadShape.errorLine(kind, deviceId, "XmlApiFailed");
+                case XmlApiResult.Completed completed -> {
+                    lifecycleResults.answer(kind, deviceId, null, completed.body());
+                    yield LifecycleReadShape.xmlLine(kind, deviceId, completed.body());
+                }
+                case XmlApiResult.Failed failed -> {
+                    lifecycleResults.notCollected(kind, deviceId, "FAILED", "XmlApiFailed");
+                    yield LifecycleReadShape.errorLine(kind, deviceId, "XmlApiFailed");
+                }
             };
         } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            lifecycleResults.notCollected(kind, deviceId, "FAILED", e.getClass().getSimpleName());
             line = LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName());
         }
         emitLifecycle(line);
