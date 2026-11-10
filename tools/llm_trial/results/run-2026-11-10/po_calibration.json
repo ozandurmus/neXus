@@ -1,0 +1,159 @@
+{
+ "source": "scoring page https://claude.ai/artifact/JsjhWe7RTJHqzfD9y7hWwU, db collection ratings, read 2026-11-10 (PO ratings 17:31-17:42 UTC)",
+ "items": [
+  {
+   "id": "B004",
+   "why_selected": "low_confidence",
+   "model": "claude-haiku-5-5",
+   "effort": "medium",
+   "po_rating": "useful",
+   "po_notes_original": "",
+   "po_notes_en": "",
+   "judges": {
+    "opus": "useful",
+    "fable": "useful",
+    "argon": "useful"
+   }
+  },
+  {
+   "id": "B007",
+   "why_selected": "random_unanimous",
+   "model": "claude-opus-5-5",
+   "effort": "low",
+   "po_rating": "useful",
+   "po_notes_original": "",
+   "po_notes_en": "",
+   "judges": {
+    "opus": "useful",
+    "fable": "useful",
+    "argon": "useful"
+   }
+  },
+  {
+   "id": "B011",
+   "why_selected": "random_unanimous",
+   "model": "claude-haiku-5-5",
+   "effort": "medium",
+   "po_rating": "useful",
+   "po_notes_original": "",
+   "po_notes_en": "",
+   "judges": {
+    "opus": "useful",
+    "fable": "useful",
+    "argon": "useful"
+   }
+  },
+  {
+   "id": "B020",
+   "why_selected": "random_unanimous",
+   "model": "claude-opus-5-5",
+   "effort": "medium",
+   "po_rating": "useful",
+   "po_notes_original": "Log dolması ayrı bir konu neden logun ilgili yerlere gitmediği ve retentionun çalışmadığının kontrolü de yapılmalı. Normalde cihaz üzerinde log tutma zorunluluğu yada gereksinimimiz yok. Biz logu managerlarda tutarız. Ve retention periyoduna göre ikisinde nd esileriz. Manager'da logları siem'e gönderir o da siler. Günün sonunda %90'a kadar yükselmesi bir nebze ok manager için, buna izin veririz, ama cihazın üzerindel og şişmesi olmamalı tüm loglaır managera gönderip kendisi üzeirnden silmesi gerke.",
+   "po_notes_en": "Disk filling up is one issue; the check must also cover why the logs are not reaching where they should and why retention is not working. We have no requirement to keep logs on the device; we keep them on the managers and delete them on both according to the retention period. The manager forwards logs to the SIEM, which deletes them in turn. Usage rising to 90 % by the end of the day is somewhat acceptable for a manager, but logs must not pile up on the device: it should send all logs to the manager and delete them itself.",
+   "judges": {
+    "opus": "useful",
+    "fable": "useful",
+    "argon": "useful"
+   }
+  },
+  {
+   "id": "B021",
+   "why_selected": "low_confidence",
+   "model": "claude-opus-5-5",
+   "effort": "medium",
+   "po_rating": "useful",
+   "po_notes_original": "",
+   "po_notes_en": "",
+   "judges": {
+    "opus": "useful",
+    "fable": "useful",
+    "argon": "useful"
+   }
+  },
+  {
+   "id": "B023",
+   "why_selected": "random_unanimous",
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "po_rating": "useful",
+   "po_notes_original": "",
+   "po_notes_en": "",
+   "judges": {
+    "opus": "useful",
+    "fable": "useful",
+    "argon": "useful"
+   }
+  },
+  {
+   "id": "B027",
+   "why_selected": "low_confidence",
+   "model": "claude-haiku-5-5",
+   "effort": "medium",
+   "po_rating": "useful",
+   "po_notes_original": "",
+   "po_notes_en": "",
+   "judges": {
+    "opus": "useful",
+    "fable": "useful",
+    "argon": "useful"
+   }
+  },
+  {
+   "id": "B030",
+   "why_selected": "random_unanimous",
+   "model": "claude-opus-5-5",
+   "effort": "low",
+   "po_rating": "useful",
+   "po_notes_original": "",
+   "po_notes_en": "",
+   "judges": {
+    "opus": "useful",
+    "fable": "useful",
+    "argon": "useful"
+   }
+  },
+  {
+   "id": "B031",
+   "why_selected": "low_confidence",
+   "model": "claude-haiku-5-5",
+   "effort": "medium",
+   "po_rating": "harmless",
+   "po_notes_original": "Bundan tam olarak emin değilim.",
+   "po_notes_en": "I am not entirely sure about this one.",
+   "judges": {
+    "opus": "useful",
+    "fable": "useful",
+    "argon": "useful"
+   }
+  },
+  {
+   "id": "B032",
+   "why_selected": "low_confidence",
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "po_rating": "useful",
+   "po_notes_original": "",
+   "po_notes_en": "",
+   "judges": {
+    "opus": "useful",
+    "fable": "useful",
+    "argon": "useful"
+   }
+  },
+  {
+   "id": "B035",
+   "why_selected": "low_confidence",
+   "model": "claude-haiku-5-5",
+   "effort": "low",
+   "po_rating": "useful",
+   "po_notes_original": "",
+   "po_notes_en": "",
+   "judges": {
+    "opus": "useful",
+    "fable": "useful",
+    "argon": "useful"
+   }
+  }
+ ]
+}
