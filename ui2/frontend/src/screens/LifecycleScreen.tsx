@@ -1,29 +1,89 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Alert, Box, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
-import { getLifecycle, getDeviceLifecycle, type LifecycleDevice } from "../auth/adminApi";
+import { getLifecycle, getDeviceLifecycle, type LifecycleDevice, type LifecycleLicense } from "../auth/adminApi";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { M3Button, M3Tabs } from "../shell/M3Widgets";
 import { downloadText, toCsv } from "./DeviceShared";
 import { LifecycleCatalogPanel, lifecycleError } from "./LifecycleCatalogPanel";
 
-const cards = [["devices", "Devices"], ["past_end_of_support", "Past end of support"], ["within_180_days", "Within 180 days"], ["within_365_days", "Within 365 days"], ["no_lifecycle_data", "No lifecycle data"], ["licenses_within_60_days", "Licenses within 60 days"]];
-const headings = ["Device / cluster", "Vendor", "Model", "Version", "Hardware end of support", "Software end of support", "Next milestone", "Nearest license expiry", "Risk", "Match basis"];
+const cards = [["devices", "Devices"], ["past_end_of_support", "Past end of support"], ["within_180_days", "Within 180 days"], ["within_365_days", "Within 365 days"], ["no_lifecycle_data", "No lifecycle data"], ["licenses_within_60_days", "Licenses within 60 days"], ["license_problems", "License problems"], ["live_patch_not_active", "Live Patch not active"]];
+const headings = ["Device / cluster", "Vendor", "Model", "Version", "Hardware end of support", "Software end of support", "Next milestone", "Nearest license expiry", "Risk", "Match basis", "Licenses", "Live Patch"];
 const shown = (value: string | null | undefined) => value || "UNKNOWN";
 /** Rows shown before "+N more" (post-release review 2026-10-18, 1.7): the page was 22,000 px as one table. */
 export const LIFECYCLE_PAGE = 50;
+/** Compact license state of the table: "Problem", else the nearest expiry, else Collected / Unknown / Not collected. */
+export function licensesCell(d: LifecycleDevice): string {
+  if (d.license_problem) return "Problem";
+  if (d.nearest_license?.expiry) return d.nearest_license.expiry;
+  return d.license_status === "COLLECTED" ? "Collected" : d.license_status === "UNKNOWN" ? "Unknown" : "Not collected";
+}
+/** "take N · A armed" for a Check Point device; an em dash for other vendors. The not-active part is {@link notActive}. */
+export function livePatchCell(d: LifecycleDevice): string {
+  const p = d.live_patch;
+  if (!p) return "—";
+  return `${livePatchBase(d)}${p.ready > 0 ? ` · ${p.ready} not active` : ""}`;
+}
+/** The package take and the armed count. "0 armed" is only said when the patch list was actually read. */
+function livePatchBase(d: LifecycleDevice): string {
+  const p = d.live_patch;
+  if (!p) return "—";
+  if (p.read_outcome === "COLLECTED") return `take ${p.package_take ?? "UNKNOWN"} · ${p.armed} armed`;
+  return p.package_take ? `take ${p.package_take} · patches not read` : "Not collected";
+}
+const notActive = (d: LifecycleDevice) => (d.live_patch?.ready ?? 0) > 0;
 export function lifecycleCells(d: LifecycleDevice): string[] {
   return [shown(d.hostname) + (d.cluster_member_ref ? ` · ${d.cluster_member_ref}` : ""), d.vendor, shown(d.model), shown(d.software_version),
     shown(d.hardware.catalog?.end_of_support), shown(d.software.catalog?.end_of_support),
     d.next_milestone ? `${d.next_milestone.name}: ${d.next_milestone.date} (${d.next_milestone.days_remaining} days)` : "UNKNOWN",
     d.nearest_license?.expiry ?? "UNKNOWN", d.risk,
-    [d.hardware.basis ?? d.hardware.reason, d.software.basis ?? d.software.reason].filter(Boolean).join(" · ")];
+    [d.hardware.basis ?? d.hardware.reason, d.software.basis ?? d.software.reason].filter(Boolean).join(" · "),
+    licensesCell(d), livePatchCell(d)];
 }
+const CATEGORIES: [string, string][] = [["LICENSE", "Licenses"], ["SUBSCRIPTION", "Subscriptions"], ["SUPPORT_CONTRACT", "Support contracts"], ["SMART_LICENSING", "Smart Licensing"]];
+/** One license row as text: label, member, expiry or Permanent or the state word, days remaining. */
+export function licenseLine(l: LifecycleLicense): string {
+  const when = l.status === "PERMANENT" ? "Permanent" : l.expiry ?? (l.label || l.status);
+  const days = l.expiry && l.days_remaining != null ? (l.days_remaining < 0 ? `expired ${-l.days_remaining} days ago` : `${l.days_remaining} days remaining`) : null;
+  const word = l.status === "PERMANENT" || l.status === "DATED" || l.status === when ? null : l.status;
+  return [l.name ?? "License", l.member, when, word, days].filter(Boolean).join(" · ");
+}
+const patchStatus = (status: string) => status === "ready" ? "installed, not active" : status;
+const readsText = (d: LifecycleDevice) => (d.license_reads ?? []).map(r => `${r.kind}: ${r.outcome}`).join("; ");
 export function lifecycleCsv(devices: LifecycleDevice[]) {
-  return toCsv([[...headings, "Hardware end of sale", "Hardware end of engineering", "Software end of sale", "Software end of engineering", "License details", "License collection", "Support contract collection"],
+  return toCsv([[...headings, "Hardware end of sale", "Hardware end of engineering", "Software end of sale", "Software end of engineering", "License details", "License collection", "Support contract collection",
+    "License problem", "License collection by kind", "Live Patch package take", "Live Patch armed", "Live Patch ready", "Live Patch jumbofix"],
     ...devices.map(d => [...lifecycleCells(d), d.hardware.catalog?.end_of_sale, d.hardware.catalog?.end_of_engineering,
       d.software.catalog?.end_of_sale, d.software.catalog?.end_of_engineering,
       d.licenses.map(l => [l.name, l.kind, l.member, l.expiry ?? l.label, l.status].filter(Boolean).join(" · ")).join("; "),
-      d.license_status, d.support_contract_status])]);
+      d.license_status, d.support_contract_status,
+      d.license_problem ? "yes" : "no", readsText(d), d.live_patch?.package_take, d.live_patch?.armed, d.live_patch?.ready, d.live_patch?.jumbofix])]);
+}
+
+/** The expanded device: licenses by category, the read outcomes when collection is UNKNOWN, and the Live Patch list. */
+export function LifecycleDetail({ d }: { d: LifecycleDevice }) {
+  const groups = CATEGORIES.map(([key, title]) => [title, d.licenses.filter(l => (l.category ?? "LICENSE") === key)] as const).filter(([, rows]) => rows.length > 0);
+  const p = d.live_patch;
+  return <Stack spacing={1.5} aria-label={`Details of ${shown(d.hostname)}`} role="group">
+    {groups.map(([title, rows]) => <Box key={title}>
+      <Typography variant="subtitle2">{title}</Typography>
+      {rows.map((l, i) => <Typography key={i} variant="caption" display="block">{licenseLine(l)}
+        {l.evidence === "MANAGER_REPORTED" && <Typography component="span" variant="caption" color="text.secondary">{" · reported by manager"}</Typography>}</Typography>)}
+    </Box>)}
+    {d.license_problem && <Typography variant="caption" color="error">License problems: {(d.license_problems ?? []).map(x => `${x.label} (${x.status})`).join(", ")}</Typography>}
+    {d.license_status === "NOT_COLLECTED" && <Typography variant="caption">License data not collected for this device</Typography>}
+    {d.license_status === "UNKNOWN" && <Box><Typography variant="caption" display="block">License collection status UNKNOWN</Typography>
+      {(d.license_reads ?? []).map((r, i) => <Typography key={i} variant="caption" display="block">{`Read ${r.kind}: ${r.outcome}${r.reason ? ` (${r.reason})` : ""}${r.observed_at ? ` · ${r.observed_at}` : ""}`}</Typography>)}</Box>}
+    {d.support_contract_status === "NOT_COLLECTED" && <Typography variant="caption">Support contract not collected for this device</Typography>}
+    {p && <Box>
+      <Typography variant="subtitle2">Live Patch</Typography>
+      <Typography variant="caption" display="block">{`Package take ${p.package_take ?? "UNKNOWN"} · Jumbo ${p.jumbo ?? "UNKNOWN"} · read ${p.read_outcome ?? "not collected"}${p.observed_at ? ` · ${p.observed_at}` : ""}`}</Typography>
+      <Typography variant="caption" display="block">{`${p.armed} armed · ${p.ready} installed, not active · ${p.jumbofix} jumbofix · ${p.other} other`}</Typography>
+      {p.items.length > 0 && <Table size="small" aria-label="Live Patch patches"><TableHead><TableRow>{["Patch", "Status", "Mode", "Processes", "Installed", "References"].map(h => <TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead><TableBody>
+        {p.items.map(x => <TableRow key={x.patch}><TableCell>{x.patch}</TableCell><TableCell sx={x.status === "ready" ? { color: "warning.main" } : undefined}>{patchStatus(x.status)}</TableCell>
+          <TableCell>{x.mode ?? "—"}</TableCell><TableCell>{x.running ?? "?"} of {x.total ?? "?"}</TableCell><TableCell>{x.installed_at ?? "—"}</TableCell><TableCell>{x.refs.join(", ") || "—"}</TableCell></TableRow>)}
+      </TableBody></Table>}
+    </Box>}
+  </Stack>;
 }
 
 export function LifecycleScreen() {
@@ -36,6 +96,8 @@ export function LifecycleScreen() {
   const filtered = rows.filter(d => (vendor === "all" || d.vendor === vendor) && (risk === "all" || d.risk === risk)
     && (missing === "all" || d.status === "NO_LIFECYCLE_DATA") && lifecycleCells(d).join(" ").toLowerCase().includes(search.toLowerCase()));
   // Paged at 50 with "+N more" (1.7): every row stays reachable, the CSV export still takes the whole filtered set.
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const toggle = (id: string) => setOpen(prev => { const next = new Set(prev); if (!next.delete(id)) next.add(id); return next; });
   const [limit, setLimit] = useState(LIFECYCLE_PAGE);
   useEffect(() => { setLimit(LIFECYCLE_PAGE); }, [search, vendor, risk, missing]);
   const visible = filtered.slice(0, limit);
@@ -44,7 +106,7 @@ export function LifecycleScreen() {
     {fleet.error && <Alert severity="error">{fleet.error}<M3Button emphasis="tonal" onClick={fleet.refresh}>Retry</M3Button></Alert>}
     {!fleet.data && !fleet.error && <Typography>Loading lifecycle…</Typography>}
     {fleet.data && <>
-      <Typography variant="caption">Stored inventory · as of {fleet.data.as_of} (UTC). Each cluster member is a separate evidence entity. Support windows overlap; license count is devices with at least one expiry in the next 60 days.</Typography>
+      <Typography variant="caption">Stored inventory · as of {fleet.data.as_of} (UTC). Each cluster member is a separate evidence entity. Support windows overlap; the 60-day count is devices with at least one license, subscription or contract expiry in the next 60 days (all vendors); license problems are devices with an expired, evaluation-expired, unregistered or out-of-compliance item.</Typography>
       <Stack direction="row" spacing={2} sx={{ flexWrap: "wrap", gap: 1 }}>{cards.map(([key, label]) => <Box key={key} sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: 2 }}><Typography variant="h6">{fleet.data?.summary[key] ?? 0}</Typography><Typography variant="caption">{label}</Typography></Box>)}</Stack>
       <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
         <TextField label="Search lifecycle" size="small" value={search} onChange={e => setSearch(e.target.value)} />
@@ -56,20 +118,18 @@ export function LifecycleScreen() {
       </Stack>
       <Typography variant="caption">Risk uses the earliest known hardware/software end of support: EXPIRED before today, HIGH under 180 days, MEDIUM under 365 days. LOW requires both support dates; missing dates remain UNKNOWN. End of sale and engineering are separate milestones.</Typography>
       <TableContainer><Table size="small" aria-label="Fleet lifecycle"><TableHead><TableRow>{headings.map(h => <TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead><TableBody>
-        {visible.map(d => <TableRow key={d.device_id}>{lifecycleCells(d).map((cell, i) => <TableCell key={i}>
-          {i === 0 ? <><a href={`?screen=inventory&device_id=${encodeURIComponent(d.device_id)}`}>{shown(d.hostname)}</a>{d.cluster_member_ref && <Typography variant="caption" display="block">{d.cluster_member_ref}</Typography>}</> : cell}
+        {visible.map(d => <Fragment key={d.device_id}><TableRow>{lifecycleCells(d).map((cell, i) => <TableCell key={i}>
+          {i === 10 ? <Typography variant="body2" component="span" color={d.license_problem ? "error" : "text.primary"}>{cell}</Typography>
+            : i === 11 ? (d.live_patch ? <>{livePatchBase(d)}{notActive(d) && <Typography variant="body2" component="span" sx={{ color: "warning.main" }}>{` · ${d.live_patch.ready} not active`}</Typography>}</> : cell)
+            : i === 0 ? <><a href={`?screen=inventory&device_id=${encodeURIComponent(d.device_id)}`}>{shown(d.hostname)}</a>{d.cluster_member_ref && <Typography variant="caption" display="block">{d.cluster_member_ref}</Typography>}
+            <M3Button emphasis="text" aria-expanded={open.has(d.device_id)} onClick={() => toggle(d.device_id)}>{open.has(d.device_id) ? "Hide details" : "Details"}</M3Button></> : cell}
           {(i === 4 || i === 5) && <Typography variant="caption" display="block">
             End of sale: {shown((i === 4 ? d.hardware : d.software).catalog?.end_of_sale)}
             {" · "}End of engineering: {shown((i === 4 ? d.hardware : d.software).catalog?.end_of_engineering)}
           </Typography>}
-          {i === 7 && <Stack spacing={0.5}>
-            {d.licenses.map((l, index) => <Typography key={index} variant="caption">{l.name ?? "License"} · {l.member ?? ""} · {l.expiry ?? (l.label || "UNKNOWN")} · {l.status}{l.kind && ` · ${l.kind}`}</Typography>)}
-            {d.license_status === "NOT_COLLECTED" && <Typography variant="caption">License data not collected for this vendor</Typography>}
-            {d.license_status === "UNKNOWN" && <Typography variant="caption">License collection status UNKNOWN</Typography>}
-            {d.support_contract_status === "NOT_COLLECTED" && <Typography variant="caption">Support contract not collected for this vendor</Typography>}
-          </Stack>}
           {i === 9 && d.status === "NO_LIFECYCLE_DATA" && <Typography variant="caption" display="block">NO_LIFECYCLE_DATA</Typography>}
-        </TableCell>)}</TableRow>)}
+        </TableCell>)}</TableRow>
+        {open.has(d.device_id) && <TableRow><TableCell colSpan={headings.length}><LifecycleDetail d={d} /></TableCell></TableRow>}</Fragment>)}
         {!filtered.length && <TableRow><TableCell colSpan={headings.length}>No devices match these filters</TableCell></TableRow>}
       </TableBody></Table></TableContainer>
       {filtered.length > 0 && <Stack direction="row" spacing={2} alignItems="center">

@@ -1224,7 +1224,7 @@ export function InventoryScreen() {
   };
 
   if (lifecycleView) return <ScreenRoot screenType="list">
-    <ScreenHeader title="Devices" subtitle="Lifecycle, end of support and licenses"
+    <ScreenHeader title="Lifecycle and security" subtitle="End of support, licenses, support contracts and Live Patch"
       actions={<M3Button emphasis="tonal" onClick={() => setLifecycleView(false)}>Back to inventory</M3Button>} />
     <LifecycleScreen />
   </ScreenRoot>;
@@ -1235,7 +1235,7 @@ export function InventoryScreen() {
   // The same five fleet controls whether the landing or an object is open; only the chrome around them changes.
   const actions = (
     <>
-      <M3Button emphasis="tonal" onClick={() => setLifecycleView(true)}>Lifecycle</M3Button>
+      <M3Button emphasis="tonal" onClick={() => setLifecycleView(true)}>Lifecycle and security</M3Button>
       <M3Button emphasis="tonal" icon="download" disabled={!devices || devices.length === 0}
         onClick={() => downloadText(`devices-${new Date().toISOString().replace(/[:.]/g, "-")}.csv`, inventoryCsv(sortedDevices))}>
         Export inventory

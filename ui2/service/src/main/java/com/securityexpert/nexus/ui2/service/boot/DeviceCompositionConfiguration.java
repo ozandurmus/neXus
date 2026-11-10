@@ -90,6 +90,12 @@ public class DeviceCompositionConfiguration {
         return new com.securityexpert.nexus.ui2.persistence.lifecycle.JooqLifecycleCatalogRepository(transactionBoundary);
     }
 
+    @Bean
+    public com.securityexpert.nexus.ui2.persistence.lifecycle.DeviceLifecycleRepository deviceLifecycleRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.lifecycle.JooqDeviceLifecycleRepository(transactionBoundary);
+    }
+
     // Mirrors worker.inventory.InventoryReadPlan.CHECK_POINT_PHYSICAL_READS
     // exactly (14D CF-3, CF-2's bare/physical form) -- kept here only
     // because DIR-2 forbids importing that worker class from service.
