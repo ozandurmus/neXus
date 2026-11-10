@@ -172,11 +172,20 @@ Per device and advisory, in this order:
 
 | Verdict | When |
 | --- | --- |
-| `NOT_EVALUABLE` | the device's version is missing or unparsed; or the advisory is `NEEDS_REVIEW` and names the device's product |
+| `NOT_EVALUABLE` | the advisory names the device's product and the device's version is missing or unparsed; or the advisory is `NEEDS_REVIEW` and names the device's train (or the product without a readable train); or the train is named but no rule covers the version |
 | `AFFECTED` | the advisory's rule for the device's product and train says the version is affected |
 | `FIXED` | the advisory has an affected range in the device's train and the version lies at or above a point the vendor names unaffected |
 | `NOT_AFFECTED` | the advisory names the device's product and train (or the whole product) as unaffected |
 | (no verdict) | the advisory does not name the device's product, or names it without the device's train; counted as "not listed", never shown as a finding |
+
+A `NEEDS_REVIEW` advisory keeps the trains it names, including those of entries that could not be read, so that it
+counts as an open question only for devices of those trains.
+
+Device names in the read interface travel under the key `hostname` next to `device_id`, which is what the masked
+projection pseudonymizes; every advisory row and every device row of an advisory carries `advisory_id`, and only on
+such rows are the version, title and fix text exempt from address masking (a four-part version is not an address).
+A link is returned only when it is `https` on the source's own host or its advisory site (`fortiguard.fortinet.com`,
+`www.fortiguard.com`, `sec.cloudapps.cisco.com`, `tools.cisco.com`).
 
 Per device the view shows: affected (and how many of those are exploited, and critical or high), not evaluable,
 fixed, and the comparison basis of rule 4. A cluster row shows its worst member. Device state: `EVALUATED`,

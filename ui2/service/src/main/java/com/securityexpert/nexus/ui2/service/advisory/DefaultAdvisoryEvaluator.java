@@ -9,7 +9,8 @@ import java.util.Optional;
 
 /**
  * Contract section 7. Order: {@code NOT_EVALUABLE} (version missing or unparsed, or the advisory needs review and names the
- * device's product), then the rules of the device's train, and when those say nothing the rules with train {@code *}.
+ * device's train or the whole product), then the rules of the device's train, and when those say nothing the rules with
+ * train {@code *}.
  *
  * <p>Within a {@link AdvisoryModel.Range} of PAN-OS, a change point whose maintenance release equals the device's decides by
  * hotfix whatever the range bounds say (below the first point the range's status, at or above a point that point's status);
@@ -64,9 +65,6 @@ public final class DefaultAdvisoryEvaluator implements AdvisoryEvaluator {
         if (canonical.isEmpty() || train.isEmpty()) {
             return verdict(AdvisoryModel.VerdictKind.NOT_EVALUABLE, "VERSION_UNPARSED", null);
         }
-        if (state == AdvisoryModel.ParseState.NEEDS_REVIEW) {
-            return verdict(AdvisoryModel.VerdictKind.NOT_EVALUABLE, "ADVISORY_NEEDS_REVIEW", null);
-        }
         List<AdvisoryModel.ProductRule> own = new ArrayList<>();
         List<AdvisoryModel.ProductRule> star = new ArrayList<>();
         for (AdvisoryModel.ProductRule r : rules) {
@@ -78,6 +76,12 @@ public final class DefaultAdvisoryEvaluator implements AdvisoryEvaluator {
         }
         if (own.isEmpty() && star.isEmpty()) {
             return verdict(AdvisoryModel.VerdictKind.NOT_LISTED, "TRAIN_NOT_NAMED", null);
+        }
+        if (state == AdvisoryModel.ParseState.NEEDS_REVIEW) {
+            // An advisory that could not be read in full cannot be judged for the trains it names (a parser names every
+            // train it saw, and the whole product when it could not tell). A train it does not name is "not listed", as
+            // for a fully read advisory: an old advisory about other release lines is not an open question for this device.
+            return verdict(AdvisoryModel.VerdictKind.NOT_EVALUABLE, "ADVISORY_NEEDS_REVIEW", null);
         }
         boolean panOs = AdvisoryModel.PRODUCT_PAN_OS.equals(productKey);
         Hit best = best(own, canonical.get(), cmp, panOs);
