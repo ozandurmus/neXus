@@ -73,12 +73,12 @@ public final class HttpTransport implements AdvisoryFetchRun.Outbound, AdvisoryF
         } catch (SSLException e) {
             return AdvisoryFetchRun.Fetched.failed(AdvisoryFetchRun.TLS_VALIDATION_FAILED);
         } catch (IOException e) {
-            return AdvisoryFetchRun.Fetched.failed(tlsCause(e) ? AdvisoryFetchRun.TLS_VALIDATION_FAILED : "IO_" + e.getClass().getSimpleName());
+            return AdvisoryFetchRun.Fetched.failed(tlsCause(e) ? AdvisoryFetchRun.TLS_VALIDATION_FAILED : codeWord("IO_", e));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return AdvisoryFetchRun.Fetched.failed("INTERRUPTED");
         } catch (RuntimeException e) {
-            return AdvisoryFetchRun.Fetched.failed("ERROR_" + e.getClass().getSimpleName());
+            return AdvisoryFetchRun.Fetched.failed(codeWord("ERROR_", e));
         }
     }
 
@@ -95,7 +95,7 @@ public final class HttpTransport implements AdvisoryFetchRun.Outbound, AdvisoryF
     @Override
     public boolean complete(String source, String runId, int fetched, int failed, String reason) {
         String json = "{\"documents_fetched\":" + fetched + ",\"documents_failed\":" + failed + ",\"reason\":"
-                + (reason == null || !reason.matches("[A-Za-z0-9_]{1,60}") ? "null" : "\"" + reason + "\"") + "}";
+                + (reason == null || !reason.matches("[A-Z0-9_]{1,40}") ? "null" : "\"" + reason + "\"") + "}";
         HttpRequest request = HttpRequest.newBuilder(ingestBase.resolve("/internal/advisories/" + source + "/complete"))
                 .timeout(Duration.ofSeconds(120))
                 .header(TOKEN_HEADER, token).header(RUN_HEADER, runId).header("Content-Type", "application/json")
@@ -113,6 +113,12 @@ public final class HttpTransport implements AdvisoryFetchRun.Outbound, AdvisoryF
             Thread.currentThread().interrupt();
             return false;
         }
+    }
+
+    /** A failure as a code word of the form the feed-run record accepts: upper case, digits and underscores, at most 40. */
+    static String codeWord(String prefix, Throwable error) {
+        String name = (prefix + error.getClass().getSimpleName()).toUpperCase(java.util.Locale.ROOT).replaceAll("[^A-Z0-9_]", "");
+        return name.length() > 40 ? name.substring(0, 40) : name;
     }
 
     /** At most one outbound request per second per host. */

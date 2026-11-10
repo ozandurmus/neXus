@@ -149,4 +149,18 @@ class AdvisoryIngestServiceTest {
         }
         assertTrue(repo.runs.isEmpty());
     }
+
+    @org.junit.jupiter.api.Test void theRunOutcomeFollowsTheStopRuleAndACleanEmptyRunIsNotAFailure() {
+        org.junit.jupiter.api.Assertions.assertEquals("OK", AdvisoryIngestService.outcome(3, 0, 3, 0, null));
+        org.junit.jupiter.api.Assertions.assertEquals("PARTIAL", AdvisoryIngestService.outcome(3, 0, 4, 1, null));
+        org.junit.jupiter.api.Assertions.assertEquals("PARTIAL", AdvisoryIngestService.outcome(3, 1, 3, 0, null));
+        org.junit.jupiter.api.Assertions.assertEquals("PARTIAL", AdvisoryIngestService.outcome(3, 0, 3, 0, "INGEST_REFUSED"));
+        // The change list was read, no file of the product family changed in the window: a good run with nothing new.
+        org.junit.jupiter.api.Assertions.assertEquals("OK", AdvisoryIngestService.outcome(0, 0, 5, 0, null));
+        org.junit.jupiter.api.Assertions.assertEquals("FAILED", AdvisoryIngestService.outcome(0, 0, 0, 1, "HTTP_403"));
+        org.junit.jupiter.api.Assertions.assertEquals("FAILED", AdvisoryIngestService.outcome(0, 0, 1, 2, null));
+        org.junit.jupiter.api.Assertions.assertEquals("FAILED", AdvisoryIngestService.outcome(0, 0, 0, 0, null));
+        // A certificate failure fails the source even when documents arrived before it.
+        org.junit.jupiter.api.Assertions.assertEquals("FAILED", AdvisoryIngestService.outcome(7, 0, 8, 1, "TLS_VALIDATION_FAILED"));
+    }
 }
