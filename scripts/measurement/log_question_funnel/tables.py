@@ -38,6 +38,40 @@ def table(header, body):
     print()
 
 
+def backtest_tables(r):
+    keys = sorted({(k[1], k[2]) for k in r if k[0] == "bt" and len(k) == 5 and k[3] == "all"})
+    if not keys:
+        return
+    print("### Backtest: events and where they sit\n")
+    rows = []
+    for kind, vendor in keys:
+        rows.append([kind, vendor, r.get(("bt", kind, vendor, "all", "events"), 0),
+                     r.get(("bt", kind, vendor, "all", "device_not_in_read_set"), 0)])
+    table(["Event kind", "Vendor", "Event-member rows", "Device not in the read set"], rows)
+    print("### Backtest: what the draft detector finds in the event window (device clock read two ways)\n")
+    head = ["Event kind", "Vendor", "Clock", "In test window", "Device active", "Signature", "Question", "Any finding",
+            "HA lines", "Link lines", "Own control: windows", "signature", "question", "any",
+            "Fleet control: devices", "signature", "question", "any"]
+    rows = []
+    for kind, vendor in keys:
+        for reading in ("local", "utc"):
+            def g(m):
+                return r.get(("bt", kind, vendor, reading, m), 0)
+            rows.append([kind, vendor, reading, g("in_test_window"), g("member_active"), g("member_signature"), g("member_question"),
+                         g("member_any"), g("ha_lines"), g("link_lines"), g("control_member_windows"), g("control_member_signature"),
+                         g("control_member_question"), g("control_member_any"), g("others_active"), g("others_signature"),
+                         g("others_question"), g("others_any")])
+    table(head, rows)
+    print("### Backtest: which finding kinds fire on the event devices\n")
+    bits = ["crash", "restart", "burst_ha", "burst_link", "rate", "rate_excluded", "new_rare_severity", "new_rare",
+            "new_rare_excluded", "new_common", "new_signature"]
+    rows = []
+    for kind, vendor in keys:
+        for reading in ("local", "utc"):
+            rows.append([kind, vendor, reading] + [r.get(("bt", kind, vendor, reading, "member_bit_" + b), 0) for b in bits])
+    table(["Event kind", "Vendor", "Clock"] + bits, rows)
+
+
 def main():
     r = load(sys.argv[1])
     g = lambda *k: r.get(tuple(k), 0)  # noqa: E731
@@ -164,6 +198,7 @@ def main():
            ["Distinct addresses in those lines", n(g("self", "distinct_sources"))],
            ["Devices on which the most widespread address occurs", n(g("self", "top_source_devices"))],
            ["Lines carrying that address", n(g("self", "top_source_lines"))]])
+    backtest_tables(r)
     meta = {k[1]: v for k, v in r.items() if k[0] == "meta"}
     print("Meta: " + ", ".join(f"{k}={v}" for k, v in sorted(meta.items())))
 

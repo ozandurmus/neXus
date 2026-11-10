@@ -116,7 +116,36 @@ EXPECT = {
     "kind\tnew_rare_signature_class\tdevice_hours": 4,
     "self\ttop_source_devices": 3,
 }
-ABSENT = ["fatal", "new\tcp_messages\tdevice_only\tother\tsev_none\tevents"]
+EXPECT.update({
+    "bt\tcrash_alert\tcp\tall\tevents": 1,
+    "bt\tcrash_alert\tcp\tlocal\tin_test_window": 1,
+    "bt\tcrash_alert\tcp\tlocal\tmember_active": 1,
+    "bt\tcrash_alert\tcp\tlocal\tmember_signature": 1,
+    "bt\tcrash_alert\tcp\tlocal\tmember_bit_crash": 1,
+    "bt\tfailover_succeeded\tpan\tall\tevents": 1,
+    "bt\tfailover_succeeded\tpan\tlocal\tmember_signature": 1,
+    "bt\tfailover_succeeded\tpan\tlocal\tmember_bit_burst_ha": 1,
+    "bt\tfailover_succeeded\tpan\tlocal\tha_lines": 3,
+    "bt\tfailover_succeeded\tpan\tlocal\tmember_with_ha_lines": 1,
+    "bt\tfailover_succeeded\tpan\tlocal\tothers_active": 1,
+    "bt\tfailover_succeeded\tpan\tlocal\tcontrol_member_windows": 6,
+    "bt\tfailover_other\tcp\tall\tdevice_not_in_read_set": 1,
+})
+ABSENT = ["fatal", "new\tcp_messages\tdevice_only\tother\tsev_none\tevents",
+          "bt\tcrash_alert\tcp\tutc\tmember_signature",            # the other clock reading sees nothing
+          "bt\tfailover_succeeded\tpan\tutc\tmember_signature",
+          "bt\tfailover_succeeded\tpan\tlocal\tothers_signature",  # the sibling device has no finding
+          "bt\tfailover_succeeded\tpan\tlocal\tcontrol_member_signature"]
+
+
+def write_events(path):
+    """Ground-truth events of the synthetic corpus: the planted crash and the planted HA burst (Istanbul wall clock)."""
+    crash = dt.datetime(2026, 11, 6, 3, 10, 0, tzinfo=TZ).timestamp()
+    start = dt.datetime(2026, 11, 5, 8, 0, 5, tzinfo=TZ).timestamp()
+    end = dt.datetime(2026, 11, 5, 8, 6, 0, tzinfo=TZ).timestamp()
+    rows = [("crash_alert", "cp", "cpa", crash, crash), ("failover_succeeded", "pan", "pana", start, end),
+            ("failover_other", "cp", "nosuchdevice", start, end)]
+    path.write_text("".join(f"{k}\t{v}\t{d}\t{int(a)}\t{int(b)}\n" for k, v, d, a, b in rows), encoding="utf-8")
 
 
 def main():
@@ -124,8 +153,11 @@ def main():
     work = pathlib.Path(sys.argv[4]) if len(sys.argv) > 4 else pathlib.Path(tempfile.mkdtemp(prefix="funnel-selftest-"))
     work.mkdir(parents=True, exist_ok=True)
     build(work)
+    events = work.parent / (work.name + "_events.tsv")
+    write_events(events)
     out = subprocess.run([java, "-cp", classpath, "com.securityexpert.nexus.ui2.service.systemlog.LogFunnelMeasure",
-                          "--tech", tech, "--selftest", str(work)], capture_output=True, text=True, check=False).stdout
+                          "--tech", tech, "--selftest", str(work), "--backtest", "1", "--events-file", str(events)],
+                         capture_output=True, text=True, check=False).stdout
     got = {}
     for line in out.splitlines():
         key, _, value = line.rpartition("\t")

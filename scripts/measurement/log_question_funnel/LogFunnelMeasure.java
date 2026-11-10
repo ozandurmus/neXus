@@ -10,12 +10,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -65,6 +67,11 @@ public final class LogFunnelMeasure {
     static int maxKeysPerDevice = 60_000;
     static long maxSeconds = 2400;
     static String[] sources = DEFAULT_SOURCES;
+    /** Backtest options: the window ends on this day (default: the day of the newest chunk). */
+    static LocalDate endDayOverride;
+    static boolean backtest;
+    static boolean onlyEventDevices;
+    static String eventsFile;
     static Set<String> tech = new HashSet<>();
 
     /** Semantic line classes in priority order (the first matching class wins). PROVISIONAL keyword classes. */
@@ -475,9 +482,17 @@ public final class LogFunnelMeasure {
     }
 
     static final class DevOut {
+        String id;
         boolean pan;
         int[] mask;
         boolean[] observedDay;
+        boolean[] active;
+        int[] haLines;
+        int[] linkLines;
+    }
+
+    /** A ground-truth event: a device and an epoch-second span; read in memory, never printed. */
+    record Event(String kind, String vendor, String device, long start, long end) {
     }
 
     static final class Engine {
@@ -493,6 +508,8 @@ public final class LogFunnelMeasure {
         final int[] devicesWithSource = new int[S];
         final List<NewEv> newEvents = new ArrayList<>();
         final List<DevOut> devs = new ArrayList<>();
+        final Map<String, DevOut> byId = new HashMap<>();
+        String devId;
         final LongIntMap ipDevices = new LongIntMap();
         final LongIntMap ipLines = new LongIntMap();
         final List<int[]> coverage = new ArrayList<>(); // {src, learnDays, testDays}
@@ -537,9 +554,10 @@ public final class LogFunnelMeasure {
             agg.computeIfAbsent(key, k -> new long[1])[0] += delta;
         }
 
-        void startDevice(boolean isPan) {
+        void startDevice(boolean isPan, String id) {
             if (dev >= 0) finishDevice();
             dev++;
+            devId = id;
             devPan = isPan;
             keys = new HashMap<>();
             covered = new boolean[S][windowDays];
@@ -765,9 +783,13 @@ public final class LogFunnelMeasure {
             int[] learnDays = new int[S];
             int[] testCov = new int[S];
             DevOut o = new DevOut();
+            o.id = devId;
             o.pan = devPan;
             o.mask = new int[testHours];
             o.observedDay = new boolean[testDays];
+            o.active = activeHour;
+            o.haLines = new int[testHours];
+            o.linkLines = new int[testHours];
             int learnDayCount = windowDays - testDays;
             for (int s = 0; s < S; s++) {
                 boolean any = false;
@@ -805,6 +827,10 @@ public final class LogFunnelMeasure {
                 prev[s].add(hv, 1);
                 tplLines[s].add(hv, k.total);
                 Cls cls = Cls.values()[k.cls];
+                if (k.hours != null && (cls == Cls.ha_state || cls == Cls.link)) {
+                    int[] target = cls == Cls.ha_state ? o.haLines : o.linkLines;
+                    for (int h = testStart; h < W; h++) target[h - testStart] += k.hours[h];
+                }
                 boolean excluded = cls == Cls.auth_admin || cls == Cls.cron_routine;
                 boolean enoughHistory = learnDays[s] >= minLearnDays;
                 int daysSeen = 0;
@@ -866,6 +892,7 @@ public final class LogFunnelMeasure {
             }
             count("meta\tdevices_" + vendor, 1);
             devs.add(o);
+            byId.put(devId, o);
             keys = null;
             covered = null;
             devIps = null;
@@ -1127,6 +1154,120 @@ public final class LogFunnelMeasure {
             };
         }
 
+        // ---------------------------------------------------------------- backtest against known events
+        int hourIndex(long epoch, ZoneId zone) {
+            LocalDateTime t = LocalDateTime.ofInstant(Instant.ofEpochSecond(epoch), zone);
+            return (int) ChronoUnit.HOURS.between(base, t) - testStart;
+        }
+
+        /** Flags of one device over the test hours [h0, h1]: {active, signature, base question, any finding}. */
+        boolean[] window(DevOut o, int h0, int h1) {
+            boolean active = false;
+            boolean sig = false;
+            boolean question = false;
+            boolean any = false;
+            for (int h = h0; h <= h1; h++) {
+                if (o.active[h]) active = true;
+                int m = o.mask[h];
+                if ((m & SIG_BITS) != 0) sig = true;
+                if (qualifies(1, m)) question = true;
+                if (m != 0) any = true;
+            }
+            return new boolean[] {active, sig, question, any};
+        }
+
+        void bt(Map<String, long[]> acc, String key, long v) {
+            acc.computeIfAbsent(key, k -> new long[1])[0] += v;
+        }
+
+        /**
+         * For every event: did the draft detector find anything on the event's device in the event's window, under two
+         * readings of the device clock (Istanbul wall clock, UTC wall clock)? And how often does it find something in
+         * the same clock window on the other days of the test window (the device's own control) and on the other devices
+         * of the same vendor (the fleet's control)? Counts only.
+         */
+        void backtest(List<Event> events, PrintStream out) {
+            ZoneId[] zones = {ZONE, ZoneOffset.UTC};
+            String[] readings = {"local", "utc"};
+            Map<String, long[]> acc = new TreeMap<>();
+            for (Event e : events) {
+                DevOut o = byId.get(e.device());
+                String vendor = o == null ? e.vendor() : o.pan ? "pan" : "cp";
+                String pre = e.kind() + "\t" + vendor + "\t";
+                bt(acc, pre + "all\tevents", 1);
+                if (o == null) {
+                    bt(acc, pre + "all\tdevice_not_in_read_set", 1);
+                    continue;
+                }
+                boolean crash = e.kind().equals("crash_alert");
+                long s0 = e.start() - (crash ? 4 * 3600 : 1800);
+                long e0 = e.end() + (crash ? 2 * 3600 : 3600);
+                for (int r = 0; r < 2; r++) {
+                    String k = pre + readings[r] + "\t";
+                    int h0 = hourIndex(s0, zones[r]);
+                    int h1 = hourIndex(e0, zones[r]);
+                    if (h1 < 0 || h0 >= testHours) {
+                        bt(acc, k + "outside_test_window", 1);
+                        continue;
+                    }
+                    h0 = Math.max(h0, 0);
+                    h1 = Math.min(h1, testHours - 1);
+                    bt(acc, k + "in_test_window", 1);
+                    bt(acc, k + "window_hours", h1 - h0 + 1);
+                    boolean[] w = window(o, h0, h1);
+                    if (w[0]) bt(acc, k + "member_active", 1);
+                    if (w[1]) bt(acc, k + "member_signature", 1);
+                    if (w[2]) bt(acc, k + "member_question", 1);
+                    if (w[3]) bt(acc, k + "member_any", 1);
+                    int mm = 0;
+                    long ha = 0;
+                    long link = 0;
+                    for (int h = h0; h <= h1; h++) {
+                        mm |= o.mask[h];
+                        ha += o.haLines[h];
+                        link += o.linkLines[h];
+                    }
+                    String[] bitName = {"crash", "restart", "burst_ha", "burst_link", "rate", "rate_excluded", "rate_strict",
+                            "rate_loose", "new_rare_severity", "new_rare", "new_rare_excluded", "new_common", "new_signature"};
+                    for (int b = 0; b < bitName.length; b++) if ((mm & (1 << b)) != 0) bt(acc, k + "member_bit_" + bitName[b], 1);
+                    bt(acc, k + "ha_lines", ha);
+                    bt(acc, k + "link_lines", link);
+                    if (ha > 0) bt(acc, k + "member_with_ha_lines", 1);
+                    // the same clock window on the other days of the test window: the device's own control
+                    for (int shift = -testDays; shift <= testDays; shift++) {
+                        if (shift == 0) continue;
+                        int a0 = h0 + 24 * shift;
+                        int a1 = h1 + 24 * shift;
+                        if (a0 < 0 || a1 >= testHours) continue;
+                        boolean[] c = window(o, a0, a1);
+                        if (!c[0]) continue;
+                        bt(acc, k + "control_member_windows", 1);
+                        if (c[1]) bt(acc, k + "control_member_signature", 1);
+                        if (c[2]) bt(acc, k + "control_member_question", 1);
+                        if (c[3]) bt(acc, k + "control_member_any", 1);
+                    }
+                    // the other devices of the same vendor in the same window: the fleet's control
+                    for (DevOut other : devs) {
+                        if (other == o || other.pan != o.pan) continue;
+                        boolean[] c = window(other, h0, h1);
+                        if (!c[0]) continue;
+                        bt(acc, k + "others_active", 1);
+                        if (c[1]) bt(acc, k + "others_signature", 1);
+                        if (c[2]) bt(acc, k + "others_question", 1);
+                        if (c[3]) bt(acc, k + "others_any", 1);
+                    }
+                }
+            }
+            for (Map.Entry<String, long[]> e : acc.entrySet()) {
+                String[] f = e.getKey().split("\t");
+                String[] all = new String[f.length + 2];
+                all[0] = "bt";
+                System.arraycopy(f, 0, all, 1, f.length);
+                all[f.length + 1] = Long.toString(e.getValue()[0]);
+                emit(out, all);
+            }
+        }
+
         void report(PrintStream out) {
             String[] covLabel = {"lines", "unparsed_lines", "time_on_line", "time_inherited", "time_from_collection",
                     "lines_over_key_cap"};
@@ -1173,6 +1314,10 @@ public final class LogFunnelMeasure {
         maxDevices = Integer.parseInt(a.getOrDefault("--devices", "0"));
         maxSeconds = Long.parseLong(a.getOrDefault("--max-seconds", "2400"));
         if (a.containsKey("--sources")) sources = a.get("--sources").split(",");
+        if (a.containsKey("--end-day")) endDayOverride = LocalDate.parse(a.get("--end-day"));
+        backtest = "1".equals(a.get("--backtest"));
+        onlyEventDevices = "1".equals(a.get("--only-event-devices"));
+        eventsFile = a.get("--events-file");
         try {
             tech = loadWords(Path.of(a.get("--tech")));
             tech.addAll(FreeTextIdentityRules.STOPWORDS);
@@ -1181,6 +1326,7 @@ public final class LogFunnelMeasure {
             emit(out, "meta", "window_days", String.valueOf(windowDays));
             emit(out, "meta", "test_days", String.valueOf(testDays));
             emit(out, "meta", "min_learn_days", String.valueOf(minLearnDays));
+            emit(out, "meta", "backtest", backtest ? "1" : "0");
             if (a.containsKey("--selftest")) selftest(out, Path.of(a.get("--selftest")));
             else run(out);
         } catch (Throwable t) {
@@ -1203,6 +1349,49 @@ public final class LogFunnelMeasure {
         }
     }
 
+    /** Executed failover runs (member devices, start and end) and crash-file alerts (device, file time): read-only. */
+    static List<Event> loadEvents(Connection conn, PrintStream out) {
+        List<Event> events = new ArrayList<>();
+        try (Statement s = conn.createStatement(); ResultSet rs = s.executeQuery(
+                "select r.vendor, r.state, r.outcome, extract(epoch from r.started_at)::bigint,"
+                        + " extract(epoch from coalesce(r.finished_at, r.started_at))::bigint, m"
+                        + " from failover_run r cross join lateral jsonb_array_elements_text(r.target_member_ids) m"
+                        + " where r.run_kind = 'FAILOVER'")) {
+            while (rs.next()) {
+                String kind = "DONE".equals(rs.getString(2)) && "SUCCEEDED".equals(rs.getString(3)) ? "failover_succeeded"
+                        : "failover_other";
+                events.add(new Event(kind, "palo_alto".equals(rs.getString(1)) ? "pan" : "cp", rs.getString(6), rs.getLong(4),
+                        rs.getLong(5)));
+            }
+        } catch (Exception e) {
+            emit(out, "meta", "events_query_failed", "failover");
+            try {
+                conn.rollback();
+            } catch (Exception ignored) {
+            }
+        }
+        try (Statement s = conn.createStatement(); ResultSet rs = s.executeQuery(
+                "select a.device_id::text, a.newest_mtime from device_crash_alert a")) {
+            while (rs.next()) events.add(new Event("crash_alert", "cp", rs.getString(1), rs.getLong(2), rs.getLong(2)));
+        } catch (Exception e) {
+            emit(out, "meta", "events_query_failed", "crash");
+            try {
+                conn.rollback();
+            } catch (Exception ignored) {
+            }
+        }
+        return events;
+    }
+
+    static List<Event> loadEventsFile(Path path) throws Exception {
+        List<Event> events = new ArrayList<>();
+        for (String line : Files.readAllLines(path, StandardCharsets.UTF_8)) {
+            String[] f = line.split("\t");
+            if (f.length == 5) events.add(new Event(f[0], f[1], f[2], Long.parseLong(f[3]), Long.parseLong(f[4])));
+        }
+        return events;
+    }
+
     /** Chunk rows: {device_id, source index, path, wrapped key, collected epoch seconds, bytes}. */
     static void run(PrintStream out) throws Exception {
         long t0 = System.nanoTime();
@@ -1211,6 +1400,7 @@ public final class LogFunnelMeasure {
         props.setProperty("password", SecretFile.readRequired(Path.of(System.getenv("UI2_DB_APP_PASSWORD_FILE")), "db_password").strip());
         props.setProperty("ApplicationName", "logfunnel-measure-readonly");
         List<Object[]> chunks = new ArrayList<>();
+        List<Event> events = new ArrayList<>();
         long maxEpoch = 0;
         try (Connection conn = new org.postgresql.Driver().connect(System.getenv("UI2_DB_URL"), props)) {
             conn.setAutoCommit(false);
@@ -1229,12 +1419,28 @@ public final class LogFunnelMeasure {
                         emit(out, "stored", source, "devices", Long.toString(rs.getLong(5)));
                     }
                 }
-                // the same join as JooqSystemLogReadRepository.findChunk: the stored path is recovery_volume_path
-                try (ResultSet rs = s.executeQuery("select c.device_id, c.source_key, a.recovery_volume_path, c.wrapped_data_key,"
-                        + " extract(epoch from c.collected_at)::bigint, c.bytes"
-                        + " from system_log_chunk c join backup_artefact a on a.artefact_id = c.artefact_ref"
-                        + " where c.pruned_at is null and a.recovery_volume_path is not null and c.wrapped_data_key is not null"
-                        + " order by c.device_id, c.source_key, c.collected_at, c.start_offset, c.chunk_id")) {
+            }
+            if (backtest) {
+                events.addAll(loadEvents(conn, out));
+                conn.rollback();
+            }
+            // the same join as JooqSystemLogReadRepository.findChunk: the stored path is recovery_volume_path
+            String sql = "select c.device_id::text, c.source_key, a.recovery_volume_path, c.wrapped_data_key,"
+                    + " extract(epoch from c.collected_at)::bigint, c.bytes"
+                    + " from system_log_chunk c join backup_artefact a on a.artefact_id = c.artefact_ref"
+                    + " where c.pruned_at is null and a.recovery_volume_path is not null and c.wrapped_data_key is not null"
+                    + (endDayOverride != null ? " and c.collected_at < ?" : "")
+                    + (onlyEventDevices ? " and c.device_id::text = any(?)" : "")
+                    + " order by c.device_id, c.source_key, c.collected_at, c.start_offset, c.chunk_id";
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                int i = 1;
+                if (endDayOverride != null) {
+                    ps.setTimestamp(i++, java.sql.Timestamp.from(endDayOverride.plusDays(2).atStartOfDay(ZONE).toInstant()));
+                }
+                if (onlyEventDevices) {
+                    ps.setArray(i, conn.createArrayOf("text", events.stream().map(Event::device).distinct().toArray(String[]::new)));
+                }
+                try (ResultSet rs = ps.executeQuery()) {
                     while (rs.next()) {
                         int src = Arrays.asList(sources).indexOf(rs.getString(2));
                         if (src < 0) continue;
@@ -1249,7 +1455,9 @@ public final class LogFunnelMeasure {
         ArtefactStore store = new FileArtefactStore(Path.of(System.getenv("UI2_ARTEFACT_STORE_ROOT")),
                 ArtefactStoreCipher.fromBase64Key(SecretFile.readRequired(
                         Path.of(System.getenv("UI2_ARTEFACT_STORE_KEY_FILE")), "artefact_store_key")));
-        Engine engine = new Engine(LocalDateTime.ofInstant(Instant.ofEpochSecond(maxEpoch), ZONE).toLocalDate());
+        Engine engine = new Engine(endDayOverride != null ? endDayOverride
+                : LocalDateTime.ofInstant(Instant.ofEpochSecond(maxEpoch), ZONE).toLocalDate());
+        emit(out, "meta", "events_loaded", String.valueOf(events.size()));
         String current = null;
         int cpDevices = 0;
         int panDevices = 0;
@@ -1273,7 +1481,7 @@ public final class LogFunnelMeasure {
                 if (!skip) {
                     if (isPan) panDevices++;
                     else cpDevices++;
-                    engine.startDevice(isPan);
+                    engine.startDevice(isPan, device);
                     emit(out, "progress", String.valueOf(cpDevices + panDevices), String.valueOf(chunksRead),
                             String.valueOf((System.nanoTime() - t0) / 1_000_000_000L));
                 }
@@ -1290,6 +1498,7 @@ public final class LogFunnelMeasure {
         }
         engine.finish();
         engine.report(out);
+        if (backtest) engine.backtest(events, out);
         emit(out, "meta", "chunks_read", String.valueOf(chunksRead));
         emit(out, "meta", "bytes_read", String.valueOf(bytesRead));
         emit(out, "meta", "chunk_errors", String.valueOf(errors));
@@ -1334,7 +1543,7 @@ public final class LogFunnelMeasure {
         for (Object[] row : rows) {
             if (!row[0].equals(current)) {
                 current = (String) row[0];
-                engine.startDevice(sources[(Integer) row[1]].startsWith("pan_"));
+                engine.startDevice(sources[(Integer) row[1]].startsWith("pan_"), current);
             }
             engine.startChunk((Long) row[3]);
             try (InputStream in = Files.newInputStream((Path) row[2])) {
@@ -1343,6 +1552,7 @@ public final class LogFunnelMeasure {
         }
         engine.finish();
         engine.report(out);
+        if (backtest && eventsFile != null) engine.backtest(loadEventsFile(Path.of(eventsFile)), out);
     }
 
     static final Pattern SAFE = Pattern.compile("[a-z0-9_.]+");
