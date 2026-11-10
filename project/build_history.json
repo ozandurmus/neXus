@@ -3,8 +3,128 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
-      "build": "NXS-LOCAL-0374",
+      "build": "NXS-LOCAL-0383",
       "status": "in_progress",
+      "title": "Enterprise stack alignment, phase 0: Spring Security sign-in, JSON logs, monitoring, secrets, scans",
+      "summary": "The PO ratified the enterprise alignment order on 2026-11-10 from the stack gap analysis: phase 0 needs no enterprise dependency (question pack, SAML via ADFS with LDAP and a break-glass account, structured JSON logs, monitoring endpoints,",
+      "started": "2026-11-10",
+      "movement": "ARCHITECTURE",
+      "docs": {
+        "agreement": "docs/design/PO_DECISION_RECORD_2026_11_10_ENTERPRISE_STACK_ALIGNMENT.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0383.md"
+    },
+    {
+      "build": "NXS-LOCAL-0382",
+      "status": "real_env_validated",
+      "title": "Platform upkeep: UBI9 base refreshes, CVE baseline, ship pipeline and CI, HOST-A k3s and kernel",
+      "summary": "The UBI9 bases were refreshed twice (Java 21.0.13, curl, xz; log4j-api 2.25.5), eMudhra roots are blocklisted, accepted findings get a daily review, and shipping gained a docs fast path, checks-gated merge and a bounded CI browser install (",
+      "started": "2026-10-22",
+      "completed": "2026-11-10",
+      "movement": "IMPLEMENTATION",
+      "docs": {
+        "agreement": "docs/design/PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md",
+        "validation": "docs/operations/HOST_LEDGER_HOST-A.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0382.md"
+    },
+    {
+      "build": "NXS-LOCAL-0381",
+      "status": "automated_validated",
+      "title": "Check Point management facts: identity panel, hotfix levels, MDS HA role, Domain placement, VSX VIPs",
+      "summary": "The device header shows platform identity as a panel, and R82 MDS and Quantum Spark hotfix levels (V195), the MDS HA role (V194, V196; Active/Active per the R82 guide), per-Domain Active/Standby placement (V197) and VSX VIP prefixes from ma",
+      "started": "2026-11-06",
+      "completed": "2026-11-09",
+      "movement": "IMPLEMENTATION",
+      "docs": {
+        "agreement": "docs/design/PO_DECISION_RECORD_2026_11_06_VSX_VIP_PREFIX_FROM_MANAGEMENT.md",
+        "validation": "docs/design/CP_MEASUREMENTS_2026_11_06_AFTERNOON.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0381.md"
+    },
+    {
+      "build": "NXS-LOCAL-0380",
+      "status": "automated_validated",
+      "title": "Policy credibility and hygiene: section joins, partial priors, NAT by package UID, fewer UNKNOWN",
+      "summary": "Check Point sections and NAT rulebases are joined across pages and read by package UID (V191-V192), group members resolve from the object inventory, and hygiene passes over partial priors that provably cannot cover a rule, with Panorama sco",
+      "started": "2026-11-03",
+      "completed": "2026-11-06",
+      "movement": "IMPLEMENTATION",
+      "docs": {
+        "agreement": "docs/design/PO_DECISION_RECORD_2026_11_05_EVENING_BATCH.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0380.md"
+    },
+    {
+      "build": "NXS-LOCAL-0379",
+      "status": "automated_validated",
+      "title": "UI review integration, executive home, Reports R1, security review fixes, sign-in page",
+      "summary": "The 2026-11-05 batch shipped the UI review information architecture and screens, the executive home, Reports R1 (V190), the security review fixes (H-1, M-1 to M-8), masked notification identities by default (V193) and the new sign-in page (",
+      "started": "2026-11-05",
+      "completed": "2026-11-05",
+      "movement": "UI",
+      "docs": {
+        "agreement": "docs/design/REPORTS_R1_CONTRACT.md",
+        "handover": "docs/design/PO_SESSION_HANDOVER_2026_11_05.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0379.md"
+    },
+    {
+      "build": "NXS-LOCAL-0378",
+      "status": "real_env_validated",
+      "title": "Path analysis phase A: topology, path engine, Path screen, validation on devices (A0-A6)",
+      "summary": "Route and interface facts (V184), per-hop policy and NAT evaluation (V185), an in-memory topology with conflicts and overrides (V186), the path engine, the Path screen and validation against the vendors' own read-only matchers (V187-V188) s",
+      "started": "2026-11-03",
+      "completed": "2026-11-05",
+      "movement": "IMPLEMENTATION",
+      "docs": {
+        "agreement": "docs/design/PATH_ANALYSIS_DESIGN.md",
+        "validation": "docs/design/PO_DECISION_RECORD_2026_11_05_EVENING_BATCH.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0378.md"
+    },
+    {
+      "build": "NXS-LOCAL-0377",
+      "status": "automated_validated",
+      "title": "Backups and diagnostics: major deviations, size-anomaly alert, backup type, local-log reads",
+      "summary": "Backups flag major deviations from stored configuration (V176), record their type so snapshot retention applies, keep the last good copy on a size anomaly (V180) and raise a daily Backup size deviation alert (V189), and the fleet table sort",
+      "started": "2026-10-23",
+      "completed": "2026-11-04",
+      "movement": "IMPLEMENTATION",
+      "docs": {
+        "agreement": "docs/design/PO_DECISION_RECORD_2026_10_30_LOCAL_LOG_DIAGNOSTICS.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0377.md"
+    },
+    {
+      "build": "NXS-LOCAL-0376",
+      "status": "automated_validated",
+      "title": "Failover pilot: P0 closure, admin window bypass, first Check Point pilot run, PAN write routes",
+      "summary": "Incident release, the Active Up return gate, final post-checks, resume of the return step, failover CLI parity, PAN write routes and config-sync remediation, the VSX chassis unit and a framed one-shell session (off, per-cluster allow-list)",
+      "started": "2026-10-20",
+      "completed": "2026-10-25",
+      "movement": "IMPLEMENTATION",
+      "docs": {
+        "agreement": "docs/design/PO_DECISION_RECORD_2026_10_20_FAILOVER_PILOT_P0.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0376.md"
+    },
+    {
+      "build": "NXS-LOCAL-0375",
+      "status": "automated_validated",
+      "title": "Operations screens: Change feed, System health, device Logs, Device events; logmask-v4",
+      "summary": "Operations gained the Change feed and System health tabs, the device Logs tab was rebuilt around the lines, and Packet Analysis shows the stored log facts of the path firewalls around a finding (PRs 651-655, 658-659, 662, 668, 679). Masking",
+      "started": "2026-10-20",
+      "completed": "2026-10-25",
+      "movement": "UI",
+      "docs": {
+        "agreement": "docs/design/UI_DESIGN_LANGUAGE.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0375.md"
+    },
+    {
+      "build": "NXS-LOCAL-0374",
+      "status": "automated_validated",
       "title": "System logs phase B: collectors, masked view, settings route, Spike Detective data",
       "summary": "Check Point and Palo Alto system-log collectors (V160, V161, V167), the masked view (logmask-v3), the settings route and Spike Detective data collection are merged. Spike data and management-server collection stay off until a security_admin",
       "started": "2026-10-17",

@@ -1,13 +1,12 @@
 # neXus — Current State
 
-Hot checkpoint reconciled on 2026-10-20 against `origin/main` at `f05e7ced`; schema and the 2026-11-05/06 lines below
-updated on 2026-11-06.
+Hot checkpoint reconciled on 2026-11-10 against `origin/main` at `0d13c450`.
 `project/QUEUE.md` and its tool-managed data own delivery state; repository
 source proves implementation, not the current deployment or device health.
 
 ## Product today
 
-UI2 is the maintained Java/React product; repository schema is **V196**.
+UI2 is the maintained Java/React product; repository schema is **V197**.
 Inventory, configuration, compliance, encrypted backups, Operations, Policy,
 Packet Analysis and device system logs use masked `aiview` projections. Restore
 from the UI remains disabled. Check Point policy collection is chunked by
@@ -21,33 +20,30 @@ UNKNOWN and missing catalog matches do not invent dates. The device header's
 
 ## Active build
 
-`NXS-LOCAL-0374` — **IN_PROGRESS**: device system logs phase B. Check Point and
-Palo Alto collectors (V160/V161/V167), masked view (rule set `logmask-v3`),
-settings route `PUT /api/v2/config/system-logs` and Spike Detective data
-collection are merged. Spike data and management-server collection are off
-until a `security_admin` switches them on from Administration › Platform.
-Open: 512 MiB spike cap not enforced by the pruner, masking residual gaps,
-no real-environment acceptance. Authority:
-[phase B decision](docs/design/PO_DECISION_RECORD_2026_10_17_SYSTEM_LOG_PHASE_B.md),
-[contract](docs/design/DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md),
-[Spike Detective layout review](docs/design/SPIKE_DETECTIVE_LAYOUT_REVIEW_2026_10_19.md).
+`NXS-LOCAL-0383` — **IN_PROGRESS** (started 2026-11-10): enterprise stack
+alignment phase 0 (Spring Security sign-in via ADFS SAML with LDAP and a
+break-glass account, JSON logs, monitoring endpoints, file-based secrets, SAST
+in CI); nothing implemented yet. Phase 1 waits for the PO's access-request
+flows. Authority: [decision](docs/design/PO_DECISION_RECORD_2026_11_10_ENTERPRISE_STACK_ALIGNMENT.md).
+Proposed NEXT (PO to confirm): finish the failover pilot.
 
-Same period, one line each (detail in `project/build_history.json`):
+Recorded since 2026-10-20 (detail in `project/build_history.json`):
 
-- `reports_r1` REAL_ENV_VALIDATED — Reports R1 (RPT-01/02/03/05, V190 `report_run`, masked by default); all four generated and downloaded live as aiview on 2026-11-05; report files on their own volume `ui2-report-store` (BK-17 unchanged) ([contract](docs/design/REPORTS_R1_CONTRACT.md)).
-- 2026-11-05 cloud integration — docs batch, code batch (UI review IA and screens, executive home, security MEDIUM fixes M-1..M-8, path/policy UNKNOWN work, test speed) and the CP NAT UID probe (V191) shipped; [handover](docs/design/PO_SESSION_HANDOVER_2026_11_05.md) §5.
-- 2026-11-05/06 measurements and the PO evening batch ([record](docs/design/PO_DECISION_RECORD_2026_11_05_EVENING_BATCH.md)), counts only — PRs 751, 756-759 live: X0 blocker split; aiview inventory start; CP NAT read by package UID (V192; first CP policy collection `COMPLETED`); notification identity masked (V193); X1 (earlier-rule UNKNOWN 60,217 -> 56,085, [plan §0.1](docs/design/POLICY_UNKNOWN_REDUCTION_PLAN_2026_11_05.md)). First A6 validation `MATCH`. Path queries with masked addresses 20/20 computed. Topology conflicts 300 after the fleet inventory (was 254): more truthful inventory, no builder defect ([RCA](docs/design/TOPOLOGY_CONFLICTS_RCA_2026_11_06.md)). M9: pseudonyms stable across a service restart; only JSON key order varied, now fixed ([design §11.1](docs/design/ANALYSIS_CONTAINER_DESIGN_2026_11_05.md)).
-- 2026-11-06/09 — PRs 765-779 live: identity panel; Spark and R82 MDS patch levels (V195); MDS fingerprint accepted once (V196), CP collection works again; MDS HA ACTIVE (Active/Active level); VSX stage 2 cut ADDRESS_PREFIX_UNKNOWN 54 -> 30 ([record](docs/design/CP_MEASUREMENTS_2026_11_06_AFTERNOON.md) §5-6).
-- `NXS-LOCAL-0373` AUTOMATED_VALIDATED — policy completeness (V163), CP hit dates, Policy Changes speed, rule view redesign, permissiveness scoring ([decision](docs/design/PO_DECISION_RECORD_2026_10_20_POLICY_PERMISSIVENESS_SCORING.md)).
-- `NXS-LOCAL-0372` AUTOMATED_VALIDATED — UI design language and the 2026-10-18 product review items D1/D2/P2/P3 ([doc](docs/design/UI_DESIGN_LANGUAGE.md)).
-- `NXS-LOCAL-0371` AUTOMATED_VALIDATED — Packet Analysis real engine, first production run fixed ([decision](docs/design/PO_DECISION_RECORD_2026_10_15_PACKETBREAKER_PORTED_INTO_NEXUS.md)).
-- `NXS-LOCAL-0370` — last build before the September–October period record; the interval between it and 0371 has no per-build record.
+- `NXS-LOCAL-0382` REAL_ENV_VALIDATED — UBI9 bases (Java 21.0.13), CVE baseline, ship/CI speed; HOST-A k3s v1.36.6, kernel -43 with its own AppArmor profile, rwsafe removed, registry pruned; e2e 80/80.
+- `NXS-LOCAL-0381` AUTOMATED_VALIDATED — CP management facts: identity panel, hotfix levels (V195), MDS HA ACTIVE (V194/V196), per-Domain placement (V197, no live check yet), VSX VIP prefixes (54 -> 30).
+- `NXS-LOCAL-0380` AUTOMATED_VALIDATED — policy credibility and hygiene (V191/V192; earlier-rule UNKNOWN 60,217 -> 56,085).
+- `NXS-LOCAL-0379` AUTOMATED_VALIDATED — UI review integration, executive home, Reports R1 (REAL_ENV_VALIDATED), security fixes, masked notifications (V193).
+- `NXS-LOCAL-0378` REAL_ENV_VALIDATED — path analysis phase A (V184–V188; 20/20 masked queries, first A6 `MATCH`).
+- `NXS-LOCAL-0377` AUTOMATED_VALIDATED — backup deviations and size alerts (V176/V180/V189), local-log diagnostics (V181–V183).
+- `NXS-LOCAL-0376` AUTOMATED_VALIDATED — failover pilot P0 closure; first CP pilot run 2026-10-21 stopped before the up step.
+- `NXS-LOCAL-0375` AUTOMATED_VALIDATED — Change feed, System health, device Logs, Device events, `logmask-v4`.
+- `NXS-LOCAL-0374` AUTOMATED_VALIDATED — system logs phase B; scheduled collection live (97 devices); spike cap open.
 
 Failover execution plan PRs 1–10 landed (V133–V143): persisted mutation
 switch, request-bound approvals, durable dispatch intents, fenced
-reconciliation. **AUTOMATED_VALIDATED, not REAL_ENV_VALIDATED; no real
-failover trial has been performed.** A pilot-preparation status lane is in
-progress (`failover_pilot_preparation`). The mutation switch in the live
+reconciliation. **AUTOMATED_VALIDATED, not REAL_ENV_VALIDATED; no completed
+real failover is recorded.** The first Check Point pilot run (2026-10-21)
+stopped before the up step and was fixed (`NXS-LOCAL-0376`). The mutation switch in the live
 manifest authorizes nothing by itself: typed request, approval, fresh
 readiness, one fleet mutation and uncertain-outcome fencing still apply.
 Authority: [2026-10-06 decision](docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md),
@@ -64,8 +60,9 @@ preview e2e checks the candidate with masked evidence and fails on page/API 4xx.
 Release also applies the committed manifests of the policy, service,
 configuration and compliance modules (the worker is still patched at run time),
 and a ship retries when the image build failed only on a base-image layer
-download. Scheduled system-log collection is enabled for the fleet.
-Device polling/admission windows begin at **00:00 / 06:00 / 12:00 / 18:00
+download. **Development mode** (PO 2026-11-03): every scheduled ui2-service
+task is off (`UI2_SCHEDULING_ENABLED=false`) except the system-log collection,
+which has its own switch. Device polling/admission windows begin at **00:00 / 06:00 / 12:00 / 18:00
 Europe/Istanbul** (default 60-minute windows). Superseded in part (PO
 2026-10-20, [record](docs/design/PO_DECISION_RECORD_2026_10_20_ADMIN_MANUAL_JOBS_AND_BUSINESS_HOURS.md)):
 manual jobs of `security_admin`/`operation_admin` are never held to the windows
@@ -98,21 +95,19 @@ Authority: [contract](docs/design/DATA_SANITIZER_CONTRACT.md).
 
 - NSPM wave 2 change report and wave 3 policy lookup/offline analyzer are
   written in local lanes but not merged into this baseline. Compliance guidance
-  has already landed independently. Policy permissiveness cannot yet model
-  Palo Alto object precedence (`pan_object_precedence_for_permissiveness`).
+  has already landed independently.
 - Per-device job serialization is written but not merged; endpoint transport
   admission is a separate existing safety boundary.
-- Masking residual gaps (single-word unknown hostnames, unmeasured principal
-  formats, XLSX serial columns, pcap) are open: `masking_residual_gaps_system_log_and_sanitizer`.
+- Masking residual gaps (single-word hosts without a keyword, unmeasured
+  principal formats, pcap) are open: `masking_residual_gaps_system_log_and_sanitizer`.
 - Worker manifest drift (`manifest_drift_service_worker_configuration_policy`)
   and the Check Point aiview readiness script client error
   (`cp_aiview_readiness_script_client_error`) are open follow-ups.
 - No full Java integration result is claimed here; this checkpoint ran no
   Gradle suite.
-- CVE exceptions remain time-boxed in `security/baseline.yaml`: entries with
-  review date **2026-10-31** (UBI runtime packages, the Packet Analysis engine
-  image) fall due first; the rest review **2026-12-31**. Review is per
-  rule/location; acceptance is not remediation.
+- CVE exceptions remain time-boxed in `security/baseline.yaml`; the remaining
+  UBI base entries review **2026-11-14**, the rest **2026-12-31**. glibc waits
+  for a Red Hat fix (`ubi_base_glibc_fix_pending`). Acceptance is not remediation.
 - First attended failover trial, full pod migration, retention-policy
   verification and capacity monitoring remain engineering-owner follow-ups.
   This reconciliation performed no deployment or live validation.

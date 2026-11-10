@@ -1,21 +1,20 @@
 # NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY
 
-## Snapshot (2026-11-09 15:30)
+## Snapshot (2026-11-10)
 Development mode: scheduled jobs are off, except the system-log collection (own switch, 00/06/12/18).
-PRs 745-777 are live. Schema V196. `CURRENT_STATE.md` and `project/QUEUE.md` win over this file.
+PRs up to 784 are on main. Schema V197. `CURRENT_STATE.md` and `project/QUEUE.md` win over this file.
 
 ## What changed this session
-- MDS hotfix level live (V195, R82 Jumbo Take 127); Spark patch levels (767).
-- MDS API fingerprint accepted once through neXus (V196, switch removed); CP policy collection COMPLETED again.
-- VSX stage 2 strict binding live: ADDRESS_PREFIX_UNKNOWN 54 -> 30. CI validate check about 100 s (771).
-- MDS HA read (V194) answers, but the reply has no servers array; role UNKNOWN.
+- Project plan refreshed: builds NXS-LOCAL-0375..0383 recorded (0383 enterprise alignment phase 0 is NOW).
+- Features: Policy, Path analysis, Packet Analysis added; inventory, backup, readiness, scheduler, operations criteria advanced on recorded live evidence.
+- Backlog: six items closed; glibc wait, HOST-A AppArmor override, enterprise phase 0, path phase B, analysis container, Reports R2 added.
 
 ## Exact next action
-Ask the PO whether the MDS has a secondary (HA) server; then decide how to show the role
-([record](docs/design/CP_MEASUREMENTS_2026_11_06_AFTERNOON.md) §6). Base image refresh due 2026-11-14.
+PO confirms NEXT (proposed: finish the failover pilot on one Check Point cluster). Base acceptances review 2026-11-14.
+Check the per-Domain placement view live as aiview (V197).
 
 ## Test delta
-Java about 4,160 / 0 failures, vitest 1505, live e2e 80/80 (2026-11-09).
+None in product code; tools tests and ProjectPlan service tests run for the plan data.
 
 ## New risks
-Base image refresh due 2026-11-14 (java-21 CVE-2026-91415 has a fix; must not be extended).
+Project data budgets are nearly full (backlog, terminal reserve, feature registry); the next refresh needs a compaction decision.

@@ -1,13 +1,13 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-05T14:23:05Z
+Build: NXS-LOCAL-0383 · Track: PCP.x · Generated: 2026-11-10T06:39:52Z
 
 ## Now
-- NXS-LOCAL-0374 — System logs phase B: collectors, masked view, settings route, Spike Detective data (in_progress)
+- NXS-LOCAL-0383 — Enterprise stack alignment, phase 0: Spring Security sign-in, JSON logs, monitoring, secrets, scans (in_progress)
 ## Next
-- overview_acceptance_and_member_specific_tuning — Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today) (planned)
+- failover_pilot_preparation — Failover pilot: repeat the Check Point pilot on one cluster, then record the closure evidence under aiview (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
 - P0/in_progress cyber_controller_known_hosts_after_hosta_rebuild — Cyber Controller SFTP push to HOST-A fails after the... (target: HOST_A_REBUILD_RUNBOOK.md)
-- P0/in_progress hosta_rebuild_real_env_acceptance — HOST-A rebuilt 2026-09-25: PO browser acceptance under... (target: HOST_A_REBUILD_RUNBOOK.md section 5)
+- P0/in_progress hosta_rebuild_real_env_acceptance — HOST-A rebuilt 2026-09-25: PO browser acceptance under... (target: HOST_A_REBUILD_RUNBOOK.md)
 - P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on... (target: Pre-CLASS-2 (OP.0b/OP.2), independent of)
 - P0/in_progress pan_tls_trust_rejects_corporate_ca — Palo Alto discovery cannot reach a Panorama fronted by a.. (target: PanXmlApiTransport certificate verificat)
 - P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test... (target: PRIVATE_REPLAY_ARCHITECTURE.md)
@@ -49,9 +49,9 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-05T14:23:05Z
 - P1/planned cp_failover_command_gate_batch
 - P1/planned cp_platform_facts_empty_on_nine_gateways
 - P1/planned cp_spark_backup_settings_sftp
-- P1/planned cve_exception_review_dates
 - P1/planned discovery_connection_state_never_populated
 - P1/planned discovery_failure_summary_stores_certificate_subject
+- P1/planned enterprise_phase0_logging_monitoring_scans
 - P1/planned failover_peer_reciprocal_agreement_check
 - P1/planned failover_pilot_fence_is_compiled_in
 - P1/planned failover_readiness_check_contract
@@ -102,6 +102,7 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-05T14:23:05Z
 - P2/in_progress release_snapshot_preview_acceptance
 - P2/in_progress ui2_m3_design_transfer_pass
 - P2/in_progress ui_device_workspace_and_overview
+- P2/planned analysis_container
 - P2/planned antigravity_provider_adapter
 - P2/planned auth_radius_mechanism
 - P2/planned auth_tacacs_mechanism
@@ -110,34 +111,33 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-05T14:23:05Z
 - P2/planned cp_backup_sftp_fetch_failed_on_cluster_member
 - P2/planned cp_cluster_vip_never_observed_in_fleet
 - P2/planned cp_vsx_config_collected_without_vs_context
-- P2/planned deploy_manifest_tests_eight_failures
 - P2/planned device_admin_accounts_and_privileges
 - P2/planned diagnostic_mask_overreach
 - P2/planned failover_phase_d_has_no_build_record
 - P2/planned gov_orch_turn_counter_blind_to_codex_stream
 - P2/planned hosta_export_include_build_namespace
 - P2/planned infoblox_member_facts
-- P2/planned java_product_plan_build_selection_is_stale
 - P2/planned m3_design_alignment_review
 - P2/planned machine_session_probe_isolation
-- P2/planned mds_ha_second_mds_read
 - P2/planned module_e2e_fail_fast
 - P2/planned orchestrator_worktree_lacks_frontend_dependencies
 - P2/planned pan_ha_serial_identity_hardening
 - P2/planned pan_keygen_no_usable_key_under_load
-- P2/planned pan_object_precedence_for_permissiveness
+- P2/planned path_analysis_phase_b
 - P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
 - P2/planned project_plan_crypto_placeholder_sentinel_lost
 - P2/planned radware_cc_identity_and_defensepro_reads
 - P2/planned regression_mapping_backend_trees_unmapped
+- P2/planned reports_r2
 - P2/planned test_fixture_realistic_names_cleanup
 - P2/planned tufin_access_query_tab
-- P2/planned ubi9_base_image_refresh
+- P2/planned ubi_base_glibc_fix_pending
 - P2/planned ui2_password_policy_configurable
 - P2/planned ui2_role_display
 - P3/planned corporate_inspection_ca_verify_with_it
 - P3/planned cp_cphaprob_peer_observation_corroboration
 - P3/planned device_role_vocabulary_declared_twice
+- P3/planned hosta_apparmor_stacked_label_override
 - P3/planned network_topology_path_analysis
 - P3/planned old_export_copies_disposal
 - P3/planned pytest_xdist_privacy_scan_scratch_file_race
@@ -192,8 +192,8 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-05T14:23:05Z
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 - po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the direct
 ## Recent builds
-- NXS-LOCAL-0374 (in_progress)
-- NXS-LOCAL-0373 (automated_validated)
-- NXS-LOCAL-0372 (automated_validated)
-- NXS-LOCAL-0371 (automated_validated)
-- NXS-LOCAL-0370 (automated_validated)
+- NXS-LOCAL-0383 (in_progress)
+- NXS-LOCAL-0382 (real_env_validated)
+- NXS-LOCAL-0381 (automated_validated)
+- NXS-LOCAL-0380 (automated_validated)
+- NXS-LOCAL-0379 (automated_validated)

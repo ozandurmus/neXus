@@ -881,7 +881,7 @@
         {"id":"session_admin","state":"done","weight":1,"label":"Session management and idle expiry"},
         {"id":"directory_signin","state":"pending","weight":1,"label":"LDAP/AD sign-in proven against a real directory"}
       ],
-      "why": "Track Java delivery with evidence; a criterion is done only when its evidence exists (real env where it says so)."
+      "why": "Evidence-backed delivery; real env where the label says so."
     },
     {
       "id": "java_discovery",
@@ -897,7 +897,7 @@
         {"id":"duplicate_guard","state":"done","weight":1},
         {"id":"management_servers","state":"pending","weight":1,"label":"MDS / Panorama read sets measured and gated"}
       ],
-      "why": "Track Java delivery with evidence; a criterion is done only when its evidence exists (real env where it says so)."
+      "why": "Evidence-backed delivery; real env where the label says so."
     },
     {
       "id": "java_inventory",
@@ -905,16 +905,17 @@
       "status": "real_env_validated",
       "introduced": "NXS-LOCAL-0165",
       "weight": 3,
-      "summary": "Interfaces, routes, HA roles and virtual systems collected from the live Check Point and Palo Alto estate; platform identity (serial, version, hotfix, content, uptime) collected for most devices.",
-      "evidence": "docs/history/builds/NXS-LOCAL-0365.md",
+      "summary": "Interfaces, routes, HA roles and VSs from the live CP and PAN estate; platform identity for most devices, incl. Spark and MDS hotfix levels and MDS HA role.",
+      "evidence": "docs/history/builds/NXS-LOCAL-0381.md",
       "criteria": [
         {"id":"cp_inventory","state":"done","weight":2,"label":"Check Point gateways, ClusterXL, VSX (real env)"},
         {"id":"pan_inventory","state":"done","weight":2,"label":"Palo Alto firewalls and HA (real env)"},
         {"id":"platform_identity","state":"done","weight":1,"label":"Serial, version, hotfix / content, uptime (real env, 53-55 of 62 CP)"},
-        {"id":"manager_inventory","state":"pending","weight":1,"label":"Panorama / MDS inventory shape"},
+        {"id":"manager_inventory","state":"pending","weight":1,"label":"Panorama inventory shape"},
+        {"id":"mds_inventory","state":"done","weight":1,"label":"MDS hotfix level and HA role (real env)"},
         {"id":"cli_parity","state":"done","weight":1,"label":"nexus-cli inventory commands"}
       ],
-      "why": "Track Java delivery with evidence; a criterion is done only when its evidence exists (real env where it says so)."
+      "why": "Evidence-backed delivery; real env where the label says so."
     },
     {
       "id": "java_configuration",
@@ -932,7 +933,7 @@
         {"id":"member_specific_tuning","state":"pending","weight":1,"label":"Per-member settings not counted as drift (38/39 clusters show DIFF today)"},
         {"id":"alignment","state":"pending","weight":2,"label":"Expected intent vs actual (Alignment plane)"}
       ],
-      "why": "Track Java delivery with evidence; a criterion is done only when its evidence exists (real env where it says so)."
+      "why": "Evidence-backed delivery; real env where the label says so."
     },
     {
       "id": "java_backup",
@@ -940,17 +941,17 @@
       "status": "real_env_validated",
       "introduced": "NXS-LOCAL-0158",
       "weight": 3,
-      "summary": "Check Point and Palo Alto backups taken from the live estate (83 devices, 16 GB), downloaded under RBAC, listed and compared; schedule and retention implemented but the fleet schedule is not switched on.",
-      "evidence": "docs/history/builds/NXS-LOCAL-0363.md",
+      "summary": "CP and PAN backups from the live estate, downloaded under RBAC, compared; daily fleet schedule ran from 2026-10-10 (off in development mode); deviation and size alerts.",
+      "evidence": "docs/history/builds/NXS-LOCAL-0377.md",
       "criteria": [
         {"id":"cp_backup","state":"done","weight":2,"label":"Check Point backup (real env)"},
         {"id":"pan_backup","state":"done","weight":1,"label":"Palo Alto bundle (real env)"},
         {"id":"download_rbac","state":"done","weight":1,"label":"Browser download under BACKUP_ADMIN (real env)"},
         {"id":"listing_compare","state":"done","weight":1},
-        {"id":"schedule_retention","state":"pending","weight":1,"label":"Scheduled fleet backup running on the estate"},
+        {"id":"schedule_retention","state":"done","weight":1,"label":"Scheduled fleet backup ran on the estate (daily 02:00)"},
         {"id":"storage_view","state":"done","weight":1,"label":"Storage use visible"}
       ],
-      "why": "Track Java delivery with evidence; a criterion is done only when its evidence exists (real env where it says so)."
+      "why": "Evidence-backed delivery; real env where the label says so."
     },
     {
       "id": "java_restore",
@@ -964,7 +965,7 @@
         {"id":"automated","state":"pending","weight":1},
         {"id":"acceptance","state":"pending","weight":1}
       ],
-      "why": "Track Java delivery with evidence; a criterion is done only when its evidence exists (real env where it says so)."
+      "why": "Evidence-backed delivery; real env where the label says so."
     },
     {
       "id": "java_checks",
@@ -980,7 +981,7 @@
         {"id":"fleet_evaluation","state":"done","weight":1,"label":"Evaluated on the live estate"},
         {"id":"evidence_gaps","state":"pending","weight":1,"label":"Data gaps closed by gated reads"}
       ],
-      "why": "Track Java delivery with evidence; a criterion is done only when its evidence exists (real env where it says so)."
+      "why": "Evidence-backed delivery; real env where the label says so."
     },
     {
       "id": "java_failover_readiness",
@@ -988,14 +989,15 @@
       "status": "in_progress",
       "introduced": null,
       "weight": 1,
-      "summary": "The readiness panel lists the enrolled clusters and shows only what the preflight API returns; no class 2 action exists.",
-      "evidence": "docs/history/builds/NXS-LOCAL-0366.md",
+      "summary": "Readiness from live evidence; controlled failover shipped, first CP pilot run 2026-10-21; no completed failover recorded.",
+      "evidence": "docs/history/builds/NXS-LOCAL-0376.md",
       "criteria": [
         {"id":"cluster_list","state":"done","weight":1,"label":"Real clusters, no demo data"},
-        {"id":"preflight_evidence","state":"pending","weight":1,"label":"Preflight checks from live evidence"},
+        {"id":"preflight_evidence","state":"done","weight":1,"label":"Preflight checks from live evidence (real env)"},
+        {"id":"pilot_failover","state":"pending","weight":1,"label":"Completed pilot failover and return (real env)"},
         {"id":"acceptance","state":"pending","weight":1}
       ],
-      "why": "Track Java delivery with evidence; a criterion is done only when its evidence exists (real env where it says so)."
+      "why": "Evidence-backed delivery; real env where the label says so."
     },
     {
       "id": "java_scheduler",
@@ -1003,14 +1005,14 @@
       "status": "in_progress",
       "introduced": "NXS-LOCAL-0363",
       "weight": 1,
-      "summary": "Backup scheduling (cron, fenced slots, catch-up) is implemented; inventory, configuration and script schedules are not.",
+      "summary": "Collection, readiness, backup and system-log schedules ran live; development mode keeps all but system logs off (2026-11-03); no script schedules.",
       "evidence": "docs/history/builds/NXS-LOCAL-0363.md",
       "criteria": [
         {"id":"backup_schedule","state":"done","weight":1},
-        {"id":"collection_schedule","state":"pending","weight":1,"label":"Inventory / configuration schedules"},
+        {"id":"collection_schedule","state":"done","weight":1,"label":"Inventory / configuration schedules (real env)"},
         {"id":"script_schedule","state":"pending","weight":1}
       ],
-      "why": "Track Java delivery with evidence; a criterion is done only when its evidence exists (real env where it says so)."
+      "why": "Evidence-backed delivery; real env where the label says so."
     },
     {
       "id": "java_project_plan",
@@ -1024,7 +1026,7 @@
         {"id":"panel","state":"done","weight":1},
         {"id":"current","state":"done","weight":1}
       ],
-      "why": "Track Java delivery with evidence; a criterion is done only when its evidence exists (real env where it says so)."
+      "why": "Evidence-backed delivery; real env where the label says so."
     },
     {
       "id": "java_operations",
@@ -1032,16 +1034,18 @@
       "status": "real_env_validated",
       "introduced": "NXS-LOCAL-0363",
       "weight": 2,
-      "summary": "Jobs screen with filters, pages and CSV export, nexus-cli for most actions, syslog/SMTP notifications (built, not yet pointed at real targets), service and storage view.",
+      "summary": "Jobs, nexus-cli, Change feed, System health, system logs, Reports R1, service view; notifications mask identities, real targets unproven.",
       "evidence": "docs/history/builds/NXS-LOCAL-0367.md",
       "criteria": [
         {"id":"jobs_screen","state":"done","weight":1,"label":"Jobs history, filters, export (real env)"},
         {"id":"cli_parity","state":"pending","weight":1,"label":"Every UI action has a CLI counterpart"},
         {"id":"notifications","state":"pending","weight":1,"label":"Syslog / SMTP relay proven against real targets"},
         {"id":"service_view","state":"done","weight":1,"label":"Pods and storage (real env)"},
-        {"id":"speed","state":"done","weight":1,"label":"Screens under one second (measured)"}
+        {"id":"speed","state":"done","weight":1,"label":"Screens under one second (measured)"},
+        {"id":"system_logs","state":"done","weight":1,"label":"Scheduled fleet system-log collection (real env)"},
+        {"id":"reports","state":"done","weight":1,"label":"Reports R1 generated as aiview (real env)"}
       ],
-      "why": "Track Java delivery with evidence; a criterion is done only when its evidence exists (real env where it says so)."
+      "why": "Evidence-backed delivery; real env where the label says so."
     },
     {
       "id": "java_overview",
@@ -1055,7 +1059,7 @@
         {"id":"implemented","state":"done","weight":1},
         {"id":"acceptance","state":"pending","weight":1,"label":"PO acceptance checklist under aiview"}
       ],
-      "why": "Track Java delivery with evidence; a criterion is done only when its evidence exists (real env where it says so)."
+      "why": "Evidence-backed delivery; real env where the label says so."
     },
     {
       "id": "java_automation",
@@ -1071,7 +1075,7 @@
         {"id":"script_runner","state":"pending","weight":1},
         {"id":"scheduled_writes","state":"pending","weight":1}
       ],
-      "why": "Track Java delivery with evidence; a criterion is done only when its evidence exists (real env where it says so)."
+      "why": "Evidence-backed delivery; real env where the label says so."
     },
     {
       "id": "java_vendor_expansion",
@@ -1079,20 +1083,67 @@
       "status": "in_progress",
       "introduced": "NXS-LOCAL-0369",
       "weight": 2,
-      "summary": "Contracts written for eight vendors. Built 2026-09-23..25: Provider-1/MDS export (one live export), Radware through the Cyber Controller (the controller's own backup ran live; a DefensePro getcfg not yet), Infoblox over HTTPS (not yet run live).",
+      "summary": "Contracts written for eight vendors. Built 2026-09-23..25: Provider-1/MDS export (one live export), Radware through the Cyber Controller (the controller's own backup ran live; a DefensePro getcfg not yet), Infoblox over HTTPS (run live, NXS-LOCAL-0370).",
       "evidence": "docs/history/builds/NXS-LOCAL-0369.md",
       "criteria": [
         {"id":"contracts","state":"done","weight":1},
         {"id":"radware","state":"pending","weight":1},
         {"id":"pulse","state":"pending","weight":1},
         {"id":"panorama","state":"pending","weight":1},
-        {"id":"infoblox","state":"pending","weight":1},
+        {"id":"infoblox","state":"done","weight":1},
         {"id":"fortigate","state":"pending","weight":1},
         {"id":"asa","state":"pending","weight":1},
         {"id":"provider1","state":"done","weight":1},
         {"id":"proxysg","state":"pending","weight":1}
       ],
-      "why": "Track Java delivery with evidence; a criterion is done only when its evidence exists (real env where it says so)."
+      "why": "Evidence-backed delivery; real env where the label says so."
+    },
+    {
+      "id": "java_policy",
+      "title": "Policy analysis (NSPM)",
+      "status": "in_progress",
+      "introduced": "NXS-LOCAL-0373",
+      "weight": 2,
+      "summary": "CP and PAN policy collected live; rule view, hygiene, shadowing, permissiveness, lifecycle; much still UNKNOWN.",
+      "evidence": "docs/history/builds/NXS-LOCAL-0380.md",
+      "criteria": [
+        {"id":"collection","state":"done","weight":2,"label":"CP and PAN policy collection (real env)"},
+        {"id":"hygiene","state":"done","weight":1,"label":"Hygiene and shadowing (live counts)"},
+        {"id":"permissiveness","state":"pending","weight":1,"label":"Permissiveness checked on the estate"},
+        {"id":"unknown_reduction","state":"pending","weight":1,"label":"UNKNOWN reduction levers"},
+        {"id":"acceptance","state":"pending","weight":1}
+      ],
+      "why": "Show what a rulebase allows and what is dead weight."
+    },
+    {
+      "id": "java_path_analysis",
+      "title": "Path analysis",
+      "status": "in_progress",
+      "introduced": "NXS-LOCAL-0378",
+      "weight": 2,
+      "summary": "Phase A live: topology, hop-by-hop policy and NAT, Path screen, device validation; phase B open.",
+      "evidence": "docs/history/builds/NXS-LOCAL-0378.md",
+      "criteria": [
+        {"id":"path_query","state":"done","weight":2,"label":"Masked path queries (real env, 20/20)"},
+        {"id":"device_validation","state":"done","weight":1,"label":"Validation on devices (real env)"},
+        {"id":"phase_b","state":"pending","weight":2,"label":"UDP, chained NAT, return path"}
+      ],
+      "why": "Answer whether traffic can pass, hop by hop."
+    },
+    {
+      "id": "java_packet_analysis",
+      "title": "Packet Analysis and Data Sanitizer",
+      "status": "automated_validated",
+      "introduced": "NXS-LOCAL-0371",
+      "weight": 1,
+      "summary": "Cases, ported engine, expert report, keyed sanitizer; no successful production run recorded.",
+      "evidence": "docs/history/builds/NXS-LOCAL-0371.md",
+      "criteria": [
+        {"id":"engine","state":"done","weight":1},
+        {"id":"sanitizer","state":"done","weight":1},
+        {"id":"production_run","state":"pending","weight":1,"label":"Successful production analysis"}
+      ],
+      "why": "Read captures without exposing identities."
     },
     {
       "id": "java_platform",
@@ -1100,7 +1151,7 @@
       "status": "in_progress",
       "introduced": "NXS-LOCAL-0367",
       "weight": 1,
-      "summary": "2 GiB limits, watched deploys and collision-free pseudonyms and the logmask-v3 masked log view are in; every module its own pod and the masking leak audit are open.",
+      "summary": "2 GiB limits, watched deploys, collision-free pseudonyms, logmask-v4 and masked notification identities are in; every module its own pod and the masking leak audit are open.",
       "evidence": "docs/history/builds/NXS-LOCAL-0368.md",
       "criteria": [
         {"id":"resource_limits","state":"done","weight":1},
@@ -1109,7 +1160,7 @@
         {"id":"module_per_pod","state":"pending","weight":1},
         {"id":"masking_audit","state":"pending","weight":1}
       ],
-      "why": "Track Java delivery with evidence; a criterion is done only when its evidence exists (real env where it says so)."
+      "why": "Evidence-backed delivery; real env where the label says so."
     }
   ]
 }
