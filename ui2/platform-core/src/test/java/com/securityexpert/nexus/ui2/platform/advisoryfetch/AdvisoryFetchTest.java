@@ -303,6 +303,17 @@ class AdvisoryFetchTest {
     }
 
     @Test
+    void failureWordsAreCodeWordsTheRunRecordAccepts() {
+        assertEquals("IO_HTTPCONNECTTIMEOUTEXCEPTION", HttpTransport.codeWord("IO_", new java.net.http.HttpConnectTimeoutException("x")));
+        assertEquals("ERROR_ILLEGALSTATEEXCEPTION", HttpTransport.codeWord("ERROR_", new IllegalStateException("never the message")));
+        assertTrue(HttpTransport.codeWord("IO_", new java.nio.channels.UnresolvedAddressException()).matches("[A-Z0-9_]{1,40}"));
+        for (String word : List.of(AdvisoryFetchRun.TLS_VALIDATION_FAILED, "ADDRESS_NOT_ALLOWED", "DOCUMENT_TOO_LARGE", "HTTP_403",
+                "INGEST_REFUSED", "NO_DOCUMENTS_NAMED", "INTERRUPTED")) {
+            assertTrue(word.matches("[A-Z0-9_]{1,40}"), word);
+        }
+    }
+
+    @Test
     void theSizeCapStopsAnOversizedDocument() throws IOException {
         assertArrayEquals(new byte[] {1, 2, 3}, HttpTransport.readCapped(new ByteArrayInputStream(new byte[] {1, 2, 3})));
         InputStream endless = new InputStream() {
@@ -341,6 +352,7 @@ class AdvisoryFetchTest {
             assertTrue(transport.document("paloalto", "run-00000001", AdvisorySources.PALOALTO.startUri(), "{}".getBytes(StandardCharsets.UTF_8)));
             assertTrue(transport.complete("paloalto", "run-00000001", 1, 0, null));
             assertTrue(transport.complete("paloalto", "run-00000001", 1, 1, "bad reason \" with quote"));
+            assertTrue(transport.complete("paloalto", "run-00000001", 1, 1, "lower_case_word"));
             assertFalse(transport.document("fortinet", "run-00000001", AdvisorySources.FORTINET.startUri(), "{}".getBytes(StandardCharsets.UTF_8)));
             assertEquals("POST /internal/advisories/paloalto token=" + token + " url=" + AdvisorySources.PALOALTO.startUri()
                     + " run=run-00000001 body={}", seen.get(0));

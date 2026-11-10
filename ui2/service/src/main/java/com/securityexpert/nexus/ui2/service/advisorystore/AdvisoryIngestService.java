@@ -154,6 +154,17 @@ public final class AdvisoryIngestService {
      * some entry was rejected, otherwise OK. Closing a run that is already closed changes nothing and answers success, so
      * a fetcher may repeat the call after a lost answer.
      */
+    /**
+     * The outcome of a run (contract section 4). A certificate failure fails the source whatever else arrived (the PO's
+     * stop rule). A run that fetched cleanly and had nothing to hand over is {@code OK}: the Cisco change list often names
+     * no file of the product family inside the window, and that must not age the source into "not evaluated".
+     */
+    static String outcome(int received, int rejected, int fetched, int failed, String reason) {
+        if ("TLS_VALIDATION_FAILED".equals(reason)) return "FAILED";
+        if (received == 0) return fetched > 0 && failed == 0 && reason == null ? "OK" : "FAILED";
+        return failed > 0 || rejected > 0 || reason != null ? "PARTIAL" : "OK";
+    }
+
     public Outcome complete(String source, String runId, byte[] body) {
         int fetched;
         int failed;
@@ -178,7 +189,7 @@ public final class AdvisoryIngestService {
             if (existing.isPresent() && existing.get().endedAt() != null) return Outcome.STORED;
             int received = existing.map(AdvisoryRepository.FeedRun::documentsReceived).orElse(0);
             int rejected = existing.map(AdvisoryRepository.FeedRun::rejected).orElse(0);
-            String outcome = received == 0 ? "FAILED" : failed > 0 || rejected > 0 ? "PARTIAL" : "OK";
+            String outcome = outcome(received, rejected, fetched, failed, reason);
             if (reason == null && !"OK".equals(outcome)) {
                 reason = received == 0 ? "NOTHING_RECEIVED" : failed > 0 ? "SOME_DOCUMENTS_FAILED" : "SOME_ENTRIES_REJECTED";
             }
