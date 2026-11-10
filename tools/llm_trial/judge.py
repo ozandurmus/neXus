@@ -21,12 +21,13 @@ import re
 from collections import Counter
 from pathlib import Path
 
-try:
-    from . import corpus, prompt
-except ImportError:  # run as a script
-    import sys
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from tools.llm_trial import corpus, prompt
+import sys
+
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from tools.llm_trial import corpus, prompt  # noqa: E402
 
 RATINGS = ("useful", "harmless", "wrong_plausible", "wrong_obvious")
 JUDGED_FIELDS = ("id", "case", "title", "level", "truth", "expected")

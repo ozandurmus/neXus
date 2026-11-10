@@ -6,11 +6,7 @@ import json
 import re
 from typing import Any
 
-try:
-    from . import prompt, schema
-except ImportError:  # pragma: no cover
-    import prompt  # type: ignore
-    import schema  # type: ignore
+from tools.llm_trial import prompt, schema  # repo root on sys.path (run_trial.py and the tests add it)
 
 URL_RE = re.compile(r"https?://|www\.", re.IGNORECASE)
 COMMAND_RE = re.compile(

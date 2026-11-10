@@ -10,10 +10,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-try:
-    from . import pricing
-except ImportError:  # pragma: no cover
-    import pricing  # type: ignore
+from tools.llm_trial import pricing  # repo root on sys.path (run_trial.py and the tests add it)
 
 VOLUMES = (
     ("upper_bound (92 devices x 30 days x 2)", 5520),
