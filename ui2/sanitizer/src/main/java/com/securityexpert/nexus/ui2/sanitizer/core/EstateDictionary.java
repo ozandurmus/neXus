@@ -18,7 +18,7 @@ import javax.crypto.Mac;
  * the service knows (device serials and recorded identities, management and interface addresses, host and cluster
  * names) is replaced by its masked form, so an unknown future format cannot leak a known identity.
  *
- * <p><b>Estate names</b> ({@code logmask-v5}, 2026-11-10): administrator, policy, rule, object, zone, virtual-system and
+ * <p><b>Estate names</b> ({@code logmask-v5}, 2026-11-10; Turkish case fold {@code logmask-v6}, 2026-11-11): administrator, policy, rule, object, zone, virtual-system and
  * MDS domain names ({@link EstateIdentity.Kind#isEstateName()}) are plain words with no shape, so they are matched
  * case-insensitively, and a multi-word name is matched as a phrase (its words joined by single spaces in the text).
  * Case folding here only widens what is masked; it never decides that two identifiers are equal. Device identities
@@ -56,9 +56,9 @@ public final class EstateDictionary {
     private final Map<Long, String> masked;
     /** Length and first/last character of each value: a cheap filter before a token is digested. */
     private final Set<Integer> shapes;
-    /** Estate names: digest of the lower-cased value (single spaces between words). */
+    /** Estate names: digest of the folded value ({@link #fold(char)}; single spaces between words). */
     private final Map<Long, String> names;
-    /** Length and lower-cased first/last character of each estate name. */
+    /** Length and folded first/last character of each estate name. */
     private final Set<Integer> nameShapes;
     private final int minLength;
     private final int maxLength;
@@ -308,8 +308,27 @@ public final class EstateDictionary {
     }
 
     private static int foldedShape(CharSequence s, int start, int end) {
-        return ((end - start) << 16) | ((Character.toLowerCase(s.charAt(start)) & 0xFF) << 8)
-                | (Character.toLowerCase(s.charAt(end - 1)) & 0xFF);
+        return ((end - start) << 16) | ((fold(s.charAt(start)) & 0xFF) << 8) | (fold(s.charAt(end - 1)) & 0xFF);
+    }
+
+    /**
+     * The case fold of an estate name ({@code logmask-v6}, 2026-11-11): one character to one character, so lengths
+     * never change. The Turkish dotted capital {@code İ} (U+0130), the dotless small {@code ı} (U+0131) and the
+     * ASCII {@code I} all fold to {@code i}; every other character folds with {@link Character#toLowerCase(char)}.
+     * The root-locale lower-casing the dictionary used before maps {@code İ} to two characters and leaves {@code ı}
+     * alone, so a name written in the other Turkish or English case escaped (planted-identity test E5: 12 of 20).
+     * Both sides use this fold: the stored name when the dictionary is built and the text when it is matched.
+     */
+    public static char fold(char c) {
+        if (c == '\u0130' || c == '\u0131' || c == 'I') return 'i';
+        return Character.toLowerCase(c);
+    }
+
+    /** {@link #fold(char)} applied to every character of {@code value}. */
+    public static String fold(String value) {
+        char[] out = new char[value.length()];
+        for (int i = 0; i < out.length; i++) out[i] = fold(value.charAt(i));
+        return new String(out);
     }
 
     private static long digest(Mac mac, String value) {
@@ -319,7 +338,7 @@ public final class EstateDictionary {
 
     private static long nameDigest(Mac mac, String value) {
         mac.update(NAME_DOMAIN);
-        return first8(mac.doFinal(value.toLowerCase(Locale.ROOT).getBytes(StandardCharsets.UTF_8)));
+        return first8(mac.doFinal(fold(value).getBytes(StandardCharsets.UTF_8)));
     }
 
     private static long first8(byte[] h) {

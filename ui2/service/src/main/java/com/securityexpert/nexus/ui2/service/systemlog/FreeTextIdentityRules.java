@@ -72,7 +72,11 @@ import com.securityexpert.nexus.ui2.sanitizer.core.PublicSuffixes;
  *   <li>vendor enum fields: the values of the Palo Alto JSON keys whose values the record lists as enum classes, times
  *       or counters ({@link #ENUM_KEYS}: {@code eventid}, {@code subtype}, {@code seqno}, {@code receive_time} ...) are
  *       not checked by the hostname and serial-like rules ({@code ike-nego-p1-start} stays an event id);</li>
- *   <li>dates ({@code 17-Oct-2026}), UUIDs, MAC addresses, {@code 0x} hex literals, and tokens the earlier passes
+ *   <li><b>hex-encoded addresses</b> ({@code logmask-v6}, 2026-11-11): {@code 0x} plus exactly eight hex digits can be an
+ *       IPv4 address, so one right after an address keyword ({@code addr}, {@code src_ip}, {@code peer=}, {@code gateway
+ *       :} ...) becomes the identity token {@code ID-} + 10 hex (same value, same token, in either letter case). The
+ *       same literal elsewhere stays: kernel masks, pointers and error codes are not identities;</li>
+ *   <li>dates ({@code 17-Oct-2026}), UUIDs, MAC addresses, other {@code 0x} hex literals, and tokens the earlier passes
  *       wrote ({@code h-}, {@code SN-}, {@code USR-}, {@code ID-}, {@code FW-TANGO-04}).</li>
  * </ul>
  *
@@ -90,6 +94,7 @@ final class FreeTextIdentityRules {
     static final String FQDN = "heuristic_fqdn";
     static final String SERIAL = "heuristic_serial";
     static final String HOST_CONTEXT = "heuristic_host_context";
+    static final String HEX_ADDRESS_COUNT = "heuristic_hex_address";
 
     /** File-name extensions (and systemd unit kinds) that make a dotted token a file name, not a host name. */
     static final Set<String> EXTENSIONS = Set.of("log", "elg", "txt", "csv", "json", "xml", "conf", "cfg", "ini", "gz",
@@ -179,6 +184,13 @@ final class FreeTextIdentityRules {
     private static final Pattern MAC_HYPHEN = Pattern.compile("(?i)[0-9a-f]{2}(?:-[0-9a-f]{2}){5}");
     private static final Pattern MAC_DOTTED = Pattern.compile("(?i)[0-9a-f]{4}\\.[0-9a-f]{4}\\.[0-9a-f]{4}");
     private static final Pattern HEX_LITERAL = Pattern.compile("0[xX][0-9a-fA-F]+");
+    /**
+     * {@code 0x} plus exactly eight hex digits right after an address keyword (optionally prefixed, {@code src_ip},
+     * {@code peer-addr}) and a separator: the hex form of an IPv4 address.
+     */
+    private static final Pattern HEX_ADDRESS = Pattern.compile("(?i)(?<![A-Za-z0-9])(?:[A-Za-z0-9]+[_-])*"
+            + "(?:ip|ipaddr|addr|address|src|dst|source|destination|peer|gateway|gw|remote|local|client|server|host|nexthop)"
+            + "[\"']?\\s*(?:[=:]\\s*|\\s+)[\"']?(0x[0-9a-f]{8})(?![A-Za-z0-9])");
     private static final Pattern LABEL = Pattern.compile("[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?");
     private static final Pattern ORDINAL = Pattern.compile("(?i)0?[1-9]|10|m[1-9]|m10|member[1-9]|member10|aa|bb");
     private static final Set<String> DATE_WORDS = Set.of("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep",
@@ -240,6 +252,7 @@ final class FreeTextIdentityRules {
     String apply(String line, Counts counts) {
         if (line == null || line.length() < 2) return line;
         List<Edit> edits = new ArrayList<>();
+        hexAddresses(line, edits);
         principals(line, edits);
         elgHosts(line, edits);
         List<int[]> enumSpans = enumSpans(line);
@@ -255,6 +268,18 @@ final class FreeTextIdentityRules {
             counts.add(e.category());
         }
         return out.append(line, copied, line.length()).toString();
+    }
+
+    // ---------------------------------------------------------------- hex-encoded addresses
+
+    private void hexAddresses(String line, List<Edit> edits) {
+        if (line.length() < 10 || line.indexOf('x') < 0 && line.indexOf('X') < 0) return;
+        Matcher m = HEX_ADDRESS.matcher(line);
+        while (m.find()) {
+            String literal = "0x" + m.group(1).substring(2).toLowerCase(Locale.ROOT);
+            add(edits, new Edit(m.start(1), m.end(1), tokens.payload(IdentityTokens.IDENTITY, literal), HEX_ADDRESS_COUNT,
+                    m.start(1), m.end(1)));
+        }
     }
 
     // ---------------------------------------------------------------- principals
