@@ -5,7 +5,7 @@ import type { ScreenId } from "./types";
 export const TAB_COVERAGE: readonly { screen: ScreenId; tabList: string; labels: readonly string[] }[] = [
   // Reports R1 (REPORTS_R1_CONTRACT.md "UI"): three tabs.
   { screen: "reports", tabList: "Reports sections", labels: ["Catalogue", "Run & preview", "History"] },
-  { screen: "inventory", tabList: "Lifecycle view", labels: ["Fleet", "Catalog"] },
+  { screen: "inventory", tabList: "Lifecycle view", labels: ["Fleet", "Catalog", "Vulnerabilities"] },
   // Diagnostics moved to Tools and the Change feed to the Changes screen (UI review 2026-11-05, C3/C4).
   { screen: "operations", tabList: "Operations sections", labels: ["HA & readiness", "Jobs", "System health"] },
   // Administration is four pages and a Product heading (C4); the former sub-pages are sections inside them.

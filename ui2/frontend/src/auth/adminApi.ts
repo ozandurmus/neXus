@@ -259,14 +259,57 @@ export interface LifecycleDevice {
   license_problem?: boolean;
   license_problems?: { label: string; status: string }[];
   live_patch?: LifecycleLivePatch | null;
+  /** The vulnerability check of ADVISORY_MATCHING_CONTRACT.md section 7; absent on a backend that predates it. */
+  vulnerabilities?: LifecycleVulnerabilities | null;
+}
+export type AdvisorySeverity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "NONE" | "UNKNOWN";
+/** What a device was compared against: "nothing matched" is only ever said together with this (contract rule 4). */
+export interface LifecycleVulnerabilityBasis {
+  source: string; advisories: number; oldest: string | null; newest: string | null; loaded_at: string | null; age_days: number | null;
+}
+export interface LifecycleVulnerabilities {
+  /** Only EVALUATED is a judgement; the other three states say why the device was not judged. */
+  state: "EVALUATED" | "NOT_EVALUATED" | "NOT_COVERED" | "VERSION_UNKNOWN";
+  reason?: "SOURCE_NEVER_LOADED" | "SOURCE_STALE" | "NO_COMPARATOR" | "VERSION_MISSING" | "VERSION_UNPARSED" | null;
+  product_key?: string | null;
+  affected?: number; affected_exploited?: number; affected_critical_high?: number; not_evaluable?: number; fixed?: number;
+  worst_severity?: AdvisorySeverity | null;
+  compared?: LifecycleVulnerabilityBasis | null;
 }
 export interface LifecycleFleet {
   as_of: string;
   devices: LifecycleDevice[];
-  summary: Record<string, number>;
+  /** Counters; `vuln_oldest_source_age_days` is null when no age is known, and the `vuln_*` keys are absent on an older backend. */
+  summary: Record<string, number | null>;
+}
+export interface LifecycleAdvisory {
+  /** `<source>:<vendor id>`; contains a colon, so it is URL-encoded in a path. */
+  advisory_id: string; source: string; title: string; severity: AdvisorySeverity; cvss_score: number | null; cve_ids: string[];
+  /** Exploited: one of the CVE ids is in the CISA Known Exploited Vulnerabilities catalog. */
+  exploited: boolean; exploited_since: string | null; published_on: string | null; updated_on: string | null;
+  /** Untrusted public text like every other advisory field: a link only when it starts with https://. Null when the server dropped it. */
+  source_url: string | null;
+  parse_state: "PARSED" | "NEEDS_REVIEW"; parse_note: string | null;
+  devices: { affected: number; fixed: number; not_affected: number; not_evaluable: number };
+}
+export interface LifecycleAdvisoryDevice {
+  /** `hostname` is the display name (the key the server masks for a masked session). */
+  advisory_id?: string; device_id: string; hostname: string | null; vendor: string; version: string | null;
+  verdict: "AFFECTED" | "FIXED" | "NOT_AFFECTED" | "NOT_EVALUABLE";
+  /** The code word of the rule that decided (IN_RANGE, AT_OR_ABOVE_FIX, ...); the set is open, an unknown word is shown as it is. */
+  basis: string; fixed_text: string | null;
+}
+export interface LifecycleAdvisorySource {
+  source: string; last_run_at: string | null; outcome: "OK" | "PARTIAL" | "FAILED" | null; reason: string | null;
+  advisories: number; needs_review: number; oldest: string | null; newest: string | null; age_days: number | null;
+  age_state: "OK" | "AMBER" | "RED" | "NEVER";
 }
 export const getLifecycle = () => call<LifecycleFleet>("/api/v2/lifecycle", "GET");
 export const getDeviceLifecycle = (id: string) => call<LifecycleDevice>(`/devices/${encodeURIComponent(id)}/lifecycle`, "GET");
+export const getLifecycleAdvisories = () => call<{ as_of: string; advisories: LifecycleAdvisory[] }>("/api/v2/lifecycle/advisories", "GET");
+export const getLifecycleAdvisory = (id: string) =>
+  call<{ advisory: LifecycleAdvisory; devices: LifecycleAdvisoryDevice[] }>(`/api/v2/lifecycle/advisories/${encodeURIComponent(id)}`, "GET");
+export const getLifecycleAdvisorySources = () => call<{ sources: LifecycleAdvisorySource[] }>("/api/v2/lifecycle/advisory-sources", "GET");
 export const getLifecycleCatalog = () => call<{ entries: LifecycleCatalogEntry[]; can_manage: boolean }>("/api/v2/lifecycle/catalog", "GET");
 export const saveLifecycleCatalog = (entry: LifecycleCatalogInput, id?: string) =>
   call(id ? `/api/v2/lifecycle/catalog/${encodeURIComponent(id)}` : "/api/v2/lifecycle/catalog", id ? "PUT" : "POST", entry);
