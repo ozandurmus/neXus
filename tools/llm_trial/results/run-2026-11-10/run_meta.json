@@ -1,0 +1,66 @@
+{
+ "run_id": "85a969e2068f",
+ "started_utc": "2026-11-10T13:42:32Z",
+ "ended_utc": "2026-11-10T14:00:41Z",
+ "provider": "claude",
+ "models": [
+  "claude-haiku-5-5",
+  "claude-sonnet-5-5",
+  "claude-opus-5-5"
+ ],
+ "efforts": [
+  "low",
+  "medium"
+ ],
+ "levels": [
+  1,
+  2
+ ],
+ "case_ids": [
+  "C01",
+  "C02",
+  "C03",
+  "C04",
+  "C05",
+  "C06",
+  "C07",
+  "C08",
+  "C09",
+  "C10",
+  "C11",
+  "C12",
+  "C13",
+  "C14",
+  "C15",
+  "C16",
+  "C17",
+  "C18",
+  "C19",
+  "C20",
+  "C21",
+  "C22",
+  "C23",
+  "C24",
+  "C25",
+  "C26",
+  "C27",
+  "C28",
+  "C29",
+  "C30",
+  "C31",
+  "C32"
+ ],
+ "max_tokens": 4096,
+ "budget_usd": 9.5,
+ "prompt_version": "trial-prompt-v1",
+ "sdk_version": "2.7.0",
+ "resumed_skipped": 24,
+ "totals": {
+  "calls": 360,
+  "skipped_for_budget": 0,
+  "by_status": {
+   "OK": 360
+  },
+  "spent_usd": 5.220569
+ }
+}

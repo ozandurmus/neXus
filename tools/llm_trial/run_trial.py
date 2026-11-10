@@ -209,6 +209,17 @@ def done_keys(results_path: Path) -> set[str]:
     return {k for k, status in keys.items() if status != "ERROR"}
 
 
+def prior_spend(results_path: Path) -> float:
+    """USD already spent by earlier invocations writing to this results file (every line counts:
+    an errored call that was retried was still billed for whatever it used)."""
+    total = 0.0
+    if results_path.exists():
+        for line in results_path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                total += float(json.loads(line).get("cost_usd") or 0.0)
+    return total
+
+
 def execute_jobs(jobs, provider, args, guard: BudgetGuard, results_path: Path) -> dict[str, Any]:
     write_lock = threading.Lock()
     totals = {"calls": 0, "skipped": 0, "by_status": {}}
@@ -257,6 +268,9 @@ def cmd_run(args, cases_loader: Callable[[], list[dict[str, Any]]]) -> int:
             if providers.call_id(j[0]["case_id"], j[1], j[2], j[3]) not in skip]
     (out_dir / "cases_snapshot.json").write_text(json.dumps(cases, ensure_ascii=False), encoding="utf-8")
     guard = BudgetGuard(args.budget_usd)
+    if args.resume:
+        guard.spent = prior_spend(results_path)  # the ceiling covers the whole results file
+        print(f"resume: {len(skip)} calls already done, ${guard.spent:.4f} already spent")
     started = utc_now()
     totals = execute_jobs(jobs, provider, args, guard, results_path)
     if totals["skipped"]:
