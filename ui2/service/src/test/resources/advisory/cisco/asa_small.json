@@ -1,0 +1,285 @@
+{
+ "document": {
+  "category": "csaf_security_advisory",
+  "csaf_version": "2.0",
+  "references": [
+   {
+    "category": "self",
+    "summary": "Cisco Secure Firewall Adaptive Security Appliance and Secure Firewall Threat Defense Software Remote Access SSL VPN Denial of Service Vulnerability",
+    "url": "https://example.invalid/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftd-vpn-dos-dzv4mQFF"
+   }
+  ],
+  "title": "Cisco Secure Firewall Adaptive Security Appliance and Secure Firewall Threat Defense Software Remote Access SSL VPN Denial of Service Vulnerability",
+  "tracking": {
+   "current_release_date": "2026-09-16T16:05:42+00:00",
+   "generator": {
+    "date": "2026-09-16T16:05:55+00:00",
+    "engine": {
+     "name": "TVCE"
+    }
+   },
+   "id": "cisco-sa-asaftd-vpn-dos-dzv4mQFF",
+   "initial_release_date": "2026-08-11T16:39:00+00:00",
+   "revision_history": [
+    {
+     "date": "2026-08-11T16:54:17+00:00",
+     "number": "1.0.0",
+     "summary": "Initial public release."
+    },
+    {
+     "date": "2026-09-16T16:05:42+00:00",
+     "number": "1.1.0",
+     "summary": "Updated fixed release information and added reference to security hardening releases."
+    }
+   ],
+   "status": "final",
+   "version": "1.1.0"
+  }
+ },
+ "product_tree": {
+  "branches": [
+   {
+    "name": "Cisco",
+    "category": "vendor",
+    "branches": [
+     {
+      "name": "Cisco Secure Firewall Adaptive Security Appliance (ASA) Software",
+      "category": "product_family",
+      "branches": [
+       {
+        "name": "9.16",
+        "category": "product_version",
+        "branches": [
+         {
+          "name": "9.16.1",
+          "category": "service_pack",
+          "product": {
+           "name": "9.16.1",
+           "product_id": "CSAFPID-283788"
+          }
+         },
+         {
+          "name": "9.16.2.14",
+          "category": "service_pack",
+          "product": {
+           "name": "9.16.2.14",
+           "product_id": "CSAFPID-286584"
+          }
+         },
+         {
+          "name": "9.16.4",
+          "category": "service_pack",
+          "product": {
+           "name": "9.16.4",
+           "product_id": "CSAFPID-290579"
+          }
+         }
+        ]
+       },
+       {
+        "name": "9.18",
+        "category": "product_version",
+        "branches": [
+         {
+          "name": "9.18.4",
+          "category": "service_pack",
+          "product": {
+           "name": "9.18.4",
+           "product_id": "CSAFPID-300821"
+          }
+         },
+         {
+          "name": "9.18.4.50",
+          "category": "service_pack",
+          "product": {
+           "name": "9.18.4.50",
+           "product_id": "CSAFPID-303039"
+          }
+         }
+        ]
+       },
+       {
+        "name": "9.20",
+        "category": "product_version",
+        "branches": [
+         {
+          "name": "9.20.1",
+          "category": "service_pack",
+          "product": {
+           "name": "9.20.1",
+           "product_id": "CSAFPID-300766"
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "name": "Cisco Secure Firewall Threat Defense (FTD) Software",
+      "category": "product_family",
+      "branches": [
+       {
+        "name": "7.0",
+        "category": "product_version",
+        "branches": [
+         {
+          "name": "7.0.0",
+          "category": "service_pack",
+          "product": {
+           "name": "7.0.0",
+           "product_id": "CSAFPID-282695"
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "name": "Cisco Firepower 2100 Series",
+      "category": "product_name",
+      "product": {
+       "name": "Cisco Firepower 2100 Series",
+       "product_id": "CSAFPID-277392"
+      }
+     },
+     {
+      "name": "Cisco Firepower 1000 Series",
+      "category": "product_name",
+      "product": {
+       "name": "Cisco Firepower 1000 Series",
+       "product_id": "CSAFPID-277393"
+      }
+     }
+    ]
+   }
+  ],
+  "relationships": [
+   {
+    "category": "installed_on",
+    "full_product_name": {
+     "name": "Cisco Secure Firewall Adaptive Security Appliance (ASA) Software 9.16.1 when installed on Cisco Firepower 2100 Series",
+     "product_id": "CSAFPID-283788:277392"
+    },
+    "product_reference": "CSAFPID-283788",
+    "relates_to_product_reference": "CSAFPID-277392"
+   },
+   {
+    "category": "installed_on",
+    "full_product_name": {
+     "name": "Cisco Secure Firewall Adaptive Security Appliance (ASA) Software 9.16.1 when installed on Cisco Firepower 1000 Series",
+     "product_id": "CSAFPID-283788:277393"
+    },
+    "product_reference": "CSAFPID-283788",
+    "relates_to_product_reference": "CSAFPID-277393"
+   },
+   {
+    "category": "installed_on",
+    "full_product_name": {
+     "name": "Cisco Secure Firewall Adaptive Security Appliance (ASA) Software 9.16.2.14 when installed on Cisco Firepower 2100 Series",
+     "product_id": "CSAFPID-286584:277392"
+    },
+    "product_reference": "CSAFPID-286584",
+    "relates_to_product_reference": "CSAFPID-277392"
+   },
+   {
+    "category": "installed_on",
+    "full_product_name": {
+     "name": "Cisco Secure Firewall Adaptive Security Appliance (ASA) Software 9.16.2.14 when installed on Cisco Firepower 1000 Series",
+     "product_id": "CSAFPID-286584:277393"
+    },
+    "product_reference": "CSAFPID-286584",
+    "relates_to_product_reference": "CSAFPID-277393"
+   },
+   {
+    "category": "installed_on",
+    "full_product_name": {
+     "name": "Cisco Secure Firewall Adaptive Security Appliance (ASA) Software 9.18.4 when installed on Cisco Firepower 2100 Series",
+     "product_id": "CSAFPID-300821:277392"
+    },
+    "product_reference": "CSAFPID-300821",
+    "relates_to_product_reference": "CSAFPID-277392"
+   },
+   {
+    "category": "installed_on",
+    "full_product_name": {
+     "name": "Cisco Secure Firewall Adaptive Security Appliance (ASA) Software 9.18.4 when installed on Cisco Firepower 1000 Series",
+     "product_id": "CSAFPID-300821:277393"
+    },
+    "product_reference": "CSAFPID-300821",
+    "relates_to_product_reference": "CSAFPID-277393"
+   },
+   {
+    "category": "installed_on",
+    "full_product_name": {
+     "name": "Cisco Secure Firewall Adaptive Security Appliance (ASA) Software 9.18.4.50 when installed on Cisco Firepower 2100 Series",
+     "product_id": "CSAFPID-303039:277392"
+    },
+    "product_reference": "CSAFPID-303039",
+    "relates_to_product_reference": "CSAFPID-277392"
+   },
+   {
+    "category": "installed_on",
+    "full_product_name": {
+     "name": "Cisco Secure Firewall Adaptive Security Appliance (ASA) Software 9.18.4.50 when installed on Cisco Firepower 1000 Series",
+     "product_id": "CSAFPID-303039:277393"
+    },
+    "product_reference": "CSAFPID-303039",
+    "relates_to_product_reference": "CSAFPID-277393"
+   },
+   {
+    "category": "installed_on",
+    "full_product_name": {
+     "name": "Cisco Secure Firewall Threat Defense (FTD) Software 7.0.0 when installed on Cisco Firepower 2100 Series",
+     "product_id": "CSAFPID-282695:277392"
+    },
+    "product_reference": "CSAFPID-282695",
+    "relates_to_product_reference": "CSAFPID-277392"
+   },
+   {
+    "category": "installed_on",
+    "full_product_name": {
+     "name": "Cisco Secure Firewall Threat Defense (FTD) Software 7.0.0 when installed on Cisco Firepower 1000 Series",
+     "product_id": "CSAFPID-282695:277393"
+    },
+    "product_reference": "CSAFPID-282695",
+    "relates_to_product_reference": "CSAFPID-277393"
+   }
+  ]
+ },
+ "vulnerabilities": [
+  {
+   "cve": "CVE-2026-20349",
+   "product_status": {
+    "known_affected": [
+     "CSAFPID-283788:277392",
+     "CSAFPID-283788:277393",
+     "CSAFPID-286584:277392",
+     "CSAFPID-286584:277393",
+     "CSAFPID-300821:277392",
+     "CSAFPID-300821:277393",
+     "CSAFPID-303039:277392",
+     "CSAFPID-303039:277393",
+     "CSAFPID-282695:277392",
+     "CSAFPID-282695:277393",
+     "CSAFPID-300766"
+    ]
+   },
+   "release_date": "2026-08-11T16:39:00+00:00",
+   "scores": [
+    {
+     "cvss_v3": {
+      "baseScore": 8.6,
+      "baseSeverity": "HIGH",
+      "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:N/I:N/A:H",
+      "version": "3.1"
+     },
+     "products": [
+      "CSAFPID-283788:277392",
+      "CSAFPID-283788:277393"
+     ]
+    }
+   ],
+   "title": "Cisco Secure Firewall Adaptive Security Appliance and Secure Firewall Threat Defense Software Remote Access SSL VPN Denial of Service Vulnerability"
+  }
+ ]
+}

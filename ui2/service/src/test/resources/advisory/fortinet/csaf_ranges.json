@@ -1,0 +1,358 @@
+{
+ "document": {
+  "title": "SSL-VPN Reflected XSS",
+  "category": "Fortinet PSIRT Advisories",
+  "csaf_version": "2.0",
+  "tracking": {
+   "id": "FG-IR-26-150",
+   "current_release_date": "2026-07-14T00:00:00",
+   "initial_release_date": "2026-07-14T00:00:00",
+   "revision_history": [
+    {
+     "number": "1",
+     "date": "2026-07-14T00:00:00",
+     "summary": "Initial Publication"
+    }
+   ],
+   "status": "final",
+   "version": "0"
+  }
+ },
+ "product_tree": {
+  "branches": [
+   {
+    "category": "vendor",
+    "name": "Fortinet PSIRT",
+    "branches": [
+     {
+      "category": "product",
+      "name": "FortiOS",
+      "branches": [
+       {
+        "category": "product_version_range",
+        "name": "FortiOS/ 8.0 all versions",
+        "product": {
+         "product_id": "FortiOS/ 8.0 all versions",
+         "name": "FortiOS"
+        }
+       },
+       {
+        "category": "product_version_range",
+        "name": "FortiOS/>=7.6.0|<=7.6.6",
+        "product": {
+         "product_id": "FortiOS >=7.6.0|<=7.6.6",
+         "name": "FortiOS"
+        }
+       },
+       {
+        "category": "product_version_range",
+        "name": "FortiOS/7.4 all versions",
+        "product": {
+         "product_id": "FortiOS 7.4 all versions",
+         "name": "FortiOS"
+        }
+       },
+       {
+        "category": "product_version_range",
+        "name": "FortiOS/7.2 all versions",
+        "product": {
+         "product_id": "FortiOS 7.2 all versions",
+         "name": "FortiOS"
+        }
+       }
+      ]
+     },
+     {
+      "category": "product",
+      "name": "FortiPAM",
+      "branches": [
+       {
+        "category": "product_version_range",
+        "name": "FortiPAM/ 1.9 all versions",
+        "product": {
+         "product_id": "FortiPAM/ 1.9 all versions",
+         "name": "FortiPAM"
+        }
+       },
+       {
+        "category": "product_version",
+        "name": "FortiPAM/1.8.0",
+        "product": {
+         "product_id": "FortiPAM 1.8.0",
+         "name": "FortiPAM"
+        }
+       },
+       {
+        "category": "product_version_range",
+        "name": "FortiPAM/1.7 all versions",
+        "product": {
+         "product_id": "FortiPAM 1.7 all versions",
+         "name": "FortiPAM"
+        }
+       },
+       {
+        "category": "product_version_range",
+        "name": "FortiPAM/1.6 all versions",
+        "product": {
+         "product_id": "FortiPAM 1.6 all versions",
+         "name": "FortiPAM"
+        }
+       },
+       {
+        "category": "product_version_range",
+        "name": "FortiPAM/1.5 all versions",
+        "product": {
+         "product_id": "FortiPAM 1.5 all versions",
+         "name": "FortiPAM"
+        }
+       },
+       {
+        "category": "product_version_range",
+        "name": "FortiPAM/1.4 all versions",
+        "product": {
+         "product_id": "FortiPAM 1.4 all versions",
+         "name": "FortiPAM"
+        }
+       },
+       {
+        "category": "product_version_range",
+        "name": "FortiPAM/1.3 all versions",
+        "product": {
+         "product_id": "FortiPAM 1.3 all versions",
+         "name": "FortiPAM"
+        }
+       },
+       {
+        "category": "product_version_range",
+        "name": "FortiPAM/1.2 all versions",
+        "product": {
+         "product_id": "FortiPAM 1.2 all versions",
+         "name": "FortiPAM"
+        }
+       },
+       {
+        "category": "product_version_range",
+        "name": "FortiPAM/1.1 all versions",
+        "product": {
+         "product_id": "FortiPAM 1.1 all versions",
+         "name": "FortiPAM"
+        }
+       },
+       {
+        "category": "product_version_range",
+        "name": "FortiPAM/1.0 all versions",
+        "product": {
+         "product_id": "FortiPAM 1.0 all versions",
+         "name": "FortiPAM"
+        }
+       }
+      ]
+     },
+     {
+      "category": "product",
+      "name": "FortiProxy",
+      "branches": [
+       {
+        "category": "product_version_range",
+        "name": "FortiProxy/ 7.6 all versions",
+        "product": {
+         "product_id": "FortiProxy/ 7.6 all versions",
+         "name": "FortiProxy"
+        }
+       },
+       {
+        "category": "product_version_range",
+        "name": "FortiProxy/>=7.4.0|<=7.4.3",
+        "product": {
+         "product_id": "FortiProxy >=7.4.0|<=7.4.3",
+         "name": "FortiProxy"
+        }
+       },
+       {
+        "category": "product_version_range",
+        "name": "FortiProxy/>=7.2.0|<=7.2.9",
+        "product": {
+         "product_id": "FortiProxy >=7.2.0|<=7.2.9",
+         "name": "FortiProxy"
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "vulnerabilities": [
+  {
+   "cve": "CVE-2026-23573",
+   "cwe": {
+    "id": "CWE-79",
+    "name": "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+   },
+   "title": "FortiOS - MEDIUM - FG-IR-26-150",
+   "scores": [
+    {
+     "products": [
+      "FortiOS"
+     ],
+     "cvss_v3": {
+      "version": "3.1",
+      "baseScore": 5.5,
+      "baseSeverity": "MEDIUM",
+      "temporalScore": 5.5,
+      "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N/E:P/RL:O/RC:C"
+     }
+    }
+   ],
+   "product_status": {
+    "known_affected": [
+     "FortiOS >=7.6.0|<=7.6.6",
+     "FortiOS 7.4 all versions",
+     "FortiOS 7.2 all versions"
+    ],
+    "known_not_affected": [
+     "FortiOS/ 8.0 all versions",
+     "FortiOS-7.6.7"
+    ]
+   },
+   "threats": [
+    {
+     "category": "impact",
+     "details": "Execute unauthorized code or commands"
+    }
+   ],
+   "remediations": [
+    {
+     "details": "FortiOS 8.0: Not Applicable\nFortiOS 7.6: Upgrade to 7.6.7 or above\nFortiOS 7.4: Migrate to a fixed release\nFortiOS 7.2: Migrate to a fixed release",
+     "category": "vendor_fix",
+     "product_ids": [
+      "FortiOS"
+     ]
+    },
+    {
+     "category": "mitigation",
+     "details": "A virtual patch is available. FortiGuard IPS signature package: Virtual Patch named \"FG-VD-60129.0day.\" is available in FMWP db update 26.021",
+     "product_ids": [
+      "FortiOS"
+     ]
+    }
+   ]
+  },
+  {
+   "cve": "CVE-2026-23573",
+   "cwe": {
+    "id": "CWE-79",
+    "name": "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+   },
+   "title": "FortiPAM - MEDIUM - FG-IR-26-150",
+   "scores": [
+    {
+     "products": [
+      "FortiPAM"
+     ],
+     "cvss_v3": {
+      "version": "3.1",
+      "baseScore": 5.5,
+      "baseSeverity": "MEDIUM",
+      "temporalScore": 5.5,
+      "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N/E:P/RL:O/RC:C"
+     }
+    }
+   ],
+   "product_status": {
+    "known_affected": [
+     "FortiPAM 1.8.0",
+     "FortiPAM 1.7 all versions",
+     "FortiPAM 1.6 all versions",
+     "FortiPAM 1.5 all versions",
+     "FortiPAM 1.4 all versions",
+     "FortiPAM 1.3 all versions",
+     "FortiPAM 1.2 all versions",
+     "FortiPAM 1.1 all versions",
+     "FortiPAM 1.0 all versions"
+    ],
+    "known_not_affected": [
+     "FortiPAM/ 1.9 all versions",
+     "FortiPAM-1.8.1"
+    ]
+   },
+   "threats": [
+    {
+     "category": "impact",
+     "details": "Execute unauthorized code or commands"
+    }
+   ],
+   "remediations": [
+    {
+     "details": "FortiPAM 1.9: Not Applicable\nFortiPAM 1.8: Upgrade to 1.8.1 or above\nFortiPAM 1.7: Migrate to a fixed release\nFortiPAM 1.6: Migrate to a fixed release\nFortiPAM 1.5: Migrate to a fixed release\nFortiPAM 1.4: Migrate to a fixed release\nFortiPAM 1.3: Migrate to a fixed release\nFortiPAM 1.2: Migrate to a fixed release\nFortiPAM 1.1: Migrate to a fixed release\nFortiPAM 1.0: Migrate to a fixed release",
+     "category": "vendor_fix",
+     "product_ids": [
+      "FortiPAM"
+     ]
+    },
+    {
+     "category": "mitigation",
+     "details": "A virtual patch is available. FortiGuard IPS signature package: Virtual Patch named \"FG-VD-60129.0day.\" is available in FMWP db update 26.021",
+     "product_ids": [
+      "FortiPAM"
+     ]
+    }
+   ]
+  },
+  {
+   "cve": "CVE-2026-23573",
+   "cwe": {
+    "id": "CWE-79",
+    "name": "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+   },
+   "title": "FortiProxy - MEDIUM - FG-IR-26-150",
+   "scores": [
+    {
+     "products": [
+      "FortiProxy"
+     ],
+     "cvss_v3": {
+      "version": "3.1",
+      "baseScore": 5.5,
+      "baseSeverity": "MEDIUM",
+      "temporalScore": 5.5,
+      "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N/E:P/RL:O/RC:C"
+     }
+    }
+   ],
+   "product_status": {
+    "known_affected": [
+     "FortiProxy >=7.4.0|<=7.4.3",
+     "FortiProxy >=7.2.0|<=7.2.9"
+    ],
+    "known_not_affected": [
+     "FortiProxy/ 7.6 all versions",
+     "FortiProxy-7.4.4",
+     "FortiProxy-7.2.10"
+    ]
+   },
+   "threats": [
+    {
+     "category": "impact",
+     "details": "Execute unauthorized code or commands"
+    }
+   ],
+   "remediations": [
+    {
+     "details": "FortiProxy 7.6: Not Applicable\nFortiProxy 7.4: Upgrade to 7.4.4 or above\nFortiProxy 7.2: Upgrade to 7.2.10 or above",
+     "category": "vendor_fix",
+     "product_ids": [
+      "FortiProxy"
+     ]
+    },
+    {
+     "category": "mitigation",
+     "details": "A virtual patch is available. FortiGuard IPS signature package: Virtual Patch named \"FG-VD-60129.0day.\" is available in FMWP db update 26.021",
+     "product_ids": [
+      "FortiProxy"
+     ]
+    }
+   ]
+  }
+ ]
+}
