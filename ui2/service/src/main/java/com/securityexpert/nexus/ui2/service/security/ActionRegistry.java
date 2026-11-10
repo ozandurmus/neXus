@@ -328,7 +328,11 @@ public final class ActionRegistry {
         register(new ActionDescriptor(SCHEDULED_JOBS_READ, true, Optional.empty()));
         register(new ActionDescriptor(SCHEDULED_JOBS_SET, true, Optional.of(RoleToken.OPERATION_ADMIN),
                 java.util.Set.of(RoleToken.SECURITY_ADMIN)));
-        register(new ActionDescriptor(DEVICE_CONFIGURATION_COLLECT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
+        // PO 2026-11-11 (PO_DECISION_RECORD_2026_11_11_AIVIEW_CONFIGURATION_AND_DISCOVERY.md): aiview (replay_viewer) may
+        // start the configuration collection too, like the inventory collection above. The configuration text read
+        // below stays onboarding_admin only.
+        register(new ActionDescriptor(DEVICE_CONFIGURATION_COLLECT, true, Optional.of(RoleToken.ONBOARDING_ADMIN),
+                java.util.Set.of(RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(DEVICE_CONFIGURATION_TEXT_READ, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(NOTIFICATIONS_READ, true, Optional.empty()));
         // 13G LIA-5: every local identity administration operation requires
@@ -354,7 +358,10 @@ public final class ActionRegistry {
         register(new ActionDescriptor(DISCOVERY_SSH_TRUST_RE_ENROLL, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(DISCOVERY_PAN_TRUST_ENROLL, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(DISCOVERY_PAN_TRUST_RE_ENROLL, true, Optional.of(RoleToken.SECURITY_ADMIN)));
-        register(new ActionDescriptor(DISCOVERY_RUN_START, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
+        // PO 2026-11-11: aiview may start a discovery run; the run read reaches it as status and counts only
+        // (DiscoveryController). Import and every other discovery write stay onboarding_admin.
+        register(new ActionDescriptor(DISCOVERY_RUN_START, true, Optional.of(RoleToken.ONBOARDING_ADMIN),
+                java.util.Set.of(RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(DISCOVERY_RUN_READ, true, Optional.empty()));
         register(new ActionDescriptor(DISCOVERY_RUN_IMPORT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(DISCOVERY_ACKNOWLEDGE, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));

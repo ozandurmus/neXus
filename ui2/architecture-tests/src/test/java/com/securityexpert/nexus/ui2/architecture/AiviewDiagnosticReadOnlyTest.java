@@ -67,7 +67,15 @@ class AiviewDiagnosticReadOnlyTest {
                 // generate, always in the masked projection; never report_raw_view
                 ActionRegistry.REPORT_READ, ActionRegistry.REPORT_GENERATE,
                 // inventory collection start, read-only (PO_DECISION_RECORD_2026_11_05_EVENING_BATCH.md item 5)
-                ActionRegistry.DEVICE_INVENTORY_COLLECT)), held);
+                ActionRegistry.DEVICE_INVENTORY_COLLECT,
+                // configuration collection and discovery run start (PO_DECISION_RECORD_2026_11_11_AIVIEW_CONFIGURATION_AND_DISCOVERY.md)
+                ActionRegistry.DEVICE_CONFIGURATION_COLLECT, ActionRegistry.DISCOVERY_RUN_START)), held);
+        // the sibling writes stay closed to the replay viewer
+        for (String closed : new String[]{ActionRegistry.DISCOVERY_RUN_IMPORT, ActionRegistry.DISCOVERY_ACKNOWLEDGE,
+                ActionRegistry.DEVICE_CONFIGURATION_TEXT_READ, ActionRegistry.DEVICE_REGISTER, ActionRegistry.DEVICE_DELETE,
+                ActionRegistry.DISCOVERY_SSH_TRUST_ENROLL, ActionRegistry.DISCOVERY_PAN_TRUST_ENROLL}) {
+            assertFalse(all.get(closed).requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER), closed);
+        }
         assertFalse(all.get(ActionRegistry.REPORT_RAW_VIEW).requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER));
         assertFalse(ActionRegistry.REPORT_RAW_ROLES.contains(RoleToken.REPLAY_VIEWER));
         assertFalse(all.get(ActionRegistry.PACKET_ANALYSIS_RAW_VIEW).requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER));

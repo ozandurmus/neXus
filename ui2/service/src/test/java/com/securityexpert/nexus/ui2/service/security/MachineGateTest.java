@@ -122,7 +122,7 @@ class MachineGateTest {
     }
 
     @Test
-    void inventoryCollectPostPassesTheMachineGuardButConfigurationCollectAndRegisterStayRefused() {
+    void collectAndDiscoveryStartPostsPassTheMachineGuardButImportRegisterAndDeleteStayRefused() {
         // PO 2026-11-05 evening, item 5: aiview starts the read-only inventory collection (one device or all).
         String cookie = "synthetic-cookie";
         Instant now = Instant.parse("2026-11-05T21:00:00Z");
@@ -136,7 +136,14 @@ class MachineGateTest {
                 mock(com.securityexpert.nexus.ui2.persistence.identity.AuthzDecisionRepository.class));
         assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.DEVICE_INVENTORY_COLLECT).isEmpty());
         assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "PUT", now, ActionRegistry.DEVICE_INVENTORY_COLLECT).isPresent());
-        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.DEVICE_CONFIGURATION_COLLECT).isPresent());
+        // PO 2026-11-11: configuration collection and discovery run start are allowed too; their other methods and
+        // the discovery import, the configuration text read and device writes stay refused.
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.DEVICE_CONFIGURATION_COLLECT).isEmpty());
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "PUT", now, ActionRegistry.DEVICE_CONFIGURATION_COLLECT).isPresent());
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.DISCOVERY_RUN_START).isEmpty());
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "DELETE", now, ActionRegistry.DISCOVERY_RUN_START).isPresent());
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.DISCOVERY_RUN_IMPORT).isPresent());
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.DISCOVERY_ACKNOWLEDGE).isPresent());
         assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.DEVICE_REGISTER).isPresent());
         assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.DEVICE_DELETE).isPresent());
     }

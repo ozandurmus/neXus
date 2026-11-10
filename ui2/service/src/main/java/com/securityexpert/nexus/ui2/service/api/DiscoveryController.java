@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.securityexpert.nexus.ui2.persistence.discovery.DiscoveryCandidateRecord;
 import com.securityexpert.nexus.ui2.persistence.discovery.DiscoveryRun;
 import com.securityexpert.nexus.ui2.service.discovery.DiscoveryRunService;
+import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAdvice;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 
 /**
@@ -151,7 +152,10 @@ public final class DiscoveryController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
         }
         DiscoveryRunService.ReadOutcome.Found found = (DiscoveryRunService.ReadOutcome.Found) outcome;
-        return ResponseEntity.ok(toRunBody(found.run(), found.candidates(), found.registryStateByCandidateId()));
+        // PO 2026-11-11: aiview reads a run's state and counts only. The candidates carry real host names and addresses,
+        // which the generic masking does not cover, so the replay viewer never receives them.
+        boolean statusOnly = PrivacyMaskingResponseBodyAdvice.isReplayViewer(servletRequest);
+        return ResponseEntity.ok(toRunBody(found.run(), found.candidates(), found.registryStateByCandidateId(), statusOnly));
     }
 
     @PostMapping("/discovery/runs/{runId}/import")
@@ -197,13 +201,19 @@ public final class DiscoveryController {
     }
 
     private static Map<String, Object> toRunBody(DiscoveryRun run, List<DiscoveryCandidateRecord> candidates,
-            Map<String, DiscoveryRunService.CandidateRegistryState> registryStateByCandidateId) {
+            Map<String, DiscoveryRunService.CandidateRegistryState> registryStateByCandidateId, boolean statusOnly) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("run_id", run.runId());
         body.put("vendor", run.vendor());
         body.put("state", run.state().name());
         body.put("job_id", run.jobId().orElse(null));
         body.put("outcome_summary", run.outcomeSummary().orElse(Map.of()));
+        if (statusOnly) {
+            body.put("candidate_count", candidates.size());
+            body.put("candidates", List.of());
+            body.put("candidates_withheld", true);
+            return body;
+        }
         body.put("candidates", candidates.stream()
                 .map(candidate -> toCandidateBody(candidate, registryStateByCandidateId.get(candidate.candidateId())))
                 .toList());
