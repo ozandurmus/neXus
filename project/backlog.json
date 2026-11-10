@@ -151,7 +151,7 @@
       "title": "PAN active/active is not excluded as a failover unit",
       "status": "planned",
       "priority": "P1",
-      "target": "PAN_ACTIVE_ACTIVE_FAILOVER_UNIT_GAP_2026_09_12.md; decision op_aa_vsls_scope",
+      "target": "PAN_ACTIVE_ACTIVE_FAILOVER_UNIT_GAP_2026_09_12.md",
       "note": ""
     },
     {
@@ -295,7 +295,7 @@
       "title": "UI2 Palo Alto transport: no credential ever appears in a...",
       "status": "planned",
       "priority": "P1",
-      "target": "PAN_DISCOVERY_CONTRACT.md T-1/T-5; the PAN...",
+      "target": "PAN_DISCOVERY_CONTRACT.md",
       "note": ""
     },
     {
@@ -421,7 +421,7 @@
       "title": "WAF (FortiWeb): decide scope, then measurement record",
       "status": "planned",
       "priority": "P3",
-      "target": "WAF_FORTIWEB_EXTERNAL_SOURCE_SURVEY_2026_09_15.md; blocked on AUTH-PLACEMENT",
+      "target": "WAF_FORTIWEB_EXTERNAL_SOURCE_SURVEY_2026_09_15.md",
       "note": ""
     },
     {
@@ -524,21 +524,12 @@
       "note": ""
     },
     {
-      "id": "java_product_plan_build_selection_is_stale",
-      "category": "project_state",
-      "title": "java_product_plan.json product_build_ids stops at...",
-      "status": "planned",
-      "priority": "P2",
-      "target": "project/java_product_plan.json product_build_ids",
-      "note": ""
-    },
-    {
       "id": "backup_plane_separate_service",
       "category": "backup",
       "title": "Backup plane as own service; re-run the security review",
       "status": "planned",
       "priority": "P1",
-      "target": "ASTRA_BACKUP_ENGINE_ARCHITECTURE_REVIEW.md; PO 2026-09-20",
+      "target": "ASTRA_BACKUP_ENGINE_ARCHITECTURE_REVIEW.md",
       "note": ""
     },
     {
@@ -601,7 +592,7 @@
       "title": "Apply the inventory and configuration design language",
       "status": "planned",
       "priority": "P1",
-      "target": "UI2_INVENTORY_AND_CONFIGURATION_DESIGN_LANGUAGE.md (DRAFT)",
+      "target": "UI2_INVENTORY_AND_CONFIGURATION_DESIGN_LANGUAGE.md",
       "note": ""
     },
     {
@@ -898,7 +889,7 @@
       "title": "HOST-A rebuilt 2026-09-25: PO browser acceptance under...",
       "status": "in_progress",
       "priority": "P0",
-      "target": "HOST_A_REBUILD_RUNBOOK.md section 5",
+      "target": "HOST_A_REBUILD_RUNBOOK.md",
       "note": ""
     },
     {
@@ -925,7 +916,7 @@
       "title": "Measure DefensePro backup through the Cyber Controller",
       "status": "planned",
       "priority": "P1",
-      "target": "RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_ENTRIES.md MEASURE FIRST 3",
+      "target": "RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_ENTRIES.md",
       "note": ""
     },
     {
@@ -935,15 +926,6 @@
       "status": "planned",
       "priority": "P2",
       "target": "research 2026-09-24; new gate document",
-      "note": ""
-    },
-    {
-      "id": "mds_ha_second_mds_read",
-      "category": "discovery",
-      "title": "MDS HA: read the second MDS / HA state (mdsstat or an...",
-      "status": "planned",
-      "priority": "P2",
-      "target": "CP management plane",
       "note": ""
     },
     {
@@ -965,15 +947,6 @@
       "note": ""
     },
     {
-      "id": "deploy_manifest_tests_eight_failures",
-      "category": "ui2",
-      "title": "tests/test_ui2_deployment_manifests.py: 8 pre-existing...",
-      "status": "planned",
-      "priority": "P2",
-      "target": "deploy/ui2/54-*, 55-*",
-      "note": ""
-    },
-    {
       "id": "run_build_sets_configuration_image",
       "category": "ui2",
       "title": "run_build.sh does not set the ui2-configuration image",
@@ -988,7 +961,7 @@
       "title": "The corporate inspection CA in ui2/.ca was taken from...",
       "status": "planned",
       "priority": "P3",
-      "target": "HOST_A_REBUILD_RUNBOOK.md section 6",
+      "target": "HOST_A_REBUILD_RUNBOOK.md",
       "note": ""
     },
     {
@@ -1118,21 +1091,12 @@
       "note": ""
     },
     {
-      "id": "ubi9_base_image_refresh",
-      "category": "Security",
-      "title": "Refresh the pinned UBI9 base image digests when Red Hat...",
-      "status": "planned",
-      "priority": "P2",
-      "target": "2026-10-31: OS-library baseline exception...",
-      "note": ""
-    },
-    {
       "id": "spring_boot_4_spring_security_migration",
       "category": "Security",
-      "title": "Migrate to Spring Boot 4 / Spring Framework 7.0.9+",
+      "title": "Spring Security: SAML (ADFS), LDAP, break-glass, then authz map",
       "status": "planned",
       "priority": "P1",
-      "target": "2026-11-05: CVE-2026-47884 baseline...",
+      "target": "ENTERPRISE_STACK_ALIGNMENT 0.2, 1.1",
       "note": ""
     },
     {
@@ -1190,15 +1154,6 @@
       "note": ""
     },
     {
-      "id": "cve_exception_review_dates",
-      "category": "engineering",
-      "title": "CVE exception reviews due 2026-10-31, 2026-11-05",
-      "status": "planned",
-      "priority": "P1",
-      "target": "security/baseline.yaml",
-      "note": ""
-    },
-    {
       "id": "manifest_drift_service_worker_configuration_policy",
       "category": "ui2",
       "title": "Worker still image+fallback patched; others use manifests",
@@ -1226,15 +1181,6 @@
       "note": ""
     },
     {
-      "id": "pan_object_precedence_for_permissiveness",
-      "category": "policy",
-      "title": "PAN object precedence for permissiveness",
-      "status": "planned",
-      "priority": "P2",
-      "target": "PO_DECISION_RECORD_2026_10_20_POLICY_PERMISSIVENESS_SCORING.md",
-      "note": ""
-    },
-    {
       "id": "spike_data_cap_not_enforced_by_pruner",
       "category": "reliability",
       "title": "512 MiB spike data cap not enforced by the pruner",
@@ -1259,6 +1205,60 @@
       "status": "planned",
       "priority": "P2",
       "target": "",
+      "note": ""
+    },
+    {
+      "id": "ubi_base_glibc_fix_pending",
+      "category": "security",
+      "title": "UBI9 runtime base: glibc MEDIUM findings wait for a Red Hat fixed package; refresh the base when the RHSA lands (CVE-2026-91403 acceptance stays: eMudhra roots are blocklisted in the image)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "BASE_IMAGE_REFRESH record s8",
+      "note": ""
+    },
+    {
+      "id": "hosta_apparmor_stacked_label_override",
+      "category": "reliability",
+      "title": "HOST-A keeps its own cri-containerd AppArmor profile: kernels -42 and -43 still stack the label; remove it when Ubuntu restores the old labelling (ledger entry 5/6)",
+      "status": "planned",
+      "priority": "P3",
+      "target": "HOST_LEDGER_HOST-A entries 5-6",
+      "note": ""
+    },
+    {
+      "id": "enterprise_phase0_logging_monitoring_scans",
+      "category": "Architecture",
+      "title": "Enterprise phase 0: JSON logs, metrics, secrets, SAST, questions",
+      "status": "planned",
+      "priority": "P1",
+      "target": "ENTERPRISE_STACK_ALIGNMENT 0.1, 0.3-0.6",
+      "note": ""
+    },
+    {
+      "id": "path_analysis_phase_b",
+      "category": "UI 2.0 (Java product line)",
+      "title": "Path phase B (DRAFT): UDP (literals await PO), chained NAT",
+      "status": "planned",
+      "priority": "P2",
+      "target": "PATH_ANALYSIS_PHASE_B_ARCHITECTURE_2026_11_05.md",
+      "note": ""
+    },
+    {
+      "id": "analysis_container",
+      "category": "UI 2.0 (Java product line)",
+      "title": "Analysis container (DRAFT): measure, review, PO go-ahead",
+      "status": "planned",
+      "priority": "P2",
+      "target": "ANALYSIS_CONTAINER_DESIGN_2026_11_05.md",
+      "note": ""
+    },
+    {
+      "id": "reports_r2",
+      "category": "UI 2.0 (Java product line)",
+      "title": "Reports R2: freeze the DRAFT contract, then build",
+      "status": "planned",
+      "priority": "P2",
+      "target": "REPORTS_R2_CONTRACT.md",
       "note": ""
     }
   ]

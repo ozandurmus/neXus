@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "NXS-LOCAL-0374",
+  "current_build": "NXS-LOCAL-0383",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,19 +150,49 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "NXS-LOCAL-0374",
-      "title": "System logs phase B: collectors, masked view, settings route, Spike Detective data",
+      "build": "NXS-LOCAL-0383",
+      "title": "Enterprise stack alignment, phase 0: Spring Security sign-in, JSON logs, monitoring, secrets, scans",
       "status": "in_progress",
-      "started": "2026-10-17",
-      "contract_doc": "docs/design/PO_DECISION_RECORD_2026_10_17_SYSTEM_LOG_PHASE_B.md"
+      "started": "2026-11-10",
+      "contract_doc": "docs/design/PO_DECISION_RECORD_2026_11_10_ENTERPRISE_STACK_ALIGNMENT.md"
     },
     "next": {
-      "build": "overview_acceptance_and_member_specific_tuning",
-      "title": "Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today)",
+      "build": "failover_pilot_preparation",
+      "title": "Failover pilot: repeat the Check Point pilot on one cluster, then record the closure evidence under aiview",
       "status": "planned",
-      "detail": "docs/design/OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md"
+      "detail": "docs/history/backlog/failover_pilot_preparation.md"
     },
     "upcoming": [
+      {
+        "build": "overview_acceptance_and_member_specific_tuning",
+        "title": "Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today)",
+        "status": "planned",
+        "detail": "docs/design/OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md"
+      },
+      {
+        "build": "path_analysis_phase_b",
+        "title": "Path analysis phase B: UDP matchers (command literals await PO approval), chained NAT, return path",
+        "status": "planned",
+        "detail": "docs/history/backlog/path_analysis_phase_b.md"
+      },
+      {
+        "build": "analysis_container",
+        "title": "Analysis container: measure, review, PO go-ahead (design DRAFT)",
+        "status": "planned",
+        "detail": "docs/history/backlog/analysis_container.md"
+      },
+      {
+        "build": "reports_r2",
+        "title": "Reports R2: freeze the contract, then schedules, delivery, five new reports",
+        "status": "planned",
+        "detail": "docs/history/backlog/reports_r2.md"
+      },
+      {
+        "build": "enterprise_alignment_phase_1",
+        "title": "Enterprise alignment phase 1: authorization map, Maven, Bitbucket and Jenkins, ship tooling port",
+        "status": "blocked",
+        "detail": "docs/design/PO_DECISION_RECORD_2026_11_10_ENTERPRISE_STACK_ALIGNMENT.md"
+      },
       {
         "build": "script_execution_module",
         "title": "Script Execution module (own pod) -- slice 1",

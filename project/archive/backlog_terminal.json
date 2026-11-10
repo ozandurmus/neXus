@@ -22,10 +22,10 @@
     {
       "id": "ui2_0_architecture_design",
       "category": "Product Surface / Platform",
-      "title": "UI 2.0 -- architecture design: separate Java operator console, LDAP multi-admin sessions",
+      "title": "UI 2.0 -- architecture design: separate Java operator...",
       "status": "done",
       "priority": "P1",
-      "target": "docs/design/UI2_0_ARCHITECTURE_DESIGN.md -- DRAFT, design resolved",
+      "target": "UI2_0_ARCHITECTURE_DESIGN.md",
       "note": "see docs/history/backlog/ui2_0_architecture_design.md"
     },
     {
@@ -58,7 +58,7 @@
     {
       "id": "op0c_uitest_fixture_verdict_diversity",
       "category": "Test coverage",
-      "title": "uitest render-harness fixture never exercises a non-INSUFFICIENT_EVIDENCE failover verdict",
+      "title": "uitest render-harness fixture never exercises a...",
       "status": "done",
       "priority": "P3",
       "target": "OP.0c follow-up",
@@ -110,7 +110,7 @@
     {
       "id": "op0b_s7_s6_test_order_isolation",
       "category": "Test infrastructure",
-      "title": "OP.0b S7 readiness tests leak state into the S6 PAN preflight collector tests when run...",
+      "title": "OP.0b S7 readiness tests leak state into the S6 PAN...",
       "status": "automated_validated",
       "priority": "P2",
       "target": "OP.0b",
@@ -514,7 +514,7 @@
     {
       "id": "snmpv3_fast_telemetry_plane",
       "category": "Architecture / Telemetry",
-      "title": "Optional SNMPv3 fast telemetry plane -- own security/command/OID gate before any code",
+      "title": "Optional SNMPv3 fast telemetry plane -- own...",
       "status": "deferred",
       "priority": "P2",
       "target": "PCP.7",
@@ -604,7 +604,7 @@
     {
       "id": "orchestrator_interactive_dashboard_app",
       "category": "Orchestrator / Observability",
-      "title": "Interactive PO + Orchestrator workbench -- human-action inbox, live movement tracking",
+      "title": "Interactive PO + Orchestrator workbench...",
       "status": "done",
       "priority": "P0",
       "target": "Follow-up to relay/NXS-LOCAL-0013...",
@@ -631,7 +631,7 @@
     {
       "id": "orchestrator_local_relay_append_relative_file_path_footgun",
       "category": "Orchestrator / reliability",
-      "title": "scripts/local_relay.py append accepts a relative --file path that silently shadows the...",
+      "title": "scripts/local_relay.py append accepts a relative...",
       "status": "done",
       "priority": "P1",
       "target": "scripts/local_relay.py::_resolve_relay_file / append CLI",
@@ -703,11 +703,11 @@
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_privacy_doc_amendment",
-      "title": "Amend PRIVACY_AND_DATA_HANDLING.md to name the UI 2.0 (PostgreSQL) database",
+      "title": "Amend PRIVACY_AND_DATA_HANDLING.md to name the UI 2.0...",
       "priority": "P2 -- UI 2.0",
       "status": "done",
       "note": "see docs/history/backlog/ui2_privacy_doc_amendment.md",
-      "target": "docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md §10"
+      "target": "UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md"
     },
     {
       "id": "project_queue_cannot_write_roadmap_now_next",
@@ -721,7 +721,7 @@
     {
       "id": "project_plan_baseline_fixture_partial_regeneration",
       "category": "Project state / durable record hygiene",
-      "title": "Regression: project_plan_payload_baseline.json current_build not regenerated with...",
+      "title": "Regression: project_plan_payload_baseline.json...",
       "status": "done",
       "priority": "P1",
       "target": "",
@@ -802,19 +802,19 @@
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_taxonomy_device_write_class_and_step_kind",
-      "title": "Taxonomy-successor movement: a utils/action_taxonomy.py class for a...",
+      "title": "Taxonomy-successor movement: a...",
       "priority": "P0 -- UI 2.0 primary, HIGH SCRUTINY",
       "status": "done",
       "note": "see docs/history/backlog/ui2_taxonomy_device_write_class_and_step_kind.md",
-      "target": "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md..."
+      "target": "UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md"
     },
     {
       "id": "auth_local_mechanism_contract",
       "category": "security",
-      "title": "Local authentication: storage, lockout, role binding for a directory-less identity",
+      "title": "Local authentication: storage, lockout, role binding...",
       "status": "done",
       "priority": "P1",
-      "target": "SUPERSEDED -- UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md (FROZEN)",
+      "target": "SUPERSEDED -- UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md",
       "note": ""
     },
     {
@@ -910,19 +910,19 @@
     {
       "id": "m14_local_ldap_d7_authorization_architecture",
       "category": "Architecture / Security",
-      "title": "Local LDAP / Active-Directory group-membership authorization producer for D7",
+      "title": "Local LDAP / Active-Directory group-membership...",
       "status": "done",
       "priority": "P2",
-      "target": "SUPERSEDED -- UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (FROZEN)",
+      "target": "SUPERSEDED -- UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md",
       "note": "see docs/history/backlog/m14_local_ldap_d7_authorization_architecture.md"
     },
     {
       "id": "pcp_storage_engine_decision",
       "category": "Storage / Architecture",
-      "title": "Storage-engine decision for the Device Registry and typed job plane (criteria recorded",
+      "title": "Storage-engine decision for the Device Registry and...",
       "status": "done",
       "priority": "P1",
-      "target": "SUPERSEDED -- UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (FROZEN)",
+      "target": "SUPERSEDED -- UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md",
       "note": "see docs/history/backlog/pcp_storage_engine_decision.md"
     },
     {
@@ -1000,7 +1000,7 @@
     {
       "id": "inventory_exclusions_management_ui",
       "category": "Inventory UX",
-      "title": "Inventory Exclusions add/restore/reason/audit workflows (write phase, DEPLOY.1A-adjacent)",
+      "title": "Inventory Exclusions add/restore/reason/audit...",
       "status": "deferred",
       "priority": "P2",
       "target": "RESERVE -- product intent kept; implementation is a UI 2.0...",
@@ -1090,19 +1090,19 @@
     {
       "id": "cp_discovery_java_implementation",
       "category": "ui2",
-      "title": "CP discovery in Java: management-plane candidate enumeration under the frozen...",
+      "title": "CP discovery in Java: management-plane candidate...",
       "status": "done",
       "priority": "P0",
-      "target": "CP_AND_VSX_DISCOVERY_CONTRACT.md; gate lifted 2026-09-13 for...",
+      "target": "CP_AND_VSX_DISCOVERY_CONTRACT.md",
       "note": ""
     },
     {
       "id": "pan_discovery_java_implementation",
       "category": "ui2",
-      "title": "PAN discovery in Java: Panorama candidate enumeration under the frozen discovery...",
+      "title": "PAN discovery in Java: Panorama candidate enumeration...",
       "status": "done",
       "priority": "P0",
-      "target": "PAN_DISCOVERY_CONTRACT.md; gate lifted 2026-09-13 for two methods",
+      "target": "PAN_DISCOVERY_CONTRACT.md",
       "note": ""
     },
     {
@@ -1117,10 +1117,10 @@
     {
       "id": "device_import_enrollment_contract_implementation",
       "category": "Architecture / Import-Enrollment",
-      "title": "Implement device import/enrollment (candidate to devices row, cluster/VS modifiers",
+      "title": "Implement device import/enrollment (candidate to...",
       "status": "done",
       "priority": "P1",
-      "target": "docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md (DRAFT",
+      "target": "DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md",
       "note": ""
     },
     {
@@ -1153,7 +1153,7 @@
     {
       "id": "project_plan_build_history_archive_split_lookup",
       "category": "Project state / durable record hygiene",
-      "title": "Pre-existing: build_history archive split removed build 0.6.1B.1.1 from the live payload",
+      "title": "Pre-existing: build_history archive split removed...",
       "status": "done",
       "priority": "P2",
       "target": "",
@@ -1225,7 +1225,7 @@
     {
       "id": "pan_backup_include_set_format_config",
       "category": "backup",
-      "title": "PAN backup bundle: add the SSH 'show' (set-format) running configuration alongside the...",
+      "title": "PAN backup bundle: add the SSH 'show' (set-format)...",
       "status": "automated_validated",
       "priority": "P0",
       "target": "",
@@ -1261,10 +1261,10 @@
     {
       "id": "overview_exception_and_evidence_screen",
       "category": "ui2",
-      "title": "Next major build (PO 2026-09-22): Overview rebuilt as an exception-and-evidence screen...",
+      "title": "Next major build (PO 2026-09-22): Overview rebuilt as...",
       "status": "automated_validated",
       "priority": "P0",
-      "target": "docs/design/OVERVIEW_COUNCIL_2026_09_22_ASTRA.md, _FABLE.md",
+      "target": "OVERVIEW_COUNCIL_2026_09_22_ASTRA.md",
       "note": ""
     },
     {
@@ -1297,7 +1297,7 @@
     {
       "id": "operations_readiness_panel_ignores_enrolled_clusters",
       "category": "ui2",
-      "title": "Operations › HA & readiness says 'No HA pair or cluster enrolled' while 38 clusters...",
+      "title": "Operations › HA & readiness says 'No HA pair or...",
       "status": "done",
       "priority": "P2",
       "target": "Point the readiness panel at the inventory's cluster list or state...",
@@ -1324,7 +1324,7 @@
     {
       "id": "infoblox_grid_member_discovery",
       "category": "collection",
-      "title": "Infoblox: enumerate grid members (GET /wapi/v<ver>/member) so the Grid Manager's...",
+      "title": "Infoblox: enumerate grid members (GET...",
       "status": "real_env_validated",
       "priority": "P2",
       "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
@@ -1544,6 +1544,60 @@
       "status": "real_env_validated",
       "priority": "P1",
       "target": "REPORTS_R1_CONTRACT.md",
+      "note": ""
+    },
+    {
+      "id": "ubi9_base_image_refresh",
+      "category": "Security",
+      "title": "Refresh the pinned UBI9 base image digests when Red Hat...",
+      "status": "done",
+      "priority": "P2",
+      "target": "2026-10-31: OS-library baseline exception...",
+      "note": ""
+    },
+    {
+      "id": "mds_ha_second_mds_read",
+      "category": "discovery",
+      "title": "MDS HA: read the second MDS / HA state (mdsstat or an...",
+      "status": "real_env_validated",
+      "priority": "P2",
+      "target": "CP management plane",
+      "note": ""
+    },
+    {
+      "id": "pan_object_precedence_for_permissiveness",
+      "category": "policy",
+      "title": "PAN object precedence for permissiveness",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "PO_DECISION_RECORD_2026_10_20_POLICY_PERMISSIVENESS_SCORING.md",
+      "note": ""
+    },
+    {
+      "id": "cve_exception_review_dates",
+      "category": "engineering",
+      "title": "CVE exception reviews due 2026-10-31, 2026-11-05",
+      "status": "done",
+      "priority": "P1",
+      "target": "security/baseline.yaml",
+      "note": ""
+    },
+    {
+      "id": "java_product_plan_build_selection_is_stale",
+      "category": "project_state",
+      "title": "java_product_plan.json product_build_ids stops at...",
+      "status": "done",
+      "priority": "P2",
+      "target": "project/java_product_plan.json product_build_ids",
+      "note": ""
+    },
+    {
+      "id": "deploy_manifest_tests_eight_failures",
+      "category": "ui2",
+      "title": "tests/test_ui2_deployment_manifests.py: 8 pre-existing...",
+      "status": "done",
+      "priority": "P2",
+      "target": "deploy/ui2/54-*, 55-*",
       "note": ""
     }
   ]

@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
-  "reviewed_at": "2026-10-20",
-  "reviewed_current_build": "NXS-LOCAL-0374",
+  "reviewed_at": "2026-11-10",
+  "reviewed_current_build": "NXS-LOCAL-0383",
   "authority": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_ARCHITECTURE_CONTRACT.md"
@@ -29,17 +29,50 @@
         "java_overview",
         "java_automation",
         "java_vendor_expansion",
+        "java_policy",
+        "java_path_analysis",
+        "java_packet_analysis",
         "java_platform"
       ]
     }
   ],
   "next": {
-    "build": "overview_acceptance_and_member_specific_tuning",
-    "title": "Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today)",
+    "build": "failover_pilot_preparation",
+    "title": "Failover pilot: repeat the Check Point pilot on one cluster, then record the closure evidence under aiview",
     "status": "planned",
-    "detail": "docs/design/OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md"
+    "detail": "docs/history/backlog/failover_pilot_preparation.md"
   },
   "upcoming": [
+    {
+      "build": "overview_acceptance_and_member_specific_tuning",
+      "title": "Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today)",
+      "status": "planned",
+      "detail": "docs/design/OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md"
+    },
+    {
+      "build": "path_analysis_phase_b",
+      "title": "Path analysis phase B: UDP matchers (command literals await PO approval), chained NAT, return path",
+      "status": "planned",
+      "detail": "docs/history/backlog/path_analysis_phase_b.md"
+    },
+    {
+      "build": "analysis_container",
+      "title": "Analysis container: measure, review, PO go-ahead (design DRAFT)",
+      "status": "planned",
+      "detail": "docs/history/backlog/analysis_container.md"
+    },
+    {
+      "build": "reports_r2",
+      "title": "Reports R2: freeze the contract, then schedules, delivery, five new reports",
+      "status": "planned",
+      "detail": "docs/history/backlog/reports_r2.md"
+    },
+    {
+      "build": "enterprise_alignment_phase_1",
+      "title": "Enterprise alignment phase 1: authorization map, Maven, Bitbucket and Jenkins, ship tooling port",
+      "status": "blocked",
+      "detail": "docs/design/PO_DECISION_RECORD_2026_11_10_ENTERPRISE_STACK_ALIGNMENT.md"
+    },
     {
       "build": "script_execution_module",
       "title": "Script Execution module (own pod) -- slice 1",
@@ -78,10 +111,21 @@
     }
   ],
   "product_build_ids": [
+    "NXS-LOCAL-0383",
+    "NXS-LOCAL-0382",
+    "NXS-LOCAL-0381",
+    "NXS-LOCAL-0380",
+    "NXS-LOCAL-0379",
+    "NXS-LOCAL-0378",
+    "NXS-LOCAL-0377",
+    "NXS-LOCAL-0376",
+    "NXS-LOCAL-0375",
     "NXS-LOCAL-0374",
     "NXS-LOCAL-0373",
     "NXS-LOCAL-0372",
     "NXS-LOCAL-0371",
+    "NXS-LOCAL-0370",
+    "NXS-LOCAL-0369",
     "NXS-LOCAL-0368",
     "NXS-LOCAL-0367",
     "NXS-LOCAL-0366",
@@ -104,6 +148,12 @@
     "NXS-LOCAL-0158"
   ],
   "backlog_classifications": {
+    "ubi_base_glibc_fix_pending": "java_debt",
+    "hosta_apparmor_stacked_label_override": "java_debt",
+    "enterprise_phase0_logging_monitoring_scans": "java_feature",
+    "path_analysis_phase_b": "java_feature",
+    "analysis_container": "java_feature",
+    "reports_r2": "java_feature",
     "masking_residual_gaps_system_log_and_sanitizer": "java_debt",
     "cp_aiview_readiness_script_client_error": "agent_operations",
     "pan_object_precedence_for_permissiveness": "java_feature",
@@ -303,6 +353,7 @@
     "Deployed on HOST-A and used daily by the Product Owner against the real estate: 105 devices, 39 clusters, 102 evaluated for compliance, 83 with a stored backup (16 GB). A criterion counts as done only with its evidence; real-environment criteria say so in their label. Overall progress 2026-09-23: 57 % of the declared Java roadmap (was shown as 25 % from a plan last reviewed 2026-09-20).",
     "Product direction 2026-09-22: 'Backbox-level minimum, and more' -- every UI action has a CLI counterpart (P1), RBAC over prohibition for downloads, Configuration on the old product's shape, platform identity facts collected, automation authored in the product, Script Execution with scheduled ledgered device writes under five conditions, every module its own pod.",
     "Active backlog statuses are preserved even where broad contract-era rows lag narrower delivered builds. Review their acceptance criteria before advancing them.",
-    "Unlisted terminal backlog records and old tracks remain historical reference; agent-operation records are excluded. New unclassified active rows produce a metadata warning."
+    "Unlisted terminal backlog records and old tracks remain historical reference; agent-operation records are excluded. New unclassified active rows produce a metadata warning.",
+    "Review 2026-11-10: builds 0375-0383 recorded; Policy, Path analysis and Packet Analysis added as features. Development mode since 2026-11-03 keeps every schedule but system logs off. Enterprise alignment phase 0 runs beside product work (PO 2026-11-10). NEXT (failover pilot) is a sequencing proposal awaiting PO confirmation."
   ]
 }
