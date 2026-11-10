@@ -118,6 +118,15 @@ spec:
                   name: ui2-e2e-machine-token
                   key: sha256
                   optional: true
+            # Advisory ingest (docs/design/ADVISORY_MATCHING_CONTRACT.md section 4): the SHA-256 of the advisory-fetch
+            # workload's own token. Unset = both ingest endpoints answer 404. Distinct from the e2e machine token above:
+            # neither token authorises the other's endpoint.
+            - name: UI2_ADVISORY_FETCH_TOKEN_SHA256
+              valueFrom:
+                secretKeyRef:
+                  name: ui2-advisory-fetch-token
+                  key: sha256
+                  optional: true
             - name: LOGGING_LEVEL_ROOT
               valueFrom:
                 configMapKeyRef:

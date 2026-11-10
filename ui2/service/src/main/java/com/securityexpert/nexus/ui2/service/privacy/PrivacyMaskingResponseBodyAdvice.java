@@ -452,6 +452,16 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                 }
                 case "status", "inventory_status", "policy_status", "action", "proto", "side" ->
                     result.put(key, value);
+                // Advisory matching (ADVISORY_MATCHING_CONTRACT.md section 8): an advisory row and a device verdict row hold public
+                // vendor text and product versions, never identities. The IP masker would read a four-part version such as
+                // 9.18.4.50 as an address, so these keys pass through, and only on rows that carry an advisory id or a verdict.
+                case "title", "fixed_text", "version", "source_url" -> {
+                    if (map.containsKey("advisory_id") || map.containsKey("verdict")) {
+                        result.put(key, value);
+                    } else {
+                        result.put(key, maskObject(value, clusterRef));
+                    }
+                }
                 default -> {
                     result.put(key, maskObject(value, clusterRef));
                 }
