@@ -75,8 +75,10 @@ public final class LifecycleProjection {
                 LocalDate expiry = null;
                 try { if (raw.matches("\\d{4}-\\d{2}-\\d{2}")) expiry = LocalDate.parse(raw); }
                 catch (RuntimeException ignored) { /* Retain the stored label as UNKNOWN. */ }
-                row.put("label", raw); row.put("expiry", text(expiry));
-                row.put("status", expiry == null ? "UNKNOWN" : expiry.isBefore(today) ? "EXPIRED" : "DATED");
+                // The vendor's own verdict (member:license expiration_status): a permanent license has no date and is not UNKNOWN.
+                boolean permanent = expiry == null && "PERMANENT".equals(value.path("expiration_status").asText(""));
+                row.put("label", permanent ? "Permanent" : raw); row.put("expiry", text(expiry));
+                row.put("status", permanent ? "PERMANENT" : expiry == null ? "UNKNOWN" : expiry.isBefore(today) ? "EXPIRED" : "DATED");
                 row.put("days_remaining", expiry == null ? null : ChronoUnit.DAYS.between(today, expiry));
                 result.add(row);
             }

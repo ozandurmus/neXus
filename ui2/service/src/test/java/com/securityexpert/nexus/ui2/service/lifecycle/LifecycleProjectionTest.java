@@ -95,6 +95,19 @@ class LifecycleProjectionTest {
         assertEquals("UNKNOWN", LifecycleProjection.licenses("INFOBLOX", "broken", TODAY).getFirst().get("status"));
     }
 
+    @Test void aPermanentInfobloxLicenseIsNotUnknownAndHasNoDate() {
+        var licenses = LifecycleProjection.licenses("INFOBLOX", """
+                [{"type":"GRID","kind":"Static","member":"grid","expiration_status":"PERMANENT"},
+                 {"type":"DNS","kind":"Static","member":"grid","expiry_date":"2026-10-20","expiration_status":"EXPIRING_SOON"}]
+                """, TODAY);
+        assertEquals("PERMANENT", licenses.getFirst().get("status"));
+        assertEquals("Permanent", licenses.getFirst().get("label"));
+        assertEquals(null, licenses.getFirst().get("expiry"));
+        assertEquals(null, licenses.getFirst().get("days_remaining"));
+        assertEquals("DATED", licenses.get(1).get("status"));
+        assertEquals("2026-10-20", licenses.get(1).get("expiry"));
+    }
+
     @Test void otherVendorsHaveNoCollectedLicensesOrSupportContractSemantics() {
         for (String vendor : List.of("check_point", "palo_alto", "fortinet", "bluecoat", "radware", "cisco_asa", "pulse_secure")) {
             var result = project(device("device-1", vendor, null), List.of(), "[{\"expiry_date\":\"2030-01-01\"}]", TODAY);
