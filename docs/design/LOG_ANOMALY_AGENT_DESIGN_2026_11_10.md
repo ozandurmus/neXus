@@ -196,7 +196,10 @@ egress profile therefore adds an allow list on top:
 1. **Closed vocabulary.** After masking, a word survives only if it is (a) in a fixed vocabulary shipped with the
    product (English words, vendor daemon and keyword lists, protocol and unit names), (b) an alias this request
    generated, or (c) an allowed shape: a number of up to five digits, a number right after a code keyword (`signal`,
-   `exit`, `errno`, `status`, `code`), an interface name, a time of day, a version, a vendor event id. Every other word
+   `exit`, `errno`, `status`, `code`), a hex literal of at most four hex digits after `0x` (an error code or an offset),
+   an interface name, a time of day, a version, a vendor event id. `0x` plus five or more hex digits, eight in
+   particular (the hex form of an IPv4 address), becomes the typed placeholder `<HEX>` (planted-identity test E5,
+   finding 6; decision note `LOG_MASKING_V6_TURKISH_FOLD_AND_HEX_ADDRESS_2026_11_11.md`). Every other word
    becomes `<W>`. Organisation-specific names are, almost by definition, not vocabulary words.
 2. **Estate dictionary check.** A vocabulary word that equals a known identity (a device called `falcon`) is still
    masked, because the dictionary pass runs first and the guard checks again (§3.5).

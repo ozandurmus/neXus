@@ -253,7 +253,7 @@ public final class EstateNameCatalog implements Supplier<EstateDictionary> {
         Set<String> seen = new HashSet<>();
         for (EstateIdentity identity : all) {
             Kind kind = kindOf(identity.kind());
-            if (seen.add(identity.kind() + ":" + identity.value().toLowerCase(Locale.ROOT))) kept.merge(kind, 1, Integer::sum);
+            if (seen.add(identity.kind() + ":" + EstateDictionary.fold(identity.value()))) kept.merge(kind, 1, Integer::sum);
         }
         EstateDictionary built = EstateDictionary.build(new ArrayList<>(all), base);
         dictionary = built;

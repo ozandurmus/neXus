@@ -119,7 +119,7 @@ class EstateNameCatalogTest {
     @Test
     void theMaskedViewHidesEveryNameInTheShapesTheMeasurementFound() {
         LogMasking.Session s = masking(new EstateNameCatalog(KEY, new FakeSource(), Duration.ofHours(1))).session();
-        assertEquals("logmask-v5", s.ruleSet());
+        assertEquals("logmask-v6", s.ruleSet());
         String[] lines = {
             "Nov 10 10:00:01 2026 gw-a kernel: " + ADMIN + " changed object",
             "Nov 10 10:00:02 2026 gw-a xpand[901]: User " + SNAPSHOT_ADMIN.toUpperCase(java.util.Locale.ROOT) + " logged out",

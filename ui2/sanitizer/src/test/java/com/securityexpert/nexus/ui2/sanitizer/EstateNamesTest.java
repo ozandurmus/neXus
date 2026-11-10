@@ -53,6 +53,42 @@ class EstateNamesTest {
         return d.replacer().replace(line, new Counts());
     }
 
+    /** Turkish letters written as escapes: dotted capital I (U+0130) and dotless small i (U+0131). */
+    private static final String DOTTED_CAPITAL = "\u0130";
+    private static final String DOTLESS = "\u0131";
+
+    @Test
+    void turkishCaseVariantsOfAnEstateNameAreOneName() {
+        // logmask-v6 (planted-identity test E5): the stored name and the text fold I, i, dotted capital and dotless to one letter.
+        String dotless = "Tarnh" + DOTLESS + "ll";
+        String plain = "Quellmir";
+        EstateDictionary d = EstateDictionary.build(List.of(
+                EstateIdentity.estateName(EstateIdentity.Kind.OBJECT, dotless),
+                EstateIdentity.estateName(EstateIdentity.Kind.POLICY, plain)), mappers);
+        String objectToken = tokens.payload(IdentityTokens.OBJECT, dotless);
+        String policyToken = tokens.payload(IdentityTokens.POLICY, plain);
+        for (String text : new String[] {dotless, "Tarnhill", "TARNHILL", "tarnhill", "TARNH" + DOTLESS + "LL", "tarnh" + DOTLESS + "ll"}) {
+            assertEquals("obj " + objectToken + " up", replace(d, "obj " + text + " up"), "a case variant escaped (value withheld)");
+        }
+        for (String text : new String[] {plain, "QUELLMIR", "quellmir", "QUELLM" + DOTTED_CAPITAL + "R", "quellm" + DOTLESS + "r",
+            "Quellm" + DOTTED_CAPITAL + "r"}) {
+            assertEquals("pol " + policyToken + " up", replace(d, "pol " + text + " up"), "a case variant escaped (value withheld)");
+        }
+        // A name stored with the dotted capital is matched by the plain forms too, as part of a phrase.
+        String stored = "QUELLM" + DOTTED_CAPITAL + "R Branch";
+        EstateDictionary phrase = EstateDictionary.build(List.of(EstateIdentity.estateName(EstateIdentity.Kind.POLICY, stored)), mappers);
+        assertEquals("p " + tokens.payload(IdentityTokens.POLICY, stored) + " ok", replace(phrase, "p quellmir BRANCH ok"));
+    }
+
+    @Test
+    void theTurkishFoldIsOneToOneAndDoesNotMergeDifferentWords() {
+        assertEquals("iiii", EstateDictionary.fold("I" + DOTTED_CAPITAL + DOTLESS + "i"));
+        assertEquals("quellmir".length(), EstateDictionary.fold("QUELLM" + DOTTED_CAPITAL + "R").length());
+        EstateDictionary d = EstateDictionary.build(List.of(EstateIdentity.estateName(EstateIdentity.Kind.POLICY, "Quellmir")), mappers);
+        assertEquals("pol Quellmar up", replace(d, "pol Quellmar up"));
+        assertEquals("pol Quellmirs up", replace(d, "pol Quellmirs up"));
+    }
+
     @Test
     void anAdministratorNameWithoutATriggerWordIsTheUserToken() {
         String out = replace(names(), "Nov 10 10:00:00 2026 " + ADMIN + " sshd[812]: session opened");

@@ -88,9 +88,11 @@ public final class LogMasking {
      * of that pass (the word after a host keyword or {@code from}/{@code to}, the sar header host, the host of an HCP
      * report file name; 2026-10-21), {@code logmask-v5} plus the estate names in the dictionary (administrator,
      * policy, rule, object, zone, virtual-system and MDS domain names, {@link EstateNameCatalog}) and an underscore as
-     * an address delimiter (2026-11-10). Returned with every masked page ({@code X-Syslog-Mask-Rules}).
+     * an address delimiter (2026-11-10), {@code logmask-v6} plus the Turkish case fold of estate names ({@code İ}, {@code ı}
+     * and {@code I} are one letter) and the hex-encoded address rule ({@code 0x} plus eight hex digits after an address
+     * keyword; 2026-11-11). Returned with every masked page ({@code X-Syslog-Mask-Rules}).
      */
-    public static final String RULE_SET = "logmask-v5";
+    public static final String RULE_SET = "logmask-v6";
 
     /** {@code hcp_report_<host>_<dd>_<mm>_<yy>_<HH>_<MM>}: prefix, host, time parts. */
     private static final Pattern HCP_REPORT = Pattern.compile("(?i)(hcp_report_)(.+?)((?:_\\d{1,4}){5})");
