@@ -521,12 +521,13 @@ Defined method per source:
 | Known-exploited flag | `www.cisa.gov` | the catalog JSON | JSON | the flag is also inside the CVE record |
 
 The last two rows are official public registries, not vendor pages. The PO's condition names vendor pages, so they
-are listed as decision D14. Without them, Check Point CVEs are discovered from the Jumbo release notes and sk185114
-only, and there is no "exploited in the wild" flag.
+were listed as decision D14; the PO approved both on 2026-11-10 ("İkisi de kullanılsın").
 
-Needed from the enterprise side before this can run: the proxy address and port, how the proxy authenticates a
-client (none, user and password, or Kerberos), whether it inspects TLS (then its CA must be trusted by the fetcher),
-and the allow-list request for the hosts above.
+**Answered on 2026-11-10** (`PO_DECISION_RECORD_2026_11_10_ADVISORY_INTAKE_PROXY_SOURCES_AND_FIX_RULES.md`): the
+proxy asks for no authentication and does not inspect TLS, so the fetcher sends no credential and validates every
+certificate against the public trust store, with no corporate CA; a chain that does not validate stops that source
+and is reported. The proxy is the one the image build jobs already use; its address is deployment configuration and
+is not written here. A first reach measurement through it found every host above reachable with a public chain.
 
 Refresh cadence:
 
@@ -657,7 +658,7 @@ tests, real-environment validation per vendor under the aiview persona.
 | U8 | How Cisco CSAF lists ASA versions and first fixed releases | parser spike on public files; no device involved |
 | U9 | Whether Check Point offers any machine-readable advisory feed | not found on 2026-11-10; the HTML pages of section 6.5 are used instead |
 | U10 | Live Patch state per virtual system on VSX; behaviour of `cplp list` on the MDS | one measured read each |
-| U11 | The corporate proxy: address, client authentication, TLS inspection and its CA, host allow-list procedure; whether HOST-A may reach it | enterprise network team, through the PO |
+| U11 | The corporate proxy: address, client authentication, TLS inspection and its CA, host allow-list procedure; whether HOST-A may reach it | resolved 2026-11-10: no authentication, no TLS inspection, the build jobs' proxy is reused, every source host reached (decision record of 2026-11-10) |
 | U12 | Rate limits and terms of use of the vendor feeds | none stated on the pages read; the bundle builder uses conditional GET and a low request rate |
 
 ## 12. Decisions
@@ -670,14 +671,14 @@ tests, real-environment validation per vendor under the aiview persona.
 | D4 | Advisory intake | online from the vendors' official pages through the corporate proxy, if the method is defined and the source parseable (section 6.5); offline bundle as fallback |
 | D5 | Cisco source | public bulletins (CSAF); no openVuln credentials |
 | D6 | How a Live Patch counts | an active Live Patch for a CVE is `FIXED_BY_LIVE_PATCH`; the vendor's 12-week Jumbo rule is shown as a deadline (section 5) |
-| D7 | Fix rules where the vendor has no machine-readable fixed version | neXus builds the rule from the vendor pages; a `security_admin` confirms with one click (section 6.4). Proposed in answer to the PO's question; awaits a yes |
+| D7 | Fix rules where the vendor has no machine-readable fixed version | approved ("Önersin, yönetici onaylasın"): neXus builds the rule from the vendor pages; a `security_admin` confirms with one click (section 6.4). An unconfirmed match is shown as pending and stays out of reports |
 | D8 | Support contracts | devices first, vendor portal APIs second, manual register last (section 4.8). Whether to use the Fortinet portal API (and Cisco's, once confirmed) is open: it needs a portal API account |
 | D9 | The view replaces Lifecycle as `Devices > Lifecycle and security` | approved |
 | D10 | Dispositions, `security_admin` only, with an expiry | approved |
 | D11 | Radware and Broadcom documentation | searched again (section 4.6) |
 | D12 | Finding history | approved: 400 days |
 | D13 | Start the no-new-command work | under way (slice S0); S1 follows the contract freeze |
-| D14 | May the fetcher also read the two official public registries (the CVE Program and the CISA known-exploited catalog), which are not vendor pages? | open; recommended yes: they supply the Check Point CVE list and the "exploited in the wild" flag |
+| D14 | May the fetcher also read the two official public registries (the CVE Program and the CISA known-exploited catalog), which are not vendor pages? | approved ("İkisi de kullanılsın") |
 | D15 | The remaining grade B rows (FG-3, FM-1, SG-1, IB-3) | approved ("Evet, dördü de"), measure-first |
 
 ## 13. Product Owner answers so far
@@ -688,8 +689,10 @@ tests, real-environment validation per vendor under the aiview persona.
 | 2026-11-10 | "Which rows does the approval cover?" (options: grade A only; grade A and B) | "Yalnız A grubu" (grade A only) | **Approved, exactly as written in section 4:** CP-1, CP-2, CP-4, AS-2, MC-1, MC-2, IB-2, with the forms section 4.1 names for a VSX gateway and a management server. Gate rows: `LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md`. **Not approved:** every grade B row (PA-1, PA-2, FG-2, FG-3, FM-1, SG-1, IB-3) and every grade C item; they stay `NOT_APPROVED` |
 | 2026-11-10 | The open decisions of section 12, asked in the PO session and relayed to this session by it | "Nexus proxy üzerinden internete çıkabilir bununla ilgili metod belli ise , ve parse edebilyorsa üreticinin resmi sayfalarından internete çıkabilir D4 için, d5, herkese açık bülten, d6, neden hafifletildi kalıcı düzeltme diyoruz ? livepatch verisini okumak 2 komut. bunu parse etmek de çok kolay, direk fixlendiğini göremiyor muyuz açıkların ? d7, anlamadım ? d8,bunu anlamadım neden elle giriyorum ? Portalden kontratları çekemez miyiz d9, olur d10, olur d11, neden bulamadığını anlamadım KB'ler ve guideler açık olmalı d12, olur d2, onayla d3,onayla onayla" | D2, D3, D4, D5, D9, D10, D12 decided as section 12 states. D6: the design now shows an active Live Patch as fixed (section 5.1 gives the vendor's wording and the one concrete consequence). D7 and D8: answered in sections 6.4 and 4.8. D11: section 4.6. The closing "onayla" is read by the PO session as approving the remaining grade B rows; this session records that reading and asks the PO to confirm it directly (D15) |
 | 2026-11-10 | "Do you also approve the remaining four grade B commands (measured on one device each)?" | "Evet, dördü de" | FG-3, FM-1, SG-1 and IB-3 approved as measure-first reads. With D2 and D3 this completes grade B; gate rows in `LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md` |
+| 2026-11-10 | Four questions on advisory intake, asked in the PO session and relayed by it: "Proxy kimlik doğrulama istiyor mu?"; "Proxy TLS denetimi yapıyor mu?"; "CVE Programı ve CISA KEV kaynak olarak kullanılsın mı?"; "neXus eşleşmeyi önersin, bir yönetici tek tıkla onaylasın mı?" | "Kimlik doğrulama yok"; "Hayır, denetim yok"; "İkisi de kullanılsın (Önerilen)"; "Önersin, yönetici onaylasın (Önerilen)" | D7 and D14 approved, U11 resolved, D4 complete. Record: `PO_DECISION_RECORD_2026_11_10_ADVISORY_INTAKE_PROXY_SOURCES_AND_FIX_RULES.md`. The implementation contract for slice S1 is `ADVISORY_MATCHING_CONTRACT.md` |
 
-The approval covers the literals. It does not approve a schema or the rest of this draft. Each approved read is first
+The device-read approvals above cover the literals. They do not approve a schema or the rest of this draft; slice S1
+is implemented from its own contract, not from this document. Each approved read is first
 sent to one device per platform with only its masked output shape logged (section 10); storage and parsing follow
 from the measured shapes.
 
