@@ -989,12 +989,12 @@
       "status": "in_progress",
       "introduced": null,
       "weight": 1,
-      "summary": "Readiness from live evidence; controlled failover shipped, first CP pilot run 2026-10-21; no completed failover recorded.",
+      "summary": "Readiness from live evidence; pilot failover SUCCEEDED 2026-10-22 on Check Point and Palo Alto.",
       "evidence": "docs/history/builds/NXS-LOCAL-0376.md",
       "criteria": [
         {"id":"cluster_list","state":"done","weight":1,"label":"Real clusters, no demo data"},
         {"id":"preflight_evidence","state":"done","weight":1,"label":"Preflight checks from live evidence (real env)"},
-        {"id":"pilot_failover","state":"pending","weight":1,"label":"Completed pilot failover and return (real env)"},
+        {"id":"pilot_failover","state":"done","weight":1,"label":"Completed pilot failover and return (real env)"},
         {"id":"acceptance","state":"pending","weight":1}
       ],
       "why": "Evidence-backed delivery; real env where the label says so."
