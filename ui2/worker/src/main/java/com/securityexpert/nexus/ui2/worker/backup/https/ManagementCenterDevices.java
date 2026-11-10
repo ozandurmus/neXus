@@ -46,6 +46,15 @@ final class ManagementCenterDevices {
         return List.copyOf(out);
     }
 
+    /** The device identifiers of the list, in the list's order, each validated with the MC identifier pattern; others are dropped. */
+    static List<String> uuids(JsonNode list) {
+        List<String> out = new ArrayList<>();
+        for (JsonNode d : items(list)) {
+            text(d, "uuid").filter(HttpsVendorPlan::isMcDeviceUuid).ifPresent(out::add);
+        }
+        return out;
+    }
+
     static Map<String, Integer> typeCounts(JsonNode list) {
         Map<String, Integer> counts = new TreeMap<>();
         for (JsonNode d : items(list)) {

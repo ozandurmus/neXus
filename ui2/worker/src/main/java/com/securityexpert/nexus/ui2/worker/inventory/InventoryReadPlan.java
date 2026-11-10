@@ -88,6 +88,34 @@ public final class InventoryReadPlan {
      *  cp_identity_cpinfo_hotfixes_mds, PO approval 2026-11-07): on the R82 management server the login-shell form
      *  answered nothing within 60 s; the interactive shell already carries the Check Point environment. */
     public static final String CP_CPINFO_HOTFIXES_MDS = "cpinfo -y all";
+    /**
+     * Lifecycle reads, group A (PO chat approval 2026-11-10, docs/design/LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md,
+     * V198 gates cp_lifecycle_*). Sent only behind {@link LifecycleReadSwitch}, after every other read of the run. A gateway
+     * gets the login-shell form, a VSX gateway the CF-2 {@code vsenv 0} form, a management server the bare literal in the
+     * interactive Expert shell (as {@link #CP_CPINFO_HOTFIXES_MDS}), a Quantum Spark only {@link #SPARK_SHOW_LICENSE}.
+     */
+    public static final String CP_CPLIC_PRINT_BARE = "cplic print";
+    public static final String CP_CPLP_LIST_BARE = "cplp list";
+    public static final String CP_CPLIC_PRINT = "bash -lc 'cplic print'";
+    public static final String CP_CPLP_LIST = "bash -lc 'cplp list'";
+    /** Gate cp_lifecycle_cplic_print_mds / cp_lifecycle_cplp_list_mds. */
+    public static final String CP_CPLIC_PRINT_MDS = CP_CPLIC_PRINT_BARE;
+    public static final String CP_CPLP_LIST_MDS = CP_CPLP_LIST_BARE;
+    /** Gate cp_lifecycle_spark_show_license: interactive clish, like {@code show software-version}. */
+    public static final String SPARK_SHOW_LICENSE = "show license";
+    /** The 60 s every lifecycle read is approved for. */
+    public static final java.time.Duration LIFECYCLE_READ_TIMEOUT = java.time.Duration.ofSeconds(60);
+
+    /** {@code bash -lc 'cplic print'}, or on a VSX host {@code bash -lc 'vsenv 0 && cplic print'}. */
+    public static String cplicPrintGateway(boolean vsxHost) {
+        return vsxHost ? checkPointPhysicalCommand(CP_CPLIC_PRINT_BARE, true) : CP_CPLIC_PRINT;
+    }
+
+    /** {@code bash -lc 'cplp list'}, or on a VSX host {@code bash -lc 'vsenv 0 && cplp list'}. */
+    public static String cplpListGateway(boolean vsxHost) {
+        return vsxHost ? checkPointPhysicalCommand(CP_CPLP_LIST_BARE, true) : CP_CPLP_LIST;
+    }
+
     public static final String CP_UPTIME = "uptime";
     /** Installed policy name and install time (V60, POLICY_INSTALL_TIME_COMMAND_GATE_ENTRIES.md #1); a login shell like cpinfo. */
     public static final String CP_CPSTAT_POLICY = "bash -lc 'cpstat -f policy fw'";

@@ -32,6 +32,8 @@ public final class CiscoAsaPlan {
     public static final String TERMINAL_PAGER_0 = "terminal pager 0";
     public static final String SHOW_CURPRIV = "show curpriv";
     public static final String SHOW_VERSION = "show version";
+    /** Lifecycle read, group A (PO 2026-11-10, gate asa_lifecycle_show_license_all): Smart Licensing state; measure-first. */
+    public static final String SHOW_LICENSE_ALL = "show license all";
     public static final String SHOW_FAILOVER_THIS_HOST = "show failover | include This host";
     public static final String SHOW_MODE = "show mode";
     public static final String SHOW_IP_ADDRESS = "show ip address";
@@ -171,6 +173,15 @@ public final class CiscoAsaPlan {
         }
         String state = m.group(2).toLowerCase(Locale.ROOT);
         return Optional.of(state.startsWith("active") ? "active" : state.startsWith("standby") ? "standby" : state);
+    }
+
+    /** The mode word of {@code show mode} ("single", "multiple"), or "unknown" when the answer names neither. */
+    public static String contextModeWord(String out) {
+        if (out == null) {
+            return "unknown";
+        }
+        String lower = out.toLowerCase(Locale.ROOT);
+        return lower.contains("mode: multiple") ? "multiple" : lower.contains("mode: single") ? "single" : "unknown";
     }
 
     /** "Security context mode: multiple" -> true. */

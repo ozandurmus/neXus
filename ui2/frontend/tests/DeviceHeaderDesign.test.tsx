@@ -363,6 +363,14 @@ describe("the header's Platform identity panel holds the grid (roadmap 2.6; PO 2
     expect(identityTiles(device(), null).some((t) => t.label === "Last configuration read")).toBe(true);
   });
 
+  it("shows the Live Patch package take only when the device reported it", () => {
+    const label = "Live Patch package take";
+    const withTake = identityTiles(device({ content_versions: { live_patch_package_take: "118" } }), null);
+    expect(withTake.find((t) => t.label === label)?.value).toBe("118");
+    expect(identityTiles(device({ content_versions: null }), null).some((t) => t.label === label)).toBe(false);
+    expect(identityTiles(device({ content_versions: {} }), null).some((t) => t.label === label)).toBe(false);
+  });
+
   it("shows those words in the grid, and UNKNOWN for a value that was attempted and is unknown", async () => {
     const d = device({ software_version: null });
     stub({ ...base(d), "/devices/dev-1/configuration": () => json(configuration(null)) });

@@ -221,6 +221,10 @@ public final class Ui2WorkerMain {
                 com.securityexpert.nexus.ui2.worker.inventory.PanConfiguredInterfaceSource.stored(
                         new com.securityexpert.nexus.ui2.persistence.device.configuration.LatestEffectiveRunningReader(
                                 transactionBoundary), artefactStore));
+        // Lifecycle reads, group A (PO 2026-11-10): measure-first, off unless UI2_LIFECYCLE_READS and UI2_LIFECYCLE_READ_DEVICES name them.
+        com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadSwitch lifecycleReads =
+                com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadSwitch.fromEnvironment();
+        inventoryCapabilityExecutor.withLifecycleReads(lifecycleReads);
         InventoryJobExecutor inventoryJobExecutor = new InventoryJobExecutor(leaseRepository, attemptRepository,
                 deviceEnrollmentReadPort, deviceRepository, deviceInventoryRepository, inventoryCapabilityExecutor,
                 platformFactsRepository)
@@ -301,7 +305,9 @@ public final class Ui2WorkerMain {
                             return new com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGateExecutor.LoginSecret(m.username(), m.password());
                         }),
                 fortiManagerExecutor);
-        httpsVendorExecutor.withCiscoAsa(new com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaExecutor(sshTransport, artefactStore, sshTransport::scpFetch));
+        httpsVendorExecutor.withLifecycleReads(lifecycleReads);
+        httpsVendorExecutor.withCiscoAsa(new com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaExecutor(sshTransport, artefactStore, sshTransport::scpFetch)
+                .withLifecycleReads(lifecycleReads));
         configurationCapabilityExecutor.withHttpsVendorExecutor(httpsVendorExecutor);
         backupJobExecutor.withHttpsVendorExecutor(httpsVendorExecutor,
                 new com.securityexpert.nexus.ui2.persistence.device.JooqDeviceSecretReferenceRepository(transactionBoundary));

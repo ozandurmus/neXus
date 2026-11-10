@@ -80,9 +80,9 @@ public final class HttpsInventoryJobExecutor {
                 }
             }
         } else if ("radware_cyber_controller".equals(vendor)) {
-            outcome = CyberControllers.oneAtATime(target, () -> executor.inventory(vendor, target, credentialRef));
+            outcome = CyberControllers.oneAtATime(target, () -> executor.inventory(vendor, target, credentialRef, deviceId));
         } else {
-            outcome = executor.inventory(vendor, target, credentialRef);
+            outcome = executor.inventory(vendor, target, credentialRef, deviceId);
         }
         boolean completed = outcome instanceof HttpsVendorExecutor.InventoryOutcome.Completed;
         if (!attempts.writeOutcome(attemptId, leaseEpoch, completed ? "MATCHED" : "EXPECTATION_UNMET", null, 0L, 0L,
