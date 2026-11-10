@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.worker.inventory;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -17,6 +18,35 @@ import com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadSwitch.Kind;
 class PersistingLifecycleResultSinkTest {
 
     private record Write(String type, String deviceId, String readKind, String outcome, String reason, int items, Object first) { }
+
+    @Test
+    void theInfobloxNiosVersionIsRecordedAsAPlatformFactAndNothingElseOfTheAnswerIs() {
+        FakeRepository repository = new FakeRepository();
+        List<com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts> recorded = new ArrayList<>();
+        var facts = new com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository() {
+            @Override public void record(com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts f) { recorded.add(f); }
+            @Override public java.util.Optional<com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts> find(String id) { return java.util.Optional.empty(); }
+            @Override public Map<String, com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts> findAll() { return Map.of(); }
+        };
+        PersistingLifecycleResultSink sink = new PersistingLifecycleResultSink(repository, facts);
+        sink.answer(Kind.INFOBLOX_UPGRADESTATUS_GRID, "dev-grid", null,
+                "[{\"_ref\":\"upgradestatus/b25l:gm.corp.example\",\"current_version\":\"9.0.4-50240\"}]");
+        assertEquals(1, recorded.size());
+        assertEquals("dev-grid", recorded.get(0).deviceId());
+        assertEquals(Map.of("nios_version", "9.0.4-50240"), recorded.get(0).contentVersions());
+        assertEquals("infoblox_upgradestatus_grid", recorded.get(0).sourceRead());
+        assertTrue(recorded.get(0).serialNumber().isEmpty() && recorded.get(0).hotfixLevel().isEmpty());
+        assertFalse(recorded.toString().contains("gm.corp"));
+
+        // No version, a refusal, a non-version value or no facts repository: nothing is written, the last version stays.
+        sink.answer(Kind.INFOBLOX_UPGRADESTATUS_GRID, "dev-grid", null, "[{\"type\":\"GRID\"}]");
+        sink.answer(Kind.INFOBLOX_UPGRADESTATUS_GRID, "dev-grid", null, "[{\"current_version\":\"gm.corp.example admin\"}]");
+        sink.answer(Kind.INFOBLOX_UPGRADESTATUS_GRID, "dev-grid", null, "not json");
+        sink.notCollected(Kind.INFOBLOX_UPGRADESTATUS_GRID, "dev-grid", "FAILED", "Http400");
+        new PersistingLifecycleResultSink(repository).answer(Kind.INFOBLOX_UPGRADESTATUS_GRID, "dev-grid", null, "[{\"current_version\":\"9.0.4\"}]");
+        assertEquals(1, recorded.size());
+        assertTrue(repository.writes.isEmpty(), "the version read writes no license row");
+    }
 
     private static final class FakeRepository implements DeviceLifecycleRepository {
         final List<Write> writes = new ArrayList<>();
@@ -100,7 +130,7 @@ class PersistingLifecycleResultSinkTest {
     void kindsTheContractDoesNotParseAreIgnoredAndSoIsANullDevice() {
         FakeRepository repository = new FakeRepository();
         PersistingLifecycleResultSink sink = new PersistingLifecycleResultSink(repository);
-        for (Kind kind : List.of(Kind.MC_SYSTEM_VERSION, Kind.MC_SHOW_LICENSES, Kind.FMG_FMUPDATE_DBCONTRACT, Kind.INFOBLOX_UPGRADESTATUS_GRID)) {
+        for (Kind kind : List.of(Kind.MC_SYSTEM_VERSION, Kind.MC_SHOW_LICENSES, Kind.FMG_FMUPDATE_DBCONTRACT)) {
             sink.answer(kind, "dev-1", null, "anything");
             sink.notCollected(kind, "dev-1", "FAILED", "TimedOut");
         }

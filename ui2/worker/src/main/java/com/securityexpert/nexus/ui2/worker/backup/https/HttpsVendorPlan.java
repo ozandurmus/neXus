@@ -45,8 +45,13 @@ public final class HttpsVendorPlan {
      */
     public static final String INFOBLOX_LICENSE_GRIDWIDE =
             "/wapi/v%s/license:gridwide?_return_fields=type,expiry_date,expiration_status,limit";
-    /** Lifecycle read, group B (PO 2026-11-10, gate infoblox_upgradestatus_grid): the grid's upgrade status, once per inventory. */
-    public static final String INFOBLOX_UPGRADESTATUS_GRID = "/wapi/v%s/upgradestatus?type=GRID";
+    /**
+     * Lifecycle read, group B (PO 2026-11-10, gate infoblox_upgradestatus_grid): the grid's running NIOS version, once per
+     * inventory. The first measurement showed that the grid does not return {@code current_version} by default; the PO
+     * approved adding that one return field ("Evet, ekle", 2026-11-10, relayed by the PO session;
+     * docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md, amendment). Nothing else is requested.
+     */
+    public static final String INFOBLOX_UPGRADESTATUS_GRID = "/wapi/v%s/upgradestatus?type=GRID&_return_fields=current_version";
     public static final String INFOBLOX_GETGRIDDATA = "/wapi/v%s/fileop?_function=getgriddata";
     public static final String INFOBLOX_GETGRIDDATA_BODY = "{\"type\": \"BACKUP\"}";
     public static final String INFOBLOX_DOWNLOADCOMPLETE = "/wapi/v%s/fileop?_function=downloadcomplete";

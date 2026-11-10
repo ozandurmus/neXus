@@ -120,6 +120,10 @@ export function identityTiles(device: DeviceSummary, collectedAt: string | null,
     ...(!isPaloAlto && device.content_versions?.live_patch_package_take
       ? [{ label: "Live Patch package take", value: device.content_versions.live_patch_package_take } satisfies IdentityTile]
       : []),
+    // Infoblox: the grid's running NIOS version (upgradestatus read); the software version above is the WAPI schema version.
+    ...(!isPaloAlto && device.content_versions?.nios_version
+      ? [{ label: "NIOS version", value: device.content_versions.nios_version } satisfies IdentityTile]
+      : []),
     { label: "Uptime", value: device.uptime_text ?? null, ...(isPaloAlto ? panNotCollected : { absent: needsGate, absentWord: "Not read yet" as const }) },
     haRole,
     { label: isPaloAlto ? "Virtual systems (VSYS)" : "Virtual systems (VSX)", value: vs.length > 0 ? `${vs.length} · ${vs.join(", ")}` : "none" },

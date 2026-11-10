@@ -29,10 +29,22 @@ public final class PersistingLifecycleResultSink implements LifecycleResultSink 
     private static final Pattern REASON = Pattern.compile("[A-Za-z0-9_.:-]{1,80}");
     private static final java.util.Set<String> NOT_COLLECTED = java.util.Set.of("REFUSED", "FAILED", "SKIPPED", "EMPTY");
 
+    /** The platform facts key and source read of the Infoblox NIOS version (amendment A-2026-11-10). */
+    public static final String NIOS_VERSION_KEY = "nios_version";
+    public static final String NIOS_VERSION_SOURCE = "infoblox_upgradestatus_grid";
+
     private final DeviceLifecycleRepository repository;
+    private final com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts;
 
     public PersistingLifecycleResultSink(DeviceLifecycleRepository repository) {
+        this(repository, null);
+    }
+
+    /** {@code platformFacts}: where the Infoblox NIOS version is recorded; null: that read is not stored. */
+    public PersistingLifecycleResultSink(DeviceLifecycleRepository repository,
+            com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts) {
         this.repository = Objects.requireNonNull(repository, "repository");
+        this.platformFacts = platformFacts;
     }
 
     @Override
@@ -55,7 +67,8 @@ public final class PersistingLifecycleResultSink implements LifecycleResultSink 
                     repository.recordLivePatchRead(deviceId, kind.token(), parsed.outcome().name(), parseReason(parsed.outcome().name()),
                             parsed.items());
                 }
-                case MC_SYSTEM_VERSION, MC_SHOW_LICENSES, FMG_FMUPDATE_DBCONTRACT, INFOBLOX_UPGRADESTATUS_GRID -> {
+                case INFOBLOX_UPGRADESTATUS_GRID -> niosVersion(deviceId, raw);
+                case MC_SYSTEM_VERSION, MC_SHOW_LICENSES, FMG_FMUPDATE_DBCONTRACT -> {
                     // Measured but not parsed in the contract: their shape line is still logged by the executor.
                 }
             }
@@ -83,6 +96,22 @@ public final class PersistingLifecycleResultSink implements LifecycleResultSink 
         } catch (RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "[LIFECYCLE_RESULT] storing {0} failed: {1}", kind.token(), e.getClass().getSimpleName());
         }
+    }
+
+    /**
+     * The grid's NIOS version, kept as a platform fact of the grid manager's device row. An Infoblox device has no other
+     * platform facts writer, so the row holds this one value; an answer without a usable version writes nothing and leaves
+     * the last recorded version in place.
+     */
+    private void niosVersion(String deviceId, String raw) {
+        if (platformFacts == null) {
+            return;
+        }
+        com.securityexpert.nexus.ui2.worker.inventory.lifecycle.InfobloxUpgradeStatusParser.currentVersion(raw).ifPresent(version ->
+                platformFacts.record(new com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts(deviceId,
+                        java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty(),
+                        java.util.Map.of(NIOS_VERSION_KEY, version), java.util.Optional.empty(), NIOS_VERSION_SOURCE,
+                        java.util.Optional.empty())));
     }
 
     private void license(Kind kind, String deviceId, LicenseParse parsed) {
