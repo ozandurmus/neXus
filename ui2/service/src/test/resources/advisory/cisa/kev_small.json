@@ -1,0 +1,35 @@
+{
+ "title": "Synthetic catalog",
+ "catalogVersion": "2026.11.10",
+ "dateReleased": "2026-11-10T14:00:00.000Z",
+ "count": 3,
+ "vulnerabilities": [
+  {
+   "cveID": "CVE-2024-3400",
+   "vendorProject": "Vendor A",
+   "product": "Product A",
+   "vulnerabilityName": "Example",
+   "dateAdded": "2024-04-12",
+   "shortDescription": "x",
+   "requiredAction": "x",
+   "dueDate": "2024-04-19",
+   "knownRansomwareCampaignUse": "Known",
+   "notes": "",
+   "cwes": []
+  },
+  {
+   "cveID": "CVE-2023-20269",
+   "vendorProject": "Vendor B",
+   "product": "Product B",
+   "dateAdded": "2023-09-13",
+   "knownRansomwareCampaignUse": "Unknown"
+  },
+  {
+   "cveID": "CVE-2021-1000123",
+   "vendorProject": "Vendor C",
+   "product": "Product C",
+   "dateAdded": "2022-01-02",
+   "knownRansomwareCampaignUse": "Unknown"
+  }
+ ]
+}
