@@ -5101,3 +5101,122 @@ gates:
     secret_output_risk: "key (the license string) is never requested; return fields are type,expiry_date,expiration_status,limit"
     safe_telemetry_fields: ["count", "field_names"]
     source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: pan_lifecycle_license_info
+    vendor: "palo_alto"
+    platform_role_scope: "pan_firewall"
+    shell_context: "not_applicable"
+    transport_kind: "PAN_XML_API"
+    canonical_command_key: "<request><license><info/></license></request>"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per firewall per inventory run"
+    session_reuse_rule: "the one key-generation session per run"
+    unsupported_behavior_ref: "an error reply or an unexpected shape: license check UNKNOWN"
+    secret_output_risk: "device serial and authcode in the reply: parsed past, never stored or logged"
+    safe_telemetry_fields: ["outcome", "reply_status", "entry_count", "element_names"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: pan_lifecycle_support_info
+    vendor: "palo_alto"
+    platform_role_scope: "pan_firewall"
+    shell_context: "not_applicable"
+    transport_kind: "PAN_XML_API"
+    canonical_command_key: "<request><support><info/></support></request>"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per firewall per inventory run"
+    session_reuse_rule: "the one key-generation session per run"
+    unsupported_behavior_ref: "an error reply or an unexpected shape: support check UNKNOWN"
+    secret_output_risk: "account, contact and link fields: never stored or logged"
+    safe_telemetry_fields: ["outcome", "reply_status", "element_names"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: fgt_lifecycle_update_info_contract
+    vendor: "fortinet"
+    platform_role_scope: "fortigate"
+    shell_context: "top_or_global"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "diagnose test update info contract"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per device per inventory run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "refused (administrator profile without diagnostics) or unparsed: contract check UNSUPPORTED or UNKNOWN"
+    secret_output_risk: "account id, company, user id, serial if printed: parsed past, never stored or logged"
+    safe_telemetry_fields: ["outcome", "line_count", "masked_shape"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: fgt_lifecycle_autoupdate_versions
+    vendor: "fortinet"
+    platform_role_scope: "fortigate"
+    shell_context: "top_or_global"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "diagnose autoupdate versions"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per device per inventory run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "refused (administrator profile without diagnostics) or unparsed: contract check UNSUPPORTED or UNKNOWN"
+    secret_output_risk: "none expected"
+    safe_telemetry_fields: ["outcome", "line_count", "masked_shape"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: fmg_lifecycle_fmupdate_dbcontract
+    vendor: "fortinet"
+    platform_role_scope: "fortimanager"
+    shell_context: "cli"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "diagnose fmupdate dbcontract"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per inventory"
+    session_reuse_rule: "one SSH session per inventory"
+    unsupported_behavior_ref: "refused or unreadable: UNKNOWN, logged"
+    secret_output_risk: "device serials, AccountID, Company, UserID, the raw contract data block: parsed past, never stored or logged"
+    safe_telemetry_fields: ["outcome", "line_count", "masked_shape"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: bluecoat_mc_command_show_licenses
+    vendor: "bluecoat"
+    platform_role_scope: "bluecoat_management_center"
+    shell_context: "config_mode_via_mc"
+    transport_kind: "HTTPS"
+    canonical_command_key: "PUT /api/devices/{uuid}/command \"show licenses\""
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 120
+    retry_rule: "none"
+    max_frequency: "at most UI2_LIFECYCLE_MC_LICENSE_MAX ProxySGs per inventory run"
+    session_reuse_rule: "one client per run"
+    unsupported_behavior_ref: "status other than success, or unparsed text: license check UNKNOWN"
+    secret_output_risk: "serial number if printed: parsed past, never stored or logged"
+    safe_telemetry_fields: ["outcome", "http_status", "line_count", "masked_shape"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: infoblox_upgradestatus_grid
+    vendor: "infoblox"
+    platform_role_scope: "infoblox_grid_manager"
+    shell_context: "not_applicable"
+    transport_kind: "HTTPS"
+    canonical_command_key: "GET /wapi/v<ver>/upgradestatus?type=GRID"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per inventory"
+    session_reuse_rule: "one client per run"
+    unsupported_behavior_ref: "failed object: NIOS version stays UNKNOWN"
+    secret_output_risk: "member names if present: never stored or logged"
+    safe_telemetry_fields: ["count", "field_names"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"

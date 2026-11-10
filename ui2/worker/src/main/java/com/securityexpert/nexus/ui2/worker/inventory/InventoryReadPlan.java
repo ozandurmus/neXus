@@ -232,6 +232,19 @@ public final class InventoryReadPlan {
     public static final List<String> PALO_ALTO_BASE_STEPS =
             List.of(PAN_TYPE_VERSION, PAN_SHOW_HA_STATE, PAN_SHOW_INTERFACE_ALL, PAN_SHOW_ROUTING_ROUTE);
 
+    /**
+     * Lifecycle reads, group B (PO chat approval 2026-11-10, docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md, V199
+     * gates pan_lifecycle_license_info / pan_lifecycle_support_info): {@code type=op} requests, sent like
+     * {@link #PAN_SHOW_HA_STATE}, only behind {@link LifecycleReadSwitch}, only to a firewall whose PAN-OS major version,
+     * observed in the same run, is known and below 12, and after every other read of the run.
+     */
+    public static final String PAN_REQUEST_LICENSE_INFO = "<request><license><info/></license></request>";
+    public static final String PAN_REQUEST_SUPPORT_INFO = "<request><support><info/></support></request>";
+    /** Lifecycle reads, group B, FortiGate (gates fgt_lifecycle_update_info_contract / fgt_lifecycle_autoupdate_versions) and FortiManager (fmg_lifecycle_fmupdate_dbcontract). */
+    public static final String FGT_DIAGNOSE_UPDATE_INFO_CONTRACT = "diagnose test update info contract";
+    public static final String FGT_DIAGNOSE_AUTOUPDATE_VERSIONS = "diagnose autoupdate versions";
+    public static final String FMG_DIAGNOSE_FMUPDATE_DBCONTRACT = "diagnose fmupdate dbcontract";
+
     /** A Panorama's inventory reads (V83 gate rows, Panorama scope): system info, then HA state. Out of the 2026-10-21 scope. */
     public static final List<String> PANORAMA_STEPS = List.of(PAN_SHOW_SYSTEM_INFO, PAN_SHOW_HA_STATE);
 }

@@ -55,6 +55,17 @@ final class ManagementCenterDevices {
         return out;
     }
 
+    /** The identifiers of the ProxySGs (MC type {@link HttpsVendorPlan#MC_TYPE_PROXYSG}) in list order, each validated; others are dropped. */
+    static List<String> proxySgUuids(JsonNode list) {
+        List<String> out = new ArrayList<>();
+        for (JsonNode d : items(list)) {
+            if (text(d, "type").filter(HttpsVendorPlan.MC_TYPE_PROXYSG::equals).isPresent()) {
+                text(d, "uuid").filter(HttpsVendorPlan::isMcDeviceUuid).ifPresent(out::add);
+            }
+        }
+        return out;
+    }
+
     static Map<String, Integer> typeCounts(JsonNode list) {
         Map<String, Integer> counts = new TreeMap<>();
         for (JsonNode d : items(list)) {

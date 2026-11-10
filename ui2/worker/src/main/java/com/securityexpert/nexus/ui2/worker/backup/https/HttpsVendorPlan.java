@@ -45,6 +45,8 @@ public final class HttpsVendorPlan {
      */
     public static final String INFOBLOX_LICENSE_GRIDWIDE =
             "/wapi/v%s/license:gridwide?_return_fields=type,expiry_date,expiration_status,limit";
+    /** Lifecycle read, group B (PO 2026-11-10, gate infoblox_upgradestatus_grid): the grid's upgrade status, once per inventory. */
+    public static final String INFOBLOX_UPGRADESTATUS_GRID = "/wapi/v%s/upgradestatus?type=GRID";
     public static final String INFOBLOX_GETGRIDDATA = "/wapi/v%s/fileop?_function=getgriddata";
     public static final String INFOBLOX_GETGRIDDATA_BODY = "{\"type\": \"BACKUP\"}";
     public static final String INFOBLOX_DOWNLOADCOMPLETE = "/wapi/v%s/fileop?_function=downloadcomplete";
@@ -69,6 +71,12 @@ public final class HttpsVendorPlan {
     /** ProxySG inventory through the MC (V82, PO 2026-09-25): its interfaces and routing table. */
     public static final String MC_CMD_SHOW_INTERFACE_ALL = "show interface all";
     public static final String MC_CMD_SHOW_IP_ROUTE_TABLE = "show ip-route-table";
+    /**
+     * Lifecycle read, group B (PO chat approval 2026-11-10, gate bluecoat_mc_command_show_licenses): the ProxySG license
+     * components, through the same command endpoint as {@link #MC_CMD_SHOW_VERSION}. Sent only behind the lifecycle switch,
+     * for at most UI2_LIFECYCLE_MC_LICENSE_MAX ProxySGs per run, 120 s, no retry.
+     */
+    public static final String MC_CMD_SHOW_LICENSES = "show licenses";
     /** The MC's type code for a ProxySG (measured 2026-09-25). */
     public static final String MC_TYPE_PROXYSG = "sgos6x";
 
@@ -104,7 +112,7 @@ public final class HttpsVendorPlan {
     /** Gate keys: {@code METHOD path}, the version placeholder kept as {@code <ver>}. */
     public static final List<String> INFOBLOX_GATE_KEYS = List.of("GET /wapidoc/", "GET /wapi/v<ver>/grid", "GET /wapi/v<ver>/member",
             "GET /wapi/v<ver>/view", "GET /wapi/v<ver>/zone_auth", "GET /wapi/v<ver>/network",
-            "GET /wapi/v<ver>/range", "GET /wapi/v<ver>/member:license", "GET /wapi/v<ver>/license:gridwide",
+            "GET /wapi/v<ver>/range", "GET /wapi/v<ver>/member:license", "GET /wapi/v<ver>/license:gridwide", "GET /wapi/v<ver>/upgradestatus?type=GRID",
             "POST /wapi/v<ver>/fileop?_function=getgriddata", "GET <getgriddata url, same host>",
             "POST /wapi/v<ver>/fileop?_function=downloadcomplete");
     public static final List<String> RADWARE_GATE_KEYS = List.of("GET /", "POST /dynamic/File/Configuration/ReceivefromDevice");

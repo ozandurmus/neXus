@@ -239,10 +239,10 @@ public final class HttpsVendorExecutor {
             return pulse().inventory(target, credentialRef);
         }
         if (FORTIGATE.equals(vendor)) {
-            return fortiGate == null ? new InventoryOutcome.Failed("no FortiGate executor in this worker") : fortiGate.inventory(target, credentialRef);
+            return fortiGate == null ? new InventoryOutcome.Failed("no FortiGate executor in this worker") : fortiGate.inventory(target, credentialRef, deviceId);
         }
         if (FORTIMANAGER.equals(vendor)) {
-            return fortiManager == null ? new InventoryOutcome.Failed("no FortiManager executor in this worker") : fortiManager.inventory(target, credentialRef);
+            return fortiManager == null ? new InventoryOutcome.Failed("no FortiManager executor in this worker") : fortiManager.inventory(target, credentialRef, deviceId);
         }
         try {
             Credentials creds = credentials.apply(credentialRef);
@@ -298,6 +298,7 @@ public final class HttpsVendorExecutor {
         InfobloxGridSummary summary = infobloxSummary(target, creds, version.get(), json);
         // Lifecycle read, group A: after the summary objects, never changes the outcome below.
         lifecycleInfobloxLicenseGridwide(target, creds, version.get(), deviceId);
+        lifecycleInfobloxUpgradeStatus(target, creds, version.get(), deviceId);
         return new InventoryOutcome.Completed(contexts, members, names,
                 new Identity(gridName, Optional.of("Infoblox Grid Manager"), Optional.of("WAPI " + version.get())), summary);
     }
@@ -569,6 +570,7 @@ public final class HttpsVendorExecutor {
                                 version.status(), version.body(), JSON))
                         : null);
         lifecycleMcDeviceLicenses(target, creds, list, deviceId);
+        lifecycleMcShowLicenses(target, creds, list, deviceId);
         return new InventoryOutcome.Completed(List.of(), managed, names, identity);
     }
 
@@ -623,6 +625,70 @@ public final class HttpsVendorExecutor {
                 emitLifecycle(got.response() == null ? LifecycleReadShape.errorLine(kind, deviceId, got.error())
                         : LifecycleReadShape.jsonLine(kind, deviceId, got.response().status(), got.response().body(), JSON));
             }
+        } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            emitLifecycle(LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName()));
+        }
+    }
+
+    /**
+     * {@code PUT /api/devices/{uuid}/command} with the body {@code show licenses} (gate bluecoat_mc_command_show_licenses, group B)
+     * for at most {@code UI2_LIFECYCLE_MC_LICENSE_MAX} ProxySGs (MC type {@code sgos6x}), the uuid taken from this run's
+     * {@code GET /api/devices} answer and validated before it enters the path. Sent like {@code show version} (same endpoint, raw
+     * body, reply {@code {reply, messages, status}}), 120 s, no retry, outside any job transcript.
+     */
+    private void lifecycleMcShowLicenses(Target target, Credentials creds, JsonNode list, String deviceId) {
+        LifecycleReadSwitch.Kind kind = LifecycleReadSwitch.Kind.MC_SHOW_LICENSES;
+        if (!lifecycleReads.allows(kind, deviceId)) {
+            return;
+        }
+        try {
+            int sent = 0;
+            for (String uuid : ManagementCenterDevices.proxySgUuids(list)) {
+                if (sent >= lifecycleReads.mcLicenseMax()) {
+                    break;
+                }
+                sent++;
+                emitLifecycle(lifecycleMcShowLicensesLine(target, creds, uuid, deviceId));
+            }
+        } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            emitLifecycle(LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName()));
+        }
+    }
+
+    private String lifecycleMcShowLicensesLine(Target target, Credentials creds, String uuid, String deviceId) {
+        LifecycleReadSwitch.Kind kind = LifecycleReadSwitch.Kind.MC_SHOW_LICENSES;
+        try {
+            return com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(() -> {
+                try {
+                    TextResponse r = client.putRaw(target, HttpsVendorPlan.mcDeviceCommand(uuid), HttpsVendorPlan.MC_CMD_SHOW_LICENSES,
+                            creds, Duration.ofSeconds(120), TEXT_MAX);
+                    return r.truncated() ? LifecycleReadShape.errorLine(kind, deviceId, "Truncated")
+                            : LifecycleReadShape.commandEnvelopeLine(kind, deviceId, r.status(), r.body(), JSON);
+                } catch (IOException e) {
+                    return LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return LifecycleReadShape.errorLine(kind, deviceId, "InterruptedException");
+                }
+            });
+        } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            return LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName());
+        }
+    }
+
+    /** {@code GET /wapi/v<ver>/upgradestatus?type=GRID} (gate infoblox_upgradestatus_grid, group B): once per inventory, JSON shape. */
+    private void lifecycleInfobloxUpgradeStatus(Target target, Credentials creds, String version, String deviceId) {
+        LifecycleReadSwitch.Kind kind = LifecycleReadSwitch.Kind.INFOBLOX_UPGRADESTATUS_GRID;
+        if (!lifecycleReads.allows(kind, deviceId)) {
+            return;
+        }
+        try {
+            LifecycleGet got = lifecycleGet(target, creds, HttpsVendorPlan.withVersion(HttpsVendorPlan.INFOBLOX_UPGRADESTATUS_GRID, version), TEXT_MAX);
+            emitLifecycle(got.response() == null ? LifecycleReadShape.errorLine(kind, deviceId, got.error())
+                    : LifecycleReadShape.jsonLine(kind, deviceId, got.response().status(), got.response().body(), JSON));
         } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             emitLifecycle(LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName()));

@@ -26,6 +26,10 @@ import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterf
 import com.securityexpert.nexus.ui2.worker.backup.BackupResult;
 import com.securityexpert.nexus.ui2.worker.backup.BackupTranscript;
 import com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor;
+import com.securityexpert.nexus.ui2.worker.inventory.InventoryReadPlan;
+import com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadShape;
+import com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadSwitch;
+import com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target;
 import com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver;
 
@@ -57,6 +61,20 @@ public final class FortiGateExecutor {
     }
 
     private java.util.function.Function<String, LoginSecret> secrets;
+
+    /** Lifecycle reads, group B (PO 2026-11-10): off unless the worker wires a switch in. See {@link LifecycleReadSwitch}. */
+    private LifecycleReadSwitch lifecycleReads = LifecycleReadSwitch.OFF;
+    private java.util.function.Consumer<String> lifecycleSink = LifecycleReadShape::log;
+
+    public FortiGateExecutor withLifecycleReads(LifecycleReadSwitch lifecycleReads) {
+        this.lifecycleReads = Objects.requireNonNull(lifecycleReads, "lifecycleReads");
+        return this;
+    }
+
+    public FortiGateExecutor withLifecycleSink(java.util.function.Consumer<String> sink) {
+        this.lifecycleSink = Objects.requireNonNull(sink, "sink");
+        return this;
+    }
 
     public FortiGateExecutor withSecrets(java.util.function.Function<String, LoginSecret> secrets) {
         this.secrets = secrets;
@@ -235,6 +253,11 @@ public final class FortiGateExecutor {
     }
 
     public HttpsVendorExecutor.InventoryOutcome inventory(Target target, String credentialRef) {
+        return inventory(target, credentialRef, null);
+    }
+
+    /** {@code deviceId}: the neXus device id the lifecycle reads (group B) are switched by and logged under (null: none). */
+    public HttpsVendorExecutor.InventoryOutcome inventory(Target target, String credentialRef, String deviceId) {
         Shell shell = open(target, credentialRef);
         if (shell.session() == null) {
             return shell.authFailure() ? new HttpsVendorExecutor.InventoryOutcome.AuthenticationFailed(shell.refusal().orElse(""))
@@ -274,6 +297,8 @@ public final class FortiGateExecutor {
                 ifaces = FortiGatePlan.parseInterfaces(read(s, FortiGatePlan.SHOW_SYSTEM_INTERFACE, LONG).orElse(null));
                 routes.put("root", FortiGatePlan.parseRoutes(read(s, FortiGatePlan.GET_ROUTING_TABLE, LONG).orElse(null)));
             }
+            // Lifecycle reads, group B: after every other read of the run; never changes the result.
+            lifecycleReads(s, deviceId, st.multiVdom());
             Map<String, List<InventoryInterface>> byVdom = new LinkedHashMap<>();
             for (FortiGatePlan.Iface i : ifaces) {
                 byVdom.computeIfAbsent(st.multiVdom() ? i.vdom() : "root", k -> new ArrayList<>()).add(i.row());
@@ -289,6 +314,81 @@ public final class FortiGateExecutor {
                     new HttpsVendorExecutor.Identity(st.hostname(), st.model(), st.version(), List.of(), haRole, ha.pairClaim()));
         } finally {
             ssh.disconnect(shell.session());
+        }
+    }
+
+    /**
+     * Lifecycle reads, group B (PO 2026-11-10, gates fgt_lifecycle_update_info_contract / fgt_lifecycle_autoupdate_versions):
+     * the two {@code diagnose} reads in the context {@code get system status} needs -- the top level, or inside
+     * {@code config global} on a multi-VDOM unit (where the status read is a global command, measured 2026-09-26). Each is
+     * sent once (no second attempt in the other context), 60 s, outside any job transcript. A refusal is
+     * {@code ERROR:CliRefusal}. The answer is reduced to a masked shape and logged; it is never returned or stored.
+     */
+    private void lifecycleReads(TransportSession s, String deviceId, boolean multiVdom) {
+        LifecycleReadSwitch.Kind contract = LifecycleReadSwitch.Kind.FGT_UPDATE_INFO_CONTRACT;
+        LifecycleReadSwitch.Kind versions = LifecycleReadSwitch.Kind.FGT_AUTOUPDATE_VERSIONS;
+        boolean sendContract = lifecycleReads.allows(contract, deviceId);
+        boolean sendVersions = lifecycleReads.allows(versions, deviceId);
+        if (!sendContract && !sendVersions) {
+            return;
+        }
+        try {
+            JobTranscriptScope.withoutRecording(() -> {
+                boolean moved = false;
+                try {
+                    if (multiVdom) {
+                        move(s, FortiGatePlan.CONFIG_GLOBAL);
+                        moved = true;
+                    }
+                    if (sendContract) {
+                        emitLifecycle(lifecycleLine(s, contract, deviceId, InventoryReadPlan.FGT_DIAGNOSE_UPDATE_INFO_CONTRACT));
+                    }
+                    if (sendVersions) {
+                        emitLifecycle(lifecycleLine(s, versions, deviceId, InventoryReadPlan.FGT_DIAGNOSE_AUTOUPDATE_VERSIONS));
+                    }
+                } finally {
+                    if (moved) {
+                        move(s, FortiGatePlan.END);
+                    }
+                }
+                return null;
+            });
+        } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            LOG.log(System.Logger.Level.INFO, "[LIFECYCLE_MEASURE] fortigate context move failed: {0}", e.getClass().getSimpleName());
+        }
+    }
+
+    private String lifecycleLine(TransportSession s, LifecycleReadSwitch.Kind kind, String deviceId, String command) {
+        try {
+            ExecResult r = ssh.execInteractive(s, new ExecSpec(command, true), InventoryReadPlan.LIFECYCLE_READ_TIMEOUT);
+            return switch (r) {
+                case ExecResult.Completed c -> lifecycleRefused(c.output()) ? LifecycleReadShape.errorLine(kind, deviceId, "CliRefusal")
+                        : LifecycleReadShape.cliLine(kind, deviceId, stripEcho(c.output(), command));
+                case ExecResult.TimedOut t -> LifecycleReadShape.errorLine(kind, deviceId, "TimedOut");
+                case ExecResult.ChannelFailed f -> LifecycleReadShape.errorLine(kind, deviceId, "ChannelFailed");
+            };
+        } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            return LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName());
+        }
+    }
+
+    /** A FortiOS refusal: a parse error, a failed command, an unknown action or command, or a missing permission. */
+    static boolean lifecycleRefused(String out) {
+        if (FortiGatePlan.isCliError(out)) {
+            return true;
+        }
+        String l = out == null ? "" : out.toLowerCase(java.util.Locale.ROOT);
+        return l.contains("permission denied") || l.contains("unknown command") || l.contains("not permitted")
+                || l.contains("unrecognized command") || l.contains("invalid command");
+    }
+
+    private void emitLifecycle(String line) {
+        try {
+            lifecycleSink.accept(line);
+        } catch (RuntimeException ignored) {
+            // A measurement sink never changes an inventory result.
         }
     }
 

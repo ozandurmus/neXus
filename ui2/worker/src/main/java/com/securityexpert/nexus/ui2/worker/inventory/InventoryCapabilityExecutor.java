@@ -670,7 +670,11 @@ public final class InventoryCapabilityExecutor {
                         "presented serial does not match the recorded baseline; strict posture refused the contact");
             }
             String haStateOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_HA_STATE, headers);
-            return panoramaInventory(identityOutput, sysInfo, haStateOutput);
+            InventoryResult panorama = panoramaInventory(identityOutput, sysInfo, haStateOutput);
+            // Lifecycle reads, group B: a Panorama never gets the firewall license and support reads.
+            lifecycleSkip(LifecycleReadSwitch.Kind.PAN_LICENSE_INFO, deviceId, "panorama");
+            lifecycleSkip(LifecycleReadSwitch.Kind.PAN_SUPPORT_INFO, deviceId, "panorama");
+            return panorama;
         }
 
         // A firewall (PO 2026-10-21): show system info is never sent (PanSystemInfoRetirement). The serial, model and
@@ -823,9 +827,62 @@ public final class InventoryCapabilityExecutor {
         PlatformFactsRead platformFacts = version.envelopeOk()
                 ? PlatformFactsRead.paloAltoFirewallTypeVersion(version)
                 : PlatformFactsRead.paloAltoFirewallNotCollected();
+        var policyInstall = panPolicyInstall(target, headers);
+        // Lifecycle reads, group B: last, after every other read of the run; never changes the result.
+        lifecyclePaloAltoFirewallReads(target, headers, deviceId, version.swVersion().orElse(null));
         return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString),
-                Optional.of(platformFacts.withPolicyInstall(panPolicyInstall(target, headers))),
+                Optional.of(platformFacts.withPolicyInstall(policyInstall)),
                 new InventoryResult.ObservedIdentity(Optional.empty(), version.model(), version.swVersion()), notCollected);
+    }
+
+    /**
+     * Lifecycle reads, group B (PO 2026-11-10, D2): {@code request license info} and {@code request support info}, sent only
+     * to a firewall whose PAN-OS major version, observed by the {@code type=version} read of THIS run, is known and below 12
+     * (the rule of {@code PanFirewallCommandSwitches.Mode.BELOW_12}: an unknown or unparseable version is treated like 12 or
+     * later). 60 s, no retry, outside any job transcript; the answer is reduced to an XML shape and logged.
+     */
+    private void lifecyclePaloAltoFirewallReads(ApiTarget target, Map<String, String> headers, String deviceId, String swVersion) {
+        LifecycleReadSwitch.Kind license = LifecycleReadSwitch.Kind.PAN_LICENSE_INFO;
+        LifecycleReadSwitch.Kind support = LifecycleReadSwitch.Kind.PAN_SUPPORT_INFO;
+        if (!lifecycleReads.allows(license, deviceId) && !lifecycleReads.allows(support, deviceId)) {
+            return;
+        }
+        boolean belowTwelve;
+        try {
+            belowTwelve = com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.decide(
+                    com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.Mode.BELOW_12, swVersion).send();
+        } catch (RuntimeException e) {
+            belowTwelve = false;
+        }
+        if (!belowTwelve) {
+            lifecycleSkip(license, deviceId, "pan_os_12_or_unknown");
+            lifecycleSkip(support, deviceId, "pan_os_12_or_unknown");
+            return;
+        }
+        lifecyclePanXmlRead(target, headers, license, deviceId, InventoryReadPlan.PAN_REQUEST_LICENSE_INFO);
+        lifecyclePanXmlRead(target, headers, support, deviceId, InventoryReadPlan.PAN_REQUEST_SUPPORT_INFO);
+    }
+
+    private void lifecyclePanXmlRead(ApiTarget target, Map<String, String> headers, LifecycleReadSwitch.Kind kind, String deviceId,
+            String cmd) {
+        if (!lifecycleReads.allows(kind, deviceId)) {
+            return;
+        }
+        String line;
+        try {
+            XmlApiResult result = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(
+                    () -> transport.xmlApiCall(target,
+                            new XmlApiSpec("GET", "op", "", "direct_firewall", Map.of("cmd", cmd), headers),
+                            InventoryReadPlan.LIFECYCLE_READ_TIMEOUT));
+            line = switch (result) {
+                case XmlApiResult.Completed completed -> LifecycleReadShape.xmlLine(kind, deviceId, completed.body());
+                case XmlApiResult.Failed failed -> LifecycleReadShape.errorLine(kind, deviceId, "XmlApiFailed");
+            };
+        } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            line = LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName());
+        }
+        emitLifecycle(line);
     }
 
     /** The configured interfaces (null when none could be derived) and the run token naming the outcome. */
