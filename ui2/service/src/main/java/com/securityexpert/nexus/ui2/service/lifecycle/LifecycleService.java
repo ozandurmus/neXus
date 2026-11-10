@@ -58,7 +58,9 @@ public final class LifecycleService {
                 Map.entry("licenses_within_60_days", rows.stream().filter(LifecycleService::licenseSoon).count()),
                 Map.entry("license_problems", rows.stream().filter(r -> Boolean.TRUE.equals(r.get("license_problem"))).count()),
                 Map.entry("licenses_collected", rows.stream().filter(r -> "COLLECTED".equals(r.get("license_status"))).count()),
-                Map.entry("live_patch_not_active", rows.stream().filter(LifecycleService::patchNotActive).count()));
+                Map.entry("live_patch_not_active", rows.stream().filter(LifecycleService::patchNotActive).count()),
+                Map.entry("live_patch_missing", rows.stream().filter(r -> r.get("live_patch") instanceof Map<?, ?> patch
+                        && Boolean.TRUE.equals(patch.get("missing"))).count()));
     }
 
     private static boolean patchNotActive(Map<String, Object> row) {

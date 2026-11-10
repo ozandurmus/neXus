@@ -101,4 +101,38 @@ class LifecycleReadsGroupBGateTest {
         });
         assertEquals(7, sql.split("\\n    \\('", -1).length - 1, "seven rows");
     }
+
+    private static final String VNODE_POINTER =
+            "docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md amendment B-2026-11-10 (PO chat approval 2026-11-10)";
+
+    @Test
+    void infobloxVnodeRowIsOneSignedOffReadAndV201SeedsTheSameRow() throws Exception {
+        List<GateRow> rows = fixture();
+        GateRow row = rows.stream().filter(r -> r.gateId().equals("infoblox_upgradestatus_vnode")).findFirst().orElseThrow();
+        assertEquals("infoblox", row.vendor());
+        assertEquals("infoblox_grid_manager", row.platformRoleScope());
+        assertEquals("not_applicable", row.shellContext());
+        assertEquals("HTTPS", row.transportKind());
+        assertEquals("GET /wapi/v<ver>/upgradestatus?type=VNODE", row.canonicalCommandKey());
+        assertEquals(ActionClass.CLASS_0_READ, row.actionClass());
+        assertEquals(SignOffState.SIGNED_OFF, row.signOffState());
+        assertEquals(60, row.timeoutS());
+        assertEquals("none", row.retryRule());
+        assertEquals(VNODE_POINTER, row.sourceDocumentPointer());
+        assertEquals(1, rows.stream().filter(r -> r.key().equals(row.key())).count());
+        assertEquals("infoblox_upgradestatus_vnode", assertInstanceOf(GateResolution.Known.class,
+                GateResolver.resolve(row.key(), Optional.of(ActionClass.CLASS_0_READ), registry(rows))).gateId());
+
+        String sql = Files.readString(Path.of("../service/src/main/resources/db/migration/V201__infoblox_upgradestatus_vnode_gate.sql"));
+        assertTrue(sql.contains("Evet, VNODE dene") && sql.contains("upgradestatus?type=VNODE&_return_fields=current_version"));
+        assertTrue(sql.contains("set_config('app.actor_fingerprint'") && sql.contains("set_config('app.action_id'"));
+        assertTrue(sql.contains("ON CONFLICT (gate_id) DO NOTHING"));
+        assertTrue(sql.contains("('infoblox_upgradestatus_vnode', 'infoblox', 'infoblox_grid_manager', 'not_applicable', 'HTTPS',\n     '"
+                + row.canonicalCommandKey() + "',\n     'read', 'SIGNED_OFF', 60, 'none', "));
+        for (String field : List.of(row.maxFrequency(), row.sessionReuseRule(), row.unsupportedBehaviorRef(), row.secretOutputRisk(),
+                row.sourceDocumentPointer())) {
+            assertTrue(sql.contains("'" + field + "'"), field);
+        }
+        assertEquals(1, sql.split("\\n    \\('", -1).length - 1, "one row");
+    }
 }

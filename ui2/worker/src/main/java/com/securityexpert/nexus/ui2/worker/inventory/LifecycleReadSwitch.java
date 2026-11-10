@@ -47,7 +47,9 @@ public final class LifecycleReadSwitch {
         FGT_AUTOUPDATE_VERSIONS("fgt_autoupdate_versions"),
         FMG_FMUPDATE_DBCONTRACT("fmg_fmupdate_dbcontract"),
         MC_SHOW_LICENSES("mc_show_licenses"),
-        INFOBLOX_UPGRADESTATUS_GRID("infoblox_upgradestatus_grid");
+        INFOBLOX_UPGRADESTATUS_GRID("infoblox_upgradestatus_grid"),
+        // PO chat approval 2026-11-10 ("Evet, VNODE dene"), V201: the member-level entries of the same object.
+        INFOBLOX_UPGRADESTATUS_VNODE("infoblox_upgradestatus_vnode");
 
         private final String token;
 

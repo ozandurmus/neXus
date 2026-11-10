@@ -48,6 +48,52 @@ class PersistingLifecycleResultSinkTest {
         assertTrue(repository.writes.isEmpty(), "the version read writes no license row");
     }
 
+    @Test
+    void theMemberLevelVersionsAreOneStringSeveralJoinedOrNothing() {
+        FakeRepository repository = new FakeRepository();
+        List<com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts> recorded = new ArrayList<>();
+        var facts = new com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository() {
+            @Override public void record(com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts f) { recorded.add(f); }
+            @Override public java.util.Optional<com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts> find(String id) { return java.util.Optional.empty(); }
+            @Override public Map<String, com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts> findAll() { return Map.of(); }
+        };
+        PersistingLifecycleResultSink sink = new PersistingLifecycleResultSink(repository, facts);
+        sink.answer(Kind.INFOBLOX_UPGRADESTATUS_VNODE, "dev-grid", null,
+                "[{\"_ref\":\"upgradestatus/a:gm.corp.example\",\"current_version\":\"9.0.4-50240\"},"
+                        + "{\"_ref\":\"upgradestatus/b:gmc.corp.example\",\"current_version\":\"9.0.4-50240\"}]");
+        assertEquals(1, recorded.size());
+        assertEquals(Map.of("nios_version", "9.0.4-50240"), recorded.get(0).contentVersions());
+        assertEquals("infoblox_upgradestatus_vnode", recorded.get(0).sourceRead());
+        sink.answer(Kind.INFOBLOX_UPGRADESTATUS_VNODE, "dev-grid", null,
+                "[{\"current_version\":\"9.0.4\"},{\"current_version\":\"8.6.3\"},{\"current_version\":\"9.0.4\"}]");
+        assertEquals(2, recorded.size());
+        assertEquals(Map.of("nios_version", "9.0.4, 8.6.3"), recorded.get(1).contentVersions());
+        sink.answer(Kind.INFOBLOX_UPGRADESTATUS_VNODE, "dev-grid", null, "[{\"type\":\"VNODE\"}]");
+        sink.answer(Kind.INFOBLOX_UPGRADESTATUS_VNODE, "dev-grid", null, "not json");
+        sink.notCollected(Kind.INFOBLOX_UPGRADESTATUS_VNODE, "dev-grid", "FAILED", "Http400");
+        new PersistingLifecycleResultSink(repository).answer(Kind.INFOBLOX_UPGRADESTATUS_VNODE, "dev-grid", null, "[{\"current_version\":\"9.0.4\"}]");
+        assertEquals(2, recorded.size());
+        assertTrue(repository.writes.isEmpty());
+    }
+
+    @Test
+    void aManagedDeviceWithoutComponentsDoesNotOverwriteTheManagementCenterRow() {
+        FakeRepository repository = new FakeRepository();
+        PersistingLifecycleResultSink sink = new PersistingLifecycleResultSink(repository);
+        String collected = "{\"components\":[{\"componentName\":\"Proxy\",\"expirationDate\":\"2030-01-01\"}]}";
+        sink.answer(Kind.MC_DEVICE_LICENSE, "dev-1", "SG-A", collected);
+        sink.answer(Kind.MC_DEVICE_LICENSE, "dev-1", "SG-B", "{\"components\":[]}");
+        sink.answer(Kind.MC_DEVICE_LICENSE, "dev-1", "SG-C", collected);
+        assertEquals(2, repository.writes.size());
+        assertTrue(repository.writes.stream().allMatch(w -> w.outcome().equals("COLLECTED") && w.readKind().equals("mc_device_license")),
+                repository.writes.toString());
+
+        // Without a member name an empty answer is still the outcome of the read.
+        FakeRepository other = new FakeRepository();
+        new PersistingLifecycleResultSink(other).answer(Kind.MC_DEVICE_LICENSE, "dev-1", null, "{\"components\":[]}");
+        assertEquals(List.of("EMPTY"), other.writes.stream().map(Write::outcome).toList());
+    }
+
     private static final class FakeRepository implements DeviceLifecycleRepository {
         final List<Write> writes = new ArrayList<>();
         boolean failing;

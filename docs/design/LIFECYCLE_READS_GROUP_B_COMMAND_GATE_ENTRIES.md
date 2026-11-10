@@ -95,3 +95,23 @@ Question: "Infoblox sürüm okumasına current_version alanı eklensin mi?" Answ
   serves under `/wapidoc/`. The object allows no create, modify or delete.
 - **What is kept:** the version string, as the platform fact `nios_version` of the grid manager's device row. The
   object reference in the answer (it names a member) is not read.
+
+## Amendment B-2026-11-10: Infoblox member-level version read
+
+**Product Owner approval (2026-11-10, asked in the PO session and relayed by it):** "Evet, VNODE dene (Önerilen)"
+(`PO_DECISION_RECORD_2026_11_10_LIFECYCLE_READS_FLEET_WIDE.md` section 2).
+
+| # | Gate id | Read | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 8 | `infoblox_upgradestatus_vnode` | `GET /wapi/v<ver>/upgradestatus?type=VNODE&_return_fields=current_version` | the running NIOS version from the member-level entries, after the grid-level entry (entry 7) returned none | CLASS_0_READ | Infoblox, `infoblox_grid_manager`, not applicable, `HTTPS` | 60 s | none | once per inventory | one client per run | failed object or no version: NIOS version stays UNKNOWN | member names in the object reference: never stored or logged | count, field names |
+
+- **Evidence:** Infoblox WAPI 2.13.7 object reference, object `upgradestatus`: "Parameter type is required for object
+  searches", with the values `GRID`, `GROUP`, `PNODE` and `VNODE`; field `current_version` ("The current version", a
+  read-only string); the object allows no create, modify or delete. Read on the public mirror of the vendor-generated
+  reference (ipam.illinois.edu/wapidoc/objects/upgradestatus.html), the same pages the grid serves under `/wapidoc/`.
+- **Gate row:** seeded by V201; the canonical key is `GET /wapi/v<ver>/upgradestatus?type=VNODE` (return fields are
+  not part of a key, as for the other Infoblox rows).
+- **What is kept:** the distinct version strings of the entries, as the platform fact `nios_version` of the grid
+  manager (one version as it is; several, as during an upgrade, joined). The object reference is not read.
+- **Measure first:** sent to the one grid manager only, behind its own switch kind, until its answer has been seen
+  and recorded in `LIFECYCLE_READS_MEASUREMENTS_2026_11_10.md`.

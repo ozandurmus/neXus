@@ -307,6 +307,7 @@ public final class HttpsVendorExecutor {
         // Lifecycle read, group A: after the summary objects, never changes the outcome below.
         lifecycleInfobloxLicenseGridwide(target, creds, version.get(), deviceId);
         lifecycleInfobloxUpgradeStatus(target, creds, version.get(), deviceId);
+        lifecycleInfobloxUpgradeStatusVnode(target, creds, version.get(), deviceId);
         return new InventoryOutcome.Completed(contexts, members, names,
                 new Identity(gridName, Optional.of("Infoblox Grid Manager"), Optional.of("WAPI " + version.get())), summary);
     }
@@ -726,6 +727,24 @@ public final class HttpsVendorExecutor {
         }
         try {
             LifecycleGet got = lifecycleGet(target, creds, HttpsVendorPlan.withVersion(HttpsVendorPlan.INFOBLOX_UPGRADESTATUS_GRID, version), TEXT_MAX);
+            lifecycleGetResult(kind, deviceId, null, got);
+            emitLifecycle(got.response() == null ? LifecycleReadShape.errorLine(kind, deviceId, got.error())
+                    : LifecycleReadShape.jsonLine(kind, deviceId, got.response().status(), got.response().body(), JSON));
+        } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            lifecycleResults.notCollected(kind, deviceId, "FAILED", e.getClass().getSimpleName());
+            emitLifecycle(LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName()));
+        }
+    }
+
+    /** {@code GET /wapi/v<ver>/upgradestatus?type=VNODE} (gate infoblox_upgradestatus_vnode, V201): once per inventory, JSON shape. */
+    private void lifecycleInfobloxUpgradeStatusVnode(Target target, Credentials creds, String version, String deviceId) {
+        LifecycleReadSwitch.Kind kind = LifecycleReadSwitch.Kind.INFOBLOX_UPGRADESTATUS_VNODE;
+        if (!lifecycleReads.allows(kind, deviceId)) {
+            return;
+        }
+        try {
+            LifecycleGet got = lifecycleGet(target, creds, HttpsVendorPlan.withVersion(HttpsVendorPlan.INFOBLOX_UPGRADESTATUS_VNODE, version), TEXT_MAX);
             lifecycleGetResult(kind, deviceId, null, got);
             emitLifecycle(got.response() == null ? LifecycleReadShape.errorLine(kind, deviceId, got.error())
                     : LifecycleReadShape.jsonLine(kind, deviceId, got.response().status(), got.response().body(), JSON));
