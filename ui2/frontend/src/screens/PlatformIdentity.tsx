@@ -116,6 +116,10 @@ export function identityTiles(device: DeviceSummary, collectedAt: string | null,
     isPaloAlto
       ? { label: "Content versions", value: device.content_versions ? <ContentVersions versions={device.content_versions} /> : null, ...panNotCollected }
       : { label: "Hotfix / Jumbo take", value: device.hotfix_level ?? null, absent: needsGate, absentWord: "Not read yet" },
+    // Check Point Live Patch package take (cpinfo -y all, no extra command): shown only when the device reported it.
+    ...(!isPaloAlto && device.content_versions?.live_patch_package_take
+      ? [{ label: "Live Patch package take", value: device.content_versions.live_patch_package_take } satisfies IdentityTile]
+      : []),
     { label: "Uptime", value: device.uptime_text ?? null, ...(isPaloAlto ? panNotCollected : { absent: needsGate, absentWord: "Not read yet" as const }) },
     haRole,
     { label: isPaloAlto ? "Virtual systems (VSYS)" : "Virtual systems (VSX)", value: vs.length > 0 ? `${vs.length} · ${vs.join(", ")}` : "none" },

@@ -39,6 +39,12 @@ public final class HttpsVendorPlan {
         if (seconds <= 0) return java.util.Optional.empty();
         return java.util.Optional.of(java.time.Instant.ofEpochSecond(seconds).atOffset(java.time.ZoneOffset.UTC).toLocalDate().toString());
     }
+    /**
+     * Lifecycle read, group A (PO 2026-11-10, gate infoblox_license_gridwide): the grid-wide licenses with their expiry. The
+     * license string field {@code key} is never requested.
+     */
+    public static final String INFOBLOX_LICENSE_GRIDWIDE =
+            "/wapi/v%s/license:gridwide?_return_fields=type,expiry_date,expiration_status,limit";
     public static final String INFOBLOX_GETGRIDDATA = "/wapi/v%s/fileop?_function=getgriddata";
     public static final String INFOBLOX_GETGRIDDATA_BODY = "{\"type\": \"BACKUP\"}";
     public static final String INFOBLOX_DOWNLOADCOMPLETE = "/wapi/v%s/fileop?_function=downloadcomplete";
@@ -66,11 +72,27 @@ public final class HttpsVendorPlan {
     /** The MC's type code for a ProxySG (measured 2026-09-25). */
     public static final String MC_TYPE_PROXYSG = "sgos6x";
 
+    /** Lifecycle read, group A (gate bluecoat_mc_device_license): a managed device's license as the MC reports it. */
+    public static final String MC_DEVICE_LICENSE = "/api/devices/%s/license";
+    private static final java.util.regex.Pattern MC_UUID = java.util.regex.Pattern.compile("[0-9A-Fa-f-]{16,64}");
+
+    /** True when {@code uuid} has the shape of an MC device identifier (the pattern every MC device path is validated with). */
+    public static boolean isMcDeviceUuid(String uuid) {
+        return uuid != null && MC_UUID.matcher(uuid).matches();
+    }
+
     public static String mcDeviceCommand(String uuid) {
-        if (uuid == null || !uuid.matches("[0-9A-Fa-f-]{16,64}")) {
+        if (!isMcDeviceUuid(uuid)) {
             throw new IllegalArgumentException("not a Management Center device uuid");
         }
         return String.format(MC_DEVICE_COMMAND, uuid);
+    }
+
+    public static String mcDeviceLicense(String uuid) {
+        if (!isMcDeviceUuid(uuid)) {
+            throw new IllegalArgumentException("not a Management Center device uuid");
+        }
+        return String.format(MC_DEVICE_LICENSE, uuid);
     }
     public static final String CC_LOGIN = "/mgmt/system/user/login";
     public static final String CC_ALLDEVICES = "/mgmt/system/config/itemlist/alldevices";
@@ -82,7 +104,7 @@ public final class HttpsVendorPlan {
     /** Gate keys: {@code METHOD path}, the version placeholder kept as {@code <ver>}. */
     public static final List<String> INFOBLOX_GATE_KEYS = List.of("GET /wapidoc/", "GET /wapi/v<ver>/grid", "GET /wapi/v<ver>/member",
             "GET /wapi/v<ver>/view", "GET /wapi/v<ver>/zone_auth", "GET /wapi/v<ver>/network",
-            "GET /wapi/v<ver>/range", "GET /wapi/v<ver>/member:license",
+            "GET /wapi/v<ver>/range", "GET /wapi/v<ver>/member:license", "GET /wapi/v<ver>/license:gridwide",
             "POST /wapi/v<ver>/fileop?_function=getgriddata", "GET <getgriddata url, same host>",
             "POST /wapi/v<ver>/fileop?_function=downloadcomplete");
     public static final List<String> RADWARE_GATE_KEYS = List.of("GET /", "POST /dynamic/File/Configuration/ReceivefromDevice");

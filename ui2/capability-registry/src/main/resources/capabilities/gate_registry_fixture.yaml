@@ -4913,3 +4913,191 @@ gates:
     secret_output_risk: "sensitive policy data; parse in memory"
     safe_telemetry_fields: ["outcome", "packageCount", "ruleCount"]
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_11_05_EVENING_BATCH.md (PO chat approval 2026-11-05 evening)"
+
+  # Lifecycle reads, group A (V198, PO chat approval 2026-11-10 "Yalnız A grubu"): docs/design/LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md.
+  - gate_id: cp_lifecycle_cplic_print
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'cplic print'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per device per inventory run"
+    session_reuse_rule: "the inventory session"
+    unsupported_behavior_ref: "empty or unparsed output: license check UNKNOWN"
+    secret_output_risk: "the Host column (an address) and the CK- certificate key in Features: parsed past, never stored or logged; cplic print -x and -F are never used"
+    safe_telemetry_fields: ["outcome", "line_count", "license_count", "masked_shape"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: cp_lifecycle_cplic_print_vsx
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'vsenv 0 && cplic print'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per device per inventory run"
+    session_reuse_rule: "the inventory session"
+    unsupported_behavior_ref: "empty or unparsed output: license check UNKNOWN"
+    secret_output_risk: "the Host column (an address) and the CK- certificate key in Features: parsed past, never stored or logged; cplic print -x and -F are never used"
+    safe_telemetry_fields: ["outcome", "line_count", "license_count", "masked_shape"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: cp_lifecycle_cplic_print_mds
+    vendor: "check_point"
+    platform_role_scope: "cp_multi_domain_server"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "cplic print"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per management server per inventory run"
+    session_reuse_rule: "the inventory session (interactive Expert shell)"
+    unsupported_behavior_ref: "empty or unparsed output: license check UNKNOWN"
+    secret_output_risk: "the Host column (an address) and the CK- certificate key in Features: parsed past, never stored or logged; cplic print -x and -F are never used"
+    safe_telemetry_fields: ["outcome", "line_count", "license_count", "masked_shape"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: cp_lifecycle_cplp_list
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'cplp list'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per device per inventory run"
+    session_reuse_rule: "the inventory session"
+    unsupported_behavior_ref: "command not found or empty output: Live Patch state UNKNOWN"
+    secret_output_risk: "none expected; the PIDS column is not kept"
+    safe_telemetry_fields: ["outcome", "line_count", "patch_count", "status_counts", "masked_shape"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: cp_lifecycle_cplp_list_vsx
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'vsenv 0 && cplp list'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per device per inventory run"
+    session_reuse_rule: "the inventory session"
+    unsupported_behavior_ref: "command not found or empty output: Live Patch state UNKNOWN"
+    secret_output_risk: "none expected; the PIDS column is not kept"
+    safe_telemetry_fields: ["outcome", "line_count", "patch_count", "status_counts", "masked_shape"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: cp_lifecycle_cplp_list_mds
+    vendor: "check_point"
+    platform_role_scope: "cp_multi_domain_server"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "cplp list"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per management server per inventory run"
+    session_reuse_rule: "the inventory session (interactive Expert shell)"
+    unsupported_behavior_ref: "command not found or empty output: Live Patch state UNKNOWN"
+    secret_output_risk: "none expected; the PIDS column is not kept"
+    safe_telemetry_fields: ["outcome", "line_count", "patch_count", "status_counts", "masked_shape"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: cp_lifecycle_spark_show_license
+    vendor: "check_point"
+    platform_role_scope: "gaia_embedded"
+    shell_context: "clish"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "show license"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per device per inventory run"
+    session_reuse_rule: "the inventory session (one clish session)"
+    unsupported_behavior_ref: "error or empty output: license check UNKNOWN"
+    secret_output_risk: "host address and contract ID: parsed past, never stored or logged"
+    safe_telemetry_fields: ["outcome", "line_count", "masked_shape"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: asa_lifecycle_show_license_all
+    vendor: "cisco_asa"
+    platform_role_scope: "cisco_asa_firewall"
+    shell_context: "privileged_exec"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "show license all"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per device per inventory run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "error, \"Not applicable in standby state\" or unparsed output: reported as such, never a failure"
+    secret_output_risk: "Smart Account and Virtual Account names, UDI (product id and serial), hostname lines: parsed past, never stored or logged"
+    safe_telemetry_fields: ["outcome", "line_count", "masked_shape"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: bluecoat_mc_device_license
+    vendor: "bluecoat"
+    platform_role_scope: "bluecoat_management_center"
+    shell_context: "not_applicable"
+    transport_kind: "HTTPS"
+    canonical_command_key: "GET /api/devices/{uuid}/license"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per managed device per inventory run"
+    session_reuse_rule: "one client per run"
+    unsupported_behavior_ref: "HTTP error or unexpected shape: license check UNKNOWN"
+    secret_output_risk: "serialNumber (device and component), partNumber, name: never stored or logged"
+    safe_telemetry_fields: ["outcome", "http_status", "component_count", "field_names"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: bluecoat_mc_system_version
+    vendor: "bluecoat"
+    platform_role_scope: "bluecoat_management_center"
+    shell_context: "not_applicable"
+    transport_kind: "HTTPS"
+    canonical_command_key: "GET /api/system/version"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per inventory run"
+    session_reuse_rule: "one client per run"
+    unsupported_behavior_ref: "HTTP error: version stays as observed today"
+    secret_output_risk: "none"
+    safe_telemetry_fields: ["outcome", "http_status", "field_names"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"
+
+  - gate_id: infoblox_license_gridwide
+    vendor: "infoblox"
+    platform_role_scope: "infoblox_grid_manager"
+    shell_context: "not_applicable"
+    transport_kind: "HTTPS"
+    canonical_command_key: "GET /wapi/v<ver>/license:gridwide"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per inventory"
+    session_reuse_rule: "one client per run"
+    unsupported_behavior_ref: "failed object: null, as the other grid summary objects"
+    secret_output_risk: "key (the license string) is never requested; return fields are type,expiry_date,expiration_status,limit"
+    safe_telemetry_fields: ["count", "field_names"]
+    source_document_pointer: "docs/design/LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md (PO chat approval 2026-11-10)"

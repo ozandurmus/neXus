@@ -24,6 +24,8 @@ import com.securityexpert.nexus.ui2.persistence.device.inventory.InfobloxGridSum
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
 import com.securityexpert.nexus.ui2.worker.backup.BackupResult;
 import com.securityexpert.nexus.ui2.worker.backup.BackupTranscript;
+import com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadShape;
+import com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadSwitch;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Credentials;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.DownloadResult;
@@ -99,6 +101,20 @@ public final class HttpsVendorExecutor {
 
     public HttpsVendorExecutor withCiscoAsa(com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaExecutor executor) {
         this.ciscoAsa = executor;
+        return this;
+    }
+
+    /** Lifecycle reads, group A (PO 2026-11-10): off unless the worker wires a switch in. See {@link LifecycleReadSwitch}. */
+    private LifecycleReadSwitch lifecycleReads = LifecycleReadSwitch.OFF;
+    private java.util.function.Consumer<String> lifecycleSink = LifecycleReadShape::log;
+
+    public HttpsVendorExecutor withLifecycleReads(LifecycleReadSwitch lifecycleReads) {
+        this.lifecycleReads = Objects.requireNonNull(lifecycleReads, "lifecycleReads");
+        return this;
+    }
+
+    public HttpsVendorExecutor withLifecycleSink(java.util.function.Consumer<String> sink) {
+        this.lifecycleSink = Objects.requireNonNull(sink, "sink");
         return this;
     }
 
@@ -211,8 +227,13 @@ public final class HttpsVendorExecutor {
     }
 
     public InventoryOutcome inventory(String vendor, Target target, String credentialRef) {
+        return inventory(vendor, target, credentialRef, null);
+    }
+
+    /** {@code deviceId}: the neXus device id the lifecycle reads (group A) are switched by and logged under (null: none). */
+    public InventoryOutcome inventory(String vendor, Target target, String credentialRef, String deviceId) {
         if (CISCO.equals(vendor)) {
-            return ciscoAsa == null ? new InventoryOutcome.Failed("no Cisco ASA executor in this worker") : ciscoAsa.inventory(target, credentialRef);
+            return ciscoAsa == null ? new InventoryOutcome.Failed("no Cisco ASA executor in this worker") : ciscoAsa.inventory(target, credentialRef, deviceId);
         }
         if (PULSE.equals(vendor)) {
             return pulse().inventory(target, credentialRef);
@@ -226,9 +247,9 @@ public final class HttpsVendorExecutor {
         try {
             Credentials creds = credentials.apply(credentialRef);
             return switch (vendor) {
-                case "infoblox" -> inventoryInfoblox(target, creds);
+                case "infoblox" -> inventoryInfoblox(target, creds, deviceId);
                 case "radware_cyber_controller" -> inventoryCyberController(target, creds);
-                case "bluecoat_mc" -> inventoryManagementCenter(target, creds);
+                case "bluecoat_mc" -> inventoryManagementCenter(target, creds, deviceId);
                 default -> new InventoryOutcome.Failed("no HTTPS inventory read for vendor " + vendor);
             };
         } catch (RuntimeException e) {
@@ -243,7 +264,7 @@ public final class HttpsVendorExecutor {
     }
 
     /** Infoblox: the grid's members with interfaces, static routes and facts -- {@code GET /wapi/v<ver>/member} (gate infoblox_member_list). */
-    private InventoryOutcome inventoryInfoblox(Target target, Credentials creds) throws IOException, InterruptedException {
+    private InventoryOutcome inventoryInfoblox(Target target, Credentials creds, String deviceId) throws IOException, InterruptedException {
         TextResponse doc = client.get(target, HttpsVendorPlan.INFOBLOX_WAPIDOC, creds, SHORT, TEXT_MAX);
         Optional<String> version = HttpsVendorPlan.parseWapiVersion(doc.body());
         if (version.isEmpty()) {
@@ -275,6 +296,8 @@ public final class HttpsVendorExecutor {
             }
         }
         InfobloxGridSummary summary = infobloxSummary(target, creds, version.get(), json);
+        // Lifecycle read, group A: after the summary objects, never changes the outcome below.
+        lifecycleInfobloxLicenseGridwide(target, creds, version.get(), deviceId);
         return new InventoryOutcome.Completed(contexts, members, names,
                 new Identity(gridName, Optional.of("Infoblox Grid Manager"), Optional.of("WAPI " + version.get())), summary);
     }
@@ -475,8 +498,21 @@ public final class HttpsVendorExecutor {
      */
     /** The MC's own name and version from /api/system/version (measured 2026-09-26); the certificate name when absent. */
     private Identity managementCenterIdentity(Target target, Credentials creds, Optional<String> peerName) throws InterruptedException {
+        return managementCenterIdentity(target, creds, peerName, null);
+    }
+
+    /** {@code observer}: sees the /api/system/version answer once (the lifecycle measurement); null: nobody. */
+    private Identity managementCenterIdentity(Target target, Credentials creds, Optional<String> peerName,
+            java.util.function.Consumer<TextResponse> observer) throws InterruptedException {
         try {
             TextResponse v = client.get(target, HttpsVendorPlan.MC_SYSTEM_VERSION, creds, SHORT, 64 * 1024);
+            if (observer != null) {
+                try {
+                    observer.accept(v);
+                } catch (RuntimeException ignored) {
+                    // A measurement never changes an inventory result.
+                }
+            }
             if (v.ok()) {
                 JsonNode j = JSON.readTree(v.body());
                 Optional<String> name = Optional.ofNullable(j.path("name").asText(null)).filter(x -> !x.isBlank());
@@ -510,7 +546,7 @@ public final class HttpsVendorExecutor {
      * type and OS version counts logged for measurement. Field names are read defensively (name / deviceName /
      * displayName; osVersion / version / softwareVersion) until the first run names them.
      */
-    private InventoryOutcome inventoryManagementCenter(Target target, Credentials creds) throws IOException, InterruptedException {
+    private InventoryOutcome inventoryManagementCenter(Target target, Credentials creds, String deviceId) throws IOException, InterruptedException {
         TextResponse r = client.get(target, HttpsVendorPlan.MC_DEVICES, creds, SHORT, 8 * 1024 * 1024);
         if (r.status() == 401 || r.status() == 403) {
             return new InventoryOutcome.AuthenticationFailed("HTTP " + r.status());
@@ -525,7 +561,88 @@ public final class HttpsVendorExecutor {
         Optional<String> names = managed.isEmpty() ? Optional.empty()
                 : Optional.of(managed.stream().map(GridMember::hostName).sorted(String.CASE_INSENSITIVE_ORDER)
                         .collect(java.util.stream.Collectors.joining(", ")));
-        return new InventoryOutcome.Completed(List.of(), managed, names, managementCenterIdentity(target, creds, r.peerName()));
+        // Lifecycle reads, group A. GET /api/system/version is already part of this run (the identity read below, the same
+        // literal as gate bluecoat_mc_system_version), so its answer is measured, not requested a second time.
+        Identity identity = managementCenterIdentity(target, creds, r.peerName(), lifecycleReads.allows(
+                LifecycleReadSwitch.Kind.MC_SYSTEM_VERSION, deviceId)
+                        ? version -> emitLifecycle(LifecycleReadShape.jsonLine(LifecycleReadSwitch.Kind.MC_SYSTEM_VERSION, deviceId,
+                                version.status(), version.body(), JSON))
+                        : null);
+        lifecycleMcDeviceLicenses(target, creds, list, deviceId);
+        return new InventoryOutcome.Completed(List.of(), managed, names, identity);
+    }
+
+    private void emitLifecycle(String line) {
+        try {
+            lifecycleSink.accept(line);
+        } catch (RuntimeException ignored) {
+            // A measurement sink never changes an inventory result.
+        }
+    }
+
+    /** What an unrecorded lifecycle GET produced: the answer, or the exception class that stopped it. */
+    private record LifecycleGet(TextResponse response, String error) {
+    }
+
+    /** One lifecycle GET: 60 s, no retry, outside any job transcript; never throws except for a lost lease. */
+    private LifecycleGet lifecycleGet(Target target, Credentials creds, String path, int maxBytes) {
+        try {
+            return com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(() -> {
+                try {
+                    return new LifecycleGet(client.get(target, path, creds, Duration.ofSeconds(60), maxBytes), null);
+                } catch (IOException e) {
+                    return new LifecycleGet(null, e.getClass().getSimpleName());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return new LifecycleGet(null, "InterruptedException");
+                }
+            });
+        } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            return new LifecycleGet(null, e.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * {@code GET /api/devices/{uuid}/license} (gate bluecoat_mc_device_license) for at most {@code UI2_LIFECYCLE_MC_LICENSE_MAX}
+     * managed devices, the uuid taken from this run's {@code GET /api/devices} answer and validated before it enters the path.
+     */
+    private void lifecycleMcDeviceLicenses(Target target, Credentials creds, JsonNode list, String deviceId) {
+        LifecycleReadSwitch.Kind kind = LifecycleReadSwitch.Kind.MC_DEVICE_LICENSE;
+        if (!lifecycleReads.allows(kind, deviceId)) {
+            return;
+        }
+        try {
+            int sent = 0;
+            for (String uuid : ManagementCenterDevices.uuids(list)) {
+                if (sent >= lifecycleReads.mcLicenseMax()) {
+                    break;
+                }
+                sent++;
+                LifecycleGet got = lifecycleGet(target, creds, HttpsVendorPlan.mcDeviceLicense(uuid), TEXT_MAX);
+                emitLifecycle(got.response() == null ? LifecycleReadShape.errorLine(kind, deviceId, got.error())
+                        : LifecycleReadShape.jsonLine(kind, deviceId, got.response().status(), got.response().body(), JSON));
+            }
+        } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            emitLifecycle(LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName()));
+        }
+    }
+
+    /** {@code GET /wapi/v<ver>/license:gridwide?_return_fields=type,expiry_date,expiration_status,limit} (gate infoblox_license_gridwide). */
+    private void lifecycleInfobloxLicenseGridwide(Target target, Credentials creds, String version, String deviceId) {
+        LifecycleReadSwitch.Kind kind = LifecycleReadSwitch.Kind.INFOBLOX_LICENSE_GRIDWIDE;
+        if (!lifecycleReads.allows(kind, deviceId)) {
+            return;
+        }
+        try {
+            LifecycleGet got = lifecycleGet(target, creds, HttpsVendorPlan.withVersion(HttpsVendorPlan.INFOBLOX_LICENSE_GRIDWIDE, version), TEXT_MAX);
+            emitLifecycle(got.response() == null ? LifecycleReadShape.errorLine(kind, deviceId, got.error())
+                    : LifecycleReadShape.jsonLine(kind, deviceId, got.response().status(), got.response().body(), JSON));
+        } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            emitLifecycle(LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName()));
+        }
     }
 
     /**

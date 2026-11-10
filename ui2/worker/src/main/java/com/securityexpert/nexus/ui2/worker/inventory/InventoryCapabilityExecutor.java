@@ -111,6 +111,9 @@ public final class InventoryCapabilityExecutor {
     private final PanCredentialResolver panCredentialResolver;
     private final com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches panSwitches;
     private final PanConfiguredInterfaceSource configuredInterfaces;
+    /** Lifecycle reads, group A (PO 2026-11-10): off unless the worker wires a switch in; see {@link LifecycleReadSwitch}. */
+    private LifecycleReadSwitch lifecycleReads = LifecycleReadSwitch.OFF;
+    private java.util.function.Consumer<String> lifecycleSink = LifecycleReadShape::log;
 
     /** Inventory run tokens (device_inventory_run.not_collected) for interfaces derived from configuration (PO 2026-10-24). */
     public static final String TOKEN_INTERFACES_FROM_CONFIGURATION = "pan_interfaces_from_configuration";
@@ -137,6 +140,18 @@ public final class InventoryCapabilityExecutor {
         this.configuredInterfaces = Objects.requireNonNull(configuredInterfaces, "configuredInterfaces");
     }
 
+    /** The lifecycle reads, group A (measure-first, default {@link LifecycleReadSwitch#OFF}: no new command is ever sent). */
+    public InventoryCapabilityExecutor withLifecycleReads(LifecycleReadSwitch lifecycleReads) {
+        this.lifecycleReads = Objects.requireNonNull(lifecycleReads, "lifecycleReads");
+        return this;
+    }
+
+    /** Where the masked [LIFECYCLE_MEASURE] lines go (default: the log). */
+    public InventoryCapabilityExecutor withLifecycleSink(java.util.function.Consumer<String> sink) {
+        this.lifecycleSink = Objects.requireNonNull(sink, "sink");
+        return this;
+    }
+
     public InventoryResult collect(InventoryRequest request, Optional<PresentedIdentity> recordedIdentity,
             boolean strictRefuseEnabled) {
         return collect(request, recordedIdentity, strictRefuseEnabled, null);
@@ -146,13 +161,13 @@ public final class InventoryCapabilityExecutor {
     public InventoryResult collect(InventoryRequest request, Optional<PresentedIdentity> recordedIdentity,
             boolean strictRefuseEnabled, String deviceId) {
         return switch (request.vendor()) {
-            case CHECK_POINT -> collectCheckPoint(request, recordedIdentity, strictRefuseEnabled);
+            case CHECK_POINT -> collectCheckPoint(request, recordedIdentity, strictRefuseEnabled, deviceId);
             case PALO_ALTO -> collectPaloAlto(request, recordedIdentity, strictRefuseEnabled, deviceId);
         };
     }
 
     private InventoryResult collectCheckPoint(InventoryRequest request, Optional<PresentedIdentity> recordedIdentity,
-            boolean strictRefuseEnabled) {
+            boolean strictRefuseEnabled, String deviceId) {
         ConnectionTarget target = request.connectionTarget()
                 .orElseThrow(() -> new IllegalArgumentException("check_point inventory requires a connectionTarget"));
         boolean preferInteractiveShell =
@@ -250,6 +265,8 @@ public final class InventoryCapabilityExecutor {
                     "[INVENTORY_PARSE] target={0}:{1} parsed in {2}ms: interfaces={3}, routes={4} (ifs_len={5}, route_len={6})",
                     target.host(), target.port(), parseElapsed, physicalInterfaces.size(), physicalRoutes.size(), fwGetifsOutput.length(), routeOutput.length());
 
+            // Lifecycle reads (group A): a device whose bare reads gave nothing and whose clish gave an answer has landed in clish.
+            boolean clishLanding = preferInteractiveShell;
             // Quantum Spark / Gaia Embedded or restricted Clish shell fallback
             if (physicalInterfaces.isEmpty()) {
                 String clishIf = execOutput(session, "show interfaces all", preferInteractiveShell);
@@ -260,6 +277,7 @@ public final class InventoryCapabilityExecutor {
                     clishIf = execOutput(session, "clish -c 'show interfaces all'", preferInteractiveShell);
                 }
                 if (!clishIf.isBlank()) {
+                    clishLanding = true;
                     physicalInterfaces = parseClishInterfaces(clishIf);
                     if (physicalInterfaces.isEmpty()) {
                         // The device answered but the parser understood none of it (measured live,
@@ -446,11 +464,20 @@ public final class InventoryCapabilityExecutor {
                         preferInteractiveShell || managementServer,
                         com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.noJumboShape(cpinfoOutput));
             }
+            // Live Patch package take (no new command): the same cpinfo answer carries BUNDLE_URGENT_SECURITY_UPDATE_* lines.
+            Optional<String> livePatchTake = com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.livePatchPackageTake(cpinfoOutput);
+            if (livePatchTake.isEmpty() && cpinfoOutput.contains("URGENT")) {
+                LOG.log(System.Logger.Level.INFO, "[CP_CPINFO_NO_LIVE_PATCH_TAKE] managementServer={0} {1}", managementServer,
+                        com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.urgentShape(cpinfoOutput));
+            }
+            Map<String, String> cpContentVersions = livePatchTake
+                    .map(take -> Map.of(com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.LIVE_PATCH_PACKAGE_TAKE_KEY, take))
+                    .orElse(Map.of());
             PlatformFactsRead platformFacts = new PlatformFactsRead(
                     com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.assetSerial(assetOutput),
                     jumbo,
                     com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.assetFamily(assetOutput),
-                    java.util.Map.of(),
+                    cpContentVersions,
                     com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointPlatformFactsParser.uptime(
                             identityReadOutput(session, InventoryReadPlan.CP_UPTIME, preferInteractiveShell)),
                     "cp_show_asset_system_cpinfo_hotfixes_uptime")
@@ -515,12 +542,85 @@ public final class InventoryCapabilityExecutor {
                     LOG.log(System.Logger.Level.WARNING, "[CP_MDS_HA] outcome=READ_FAILED {0}", e.getClass().getSimpleName());
                 }
             }
+            // Lifecycle reads, group A: last, after every other read of the run; never changes the result.
+            if (lifecycleReads.anyFor(deviceId)) {
+                boolean sparkIdentified = platformFacts.platformFamily().filter("gaia_embedded"::equals).isPresent();
+                lifecycleCheckPointReads(session, deviceId, managementServer, vsxHost, sparkIdentified, clishLanding);
+            }
             InventoryResult.ObservedIdentity observed = new InventoryResult.ObservedIdentity(gaiaHostname,
                     observedModel, gaiaVersion, mdsHaRole);
             return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString),
                     Optional.of(platformFacts), observed);
         } finally {
             transport.disconnect(session);
+        }
+    }
+
+    /**
+     * Lifecycle reads, group A (PO 2026-11-10): the approved form for where this run landed, each read alone in its own
+     * try/catch, 60 s, no retry, no fallback channel. A management server gets the bare literal in the interactive Expert
+     * shell; a Quantum Spark identified in this run only {@code show license}; a device in clish that is not a Spark gets
+     * none; a Gaia gateway the login-shell form (the {@code vsenv 0} form on a VSX host). The answer is reduced to a masked
+     * shape and logged; it is never returned, stored or recorded in a transcript.
+     */
+    private void lifecycleCheckPointReads(TransportSession session, String deviceId, boolean managementServer, boolean vsxHost,
+            boolean sparkIdentified, boolean clishLanding) {
+        LifecycleReadSwitch.Kind cplic = LifecycleReadSwitch.Kind.CP_CPLIC_PRINT;
+        LifecycleReadSwitch.Kind cplp = LifecycleReadSwitch.Kind.CP_CPLP_LIST;
+        LifecycleReadSwitch.Kind spark = LifecycleReadSwitch.Kind.CP_SPARK_SHOW_LICENSE;
+        if (managementServer) {
+            lifecycleSkip(spark, deviceId, "management_server");
+            lifecycleCliRead(session, cplic, deviceId, InventoryReadPlan.CP_CPLIC_PRINT_MDS, true);
+            lifecycleCliRead(session, cplp, deviceId, InventoryReadPlan.CP_CPLP_LIST_MDS, true);
+        } else if (sparkIdentified) {
+            lifecycleSkip(cplic, deviceId, "spark_gets_show_license_only");
+            lifecycleSkip(cplp, deviceId, "spark_gets_show_license_only");
+            lifecycleCliRead(session, spark, deviceId, InventoryReadPlan.SPARK_SHOW_LICENSE, true);
+        } else if (clishLanding) {
+            lifecycleSkip(cplic, deviceId, "no_approved_form_for_landing_shell");
+            lifecycleSkip(cplp, deviceId, "no_approved_form_for_landing_shell");
+            lifecycleSkip(spark, deviceId, "no_approved_form_for_landing_shell");
+        } else {
+            lifecycleCliRead(session, cplic, deviceId, InventoryReadPlan.cplicPrintGateway(vsxHost), false);
+            lifecycleCliRead(session, cplp, deviceId, InventoryReadPlan.cplpListGateway(vsxHost), false);
+        }
+    }
+
+    private void lifecycleSkip(LifecycleReadSwitch.Kind kind, String deviceId, String reason) {
+        if (lifecycleReads.allows(kind, deviceId)) {
+            emitLifecycle(LifecycleReadShape.skippedLine(kind, deviceId, reason));
+        }
+    }
+
+    private void lifecycleCliRead(TransportSession session, LifecycleReadSwitch.Kind kind, String deviceId, String command,
+            boolean interactive) {
+        if (!lifecycleReads.allows(kind, deviceId)) {
+            return;
+        }
+        String line;
+        try {
+            ExecSpec spec = new ExecSpec(command);
+            // Nothing from these reads is kept in a job transcript: the scope, if one is open on this thread, is lifted.
+            ExecResult result = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(
+                    () -> interactive ? transport.execInteractive(session, spec, InventoryReadPlan.LIFECYCLE_READ_TIMEOUT)
+                            : transport.exec(session, spec, InventoryReadPlan.LIFECYCLE_READ_TIMEOUT));
+            line = switch (result) {
+                case ExecResult.Completed completed -> LifecycleReadShape.cliLine(kind, deviceId, completed.output());
+                case ExecResult.TimedOut timedOut -> LifecycleReadShape.errorLine(kind, deviceId, "TimedOut");
+                case ExecResult.ChannelFailed failed -> LifecycleReadShape.errorLine(kind, deviceId, "ChannelFailed");
+            };
+        } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            line = LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName());
+        }
+        emitLifecycle(line);
+    }
+
+    private void emitLifecycle(String line) {
+        try {
+            lifecycleSink.accept(line);
+        } catch (RuntimeException ignored) {
+            // A measurement sink never changes an inventory result.
         }
     }
 

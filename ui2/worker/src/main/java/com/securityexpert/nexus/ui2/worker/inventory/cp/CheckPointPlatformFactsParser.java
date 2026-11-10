@@ -22,6 +22,8 @@ public final class CheckPointPlatformFactsParser {
 
     private static final Pattern JUMBO_TAKE =
             Pattern.compile("(?im)^\\s*HOTFIX_(R\\d+(?:_\\d+)*)_JUMBO_HF_MAIN\\s+Take:\\s*(\\d+)\\s*$");
+    private static final Pattern LIVE_PATCH_TAKE =
+            Pattern.compile("(?im)^\\s*BUNDLE_URGENT_SECURITY_UPDATE_\\S*\\s+Take:\\s*(\\d+)\\s*$");
     private static final Pattern UPTIME = Pattern.compile("(?i)\\bup\\s+(.+?),\\s*\\d+\\s+users?\\b");
     private static final Pattern ASSET_SERIAL = Pattern.compile("(?im)^\\s*Serial Number:\\s*(\\S.*?)\\s*$");
     private static final Pattern ASSET_MODEL = Pattern.compile("(?im)^\\s*Model:\\s*(\\S.*?)\\s*$");
@@ -40,6 +42,51 @@ public final class CheckPointPlatformFactsParser {
             return Optional.empty();
         }
         return Optional.of(matcher.group(1).replace('_', '.') + " Jumbo Take " + matcher.group(2));
+    }
+
+    /** The key under which the Live Patch package take travels in the platform facts' content versions. */
+    public static final String LIVE_PATCH_PACKAGE_TAKE_KEY = "live_patch_package_take";
+
+    /**
+     * The Check Point Live Patch package take from the same {@code cpinfo -y all} answer (no extra command): a line
+     * {@code BUNDLE_URGENT_SECURITY_UPDATE_<token>   Take:  <digits>}. Several matching lines: the highest take.
+     * {@code Optional.empty()} when no line matches.
+     */
+    public static Optional<String> livePatchPackageTake(String cpinfoOutput) {
+        if (cpinfoOutput == null || cpinfoOutput.isBlank()) {
+            return Optional.empty();
+        }
+        Matcher matcher = LIVE_PATCH_TAKE.matcher(cpinfoOutput);
+        java.math.BigInteger best = null;
+        while (matcher.find()) {
+            java.math.BigInteger take = new java.math.BigInteger(matcher.group(1));
+            if (best == null || take.compareTo(best) > 0) {
+                best = take;
+            }
+        }
+        return best == null ? Optional.empty() : Optional.of(best.toString());
+    }
+
+    private static final Pattern URGENT_LINE = Pattern.compile("(?im)^.*URGENT.*$");
+
+    /**
+     * Shape of the lines of a {@code cpinfo -y all} answer that name URGENT but did not match {@link #livePatchPackageTake}:
+     * every digit run replaced by {@code 9}, characters outside a closed set dropped (same masking as {@link #noJumboShape}).
+     */
+    public static String urgentShape(String cpinfoOutput) {
+        if (cpinfoOutput == null) return "urgentLines=0";
+        java.util.Set<String> shapes = new java.util.TreeSet<>();
+        long count = 0;
+        Matcher m = URGENT_LINE.matcher(cpinfoOutput);
+        while (m.find()) {
+            count++;
+            if (shapes.size() < 12) {
+                String shape = SHAPE_SAFE.matcher(m.group().strip().replaceAll("\\d+", "9")).replaceAll("").replaceAll("\\s+", " ");
+                if (shape.length() > 80) shape = shape.substring(0, 80);
+                if (!shape.isBlank()) shapes.add(shape);
+            }
+        }
+        return "urgentLines=" + count + " shapes=" + String.join(" | ", shapes);
     }
 
     private static final Pattern SHAPE_LINE = Pattern.compile("(?im)^.*(?:JUMBO|HOTFIX_R\\d|Take:).*$");
