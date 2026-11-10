@@ -138,7 +138,7 @@ class SystemLogReadServiceTest {
         String shown = text(masked);
         assertFalse(shown.contains(peer) || shown.contains(source), "a plain host word is in the masked page (value withheld)");
         assertTrue(shown.contains(" is down\n") && shown.contains(" standby\"}\r\n"), "the text and line ends around it stay");
-        assertEquals("logmask-v4", masked.page().maskRuleSet(), "the page names the new rule set");
+        assertEquals("logmask-v5", masked.page().maskRuleSet(), "the page names the new rule set");
 
         var unmasked = fx.service().text(unmasked(CHUNK, 0, 0, true));
         assertTrue(unmasked.isOk());

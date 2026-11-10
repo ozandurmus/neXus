@@ -17,6 +17,7 @@ import com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts;
 import com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
+import com.securityexpert.nexus.ui2.persistence.diagnostic.JooqEstateNameRepository;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogCollectionRepository;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogReadRepository;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogSettingsRepository;
@@ -51,10 +52,70 @@ public class SystemLogReadConfiguration {
         return new EstateDictionarySource(keys.getSecretKey(), estateIdentities(devices, platformFacts, names), NAMES_TTL);
     }
 
+    /**
+     * The estate names of the masked view ({@code logmask-v5}): administrator, policy, rule, object, zone,
+     * virtual-system and MDS domain names, read from the policy and device tables (snapshots one row at a time, only
+     * when changed) and refreshed in the background every 15 minutes.
+     */
+    @Bean
+    public EstateNameCatalog estateNameCatalog(HmacKeyProvider keys, TransactionBoundary transactions) {
+        return new EstateNameCatalog(keys.getSecretKey(), estateNameSource(new JooqEstateNameRepository(transactions)),
+                EstateNameCatalog.DEFAULT_REFRESH);
+    }
+
+    /** The repository as the catalog's source (also used by the 2026-11-10 measurement program). */
+    public static EstateNameCatalog.Source estateNameSource(JooqEstateNameRepository repository) {
+        return new EstateNameCatalog.Source() {
+            @Override
+            public List<EstateNameCatalog.Named> flatNames() {
+                List<EstateNameCatalog.Named> out = new ArrayList<>();
+                for (JooqEstateNameRepository.FlatName f : repository.flatNames()) {
+                    out.add(new EstateNameCatalog.Named(EstateNameCatalog.Kind.valueOf(f.category().name()), f.value()));
+                }
+                return out;
+            }
+
+            @Override
+            public List<String> objectInventoryDocuments() {
+                return repository.objectInventoryDocuments();
+            }
+
+            @Override
+            public Map<String, String> policySnapshotVersions() {
+                return repository.policySnapshotVersions();
+            }
+
+            @Override
+            public Optional<String[]> policySnapshot(String policyId) {
+                return repository.policySnapshot(policyId).map(d -> new String[] {d.metadataJson(), d.snapshotJson()});
+            }
+        };
+    }
+
+    /** Loads the estate names once the service is up, so the first masked page does not wait for the read. */
+    @Bean
+    public EstateNameWarmUp estateNameWarmUp(EstateNameCatalog catalog) {
+        return new EstateNameWarmUp(catalog);
+    }
+
+    public static final class EstateNameWarmUp {
+        private final EstateNameCatalog catalog;
+
+        EstateNameWarmUp(EstateNameCatalog catalog) {
+            this.catalog = catalog;
+        }
+
+        @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
+        public void onApplicationReady() {
+            catalog.refreshAsync();
+        }
+    }
+
     @Bean
     public LogMasking logMasking(HmacKeyProvider keys, DeviceRepository devices, TopologyNamePseudonymizer names,
-            EstateDictionarySource estate) {
-        return new LogMasking(keys.getSecretKey(), cached(SanitizerConfiguration.knownNames(devices, names), NAMES_TTL), estate);
+            EstateDictionarySource estate, EstateNameCatalog estateNames) {
+        return new LogMasking(keys.getSecretKey(), cached(SanitizerConfiguration.knownNames(devices, names), NAMES_TTL), estate,
+                estateNames);
     }
 
     /**

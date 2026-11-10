@@ -819,7 +819,7 @@ interface TextState {
   readonly nextOffset: number;
   readonly eof: boolean;
   readonly masked: boolean | null;
-  /** The masking rule set of the last masked page (`logmask-v4`); null when unknown. */
+  /** The masking rule set of the last masked page (`logmask-v5`); null when unknown. */
   readonly maskRules: string | null;
   readonly loading: boolean;
   readonly error: string | null;

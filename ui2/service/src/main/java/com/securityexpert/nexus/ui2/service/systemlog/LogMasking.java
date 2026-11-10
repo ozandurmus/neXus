@@ -64,7 +64,10 @@ import com.securityexpert.nexus.ui2.service.privacy.EstateDictionarySource;
  *   <li>the Data Sanitizer text rules on all other text;</li>
  *   <li>the <b>estate dictionary</b> ({@link EstateDictionary}, shared with the Data Sanitizer): any token (or
  *       {@code . _ : -}-delimited part of one) equal to an identity value the service knows is replaced by its masked
- *       form. It holds only keyed digests and the masked forms;</li>
+ *       form. It holds only keyed digests and the masked forms. Since {@code logmask-v5} this view adds the estate
+ *       names ({@link EstateNameCatalog}: administrator {@code USR-}, policy {@code POL-}, rule {@code RUL-}, object
+ *       {@code OBJ-}, zone {@code ZON-}, virtual-system {@code VSN-}, domain {@code DMN-}), matched case-insensitively
+ *       and as phrases; the Data Sanitizer's exports keep the device identities only;</li>
  *   <li>the <b>heuristic free-text pass</b> ({@link FreeTextIdentityRules}, 2026-10-19): FQDN-shaped, hostname-shaped
  *       and serial-like tokens, principal mentions and (since {@code logmask-v4}) the word after a host keyword or
  *       {@code from}/{@code to} in free text, with a short documented allowlist.</li>
@@ -83,9 +86,11 @@ public final class LogMasking {
      * {@code logmask-v2} plus the serial and JSON identity-field rules and the estate dictionary (2026-10-18),
      * {@code logmask-v3} plus the heuristic free-text pass (2026-10-19), {@code logmask-v4} plus the host-context rules
      * of that pass (the word after a host keyword or {@code from}/{@code to}, the sar header host, the host of an HCP
-     * report file name; 2026-10-21). Returned with every masked page ({@code X-Syslog-Mask-Rules}).
+     * report file name; 2026-10-21), {@code logmask-v5} plus the estate names in the dictionary (administrator,
+     * policy, rule, object, zone, virtual-system and MDS domain names, {@link EstateNameCatalog}) and an underscore as
+     * an address delimiter (2026-11-10). Returned with every masked page ({@code X-Syslog-Mask-Rules}).
      */
-    public static final String RULE_SET = "logmask-v4";
+    public static final String RULE_SET = "logmask-v5";
 
     /** {@code hcp_report_<host>_<dd>_<mm>_<yy>_<HH>_<MM>}: prefix, host, time parts. */
     private static final Pattern HCP_REPORT = Pattern.compile("(?i)(hcp_report_)(.+?)((?:_\\d{1,4}){5})");
@@ -103,6 +108,11 @@ public final class LogMasking {
     private final Mappers base;
     private final Supplier<KnownNames> knownNames;
     private final EstateDictionarySource estate;
+    private final Supplier<EstateDictionary> names;
+    /** The last combined dictionary and the two parts it was made from (both are replaced, never mutated). */
+    private volatile Combined combined;
+
+    private record Combined(EstateDictionary devices, EstateDictionary names, EstateDictionary both) {}
 
     /**
      * Without an estate dictionary (tests, and wiring that has no device tables); the serial rule still applies.
@@ -126,10 +136,20 @@ public final class LogMasking {
 
     /** @param estate the estate dictionary shared with the Data Sanitizer */
     public LogMasking(byte[] privacyKey, Supplier<KnownNames> knownNames, EstateDictionarySource estate) {
+        this(privacyKey, knownNames, estate, EstateNameCatalog.none());
+    }
+
+    /**
+     * @param estate the estate dictionary shared with the Data Sanitizer
+     * @param names the estate-name dictionary ({@link EstateNameCatalog}) this view adds; it throws when unavailable
+     */
+    public LogMasking(byte[] privacyKey, Supplier<KnownNames> knownNames, EstateDictionarySource estate,
+            Supplier<EstateDictionary> names) {
         Objects.requireNonNull(privacyKey, "privacyKey");
         this.base = new Mappers(SanitizerKey.of(privacyKey), KnownNames.NONE);
         this.knownNames = knownNames == null ? () -> KnownNames.NONE : knownNames;
         this.estate = Objects.requireNonNull(estate, "estate");
+        this.names = names == null ? EstateNameCatalog.none() : names;
     }
 
     /**
@@ -140,13 +160,22 @@ public final class LogMasking {
     public Session session() {
         EstateDictionary estateDictionary;
         try {
-            estateDictionary = estate.get();
-        } catch (EstateDictionarySource.UnavailableException e) {
+            estateDictionary = combine(estate.get(), names.get());
+        } catch (EstateDictionarySource.UnavailableException | EstateNameCatalog.UnavailableException e) {
             throw new MaskingUnavailableException(e.getCause() == null ? e : e.getCause());
         }
         KnownNames known = knownNames.get();
         return new Session(new Mappers(base.ip(), base.mac(), base.names(), known == null ? KnownNames.NONE : known,
                 base.identity()), known, estateDictionary);
+    }
+
+    /** The device identities with the estate names added (device forms win); rebuilt only when a part changed. */
+    private EstateDictionary combine(EstateDictionary devices, EstateDictionary estateNames) {
+        Combined c = combined;
+        if (c != null && c.devices() == devices && c.names() == estateNames) return c.both();
+        EstateDictionary both = devices.with(estateNames);
+        combined = new Combined(devices, estateNames, both);
+        return both;
     }
 
     /** One request's projection. */
