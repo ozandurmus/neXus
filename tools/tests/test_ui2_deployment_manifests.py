@@ -229,6 +229,7 @@ def test_the_rule_checks_below_have_something_to_check():
         "Deployment/ui2-configuration", "Deployment/ui2-compliance", "Deployment/ui2-policy",
         "Deployment/ui2-packet-analysis",
         "Job/ui2-e2e", "CronJob/ui2-e2e",
+        "CronJob/ui2-advisory-fetch",
     }
     assert len(_containers()) == len(pod_specs)
 
@@ -974,3 +975,51 @@ def test_integration_job_uses_native_sidecar_and_build_jdk():
     assert any(v.get("configMap") == {"name": "corp-ca"} for v in spec["volumes"])
     for container in (postgres, runner):
         assert container["resources"]["requests"] and container["resources"]["limits"]
+
+
+def test_the_advisory_fetch_workload_holds_nothing_and_reaches_only_dns_and_the_ingest_port():
+    """docs/design/ADVISORY_MATCHING_CONTRACT.md section 3: the one workload that reaches the internet has no neXus
+    key, no database account and no service-account token; the committed policy allows DNS and the service's internal
+    port only, and the proxy address is never committed."""
+    path = MANIFEST_DIR / "59-advisory-fetch-cronjob.yaml"
+    text = path.read_text(encoding="utf-8")
+    documents = {doc["kind"]: doc for doc in load_documents(text)}
+    assert set(documents) == {"ServiceAccount", "NetworkPolicy", "CronJob"}
+    assert documents["ServiceAccount"]["automountServiceAccountToken"] is False
+
+    cron = documents["CronJob"]
+    assert cron["spec"]["suspend"] is True and cron["spec"]["concurrencyPolicy"] == "Forbid"
+    job = cron["spec"]["jobTemplate"]["spec"]
+    assert job["backoffLimit"] == 0
+    pod = job["template"]["spec"]
+    assert pod["automountServiceAccountToken"] is False and pod["serviceAccountName"] == "ui2-advisory-fetch"
+    assert job["template"]["metadata"]["labels"]["app.kubernetes.io/component"] == "advisory-fetch"
+    assert all("emptyDir" in volume for volume in pod["volumes"]), "no secret, claim or host volume"
+    (container,) = pod["containers"]
+    assert container["args"] == ["advisory-fetch"]
+    env = {entry["name"]: entry for entry in container["env"]}
+    assert set(env) == {"UI2_ADVISORY_PROXY", "UI2_ADVISORY_FETCH_TOKEN", "UI2_ADVISORY_INGEST_URL",
+                        "UI2_ADVISORY_CISCO_DAYS", "JAVA_TOOL_OPTIONS"}
+    assert env["UI2_ADVISORY_PROXY"]["valueFrom"]["configMapKeyRef"] == {
+        "name": "ui2-advisory-fetch", "key": "proxy", "optional": True}
+    assert env["UI2_ADVISORY_FETCH_TOKEN"]["valueFrom"]["secretKeyRef"] == {
+        "name": "ui2-advisory-fetch-token", "key": "token", "optional": True}
+    referenced = {entry["valueFrom"]["secretKeyRef"]["name"] for entry in container["env"]
+                  if "secretKeyRef" in entry.get("valueFrom", {})}
+    assert referenced == {"ui2-advisory-fetch-token"}, "its own token is its only secret"
+    for forbidden in ("ui2-db", "credential-store", "artefact-store", "hostname-fingerprint", "privacy-hmac", "role-binding"):
+        assert forbidden not in json_dump(pod), forbidden
+
+    policy = documents["NetworkPolicy"]["spec"]
+    assert policy["podSelector"] == {"matchLabels": {"app.kubernetes.io/component": "advisory-fetch"}}
+    assert policy["policyTypes"] == ["Ingress", "Egress"] and policy["ingress"] == []
+    ports = sorted((port["protocol"], port["port"]) for rule in policy["egress"] for port in rule["ports"])
+    assert ports == [("TCP", 53), ("TCP", 8086), ("UDP", 53)]
+    assert "ipBlock" not in text, "the proxy address is deployment configuration, never committed"
+    assert not re.search(r"\b\d{1,3}(\.\d{1,3}){3}\b", text), "no address literal in this manifest"
+
+
+def json_dump(value) -> str:
+    import json
+    return json.dumps(value, sort_keys=True)
+

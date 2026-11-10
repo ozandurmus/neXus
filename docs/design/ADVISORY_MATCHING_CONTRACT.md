@@ -67,21 +67,26 @@ hold a device credential.
   nothing and exits with a clear message.
 - **TLS.** Certificates are validated against the runtime's public trust store. No custom CA, no trust-all, no
   host-name bypass, on any code path. A validation failure fails that source and is reported in the run.
-- **Requests.** `GET` only, no body, `User-Agent: neXus-advisory-fetch/1.0`, at most one request per second per
-  host, 60 s timeout, at most 16 MiB per document, redirects not followed. A request is sent only to a host and
+- **Requests.** `GET` only, no body, a fixed `User-Agent` that names the software (`neXus-advisory-fetch/1.0`) and
+  nothing about the estate, at most one request per second per host, 60 s timeout, at most 16 MiB per document,
+  redirects not followed. A request is sent only to a host and
   path prefix of section 2, checked in code immediately before sending.
-- **Cisco selection.** The first run fetches the files changed in the last `UI2_ADVISORY_CISCO_BACKFILL_DAYS`
-  (default 1100) days; later runs the last 7 days. A fetched file is handed on only if its text contains the ASA
-  software family name; the others are dropped unread.
+- **Cisco selection.** A run fetches the files the change list names as changed in the last
+  `UI2_ADVISORY_CISCO_DAYS` days (default 7). The workload keeps no state, so the first load is one run started by
+  hand with a larger value (1100). A fetched file is handed on only if its text contains the ASA software family
+  name; the others are dropped unread.
 - **Hand-over.** Each document goes to the internal endpoint of section 4 with the source key and the address it
   was read from. The workload reads nothing back except the status code.
 - **Schedule and switch.** A CronJob, once a day, created suspended; it can also be started by hand. The schedule is
-  independent of every collection schedule.
+  independent of every collection schedule. It runs the service image with its own role (`advisory-fetch`), and a
+  service release re-applies it with the new image without changing whether it is suspended.
+- **Code fence.** The workload's code lives in a package of `platform-core` that imports JDK classes only, so it
+  cannot reach a repository, a credential or a device transport; a test enforces it.
 
 ## 4. Ingest (in `ui2-service`)
 
-`POST /internal/advisories/{source}` on the internal port, authenticated by the fetcher's own token
-(`ui2-advisory-fetch-token`, compared in constant time; this token authorises nothing else, and no other token
+`POST /internal/advisories/{source}` on the internal port, authenticated by the fetcher's own token (header
+`X-Nexus-Advisory-Token`, Secret `ui2-advisory-fetch-token`, compared in constant time; this token authorises nothing else, and no other token
 authorises this endpoint). Headers: `X-Advisory-Url` (must be `https`, on the host and path prefix of the source)
 and `X-Advisory-Run` (an id the fetcher makes per run). Body: the document, at most 16 MiB.
 `POST /internal/advisories/{source}/complete` closes the run with the fetcher's counts and failure reasons.

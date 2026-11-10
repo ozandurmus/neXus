@@ -74,7 +74,8 @@ class Ui2LauncherTest {
         assertEquals(Map.of(
                 "service", "com.securityexpert.nexus.ui2.service.boot.Ui2Application",
                 "worker", "com.securityexpert.nexus.ui2.worker.Ui2WorkerMain",
-                "cli", "com.securityexpert.nexus.ui2.cli.CliEntryPoint"),
+                "cli", "com.securityexpert.nexus.ui2.cli.CliEntryPoint",
+                "advisory-fetch", "com.securityexpert.nexus.ui2.platform.advisoryfetch.AdvisoryFetchMain"),
                 Ui2Launcher.MAIN_CLASS_BY_ROLE);
     }
 }

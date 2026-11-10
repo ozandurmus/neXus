@@ -144,7 +144,9 @@ def test_a_first_release_still_creates_the_disabled_deployment(monkeypatch):
 def test_other_deployments_apply_their_manifest_after_the_diff_keeping_live_replicas(monkeypatch, target):
     events, diffs = cluster(monkeypatch, replicas='1')
     deploy.replace(target, IMAGE, 'synthetic-snapshot', 20)
-    (apply_index, manifest), = applies(events)
+    (apply_index, manifest), *others = applies(events)
+    # The service release also applies the advisory fetch CronJob, which runs the same image (see below).
+    assert [payload for _, payload in others] == ([deploy.render_advisory_fetch(IMAGE)] if target == 'service' else [])
     assert manifest == deploy.render_manifest(target, IMAGE, 1) and diffs == [manifest]
     assert deployment(manifest)['spec']['template']['spec']['containers'][0]['image'] == IMAGE
     assert index(events, lambda a: a == ('diff',)) < apply_index < index(events, lambda a: 'rollout' in a)
@@ -191,3 +193,56 @@ def test_an_unreadable_live_replica_count_stops_before_any_drain(monkeypatch):
     with pytest.raises(deploy.Blocked, match='live replica count'):
         deploy.replace('policy', IMAGE, 'synthetic-snapshot', 20, authorization='synthetic-approval')
     assert not applies(events) and not any(args[0] == 'query' and 'drain_requested' in args[1] for args, _ in events)
+
+
+def cron_job(text):
+    return next(d for d in yaml.safe_load_all(text) if d['kind'] == 'CronJob')
+
+
+def test_the_advisory_fetch_cronjob_is_rendered_with_the_candidate_image_and_keeps_its_live_switch():
+    committed = deploy.render_advisory_fetch(IMAGE)
+    job = cron_job(committed)
+    assert job['spec']['jobTemplate']['spec']['template']['spec']['containers'][0]['image'] == IMAGE
+    assert job['spec']['suspend'] is True, 'committed suspended: a first release never starts fetching'
+    assert cron_job(deploy.render_advisory_fetch(IMAGE, suspended=False))['spec']['suspend'] is False
+    assert cron_job(deploy.render_advisory_fetch(IMAGE, suspended=True))['spec']['suspend'] is True
+    kinds = [d['kind'] for d in yaml.safe_load_all(committed)]
+    assert kinds == ['ServiceAccount', 'NetworkPolicy', 'CronJob']
+
+
+@pytest.mark.parametrize('live, expected', [('', True), ('true', True), ('false', False)])
+def test_a_service_release_applies_the_advisory_fetch_set_without_changing_its_switch(monkeypatch, live, expected):
+    calls = []
+    def run(*args, input=None, timeout=660):
+        calls.append((args, input))
+        return live if 'jsonpath={.spec.suspend}' in args else ''
+    monkeypatch.setattr(deploy, 'run', run)
+    deploy.sync_advisory_fetch(IMAGE)
+    (get, _), (apply, manifest) = calls
+    assert get[:6] == ('kubectl', '-n', 'ui2', 'get', 'cronjob', 'ui2-advisory-fetch') and '--ignore-not-found' in get
+    assert apply[:4] == ('kubectl', '-n', 'ui2', 'apply')
+    assert cron_job(manifest)['spec']['suspend'] is expected
+    assert cron_job(manifest)['spec']['jobTemplate']['spec']['template']['spec']['containers'][0]['image'] == IMAGE
+
+
+def test_only_the_service_release_carries_the_advisory_fetch_set_and_a_rollback_does_not(monkeypatch):
+    for target in ('configuration', 'compliance', 'policy'):
+        events, _ = cluster(monkeypatch)
+        deploy.replace(target, IMAGE, 'synthetic-snapshot', 20, authorization='synthetic-approval')
+        assert not any('ui2-advisory-fetch' in args for args, _ in events), target
+    events, _ = cluster(monkeypatch)
+    deploy.replace('service', OLD, 'synthetic-snapshot', 20, rollback=True)
+    assert not any('ui2-advisory-fetch' in args for args, _ in events)
+
+
+def test_a_malformed_advisory_fetch_template_blocks_the_release(monkeypatch, tmp_path):
+    path = tmp_path / deploy.ADVISORY_FETCH_MANIFEST
+    path.parent.mkdir(parents=True)
+    monkeypatch.setattr(deploy, 'REPO', tmp_path)
+    path.write_text('kind: CronJob\nspec:\n  suspend: true\n')
+    with pytest.raises(deploy.Blocked, match='exactly one workload image'):
+        deploy.render_advisory_fetch(IMAGE)
+    path.write_text('kind: CronJob\nspec:\n  x:\n    image: a@sha256:b\n')
+    with pytest.raises(deploy.Blocked, match='exactly one suspend line'):
+        deploy.render_advisory_fetch(IMAGE, suspended=True)
+
