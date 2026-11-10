@@ -83,4 +83,22 @@ class LifecycleReadSwitchTest {
             assertFalse(only.allows(kinds[i], "dev-2"));
         }
     }
+
+    @Test
+    void thePaloAltoExtendedScopeIsOffByDefaultAndListsDevicesOrStar() {
+        assertFalse(LifecycleReadSwitch.OFF.allowsPanExtended("dev-1"));
+        assertFalse(LifecycleReadSwitch.from(k -> null).allowsPanExtended("dev-1"));
+        assertFalse(LifecycleReadSwitch.from(Map.of("UI2_LIFECYCLE_PAN_EXTENDED_DEVICES", " ")::get).allowsPanExtended("dev-1"));
+        LifecycleReadSwitch listed = LifecycleReadSwitch.from(Map.of("UI2_LIFECYCLE_PAN_EXTENDED_DEVICES", "dev-1, dev-2")::get);
+        assertTrue(listed.allowsPanExtended("dev-1"));
+        assertTrue(listed.allowsPanExtended("dev-2"));
+        assertFalse(listed.allowsPanExtended("dev-3"));
+        assertFalse(listed.allowsPanExtended(null));
+        LifecycleReadSwitch star = LifecycleReadSwitch.from(Map.of("UI2_LIFECYCLE_PAN_EXTENDED_DEVICES", "*")::get);
+        assertTrue(star.allowsPanExtended("dev-9"));
+        assertTrue(star.allowsPanExtended(null));
+        // The extended scope enables no kind and no device by itself.
+        assertFalse(star.allows(Kind.PAN_LICENSE_INFO, "dev-9"));
+        assertFalse(star.anyFor("dev-9"));
+    }
 }

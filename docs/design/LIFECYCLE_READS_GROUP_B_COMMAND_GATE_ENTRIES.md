@@ -27,7 +27,8 @@ stored until the parsers are written from the measured shapes.
 **Palo Alto limit (D2).** Rows 1 and 2 are sent only to a firewall whose stored PAN-OS major version is below 12.
 A PAN-OS 12 firewall, a firewall whose version is unknown or unparsed, and Panorama get neither read
 (`SKIPPED:pan_os_12_or_unknown`, `SKIPPED:panorama`). Widening this needs the PO's decision after the first result
-(`PO_DECISION_RECORD_2026_10_21_PAN_SHOW_SYSTEM_INFO_RETIRED.md` is the background).
+(`PO_DECISION_RECORD_2026_10_21_PAN_SHOW_SYSTEM_INFO_RETIRED.md` is the background). **Widened on 2026-11-10 by
+amendment C below.**
 
 ## Entries
 
@@ -115,3 +116,27 @@ Question: "Infoblox sürüm okumasına current_version alanı eklensin mi?" Answ
   manager (one version as it is; several, as during an upgrade, joined). The object reference is not read.
 - **Measure first:** sent to the one grid manager only, behind its own switch kind, until its answer has been seen
   and recorded in `LIFECYCLE_READS_MEASUREMENTS_2026_11_10.md`.
+
+## Amendment C-2026-11-10: Palo Alto reads for PAN-OS 12 firewalls and Panorama
+
+**Product Owner approval (2026-11-10, asked in the PO session and relayed by it).** Question: "PAN-OS 12
+firewall'larda ve Panorama'da da lisans okuması açılsın mı?" Answer (verbatim): "Evet, aç"
+(`PO_DECISION_RECORD_2026_11_10_PAN_OS12_PANORAMA_LICENSE_READS.md`, which also carries the evidence).
+
+| # | Gate id | Read | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 9 | `pan_panorama_lifecycle_license_info` | `<request><license><info/></license></request>` | the licenses installed on the Panorama, with expiry | CLASS_0_READ | Palo Alto, `panorama`, not applicable, `PAN_XML_API` (`type=op`) | 60 s | none | once per inventory | the one key-generation session per run | an error reply or an unexpected shape: license check UNKNOWN | device serial and authcode in the reply: parsed past, never stored or logged | outcome, reply status, entry count, element names |
+| 10 | `pan_panorama_lifecycle_support_info` | `<request><support><info/></support></request>` | support level and expiry of the Panorama | CLASS_0_READ | as entry 9 | 60 s | none | as entry 9 | as entry 9 | an error reply or an unexpected shape: support check UNKNOWN | account, contact and link fields: never stored or logged | outcome, reply status, element names |
+
+- **PAN-OS 12 firewalls: no new row.** Entries 1 and 2 already gate these literals for the scope `pan_firewall`
+  without a version condition; the limit was the worker's guard. The guard now lets a firewall on PAN-OS 12 or later,
+  or of unknown version, through when the extended-scope setting lists it.
+- **Panorama: entries 9 and 10**, seeded by V202 and mirrored in the fixture. The literals are those of entries 1
+  and 2; only the platform scope differs.
+- **Setting:** `UI2_LIFECYCLE_PAN_EXTENDED_DEVICES` (device ids, or `*`; unset = none). A device outside the first
+  scope that is not listed keeps `SKIPPED:pan_os_12_or_unknown` or `SKIPPED:panorama`.
+- **What is kept:** as for entries 1 and 2 (`LIFECYCLE_LICENSE_STORAGE_CONTRACT.md` section 2): feature label, expiry
+  date and state; support level and expiry date. Nothing else.
+- **Measure first:** one PAN-OS 12 firewall and the Panorama before `*`; the result is recorded in
+  `LIFECYCLE_READS_MEASUREMENTS_2026_11_10.md`.
+- **Still never sent:** the list above is unchanged.

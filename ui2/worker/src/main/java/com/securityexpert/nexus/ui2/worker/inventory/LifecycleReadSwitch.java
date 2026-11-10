@@ -17,6 +17,9 @@ import java.util.function.Function;
  * <li>{@value #DEVICES_VARIABLE}: comma-separated neXus device ids, or {@code *}. Unset or blank: none.</li>
  * <li>{@value #MC_MAX_VARIABLE}: how many managed devices' licenses one Management Center inventory run reads
  * (default 1); it bounds {@code mc_device_license} (group A) and {@code mc_show_licenses} (group B).</li>
+ * <li>{@value #PAN_EXTENDED_DEVICES_VARIABLE}: comma-separated neXus device ids, or {@code *}: the Palo Alto devices outside
+ * the first scope (a firewall on PAN-OS 12 or later, a firewall whose version is unknown, a Panorama) that get the license and
+ * support reads (PO 2026-11-10, "Evet, aç"; group B record, amendment C). Unset or blank: none, as before.</li>
  * </ul>
  *
  * <p>A read is sent only when its kind is enabled and the inventory target's device id is listed (or {@code *}).
@@ -27,6 +30,7 @@ public final class LifecycleReadSwitch {
     public static final String KINDS_VARIABLE = "UI2_LIFECYCLE_READS";
     public static final String DEVICES_VARIABLE = "UI2_LIFECYCLE_READ_DEVICES";
     public static final String MC_MAX_VARIABLE = "UI2_LIFECYCLE_MC_LICENSE_MAX";
+    public static final String PAN_EXTENDED_DEVICES_VARIABLE = "UI2_LIFECYCLE_PAN_EXTENDED_DEVICES";
     public static final int DEFAULT_MC_LICENSE_MAX = 1;
 
     private static final System.Logger LOG = System.getLogger(LifecycleReadSwitch.class.getName());
@@ -72,18 +76,44 @@ public final class LifecycleReadSwitch {
     }
 
     /** Nothing is ever sent. */
-    public static final LifecycleReadSwitch OFF = new LifecycleReadSwitch(EnumSet.noneOf(Kind.class), Set.of(), false, DEFAULT_MC_LICENSE_MAX);
+    public static final LifecycleReadSwitch OFF = new LifecycleReadSwitch(EnumSet.noneOf(Kind.class), DeviceList.NONE,
+            DEFAULT_MC_LICENSE_MAX, DeviceList.NONE);
+
+    /** A list of device ids, or every device. */
+    private record DeviceList(Set<String> ids, boolean all) {
+        static final DeviceList NONE = new DeviceList(Set.of(), false);
+
+        static DeviceList parse(String raw) {
+            Set<String> ids = new LinkedHashSet<>();
+            boolean all = false;
+            if (raw != null && !raw.isBlank()) {
+                for (String piece : raw.split(",")) {
+                    String id = piece.strip();
+                    if ("*".equals(id)) {
+                        all = true;
+                    } else if (!id.isEmpty()) {
+                        ids.add(id);
+                    }
+                }
+            }
+            return new DeviceList(Set.copyOf(ids), all);
+        }
+
+        boolean contains(String deviceId) {
+            return all || (deviceId != null && ids.contains(deviceId));
+        }
+    }
 
     private final Set<Kind> kinds;
-    private final Set<String> devices;
-    private final boolean allDevices;
+    private final DeviceList devices;
     private final int mcLicenseMax;
+    private final DeviceList panExtended;
 
-    private LifecycleReadSwitch(Set<Kind> kinds, Set<String> devices, boolean allDevices, int mcLicenseMax) {
+    private LifecycleReadSwitch(Set<Kind> kinds, DeviceList devices, int mcLicenseMax, DeviceList panExtended) {
         this.kinds = kinds;
         this.devices = devices;
-        this.allDevices = allDevices;
         this.mcLicenseMax = mcLicenseMax;
+        this.panExtended = panExtended;
     }
 
     /** From the worker's environment. */
@@ -113,19 +143,7 @@ public final class LifecycleReadSwitch {
                 LOG.log(System.Logger.Level.WARNING, "[LIFECYCLE_MEASURE] {0} ignored unknown read kind(s): {1}", KINDS_VARIABLE, unknown);
             }
         }
-        Set<String> devices = new LinkedHashSet<>();
-        boolean all = false;
-        String rawDevices = source.apply(DEVICES_VARIABLE);
-        if (rawDevices != null && !rawDevices.isBlank()) {
-            for (String piece : rawDevices.split(",")) {
-                String id = piece.strip();
-                if ("*".equals(id)) {
-                    all = true;
-                } else if (!id.isEmpty()) {
-                    devices.add(id);
-                }
-            }
-        }
+        DeviceList devices = DeviceList.parse(source.apply(DEVICES_VARIABLE));
         int max = DEFAULT_MC_LICENSE_MAX;
         String rawMax = source.apply(MC_MAX_VARIABLE);
         if (rawMax != null && !rawMax.isBlank()) {
@@ -140,7 +158,7 @@ public final class LifecycleReadSwitch {
                 LOG.log(System.Logger.Level.WARNING, "[LIFECYCLE_MEASURE] {0} is not a number; the default {1} is used", MC_MAX_VARIABLE, max);
             }
         }
-        return new LifecycleReadSwitch(kinds, Set.copyOf(devices), all, max);
+        return new LifecycleReadSwitch(kinds, devices, max, DeviceList.parse(source.apply(PAN_EXTENDED_DEVICES_VARIABLE)));
     }
 
     /** True when {@code kind} is enabled and {@code deviceId} is listed (or every device is). A null id matches only {@code *}. */
@@ -148,7 +166,16 @@ public final class LifecycleReadSwitch {
         if (!kinds.contains(kind)) {
             return false;
         }
-        return allDevices || (deviceId != null && devices.contains(deviceId));
+        return devices.contains(deviceId);
+    }
+
+    /**
+     * True when {@code deviceId} is a Palo Alto device outside the first scope (PAN-OS 12 or later, version unknown, or a
+     * Panorama) that may get the license and support reads. It widens nothing by itself: the kind and the device must
+     * still pass {@link #allows}.
+     */
+    public boolean allowsPanExtended(String deviceId) {
+        return panExtended.contains(deviceId);
     }
 
     /** True when any kind is enabled for {@code deviceId}. */

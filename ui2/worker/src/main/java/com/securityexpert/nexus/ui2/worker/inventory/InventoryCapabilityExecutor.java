@@ -690,9 +690,18 @@ public final class InventoryCapabilityExecutor {
             }
             String haStateOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_HA_STATE, headers);
             InventoryResult panorama = panoramaInventory(identityOutput, sysInfo, haStateOutput);
-            // Lifecycle reads, group B: a Panorama never gets the firewall license and support reads.
-            lifecycleSkip(LifecycleReadSwitch.Kind.PAN_LICENSE_INFO, deviceId, "panorama");
-            lifecycleSkip(LifecycleReadSwitch.Kind.PAN_SUPPORT_INFO, deviceId, "panorama");
+            // Lifecycle reads, group B, amendment C (PO 2026-11-10, "Evet, aç"): a Panorama gets the license and support
+            // reads (gate rows pan_panorama_lifecycle_*) only when the extended-scope setting lists it; last, after every
+            // other read, and never changing the result.
+            if (lifecycleReads.allowsPanExtended(deviceId)) {
+                lifecyclePanXmlRead(target, headers, LifecycleReadSwitch.Kind.PAN_LICENSE_INFO, deviceId,
+                        InventoryReadPlan.PAN_REQUEST_LICENSE_INFO);
+                lifecyclePanXmlRead(target, headers, LifecycleReadSwitch.Kind.PAN_SUPPORT_INFO, deviceId,
+                        InventoryReadPlan.PAN_REQUEST_SUPPORT_INFO);
+            } else {
+                lifecycleSkip(LifecycleReadSwitch.Kind.PAN_LICENSE_INFO, deviceId, "panorama");
+                lifecycleSkip(LifecycleReadSwitch.Kind.PAN_SUPPORT_INFO, deviceId, "panorama");
+            }
             return panorama;
         }
 
@@ -855,10 +864,12 @@ public final class InventoryCapabilityExecutor {
     }
 
     /**
-     * Lifecycle reads, group B (PO 2026-11-10, D2): {@code request license info} and {@code request support info}, sent only
-     * to a firewall whose PAN-OS major version, observed by the {@code type=version} read of THIS run, is known and below 12
+     * Lifecycle reads, group B (PO 2026-11-10, D2): {@code request license info} and {@code request support info}, sent to a
+     * firewall whose PAN-OS major version, observed by the {@code type=version} read of THIS run, is known and below 12
      * (the rule of {@code PanFirewallCommandSwitches.Mode.BELOW_12}: an unknown or unparseable version is treated like 12 or
-     * later). 60 s, no retry, outside any job transcript; the answer is reduced to an XML shape and logged.
+     * later). A firewall on PAN-OS 12 or later, or of unknown version, gets them only when the extended-scope setting
+     * lists it (amendment C, PO 2026-11-10, "Evet, aç"). 60 s, no retry, outside any job transcript; the answer is reduced
+     * to an XML shape and logged.
      */
     private void lifecyclePaloAltoFirewallReads(ApiTarget target, Map<String, String> headers, String deviceId, String swVersion) {
         LifecycleReadSwitch.Kind license = LifecycleReadSwitch.Kind.PAN_LICENSE_INFO;
@@ -873,7 +884,7 @@ public final class InventoryCapabilityExecutor {
         } catch (RuntimeException e) {
             belowTwelve = false;
         }
-        if (!belowTwelve) {
+        if (!belowTwelve && !lifecycleReads.allowsPanExtended(deviceId)) {
             lifecycleSkip(license, deviceId, "pan_os_12_or_unknown");
             lifecycleSkip(support, deviceId, "pan_os_12_or_unknown");
             return;

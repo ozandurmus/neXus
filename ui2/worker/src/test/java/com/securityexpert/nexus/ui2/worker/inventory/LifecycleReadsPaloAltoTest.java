@@ -30,7 +30,8 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMateria
 /**
  * Lifecycle reads, group B, Palo Alto (PO 2026-11-10, D2): the license and support reads are sent only to a firewall whose
  * PAN-OS major version, observed by this run's {@code type=version} read, is known and below 12; never to a Panorama; last,
- * 60 s, no retry; and nothing they do changes the inventory result.
+ * 60 s, no retry; and nothing they do changes the inventory result. Amendment C (PO 2026-11-10, "Evet, aç"): a firewall on
+ * PAN-OS 12 or later or of unknown version, and a Panorama, get them when the extended-scope setting lists the device.
  */
 class LifecycleReadsPaloAltoTest {
 
@@ -51,6 +52,12 @@ class LifecycleReadsPaloAltoTest {
     }
 
     private static final String BOTH = "pan_license_info,pan_support_info";
+
+    /** Both kinds on for the device, and the device listed in the extended scope (amendment C). */
+    private static LifecycleReadSwitch onExtended(String kinds, String extendedDevices) {
+        return LifecycleReadSwitch.from(Map.of("UI2_LIFECYCLE_READS", kinds, "UI2_LIFECYCLE_READ_DEVICES", DEVICE,
+                "UI2_LIFECYCLE_PAN_EXTENDED_DEVICES", extendedDevices)::get);
+    }
 
     private static String typeVersion(String version) {
         return "<response status=\"success\"><result>" + (version == null ? "" : "<sw-version>" + version + "</sw-version>")
@@ -233,6 +240,73 @@ class LifecycleReadsPaloAltoTest {
         assertTrue(on.lines().stream().allMatch(l -> l.contains("outcome=SKIPPED:panorama")), on.lines().toString());
         Run licenseOnly = run(null, true, on("pan_license_info"), bodies());
         assertEquals(1, licenseOnly.lines().size());
+    }
+
+    // ------------------------------------------------------------------- extended scope (amendment C, PO 2026-11-10, "Evet, aç")
+
+    @Test
+    void aTwelveOrUnknownVersionFirewallListedInTheExtendedScopeGetsBothReadsLast() {
+        for (String version : new String[] {"12.1.2", "12.0.0", "13.0.1", null, "abc"}) {
+            Run off = run(version, false, LifecycleReadSwitch.OFF, Map.of());
+            for (String listed : List.of(DEVICE, "*", "dev-7, " + DEVICE)) {
+                Run on = run(version, false, onExtended(BOTH, listed), bodies());
+                assertEquals(off.result(), on.result(), "version=" + version);
+                assertEquals(List.of(InventoryReadPlan.PAN_REQUEST_LICENSE_INFO, InventoryReadPlan.PAN_REQUEST_SUPPORT_INFO),
+                        on.sent().subList(off.sent().size(), on.sent().size()), "version=" + version);
+                assertEquals(off.sent(), on.sent().subList(0, off.sent().size()));
+                assertEquals(List.of(Duration.ofSeconds(60), Duration.ofSeconds(60)), on.spy().timeouts);
+                assertTrue(on.lines().stream().noneMatch(l -> l.contains("SKIPPED")), on.lines().toString());
+            }
+        }
+    }
+
+    @Test
+    void theExtendedScopeAloneSendsNothingAndAnotherDevicesEntryDoesNotCount() {
+        // Listed in the extended scope, but the kinds are off: nothing is sent and nothing is said.
+        Run kindsOff = run("12.1.2", false, LifecycleReadSwitch.from(Map.of("UI2_LIFECYCLE_PAN_EXTENDED_DEVICES", "*")::get), bodies());
+        assertEquals(0, kindsOff.spy().specs.size());
+        assertTrue(kindsOff.lines().isEmpty());
+        // The kinds are on, but the extended scope names another device: skipped as before, for a firewall and a Panorama.
+        Run other = run("12.1.2", false, onExtended(BOTH, "dev-9"), bodies());
+        assertEquals(0, other.spy().specs.size());
+        assertTrue(other.lines().stream().allMatch(l -> l.contains("outcome=SKIPPED:pan_os_12_or_unknown")), other.lines().toString());
+        Run otherPanorama = run(null, true, onExtended(BOTH, "dev-9"), bodies());
+        assertEquals(0, otherPanorama.spy().specs.size());
+        assertTrue(otherPanorama.lines().stream().allMatch(l -> l.contains("outcome=SKIPPED:panorama")), otherPanorama.lines().toString());
+        // Below 12 the extended scope changes nothing.
+        assertEquals(run("11.1.4", false, on(BOTH), bodies()).sent(), run("11.1.4", false, onExtended(BOTH, "*"), bodies()).sent());
+    }
+
+    @Test
+    void aPanoramaListedInTheExtendedScopeGetsBothReadsLastAndItsResultIsUnchanged() {
+        Run off = run(null, true, LifecycleReadSwitch.OFF, Map.of());
+        RecordingLifecycleSink sink = new RecordingLifecycleSink();
+        Run on = run(null, true, onExtended(BOTH, DEVICE), bodies(), sink);
+        assertEquals(off.result(), on.result());
+        assertEquals(off.sent(), on.sent().subList(0, off.sent().size()), "every existing read first, in the same order");
+        assertEquals(List.of(InventoryReadPlan.PAN_REQUEST_LICENSE_INFO, InventoryReadPlan.PAN_REQUEST_SUPPORT_INFO),
+                on.sent().subList(off.sent().size(), on.sent().size()));
+        for (int i = 0; i < 2; i++) {
+            XmlApiSpec spec = on.spy().specs.get(i);
+            assertEquals("GET", spec.httpMethod());
+            assertEquals("op", spec.type());
+            assertEquals(Duration.ofSeconds(60), on.spy().timeouts.get(i));
+        }
+        assertEquals(2, on.lines().size());
+        assertTrue(on.lines().get(0).startsWith("[LIFECYCLE_MEASURE] kind=pan_license_info device=dev-1 outcome=OK "), on.lines().get(0));
+        assertTrue(on.lines().get(1).startsWith("[LIFECYCLE_MEASURE] kind=pan_support_info device=dev-1 outcome=OK "), on.lines().get(1));
+        assertEquals(List.of("ANSWER", "ANSWER"), sink.calls.stream().map(RecordingLifecycleSink.Call::outcome).toList());
+        Run licenseOnly = run(null, true, onExtended("pan_license_info", DEVICE), bodies());
+        assertEquals(List.of(InventoryReadPlan.PAN_REQUEST_LICENSE_INFO), licenseOnly.spy().specs.stream().map(s -> s.formParams().get("cmd")).toList());
+
+        // A failing or throwing read on a Panorama never changes its result either.
+        Map<String, Object> broken = new HashMap<>();
+        broken.put(InventoryReadPlan.PAN_REQUEST_LICENSE_INFO, new XmlApiResult.Failed("synthetic"));
+        broken.put(InventoryReadPlan.PAN_REQUEST_SUPPORT_INFO, new IllegalStateException("synthetic"));
+        Run failed = run(null, true, onExtended(BOTH, DEVICE), broken);
+        assertEquals(off.result(), failed.result());
+        assertTrue(failed.lines().get(0).contains("outcome=ERROR:XmlApiFailed"), failed.lines().get(0));
+        assertTrue(failed.lines().get(1).contains("outcome=ERROR:IllegalStateException"), failed.lines().get(1));
     }
 
     @Test

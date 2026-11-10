@@ -173,8 +173,8 @@ spec:
             # Dedicated ui2-configuration microservice internal ClusterIP endpoint
             # Lifecycle reads (PO 2026-11-10: "Evet, hepsinde aç", relayed by the PO session; gate rows V198, V199, V201;
             # docs/design/LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md and ..._GROUP_B_...). The ten parsed read kinds
-            # are sent at the end of every inventory, to every device (the Palo Alto ones only below PAN-OS 12, never to
-            # Panorama, by code). Removing the three entries (and restarting the worker) stops them. The Infoblox
+            # are sent at the end of every inventory, to every device (the Palo Alto ones below PAN-OS 12 by default; see
+            # UI2_LIFECYCLE_PAN_EXTENDED_DEVICES below). Removing the three entries (and restarting the worker) stops them. The Infoblox
             # member-level version read (infoblox_upgradestatus_vnode) was measured on 2026-11-10 and returns the version.
             - name: UI2_LIFECYCLE_READS
               value: "cp_cplic_print,cp_cplp_list,cp_spark_show_license,asa_show_license_all,mc_device_license,infoblox_license_gridwide,pan_license_info,pan_support_info,fgt_update_info_contract,fgt_autoupdate_versions,infoblox_upgradestatus_vnode"
@@ -182,6 +182,11 @@ spec:
               value: "*"
             - name: UI2_LIFECYCLE_MC_LICENSE_MAX
               value: "10"
+            # PO 2026-11-10 ("Evet, aç", docs/design/PO_DECISION_RECORD_2026_11_10_PAN_OS12_PANORAMA_LICENSE_READS.md): the
+            # Palo Alto license and support reads also go to firewalls on PAN-OS 12 or later, firewalls of unknown version
+            # and Panorama (gate rows V199, V202). Removing the entry (and restarting the worker) restores the old limit.
+            - name: UI2_LIFECYCLE_PAN_EXTENDED_DEVICES
+              value: "*"
             - name: UI2_CONFIG_SERVICE_URL
               value: "http://ui2-configuration.ui2.svc.cluster.local:8084"
             # Dedicated ui2-compliance microservice internal ClusterIP endpoint

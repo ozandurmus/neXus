@@ -135,4 +135,51 @@ class LifecycleReadsGroupBGateTest {
         }
         assertEquals(1, sql.split("\\n    \\('", -1).length - 1, "one row");
     }
+
+    private static final String PANORAMA_POINTER =
+            "docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md amendment C-2026-11-10 (PO chat approval 2026-11-10)";
+
+    /** Amendment C (PO 2026-11-10, "Evet, aç"): the two firewall literals, gated for Panorama; V202 seeds the same rows. */
+    @Test
+    void panoramaLicenseAndSupportRowsAreSignedOffReadsAndV202SeedsTheSameRows() throws Exception {
+        List<GateRow> rows = fixture();
+        Map<String, String> literals = Map.of(
+                "pan_panorama_lifecycle_license_info", "<request><license><info/></license></request>",
+                "pan_panorama_lifecycle_support_info", "<request><support><info/></support></request>");
+        String sql = Files.readString(Path.of("../service/src/main/resources/db/migration/V202__pan_panorama_lifecycle_license_gates.sql"));
+        assertTrue(sql.contains("PAN-OS 12 firewall'larda ve Panorama'da da lisans okuması açılsın mı?") && sql.contains("Evet, aç"));
+        assertTrue(sql.contains("set_config('app.actor_fingerprint'") && sql.contains("set_config('app.action_id'"));
+        assertTrue(sql.contains("ON CONFLICT (gate_id) DO NOTHING"));
+        literals.forEach((gateId, literal) -> {
+            GateRow row = rows.stream().filter(r -> r.gateId().equals(gateId)).findFirst().orElseThrow(() -> new AssertionError(gateId));
+            assertEquals("palo_alto", row.vendor(), gateId);
+            assertEquals("panorama", row.platformRoleScope(), gateId);
+            assertEquals("not_applicable", row.shellContext(), gateId);
+            assertEquals("PAN_XML_API", row.transportKind(), gateId);
+            assertEquals(literal, row.canonicalCommandKey(), gateId);
+            assertEquals(ActionClass.CLASS_0_READ, row.actionClass(), gateId);
+            assertEquals(SignOffState.SIGNED_OFF, row.signOffState(), gateId);
+            assertEquals(60, row.timeoutS(), gateId);
+            assertEquals("none", row.retryRule(), gateId);
+            assertFalse(row.safeTelemetryFields().isEmpty(), gateId);
+            assertEquals(PANORAMA_POINTER, row.sourceDocumentPointer(), gateId);
+            assertEquals(1, rows.stream().filter(r -> r.key().equals(row.key())).count(), "unique canonical key " + gateId);
+            assertEquals(gateId, assertInstanceOf(GateResolution.Known.class,
+                    GateResolver.resolve(row.key(), Optional.of(ActionClass.CLASS_0_READ), registry(rows))).gateId());
+            // The firewall row of the same literal is a different key (scope pan_firewall) and stays as it was.
+            String firewallId = gateId.replace("pan_panorama_", "pan_");
+            GateRow firewall = rows.stream().filter(r -> r.gateId().equals(firewallId)).findFirst().orElseThrow();
+            assertEquals(literal, firewall.canonicalCommandKey(), firewallId);
+            assertEquals("pan_firewall", firewall.platformRoleScope(), firewallId);
+            assertTrue(sql.contains("('" + gateId + "', 'palo_alto', 'panorama', 'not_applicable', 'PAN_XML_API',\n     '" + literal
+                    + "',\n     'read', 'SIGNED_OFF', 60, 'none', "), gateId);
+            for (String field : List.of(row.maxFrequency(), row.sessionReuseRule(), row.unsupportedBehaviorRef(), row.secretOutputRisk(),
+                    row.sourceDocumentPointer())) {
+                assertTrue(sql.contains("'" + field + "'"), gateId + ": " + field);
+            }
+        });
+        assertEquals(literals.keySet(), rows.stream().filter(r -> PANORAMA_POINTER.equals(r.sourceDocumentPointer()))
+                .map(GateRow::gateId).collect(Collectors.toSet()), "no other row cites the amendment");
+        assertEquals(2, sql.split("\\n    \\('", -1).length - 1, "two rows");
+    }
 }
