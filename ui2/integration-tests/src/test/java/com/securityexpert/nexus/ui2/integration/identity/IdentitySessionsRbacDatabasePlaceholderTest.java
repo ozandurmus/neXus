@@ -353,13 +353,13 @@ class IdentitySessionsRbacDatabasePlaceholderTest {
     void unmappedIdentityReceivesNoRoleAgainstARealDirectoryBind() {
         try (TestLdapDirectory directory = TestLdapDirectory.start()) {
             String personDn = directory.addPerson("unmapped-user", "test-pw-unmapped-1");
-            // A role group the unmapped identity is deliberately NOT a member of.
-            String operatorGroupDn = directory.addGroup("role-operator-group");
+            // A role group the unmapped identity is deliberately NOT a member of: the administrators group.
+            String operatorGroupDn = TestLdapDirectory.ADMIN_GROUP_DN;
 
             LdapOperatorBindPort.OperatorBindOutcome outcome = bind(directory, "unmapped-user", "test-pw-unmapped-1");
             assertEquals(PrincipalFingerprint.of(personDn), outcome.actorFingerprint());
-            assertEquals(Set.of(TestLdapDirectory.ACCESS_GROUP_DN), outcome.groupReferences(),
-                    "the unmapped identity must resolve to the access group only, no role group");
+            assertEquals(Set.of(TestLdapDirectory.USERS_GROUP_DN), outcome.groupReferences(),
+                    "the unmapped identity must resolve to the users group only, no role group");
 
             Directory db = new Directory(fixture);
             Instant now = Instant.now();
@@ -398,12 +398,12 @@ class IdentitySessionsRbacDatabasePlaceholderTest {
     @Test
     void boundButNotAMemberRefusalShapeAgainstARealDirectoryBind() {
         try (TestLdapDirectory directory = TestLdapDirectory.start()) {
-            String bobDn = directory.addPerson("bob", "test-pw-bob-1");
-            String memberGroupDn = directory.addGroup("group-bob-is-in", bobDn);
-            String requiredGroupDn = directory.addGroup("group-required-for-backup-admin"); // bob is NOT a member
+            directory.addPerson("bob", "test-pw-bob-1");
+            String memberGroupDn = TestLdapDirectory.USERS_GROUP_DN;
+            String requiredGroupDn = TestLdapDirectory.ADMIN_GROUP_DN; // bob is NOT a member
 
             LdapOperatorBindPort.OperatorBindOutcome outcome = bind(directory, "bob", "test-pw-bob-1");
-            assertEquals(Set.of(TestLdapDirectory.ACCESS_GROUP_DN, memberGroupDn), outcome.groupReferences(),
+            assertEquals(Set.of(memberGroupDn), outcome.groupReferences(),
                     "bob must resolve to exactly the groups he is a real member of");
 
             Directory db = new Directory(fixture);
@@ -447,12 +447,12 @@ class IdentitySessionsRbacDatabasePlaceholderTest {
         try (TestLdapDirectory directory = TestLdapDirectory.start();
                 Ui2PostgresFixture own = Ui2PostgresFixture.createAndMigrate("identity_self_grant")) {
             String adminDn = directory.addPerson("security-admin-1", "test-pw-admin-1");
-            String securityAdminsDn = directory.addGroup("security-admins", adminDn);
-            String ownGroupDn = directory.addGroup("group-admin-already-holds", adminDn);
+            directory.addAdmin(adminDn);
+            String securityAdminsDn = TestLdapDirectory.ADMIN_GROUP_DN;
+            String ownGroupDn = TestLdapDirectory.USERS_GROUP_DN; // a group the admin already holds
 
             LdapOperatorBindPort.OperatorBindOutcome outcome = bind(directory, "security-admin-1", "test-pw-admin-1");
-            assertEquals(Set.of(TestLdapDirectory.ACCESS_GROUP_DN, securityAdminsDn, ownGroupDn),
-                    outcome.groupReferences());
+            assertEquals(Set.of(TestLdapDirectory.USERS_GROUP_DN, securityAdminsDn), outcome.groupReferences());
 
             Directory db = new Directory(own);
             Instant now = Instant.now();
@@ -625,8 +625,8 @@ class IdentitySessionsRbacDatabasePlaceholderTest {
     void directoryUnreachableRevalidationLeavesActorAuthzStateStale() throws SQLException {
         try (TestLdapDirectory directory = TestLdapDirectory.start();
                 Ui2PostgresFixture own = Ui2PostgresFixture.createAndMigrate("identity_revalidation")) {
-            String daveDn = directory.addPerson("dave", "test-pw-dave-1");
-            String operatorsDn = directory.addGroup("operators", daveDn);
+            directory.addPerson("dave", "test-pw-dave-1");
+            String operatorsDn = TestLdapDirectory.USERS_GROUP_DN;
             LdapOperatorBindPort.OperatorBindOutcome outcome = bind(directory, "dave", "test-pw-dave-1");
 
             Directory db = new Directory(own);
@@ -639,7 +639,7 @@ class IdentitySessionsRbacDatabasePlaceholderTest {
             Timestamp resolvedAtLogin = resolvedAt(own, outcome.actorFingerprint());
 
             DirectoryAuthorizationRefresh refresh = new DirectoryAuthorizationRefresh(directory.revalidationAdapter(),
-                    db.bindings, db.cipher);
+                    db.bindings, db.cipher, db.actors, db.sessions);
             directory.stopListening();
             assertFalse(refresh.refresh(outcome.actorFingerprint(), Instant.now()),
                     "an unreachable directory must refresh nothing");

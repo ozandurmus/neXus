@@ -354,9 +354,72 @@ export function listDeviceBackups(deviceId: string): Promise<{ backups: BackupAr
 }
 
 /** Every recorded backup artefact across the fleet, newest first as the store returns them. */
-/** Save the LDAP directory profile (security_admin). Goes through call() so the CSRF token is sent like every other write. */
-export function saveLdapProfile<T>(profile: T): Promise<T> {
-  return call<T>("/api/v2/config/ldap", "PUT", profile);
+export type LdapTrustMode = "TRUST_ANY" | "TRUST_PEM";
+
+/** The fields a Security Admin sets for the Active Directory service bind (LDAP_SERVICE_BIND_DESIGN_2026_11_11, section 2). */
+export interface LdapSettingsFields {
+  readonly enabled: boolean;
+  readonly serverType: "ACTIVE_DIRECTORY";
+  /** 1..5 host names or IP literals, tried in order. */
+  readonly servers: readonly string[];
+  readonly port: number;
+  readonly domainDn: string;
+  readonly adminGroupDn: string;
+  readonly usersGroupDn: string;
+  readonly bindDn: string;
+  readonly connectTimeoutSeconds: number;
+  readonly ldaps: boolean;
+  readonly trustMode: LdapTrustMode;
+  readonly trustPem: string;
+}
+
+/** `GET/PUT /api/v2/config/ldap`: the password never comes back, only whether one is stored. */
+export interface LdapSettingsView extends LdapSettingsFields {
+  readonly configured: boolean;
+  readonly bindPasswordSet: boolean;
+  readonly updatedAt: string | null;
+  readonly adminGroupRoles: readonly string[];
+  readonly usersGroupRoles: readonly string[];
+}
+
+/** The write body. `bindPassword: ""` keeps the stored password; the server refuses that when the connection target changed. */
+export interface LdapSettingsBody extends LdapSettingsFields {
+  readonly bindPassword: string;
+}
+
+/** One entry of a 400 `INVALID_SETTINGS` answer; `field` is a request field name, or "" for the whole form. */
+export interface LdapSettingsProblem {
+  readonly field: string;
+  readonly message: string;
+}
+
+export type LdapUserMatch = "found" | "not_found" | "ambiguous" | "not_run" | "error";
+
+/** `POST /api/v2/config/ldap/test`: outcomes only, never a DN, an attribute or any other directory value. */
+export interface LdapTestResult {
+  readonly servers: readonly { readonly server: string; readonly outcome: string }[];
+  readonly serviceBindOk: boolean;
+  readonly domainDnExists: boolean | null;
+  readonly adminGroupExists: boolean | null;
+  readonly usersGroupExists: boolean | null;
+  readonly userMatch: LdapUserMatch;
+  readonly inAdminGroup: boolean | null;
+  readonly inUsersGroup: boolean | null;
+}
+
+/** The LDAP settings (security_admin; 403 otherwise). Defaults come back with `configured: false` when nothing is saved. */
+export function getLdapSettings(): Promise<LdapSettingsView> {
+  return call<LdapSettingsView>("/api/v2/config/ldap", "GET");
+}
+
+/** Save the LDAP settings (security_admin). Goes through call() so the CSRF token is sent like every other write. */
+export function saveLdapSettings(body: LdapSettingsBody): Promise<LdapSettingsView> {
+  return call<LdapSettingsView>("/api/v2/config/ldap", "PUT", body);
+}
+
+/** Test the form as entered, unsaved: service bind, user search and group membership; never a user sign-in. */
+export function testLdapSettings(settings: LdapSettingsBody, testUser: string): Promise<LdapTestResult> {
+  return call<LdapTestResult>("/api/v2/config/ldap/test", "POST", { settings, testUser });
 }
 
 export function listFleetBackups(): Promise<{ backups: BackupArtefact[]; baselines?: Record<string, string> }> {

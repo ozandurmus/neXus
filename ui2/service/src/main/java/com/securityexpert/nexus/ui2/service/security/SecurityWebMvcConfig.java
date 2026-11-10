@@ -240,6 +240,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("DELETE /roles/*", ActionRegistry.RBAC_ROLE_WRITE),
             Map.entry("GET /api/v2/config/ldap", ActionRegistry.LDAP_CONFIG_READ),
             Map.entry("PUT /api/v2/config/ldap", ActionRegistry.LDAP_CONFIG_WRITE),
+            Map.entry("POST /api/v2/config/ldap/test", ActionRegistry.LDAP_CONFIG_WRITE),
             Map.entry("GET /api/v2/ssh-trust", ActionRegistry.SSH_TRUST_READ),
             Map.entry("PUT /api/v2/ssh-trust/mode", ActionRegistry.SSH_TRUST_MANAGE),
             Map.entry("POST /api/v2/ssh-trust/observations/*/accept", ActionRegistry.SSH_TRUST_MANAGE),

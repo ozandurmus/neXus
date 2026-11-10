@@ -276,7 +276,7 @@ class DirectoryBindingsTest {
                         NOW.plusSeconds(100), NOW.plusSeconds(400), f::publish));
             }
         };
-        var refresh = new DirectoryAuthorizationRefresh(directory, f.bindings, f.cipher);
+        var refresh = new DirectoryAuthorizationRefresh(directory, f.bindings, f.cipher, f.actors, f.sessions);
         assertFalse(refresh.refresh(ACTOR, NOW.plusSeconds(100))); assertEquals(0, calls.get());
         enabled.set(true);
         assertTrue(refresh.refresh(ACTOR, NOW.plusSeconds(100)));

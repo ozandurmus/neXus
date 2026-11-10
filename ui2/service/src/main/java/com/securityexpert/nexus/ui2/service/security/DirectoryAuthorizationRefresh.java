@@ -1,51 +1,116 @@
 package com.securityexpert.nexus.ui2.service.security;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import com.securityexpert.nexus.ui2.platform.*;
 import com.securityexpert.nexus.ui2.persistence.identity.*;
 
-/** Existing service-account port refreshes only an independently authenticated session's own proof.
- * No scheduler or corporate activation; disabled state performs zero cache/secret/directory reads.
+/**
+ * Refreshes a signed-in directory actor's group set through the service account (design
+ * LDAP_SERVICE_BIND_DESIGN_2026_11_11 §6). Called by {@link RbacEvaluator} when the set is stale.
+ *
+ * <p>The directory round trip runs outside the table-locking directory mutation; the mutation then re-checks
+ * that the actor's proof and session are unchanged before it publishes or revokes. One refresh per actor at a
+ * time; concurrent requests of the same actor wait for it instead of querying the directory again.</p>
  */
 public final class DirectoryAuthorizationRefresh {
     private final LdapRevalidationPort directory;
     private final RoleBindingRepository bindings;
     private final GroupReferenceCipher cipher;
+    private final ActorAuthzStateRepository actors;
+    private final SessionRepository sessions;
+    private final ConcurrentHashMap<String, Object> inFlight = new ConcurrentHashMap<>();
+    /** A failed refresh is not retried for this long, so an unreachable directory is not asked once per request. */
+    static final java.time.Duration RETRY_AFTER_FAILURE = java.time.Duration.ofSeconds(15);
+    private final ConcurrentHashMap<String, Instant> failedAt = new ConcurrentHashMap<>();
 
-    public DirectoryAuthorizationRefresh(LdapRevalidationPort directory, RoleBindingRepository bindings, GroupReferenceCipher cipher) {
+    public DirectoryAuthorizationRefresh(LdapRevalidationPort directory, RoleBindingRepository bindings,
+            GroupReferenceCipher cipher, ActorAuthzStateRepository actors, SessionRepository sessions) {
         this.directory = directory;
         this.bindings = bindings;
         this.cipher = cipher;
+        this.actors = actors;
+        this.sessions = sessions;
     }
 
+    /** True when a fresh group set was published for {@code actor}. Always asks the directory. */
     public boolean refresh(String actor, Instant now) {
-        if (!directory.directoryPostureEnabled()) return false;
+        return refresh(actor, now, false);
+    }
+
+    /** The evaluator's entry: a set another request refreshed meanwhile is used as is. */
+    public boolean refreshStale(String actor, Instant now) {
+        return refresh(actor, now, true);
+    }
+
+    private boolean refresh(String actor, Instant now, boolean onlyIfStale) {
+        Object lock = inFlight.computeIfAbsent(actor, key -> new Object());
+        try {
+            synchronized (lock) {
+                Instant failed = failedAt.get(actor);
+                if (failed != null && Instant.now().isBefore(failed.plus(RETRY_AFTER_FAILURE))) return false;
+                Outcome outcome = refreshLocked(actor, now, onlyIfStale);
+                if (outcome == Outcome.DIRECTORY_FAILED) failedAt.put(actor, Instant.now()); else failedAt.remove(actor);
+                if (failedAt.size() > 10_000) failedAt.clear();
+                return outcome == Outcome.REFRESHED;
+            }
+        } finally {
+            inFlight.remove(actor, lock);
+        }
+    }
+
+    private enum Outcome { REFRESHED, NOT_APPLICABLE, DIRECTORY_FAILED }
+
+    private Outcome refreshLocked(String actor, Instant now, boolean onlyIfStale) {
         long started = System.nanoTime();
         try {
-            return bindings.directoryMutation(tx -> {
-                Optional<ActorAuthzStateRecord> state = tx.actors().find(actor).filter(ActorAuthzStateRecord::hasDirectoryProof);
-                var session = tx.sessions().findActiveByActor(actor).filter(s -> s.isActive(now));
-                if (state.isEmpty() || session.isEmpty() || new LocalIdentityResolver(tx.locals()).resolve(actor).isPresent()) return false;
-                String principal = cipher.decryptDirectory(state.get().principalReferenceEncrypted(), state.get().directoryProfileId(),
-                        DirectoryBindingKind.DIRECTORY_PRINCIPAL, state.get().principalReferenceKeyId());
-                Result<DirectoryObservation> result = directory.revalidatePrincipal(principal);
+            if (!directory.directoryPostureEnabled()) return Outcome.NOT_APPLICABLE;
+            Optional<ActorAuthzStateRecord> state = actors.find(actor).filter(ActorAuthzStateRecord::hasDirectoryProof);
+            if (state.isEmpty()) return Outcome.NOT_APPLICABLE;
+            // Another request of this actor refreshed while this one waited.
+            if (onlyIfStale && state.get().isFresh(now)) return Outcome.REFRESHED;
+            var session = sessions.findActiveByActor(actor, now);
+            if (session.isEmpty()) return Outcome.NOT_APPLICABLE;
+            String principal = cipher.decryptDirectory(state.get().principalReferenceEncrypted(),
+                    state.get().directoryProfileId(), DirectoryBindingKind.DIRECTORY_PRINCIPAL,
+                    state.get().principalReferenceKeyId());
+            Result<DirectoryObservation> result = directory.revalidatePrincipal(principal);
+            Boolean published = bindings.directoryMutation(tx -> {
+                Optional<ActorAuthzStateRecord> current = tx.actors().find(actor).filter(ActorAuthzStateRecord::hasDirectoryProof);
+                Instant at = now.plusNanos(System.nanoTime() - started);
+                var active = tx.sessions().findActiveByActor(actor).filter(s -> s.isActive(at));
+                if (current.isEmpty() || active.isEmpty() || !active.get().sessionId().equals(session.get().sessionId())
+                        || !current.get().directoryProfileId().equals(state.get().directoryProfileId())
+                        || !Arrays.equals(current.get().principalReferenceEncrypted(), state.get().principalReferenceEncrypted())
+                        || new LocalIdentityResolver(tx.locals()).resolve(actor).isPresent()) {
+                    return false;
+                }
                 if (result instanceof Result.Err<DirectoryObservation> error) {
                     if ("access_group_lost".equals(error.code())) {
-                        tx.sessions().revokeAccessGroupLost(session.get().sessionId(), "session_access_group_lost");
+                        tx.sessions().revokeAccessGroupLost(active.get().sessionId(), "session_access_group_lost");
                         tx.actors().delete(actor);
                     }
                     return false;
                 }
-                Instant at = now.plusNanos(System.nanoTime() - started);
-                if (!session.get().isActive(at)) return false;
                 DirectoryObservation observation = ((Result.Ok<DirectoryObservation>) result).value();
-                if (!state.get().directoryProfileId().equals(observation.profileId()) || !principal.equals(observation.principalReference())
-                        || at.isBefore(observation.resolvedAt()) || observation.resolvedAt().isBefore(state.get().resolvedAt()) || !at.isBefore(observation.validUntil())) return false;
+                if (!current.get().directoryProfileId().equals(observation.profileId())
+                        || !principal.equals(observation.principalReference())
+                        || at.isBefore(observation.resolvedAt()) || observation.resolvedAt().isBefore(current.get().resolvedAt())
+                        || !at.isBefore(observation.validUntil())) {
+                    return false;
+                }
                 return observation.publication().ifCurrent(() -> tx.actors().upsertDirectory(new ActorAuthzStateRecord(actor,
                         observation.groupReferences(), observation.resolvedAt(), observation.validUntil(), observation.profileId(),
-                        cipher.encryptDirectory(principal, observation.profileId(), DirectoryBindingKind.DIRECTORY_PRINCIPAL), cipher.keyId())));
+                        cipher.encryptDirectory(principal, observation.profileId(), DirectoryBindingKind.DIRECTORY_PRINCIPAL),
+                        cipher.keyId())));
             });
-        } catch (RuntimeException e) { return false; }
+            if (Boolean.TRUE.equals(published)) return Outcome.REFRESHED;
+            return result instanceof Result.Err<DirectoryObservation> err && "directory_unavailable".equals(err.code())
+                    ? Outcome.DIRECTORY_FAILED : Outcome.NOT_APPLICABLE;
+        } catch (RuntimeException e) {
+            return Outcome.DIRECTORY_FAILED;
+        }
     }
 }
