@@ -18,7 +18,27 @@ public final class HttpsVendorPlan {
     public static final String INFOBLOX_MEMBERS = "/wapi/v%s/member?_return_fields=host_name,platform,master_candidate,enable_ha,"
             + "vip_setting,node_info,service_status,lan2_enabled,lan2_port_setting,additional_ip_list,static_routes";
     public static final String[] INFOBLOX_SUMMARY_OBJECTS = {"view", "zone_auth", "network", "range", "member:license"};
-    public static final String[] INFOBLOX_SUMMARY_FIELDS = {"name", "fqdn", "network,utilization", "start_addr", "type,kind,expiry_date,hwid"};
+    /** member:license return fields. {@code expiration_status} (WAPI object reference, member:license: EXPIRED, EXPIRING_SOON,
+     *  EXPIRING_VERY_SOON, NOT_EXPIRED, PERMANENT, DELETED) is the vendor's own verdict; {@code key}, the license string,
+     *  is never requested. */
+    public static final String[] INFOBLOX_SUMMARY_FIELDS = {"name", "fqdn", "network,utilization", "start_addr",
+            "type,kind,expiry_date,expiration_status,hwid"};
+
+    /**
+     * A member:license {@code expiry_date} as an ISO date (UTC). The WAPI object reference types the field as a timestamp:
+     * the grid sends epoch seconds as a JSON number, which the first parser (text only) dropped on every row (44 stored
+     * licenses without a date, 2026-11-10). A digits-only string is read the same way; any other text is kept as sent,
+     * so the screen shows it as a label. A value that is not a plausible second count gives no date (UNKNOWN on screen).
+     */
+    public static java.util.Optional<String> infobloxExpiryDate(com.fasterxml.jackson.databind.JsonNode value) {
+        if (value == null || value.isMissingNode() || value.isNull()) return java.util.Optional.empty();
+        String text = value.isIntegralNumber() ? value.asText() : value.isTextual() ? value.asText().strip() : "";
+        if (text.isEmpty()) return java.util.Optional.empty();
+        if (!text.matches("\\d{1,11}")) return value.isTextual() ? java.util.Optional.of(text) : java.util.Optional.empty();
+        long seconds = Long.parseLong(text);
+        if (seconds <= 0) return java.util.Optional.empty();
+        return java.util.Optional.of(java.time.Instant.ofEpochSecond(seconds).atOffset(java.time.ZoneOffset.UTC).toLocalDate().toString());
+    }
     public static final String INFOBLOX_GETGRIDDATA = "/wapi/v%s/fileop?_function=getgriddata";
     public static final String INFOBLOX_GETGRIDDATA_BODY = "{\"type\": \"BACKUP\"}";
     public static final String INFOBLOX_DOWNLOADCOMPLETE = "/wapi/v%s/fileop?_function=downloadcomplete";

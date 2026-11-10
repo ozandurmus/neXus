@@ -371,8 +371,12 @@ public final class HttpsVendorExecutor {
                 for (JsonNode license : pages[4].items()) {
                     Map<String, String> entry = new LinkedHashMap<>();
                     entry.put("member", memberByHwid.getOrDefault(license.path("hwid").asText(""), "grid"));
-                    for (String field : List.of("type", "kind", "expiry_date")) {
+                    for (String field : List.of("type", "kind", "expiration_status")) {
                         if (license.path(field).isTextual()) entry.put(field, license.path(field).asText());
+                    }
+                    // A permanent license has no expiry: the vendor's status says so, and its timestamp is not a date to show.
+                    if (!"PERMANENT".equals(entry.get("expiration_status"))) {
+                        HttpsVendorPlan.infobloxExpiryDate(license.path("expiry_date")).ifPresent(date -> entry.put("expiry_date", date));
                     }
                     licenses.add(entry);
                 }

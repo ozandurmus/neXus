@@ -351,7 +351,8 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                     if (value instanceof String s && "virtual_system".equals(key) && managedDeviceRow) {
                         result.put(key, topologyPseudonymizer.maskManagedDeviceName(s));
                     } else if (value instanceof String s && "member".equals(key) && !"grid".equals(s)
-                            && (map.containsKey("expiry_date") || map.containsKey("days_remaining"))) {
+                            && (map.containsKey("expiry_date") || map.containsKey("expiration_status")
+                                    || map.containsKey("days_remaining"))) {
                         // An Infoblox license row (grid summary, or its Lifecycle projection) names the grid member it
                         // is bound to: the same MD- name as the grid member row, so the two can be matched on screen.
                         result.put(key, topologyPseudonymizer.maskManagedDeviceName(s));

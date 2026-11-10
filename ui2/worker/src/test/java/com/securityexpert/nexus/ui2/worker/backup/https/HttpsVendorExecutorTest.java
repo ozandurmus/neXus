@@ -182,8 +182,12 @@ class HttpsVendorExecutorTest {
                 + "{\"network\":\"192.0.2.128/25\",\"utilization\":950},"
                 + "{\"network\":\"198.51.100.128/25\",\"utilization\":700},"
                 + "{\"network\":\"203.0.113.128/25\",\"utilization\":600}]}");
-        calls.wapiBodies.put("member:license", "{\"result\":[{\"type\":\"DNS\",\"kind\":\"permanent\","
-                + "\"expiry_date\":\"2027-01-01\",\"hwid\":\"synthetic-hwid\"}]}");
+        // expiry_date as the WAPI sends it: a timestamp (epoch seconds, a JSON number), not text.
+        calls.wapiBodies.put("member:license", "{\"result\":["
+                + "{\"type\":\"DNS\",\"kind\":\"Static\",\"expiry_date\":1798761600,\"expiration_status\":\"NOT_EXPIRED\","
+                + "\"hwid\":\"synthetic-hwid\"},"
+                + "{\"type\":\"GRID\",\"kind\":\"Static\",\"expiry_date\":2147483647,\"expiration_status\":\"PERMANENT\","
+                + "\"hwid\":\"synthetic-hwid\"}]}");
         calls.failObject = "zone_auth";
         var done = (HttpsVendorExecutor.InventoryOutcome.Completed) executor.inventory("infoblox", T, "cred");
         assertEquals(2, done.gridSummary().dnsViews());
@@ -196,7 +200,13 @@ class HttpsVendorExecutorTest {
         assertEquals(87.5, top.get(1).path("percent").asDouble());
         var licenses = new com.fasterxml.jackson.databind.ObjectMapper().readTree(done.gridSummary().licensesJson());
         assertEquals("grid", licenses.get(0).path("member").asText());
+        assertEquals("2027-01-01", licenses.get(0).path("expiry_date").asText());
+        assertEquals("NOT_EXPIRED", licenses.get(0).path("expiration_status").asText());
+        assertEquals("PERMANENT", licenses.get(1).path("expiration_status").asText());
+        assertTrue(licenses.get(1).path("expiry_date").isMissingNode(), "a permanent license carries no date");
         assertFalse(done.gridSummary().licensesJson().contains("synthetic-hwid"));
+        assertTrue(calls.log.stream().anyMatch(l -> l.contains("member:license") && l.contains("expiration_status")
+                && !l.contains("key")), String.valueOf(calls.log));
         assertTrue(calls.log.stream().anyMatch(s -> s.contains("&_page_id=p2")));
 
         calls.failObject = null;
@@ -442,5 +452,19 @@ class HttpsVendorExecutorTest {
                 return new DownloadResult.Failed(e.getMessage());
             }
         }
+    }
+
+    @Test
+    void infobloxExpiryDateReadsATimestampAndKeepsOtherTextAsALabel() throws Exception {
+        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        assertEquals(Optional.of("2027-01-01"), HttpsVendorPlan.infobloxExpiryDate(json.readTree("1798761600")));
+        assertEquals(Optional.of("2027-01-01"), HttpsVendorPlan.infobloxExpiryDate(json.readTree("\"1798761600\"")));
+        assertEquals(Optional.of("2027-01-01"), HttpsVendorPlan.infobloxExpiryDate(json.readTree("\"2027-01-01\"")));
+        assertEquals(Optional.of("Never"), HttpsVendorPlan.infobloxExpiryDate(json.readTree("\"Never\"")));
+        assertEquals(Optional.empty(), HttpsVendorPlan.infobloxExpiryDate(json.readTree("0")));
+        assertEquals(Optional.empty(), HttpsVendorPlan.infobloxExpiryDate(json.readTree("1798761600000000")));
+        assertEquals(Optional.empty(), HttpsVendorPlan.infobloxExpiryDate(json.readTree("17987616.5")));
+        assertEquals(Optional.empty(), HttpsVendorPlan.infobloxExpiryDate(json.readTree("null")));
+        assertEquals(Optional.empty(), HttpsVendorPlan.infobloxExpiryDate(json.readTree("{}").path("expiry_date")));
     }
 }

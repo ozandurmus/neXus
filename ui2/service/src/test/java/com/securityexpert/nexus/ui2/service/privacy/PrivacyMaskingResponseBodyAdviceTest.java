@@ -227,6 +227,20 @@ class PrivacyMaskingResponseBodyAdviceTest {
     }
 
     @Test
+    void aPermanentLicenseRowMasksItsMemberLikeADatedOne() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        Map<String, Object> body = Map.of("grid_summary", Map.of("licenses", List.of(
+                Map.of("member", "ns2.example", "type", "DNS", "expiry_date", "2027-01-01"),
+                Map.of("member", "ns2.example", "type", "GRID", "expiration_status", "PERMANENT"))));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> masked = (Map<String, Object>) advice.beforeBodyWrite(body, null, null, null, serverRequest, null);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> licenses = (List<Map<String, Object>>) ((Map<String, Object>) masked.get("grid_summary")).get("licenses");
+        assertThat(licenses.get(0).get("member")).isNotEqualTo("ns2.example");
+        assertThat(licenses.get(1).get("member")).isEqualTo(licenses.get(0).get("member"));
+    }
+
+    @Test
     void masksDeviceSummaryListForReplayViewer() {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
 
