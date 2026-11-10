@@ -135,11 +135,18 @@ on 2026-11-10 and their meaning:
   affected when it lies in the range, **except** that for a maintenance release with a change point
   (`at: <train>.<m>-h<n>`, `unaffected`) the hotfix decides: below the point affected, at or above it unaffected,
   whatever the range bound says. A bound of the form `<train>*` means the end of the train.
-- `version` alone with a status, or with only `changes[]`: affected from that version to the end of the train,
-  with the same change-point rule.
+- **Upper bound of an affected range (measured on the vendor's full set, 2026-11-10).** The vendor writes the
+  first fix as the bound and the backported fixes of later maintenance releases as change points. A release between
+  them that has no point of its own stays affected, so the range ends at its highest unaffected change point, not at
+  the written bound. The vendor's own lists of affected versions agree in every consistent case.
+- `version` alone with a status: affected from that version to the end of the train. With only `changes[]`: the
+  same change-point rule, and the range ends at its highest unaffected change point (the vendor's lists never name
+  a release above it as affected); without any change point it runs to the end of the train.
 - The mirrored forms with status `unaffected` and `changes[]` to `affected` follow the same logic with the statuses
   exchanged.
 - Any other form (free text, an empty version, status `unknown`): the advisory is `NEEDS_REVIEW`.
+- Blank padding around a version, bound or change point in the vendor's record is removed; nothing else is.
+  A device's own version is never altered.
 - **Self-check.** 319 of the 359 advisories carry the vendor's own list of affected versions (`x_affectedList`).
   At ingest, every version in that list must come out `AFFECTED` and every change point `unaffected`. One
   disagreement makes the advisory `NEEDS_REVIEW` with the code word `SELF_CHECK_FAILED`.

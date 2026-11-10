@@ -54,6 +54,23 @@ class DefaultAdvisoryEvaluatorTest {
         assertEquals(VerdictKind.FIXED, pan("10.2.9", r).kind());
     }
 
+    /** A range without a bound ends at its highest fix point: a later release of the train is fixed, not affected. */
+    @Test
+    void anUnboundedRangeEndsAtItsHighestFixPoint() {
+        ProductRule r = new ProductRule(PAN, "12.1", List.of(new Range(Status.AFFECTED, "12.1.0", null, false,
+                List.of(fix("12.1.4-h12"), fix("12.1.10-h2"), fix("12.1.7-h8")))), null);
+        assertEquals(VerdictKind.AFFECTED, pan("12.1.4-h11", r).kind());
+        assertEquals(VerdictKind.FIXED, pan("12.1.4-h12", r).kind());
+        assertEquals(VerdictKind.AFFECTED, pan("12.1.5", r).kind(), "no point of its own, below the highest fix");
+        assertEquals(VerdictKind.AFFECTED, pan("12.1.10-h1", r).kind());
+        assertEquals(new AdvisoryModel.Verdict(VerdictKind.FIXED, "AT_OR_ABOVE_FIX", null), pan("12.1.10-h2", r));
+        assertEquals(new AdvisoryModel.Verdict(VerdictKind.FIXED, "AT_OR_ABOVE_FIX", null), pan("12.1.11", r));
+        assertEquals(VerdictKind.FIXED, pan("12.1.12-h3", r).kind());
+        // Without any fix point there is nothing to end at: the range runs to the end of the train.
+        ProductRule open = new ProductRule(PAN, "12.1", List.of(new Range(Status.AFFECTED, "12.1.0", null, false, List.of())), null);
+        assertEquals(VerdictKind.AFFECTED, pan("12.1.11", open).kind());
+    }
+
     @Test
     void rangeInclusiveAndBelowFrom() {
         ProductRule r = new ProductRule(PAN, "7.1", List.of(new Range(Status.AFFECTED, "7.1.2", "7.1.24", true, List.of())), null);
