@@ -10,12 +10,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-try:  # package import (repo root on sys.path)
-    from . import pricing, prompt, schema
-except ImportError:  # pragma: no cover - direct execution fallback
-    import pricing  # type: ignore
-    import prompt  # type: ignore
-    import schema  # type: ignore
+from tools.llm_trial import pricing, prompt, schema  # repo root on sys.path (run_trial.py and the tests add it)
 
 CHARS_PER_TOKEN = 3.6
 THINKING_TOKENS = {"low": 400, "medium": 900}
