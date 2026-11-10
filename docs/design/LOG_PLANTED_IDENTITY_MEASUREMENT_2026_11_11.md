@@ -27,7 +27,8 @@ program from a fixed seed. Nothing was read from HOST-A, a device, a database or
 - **One class of identity cannot be removed by any vocabulary filter: a name that is itself a vocabulary word.**
   970 of 1,400 planted vocabulary-word names (69 %) are released, all of them in contexts without a trigger word. The
   dictionary does not hold them either (the catalogue drops generic names on purpose). This test measures the
-  mechanism, not the rate: on the real lines of the risk measurement the profile left 21 lines in 2.9 million.
+  mechanism, not the rate: on the real lines of the risk measurement the profile left 21 lines in 2.9 million. **The
+  PO accepted this as a known residual risk and asked for it to be recorded (§4.1).**
 - **One real gap in the profile: hex-encoded addresses.** A value such as `0x` plus eight hex digits is kept by the
   profile's hex-literal allowance, and the guard has no shape for it. 55 of 100 planted survive. Excluding vocabulary-
   word names, secrets and this encoding, **0 of 9,860 planted values survive p3**; with it, 55 of 9,960.
@@ -365,11 +366,11 @@ source (`cp_messages` 28.0 %).
    one (Argon finding 1).
 5. **Vocabulary-word identities are a structural residual.** A name that is an ordinary technical word (and is therefore
    in the vocabulary, and dropped from the dictionary as generic) cannot be removed by a filter that keeps vocabulary
-   words. 970 of 1,400 are released; all in contexts without a trigger word. Options for the design, for the PO session
-   to weigh: accept the residual (it was 21 lines in 2.9 million on real data, all of them generic names); or keep
-   generic-named estate names in a dictionary used only at egress, which masks `inside`-type names too and costs
-   meaning; or exclude lines that contain such a word in a name position, which needs the policy and object context
-   that a log line does not carry.
+   words. 970 of 1,400 are released; all in contexts without a trigger word. The options put to the PO were to accept
+   the residual (it was 21 lines in 2.9 million on real data, all of them generic names), to keep generic-named estate
+   names in a dictionary used only at egress (which masks `inside`-type names too and costs meaning), or to exclude
+   lines that contain such a word in a name position (which needs policy and object context that a log line does not
+   carry). The PO accepted the residual (§4.1).
 6. **Hex-encoded addresses pass the profile.** The profile keeps `0x` literals (they are error codes and pointers) and
    the guard has no shape for them: 55 of 100 planted survive and are released; the guard blocks 5 of 70 in the raw-
    input scenario. Restricting the allowance to short literals (four hex digits or fewer, say) removes the gap; the
@@ -391,6 +392,24 @@ source (`cp_messages` 28.0 %).
    is blocked by G4 (35 of 35).
 10. **Profile cost.** 10.3 % of the word tokens of the control lines are replaced. See §3.8 for the real-text figure
     from the risk measurement.
+
+### 4.1 Accepted residual risk (PO decision, 2026-11-11)
+
+The PO session put finding 5 to the PO on 2026-11-11 and relayed the answer to this session. The PO's answer, in the
+PO's words: "Kabul et, kayıt düş" (accept it, record it). Recorded as follows.
+
+- **The residual is an accepted, known risk of the egress design.** It is not a defect to close before a pilot, and the
+  design must state it (§6 item 3).
+- **Nothing extra is masked at egress for it:** no egress-only dictionary of generic names, no exclusion of lines.
+- **What it covers:** a name (administrator, policy, rule, object, zone, virtual system, domain or host) that is itself a
+  word of the technical vocabulary, in a context without a trigger word. 970 of 1,400 planted values here; 21 lines in
+  2.9 million on real lines (the risk measurement, §10.2, profile p3), all of them generic names by that record's rule.
+- **What it does not cover:** any name that is not a vocabulary word, any shaped value, and the hex-encoded address of
+  finding 6. Those stay in scope and are not accepted by this decision.
+- **Level 2 target:** the zero-survivor target for the re-run on real lines (§6 item 6) excludes vocabulary-word names;
+  their count is reported separately, not hidden.
+- **The vocabulary stays a reviewed list.** Each word added to it widens this residual; each word removed narrows it
+  and replaces more text by placeholders. The review by `security_admin` that §5 asks for still applies.
 
 ## 5. Limits
 
@@ -419,13 +438,15 @@ source (`cp_messages` 28.0 %).
 ## 6. What this record changes in the DRAFT design
 
 1. §3.3: the English word list goes (Argon finding 1, now with a count); the vocabulary is the only allow list.
-2. §3.3: hex literals are kept only when short.
-3. §3.3 and §3.5: state the vocabulary-word residual in the PO decision on Level 2 and decide between the three options
-   of finding 5.
+2. §3.3: hex literals are kept only when short. The PO chose a separate lane for this (finding 6), not this record's
+   branch.
+3. §3.3 and §3.5: state the vocabulary-word residual as an accepted known risk (§4.1), with the PO's words, in the PO
+   decision on Level 2.
 4. §3.5: G3 depends on a substitution list from the masker (finding 8); say so, and add a test where a leaked address
    sits next to a masked one.
 5. §3.5: G2 must fold case the way the dictionary does, and the dictionary should fold Turkish `i` (finding 2); device
-   names stay exact unless the PO session changes the identity-law reading (finding 3).
+   names stay exact unless the PO session changes the identity-law reading (finding 3). The PO chose a separate lane
+   for the Turkish fold; it is not part of this record's branch.
 6. §10: E5 is done for the synthetic part. What remains before a Level 2 decision is a re-run of the risk measurement
    with the finished profile and guard on real lines, with zero surviving identities as the target.
 
