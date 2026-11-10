@@ -129,5 +129,18 @@ comes with the next full Check Point inventory. The Spark has none, as documente
 
 The PO approved adding `current_version` to the return fields of the `upgradestatus` read ("Evet, ekle", relayed by
 the PO session; `LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md`, amendment A-2026-11-10). The request is now
-`GET /wapi/v<ver>/upgradestatus?type=GRID&_return_fields=current_version`. Its first answer on the grid is recorded
-here once it has been measured.
+`GET /wapi/v<ver>/upgradestatus?type=GRID&_return_fields=current_version`.
+
+**Measured 2026-11-10, after the change was live** (the one grid manager, only this read kind switched on, its
+ordinary inventory `COMPLETED`, the switch removed afterwards and checked: no `UI2_LIFECYCLE*` name on the deployment
+or in the running pod):
+
+- The grid answered with one entry that holds the object reference only (shape `[1]{_ref:string}`). **It returned
+  no `current_version`, also when asked for it by name.** For the grid-level entry the field has no value on this
+  grid; WAPI leaves out a field without a value.
+- Nothing was stored, as the contract amendment requires for an answer without a usable version: the grid manager
+  still has no `nios_version` platform fact.
+- Consequence: the NIOS version cannot be read from `type=GRID`. The same object has member-level entries
+  (`type=VNODE`, `type=PNODE`) and group-level entries (`type=GROUP`) with the same field; whether one of them
+  carries the version on this grid is UNKNOWN. Each is a different request and needs its own PO approval and a
+  measurement; none has been sent.
