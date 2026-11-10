@@ -110,6 +110,10 @@ public final class EstateNameCatalog implements Supplier<EstateDictionary> {
     private static final Pattern HEX = Pattern.compile("[0-9a-fA-F]{32,}");
     private static final Pattern IPV4 = Pattern.compile("(?<![0-9A-Za-z.])\\d{1,3}(?:\\.\\d{1,3}){3}(?![0-9A-Za-z]|\\.\\d)");
     private static final Pattern PARTS = Pattern.compile("[\\s._\\-/:]+");
+    /** Characters an estate-dictionary name cannot hold (anything but letters, digits, {@code . _ : -} and space). */
+    private static final Pattern OTHER_CHARS = Pattern.compile("[^\\p{L}\\p{N} ._:-]+");
+    /** Leading and trailing characters that are not letters or digits. */
+    private static final Pattern EDGES = Pattern.compile("^[^\\p{L}\\p{N}]+|[^\\p{L}\\p{N}]+$");
     private static final Set<String> SKIP_KEYS = Set.of("comment", "comments", "uuid", "id", "parentruleid", "type", "action",
             "time", "log", "enabled", "status", "number", "schedule", "values", "vendor", "artefactref", "collectedat",
             "sourceid", "containerid", "inventoryprovenance", "content", "vpn", "last-modified", "track-accounting",
@@ -286,9 +290,28 @@ public final class EstateNameCatalog implements Supplier<EstateDictionary> {
             this.vocabulary = vocabulary;
         }
 
+        /**
+         * A name the dictionary can match is letters, digits, {@code . _ : -} and single spaces, starting and ending
+         * with a letter or digit. Any other name ({@code Net_A/B}, {@code _scratch}, {@code Hosts (old)}) is split at
+         * the other characters and each piece trimmed to its letters and digits, so every piece the text can carry is
+         * masked; each piece passes the same shape and generic filters.
+         */
         void add(String raw, Kind kind) {
             if (raw == null) return;
             String value = raw.strip().replaceAll("\\s+", " ");
+            if (OTHER_CHARS.matcher(value).find() || !value.isEmpty() && (!Character.isLetterOrDigit(value.charAt(0))
+                    || !Character.isLetterOrDigit(value.charAt(value.length() - 1)))) {
+                String[] pieces = OTHER_CHARS.split(value);
+                for (String piece : pieces) {
+                    String trimmed = EDGES.matcher(piece).replaceAll("");
+                    if (pieces.length > 1 || !trimmed.equals(value)) addEligible(trimmed, kind);
+                }
+                return;
+            }
+            addEligible(value, kind);
+        }
+
+        private void addEligible(String value, Kind kind) {
             String lower = value.toLowerCase(Locale.ROOT);
             if (lower.length() < 3 || ALLNUM.matcher(lower).matches() || UUID.matcher(lower).matches()
                     || HEX.matcher(lower).matches() || IPV4.matcher(lower).find() || lower.chars().noneMatch(Character::isLetter)) {

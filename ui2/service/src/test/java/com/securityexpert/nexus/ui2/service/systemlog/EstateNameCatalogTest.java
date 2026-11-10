@@ -179,6 +179,38 @@ class EstateNameCatalogTest {
     }
 
     @Test
+    void aNameWithOtherCharactersIsMaskedPieceByPiece() {
+        EstateNameCatalog.Source source = new EstateNameCatalog.Source() {
+            @Override
+            public List<EstateNameCatalog.Named> flatNames() {
+                return List.of(new EstateNameCatalog.Named(EstateNameCatalog.Kind.VSYS, "Fenwhistle (old)"));
+            }
+
+            @Override
+            public List<String> objectInventoryDocuments() {
+                return List.of("{\"objects\":[{\"name\":\"_Scratchvale\"},{\"name\":\"Net_Wyndmoor/Oakhurst+\"},{\"name\":\"(any)\"}]}");
+            }
+
+            @Override
+            public Map<String, String> policySnapshotVersions() {
+                return Map.of();
+            }
+
+            @Override
+            public Optional<String[]> policySnapshot(String policyId) {
+                return Optional.empty();
+            }
+        };
+        LogMasking.Session s = masking(new EstateNameCatalog(KEY, source, Duration.ofHours(1))).session();
+        String masked = s.maskLine("cpd: _Scratchvale ok; Net_Wyndmoor/Oakhurst+ synced; vs Fenwhistle (old) up; any old rule")
+                .toLowerCase(java.util.Locale.ROOT);
+        for (String v : new String[] {"scratchvale", "wyndmoor", "oakhurst", "fenwhistle"}) {
+            assertFalse(masked.contains(v), "a piece survived");
+        }
+        assertTrue(masked.contains("(old)") && masked.endsWith("any old rule"), "generic pieces stay readable");
+    }
+
+    @Test
     void genericNamesAreMadeOnlyOfVocabularyWordsAndNumbers() {
         var vocabulary = EstateNameCatalog.genericVocabulary();
         assertTrue(EstateNameCatalog.isGeneric("cleanup rule", vocabulary));
