@@ -405,3 +405,16 @@ PO waived the VMware snapshot. If the maintenance fails: troubleshoot first, res
 - Kernel: `grub-reboot` the -42 entry, or restore the grub backup.
 - k3s: reinstall `/usr/local/bin/k3s.v1.36.4` and restart k3s.
 - Data: the platform backup.
+
+**Addendum, 2026-11-10 morning.**
+- The `scanner_allowed` set is permanent: the corporate scans run continuously (PO 2026-11-10). Only the comment in
+  `/etc/nexus/firewall.nft` changed.
+- Image registry pruned from 129 GB to 17.2 GB (PO "evet temizleyebilirsin"). Disk use went from 536 GB to 423 GB.
+  - Kept:
+    - every image the cluster references;
+    - every image in the 20 release snapshots (124 references);
+    - the newest 40 tags of `nexus-ui2-service` and `nexus-ui2-e2e`;
+    - the newest 150 tags of `nexus-ui2-build-cache`.
+  - Removed: 452 service, 340 e2e and 572 build-cache tags.
+  - Then `registry garbage-collect --delete-untagged`, with no build or ship running.
+  - All 124 kept references were checked afterwards: manifest and every blob present.
