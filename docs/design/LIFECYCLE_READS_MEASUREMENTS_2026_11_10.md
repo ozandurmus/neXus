@@ -78,8 +78,8 @@ comes with the next full Check Point inventory. The Spark has none, as documente
 - `GET /api/system/version`: `name`, `version`, `id`, `buildNumber` (all strings).
 - `GET /api/devices/{uuid}/license` for a ProxySG: top-level `licenseStatus` and `trialPeriodExpirationDate` are
   null; `components` has 12 entries with `componentName`, `serialNumber`, `productDescription`, `partNumber`,
-  `activationDate`, `expirationDate`, `validity`. Seven undocumented field names appeared (masked); they were all
-  null or inside the documented structure.
+  `activationDate`, `expirationDate`, `validity`. Eight undocumented field names appeared (masked); all eight
+  were null.
 - `show licenses` through the command call: status `SUCCESS`; the reply lists the same 12 components with
   `Valid`, an activation date and an `Expiration date` each, plus appliance-level lines. Both routes give component
   expiry; the API route is structured and is the one to parse.
