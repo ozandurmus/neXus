@@ -25,6 +25,7 @@ import { DirectorySettingsPanel } from "../components/settings/DirectorySettings
 import { NotificationSettingsPanel } from "../components/settings/NotificationSettingsPanel";
 import { SystemLogSettingsPanel } from "../components/settings/SystemLogSettingsPanel";
 import { SystemStatusPanel } from "./SystemStatusPanel";
+import { ScheduledJobsPanel } from "./ScheduledJobsPanel";
 
 interface AdminSectionDef {
   readonly slug: string;
@@ -87,9 +88,11 @@ const PAGES: readonly AdminPageDef[] = [
     slug: "platform",
     label: "Platform",
     nav: "Administration pages",
-    blurb: "The product's own health and settings: system status, notifications and log collection.",
+    blurb: "The product's own health and settings: system status, which scheduled jobs run, notifications and log collection.",
     sections: [
       { slug: "system", label: "System", panel: <SystemStatusPanel /> },
+      // Readable by every signed-in role (operator and the aiview inspection persona included); the server decides who may switch.
+      { slug: "scheduled-jobs", label: "Scheduled jobs", panel: <ScheduledJobsPanel /> },
       { slug: "notifications", administratorOnly: true, label: "Notifications", panel: <NotificationSettingsPanel /> },
       { slug: "system-logs", administratorOnly: true, label: "Log collection settings", panel: <SystemLogSettingsPanel /> },
     ],

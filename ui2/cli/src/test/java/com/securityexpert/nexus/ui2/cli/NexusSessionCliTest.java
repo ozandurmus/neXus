@@ -133,6 +133,40 @@ class NexusSessionCliTest {
         }
     }
 
+    /** V203: CLI parity for Administration > Platform > Scheduled jobs -- the screen's routes, body and acknowledgement. */
+    @Test
+    void scheduleCommandsCallTheScreenRoutesAndAnUnknownFamilySendsNothing(@TempDir Path home) throws Exception {
+        java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            calls.add(exchange.getRequestMethod() + " " + exchange.getRequestURI() + " ack="
+                    + exchange.getRequestHeaders().getFirst("X-Nexus-Business-Hours-Ack") + " csrf="
+                    + exchange.getRequestHeaders().getFirst("X-CSRF-Token") + " "
+                    + new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            byte[] out = "{}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.start();
+        try {
+            NexusSessionCli cli = new NexusSessionCli(home);
+            cli.saveSession(new NexusSessionCli.Session("http://127.0.0.1:" + server.getAddress().getPort(), "opaque-cookie", "csrf-9"));
+            assertEquals(0, cli.run(new String[] {"schedules"}));
+            assertEquals(0, cli.run(new String[] {"schedule-set", "ha_readiness", "off", "Pilot week", "--business-hours-ack"}));
+            assertEquals(0, new NexusSessionCli(home).run(new String[] {"schedule-set", "ha_readiness", "on", "Pilot over"}));
+            assertTrue(new NexusSessionCli(home).run(new String[] {"schedule-set", "cluster_diff", "off", "Not a family"}) != 0);
+            assertTrue(new NexusSessionCli(home).run(new String[] {"schedule-set", "ha_readiness", "maybe", "Bad state"}) != 0);
+            assertEquals(java.util.List.of(
+                    "GET /api/v2/config/scheduled-jobs ack=null csrf=null ",
+                    "PUT /api/v2/config/scheduled-jobs/ha_readiness ack=true csrf=csrf-9 {\"enabled\":false,\"reason\":\"Pilot week\"}",
+                    "PUT /api/v2/config/scheduled-jobs/ha_readiness ack=null csrf=csrf-9 {\"enabled\":true,\"reason\":\"Pilot over\"}"),
+                    calls);
+        } finally {
+            server.stop(0);
+        }
+    }
+
     @Test
     void systemLogMeasurementCommandsCallTheScreenRoutes(@TempDir Path home) throws Exception {
         java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();

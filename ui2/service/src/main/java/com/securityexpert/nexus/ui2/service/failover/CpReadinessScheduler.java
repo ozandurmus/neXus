@@ -14,6 +14,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository;
+import com.securityexpert.nexus.ui2.service.schedule.FamilySwitch;
+import com.securityexpert.nexus.ui2.service.schedule.ScheduledJobFamily;
 
 /** Advances one readiness pass without waiting on Spring's scheduling thread. */
 @Component
@@ -25,6 +27,7 @@ public final class CpReadinessScheduler {
     private final Duration unitPause;
     private final JobWindowPolicy windows;
     private final Clock clock;
+    private final FamilySwitch switches;
     // A restart waits for the next slot; ticks never create another readiness pass.
     private Iterator<CpFailoverService.ReadinessTarget> targets;
     private Instant nextUnitAt;
@@ -33,12 +36,18 @@ public final class CpReadinessScheduler {
 
     @Autowired
     public CpReadinessScheduler(CpFailoverService service, JooqCpFailoverRepository store,
-            @Value("${ui2.failover.readiness-unit-pause-ms:2000}") long unitPauseMs) {
-        this(service, store, unitPauseMs, Clock.systemUTC());
+            @Value("${ui2.failover.readiness-unit-pause-ms:2000}") long unitPauseMs, FamilySwitch switches) {
+        this(service, store, unitPauseMs, Clock.systemUTC(), switches);
     }
 
     CpReadinessScheduler(CpFailoverService service, JooqCpFailoverRepository store,
             long unitPauseMs, Clock clock) {
+        this(service, store, unitPauseMs, clock, FamilySwitch.ALWAYS_ON);
+    }
+
+    CpReadinessScheduler(CpFailoverService service, JooqCpFailoverRepository store,
+            long unitPauseMs, Clock clock, FamilySwitch switches) {
+        this.switches = switches;
         this.service = service;
         this.store = store;
         this.unitPause = Duration.ofMillis(Math.max(0, unitPauseMs));
@@ -49,6 +58,7 @@ public final class CpReadinessScheduler {
     @Scheduled(cron = JobWindowPolicy.CRON, zone = JobWindowPolicy.ZONE)
     public void beginPass() {
         if (!windows.isOpen() || targets != null) return;
+        if (!switches.allows(ScheduledJobFamily.HA_READINESS, "HA_READINESS")) return;
         try {
             // A run whose job ended without a result would otherwise refuse its unit forever.
             int closed = store.closeOrphanReadinessRuns();
@@ -71,6 +81,12 @@ public final class CpReadinessScheduler {
             return;
         }
         if (targets == null) return;
+        // Switched off mid-pass: drop the cursor at once; the unit already admitted finishes on its own.
+        if (!switches.allows(ScheduledJobFamily.HA_READINESS, "HA_READINESS")) {
+            targets = null;
+            runId = null;
+            return;
+        }
         if (runId != null) {
             if (!now.isBefore(runDeadline)) {
                 LOG.warn("Readiness run reached the 10-minute scheduler cap; advancing after the unit pause");

@@ -51,6 +51,16 @@ public final class ActionRegistry {
     public static final String SYSTEM_LOG_SETTINGS_READ = "system_log_settings_read";
     /** Phase B section 14: writes the settings row ({@code PUT /api/v2/config/system-logs}); security_admin, never aiview. */
     public static final String SYSTEM_LOG_SETTINGS_WRITE = "system_log_settings_write";
+    /**
+     * V203 (PO 2026-11-10): the per-family scheduled-job switches, {@code GET /api/v2/config/scheduled-jobs}; every signed-in
+     * role reads them (aiview masked: the actor becomes a user token, the reason is withheld).
+     */
+    public static final String SCHEDULED_JOBS_READ = "scheduled_jobs_read";
+    /**
+     * V203: switches one family on or off ({@code PUT /api/v2/config/scheduled-jobs/{family}}) with a mandatory reason and,
+     * inside business hours, the acknowledgement; operation_admin and security_admin, never aiview.
+     */
+    public static final String SCHEDULED_JOBS_SET = "scheduled_jobs_set";
     /** NXS-LOCAL-0165 "Routes": {@code POST /devices/{id}/configuration/collect} -- same gate as {@link #DEVICE_INVENTORY_COLLECT}. */
     public static final String DEVICE_CONFIGURATION_COLLECT = "device_configuration_collect";
     /** NXS-LOCAL-0165 "Routes": {@code GET /devices/{id}/configuration/text} -- the sanitized Check Point view; a gated read, {@code role:onboarding_admin} only (it names section/entry structure of a device's own configuration). */
@@ -313,6 +323,11 @@ public final class ActionRegistry {
         // Settings read and write are security_admin only (contract section 14), like the notification settings.
         register(new ActionDescriptor(SYSTEM_LOG_SETTINGS_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SYSTEM_LOG_SETTINGS_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        // V203: reading the schedule switches is open to every signed-in session; changing one is for the two administrator
+        // roles that already own the job windows' manual bypass (PO decision 2026-10-20). The controller refuses aiview.
+        register(new ActionDescriptor(SCHEDULED_JOBS_READ, true, Optional.empty()));
+        register(new ActionDescriptor(SCHEDULED_JOBS_SET, true, Optional.of(RoleToken.OPERATION_ADMIN),
+                java.util.Set.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(DEVICE_CONFIGURATION_COLLECT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(DEVICE_CONFIGURATION_TEXT_READ, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(NOTIFICATIONS_READ, true, Optional.empty()));

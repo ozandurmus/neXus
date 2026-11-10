@@ -514,6 +514,25 @@ describe("restricted Administration reads", () => {
       expect(document.querySelector("[data-locked='true'] [data-lock-badge]")).not.toBeNull();
       await waitFor(() => expect(fetch).not.toHaveBeenCalled());
     });
+  it("opens Platform > Scheduled jobs for a viewer without the administration-read grant: readable, not locked", async () => {
+    const fetch = routedFetch({ "/api/v2/config/scheduled-jobs": { body: {
+      master_enabled: true, master_env: "UI2_SCHEDULING_ENABLED", can_write: false, masked: true, business_hours: null,
+      families: [{ family: "discovery_refresh", label: "Discovery refresh", description: "Synthetic description.", cadence: "Every 6 hours",
+        enabled: true, state: "ON", will_run: true, lock_reason: null, note: null, window_open_now: false, next_window_at: "2026-11-11T00:00:00+03:00",
+        last_run_at: null, changed_by: "USR-0a1b2c3d4e", changed_at: "2026-11-10T18:05:00Z", reason: null }],
+    } } });
+    vi.stubGlobal("fetch", fetch);
+    window.history.replaceState(null, "", "/?screen=administration&tab=platform&section=scheduled-jobs");
+    render(withTheme(<SessionContext.Provider value={{ displayName: "Synthetic viewer", roleTokens: [],
+      permissions: [], canReadAdministration: false, onSignOut: () => {} }}>
+      <AdministrationScreen />
+    </SessionContext.Provider>));
+    const section = within(screen.getByRole("region", { name: "Scheduled jobs" }));
+    expect(await section.findByRole("heading", { name: "Discovery refresh" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Scheduled jobs" })).toHaveAttribute("data-locked", "false");
+    expect(section.getByText("Reason withheld (masked view)")).toBeInTheDocument();
+    expect(section.queryByRole("switch")).toBeNull();
+  });
   it("mounts Credentials when the server permits its read", async () => {
     const fetch = routedFetch({ "/credentials": { body: { credentials: [] } } });
     vi.stubGlobal("fetch", fetch);

@@ -294,6 +294,8 @@ public final class AuditPresentationAllowlist {
             Map.entry("system_log_run", Set.of(
                     "bytes_read", "bytes_stored", "created_at", "device_id", "duration_ms", "job_id", "outcome",
                     "reads_issued", "run_id", "source_key")),
+            // V203: the per-family scheduled-job switches; the free-text reason is tier-2 redacted (audit_redaction_policy).
+            Map.entry("scheduled_job_family", Set.of("changed_at", "changed_by", "enabled", "family_key")),
             Map.entry("system_log_settings", Set.of(
                     "device_cap_bytes", "hcp_retention_days", "include_management_servers", "ledger_retention_days",
                     "raw_retention_days", "settings_id", "spike_data_cap_bytes", "spike_data_enabled",

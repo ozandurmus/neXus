@@ -47,3 +47,23 @@ test("Operations System health and the Changes timeline reach a settled state (n
   await safety.checkpoint();
   await expect(page.getByRole("tabpanel", { name: "Timeline", exact: true }).getByRole("progressbar")).toHaveCount(0);
 });
+
+// Scheduled jobs (2026-11-10): every signed-in role reads the family list; only Security Admin and Operation Admin are
+// offered a switch. The aiview persona must see the six families, no control, and no change reason.
+test("aiview: Administration > Platform > Scheduled jobs is read-only and withholds the change reason", async ({ page, safety }) => {
+  await visit(page, "screen=administration&tab=platform&section=scheduled-jobs", "Administration");
+  const section = page.getByRole("tabpanel", { name: "Platform" }).getByRole("region", { name: "Scheduled jobs", exact: true });
+  const families = section.getByRole("list", { name: "Scheduled job families" });
+  await expect(families).toBeVisible();
+  await safety.checkpoint();
+  for (const label of ["Discovery refresh", "Inventory collection", "Configuration refresh", "HA readiness", "Scheduled backup", "System log collection"]) {
+    await expect(families.getByRole("heading", { name: label, exact: true })).toBeVisible();
+  }
+  await expect(section.getByRole("switch")).toHaveCount(0);
+  await expect(section.getByRole("checkbox")).toHaveCount(0);
+  await expect(section.getByText(/Read-only: turning a job family on or off needs the Security Admin or Operation Admin role/)).toBeVisible();
+  // A reason is free text an administrator typed: under the masked view it is never rendered, only the withheld note.
+  await expect(section.getByText(/^Reason: /)).toHaveCount(0);
+  const reasons = section.getByTestId("scheduled-family-reason");
+  for (const text of await reasons.allInnerTexts()) expect(text.trim()).toBe("Reason withheld (masked view)");
+});

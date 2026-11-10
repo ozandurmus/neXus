@@ -14,6 +14,10 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
+import com.securityexpert.nexus.ui2.service.schedule.FamilySwitch;
+import com.securityexpert.nexus.ui2.service.schedule.ScheduledJobFamily;
+
 /**
  * Scheduled trigger of the system-log collection (DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md section 3.1): once a minute it
  * admits the devices that have reached their {@code hash(device_id) mod 40} offset inside the current 00/06/12/18
@@ -38,20 +42,27 @@ public class SystemLogCollectionScheduler implements SmartLifecycle, DisposableB
     private final SystemLogCollectionService service;
     private final boolean enabled;
     private final boolean independent;
+    private final FamilySwitch switches;
     private ScheduledExecutorService executor;
 
     public SystemLogCollectionScheduler(SystemLogCollectionService service) {
-        this(service, true, false);
+        this(service, true, false, FamilySwitch.ALWAYS_ON);
+    }
+
+    public SystemLogCollectionScheduler(SystemLogCollectionService service, boolean enabled, boolean independent) {
+        this(service, enabled, independent, FamilySwitch.ALWAYS_ON);
     }
 
     @Autowired
     public SystemLogCollectionScheduler(
             SystemLogCollectionService service,
             @Value("${ui2.system-log.scheduled-collection.enabled:false}") boolean enabled,
-            @Value("${ui2.system-log.scheduled-collection.independent:false}") boolean independent) {
+            @Value("${ui2.system-log.scheduled-collection.independent:false}") boolean independent,
+            FamilySwitch switches) {
         this.service = service;
         this.enabled = enabled;
         this.independent = independent;
+        this.switches = switches;
     }
 
     @Override
@@ -88,7 +99,14 @@ public class SystemLogCollectionScheduler implements SmartLifecycle, DisposableB
     @Scheduled(cron = "0 * * * * *", zone = com.securityexpert.nexus.ui2.platform.JobWindowPolicy.ZONE)
     public void tick() {
         try {
-            var outcome = service.admitDue(Instant.now(), ACTOR);
+            Instant now = Instant.now();
+            // V203: read every minute; the skip is logged once per window (its first minute), not every minute.
+            if (!switches.isOn(ScheduledJobFamily.SYSTEM_LOG_COLLECTION)) {
+                if (JobWindowPolicy.SYSTEM.isSlotMinute(now))
+                    LOG.info("[SYSTEM_LOG_COLLECT] skipped: scheduled family system_log_collection is switched OFF");
+                return;
+            }
+            var outcome = service.admitDue(now, ACTOR);
             if (outcome != null && (outcome.admitted() > 0 || outcome.refused() > 0))
                 LOG.info("[SYSTEM_LOG_COLLECT] due=" + outcome.targets() + " admitted=" + outcome.admitted()
                         + " deduplicated=" + outcome.deduplicated() + " refused=" + outcome.refused());
