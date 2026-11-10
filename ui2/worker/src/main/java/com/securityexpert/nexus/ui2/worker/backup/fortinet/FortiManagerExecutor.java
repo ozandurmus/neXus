@@ -14,6 +14,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.GridMember;
 import com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor;
+import com.securityexpert.nexus.ui2.worker.inventory.InventoryReadPlan;
+import com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadShape;
+import com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadSwitch;
+import com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceCalls;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Credentials;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target;
@@ -40,6 +44,20 @@ public final class FortiManagerExecutor {
     public FortiManagerExecutor(HttpsDeviceCalls client, Function<String, Credentials> credentials) {
         this.client = client;
         this.credentials = credentials;
+    }
+
+    /** Lifecycle reads, group B (PO 2026-11-10): off unless the worker wires a switch in. See {@link LifecycleReadSwitch}. */
+    private LifecycleReadSwitch lifecycleReads = LifecycleReadSwitch.OFF;
+    private java.util.function.Consumer<String> lifecycleSink = LifecycleReadShape::log;
+
+    public FortiManagerExecutor withLifecycleReads(LifecycleReadSwitch lifecycleReads) {
+        this.lifecycleReads = java.util.Objects.requireNonNull(lifecycleReads, "lifecycleReads");
+        return this;
+    }
+
+    public FortiManagerExecutor withLifecycleSink(java.util.function.Consumer<String> sink) {
+        this.lifecycleSink = java.util.Objects.requireNonNull(sink, "sink");
+        return this;
     }
 
     public FortiManagerExecutor withSsh(com.securityexpert.nexus.ui2.jobs.transport.DeviceTransport transport) {
@@ -81,9 +99,14 @@ public final class FortiManagerExecutor {
         return states;
     }
 
-    /** The link states over SSH, or empty when SSH is not wired, refused or unreadable (logged, never guessed). */
-    private Map<String, String> interfaceStatesOverSsh(Target target, String credentialRef) {
+    /**
+     * The link states over SSH, or empty when SSH is not wired, refused or unreadable (logged, never guessed). The one SSH
+     * session this opens also carries the lifecycle read of group B (after {@code get system interface}); where no session
+     * is opened that read is not sent ({@code SKIPPED:no_ssh_session}) and none is opened for it.
+     */
+    private Map<String, String> interfaceStatesOverSsh(Target target, String credentialRef, String deviceId) {
         if (ssh == null) {
+            lifecycleSkipNoSession(deviceId);
             return Map.of();
         }
         var ct = new com.securityexpert.nexus.ui2.jobs.transport.ConnectionTarget(UUID.randomUUID().toString(), target.host(), 22);
@@ -92,9 +115,11 @@ public final class FortiManagerExecutor {
         var r = ssh.connect(ct, spec, Duration.ofSeconds(30));
         if (!(r instanceof com.securityexpert.nexus.ui2.jobs.transport.ConnectResult.Authenticated a)) {
             LOG.log(System.Logger.Level.INFO, "[FMG] ssh interface states not read: {0}", r.getClass().getSimpleName());
+            lifecycleSkipNoSession(deviceId);
             return Map.of();
         }
         try {
+            Map<String, String> result = Map.of();
             var out = ssh.execInteractive(a.session(), new com.securityexpert.nexus.ui2.jobs.transport.ExecSpec(SSH_GET_SYSTEM_INTERFACE, true),
                     Duration.ofSeconds(60));
             if (out instanceof com.securityexpert.nexus.ui2.jobs.transport.ExecResult.Completed c) {
@@ -108,12 +133,54 @@ public final class FortiManagerExecutor {
                 }
                 LOG.log(System.Logger.Level.INFO, "[FMG] ssh interface states: {0} read; status words {1}; shape {2}", states.size(), words,
                         com.securityexpert.nexus.ui2.worker.backup.https.ProxySgOutputs.shape(c.output(), 8));
-                return states;
+                result = states;
+            } else {
+                LOG.log(System.Logger.Level.INFO, "[FMG] ssh get system interface: {0}", out.getClass().getSimpleName());
             }
-            LOG.log(System.Logger.Level.INFO, "[FMG] ssh get system interface: {0}", out.getClass().getSimpleName());
-            return Map.of();
+            // Lifecycle read, group B: after the existing SSH read, in the same session; never changes the result.
+            lifecycleDbContract(a.session(), deviceId);
+            return result;
         } finally {
             ssh.disconnect(a.session());
+        }
+    }
+
+    private void lifecycleSkipNoSession(String deviceId) {
+        if (lifecycleReads.allows(LifecycleReadSwitch.Kind.FMG_FMUPDATE_DBCONTRACT, deviceId)) {
+            emitLifecycle(LifecycleReadShape.skippedLine(LifecycleReadSwitch.Kind.FMG_FMUPDATE_DBCONTRACT, deviceId, "no_ssh_session"));
+        }
+    }
+
+    /** {@code diagnose fmupdate dbcontract} (gate fmg_lifecycle_fmupdate_dbcontract): 60 s, no retry, outside any job transcript. */
+    private void lifecycleDbContract(com.securityexpert.nexus.ui2.jobs.transport.TransportSession session, String deviceId) {
+        LifecycleReadSwitch.Kind kind = LifecycleReadSwitch.Kind.FMG_FMUPDATE_DBCONTRACT;
+        if (!lifecycleReads.allows(kind, deviceId)) {
+            return;
+        }
+        String line;
+        try {
+            var command = InventoryReadPlan.FMG_DIAGNOSE_FMUPDATE_DBCONTRACT;
+            var result = JobTranscriptScope.withoutRecording(() -> ssh.execInteractive(session,
+                    new com.securityexpert.nexus.ui2.jobs.transport.ExecSpec(command, true), InventoryReadPlan.LIFECYCLE_READ_TIMEOUT));
+            line = switch (result) {
+                case com.securityexpert.nexus.ui2.jobs.transport.ExecResult.Completed c -> FortiGateExecutor.lifecycleRefused(c.output())
+                        ? LifecycleReadShape.errorLine(kind, deviceId, "CliRefusal")
+                        : LifecycleReadShape.cliLine(kind, deviceId, FortiGateExecutor.stripEcho(c.output(), command));
+                case com.securityexpert.nexus.ui2.jobs.transport.ExecResult.TimedOut t -> LifecycleReadShape.errorLine(kind, deviceId, "TimedOut");
+                case com.securityexpert.nexus.ui2.jobs.transport.ExecResult.ChannelFailed f -> LifecycleReadShape.errorLine(kind, deviceId, "ChannelFailed");
+            };
+        } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            line = LifecycleReadShape.errorLine(kind, deviceId, e.getClass().getSimpleName());
+        }
+        emitLifecycle(line);
+    }
+
+    private void emitLifecycle(String line) {
+        try {
+            lifecycleSink.accept(line);
+        } catch (RuntimeException ignored) {
+            // A measurement sink never changes an inventory result.
         }
     }
 
@@ -370,6 +437,11 @@ public final class FortiManagerExecutor {
     }
 
     public HttpsVendorExecutor.InventoryOutcome inventory(Target target, String credentialRef) {
+        return inventory(target, credentialRef, null);
+    }
+
+    /** {@code deviceId}: the neXus device id the lifecycle read (group B) is switched by and logged under (null: none). */
+    public HttpsVendorExecutor.InventoryOutcome inventory(Target target, String credentialRef, String deviceId) {
         try {
             Login l = login(target, credentialRef);
             if (l instanceof Login.Refused r) {
@@ -405,7 +477,7 @@ public final class FortiManagerExecutor {
                 } catch (IOException e) {
                     LOG.log(System.Logger.Level.INFO, "[FMG] routes not read: {0}", String.valueOf(e.getMessage()));
                 }
-                Map<String, String> states = interfaceStatesOverSsh(target, credentialRef);
+                Map<String, String> states = interfaceStatesOverSsh(target, credentialRef, deviceId);
                 if (!states.isEmpty()) {
                     interfaces = interfaces.stream().map(i -> states.containsKey(i.name())
                             ? new com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface(i.interfaceId(), i.name(), i.parent(), i.kind(),

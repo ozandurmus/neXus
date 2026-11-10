@@ -58,3 +58,21 @@ each is a measure-first read on one device.
 
 `request license fetch`, `request support check`, `request batch license refresh`, `execute update-now`, any
 `diagnose debug ...` form, `show sources license-key`, `licensing update-key`, `licensing request-key`.
+
+## Implementation record (2026-11-10)
+
+- Branch `feat/lifecycle-reads-group-b-1110` (on top of the group A branch): the seven rows are seeded by V199 and
+  mirrored in `gate_registry_fixture.yaml`; the reads use the group A switch and shape mechanism. All paths run in
+  the worker.
+- Palo Alto guard: the same rule as the switched firewall reads (`PanFirewallCommandSwitches`, mode `BELOW_12`),
+  applied to the version the `type=version` read of the same run returned. Unknown, unparsed or 12 and later:
+  `SKIPPED:pan_os_12_or_unknown`. Panorama: `SKIPPED:panorama`.
+- FortiGate: on a multi-VDOM unit the two reads are sent inside `config global`, once each; there is no second
+  attempt in another context. A refusal reads `ERROR:CliRefusal`.
+- FortiManager: the read uses the SSH session the inventory already opens for `get system interface`. Where that
+  session is not opened, the read is not sent (`SKIPPED:no_ssh_session`).
+- ProxySG: the command goes to ProxySG-type devices only, at most `UI2_LIFECYCLE_MC_LICENSE_MAX` per run.
+- Shapes: a mixed token is logged as its character-class pattern (`~9-9-9` for a date, `~a9a9` for a serial) or a
+  length class; a Fortinet contract code is named only when it is in a closed list, any other upper-case token is
+  `U<len>`; XML and JSON shapes name only documented element and field names.
+- V199 must be dry-run (BEGIN/ROLLBACK) on the live ui2 database before rollout.

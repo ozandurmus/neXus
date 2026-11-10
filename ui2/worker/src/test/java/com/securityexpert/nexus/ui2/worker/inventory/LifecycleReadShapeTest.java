@@ -15,7 +15,8 @@ class LifecycleReadShapeTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final List<Kind> CLI_KINDS = List.of(Kind.CP_CPLIC_PRINT, Kind.CP_CPLP_LIST, Kind.CP_SPARK_SHOW_LICENSE,
-            Kind.ASA_SHOW_LICENSE_ALL);
+            Kind.ASA_SHOW_LICENSE_ALL, Kind.FGT_UPDATE_INFO_CONTRACT, Kind.FGT_AUTOUPDATE_VERSIONS, Kind.FMG_FMUPDATE_DBCONTRACT,
+            Kind.MC_SHOW_LICENSES);
 
     /** Synthetic customer-looking values, built at runtime so no literal looks like a real secret. */
     private static final List<String> SENSITIVE = List.of(
@@ -42,11 +43,11 @@ class LifecycleReadShapeTest {
 
     @Test
     void maskingRulesFollowTheSpec() {
-        assertEquals("host a4 9 m9", LifecycleReadShape.maskLine(LifecycleReadShape.allowList(Kind.CP_CPLIC_PRINT), "host abcd 1234 abcd1234x"));
+        assertEquals("host a4 9 ~a9a", LifecycleReadShape.maskLine(LifecycleReadShape.allowList(Kind.CP_CPLIC_PRINT), "host abcd 1234 abcd1234x"));
         assertEquals("CK-m16", LifecycleReadShape.maskLine(LifecycleReadShape.allowList(Kind.CP_CPLIC_PRINT), "CK-ABCDEF0123456789"));
         assertEquals("sku:sk9", LifecycleReadShape.maskLine(LifecycleReadShape.allowList(Kind.CP_CPLIC_PRINT), "sku:sk4711"));
         assertEquals("id=9,status=a4", LifecycleReadShape.maskLine(LifecycleReadShape.allowList(Kind.CP_CPLP_LIST), "id=12,status=Zzzz".replace("Zzzz", "abcd")));
-        assertEquals("a5(m3)[9]|a3", LifecycleReadShape.maskLine(LifecycleReadShape.allowList(Kind.CP_CPLP_LIST), "hello(a.b)[7]|abc"));
+        assertEquals("a5(~a.a)[9]|a3", LifecycleReadShape.maskLine(LifecycleReadShape.allowList(Kind.CP_CPLP_LIST), "hello(a.b)[7]|abc"));
         assertEquals("Status: a4", LifecycleReadShape.maskLine(LifecycleReadShape.allowList(Kind.CP_CPLP_LIST).contains("status") ? LifecycleReadShape.allowList(Kind.CP_CPLP_LIST) : java.util.Set.of(),
                 "Status: abcd"), "an allow-listed keyword is kept with its own case");
     }
@@ -102,5 +103,22 @@ class LifecycleReadShapeTest {
         assertTrue(LifecycleReadShape.jsonLine(Kind.MC_SYSTEM_VERSION, "d", 404, "x", JSON).contains("outcome=ERROR:Http404"));
         assertTrue(LifecycleReadShape.jsonLine(Kind.MC_SYSTEM_VERSION, "d", 200, "{oops", JSON).contains("outcome=ERROR:JsonParseException"));
         assertTrue(LifecycleReadShape.jsonLine(Kind.MC_SYSTEM_VERSION, "d", 200, "{\"version\":\"1\"}", JSON).contains("shape={version:string}"));
+    }
+
+    @Test
+    void aMixedTokenBecomesItsCharacterClassPatternAndCarriesNoCharacterOfTheToken() {
+        assertEquals("~9-9-9", LifecycleReadShape.classPattern("2027-07-30"));
+        assertEquals("~9a9", LifecycleReadShape.classPattern("30Dec2026"));
+        assertEquals("~9.9.9.9", LifecycleReadShape.classPattern("192.0.2.14"));
+        assertEquals("~a9a9", LifecycleReadShape.classPattern("FGT60FTK20001234"));
+        // Any other character, or a pattern longer than 20 characters, stays a length class.
+        assertEquals("m17", LifecycleReadShape.classPattern("admin@example.org"));
+        assertEquals("m44", LifecycleReadShape.classPattern("a1-b2-c3-d4-e5-f6-a1-b2-c3-d4-e5-f6-a1-b2-c3"));
+        for (String token : java.util.List.of("2027-07-30", "30Dec2026", "192.0.2.14", "fw-ist-01.example", "ACME-Bank_2")) {
+            String pattern = LifecycleReadShape.classPattern(token);
+            for (char c : pattern.toCharArray()) {
+                assertTrue(c == '~' || c == '9' || c == 'a' || "-/._+".indexOf(c) >= 0 || c == 'm' , pattern);
+            }
+        }
     }
 }

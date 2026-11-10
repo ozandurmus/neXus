@@ -221,7 +221,7 @@ public final class Ui2WorkerMain {
                 com.securityexpert.nexus.ui2.worker.inventory.PanConfiguredInterfaceSource.stored(
                         new com.securityexpert.nexus.ui2.persistence.device.configuration.LatestEffectiveRunningReader(
                                 transactionBoundary), artefactStore));
-        // Lifecycle reads, group A (PO 2026-11-10): measure-first, off unless UI2_LIFECYCLE_READS and UI2_LIFECYCLE_READ_DEVICES name them.
+        // Lifecycle reads, groups A and B (PO 2026-11-10): measure-first, off unless UI2_LIFECYCLE_READS and UI2_LIFECYCLE_READ_DEVICES name them.
         com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadSwitch lifecycleReads =
                 com.securityexpert.nexus.ui2.worker.inventory.LifecycleReadSwitch.fromEnvironment();
         inventoryCapabilityExecutor.withLifecycleReads(lifecycleReads);
@@ -298,12 +298,13 @@ public final class Ui2WorkerMain {
         // Cisco ASA: SSH interactive shell, through the same vendor jobs (CISCO_ASA_CONTRACT.md).
         // Fortinet (FORTINET_CONTRACT.md): FortiGate over SSH, FortiManager over JSON-RPC.
         com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerExecutor fortiManagerExecutor = httpsVendorExecutor.newFortiManagerExecutor()
-                .withSsh(sshTransport);
+                .withSsh(sshTransport).withLifecycleReads(lifecycleReads);
         httpsVendorExecutor.withFortinet(new com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGateExecutor(sshTransport, artefactStore)
                         .withSecrets(ref -> {
                             var m = panCredentialResolver.resolve(ref);
                             return new com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGateExecutor.LoginSecret(m.username(), m.password());
-                        }),
+                        })
+                        .withLifecycleReads(lifecycleReads),
                 fortiManagerExecutor);
         httpsVendorExecutor.withLifecycleReads(lifecycleReads);
         httpsVendorExecutor.withCiscoAsa(new com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaExecutor(sshTransport, artefactStore, sshTransport::scpFetch)

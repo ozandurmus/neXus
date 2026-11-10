@@ -7,15 +7,16 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * The worker switch of the lifecycle reads, group A (docs/design/LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md, PO
- * chat approval 2026-11-10: "Yalnız A grubu"). Measure-first: every read is off unless BOTH settings name it.
+ * The worker switch of the lifecycle reads, groups A and B (docs/design/LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md, PO
+ * chat approval 2026-11-10: "Yalnız A grubu"; docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md, "d2, onayla d3,onayla
+ * onayla" and "Evet, dördü de"). Measure-first: every read is off unless BOTH settings name it.
  *
  * <ul>
  * <li>{@value #KINDS_VARIABLE}: comma-separated read kinds from the closed set of {@link Kind}. Unset or blank: none.
  * An unknown token is ignored and logged once at WARNING.</li>
  * <li>{@value #DEVICES_VARIABLE}: comma-separated neXus device ids, or {@code *}. Unset or blank: none.</li>
  * <li>{@value #MC_MAX_VARIABLE}: how many managed devices' licenses one Management Center inventory run reads
- * (default 1).</li>
+ * (default 1); it bounds {@code mc_device_license} (group A) and {@code mc_show_licenses} (group B).</li>
  * </ul>
  *
  * <p>A read is sent only when its kind is enabled and the inventory target's device id is listed (or {@code *}).
@@ -38,7 +39,15 @@ public final class LifecycleReadSwitch {
         ASA_SHOW_LICENSE_ALL("asa_show_license_all"),
         MC_DEVICE_LICENSE("mc_device_license"),
         MC_SYSTEM_VERSION("mc_system_version"),
-        INFOBLOX_LICENSE_GRIDWIDE("infoblox_license_gridwide");
+        INFOBLOX_LICENSE_GRIDWIDE("infoblox_license_gridwide"),
+        // Group B (PO 2026-11-10, docs/design/LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md, V199).
+        PAN_LICENSE_INFO("pan_license_info"),
+        PAN_SUPPORT_INFO("pan_support_info"),
+        FGT_UPDATE_INFO_CONTRACT("fgt_update_info_contract"),
+        FGT_AUTOUPDATE_VERSIONS("fgt_autoupdate_versions"),
+        FMG_FMUPDATE_DBCONTRACT("fmg_fmupdate_dbcontract"),
+        MC_SHOW_LICENSES("mc_show_licenses"),
+        INFOBLOX_UPGRADESTATUS_GRID("infoblox_upgradestatus_grid");
 
         private final String token;
 
