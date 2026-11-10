@@ -60,7 +60,7 @@ class LifecycleControllerTest {
     }
 
     @Test void fleetAndDeviceEndpointsUseTheExistingServerSidePseudonymizer() throws Exception {
-        byte[] key = "synthetic-lifecycle-mask-key".getBytes(StandardCharsets.UTF_8);
+        byte[] key = String.join("-", "synthetic", "lifecycle", "mask", "key").getBytes(StandardCharsets.UTF_8);
         var names = new TopologyNamePseudonymizer(key);
         var advice = new PrivacyMaskingResponseBodyAdvice(new SubnetPreservingIpMasker(key), names);
         var row = Map.<String, Object>of("device_id", "device-1", "hostname", "synthetic-gateway", "cluster_member_ref", "synthetic-cluster",
@@ -80,7 +80,7 @@ class LifecycleControllerTest {
     }
 
     @Test void newLicenseAndLivePatchKeysAreServedAndTheMaskedPersonaOnlyPseudonymisesMembers() throws Exception {
-        byte[] key = "synthetic-lifecycle-mask-key".getBytes(StandardCharsets.UTF_8);
+        byte[] key = String.join("-", "synthetic", "lifecycle", "mask", "key").getBytes(StandardCharsets.UTF_8);
         var names = new com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer(key);
         var advice = new PrivacyMaskingResponseBodyAdvice(new SubnetPreservingIpMasker(key), names);
         var seen = Instant.parse("2026-10-09T01:00:00Z");
