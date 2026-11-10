@@ -323,10 +323,10 @@ never mixed with a device-read date. The hand-built Excel can be imported once t
 | No approval needed (parse-scope) | CP-3, FG-1, IB-1, AS-1 | IB-1 is fixed and shipped separately; CP-3 is in the group A lane |
 | Grade A | CP-1, CP-2, CP-4, AS-2, MC-1, MC-2, IB-2 | **approved** by the PO in this session ("Yalnız A grubu"); gate rows in `LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md`; measure-first |
 | Grade B, Palo Alto and FortiGate | PA-1, PA-2 (one PAN-OS 11.1 firewall first; PAN-OS 12 after the result), FG-2 | approved by the PO as decisions D2 and D3, relayed by the PO session (section 13) |
-| Grade B, the rest | FG-3, FM-1, SG-1, IB-3 | the PO session reads the PO's closing "onayla" as approving them, measure-first; the PO is asked to confirm this in one line before a gate row is written |
+| Grade B, the rest | FG-3, FM-1, SG-1, IB-3 | **approved** by the PO in this session ("Evet, dördü de"), each measured on one device first |
 | Grade C | PA-3, Radware | not proposed |
 
-No grade B gate row exists yet. None is written before the confirmation above.
+Grade B gate rows: `LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md`.
 
 ## 5. Check Point Live Patch
 
@@ -678,7 +678,7 @@ tests, real-environment validation per vendor under the aiview persona.
 | D12 | Finding history | approved: 400 days |
 | D13 | Start the no-new-command work | under way (slice S0); S1 follows the contract freeze |
 | D14 | May the fetcher also read the two official public registries (the CVE Program and the CISA known-exploited catalog), which are not vendor pages? | open; recommended yes: they supply the Check Point CVE list and the "exploited in the wild" flag |
-| D15 | The remaining grade B rows (FG-3, FM-1, SG-1, IB-3) | awaiting the PO's one-line confirmation (section 4.9) |
+| D15 | The remaining grade B rows (FG-3, FM-1, SG-1, IB-3) | approved ("Evet, dördü de"), measure-first |
 
 ## 13. Product Owner answers so far
 
@@ -687,6 +687,7 @@ tests, real-environment validation per vendor under the aiview persona.
 | 2026-11-10 | The Turkish summary of this document: the parse-scope rows, the seven grade A literals, the seven grade B literals, the decisions of section 12, and whether to fix finding F2 now | "ok abi çalıştırtırabilsin aynı zamanda da hatayı düzelt" | **F2 / IB-1:** fixed on branch `fix/infoblox-license-expiry-1110` (parser reads the WAPI timestamp; the same read also returns `expiration_status`; a permanent license is `PERMANENT`), shipped through the normal queue. **Device reads:** the answer allows neXus to run the proposed reads but names no row or group. No gate row is authored from it. The PO is asked which rows it covers: the grade A literals only, or the grade B measure-first reads as well |
 | 2026-11-10 | "Which rows does the approval cover?" (options: grade A only; grade A and B) | "Yalnız A grubu" (grade A only) | **Approved, exactly as written in section 4:** CP-1, CP-2, CP-4, AS-2, MC-1, MC-2, IB-2, with the forms section 4.1 names for a VSX gateway and a management server. Gate rows: `LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md`. **Not approved:** every grade B row (PA-1, PA-2, FG-2, FG-3, FM-1, SG-1, IB-3) and every grade C item; they stay `NOT_APPROVED` |
 | 2026-11-10 | The open decisions of section 12, asked in the PO session and relayed to this session by it | "Nexus proxy üzerinden internete çıkabilir bununla ilgili metod belli ise , ve parse edebilyorsa üreticinin resmi sayfalarından internete çıkabilir D4 için, d5, herkese açık bülten, d6, neden hafifletildi kalıcı düzeltme diyoruz ? livepatch verisini okumak 2 komut. bunu parse etmek de çok kolay, direk fixlendiğini göremiyor muyuz açıkların ? d7, anlamadım ? d8,bunu anlamadım neden elle giriyorum ? Portalden kontratları çekemez miyiz d9, olur d10, olur d11, neden bulamadığını anlamadım KB'ler ve guideler açık olmalı d12, olur d2, onayla d3,onayla onayla" | D2, D3, D4, D5, D9, D10, D12 decided as section 12 states. D6: the design now shows an active Live Patch as fixed (section 5.1 gives the vendor's wording and the one concrete consequence). D7 and D8: answered in sections 6.4 and 4.8. D11: section 4.6. The closing "onayla" is read by the PO session as approving the remaining grade B rows; this session records that reading and asks the PO to confirm it directly (D15) |
+| 2026-11-10 | "Do you also approve the remaining four grade B commands (measured on one device each)?" | "Evet, dördü de" | FG-3, FM-1, SG-1 and IB-3 approved as measure-first reads. With D2 and D3 this completes grade B; gate rows in `LIFECYCLE_READS_GROUP_B_COMMAND_GATE_ENTRIES.md` |
 
 The approval covers the literals. It does not approve a schema or the rest of this draft. Each approved read is first
 sent to one device per platform with only its masked output shape logged (section 10); storage and parsing follow
