@@ -35,10 +35,10 @@ is one view, "Lifecycle and security", with four checks per device: support life
 (Jumbo take plus Live Patch) and known vulnerabilities (section 7). A useful first version needs **no new device
 command at all** (section 9, slice S1).
 
-One correction to an assumption, from Check Point's own article (sk185114): Live Patch is a mitigation for selected
-CVEs only (six CVEs in six packages between 2026-07-08 and 2026-10-14), and Check Point states it does not replace the
-Jumbo Hotfix. "Live Patch is enabled" therefore does not raise the patch level in general. It closes specific CVEs
-until the Jumbo that carries the permanent fix is installed. The design shows it exactly that way (section 5).
+Two facts about Live Patch from Check Point's own article (sk185114). It covers selected CVEs only (six CVEs in six
+packages between 2026-07-08 and 2026-10-14), so "Live Patch is enabled" does not raise the patch level in general:
+a CVE without a Live Patch is still judged by the Jumbo take. And for a CVE that has one, an active patch is shown as
+**Fixed (Live Patch)** (PO decision D6, section 5.1), with the vendor's 12-week Jumbo deadline shown beside it.
 
 ## 2. What neXus reads today
 
@@ -178,9 +178,8 @@ Notes:
   refresh`, `request batch license offline refresh`.
 - No official page states that PA-1 and PA-2 read only local state. The cheat-sheet wording ("installed on the
   device") supports it; it stays an assumption until measured.
-- **Choice for the PO (D2).** PA-1 on 38 firewalls is direct evidence but a new firewall command, six of them on
-  PAN-OS 12 (F6). PA-3 would read all 38 from Panorama in one call without touching a firewall, but it has no
-  official evidence, is a manager's cached view (lower evidence grade), and may be up to a day old.
+- **Decided (D2, 2026-11-10):** PA-1 and PA-2 directly on the firewalls, measured first on one PAN-OS 11.1
+  firewall; PAN-OS 12 firewalls only after that result. PA-3 (through Panorama) stays unproposed.
 
 ### 4.3 Fortinet
 
@@ -197,9 +196,7 @@ Notes:
   the data is the local cache. Both are measure-first reads on one FortiGate.
 - `diagnose` commands need an administrator profile that allows diagnostics. Whether the neXus account has it is
   UNKNOWN; a refusal reads `UNSUPPORTED`.
-- **Choice for the PO (D3).** FG-2 per FortiGate (direct evidence, nine devices) or FM-1 once on FortiManager (one
-  read for all nine, but a manager's stored copy, which is only as fresh as FortiManager's FortiGuard contact).
-  Recommendation: FG-2 first; FM-1 only if FG-2 is refused.
+- **Decided (D3, 2026-11-10):** FG-2 on each FortiGate first; FM-1 through FortiManager only if FG-2 is refused.
 - Never to be sent: `execute update-now`, any `diagnose debug ...` form.
 - Not proposed (grade C): `get system fortiguard-service status`, `diagnose forticare ...`, the FortiManager JSON-RPC
   license fields (the JSON API reference is behind a Fortinet developer login).
@@ -243,14 +240,34 @@ Notes:
 
 ### 4.6 Radware DefensePro and Cyber Controller
 
-No command is proposed. The public REST reference (webhelp.radware.com/vision/REST/10_3_0) documents the calls neXus
-already uses and a `License` structure with feature flags and license strings, but no expiry field and no read for
-subscription dates. The CLI references and the user guides are behind the Radware customer portal.
+Searched twice on 2026-11-10; the second pass read the public REST references in full (PO question, D11). The PO is
+right that documentation is public. What is public does not contain a license or subscription expiry read.
 
-- Radware licenses and subscriptions: `NOT_COLLECTED` until the PO supplies the DefensePro and Cyber Controller
-  guides from the customer portal (D11). The dates can be entered by hand meanwhile (section 4.8).
-- The Cyber Controller version is UNKNOWN today; whether `GET /mgmt/system/config/itemlist/alldevices` (already
-  approved) carries it is unverified.
+**Public and read** (no sign-in): the Cyber Controller REST API references at
+`webhelp.radware.com/vision/REST/<version>/index.html` (versions up to 10.11.1; 10.12 and 10.13 pages do not exist
+there), Cyber Controller release notes, a few knowledge-base articles.
+
+| What | Finding |
+|---|---|
+| Device software version | `GET /mgmt/system/config/itemlist/alldevices` (already approved and sent) returns `deviceVersion` per device: a parse-scope extension, no new read |
+| Device license | `GET /mgmt/system/config/tree/device/byip/{ip}` is documented (REST reference 10.11.0, "device information, device properties, and status"). Its `License` structure has feature flags, `throughput`, and three license strings. **It has no expiry date.** The strings are license keys and must never be read into storage or logs |
+| Subscription expiry (signature updates, attacker feed, geolocation) | no field, endpoint or scalar in any public page |
+| Single device values ("scalars") | only the write form is documented (`PUT .../config`); the read form is not |
+| Cyber Controller's own version and license | no REST path; no public CLI reference |
+| Security advisories | knowledge-base articles on `support.radware.com`; without sign-in only the title and product list show ("Partial content displayed, please Sign In"). NVD has no product entry for DefensePro or Cyber Controller, so matching by product name there does not work |
+
+**Behind the customer portal sign-in:** the DefensePro and Cyber Controller user guides and CLI references, the full
+text of the advisories, and anything about subscription expiry.
+
+Candidate read, not proposed for approval yet:
+
+| # | Platform | Exact literal | Grade | Official evidence | Kept | Never read or stored |
+|---|---|---|---|---|---|---|
+| RD-1 | Cyber Controller, per DefensePro | `GET /mgmt/system/config/tree/device/byip/{ip}` | B | Cyber Controller 10.11.0 REST API reference, `Device` / `DeviceSetup` / `License` definitions | feature flags, `throughput`, software and driver version | the three license strings, access settings |
+
+RD-1 gives a throughput and feature picture, not a date. It is worth an approval only if that picture is wanted. The
+expiry dates need either the gated guides (to find the documented read) or the manual register. Radware advisories
+can only be followed by hand or with a portal sign-in.
 
 ### 4.7 Infoblox
 
@@ -264,31 +281,62 @@ Notes: the WAPI reference was read on a public mirror of the vendor-generated do
 the grid serves the same pages at `/wapidoc/`, which neXus already fetches. IB-3's exact query string is built from
 the documented rules and has no printed example: measure first. Infoblox has no API object for the support contract.
 
-### 4.8 What stays manual
+### 4.8 Support contracts: devices first, vendor portals second, manual last (PO question, D8)
 
-Support contracts and anything a vendor does not expose are entered by a `security_admin` in a contract register
-(same pattern as the lifecycle catalog: manual entry or file import, audited). The hand-built Excel report can be the
-first import. A manual date is labelled `OPERATOR_ENTERED` on screen and never mixed with a device-read date.
+The PO asked why contract dates would be typed by hand. They are not, wherever a device or a vendor API can give
+them. The order is:
 
-### 4.9 Summary for approval
+**1. From the device (the reads of this section).**
 
-| Group | Rows | What the PO is asked |
+| Vendor | What the device read gives |
+|---|---|
+| Check Point Spark | licenses and the contract coverage table with expiry (CP-4) |
+| Check Point Gaia | license expiry (CP-1). A contract table in the same output is user-reported only; the first measurement shows whether it is there |
+| Palo Alto | license and subscription expiry (PA-1), support level and expiry (PA-2) |
+| Fortinet | FortiCare support, firmware and FortiGuard service contract dates (FG-2) |
+| Cisco ASA | Smart Licensing registration and compliance (AS-2). The hardware support contract is not on the box |
+| ProxySG | license components with expiry, through Management Center (MC-1) |
+| Infoblox | license expiry per member and grid-wide (IB-1, IB-2). No maintenance contract object |
+| Radware | section 4.6 |
+
+**2. From the vendor's customer portal, where it has a documented API** (searched 2026-11-10). Every one of these
+needs a new kind of credential in neXus (a portal API account, not a device account) and sends device serial numbers
+to the vendor, which already holds them. Each is its own decision.
+
+| Vendor | API | What it returns | Credential | State |
+|---|---|---|---|---|
+| Fortinet | FortiCare Registration API v3, `POST https://support.fortinet.com/ES/api/registration/v3/products/list` (Fortinet Technical Tip "API how to retrieve list of registered units") | per registered unit: entitlements and contract terms with start and end dates, warranty | a FortiCloud IAM API user with the "FortiCare Registration API" permission profile; OAuth token from `customerapiauth.fortinet.com` | documented by Fortinet; usable |
+| Cisco | Support APIs, "Serial Number to Information" (coverage end date, warranty end date by serial) | per serial: coverage status and end date | Cisco API Console application; access is tied to the customer's support contract programme | exists, but the official page could not be opened without an account; needs someone with the Cisco login to confirm |
+| Palo Alto | Licensing API at `api.paloaltonetworks.com` | license dates | API key from the Customer Support Portal | documented for VM-Series and software firewalls only; nothing found for hardware firewalls, where PA-1 and PA-2 already give the dates |
+| Check Point | none found for contracts (the Infinity Portal has an API, no documented contracts endpoint) | - | - | not found |
+| Infoblox, Broadcom, Radware | none found | - | - | not found |
+
+**3. The manual register**, only for what neither a device nor an API gives: on today's evidence the Cisco hardware
+support contract (unless the Cisco API is confirmed), Check Point Gaia support contracts (unless `cplic print` shows
+them), Infoblox maintenance, ProxySG hardware support and Radware. A manual date is labelled `OPERATOR_ENTERED` and
+never mixed with a device-read date. The hand-built Excel can be imported once to fill it.
+
+### 4.9 Approval state (2026-11-10)
+
+| Group | Rows | State |
 |---|---|---|
-| No approval needed (parse-scope) | CP-3, FG-1, IB-1, AS-1 | none; listed for transparency. IB-1 adds three return fields to an approved read |
-| Ready for exact-literal approval (grade A) | CP-1, CP-2, CP-4, AS-2, MC-1, MC-2, IB-2 | approve each literal; the first run on each platform is a single-device measurement with the sanitised output shape shown to the PO |
-| Approval after one confirmation step (grade B) | PA-1, PA-2, FG-2, FG-3, FM-1, SG-1, IB-3 | approve as measure-first reads on one device each (amendment 2026-09-26), or wait for the named confirmation |
-| Not proposed (grade C) | PA-3, Radware, the items listed as "not proposed" | nothing now |
+| No approval needed (parse-scope) | CP-3, FG-1, IB-1, AS-1 | IB-1 is fixed and shipped separately; CP-3 is in the group A lane |
+| Grade A | CP-1, CP-2, CP-4, AS-2, MC-1, MC-2, IB-2 | **approved** by the PO in this session ("Yalnız A grubu"); gate rows in `LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md`; measure-first |
+| Grade B, Palo Alto and FortiGate | PA-1, PA-2 (one PAN-OS 11.1 firewall first; PAN-OS 12 after the result), FG-2 | approved by the PO as decisions D2 and D3, relayed by the PO session (section 13) |
+| Grade B, the rest | FG-3, FM-1, SG-1, IB-3 | the PO session reads the PO's closing "onayla" as approving them, measure-first; the PO is asked to confirm this in one line before a gate row is written |
+| Grade C | PA-3, Radware | not proposed |
+
+No grade B gate row exists yet. None is written before the confirmation above.
 
 ## 5. Check Point Live Patch
 
-Facts, all from sk185114 (opened 2026-11-10):
+Facts, all from sk185114 (opened 2026-11-10, re-read for exact wording the same day):
 
 - Supported on R81.20, R82, R82.10 and R82.20: gateways, ClusterXL members, traditional VSX, management servers
   and Multi-Domain servers. Not supported on Spark appliances.
 - It patches running processes in memory. A reboot or process restart does not remove it; active patches are
   re-applied automatically.
-- It "does not replace" the Hotfix or Jumbo Hotfix Accumulator; the Jumbo stays the long-term remediation.
-- The package is delivered by the automatic updater and is cumulative over a rolling window. Its level is the
+- The package is delivered by the automatic updater. Its level is the
   `BUNDLE_URGENT_SECURITY_UPDATE_..._AUTOUPDATE Take: <n>` line of `cpinfo -y all`. The current package on
   2026-11-10 is take 30 (2026-10-14).
 - `cplp list` shows each patch with a STATUS: `armed` (active in the running process), `ready` (installed, applied
@@ -296,33 +344,54 @@ Facts, all from sk185114 (opened 2026-11-10):
   therefore not applied), `unsupp` (the patch does not cover the installed build), `nopatch` (none for this version
   or platform), `nolib` (the component is not installed).
 - The article's own table maps each package take to dates and CVEs, and the COMMENT column of `cplp list` cites the
-  sk article of the CVE a patch covers.
+  sk article of the CVE a patch covers. The CVE record of a Check Point CVE links the same sk article, so a patch
+  row can be tied to its CVE without anyone typing it.
 
-What neXus stores: the package take (CP-3, no new command) and, once CP-2 is approved, one row per patch with its
-status. What the patch-level check shows: `R81.20 · Jumbo take 119 · Live Patch package take 30 · 4 armed, 0 ready`.
+### 5.1 Is a Live Patch a fix? (PO question, D6)
 
-How a Live Patch counts in the vulnerability check (in this order, first match wins):
+What the vendor's article says, in its own words:
+
+- For: it "closes critical vulnerabilities in the field by applying targeted, in-memory fixes"; a live patch is "an
+  in-memory fix designed to protect customers immediately against a critical vulnerability".
+- Against: CPLP "is a built-in mitigation delivery service"; "It does not replace the Hotfix or Jumbo Hotfix
+  Accumulator"; the Jumbo remains "the recommended long-term remediation option".
+- The one concrete consequence: "CPLP retains live patches for 12 weeks", and the customer is asked to install the
+  fixing Hotfix or Jumbo within that time. An active protection is never removed. But once a patch has aged out of
+  the package, a gateway whose installed Jumbo does not fix that CVE blocks every newer package: it keeps what it
+  has and **receives no new live patches** until the fixing Jumbo is installed.
+
+There is no statement that a Live Patch is lost on reboot or protects less. So the earlier wording "mitigated,
+permanent fix pending" is dropped, as the PO decided: an active Live Patch for a CVE is shown as **Fixed (Live
+Patch)**. The 12-week rule is kept as what it is, a deadline, not a vulnerability state (section 5.3).
+
+### 5.2 Verdicts
+
+What neXus stores: the package take (CP-3, no new command) and one row per patch with its status (CP-2, approved).
+What the patch-level check shows: `R81.20 · Jumbo take 119 · Live Patch package take 30 · 4 armed, 0 ready`.
+
+For one device and one Check Point CVE, first match wins:
 
 | Evidence | Verdict | Colour |
 |---|---|---|
-| Jumbo take is at or above the take that carries the permanent fix | `FIXED` | green |
-| `cplp list` has a patch that cites the advisory's sk article, STATUS `armed` | `MITIGATED_BY_LIVE_PATCH` (permanent fix still pending) | green with a marker |
-| the same patch with STATUS `ready` | `MITIGATION_PENDING` (not yet active in the process) | amber |
-| the same patch with STATUS `jumbofix` while the take comparison says affected | `INCONSISTENT` (shown, never resolved silently) | amber |
+| Jumbo take is at or above the take whose release notes list the CVE | `FIXED` (Jumbo) | green |
+| `cplp list` has a patch that cites the CVE's sk article, STATUS `armed` | `FIXED_BY_LIVE_PATCH` | green |
+| the same patch with STATUS `jumbofix` | `FIXED` (the patch itself reports that the installed Jumbo carries the fix); if the take comparison disagrees, `INCONSISTENT` is shown instead | green / amber |
+| the same patch with STATUS `ready` | `LIVE_PATCH_NOT_ACTIVE` (installed; applied when the process starts) | amber |
 | the same patch with STATUS `nolib` | `NOT_APPLICABLE` (component not installed) | grey |
 | the same patch `reverted`, `unsupp` or `nopatch` | `AFFECTED` | red |
-| no `cplp list` evidence, but the package take is at or above the take that introduced the patch (per the sk185114 table) | `MITIGATION_PACKAGE_PRESENT` (the package is installed; per-process state not read) | amber |
-| no Live Patch evidence at all, and the PO's statement of 2026-11-10 that Live Patch is enabled on all Check Point firewalls | `AFFECTED_BY_JUMBO_LIVE_PATCH_UNVERIFIED` | amber, never green |
-| none of the above | `AFFECTED` | red |
+| no `cplp list` result for the device yet, package take at or above the take that introduced the patch | `LIVE_PATCH_PACKAGE_PRESENT` (per-patch state not read yet) | amber |
+| a CVE with no Live Patch, Jumbo take below the fixing take | `AFFECTED` | red |
 
-A mitigated advisory stays on the "permanent fix pending" list with the target Jumbo take, so upgrade planning still
-sees it. An advisory for which Check Point published no Live Patch is unaffected by any of this.
+### 5.3 The Jumbo deadline
 
-Why this matters on this estate (an illustration, not a verdict): the sk185114 row of 2026-09-14 names R81.20
-Jumbo take 146 as its threshold; 47 of the 55 R81.20 gateways run take 120 or lower and 8 run take 161.
+For every `FIXED_BY_LIVE_PATCH` finding neXus also shows "Jumbo take N due by <date>", where the date is the Live
+Patch release date from sk185114 plus 12 weeks. After that date the finding stays `FIXED_BY_LIVE_PATCH`; what changes
+is a separate warning on the device: "may no longer receive new Live Patches (sk185114)".
 
-The PO's statement is not yet a repository record. It should be recorded as a short decision record so the last
-amber state has a citable basis; it is replaced by real evidence as soon as CP-3 ships.
+To be checked with the first measurement, not asserted: the first Live Patch was released on 2026-07-08, so its 12
+weeks ended on 2026-09-30. 47 of the 55 R81.20 gateways run Jumbo take 120 or lower. If their Jumbo does not carry
+that fix, their package take may be stuck below the current take 30. CP-3 shows the package take per device, and a
+device whose take is behind the current one is flagged.
 
 ## 6. Vulnerability matching
 
@@ -345,8 +414,8 @@ amber state has a citable basis; it is replaced by real evidence as soon as CP-3
 | Palo Alto | security.paloaltonetworks.com: `/rss.xml` for new items and `/json/<CVE>` for the vendor's current copy; the full set is listed from the CVE Program bulk data (assigner Palo Alto). The site's `/api/v1/products/PAN-OS/<version>/advisories` call is not used: it carries a version in the request (principle 1) | CVE JSON 5; no authentication (fetched 2026-11-10) | per release train, hotfix-exact (`lessThan`, `changes[]`) | yes, in `changes[]` | automatic |
 | Fortinet | PSIRT RSS `filestore.fortinet.com/fortiguard/rss/ir.xml`; each item links its CSAF file | RSS 2.0 plus CSAF 2.0; no authentication. The CSAF file name contains a title slug, so it is read from the RSS item, not built | text-encoded per branch (for example `FortiOS >=7.4.0\|<=7.4.9`) | remediation text ("Upgrade to 7.4.10 or above") | automatic, with a strict parser; an advisory with an empty product tree goes to curation |
 | Cisco | public CSAF `www.cisco.com/.well-known/csaf/` (provider metadata and index fetched 2026-11-10) | CSAF 2.0; no authentication | how ASA versions are listed in the CSAF product tree is UNKNOWN until the first parser spike | "first fixed release" is offered by the openVuln API and the Software Checker; whether CSAF carries it is UNKNOWN | automatic for affected; fixed release may need curation or openVuln (D5) |
-| Cisco (optional) | openVuln API `apix.cisco.com/security/advisories/v2/` | JSON; OAuth2 client credentials from a Cisco account; rate limits not published | per-version query (conflicts with principle 1) or whole-product listing | yes | only on a PO decision (D5) |
-| Check Point | CVE records published by Check Point as CVE Numbering Authority, the sk article of each CVE, the Jumbo release notes, sk185114 for Live Patch | CVE JSON 5 from the CVE Program; no Check Point feed was found | free text: in CVE-2024-24919 the affected version is one sentence, not a range | in the sk article and the Jumbo release notes | advisory arrives automatically; the fix rule (fixed Jumbo take per train, Live Patch sk reference and package take) is entered by a `security_admin` (section 6.4) |
+| Cisco openVuln API | not used (PO decision D5: public bulletins only) | - | - | - | - |
+| Check Point | CVE records published by Check Point as CVE Numbering Authority, the sk article of each CVE, the Jumbo release notes, sk185114 for Live Patch | CVE JSON 5 from the CVE Program; no Check Point feed was found | free text: in CVE-2024-24919 the affected version is one sentence, not a range | in the sk article and the Jumbo release notes | advisory arrives automatically; neXus proposes the fix rule from the Jumbo release notes and sk185114, and a `security_admin` confirms it with one click (section 6.4) |
 | Infoblox | NVD entries for `cpe:2.3:o:infoblox:nios` | NVD JSON; thin coverage (10 CVEs in total on 2026-11-10); vendor KB needs a login | present where NVD has them | partial | NVD plus manual entry |
 | Symantec ProxySG, Management Center | Broadcom advisories portal and KB articles; format not verified | UNKNOWN | UNKNOWN | UNKNOWN | CVE-record watch plus manual entry |
 | Radware | no public advisory feed found | - | - | - | CVE-record watch plus manual entry |
@@ -383,54 +452,91 @@ Range evaluation follows the CVE JSON 5 rules (`version`, `lessThan`, `lessThanO
 Known coverage gaps, shown on screen as gaps: FXOS under ASA (version not read), NIOS (until IB-3), Cyber Controller
 (version UNKNOWN), the two Check Point devices still in `DRAFT`.
 
-### 6.4 Verdicts, curation and disposition
+### 6.4 Verdicts, proposed fix rules and disposition
 
-Per device and advisory: `AFFECTED`, `FIXED`, `NOT_AFFECTED`, `NOT_EVALUABLE`, `NEEDS_CURATION`, plus the Check Point
+Per device and advisory: `AFFECTED`, `FIXED`, `NOT_AFFECTED`, `NOT_EVALUABLE`, `NEEDS_REVIEW`, plus the Check Point
 Live Patch verdicts of section 5.
 
-**Curation.** Where a vendor publishes no machine-readable fixed version (Check Point always; Cisco, Infoblox,
-Broadcom and Radware sometimes), the advisory arrives as `NEEDS_CURATION`. A `security_admin` enters a fix rule from
-the vendor article: product, train, fixed version or fixed Jumbo take, and for Check Point the Live Patch sk reference
-and package take. The rule records who entered it, when, and the source URL, and is audited. For Check Point the
-volume is small (six Live Patch CVEs in four months, a handful of Jumbo security fixes per take). Text patterns such
-as "Jumbo Take 141 or below" may be offered as a pre-filled suggestion; a suggestion is never applied without
-confirmation.
+**Why a fix rule exists at all (PO question, D7).** To decide "is this device fixed" neXus needs one fact per
+advisory: from which version on the fix is present. Palo Alto and Fortinet (and Cisco, to be confirmed) publish that
+fact in a form a program can read, so neXus decides alone. Check Point publishes it as a sentence in an article and
+as a row in the Jumbo release notes. Something has to turn that into "fixed from Jumbo take N". The first draft had a
+person type it. That is replaced:
+
+**neXus proposes, one click confirms.** For every advisory without a machine-readable fixed version, neXus builds
+the fix rule itself from the vendor's official pages and shows it with the source lines it was read from:
+
+| Vendor | What neXus reads to build the proposal |
+|---|---|
+| Check Point | the CVE record (names the sk article); the Jumbo release notes of each version (`sc1.checkpoint.com/documents/Jumbo_HFA/<version>/All_Resolved_Issues.html`: one table per take with ID, product, description; a security fix names its CVE and sk article), where the lowest take that lists the CVE is the fixing take; the sk185114 table for the Live Patch package take and date |
+| Cisco | the CSAF file; if it lacks the first fixed release, the advisory page's fixed-release table |
+| Infoblox, Broadcom, Radware | the CVE record and NVD ranges; the vendor advisory page where it is public (section 4.6 and U6) |
+
+A `security_admin` confirms the proposal with one click, or corrects it. A proposal is applied only after that
+confirmation; until then the advisory reads `NEEDS_REVIEW` with the proposed verdict shown next to it. Every rule
+records its source URLs, who confirmed it and when, and is audited. If a page cannot be parsed, neXus says so and
+proposes nothing; it never guesses a take. Web pages change their layout, so each page parser has a self-check (for
+example: the newest take on the page must not be lower than the last one seen) and fails closed.
 
 **Disposition.** A `security_admin` can mark a finding `ACCEPTED_RISK`, `NOT_EXPOSED_BY_CONFIGURATION`,
-`MITIGATED_OTHERWISE` or `PLANNED` (with a due date), with a reason and an expiry. The verdict itself does not
-change; the disposition is shown next to it and is audited. It concerns managed devices only and has nothing to do
-with the scan gates for the neXus product images.
+`MITIGATED_OTHERWISE` or `PLANNED` (with a due date), with a reason and an expiry (approved, D10). The verdict
+itself does not change; the disposition is shown next to it and is audited. It concerns managed devices only and has
+nothing to do with the scan gates for the neXus product images.
 
 Clusters: each member is judged alone; a cluster row shows the worst member.
 
 ### 6.5 How the feeds get in, and how often
 
-Two modes; the PO chooses (D4).
+**Decision (D4, PO 2026-11-10): online, from the vendors' official pages, through the corporate proxy**, on two
+conditions the PO set: the method is defined, and the source can be parsed. The offline bundle stays as the fallback
+and uses the same parsers.
 
-- **Offline bundle (recommended first).** A script in the repository (`tools/advisory/`) runs on any
-  internet-connected workstation, downloads the sources of section 6.2, and writes one JSON bundle with a SHA-256.
-  A `security_admin` uploads it on the "Catalog and sources" tab. neXus validates it (schema, size cap, hash),
-  stores the advisories and re-evaluates. neXus itself makes no outbound connection. This matches finding F7: no
-  pod with device credentials talks to the internet.
-- **Online refresh (later, optional).** A fetch job reads the same fixed list of URLs through the enterprise proxy,
-  GET only, no request body, no estate data. Because every current pod holds the credential-store key, this needs
-  either an accepted exception or a small fetch-only pod with no device route and no credential key. The ratified
-  container principle (`PO_DECISION_RECORD_2026_11_05_ANALYSIS_CONTAINER_DIRECTION.md`) lists load isolation, failure
-  isolation and deploy cadence as justifications, not a trust boundary; this document does not stretch it and leaves
-  the choice to the PO. Whether HOST-A has any permitted route out is UNKNOWN.
+The fetcher is a separate, small workload, `ui2-advisory-fetch`, so that nothing that can reach the internet holds a
+device credential (finding F7):
+
+- **No secrets, no devices.** It does not mount the credential-store key or any other neXus key, has no database
+  account, and its network policy allows only DNS, the corporate proxy, and one internal neXus endpoint.
+- **Read-only, fixed targets.** GET requests only, no request body, to a host allow-list compiled into the image
+  (table below). No request carries a device version, model, serial or name (principle 1). The same host list is
+  given to the proxy team, so the proxy can enforce it too.
+- **One way in.** It hands each fetched document to `ui2-service` through an internal ingest endpoint, with its own
+  token. `ui2-service` treats the content as untrusted: schema validation, size caps, text never rendered as HTML.
+  The fetcher can write advisories in; it can read nothing out.
+- **Own switch and schedule**, independent of every other schedule (collection schedules stay off in development
+  mode).
+
+The container principle (`PO_DECISION_RECORD_2026_11_05_ANALYSIS_CONTAINER_DIRECTION.md`) asks for a measured need
+before a new container and does not list a trust boundary among its reasons. This workload exists for exactly that
+reason, on the PO's decision D4; the decision record that freezes this design must say so explicitly.
+
+Defined method per source:
+
+| Source | Host | What is fetched | Parser | State on 2026-11-10 |
+|---|---|---|---|---|
+| Palo Alto advisories | `security.paloaltonetworks.com` | `/rss.xml`, then `/json/<CVE>` per item | CVE JSON 5 | fetched; parseable |
+| Fortinet PSIRT | `filestore.fortinet.com` | `/fortiguard/rss/ir.xml`, then the CSAF file each item links | RSS, CSAF 2.0 with text-encoded ranges | fetched; parseable; an empty product tree goes to review |
+| Cisco advisories (D5: public bulletins only) | `www.cisco.com` | `/.well-known/csaf/index.txt`, then the ASA-related files | CSAF 2.0 | index fetched; version listing to be confirmed (U8) |
+| Check Point | `support.checkpoint.com`, `sc1.checkpoint.com` | sk185114; the Jumbo release notes per version; the sk article of a CVE | HTML tables | fetched; R81.20 release notes confirmed parseable, R82 to be confirmed |
+| Check Point, Infoblox, Broadcom, Radware CVE records | CVE Program (`cveawg.mitre.org` or the `cvelistV5` repository) | records by vendor | CVE JSON 5 | fetched for one Check Point record |
+| Known-exploited flag | `www.cisa.gov` | the catalog JSON | JSON | the flag is also inside the CVE record |
+
+The last two rows are official public registries, not vendor pages. The PO's condition names vendor pages, so they
+are listed as decision D14. Without them, Check Point CVEs are discovered from the Jumbo release notes and sk185114
+only, and there is no "exploited in the wild" flag.
+
+Needed from the enterprise side before this can run: the proxy address and port, how the proxy authenticates a
+client (none, user and password, or Kerberos), whether it inspects TLS (then its CA must be trusted by the fetcher),
+and the allow-list request for the hosts above.
 
 Refresh cadence:
 
 | What | When |
 |---|---|
-| Device facts (version, Jumbo take, Live Patch, licenses) | every inventory run; no schedule of their own (schedules are off in development mode) |
-| Advisory bundle, offline | weekly, and after the vendors' fixed publication days (Fortinet: the second Tuesday of the month, per its PSIRT policy; the other vendors' days are added as they are confirmed), and on any out-of-cycle alert |
-| Advisory feeds, online | once a day, with conditional GET; own on/off switch, independent of other schedules |
+| Device facts (version, Jumbo take, Live Patch, licenses) | every inventory run; no schedule of their own |
+| Advisory sources, online | once a day, with conditional GET and a low request rate |
+| Offline bundle (fallback) | on demand, uploaded by a `security_admin` |
 | Re-evaluation | after every feed load and every inventory run (a database computation; no device contact) |
 | Feed age shown on screen | amber after 7 days, red after 30 days; red also sets every "no findings" to `NOT_EVALUATED` |
-
-Advisory content is untrusted input: strict schema validation, text rendered as text (never as HTML), links shown
-only for an allow-list of vendor hosts.
 
 ### 6.6 Acceptance oracle
 
@@ -451,7 +557,7 @@ difference is investigated before anything ships.
 | `device_live_patch_item` | device and patch | patch id (PATCH:PROC), status, mode, installed_at, sk references | Check Point only, after CP-2 |
 | `advisory` | advisory | id, vendor, source, source URL, title, severity, CVSS, CVE ids, published, updated, exploited flag and date, content hash | public data |
 | `advisory_affected_range` | advisory, product and train | product key, train, range bounds, status, fixed version | parsed from the feed |
-| `advisory_fix_rule` | curated rule | advisory, product key, train, fixed version or Jumbo take, Live Patch sk reference, Live Patch package take, source URL, curated_by, curated_at | audited |
+| `advisory_fix_rule` | proposed or confirmed rule | advisory, product key, train, fixed version or Jumbo take, Live Patch sk reference, Live Patch package take and release date, state (`PROPOSED`, `CONFIRMED`, `REJECTED`), source URLs and the lines read, proposed_at, confirmed_by, confirmed_at | built by neXus, confirmed by a `security_admin`; audited |
 | `advisory_feed_run` | load | source, mode (`BUNDLE`, `ONLINE`), bundle hash, counts, outcome, actor, loaded_at | drives the feed-age display |
 | `device_vulnerability_finding` | device and advisory | verdict, basis, observed version and patch level, feed run, evaluated_at | recomputed; history kept for trend (D12) |
 | `vulnerability_disposition` | finding or advisory scope | disposition, reason, due date, expiry, actor | audited |
@@ -462,7 +568,8 @@ Infoblox-only branch.
 
 ## 8. Where it runs, permissions, and the view
 
-**Runtime.** Device reads are extra steps of the existing inventory capability in the worker. Matching and the
+**Runtime.** Device reads are extra steps of the existing inventory capability in the worker. Advisory fetching is
+the separate `ui2-advisory-fetch` workload of section 6.5. Matching and the
 bundle import run in `ui2-service`: the data is small (134 devices, a few hundred advisories), so no new container
 is justified by the container principle. If the planned analysis container exists by then, the matcher can move
 there without a design change.
@@ -484,7 +591,7 @@ and is not masked; device names, member names and operator notes are masked as t
 
    Default sort: what needs action soonest (exploited and affected first, then expired, then nearest date).
 2. **Vulnerabilities.** One row per advisory: severity, exploited flag, affected device count, fixed version, state
-   (`NEEDS_CURATION` first for a `security_admin`). Opening a row lists the devices with their verdict and basis.
+   (`NEEDS_REVIEW` first for a `security_admin`, with the proposed fix rule and a confirm button). Opening a row lists the devices with their verdict and basis.
 3. **Licenses.** A timeline of expiry dates, grouped by vendor, with the evidence grade of each date.
 4. **Catalog and sources.** The existing end-of-support catalog, the contract register, the bundle upload and the
    feed status table.
@@ -500,12 +607,13 @@ which approval or source is missing.
 
 | Slice | Content | Device commands | Size | Risk |
 |---|---|---|---|---|
-| S1 | Infoblox expiry fix (F2); Live Patch package take from `cpinfo` (CP-3); FortiGate license status (FG-1); advisory store, offline bundle, comparators and matcher for Palo Alto, Fortinet and Cisco ASA; Check Point advisories with curated fix rules; known-exploited flag; view with the four checks | none new | large: about five lanes (schema and repositories, comparators and matcher, bundle builder and three feed parsers, view, report) | medium: no device impact; the risk is a wrong verdict. Countered by the oracle of section 6.6, fixtures shaped like real advisories, and `NOT_EVALUABLE` as the default |
-| S2 | License reads, one vendor at a time: CP-1, CP-4, AS-2, MC-1, MC-2, IB-2, then the grade B rows as they are confirmed | each approved literal, first on one device | medium per vendor | low to medium: read-only, but new commands on production firewalls; each has a switch |
-| S3 | `cplp list` (CP-2) and the full Live Patch verdicts | CP-2 | small | low |
-| S4 | NIOS version (IB-3), Radware (after the vendor guides), online refresh if chosen, contract register import, notifications for expiring licenses and newly exploited advisories | IB-3 | medium | low |
+| S0 (running) | Infoblox expiry fix (F2), shipped on its own; group A reads behind a switch, measure-first (shape only, nothing stored); Live Patch package take from `cpinfo` (CP-3) | the approved group A literals, one device per platform first | medium | low: off by default; cannot change an inventory result |
+| S1 | Advisory store; `ui2-advisory-fetch` with the offline fallback; comparators and matcher for Palo Alto, Fortinet and Cisco ASA; Check Point advisories with proposed fix rules; view with the four checks | none new | large: about five lanes (schema and repositories, comparators and matcher, fetcher and parsers, view, report) | medium: no device impact; the risk is a wrong verdict. Countered by the oracle of section 6.6, fixtures shaped like real advisories, and `NOT_EVALUABLE` as the default |
+| S2 | Parsers and storage for the group A reads, written from the measured shapes; Live Patch verdicts and the Jumbo deadline; licenses on the view | none new | medium per vendor | low |
+| S3 | Grade B reads, measure-first on one device each, as far as they are approved (section 13) | the approved grade B literals | medium | low to medium: new commands on production firewalls; each has a switch |
+| S4 | Contract dates from vendor portals where an API exists (section 4.8), the manual register for the rest, notifications for expiring licenses and newly exploited advisories, the report | none | medium | low; a portal API needs its own credential and decision |
 
-S1 already gives a vulnerability verdict for 121 of the 134 devices without sending one new command. The other 13
+S1 gives a vulnerability verdict for 121 of the 134 devices without sending one new command. The other 13
 show as named gaps: Infoblox (1, no NIOS version), Radware (5) and the ProxySG family (5), which have no usable feed
 and rely on the CVE inbox and manual entry, and the two Check Point devices still in `DRAFT`.
 
@@ -528,7 +636,8 @@ tests, real-environment validation per vendor under the aiview persona.
 - **Every new read is `NOT_APPROVED` until the PO approves its exact literal.** Approval of one row does not approve
   another. The gate migration quotes the PO's words, as V194 does. The first execution of each literal is one device,
   with the sanitised shape reported back before the read is enabled for the platform.
-- **Outbound traffic carries no estate data.** Offline mode has no outbound traffic at all.
+- **Outbound traffic carries no estate data and comes from a workload without secrets.** The fetcher of section
+  6.5 holds no device credential and no database account, and requests fixed public URLs only.
 - **Evidence grade is visible.** A date reported by a manager (Management Center, FortiManager, Panorama) or typed
   by an operator is labelled and never presented as a direct device read.
 - Chat, commits and pull requests keep using masked names; database checks for this feature return counts and opaque
@@ -543,31 +652,33 @@ tests, real-environment validation per vendor under the aiview persona.
 | U3 | Output shape and locality of FG-2, FG-3, FM-1; whether the neXus FortiGate account may run `diagnose` | one measured read |
 | U4 | ASA: correct context in multiple-context mode; shape of `show license all` on the 4100 series; the license block of `show version` | one measured read per platform type |
 | U5 | MC-1 reply shape for a ProxySG; whether `show licenses` shows expiry dates | one measured read |
-| U6 | Radware license, subscription and version reads; Radware and Broadcom advisory formats | vendor guides from the customer portals (D11) |
+| U6 | Radware subscription and license expiry reads; Cyber Controller version and license; full text of Radware advisories; Broadcom advisory format | the gated Radware guides (someone with the portal sign-in), section 4.6; Broadcom portal to be read at S1 |
 | U7 | IB-3 query form; whether `upgradestatus` names the NIOS version as the advisories do | one measured read |
 | U8 | How Cisco CSAF lists ASA versions and first fixed releases | parser spike on public files; no device involved |
-| U9 | Whether Check Point offers any machine-readable advisory feed | not found on 2026-11-10; ask the vendor account team |
+| U9 | Whether Check Point offers any machine-readable advisory feed | not found on 2026-11-10; the HTML pages of section 6.5 are used instead |
 | U10 | Live Patch state per virtual system on VSX; behaviour of `cplp list` on the MDS | one measured read each |
-| U11 | Whether HOST-A has a permitted outbound route | only matters for online refresh |
+| U11 | The corporate proxy: address, client authentication, TLS inspection and its CA, host allow-list procedure; whether HOST-A may reach it | enterprise network team, through the PO |
 | U12 | Rate limits and terms of use of the vendor feeds | none stated on the pages read; the bundle builder uses conditional GET and a low request rate |
 
-## 12. Decisions requested from the Product Owner
+## 12. Decisions
 
-| # | Decision | Recommendation |
+| # | Decision | State on 2026-11-10 |
 |---|---|---|
-| D1 | Approve the grade A literals of section 4.9, each by its exact text | approve; first run on one device per platform |
-| D2 | Palo Alto: new reads on firewalls (PA-1, PA-2), and whether PAN-OS 12 firewalls are included | approve as measure-first on one PAN-OS 11.1 firewall; decide PAN-OS 12 after the result |
-| D3 | Fortinet: per FortiGate (FG-2) or through FortiManager (FM-1) | FG-2 first |
-| D4 | Advisory intake: offline bundle or online refresh | offline bundle first |
-| D5 | Cisco: public CSAF only, or openVuln API credentials from the Cisco account | CSAF first; decide after the parser spike (U8) |
-| D6 | Live Patch counts as "mitigated, permanent fix pending", not "fixed"; record the 2026-11-10 statement as a decision record | yes to both |
-| D7 | Fix rules for Check Point (and other vendors without a feed) are curated by a `security_admin` | yes |
-| D8 | Support contracts come from an operator-maintained register; first import from the Excel report | yes |
-| D9 | The view is `Devices > Lifecycle and security`, replacing Lifecycle | yes |
-| D10 | Dispositions (accepted risk and the others) are allowed, `security_admin` only, with an expiry | yes |
-| D11 | The PO supplies the Radware and Broadcom customer-portal guides | needed for U6 |
-| D12 | Finding history is kept for trend reporting | keep 400 days |
-| D13 | Start S1 now (no new device command) | yes |
+| D1 | The grade A literals | approved ("Yalnız A grubu") |
+| D2 | Palo Alto reads on firewalls | approved: one PAN-OS 11.1 firewall first, PAN-OS 12 after the result |
+| D3 | Fortinet: per FortiGate or through FortiManager | approved: per FortiGate first |
+| D4 | Advisory intake | online from the vendors' official pages through the corporate proxy, if the method is defined and the source parseable (section 6.5); offline bundle as fallback |
+| D5 | Cisco source | public bulletins (CSAF); no openVuln credentials |
+| D6 | How a Live Patch counts | an active Live Patch for a CVE is `FIXED_BY_LIVE_PATCH`; the vendor's 12-week Jumbo rule is shown as a deadline (section 5) |
+| D7 | Fix rules where the vendor has no machine-readable fixed version | neXus builds the rule from the vendor pages; a `security_admin` confirms with one click (section 6.4). Proposed in answer to the PO's question; awaits a yes |
+| D8 | Support contracts | devices first, vendor portal APIs second, manual register last (section 4.8). Whether to use the Fortinet portal API (and Cisco's, once confirmed) is open: it needs a portal API account |
+| D9 | The view replaces Lifecycle as `Devices > Lifecycle and security` | approved |
+| D10 | Dispositions, `security_admin` only, with an expiry | approved |
+| D11 | Radware and Broadcom documentation | searched again (section 4.6) |
+| D12 | Finding history | approved: 400 days |
+| D13 | Start the no-new-command work | under way (slice S0); S1 follows the contract freeze |
+| D14 | May the fetcher also read the two official public registries (the CVE Program and the CISA known-exploited catalog), which are not vendor pages? | open; recommended yes: they supply the Check Point CVE list and the "exploited in the wild" flag |
+| D15 | The remaining grade B rows (FG-3, FM-1, SG-1, IB-3) | awaiting the PO's one-line confirmation (section 4.9) |
 
 ## 13. Product Owner answers so far
 
@@ -575,6 +686,7 @@ tests, real-environment validation per vendor under the aiview persona.
 |---|---|---|---|
 | 2026-11-10 | The Turkish summary of this document: the parse-scope rows, the seven grade A literals, the seven grade B literals, the decisions of section 12, and whether to fix finding F2 now | "ok abi çalıştırtırabilsin aynı zamanda da hatayı düzelt" | **F2 / IB-1:** fixed on branch `fix/infoblox-license-expiry-1110` (parser reads the WAPI timestamp; the same read also returns `expiration_status`; a permanent license is `PERMANENT`), shipped through the normal queue. **Device reads:** the answer allows neXus to run the proposed reads but names no row or group. No gate row is authored from it. The PO is asked which rows it covers: the grade A literals only, or the grade B measure-first reads as well |
 | 2026-11-10 | "Which rows does the approval cover?" (options: grade A only; grade A and B) | "Yalnız A grubu" (grade A only) | **Approved, exactly as written in section 4:** CP-1, CP-2, CP-4, AS-2, MC-1, MC-2, IB-2, with the forms section 4.1 names for a VSX gateway and a management server. Gate rows: `LIFECYCLE_READS_GROUP_A_COMMAND_GATE_ENTRIES.md`. **Not approved:** every grade B row (PA-1, PA-2, FG-2, FG-3, FM-1, SG-1, IB-3) and every grade C item; they stay `NOT_APPROVED` |
+| 2026-11-10 | The open decisions of section 12, asked in the PO session and relayed to this session by it | "Nexus proxy üzerinden internete çıkabilir bununla ilgili metod belli ise , ve parse edebilyorsa üreticinin resmi sayfalarından internete çıkabilir D4 için, d5, herkese açık bülten, d6, neden hafifletildi kalıcı düzeltme diyoruz ? livepatch verisini okumak 2 komut. bunu parse etmek de çok kolay, direk fixlendiğini göremiyor muyuz açıkların ? d7, anlamadım ? d8,bunu anlamadım neden elle giriyorum ? Portalden kontratları çekemez miyiz d9, olur d10, olur d11, neden bulamadığını anlamadım KB'ler ve guideler açık olmalı d12, olur d2, onayla d3,onayla onayla" | D2, D3, D4, D5, D9, D10, D12 decided as section 12 states. D6: the design now shows an active Live Patch as fixed (section 5.1 gives the vendor's wording and the one concrete consequence). D7 and D8: answered in sections 6.4 and 4.8. D11: section 4.6. The closing "onayla" is read by the PO session as approving the remaining grade B rows; this session records that reading and asks the PO to confirm it directly (D15) |
 
 The approval covers the literals. It does not approve a schema or the rest of this draft. Each approved read is first
 sent to one device per platform with only its masked output shape logged (section 10); storage and parsing follow
@@ -603,7 +715,9 @@ must be re-read at contract freeze.
 | Cisco advisories | www.cisco.com/.well-known/csaf/provider-metadata.json and index.txt (fetched); developer.cisco.com/docs/psirt |
 | Management Center API | techdocs.broadcom.com/us/en/symantec-security-software/web-and-network-security/management-center/4-1/api/ (getdevicelicense, getdevice, getversion, executecommand) |
 | SGOS `show licenses` | techdocs.broadcom.com/us/en/symantec-security-software/web-and-network-security/edge-swg/7-4/index2/_standard/show.html |
-| Radware REST | webhelp.radware.com/vision/REST/10_3_0/index.html (partly read) |
+| Radware REST | webhelp.radware.com/vision/REST/10_11_0/index.html and 10_3_0 (read in full); support.radware.com knowledge-base articles (partial without sign-in) |
+| Vendor portal contract APIs | Fortinet Technical Tip "API how to retrieve list of registered units" (community.fortinet.com); developer.cisco.com/site/support-apis/docs (intro only); docs.paloaltonetworks.com VM-Series Licensing API |
+| Check Point Jumbo release notes | sc1.checkpoint.com/documents/Jumbo_HFA/R81.20/All_Resolved_Issues.html (first part read: one table per take, CVE and sk named per security fix) |
 | Infoblox WAPI | ipam.illinois.edu/wapidoc/objects/member.license.html, license.gridwide.html, upgradestatus.html (public mirror of the vendor-generated WAPI 2.13.7 reference) |
 | Infoblox in NVD | services.nvd.nist.gov/rest/json/cves/2.0 with `virtualMatchString=cpe:2.3:o:infoblox:nios` (fetched) |
 | CVE Program bulk data | github.com/CVEProject/cvelistV5 |

@@ -57,3 +57,17 @@ Official documentation for each literal is listed in `LIFECYCLE_SECURITY_CHECKS_
   Infoblox `member:license` parser fix.
 - Never to be sent, on any platform: `cplic print -x`, `cplic contract put/del`, `contract_util ...`, `fetch license`,
   `autoupdatercli ...`, `show sources license-key`, `licensing update-key`, `licensing request-key`.
+
+## Implementation record (2026-11-10)
+
+- Branch `feat/lifecycle-reads-group-a-1110`: the eleven rows are seeded by V198 and mirrored in
+  `gate_registry_fixture.yaml`; the reads are wired into the worker's inventory paths behind `LifecycleReadSwitch`
+  and reduce every answer to a masked shape (`LifecycleReadShape`). All four paths run in the worker.
+- Entry 10 (`GET /api/system/version`): the Management Center inventory already sent this request as its identity
+  read (30 s) without a gate row of its own. The row now records it. The measurement uses that existing answer; no
+  second request is sent and the order of requests is unchanged.
+- A Check Point device that lands in clish and is neither a management server nor identified as a Quantum Spark in
+  the same run gets none of the reads (`SKIPPED:no_approved_form_for_landing_shell`): no approved literal fits it.
+- The Live Patch package take is read from the already approved `cpinfo -y all` answer and shown on the device's
+  platform identity panel; it needs no row.
+- V198 must be dry-run (BEGIN/ROLLBACK) on the live ui2 database before rollout.
