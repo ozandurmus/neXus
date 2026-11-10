@@ -1,7 +1,7 @@
 # Log anomaly agent — Claude trial on synthetic logs (Haiku 5.5, Sonnet 5.5, Opus 5.5)
 
-**Status: RECORD — automatic results complete (paid run 2026-11-10, 384 calls, USD 5.22); the human rubric scoring is
-open.** This record decides nothing; §4 is a recommendation for the PO's decision A5. It answers the trial the PO
+**Status: RECORD — automatic results complete (paid run 2026-11-10, 384 calls, USD 5.22); rubric scored by three
+LLM judges (Opus 5.5, Fable 5.2, Argon), all 36 `useful`; PO calibration of 11 items open.** This record decides nothing; §4 is a recommendation for the PO's decision A5. It answers the trial the PO
 chose in [PO_DECISION_RECORD_2026_11_10_LOG_ANOMALY_AGENT.md](PO_DECISION_RECORD_2026_11_10_LOG_ANOMALY_AGENT.md) §1 A1
 and A5 and §2 item 1, against the DRAFT design
 [LOG_ANOMALY_AGENT_DESIGN_2026_11_10.md](LOG_ANOMALY_AGENT_DESIGN_2026_11_10.md).
@@ -175,11 +175,80 @@ Per model over all 128 calls:
 | Sonnet 5.5 cache read USD 0.20 per 1M | USD 0.10 per 1M |
 | Typical device-day (2 findings) about USD 0.05 on Opus 5.5 | About USD 0.07 per device-day on Opus 5.5 without cache (2 x 0.034); Sonnet 5.5 about 0.034; Haiku 5.5 about 0.002 |
 
-### 3.4 Human rubric (open)
+### 3.4 Rubric scoring by LLM judges, with PO calibration
 
-`rubric_blind.csv` holds 36 answers (3 per configuration, different cases, model and effort hidden) with the known cause
-beside each; `rubric_blind_key.csv` maps them back. The scorer marks each `useful`, `harmless`, `wrong_plausible` or
-`wrong_obvious`. The share of `wrong_plausible` is the release gate the design names (R5). It is not scored yet.
+The PO decided on 2026-11-10 that the 36-row blind rubric is scored by external LLM judges instead of by hand, and that
+the PO checks a short calibration set. This is **not a full human scoring**. The human gate for `wrong_plausible`
+answers stays for the real-log pilot (design phase 2).
+
+Judges, each run independently through the host CLIs on the PO's subscriptions (no API spend; the Claude CLI was
+signed in as claude.ai Max, no `ANTHROPIC_API_KEY` was set, and the judge script refuses to run if one is):
+
+- Opus 5.5 (`scripts/consult_claude_log_trial_judge.py`, effort high). It also wrote 12 of the 36 answers.
+- Fable 5.2 (same script, `--model claude-fable-5-2`, effort high). It wrote none of the answers.
+- Argon (`scripts/consult_argon.py --isolated`, gemini-4-argon-high, effort high).
+
+All three read the same brief, [LOG_TRIAL_JUDGE_BRIEF_2026_11_10.md](LOG_TRIAL_JUDGE_BRIEF_2026_11_10.md). Built by
+`tools/llm_trial/judge.py brief`, it carries:
+
+- the ground truth, accepted categories and accepted priorities;
+- the agent's exact input block;
+- the original English answer.
+
+It carries no model or effort names and no Turkish translation. Each judge ran in an empty working directory with no
+tools, so it could not read the repository's blind key. No judge saw another judge's output.
+
+Unaltered outputs:
+
+- [OPUS](LOG_TRIAL_JUDGE_OPUS_2026_11_10.md)
+- [FABLE](LOG_TRIAL_JUDGE_FABLE_2026_11_10.md)
+- Argon [part 1](LOG_TRIAL_JUDGE_ARGON_2026_11_10_PART1.md) and [part 2](LOG_TRIAL_JUDGE_ARGON_2026_11_10_PART2.md)
+
+Two runs were discarded and are kept for the record:
+
+- [Opus run 1](LOG_TRIAL_JUDGE_OPUS_2026_11_10_RUN1_DISCARDED.md) used a first brief that left out the device card and
+  the per-bucket counts the agent had seen, so true statements could look invented. It still rated all 36 `useful`.
+- [Argon run 1](LOG_TRIAL_JUDGE_ARGON_2026_11_10_RUN1_TRUNCATED.md) was cut off by the agy CLI's input limit about
+  187 KB in, in the middle of item B027. It rated the 27 items it saw, all `useful`. Argon's full run was therefore
+  split into two halves; the head and rules were identical in both, and each half ran as its own conversation.
+
+The unblinded report is `tools/llm_trial/results/run-2026-11-10/judge_summary.md`; the machine copy is
+`judge_summary.json`.
+
+Results:
+
+- **All three judges rated all 36 answers `useful`: 108 of 108 ratings.** No judge gave `harmless`, `wrong_plausible` or
+  `wrong_obvious` to any model at any effort.
+- Agreement is 100 % for every pair. Cohen's kappa and Fleiss' kappa are undefined, because every rating has the same
+  value and chance agreement is 100 %. The judges agree, but this rubric cannot separate the models any more than the
+  automatic checks could (§3.2 item 1).
+- **Wrong and plausible rate: 0 of 36** by every judge.
+- Self-preference: none visible, but untestable at a ceiling. The Opus judge's useful share on Opus-written answers
+  (100 %) equals Fable's and Argon's, and so does its share on everything else.
+- The signal is in the judges' notes and lower confidences, not in the ratings. They named the same few small factual
+  slips that none of them thought would misdirect an operator. Six answers drew a confidence at or below 0.80 from at
+  least one judge:
+
+  | Item | Answer | Slip the judges noted |
+  |---|---|---|
+  | B031 | Haiku, medium | Misread template buckets (the crash and the BGP drop share a bucket). Opus judge 0.60 |
+  | B004 | Haiku, medium | Wrong gap between two log lines |
+  | B027 | Haiku, medium | A next check pointing to an unrelated vendor document, marked "skip" |
+  | B035 | Haiku, low | The same kind of irrelevant next check |
+  | B032 | Sonnet, medium | Up and down intervals of a flap swapped |
+  | B021 | Opus, medium | Slightly alarmist tone |
+
+  Four of the six are Haiku answers (Haiku wrote 12 of the 36). On this sample, that is the only difference between
+  tiers. It is too small to count, but it points the same way as §4.
+
+PO calibration set (on the scoring page, same address, Turkish, judges' ratings shown only after the PO's own):
+
+- the 6 low-confidence items above;
+- 5 random items from the rest (seeded; `judge.py` `calibration_ids`).
+
+The rule was also to include every non-unanimous item and every item any judge rated `wrong_plausible`. There were
+none of either, so the low-confidence items were added to keep the set from being random only. **The PO's calibration
+is open.** If the PO rates a calibration item below `useful`, that argues against relying on the judges.
 
 An engineer's read of 15 answers (C07 and C27 across models, C17, C03, C25), not a substitute for the rubric: all were
 grounded and readable. Opus 5.5 added the most operator-relevant nuance (for example "possible split-brain" on C07, and
@@ -213,8 +282,9 @@ USD 30 covers about 1,750 Sonnet explanations a month (about 58 a day), three ti
 stops a runaway day at about 118 explanations. The upper-bound row applies only if an automatic digest is ever enabled,
 which A8 excludes.
 
-**Before the decision is final**, in this order: (1) the PO or an engineer scores the 36-row blind rubric; (2) the first
-real pilot (design phase 2, one cluster, level 1, `security_admin` only) re-runs the same scoring on real findings;
+**Before the decision is final**, in this order: (1) the blind rubric, scored by three LLM judges with no wrong and plausible
+answer (§3.4), is confirmed by the PO's 11-item calibration; (2) the first
+real pilot (design phase 2, one cluster, level 1, `security_admin` only) re-runs the same scoring on real findings, with a human, not an LLM judge, deciding every `wrong_plausible`;
 (3) if Sonnet shows wrong-and-plausible answers that Opus avoids, the tier moves up; if Haiku matches Sonnet on the
 rubric, it moves down. Prompt follow-ups that need no decision: cap list lengths to cut output tokens, and consider
 dropping the cache breakpoint on the gateway, since on-demand calls rarely hit a warm cache (Argon finding 10); the
@@ -232,6 +302,8 @@ write premium on 2,833 tokens is about USD 0.0014 per call on Sonnet, so either 
 - The closed cause list (design §8.3) has no class for certificate or licence lifecycle (C19, C20 were answered as
   `configuration_change`) or for security events (C31 was answered as `external_dependency`). A design question,
   not a model fault.
+- The rubric was scored by LLM judges, not people (PO decision 2026-11-10), with only an 11-item PO calibration. The
+  judges saturated as the automatic checks did, so neither measures the difference between tiers on hard cases.
 - The automatic category check accepts a fixed set per case; the rubric sheet is the judge of usefulness and of "wrong
   and plausible".
 - Latency is measured from one development machine over the public internet, not through the corporate proxy (design
