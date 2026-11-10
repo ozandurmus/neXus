@@ -444,6 +444,86 @@
       "reason": "sqlite-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-09); the build cannot reach the UBI package repos to update it. CVE-2026-119379 (HIGH, Red Hat Important, CVSS 7.8 AV:L/UI:R): code execution via crafted session changesets. Exposure: as CVE-2026-119374; no neXus code opens an SQLite database. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed) and the PO's ok of 2026-11-09 ('Kabul et'); review with the base refresh due 2026-11-14; remove when Red Hat rebuilds the base image.",
       "owner": "PO",
       "review_date": "2026-11-14"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-112315",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
+      "reason": "krb5-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): published 2026-11-09, Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-10); the build cannot reach the UBI package repos to update it. CVE-2026-112315 (HIGH, Red Hat Important): MIT krb5 kadmind unauthenticated memory-leak DoS (CVSS 5.3). Exposure: the flaw is in the Kerberos admin server (kadmind) / KDC, which are not installed in either image (krb5-server and krb5-workstation absent, no /usr/sbin/kadmind or krb5kdc, no installed package requires krb5-libs; checked in the running pods 2026-11-10); neXus never runs a Kerberos server. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed 14 days); remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-24"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-112316",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
+      "reason": "krb5-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): published 2026-11-09, Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-10); the build cannot reach the UBI package repos to update it. CVE-2026-112316 (HIGH, Red Hat Important): MIT krb5 kadmind DoS. Exposure: the flaw is in the Kerberos admin server (kadmind) / KDC, which are not installed in either image (krb5-server and krb5-workstation absent, no /usr/sbin/kadmind or krb5kdc, no installed package requires krb5-libs; checked in the running pods 2026-11-10); neXus never runs a Kerberos server. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed 14 days); remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-24"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-112317",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
+      "reason": "krb5-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): published 2026-11-09, Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-10); the build cannot reach the UBI package repos to update it. CVE-2026-112317 (HIGH, Red Hat Important): MIT krb5 kadmind DoS. Exposure: the flaw is in the Kerberos admin server (kadmind) / KDC, which are not installed in either image (krb5-server and krb5-workstation absent, no /usr/sbin/kadmind or krb5kdc, no installed package requires krb5-libs; checked in the running pods 2026-11-10); neXus never runs a Kerberos server. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed 14 days); remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-24"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-112318",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
+      "reason": "krb5-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): published 2026-11-09, Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-10); the build cannot reach the UBI package repos to update it. CVE-2026-112318 (HIGH, Red Hat Important): MIT krb5 kadmind DoS. Exposure: the flaw is in the Kerberos admin server (kadmind) / KDC, which are not installed in either image (krb5-server and krb5-workstation absent, no /usr/sbin/kadmind or krb5kdc, no installed package requires krb5-libs; checked in the running pods 2026-11-10); neXus never runs a Kerberos server. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed 14 days); remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-24"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-112319",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
+      "reason": "krb5-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): published 2026-11-09, Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-10); the build cannot reach the UBI package repos to update it. CVE-2026-112319 (HIGH, Red Hat Important): MIT krb5 kadmind authenticated memory-exhaustion DoS (CVSS 6.5). Exposure: the flaw is in the Kerberos admin server (kadmind) / KDC, which are not installed in either image (krb5-server and krb5-workstation absent, no /usr/sbin/kadmind or krb5kdc, no installed package requires krb5-libs; checked in the running pods 2026-11-10); neXus never runs a Kerberos server. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed 14 days); remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-24"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-112320",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
+      "reason": "krb5-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): published 2026-11-09, Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-10); the build cannot reach the UBI package repos to update it. CVE-2026-112320 (HIGH, Red Hat Important): MIT krb5 kadmind DoS. Exposure: the flaw is in the Kerberos admin server (kadmind) / KDC, which are not installed in either image (krb5-server and krb5-workstation absent, no /usr/sbin/kadmind or krb5kdc, no installed package requires krb5-libs; checked in the running pods 2026-11-10); neXus never runs a Kerberos server. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed 14 days); remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-24"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-112321",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
+      "reason": "krb5-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): published 2026-11-09, Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-10); the build cannot reach the UBI package repos to update it. CVE-2026-112321 (HIGH, Red Hat Important): MIT krb5 kadmind DoS. Exposure: the flaw is in the Kerberos admin server (kadmind) / KDC, which are not installed in either image (krb5-server and krb5-workstation absent, no /usr/sbin/kadmind or krb5kdc, no installed package requires krb5-libs; checked in the running pods 2026-11-10); neXus never runs a Kerberos server. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed 14 days); remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-24"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-112322",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
+      "reason": "krb5-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): published 2026-11-09, Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-10); the build cannot reach the UBI package repos to update it. CVE-2026-112322 (HIGH, Red Hat Important): MIT krb5 kadmind DoS. Exposure: the flaw is in the Kerberos admin server (kadmind) / KDC, which are not installed in either image (krb5-server and krb5-workstation absent, no /usr/sbin/kadmind or krb5kdc, no installed package requires krb5-libs; checked in the running pods 2026-11-10); neXus never runs a Kerberos server. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed 14 days); remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-24"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-112323",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
+      "reason": "krb5-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): published 2026-11-09, Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-10); the build cannot reach the UBI package repos to update it. CVE-2026-112323 (HIGH, Red Hat Important): MIT krb5 kadmind unauthenticated memory-exhaustion DoS (CVSS 7.5). Exposure: the flaw is in the Kerberos admin server (kadmind) / KDC, which are not installed in either image (krb5-server and krb5-workstation absent, no /usr/sbin/kadmind or krb5kdc, no installed package requires krb5-libs; checked in the running pods 2026-11-10); neXus never runs a Kerberos server. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed 14 days); remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-24"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-119079",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
+      "reason": "krb5-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): published 2026-11-09, Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-10); the build cannot reach the UBI package repos to update it. CVE-2026-119079 (HIGH, Red Hat Important): MIT krb5 KDC unauthenticated CPU DoS via ASN.1 decoding (CVSS 7.5). Exposure: the flaw is in the Kerberos admin server (kadmind) / KDC, which are not installed in either image (krb5-server and krb5-workstation absent, no /usr/sbin/kadmind or krb5kdc, no installed package requires krb5-libs; checked in the running pods 2026-11-10); neXus never runs a Kerberos server. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed 14 days); remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-24"
     }
   ]
 }
