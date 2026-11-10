@@ -1,0 +1,1767 @@
+{
+ "success": true,
+ "data": [
+  {
+   "dataType": "CVE_RECORD",
+   "cveMetadata": {
+    "cveId": "CVE-2025-4619"
+   },
+   "containers": {
+    "cna": {
+     "title": "PAN-OS: Firewall Denial of Service (DoS) Using Specially Crafted Packets",
+     "datePublic": "2025-11-12T17:00:00.000Z",
+     "metrics": [
+      {
+       "cvssV4_0": {
+        "version": "4.0",
+        "baseSeverity": "HIGH",
+        "baseScore": 8.7
+       }
+      }
+     ],
+     "affected": [
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "status": "unaffected",
+         "version": "12.1.0"
+        },
+        {
+         "status": "affected",
+         "version": "11.2.0",
+         "lessThan": "11.2.5",
+         "changes": [
+          {
+           "at": "11.2.5",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.2.4-h4",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.2.3-h6",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.2.2-h2",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "11.1.0",
+         "lessThan": "11.1.7",
+         "changes": [
+          {
+           "at": "11.1.7",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.1.6-h1",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.1.4-h13",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.1.4-h4",
+           "status": "affected"
+          },
+          {
+           "at": "11.1.3-h2",
+           "status": "affected"
+          },
+          {
+           "at": "11.1.2-h18",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.1.2-h9",
+           "status": "affected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "10.2.0",
+         "lessThan": "10.2.14",
+         "changes": [
+          {
+           "at": "10.2.14",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.13-h3",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.12-h6",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.11-h12",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.10-h14",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.10-h2",
+           "status": "affected"
+          },
+          {
+           "at": "10.2.9-h21",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.9-h6",
+           "status": "affected"
+          },
+          {
+           "at": "10.2.8-h21",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.8-h10",
+           "status": "affected"
+          },
+          {
+           "at": "10.2.7-h24",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.7-h11",
+           "status": "affected"
+          },
+          {
+           "at": "10.2.4-h25",
+           "status": "affected"
+          }
+         ]
+        },
+        {
+         "status": "unaffected",
+         "version": "10.1.0"
+        }
+       ],
+       "defaultStatus": "unaffected"
+      }
+     ],
+     "x_affectedList": [
+      "PAN-OS 11.2.4-h3",
+      "PAN-OS 11.2.4-h2",
+      "PAN-OS 11.2.4-h1",
+      "PAN-OS 11.2.4",
+      "PAN-OS 10.2.9",
+      "PAN-OS 10.2.8-h20",
+      "PAN-OS 10.2.8-h19",
+      "PAN-OS 10.2.0-h2",
+      "PAN-OS 10.2.0-h1",
+      "PAN-OS 10.2.0"
+     ]
+    }
+   }
+  },
+  {
+   "dataType": "CVE_RECORD",
+   "cveMetadata": {
+    "cveId": "CVE-2026-0322"
+   },
+   "containers": {
+    "cna": {
+     "title": "PAN-OS: Authenticated Remote Code Execution (RCE) in the Management Interface",
+     "datePublic": "2026-10-14T16:00:00.000Z",
+     "metrics": [
+      {
+       "cvssV4_0": {
+        "version": "4.0",
+        "baseSeverity": "HIGH",
+        "baseScore": 8.6
+       }
+      },
+      {
+       "cvssV4_0": {
+        "version": "4.0",
+        "baseSeverity": "HIGH",
+        "baseScore": 8.5
+       }
+      }
+     ],
+     "affected": [
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "status": "affected",
+         "version": "12.2.0",
+         "lessThan": "12.2.4",
+         "changes": [
+          {
+           "at": "12.2.4",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "12.1.0",
+         "changes": [
+          {
+           "at": "12.1.4-h12",
+           "status": "unaffected"
+          },
+          {
+           "at": "12.1.7-h8",
+           "status": "unaffected"
+          },
+          {
+           "at": "12.1.10-h2",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "11.2.0",
+         "changes": [
+          {
+           "at": "11.2.4-h22",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.2.7-h21",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.2.10-h15",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.2.13-h3",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.2.16",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "11.1.0",
+         "changes": [
+          {
+           "at": "11.1.4-h37",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.1.6-h39",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.1.7-h11",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.1.10-h35",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.1.13-h15",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.1.16-h3",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "10.2.0",
+         "changes": [
+          {
+           "at": "10.2.7-h38",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.10-h41",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.13-h26",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.16-h11",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.18-h12",
+           "status": "unaffected"
+          }
+         ]
+        }
+       ],
+       "defaultStatus": "unaffected"
+      }
+     ],
+     "x_affectedList": [
+      "PAN-OS 12.2.3",
+      "PAN-OS 12.2.2",
+      "PAN-OS 12.1.10",
+      "PAN-OS 12.1.9",
+      "PAN-OS 10.2.18-h5",
+      "PAN-OS 10.2.18-h1",
+      "PAN-OS 10.2.18",
+      "PAN-OS 10.2.0-h2",
+      "PAN-OS 10.2.0-h1",
+      "PAN-OS 10.2.0"
+     ]
+    }
+   }
+  },
+  {
+   "dataType": "CVE_RECORD",
+   "cveMetadata": {
+    "cveId": "CVE-2024-3393"
+   },
+   "containers": {
+    "cna": {
+     "title": "PAN-OS: Firewall Denial of Service (DoS) in DNS Security Using a Specially Crafted Packet",
+     "datePublic": "2024-12-27T02:30:00.000Z",
+     "metrics": [
+      {
+       "cvssV4_0": {
+        "version": "4.0",
+        "baseSeverity": "HIGH",
+        "baseScore": 8.7
+       }
+      },
+      {
+       "cvssV4_0": {
+        "version": "4.0",
+        "baseSeverity": "HIGH",
+        "baseScore": 7.1
+       }
+      }
+     ],
+     "affected": [
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "status": "affected",
+         "version": "11.2.0",
+         "lessThan": "11.2.3",
+         "changes": [
+          {
+           "at": "11.2.3",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "11.1.0",
+         "lessThan": "11.1.5",
+         "changes": [
+          {
+           "at": "11.1.5",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.1.4-h7",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.1.2-h16",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.1.3-h13",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "unaffected",
+         "version": "10.2.0",
+         "lessThan": "10.2.8",
+         "changes": [
+          {
+           "at": "10.2.8",
+           "status": "affected"
+          },
+          {
+           "at": "10.2.14",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.8-h19",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.9-h19",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.10-h12",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.11-h10",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.12-h4",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.13-h2",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "unaffected",
+         "version": "10.1.0",
+         "lessThan": "10.1.14",
+         "changes": [
+          {
+           "at": "10.1.14",
+           "status": "affected"
+          },
+          {
+           "at": "10.1.15",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.1.14-h8",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "unaffected",
+         "version": "10.0.0"
+        },
+        {
+         "status": "unaffected",
+         "version": "9.1.0"
+        }
+       ],
+       "defaultStatus": "unaffected"
+      },
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "status": "unaffected",
+         "version": "10.2.0",
+         "lessThan": "10.2.8",
+         "changes": [
+          {
+           "at": "10.2.8",
+           "status": "affected"
+          },
+          {
+           "at": "10.2.9-h19",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.10-h12",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "11.2.0",
+         "lessThan": "11.2.3",
+         "changes": [
+          {
+           "at": "11.2.3",
+           "status": "unaffected"
+          }
+         ]
+        }
+       ],
+       "defaultStatus": "unaffected"
+      },
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "status": "unaffected",
+         "version": "All"
+        }
+       ],
+       "defaultStatus": "unaffected"
+      }
+     ],
+     "x_affectedList": [
+      "PAN-OS 11.2.2-h2",
+      "PAN-OS 11.2.2-h1",
+      "PAN-OS 11.2.1-h1",
+      "PAN-OS 11.2.1",
+      "PAN-OS 10.2.11-h3",
+      "PAN-OS 10.2.11-h2",
+      "PAN-OS 10.2.11-h1",
+      "PAN-OS 10.1.14-h2",
+      "PAN-OS 10.1.14-h1",
+      "PAN-OS 10.1.14"
+     ]
+    }
+   }
+  },
+  {
+   "dataType": "CVE_RECORD",
+   "cveMetadata": {
+    "cveId": "CVE-2024-9471",
+    "datePublished": "2024-10-09T07:00:00.000Z",
+    "dateUpdated": "2024-10-09T00:00:00.000Z"
+   },
+   "containers": {
+    "cna": {
+     "title": "PAN-OS: Privilege Escalation (PE) Vulnerability in XML API",
+     "datePublic": "2024-10-09T16:00:00.000Z",
+     "metrics": [
+      {
+       "cvssV4_0": {
+        "version": "4.0",
+        "baseSeverity": "MEDIUM",
+        "baseScore": 5.1
+       }
+      }
+     ],
+     "affected": [
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "status": "unaffected",
+         "version": "11.1 All"
+        },
+        {
+         "status": "affected",
+         "version": "9.1 All"
+        },
+        {
+         "status": "unaffected",
+         "version": "9.1 None"
+        },
+        {
+         "status": "affected",
+         "version": "9.0 All"
+        },
+        {
+         "status": "unaffected",
+         "version": "9.0 None"
+        },
+        {
+         "status": "affected",
+         "version": "11.0",
+         "lessThan": "11.0.3",
+         "changes": [
+          {
+           "at": "11.0.3",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "10.1",
+         "lessThan": "10.1.11",
+         "changes": [
+          {
+           "at": "10.1.11",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "10.2",
+         "lessThan": "10.2.8",
+         "changes": [
+          {
+           "at": "10.2.8",
+           "status": "unaffected"
+          }
+         ]
+        }
+       ],
+       "defaultStatus": "unaffected"
+      }
+     ],
+     "x_affectedList": [
+      "PAN-OS 11.0.2-h5",
+      "PAN-OS 11.0.2-h4",
+      "PAN-OS 11.0.2-h3",
+      "PAN-OS 11.0.2-h2",
+      "PAN-OS 10.2.3-h12",
+      "PAN-OS 10.2.3-h11",
+      "PAN-OS 10.2.3-h10",
+      "PAN-OS 10.1.2",
+      "PAN-OS 10.1.1",
+      "PAN-OS 10.1.0"
+     ]
+    }
+   }
+  },
+  {
+   "dataType": "CVE_RECORD",
+   "cveMetadata": {
+    "cveId": "PAN-SA-2025-0005"
+   },
+   "containers": {
+    "cna": {
+     "title": "GlobalProtect Clientless VPN: Clientless VPN Misconfiguration Allows Cross-Site Attacks",
+     "datePublic": "2025-02-12T17:00:00.000Z",
+     "metrics": [
+      {
+       "cvssV4_0": {
+        "version": "4.0",
+        "baseSeverity": "NONE",
+        "baseScore": 0
+       }
+      }
+     ],
+     "affected": [
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "status": "affected",
+         "version": "All"
+        }
+       ],
+       "defaultStatus": "unaffected"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "dataType": "CVE_RECORD",
+   "cveMetadata": {
+    "cveId": "CVE-2022-0023",
+    "datePublished": "2022-04-13T00:00:00",
+    "dateUpdated": "2022-04-13T00:00:00.000000Z"
+   },
+   "containers": {
+    "cna": {
+     "title": "PAN-OS: Denial-of-Service (DoS) Vulnerability in DNS Proxy",
+     "datePublic": "2022-04-13T16:00:00.000Z",
+     "metrics": [
+      {
+       "cvssV3_1": {
+        "version": "3.1",
+        "baseScore": 5.9,
+        "baseSeverity": "MEDIUM"
+       }
+      }
+     ],
+     "affected": [
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "version": "10.2.*",
+         "status": "unaffected"
+        },
+        {
+         "version": "8.1",
+         "status": "affected",
+         "lessThan": "8.1.22",
+         "changes": [
+          {
+           "at": "8.1.22",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "9.1",
+         "status": "affected",
+         "lessThan": "9.1.13",
+         "changes": [
+          {
+           "at": "9.1.13",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "10.1",
+         "status": "affected",
+         "lessThan": "10.1.5",
+         "changes": [
+          {
+           "at": "10.1.5",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "10.0",
+         "status": "affected",
+         "lessThan": "10.0.10",
+         "changes": [
+          {
+           "at": "10.0.10",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "9.0",
+         "status": "affected",
+         "lessThan": "9.0.16",
+         "changes": [
+          {
+           "at": "9.0.16",
+           "status": "unaffected"
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "x_affectedList": [
+      "PAN-OS 10.1.4-h4",
+      "PAN-OS 10.1.4-h3",
+      "PAN-OS 10.1.4-h2",
+      "PAN-OS 10.1.4-h1",
+      "PAN-OS 9.0.11",
+      "PAN-OS 9.0.10",
+      "PAN-OS 9.0.9-h1",
+      "PAN-OS 8.1.1",
+      "PAN-OS 8.1.0",
+      "PAN-OS 8.1"
+     ]
+    }
+   }
+  },
+  {
+   "dataType": "CVE_RECORD",
+   "cveMetadata": {
+    "cveId": "CVE-2022-0011",
+    "datePublished": "2022-02-09T17:00:00.000Z",
+    "dateUpdated": "2022-03-09T00:00:00.000000Z"
+   },
+   "containers": {
+    "cna": {
+     "title": "PAN-OS: URL Category Exceptions Match More URLs Than Intended in URL Filtering",
+     "datePublic": "2022-02-09T17:00:00.000Z",
+     "metrics": [
+      {
+       "cvssV3_1": {
+        "version": "3.1",
+        "baseScore": 6.5,
+        "baseSeverity": "MEDIUM"
+       }
+      }
+     ],
+     "affected": [
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "version": "9.0.*",
+         "status": "affected"
+        },
+        {
+         "version": "8.1",
+         "status": "affected",
+         "lessThan": "8.1.21",
+         "changes": [
+          {
+           "at": "8.1.21",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "9.1",
+         "status": "affected",
+         "lessThan": "9.1.12",
+         "changes": [
+          {
+           "at": "9.1.12",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "10.0",
+         "status": "affected",
+         "lessThan": "10.0.8",
+         "changes": [
+          {
+           "at": "10.0.8",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "10.1",
+         "status": "affected",
+         "lessThan": "10.1.3",
+         "changes": [
+          {
+           "at": "10.1.3",
+           "status": "unaffected"
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "x_affectedList": [
+      "PAN-OS 10.1.2",
+      "PAN-OS 10.1.1",
+      "PAN-OS 10.1.0",
+      "PAN-OS 10.1",
+      "PAN-OS 9.0.5",
+      "PAN-OS 9.0.4",
+      "PAN-OS 9.0.3-h3",
+      "PAN-OS 8.1.1",
+      "PAN-OS 8.1.0",
+      "PAN-OS 8.1",
+      "Prisma Access 2.2"
+     ]
+    }
+   }
+  },
+  {
+   "dataType": "CVE_RECORD",
+   "cveMetadata": {
+    "cveId": "CVE-2022-0024",
+    "datePublished": "2022-05-11T00:00:00",
+    "dateUpdated": "2022-05-11T00:00:00.000000Z"
+   },
+   "containers": {
+    "cna": {
+     "title": "PAN-OS: Improper Neutralization Vulnerability Leads to Unintended Program Execution During Configuration Commit",
+     "datePublic": "2022-05-11T16:00:00.000Z",
+     "metrics": [
+      {
+       "cvssV3_1": {
+        "version": "3.1",
+        "baseScore": 7.2,
+        "baseSeverity": "HIGH"
+       }
+      }
+     ],
+     "affected": [
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "version": "9.1",
+         "status": "affected",
+         "lessThan": "9.1.13",
+         "changes": [
+          {
+           "at": "9.1.13",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "10.1",
+         "status": "affected",
+         "lessThan": "10.1.5",
+         "changes": [
+          {
+           "at": "10.1.5",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "9.0",
+         "status": "affected",
+         "lessThan": "9.0.16",
+         "changes": [
+          {
+           "at": "9.0.16",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "8.1",
+         "status": "affected",
+         "lessThan": "8.1.23",
+         "changes": [
+          {
+           "at": "8.1.23",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "10.0",
+         "status": "affected",
+         "lessThan": "10.0.10",
+         "changes": [
+          {
+           "at": "10.0.10",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "10.2.0",
+         "status": "unaffected",
+         "lessThan": "10.2*"
+        }
+       ]
+      }
+     ],
+     "x_affectedList": [
+      "PAN-OS 10.1.4-h4",
+      "PAN-OS 10.1.4-h3",
+      "PAN-OS 10.1.4-h2",
+      "PAN-OS 10.1.4-h1",
+      "PAN-OS 9.0.11",
+      "PAN-OS 9.0.10",
+      "PAN-OS 9.0.9-h1",
+      "PAN-OS 8.1.1",
+      "PAN-OS 8.1.0",
+      "PAN-OS 8.1"
+     ]
+    }
+   }
+  },
+  {
+   "dataType": "CVE_RECORD",
+   "cveMetadata": {
+    "cveId": "CVE-2019-1581",
+    "datePublished": "2019-08-21T22:13:00.000Z"
+   },
+   "containers": {
+    "cna": {
+     "title": "Remote code execution in PAN-OS SSH management interface",
+     "datePublic": "2019-08-21T22:13:00.000Z",
+     "metrics": [
+      {
+       "cvssV3_1": {
+        "version": "3.1",
+        "baseScore": 9.8,
+        "baseSeverity": "CRITICAL"
+       }
+      }
+     ],
+     "affected": [
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "version": "7.1",
+         "status": "affected",
+         "lessThanOrEqual": "7.1.24",
+         "changes": [
+          {
+           "at": "7.1.24-h1",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "8.0",
+         "status": "affected",
+         "lessThanOrEqual": "8.0.19",
+         "changes": [
+          {
+           "at": "8.0.19-h1",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "8.1",
+         "status": "affected",
+         "lessThanOrEqual": "8.1.9",
+         "changes": [
+          {
+           "at": "8.1.9-h4",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "9.0",
+         "status": "affected",
+         "lessThanOrEqual": "9.0.3",
+         "changes": [
+          {
+           "at": "9.0.3-h3",
+           "status": "unaffected"
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "x_affectedList": [
+      "PAN-OS 9.0.3",
+      "PAN-OS 9.0.2-h4",
+      "PAN-OS 9.0.2-h3",
+      "PAN-OS 9.0.2-h2",
+      "PAN-OS 8.0.6",
+      "PAN-OS 8.0.5",
+      "PAN-OS 8.0.4",
+      "PAN-OS 7.1.1",
+      "PAN-OS 7.1.0",
+      "PAN-OS 7.1"
+     ]
+    }
+   }
+  },
+  {
+   "dataType": "CVE_RECORD",
+   "cveMetadata": {
+    "cveId": "CVE-2024-0012"
+   },
+   "containers": {
+    "cna": {
+     "title": "PAN-OS: Authentication Bypass in the Management Web Interface (PAN-SA-2024-0015)",
+     "datePublic": "2024-11-18T14:20:00.000Z",
+     "metrics": [
+      {
+       "cvssV4_0": {
+        "version": "4.0",
+        "baseSeverity": "CRITICAL",
+        "baseScore": 9.3
+       }
+      },
+      {
+       "cvssV4_0": {
+        "version": "4.0",
+        "baseSeverity": "MEDIUM",
+        "baseScore": 5.9
+       }
+      }
+     ],
+     "affected": [
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "status": "affected",
+         "version": "11.2.0",
+         "lessThan": "11.2.4-h1",
+         "changes": [
+          {
+           "at": "11.2.4-h1",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.2.1-h1",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.2.2-h2",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.2.3-h3",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.2.0-h1",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "11.1.0",
+         "lessThan": "11.1.5-h1",
+         "changes": [
+          {
+           "at": "11.1.5-h1",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.1.0-h4",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.1.1-h2",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.1.2-h15",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.1.3-h11",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.1.4-h7",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "11.0.0",
+         "lessThan": "11.0.6-h1",
+         "changes": [
+          {
+           "at": "11.0.6-h1",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.0.0-h4",
+           "status": "unaffected"
+          },
+          {
+           "at": " 11.0.1-h5",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.0.2-h5",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.0.3-h13",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.0.4-h6",
+           "status": "unaffected"
+          },
+          {
+           "at": " 11.0.5-h2",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "10.2.0",
+         "lessThan": "10.2.12-h2",
+         "changes": [
+          {
+           "at": "10.2.0-h4",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.1-h3",
+           "status": "unaffected"
+          },
+          {
+           "at": " 10.2.2-h6",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.3-h14",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.4-h32",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.5-h9",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.6-h6",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.7-h18",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.8-h15",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.9-h16",
+           "status": "unaffected"
+          },
+          {
+           "at": " 10.2.10-h9",
+           "status": "unaffected"
+          },
+          {
+           "at": "10.2.11-h6",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "unaffected",
+         "version": "10.1.0"
+        }
+       ],
+       "defaultStatus": "unaffected"
+      }
+     ],
+     "x_affectedList": [
+      "PAN-OS 11.2.4",
+      "PAN-OS 11.2.3-h2",
+      "PAN-OS 11.2.3-h1",
+      "PAN-OS 11.2.3",
+      "PAN-OS 10.2.9-h4",
+      "PAN-OS 10.2.9-h3",
+      "PAN-OS 10.2.9-h2",
+      "PAN-OS 10.2.0-h2",
+      "PAN-OS 10.2.0-h1",
+      "PAN-OS 10.2.0"
+     ]
+    }
+   }
+  },
+  {
+   "dataType": "CVE_RECORD",
+   "cveMetadata": {
+    "cveId": "PAN-SA-2023-0004",
+    "datePublished": "2023-08-17T00:00:00",
+    "dateUpdated": "2023-09-26T00:00:00.000000Z"
+   },
+   "containers": {
+    "cna": {
+     "title": "Informational Bulletin: Impact of TunnelCrack Vulnerabilities (CVE-2023-36671, CVE-2023-36672, CVE-2023-35838, and CVE-2023-36673)",
+     "datePublic": "2023-08-17T01:00:00.000Z",
+     "metrics": [
+      {
+       "cvssV3_1": {
+        "version": "3.1",
+        "baseScore": 0,
+        "baseSeverity": "NONE"
+       }
+      }
+     ],
+     "affected": [
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "Prisma Access",
+       "versions": [
+        {
+         "version": "with GlobalProtect app on Windows, macOS, and Linux LocalNet: \"No direct access to local network\" enabled, ServerIP: All",
+         "status": "unaffected"
+        }
+       ]
+      },
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "version": "with GlobalProtect app on Windows, macOS, and Linux LocalNet: \"No direct access to local network\" enabled, ServerIP: Gateways with address set as an IP",
+         "status": "unaffected"
+        },
+        {
+         "version": "with GlobalProtect app on Windows, macOS, and Linux LocalNet: Configurations allowing local network access, ServerIP: Gateways with address set as an FQDN",
+         "status": "affected"
+        },
+        {
+         "version": "with GlobalProtect app on Android and ChromeOS LocalNet: All, ServerIP: Gateways with address set as an IP",
+         "status": "unaffected"
+        },
+        {
+         "version": "with GlobalProtect app on Android and ChromeOS LocalNet: None, ServerIP: Gateways with address set as an FQDN",
+         "status": "affected"
+        },
+        {
+         "version": "with GlobalProtect app on iOS LocalNet: Third-party apps with the \"Local Network\" permission disabled, ServerIP: Gateways with address set as an IP",
+         "status": "unaffected"
+        },
+        {
+         "version": "with GlobalProtect app on iOS LocalNet: Third-party apps with the \"Local Network\" permission enabled and Apple apps, ServerIP: Gateways with address set as an FQDN",
+         "status": "affected"
+        }
+       ]
+      }
+     ],
+     "x_affectedList": [
+      "PAN-OS with GlobalProtect app on Windows, macOS, and Linux OS",
+      "PAN-OS with GlobalProtect app on Windows, macOS, and Linux",
+      "PAN-OS with GlobalProtect app on iOS, Android, and ChromeOS",
+      "PAN-OS with GlobalProtect app on iOS",
+      "PAN-OS with GlobalProtect app on Android and ChromeOS",
+      "Prisma Access with GlobalProtect app on Windows, macOS, and Linux OS"
+     ]
+    }
+   }
+  },
+  {
+   "dataType": "CVE_RECORD",
+   "cveMetadata": {
+    "cveId": "CVE-2025-4614"
+   },
+   "containers": {
+    "cna": {
+     "title": "PAN-OS: Session Token Disclosure Vulnerability",
+     "datePublic": "2025-10-08T16:00:00.000Z",
+     "metrics": [
+      {
+       "cvssV4_0": {
+        "version": "4.0",
+        "baseSeverity": "MEDIUM",
+        "baseScore": 4.8
+       }
+      }
+     ],
+     "affected": [
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "status": "unaffected",
+         "version": "12.1.0"
+        },
+        {
+         "status": "affected",
+         "version": "11.2.0",
+         "lessThan": "11.2.8",
+         "changes": [
+          {
+           "at": "11.2.8",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "11.1.0",
+         "lessThan": "11.1.6-h21",
+         "changes": [
+          {
+           "at": "11.1.6-h21",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "10.2.0",
+         "lessThan": "10.2.17",
+         "changes": [
+          {
+           "at": "10.2.17",
+           "status": "unaffected"
+          }
+         ]
+        }
+       ],
+       "defaultStatus": "unaffected"
+      }
+     ],
+     "x_affectedList": [
+      "PAN-OS 11.1.11",
+      "PAN-OS 11.1.6-h20"
+     ]
+    }
+   }
+  },
+  {
+   "dataType": "CVE_RECORD",
+   "cveMetadata": {
+    "cveId": "CVE-2026-111497"
+   },
+   "containers": {
+    "cna": {
+     "title": "Portfolio Status: Impact of Brotli Vulnerability (CVE-2026-111497) on Palo Alto Networks Products",
+     "datePublic": "2026-10-26T18:30:00.000Z",
+     "metrics": [
+      {
+       "cvssV4_0": {
+        "version": "4.0",
+        "baseSeverity": "CRITICAL",
+        "baseScore": 9.2
+       }
+      }
+     ],
+     "affected": [
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "Prisma Cloud - Application Security Transporter Client",
+       "versions": [
+        {
+         "status": "affected",
+         "version": " ",
+         "lessThan": "0.2.9",
+         "changes": [
+          {
+           "at": "0.2.9",
+           "status": "unaffected"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "status": "affected",
+         "version": "12.2",
+         "lessThan": "12.2.4-h1",
+         "changes": [
+          {
+           "at": "12.2.4-h1",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "12.1",
+         "lessThan": "12.1.4-h13",
+         "changes": [
+          {
+           "at": "12.1.10-h3",
+           "status": "unaffected"
+          },
+          {
+           "at": "12.1.7-h11",
+           "status": "unaffected"
+          },
+          {
+           "at": "12.1.4-h13",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "11.2",
+         "lessThan": "11.2.4-h23",
+         "changes": [
+          {
+           "at": "11.2.16-h1",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.2.13-h4",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.2.10-h17",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.2.7-h23",
+           "status": "unaffected"
+          },
+          {
+           "at": "11.2.4-h23",
+           "status": "unaffected"
+          }
+         ]
+        }
+       ],
+       "defaultStatus": "unaffected"
+      }
+     ],
+     "x_affectedList": [
+      "PAN-OS 12.2.4",
+      "PAN-OS 12.2.3",
+      "PAN-OS 12.2.2",
+      "PAN-OS 12.1.10-h2",
+      "PAN-OS 11.2.10",
+      "PAN-OS 11.2.9",
+      "PAN-OS 11.2.8",
+      "PAN-OS 11.2.1",
+      "PAN-OS 11.2.0-h1",
+      "PAN-OS 11.2.0"
+     ]
+    }
+   }
+  },
+  {
+   "dataType": "CVE_RECORD",
+   "cveMetadata": {
+    "cveId": "CVE-2026-0282"
+   },
+   "containers": {
+    "cna": {
+     "title": "PAN-OS: File Deletion Vulnerability in Management Web Interface",
+     "datePublic": "2026-07-08T16:00:00.000Z",
+     "metrics": [
+      {
+       "cvssV4_0": {
+        "version": "4.0",
+        "baseSeverity": "MEDIUM",
+        "baseScore": 6.9
+       }
+      },
+      {
+       "cvssV4_0": {
+        "version": "4.0",
+        "baseSeverity": "MEDIUM",
+        "baseScore": 5.1
+       }
+      }
+     ],
+     "affected": [
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "status": "affected",
+         "version": "12.1.0",
+         "lessThan": "12.1.8",
+         "changes": [
+          {
+           "at": "12.1.8",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "11.2.0",
+         "lessThan": "11.2.13",
+         "changes": [
+          {
+           "at": "11.2.13",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "11.1.0",
+         "lessThan": "11.1.16",
+         "changes": [
+          {
+           "at": "11.1.16",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "status": "affected",
+         "version": "10.2.0"
+        }
+       ],
+       "defaultStatus": "unaffected"
+      }
+     ],
+     "x_affectedList": [
+      "PAN-OS 12.1.7-h11",
+      "PAN-OS 12.1.7-h9",
+      "PAN-OS 12.1.7-h8",
+      "PAN-OS 12.1.7-h6",
+      "PAN-OS 10.2.18-h6",
+      "PAN-OS 10.2.18-h5",
+      "PAN-OS 10.2.18-h1",
+      "PAN-OS 10.2.0-h2",
+      "PAN-OS 10.2.0-h1",
+      "PAN-OS 10.2.0"
+     ]
+    }
+   }
+  },
+  {
+   "dataType": "CVE_RECORD",
+   "cveMetadata": {
+    "cveId": "CVE-2017-15944",
+    "datePublished": "2017-12-06T00:05:10.000Z"
+   },
+   "containers": {
+    "cna": {
+     "title": "Vulnerability in PAN-OS and Panorama on Management Interface",
+     "datePublic": "2017-12-06T00:05:10.000Z",
+     "metrics": [
+      {
+       "cvssV3_0": {
+        "version": "3.0",
+        "baseScore": 9.8,
+        "baseSeverity": "CRITICAL"
+       }
+      }
+     ],
+     "affected": [
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "version": "6.1",
+         "status": "affected",
+         "lessThanOrEqual": "6.1.18",
+         "changes": [
+          {
+           "at": "6.1.19",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "7.0",
+         "status": "affected",
+         "lessThanOrEqual": "7.0.18",
+         "changes": [
+          {
+           "at": "7.0.19",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "7.1",
+         "status": "affected",
+         "lessThanOrEqual": "7.1.13",
+         "changes": [
+          {
+           "at": "7.1.14",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "8.0.6",
+         "status": "unaffected",
+         "lessThan": "8.0*",
+         "changes": [
+          {
+           "at": "8.0",
+           "status": "unaffected"
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "x_affectedList": [
+      "PAN-OS 7.1.13",
+      "PAN-OS 7.1.12",
+      "PAN-OS 7.1.11",
+      "PAN-OS 7.1.10",
+      "PAN-OS 7.0.8",
+      "PAN-OS 7.0.7",
+      "PAN-OS 7.0.6",
+      "PAN-OS 6.1.1",
+      "PAN-OS 6.1.0",
+      "PAN-OS 6.1"
+     ]
+    }
+   }
+  },
+  {
+   "dataType": "CVE_RECORD",
+   "cveMetadata": {
+    "cveId": "CVE-2019-1559",
+    "datePublished": "2019-12-04T17:00:00.000Z"
+   },
+   "containers": {
+    "cna": {
+     "title": "OpenSSL vulnerability CVE-2019-1559 has been resolved in PAN-OS",
+     "datePublic": "2019-12-04T17:00:00.000Z",
+     "metrics": [
+      {
+       "cvssV3_1": {
+        "version": "3.1",
+        "baseScore": 5.9,
+        "baseSeverity": "MEDIUM"
+       }
+      }
+     ],
+     "affected": [
+      {
+       "vendor": "Palo Alto Networks",
+       "product": "PAN-OS",
+       "versions": [
+        {
+         "version": "unspecified",
+         "lessThanOrEqual": "7.0",
+         "status": "unknown"
+        },
+        {
+         "version": "7.1",
+         "status": "affected",
+         "lessThan": "7.1.25",
+         "changes": [
+          {
+           "at": "7.1.25",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "8.0",
+         "status": "affected",
+         "lessThan": "8.0.20",
+         "changes": [
+          {
+           "at": "8.0.20",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "8.1",
+         "status": "affected",
+         "lessThan": "8.1.8",
+         "changes": [
+          {
+           "at": "8.1.8",
+           "status": "unaffected"
+          }
+         ]
+        },
+        {
+         "version": "9.0",
+         "status": "affected",
+         "lessThan": "9.0.2",
+         "changes": [
+          {
+           "at": "9.0.2",
+           "status": "unaffected"
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "x_affectedList": [
+      "PAN-OS 9.0.1",
+      "PAN-OS 9.0.0",
+      "PAN-OS 9.0",
+      "PAN-OS 8.1.7",
+      "PAN-OS 8.0.3",
+      "PAN-OS 8.0.2",
+      "PAN-OS 8.0.1",
+      "PAN-OS 7.1.1",
+      "PAN-OS 7.1.0",
+      "PAN-OS 7.1"
+     ]
+    }
+   }
+  }
+ ]
+}
