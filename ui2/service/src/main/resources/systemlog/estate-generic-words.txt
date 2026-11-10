@@ -1,0 +1,156 @@
+# Generic-word vocabulary of the estate-name dictionary (logmask-v5): a name made only of these words (and numbers)
+# is generic ("Cleanup rule", "inside", "Any"), not an identity, and is not masked. Same list as the 2026-11-10
+# measurement (scripts/measurement/log_masking_risk/techvocab.txt); EstateNameCatalog adds the free-text rules' stop words.
+
+
+# function words, pronouns, auxiliaries
+a an the this that these those there here it its it's he she they them their we our you your i me my
+is are was were be been being am has have had having do does did done doing can cannot could should would will
+shall may might must not no nor yes ok okay and or but if then else when while where which who whom whose what why how
+of on in at to from by for with without within into onto upon over under above below between among through during
+before after since until till via per as than so too very just only also again still yet already ever never always
+all any each every some none both either neither other another such same more most less least few many much several
+up down out off about around against across along behind beyond near next last first second third new old
+one two three four five six seven eight nine ten zero null nil none true false
+
+# common log verbs (all forms)
+start starts started starting stop stops stopped stopping restart restarts restarted restarting run runs running ran
+open opens opened opening close closes closed closing connect connects connected connecting disconnect disconnected
+disconnecting reconnect reconnected reconnecting load loads loaded loading unload unloaded reload reloaded reloading
+read reads reading write writes writing wrote written send sends sent sending receive receives received receiving
+get gets got set sets setting reset resets update updates updated updating upgrade upgraded upgrading install
+installs installed installing uninstall uninstalled create creates created creating delete deletes deleted deleting
+remove removes removed removing add adds added adding change changes changed changing modify modified modifying
+enable enables enabled enabling disable disables disabled disabling initialize initialized initializing init
+register registered registering unregister unregistered fail fails failed failing failure failures succeed succeeded
+success successful successfully complete completed completing finish finished finishing abort aborted aborting
+exit exits exited exiting kill killed terminate terminated terminating timeout timed expire expired expiring
+retry retries retrying retried wait waiting waited check checks checked checking verify verified verifying
+validate validated validation process processed processing handle handled handling call called calling
+accept accepted accepting reject rejected rejecting drop dropped dropping allow allowed allowing deny denied
+block blocked blocking pass passed passing match matched matching apply applied applying commit committed
+committing push pushed pull pulled sync synced syncing synchronize synchronized synchronizing synchronization
+attach attached detach detached bind bound binding listen listening lookup resolve resolved resolving
+parse parsed parsing generate generated generating save saved saving store stored storing fetch fetched
+login logged logging logout logon logoff authenticate authenticated authenticating authorize authorized
+use used using find found missing exist exists existed get getting go going gone become became move moved
+log logs show shows shown display displayed print printed report reported reporting notify notified notification
+recover recovered recovering restore restored restoring backup backups collect collected collecting
+copy copied compress compressed decompress encrypt encrypted encrypting decrypt decrypted decrypting
+sign signed signing negotiate negotiated negotiating establish established establishing initiate initiated
+respond responded responding reply replied request requested requesting require required requires
+reach reached reaching exceed exceeded exceeding limit limited limiting allocate allocated allocation free freed
+assign assigned assigning release released releasing lock locked locking unlock unlocked hold held
+take taken taking give given make made making need needed needs try tried trying keep kept skip skipped
+ignore ignored ignoring continue continued continuing begin began begun ending end ended ends
+switch switched switching fall fallback failover failback takeover elect elected election
+detect detected detecting monitor monitored monitoring poll polled polling probe probed probing
+scan scanned scanning trigger triggered triggering schedule scheduled scheduling queue queued queuing
+flush flushed flushing clear cleared clearing purge purged rotate rotated rotating truncate truncated
+mount mounted unmount unmounted boot booted booting reboot rebooted rebooting shutdown halt halted
+crash crashed crashing core dump dumped dumping panic hang hung stuck respawn respawned spawn spawned
+
+# common log nouns, states, adjectives
+error errors warning warnings warn info information notice debug trace critical crit alert alerts emergency emerg
+fatal severity level levels high medium low informational message messages event events status state states
+up down active standby ready down detected inactive passive primary secondary master slave backup member members
+cluster clusters node nodes peer peers local remote internal external public private default custom
+service services daemon daemons process processes thread threads task tasks job jobs worker workers
+module modules component components function functions handler handlers kernel driver drivers library
+file files directory directories path paths folder name names value values key keys entry entries record records
+table tables list lists item items object objects element elements field fields attribute attributes parameter
+parameters argument arguments option options flag flags mode modes type types kind class version versions
+build release revision patch hotfix take jumbo update updates image images package packages
+system systems host hosts hostname server servers client clients device devices gateway gateways appliance
+interface interfaces port ports link links address addresses network networks subnet subnets mask netmask
+route routes routing router table neighbor neighbors neighbour session sessions connection connections
+socket sockets channel channels tunnel tunnels stream streams buffer buffers queue queues pool pools
+memory cpu cpus core cores disk disks storage space usage load average utilization capacity size bytes
+time times date dates timestamp clock second seconds minute minutes hour hours day days week month year
+count counter counters total number numbers rate rates percent ratio threshold maximum minimum max min avg
+user users admin admins administrator account accounts group groups role roles permission permissions
+password passwords credential credentials certificate certificates cert certs key keys token tokens secret
+policy policies rule rules rulebase layer layers section sections object network-object zone zones
+license licenses contract contracts subscription feature features blade blades
+config configuration configurations setting settings profile profiles template templates
+database db query queries result results response responses request requests reply answer
+reason cause code codes signal signals errno exit status return returned value
+invalid valid unknown unexpected unsupported unavailable available busy idle full empty partial
+current previous next pending ongoing running stopped normal abnormal ok good bad wrong correct
+new old older newer latest initial final main global general specific generic
+enabled disabled on off yes no auto manual automatic dynamic static fixed
+success failure succeeded failed denied granted allowed blocked dropped accepted rejected
+cannot unable could not because due while during after before since without
+size length offset limit index id ids uid gid pid ppid tid sid
+start end begin first last top bottom head tail
+total used free available shared cached buffers swap
+
+# networking and protocols
+ip ipv4 ipv6 tcp udp icmp icmpv6 arp rarp dns dhcp ntp snmp syslog smtp http https ftp ftps sftp ssh scp telnet
+ldap ldaps radius tacacs kerberos ntlm saml oauth tls ssl dtls ike ikev1 ikev2 ipsec esp ah gre vxlan vlan vlans
+bgp ospf ospfv3 rip pim igmp mld vrrp hsrp lacp lldp cdp stp mstp bfd mpls nat snat dnat pat napt
+mac mtu mss ttl tos dscp qos ecn syn ack fin rst psh urg window seq sequence
+src dst source destination sport dport inbound outbound ingress egress incoming outgoing direction
+packet packets frame frames segment segments datagram datagrams payload header headers checksum
+broadcast multicast unicast anycast loopback localhost lo any all none
+link-local global unique site prefix prefixes cidr gateway nexthop next-hop hop hops metric metrics
+upstream downstream uplink downlink bandwidth throughput latency jitter loss drop drops retransmit
+proxy forward reverse transparent tproxy redirect redirected redirection
+dhcpd named resolver nameserver resolv domain domains realm
+url uri urls host-header cookie cookies agent useragent
+
+# security
+firewall firewalls fw security secure insecure threat threats attack attacks attacker malware virus antivirus
+anti-virus anti-bot antibot ips ids intrusion prevention detection inspection deep inspect inspected
+vpn vpns encryption decryption cipher ciphers aes aes128 aes256 3des des sha sha1 sha256 sha384 sha512 md5 hmac
+rsa dsa ecdsa ed25519 dh ecdh pfs prf group14 group19 group20 phase phase1 phase2 sa sas spi
+certificate ca crl ocsp pki x509 csr fingerprint trust trusted untrusted verify verification signature
+auth authentication authorization identity identities sso mfa otp captive portal
+audit audited auditing compliance violation violations alert alarm alarms incident incidents
+spoof spoofing spoofed scan scans flood floods ddos dos syn-flood brute force
+sandbox emulation extraction threatcloud reputation signature signatures protections protection
+
+# operating system
+linux unix kernel gaia expert clish bash sh shell cron crond systemd init sysctl udev rsyslog rsyslogd syslogd
+journald sshd httpd nginx apache java jvm perl
+oom oom-killer killer swap swapper kswapd paging page pages segfault segmentation fault traceback stack exception
+filesystem fs ext3 ext4 xfs tmpfs lvm raid partition partitions inode inodes mount mountpoint
+var tmp opt etc usr bin sbin lib lib64 proc dev sys log run home root boot
+cpu cpus irq irqs softirq interrupt interrupts nic nics napi ring rx tx rxq txq queue affinity
+temperature fan fans psu power supply voltage sensor sensors hardware firmware bios bmc lom ipmi
+ram dimm ecc nvram flash ssd hdd raid controller
+
+# Check Point
+checkpoint check point cp cpd cpm cpwd fwd fwm fwk fw1 vpnd vpnk cpca cprid cprid_d cpstat cpview cpinfo
+cphaprob cphastop cphastart cphaconf clusterxl ccp sync pnote pnotes ha haproxy vsx vs vsid vsys mds mlm cma
+smartconsole smartcenter smartevent smartlog smartview management mgmt sms log-server logserver
+sic sxl securexl corexl cores instance instances fwaccel sim affinity dynamic-dispatcher dispatcher
+policy-installation install-policy installation installed fetch fetchlocal fetchpolicy
+identity-awareness pdp pep cpsemd cpsead cpsead fwssd in.asessiond in.emaild rad_admin dlpu mpdaemon
+ted scrub urlf appi av ab te tex dlp ips_update
+r80 r81 r82 r80.40 r81.10 r81.20 r82.10 jhf jumbo cpuse da cdt
+spike spike-detective cpu-spike fwk_dev kiss ld cpas
+interface-active interface-down problem notification
+
+# Palo Alto
+paloalto palo alto pan panos pan-os panorama vsys1 vsys2 shared device-group template-stack
+mgmtsrvr devsrvr useridd sslmgr authd logrcvr routed ikemgr keymgr satd dagger dha
+commit commit-all push-scope candidate running-config saved-config
+globalprotect gp-portal gp-gateway hip userid user-id app-id content-id wildfire
+ha1 ha2 ha3 ha-1 ha-2 path-monitoring link-monitoring heartbeat hello preemption
+dataplane management-plane mp dp pa-220 pa-440 pa-820 pa-850 pa-3220 pa-3410 pa-5220
+system config general hw tunnel-mgmt routing satd port vpn
+
+# units, months, days
+b kb mb gb tb kib mib gib tib bps kbps mbps gbps pps ms us ns sec secs min mins hr hrs
+jan feb mar apr may jun jul aug sep oct nov dec january february march april june july august september
+october november december mon tue wed thu fri sat sun monday tuesday wednesday thursday friday saturday sunday
+am pm utc gmt
+
+# generic rule and object names (vendor defaults, not identities)
+cleanup stealth noise implied implicit explicit catch-all catchall default-deny intrazone interzone intrazone-default
+interzone-default predefined builtin built-in
+
+# generic zone, policy and interface-role names (network-design words, not identities)
+inside outside untrust untrusted dmz wan lan guest guests wireless wifi voice inet internet extranet intranet
+standard corporate office branch datacenter dc mgmt-zone management-zone l3-trust l3-untrust

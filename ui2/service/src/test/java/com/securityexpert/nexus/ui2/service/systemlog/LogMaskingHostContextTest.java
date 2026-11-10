@@ -183,7 +183,7 @@ class LogMaskingHostContextTest {
         LogMasking.Session s = session();
         String once = s.maskLine("sync from " + word(600) + " to " + word(601) + " via gateway " + word(602));
         assertEquals(once, session().maskLine(once), "written tokens are never masked again");
-        assertEquals("logmask-v4", s.ruleSet());
+        assertEquals(LogMasking.RULE_SET, s.ruleSet());
         assertEquals(LogMasking.RULE_SET, s.ruleSet());
     }
 }

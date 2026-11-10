@@ -8,7 +8,7 @@ import javax.crypto.Mac;
 /**
  * The one-way keyed identity tokens the inventory screens show: a serial becomes {@code SN-} + 10 upper-case hex and
  * any other identity value {@code KIND-} + 10 upper-case hex (a user {@code USR-}, an unclassified identity
- * {@code ID-}), each the first 5 bytes of HMAC-SHA256 under the product's privacy key. This is the single
+ * {@code ID-}, an estate name {@code POL-} / {@code RUL-} / {@code OBJ-} / {@code ZON-} / {@code VSN-} / {@code DMN-}), each the first 5 bytes of HMAC-SHA256 under the product's privacy key. This is the single
  * implementation: {@code TopologyNamePseudonymizer#maskSerial} and {@code #maskPayloadToken} delegate here, so a
  * serial reads the same in the UI, in the masked system-log view and in a sanitized file. No vault: a token cannot be
  * turned back into its value. Thread-safe; {@link #toString()} prints nothing of the key.
@@ -19,6 +19,16 @@ public final class IdentityTokens {
     public static final String USER = "USR";
     /** The kind of an identity value that is neither a serial, an address nor a known name. */
     public static final String IDENTITY = "ID";
+    /** Estate-name kinds ({@code logmask-v5}): policy, rule, object, zone, virtual-system and MDS domain names. */
+    public static final String POLICY = "POL";
+    public static final String RULE = "RUL";
+    public static final String OBJECT = "OBJ";
+    public static final String ZONE = "ZON";
+    public static final String VSYS = "VSN";
+    public static final String DOMAIN = "DMN";
+
+    private static final java.util.Set<String> KINDS = java.util.Set.of("SN", USER, IDENTITY, POLICY, RULE, OBJECT, ZONE,
+            VSYS, DOMAIN);
 
     private final byte[] key;
     private final ThreadLocal<Mac> mac;
@@ -46,7 +56,7 @@ public final class IdentityTokens {
         return payload(USER, raw);
     }
 
-    /** True for an {@code SN-}, {@code USR-} or {@code ID-} token as this class writes them. */
+    /** True for an {@code SN-}, {@code USR-}, {@code ID-} or estate-name ({@code POL-}, {@code OBJ-} ...) token as this class writes them. */
     public static boolean isToken(CharSequence text) {
         int dash = -1;
         for (int i = 0; i < text.length() && i < 4; i++) {
@@ -57,7 +67,7 @@ public final class IdentityTokens {
         }
         if (dash < 0 || text.length() != dash + 11) return false;
         String kind = text.subSequence(0, dash).toString();
-        if (!kind.equals("SN") && !kind.equals(USER) && !kind.equals(IDENTITY)) return false;
+        if (!KINDS.contains(kind)) return false;
         for (int i = dash + 1; i < text.length(); i++) {
             char c = text.charAt(i);
             if (!(c >= '0' && c <= '9') && !(c >= 'A' && c <= 'F')) return false;

@@ -44,6 +44,7 @@ import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactRef;
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
 import com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore;
 import com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts;
+import com.securityexpert.nexus.ui2.persistence.diagnostic.JooqEstateNameRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.device.JooqDevicePlatformFactsRepository;
 import com.securityexpert.nexus.ui2.persistence.device.JooqDeviceRepository;
@@ -58,7 +59,7 @@ import com.securityexpert.nexus.ui2.service.sanitizer.SanitizerConfiguration;
 
 /**
  * One-off, read-only measurement (2026-11-10): how much sensitive information the stored device system logs carry and
- * how much of it the aiview masking projection ({@link LogMasking}, {@code logmask-v4}) catches. Runs inside the
+ * how much of it the aiview masking projection ({@link LogMasking}, the deployed {@code LogMasking.RULE_SET}) catches. Runs inside the
  * ui2-service pod with the service's own keys, as a second JVM on the service jar (PropertiesLauncher, loader.main).
  *
  * <p><b>Privacy boundary.</b> Raw text, masked text, names and values exist only in this process's memory. The output
@@ -86,7 +87,7 @@ public final class LogRiskMeasure {
             Cls.serial_shape, Cls.name_rule, Cls.name_policy, Cls.name_object, Cls.name_zone, Cls.name_vs,
             Cls.name_domain, Cls.secret_marker, Cls.private_key_marker);
 
-    /** Profiles: p0 logmask-v4 masked line; p1 naive template; p2 egress-v1 as drafted; p3 egress-v1 with Argon fixes. */
+    /** Profiles: p0 the deployed LogMasking masked line; p1 naive template; p2 egress-v1 as drafted; p3 egress-v1 with Argon fixes. */
     static final int P = 4;
 
     // ------------------------------------------------------------------ settings
@@ -140,7 +141,7 @@ public final class LogRiskMeasure {
 
     // shapes kept by the egress profiles (masked tokens, times, versions ...)
     static final Pattern MASKED = Pattern.compile(
-            "(?:(?:h-[0-9a-f]{10}|(?:USR|SN|ID)-[0-9A-F]{10})(?:[@.](?:h-[0-9a-f]{10}|[A-Za-z]{2,24}))*|[A-Z]{2,4}(?:-[A-Z]+)+-M?\\d{1,3}(?:-[A-Z0-9]+)*)");
+            "(?:(?:h-[0-9a-f]{10}|(?:USR|SN|ID|POL|RUL|OBJ|ZON|VSN|DMN)-[0-9A-F]{10})(?:[@.](?:h-[0-9a-f]{10}|[A-Za-z]{2,24}))*|[A-Z]{2,4}(?:-[A-Z]+)+-M?\\d{1,3}(?:-[A-Z0-9]+)*)");
     static final Pattern TIME = Pattern.compile("\\d{1,2}:\\d{2}(?::\\d{2}(?:[.,]\\d+)?)?|\\d{4}[-/]\\d{2}[-/]\\d{2}(?:T[0-9:.+Z-]*)?|\\d{1,2}[-/][A-Za-z]{3}[-/]\\d{4}");
     static final Pattern VERSION = Pattern.compile("(?i)r\\d{2}(?:\\.\\d+)*|v?\\d+(?:\\.\\d+){1,3}(?:-h\\d+)?");
     static final Pattern ALLNUM = Pattern.compile("\\d+");
@@ -250,7 +251,18 @@ public final class LogRiskMeasure {
                     SystemLogReadConfiguration.estateIdentities(devices, facts, names), Duration.ofHours(4));
             KnownNames known = SanitizerConfiguration.knownNames(devices, names).get();
             Supplier<KnownNames> knownOnce = () -> known;
-            LogMasking masking = new LogMasking(key, knownOnce, estate);
+            // logmask-v5: the masked view's estate-name dictionary, built by the service's own catalog code (read once).
+            EstateNameCatalog estateNames = new EstateNameCatalog(key,
+                    SystemLogReadConfiguration.estateNameSource(new JooqEstateNameRepository(tb)), Duration.ofHours(4));
+            estateNames.get();
+            EstateNameCatalog.Stats nameStats = estateNames.stats();
+            for (Map.Entry<EstateNameCatalog.Kind, Integer> e : new java.util.TreeMap<>(nameStats.kept()).entrySet()) {
+                emit(out, "meta", "masking_names_" + e.getKey().name().toLowerCase(Locale.ROOT), String.valueOf(e.getValue()));
+            }
+            emit(out, "meta", "masking_names_generic_dropped", String.valueOf(nameStats.genericDropped()));
+            emit(out, "meta", "masking_names_snapshot_failures", String.valueOf(nameStats.snapshotFailures()));
+            LogMasking masking = new LogMasking(key, knownOnce, estate, estateNames);
+            emit(out, "meta", "rule_set", LogMasking.RULE_SET.replace('-', '_'));
             ArtefactStore store = new FileArtefactStore(Path.of(System.getenv("UI2_ARTEFACT_STORE_ROOT")),
                     ArtefactStoreCipher.fromBase64Key(SecretFile.readRequired(
                             Path.of(System.getenv("UI2_ARTEFACT_STORE_KEY_FILE")), "artefact_store_key")));

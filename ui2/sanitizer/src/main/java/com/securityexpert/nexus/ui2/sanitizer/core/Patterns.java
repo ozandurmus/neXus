@@ -12,10 +12,14 @@ final class Patterns {
     static final String LABEL = "[\\p{L}\\p{N}](?:[\\p{L}\\p{N}\\p{M}-]{0,61}[\\p{L}\\p{N}\\p{M}])?";
     private static final String NAME_CHAR = "\\p{L}\\p{N}\\p{M}";
 
-    /** Dotted-quad candidates; {@link Addresses#parseV4} decides. Not inside a longer dotted number (OID, version). */
+    /**
+     * Dotted-quad candidates; {@link Addresses#parseV4} decides. Not inside a longer dotted number (OID, version). An
+     * underscore is a delimiter here ({@code logmask-v5}): object-like tokens such as {@code net_192.0.2.7} carry the
+     * address glued to {@code _}.
+     */
     static final Pattern IPV4 = Pattern.compile(
-            "(?<![" + NAME_CHAR + "_.])(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})(?:/(\\d{1,2})(?!\\d))?"
-                    + "(?![" + NAME_CHAR + "_]|\\.\\d)");
+            "(?<![" + NAME_CHAR + ".])(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})(?:/(\\d{1,2})(?!\\d))?"
+                    + "(?![" + NAME_CHAR + "]|\\.\\d)");
 
     /** Runs of IPv6 characters; validated (and trimmed) by {@link Addresses#parseV6}. */
     static final Pattern IPV6_RUN = Pattern.compile("(?<![" + NAME_CHAR + "_:.])[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*");
