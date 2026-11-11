@@ -819,6 +819,21 @@ def test_service_copies_only_required_keys_and_has_namespace_only_service(monkey
     assert all(o["kind"] != "Deployment" or o["metadata"]["name"] == "ui2-preview-service" for o in objects)
 
 
+def test_service_preview_skips_an_optional_secret_that_does_not_exist_yet(monkeypatch):
+    copied = []
+    monkeypatch.setattr(preview, "load", local_load)
+    monkeypatch.setattr(preview, "copy_secret", copied.append)
+    monkeypatch.setattr(preview, "create", lambda ns, obj: None)
+    def fake(ns, *args, **kwargs):
+        if args[:2] == ("get", "secret"):
+            # Only the secrets the service cannot start without exist on the host; optional ones are absent.
+            return "" if args[2] == "ui2-advisory-fetch-token" else "secret/" + args[2]
+        return json.dumps(dict(spec=dict(clusterIP="192.0.2.20")))
+    monkeypatch.setattr(preview, "k", fake)
+    preview.setup_service(ROOT, IMAGE, "192.0.2.10", ENDPOINTS)
+    assert "ui2-advisory-fetch-token" not in copied and "ui2-e2e-machine-token" in copied
+
+
 @pytest.mark.parametrize("code,marker", [(0, "PREVIEW E2E: PASS"), (1, "PREVIEW E2E: PASS"), (0, "missing")])
 def test_client_requires_pass_exit_and_verdict(monkeypatch, code, marker, capsys):
     monkeypatch.setattr(sa, "_git", lambda *a, **kw: "# Synthetic wrapper\n")

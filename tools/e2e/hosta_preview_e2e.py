@@ -905,8 +905,15 @@ def setup_workload(template, image, db_ip, endpoints):
     names = {v["secret"]["secretName"] for v in source_spec.get("volumes", []) if "secret" in v}
     names.update(e["valueFrom"]["secretKeyRef"]["name"] for c in source_spec["containers"] for e in c.get("env", [])
                  if "secretKeyRef" in e.get("valueFrom", {}))
+    required = {v["secret"]["secretName"] for v in source_spec.get("volumes", []) if "secret" in v and not v["secret"].get("optional")}
+    required.update(e["valueFrom"]["secretKeyRef"]["name"] for c in source_spec["containers"] for e in c.get("env", [])
+                    if "secretKeyRef" in e.get("valueFrom", {}) and not e["valueFrom"]["secretKeyRef"].get("optional"))
     deployment = workload_manifest(template, image, db_ip, endpoints)
     for name in sorted(names - {"ui2-db"}):
+        # A secret that every reference marks optional may legitimately not exist yet (the advisory fetch token is
+        # created by the host setup after the first ship); the pod starts without it, so the preview must too.
+        if name not in required and not k("ui2", "get", "secret", name, "--ignore-not-found", "-o", "name").strip():
+            continue
         copy_secret(name)
     for volume in source_spec.get("volumes", []):
         if "configMap" in volume and volume["configMap"]["name"] != "ui2-config":
