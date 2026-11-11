@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0383 · Track: PCP.x · Generated: 2026-11-11T14:21:11Z
+Build: NXS-LOCAL-0383 · Track: PCP.x · Generated: 2026-11-12T19:41:21Z
 
 ## Now
 - NXS-LOCAL-0383 — Enterprise stack alignment, phase 0: Spring Security sign-in, JSON logs, monitoring, secrets, scans (in_progress)
@@ -157,6 +157,7 @@ Build: NXS-LOCAL-0383 · Track: PCP.x · Generated: 2026-11-11T14:21:11Z
 - P1 ui2_b1_05_extract_cp_inventory_subset
 - P1 ui2_b1_06_implement_cp_inventory_capability
 - P1 ui2_b1_13_second_flow_pan_config_export_artefact
+- P2 CP-SHELL-M2-LAB-READ
 - P2 bulk_fleet_ops
 - P2 compliance_assignment_ui_and_registry
 - P2 compliance_check_engine_ui
