@@ -1608,6 +1608,15 @@
       "priority": "P1",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "CP-SHELL-M2-LAB-READ",
+      "category": "collection",
+      "title": "Check Point shell normalization: one-off lab read M2 (deferred by PO 2026-11-11)",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "",
+      "note": ""
     }
   ]
 }

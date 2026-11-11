@@ -1,0 +1,5 @@
+# Check Point shell normalization: one-off lab read M2 (deferred by PO 2026-11-11)
+
+status: deferred · target: 
+
+Deferred by the PO 2026-11-11 ("şimdi değil, backloga koy"). Precondition: PO approval of the exact literal AND a PO-watched run, outside 00/02/06/12/18. Literal (one line, both targets): unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; echo "$0"; type -t vsenv mdsenv mdsstat cplic; echo ${#CPDIR} ${#FWDIR} ${#CPMDIR} ${#MDSVERUTIL}; grep -l vsenv /etc/profile /etc/bashrc /etc/profile.d/*.sh 2>/dev/null. Targets (pseudonyms): FW-VICTOR-09 (R82 MDS) and FW-MIKE-07-M2 (R81.20 VSX member, STANDBY); no R82 gateway in the inventory. Bounds: once per device, class 0, normal neXus SSH exec path and account, 30 s timeout, no retry, HOST-A never used; keep only shell name, the four type results, the four variable lengths and the defining file names. No gate row exists yet. Unblocks phase 2 of docs/design/CP_REMOTE_SHELL_NORMALIZATION_CONTRACT_2026_11_11.md (where vsenv/mdsenv are defined).
