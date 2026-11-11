@@ -67,7 +67,7 @@ for m in "${APPLY[@]:-}"; do [ -n "$m" ] && APPLY_NAMES="$APPLY_NAMES /tmp/$(bas
 # repository (~/nexus.git), which ~/nexus (run_build.sh's checkout) pulls from.
 git -C "$(dirname "$0")/../.." push -q "ssh://$HOST/~/nexus.git" main || { echo "STOP: push to the host repository failed" >&2; exit 6; }
 
-ssh -o ConnectTimeout=10 "$HOST" "LIMIT=$LIMIT SKIP_SECURITY_B64='$SKIP_SECURITY_B64' APPLY_NAMES='$APPLY_NAMES' TARGETS='$TARGETS' PA_BUILD='$PA_BUILD' bash -s" <<'REMOTE'
+ssh -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 "$HOST" "LIMIT=$LIMIT SKIP_SECURITY_B64='$SKIP_SECURITY_B64' APPLY_NAMES='$APPLY_NAMES' TARGETS='$TARGETS' PA_BUILD='$PA_BUILD' bash -s" <<'REMOTE'
 set -uo pipefail
 export KUBECONFIG=$HOME/.kube/config
 export NEXUS_SKIP_SECURITY_REASON="$(printf '%s' "$SKIP_SECURITY_B64" | base64 --decode)"
