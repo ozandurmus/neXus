@@ -1251,6 +1251,15 @@
       "priority": "P0",
       "target": "TopologyNamePseudonymizer.computeDeviceName",
       "note": ""
+    },
+    {
+      "id": "discovery-run-start-empty-body-500",
+      "category": "ui2",
+      "title": "POST /discovery/runs with an empty JSON body answers 500 instead of a 400 validation error",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
     }
   ]
 }
