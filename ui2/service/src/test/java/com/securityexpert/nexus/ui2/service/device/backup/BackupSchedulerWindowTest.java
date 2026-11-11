@@ -78,8 +78,6 @@ class BackupSchedulerWindowTest {
         when(devices.findSummary("spark")).thenReturn(Optional.of(new DeviceSummaryRecord("spark", "gateway",
                 "check_point", DeviceEnrollmentState.ENROLLED, Optional.empty(), Optional.of("Quantum Spark 1590"),
                 Optional.empty(), Optional.empty(), Optional.empty())));
-        var eligibility = mock(MdsExportEligibility.class);
-        when(eligibility.measuredTargets()).thenReturn(Set.of("mds-measured"));
         var jobs = mock(JobAdmissionService.class);
         var submissions = new ArrayList<String>();
         var types = new java.util.HashSet<String>();
@@ -95,8 +93,7 @@ class BackupSchedulerWindowTest {
                     String type = call.getArgument(0), device = call.getArgument(1), actor = call.getArgument(3);
                     window.requireDeviceJobOpen(type, type, actor);
                     assertEquals(date.atTime(2, 0).atZone(JobWindowPolicy.ZONE_ID).toInstant(), now);
-                    assertEquals("cp_mds_export".equals(type) ? ScheduledBackupWindowPolicy.MDS_ACTOR
-                            : ScheduledBackupWindowPolicy.ACTOR, actor);
+                    assertEquals(ScheduledBackupWindowPolicy.ACTOR, actor);
                     assertEquals(device + ":" + type + ":scheduled:" + date, call.getArgument(2));
                     types.add(type);
                     submissions.add(device + ":" + type + ":" + date);
@@ -104,20 +101,20 @@ class BackupSchedulerWindowTest {
                     return new AdmissionResult.Admitted("synthetic-job");
                 }).when(jobs).submit(anyString(), anyString(), anyString(), anyString(), anyString());
                 var collect = new BackupCollectService(devices, jobs, Set.of(), true,
-                        Clock.fixed(now, JobWindowPolicy.ZONE_ID)).withMdsExportEligibility(eligibility);
+                        Clock.fixed(now, JobWindowPolicy.ZONE_ID));
                 var scheduler = new BackupScheduler(store, collect);
                 scheduler.tick(now);
                 scheduler.tick(now.plusSeconds(20));
             }
         }
         assertEquals(expected, store.claims);
-        // The two MDSs get no Gaia backup (PO 2026-10-16); the measured one gets its MDS export.
-        assertEquals(7 * (targets.size() - 2 + 1), submissions.size());
+        // The two MDSs get no Gaia backup (PO 2026-10-16) and no MDS export either: the export is never scheduled,
+        // even for an MDS with an earlier completed manual export (PO 2026-11-11, MDS fork storm fix contract B.1).
+        assertEquals(7 * (targets.size() - 2), submissions.size());
         assertEquals(submissions.size(), Set.copyOf(submissions).size());
-        var expectedTypes = new java.util.HashSet<>(ScheduledBackupWindowPolicy.FLEET_JOB_TYPES);
-        expectedTypes.add(ScheduledBackupWindowPolicy.MDS_EXPORT);
-        assertEquals(expectedTypes, types);
-        assertEquals(Set.of("cp_mds_export"), perDeviceTypes.get("mds-measured"));
+        assertEquals(new java.util.HashSet<>(ScheduledBackupWindowPolicy.FLEET_JOB_TYPES), types);
+        assertFalse(types.contains(ScheduledBackupWindowPolicy.MDS_EXPORT));
+        assertEquals(null, perDeviceTypes.get("mds-measured"));
         assertEquals(null, perDeviceTypes.get("mds-unmeasured"));
         assertEquals(Set.of("rdw_cc_config_backup"), perDeviceTypes.get("controller"));
     }
@@ -134,43 +131,19 @@ class BackupSchedulerWindowTest {
                 DeviceEnrollmentState.ENROLLED, false, null, true);
     }
 
-    @Test void manualFleetBackupRefusesTheMdsGaiaBackupAndDoesNotReadScheduledMdsEligibility() {
+    @Test void manualFleetBackupRefusesTheMdsGaiaBackup() {
         var devices = mock(DeviceRepository.class);
         var target = target("mds-measured", "management_server", "check_point");
         when(devices.listAll()).thenReturn(List.of(summary(target)));
         when(devices.find(target.deviceId())).thenReturn(Optional.of(target));
-        var eligibility = mock(MdsExportEligibility.class);
         var jobs = mock(JobAdmissionService.class);
         when(jobs.submit(anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new AdmissionResult.Admitted("synthetic-job"));
         var collect = new BackupCollectService(devices, jobs, Set.of(), true,
-                Clock.fixed(at("2026-10-09T06:00:00"), JobWindowPolicy.ZONE_ID))
-                .withMdsExportEligibility(eligibility);
+                Clock.fixed(at("2026-10-09T06:00:00"), JobWindowPolicy.ZONE_ID));
         assertEquals(new BackupCollectService.BulkOutcome(1, 0, 1),
                 collect.requestCollectAll("synthetic-operator", "Manual fleet backup"));
-        verifyNoInteractions(eligibility);
         verifyNoInteractions(jobs);
-    }
-
-    @Test void scheduledMdsExportUsesTheLastWindowSecondAndNeverReadsEligibilityOutsideIt() {
-        var devices = mock(DeviceRepository.class);
-        var target = target("mds-measured", "management_server", "check_point");
-        when(devices.find(target.deviceId())).thenReturn(Optional.of(target));
-        var eligibility = mock(MdsExportEligibility.class);
-        when(eligibility.measuredTargets()).thenReturn(Set.of(target.deviceId()));
-        var jobs = mock(JobAdmissionService.class);
-        when(jobs.submit(anyString(), anyString(), anyString(), anyString(), anyString()))
-                .thenReturn(new AdmissionResult.Admitted("synthetic-job"));
-        for (var local : List.of("2026-10-09T01:59:59", "2026-10-09T02:59:59", "2026-10-09T03:00:00")) {
-            new BackupCollectService(devices, jobs, Set.of(), true,
-                    Clock.fixed(at(local), JobWindowPolicy.ZONE_ID))
-                    .withMdsExportEligibility(eligibility).requestScheduledMdsExports();
-        }
-        verify(eligibility).measuredTargets();
-        verify(jobs).submit(eq("cp_mds_export"), eq(target.deviceId()),
-                eq("mds-measured:cp_mds_export:scheduled:2026-10-09"),
-                eq(ScheduledBackupWindowPolicy.MDS_ACTOR), anyString());
-        verifyNoMoreInteractions(jobs);
     }
 
     @Test void restartAndStaleReplicaCannotClaimAnotherRunOnTheSameLocalDay() {
@@ -184,7 +157,6 @@ class BackupSchedulerWindowTest {
         assertTrue(new BackupScheduler(store, collect).tick(at("2026-10-09T02:59:00")).isEmpty());
         assertEquals(1, store.claims.size());
         verify(collect).requestCollectAll(anyString(), anyString());
-        verify(collect).requestScheduledMdsExports();
     }
 
     @Test void missedDaysAreSkippedAndOnlyTodaysRunCanStartWithinTheBackupWindow() {
@@ -199,7 +171,6 @@ class BackupSchedulerWindowTest {
         assertTrue(scheduler.tick(at("2026-10-15T03:00:00")).isEmpty());
         assertEquals(List.of(at("2026-10-15T02:30:00")), store.claims);
         verify(collect).requestCollectAll(anyString(), anyString());
-        verify(collect).requestScheduledMdsExports();
     }
 
     @Test void cronOutsideBackupWindowDoesNotCarryOverToTheNextDay() {

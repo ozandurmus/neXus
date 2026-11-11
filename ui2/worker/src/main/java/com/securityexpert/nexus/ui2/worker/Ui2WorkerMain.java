@@ -336,13 +336,14 @@ public final class Ui2WorkerMain {
         backupJobExecutor.withQuantumSparkBackupExecutor(new com.securityexpert.nexus.ui2.worker.backup.cp.QuantumSparkBackupExecutor(
                 compositeTransport, artefactStore, ccInbox == null || ccInbox.isBlank() ? null : java.nio.file.Path.of(ccInbox),
                 System.getenv("UI2_CC_RECEIVER_HOST"), ref -> panCredentialResolver.resolve(ref).password()));
-        // V61: MDS export -- mds_backup of the whole server; its run time on this estate is still to be measured, so
-        // the deadline is generous and configurable (UI2_MDS_EXPORT_RUN_DEADLINE_SECONDS).
+        // V61: MDS export -- mds_backup of the whole server. The wait for its exit code is capped at 45 min (PO
+        // 2026-11-11, MDS fork storm fix contract C.1: five times the usual 8-9 min, 1.6 times the longest measured 28 min);
+        // bundling, digest and fetch keep their own timeouts. UI2_MDS_EXPORT_RUN_DEADLINE_SECONDS overrides it.
         backupJobExecutor.withMdsExportExecutor(new com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportExecutor(compositeTransport,
                 artefactStore,
                 Long.parseLong(System.getenv().getOrDefault("UI2_MDS_EXPORT_MIN_FREE_BYTES", String.valueOf(20L * 1024 * 1024 * 1024))),
                 Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_MDS_EXPORT_POLL_INTERVAL_SECONDS", "30"))),
-                Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_MDS_EXPORT_RUN_DEADLINE_SECONDS", "14400")))));
+                Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_MDS_EXPORT_RUN_DEADLINE_SECONDS", "2700")))));
 
         DiscoveryRunRepository discoveryRunRepository = new JooqDiscoveryRunRepository(transactionBoundary);
         var policyCollectionRepository = new com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository(transactionBoundary);

@@ -12,19 +12,34 @@ import java.util.regex.Pattern;
  */
 public final class MdsExportPlan {
 
+    /**
+     * Check Point remote shell normalization, phase 1 (CP_REMOTE_SHELL_NORMALIZATION_CONTRACT_2026_11_11.md section 6.1,
+     * PO approved 2026-11-11): the command runs in the shell sshd starts (no {@code bash -lc}), BASH_ENV and ENV are
+     * cleared, the Check Point environment is loaded explicitly, and both are cleared again. A login shell read the
+     * vendor {@code /root/.bash_profile}, which exports {@code BASH_ENV=$HOME/.bashrc}; every non-interactive bash under
+     * mds_backup then re-sourced the Check Point profile (the 2026-11-11 fork storm,
+     * INCIDENT_2026_11_11_MDS_FORK_STORM.md).
+     */
+    public static final String CP_ENV = "unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; ";
+
     public static final String DF_VAR_LOG = "df -P /var/log";
     public static final String SHOW_VERSION_ALL = "clish -c 'show version all'";
     public static final String MKDIR = "mkdir -p %s";
-    public static final String MDSSTAT = "bash -lc 'mdsstat' > %s/mdsstat.txt 2>&1";
+    public static final String MDSSTAT = CP_ENV + "mdsstat > %s/mdsstat.txt 2>&1";
     public static final String GAIA_CONFIGURATION = "clish -c 'show configuration' > %s/gaia_config.txt";
-    public static final String LICENSES = "bash -lc 'cplic print -x' > %s/cplic.txt 2>&1";
+    public static final String LICENSES = CP_ENV + "cplic print -x > %s/cplic.txt 2>&1";
     public static final String ROUTES = "netstat -rn > %s/netstat.txt";
     public static final String UNAME = "uname -a > %s/uname.txt";
-    /** Started in the background from /var/log (outside the product tree, as the vendor requires); exit code to a file. */
-    /** Detached from the SSH channel (setsid, stdin from /dev/null): measured 2026-09-24, without it the exec
-     * channel stayed open on the background process's stdin and the start "timed out" while mds_backup ran. */
-    public static final String MDS_BACKUP_START = "cd /var/log && setsid nohup bash -lc '$CPMDIR/scripts/mds_backup -b -l -d %1$s "
-            + "> %1$s/mds_backup.log 2>&1; echo $? > %1$s/mds_backup.rc' </dev/null >/dev/null 2>&1 &";
+    /**
+     * Started in the background from /var/log (outside the product tree, as the vendor requires); exit code to a file.
+     * Detached from the SSH channel (setsid, stdin from /dev/null): measured 2026-09-24, without it the exec channel
+     * stayed open on the background process's stdin and the start "timed out" while mds_backup ran. Normalization
+     * phase 1 (PO 2026-11-11): the inner shell is {@code bash --noprofile --norc}, not a login shell, so no
+     * /etc/profile, ~/.bash_profile or ~/.bashrc is read and nothing re-exports BASH_ENV under mds_backup.
+     */
+    public static final String MDS_BACKUP_START = CP_ENV + "cd /var/log && setsid nohup bash --noprofile --norc -c "
+            + "\"$CPMDIR/scripts/mds_backup -b -l -d %1$s > %1$s/mds_backup.log 2>&1; echo \\$? > %1$s/mds_backup.rc\" "
+            + "</dev/null >/dev/null 2>&1 &";
     public static final String MDS_BACKUP_POLL = "cat %s/mds_backup.rc";
     public static final String LIST = "ls %s";
     public static final String BUNDLE = "cd %1$s && tar -czf %1$s.tgz .";

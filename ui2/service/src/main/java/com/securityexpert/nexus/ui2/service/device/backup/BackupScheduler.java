@@ -68,8 +68,8 @@ public final class BackupScheduler {
                 "Scheduled fleet backup (slot " + slot.get() + ")");
         LOG.info("[BACKUP_SCHEDULE] slot " + slot.get() + ": targets=" + outcome.targets() + " admitted="
                 + outcome.admitted() + " refused=" + outcome.refused());
-        // Switched off while the fleet was being admitted: the MDS exports are not started (the sweep cancels the rest).
-        if (switches.isOn(ScheduledJobFamily.SCHEDULED_BACKUP)) collectService.requestScheduledMdsExports();
+        // No MDS export is ever scheduled (PO 2026-11-11, "İzlenen elle çalışsın"; MDS fork storm fix contract B.1):
+        // an operator starts it by hand and watches it.
         return slot;
     }
 }

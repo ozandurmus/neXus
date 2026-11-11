@@ -60,6 +60,20 @@ class MdsExportExecutorTest {
     }
 
     @Test
+    void theThreeNormalizedLiteralsAreExactlyThePoApprovedOnes() {
+        // CP_REMOTE_SHELL_NORMALIZATION_CONTRACT_2026_11_11.md section 6.1, PO 2026-11-11 ("Üçünü onayla").
+        String prefix = "unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; ";
+        assertEquals(prefix + "cd /var/log && setsid nohup bash --noprofile --norc -c \"$CPMDIR/scripts/mds_backup -b -l -d " + DIR
+                + " > " + DIR + "/mds_backup.log 2>&1; echo \\$? > " + DIR + "/mds_backup.rc\" </dev/null >/dev/null 2>&1 &",
+                MdsExportPlan.with(MdsExportPlan.MDS_BACKUP_START, DIR));
+        assertEquals(prefix + "mdsstat > " + DIR + "/mdsstat.txt 2>&1", MdsExportPlan.with(MdsExportPlan.MDSSTAT, DIR));
+        assertEquals(prefix + "cplic print -x > " + DIR + "/cplic.txt 2>&1", MdsExportPlan.with(MdsExportPlan.LICENSES, DIR));
+        for (String literal : MdsExportPlan.LITERALS) {
+            assertFalse(literal.contains("bash -lc") || literal.contains("bash -l ") || literal.contains("--login"), literal);
+        }
+    }
+
+    @Test
     void theWorkDirectoryIsBuiltFromTheJobIdOnly() {
         assertEquals(DIR, MdsExportPlan.workDir(JOB));
         assertEquals("/var/log/nexus-mds-abcdef12-f", MdsExportPlan.workDir("ABCDEF12;rm -rf /")); // only [a-f0-9-] survives
@@ -120,6 +134,54 @@ class MdsExportExecutorTest {
         assertFalse(transport.issued.stream().anyMatch(c -> c.startsWith("rm -rf")));
     }
 
+    @Test
+    void aLostLeaseBeforeTheStartStartsNothing() {
+        BackupResult r = executor.collect(request, "dev", JOB, () -> false);
+        assertTrue(r instanceof BackupResult.SubmitRefused, String.valueOf(r));
+        assertFalse(transport.issued.stream().anyMatch(c -> c.contains("mds_backup -b")), "mds_backup is never started");
+        assertTrue(transport.issued.contains("rm -rf " + DIR + " " + DIR + ".tgz"), "the empty work directory is ours to remove");
+    }
+
+    @Test
+    void theBoundaryIsMarkedOnceRightBeforeTheStartCommand() {
+        List<Integer> markedAt = new ArrayList<>();
+        BackupResult r = executor.collect(request, "dev", JOB, () -> {
+            markedAt.add(transport.issued.size());
+            return true;
+        });
+        assertTrue(r instanceof BackupResult.Completed, String.valueOf(r));
+        assertEquals(1, markedAt.size());
+        assertTrue(transport.issued.get(markedAt.get(0)).contains("mds_backup -b"), "the next command after the mark is the start");
+    }
+
+    @Test
+    void anInterruptedRunStopsPollingAndEndsOutcomeUnknownWithoutCleanup() {
+        transport.rc = null;
+        transport.interruptOnPoll = true;
+        executor = new MdsExportExecutor(transport,
+                new FileArtefactStore(tempDir, ArtefactStoreCipher.fromBase64Key(Base64.getEncoder().encodeToString(new byte[32]))),
+                1024L * 1024, Duration.ofMillis(1), Duration.ofSeconds(30));
+        try {
+            BackupResult r = executor.collect(request, "dev", JOB);
+            assertTrue(r instanceof BackupResult.OutcomeUnknown, String.valueOf(r));
+            assertTrue(((BackupResult.OutcomeUnknown) r).reason().contains("interrupted"));
+            assertEquals(1, transport.issued.stream().filter(c -> c.startsWith("cat ")).count(), "no busy polling after the interrupt");
+            assertFalse(transport.issued.stream().anyMatch(c -> c.startsWith("rm -rf")));
+        } finally {
+            Thread.interrupted(); // clear the flag for the next test
+        }
+    }
+
+    @Test
+    void threeUnansweredPollsInARowAreRecordedAsLostContactAndPollingContinues() {
+        transport.rc = null;
+        transport.pollsFail = true;
+        BackupResult r = com.securityexpert.nexus.ui2.worker.transcript.TranscriptAssertions.capture(
+                () -> executor.collect(request, "dev", JOB), "device stopped answering");
+        assertTrue(r instanceof BackupResult.OutcomeUnknown, String.valueOf(r));
+        assertTrue(transport.issued.stream().filter(c -> c.startsWith("cat ")).count() > MdsExportExecutor.LOST_CONTACT_POLLS);
+    }
+
     private static final class Scripted implements DeviceTransport {
         final List<String> issued = new ArrayList<>();
         String rc = "0";
@@ -127,6 +189,8 @@ class MdsExportExecutorTest {
         String digest;
         String fetchedPath;
         boolean startTimesOut;
+        boolean interruptOnPoll;
+        boolean pollsFail;
 
         Scripted() {
             try {
@@ -156,6 +220,12 @@ class MdsExportExecutorTest {
                         + dfAvailableKb + " 1% /var/log\n", 0);
             }
             if (c.startsWith("cat ") && c.endsWith("mds_backup.rc")) {
+                if (interruptOnPoll) {
+                    Thread.currentThread().interrupt();
+                }
+                if (pollsFail) {
+                    return new ExecResult.ChannelFailed("synthetic: no answer");
+                }
                 return rc == null ? new ExecResult.Completed("cat: no such file", 1) : new ExecResult.Completed(rc + "\n", 0);
             }
             if (c.startsWith("ls ")) {

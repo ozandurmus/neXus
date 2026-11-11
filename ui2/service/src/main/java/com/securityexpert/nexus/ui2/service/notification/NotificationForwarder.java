@@ -92,7 +92,7 @@ public class NotificationForwarder {
             return dsl.fetch(
                 "select j.job_id, j.job_type, j.target_device_id, d.observed_hostname, j.terminal_reason, j.finished_at "
                         + "from jobs j left join devices d on d.device_id = j.target_device_id "
-                        + "where (j.state = 'FAILED' or (j.job_type in ('cp_cluster_failover','pan_cluster_failover') "
+                        + "where (j.state = 'FAILED' or (j.job_type in ('cp_cluster_failover','pan_cluster_failover','cp_mds_export') "
                         + "and j.state = 'OUTCOME_UNKNOWN')) and j.finished_at > {0} "
                         + "order by j.finished_at limit 200",
                 Timestamp.from(from));

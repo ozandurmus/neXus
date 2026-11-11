@@ -129,9 +129,12 @@ final class NotificationMailRouter {
                 }
             }
             case "backup_failure", "job_failure" -> {
-                String backup = "(j.job_type like '%\\_backup' escape '\\' or j.job_type = 'https_vendor_backup')";
+                // The MDS export is a backup (cp_mds_export); its OUTCOME_UNKNOWN (ceiling reached, contact lost, cancelled
+                // while mds_backup may still run) alerts like a failure (MDS fork storm fix contract C.3).
+                String backup = "(j.job_type like '%\\_backup' escape '\\' or j.job_type in ('https_vendor_backup', 'cp_mds_export'))";
                 String predicate = type.equals("backup_failure")
-                        ? backup + " and (j.state = 'FAILED' or (j.state = 'COMPLETED' and j.terminal_reason like 'partial:%'))"
+                        ? backup + " and (j.state = 'FAILED' or (j.job_type = 'cp_mds_export' and j.state = 'OUTCOME_UNKNOWN')"
+                            + " or (j.state = 'COMPLETED' and j.terminal_reason like 'partial:%'))"
                         : "not " + backup + " and (j.state = 'FAILED' or "
                             + "(j.job_type in ('cp_cluster_failover','pan_cluster_failover') and j.state = 'OUTCOME_UNKNOWN'))";
                 rows = dsl.fetch("select j.job_id, j.job_type, j.terminal_reason, j.finished_at, "
