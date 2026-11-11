@@ -131,7 +131,8 @@ public class SystemLogReadConfiguration {
             Map<String, DevicePlatformFacts> facts = platformFacts == null ? Map.of() : platformFacts.findAll();
             for (DeviceSummaryRecord d : devices.listAll()) {
                 String cluster = d.clusterMemberRef().filter(s -> !s.isBlank()).orElse(null);
-                d.observedHostname().filter(s -> !s.isBlank())
+                // A hostname that is an address or a placeholder has no name to mask; the address entries below cover it.
+                d.observedHostname().filter(s -> !TopologyNamePseudonymizer.isNotAHostname(s))
                         .ifPresent(host -> out.add(EstateIdentity.name(host, names.maskDeviceName(host, cluster))));
                 if (cluster != null) out.add(EstateIdentity.name(cluster, names.maskClusterName(cluster)));
                 d.managementIp().ifPresent(address -> out.add(EstateIdentity.address(address)));

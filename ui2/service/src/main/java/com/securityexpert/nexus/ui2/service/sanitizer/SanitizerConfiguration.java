@@ -88,7 +88,7 @@ public class SanitizerConfiguration {
                 String cluster = d.clusterMemberRef().filter(s -> !s.isBlank()).orElse(null);
                 d.observedHostname().filter(s -> !s.isBlank()).ifPresent(host -> {
                     String pseudonym = names.maskDeviceName(host, cluster);
-                    if (!"Unknown".equals(pseudonym)) map.put(host.strip(), pseudonym);
+                    if (!TopologyNamePseudonymizer.isGap(pseudonym)) map.put(host.strip(), pseudonym);
                 });
                 if (cluster != null) map.put(cluster.strip(), names.maskClusterName(cluster));
             });

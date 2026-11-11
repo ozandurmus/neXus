@@ -578,15 +578,6 @@
       "note": ""
     },
     {
-      "id": "aiview_masking_manufactures_names_from_any_string",
-      "category": "privacy",
-      "title": "The AIView pseudonymizer turns any non-blank string into...",
-      "status": "planned",
-      "priority": "P0",
-      "target": "TopologyNamePseudonymizer.computeDeviceName",
-      "note": ""
-    },
-    {
       "id": "ui2_inventory_and_configuration_design_language",
       "category": "ui",
       "title": "Apply the inventory and configuration design language",
@@ -1250,6 +1241,15 @@
       "status": "planned",
       "priority": "P2",
       "target": "REPORTS_R2_CONTRACT.md",
+      "note": ""
+    },
+    {
+      "id": "aiview_masking_manufactures_names_from_any_string",
+      "category": "privacy",
+      "title": "The AIView pseudonymizer turns any non-blank string into...",
+      "status": "in_progress",
+      "priority": "P0",
+      "target": "TopologyNamePseudonymizer.computeDeviceName",
       "note": ""
     }
   ]
