@@ -27,7 +27,7 @@ public final class LifecycleService {
     private final DevicePlatformFactsRepository facts;
     private final AdvisoryReadService advisories;
 
-    /** Without the advisory read service the payload carries no {@code vulnerabilities} object (the pre-V204 shape). */
+    /** Without the advisory read service the payload carries no {@code vulnerabilities} object (the pre-V205 shape). */
     public LifecycleService(LifecycleCatalogRepository catalog, DeviceRepository devices,
             DeviceLifecycleRepository stored, DevicePlatformFactsRepository facts) {
         this(catalog, devices, stored, facts, null);
