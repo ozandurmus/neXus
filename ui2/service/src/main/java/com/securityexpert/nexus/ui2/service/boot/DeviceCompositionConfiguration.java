@@ -90,7 +90,7 @@ public class DeviceCompositionConfiguration {
         return new com.securityexpert.nexus.ui2.persistence.lifecycle.JooqLifecycleCatalogRepository(transactionBoundary);
     }
 
-    /** The advisory store (V204, docs/design/ADVISORY_MATCHING_CONTRACT.md section 5). */
+    /** The advisory store (V205, docs/design/ADVISORY_MATCHING_CONTRACT.md section 5). */
     @Bean
     public com.securityexpert.nexus.ui2.persistence.advisory.AdvisoryRepository advisoryRepository(
             TransactionBoundary transactionBoundary) {

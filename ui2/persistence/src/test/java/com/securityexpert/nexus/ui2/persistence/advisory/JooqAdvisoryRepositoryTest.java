@@ -32,7 +32,7 @@ import com.securityexpert.nexus.ui2.persistence.advisory.AdvisoryRepository.Stor
 
 /**
  * Statement-level tests in the style of the lifecycle repository tests: the statements and their bindings are captured
- * with a mock connection (no PostgreSQL is available here); the V204 CHECK constraints are exercised on a real database
+ * with a mock connection (no PostgreSQL is available here); the V205 CHECK constraints are exercised on a real database
  * only, by the orchestrator's dry run.
  */
 class JooqAdvisoryRepositoryTest {
