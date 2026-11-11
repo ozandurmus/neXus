@@ -99,4 +99,61 @@ class TopologyNamePseudonymizerTest {
         assertThat(pseudonymizer.maskText(masked)).isEqualTo(masked);
     }
 
+
+    @Test
+    void aValueThatIsNotAHostnameIsAGapAndNeverAFirewallName() {
+        // Built at runtime: synthetic documentation-range addresses and placeholder spellings only.
+        String v4 = String.join(".", "198", "51", "100", "7");
+        String v6 = String.join(":", "2001", "db8", "", "1");
+        for (String value : new String[] {v4, v4 + "/24", v4 + ":22", v6, "[" + v6 + "]", "UNKNOWN", "Unknown hostname",
+                "n/a", "-", "None", "null", "(none)"}) {
+            assertThat(pseudonymizer.maskDeviceName(value, null)).as(value).isEqualTo(TopologyNamePseudonymizer.GAP);
+            assertThat(pseudonymizer.maskDeviceName(value, "CLUSTER-ONE")).as(value + " with cluster")
+                    .isEqualTo(TopologyNamePseudonymizer.GAP);
+            assertThat(pseudonymizer.maskManagedDeviceName(value)).as(value + " managed")
+                    .isEqualTo(TopologyNamePseudonymizer.GAP);
+            assertThat(TopologyNamePseudonymizer.isNotAHostname(value)).as(value).isTrue();
+        }
+        assertThat(pseudonymizer.maskDeviceName("", null)).isEmpty();
+        assertThat(pseudonymizer.maskDeviceName(null, null)).isNull();
+        assertThat(TopologyNamePseudonymizer.isNotAHostname("  ")).isTrue();
+    }
+
+    @Test
+    void anyRealHostnameShapeIsStillMasked() {
+        for (String host : new String[] {"fw-example-01", "ARKTEST-FW", "mgmt1.example.test", "198-51-100-7", "node7", "na"}) {
+            assertThat(TopologyNamePseudonymizer.isNotAHostname(host)).as(host).isFalse();
+            assertThat(pseudonymizer.maskDeviceName(host, null)).as(host).startsWith("FW-");
+        }
+    }
+
+    @Test
+    void aNameEqualToTheDevicesOwnManagementAddressIsAGap() {
+        String address = String.join(".", "203", "0", "113", "9");
+        assertThat(pseudonymizer.maskDeviceName(address, null, "dev-1", address)).isEqualTo(TopologyNamePseudonymizer.GAP);
+        // A dotted name that is not the address keeps its pseudonym, and no address means no comparison.
+        assertThat(pseudonymizer.maskDeviceName("gw.example.test", null, "dev-1", address)).startsWith("FW-");
+        assertThat(pseudonymizer.maskDeviceName("gw.example.test", null, "dev-1", null)).startsWith("FW-");
+        // A name equal to an address that is not a literal (a DNS name used for management) is a gap as well.
+        assertThat(pseudonymizer.maskDeviceName("Mgmt.Example.Test", null, "dev-2", "mgmt.example.test"))
+                .isEqualTo(TopologyNamePseudonymizer.GAP);
+    }
+
+    @Test
+    void unknownHostTokenIsStableKeyedDistinctAndIdempotent() {
+        String a = pseudonymizer.maskUnknownHost("device-a");
+        String b = pseudonymizer.maskUnknownHost("device-b");
+        assertThat(a).matches("UNKNOWN-HOST-[0-9a-f]{6}").isEqualTo(pseudonymizer.maskUnknownHost("device-a"));
+        assertThat(a).isNotEqualTo(b).doesNotContain("device-a");
+        assertThat(a).doesNotStartWith("FW-");
+        // Another key gives another token; the token passes through a second masking unchanged.
+        TopologyNamePseudonymizer other = new TopologyNamePseudonymizer(
+                "abcdefghijklmnopqrstuvwxyz012345".getBytes(StandardCharsets.UTF_8));
+        assertThat(other.maskUnknownHost("device-a")).isNotEqualTo(a);
+        assertThat(pseudonymizer.maskDeviceName(a, null)).isEqualTo(a);
+        assertThat(TopologyNamePseudonymizer.isGap(a)).isTrue();
+        assertThat(TopologyNamePseudonymizer.isGap("FW-ALPHA-01")).isFalse();
+        // The gap is never registered for free-text replacement.
+        assertThat(pseudonymizer.maskText("host UNKNOWN is down")).isEqualTo("host UNKNOWN is down");
+    }
 }

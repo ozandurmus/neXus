@@ -1,18 +1,18 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0383 · Track: PCP.x · Generated: 2026-11-10T08:48:41Z
+Build: NXS-LOCAL-0383 · Track: PCP.x · Generated: 2026-11-11T00:13:56Z
 
 ## Now
 - NXS-LOCAL-0383 — Enterprise stack alignment, phase 0: Spring Security sign-in, JSON logs, monitoring, secrets, scans (in_progress)
 ## Next
 - overview_acceptance_and_member_specific_tuning — Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
+- P0/in_progress aiview_masking_manufactures_names_from_any_string — The AIView pseudonymizer turns any non-blank string into.. (target: TopologyNamePseudonymizer.computeDeviceN)
 - P0/in_progress cyber_controller_known_hosts_after_hosta_rebuild — Cyber Controller SFTP push to HOST-A fails after the... (target: HOST_A_REBUILD_RUNBOOK.md)
 - P0/in_progress hosta_rebuild_real_env_acceptance — HOST-A rebuilt 2026-09-25: PO browser acceptance under... (target: HOST_A_REBUILD_RUNBOOK.md)
 - P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on... (target: Pre-CLASS-2 (OP.0b/OP.2), independent of)
 - P0/in_progress pan_tls_trust_rejects_corporate_ca — Palo Alto discovery cannot reach a Panorama fronted by a.. (target: PanXmlApiTransport certificate verificat)
 - P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test... (target: PRIVATE_REPLAY_ARCHITECTURE.md)
 - P0/in_progress recovery_offhost_key_custody — Off-host recovery artifacts and encryption-key custody (target: DEPLOY.1; blocks reliance on RB.3b recov)
-- P0/planned aiview_masking_manufactures_names_from_any_string — The AIView pseudonymizer turns any non-blank string into.. (target: TopologyNamePseudonymizer.computeDeviceN)
 - P0/planned cluster_membership_lost_at_enrollment — Cluster membership is known at discovery but does not... (target: enrollment/confirm path writing...)
 - P0/planned deploy1_evidence_egress_policy — DEPLOY.1 — Evidence Egress & Sharing Policy (target: DEPLOY.1)
 - P0/planned discovery_lateral_join_drops_cluster_members — Device display falls back to the management IP for every.. (target: JooqDeviceRepository DEVICE_SELECT later)

@@ -302,7 +302,10 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                 }
                 case "hostname", "subject_cn", "issuer_cn", "device", "point_label", "capture_name" -> {
                     if (value instanceof String s && "hostname".equals(key) && rowDeviceId != null) {
-                        result.put(key, topologyPseudonymizer.maskDeviceName(s, clusterRef, rowDeviceId));
+                        // A name equal to the row's own management address is a display fallback, not a hostname.
+                        String ownAddress = map.get("management_ip") instanceof String a ? a
+                                : map.get("address") instanceof String a2 ? a2 : null;
+                        result.put(key, topologyPseudonymizer.maskDeviceName(s, clusterRef, rowDeviceId, ownAddress));
                     } else if (value instanceof String s) {
                         result.put(key, topologyPseudonymizer.maskDeviceName(s, clusterRef));
                     } else {
@@ -541,14 +544,15 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             String fallbackId = deviceId != null ? deviceId : clusterRef;
             if (name != null && !name.isBlank()) {
                 String masked = topologyPseudonymizer.maskDeviceName(name, null, deviceId);
-                if (masked != null && !"Unknown".equals(masked)) {
+                if (masked != null && !TopologyNamePseudonymizer.isGap(masked)) {
                     return masked;
                 }
                 if (fallbackId == null) {
-                    return topologyPseudonymizer.maskDeviceName("source:" + name.strip(), null, null);
+                    return topologyPseudonymizer.maskUnknownHost("source:" + name.strip());
                 }
             }
-            return fallbackId != null ? topologyPseudonymizer.maskDeviceName(fallbackId, null, fallbackId) : null;
+            // No hostname to mask: a keyed gap token for the opaque ID, never an invented FW- name.
+            return fallbackId != null ? topologyPseudonymizer.maskUnknownHost(fallbackId) : null;
         }
         if (kind == null && jobType != null
                 && com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.FAILOVER_JOB_TYPES.contains(jobType)
@@ -567,15 +571,15 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
         }
         if (name != null && !name.isBlank()) {
             String masked = topologyPseudonymizer.maskDeviceName(name, clusterRef, deviceId);
-            if (masked != null && !"Unknown".equals(masked)) {
+            if (masked != null && !TopologyNamePseudonymizer.isGap(masked)) {
                 return masked;
             }
             if (deviceId == null) {
-                return topologyPseudonymizer.maskDeviceName("device:" + name.strip(), clusterRef, null);
+                return topologyPseudonymizer.maskUnknownHost("device:" + name.strip());
             }
         }
         if (deviceId != null) {
-            return topologyPseudonymizer.maskDeviceName(deviceId, clusterRef, deviceId);
+            return topologyPseudonymizer.maskUnknownHost(deviceId);
         }
         return null;
     }

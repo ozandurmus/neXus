@@ -31,6 +31,22 @@ public class TopologyNamePseudonymizer {
     private static final Pattern MEMBER_ORDINAL_PATTERN = Pattern.compile("[-_.]?(?:0?([1-9]|10)|m([1-9]|10)|member([1-9]|10)|aa|bb)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern IPV4_PATTERN = Pattern.compile("^(?:\\d{1,3}\\.){3}\\d{1,3}(?:/\\d{1,2})?$");
 
+    /**
+     * What a masked projection shows where the source holds no hostname: a missing value, a placeholder, or a
+     * management address that a display fallback put in the name column. A fixed word, not a pseudonym, so it can
+     * never be mistaken for a healthy device.
+     */
+    public static final String GAP = "Unknown";
+
+    /** Prefix of {@link #maskUnknownHost}: a keyed, stable token that is plainly a gap and never an {@code FW-} name. */
+    public static final String UNKNOWN_HOST_PREFIX = "UNKNOWN-HOST-";
+    private static final Pattern UNKNOWN_HOST_TOKEN = Pattern.compile("^UNKNOWN-HOST-[0-9a-f]{6}$");
+
+    /** Placeholder spellings (lower case) that stand for "no hostname"; nothing is normalised beyond this list. */
+    private static final java.util.Set<String> PLACEHOLDERS = java.util.Set.of(
+            "unknown", "unknown host", "unknown hostname", "unknown-host", "n/a", "none", "null",
+            "undefined", "not set", "not available", "-", "--", "?", "(none)", "(null)", "(unknown)");
+
     private final byte[] secretKey;
     private final IdentityTokens identityTokens;
     private final Map<String, String> clusterCache = new ConcurrentHashMap<>();
@@ -120,13 +136,61 @@ public class TopologyNamePseudonymizer {
         return null;
     }
 
+    /**
+     * True for a value that cannot be a hostname: blank, a placeholder such as "UNKNOWN", an IPv4 literal (with an
+     * optional prefix length) or anything with a colon (an IPv6 literal or an address with a port). Only the shape is read; nothing is cast or normalised, and the
+     * identity of a real hostname is never touched.
+     */
+    public static boolean isNotAHostname(String value) {
+        if (value == null) {
+            return true;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty() || trimmed.contains(":") || IPV4_PATTERN.matcher(trimmed).matches()) {
+            return true;
+        }
+        return PLACEHOLDERS.contains(trimmed.toLowerCase(java.util.Locale.ROOT));
+    }
+
+    /** True when {@code masked} is the gap marker, whether the fixed word or a keyed {@link #maskUnknownHost} token. */
+    public static boolean isGap(String masked) {
+        return masked != null && (GAP.equals(masked) || UNKNOWN_HOST_TOKEN.matcher(masked).matches());
+    }
+
+    /**
+     * A stable gap token for a device that has no hostname, keyed by an opaque handle (its device ID): the same
+     * device always shows the same {@code UNKNOWN-HOST-xxxxxx}, two devices differ, and it can never read as a
+     * healthy {@code FW-} name. The key is hashed, never shown.
+     */
+    public String maskUnknownHost(String opaqueKey) {
+        String key = opaqueKey == null ? "" : opaqueKey.trim();
+        byte[] hash = hmacSha256("UNKNOWNHOST:" + key);
+        return UNKNOWN_HOST_PREFIX + java.util.HexFormat.of().formatHex(hash, 0, 3);
+    }
+
+    /**
+     * Like {@link #maskDeviceName(String, String, String)}, but a name equal to the device's own management address
+     * (a display fallback put it in the name column) is a gap too. The comparison is a trimmed, case-insensitive
+     * string match, nothing more.
+     */
+    public String maskDeviceName(String rawDeviceName, String clusterMemberRef, String deviceId, String managementAddress) {
+        if (rawDeviceName != null && managementAddress != null && !managementAddress.isBlank()
+                && rawDeviceName.trim().equalsIgnoreCase(managementAddress.trim())) {
+            return GAP;
+        }
+        return maskDeviceName(rawDeviceName, clusterMemberRef, deviceId);
+    }
+
     public String maskDeviceName(String rawDeviceName, String clusterMemberRef) {
         if (rawDeviceName == null || rawDeviceName.isBlank()) {
             return rawDeviceName;
         }
         String trimmed = rawDeviceName.trim();
-        if ("unknown".equalsIgnoreCase(trimmed) || IPV4_PATTERN.matcher(trimmed).matches() || trimmed.contains(":")) {
-            return "Unknown";
+        if (UNKNOWN_HOST_TOKEN.matcher(trimmed).matches()) {
+            return trimmed;
+        }
+        if (isNotAHostname(trimmed)) {
+            return GAP;
         }
         String key = trimmed + "::" + (clusterMemberRef != null ? clusterMemberRef.trim() : "");
         String masked = deviceCache.computeIfAbsent(key, k -> computeDeviceName(trimmed, clusterMemberRef));
@@ -145,7 +209,7 @@ public class TopologyNamePseudonymizer {
      */
     public String maskDeviceName(String rawDeviceName, String clusterMemberRef, String deviceId) {
         String base = maskDeviceName(rawDeviceName, clusterMemberRef);
-        if (deviceId == null || deviceId.isBlank() || deviceDirectory == null || base == null || "Unknown".equals(base)) {
+        if (deviceId == null || deviceId.isBlank() || deviceDirectory == null || base == null || isGap(base)) {
             return base;
         }
         DeviceNameOverride override = disambiguation().get(deviceId.trim());
@@ -164,6 +228,9 @@ public class TopologyNamePseudonymizer {
             return rawName;
         }
         String trimmed = rawName.trim();
+        if (isNotAHostname(trimmed)) {
+            return GAP;
+        }
         String masked = managedCache.computeIfAbsent(trimmed.toUpperCase(java.util.Locale.ROOT), upper -> {
             byte[] hash = hmacSha256("MANAGED:" + upper);
             int dictIndex = (hash[0] & 0xFF) % DICTIONARY.size();
@@ -229,7 +296,7 @@ public class TopologyNamePseudonymizer {
                 continue;
             }
             String base = maskDeviceName(entry.hostname(), entry.clusterRef());
-            if (base == null || "Unknown".equals(base)) {
+            if (base == null || isGap(base)) {
                 continue;
             }
             byBase.computeIfAbsent(base, ignored -> new java.util.ArrayList<>()).add(entry);
@@ -419,6 +486,10 @@ public class TopologyNamePseudonymizer {
     }
 
     private String computeDeviceName(String rawDeviceName, String clusterMemberRef) {
+        // maskDeviceName filters first; this keeps the minting step itself from ever naming a non-hostname.
+        if (isNotAHostname(rawDeviceName)) {
+            return GAP;
+        }
         if (clusterMemberRef != null && !clusterMemberRef.isBlank()) {
             String maskedCluster = maskClusterName(clusterMemberRef);
             String base = maskedCluster.startsWith("CLS-") ? maskedCluster.substring(4) : maskedCluster;

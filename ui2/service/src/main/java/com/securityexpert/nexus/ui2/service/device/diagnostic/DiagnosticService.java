@@ -203,7 +203,7 @@ public final class DiagnosticService {
                     output=com.securityexpert.nexus.ui2.platform.DiagnosticText.scrubSecrets(output);
                     if (masked && !com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CPVIEW_GATE.equals(job.gateId())) {
                         var knownNames=new java.util.HashMap<String,String>();
-                        devices.listAll().forEach(d -> d.observedHostname().ifPresent(n -> knownNames.put(n,names.maskDeviceName(n,d.clusterMemberRef().orElse(null)))));
+                        devices.listAll().forEach(d -> d.observedHostname().filter(n -> !TopologyNamePseudonymizer.isNotAHostname(n)).ifPresent(n -> knownNames.put(n,names.maskDeviceName(n,d.clusterMemberRef().orElse(null)))));
                         output=com.securityexpert.nexus.ui2.platform.DiagnosticText.masked(output, knownNames, token -> {
                             if (knownNames.containsKey(token)) return knownNames.get(token);
                             if (token.matches("[0-9]{1,3}(\\.[0-9]{1,3}){3}(/([0-9]|[12][0-9]|3[0-2]))?")) {

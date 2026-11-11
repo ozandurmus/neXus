@@ -433,11 +433,13 @@ class PrivacyMaskingResponseBodyAdviceTest {
         var result = (com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobPage)
                 advice.beforeBodyWrite(page, null, null, null, serverRequest, null);
 
-        assertThat(result.items().get(0).deviceName()).startsWith("FW-");
+        // No hostname recorded: a keyed gap token for the opaque device ID, never an invented FW- name.
+        assertThat(result.items().get(0).deviceName()).matches("UNKNOWN-HOST-[0-9a-f]{6}");
         assertThat(result.items().get(1).deviceName()).startsWith("CLS-").doesNotContain("raw-cluster-01");
         assertThat(result.items().get(2).deviceName()).startsWith("VS-");
         assertThat(result.items().get(3).deviceName()).startsWith("DOM-").doesNotContain("raw-domain-alpha");
-        assertThat(result.items().get(4).deviceName()).startsWith("FW-").doesNotContain("192.0.2.50");
+        assertThat(result.items().get(4).deviceName()).matches("UNKNOWN-HOST-[0-9a-f]{6}").doesNotContain("192.0.2.50");
+        assertThat(result.items().get(4).deviceName()).isNotEqualTo(result.items().get(0).deviceName());
         assertThat(result.items().get(5).deviceName()).startsWith("OBJ-").doesNotContain("raw-packet-case-title");
         assertThat(result.items().get(6).deviceName()).isEqualTo("Fleet (24 devices)");
         assertThat(result.items().get(7).deviceName()).isNull();
