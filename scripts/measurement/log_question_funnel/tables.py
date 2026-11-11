@@ -49,16 +49,25 @@ def backtest_tables(r):
                      r.get(("bt", kind, vendor, "all", "device_not_in_read_set"), 0)])
     table(["Event kind", "Vendor", "Event-member rows", "Device not in the read set"], rows)
     print("### Backtest: what the draft detector finds in the event window (device clock read two ways)\n")
-    head = ["Event kind", "Vendor", "Clock", "In test window", "Device active", "Signature", "Question", "Any finding",
-            "HA lines", "Link lines", "Own control: windows", "signature", "question", "any",
-            "Fleet control: devices", "signature", "question", "any"]
+    head = ["Event kind", "Vendor", "Clock", "Rows in the test window", "Device active", "Signature", "Question", "Any finding",
+            "HA lines", "Link lines"]
     rows = []
     for kind, vendor in keys:
         for reading in ("local", "utc"):
             def g(m):
                 return r.get(("bt", kind, vendor, reading, m), 0)
             rows.append([kind, vendor, reading, g("in_test_window"), g("member_active"), g("member_signature"), g("member_question"),
-                         g("member_any"), g("ha_lines"), g("link_lines"), g("control_member_windows"), g("control_member_signature"),
+                         g("member_any"), g("ha_lines"), g("link_lines")])
+    table(head, rows)
+    print("### Backtest: the same detector in windows without a known event (controls)\n")
+    head = ["Event kind", "Vendor", "Clock", "Own: windows", "signature", "question", "any", "Fleet: device-windows",
+            "signature", "question", "any"]
+    rows = []
+    for kind, vendor in keys:
+        for reading in ("local", "utc"):
+            def g(m):
+                return r.get(("bt", kind, vendor, reading, m), 0)
+            rows.append([kind, vendor, reading, g("control_member_windows"), g("control_member_signature"),
                          g("control_member_question"), g("control_member_any"), g("others_active"), g("others_signature"),
                          g("others_question"), g("others_any")])
     table(head, rows)
