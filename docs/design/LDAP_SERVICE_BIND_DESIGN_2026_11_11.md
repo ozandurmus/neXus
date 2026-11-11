@@ -180,7 +180,9 @@ outcome; then `user_found: 0|1|many`, `in_admin_group`, `in_users_group`, and th
 admin/users group existence. It never returns attributes, the DN, or any value from
 the directory. A blank password in the form means "use the stored password".
 
-## 8. Storage and migration (V205)
+## 8. Storage and migration (V204)
+
+Renumbered from V205 to V204 on 2026-11-11 before shipping: the advisory branch that held V204 did not ship and main ends at V203 (Flyway runs without out-of-order). The Argon review below names V205; it is the same migration.
 
 - Create `ldap_settings` (singleton: `id smallint primary key check (id = 1)`),
   grants to `ui2_app`, audit trigger as for `directory_profiles`.
@@ -240,4 +242,4 @@ taken; where the reviewer read the pre-rewrite classes, the fix is in the rewrit
 | 8 | Group queries before the user bind | User bind first; reason-code order kept. |
 | 9 | Sync race, randomized cipher, disable, hand-made bindings | Sync under the table lock reading the row inside it; decrypt to compare; disable withdraws trust and expires directory state; §5 states hand-made scope. |
 | 10 | Missing codes; signing required; exception leakage | `search_failed`, `strong_auth_required` added; no exception or message is ever logged. |
-| 11 | Throttle case; temp PEM file; residual state | Case-insensitive throttle key; PEM parsed in memory; V205 deletes directory actor state. |
+| 11 | Throttle case; temp PEM file; residual state | Case-insensitive throttle key; PEM parsed in memory; V204 deletes directory actor state. |

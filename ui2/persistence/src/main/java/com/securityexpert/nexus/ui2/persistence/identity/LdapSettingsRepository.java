@@ -2,7 +2,7 @@ package com.securityexpert.nexus.ui2.persistence.identity;
 
 import java.util.Optional;
 
-/** {@code ldap_settings} persistence port (V205): one row or none. */
+/** {@code ldap_settings} persistence port (V204): one row or none. */
 public interface LdapSettingsRepository {
 
     Optional<LdapSettingsRecord> find();
