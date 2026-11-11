@@ -63,7 +63,7 @@ class AuditCoverageCompletenessTest {
      * trigger must exist on its table ({@link #everyNamedAuditTriggerExists()}).
      */
     static final Map<String, Set<String>> AUDITED_BY_NAMED_TRIGGER = Map.of(
-            "ldap_settings", Set.of("tr_audit_ldap_settings"),                         // V205
+            "ldap_settings", Set.of("tr_audit_ldap_settings"),                         // V204
             "module_runtime_control", Set.of("module_runtime_control_audit"),          // V128
             "endpoint_admission", Set.of("endpoint_quarantine_release_audit"),         // V131
             "runtime_task_lease", Set.of("task_quarantine_release_audit"),             // V131

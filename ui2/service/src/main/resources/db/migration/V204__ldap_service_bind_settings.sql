@@ -1,4 +1,4 @@
--- V205 -- LDAP sign-in moves to the Active Directory service-bind model
+-- V204 -- LDAP sign-in moves to the Active Directory service-bind model
 -- (docs/design/PO_DECISION_RECORD_2026_11_11_LDAP_SERVICE_BIND.md,
 --  docs/design/LDAP_SERVICE_BIND_DESIGN_2026_11_11.md).
 --

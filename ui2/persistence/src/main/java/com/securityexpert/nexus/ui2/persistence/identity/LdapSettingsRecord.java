@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * The one {@code ldap_settings} row (V205). {@code bindPasswordEncrypted} is AES-256-GCM ciphertext under the
+ * The one {@code ldap_settings} row (V204). {@code bindPasswordEncrypted} is AES-256-GCM ciphertext under the
  * credential store key; it never leaves the server. Equality compares the ciphertext by content so a reload is
  * detected only when a value really changed.
  */
