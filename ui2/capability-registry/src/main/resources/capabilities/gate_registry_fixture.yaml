@@ -1187,7 +1187,7 @@ gates:
     platform_role_scope: 'cp_multi_domain_server'
     shell_context: 'expert'
     transport_kind: 'SSH_EXEC'
-    canonical_command_key: 'bash -lc ''mdsstat'' > %s/mdsstat.txt 2>&1'
+    canonical_command_key: 'unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; mdsstat > %s/mdsstat.txt 2>&1'
     action_class: 'read'
     sign_off_state: 'SIGNED_OFF'
     timeout_s: 60
@@ -1219,7 +1219,7 @@ gates:
     platform_role_scope: 'cp_multi_domain_server'
     shell_context: 'expert'
     transport_kind: 'SSH_EXEC'
-    canonical_command_key: 'bash -lc ''cplic print -x'' > %s/cplic.txt 2>&1'
+    canonical_command_key: 'unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; cplic print -x > %s/cplic.txt 2>&1'
     action_class: 'read'
     sign_off_state: 'SIGNED_OFF'
     timeout_s: 60
@@ -1267,7 +1267,7 @@ gates:
     platform_role_scope: 'cp_multi_domain_server'
     shell_context: 'expert'
     transport_kind: 'SSH_EXEC'
-    canonical_command_key: 'cd /var/log && setsid nohup bash -lc ''$CPMDIR/scripts/mds_backup -b -l -d %1$s > %1$s/mds_backup.log 2>&1; echo $? > %1$s/mds_backup.rc'' </dev/null >/dev/null 2>&1 &'
+    canonical_command_key: 'unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; cd /var/log && setsid nohup bash --noprofile --norc -c "$CPMDIR/scripts/mds_backup -b -l -d %1$s > %1$s/mds_backup.log 2>&1; echo \$? > %1$s/mds_backup.rc" </dev/null >/dev/null 2>&1 &'
     action_class: 'recovery-write'
     sign_off_state: 'SIGNED_OFF'
     timeout_s: 60

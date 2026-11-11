@@ -325,7 +325,10 @@ public final class BackupJobExecutor {
         } else if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_MDS_EXPORT.equals(capabilityId)) {
             result = mdsExportExecutor == null
                     ? new BackupResult.ConnectFailed("mds export executor not configured in this worker")
-                    : mdsExportExecutor.collect(request, targetDeviceId, jobId);
+                    // B.6 (MDS fork storm fix contract): the point of no return is marked right before mds_backup
+                    // starts, so a lost lease ends OUTCOME_UNKNOWN instead of a second run on the same server.
+                    : mdsExportExecutor.collect(request, targetDeviceId, jobId,
+                            () -> attemptRepository.markBoundaryCrossed(attemptId, leaseEpoch));
         } else if ((com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP.equals(capabilityId)
                 || "palo_alto".equals(vendor)) && panBackupExecutor != null) {
             // The device's credential reference; PaloAltoBackupExecutor resolves it and generates the key.

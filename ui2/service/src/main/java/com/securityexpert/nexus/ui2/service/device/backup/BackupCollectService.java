@@ -55,12 +55,6 @@ public final class BackupCollectService {
     private final Set<String> pilotAllowlist;
     private final boolean backupCredentialConfigured;
     private final Clock clock;
-    private java.util.function.Supplier<Set<String>> measuredMdsExports = Set::of;
-
-    public BackupCollectService withMdsExportEligibility(MdsExportEligibility eligibility) {
-        measuredMdsExports = Objects.requireNonNull(eligibility)::measuredTargets;
-        return this;
-    }
 
     public BackupCollectService(DeviceRepository deviceRepository, JobAdmissionService jobAdmissionService,
             Set<String> pilotAllowlist, boolean backupCredentialConfigured) {
@@ -220,18 +214,6 @@ public final class BackupCollectService {
             }
         }
         return new BulkOutcome(targets, admitted, targets - admitted);
-    }
-
-    /** Separate MDS export pass, invoked only after the fleet scheduler claims the local day. */
-    public void requestScheduledMdsExports() {
-        Instant now = clock.instant();
-        if (!ScheduledBackupWindowPolicy.isOpen(now)) return;
-        Optional<String> nonce = Optional.of("scheduled:" + now.atZone(
-                com.securityexpert.nexus.ui2.platform.JobWindowPolicy.ZONE_ID).toLocalDate());
-        for (String deviceId : measuredMdsExports.get()) {
-            requestCollect(deviceId, ScheduledBackupWindowPolicy.MDS_ACTOR,
-                    "Scheduled MDS export", nonce, "mds_export");
-        }
     }
 
     private String minuteBucket() {

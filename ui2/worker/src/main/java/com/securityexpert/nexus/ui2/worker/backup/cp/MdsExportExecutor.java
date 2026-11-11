@@ -56,11 +56,25 @@ public final class MdsExportExecutor {
         this.runDeadline = Objects.requireNonNull(runDeadline, "runDeadline");
     }
 
+    /** Consecutive poll failures (channel failed or timed out) after which the run records lost contact. */
+    static final int LOST_CONTACT_POLLS = 3;
+
     public BackupResult collect(BackupRequest request, String deviceId, String jobId) {
-        return BackupTranscript.record("MDS export", () -> collectRecorded(request, deviceId, jobId));
+        return collect(request, deviceId, jobId, () -> true);
     }
 
-    private BackupResult collectRecorded(BackupRequest request, String deviceId, String jobId) {
+    /**
+     * @param beforeStart called once, right before the mds_backup start command; the job marks its point of no return
+     *     there (MDS_FORK_STORM_FIX_CONTRACT_2026_11_11.md B.6), so a lost lease after it ends OUTCOME_UNKNOWN instead
+     *     of starting mds_backup a second time (the 2026-10-15 double run). {@code false}: nothing is started.
+     */
+    public BackupResult collect(BackupRequest request, String deviceId, String jobId, java.util.function.BooleanSupplier beforeStart) {
+        Objects.requireNonNull(beforeStart, "beforeStart");
+        return BackupTranscript.record("MDS export", () -> collectRecorded(request, deviceId, jobId, beforeStart));
+    }
+
+    private BackupResult collectRecorded(BackupRequest request, String deviceId, String jobId,
+            java.util.function.BooleanSupplier beforeStart) {
         if (request.credentialRef().isEmpty() || request.credentialRef().get().isBlank()) {
             return new BackupResult.CredentialUnresolvable("no backup credential configured for check_point (BK-11) -- refused before any device contact");
         }
@@ -77,13 +91,13 @@ public final class MdsExportExecutor {
         }
         TransportSession session = authenticated.session();
         try {
-            return run(session, deviceId, jobId);
+            return run(session, deviceId, jobId, beforeStart);
         } finally {
             transport.disconnect(session);
         }
     }
 
-    private BackupResult run(TransportSession session, String deviceId, String jobId) {
+    private BackupResult run(TransportSession session, String deviceId, String jobId, java.util.function.BooleanSupplier beforeStart) {
         String dir = MdsExportPlan.workDir(jobId);
         Optional<String> observedVersion = com.securityexpert.nexus.ui2.worker.backup.BackupReadPlan.parseGaiaVersion(
                 exec(session, MdsExportPlan.SHOW_VERSION_ALL, SHORT).output());
@@ -109,7 +123,10 @@ public final class MdsExportExecutor {
         exec(session, MdsExportPlan.with(MdsExportPlan.GAIA_CONFIGURATION, dir), CONFIG);
 
         // mds_backup: started once, never retried; its exit code is the truth.
-        // TODO: log remote process count here if an approved existing read exposes it; no process-count read exists in this plan.
+        if (!beforeStart.getAsBoolean()) {
+            remove(session, dir);
+            return new BackupResult.SubmitRefused("the job lost its lease before mds_backup was started; nothing was started");
+        }
         ExecOutcome start = exec(session, MdsExportPlan.with(MdsExportPlan.MDS_BACKUP_START, dir), SHORT);
         if (!start.succeeded() && !start.timedOut()) {
             // an explicit refusal (non-zero exit, channel failure): nothing started, the directory is ours to remove
@@ -123,8 +140,15 @@ public final class MdsExportExecutor {
         Optional<Integer> rc = Optional.empty();
         Instant deadline = started.plus(runDeadline);
         int iterations = 0;
+        int unanswered = 0;
+        boolean interrupted = false;
         while (Instant.now().isBefore(deadline)) {
-            sleep(pollInterval);
+            if (!sleep(pollInterval)) {
+                // a cancelled job interrupts the worker thread: stop polling (the sleep would otherwise return at once
+                // on every pass and the loop would poll without pause until the deadline)
+                interrupted = true;
+                break;
+            }
             ExecOutcome poll = exec(session, MdsExportPlan.with(MdsExportPlan.MDS_BACKUP_POLL, dir), SHORT);
             BackupTranscript.note("MDS poll iteration=" + (++iterations) + " exit-code-present=" + parseExitCode(poll.output()).isPresent());
             if (poll.succeeded()) {
@@ -133,6 +157,17 @@ public final class MdsExportExecutor {
                     break;
                 }
             }
+            // A missing rc file is a completed cat with a non-zero exit (still running); no answer at all is not.
+            unanswered = poll.answered() ? 0 : unanswered + 1;
+            if (unanswered == LOST_CONTACT_POLLS) {
+                BackupTranscript.note("MDS export: device stopped answering (" + LOST_CONTACT_POLLS + " polls in a row); still polling until the deadline");
+                LOG.log(System.Logger.Level.WARNING, "[MDS_EXPORT_LOST_CONTACT] device {0} job {1}: {2} unanswered polls in a row",
+                        deviceId, jobId, LOST_CONTACT_POLLS);
+            }
+        }
+        if (interrupted) {
+            return new BackupResult.OutcomeUnknown("the run was interrupted (cancelled) before mds_backup reported an exit code; it may "
+                    + "still be running and holding the MDS database lock -- the work directory is left in place");
         }
         long minutes = Duration.between(started, Instant.now()).toMinutes();
         LOG.log(System.Logger.Level.INFO, "[MDS_EXPORT] mds_backup finished={0} rc={1} after {2} min (measurement: run time of this estate)",
@@ -224,13 +259,13 @@ public final class MdsExportExecutor {
     private ExecOutcome exec(TransportSession session, String command, Duration timeout) {
         ExecResult result = transport.exec(session, new ExecSpec(command), timeout);
         return switch (result) {
-            case ExecResult.Completed c -> new ExecOutcome(c.output(), c.exitStatus() == 0, false);
-            case ExecResult.TimedOut t -> new ExecOutcome("", false, true);
-            case ExecResult.ChannelFailed f -> new ExecOutcome(String.valueOf(f.reason()), false, false);
+            case ExecResult.Completed c -> new ExecOutcome(c.output(), c.exitStatus() == 0, false, true);
+            case ExecResult.TimedOut t -> new ExecOutcome("", false, true, false);
+            case ExecResult.ChannelFailed f -> new ExecOutcome(String.valueOf(f.reason()), false, false, false);
         };
     }
 
-    private record ExecOutcome(String output, boolean succeeded, boolean timedOut) {
+    private record ExecOutcome(String output, boolean succeeded, boolean timedOut, boolean answered) {
     }
 
     private static void closeQuietly(ArtefactStore.ArtefactHandle handle) {
@@ -241,11 +276,17 @@ public final class MdsExportExecutor {
         }
     }
 
-    private static void sleep(Duration d) {
+    /** @return false when the thread is (or becomes) interrupted; the interrupt flag is kept. */
+    private static boolean sleep(Duration d) {
+        if (Thread.currentThread().isInterrupted()) {
+            return false;
+        }
         try {
             Thread.sleep(d.toMillis());
+            return true;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            return false;
         }
     }
 }

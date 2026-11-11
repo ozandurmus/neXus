@@ -796,12 +796,11 @@ public class DeviceCompositionConfiguration {
     @Bean
     public BackupCollectService backupCollectService(DeviceRepository deviceRepository,
             JobAdmissionService jobAdmissionService,
-            com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts,
-            com.securityexpert.nexus.ui2.service.device.backup.MdsExportEligibility mdsExportEligibility) {
+            com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts) {
         java.util.Set<String> allowlist = parseCsvEnv("UI2_BACKUP_PILOT_DEVICE_IDS");
         boolean backupCredentialConfigured = !System.getenv().getOrDefault("UI2_CP_BACKUP_CREDENTIAL_REF", "").isBlank();
         return new BackupCollectService(deviceRepository, jobAdmissionService, allowlist, backupCredentialConfigured)
-                .withPlatformFacts(platformFacts).withMdsExportEligibility(mdsExportEligibility);
+                .withPlatformFacts(platformFacts);
     }
 
     private static java.util.Set<String> parseCsvEnv(String name) {
