@@ -24,7 +24,11 @@ public final class DiagnosticRead {
         "cp_syslog_collect_stat", "cp_syslog_collect_ls_crash", "cp_syslog_collect_ls_spike",
         "cp_syslog_collect_ls_spike_dir", "cp_syslog_collect_ls_sa", "cp_syslog_collect_ls_hcp",
         // Path analysis A6 (V188): parameters come only from a computed path result; only path_validation issues them.
-        "path_validation_cp_route_get", "path_validation_cp_route_get_vsx");
+        "path_validation_cp_route_get", "path_validation_cp_route_get_vsx",
+        // ASA failover one-time measurement (PO 2026-11-13, "tek çift, tek sefer"): only the window-gated inventory step
+        // issues them; regular use needs its own approval.
+        "asa_measure_show_failover", "asa_measure_show_failover_state", "asa_measure_show_failover_history",
+        "asa_measure_show_conn_count");
     // Phase A measurement reads whose "%s" is a literal field of the remote command (stat -c "%i %s %Y",
     // ls --time-style=+%s), not a template placeholder. The placeholder guard in eligible() would otherwise hide them.
     public static final Set<String> LITERAL_PERCENT_S_GATES = Set.of(
