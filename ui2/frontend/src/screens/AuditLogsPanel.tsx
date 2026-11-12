@@ -40,7 +40,7 @@ export function AuditLogsPanel() {
 
   if (error && data === null) {
     return isRestricted(rawError)
-      ? <RestrictedPanel area="Audit Logs" role="Security Admin" />
+      ? <RestrictedPanel area="Audit log" role="Security Admin" />
       : <StatePanel variant="error" title="Audit logs unavailable" body="Audit events could not be read." code={error}
           action={<M3Button emphasis="outlined" onClick={refresh}>Retry</M3Button>} />;
   }

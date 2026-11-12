@@ -3,7 +3,7 @@ import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { m3 } from "../theme/m3Theme";
-import { TYPE, type Density, type ScreenType } from "../theme/tokens";
+import { LABEL_UPPER, TYPE, type Density, type ScreenType } from "../theme/tokens";
 import { DensityScope } from "./displayMode";
 import { KpiCard, KpiRow, type KpiCardProps } from "./KpiCard";
 import { StatePanel } from "./States";
@@ -15,7 +15,10 @@ export function ScreenHeader({
   subtitle,
   filters,
   actions,
+  overline,
 }: {
+  /** The area a page belongs to, above its title (Administration's pages); not a heading. */
+  readonly overline?: string;
   readonly title: string;
   readonly subtitle: string;
   /** List filters beside the title (PO, 2026-09-24): they narrow the screen's list, never its detail. */
@@ -27,6 +30,7 @@ export function ScreenHeader({
       {/* The title block shrinks and its subtitle wraps (post-release review 2026-10-18, R1): a two-sentence tool contract
           used to run unbroken past the viewport and scroll the whole page sideways at 1440 px. */}
       <Stack data-testid="screen-header-title" spacing={0.75} sx={{ flex: "0 1 auto", minWidth: 0, maxWidth: 880 }}>
+        {overline ? <Typography component="div" data-testid="screen-header-overline" sx={{ ...LABEL_UPPER, color: m3.onSurfaceVar }}>{overline}</Typography> : null}
         <Typography variant="h2" sx={{ ...TYPE.pageTitle }}>{title}</Typography>
         <Typography variant="body1" sx={{ color: m3.onSurfaceVar, whiteSpace: "normal", overflowWrap: "anywhere" }}>{subtitle}</Typography>
       </Stack>

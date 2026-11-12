@@ -151,7 +151,7 @@ describe("what a session is shown (plane checks only)", () => {
   });
 
   it("hides an entry whose plane the session lacks, and a group once none of its children is left", () => {
-    expect(labelsOf(visibleEntries(["Policy", "PacketAnalysis"], "operations"))).toEqual([
+    expect(labelsOf(visibleEntries(["Policy", "PacketAnalysis"], "operations-ha"))).toEqual([
       ["Overview", null],
       ["Reports", null],
       ["Policy and changes", ["Policy", "Trace", "Changes"]],
@@ -167,13 +167,23 @@ describe("what a session is shown (plane checks only)", () => {
     expect(leavesOf(tools).map((l) => l.label)).toEqual(["Diagnostics", "Offline analysis"]);
   });
 
-  it("always keeps the entry of the open screen, whatever the plane list says", () => {
-    const shown = visibleEntries(["Policy"], "sanitizer").flatMap(leavesOf).map((l) => l.id);
-    expect(shown).toContain("sanitizer");
-    expect(shown).not.toContain("packet-analysis");
-    // Both entries of the Devices screen stay while it is open, as the old drawer did.
-    const onDevices = visibleEntries(["Policy"], "inventory").flatMap(leavesOf).map((l) => l.id);
-    expect(onDevices).toEqual(expect.arrayContaining(["devices", "lifecycle"]));
+  it("always keeps the entry of the open page, whatever the plane list says, and nothing else with it", () => {
+    const ids = (activeId: string) => visibleEntries(["Policy"], activeId).flatMap(leavesOf).map((l) => l.id);
+    expect(ids("sanitizer")).toContain("sanitizer");
+    expect(ids("sanitizer")).not.toContain("packet-analysis");
+    // Devices and Lifecycle and security share one screen and one plane: only the lit one of the two is kept.
+    expect(ids(activeLeafId("inventory", "?screen=inventory"))).toContain("devices");
+    expect(ids(activeLeafId("inventory", "?screen=inventory"))).not.toContain("lifecycle");
+    expect(ids(activeLeafId("inventory", "?screen=inventory&view=lifecycle"))).toContain("lifecycle");
+    expect(ids(activeLeafId("inventory", "?screen=inventory&view=lifecycle"))).not.toContain("devices");
+    // Its group is listed for that one child alone.
+    const group = visibleEntries(["Policy"], "lifecycle").find((e) => e.id === "compliance-security")!;
+    expect(leavesOf(group).map((l) => l.label)).toEqual(["Lifecycle and security"]);
+    // Being there grants nothing once the reader has left.
+    expect(ids("overview")).not.toContain("devices");
+    expect(ids("overview")).not.toContain("lifecycle");
+    // A session that holds the plane sees both, wherever it is.
+    expect(visibleEntries(["Devices"], "overview").flatMap(leavesOf).map((l) => l.id)).toEqual(expect.arrayContaining(["devices", "lifecycle"]));
   });
 
   it("lists the five Administration pages for every session and locks, never hides, what it may not use", () => {

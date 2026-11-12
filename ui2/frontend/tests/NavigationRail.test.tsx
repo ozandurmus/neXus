@@ -152,6 +152,20 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     expect(within(tools).getAllByRole("link").map((a) => a.textContent)).toEqual(["Packet analysis", "Diagnostics", "Offline analysis"]);
   });
 
+  it("keeps only the lit entry for a session without the Devices plane that opens Devices", () => {
+    const first = rail("inventory", viewer);
+    expect(current()).toHaveLength(1);
+    expect(current()[0]).toHaveTextContent("Devices");
+    expect(within(nav()).queryByText("Lifecycle and security")).toBeNull();
+    expect(within(nav()).queryByText("Compliance and security")).toBeNull();
+    first.unmount();
+    rail("inventory", viewer, "?screen=inventory&view=lifecycle");
+    expect(current()).toHaveLength(1);
+    expect(current()[0]).toHaveTextContent("Lifecycle and security");
+    expect(within(nav()).queryByRole("link", { name: "Devices" })).toBeNull();
+    expect(within(nav()).queryByRole("link", { name: "Compliance" })).toBeNull();
+  });
+
   it("keeps the entry of the open screen for a session without its plane", () => {
     rail("sanitizer", viewer);
     expect(current()).toHaveLength(1);

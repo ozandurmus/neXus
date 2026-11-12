@@ -17,7 +17,8 @@ const PRODUCT_MARKERS: Record<string, string> = {
   // Without a store the overview read fails: the headline writes UNKNOWN for every figure, never a claim (review 4.3).
   compliance: "UNKNOWN of evidenced controls pass, UNKNOWN have no evidence · checks UNKNOWN · firewalls UNKNOWN · critical failing UNKNOWN",
   operations: "No HA pair or cluster enrolled",
-  administration: "Administration",
+  // ?screen=administration alone opens the Device registry page (navigation redesign 2026-11-12); its own blurb is the marker.
+  administration: "Enrollment is the one place a device enters the product: the registry, what is excluded from collection, the credentials collection uses, and per-device SSH trust.",
   // Trace (C3) opens on the topology path mode, the old Path analysis (A5b): nothing is evaluated until a query is sent; the
   // screen never shows a seeded verdict.
   trace: "No path evaluated yet",

@@ -51,8 +51,8 @@ test("Operations System health and the Changes timeline reach a settled state (n
 // Scheduled jobs (2026-11-10): every signed-in role reads the family list; only Security Admin and Operation Admin are
 // offered a switch. The aiview persona must see the six families, no control, and no change reason.
 test("aiview: Administration > Platform > Scheduled jobs is read-only and withholds the change reason", async ({ page, safety }) => {
-  await visit(page, "screen=administration&tab=platform&section=scheduled-jobs", "Administration");
-  const section = page.getByRole("tabpanel", { name: "Platform" }).getByRole("region", { name: "Scheduled jobs", exact: true });
+  await visit(page, "screen=administration&tab=platform&section=scheduled-jobs", "Platform");
+  const section = page.getByRole("tabpanel", { name: "Scheduled jobs" }).getByRole("region", { name: "Scheduled jobs", exact: true });
   const families = section.getByRole("list", { name: "Scheduled job families" });
   await expect(families).toBeVisible();
   await safety.checkpoint();
