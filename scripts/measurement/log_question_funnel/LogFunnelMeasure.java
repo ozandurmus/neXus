@@ -72,6 +72,12 @@ public final class LogFunnelMeasure {
     static boolean backtest;
     static boolean onlyEventDevices;
     static String eventsFile;
+    /**
+     * PO rule of 2026-11-11: a (device, source) pair with fewer than {@link #minLearnDays} learning days is NOT_EVALUABLE
+     * and produces no finding that can become a question, signatures included. This option switches the rule off to
+     * measure what the detector sees without it (the backtest and the threshold sweep on a young pool).
+     */
+    static boolean signaturesUngated;
     static Set<String> tech = new HashSet<>();
 
     /** Semantic line classes in priority order (the first matching class wins). PROVISIONAL keyword classes. */
@@ -478,6 +484,24 @@ public final class LogFunnelMeasure {
     static final int B_NEW_SIG = 1 << 12;
     static final int SIG_BITS = B_CRASH | B_RESTART | B_BURST_HA | B_BURST_LINK;
 
+    /**
+     * Burst threshold sweep: a burst is N lines of one class within ten minutes. The threshold of the funnel record is
+     * N = 3 (bits 2 and 3); the stricter ones have bits of their own. Every stricter burst is also a burst at N = 3.
+     */
+    static final int[] BURST_N = {3, 10, 20, 30};
+    static final int[] HA_BIT = {B_BURST_HA, 1 << 13, 1 << 14, 1 << 15};
+    static final int[] LINK_BIT = {B_BURST_LINK, 1 << 16, 1 << 17, 1 << 18};
+    static final int BURST_ALL = B_BURST_HA | B_BURST_LINK | (1 << 13) | (1 << 14) | (1 << 15) | (1 << 16) | (1 << 17)
+            | (1 << 18);
+
+    /** The mask as the policies see it when the burst threshold is BURST_N[t]. */
+    static int atThreshold(int m, int t) {
+        int out = m & ~BURST_ALL;
+        if ((m & HA_BIT[t]) != 0) out |= B_BURST_HA;
+        if ((m & LINK_BIT[t]) != 0) out |= B_BURST_LINK;
+        return out;
+    }
+
     record NewEv(int dev, int src, long hv, int cls, int sev, int hour, int lines) {
     }
 
@@ -489,6 +513,9 @@ public final class LogFunnelMeasure {
         boolean[] active;
         int[] haLines;
         int[] linkLines;
+        /** Per source: the pair exists in the window, and has enough learning days (otherwise NOT_EVALUABLE). */
+        boolean[] pairPresent;
+        boolean[] pairEvaluable;
     }
 
     /** A ground-truth event: a device and an epoch-second span; read in memory, never printed. */
@@ -790,6 +817,8 @@ public final class LogFunnelMeasure {
             o.active = activeHour;
             o.haLines = new int[testHours];
             o.linkLines = new int[testHours];
+            o.pairPresent = new boolean[S];
+            o.pairEvaluable = new boolean[S];
             int learnDayCount = windowDays - testDays;
             for (int s = 0; s < S; s++) {
                 boolean any = false;
@@ -805,6 +834,8 @@ public final class LogFunnelMeasure {
                 if (any) {
                     devicesWithSource[s]++;
                     coverage.add(new int[] {s, learnDays[s], testCov[s]});
+                    o.pairPresent[s] = true;
+                    o.pairEvaluable[s] = learnDays[s] >= minLearnDays;
                 }
             }
             // an hourly rate needs lines that carry their own time: at least 80 % of this device's lines in the source
@@ -846,6 +877,8 @@ public final class LogFunnelMeasure {
                     }
                 }
                 boolean routine = enoughHistory && daysSeen * 10 >= learnDays[s] * 8;
+                // the pair may produce signature findings only when it is evaluable (the 2026-11-11 rule), unless switched off
+                boolean signaturesAllowed = enoughHistory || signaturesUngated;
                 count("routine\t" + source + "\ttest_lines", k.testTotal);
                 if (routine) count("routine\t" + source + "\ttest_lines_routine", k.testTotal);
                 if (!enoughHistory) count("routine\t" + source + "\ttest_lines_short_history", k.testTotal);
@@ -868,6 +901,8 @@ public final class LogFunnelMeasure {
                             if (k.hours[h] == 0) continue;
                             if (routine) {
                                 count("sig\t" + label + "\t" + source + "\troutine_suppressed_lines", k.hours[h]);
+                            } else if (!signaturesAllowed) {
+                                count("sig\t" + label + "\t" + source + "\tnot_evaluable_lines", k.hours[h]);
                             } else {
                                 count("sig\t" + label + "\t" + source + "\tlines", k.hours[h]);
                                 o.mask[h - testStart] |= crash ? B_CRASH : B_RESTART;
@@ -878,6 +913,9 @@ public final class LogFunnelMeasure {
                         if (routine) {
                             count("sig\t" + (cls == Cls.ha_state ? "burst_ha" : "burst_link") + "\t" + source
                                     + "\troutine_suppressed_lines", k.mins.n);
+                        } else if (!signaturesAllowed) {
+                            count("sig\t" + (cls == Cls.ha_state ? "burst_ha" : "burst_link") + "\t" + source
+                                    + "\tnot_evaluable_lines", k.mins.n);
                         } else {
                             IntList t = cls == Cls.ha_state ? haMins : linkMins;
                             for (int i = 0; i < k.mins.n; i++) t.add(k.mins.a[i]);
@@ -885,8 +923,8 @@ public final class LogFunnelMeasure {
                     }
                 }
             }
-            bursts(haMins, B_BURST_HA, "burst_ha", o);
-            bursts(linkMins, B_BURST_LINK, "burst_link", o);
+            bursts(haMins, HA_BIT, "burst_ha", o);
+            bursts(linkMins, LINK_BIT, "burst_link", o);
             for (int i = 0; i < devIps.keys.length; i++) {
                 if (devIps.used[i]) ipDevices.add(devIps.keys[i], 1);
             }
@@ -948,17 +986,26 @@ public final class LogFunnelMeasure {
             }
         }
 
-        /** Three or more lines of one class within ten minutes; overlapping windows are one episode. */
-        void bursts(IntList mins, int bit, String label, DevOut o) {
-            if (mins.n < 3) return;
+        /**
+         * N or more lines of one class within ten minutes, for each threshold of the sweep (3, 10, 20, 30); overlapping
+         * windows are one episode. The threshold 3 keeps its labels; the stricter ones carry an {@code _nN} suffix.
+         */
+        void bursts(IntList mins, int[] bits, String label, DevOut o) {
+            if (mins.n < BURST_N[0]) return;
             int[] a = Arrays.copyOf(mins.a, mins.n);
             Arrays.sort(a);
-            int lastEnd = Integer.MIN_VALUE;
-            for (int i = 0; i + 2 < a.length; i++) {
-                if (a[i + 2] - a[i] <= 10) {
-                    if (a[i] > lastEnd) count("sig\t" + label + "\tepisodes", 1);
-                    lastEnd = Math.max(lastEnd, a[i + 2]);
-                    for (int h = a[i] / 60; h <= a[i + 2] / 60 && h < testHours; h++) o.mask[h] |= bit;
+            for (int t = 0; t < BURST_N.length; t++) {
+                int need = BURST_N[t];
+                if (a.length < need) break;
+                String name = t == 0 ? label : label + "_n" + need;
+                int lastEnd = Integer.MIN_VALUE;
+                for (int i = 0; i + need - 1 < a.length; i++) {
+                    int last = a[i + need - 1];
+                    if (last - a[i] <= 10) {
+                        if (a[i] > lastEnd) count("sig\t" + name + "\tepisodes", 1);
+                        lastEnd = Math.max(lastEnd, last);
+                        for (int h = a[i] / 60; h <= last / 60 && h < testHours; h++) o.mask[h] |= bits[t];
+                    }
                 }
             }
         }
@@ -1181,6 +1228,24 @@ public final class LogFunnelMeasure {
         }
 
         /**
+         * One window of one device, at each burst threshold: HA burst, link burst, any signature, and the base question
+         * (the question is judged hour by hour, as in the funnel). Adds 1 per flag that holds.
+         */
+        void sweepFlags(Map<String, long[]> acc, String prefix, DevOut o, int h0, int h1) {
+            int merged = 0;
+            for (int h = h0; h <= h1; h++) merged |= o.mask[h];
+            for (int t = 0; t < BURST_N.length; t++) {
+                String n = "_n" + BURST_N[t];
+                if ((merged & HA_BIT[t]) != 0) bt(acc, prefix + "ha" + n, 1);
+                if ((merged & LINK_BIT[t]) != 0) bt(acc, prefix + "link" + n, 1);
+                if ((atThreshold(merged, t) & SIG_BITS) != 0) bt(acc, prefix + "sig" + n, 1);
+                boolean question = false;
+                for (int h = h0; h <= h1 && !question; h++) question = qualifies(1, atThreshold(o.mask[h], t));
+                if (question) bt(acc, prefix + "question" + n, 1);
+            }
+        }
+
+        /**
          * For every event: did the draft detector find anything on the event's device in the event's window, under two
          * readings of the device clock (Istanbul wall clock, UTC wall clock)? And how often does it find something in
          * the same clock window on the other days of the test window (the device's own control) and on the other devices
@@ -1198,6 +1263,10 @@ public final class LogFunnelMeasure {
                 if (o == null) {
                     bt(acc, pre + "all\tdevice_not_in_read_set", 1);
                     continue;
+                }
+                for (int s = 0; s < S; s++) { // how many of the event device's pairs the rule would have let through
+                    if (o.pairPresent[s]) bt(acc, pre + "all\tmember_pairs_present", 1);
+                    if (o.pairEvaluable[s]) bt(acc, pre + "all\tmember_pairs_evaluable", 1);
                 }
                 boolean crash = e.kind().equals("crash_alert");
                 long s0 = e.start() - (crash ? 4 * 3600 : 1800);
@@ -1219,6 +1288,7 @@ public final class LogFunnelMeasure {
                     if (w[1]) bt(acc, k + "member_signature", 1);
                     if (w[2]) bt(acc, k + "member_question", 1);
                     if (w[3]) bt(acc, k + "member_any", 1);
+                    sweepFlags(acc, k + "m_", o, h0, h1);
                     int mm = 0;
                     long ha = 0;
                     long link = 0;
@@ -1228,7 +1298,8 @@ public final class LogFunnelMeasure {
                         link += o.linkLines[h];
                     }
                     String[] bitName = {"crash", "restart", "burst_ha", "burst_link", "rate", "rate_excluded", "rate_strict",
-                            "rate_loose", "new_rare_severity", "new_rare", "new_rare_excluded", "new_common", "new_signature"};
+                            "rate_loose", "new_rare_severity", "new_rare", "new_rare_excluded", "new_common", "new_signature",
+                            "burst_ha_n10", "burst_ha_n20", "burst_ha_n30", "burst_link_n10", "burst_link_n20", "burst_link_n30"};
                     for (int b = 0; b < bitName.length; b++) if ((mm & (1 << b)) != 0) bt(acc, k + "member_bit_" + bitName[b], 1);
                     bt(acc, k + "ha_lines", ha);
                     bt(acc, k + "link_lines", link);
@@ -1245,16 +1316,28 @@ public final class LogFunnelMeasure {
                         if (c[1]) bt(acc, k + "control_member_signature", 1);
                         if (c[2]) bt(acc, k + "control_member_question", 1);
                         if (c[3]) bt(acc, k + "control_member_any", 1);
+                        sweepFlags(acc, k + "c_", o, a0, a1);
                     }
                     // the other devices of the same vendor in the same window: the fleet's control
                     for (DevOut other : devs) {
                         if (other == o || other.pan != o.pan) continue;
+                        // the same clock window on the other days of the test window, on the other devices: the background
+                        for (int shift = -testDays; shift <= testDays; shift++) {
+                            if (shift == 0) continue;
+                            int a0 = h0 + 24 * shift;
+                            int a1 = h1 + 24 * shift;
+                            if (a0 < 0 || a1 >= testHours) continue;
+                            if (!window(other, a0, a1)[0]) continue;
+                            bt(acc, k + "bg_active", 1);
+                            sweepFlags(acc, k + "bg_", other, a0, a1);
+                        }
                         boolean[] c = window(other, h0, h1);
                         if (!c[0]) continue;
                         bt(acc, k + "others_active", 1);
                         if (c[1]) bt(acc, k + "others_signature", 1);
                         if (c[2]) bt(acc, k + "others_question", 1);
                         if (c[3]) bt(acc, k + "others_any", 1);
+                        sweepFlags(acc, k + "o_", other, h0, h1);
                     }
                 }
             }
@@ -1268,8 +1351,47 @@ public final class LogFunnelMeasure {
             }
         }
 
+        /** Counts of the burst-threshold sweep over all devices, per vendor and threshold; no event needed. */
+        void sweep() {
+            for (DevOut o : devs) {
+                String v = o.pan ? "pan" : "cp";
+                count("sweep\t" + v + "\tdevices", 1);
+                for (int d = 0; d < testDays; d++) {
+                    boolean active = false;
+                    boolean[][] day = new boolean[BURST_N.length][4];
+                    for (int h = d * 24; h < d * 24 + 24; h++) {
+                        if (o.active[h]) {
+                            active = true;
+                            count("sweep\t" + v + "\tactive_device_hours", 1);
+                        }
+                        int m = o.mask[h];
+                        for (int t = 0; t < BURST_N.length; t++) {
+                            String n = "_n" + BURST_N[t];
+                            int mt = atThreshold(m, t);
+                            boolean[] f = {(m & HA_BIT[t]) != 0, (m & LINK_BIT[t]) != 0, (mt & SIG_BITS) != 0, qualifies(1, mt)};
+                            String[] name = {"ha", "link", "sig", "question"};
+                            for (int i = 0; i < f.length; i++) {
+                                if (!f[i]) continue;
+                                count("sweep\t" + v + "\t" + name[i] + n + "\tdevice_hours", 1);
+                                day[t][i] = true;
+                            }
+                        }
+                    }
+                    if (!active) continue;
+                    count("sweep\t" + v + "\tactive_device_days", 1);
+                    for (int t = 0; t < BURST_N.length; t++) {
+                        String[] name = {"ha", "link", "sig", "question"};
+                        for (int i = 0; i < name.length; i++) {
+                            if (day[t][i]) count("sweep\t" + v + "\t" + name[i] + "_n" + BURST_N[t] + "\tdevice_days", 1);
+                        }
+                    }
+                }
+            }
+        }
+
         void report(PrintStream out) {
-            String[] covLabel = {"lines", "unparsed_lines", "time_on_line", "time_inherited", "time_from_collection",
+            sweep();
+            String[] covLabel ={"lines", "unparsed_lines", "time_on_line", "time_inherited", "time_from_collection",
                     "lines_over_key_cap"};
             String[] sevLabel = {"sev_error", "sev_warn", "sev_none"};
             String[] whereLabel = {"before_window", "after_window", "learn", "test"};
@@ -1317,6 +1439,7 @@ public final class LogFunnelMeasure {
         if (a.containsKey("--end-day")) endDayOverride = LocalDate.parse(a.get("--end-day"));
         backtest = "1".equals(a.get("--backtest"));
         onlyEventDevices = "1".equals(a.get("--only-event-devices"));
+        signaturesUngated = "1".equals(a.get("--signatures-ungated"));
         eventsFile = a.get("--events-file");
         try {
             tech = loadWords(Path.of(a.get("--tech")));
@@ -1327,6 +1450,7 @@ public final class LogFunnelMeasure {
             emit(out, "meta", "test_days", String.valueOf(testDays));
             emit(out, "meta", "min_learn_days", String.valueOf(minLearnDays));
             emit(out, "meta", "backtest", backtest ? "1" : "0");
+            emit(out, "meta", "signatures_ungated", signaturesUngated ? "1" : "0");
             if (a.containsKey("--selftest")) selftest(out, Path.of(a.get("--selftest")));
             else run(out);
         } catch (Throwable t) {
