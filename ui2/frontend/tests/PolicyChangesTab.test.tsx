@@ -144,3 +144,35 @@ it("stops waiting at the component bounded timeout even if fetch never settles a
   mount();
   expect(await screen.findByRole("alert")).toHaveTextContent("Could not load changes · Stored policy history is unavailable");
 });
+it("shows a resolved administrator, and an AMBIGUOUS change offers its candidates on request only (PO D4/D6)", async () => {
+  const base = page.rows[0];
+  const resolved: PolicyChangesPage = { ...page, rows: [
+    { ...base, revision: "3", changedBy: "admin-a", actorState: "MATCHED", actorCandidates: 1 },
+    { ...base, revision: "2", ruleId: "r2", number: 8, name: "RULE-CHARLIE-03", changedBy: "AMBIGUOUS (2 administrators before the commit)", actorState: "AMBIGUOUS", actorCandidates: 2 },
+  ] };
+  const calls: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    calls.push(String(url));
+    if (String(url).includes("/actor-candidates")) return response({ revision: "2", candidates: ["admin-b", "admin-c"] });
+    return response(resolved);
+  }));
+  mount();
+  expect(await screen.findByText("admin-a")).toBeInTheDocument();
+  expect(screen.getByText("AMBIGUOUS (2 administrators before the commit)")).toBeInTheDocument();
+  // Only the AMBIGUOUS row has the button, and no candidate name is on screen or requested before the click.
+  expect(screen.getAllByRole("button", { name: "Show candidates" })).toHaveLength(1);
+  expect(screen.queryByText(/admin-b/)).toBeNull();
+  expect(calls.some(url => url.includes("/actor-candidates"))).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Show candidates" }));
+  expect(await screen.findByText("Candidates: admin-b, admin-c")).toBeInTheDocument();
+  expect(calls.filter(url => url.includes("/actor-candidates?revision=2"))).toHaveLength(1);
+});
+it("says the candidates are withheld when the masked persona is refused", async () => {
+  const base = page.rows[0];
+  const ambiguous: PolicyChangesPage = { ...page, rows: [{ ...base, revision: "2", changedBy: "AMBIGUOUS (2 administrators before the commit)", actorState: "AMBIGUOUS", actorCandidates: 2 }] };
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => String(url).includes("/actor-candidates")
+    ? new Response(JSON.stringify({ error: "WITHHELD_IN_AIVIEW" }), { status: 403 }) : response(ambiguous)));
+  mount();
+  fireEvent.click(await screen.findByRole("button", { name: "Show candidates" }));
+  expect(await screen.findByText("Withheld in AIView")).toBeInTheDocument();
+});

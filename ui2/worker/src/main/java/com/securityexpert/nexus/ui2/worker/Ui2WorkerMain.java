@@ -357,7 +357,8 @@ public final class Ui2WorkerMain {
         var policyCollectionExecutor = new com.securityexpert.nexus.ui2.worker.policy.PolicyCollectionJobExecutor(
                 leaseRepository, attemptRepository, discoveryRunRepository, policyCollectionRepository, policyCollector, gateRegistry)
                 .withPanorama(policyPanorama(compositeTransport, gateRegistry, panCredentialResolver, policyCollectionRepository, policyDeadline,
-                        completenessSettings, completenessEvidence, hostnameFingerprint))
+                        completenessSettings, completenessEvidence, hostnameFingerprint,
+                        new com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeActorRepository(transactionBoundary)))
                 .withCompleteness(policyCompleteness(transactionBoundary, completenessSettings, policyCollector, gateRegistry,
                         completenessEvidence, policyCollectionRepository, hostnameFingerprint));
         MgmtCliEnumerationAdapter checkPointDiscoveryAdapter =
@@ -621,11 +622,15 @@ public final class Ui2WorkerMain {
             com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialResolver credentials,
             com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository policies, Duration deadline,
             com.securityexpert.nexus.ui2.worker.policy.PolicyCompletenessSettings settings,
-            com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeEvidenceRepository evidence, HostnameFingerprint fingerprint) {
+            com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeEvidenceRepository evidence, HostnameFingerprint fingerprint,
+            com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeActorRepository actors) {
         var windows = com.securityexpert.nexus.ui2.platform.JobWindowPolicy.SYSTEM;
-        return new com.securityexpert.nexus.ui2.worker.policy.PanoramaPolicyCollector(transport, gates, credentials, policies, deadline)
+        var collector = new com.securityexpert.nexus.ui2.worker.policy.PanoramaPolicyCollector(transport, gates, credentials, policies, deadline)
             .withCompleteness(settings, windows, new com.securityexpert.nexus.ui2.worker.diagnostic.PanoramaConfigLogReader(
                 transport, gates, evidence, policies, settings, windows, fingerprint));
+        // The join needs the product key (rule references are keyed hashes); without it the screen keeps UNKNOWN.
+        return fingerprint == null ? collector : collector.withActorResolver(
+            new com.securityexpert.nexus.ui2.worker.diagnostic.PolicyChangeActorResolver(actors, fingerprint));
     }
 
     /** Revision rows per collection and the off-by-default Check Point change reader (C-1, C-2). */
@@ -658,7 +663,8 @@ public final class Ui2WorkerMain {
         var completenessSettings = com.securityexpert.nexus.ui2.worker.policy.PolicyCompletenessSettings.fromEnvironment();
         var completenessEvidence = new com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeEvidenceRepository(boundary);
         var policy = new com.securityexpert.nexus.ui2.worker.policy.PolicyCollectionJobExecutor(leases, attempts, runs, policies, cpCollector, gates)
-            .withPanorama(policyPanorama(transport, gates, credentials, policies, deadline, completenessSettings, completenessEvidence, fingerprint))
+            .withPanorama(policyPanorama(transport, gates, credentials, policies, deadline, completenessSettings, completenessEvidence, fingerprint,
+                new com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeActorRepository(boundary)))
             .withCompleteness(policyCompleteness(boundary, completenessSettings, cpCollector, gates, completenessEvidence, policies, fingerprint))
             .withTranscript(store, jobs);
         // Policy composition has no enrollment, backup, inventory, configuration or failover executors.

@@ -2403,6 +2403,8 @@ export interface PolicyChangeRow {
   changedBy: string; changeType: string; changedFields: string[]; changes: { field: string; before: unknown; after: unknown }[];
   /** The collection that recorded the revision (UTC ISO); groups the list. */
   collectedAt?: string; initialCapture?: boolean;
+  /** Palo Alto: how the administrator was resolved from the Panorama config log. AMBIGUOUS carries the candidate count only. */
+  actorState?: "MATCHED" | "AMBIGUOUS"; actorCandidates?: number;
   targetDevices?: PolicyFirewallRef[];
 }
 export interface PolicyChangesPage {
@@ -2416,6 +2418,9 @@ const changeParams = ({ includeInitial, ...filters }: PolicyChangeFilters) => {
 };
 export const getPolicyChanges = (filters: PolicyChangeFilters, cursor = "") =>
   call<PolicyChangesPage>(`/api/v2/policy/changes?${changeParams(filters)}&cursor=${encodeURIComponent(cursor)}`, "GET");
+/** The candidate administrators of an AMBIGUOUS change; authorised roles only (403 for the masked persona). */
+export const getPolicyActorCandidates = (revision: string) =>
+  call<{ revision: string; candidates: string[] }>(`/api/v2/policy/changes/actor-candidates?revision=${encodeURIComponent(revision)}`, "GET");
 export async function downloadPolicyChanges(filters: PolicyChangeFilters) {
   const response = await fetch(`/api/v2/policy/changes.csv?${changeParams(filters)}`, { credentials: "include" });
   if (!response.ok) throw new Error("Change export failed");

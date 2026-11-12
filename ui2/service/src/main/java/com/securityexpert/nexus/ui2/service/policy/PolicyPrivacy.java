@@ -104,7 +104,9 @@ public final class PolicyPrivacy {
         // Lookup addresses are user-entered or bounded subdivisions in the viewer's address space.
         if (key.equals("querySource") || key.equals("queryDestination")) return text.matches("[0-9./-]{7,35}") ? text : "Withheld in AIView";
         if (key.equals("queryService")) return text.matches("any|(?:tcp|udp)/[0-9]{1,5}") ? text : "UNKNOWN";
-        if (key.equals("changedBy") && text.equals(PolicyChangesService.UNKNOWN_ACTOR)) return text;
+        if (key.equals("changedBy") && (text.equals(PolicyChangesService.UNKNOWN_ACTOR)
+                || text.matches("AMBIGUOUS \\([0-9]{1,3} administrators before the commit\\)"))) return text;
+        if (key.equals("actorState")) return Set.of("MATCHED", "AMBIGUOUS").contains(text) ? text : "UNKNOWN";
         if (key.equals("nextCursor")) return text.matches("[A-Za-z0-9_-]{1,1024}") ? text : "";
         if (key.equals("revision")) return text.matches("[0-9]+") ? text : "";
         if (key.equals("changedFields")) return PolicyChangesService.FIELDS.contains(text) ? text : "UNKNOWN";

@@ -81,6 +81,10 @@ public final class PanoramaConfigLogReader {
     private static final Pattern COMMAND_CLASS = Pattern.compile("[a-z][a-z0-9_-]{0,31}");
     private static final Pattern RESULT_CLASS = Pattern.compile("[A-Za-z][A-Za-z0-9_-]{0,31}");
     private static final Pattern DEVICE_GROUP_PATH = Pattern.compile("/device-group/entry\\[@name=(?:'([^'\\r\\n]{1,255})'|\"([^\"\\r\\n]{1,255})\")\\]");
+    /** The documented {@code cmd} values that change configuration (Config Log Fields); commit is deliberately absent. */
+    static final java.util.Set<String> CHANGE_COMMANDS = java.util.Set.of("add", "clone", "delete", "edit", "move", "rename", "set");
+    /** 1 to 128 characters, no control characters, no redaction marker (the V208 column check repeats the first two). */
+    private static final Pattern ADMIN_NAME = Pattern.compile("[^\\p{Cntrl}]{1,128}");
     private static final Comparator<String> SEQNO_ORDER = Comparator.comparing(java.math.BigInteger::new);
 
     /** @param outcome OFF, COLLECTED, NO_NEW_DATA, BACKLOG or UNKNOWN; {@code reason} is a fixed code for UNKNOWN. */
@@ -280,9 +284,17 @@ public final class PanoramaConfigLogReader {
         String path = strip(fields.get("path"));
         String pathHmac = fingerprint == null || path.isEmpty() ? null : fingerprint.ofContent(DOMAIN_PATH,
                 path.getBytes(StandardCharsets.UTF_8), 0, path.getBytes(StandardCharsets.UTF_8).length);
+        String commandClass = COMMAND_CLASS.matcher(command).matches() ? command : null;
+        String resultClass = RESULT_CLASS.matcher(outcome).matches() ? outcome : null;
+        // Rule reference and administrator name (design section 6, PO D2 2026-11-12). The reference needs the product key; the
+        // name is kept only for a successful configuration-change command that names a rule, never for a commit, a failed
+        // command or an entry whose path names no rule. A name that is not shaped as expected stays NULL (UNKNOWN).
+        String ruleRef = fingerprint == null ? null : PanRuleRef.fromPath(path).map(parts -> PanRuleRef.hmac(fingerprint, parts)).orElse(null);
+        boolean keepName = ruleRef != null && commandClass != null && CHANGE_COMMANDS.contains(commandClass) && "Succeeded".equals(resultClass);
+        String adminName = keepName && ADMIN_NAME.matcher(admin).matches() && !admin.contains(PanLogRedactor.REDACTED) ? admin : null;
         return new Evidence("palo_alto", PolicyChangeEvidenceRepository.PAN_CONFIG_LOG, containerRef(sourceId, path), entry.seqno(),
-                sqlTime(entry.receiveTime()), "DEVICE_LOCAL", adminRef, COMMAND_CLASS.matcher(command).matches() ? command : null,
-                RESULT_CLASS.matcher(outcome).matches() ? outcome : null, pathHmac, redacted.redactions(), null, null, null, null, false);
+                sqlTime(entry.receiveTime()), "DEVICE_LOCAL", adminRef, commandClass, resultClass, pathHmac, redacted.redactions(),
+                null, null, null, null, false, adminName, ruleRef);
     }
 
     /** The opaque device-group container ref when the path names one; null (UNKNOWN) otherwise. */

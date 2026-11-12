@@ -35,6 +35,12 @@ public final class PanoramaPolicyCollector {
     private PolicyCompletenessSettings completeness = PolicyCompletenessSettings.OFF;
     private com.securityexpert.nexus.ui2.platform.JobWindowPolicy windows = com.securityexpert.nexus.ui2.platform.JobWindowPolicy.SYSTEM;
     private com.securityexpert.nexus.ui2.worker.diagnostic.PanoramaConfigLogReader configLog;
+    private com.securityexpert.nexus.ui2.worker.diagnostic.PolicyChangeActorResolver actorResolver;
+
+    /** Links the history rows of the config-log trial Panorama to the administrator of their change (PO 2026-11-12). */
+    public PanoramaPolicyCollector withActorResolver(com.securityexpert.nexus.ui2.worker.diagnostic.PolicyChangeActorResolver resolver) {
+        this.actorResolver = resolver; return this;
+    }
 
     /** Switches the completeness readers on for their trial targets: P-1 (firewall NAT hit measurement) and P-2/P-3/P-4 (config log). */
     public PanoramaPolicyCollector withCompleteness(PolicyCompletenessSettings settings, com.securityexpert.nexus.ui2.platform.JobWindowPolicy windows,
@@ -262,8 +268,13 @@ public final class PanoramaPolicyCollector {
             ScheduledExecutorService timer, long deadline, long[] bytes, Instant jobStart, Target natTrial) {
         if (configLog != null && completeness.panConfigLogTargets(scope.sourceId())) {
             try {
-                if (clock.getAsLong() < deadline)
-                    configLog.read(scope.sourceId(), scope.jobId(), scope.throttledAutomatic(), jobStart, target, key, lease);
+                if (clock.getAsLong() < deadline) {
+                    var read = configLog.read(scope.sourceId(), scope.jobId(), scope.throttledAutomatic(), jobStart, target, key, lease);
+                    // Only a complete read of the log lets the join speak: after OFF, UNKNOWN or BACKLOG the newest changes may
+                    // be missing from the evidence, so the history rows stay unlinked and are retried by the next run.
+                    if (actorResolver != null && ("COLLECTED".equals(read.outcome()) || "NO_NEW_DATA".equals(read.outcome())))
+                        resolveActors(scope);
+                }
             } catch (RuntimeException unavailable) {
                 com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unavailable);
                 if (completenessFatal(unavailable)) throw unavailable;
@@ -271,6 +282,17 @@ public final class PanoramaPolicyCollector {
             }
         }
         if (natTrial != null && clock.getAsLong() < deadline) measureNatHits(natTrial, scope, timer, deadline, bytes, lease, jobStart);
+    }
+
+    /** The join reads stored rows only (no device call) and can never fail the policy collection. */
+    private void resolveActors(PolicyCollectionRepository.Request scope) {
+        try {
+            var result = actorResolver.resolve(scope.sourceId(), scope.jobId(), java.time.Instant.now());
+            com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", result.note());
+        } catch (RuntimeException unavailable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unavailable);
+            com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", "PAN_ACTOR_LINK outcome=UNKNOWN reason=RESOLVER_FAILED");
+        }
     }
 
     private static boolean completenessFatal(RuntimeException error) {

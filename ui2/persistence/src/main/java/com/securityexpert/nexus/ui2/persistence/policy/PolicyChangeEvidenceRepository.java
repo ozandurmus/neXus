@@ -25,10 +25,21 @@ public class PolicyChangeEvidenceRepository {
      * One evidence row. {@code changeTime} is {@code yyyy-MM-dd HH:mm:ss} text bound as a timestamp; {@code timeBasis} is
      * DEVICE_LOCAL (Palo Alto receive_time) or UTC (Check Point publish time). {@code adminRef} is a 64-hex HMAC,
      * {@code masked:<length>} or UNKNOWN. {@code objectChangesJson} is a JSON array of {uid, type, op} or null.
+     * {@code adminName} (V208, PO D2 2026-11-12) is set only for a successful configuration-change entry that names a rule;
+     * {@code ruleRefHmac} is the keyed hash of that rule's reference.
      */
     public record Evidence(String vendor, String evidenceKind, String containerRef, String entryRef, String changeTime,
             String timeBasis, String adminRef, String commandClass, String resultClass, String pathHmac, int redactionCount,
-            Integer addedCount, Integer modifiedCount, Integer deletedCount, String objectChangesJson, boolean objectChangesTruncated) {}
+            Integer addedCount, Integer modifiedCount, Integer deletedCount, String objectChangesJson, boolean objectChangesTruncated,
+            String adminName, String ruleRefHmac) {
+        /** The V163 shape: no administrator name and no rule reference (Check Point rows, commits, and every non-change entry). */
+        public Evidence(String vendor, String evidenceKind, String containerRef, String entryRef, String changeTime,
+                String timeBasis, String adminRef, String commandClass, String resultClass, String pathHmac, int redactionCount,
+                Integer addedCount, Integer modifiedCount, Integer deletedCount, String objectChangesJson, boolean objectChangesTruncated) {
+            this(vendor, evidenceKind, containerRef, entryRef, changeTime, timeBasis, adminRef, commandClass, resultClass, pathHmac,
+                    redactionCount, addedCount, modifiedCount, deletedCount, objectChangesJson, objectChangesTruncated, null, null);
+        }
+    }
 
     private final TransactionBoundary tx;
 
@@ -56,12 +67,13 @@ public class PolicyChangeEvidenceRepository {
             for (Evidence e : rows) {
                 stored += db.execute("insert into policy_change_evidence(evidence_id, source_id, vendor, evidence_kind, container_ref, job_id, "
                     + "entry_ref, change_time, time_basis, admin_ref, command_class, result_class, path_hmac, redaction_count, added_count, "
-                    + "modified_count, deleted_count, object_changes, object_changes_truncated) "
-                    + "values ({0},{1},{2},{3},{4},{5},{6},{7}::timestamp,{8},{9},{10},{11},{12},{13},{14},{15},{16},{17}::jsonb,{18}) "
+                    + "modified_count, deleted_count, object_changes, object_changes_truncated, admin_name, rule_ref_hmac) "
+                    + "values ({0},{1},{2},{3},{4},{5},{6},{7}::timestamp,{8},{9},{10},{11},{12},{13},{14},{15},{16},{17}::jsonb,{18},{19},{20}) "
                     + "on conflict do nothing",
                     UUID.randomUUID().toString(), sourceId, e.vendor(), e.evidenceKind(), e.containerRef(), jobId, e.entryRef(),
                     e.changeTime(), e.timeBasis(), e.adminRef(), e.commandClass(), e.resultClass(), e.pathHmac(), e.redactionCount(),
-                    e.addedCount(), e.modifiedCount(), e.deletedCount(), e.objectChangesJson(), e.objectChangesTruncated());
+                    e.addedCount(), e.modifiedCount(), e.deletedCount(), e.objectChangesJson(), e.objectChangesTruncated(),
+                    e.adminName(), e.ruleRefHmac());
             }
             newCursor.ifPresent(c -> db.execute("insert into policy_change_cursor(source_id, change_source, last_receive_time, boundary_seqnos, updated_job_id) "
                 + "values ({0},'pan_config_log',{1},{2}::jsonb,{3}) on conflict (source_id, change_source) do update set "
