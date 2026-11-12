@@ -362,3 +362,50 @@ describe("the sidebar folds to icons (PO 2026-10-20)", () => {
     }
   });
 });
+
+describe("the logo (brand area 2026-11-13)", () => {
+  const brands = (root: ParentNode = document) => [...root.querySelectorAll("[data-brand]")].map((el) => el.getAttribute("data-brand"));
+
+  it("is the wordmark, once, on the expanded sidebar", () => {
+    viewport(1440);
+    rail("overview");
+    expect(nav()).toHaveAttribute("data-nav-layout", "expanded");
+    expect(within(nav()).getAllByRole("img", { name: "neXus" })).toHaveLength(1);
+    expect(brands()).toEqual(["wordmark"]);
+    expect(document.querySelector("img")).toBeNull();
+  });
+
+  it("is the X mark alone, once, when the sidebar is folded", () => {
+    viewport(1440);
+    rail("overview");
+    fireEvent.click(within(nav()).getByRole("button", { name: "Collapse menu" }));
+    expect(nav()).toHaveAttribute("data-nav-layout", "folded");
+    expect(within(nav()).getAllByRole("img", { name: "neXus" })).toHaveLength(1);
+    expect(brands()).toEqual(["mark"]);
+  });
+
+  it("is the X mark on the narrow strip, and the wordmark once in the drawer with no caption and no footer text", () => {
+    viewport(1000);
+    rail("overview");
+    expect(nav()).toHaveAttribute("data-nav-layout", "narrow");
+    expect(brands()).toEqual(["mark"]);
+    fireEvent.click(within(nav()).getByRole("button", { name: "Open navigation" }));
+    const drawer = screen.getByRole("navigation", { name: "Primary navigation drawer" });
+    expect(within(drawer).getAllByRole("img", { name: "neXus" })).toHaveLength(1);
+    expect(brands(drawer)).toEqual(["wordmark"]);
+    // The open drawer hides the strip behind it from the accessibility tree; the strip itself still holds the one mark.
+    expect(brands(document.querySelector('[data-nav-layout="narrow"]')!)).toEqual(["mark"]);
+    expect(within(drawer).getByRole("button", { name: "Close navigation" })).toBeInTheDocument();
+    expect(screen.queryByText("Verified state")).toBeNull();
+    expect(screen.queryByText(/Read-only evidence/)).toBeNull();
+  });
+
+  it("never prints SX in any layout", () => {
+    for (const width of [1440, 1150, 1000]) {
+      viewport(width);
+      const { unmount } = rail("overview");
+      expect(screen.queryByText("SX")).toBeNull();
+      unmount();
+    }
+  });
+});

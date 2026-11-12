@@ -31,3 +31,12 @@ it("keeps the time-zone note and the build stamp out of the bar and in the accou
   expect(within(menu).getByText(/aiview · read-only/)).toBeInTheDocument();
   expect(within(menu).getByRole("button", { name: "Sign out" })).toBeInTheDocument();
 });
+
+it("carries no logo and no SX badge: search and account controls only (brand area 2026-11-13)", () => {
+  const { container } = mountBar();
+  expect(screen.queryByRole("img", { name: "neXus" })).toBeNull();
+  expect(container.querySelector("[data-brand]")).toBeNull();
+  expect(screen.queryByText("SX")).toBeNull();
+  expect(screen.getByRole("textbox", { name: "Search devices, settings and evidence" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Account menu" })).toBeInTheDocument();
+});
