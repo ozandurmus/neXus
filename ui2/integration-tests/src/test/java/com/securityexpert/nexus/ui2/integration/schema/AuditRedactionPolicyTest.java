@@ -409,6 +409,14 @@ class AuditRedactionPolicyTest {
             "ssh_host_key_observation.status", "ssh_host_key_observation.strict_refusal",
             // ssh_trust_settings
             "ssh_trust_settings.mode", "ssh_trust_settings.settings_id",
+            // credential_failure_alert (V207): ids, counters, times and a 12-hex digest of the credential reference
+            "credential_failure_alert.alert_id", "credential_failure_alert.changed_at",
+            "credential_failure_alert.closed_at", "credential_failure_alert.closed_reason",
+            "credential_failure_alert.credential_ref_digest", "credential_failure_alert.failed_device_count",
+            "credential_failure_alert.failed_device_ids", "credential_failure_alert.failed_job_count",
+            "credential_failure_alert.first_failure_at", "credential_failure_alert.last_failure_at",
+            "credential_failure_alert.last_job_id", "credential_failure_alert.run_device_ids",
+            "credential_failure_alert.scheduled_day", "credential_failure_alert.vendor",
             // device_crash_alert (V160)
             "device_crash_alert.alert_id", "device_crash_alert.created_at", "device_crash_alert.device_id",
             "device_crash_alert.file_count", "device_crash_alert.job_id", "device_crash_alert.newest_mtime",
@@ -494,6 +502,7 @@ class AuditRedactionPolicyTest {
             "credential_references.credential_reference_id",
             "devices.credential_reference_id",
             // A digest, already non-reversible.
+            "credential_failure_alert.credential_ref_digest",
             "job_step_attempt.fingerprint_sha256",
             "provenance_records.fingerprint_sha256",
             // Identifiers of a credential or credential reference, never the credential.

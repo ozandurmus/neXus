@@ -115,6 +115,15 @@ public final class BackupJobExecutor {
         return this;
     }
 
+    /** V207: the credential failure alert; unset (tests, the CLI), nothing is recorded. */
+    private CredentialFailureReporter credentialAlerts = CredentialFailureReporter.none();
+
+    public BackupJobExecutor withCredentialAlerts(
+            com.securityexpert.nexus.ui2.persistence.artefact.CredentialFailureAlertRepository repository) {
+        this.credentialAlerts = new CredentialFailureReporter(Objects.requireNonNull(repository, "repository"));
+        return this;
+    }
+
     /** V61: the Check Point MDS export; unset, a cp_mds_export job fails closed (never falls back to the Gaia backup). */
     public BackupJobExecutor withMdsExportExecutor(com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportExecutor executor) {
         this.mdsExportExecutor = executor;
@@ -372,7 +381,11 @@ public final class BackupJobExecutor {
         }
 
         if (result instanceof BackupResult.Completed completed) {
-            return handleCompleted(jobId, leaseEpoch, targetDeviceId, completed, confirmFacts, backupType);
+            JobOutcome completedOutcome = handleCompleted(jobId, leaseEpoch, targetDeviceId, completed, confirmFacts, backupType);
+            if (completedOutcome instanceof JobOutcome.Completed) {
+                credentialAlerts.succeeded(request.credentialRef());
+            }
+            return completedOutcome;
         }
 
         if (result instanceof BackupResult.CleanupFailed cleanupFailed) {
@@ -392,6 +405,10 @@ public final class BackupJobExecutor {
         }
 
         leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR, ACTION_FAILED, describeFailure(result));
+        if (result instanceof BackupResult.ConnectFailed connectFailed && connectFailed.authentication()) {
+            // V207: the first authentication failure of a credential alerts; two devices in one scheduled run hold the rest.
+            credentialAlerts.authenticationFailed(request.credentialRef(), vendor, jobId, targetDeviceId);
+        }
         return new JobOutcome.Failed(describeFailure(result));
     }
 

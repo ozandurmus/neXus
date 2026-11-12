@@ -38,9 +38,18 @@ final class ScriptedBackupTransport implements DeviceTransport {
     boolean fetchFails;
     boolean disconnectCalled;
     boolean connectFails;
+    /** When set, {@link #connect} answers this instead (a timeout, a host key rejection, ...). */
+    ConnectResult connectOverride;
+    int connectCount;
+    int execCount;
+    int fetchCount;
 
     @Override
     public ConnectResult connect(ConnectionTarget target, ConnectSpec spec, Duration timeout) {
+        connectCount++;
+        if (connectOverride != null) {
+            return connectOverride;
+        }
         if (connectFails) {
             return new ConnectResult.AuthenticationFailed("scripted failure");
         }
@@ -49,6 +58,7 @@ final class ScriptedBackupTransport implements DeviceTransport {
 
     @Override
     public ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout) {
+        execCount++;
         com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("ssh", "command", spec.command());
         commandsIssued.add(spec.command());
         String command = spec.command();
@@ -71,12 +81,14 @@ final class ScriptedBackupTransport implements DeviceTransport {
 
     @Override
     public FetchResult fetch(TransportSession session, FetchSpec spec, Duration timeout) {
+        fetchCount++;
         throw new UnsupportedOperationException("not exercised by these tests");
     }
 
     @Override
     public FetchStreamResult fetchStreaming(TransportSession session, FetchSpec spec, Duration timeout,
             OutputStream sink) {
+        fetchCount++;
         if (fetchFails) {
             return new FetchStreamResult.Failed("scripted fetch failure");
         }

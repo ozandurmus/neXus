@@ -120,7 +120,8 @@ public final class BackupCapabilityExecutor {
             return new BackupResult.CredentialUnresolvable(String.valueOf(credentialUnresolvable.getMessage()));
         }
         if (!(connectResult instanceof ConnectResult.Authenticated authenticated)) {
-            return new BackupResult.ConnectFailed(describeConnect(connectResult));
+            return new BackupResult.ConnectFailed(describeConnect(connectResult),
+                    connectResult instanceof ConnectResult.AuthenticationFailed);
         }
         TransportSession session = authenticated.session();
         try {

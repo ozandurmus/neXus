@@ -63,7 +63,8 @@ public final class WorkerClaimLoop {
             DiscoveryCapabilityIds.RDW_DISCOVERY_ENUMERATE, DiscoveryCapabilityIds.FMG_DISCOVERY_ENUMERATE,
             DiscoveryCapabilityIds.BCMC_DISCOVERY_ENUMERATE,
             BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL, BackupCapabilityIds.CP_SPARK_SFTP_BACKUP, BackupCapabilityIds.CP_GAIA_SNAPSHOT,
-            BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP, BackupCapabilityIds.CP_MDS_EXPORT, BackupCapabilityIds.RDW_CC_CONFIG_BACKUP);
+            BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP, BackupCapabilityIds.CP_MDS_EXPORT, BackupCapabilityIds.RDW_CC_CONFIG_BACKUP,
+            BackupCapabilityIds.CREDENTIAL_CANARY);
     private List<String> eligibleCapabilityIds = claimCapabilities("general", false);
     public static List<String> claimCapabilities(String role, boolean policyFallback) {
         if ("policy".equals(role)) return policyFallback ? List.of() : List.of("cp_policy_collect", "pan_policy_collect");
@@ -147,6 +148,14 @@ public final class WorkerClaimLoop {
     }
     private com.securityexpert.nexus.ui2.worker.diagnostic.CpSpikeLayoutReviewJobExecutor cpSpikeLayoutReviewExecutor;
     /** The one-off Spike Detective layout review (contract section 8.3; PO approval 2026-10-19). */
+    private com.securityexpert.nexus.ui2.worker.backup.CredentialCanaryJobExecutor credentialCanaryExecutor;
+
+    /** V207: the nightly credential canary (authentication only, no command). */
+    public WorkerClaimLoop withCredentialCanary(com.securityexpert.nexus.ui2.worker.backup.CredentialCanaryJobExecutor executor) {
+        this.credentialCanaryExecutor = executor;
+        return this;
+    }
+
     public WorkerClaimLoop withCpSpikeLayoutReview(com.securityexpert.nexus.ui2.worker.diagnostic.CpSpikeLayoutReviewJobExecutor executor) {
         this.cpSpikeLayoutReviewExecutor=executor; return this;
     }
@@ -272,7 +281,8 @@ public final class WorkerClaimLoop {
     public static String purposeOf(String capability) {
         if (com.securityexpert.nexus.ui2.persistence.JooqPanConfigSyncRepository.JOB_TYPE.equals(capability)) return "CONFIGURATION_WRITE";
         return capability.contains("policy") ? "POLICY"
-            : capability.contains("backup") || capability.equals("cp_gaia_snapshot") ? "BACKUP"
+            : capability.contains("backup") || capability.equals("cp_gaia_snapshot")
+            || capability.equals(BackupCapabilityIds.CREDENTIAL_CANARY) ? "BACKUP"
             : capability.contains("configuration") ? "CONFIGURATION"
             : capability.contains("discovery") ? "DISCOVERY"
             : capability.contains("confirm") ? "ENROLLMENT"
@@ -627,6 +637,20 @@ public final class WorkerClaimLoop {
                 BackupRequest ccRequest = new BackupRequest(new ConnectionTarget(endpoint.endpointId(), host, DEFAULT_SSH_PORT),
                         Optional.ofNullable(device.credentialReferenceId()), trustRuleRef);
                 backupJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), ccRequest, job.capabilityId());
+                return true;
+            }
+            if (BackupCapabilityIds.CREDENTIAL_CANARY.equals(job.capabilityId())) {
+                if (credentialCanaryExecutor == null) {
+                    leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(), com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
+                            com.securityexpert.nexus.ui2.jobs.JobState.REJECTED, "system:worker", "credential_canary_claim_check", "EXECUTOR_UNAVAILABLE");
+                } else {
+                    // The same connection target, trust rule and distinct backup credential the backup itself uses (BK-11).
+                    String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
+                            hostOf(endpoint.addressRef()), portOf(endpoint.addressRef()));
+                    credentialCanaryExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(),
+                            new BackupRequest(new ConnectionTarget(endpoint.endpointId(), hostOf(endpoint.addressRef()),
+                                    portOf(endpoint.addressRef())), backupCredentialRef, trustRuleRef));
+                }
                 return true;
             }
             if (BackupCapabilityIds.isBackupCapability(job.capabilityId())) {

@@ -103,6 +103,42 @@ class BackupJobExecutorEndToEndTest {
         assertTrue(transport.commandsIssued.isEmpty(), "the Gaia precheck must never run");
     }
 
+    @Test
+    void anAuthenticationFailureOpensTheCredentialAlertAndOtherConnectFailuresDoNot(@TempDir Path dir) throws Exception {
+        var transport = new ScriptedBackupTransport();
+        transport.connectFails = true;
+        var harness = new Harness(transport, newArtefactStore(dir.resolve("a")), Duration.ofMillis(5), Duration.ofSeconds(5), dir);
+        var alerts = new RecordingCredentialAlerts();
+        harness.executor.withCredentialAlerts(alerts);
+        var failed = org.junit.jupiter.api.Assertions.assertInstanceOf(JobOutcome.Failed.class,
+                harness.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request()));
+        assertTrue(failed.terminalReason().contains("authentication_failed"));
+        assertEquals(java.util.List.of("cred-backup-1|check_point|" + JOB_ID + "|" + DEVICE_ID), alerts.failures);
+
+        var timeout = new ScriptedBackupTransport();
+        timeout.connectOverride = new com.securityexpert.nexus.ui2.jobs.transport.ConnectResult.TimedOut("connect timed out");
+        var other = new Harness(timeout, newArtefactStore(dir.resolve("b")), Duration.ofMillis(5), Duration.ofSeconds(5), dir);
+        var otherAlerts = new RecordingCredentialAlerts();
+        other.executor.withCredentialAlerts(otherAlerts);
+        assertTrue(other.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request()) instanceof JobOutcome.Failed);
+        assertTrue(otherAlerts.failures.isEmpty(), "a timeout is not a credential failure");
+    }
+
+    @Test
+    void aCompletedBackupClosesTheOpenCredentialAlert(@TempDir Path tempDir) throws Exception {
+        ScriptedBackupTransport transport = happyPathTransportUpTo("succeeded");
+        transport.fetchedContent = "archive-bytes-content";
+        transport.execOutputs.put(BackupReadPlan.archiveDigestCommand(ARCHIVE_NAME),
+                sha256Hex(transport.fetchedContent) + "  " + ARCHIVE_NAME + "\n");
+        transport.execOutputs.put(BackupReadPlan.deleteBackupCommand(ARCHIVE_NAME), "");
+        Harness harness = new Harness(transport, newArtefactStore(tempDir), Duration.ofMillis(5), Duration.ofSeconds(5), tempDir);
+        var alerts = new RecordingCredentialAlerts();
+        harness.executor.withCredentialAlerts(alerts);
+        assertTrue(harness.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request()) instanceof JobOutcome.Completed);
+        assertEquals(java.util.List.of("cred-backup-1"), alerts.closed);
+        assertTrue(alerts.failures.isEmpty());
+    }
+
     @Test void storesTranscriptRefAndPreservesOutcomeOnStoreFailure(@TempDir Path tempDir) throws Exception {
         ScriptedBackupTransport transport = happyPathTransportUpTo("succeeded");
         transport.fetchedContent = "archive-bytes-content";

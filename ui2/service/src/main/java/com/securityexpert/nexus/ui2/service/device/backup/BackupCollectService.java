@@ -48,6 +48,27 @@ public final class BackupCollectService {
         return this;
     }
 
+    private static final java.util.logging.Logger LOG = java.util.logging.Logger.getLogger(BackupCollectService.class.getName());
+    /** The reason a scheduled backup is refused while its credential has an open failure alert (V207). */
+    public static final String CREDENTIAL_HOLD = "credential_auth_failed_hold";
+
+    private com.securityexpert.nexus.ui2.persistence.artefact.CredentialFailureAlertRepository credentialAlerts =
+            com.securityexpert.nexus.ui2.persistence.artefact.CredentialFailureAlertRepository.NONE;
+    private Optional<String> checkPointBackupCredentialRef = Optional.empty();
+
+    /**
+     * V207: the credential failure alerts that hold scheduled backups, and the one environment-wide Check Point backup
+     * credential reference ({@code UI2_CP_BACKUP_CREDENTIAL_REF}) the hold and the canary resolve devices against.
+     */
+    public BackupCollectService withCredentialAlerts(
+            com.securityexpert.nexus.ui2.persistence.artefact.CredentialFailureAlertRepository alerts,
+            Optional<String> checkPointCredentialRef) {
+        this.credentialAlerts = Objects.requireNonNull(alerts, "alerts");
+        this.checkPointBackupCredentialRef = Objects.requireNonNull(checkPointCredentialRef, "checkPointCredentialRef")
+                .filter(ref -> !ref.isBlank());
+        return this;
+    }
+
     private static final int MIN_REASON_LENGTH = 8;
 
     private final DeviceRepository deviceRepository;
@@ -191,13 +212,70 @@ public final class BackupCollectService {
     }
 
     /** Counts only, so a bulk request does not return a fleet's opaque device identifiers. */
-    public record BulkOutcome(int targets, int admitted, int refused) {
+    public record BulkOutcome(int targets, int admitted, int refused, int held) {
+        public BulkOutcome(int targets, int admitted, int refused) {
+            this(targets, admitted, refused, 0);
+        }
+    }
+
+    /** The backup credential reference a device's backup uses: Check Point's environment value, Palo Alto's own, else none. */
+    private Optional<String> backupCredentialRefOf(String deviceId, String vendorHint) {
+        if ("check_point".equals(vendorHint)) {
+            return checkPointBackupCredentialRef;
+        }
+        if ("palo_alto".equals(vendorHint)) {
+            return deviceRepository.find(deviceId).map(DeviceRecord::credentialReferenceId).filter(ref -> !ref.isBlank());
+        }
+        return Optional.empty();
+    }
+
+    /** True while the device's backup credential has an open failure alert; a lookup failure never holds a backup. */
+    private boolean heldByCredentialAlert(String deviceId, String vendorHint) {
+        try {
+            Optional<String> ref = backupCredentialRefOf(deviceId, vendorHint);
+            return ref.isPresent() && credentialAlerts.hasOpenAlert(ref.get());
+        } catch (RuntimeException e) {
+            LOG.warning("[CREDENTIAL_HOLD] alert lookup failed, not holding: " + e.getClass().getSimpleName());
+            return false;
+        }
+    }
+
+    /**
+     * The nightly credential canary (V207): one {@code credential_canary} job for the Check Point backup credential, on
+     * the first enrolled, enabled Check Point backup-target gateway by device id. Check Point only in this release.
+     * Deduplicated per device and day, so a repeated call admits nothing new.
+     *
+     * @return the number of canary jobs admitted or already present for {@code day}
+     */
+    public int requestCredentialCanaries(String actorFingerprint, java.time.LocalDate day) {
+        if (checkPointBackupCredentialRef.isEmpty()) {
+            return 0;
+        }
+        Optional<String> canary = deviceRepository.listAll().stream()
+                .filter(d -> "check_point".equals(d.vendorHint()) && "gateway".equals(d.role()) && d.backupTarget()
+                        && d.enrollmentState() == com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState.ENROLLED)
+                .map(d -> d.deviceId())
+                .sorted()
+                .filter(id -> deviceRepository.find(id).map(r -> !r.disabled()).orElse(false))
+                .findFirst();
+        if (canary.isEmpty()) {
+            return 0;
+        }
+        try {
+            AdmissionResult admission = jobAdmissionService.submit(BackupCapabilityIds.CREDENTIAL_CANARY, canary.get(),
+                    canary.get() + ":" + BackupCapabilityIds.CREDENTIAL_CANARY + ":" + day, actorFingerprint,
+                    ActionRegistry.DEVICE_BACKUP_COLLECT);
+            return admission instanceof AdmissionResult.Refused ? 0 : 1;
+        } catch (com.securityexpert.nexus.ui2.platform.JobWindowPolicy.OutsideWindow e) {
+            return 0;
+        }
     }
 
     /** "Run Fleet Backup": one backup per enrolled, non-disabled backup target -- nothing else is touched. */
     public BulkOutcome requestCollectAll(String actorFingerprint, String reason) {
         int targets = 0;
         int admitted = 0;
+        int held = 0;
         boolean scheduled = ScheduledBackupWindowPolicy.ACTOR.equals(actorFingerprint);
         Optional<String> nonce = scheduled
                 ? Optional.of("scheduled:" + clock.instant().atZone(
@@ -209,11 +287,17 @@ public final class BackupCollectService {
                 continue;
             }
             targets++;
+            // V207: a scheduled run never sends a credential that has an open authentication-failure alert to its devices;
+            // a manual fleet backup is never held.
+            if (scheduled && heldByCredentialAlert(device.deviceId(), device.vendorHint())) {
+                held++;
+                continue;
+            }
             if (requestCollect(device.deviceId(), actorFingerprint, reason, nonce) instanceof Outcome.Admitted) {
                 admitted++;
             }
         }
-        return new BulkOutcome(targets, admitted, targets - admitted);
+        return new BulkOutcome(targets, admitted, targets - admitted, held);
     }
 
     private String minuteBucket() {

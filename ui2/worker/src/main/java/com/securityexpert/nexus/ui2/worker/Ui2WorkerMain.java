@@ -293,6 +293,9 @@ public final class Ui2WorkerMain {
         // V180: backup size anomaly at ingest; retention keeps the last good backup until a security_admin accepts it.
         backupJobExecutor.withSizeAnomalyCheck(
                 new com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupSizeAnomalyRepository(transactionBoundary));
+        // V207: the credential failure alert (first authentication failure of a backup credential; early stop; canary).
+        var credentialFailureAlerts = new com.securityexpert.nexus.ui2.persistence.artefact.JooqCredentialFailureAlertRepository(transactionBoundary);
+        backupJobExecutor.withCredentialAlerts(credentialFailureAlerts);
         // V64: vendors backed up over HTTPS (Infoblox, Radware) -- credentials resolved like the PAN API password.
         var httpsCertificateTrust = new com.securityexpert.nexus.ui2.persistence.https.HttpsCertificateTrustRepository(transactionBoundary);
         com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor httpsVendorExecutor =
@@ -407,6 +410,9 @@ public final class Ui2WorkerMain {
                 leaseRepository, attemptRepository, deviceRepository, deviceInventoryRepository, platformFactsRepository,
                 strictFailoverSsh, panTransport, panCredentialResolver, gateRegistry,
                 new com.securityexpert.nexus.ui2.persistence.pathvalidation.JooqPathValidationRepository(transactionBoundary));
+        var credentialCanaryExecutor = new com.securityexpert.nexus.ui2.worker.backup.CredentialCanaryJobExecutor(
+                leaseRepository, attemptRepository, deviceEnrollmentReadPort, compositeTransport,
+                new com.securityexpert.nexus.ui2.worker.backup.CredentialFailureReporter(credentialFailureAlerts));
         java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(10);
         java.util.List<WorkerClaimLoop> claimLoops = new java.util.ArrayList<>();
         var failoverRecovery = new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary);
@@ -446,6 +452,7 @@ public final class Ui2WorkerMain {
                     .withPanSystemLogCollect(panSystemLogCollectExecutor)
                     .withCpSystemLogCollect(cpSystemLogCollectExecutor)
                     .withCpSpikeLayoutReview(cpSpikeLayoutReviewExecutor)
+                    .withCredentialCanary(credentialCanaryExecutor)
                     .withPathValidation(pathValidationExecutor)
                     .withPolicyCollection(policyCollectionExecutor)
                     .withRole(role, policyFallback)

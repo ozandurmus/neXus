@@ -77,7 +77,8 @@ public final class CheckPointSnapshotExecutor {
         }
 
         if (!(connectResult instanceof ConnectResult.Authenticated authenticated)) {
-            return new BackupResult.ConnectFailed("SSH connection failed to target device");
+            return new BackupResult.ConnectFailed("SSH connection failed to target device",
+                    connectResult instanceof ConnectResult.AuthenticationFailed);
         }
 
         TransportSession session = authenticated.session();

@@ -25,7 +25,7 @@ describe("job type labels", () => {
     ["cp_system_log_collect", "Check Point log collection"], ["pan_system_log_collect", "Palo Alto log collection"],
     ["cp_spike_layout_review", "Check Point Spike Detective layout review"],
     ["cp_inventory_collect", "Check Point inventory read"], ["fgt_configuration_collect", "FortiGate configuration read"],
-    ["cp_gateway_backup", "Check Point backup"], ["cp_mds_export", "Check Point MDS export"], ["cp_gaia_snapshot", "Check Point Gaia snapshot"],
+    ["cp_gateway_backup", "Check Point backup"], ["cp_mds_export", "Check Point MDS export"], ["credential_canary", "Backup credential check"], ["cp_gaia_snapshot", "Check Point Gaia snapshot"],
     ["asa_config_backup", "Cisco ASA backup"], ["rdw_discovery_enumerate", "Radware discovery"], ["bcmc_discovery_enumerate", "Blue Coat discovery"],
     ["device_confirm_palo_alto", "Palo Alto identity check"], ["device_confirm_https", "Identity check"],
     ["packet_analysis_run", "Packet analysis"], ["data_sanitize_run", "Data sanitizer run"],
