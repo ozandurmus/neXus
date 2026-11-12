@@ -27,7 +27,7 @@ implementation authority for Phase 0 only. The design draft stays DRAFT for ever
   FortiGate `get system status` "Serial-Number:"), stored as the device's platform fact (`device_platform_facts`,
   source `asa_show_version` / `fgt_get_system_status`). A parse-scope extension of an issued command, same
   command/session/timeout/frequency: no gate change. An absent serial never erases a recorded one.
-- **Pair identity (`ha_pair_identity`, V206):** for a pair of exactly two enrolled members of one vendor, the two
+- **Pair identity (`ha_pair_identity`, V209):** for a pair of exactly two enrolled members of one vendor, the two
   serials are recorded the first time both members report two different serials; afterwards each inventory only
   compares: MATCH, MISMATCH, MISSING, AMBIGUOUS. Never re-bound automatically. For Cisco ASA the two device rows are
   the pair's management address slots (both present the same SSH host key, measured 2026-11-12 on all five pairs);

@@ -2,7 +2,7 @@ package com.securityexpert.nexus.ui2.persistence.device;
 
 import java.util.Optional;
 
-/** V206 {@code ha_pair_identity}: a failover pair's recorded unit serials and the state of the last comparison. */
+/** V209 {@code ha_pair_identity}: a failover pair's recorded unit serials and the state of the last comparison. */
 public interface HaPairIdentityRepository {
 
     /**

@@ -10,7 +10,7 @@ import org.jooq.Record;
 
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 
-/** jOOQ implementation of {@link HaPairIdentityRepository} (V206). */
+/** jOOQ implementation of {@link HaPairIdentityRepository} (V209). */
 public final class JooqHaPairIdentityRepository implements HaPairIdentityRepository {
 
     /** The vendors whose pairs carry a serial identity (failover Phase 0). */

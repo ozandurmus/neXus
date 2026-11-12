@@ -1,4 +1,4 @@
--- V206 -- FortiGate HA / Cisco ASA failover, Phase 0 (PO_DECISION_RECORD_2026_11_13_FAILOVER_ASA_FORTIGATE_PHASE0.md,
+-- V209 -- FortiGate HA / Cisco ASA failover, Phase 0 (PO_DECISION_RECORD_2026_11_13_FAILOVER_ASA_FORTIGATE_PHASE0.md,
 -- RATIFIED). No device command and no gate row: every value comes from reads the inventory already makes
 -- (Cisco ASA "show version" and "show failover | include This host"; FortiGate "get system status" and
 -- "get system ha status").
@@ -10,7 +10,7 @@
 -- No audit trigger: machine-written rows, never entered by a person (the rule of V200 and V205).
 -- Dry-run in BEGIN/ROLLBACK on the live database before rollout.
 
-SELECT set_config('app.actor_fingerprint', 'migration:V206_failover_phase0_identity', true);
+SELECT set_config('app.actor_fingerprint', 'migration:V209_failover_phase0_identity', true);
 SELECT set_config('app.action_id', 'failover_phase0_identity_by_migration', true);
 
 ALTER TABLE device_inventory_ha DROP CONSTRAINT device_inventory_ha_source_check;
