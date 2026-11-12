@@ -4,7 +4,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * A failover pair's serial identity (V206, failover Phase 0, PO 2026-11-13): the two unit serials recorded the first
+ * A failover pair's serial identity (V209, failover Phase 0, PO 2026-11-13): the two unit serials recorded the first
  * time both enrolled members of the pair reported two different serials. Afterwards the pair is only compared with
  * what its members report, never re-bound. For a Cisco ASA pair the two device rows are address slots that follow the
  * active/standby role, so the comparison is on the pair's serial set, never per address.
