@@ -17,6 +17,8 @@ public final class PolicyChangesService {
     public static final String UNKNOWN_ACTOR = "UNKNOWN (observed by collection)";
     public static final Set<String> FIELDS = Set.of("name", "number", "enabled", "source", "destination", "service", "application", "action", "log", "comment", "extras", "container", "section", "parentRuleId");
     private final PolicyChangeRepository repository;
+    /** Reads the Panorama config-log join (V208); null in unit tests that build the service from a repository alone. */
+    private final com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeActorRepository actors;
     private final ObjectMapper mapper;
     private final TopologyNamePseudonymizer names;
     private final SubnetPreservingIpMasker ips;
@@ -29,10 +31,42 @@ public final class PolicyChangesService {
     @org.springframework.beans.factory.annotation.Autowired
     public PolicyChangesService(TransactionBoundary transactions, ObjectMapper mapper, TopologyNamePseudonymizer names, SubnetPreservingIpMasker ips) {
         this.repository = new PolicyChangeRepository(transactions); this.mapper = mapper; this.names = names; this.ips = ips;
+        this.actors = new com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeActorRepository(transactions);
     }
     PolicyChangesService(PolicyChangeRepository repository, ObjectMapper mapper, TopologyNamePseudonymizer names, SubnetPreservingIpMasker ips) {
-        this.repository = repository; this.mapper = mapper; this.names = names; this.ips = ips;
+        this.repository = repository; this.mapper = mapper; this.names = names; this.ips = ips; this.actors = null;
     }
+    PolicyChangesService(PolicyChangeRepository repository, ObjectMapper mapper, TopologyNamePseudonymizer names, SubnetPreservingIpMasker ips,
+            com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeActorRepository actors) {
+        this.repository = repository; this.mapper = mapper; this.names = names; this.ips = ips; this.actors = actors;
+    }
+    /** Shown instead of a name when two or more different administrators edited the rule before one commit; never a guess. */
+    public static String ambiguousActor(int administrators) { return "AMBIGUOUS (" + administrators + " administrators before the commit)"; }
+    /**
+     * Rows without a vendor-supplied actor get the administrator the Panorama config-log join resolved (V208, PO 2026-11-12):
+     * a name for MATCHED, the AMBIGUOUS text for AMBIGUOUS, otherwise the row is unchanged and shows UNKNOWN as before.
+     * The candidate names are never put on a row; authorised roles read them from {@link #actorCandidates}.
+     */
+    List<Row> enrich(List<Row> batch) {
+        if (actors == null || batch.isEmpty()) return batch;
+        List<Long> ids = batch.stream().filter(r -> r.actor() == null || r.actor().isBlank()).map(Row::revision).toList();
+        if (ids.isEmpty()) return batch;
+        var links = actors.links(ids);
+        if (links.isEmpty()) return batch;
+        var out = new ArrayList<Row>(batch.size());
+        for (Row row : batch) {
+            var link = links.get(row.revision());
+            if (link == null || (row.actor() != null && !row.actor().isBlank())) { out.add(row); continue; }
+            switch (link.state()) {
+                case "MATCHED" -> out.add(row.withResolvedActor(link.names().get(0), "MATCHED", 1));
+                case "AMBIGUOUS" -> out.add(row.withResolvedActor(ambiguousActor(link.names().size()), "AMBIGUOUS", link.names().size()));
+                default -> out.add(row);
+            }
+        }
+        return out;
+    }
+    /** The candidate administrators of one change, for authorised (non-replay-viewer) callers only; empty when none are linked. */
+    public List<String> actorCandidates(long revision) { return actors == null ? List.of() : actors.candidates(revision); }
     record Cursor(Instant from, Instant to, long ceiling, Position position) {}
     /** includeInitial: also list a policy's initial baseline capture (every rule 'added' when no baseline existed). */
     public record Request(String from, String to, String policy, String device, String actor, String changeType, String field, String q, String cursor, int limit,
@@ -96,6 +130,7 @@ public final class PolicyChangesService {
             out.put("changedOn", row.time()); out.put("observedAtCollection", row.observed()); out.put("changeType", row.changeType());
             out.put("collectedAt", row.collectedAt()); out.put("initialCapture", row.initialCapture());
             out.put("changedBy", row.actor() == null || row.actor().isBlank() ? UNKNOWN_ACTOR : row.actor());
+            if (row.actorState() != null) { out.put("actorState", row.actorState()); out.put("actorCandidates", row.actorCandidates()); }
             out.put("changes", changes); out.put("changedFields", changes.stream().map(c -> c.get("field")).toList());
             if (firewalls != null) {
                 var selectors = firewalls.changeSelectors(changes);
@@ -114,7 +149,7 @@ public final class PolicyChangesService {
         Filter rowsFilter = filter(request, cursor, request.includeInitial() || scannedSummary);
         // Bounded batches keep the estate summary independent of page size, without retaining history payloads.
         while (true) {
-            var batch = repository.rows(rowsFilter, cursor.ceiling(), scan);
+            var batch = enrich(repository.rows(rowsFilter, cursor.ceiling(), scan));
             for (Row row : batch) {
                 if (!scannedSummary) {
                     if (row.initialCapture() && !request.includeInitial()) continue;
@@ -136,7 +171,7 @@ public final class PolicyChangesService {
                 if (row.initialCapture()) initial++;
                 if (row.initialCapture() && !request.includeInitial()) continue;
                 total++; counts.merge(row.changeType(), 1L, Long::sum); rules.add(List.of(row.policy(), row.ruleKey()));
-                if (row.actor() != null && !row.actor().isBlank()) actors.add(row.actor());
+                if (row.actor() != null && !row.actor().isBlank() && !"AMBIGUOUS".equals(row.actorState())) actors.add(row.actor());
                 Position position = new Position(Instant.parse(row.time()), row.revision());
                 boolean after = cursor.position() == null || position.time().isBefore(cursor.position().time())
                     || position.time().equals(cursor.position().time()) && position.revision() < cursor.position().revision();
@@ -160,7 +195,7 @@ public final class PolicyChangesService {
         if (!from.isBefore(to)) throw new IllegalArgumentException("Invalid change range");
         var filter = new Filter(from, to, "", device == null ? "" : device, "", "", false);
         var rows = new ArrayList<Map<String, Object>>();
-        for (Row row : repository.rows(filter, repository.ceiling(), null)) {
+        for (Row row : enrich(repository.rows(filter, repository.ceiling(), null))) {
             if (row.initialCapture()) continue;
             rows.add(project(row, masked));
         }
@@ -173,7 +208,7 @@ public final class PolicyChangesService {
         var writer = new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8));
         writer.write("Time,Observed at collection,Policy,Devices,Rule number,Rule name,Current snapshot label,Change type,Actor,Field,Before,After,Collected at,Initial capture\r\n");
         while (true) {
-            var batch = repository.rows(filter(request, cursor), cursor.ceiling(), scan);
+            var batch = enrich(repository.rows(filter(request, cursor), cursor.ceiling(), scan));
             for (Row row : batch) {
                 var view = project(row, masked);
                 if (!matches(view, request)) continue;

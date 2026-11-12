@@ -110,6 +110,7 @@ class AuditCoverageCompletenessTest {
             Map.entry("policy_revision", "V163: per-collection revision record written by the policy job; the jobs row is audited"),
             Map.entry("policy_change_evidence", "V163: redacted change evidence read by the policy job; the jobs row is audited"),
             Map.entry("policy_change_cursor", "V163: resume point of the config-log reader; the jobs row is audited"),
+            Map.entry("policy_change_actor_link", "V208: join of a history row to Panorama config-log entries, written by the policy job; deleted with the history row; the jobs row is audited"),
             Map.entry("cp_policy_json_chunk", "V126: storage chunks of collected policy JSON"),
             Map.entry("policy_unit_checkpoint", "V128: collection resume checkpoints"),
             Map.entry("runtime_instance_heartbeat", "V131: process liveness telemetry"),

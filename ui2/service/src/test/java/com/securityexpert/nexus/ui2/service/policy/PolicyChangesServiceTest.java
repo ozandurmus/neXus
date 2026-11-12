@@ -140,4 +140,53 @@ class PolicyChangesServiceTest {
         assertEquals(first, second);
         assertEquals(1, claims.get(), "domain pseudonyms are cached in memory across repeated calls");
     }
+
+    // --- Palo Alto actor resolved from the Panorama config log (V208; PO decision record 2026-11-12) ---
+    final com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeActorRepository actorRepository =
+        mock(com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeActorRepository.class);
+    PolicyChangesService withActors() { return new PolicyChangesService(repository, mapper, names, ips, actorRepository); }
+    static com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeActorRepository.Link link(long revision, String state, String reason, String... who) {
+        return new com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeActorRepository.Link(revision, state, reason, List.of(who));
+    }
+    @Test void aMatchedAdministratorFillsTheActorAndIsMaskedLikeALastModifier() throws Exception {
+        stub(List.of(row(2, null, true)));
+        when(actorRepository.links(List.of(2L))).thenReturn(Map.of(2L, link(2, "MATCHED", null, "synthetic-admin")));
+        var result = withActors().changes(request("", "", "", 100), true);
+        assertEquals("synthetic-admin", mapper.valueToTree(result.body()).path("rows").get(0).path("changedBy").asText());
+        assertEquals("MATCHED", mapper.valueToTree(result.body()).path("rows").get(0).path("actorState").asText());
+        var masked = mapper.valueToTree(PolicyPrivacy.mask(result.body(), "", names, ips));
+        assertFalse(masked.toString().contains("synthetic-admin"), "aiview sees the pseudonym, not the name");
+        assertEquals(names.maskPolicyName("last-modifier", "synthetic-admin"), masked.path("rows").get(0).path("changedBy").asText());
+    }
+    @Test void anAmbiguousChangeShowsTheCountOnlyAndNeverACandidateName() throws Exception {
+        stub(List.of(row(2, null, true)));
+        when(actorRepository.links(List.of(2L))).thenReturn(Map.of(2L, link(2, "AMBIGUOUS", null, "admin-a", "admin-b")));
+        var result = withActors().changes(request("", "", "", 100), false);
+        var json = mapper.valueToTree(result.body());
+        assertEquals("AMBIGUOUS (2 administrators before the commit)", json.path("rows").get(0).path("changedBy").asText());
+        assertEquals(2, json.path("rows").get(0).path("actorCandidates").asInt());
+        assertFalse(json.toString().contains("admin-a") || json.toString().contains("admin-b"), "the list never carries a candidate name");
+        var masked = mapper.valueToTree(PolicyPrivacy.mask(result.body(), "", names, ips));
+        assertEquals("AMBIGUOUS (2 administrators before the commit)", masked.path("rows").get(0).path("changedBy").asText());
+        assertEquals("AMBIGUOUS", masked.path("rows").get(0).path("actorState").asText());
+    }
+    @Test void aVendorSuppliedActorIsNeverReplacedAndAnUnknownLinkStaysUnknown() throws Exception {
+        stub(List.of(row(3, "Synthetic actor", false), row(2, null, true)));
+        when(actorRepository.links(List.of(2L))).thenReturn(Map.of(2L, link(2, "UNKNOWN", "NO_ENTRY")));
+        var json = mapper.valueToTree(withActors().changes(request("", "", "", 100), false).body());
+        assertEquals("Synthetic actor", json.path("rows").get(0).path("changedBy").asText());
+        assertEquals(PolicyChangesService.UNKNOWN_ACTOR, json.path("rows").get(1).path("changedBy").asText());
+        assertTrue(json.path("rows").get(1).path("actorState").isMissingNode());
+    }
+    @Test void anAmbiguousChangeIsNotCountedAsAnActorInAScannedSummary() throws Exception {
+        stub(List.of(row(3, null, true), row(2, null, true)));
+        when(actorRepository.links(any())).thenReturn(Map.of(3L, link(3, "AMBIGUOUS", null, "admin-a", "admin-b"), 2L, link(2, "MATCHED", null, "admin-c")));
+        var json = mapper.valueToTree(withActors().changes(request("", "7", "", 100), false).body());
+        assertEquals(1, json.path("summary").path("actors").asInt());
+    }
+    @Test void candidatesAreReadFromTheLinkOnly() {
+        when(actorRepository.candidates(5L)).thenReturn(List.of("admin-a", "admin-b"));
+        assertEquals(List.of("admin-a", "admin-b"), withActors().actorCandidates(5L));
+        assertEquals(List.of(), service.actorCandidates(5L), "a service built without the join has none");
+    }
 }

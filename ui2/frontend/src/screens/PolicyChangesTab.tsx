@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Box, Button, Chip, FormControlLabel, MenuItem, Skeleton, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from "@mui/material";
-import { downloadPolicyChanges, getPolicyChanges, type PolicyChangeFilters, type PolicyChangeRow, type PolicyChangesPage, type PolicyMetadata, type PolicyTarget } from "../auth/adminApi";
+import { downloadPolicyChanges, getPolicyActorCandidates, getPolicyChanges, type PolicyChangeFilters, type PolicyChangeRow, type PolicyChangesPage, type PolicyMetadata, type PolicyTarget } from "../auth/adminApi";
 import { m3 } from "../theme/m3Theme";
 import { withFirewallNames } from "./policyFirewalls";
 import { isPolicyBusy, POLICY_BUSY_MESSAGE } from "./PolicyRuleViewer";
@@ -24,6 +24,19 @@ function describeChangesFailure(failure: unknown): string {
   if (timedOut) return "Could not load changes · the read timed out after 20 s";
   const reason = f?.body?.message ?? f?.body?.reason ?? f?.body?.error ?? f?.body?.code;
   return typeof reason === "string" && reason.trim() ? `Could not load changes · ${reason.trim()}` : "Could not load changes";
+}
+
+/** AMBIGUOUS actor: the candidate administrators are fetched on request, for authorised roles only (never in the list). */
+export function ActorCandidates({ revision }: { revision: string }) {
+  const [state, setState] = useState<{ names: string[] } | { error: string } | null>(null);
+  const load = () => getPolicyActorCandidates(revision)
+    .then(result => setState({ names: result.candidates }))
+    .catch((failure: { status?: number }) => setState({ error: failure?.status === 403 ? "Withheld in AIView" : "Could not load candidates" }));
+  return <Box>
+    {state === null && <Button size="small" onClick={load}>Show candidates</Button>}
+    {state !== null && "error" in state && <Typography variant="caption" display="block">{state.error}</Typography>}
+    {state !== null && "names" in state && <Typography variant="caption" display="block">Candidates: {state.names.join(", ") || "none"}</Typography>}
+  </Box>;
 }
 
 /** One collection of one policy: the rows a single snapshot publication recorded, in page order. */
@@ -161,7 +174,7 @@ export function PolicyChangesTab({ policies, devices, openRule }: { policies: Po
           <TableCell><Chip size="small" label={row.changeType} />
             {row.initialCapture && <Typography variant="caption" display="block">Initial capture</Typography>}
             {renumberedOnly(row) && <Typography variant="caption" display="block">Position only</Typography>}</TableCell>
-          <TableCell>{row.changedBy || "UNKNOWN (observed by collection)"}</TableCell>
+          <TableCell>{row.changedBy || "UNKNOWN (observed by collection)"}{row.actorState === "AMBIGUOUS" && <ActorCandidates revision={row.revision} />}</TableCell>
           <TableCell><Box component="details"><Box component="summary" sx={{ cursor: "pointer" }}>{row.changedFields.join(", ") || "No field details"}</Box>
             {row.changes.map((change, index) => <Stack key={index} gap={0.5} sx={{ my: 1 }}><Typography variant="caption">{change.field}</Typography>
               <Chip size="small" variant="outlined" label={`Before: ${JSON.stringify(withFirewallNames(change.before, row.targetDevices)) ?? "UNKNOWN"}`} sx={{ maxWidth: 480, height: "auto", "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere" } }} />

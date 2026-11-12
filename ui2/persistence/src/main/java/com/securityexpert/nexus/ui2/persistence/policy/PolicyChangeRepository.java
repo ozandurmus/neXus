@@ -16,10 +16,21 @@ public final class PolicyChangeRepository {
     public record Position(Instant time, long revision) {}
     public record Row(long revision, String policy, String ruleId, String ruleKey, String changeType, String time,
                       boolean observed, String actor, String changes, String metadata, String name, Integer number, boolean currentLabel,
-                      String collectedAt, boolean initialCapture) {
+                      String collectedAt, boolean initialCapture, String actorState, int actorCandidates) {
         public Row(long revision, String policy, String ruleId, String ruleKey, String changeType, String time,
                    boolean observed, String actor, String changes, String metadata, String name, Integer number, boolean currentLabel) {
             this(revision, policy, ruleId, ruleKey, changeType, time, observed, actor, changes, metadata, name, number, currentLabel, time, false);
+        }
+        public Row(long revision, String policy, String ruleId, String ruleKey, String changeType, String time,
+                   boolean observed, String actor, String changes, String metadata, String name, Integer number, boolean currentLabel,
+                   String collectedAt, boolean initialCapture) {
+            this(revision, policy, ruleId, ruleKey, changeType, time, observed, actor, changes, metadata, name, number, currentLabel,
+                    collectedAt, initialCapture, null, 0);
+        }
+        /** The same row with the actor the Panorama config-log join resolved (V208): a name, or the AMBIGUOUS text. */
+        public Row withResolvedActor(String resolvedActor, String state, int candidates) {
+            return new Row(revision, policy, ruleId, ruleKey, changeType, time, observed, resolvedActor, changes, metadata, name,
+                    number, currentLabel, collectedAt, initialCapture, state, candidates);
         }
     }
     /**

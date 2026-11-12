@@ -23,6 +23,17 @@ public final class PolicyChangesController {
         boolean masked = PrivacyMaskingResponseBodyAdvice.isReplayViewer(request);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(changes.changes(filters, masked));
     }
+    /**
+     * The candidate administrators of one change whose actor is AMBIGUOUS (PO D4/D6, 2026-11-12). Authorised roles only: the
+     * masked persona (aiview) never receives a candidate name, and the list endpoint never carries one.
+     */
+    @GetMapping("/api/v2/policy/changes/actor-candidates")
+    public ResponseEntity<?> actorCandidates(@RequestParam long revision, HttpServletRequest request) {
+        if (PrivacyMaskingResponseBodyAdvice.isReplayViewer(request))
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).cacheControl(CacheControl.noStore()).body(Map.of("error", "WITHHELD_IN_AIVIEW"));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(Map.of("revision", String.valueOf(revision), "candidates", changes.actorCandidates(revision)));
+    }
     @GetMapping("/api/v2/policy/changes.csv")
     public ResponseEntity<StreamingResponseBody> changesCsv(@RequestParam(defaultValue = "") String from, @RequestParam(defaultValue = "") String to,
             @RequestParam(defaultValue = "") String policy, @RequestParam(defaultValue = "") String device,

@@ -155,7 +155,8 @@ class PanoramaConfigLogReaderTest {
         for (String raw : List.of("synthetic-admin", "synthetic-value", "rule-alpha", "Synthetic DG", "obj-1", SECRET_TAG))
             assertFalse(stored.contains(raw), raw);
         assertTrue(java.util.Arrays.stream(Evidence.class.getRecordComponents()).noneMatch(c -> c.getName().toLowerCase().contains("detail")
-                || c.getName().toLowerCase().contains("raw") || c.getName().toLowerCase().contains("name")));
+                || c.getName().toLowerCase().contains("raw")
+                || (c.getName().toLowerCase().contains("name") && !c.getName().equals("adminName"))));
     }
 
     @Test void withTheMountedKeyTheAdminAndPathAreKeyedDigestsNotText() {
@@ -252,6 +253,57 @@ class PanoramaConfigLogReaderTest {
         assertEquals("BACKLOG", result.outcome());
         assertEquals(4, result.pages());
         assertEquals(4, sent.stream().filter(m -> m.containsKey("query")).count(), "at most four pages per Panorama per run");
+    }
+
+    private static final String RULE_PATH = PATH_PREFIX + "/pre-rulebase/security/rules/entry[@name='rule-alpha']";
+
+    private static String entryWithResult(String time, String seqno, String admin, String path, String cmd, String result) {
+        return entry(time, seqno, admin, path, cmd).replace("<result>Succeeded</result>", "<result>" + result + "</result>");
+    }
+
+    private List<Evidence> storedFor(List<String> entries, HostnameFingerprint fingerprint) {
+        when(evidence.cursor(SOURCE)).thenReturn(Optional.empty());
+        answers.add(ENQUEUED);
+        answers.add(fin(entries));
+        run(reader(trial(), signed, OPEN, fingerprint));
+        @SuppressWarnings("unchecked") ArgumentCaptor<List<Evidence>> rows = ArgumentCaptor.forClass(List.class);
+        verify(evidence).save(any(), any(), rows.capture(), any());
+        return rows.getValue();
+    }
+
+    private static HostnameFingerprint key() { return HostnameFingerprint.fromBase64Key(Base64.getEncoder().encodeToString(new byte[32])); }
+
+    @Test void theAdministratorNameIsKeptOnlyForASuccessfulChangeThatNamesARule() {
+        var rows = storedFor(List.of(
+                entry(ts(5), "15", "synthetic-admin", RULE_PATH, "edit"),
+                entry(ts(4), "14", "synthetic-admin", RULE_PATH, "commit"),
+                entryWithResult(ts(3), "13", "synthetic-admin", RULE_PATH, "edit", "Failed"),
+                entry(ts(2), "12", "synthetic-admin", "/config/shared/address/entry[@name='obj-1']", "set"),
+                entry(ts(1), "11", "synthetic-admin", PATH_PREFIX, "delete")), key());
+        var byRef = rows.stream().collect(java.util.stream.Collectors.toMap(Evidence::entryRef, e -> e));
+        assertEquals("synthetic-admin", byRef.get("15").adminName());
+        assertTrue(byRef.get("15").ruleRefHmac().matches("[0-9a-f]{64}"));
+        assertNull(byRef.get("14").adminName(), "a commit keeps the keyed reference only");
+        assertNull(byRef.get("13").adminName(), "a failed command keeps the keyed reference only");
+        assertNull(byRef.get("12").adminName(), "an object edit names no rule");
+        assertNull(byRef.get("11").adminName(), "a device-group path without a rule names no rule");
+        assertNull(byRef.get("11").ruleRefHmac());
+        assertTrue(byRef.get("15").adminRef().matches("[0-9a-f]{64}"), "the keyed reference is still stored next to the name");
+        // Neither a rule name nor a device-group name reaches a row, only the keyed digest of them.
+        for (String raw : List.of("rule-alpha", "Synthetic DG", "obj-1")) assertFalse(rows.toString().contains(raw), raw);
+    }
+
+    @Test void withoutTheProductKeyNoNameAndNoRuleReferenceAreKept() {
+        var row = storedFor(List.of(entry(ts(1), "10", "synthetic-admin", RULE_PATH, "edit")), null).get(0);
+        assertNull(row.adminName());
+        assertNull(row.ruleRefHmac());
+    }
+
+    @Test void aRedactedOrOversizedAdministratorNameIsNeverStored() {
+        var rows = storedFor(List.of(
+                entry(ts(2), "11", "a".repeat(129), RULE_PATH, "edit"),
+                entry(ts(1), "10", "&lt;redacted&gt;", RULE_PATH, "edit")), key());
+        assertTrue(rows.stream().allMatch(r -> r.adminName() == null));
     }
 
     @Test void theContainerRefComesOnlyFromADeviceGroupPath() {
