@@ -59,7 +59,7 @@ public final class JooqReportData implements ReportData {
     @Override
     public List<HaUnit> haUnits(String actor) {
         if (failover == null) return List.of();
-        return failover.summary(actor).stream().map(s -> {
+        return failover.summary(actor).stream().filter(CpFailoverService.Summary::readinessAvailable).map(s -> {
             var r = s.readiness();
             String clusterRef = s.unit().members().get(0).clusterMemberRef().orElse(null);
             return new HaUnit(clusterRef, s.vendor(), s.unit().vsId(), s.unit().vsxChassis(),

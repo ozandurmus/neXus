@@ -384,3 +384,11 @@ it("opens on the status named by ?readiness= (the Overview's needs-attention lin
     window.history.replaceState(null, "", "/");
   }
 });
+it("lists a Cisco ASA pair as 'Readiness not available yet' with its vendor name and no run action", () => {
+  const asa: CpFailoverSummary = { ...summary("CLS-DELTA-04", "READY"), readiness: null, canRunReadiness: false, readinessAvailable: false };
+  setup({ rows: { ...rows, "CLS-DELTA-04": [asa] } });
+  const item = screen.getByText("CLS-DELTA-04").closest("li")!;
+  expect(within(item).getByText("Cisco ASA")).toBeInTheDocument();
+  expect(within(item).getByText("Readiness not available yet")).toBeInTheDocument();
+  expect(within(item).queryByRole("button")).toBeNull();
+});

@@ -2094,6 +2094,8 @@ export interface PanConfigSyncFacts { offered: boolean; canRun: boolean; refusal
 export interface ReadinessCheck { device_id?: string; checkNo: number; title: string; member: string; result: CpFailoverCheckStatus; summary: string; blocking: boolean }
 export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system" | "members" | "masked" | "mode" | "refusalReason" | "readinessObservedAt" | "unitKind" | "failoverRefusal" | "configSync"> {
   activeWindow: boolean; lastRunState: string | null; lastRunOutcome: string | null; lastRunAt: string | null; canRunReadiness: boolean;
+  /** False for a listed pair whose vendor has no readiness yet (Cisco ASA): shown, never run. */
+  readinessAvailable?: boolean;
   readiness: { status: "READY" | "NOT_READY" | "UNKNOWN"; observedAt: string; failedCheck: string; stopCode?: string; checks: Array<ReadinessCheck & { status: CpFailoverCheckStatus; derived: Record<string, unknown> }> } | null;
 }
 export interface CpFailoverApproval { approvalId: string; windowFrom: string; windowUntil: string; reason: string; revokedAt: string | null; requestId?: string; revision?: number; policy?: "ADMIN_SINGLE" | "OPERATION_ADMIN_TWO_PERSON"; approved?: boolean; executionNonce?: string; canStart?: boolean; canApprove?: boolean }
