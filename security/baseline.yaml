@@ -556,6 +556,46 @@
       "reason": "krb5-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-12); the build cannot reach the UBI package repos to update it. published 2026-11-09. CVE-2026-71200 (HIGH, Red Hat Important, CVSS 7.5): unauthenticated KDC NULL dereference via a crafted PKINIT pre-auth request. Exposure: krb5-server, krb5-workstation, kadmind and krb5kdc are not installed in either image (checked 2026-11-10 for the earlier krb5 set; same base digest); neXus runs no Kerberos KDC/admin server and no RPCSEC_GSS service (no NFS, no kadmin), and the JVM uses its own Kerberos/GSS implementation, not the system krb5-libs. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed 14 days); remove when Red Hat rebuilds the base image.",
       "owner": "PO",
       "review_date": "2026-11-26"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-66046",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: expat",
+      "reason": "expat in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): expat 2.5.0-6.el9_8.7 is installed; Red Hat lists the RHEL 9 fix as expat-2.5.0-6.el9_8.5 (RHSA-2026:72663, 2026-09-29). CVE-2026-66046 (HIGH, Red Hat Important): quadratic-time attribute processing in Expat (denial of service on crafted XML). Exposure: the installed package already carries Red Hat's fix for this CVE in the RHEL 9.8 stream; trivy flags it only because Red Hat published the RHEL 9.9 rebuild (RHSA-2026:98478, 2026-11-11) and trivy compares against that newer release. The base digest (openjdk-21-runtime 1.24-3.1793323798, 2026-10-30) is the newest published; installed versions read from the Red Hat catalog rpm manifest 2026-11-12. Accepted as a scanner false positive under the PO base-image rule of 2026-10-30 (time-boxed 14 days); remove when the UBI9 runtime base moves to the RHEL 9.9 packages and refresh the digest then.",
+      "owner": "PO",
+      "review_date": "2026-11-26"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-77214",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: expat",
+      "reason": "expat in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): expat 2.5.0-6.el9_8.7 is installed; Red Hat lists the RHEL 9 fix as expat-2.5.0-6.el9_8.7 (RHSA-2026:88247, 2026-10-22). CVE-2026-77214 (HIGH, Red Hat Important): heap over-read in XML_ParseBuffer with a caller-supplied length. Exposure: the installed package already carries Red Hat's fix for this CVE in the RHEL 9.8 stream; trivy flags it only because Red Hat published the RHEL 9.9 rebuild (RHSA-2026:98478, 2026-11-11) and trivy compares against that newer release. The base digest (openjdk-21-runtime 1.24-3.1793323798, 2026-10-30) is the newest published; installed versions read from the Red Hat catalog rpm manifest 2026-11-12. Accepted as a scanner false positive under the PO base-image rule of 2026-10-30 (time-boxed 14 days); remove when the UBI9 runtime base moves to the RHEL 9.9 packages and refresh the digest then.",
+      "owner": "PO",
+      "review_date": "2026-11-26"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-93990",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: expat",
+      "reason": "expat in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): expat 2.5.0-6.el9_8.7 is installed; Red Hat lists the RHEL 9 fix as expat-2.5.0-6.el9_8.5 (RHSA-2026:72663, 2026-09-29). CVE-2026-93990 (HIGH, Red Hat Important): malformed UTF-16 surrogates accepted by Expat. Exposure: the installed package already carries Red Hat's fix for this CVE in the RHEL 9.8 stream; trivy flags it only because Red Hat published the RHEL 9.9 rebuild (RHSA-2026:98478, 2026-11-11) and trivy compares against that newer release. The base digest (openjdk-21-runtime 1.24-3.1793323798, 2026-10-30) is the newest published; installed versions read from the Red Hat catalog rpm manifest 2026-11-12. Accepted as a scanner false positive under the PO base-image rule of 2026-10-30 (time-boxed 14 days); remove when the UBI9 runtime base moves to the RHEL 9.9 packages and refresh the digest then.",
+      "owner": "PO",
+      "review_date": "2026-11-26"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-74860",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libxml2",
+      "reason": "libxml2 in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): libxml2 2.9.13-14.el9_8.5 is installed; Red Hat lists the RHEL 9 fix as libxml2-2.9.13-14.el9_8.5 (RHSA-2026:71585, 2026-09-24). CVE-2026-74860 (HIGH, Red Hat Important): double free in the libxml2 Python bindings (the runtime image has no Python: python3* RPMs are erased at build). Exposure: the installed package already carries Red Hat's fix for this CVE in the RHEL 9.8 stream; trivy flags it only because Red Hat published the RHEL 9.9 rebuild (RHSA-2026:98468, 2026-11-11) and trivy compares against that newer release. The base digest (openjdk-21-runtime 1.24-3.1793323798, 2026-10-30) is the newest published; installed versions read from the Red Hat catalog rpm manifest 2026-11-12. Accepted as a scanner false positive under the PO base-image rule of 2026-10-30 (time-boxed 14 days); remove when the UBI9 runtime base moves to the RHEL 9.9 packages and refresh the digest then.",
+      "owner": "PO",
+      "review_date": "2026-11-26"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-86140",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libxml2",
+      "reason": "libxml2 in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): libxml2 2.9.13-14.el9_8.5 is installed; Red Hat lists the RHEL 9 fix as libxml2-2.9.13-14.el9_8.5 (RHSA-2026:71585, 2026-09-24). CVE-2026-86140 (HIGH, Red Hat Important): stack overflow in xmlSnprintfElements (valid.c). Exposure: the installed package already carries Red Hat's fix for this CVE in the RHEL 9.8 stream; trivy flags it only because Red Hat published the RHEL 9.9 rebuild (RHSA-2026:98468, 2026-11-11) and trivy compares against that newer release. The base digest (openjdk-21-runtime 1.24-3.1793323798, 2026-10-30) is the newest published; installed versions read from the Red Hat catalog rpm manifest 2026-11-12. Accepted as a scanner false positive under the PO base-image rule of 2026-10-30 (time-boxed 14 days); remove when the UBI9 runtime base moves to the RHEL 9.9 packages and refresh the digest then.",
+      "owner": "PO",
+      "review_date": "2026-11-26"
     }
   ]
 }
