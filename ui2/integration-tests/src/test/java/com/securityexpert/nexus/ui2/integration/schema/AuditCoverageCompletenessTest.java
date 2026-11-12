@@ -92,6 +92,7 @@ class AuditCoverageCompletenessTest {
             Map.entry("advisory_product_rule", "V205: normalised version rules of a public advisory, written by the ingest endpoint"),
             Map.entry("known_exploited_cve", "V205: public known-exploited catalog written by the ingest endpoint"),
             Map.entry("advisory_feed_run", "V205: record of one fetch run, written by the ingest endpoint; holds counts and code words only"),
+            Map.entry("ha_pair_identity", "V206: a failover pair's unit serials recorded and compared by the inventory job from its own reads; the jobs row is audited"),
             Map.entry("cluster_member_diff", "V52: server-side recomputed summary of collected texts"),
             Map.entry("pseudonym_registry", "V53: derived AIView pseudonym claims, keyed by HMAC"),
             Map.entry("compliance_evaluation", "V59: derived from the configuration run, recomputable"),

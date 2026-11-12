@@ -329,7 +329,9 @@ public final class Ui2WorkerMain {
         // managed device list (Radware Cyber Controller); backups only back up.
         com.securityexpert.nexus.ui2.worker.backup.https.HttpsInventoryJobExecutor httpsInventoryJobExecutor =
                 new com.securityexpert.nexus.ui2.worker.backup.https.HttpsInventoryJobExecutor(leaseRepository, attemptRepository,
-                        deviceEnrollmentReadPort, deviceRepository, deviceInventoryRepository, httpsVendorExecutor);
+                        deviceEnrollmentReadPort, deviceRepository, deviceInventoryRepository, httpsVendorExecutor)
+                        .withFailoverIdentity(platformFactsRepository,
+                                new com.securityexpert.nexus.ui2.persistence.device.JooqHaPairIdentityRepository(transactionBoundary));
         // V69: a Radware Cyber Controller's own configuration backup, pushed to HOST-A's chrooted SFTP receiver, whose
         // upload directory is mounted here (UI2_CC_INBOX_DIR) and whose address the Cyber Controller dials (UI2_CC_RECEIVER_HOST).
         String ccInbox = System.getenv("UI2_CC_INBOX_DIR");

@@ -147,7 +147,7 @@ public final class FortiGateExecutor {
         return out.filter(o -> o.contains("Version:"));
     }
 
-    private record HaObservation(Optional<String> role, Optional<String> pairClaim) {}
+    private record HaObservation(Optional<String> role, Optional<String> pairClaim, Optional<String> mode) {}
 
     private HaObservation haObservation(TransportSession s, Optional<String> ownSerial) {
         Optional<String> output = read(s, FortiGatePlan.GET_SYSTEM_HA_STATUS, HA_READ);
@@ -160,7 +160,7 @@ public final class FortiGateExecutor {
         }
         if (output.isEmpty()) {
             LOG.log(System.Logger.Level.INFO, "[FGT] HA role unknown: status read refused or unavailable");
-            return new HaObservation(Optional.empty(), Optional.empty());
+            return new HaObservation(Optional.empty(), Optional.empty(), Optional.empty());
         }
         String text = output.get();
         List<String> labels = text.lines().map(line -> {
@@ -180,7 +180,8 @@ public final class FortiGateExecutor {
         if (role.isEmpty()) {
             LOG.log(System.Logger.Level.INFO, "[FGT] HA role unknown or standalone");
         }
-        return new HaObservation(role, FortiGatePlan.haPairClaim(text, ownSerial));
+        return new HaObservation(role, FortiGatePlan.haPairClaim(text, ownSerial),
+                role.isPresent() ? FortiGatePlan.haMode(text) : Optional.empty());
     }
 
     /**
@@ -319,7 +320,8 @@ public final class FortiGateExecutor {
                     routes.values().stream().mapToInt(List::size).sum(), haRole.orElse("none"));
             return new HttpsVendorExecutor.InventoryOutcome.Completed(contexts, List.of(),
                     st.multiVdom() ? Optional.of(String.join(", ", byVdom.keySet())) : Optional.empty(),
-                    new HttpsVendorExecutor.Identity(st.hostname(), st.model(), st.version(), List.of(), haRole, ha.pairClaim()));
+                    new HttpsVendorExecutor.Identity(st.hostname(), st.model(), st.version(), List.of(), haRole, ha.pairClaim(),
+                            st.serial(), ha.mode()));
         } finally {
             ssh.disconnect(shell.session());
         }

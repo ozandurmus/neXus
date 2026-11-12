@@ -62,6 +62,10 @@ class FortinetParsersTest {
                 Secondary   : FW-JULIET-06, SYNTH00002, HA cluster index = 1
                 """;
         assertEquals(Optional.of("primary"), FortiGatePlan.haRole(members, Optional.of("SYNTH00001")));
+        assertEquals(Optional.of("a-p"), FortiGatePlan.haMode(members));
+        assertEquals(Optional.of("a-a"), FortiGatePlan.haMode(members.replace("HA A-P", "HA A-A")));
+        assertEquals(Optional.empty(), FortiGatePlan.haMode("HA Health Status: Standalone\nMode: Standalone\n"));
+        assertEquals(Optional.empty(), FortiGatePlan.haMode(null));
         assertEquals(Optional.of("secondary"), FortiGatePlan.haRole(members, Optional.of("SYNTH00002")));
         assertEquals(Optional.of("primary"), FortiGatePlan.haRole(members.replace("HA A-P", "HA A-A"), Optional.of("SYNTH00001")));
         assertEquals(Optional.empty(), FortiGatePlan.haRole(members, Optional.of("SYNTH0001")));

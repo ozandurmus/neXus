@@ -79,6 +79,17 @@ public final class FortiGatePlan {
                 mode.startsWith("multiple") || mode.startsWith("split"), group(HA, out).map(String::trim));
     }
 
+    private static final Pattern HA_STATUS_MODE = Pattern.compile("(?m)^Mode:\\s*HA (A-[PA])\\s*$");
+
+    /** "Mode: HA A-P" -> "a-p", "Mode: HA A-A" -> "a-a"; anything else (standalone, FGSP, unknown shape) -> empty. */
+    public static Optional<String> haMode(String output) {
+        if (output == null) {
+            return Optional.empty();
+        }
+        Matcher m = HA_STATUS_MODE.matcher(output);
+        return m.find() ? Optional.of(m.group(1).toLowerCase(Locale.ROOT)) : Optional.empty();
+    }
+
     /** This unit's exact serial in an A-P/A-A member row determines its FortiOS role. */
     public static Optional<String> haRole(String output, Optional<String> ownSerial) {
         if (output == null || ownSerial.isEmpty() || ownSerial.get().isBlank()) {

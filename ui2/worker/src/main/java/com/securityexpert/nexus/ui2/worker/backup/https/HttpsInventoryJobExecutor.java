@@ -3,6 +3,7 @@ package com.securityexpert.nexus.ui2.worker.backup.https;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 import com.securityexpert.nexus.ui2.jobs.executor.JobOutcome;
@@ -10,8 +11,13 @@ import com.securityexpert.nexus.ui2.jobs.JobState;
 import com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentReadPort;
 import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
 import com.securityexpert.nexus.ui2.jobs.stepattempt.JobStepAttemptRepository;
+import com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts;
+import com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
+import com.securityexpert.nexus.ui2.persistence.device.HaPairIdentityRepository;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
+import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryHaFact;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target;
 
@@ -31,6 +37,8 @@ public final class HttpsInventoryJobExecutor {
     private final DeviceRepository devices;
     private final DeviceInventoryRepository inventory;
     private final HttpsVendorExecutor executor;
+    private DevicePlatformFactsRepository platformFacts = DevicePlatformFactsRepository.NONE;
+    private HaPairIdentityRepository pairIdentity = HaPairIdentityRepository.NONE;
 
     public HttpsInventoryJobExecutor(JobLeaseRepository leases, JobStepAttemptRepository attempts, DeviceEnrollmentReadPort enrollment,
             DeviceRepository devices, DeviceInventoryRepository inventory, HttpsVendorExecutor executor) {
@@ -40,6 +48,40 @@ public final class HttpsInventoryJobExecutor {
         this.devices = Objects.requireNonNull(devices);
         this.inventory = Objects.requireNonNull(inventory);
         this.executor = Objects.requireNonNull(executor);
+    }
+
+    /** Failover Phase 0 (PO 2026-11-13): the unit serial and the pair's serial identity for Cisco ASA and FortiGate. */
+    public HttpsInventoryJobExecutor withFailoverIdentity(DevicePlatformFactsRepository platformFacts,
+            HaPairIdentityRepository pairIdentity) {
+        this.platformFacts = Objects.requireNonNull(platformFacts, "platformFacts");
+        this.pairIdentity = Objects.requireNonNull(pairIdentity, "pairIdentity");
+        return this;
+    }
+
+    /** The source read of a serial recorded from an inventory read, per vendor; empty for vendors this does not cover. */
+    static Optional<String> serialSource(String vendor) {
+        return switch (vendor) {
+            case "cisco_asa" -> Optional.of("asa_show_version");
+            case "fortinet" -> Optional.of("fgt_get_system_status");
+            default -> Optional.empty();
+        };
+    }
+
+    /**
+     * The HA fact of the physical context for a Cisco ASA or FortiGate read that reported an HA role; nothing for a
+     * standalone unit, an unknown role, or another vendor.
+     */
+    static List<InventoryHaFact> haFacts(String vendor, HttpsVendorExecutor.Identity identity) {
+        String source = switch (vendor) {
+            case "cisco_asa" -> InventoryHaFact.SOURCE_ASA_SHOW_FAILOVER;
+            case "fortinet" -> InventoryHaFact.SOURCE_FGT_HA_STATUS;
+            default -> null;
+        };
+        if (source == null || identity.haRole().filter(r -> !r.isBlank()).isEmpty()) {
+            return List.of();
+        }
+        return List.of(new InventoryHaFact(UUID.randomUUID().toString(), InventoryContext.PHYSICAL, identity.haRole().get(),
+                identity.haMode(), source));
     }
 
     public JobOutcome execute(String jobId, long leaseEpoch, String deviceId, String vendor, Target target, String credentialRef) {
@@ -102,7 +144,8 @@ public final class HttpsInventoryJobExecutor {
         }
         try {
             inventory.recordRun(new InventoryRun(UUID.randomUUID().toString(), deviceId, jobId, Instant.now(), done.contexts().size(),
-                    done.contexts(), List.of(), done.virtualSystems(), done.members(), done.gridSummary()), ACTOR, "inventory_completed");
+                    done.contexts(), haFacts(vendor, done.identity()), done.virtualSystems(), done.members(), done.gridSummary()),
+                    ACTOR, "inventory_completed");
         } catch (RuntimeException writeFailed) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(writeFailed);
             String reason = "inventory_run_write_failed: " + writeFailed.getMessage() + " (after " + ms + "ms)";
@@ -127,9 +170,33 @@ public final class HttpsInventoryJobExecutor {
             LOG.log(System.Logger.Level.WARNING, "[HA] pair claim write failed for inventory job {0}: {1}", jobId,
                     claimFailed.getClass().getSimpleName());
         }
+        recordFailoverIdentity(jobId, deviceId, vendor, done.identity());
         LOG.log(System.Logger.Level.INFO, "[JOB_COMPLETED] HTTPS inventory job {0} ({1}) in {2}ms: {3} context(s), {4} member(s)",
                 jobId, vendor, ms, done.contexts().size(), done.members().size());
         leases.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.COMPLETED, ACTOR, "inventory_completed", "completed in " + ms + "ms");
         return new JobOutcome.Completed();
+    }
+
+    /**
+     * Records the unit serial the read presented (only when it presented one: an absent serial never erases the last
+     * recorded one) and compares the device's failover pair with its recorded serial identity. A failure here leaves
+     * the stored inventory as it is and is logged by class only (no value).
+     */
+    private void recordFailoverIdentity(String jobId, String deviceId, String vendor, HttpsVendorExecutor.Identity identity) {
+        Optional<String> source = serialSource(vendor);
+        if (source.isEmpty()) {
+            return;
+        }
+        try {
+            identity.serial().filter(s -> !s.isBlank()).ifPresent(serial -> platformFacts.record(new DevicePlatformFacts(deviceId,
+                    Optional.of(serial), Optional.empty(), Optional.empty(), java.util.Map.of(), Optional.empty(), source.get(),
+                    Optional.empty())));
+            pairIdentity.observe(deviceId, ACTOR).ifPresent(state ->
+                    LOG.log(System.Logger.Level.INFO, "[HA] pair identity after inventory job {0}: {1}", jobId, state));
+        } catch (RuntimeException failed) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(failed);
+            LOG.log(System.Logger.Level.WARNING, "[HA] pair identity write failed for inventory job {0}: {1}", jobId,
+                    failed.getClass().getSimpleName());
+        }
     }
 }
