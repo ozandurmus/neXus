@@ -40,7 +40,7 @@ function stubFetch(devices: unknown[], summary: unknown | null) {
 afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState(null, "", "/"); });
 
 const TABS = [
-  { label: "HA & readiness", marker: "No HA pair or cluster enrolled" },
+  { label: "HA and readiness", marker: "No HA pair or cluster enrolled" },
   { label: "Jobs", marker: "All jobs" },
   { label: "System health", marker: "System health could not be read" },
 ];
@@ -67,10 +67,10 @@ describe("OperationsScreen tabs", () => {
     render(withTheme(<OperationsScreen />));
     await screen.findByText("No HA pair or cluster enrolled");
     const tablist = screen.getByRole("tablist", { name: "Operations sections" });
-    expect(within(tablist).getAllByRole("tab").map(t => t.textContent)).toEqual(["HA & readiness", "Jobs", "System health"]);
+    expect(within(tablist).getAllByRole("tab").map(t => t.textContent)).toEqual(["HA and readiness", "Jobs", "System health"]);
   });
 
-  it("defaults to the HA & readiness tab, empty", async () => {
+  it("defaults to the HA and readiness tab, empty", async () => {
     stubFetch([], null);
     render(withTheme(<OperationsScreen />));
     expect(await screen.findByText("No HA pair or cluster enrolled")).toBeInTheDocument();

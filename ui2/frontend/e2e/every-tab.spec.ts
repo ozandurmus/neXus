@@ -69,7 +69,7 @@ for (const { screen, tabList, labels } of TAB_COVERAGE.filter(row => row.screen 
       const panel = page.getByRole("tabpanel", { name: label, exact: true });
       await content(page, panel);
       await nestedTabs(page, panel, safety.checkpoint);
-      if (screen === "operations" && label === "HA & readiness") {
+      if (screen === "operations" && label === "HA and readiness") {
         await expect(panel.getByLabel("Readiness summary").getByRole("button")).toHaveCount(4);
         await expect(panel.getByRole("table", { name: "HA clusters", exact: true }).getByRole("row").nth(1)).toBeVisible();
       }
