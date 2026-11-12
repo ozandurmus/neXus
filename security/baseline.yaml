@@ -524,6 +524,38 @@
       "reason": "krb5-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): published 2026-11-09, Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-10); the build cannot reach the UBI package repos to update it. CVE-2026-119079 (HIGH, Red Hat Important): MIT krb5 KDC unauthenticated CPU DoS via ASN.1 decoding (CVSS 7.5). Exposure: the flaw is in the Kerberos admin server (kadmind) / KDC, which are not installed in either image (krb5-server and krb5-workstation absent, no /usr/sbin/kadmind or krb5kdc, no installed package requires krb5-libs; checked in the running pods 2026-11-10); neXus never runs a Kerberos server. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed 14 days); remove when Red Hat rebuilds the base image. Review date set to 2026-11-14 by the PO on 2026-11-10 ('Evet, 14 Kasım'), aligned with the other base findings.",
       "owner": "PO",
       "review_date": "2026-11-14"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-107364",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
+      "reason": "krb5-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-12); the build cannot reach the UBI package repos to update it. published 2026-11-10. CVE-2026-107364 (HIGH, Red Hat Important, CVSS 7.5): unauthenticated KDC DoS via an ASN.1 decoder read overrun. Exposure: krb5-server, krb5-workstation, kadmind and krb5kdc are not installed in either image (checked 2026-11-10 for the earlier krb5 set; same base digest); neXus runs no Kerberos KDC/admin server and no RPCSEC_GSS service (no NFS, no kadmin), and the JVM uses its own Kerberos/GSS implementation, not the system krb5-libs. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed 14 days); remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-26"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-118380",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
+      "reason": "krb5-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-12); the build cannot reach the UBI package repos to update it. published 2026-11-09. CVE-2026-118380 (HIGH, Red Hat Important, CVSS 7.4): an active network attacker can alter RPCSEC_GSS-protected RPC arguments (kadmind) or force plain-text replies. Exposure: krb5-server, krb5-workstation, kadmind and krb5kdc are not installed in either image (checked 2026-11-10 for the earlier krb5 set; same base digest); neXus runs no Kerberos KDC/admin server and no RPCSEC_GSS service (no NFS, no kadmin), and the JVM uses its own Kerberos/GSS implementation, not the system krb5-libs. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed 14 days); remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-26"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-71199",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
+      "reason": "krb5-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-12); the build cannot reach the UBI package repos to update it. published 2026-11-09. CVE-2026-71199 (HIGH, Red Hat Important, CVSS 8.1): KDC authentication-indicator bypass via an unkeyed checksum in the CAMMAC authdata container. Exposure: krb5-server, krb5-workstation, kadmind and krb5kdc are not installed in either image (checked 2026-11-10 for the earlier krb5 set; same base digest); neXus runs no Kerberos KDC/admin server and no RPCSEC_GSS service (no NFS, no kadmin), and the JVM uses its own Kerberos/GSS implementation, not the system krb5-libs. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed 14 days); remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-26"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-71200",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: krb5-libs",
+      "reason": "krb5-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): Red Hat lists RHEL 9 as Affected with no fixed package (security data API, read 2026-11-12); the build cannot reach the UBI package repos to update it. published 2026-11-09. CVE-2026-71200 (HIGH, Red Hat Important, CVSS 7.5): unauthenticated KDC NULL dereference via a crafted PKINIT pre-auth request. Exposure: krb5-server, krb5-workstation, kadmind and krb5kdc are not installed in either image (checked 2026-11-10 for the earlier krb5 set; same base digest); neXus runs no Kerberos KDC/admin server and no RPCSEC_GSS service (no NFS, no kadmin), and the JVM uses its own Kerberos/GSS implementation, not the system krb5-libs. Accepted under the PO base-image rule of 2026-10-30 (no fix -> time-boxed 14 days); remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-26"
     }
   ]
 }
