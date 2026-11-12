@@ -10,7 +10,15 @@ public enum DirectoryReason {
     USER_AMBIGUOUS("user_ambiguous"),
     USER_BIND_FAILED("user_bind_failed"),
     NOT_IN_GROUP("not_in_group"),
+    /** The certificate chain or its dates were not accepted (certificate-below mode). */
     TLS_TRUST_FAILED("tls_trust_failed"),
+    /** Certificate-below mode: the chain is trusted, but the certificate does not name the configured address. */
+    TLS_NAME_MISMATCH("tls_name_mismatch"),
+    /**
+     * TCP connected, then TLS negotiation failed before any certificate decision: the server reset or closed the
+     * connection, or refused the handshake (no shared protocol version or cipher suite, or no LDAPS certificate).
+     */
+    TLS_HANDSHAKE_FAILED("tls_handshake_failed"),
     TIMEOUT("timeout"),
     CONNECT_FAILED("connect_failed"),
     STRONG_AUTH_REQUIRED("strong_auth_required"),

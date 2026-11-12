@@ -132,7 +132,10 @@ function failureOf(err: unknown, what: string): Failure {
 const OUTCOMES: Readonly<Record<string, string>> = {
   ok: "Reached; the service account signed in.",
   service_bind_failed: "The server refused the bind DN or its password.",
-  tls_trust_failed: "The server's certificate is not trusted or does not match the server name.",
+  tls_trust_failed: "The server's certificate is not trusted: check the pasted certificate and its dates.",
+  tls_name_mismatch: "The server certificate does not name this address: use the DNS name on the certificate.",
+  tls_handshake_failed:
+    "Connected, but the TLS handshake failed: check that LDAPS is enabled on this server and that it accepts TLS 1.2 or later with a current cipher suite.",
   timeout: "No answer within the connection timeout.",
   connect_failed: "Could not connect: check the name, the port and the network path.",
   strong_auth_required: "The server requires LDAP signing or TLS: turn LDAPS on.",

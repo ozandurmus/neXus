@@ -26,13 +26,21 @@ final class DirectoryConnection {
 
     private DirectoryConnection() { }
 
+    /**
+     * Makes sure the TLS handshake is complete inside {@code connect()}, exactly once. UnboundID's connect thread
+     * has normally completed it already; calling {@code startHandshake()} again on an established TLS 1.2 socket
+     * starts a client-initiated renegotiation, which a Windows domain controller refuses by resetting the
+     * connection, so every LDAPS operation after connect failed with "server down" (field defect 2026-11-12).
+     * {@code getSession()} completes a pending handshake and is a no-op on an established one; a failed handshake
+     * yields the null cipher suite instead of an exception.
+     */
     private static final com.unboundid.util.ssl.SSLSocketVerifier HANDSHAKE_NOW = new com.unboundid.util.ssl.SSLSocketVerifier() {
         @Override
         public void verifySSLSocket(String host, int port, javax.net.ssl.SSLSocket socket) throws LDAPException {
-            try {
-                socket.startHandshake();
-            } catch (java.io.IOException e) {
-                throw new LDAPException(ResultCode.CONNECT_ERROR, "tls handshake failed", e);
+            javax.net.ssl.SSLSession session = socket.getSession();
+            if (session == null || !session.isValid() || "SSL_NULL_WITH_NULL_NULL".equals(session.getCipherSuite())) {
+                throw new LDAPException(ResultCode.CONNECT_ERROR, "tls handshake failed",
+                        new javax.net.ssl.SSLHandshakeException("tls handshake failed"));
             }
         }
     };
@@ -92,7 +100,8 @@ final class DirectoryConnection {
         options.setResponseTimeoutMillis(millis);
         options.setUseSynchronousMode(true);
         // Complete the TLS handshake inside connect(), so a TLS failure is a connect-time failure: it is
-        // classified as tls_trust_failed and the next server is tried (Argon review finding 3).
+        // classified (tls_handshake_failed, tls_trust_failed or tls_name_mismatch) and the next server is tried
+        // (Argon review finding 3).
         options.setSSLSocketVerifier(HANDSHAKE_NOW);
         LDAPConnection connection = new LDAPConnection(snapshot.socketFactory(), options);
         try {
@@ -178,15 +187,21 @@ final class DirectoryConnection {
 
     /**
      * A failure before the server answered: TLS, timeout or connect. Null when the server answered with an LDAP
-     * result (the caller decides what that result means).
+     * result (the caller decides what that result means). Order matters: a certificate decision is more specific
+     * than "the handshake failed", and a timeout inside the handshake is still a timeout.
      */
     static DirectoryReason classify(LDAPException e) {
+        boolean nameMismatch = false, certificate = false, timeout = false, handshake = false;
         for (Throwable cause = e; cause != null; cause = cause.getCause()) {
-            if (cause instanceof javax.net.ssl.SSLException || cause instanceof java.security.cert.CertificateException) {
-                return DirectoryReason.TLS_TRUST_FAILED;
-            }
-            if (cause instanceof java.net.SocketTimeoutException) return DirectoryReason.TIMEOUT;
+            if (cause instanceof DirectoryTrustPolicy.NameMismatch) nameMismatch = true;
+            else if (cause instanceof java.security.cert.CertificateException) certificate = true;
+            else if (cause instanceof java.net.SocketTimeoutException) timeout = true;
+            else if (cause instanceof javax.net.ssl.SSLException || inHandshake(cause)) handshake = true;
         }
+        if (nameMismatch) return DirectoryReason.TLS_NAME_MISMATCH;
+        if (certificate) return DirectoryReason.TLS_TRUST_FAILED;
+        if (timeout) return DirectoryReason.TIMEOUT;
+        if (handshake) return DirectoryReason.TLS_HANDSHAKE_FAILED;
         ResultCode code = e.getResultCode();
         if (code == ResultCode.TIMEOUT) return DirectoryReason.TIMEOUT;
         if (code == ResultCode.CONNECT_ERROR || code == ResultCode.SERVER_DOWN || code == ResultCode.LOCAL_ERROR
@@ -194,6 +209,21 @@ final class DirectoryConnection {
             return DirectoryReason.CONNECT_FAILED;
         }
         return null;
+    }
+
+    /**
+     * Whether this throwable was raised inside a TLS handshake. UnboundID's connect thread runs
+     * {@code SSLSocket.startHandshake()} itself, and a Windows domain controller that cannot negotiate (no shared
+     * protocol version or cipher suite) resets the connection: a plain {@code SocketException} with no
+     * SSLException around it. TCP had already connected, so it must not read as "could not connect". The public
+     * API method name is the one stable marker of that phase.
+     */
+    private static boolean inHandshake(Throwable cause) {
+        if (!(cause instanceof java.io.IOException)) return false;
+        for (StackTraceElement frame : cause.getStackTrace()) {
+            if ("startHandshake".equals(frame.getMethodName())) return true;
+        }
+        return false;
     }
 
     /** A failure after a server answered a search: its classified reason, or {@code search_failed}. */
