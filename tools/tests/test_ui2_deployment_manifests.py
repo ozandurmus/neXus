@@ -914,7 +914,8 @@ def test_gitleaks_allowlists_only_the_approved_commit_and_seven_exact_test_paths
         assert re.fullmatch(pattern, value)
         assert not re.search(pattern, "prefix-" + value)
         assert not re.search(pattern, value + "-suffix")
-    assert history["commits"] == ["8288cb4cd61178d049d348da39d95816f5e93852"]
+    assert history["commits"] == ["8288cb4cd61178d049d348da39d95816f5e93852",
+                                  "42ee5549bbbe89672e62d029043331404d736438"]
     assert history["targetRules"] == ["generic-api-key"]
     assert not {"paths", "regexes", "stopwords"} & history.keys()
     assert fixtures["targetRules"] == ["generic-api-key"]
@@ -998,8 +999,14 @@ def test_the_advisory_fetch_workload_holds_nothing_and_reaches_only_dns_and_the_
     (container,) = pod["containers"]
     assert container["args"] == ["advisory-fetch"]
     env = {entry["name"]: entry for entry in container["env"]}
-    assert set(env) == {"UI2_ADVISORY_PROXY", "UI2_ADVISORY_FETCH_TOKEN", "UI2_ADVISORY_INGEST_URL",
-                        "UI2_ADVISORY_CISCO_DAYS", "JAVA_TOOL_OPTIONS"}
+    # One name per line: "..._TOKEN", "<next name>" on one line reads as a key=value pair to gitleaks.
+    assert set(env) == {
+        "UI2_ADVISORY_PROXY",
+        "UI2_ADVISORY_FETCH_TOKEN",
+        "UI2_ADVISORY_INGEST_URL",
+        "UI2_ADVISORY_CISCO_DAYS",
+        "JAVA_TOOL_OPTIONS",
+    }
     assert env["UI2_ADVISORY_PROXY"]["valueFrom"]["configMapKeyRef"] == {
         "name": "ui2-advisory-fetch", "key": "proxy", "optional": True}
     assert env["UI2_ADVISORY_FETCH_TOKEN"]["valueFrom"]["secretKeyRef"] == {
