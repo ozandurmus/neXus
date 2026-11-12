@@ -48,12 +48,24 @@ public final class HttpsVendorExecutor {
 
     /** The identity a confirm read returns; every field optional. */
     /** {@code members}: the grid members an Infoblox Grid Manager lists (facts, ordered); empty for every other vendor. */
+    /**
+     * {@code serial}: the unit's own serial number from a read the run already makes (Cisco ASA {@code show version},
+     * FortiGate {@code get system status}); {@code haMode}: the HA mode the HA read reported (FortiGate "a-p" / "a-a").
+     * Both empty for every other vendor (failover Phase 0, PO 2026-11-13).
+     */
     public record Identity(Optional<String> name, Optional<String> model, Optional<String> version, List<GridMember> members,
-            Optional<String> haRole, Optional<String> haPairClaim) {
+            Optional<String> haRole, Optional<String> haPairClaim, Optional<String> serial, Optional<String> haMode) {
         public Identity {
             members = members == null ? List.of() : List.copyOf(members);
             Objects.requireNonNull(haRole, "haRole");
             Objects.requireNonNull(haPairClaim, "haPairClaim");
+            Objects.requireNonNull(serial, "serial");
+            Objects.requireNonNull(haMode, "haMode");
+        }
+
+        public Identity(Optional<String> name, Optional<String> model, Optional<String> version, List<GridMember> members,
+                Optional<String> haRole, Optional<String> haPairClaim) {
+            this(name, model, version, members, haRole, haPairClaim, Optional.empty(), Optional.empty());
         }
 
         public Identity(Optional<String> name, Optional<String> model, Optional<String> version, List<GridMember> members,

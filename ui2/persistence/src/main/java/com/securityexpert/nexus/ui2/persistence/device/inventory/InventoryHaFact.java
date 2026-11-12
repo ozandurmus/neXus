@@ -15,6 +15,10 @@ public record InventoryHaFact(String haId, String context, String role, Optional
     public static final String SOURCE_CP_CPHAPROB_STAT = "cp_cphaprob_stat";
     public static final String SOURCE_CP_VSLS_TABLE = "cp_vsls_table";
     public static final String SOURCE_PAN_HIGH_AVAILABILITY_STATE = "pan_high_availability_state";
+    /** Cisco ASA {@code show failover | include This host} (V206): role "active" / "standby" of the physical context. */
+    public static final String SOURCE_ASA_SHOW_FAILOVER = "asa_show_failover";
+    /** FortiGate {@code get system ha status} (V206): role "primary" / "secondary"; cluster mode "a-p" / "a-a". */
+    public static final String SOURCE_FGT_HA_STATUS = "fgt_get_system_ha_status";
 
     public InventoryHaFact {
         Objects.requireNonNull(haId, "haId");

@@ -277,7 +277,8 @@ public final class CiscoAsaExecutor {
             // Lifecycle read, group A: after every existing read, never changes the outcome below.
             lifecycleShowLicenseAll(s, deviceId, CiscoAsaPlan.contextModeWord(modeAnswer.orElse(null)));
             return new HttpsVendorExecutor.InventoryOutcome.Completed(List.of(new InventoryContext(context, interfaces, routes)),
-                    List.of(), Optional.empty(), new HttpsVendorExecutor.Identity(v.hostname(), v.model(), v.softwareVersion(), haRole));
+                    List.of(), Optional.empty(), new HttpsVendorExecutor.Identity(v.hostname(), v.model(), v.softwareVersion(),
+                            List.of(), haRole, Optional.empty(), v.serial(), Optional.empty()));
         } finally {
             ssh.disconnect(shell.session());
         }
