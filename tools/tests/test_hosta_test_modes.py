@@ -126,7 +126,7 @@ elif 'delete' in args and failure=='cleanup': sys.exit(1)
         path.chmod(0o755)
     calls = tmp_path / "calls"
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "HOME": str(tmp_path / "home"),
-           "TEST_REMOTE_HOME": str(remote), "TEST_CALLS": str(calls), "TEST_FAILURE": failure,
+           "TEST_REMOTE_HOME": str(remote), "NEXUS_HOST_TREE": str(remote / "nexus"), "TEST_CALLS": str(calls), "TEST_FAILURE": failure,
            "TEST_MANIFEST": str(ROOT / "deploy/ui2-image-build/33-integration-postgres.yaml")}
     result = subprocess.run(["bash", str(checkout / "tools/delivery/hosta_integration.sh")], env=env,
                             capture_output=True, text=True, timeout=20)

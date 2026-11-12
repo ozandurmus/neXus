@@ -60,7 +60,7 @@ authentication instead of failing loudly -- every SFTP push then dies at `authen
    mirroring `registry.kube-system.svc.cluster.local` to `http://<the registry Service ClusterIP>` and restart k3s.
 3. **Build path**: `kubectl apply -f deploy/ui2-image-build/00-namespace.yaml -f deploy/ui2-image-build/10-context-pvc.yaml`;
    render the proxy job: `envsubst < deploy/ui2-image-build/31-build-job-proxy.yaml.template > ~/build-job-proxy.yaml`
-   (values from `host-files.tar`); `cp deploy/ui2-image-build/run_build.sh ~/`; clone the repository to `~/nexus`.
+   (values from `host-files.tar`); `cp deploy/ui2-image-build/run_build.sh ~/`; create the service account and `/opt/nexus.git` + `/opt/nexus` as in `docs/operations/HOST_A_RUNBOOK.md` §2.
 4. **Namespace, secrets, config**: `kubectl apply -f deploy/ui2/00-namespace.yaml`; apply `secrets/*.yaml` from the
    export (strip `resourceVersion`, `uid`, `creationTimestamp` first); apply `configmaps.yaml` (same stripping).
    Do **not** apply `deploy/ui2/2x-secret*.yaml` over them — those would replace the keys.
@@ -105,8 +105,8 @@ authentication instead of failing loudly -- every SFTP push then dies at `authen
 - **`corp-ca` ConfigMap in `ui2-build`** (mounted at `/kaniko/ssl/certs`, it replaces kaniko's own bundle): created
   from the host's `/etc/ssl/certs/ca-certificates.crt`. It lived only in the `ui2-build` namespace, which the export did
   not cover — the export script should include it next time.
-- **No GitHub credential on the host.** The code is pushed to a bare repository on the host (`~/nexus.git`, HEAD →
-  `main`); `~/nexus` is its clone; `tools/delivery/hosta_deploy.sh` pushes before building.
+- **No GitHub credential on the host.** The code is pushed to a bare repository on the host (`/opt/nexus.git`, HEAD →
+  `main`; `~/nexus.git` until 2026-11); `/opt/nexus` is its clone; `tools/delivery/hosta_deploy.sh` pushes before building.
 - **The artefact store** was restored by extracting the archive straight into the local-path volume directory with
   `sudo tar --same-owner --numeric-owner` (98 GB through `kubectl exec` stdin times out); files 185:0 0600.
 - **`ui2-configuration`** is not updated by `run_build.sh`; set its image to the same digest after a build.
