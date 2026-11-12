@@ -318,7 +318,8 @@ public final class Ui2WorkerMain {
                 fortiManagerExecutor);
         httpsVendorExecutor.withLifecycleReads(lifecycleReads).withLifecycleResults(lifecycleResults);
         httpsVendorExecutor.withCiscoAsa(new com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaExecutor(sshTransport, artefactStore, sshTransport::scpFetch)
-                .withLifecycleReads(lifecycleReads).withLifecycleResults(lifecycleResults));
+                .withLifecycleReads(lifecycleReads).withLifecycleResults(lifecycleResults)
+                .withFailoverMeasure(com.securityexpert.nexus.ui2.worker.backup.asa.AsaFailoverMeasure.fromEnvironment()));
         configurationCapabilityExecutor.withHttpsVendorExecutor(httpsVendorExecutor);
         backupJobExecutor.withHttpsVendorExecutor(httpsVendorExecutor,
                 new com.securityexpert.nexus.ui2.persistence.device.JooqDeviceSecretReferenceRepository(transactionBoundary));

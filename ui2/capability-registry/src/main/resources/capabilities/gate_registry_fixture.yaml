@@ -1806,6 +1806,70 @@ gates:
     secret_output_risk: 'serial number and hostname (masked to aiview)'
     safe_telemetry_fields: []
     source_document_pointer: 'Cisco ASA command reference (show version); Backbox ASA trail; DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md: diagnostic output/history'
+  - gate_id: asa_measure_show_failover
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'show failover'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per device in the PO-attended measurement window'
+    session_reuse_rule: 'the inventory session (pager off, privilege 15)'
+    unsupported_behavior_ref: 'refused or timed out -> logged, next read'
+    secret_output_risk: 'none (shape only logged)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cisco ASA command reference (show failover); PO_DECISION_RECORD_2026_11_13_FAILOVER_ASA_FORTIGATE_PHASE0.md'
+  - gate_id: asa_measure_show_failover_state
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'show failover state'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per device in the PO-attended measurement window'
+    session_reuse_rule: 'the inventory session (pager off, privilege 15)'
+    unsupported_behavior_ref: 'refused or timed out -> logged, next read'
+    secret_output_risk: 'none (shape only logged)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cisco ASA command reference (show failover state); PO_DECISION_RECORD_2026_11_13_FAILOVER_ASA_FORTIGATE_PHASE0.md'
+  - gate_id: asa_measure_show_failover_history
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'show failover history'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 60
+    retry_rule: 'none'
+    max_frequency: 'once per device in the PO-attended measurement window'
+    session_reuse_rule: 'the inventory session (pager off, privilege 15)'
+    unsupported_behavior_ref: 'refused or timed out -> logged, next read'
+    secret_output_risk: 'none (shape only logged)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cisco ASA command reference (show failover history); PO_DECISION_RECORD_2026_11_13_FAILOVER_ASA_FORTIGATE_PHASE0.md'
+  - gate_id: asa_measure_show_conn_count
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'show conn count'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per device in the PO-attended measurement window'
+    session_reuse_rule: 'the inventory session (pager off, privilege 15)'
+    unsupported_behavior_ref: 'refused or timed out -> logged, next read'
+    secret_output_risk: 'none (counts and shape logged)'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cisco ASA command reference (show conn); PO_DECISION_RECORD_2026_11_13_FAILOVER_ASA_FORTIGATE_PHASE0.md'
   - gate_id: asa_show_failover_this_host
     vendor: 'cisco_asa'
     platform_role_scope: 'cisco_asa_firewall'

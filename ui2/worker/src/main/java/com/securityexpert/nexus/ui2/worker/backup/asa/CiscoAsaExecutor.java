@@ -81,6 +81,21 @@ public final class CiscoAsaExecutor {
         return this;
     }
 
+    private AsaFailoverMeasure failoverMeasure = AsaFailoverMeasure.OFF;
+    private java.util.function.Consumer<String> measureSink = line ->
+            LOG.log(System.Logger.Level.INFO, "{0}", line);
+
+    /** The one-time failover measurement switch (off unless {@value AsaFailoverMeasure#VARIABLE} names the device). */
+    public CiscoAsaExecutor withFailoverMeasure(AsaFailoverMeasure measure) {
+        this.failoverMeasure = Objects.requireNonNull(measure, "measure");
+        return this;
+    }
+
+    CiscoAsaExecutor withMeasureSink(java.util.function.Consumer<String> sink) {
+        this.measureSink = Objects.requireNonNull(sink, "sink");
+        return this;
+    }
+
     public CiscoAsaExecutor withLifecycleSink(java.util.function.Consumer<String> sink) {
         this.lifecycleSink = Objects.requireNonNull(sink, "sink");
         return this;
@@ -126,6 +141,40 @@ public final class CiscoAsaExecutor {
         }
         LOG.log(System.Logger.Level.INFO, "[ASA] {0}: {1}", command, r instanceof ExecResult.Completed ? "cli_error" : r.getClass().getSimpleName());
         return Optional.empty();
+    }
+
+    /**
+     * The four approved failover reads (gates asa_measure_*), in the inventory's own session (pager off, privilege 15),
+     * one at a time, no retry. Each answer is reduced in memory to its shape and discarded; it is never returned, stored
+     * or recorded in the job transcript. {@code show conn count} also logs its two counts.
+     */
+    private void measureFailover(TransportSession s) {
+        for (AsaFailoverMeasure.Read read : AsaFailoverMeasure.Read.values()) {
+            String line;
+            try {
+                ExecResult r = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(
+                        () -> ssh.execInteractive(s, new ExecSpec(read.command(), true), Duration.ofSeconds(read.timeoutS())));
+                if (r instanceof ExecResult.Completed c && !CiscoAsaPlan.isCliError(c.output())) {
+                    String answer = stripEcho(c.output(), read.command());
+                    java.util.List<String> shape = AsaFailoverMeasure.shape(answer, read.maxLines());
+                    String counts = read == AsaFailoverMeasure.Read.SHOW_CONN_COUNT
+                            ? AsaFailoverMeasure.connCount(answer).map(n -> " in_use=" + n[0] + " most_used=" + n[1]).orElse(" counts=unparsed")
+                            : "";
+                    line = "[ASA] MEASURE " + read.gateId() + ": answered lines=" + answer.lines().filter(l -> !l.isBlank()).count()
+                            + counts + " shape=" + shape;
+                } else {
+                    line = "[ASA] MEASURE " + read.gateId() + ": " + (r instanceof ExecResult.Completed ? "cli_error" : r.getClass().getSimpleName());
+                }
+            } catch (RuntimeException e) {
+                com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+                line = "[ASA] MEASURE " + read.gateId() + ": " + e.getClass().getSimpleName();
+            }
+            try {
+                measureSink.accept(line);
+            } catch (RuntimeException ignored) {
+                // A measurement sink never changes an inventory result.
+            }
+        }
     }
 
     /**
@@ -276,6 +325,10 @@ public final class CiscoAsaExecutor {
             String context = InventoryContext.PHYSICAL;
             // Lifecycle read, group A: after every existing read, never changes the outcome below.
             lifecycleShowLicenseAll(s, deviceId, CiscoAsaPlan.contextModeWord(modeAnswer.orElse(null)));
+            // One-time PO-attended failover measurement: after every other read, never changes the result below.
+            if (!multiple && failoverMeasure.claim(deviceId, java.time.Instant.now())) {
+                measureFailover(s);
+            }
             return new HttpsVendorExecutor.InventoryOutcome.Completed(List.of(new InventoryContext(context, interfaces, routes)),
                     List.of(), Optional.empty(), new HttpsVendorExecutor.Identity(v.hostname(), v.model(), v.softwareVersion(),
                             List.of(), haRole, Optional.empty(), v.serial(), Optional.empty()));
