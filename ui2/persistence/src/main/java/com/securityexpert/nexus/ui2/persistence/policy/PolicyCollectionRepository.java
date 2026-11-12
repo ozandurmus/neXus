@@ -432,6 +432,19 @@ public class PolicyCollectionRepository {
         return true;
     }
 
+    /** The stored snapshot's rule count and completeness (see {@link PolicySnapshotRepository#ruleFacts}). */
+    public Optional<PolicySnapshotRepository.RuleFacts> ruleFacts(String policyId) {
+        return new PolicySnapshotRepository(tx).ruleFacts(policyId);
+    }
+    /**
+     * The change state this job recorded for one container (policy_revision: CHANGED, UNCHANGED or UNKNOWN against the
+     * previous marker -- CP published session, PAN lineage content version); empty when none was recorded.
+     */
+    public Optional<String> revisionState(String jobId, String containerRef) {
+        return tx.inTransaction(db -> db.fetch("select change_state from policy_revision where job_id = {0} and container_ref = {1}",
+            jobId, containerRef).stream().findFirst().map(r -> r.get("change_state", String.class)));
+    }
+
     /** Publication and the terminal transition share a row lock and transaction. */
     public boolean publish(String jobId, long epoch, List<PolicySnapshotRepository.Stored> snapshots, String actor) {
         return publish(jobId, epoch, snapshots, actor, "");

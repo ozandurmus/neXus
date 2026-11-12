@@ -39,6 +39,22 @@ public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<Stri
     public static boolean unknownPart(CollectionFailure failure) {
         return failure != null && UNKNOWN_PART_REASONS.contains(failure.reason()) && "NAT".equals(failure.layerName());
     }
+    /** Failures that leave every rule of the snapshot collected: hit counters or the object inventory only. */
+    public static final java.util.Set<String> ADVISORY_REASONS = java.util.Set.of("POLICY_HITS_UNAVAILABLE", "POLICY_DB_INVENTORY_WRITE_FAILED");
+    /**
+     * Every rule of the policy is in the snapshot: each failure is advisory or an explicit UNKNOWN part. An in-progress
+     * collection checkpoint (COLLECTION_PENDING) and a run that lost a layer (timeout, page error) are not rule-complete.
+     * PolicySnapshotRepository applies the same test in SQL; keep the two in step.
+     */
+    public boolean ruleComplete() {
+        return failures.stream().allMatch(f -> ADVISORY_REASONS.contains(f.reason()) || unknownPart(f));
+    }
+    /** Rules in every section, security and NAT. */
+    public int ruleCount() {
+        int n = 0;
+        for (Section section : sections) n += section.rules().size();
+        return n;
+    }
     /** Section names the Panorama mapper gives to rulebases that are not security rules. */
     public static final String PAN_PRE_NAT = "Pre NAT rules", PAN_POST_NAT = "Post NAT rules",
             PAN_PRE_DEFAULT = "Pre default rules", PAN_POST_DEFAULT = "Post default rules";
