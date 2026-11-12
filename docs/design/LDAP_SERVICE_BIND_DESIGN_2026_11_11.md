@@ -54,8 +54,8 @@ through the table's audit trigger (actor and action, never values).
   its own anchor (JDK PKIX accepts a chain whose first certificate is a trust anchor).
   PKIX does not check an anchor's dates, so after PKIX accepts the chain every
   presented certificate must also be inside its validity window.
-- The TLS handshake completes inside `connect()` (an `SSLSocketVerifier` that calls
-  `startHandshake()`), so a TLS failure is a connect-time failure: `tls_trust_failed`,
+- The TLS handshake completes inside `connect()`, exactly once (an `SSLSocketVerifier` that calls
+  `getSession()`, §13), so a TLS failure is a connect-time failure: `tls_trust_failed`, `tls_name_mismatch` or `tls_handshake_failed` (§13),
   next server. UnboundID's `HostNameSSLSocketVerifier` is not used.
 - `ldaps = false`: plain TCP. No StartTLS in this model (not in the Tufin form).
 
@@ -112,7 +112,7 @@ The browser sees the same `INVALID_CREDENTIALS` body for every refusal, and
 failures. The server logs exactly one line per failed directory attempt:
 `ldap_login_refused reason=<code>`, with `<code>` from the closed set
 `service_bind_failed, user_not_found, user_ambiguous, user_bind_failed,
-not_in_group, tls_trust_failed, timeout, connect_failed, strong_auth_required,
+not_in_group, tls_trust_failed, tls_name_mismatch, tls_handshake_failed, timeout, connect_failed, strong_auth_required,
 search_failed, directory_disabled, settings_invalid, directory_error`. Never the
 user name, a DN, the password, the server address, or an exception (its message
 can carry all of those). When every server fails before answering, the code is the
@@ -243,3 +243,37 @@ taken; where the reviewer read the pre-rewrite classes, the fix is in the rewrit
 | 9 | Sync race, randomized cipher, disable, hand-made bindings | Sync under the table lock reading the row inside it; decrypt to compare; disable withdraws trust and expires directory state; §5 states hand-made scope. |
 | 10 | Missing codes; signing required; exception leakage | `search_failed`, `strong_auth_required` added; no exception or message is ever logged. |
 | 11 | Throttle case; temp PEM file; residual state | Case-insensitive throttle key; PEM parsed in memory; V204 deletes directory actor state. |
+
+## 13. Amendment 2026-11-12: one TLS handshake, TLS failure codes, connection-test log lines
+
+First field use: Test connection to a domain controller (LDAPS 636, trust any certificate, by IP and then by
+the DNS name on its certificate) reported `connect_failed` and a failed service bind, although TCP and a TLS
+handshake from the service pod worked. Root cause: UnboundID's connect thread completes the TLS handshake
+itself, and the §3 verifier then called `startHandshake()` again. On an established TLS 1.2 socket that is a
+client-initiated renegotiation; Windows refuses it and resets the connection, so the first LDAP operation
+failed with result 81 (server down), read as `connect_failed`. Trust any certificate and host-name checks were
+not involved. The JDK test directory accepted the renegotiation, so every test passed.
+
+Fix: the verifier calls `getSession()`, which completes a pending handshake and does nothing on an established
+one; a failed handshake (null cipher suite) is `tls_handshake_failed`. The adapter tests run the in-process
+directory with `jdk.tls.rejectClientInitiatedRenegotiation=true`, as a domain controller behaves; with the old
+verifier every TLS sign-in test fails. Measured in the service pod against the field DC (TCP and TLS, rootDSE
+read, one bind with a synthetic non-existent DN; outcomes only): old verifier rootDSE result 81, new verifier
+rootDSE read and the bind answered 49.
+
+Changes to the closed reason-code set of §4 (still identity-free):
+- `tls_handshake_failed` (new): TCP connected, the TLS handshake failed before any certificate decision: the
+  server reset or closed the connection, or answered with a handshake alert (no shared protocol version or cipher
+  suite, no LDAPS certificate on the server). Detected from an `SSLException`, or an `IOException` raised inside
+  `startHandshake`.
+- `tls_name_mismatch` (new, certificate-below mode only): the chain is trusted but the certificate does not name
+  the configured address (an IP with no IP SAN, or another host name). The UI says to use the DNS name on the
+  certificate.
+- `tls_trust_failed` (narrowed): the chain or a certificate's dates were refused.
+
+Precedence when several apply: name mismatch, then trust, then timeout, then handshake, then connect.
+
+Test connection now logs, on the same logger as the sign-in codes, one `ldap_test_server index=<n>
+outcome=<code>` line per configured server and one `ldap_test_result` line with the service-bind result, the
+three DN existence booleans, the test-user match and the two membership booleans. Never a server address, a DN,
+a user name, a password or an exception.

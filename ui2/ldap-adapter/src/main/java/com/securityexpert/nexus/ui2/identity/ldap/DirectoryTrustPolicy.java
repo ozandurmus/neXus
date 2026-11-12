@@ -159,14 +159,42 @@ public final class DirectoryTrustPolicy {
             dates(chain);
         }
         @Override public void checkServerTrusted(X509Certificate[] chain, String authType, Socket socket) throws java.security.cert.CertificateException {
-            delegate.checkServerTrusted(chain, authType, socket);
+            try {
+                delegate.checkServerTrusted(chain, authType, socket);
+            } catch (java.security.cert.CertificateException withName) {
+                throw nameOrTrust(chain, authType, withName);
+            }
             dates(chain);
         }
         @Override public void checkServerTrusted(X509Certificate[] chain, String authType, SSLEngine engine) throws java.security.cert.CertificateException {
-            delegate.checkServerTrusted(chain, authType, engine);
+            try {
+                delegate.checkServerTrusted(chain, authType, engine);
+            } catch (java.security.cert.CertificateException withName) {
+                throw nameOrTrust(chain, authType, withName);
+            }
             dates(chain);
         }
+        /**
+         * The socket form also runs the "LDAPS" endpoint check. When the chain alone is trusted, the refusal was
+         * the name: the certificate does not name the configured address (an IP with no IP SAN, or another name).
+         */
+        private java.security.cert.CertificateException nameOrTrust(X509Certificate[] chain, String authType,
+                java.security.cert.CertificateException withName) {
+            try {
+                delegate.checkServerTrusted(chain, authType);
+            } catch (java.security.cert.CertificateException chainRefused) {
+                return withName;
+            }
+            return new NameMismatch();
+        }
         @Override public X509Certificate[] getAcceptedIssuers() { return delegate.getAcceptedIssuers(); }
+    }
+
+    /** The chain is trusted but the certificate does not name the configured server address. Carries no value. */
+    static final class NameMismatch extends java.security.cert.CertificateException {
+        NameMismatch() {
+            super("certificate does not name the server address");
+        }
     }
 
     /** Trust any certificate: the PO-owned mode. Checks nothing, by decision. */

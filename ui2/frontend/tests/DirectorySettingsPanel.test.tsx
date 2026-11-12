@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { DirectorySettingsPanel } from "../src/components/settings/DirectorySettingsPanel";
+import { DirectorySettingsPanel, ldapOutcomeSentence } from "../src/components/settings/DirectorySettingsPanel";
 
 /** Synthetic only: example.local names and 192.0.2.x addresses. */
 const PEM = "-----BEGIN CERTIFICATE-----\nc3ludGhldGlj\n-----END CERTIFICATE-----";
@@ -186,6 +186,14 @@ describe("DirectorySettingsPanel", () => {
     expect(post.body.settings.domainDn).toBe("DC=lab,DC=example,DC=local");
     expect(post.body.settings.bindPassword).toBe("");
     expect(calls.some((c) => c.method === "PUT")).toBe(false);
+  });
+
+  it("names the TLS failures apart from a network failure", async () => {
+    expect(ldapOutcomeSentence("tls_handshake_failed")).toMatch(/^Connected, but the TLS handshake failed/);
+    expect(ldapOutcomeSentence("tls_name_mismatch")).toBe(
+      "The server certificate does not name this address: use the DNS name on the certificate.");
+    expect(ldapOutcomeSentence("tls_trust_failed")).toMatch(/certificate is not trusted/);
+    expect(ldapOutcomeSentence("connect_failed")).toMatch(/^Could not connect/);
   });
 
   it("shows a test's 400 problems on the form instead of a result", async () => {

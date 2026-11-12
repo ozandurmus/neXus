@@ -10,6 +10,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.securityexpert.nexus.ui2.identity.ldap.DirectoryProbe;
 import com.securityexpert.nexus.ui2.identity.ldap.DirectoryProfile;
 import com.securityexpert.nexus.ui2.persistence.identity.LdapSettingsRecord;
@@ -32,6 +35,8 @@ import com.securityexpert.nexus.ui2.platform.RoleToken;
  * the stored secret can never be sent to a newly entered server (Argon review finding 5).</p>
  */
 public final class LdapSettingsService {
+    /** The same logger as the sign-in reason codes, so one filter shows every directory outcome. */
+    private static final Logger LOG = LoggerFactory.getLogger("com.securityexpert.nexus.ui2.ldap");
 
     /** Creator of the system-managed DIRECTORY_GROUP bindings; hand-made bindings are never touched. */
     public static final String SYNC_ACTOR = "system:ldap-settings";
@@ -123,7 +128,24 @@ public final class LdapSettingsService {
         if (!prepared.problems().isEmpty()) return new Outcome.Invalid(prepared.problems());
         char[] password = prepared.newPassword() != null ? prepared.newPassword().toCharArray()
                 : servicePassword(stored.get()).get();
-        return new Outcome.Tested(DirectoryProbe.run(prepared.profile(), password, testUser == null ? null : testUser.strip()));
+        DirectoryProbe.Report report = DirectoryProbe.run(prepared.profile(), password,
+                testUser == null ? null : testUser.strip());
+        logTest(report);
+        return new Outcome.Tested(report);
+    }
+
+    /**
+     * One line per server and one summary line per connection test: reason codes, server positions and booleans
+     * only. Never a server address, a DN, a user name or a password (design §4).
+     */
+    private static void logTest(DirectoryProbe.Report report) {
+        for (int index = 0; index < report.servers().size(); index++) {
+            LOG.info("ldap_test_server index={} outcome={}", index + 1, report.servers().get(index).outcome());
+        }
+        LOG.info("ldap_test_result service_bind={} domain_dn={} admin_group={} users_group={} user_match={} "
+                + "in_admin_group={} in_users_group={}", report.serviceBindOk() ? "ok" : "failed",
+                report.domainDnExists(), report.adminGroupExists(), report.usersGroupExists(), report.userMatch(),
+                report.inAdminGroup(), report.inUsersGroup());
     }
 
     /**

@@ -54,7 +54,7 @@ class DirectoryTrustModesTest {
         try (var ad = ActiveDirectoryFixture.start(ActiveDirectoryFixture.Listener.TLS_DNS_LOCALHOST)) {
             ad.addUser("tls-user", "pw-tls", ActiveDirectoryFixture.ADMIN_GROUP);
             String ca = ActiveDirectoryFixture.Tls.material().caPem();
-            assertEquals("tls_trust_failed", reason(signIn(ad, "127.0.0.1", DirectoryProfile.TrustMode.TRUST_PEM, ca)));
+            assertEquals("tls_name_mismatch", reason(signIn(ad, "127.0.0.1", DirectoryProfile.TrustMode.TRUST_PEM, ca)));
         }
     }
 
@@ -75,6 +75,15 @@ class DirectoryTrustModesTest {
             var result = signIn(ad, "localhost", DirectoryProfile.TrustMode.TRUST_PEM, other);
             assertEquals("tls_trust_failed", reason(result));
             assertEquals(LdapOperatorBindPort.FailureCodes.DIRECTORY_UNAVAILABLE, ((Result.Err<?>) result).code());
+        }
+    }
+
+    @Test
+    void pemModeReportsAnUntrustedChainBeforeTheName() throws Exception {
+        try (var ad = ActiveDirectoryFixture.start(ActiveDirectoryFixture.Listener.TLS_DNS_LOCALHOST)) {
+            ad.addUser("tls-user", "pw-tls", ActiveDirectoryFixture.ADMIN_GROUP);
+            String other = ActiveDirectoryFixture.Tls.material().otherCaPem();
+            assertEquals("tls_trust_failed", reason(signIn(ad, "127.0.0.1", DirectoryProfile.TrustMode.TRUST_PEM, other)));
         }
     }
 
