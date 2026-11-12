@@ -149,7 +149,7 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
   const session = useSession();
   const search = useLocationSearch();
   const activeId = activeLeafId(active, search);
-  const entries = visibleEntries(session?.permissions, active);
+  const entries = visibleEntries(session?.permissions, activeId);
   // Icons without words: the narrow layout, or the wide one folded.
   const iconsOnly = !wide || collapsed;
   const menuGroup = menu ? entries.find((e): e is NavGroup => e.kind === "group" && e.id === menu.groupId) ?? null : null;

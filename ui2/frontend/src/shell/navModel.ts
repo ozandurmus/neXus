@@ -21,7 +21,7 @@ export interface NavLeaf {
   readonly label: string;
   readonly screen: ScreenId;
   readonly href: string;
-  /** Listed only when the session's plane list holds this plane, or the leaf's screen is the open one. */
+  /** Listed only when the session's plane list holds this plane, or the leaf is the lit entry. */
   readonly requiredPlane?: string;
   /** Listed for every session; drawn locked when the session lacks the grant. Never hides the entry. */
   readonly lock?: NavLock;
@@ -133,22 +133,24 @@ export function activeLeafId(screen: ScreenId, search: string): string {
 }
 
 /**
- * Whether a leaf is listed. Unchanged rule: a session with no plane list is unrestricted; otherwise a leaf with a plane
- * needs that plane, or its screen is the open one (the reader never loses "you are here"). Planes only, no role token.
+ * Whether a leaf is listed. A session with no plane list is unrestricted; otherwise a leaf with a plane needs that
+ * plane, or it is the lit entry itself: the reader never loses "you are here", and gains nothing else by being there
+ * (a session without the Devices plane that opens Devices keeps Devices, not Lifecycle and security beside it). Planes
+ * only, no role token.
  */
-export function leafShown(leaf: NavLeaf, permissions: readonly string[] | undefined, activeScreen: ScreenId): boolean {
+export function leafShown(leaf: NavLeaf, permissions: readonly string[] | undefined, activeId: string): boolean {
   const restricted = Boolean(permissions && permissions.length > 0);
-  return !restricted || !leaf.requiredPlane || permissions!.includes(leaf.requiredPlane) || leaf.screen === activeScreen;
+  return !restricted || !leaf.requiredPlane || permissions!.includes(leaf.requiredPlane) || leaf.id === activeId;
 }
 
-/** The list a session sees: leaves filtered by plane; a group is listed while at least one child is. */
-export function visibleEntries(permissions: readonly string[] | undefined, activeScreen: ScreenId): readonly NavEntry[] {
+/** The list a session sees: leaves filtered by plane; a group is listed while at least one child is. `activeId` is {@link activeLeafId}. */
+export function visibleEntries(permissions: readonly string[] | undefined, activeId: string): readonly NavEntry[] {
   const out: NavEntry[] = [];
   for (const entry of NAV_ENTRIES) {
     if (entry.kind === "link") {
-      if (leafShown(entry, permissions, activeScreen)) out.push(entry);
+      if (leafShown(entry, permissions, activeId)) out.push(entry);
     } else {
-      const children = entry.children.filter((c) => leafShown(c, permissions, activeScreen));
+      const children = entry.children.filter((c) => leafShown(c, permissions, activeId));
       if (children.length > 0) out.push({ ...entry, children });
     }
   }

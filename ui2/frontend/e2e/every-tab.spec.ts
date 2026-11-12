@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import type { DeviceSummary } from "../src/auth/adminApi";
-import { TAB_COVERAGE, BACKUP_SECTIONS, SCREEN_HEADINGS } from "../src/shell/tabCoverage";
+import { TAB_COVERAGE, BACKUP_SECTIONS, SCREEN_HEADINGS, ADMIN_PAGES } from "../src/shell/tabCoverage";
 import { SCREEN_IDS } from "../src/shell/types";
 import { test, expect, visit, browserGet } from "./fixtures";
 
@@ -60,10 +60,11 @@ for (const label of ["Fleet", "Catalog", "Vulnerabilities"]) {
 }
 // Inventory detail tabs need a stored entity and Packet Analysis case views an opened case (opened by a row click, an
 // action this suite never takes): both are reached through nestedTabs from their own entry, not from the screen URL.
-for (const { screen, tabList, labels } of TAB_COVERAGE.filter(row => row.screen !== "inventory" && row.screen !== "packet_analysis")) {
+for (const { screen, tabList, labels, query, heading } of TAB_COVERAGE.filter(row => row.screen !== "inventory" && row.screen !== "packet_analysis")) {
   for (const label of labels) {
     test(`full: ${screen} / ${label}`, async ({ page, safety }) => {
-      await visit(page, `screen=${screen}`, SCREEN_HEADINGS[screen]);
+      // A tab list that lives at its own address (an Administration page) is visited there, under that page's heading.
+      await visit(page, query ?? `screen=${screen}`, heading ?? SCREEN_HEADINGS[screen]);
       await page.getByRole("tablist", { name: tabList, exact: true }).getByRole("tab", { name: label, exact: true }).click();
       await safety.checkpoint();
       const panel = page.getByRole("tabpanel", { name: label, exact: true });
@@ -75,6 +76,15 @@ for (const { screen, tabList, labels } of TAB_COVERAGE.filter(row => row.screen 
       }
     });
   }
+}
+// Administration's five pages (navigation redesign 2026-11-12): each is its own screen under its own heading; a page the
+// persona may not read shows the Restricted state, which is content.
+for (const { query, heading } of ADMIN_PAGES) {
+  test(`full: administration page / ${heading}`, async ({ page, safety }) => {
+    await visit(page, query, heading);
+    await safety.checkpoint();
+    await content(page);
+  });
 }
 for (const label of BACKUP_SECTIONS) {
   test(`full: backups / ${label}`, async ({ page, safety }) => {

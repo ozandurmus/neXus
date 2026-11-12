@@ -111,6 +111,8 @@ export interface M3TabDef {
   readonly label: string;
   /** This tab's own panel. Rendered only while this tab is selected. */
   readonly panel: ReactNode;
+  /** A small mark after the label (a lock on a restricted tab). Decorative: the tab's name stays its label. */
+  readonly adornment?: ReactNode;
 }
 
 /**
@@ -175,6 +177,7 @@ export function M3Tabs({
             id={tabId(index)}
             aria-controls={panelId}
             label={t.label}
+            {...(t.adornment ? { icon: <Box component="span" aria-hidden sx={{ display: "inline-flex" }}>{t.adornment}</Box>, iconPosition: "end" as const } : {})}
             sx={{
               minHeight: 48,
               textTransform: "none",

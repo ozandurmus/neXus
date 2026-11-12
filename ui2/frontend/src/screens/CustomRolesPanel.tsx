@@ -99,7 +99,7 @@ export function CustomRolesPanel() {
   );
 
   if (restricted) {
-    return <RestrictedPanel area="Roles & Permissions" role="Security Admin" />;
+    return <RestrictedPanel area="Roles and permissions" role="Security Admin" />;
   }
 
   return (
