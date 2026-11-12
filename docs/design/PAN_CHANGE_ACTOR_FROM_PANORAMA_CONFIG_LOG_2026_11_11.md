@@ -1,6 +1,9 @@
 # Palo Alto policy-change actor from the Panorama config log — design
 
-**Status: DRAFT (2026-11-11). Not implementation authority.** Docs only: no code, no migration, no gate row, and no
+**Status: DRAFT (2026-11-11; PO decisions D1-D7 ratified 2026-11-12 in
+`PO_DECISION_RECORD_2026_11_12_PAN_CHANGE_ACTOR_FROM_CONFIG_LOG.md`).** The design stays DRAFT: its vendor semantics
+(section 8) are not yet established and are not frozen by the decision record. Phase 1 is built under the decision
+record, failing closed on every UNKNOWN. This version was written as docs only: no code, no migration, no gate row, and no
 device command is added or sent by this document. The Product Owner approved starting this design on 2026-11-11
 ("Tasarımı başlat"). Every vendor semantic that official Palo Alto Networks documentation could not establish is marked
 `UNKNOWN` (vendor semantics law) and is settled by the partial-first measurement of §9 before anything freezes. All
@@ -89,7 +92,7 @@ trigger compared against; how the resolver reads P is an implementation detail �
    (also the outcome when the reader reported `BACKLOG` for that run: the log was not read up to C).
 2. **Edit window.** From the previous successful `commit` entry before the first commit of step 1 (call its time B) up
    to the last commit of step 1 (call it E). If no earlier commit is stored (evidence floor later than P), the window
-   start is not covered: outcome `UNKNOWN`, reason `WINDOW_NOT_COVERED`. A partial window never produces a name.
+   start is not covered, or lies more than 30 days before E: outcome `UNKNOWN`, reason `WINDOW_NOT_COVERED`. A partial window never produces a name.
 3. **Candidates.** Entries in (B, E] from the same source with: `result_class = Succeeded`; a configuration-change
    command class (`add`, `clone`, `delete`, `edit`, `move`, `rename`, `set` — the documented `cmd` values); a rule
    reference equal to H's rule reference (§4.3); a command compatible with H's change type:
@@ -172,9 +175,11 @@ remedy.
 Presentation: `PolicyChangesService` reads the link; `MATCHED` puts the name into `changedBy`, which `PolicyPrivacy`
 already masks as a `last-modifier` USER name for aiview and masked views (§2). `AMBIGUOUS` is a fixed string without
 names. The new columns and table need entries in the audit presentation allowlist (`AuditPresentationAllowlist`) and
-the privacy tests; the Check Point `changed_by` precedent (plain text, masked at presentation) is the model. Retention
-of `admin_name` follows the retention of `policy_change_evidence`; whether that table has a retention job is UNKNOWN
-(D5).
+the privacy tests; the Check Point `changed_by` precedent (plain text, masked at presentation) is the model. **Retention (PO D5,
+2026-11-12): the name lives as long as the policy history row it explains.** Implementation: a link row references the
+evidence rows and cascades with its `policy_rule_history` row; the resolver clears `admin_name` from evidence rows that
+no link row references once they are older than the 30-day edit lookback (§4.2 caps the edit window at 30 days, so such a
+row can no longer explain a change). Neither `policy_rule_history` nor `policy_change_evidence` has a retention job today.
 
 ## 7. Command literals and the network-device command gate (finding 3)
 
