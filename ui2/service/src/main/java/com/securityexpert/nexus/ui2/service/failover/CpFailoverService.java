@@ -18,7 +18,6 @@ import com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository;
-import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryHaFact;
 import com.securityexpert.nexus.ui2.persistence.discovery.ManagementEndpointSshTrustRepository;
 import com.securityexpert.nexus.ui2.platform.AuthzOutcome;
 import com.securityexpert.nexus.ui2.platform.RoleToken;
@@ -44,7 +43,16 @@ public final class CpFailoverService {
     public static final String CHASSIS_FAILOVER_NOT_APPROVED = "VSX_CHASSIS_FAILOVER_NOT_APPROVED";
     public record Summary(Unit unit, String vendor, boolean activeWindow, String lastRunState,
             String lastRunOutcome, Instant lastRunAt, JooqCpFailoverRepository.ReadinessStatus readiness,
-            boolean canRunReadiness) {}
+            boolean canRunReadiness, boolean readinessAvailable) {
+        /** Check Point and Palo Alto units: readiness is available. */
+        public Summary(Unit unit, String vendor, boolean activeWindow, String lastRunState,
+                String lastRunOutcome, Instant lastRunAt, JooqCpFailoverRepository.ReadinessStatus readiness,
+                boolean canRunReadiness) {
+            this(unit, vendor, activeWindow, lastRunState, lastRunOutcome, lastRunAt, readiness, canRunReadiness, true);
+        }
+    }
+    /** Refusal code for a vendor whose pairs are listed but have no readiness or execution yet (Cisco ASA, FortiGate). */
+    public static final String VENDOR_NOT_AVAILABLE = "FAILOVER_VENDOR_NOT_AVAILABLE";
     public record ReadinessTarget(String clusterId, String unitId, String vendor) {}
     private record StatusKey(String clusterRef, String vsId, String vendor) {}
     public static final class Refusal extends RuntimeException {
@@ -139,7 +147,20 @@ public final class CpFailoverService {
             .toList();
     }
     private static boolean failoverVendor(DeviceSummaryRecord d) {
-        return d.clusterMemberRef().isPresent() && ("check_point".equals(d.vendorHint()) || "palo_alto".equals(d.vendorHint()));
+        return d.clusterMemberRef().isPresent() && FailoverVendor.of(d.vendorHint()).isPresent();
+    }
+    private static boolean isVendor(String vendor, FailoverVendor expected) {
+        return FailoverVendor.of(vendor).filter(expected::equals).isPresent();
+    }
+    /** True for a known vendor that has no readiness/execution yet; an unknown string keeps the legacy handling. */
+    private static boolean unavailable(String vendor) {
+        return FailoverVendor.of(vendor).filter(v -> !v.readinessAvailable()).isPresent();
+    }
+    private static void requireAvailable(String vendor) {
+        if (unavailable(vendor)) throw new Refusal(VENDOR_NOT_AVAILABLE);
+    }
+    private static boolean sshTrusted(String vendor) {
+        return FailoverVendor.of(vendor).filter(v -> v.requiresSshTrust() && v.readinessAvailable()).isPresent();
     }
     /** One cluster's summary rows from already-read facts; shared by the fleet summary and the one-cluster read. */
     private static java.util.stream.Stream<Summary> clusterSummaries(String clusterRef, List<DeviceSummaryRecord> members,
@@ -149,23 +170,32 @@ public final class CpFailoverService {
         List<DeviceSummaryRecord> pair = members.stream()
             .sorted(Comparator.comparing(DeviceSummaryRecord::deviceId)).toList();
         String vendor = pair.get(0).vendorHint();
-        if (!vendor.equals(pair.get(1).vendorHint()) || pair.stream().anyMatch(m -> {
+        FailoverVendor descriptor = FailoverVendor.of(vendor).orElse(null);
+        if (descriptor == null || !vendor.equals(pair.get(1).vendorHint()) || pair.stream().anyMatch(m -> {
             List<JooqCpFailoverRepository.SummaryMember> rows = facts.get(m.deviceId());
             return rows == null || rows.isEmpty() || !rows.get(0).readable()
                 || rows.get(0).transportKind() == null || !rows.get(0).inventoryPresent()
-                || ("palo_alto".equals(vendor) && (!"pan_xml_api".equalsIgnoreCase(rows.get(0).transportKind())
-                    || !rows.get(0).panSupported()));
+                || descriptor.requiredTransportKind().filter(k -> !k.equalsIgnoreCase(rows.get(0).transportKind())).isPresent()
+                || (descriptor == FailoverVendor.PALO_ALTO && !rows.get(0).panSupported());
         })) return java.util.stream.Stream.<Summary>empty();
+        if (!descriptor.readinessAvailable()) {
+            // Listed only: one unit per pair, no virtual systems, no readiness, no actions.
+            Unit only = new Unit(opaque(clusterRef), opaque(clusterRef), clusterRef, null, pair);
+            var status = statuses.get(new StatusKey(clusterRef, null, vendor));
+            return java.util.stream.Stream.of(new Summary(only, vendor, false,
+                status == null ? null : status.state(), status == null ? null : status.outcome(),
+                status == null ? null : status.scheduledFor(), null, false, false));
+        }
         List<String> common = facts.get(pair.get(0).deviceId()).stream()
             .map(JooqCpFailoverRepository.SummaryMember::context)
             .filter(c -> c != null && !"physical".equals(c) && c.matches("[0-9]{1,10}"))
             .filter(c -> facts.get(pair.get(1).deviceId()).stream().anyMatch(r -> c.equals(r.context())))
             .distinct().sorted().toList();
-        boolean vsx = "check_point".equals(vendor) && pair.stream().anyMatch(m ->
+        boolean vsx = descriptor == FailoverVendor.CHECK_POINT && pair.stream().anyMatch(m ->
             m.virtualSystems().filter(v -> !v.isBlank()).isPresent() || facts.get(m.deviceId()).stream()
                 .anyMatch(r -> r.context() != null && !"physical".equals(r.context())));
         if (vsx && common.isEmpty()) return java.util.stream.Stream.<Summary>empty();
-        List<Unit> units = "palo_alto".equals(vendor)
+        List<Unit> units = descriptor == FailoverVendor.PALO_ALTO
             ? List.of(new Unit(opaque(clusterRef), opaque(clusterRef), clusterRef, null, pair))
             : namedUnits(clusterRef, pair, common);
         return units.stream().map(u -> {
@@ -173,7 +203,7 @@ public final class CpFailoverService {
             return new Summary(u, vendor, status != null && status.activeWindow(),
                 status == null ? null : status.state(), status == null ? null : status.outcome(),
                 status == null ? null : status.scheduledFor(),
-                readiness.get(new StatusKey(clusterRef, u.vsId(), vendor)), canRunReadiness);
+                readiness.get(new StatusKey(clusterRef, u.vsId(), vendor)), canRunReadiness, true);
         });
     }
 
@@ -208,6 +238,7 @@ public final class CpFailoverService {
     }
     public List<ReadinessTarget> readinessTargets() {
         return summaries("system:failover-readiness-scheduler").stream()
+            .filter(Summary::readinessAvailable)
             .map(s -> new ReadinessTarget(s.unit().clusterId(),s.unit().id(),s.vendor())).toList();
     }
     public List<Unit> unitsForRef(String clusterRef, String actor) {
@@ -272,11 +303,15 @@ public final class CpFailoverService {
         List<DeviceSummaryRecord> pair=members.stream().sorted(Comparator.comparing(DeviceSummaryRecord::deviceId)).toList();
         if (pair.stream().anyMatch(m -> !inventory.hasRun(m.deviceId())))
             throw new Refusal("INVENTORY_REQUIRED");
-        if ("palo_alto".equals(vendor)) {
-            if (pair.stream().anyMatch(m -> !"pan_xml_api".equalsIgnoreCase(endpoints.get(m.deviceId()).transportKind())))
-                throw new Refusal("CLUSTER_NOT_ELIGIBLE");
+        FailoverVendor descriptor = FailoverVendor.of(vendor).orElse(null);
+        if (descriptor != null && descriptor.requiredTransportKind().isPresent()
+                && pair.stream().anyMatch(m -> !descriptor.requiredTransportKind().get()
+                    .equalsIgnoreCase(endpoints.get(m.deviceId()).transportKind())))
+            throw new Refusal("CLUSTER_NOT_ELIGIBLE");
+        if (descriptor != null && !descriptor.readinessAvailable()) return List.of(new Unit(clusterId,clusterId,cluster,null,pair));
+        if (descriptor == FailoverVendor.PALO_ALTO) {
             boolean supported=pair.stream().allMatch(m -> inventory.findLatestHaFacts(m.deviceId()).stream()
-                .anyMatch(f -> InventoryHaFact.SOURCE_PAN_HIGH_AVAILABILITY_STATE.equals(f.source())
+                .anyMatch(f -> FailoverVendor.PALO_ALTO.haFactSource().equals(f.source())
                     && f.clusterMode().map(mode -> "active-passive".equalsIgnoreCase(mode)).orElse(false)));
             if (!supported) throw new Refusal("UNSUPPORTED_HA_MODE");
             return List.of(new Unit(clusterId,clusterId,cluster,null,pair));
@@ -331,12 +366,14 @@ public final class CpFailoverService {
     public JooqCpFailoverRepository.Approval approve(String clusterId, String unitId, Instant from,
             Instant until, String reason, String actor, String vendor) {
         requireAdmin(actor);
+        requireAvailable(vendor);
         throw new Refusal("REQUEST_BINDING_REQUIRED");
     }
 
     public JooqCpFailoverRepository.RequestApproval createApprovalRequest(String requestId,String clusterId,
             String unitId,Instant from,Instant until,String reason,String actor,String vendor) {
         String policy=approvalPolicy(actor);
+        requireAvailable(vendor);
         // PO 2026-10-20: an approval request sends nothing to a device; an administrator is never refused for the window.
         windows.requireOpenUnlessAdmin(actor);
         Unit u=unit(clusterId,unitId,actor,vendor);
@@ -352,6 +389,7 @@ public final class CpFailoverService {
     public JooqCpFailoverRepository.RequestApproval secondApproval(String requestId,long revision,
             String clusterId,String unitId,String actor,String vendor) {
         approvalPolicy(actor);
+        requireAvailable(vendor);
         Unit u=unit(clusterId,unitId,actor,vendor);
         if (u.vsxChassis()) throw new Refusal(CHASSIS_FAILOVER_NOT_APPROVED);
         var request=store.requestApproval(requestId).orElseThrow(() -> new Refusal("REQUEST_NOT_FOUND"));
@@ -367,8 +405,9 @@ public final class CpFailoverService {
         return approvals(clusterId,unitId,actor,"check_point");
     }
     public List<JooqCpFailoverRepository.Approval> approvals(String clusterId, String unitId, String actor,String vendor) {
+        if (unavailable(vendor)) return List.of();
         Unit u=unit(clusterId,unitId,actor,vendor);
-        return "check_point".equals(vendor)
+        return isVendor(vendor,FailoverVendor.CHECK_POINT)
             ?store.approvals(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId())
             :store.approvals(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),vendor);
     }
@@ -384,6 +423,7 @@ public final class CpFailoverService {
     public String request(String clusterId,String unitId,Instant scheduledFor,String actor,String vendor,
             String requestId,long revision,String nonce,boolean warningConfirmed) {
         String policy=approvalPolicy(actor);
+        requireAvailable(vendor);
         if (!mutationSwitch.enabled()) throw new Refusal(FailoverMutationSwitch.DISABLED);
         // PO 2026-10-20: an administrator's immediate start needs no window, only the business-hours acknowledgement;
         // a scheduled start keeps the window (checked again at its time by the repository and the scheduler).
@@ -413,15 +453,17 @@ public final class CpFailoverService {
 
     public String requestReadiness(String clusterId, String unitId, String actor, String vendor) {
         if (!mayStart(actor) && !allowed(actor,RoleToken.OPERATOR) && !allowed(actor, RoleToken.REPLAY_VIEWER)) throw new Refusal("WRONG_ROLE");
+        requireAvailable(vendor);
         return submitReadiness(clusterId, unitId, actor, vendor);
     }
     public String requestScheduledReadiness(ReadinessTarget target) {
         return submitReadiness(target.clusterId(),target.unitId(),"system:failover-readiness-scheduler",target.vendor());
     }
     private String submitReadiness(String clusterId, String unitId, String actor, String vendor) {
+        requireAvailable(vendor);
         windows.requireOpenFor(actor);
         Unit u = unit(clusterId, unitId, actor, vendor);
-        if ("check_point".equals(vendor)) for (DeviceSummaryRecord member : u.members()) requireTrusted(member);
+        if (sshTrusted(vendor)) for (DeviceSummaryRecord member : u.members()) requireTrusted(member);
         try {
             var decision = store.requestReadiness(u.members().get(0).clusterMemberRef().orElseThrow(),
                 u.vsId(), actor, u.members().get(0).deviceId(), vendor);
@@ -437,8 +479,8 @@ public final class CpFailoverService {
     private String observedRole(DeviceSummaryRecord member,String vsId,String vendor) {
         return inventory.findLatestRun(member.deviceId()).stream().flatMap(r -> r.haFacts().stream())
             .filter(f -> (vsId==null ? "physical" : vsId).equals(f.context()))
-            .filter(f -> ("palo_alto".equals(vendor) ? InventoryHaFact.SOURCE_PAN_HIGH_AVAILABILITY_STATE
-                : InventoryHaFact.SOURCE_CP_CPHAPROB_STAT).equals(f.source()))
+            .filter(f -> FailoverVendor.of(vendor).filter(FailoverVendor::readinessAvailable)
+                .orElse(FailoverVendor.CHECK_POINT).haFactSource().equals(f.source()))
             .map(f -> f.role().toUpperCase(java.util.Locale.ROOT)).findFirst().orElse("UNKNOWN");
     }
     private void requireTrusted(DeviceSummaryRecord member) {
@@ -459,8 +501,9 @@ public final class CpFailoverService {
         return runs(clusterId,unitId,actor,"check_point");
     }
     public List<JooqCpFailoverRepository.Run> runs(String clusterId,String unitId,String actor,String vendor) {
+        if (unavailable(vendor)) return List.of();
         Unit u=unit(clusterId,unitId,actor,vendor);
-        return "check_point".equals(vendor)
+        return isVendor(vendor,FailoverVendor.CHECK_POINT)
             ?store.runs(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId())
             :store.runs(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),vendor);
     }
@@ -593,7 +636,7 @@ public final class CpFailoverService {
             if (!windows.isOpen()) break;
             List<DeviceSummaryRecord> members=devices.findMembersByClusterRef(run.clusterRef());
             String vendor=run.vendor();
-            String passive="palo_alto".equals(vendor)?"PASSIVE":"STANDBY";
+            String passive=FailoverVendor.of(vendor).map(FailoverVendor::standbyRoleWord).orElse("STANDBY");
             if (members.size()!=2 || members.stream().anyMatch(m -> !vendor.equals(m.vendorHint()))
                     || !("ACTIVE".equals(observedRole(members.get(0),run.vsId(),vendor))
                     && passive.equals(observedRole(members.get(1),run.vsId(),vendor))
@@ -602,7 +645,7 @@ public final class CpFailoverService {
                 store.stopPlanned(run.id(),"CLUSTER_STATE_NOT_READY");
                 continue;
             }
-            try { if ("check_point".equals(vendor)) members.forEach(this::requireTrusted); }
+            try { if (sshTrusted(vendor)) members.forEach(this::requireTrusted); }
             catch (Refusal refused) {
                 store.stopPlanned(run.id(),refused.code());
                 continue;

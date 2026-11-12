@@ -379,7 +379,12 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
     {unsupported.length > 0 && <Box component="details" open={showUnsupported || filter === "UNSUPPORTED"} onToggle={e => setShowUnsupported(e.currentTarget.open)} sx={{ mt: 1.5, border: `1px solid ${m3.outlineVar}`, borderRadius: 2, p: 1.5, bgcolor: m3.scLow }}>
       <Box component="summary" sx={{ cursor: "pointer", color: m3.onSurfaceVar, fontWeight: 600 }}>Not supported · {unsupported.length} clusters</Box>
       <Typography variant="body2" sx={{ color: m3.onSurfaceVar, my: 1 }}>Readiness pre-checks are not supported for these vendors; enrolled clusters are shown for inventory context.</Typography>
-      <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0 }}>{unsupported.map(({ cluster, vendor }) => <Box component="li" key={cluster.ref} sx={{ display: "flex", gap: 1, alignItems: "center", py: 0.75 }}><Typography variant="body2">{cluster.title}</Typography><VendorBadge vendor={vendor} /><Typography variant="caption" title="UNSUPPORTED_MODE"><Presented label={readinessReasonLabel("UNSUPPORTED_MODE")} raw="UNSUPPORTED_MODE" /> · Readiness: not evaluated</Typography></Box>)}</Box>
+      <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0 }}>{unsupported.map(({ cluster, vendor, units }) => {
+        const listedOnly = vendor === "cisco_asa" || units.some(unit => unit.readinessAvailable === false);
+        return <Box component="li" key={cluster.ref} sx={{ display: "flex", gap: 1, alignItems: "center", py: 0.75 }}><Typography variant="body2">{cluster.title}</Typography><VendorBadge vendor={vendor} />{listedOnly && <Typography variant="body2">{vendorDisplayName(vendor)}</Typography>}{listedOnly
+          ? <Typography variant="caption" title="FAILOVER_VENDOR_NOT_AVAILABLE">Readiness not available yet</Typography>
+          : <Typography variant="caption" title="UNSUPPORTED_MODE"><Presented label={readinessReasonLabel("UNSUPPORTED_MODE")} raw="UNSUPPORTED_MODE" /> · Readiness: not evaluated</Typography>}</Box>;
+      })}</Box>
     </Box>}
     {visible.length === 0 && <StatePanel variant="empty" title="No clusters match these filters" />}
   </Box>;

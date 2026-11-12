@@ -210,6 +210,7 @@ public final class CpFailoverController {
             m.put("lastRunOutcome", s.lastRunOutcome());
             m.put("lastRunAt", s.lastRunAt());
             m.put("canRunReadiness", s.canRunReadiness());
+            m.put("readinessAvailable", s.readinessAvailable());
             eligibility(m,s.unit(),s.readiness(),incidents);
             putConfigSync(m,s.unit(),s.vendor(),s.readiness(),PrivacyMaskingResponseBodyAdvice.isReplayViewer(request),actor(request));
             if (s.readiness() != null) {
