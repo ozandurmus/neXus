@@ -138,6 +138,8 @@ describe("the six product screens", () => {
     ["?screen=operations&tab=changes", "changes", "Who changed what, and when"],
     ["?screen=operations&tab=diagnostics", "diagnostics", "Run an approved read-only diagnostic"],
     ["?screen=administration&tab=job-logs", "operations", "All jobs"],
+    // PO 2026-11-13: Scheduled jobs is a tab of Operations.
+    ["?screen=administration&tab=platform&section=scheduled-jobs", "operations", "The scheduled jobs list is unavailable"],
   ])("lands %s on its new screen", async (search, screenId, marker) => {
     const { unmount } = render(<App search={search} />);
     expect(await screen.findByText(new RegExp(marker))).toBeInTheDocument();

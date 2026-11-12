@@ -65,11 +65,16 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     { id: "changes", label: "Changes", screen: "changes", href: "?screen=changes" },
   ] },
   { kind: "link", id: "backups", label: "Backups", icon: "backup", screen: "backups", href: "?screen=backups" },
-  // Jobs stays a child of Operations (PO-NAV-8); the three children are the three tabs of the one screen.
+  // Jobs stays a child of Operations (PO-NAV-8); the children are the tabs of the one screen.
   { kind: "group", id: "operations", label: "Operations", icon: "operations", children: [
     { id: "operations-ha", label: "HA and readiness", screen: "operations", href: "?screen=operations" },
     { id: "operations-jobs", label: "Jobs", screen: "operations", href: "?screen=operations&tab=jobs" },
-    { id: "operations-health", label: "System health", screen: "operations", href: "?screen=operations&tab=health" },
+    // Which scheduled job families run (PO 2026-11-13, F2: from Administration); every signed-in role reads it.
+    { id: "operations-schedules", label: "Scheduled jobs", screen: "operations", href: "?screen=operations&tab=schedules" },
+    // Two subjects, two entries (PO 2026-11-13, F1): the firewalls' own health, then neXus' own storage and services.
+    // Platform status had no lock under Administration and has none here; the server decides what it returns.
+    { id: "operations-health", label: "Device health", screen: "operations", href: "?screen=operations&tab=health" },
+    { id: "operations-platform", label: "Platform status", screen: "operations", href: "?screen=operations&tab=platform-status" },
   ] },
   // The four ad hoc, file-in or single-device engineering tools (UI review 2026-11-05, C4), listed in place.
   { kind: "group", id: "tools", label: "Tools", icon: "tools", children: [
@@ -82,7 +87,8 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   { kind: "group", id: "administration", label: "Administration", icon: "admin", startsClosed: true, children: [
     adminPage("registry", "Device registry"),
     adminPage("access", "Access and identity", "adminRead"),
-    adminPage("platform", "Platform"),
+    // Renamed from "Platform" (PO 2026-11-13); the address slug stays `platform`. Both its tabs need the administration-read grant.
+    adminPage("platform", "Notifications and logging", "adminRead"),
     adminPage("audit", "Audit log", "adminRead"),
     adminPage("product", "Delivery plan", "adminPlane"),
   ] },
@@ -116,6 +122,8 @@ export function activeLeafId(screen: ScreenId, search: string): string {
       const tab = params.get("tab");
       if (tab === "jobs" || tab === "queue" || tab === "history") return "operations-jobs";
       if (tab === "health") return "operations-health";
+      if (tab === "schedules") return "operations-schedules";
+      if (tab === "platform-status") return "operations-platform";
       if (tab === "ha") return "operations-ha";
       // A job link that names only `?job=<id>` lands on Jobs (roadmap 3.6).
       return params.get("job") ? "operations-jobs" : "operations-ha";

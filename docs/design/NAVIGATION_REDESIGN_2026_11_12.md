@@ -276,3 +276,54 @@ the six amendment lines of section 7. The questions as they were put follow.
 
 Noted, not proposed here: Operations > System health and Administration > Platform > System both describe the
 product's own state. Whether they should be one place is a screen change and outside this regrouping.
+
+## Amendment 2026-11-13 (PO approved, follow-ups F1, F2, F4 and the Platform rename)
+
+From the external effectiveness review of 2026-11-12. Frontend only; no API, permission or device command changes.
+
+| # | Change | Before | After |
+|---|---|---|---|
+| F1 | Two health subjects, two entries | Operations > System health (the firewalls) and Administration > Platform > System (neXus' own storage and service pods) | Operations > **Device health**: the firewall fleet panel, at the address it always had, `?screen=operations&tab=health`. Operations > **Platform status**: neXus' own storage and service pods, `?screen=operations&tab=platform-status`. |
+| F2 | Scheduled jobs | Administration > Platform > Scheduled jobs | Operations > Scheduled jobs, `?screen=operations&tab=schedules`. Every signed-in role reads it; who may switch a family is decided by the server as before. |
+| F4 | Rename | Log collection settings | Log collection. The address slug `system-logs` stays. |
+| | Rename | Administration > Platform | Administration > **Notifications and logging** (menu label, heading, tab list). The address slug stays `platform`. |
+
+F1 was first approved as one merged tab. Reading the two panels showed they are different subjects (the firewalls'
+CPU, restarts and crash files; neXus' own disk use and services), with no fact in common, so the PO decided on the
+split the same day.
+
+Not changed: Device management keeps its name (F5); Delivery plan stays the last Administration child (F6).
+
+Resulting structure (this replaces the Operations and Administration rows of section 2 and the Platform rows of section 4):
+
+- Operations: HA and readiness; Jobs; Scheduled jobs; Device health; Platform status. The order is "act on the fleet,
+  what ran, what will run, how the firewalls are, how neXus itself is": the two job entries sit together and the two
+  health entries sit together, neXus' own last. 23 destinations in total.
+- Administration: Device registry; Access and identity; Notifications and logging (Notifications; Log collection);
+  Audit log; Delivery plan.
+
+Access, unchanged for every session:
+
+- Platform status carried no lock under Administration (every session could open it and the server decides what it
+  returns). It carries none in the menu or on the tab now.
+- Notifications and Log collection both need the administration-read grant, as before. Because nothing else is left
+  on that page, its menu entry now shows the lock for a session without the grant, like Access and identity and
+  Audit log. The page is still listed and opens to the Restricted state.
+
+Why the page slug stays `platform`: a new slug would change two working addresses and add three redirects for no
+gain to the reader, who sees the label, not the slug. The Operations tab uses `platform-status`, so the two addresses
+cannot be confused.
+
+New redirects (in `shell/legacyRoutes.ts`, tested):
+
+| Old address | Lands on |
+|---|---|
+| `?screen=administration&tab=platform&section=system` | `?screen=operations&tab=platform-status` |
+| `?screen=administration&tab=system` (older slug) | `?screen=operations&tab=platform-status` |
+| `?screen=administration&tab=platform&section=scheduled-jobs` | `?screen=operations&tab=schedules` |
+| `?screen=operations&tab=health&focus=platform` (the merged form of the first commit) | `?screen=operations&tab=platform-status` |
+
+Unchanged addresses: `?screen=operations&tab=health` (Device health), `?screen=administration&tab=platform` with or
+without `section=notifications` or `section=system-logs`, and the older `tab=notifications` and `tab=system-logs`.
+
+Lit entries: `tab=schedules` lights Scheduled jobs, `tab=health` Device health, `tab=platform-status` Platform status.

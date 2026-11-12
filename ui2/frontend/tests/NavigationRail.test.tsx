@@ -43,7 +43,7 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     const text = nav().textContent ?? "";
     let at = -1;
     for (const label of ["Overview", "Reports", "Devices", "Compliance and security", "Lifecycle and security", "Policy and changes", "Trace", "Changes", "Backups",
-      "Operations", "HA and readiness", "Jobs", "System health", "Tools", "Packet analysis", "Data sanitizer", "Diagnostics", "Offline analysis", "Administration"]) {
+      "Operations", "HA and readiness", "Jobs", "Scheduled jobs", "Device health", "Platform status", "Tools", "Packet analysis", "Data sanitizer", "Diagnostics", "Offline analysis", "Administration"]) {
       const next = text.indexOf(label, at + 1);
       expect(next, label).toBeGreaterThan(at);
       at = next;
@@ -83,14 +83,16 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     ["backups", "?screen=backups", "Backups", null],
     ["operations", "?screen=operations", "HA and readiness", "Operations"],
     ["operations", "?screen=operations&tab=jobs", "Jobs", "Operations"],
-    ["operations", "?screen=operations&tab=health", "System health", "Operations"],
+    ["operations", "?screen=operations&tab=health", "Device health", "Operations"],
+    ["operations", "?screen=operations&tab=platform-status", "Platform status", "Operations"],
+    ["operations", "?screen=operations&tab=schedules", "Scheduled jobs", "Operations"],
     ["packet_analysis", "?screen=packet_analysis", "Packet analysis", "Tools"],
     ["sanitizer", "?screen=sanitizer", "Data sanitizer", "Tools"],
     ["diagnostics", "?screen=diagnostics", "Diagnostics", "Tools"],
     ["offline_analysis", "?screen=offline_analysis", "Offline analysis", "Tools"],
     ["administration", "?screen=administration", "Device registry", "Administration"],
     ["administration", "?screen=administration&tab=access&section=ldap-settings", "Access and identity", "Administration"],
-    ["administration", "?screen=administration&tab=platform", "Platform", "Administration"],
+    ["administration", "?screen=administration&tab=platform", "Notifications and logging", "Administration"],
     ["administration", "?screen=administration&tab=audit", "Audit log", "Administration"],
     ["administration", "?screen=administration&tab=product", "Delivery plan", "Administration"],
   ])("lights exactly one entry for %s %s: %s", (screenId, search, label, groupLabel) => {
@@ -115,7 +117,7 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
       window.history.replaceState(null, "", "/?screen=operations&tab=health");
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
-    expect(current()[0]).toHaveTextContent("System health");
+    expect(current()[0]).toHaveTextContent("Device health");
   });
 
   it("opens and closes a group in place, remembers it per viewer, and never closes the group of the open page", () => {
@@ -124,7 +126,7 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     expect(header("Tools")).toHaveAttribute("aria-expanded", "false");
     expect(within(nav()).queryByText("Diagnostics")).toBeNull();
     fireEvent.click(header("Administration"));
-    expect(within(nav()).getByRole("link", { name: "Platform" })).toHaveAttribute("href", "?screen=administration&tab=platform");
+    expect(within(nav()).getByRole("link", { name: "Notifications and logging" })).toHaveAttribute("href", "?screen=administration&tab=platform");
     expect(window.localStorage.getItem(GROUPS_KEY)).toBe("tools:0,administration:1");
     first.unmount();
 
@@ -181,7 +183,7 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     expect(pages.map((a) => [a.textContent, a.getAttribute("href"), a.getAttribute("data-locked")])).toEqual([
       ["Device registry", "?screen=administration&tab=registry", null],
       ["Access and identity", "?screen=administration&tab=access", "true"],
-      ["Platform", "?screen=administration&tab=platform", null],
+      ["Notifications and logging", "?screen=administration&tab=platform", "true"],
       ["Audit log", "?screen=administration&tab=audit", "true"],
       ["Delivery plan", "?screen=administration&tab=product", "true"],
     ]);
@@ -237,7 +239,7 @@ describe("the narrow layout", () => {
     fireEvent.click(header("Administration", drawer));
     const pages = within(drawer).getAllByRole("link").filter((a) => (a.getAttribute("href") ?? "").startsWith("?screen=administration"));
     expect(pages.map((a) => [a.textContent, a.getAttribute("data-locked")])).toEqual([
-      ["Device registry", null], ["Access and identity", "true"], ["Platform", null], ["Audit log", "true"], ["Delivery plan", "true"],
+      ["Device registry", null], ["Access and identity", "true"], ["Notifications and logging", "true"], ["Audit log", "true"], ["Delivery plan", "true"],
     ]);
   });
 
@@ -290,7 +292,8 @@ describe("the sidebar folds to icons (PO 2026-10-20)", () => {
     expect(operations).toHaveAttribute("aria-expanded", "true");
     const items = within(menu).getAllByRole("menuitem");
     expect(items.map((i) => [i.textContent, i.getAttribute("href")])).toEqual([
-      ["HA and readiness", "?screen=operations"], ["Jobs", "?screen=operations&tab=jobs"], ["System health", "?screen=operations&tab=health"],
+      ["HA and readiness", "?screen=operations"], ["Jobs", "?screen=operations&tab=jobs"], ["Scheduled jobs", "?screen=operations&tab=schedules"],
+      ["Device health", "?screen=operations&tab=health"], ["Platform status", "?screen=operations&tab=platform-status"],
     ]);
     for (const item of items) expect(item.tagName).toBe("A");
     expect(items[1]).toHaveAttribute("aria-current", "page");

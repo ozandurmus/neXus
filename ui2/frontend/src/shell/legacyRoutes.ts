@@ -11,7 +11,10 @@
 export const ADMIN_GROUP_SLUGS = ["registry", "access", "platform", "audit", "product"] as const;
 export type AdminGroupSlug = (typeof ADMIN_GROUP_SLUGS)[number];
 
-/** Every Administration tab slug that existed before the regrouping, with the group page and the section that now holds it. */
+/**
+ * Every Administration tab slug that existed before the regrouping, with the group page and the section that now holds it.
+ * The former `system` page is not here: it left Administration for Operations > Platform status (2026-11-13) and is rewritten below.
+ */
 export const LEGACY_ADMIN_TABS: Readonly<Record<string, { readonly group: AdminGroupSlug; readonly section: string }>> = {
   "device-management": { group: "registry", section: "device-management" },
   "inventory-exclusions": { group: "registry", section: "inventory-exclusions" },
@@ -21,7 +24,6 @@ export const LEGACY_ADMIN_TABS: Readonly<Record<string, { readonly group: AdminG
   sessions: { group: "access", section: "sessions" },
   "roles-permissions": { group: "access", section: "roles-permissions" },
   "ldap-settings": { group: "access", section: "ldap-settings" },
-  system: { group: "platform", section: "system" },
   notifications: { group: "platform", section: "notifications" },
   "system-logs": { group: "platform", section: "system-logs" },
   "delivery-plan": { group: "product", section: "delivery-plan" },
@@ -63,12 +65,26 @@ export function rewriteLegacyRoute(search: string): string | null {
     } else if (tab === "diagnostics") {
       params.set("screen", "diagnostics");
       params.delete("tab");
+    } else if (tab === "health" && params.get("focus") === "platform") {
+      // The first form of the 2026-11-13 change put neXus' own status inside System health; it is its own tab now.
+      params.set("tab", "platform-status");
+      params.delete("focus");
     }
   } else if (screen === "administration" && key === "screen") {
     if (tab === "job-logs" || (!tab && params.get("job"))) {
       // Job Logs was the same table as Operations > Jobs (B6); a `?job=<id>` link opens that job there.
       params.set("screen", "operations");
       params.set("tab", "jobs");
+    } else if (tab === "system" || (tab === "platform" && params.get("section") === "system")) {
+      // neXus' own storage and service view is Operations > Platform status (PO 2026-11-13, F1).
+      params.set("screen", "operations");
+      params.set("tab", "platform-status");
+      params.delete("section");
+    } else if (tab === "platform" && params.get("section") === "scheduled-jobs") {
+      // Scheduled jobs is a tab of Operations (PO 2026-11-13, F2).
+      params.set("screen", "operations");
+      params.set("tab", "schedules");
+      params.delete("section");
     } else if (tab && LEGACY_ADMIN_TABS[tab]) {
       const home = LEGACY_ADMIN_TABS[tab];
       params.set("tab", home.group);

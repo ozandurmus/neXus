@@ -16,15 +16,15 @@ export const TAB_COVERAGE: readonly TabCoverageRow[] = [
   { screen: "inventory", tabList: "Lifecycle view", labels: ["Fleet", "Catalog", "Vulnerabilities"] },
   // Navigation redesign 2026-11-12: "HA and readiness" (was "HA & readiness"), "Packet analysis", "Data sanitizer".
   // Diagnostics moved to Tools and the Change feed to the Changes screen (UI review 2026-11-05, C3/C4).
-  { screen: "operations", tabList: "Operations sections", labels: ["HA and readiness", "Jobs", "System health"] },
+  { screen: "operations", tabList: "Operations sections", labels: ["HA and readiness", "Jobs", "Scheduled jobs", "Device health", "Platform status"] },
   // Administration's five pages are children of the navigation group (navigation redesign 2026-11-12); a page's sections
   // are its one tab strip, reached at the page's own address. Audit log and Delivery plan have a single section and no strip.
   { screen: "administration", tabList: "Device registry sections", labels: ["Device management", "Inventory exclusions", "Credentials", "SSH trust"],
     query: "screen=administration&tab=registry", heading: "Device registry" },
   { screen: "administration", tabList: "Access and identity sections", labels: ["Local identities", "Sessions", "Roles and permissions", "LDAP settings"],
     query: "screen=administration&tab=access", heading: "Access and identity" },
-  { screen: "administration", tabList: "Platform sections", labels: ["System", "Scheduled jobs", "Notifications", "Log collection settings"],
-    query: "screen=administration&tab=platform", heading: "Platform" },
+  { screen: "administration", tabList: "Notifications and logging sections", labels: ["Notifications", "Log collection"],
+    query: "screen=administration&tab=platform", heading: "Notifications and logging" },
   // Trace is two modes of one screen; Changes is two views of one question (C3).
   { screen: "trace", tabList: "Trace modes", labels: ["Topology path", "Policy rule lookup"] },
   { screen: "changes", tabList: "Changes views", labels: ["Timeline", "Policy rule revisions"] },
@@ -49,7 +49,7 @@ export const SCREEN_HEADINGS: Record<ScreenId, string> = {
 export const ADMIN_PAGES: readonly { readonly query: string; readonly heading: string }[] = [
   { query: "screen=administration&tab=registry", heading: "Device registry" },
   { query: "screen=administration&tab=access", heading: "Access and identity" },
-  { query: "screen=administration&tab=platform", heading: "Platform" },
+  { query: "screen=administration&tab=platform", heading: "Notifications and logging" },
   { query: "screen=administration&tab=audit", heading: "Audit log" },
   { query: "screen=administration&tab=product", heading: "Delivery plan" },
 ];

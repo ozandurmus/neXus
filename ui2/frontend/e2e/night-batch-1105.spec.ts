@@ -4,9 +4,9 @@ import { test, expect, visit } from "./fixtures";
 // role (Collect menu items, Collect logs now, fleet log collection) is proven by the vitest integration tests; here
 // the aiview persona must NOT be offered those actions.
 
-test("aiview: Operations > System health offers no fleet log collection action", async ({ page, safety }) => {
+test("aiview: Operations > Device health offers no fleet log collection action", async ({ page, safety }) => {
   await visit(page, "screen=operations", "Operations");
-  await page.getByRole("tablist", { name: "Operations sections" }).getByRole("tab", { name: "System health", exact: true }).click();
+  await page.getByRole("tablist", { name: "Operations sections" }).getByRole("tab", { name: "Device health", exact: true }).click();
   await safety.checkpoint();
   await expect(page.getByRole("button", { name: /Collect logs \(all supported devices\)/ })).toHaveCount(0);
 });
@@ -37,11 +37,11 @@ test("Jobs: every listed row names its target (a masked name or an explicit 'No 
   await safety.checkpoint();
 });
 
-test("Operations System health and the Changes timeline reach a settled state (no endless loader)", async ({ page, safety }) => {
+test("Operations Device health and the Changes timeline reach a settled state (no endless loader)", async ({ page, safety }) => {
   await visit(page, "screen=operations", "Operations");
-  await page.getByRole("tablist", { name: "Operations sections" }).getByRole("tab", { name: "System health", exact: true }).click();
+  await page.getByRole("tablist", { name: "Operations sections" }).getByRole("tab", { name: "Device health", exact: true }).click();
   await safety.checkpoint(); // waits for all reads to finish
-  await expect(page.getByRole("tabpanel", { name: "System health", exact: true }).getByRole("progressbar")).toHaveCount(0);
+  await expect(page.getByRole("tabpanel", { name: "Device health", exact: true }).getByRole("progressbar")).toHaveCount(0);
   // The change feed moved from Operations to the Changes screen (UI review 2026-11-05, C3).
   await visit(page, "screen=changes", "Changes");
   await safety.checkpoint();
@@ -50,9 +50,10 @@ test("Operations System health and the Changes timeline reach a settled state (n
 
 // Scheduled jobs (2026-11-10): every signed-in role reads the family list; only Security Admin and Operation Admin are
 // offered a switch. The aiview persona must see the six families, no control, and no change reason.
-test("aiview: Administration > Platform > Scheduled jobs is read-only and withholds the change reason", async ({ page, safety }) => {
-  await visit(page, "screen=administration&tab=platform&section=scheduled-jobs", "Platform");
-  const section = page.getByRole("tabpanel", { name: "Scheduled jobs" }).getByRole("region", { name: "Scheduled jobs", exact: true });
+test("aiview: Operations > Scheduled jobs is read-only and withholds the change reason", async ({ page, safety }) => {
+  // PO 2026-11-13 (F2): the panel moved from Administration > Platform; the old address is rewritten to this one.
+  await visit(page, "screen=operations&tab=schedules", "Operations");
+  const section = page.getByRole("tabpanel", { name: "Scheduled jobs", exact: true });
   const families = section.getByRole("list", { name: "Scheduled job families" });
   await expect(families).toBeVisible();
   await safety.checkpoint();
