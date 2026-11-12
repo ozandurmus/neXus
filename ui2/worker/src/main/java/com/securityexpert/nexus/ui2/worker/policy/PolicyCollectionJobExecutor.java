@@ -145,9 +145,20 @@ public final class PolicyCollectionJobExecutor {
         java.time.Instant jobStart = completeness == null ? java.time.Instant.now() : completeness.now();
         java.util.function.BooleanSupplier lease = () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10));
         PolicySnapshotRepository.Stored[] latest = {null};
+        // Rule-complete snapshots that dropped sharply against the stored one wait for the run's change evidence.
+        Map<String, Held> held = new LinkedHashMap<>();
         java.util.function.Consumer<com.securityexpert.nexus.ui2.policy.PolicySnapshot> publish = snapshot -> {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.checkPublication();
             var stored = stored(snapshot);
+            if (snapshot.ruleComplete()) {
+                var before = repository.ruleFacts(snapshot.metadata().id());
+                int after = snapshot.ruleCount();
+                if (before.isPresent() && before.get().ruleComplete() && sharpDrop(before.get().rules(), after)) {
+                    held.put(snapshot.metadata().id(), new Held(stored, snapshot.metadata().containerId(), before.get().rules(), after));
+                    return;
+                }
+                held.remove(snapshot.metadata().id());
+            }
             if (!repository.checkpoint(jobId, epoch, stored, ACTOR)) throw PolicyCollectionTrace.failure("LEASE_LOST");
             latest[0] = stored;
         };
@@ -164,6 +175,8 @@ public final class PolicyCollectionJobExecutor {
             recordGaps(jobId, epoch, failures);
             recordRun(jobId, epoch, request.get(), run.get().vendor(), runStarted);
             String reason = failures.stream().map(f -> f.layerRef() + ": " + f.reason()).findFirst().orElse("");
+            String drop = resolveHeld(jobId, epoch, held, latest);
+            if (!drop.isEmpty()) return finish(jobId, epoch, attempt, latest[0], reason.isEmpty() ? drop : drop + "; " + reason, true);
             return finish(jobId, epoch, attempt, latest[0], reason, false);
         } catch (Exception incomplete) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(incomplete);
@@ -179,8 +192,43 @@ public final class PolicyCollectionJobExecutor {
                 try { completeness.afterCollection(run.get(), request.get().withLease(epoch), observations, jobStart, lease, false); }
                 catch (RuntimeException ignored) { com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(ignored); }
             }
+            if (!held.isEmpty()) com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note",
+                "POLICY_RULE_DROP_HELD_NOT_PUBLISHED packages=" + held.size());
             return finish(jobId, epoch, attempt, latest[0], reason, PolicyCollectionTrace.fatal(incomplete));
         }
+    }
+
+    /** A rule-complete snapshot held back by the rule-drop guard: the container whose change evidence decides it. */
+    record Held(PolicySnapshotRepository.Stored stored, String container, int before, int after) {}
+
+    /**
+     * Sharp drop: more than 10 % and at least {@link #DROP_MIN_RULES} rules fewer than the stored rule-complete snapshot
+     * (PO 2026-11-13). The absolute floor keeps small policies' ordinary edits out of the guard.
+     */
+    static boolean sharpDrop(int before, int after) {
+        return before - after >= DROP_MIN_RULES && after * 10L < before * 9L;
+    }
+    static final int DROP_MIN_RULES = 20;
+
+    /**
+     * Publishes each held snapshot whose container this job recorded as CHANGED (a new CP published session or PAN
+     * content version: the drop may be a real deletion); refuses the rest, so the last rule-complete snapshot stays
+     * current. Returns the job failure reason for refused snapshots (counts only), or empty. A failed job reaches the
+     * job-failure syslog and mail routes.
+     */
+    private String resolveHeld(String jobId, long epoch, Map<String, Held> held, PolicySnapshotRepository.Stored[] latest) {
+        List<Held> refused = new ArrayList<>();
+        for (Held h : held.values()) {
+            boolean changed = completeness != null && repository.revisionState(jobId, h.container()).filter("CHANGED"::equals).isPresent();
+            if (!changed) { refused.add(h); continue; }
+            if (!repository.checkpoint(jobId, epoch, h.stored(), ACTOR)) throw PolicyCollectionTrace.failure("LEASE_LOST");
+            latest[0] = h.stored();
+            com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note",
+                "POLICY_RULE_DROP_CONFIRMED rules=" + h.before() + "->" + h.after());
+        }
+        if (refused.isEmpty()) return "";
+        Held worst = refused.stream().max(Comparator.comparingInt(h -> h.before() - h.after())).orElseThrow();
+        return "POLICY_RULE_DROP_UNCONFIRMED packages=" + refused.size() + " rules=" + worst.before() + "->" + worst.after();
     }
 
     static final int RUN_RECORD_STEP = -10_000;
@@ -244,7 +292,7 @@ public final class PolicyCollectionJobExecutor {
                 return new JobOutcome.ZombieStopped();
             return new JobOutcome.Cancelled();
         }
-        if (!reason.isEmpty() && latest != null) reason = "PARTIAL_SNAPSHOT " + reason;
+        if (!reason.isEmpty() && latest != null && !reason.startsWith("POLICY_RULE_DROP_")) reason = "PARTIAL_SNAPSHOT " + reason;
         if (!reason.isEmpty() && (fatal || latest == null)) {
             if (!repository.publish(jobId, epoch, List.of(), ACTOR, reason)) return new JobOutcome.ZombieStopped();
             return new JobOutcome.Failed(reason);

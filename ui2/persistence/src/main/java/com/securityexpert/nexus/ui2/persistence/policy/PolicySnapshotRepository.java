@@ -117,16 +117,39 @@ public final class PolicySnapshotRepository {
                 + "order by collected_at desc, revision_id desc limit 200 offset {2}", policyId, ruleId, (long) page * 200)
                 .map(row -> row.get("revision", String.class)));
     }
-    /** Future approved collectors publish a complete parse atomically; older runs cannot replace newer ones. */
-    public void save(Stored stored, String actorFingerprint, String actionId) {
-        PolicyJsonWrite.guarded("PolicySnapshotRepository.save", "SNAPSHOT_UPSERT_HISTORY_TRIGGER",
+    /**
+     * SQL twin of {@code PolicySnapshot#ruleComplete} over a stored snapshot document: true when some failure is neither
+     * advisory ({@code PolicySnapshot.ADVISORY_REASONS}) nor the explicit UNKNOWN NAT part ({@code PolicySnapshot#unknownPart}),
+     * i.e. some rules of the policy are missing (an in-progress checkpoint, a lost layer). Reads only the failures array.
+     */
+    static String gap(String document) {
+        return "exists (select 1 from jsonb_array_elements(coalesce(" + document + "->'failures', '[]'::jsonb)) f "
+            + "where not (coalesce(f->>'reason', '') in ('POLICY_HITS_UNAVAILABLE', 'POLICY_DB_INVENTORY_WRITE_FAILED') "
+            + "or (f->>'reason' = 'VENDOR_NAME_NOT_UNIQUE' and f->>'layerName' = 'NAT')))";
+    }
+    /**
+     * Older runs cannot replace newer ones, and a snapshot with missing rules never replaces one that has every rule:
+     * a running collection's checkpoint, or a run that lost a layer, leaves the last rule-complete snapshot current
+     * (2026-11-13: CP checkpoints made a 9,407-rule policy read as 6,262 rules for the length of every collection).
+     * A gapped snapshot still replaces a gapped or missing one, so a first or recovering collection stays visible.
+     * Returns whether the row was written.
+     */
+    public boolean save(Stored stored, String actorFingerprint, String actionId) {
+        return PolicyJsonWrite.guarded("PolicySnapshotRepository.save", "SNAPSHOT_UPSERT_HISTORY_TRIGGER",
             PolicyJsonWrite.bytes(stored.metadataJson(), stored.snapshotJson()),
-            () -> new AuditedTransactionBoundary(transactions).inTransaction(actorFingerprint, actionId, db -> {
+            () -> new AuditedTransactionBoundary(transactions).inTransaction(actorFingerprint, actionId, db ->
             db.execute("insert into policy_snapshot(policy_id, collected_at, metadata, snapshot) values ({0}, {1}::timestamptz, {2}::jsonb, {3}::jsonb) "
                     + "on conflict (policy_id) do update set collected_at = excluded.collected_at, metadata = excluded.metadata, snapshot = excluded.snapshot "
-                    + "where policy_snapshot.collected_at < excluded.collected_at",
-                    stored.id(), stored.collectedAt(), PolicyJsonWrite.json(db, stored.metadataJson()), PolicyJsonWrite.json(db, stored.snapshotJson()));
-            return null;
-        }));
+                    + "where policy_snapshot.collected_at < excluded.collected_at "
+                    + "and (not " + gap("excluded.snapshot") + " or " + gap("policy_snapshot.snapshot") + ")",
+                    stored.id(), stored.collectedAt(), PolicyJsonWrite.json(db, stored.metadataJson()), PolicyJsonWrite.json(db, stored.snapshotJson())) > 0));
+    }
+    /** Rule count of the stored snapshot and whether it has every rule; empty when none is stored. */
+    public record RuleFacts(int rules, boolean ruleComplete) {}
+    public Optional<RuleFacts> ruleFacts(String policyId) {
+        return transactions.inTransaction(db -> db.fetch("select coalesce((select sum(jsonb_array_length(coalesce(s->'rules', '[]'::jsonb))) "
+                + "from jsonb_array_elements(coalesce(snapshot->'sections', '[]'::jsonb)) s), 0)::int as rules, "
+                + "not " + gap("snapshot") + " as complete from policy_snapshot where policy_id = {0}", policyId)
+            .stream().findFirst().map(r -> new RuleFacts(r.get("rules", Integer.class), Boolean.TRUE.equals(r.get("complete", Boolean.class)))));
     }
 }
