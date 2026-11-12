@@ -8,7 +8,7 @@ export function PacketAnalysisPreview() {
     .map(stage => ({ stage, verdict: "unknown", reason: "engine not yet ported" }));
   return (
     <ScreenRoot screenType="tool">
-      <ScreenHeader title="Packet Analysis" subtitle="OBJ-TANGO-04 · 2 captures · expires 2026-10-22"
+      <ScreenHeader title="Packet analysis" subtitle="OBJ-TANGO-04 · 2 captures · expires 2026-10-22"
         actions={<StatusChip tone="mem" label="Masked view" />} />
       <ResultView report={{ job_id: "preview", case_id: "preview", projection: "masked",
         summary: { verdict: "unknown", reason: "engine not yet ported", stages, capture_count: 2, total_bytes: 268435456, finding_count: 0 } }} />

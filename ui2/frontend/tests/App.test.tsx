@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
-import { DESTINATIONS, DRAWER_GROUPS } from "../src/shell/NavigationRail";
+import { NAV_ENTRIES, NAV_LEAVES } from "../src/shell/navModel";
 
 // Deliberately distinct from any navigation-rail label ("Compliance" and
 // "Operations" both also name a collapsed rail item, so the screen's own
@@ -53,21 +53,19 @@ describe("the UI 2.0 shell navigation", () => {
     expect(screen.queryByText(/Search devices, settings, evidence/)).toBeNull();
   });
 
-  it("renders the five-verb rail in order, Administration last", () => {
+  it("renders the nine entries of the one navigation model in order, Administration last", () => {
     render(<App />);
     const rail = screen.getByRole("navigation", { name: "Primary" });
     // Reports R1: Reports sits directly under Overview (REPORTS_R1_CONTRACT.md "UI").
-    expect(DESTINATIONS.map((d) => d.label)).toEqual(["Overview", "Reports", "Devices", "Compliance", "Policy", "Trace", "Changes", "Backups", "Operations", "Packets", "Sanitizer", "Diagnostics", "Offline analysis", "Administration"]);
-    for (const label of ["Overview", "Reports", "Devices", "Compliance", "Policy", "Trace", "Changes", "Backups", "Operations", "Tools", "Administration"]) {
-      expect(within(rail).getByText(label)).toBeInTheDocument();
-    }
-    // Packets, Sanitizer, Diagnostics and Offline analysis live behind the one Tools entry; the wide rail has no drawer
-    expect(within(rail).queryByText("Packets")).toBeNull();
-    expect(within(rail).queryByText("Diagnostics")).toBeNull();
+    expect(NAV_ENTRIES.map((e) => e.label)).toEqual(["Overview", "Reports", "Devices", "Compliance and security", "Policy and changes", "Backups", "Operations", "Tools", "Administration"]);
+    for (const entry of NAV_ENTRIES) expect(within(rail).getByText(entry.label)).toBeInTheDocument();
+    // The four tools are listed in place (no popup); Administration's pages open with its group. The wide sidebar has no drawer.
+    for (const label of ["Packet analysis", "Data sanitizer", "Diagnostics", "Offline analysis"]) expect(within(rail).getByRole("link", { name: label })).toBeInTheDocument();
+    expect(within(rail).queryByText("Device registry")).toBeNull();
     expect(screen.queryByRole("button", { name: "Open navigation" })).toBeNull();
   });
 
-  it("opens the drawer only below the width rule, with every group and leaf, and closes it again", () => {
+  it("opens the drawer only below the width rule, with every entry of the same model, and closes it again", () => {
     narrow();
     render(<App />);
     const rail = screen.getByRole("navigation", { name: "Primary" });
@@ -75,29 +73,19 @@ describe("the UI 2.0 shell navigation", () => {
     fireEvent.click(within(rail).getByRole("button", { name: "Open navigation" }));
 
     const drawer = screen.getByRole("navigation", { name: "Primary navigation drawer" });
-    expect(within(drawer).getByText("Overview")).toBeInTheDocument();
-    for (const g of DRAWER_GROUPS) {
-      expect(within(drawer).getByText(g.header)).toBeInTheDocument();
-      for (const leaf of g.leaves) {
-        expect(within(drawer).getByText(leaf.label)).toBeInTheDocument();
-      }
-    }
+    fireEvent.click(within(drawer).getByRole("button", { name: "Administration" }));
+    expect(within(drawer).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")])).toEqual(NAV_LEAVES.map((l) => [l.label, l.href]));
     fireEvent.click(within(drawer).getByRole("button", { name: "Close navigation" }));
     expect(screen.getByRole("navigation", { name: "Primary" })).toBeInTheDocument();
   });
 
-  it("marks a leaf the shell cannot yet serve as disabled rather than hiding it", () => {
+  it("lists no entry the shell cannot serve: nothing in the drawer is disabled or a placeholder (D-NAV6b)", () => {
     narrow();
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
     const drawer = screen.getByRole("navigation", { name: "Primary navigation drawer" });
-
-    const unbuilt = DRAWER_GROUPS.flatMap((g) => g.leaves).filter((l) => !l.href);
-    expect(unbuilt.length).toBeGreaterThan(0);
-    for (const leaf of unbuilt) {
-      const item = within(drawer).getByText(leaf.label).closest("[aria-disabled]");
-      expect(item).not.toBeNull();
-    }
+    expect(drawer.querySelector("[aria-disabled]")).toBeNull();
+    expect(within(drawer).queryByText("Discovery")).toBeNull();
   });
 });
 

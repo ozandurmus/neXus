@@ -1,4 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
+
+/** Announced on `window` after {@link writeUrlParams} changed the address, so the navigation can follow a tab switch. */
+export const URL_CHANGE_EVENT = "nx:urlchange";
 
 /** A query parameter of the current page (the Overview links carry their filter this way); null when absent. */
 export function urlParam(name: string): string | null {
@@ -25,6 +28,7 @@ export function writeUrlParams(changes: Readonly<Record<string, string | null>>,
     if (url.toString() === window.location.href) return;
     if (mode === "push") window.history.pushState(null, "", url.toString());
     else window.history.replaceState(null, "", url.toString());
+    window.dispatchEvent(new Event(URL_CHANGE_EVENT));
   } catch {
     // Not a browser, or the origin refuses the history API: the in-memory selection still works.
   }
@@ -37,4 +41,18 @@ export function useUrlParamSync(name: string, onChange: (value: string | null) =
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, [name, onChange]);
+}
+
+function subscribeToAddress(onChange: () => void): () => void {
+  window.addEventListener("popstate", onChange);
+  window.addEventListener(URL_CHANGE_EVENT, onChange);
+  return () => {
+    window.removeEventListener("popstate", onChange);
+    window.removeEventListener(URL_CHANGE_EVENT, onChange);
+  };
+}
+
+/** The current query string, re-read when the browser navigates its history or a screen writes a parameter. */
+export function useLocationSearch(): string {
+  return useSyncExternalStore(subscribeToAddress, () => window.location.search, () => "");
 }

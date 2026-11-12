@@ -38,7 +38,7 @@ export interface HeaderFact {
   readonly title?: string;
 }
 
-/** Vendors whose clusters have a readiness check (Operations › HA & readiness). */
+/** Vendors whose clusters have a readiness check (Operations › HA and readiness). */
 export const READINESS_VENDORS: ReadonlySet<string> = new Set(["check_point", "palo_alto"]);
 
 export const complianceHref = (vendor: string | null | undefined) =>

@@ -165,7 +165,7 @@ export function SanitizerScreen() {
   return (
     <ScreenRoot screenType="tool">
       {/* Tool page (UI review 2026-10-18 §3, roadmap 3.3): the contract in two sentences -- what it does, what it never does. */}
-      <ScreenHeader title="Data Sanitizer" subtitle={SANITIZER_CONTRACT} />
+      <ScreenHeader title="Data sanitizer" subtitle={SANITIZER_CONTRACT} />
       {error && <Alert severity="error">{error}</Alert>}
       {!info && !error && <Typography role="status">Loading…</Typography>}
       {limits && !limits.vault_available && <Alert severity="warning">

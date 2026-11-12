@@ -1,6 +1,6 @@
 import { SshHostKeyPanel } from "./SshHostKeyPanel";
-import { useState, useEffect, useMemo, useRef } from "react";
-import { urlParam } from "../shell/urlParams";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { urlParam, useUrlParamSync, writeUrlParams } from "../shell/urlParams";
 import { inFreshnessBucket } from "../shell/freshness";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
@@ -1041,6 +1041,10 @@ export function matchesForm(device: Pick<DeviceSummary, "cluster_member_ref" | "
 
 export function InventoryScreen() {
   const [lifecycleView, setLifecycleView] = useState(() => urlParam("view") === "lifecycle");
+  // The view is part of the address (`?screen=inventory&view=lifecycle`), so it can be bookmarked, the browser's Back
+  // leaves it, and the navigation lights "Lifecycle and security" rather than "Devices" (navigation redesign 2026-11-12).
+  const showLifecycle = (on: boolean) => { setLifecycleView(on); writeUrlParams({ view: on ? "lifecycle" : null }, "push"); };
+  useUrlParamSync("view", useCallback((value: string | null) => setLifecycleView(value === "lifecycle"), []));
   const { data, error, refresh } = useFetchOnMount(
     () => listDevices().then((result) => result.devices ?? []),
     describeApiError,
@@ -1225,7 +1229,7 @@ export function InventoryScreen() {
 
   if (lifecycleView) return <ScreenRoot screenType="list">
     <ScreenHeader title="Lifecycle and security" subtitle="End of support, licenses, support contracts and Live Patch"
-      actions={<M3Button emphasis="tonal" onClick={() => setLifecycleView(false)}>Back to inventory</M3Button>} />
+      actions={<M3Button emphasis="tonal" onClick={() => showLifecycle(false)}>Back to inventory</M3Button>} />
     <LifecycleScreen />
   </ScreenRoot>;
 
@@ -1235,7 +1239,7 @@ export function InventoryScreen() {
   // The same five fleet controls whether the landing or an object is open; only the chrome around them changes.
   const actions = (
     <>
-      <M3Button emphasis="tonal" onClick={() => setLifecycleView(true)}>Lifecycle and security</M3Button>
+      <M3Button emphasis="tonal" onClick={() => showLifecycle(true)}>Lifecycle and security</M3Button>
       <M3Button emphasis="tonal" icon="download" disabled={!devices || devices.length === 0}
         onClick={() => downloadText(`devices-${new Date().toISOString().replace(/[:.]/g, "-")}.csv`, inventoryCsv(sortedDevices))}>
         Export inventory

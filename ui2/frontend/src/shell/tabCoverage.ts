@@ -6,8 +6,9 @@ export const TAB_COVERAGE: readonly { screen: ScreenId; tabList: string; labels:
   // Reports R1 (REPORTS_R1_CONTRACT.md "UI"): three tabs.
   { screen: "reports", tabList: "Reports sections", labels: ["Catalogue", "Run & preview", "History"] },
   { screen: "inventory", tabList: "Lifecycle view", labels: ["Fleet", "Catalog", "Vulnerabilities"] },
+  // Navigation redesign 2026-11-12: "HA and readiness" (was "HA & readiness"), "Packet analysis", "Data sanitizer".
   // Diagnostics moved to Tools and the Change feed to the Changes screen (UI review 2026-11-05, C3/C4).
-  { screen: "operations", tabList: "Operations sections", labels: ["HA & readiness", "Jobs", "System health"] },
+  { screen: "operations", tabList: "Operations sections", labels: ["HA and readiness", "Jobs", "System health"] },
   // Administration is four pages and a Product heading (C4); the former sub-pages are sections inside them.
   { screen: "administration", tabList: "Administration pages", labels: ["Device Registry", "Access & Identity", "Platform", "Audit"] },
   { screen: "administration", tabList: "Product", labels: ["Delivery plan"] },
@@ -28,6 +29,6 @@ export const TAB_COVERAGE: readonly { screen: ScreenId; tabList: string; labels:
 export const BACKUP_SECTIONS = ["Backup-capable", "Targets", "Targets without archive", "Large backups"] as const;
 export const SCREEN_HEADINGS: Record<ScreenId, string> = {
   policy: "Policy", overview: "Overview", reports: "Reports", inventory: "Devices", configuration: "Devices", compliance: "Compliance",
-  backups: "Backups", operations: "Operations", administration: "Administration", packet_analysis: "Packet Analysis",
-  sanitizer: "Data Sanitizer", trace: "Trace", changes: "Changes", diagnostics: "Diagnostics", offline_analysis: "Offline analysis",
+  backups: "Backups", operations: "Operations", administration: "Administration", packet_analysis: "Packet analysis",
+  sanitizer: "Data sanitizer", trace: "Trace", changes: "Changes", diagnostics: "Diagnostics", offline_analysis: "Offline analysis",
 };

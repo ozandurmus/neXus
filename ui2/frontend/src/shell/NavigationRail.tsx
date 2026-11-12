@@ -8,281 +8,249 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { m3 } from "../theme/m3Theme";
-import { Icon, type IconName } from "./Icon";
+import { Icon } from "./Icon";
 import type { ScreenId } from "./types";
 import { NexusMark } from "../brand/NexusMark";
 import { NexusWordmark } from "../brand/NexusWordmark";
 import { useSession } from "../auth/SessionContext";
-import { usePreferenceFlag } from "./preference";
+import { readPreference, writePreference } from "./preference";
+import { useLocationSearch } from "./urlParams";
+import {
+  activeLeafId, formatGroupChoices, groupOpen, leafLocked, parseGroupChoices, visibleEntries,
+  type NavEntry, type NavGroup, type NavLeaf, type NavSessionGrants,
+} from "./navModel";
 
 /**
- * The rail is the product principle written down the left edge (UI product review 2026-10-18, §2.3 / roadmap 1.1):
- * Overview, then SEE Devices, VERIFY Compliance and Policy, TRACE Trace and Changes, RECOVER Backups, OPERATE Operations
- * and Tools, with Administration at the bottom. The group labels make the order explain itself. Every route keeps a home
- * and an active item. TRACE (UI review 2026-11-05, C3) holds the two questions "can A reach B" (Trace: topology path or
- * policy rule lookup) and "what changed" (Changes: the feed and the policy rule revisions together). `Tools` is one rail
- * entry whose destinations (Packets, Sanitizer, Diagnostics, Offline analysis; C4) open from a small menu, because all four
- * are ad hoc, file-in or single-device engineering tools rather than planes of the estate.
+ * The left navigation (NAVIGATION_REDESIGN_2026_11_12.md, PO approved 2026-11-12). One model, `navModel.ts`, three
+ * renderings:
  *
- * Width rule: from {@link DRAWER_BELOW_PX} up the rail is persistent with its labels and groups and there is no drawer
- * at all. Below that width the rail shrinks to icons and a `≡` button opens the same list as a temporary drawer -- the
- * old 360 px expanded drawer is gone from the wide layout, where it only repeated the rail. From that width the viewer
- * may also fold the rail to its icons (PO 2026-10-20, `Collapse menu`); the choice is remembered per viewer and the
- * labels come back on hover. Below the width the drawer behaviour is unchanged.
+ * - **Expanded sidebar**, {@link SIDEBAR_PX} px, from {@link DRAWER_BELOW_PX} px up: icon and label per top-level
+ *   entry; a group opens and closes in place by its header. Every group starts open except Administration; the
+ *   viewer's choice is remembered, and the group that holds the open page is always open.
+ * - **Folded**, {@link FOLDED_PX} px: the same entries as icons, each named for the tooltip and the screen reader. A
+ *   link icon navigates; a group icon opens a small menu of its children. The viewer folds and unfolds with
+ *   `Collapse menu` / `Expand menu` (PO 2026-10-20, remembered as `nx.rail.collapsed`); between {@link DRAWER_BELOW_PX}
+ *   and {@link EXPANDED_BY_DEFAULT_PX} px the sidebar starts folded unless the viewer chose otherwise.
+ * - **Narrow**, below {@link DRAWER_BELOW_PX} px: the folded icons plus `Open navigation`, whose drawer renders the
+ *   expanded list itself.
+ *
+ * Exactly one entry is the current page (`aria-current="page"`): the page itself, not its group. Folding changes
+ * density only, never the entry set (D-NAV2). What is listed follows the session's plane list (the server decides
+ * every request); Administration's pages are listed for every session and locked where it may not use them.
  */
 export const DRAWER_BELOW_PX = 1100;
+export const EXPANDED_BY_DEFAULT_PX = 1280;
+export const SIDEBAR_PX = 248;
+export const FOLDED_PX = 56;
 
-/** The product groups, in the order of the principle. `null` means the item sits outside every group (Overview). */
-export type RailGroup = "SEE" | "VERIFY" | "TRACE" | "RECOVER" | "OPERATE";
+const COLLAPSED_KEY = "nx.rail.collapsed";
+const GROUPS_KEY = "nx.nav.groups";
 
-export interface RailDestination {
-  readonly id: string;
-  readonly label: string;
-  readonly icon: IconName;
-  readonly screen: ScreenId;
-  readonly requiredPlane?: string;
+const LOCK_TITLE = "Restricted for this account";
+
+function LockMark() {
+  return (
+    <Box component="span" data-nav-lock title={LOCK_TITLE} sx={{ ml: "auto", display: "inline-flex", color: "inherit", opacity: 0.8 }}>
+      <Icon name="lock" size={14} />
+    </Box>
+  );
 }
 
-export interface RailEntry {
-  readonly id: string;
-  readonly label: string;
-  readonly icon: IconName;
-  readonly group: RailGroup | null;
-  /** A single destination ... */
-  readonly screen?: ScreenId;
-  readonly requiredPlane?: string;
-  /** ... or a menu of destinations (Tools): active when any of them is the open screen. */
-  readonly destinations?: readonly RailDestination[];
+const ROW = { display: "flex", alignItems: "center", boxSizing: "border-box", width: "100%", textDecoration: "none", border: 0, cursor: "pointer",
+  font: "inherit", textAlign: "left", whiteSpace: "nowrap", letterSpacing: "0.1px",
+  "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: -2 } } as const;
+
+/** The labelled list: the expanded sidebar's body and the drawer's body are this one component. */
+function NavList({ entries, activeId, session, choices, onToggle }: {
+  readonly entries: readonly NavEntry[];
+  readonly activeId: string;
+  readonly session: NavSessionGrants | null;
+  readonly choices: Readonly<Record<string, boolean>>;
+  readonly onToggle: (group: NavGroup, open: boolean) => void;
+}) {
+  const top = (on: boolean, strong: boolean) => ({ ...ROW, height: 36, gap: "10px", pl: 1.5, pr: 1.25, borderRadius: "18px", fontSize: 14,
+    fontWeight: strong ? 600 : 500, bgcolor: on ? m3.secondaryContainer : "transparent",
+    color: on ? m3.onSecondaryContainer : strong ? m3.onSurface : m3.onSurfaceVar,
+    "&:hover": { bgcolor: on ? m3.secondaryContainer : m3.sc } });
+  const child = (on: boolean) => ({ ...ROW, height: 32, gap: 1, pl: "42px", pr: 1.5, borderRadius: "16px", fontSize: 13.5, fontWeight: 500,
+    bgcolor: on ? m3.secondaryContainer : "transparent", color: on ? m3.onSecondaryContainer : m3.onSurfaceVar,
+    "&:hover": { bgcolor: on ? m3.secondaryContainer : m3.sc } });
+  return (
+    <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
+      {entries.map((entry) => {
+        // Administration sits apart, after a hairline: it is about the product itself, not about the estate.
+        const divider = entry.id === "administration"
+          ? <Box component="li" key="divider" role="presentation" sx={{ height: "1px", bgcolor: m3.outlineVar, mx: 1.5, my: 1 }} /> : null;
+        if (entry.kind === "link") {
+          const on = entry.id === activeId;
+          return (
+            <Box component="li" key={entry.id}>
+              <Box component="a" href={entry.href} aria-current={on ? "page" : undefined} sx={top(on, false)}>
+                <Icon name={entry.icon} size={20} />
+                <span>{entry.label}</span>
+              </Box>
+            </Box>
+          );
+        }
+        const holdsActive = entry.children.some((c) => c.id === activeId);
+        const open = groupOpen(entry, choices, activeId);
+        const listId = `nav-group-${entry.id}`;
+        return [divider, (
+          <Box component="li" key={entry.id}>
+            <Box component="button" type="button" aria-expanded={open} aria-controls={listId} data-holds-current={holdsActive ? "true" : undefined}
+              onClick={() => onToggle(entry, !open)} sx={{ ...top(false, holdsActive), bgcolor: "transparent" }}>
+              <Icon name={entry.icon} size={20} />
+              <span>{entry.label}</span>
+              <Box component="span" sx={{ ml: "auto", display: "inline-flex" }}><Icon name={open ? "chevron-down" : "chevron-right"} size={16} /></Box>
+            </Box>
+            {open && (
+              <Box component="ul" id={listId} aria-label={entry.label} sx={{ listStyle: "none", m: 0, p: 0, pt: "2px", display: "flex", flexDirection: "column", gap: "2px" }}>
+                {entry.children.map((leaf) => {
+                  const on = leaf.id === activeId;
+                  const locked = leafLocked(leaf, session);
+                  return (
+                    <Box component="li" key={leaf.id}>
+                      <Box component="a" href={leaf.href} aria-current={on ? "page" : undefined} data-locked={locked ? "true" : undefined} sx={child(on)}>
+                        <span>{leaf.label}</span>
+                        {locked && <LockMark />}
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
+            )}
+          </Box>
+        )];
+      })}
+    </Box>
+  );
 }
-
-export const PACKETS: RailDestination = { id: "packet-analysis", label: "Packets", icon: "rows", screen: "packet_analysis", requiredPlane: "PacketAnalysis" };
-export const SANITIZER: RailDestination = { id: "sanitizer", label: "Sanitizer", icon: "lock", screen: "sanitizer", requiredPlane: "Sanitizer" };
-// UI review 2026-11-05, C4: single-device diagnostics (a tab of Operations) and the SIEM-export check (a tab of Policy) are Tools.
-// Diagnostics had no plane gate as a tab of Operations; Offline analysis follows the Policy plane it was a tab of.
-export const DIAGNOSTICS: RailDestination = { id: "diagnostics", label: "Diagnostics", icon: "operations", screen: "diagnostics" };
-export const OFFLINE_ANALYSIS: RailDestination = { id: "offline-analysis", label: "Offline analysis", icon: "list", screen: "offline_analysis", requiredPlane: "Policy" };
-
-/** The rail, top to bottom; Administration is rendered last, at the bottom edge. */
-export const RAIL_ENTRIES: readonly RailEntry[] = [
-  { id: "overview", label: "Overview", icon: "grid", group: null, screen: "overview" },
-  // Reports R1 (REPORTS_R1_CONTRACT.md "UI"): a top-level entry directly under Overview, because it is executive-facing.
-  { id: "reports", label: "Reports", icon: "report", group: null, screen: "reports" },
-  { id: "devices", label: "Devices", icon: "devices", group: "SEE", screen: "inventory", requiredPlane: "Devices" },
-  { id: "compliance", label: "Compliance", icon: "compliance", group: "VERIFY", screen: "compliance", requiredPlane: "Compliance" },
-  { id: "policy", label: "Policy", icon: "policy", group: "VERIFY", screen: "policy", requiredPlane: "Policy" },
-  // Trace (C3): Path analysis (PATH_ANALYSIS_DESIGN.md §5, stage A5b) and Policy > Lookup as two modes of one screen. The path
-  // query follows the inventory read (open to every signed-in role, masked for aiview), so the entry carries no plane gate.
-  { id: "trace", label: "Trace", icon: "route", group: "TRACE", screen: "trace" },
-  // One Changes entry for the Change feed (was Operations) and the policy rule revisions (was Policy > Changes).
-  { id: "changes", label: "Changes", icon: "rows", group: "TRACE", screen: "changes" },
-  // The Product Owner's backup requirement asks for a left-hand Backup destination outright; RECOVER is its own verb.
-  { id: "backups", label: "Backups", icon: "backup", group: "RECOVER", screen: "backups" },
-  { id: "operations", label: "Operations", icon: "operations", group: "OPERATE", screen: "operations" },
-  // PO decision record 2026-10-15 (Packet Analysis) and DATA_SANITIZER_CONTRACT.md §3.1 (Data Sanitizer).
-  { id: "tools", label: "Tools", icon: "tools", group: "OPERATE", destinations: [PACKETS, SANITIZER, DIAGNOSTICS, OFFLINE_ANALYSIS] },
-];
-
-/**
- * Administration is on every route for every session (post-release review 2026-10-18, R4): it used to be gated on the
- * Admin plane, so a read-only session saw it only while already there and reached it from elsewhere only through `≡`.
- * The screen itself decides what a role may see (its registry, exclusions, trust and job-log tabs are readable); the
- * rail only has to say where it is. Its deep links in the drawer keep their plane gate.
- */
-export const ADMINISTRATION: RailEntry = { id: "admin", label: "Administration", icon: "admin", group: null, screen: "administration" };
-
-/** Kept for callers that list the rail's single destinations (tests, the shell): every entry with its own screen, Administration last. */
-export const DESTINATIONS: readonly RailDestination[] = [
-  ...RAIL_ENTRIES.flatMap((e) => (e.screen ? [{ id: e.id, label: e.label, icon: e.icon, screen: e.screen, requiredPlane: e.requiredPlane }] : e.destinations ?? [])),
-  { id: ADMINISTRATION.id, label: ADMINISTRATION.label, icon: ADMINISTRATION.icon, screen: ADMINISTRATION.screen!, requiredPlane: ADMINISTRATION.requiredPlane },
-];
-
-export interface DrawerLeaf {
-  readonly label: string;
-  /** A deep link (`?screen=...&tab=...`); a leaf without one is a destination the shell cannot serve yet and is shown disabled. */
-  readonly href?: string;
-  readonly screen?: ScreenId;
-  readonly requiredPlane?: string;
-}
-export interface DrawerGroup {
-  readonly header: string;
-  readonly screen?: ScreenId;
-  readonly requiredPlane?: string;
-  readonly leaves: readonly DrawerLeaf[];
-}
-
-/**
- * The narrow-width drawer: the rail's own list, with the sub-views the old drawer held re-homed under their screens
- * (`Jobs` is the Jobs tab of Operations; the Administration groups are its four pages). Nothing
- * the old drawer served is dropped; `Discovery`, which never had a screen, stays a disabled leaf under Devices.
- */
-export const DRAWER_GROUPS: readonly DrawerGroup[] = [
-  { header: "SEE", leaves: [
-    { label: "Devices", screen: "inventory", href: "?screen=inventory", requiredPlane: "Devices" },
-    { label: "Lifecycle and security", href: "?screen=inventory&view=lifecycle", screen: "inventory", requiredPlane: "Devices" },
-    { label: "Discovery", requiredPlane: "Devices" },
-  ] },
-  { header: "VERIFY", leaves: [
-    { label: "Compliance", screen: "compliance", href: "?screen=compliance", requiredPlane: "Compliance" },
-    { label: "Policy", screen: "policy", href: "?screen=policy", requiredPlane: "Policy" },
-  ] },
-  { header: "TRACE", leaves: [
-    { label: "Trace", screen: "trace", href: "?screen=trace" },
-    { label: "Changes", screen: "changes", href: "?screen=changes" },
-  ] },
-  { header: "RECOVER", leaves: [
-    { label: "Backups", screen: "backups", href: "?screen=backups" },
-  ] },
-  { header: "OPERATE", leaves: [
-    { label: "Operations", screen: "operations", href: "?screen=operations" },
-    { label: "Jobs", href: "?screen=operations&tab=jobs", screen: "operations" },
-    { label: "System health", href: "?screen=operations&tab=health", screen: "operations" },
-    { label: "Packets", screen: "packet_analysis", href: "?screen=packet_analysis", requiredPlane: "PacketAnalysis" },
-    { label: "Sanitizer", screen: "sanitizer", href: "?screen=sanitizer", requiredPlane: "Sanitizer" },
-    { label: "Diagnostics", screen: "diagnostics", href: "?screen=diagnostics" },
-    { label: "Offline analysis", screen: "offline_analysis", href: "?screen=offline_analysis", requiredPlane: "Policy" },
-  ] },
-  // The four Administration groups (C4) plus the Product heading; every page is reachable, the screen shows a locked panel
-  // where the session may not use it.
-  { header: "Administration", screen: "administration", leaves: [
-    { label: "Device Registry", href: "?screen=administration&tab=registry", screen: "administration", requiredPlane: "Admin" },
-    { label: "Access & Identity", href: "?screen=administration&tab=access", screen: "administration", requiredPlane: "Admin" },
-    { label: "Platform", href: "?screen=administration&tab=platform", screen: "administration", requiredPlane: "Admin" },
-    { label: "Audit", href: "?screen=administration&tab=audit", screen: "administration", requiredPlane: "Admin" },
-  ] },
-];
-
-function href(screen: ScreenId | undefined): string | undefined {
-  return screen ? `?screen=${screen}` : undefined;
-}
-
-const GROUP_LABEL = { fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", color: m3.onSurfaceVar, lineHeight: 1 } as const;
 
 export function NavigationRail({ active }: { readonly active: ScreenId }) {
-  // jsdom and server rendering have no matchMedia: the wide rail is the default there.
+  // jsdom and server rendering have no matchMedia: the wide, expanded sidebar is the default there.
   const wide = useMediaQuery(`(min-width:${DRAWER_BELOW_PX}px)`, { defaultMatches: true, noSsr: true });
+  const roomy = useMediaQuery(`(min-width:${EXPANDED_BY_DEFAULT_PX}px)`, { defaultMatches: true, noSsr: true });
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [collapsed, setCollapsed] = usePreferenceFlag("nx.rail.collapsed", false);
-  // Icons without words: the narrow layout, or the wide one folded by the viewer.
-  const iconsOnly = !wide || collapsed;
-  const [toolsAnchor, setToolsAnchor] = useState<HTMLElement | null>(null);
+  // The viewer's own fold choice, or none yet: without one the sidebar is folded where the screen is tight.
+  const [foldChoice, setFoldChoice] = useState<boolean | null>(() => {
+    const stored = readPreference(COLLAPSED_KEY);
+    return stored === null ? null : stored === "1";
+  });
+  const collapsed = foldChoice ?? !roomy;
+  const setCollapsed = (next: boolean) => { setFoldChoice(next); writePreference(COLLAPSED_KEY, next ? "1" : "0"); };
+  const [choices, setChoices] = useState(() => parseGroupChoices(readPreference(GROUPS_KEY)));
+  const onToggle = (group: NavGroup, open: boolean) => {
+    const next = { ...choices, [group.id]: open };
+    setChoices(next);
+    writePreference(GROUPS_KEY, formatGroupChoices(next));
+  };
+  const [menu, setMenu] = useState<{ readonly anchor: HTMLElement; readonly groupId: string } | null>(null);
+
   const session = useSession();
-  const permissions = session?.permissions;
+  const search = useLocationSearch();
+  const activeId = activeLeafId(active, search);
+  const entries = visibleEntries(session?.permissions, active);
+  // Icons without words: the narrow layout, or the wide one folded.
+  const iconsOnly = !wide || collapsed;
+  const menuGroup = menu ? entries.find((e): e is NavGroup => e.kind === "group" && e.id === menu.groupId) ?? null : null;
 
-  const restricted = Boolean(permissions && permissions.length > 0);
-  // The open screen always keeps its item (and so its active state), whatever the plane list says: the server decides
-  // what the screen may show, the rail never leaves the reader without a "you are here".
-  const granted = (plane: string | undefined, screen: ScreenId | undefined) =>
-    !restricted || !plane || permissions!.includes(plane) || (screen !== undefined && screen === active);
-  const entryShown = (e: RailEntry) => e.destinations
-    ? e.destinations.some((d) => granted(d.requiredPlane, d.screen))
-    : granted(e.requiredPlane, e.screen);
-  const entryActive = (e: RailEntry) => e.destinations ? e.destinations.some((d) => d.screen === active) : e.screen === active;
-
-  const entries = RAIL_ENTRIES.filter(entryShown);
-  const admin = ADMINISTRATION;
-  const toolsDestinations = (RAIL_ENTRIES.find((e) => e.id === "tools")?.destinations ?? []).filter((d) => granted(d.requiredPlane, d.screen));
-
-  const allowedDrawerGroups = DRAWER_GROUPS
-    .filter((g) => granted(g.requiredPlane, g.screen))
-    .map((g) => ({ ...g, leaves: g.leaves.filter((l) => granted(l.requiredPlane, l.screen)) }))
-    .filter((g) => g.screen || g.leaves.length > 0);
-
-  const openTools = (event: MouseEvent<HTMLElement>) => setToolsAnchor(event.currentTarget);
-
-  const railItem = (e: RailEntry) => {
-    const on = entryActive(e);
-    const shared = {
-      "aria-current": on ? ("page" as const) : undefined,
-      sx: { width: iconsOnly ? 48 : 80, textDecoration: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: "4px",
-        color: on ? m3.onSurface : m3.onSurfaceVar, cursor: "pointer", border: 0, bgcolor: "transparent", p: 0, font: "inherit" },
-    } as const;
-    const body = (
-      <>
-        <Box sx={{ width: iconsOnly ? 40 : 56, height: 32, borderRadius: "16px", display: "grid", placeItems: "center",
-                   bgcolor: on ? m3.secondaryContainer : "transparent", color: on ? m3.onSecondaryContainer : "inherit" }}>
-          <Icon name={e.icon} size={20} />
-        </Box>
-        {!iconsOnly && <Typography sx={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.5px" }}>{e.label}</Typography>}
-      </>
-    );
-    if (e.destinations) {
+  const iconItem = (entry: NavEntry) => {
+    const on = entry.kind === "link" ? entry.id === activeId : entry.children.some((c) => c.id === activeId);
+    const sx = { width: 40, height: 32, borderRadius: "16px", display: "grid", placeItems: "center", border: 0, p: 0, cursor: "pointer", textDecoration: "none",
+      bgcolor: on ? m3.secondaryContainer : "transparent", color: on ? m3.onSecondaryContainer : m3.onSurfaceVar,
+      "&:hover": { bgcolor: on ? m3.secondaryContainer : m3.sc }, "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: 2 } } as const;
+    if (entry.kind === "link") {
       return (
-        <Tooltip key={e.id} title={iconsOnly ? `${e.label}: ${e.destinations.map((d) => d.label).join(" · ")}` : ""} placement="right">
-          <Box component="button" type="button" aria-haspopup="menu" aria-expanded={Boolean(toolsAnchor)} aria-label={e.label} onClick={openTools} {...shared}>
-            {body}
+        <Tooltip key={entry.id} title={entry.label} placement="right">
+          <Box component="a" href={entry.href} aria-label={entry.label} aria-current={on ? "page" : undefined} sx={sx}>
+            <Icon name={entry.icon} size={20} />
           </Box>
         </Tooltip>
       );
     }
+    const isOpen = menu?.groupId === entry.id;
     return (
-      <Tooltip key={e.id} title={iconsOnly ? e.label : ""} placement="right">
-        <Box component="a" href={href(e.screen)} {...shared}>{body}</Box>
+      <Tooltip key={entry.id} title={`${entry.label}: ${entry.children.map((c) => c.label).join(" · ")}`} placement="right">
+        {/* The current page is a child inside the menu; the icon only says that the group holds it. */}
+        <Box component="button" type="button" aria-label={entry.label} aria-haspopup="menu" aria-expanded={isOpen}
+          aria-current={on ? "true" : undefined} data-holds-current={on ? "true" : undefined}
+          onClick={(event: MouseEvent<HTMLElement>) => setMenu({ anchor: event.currentTarget, groupId: entry.id })} sx={sx}>
+          <Icon name={entry.icon} size={20} />
+        </Box>
       </Tooltip>
     );
   };
 
-  // Group labels sit above the first entry of each group; the wide rail only (the icon strip has no room for words).
-  let lastGroup: RailGroup | null | undefined;
-  const items: React.ReactNode[] = [];
-  for (const e of entries) {
-    if (!iconsOnly && e.group && e.group !== lastGroup) {
-      items.push(<Typography key={`group-${e.group}`} component="div" aria-hidden sx={{ ...GROUP_LABEL, mt: 0.5 }}>{e.group}</Typography>);
+  const iconItems: React.ReactNode[] = [];
+  for (const entry of entries) {
+    if (entry.id === "administration") {
+      iconItems.push(<Box key="divider" role="presentation" sx={{ width: 32, height: "1px", bgcolor: m3.outlineVar, my: 0.5 }} />);
     }
-    lastGroup = e.group;
-    items.push(railItem(e));
+    iconItems.push(iconItem(entry));
   }
+
+  const frame = { flex: "none", bgcolor: m3.surface, position: "sticky", top: 0, alignSelf: "flex-start", height: "100vh", boxSizing: "border-box",
+    overflowY: "auto", overflowX: "hidden", display: "flex", flexDirection: "column" } as const;
 
   return (
     <>
-      <Box
-        component="nav"
-        aria-label="Primary"
-        // The rail stays in view on a long page (sticky, one viewport tall) so Administration, pinned at its bottom edge,
-        // is always one click away (R4); a viewport shorter than the list scrolls the rail itself.
-        sx={{ width: iconsOnly ? 56 : 88, flex: "none", bgcolor: m3.surface, pt: 2, display: "flex", flexDirection: "column", alignItems: "center", gap: 1.25,
-              position: "sticky", top: 0, alignSelf: "flex-start", height: "100vh", boxSizing: "border-box", overflowY: "auto", overflowX: "hidden" }}
-      >
-        <Box sx={{ mb: 1 }}>
-          <NexusMark size={iconsOnly ? 36 : 44} />
+      {iconsOnly ? (
+        // The sidebar stays in view on a long page (sticky, one viewport tall); a window shorter than the list scrolls it.
+        <Box component="nav" aria-label="Primary" data-nav-layout={wide ? "folded" : "narrow"}
+          sx={{ ...frame, width: FOLDED_PX, pt: 2, pb: 2, alignItems: "center", gap: 0.75 }}>
+          <Box sx={{ mb: 0.75 }}><NexusMark size={36} /></Box>
+          {wide && (
+            <Tooltip title="Expand menu: show the labels" placement="right">
+              <IconButton aria-label="Expand menu" aria-pressed onClick={() => setCollapsed(false)}
+                sx={{ width: 32, height: 32, borderRadius: "8px", border: `1px solid ${m3.outlineVar}`, color: m3.onSurfaceVar, mb: 0.5 }}>
+                <Icon name="chevron-right" size={18} />
+              </IconButton>
+            </Tooltip>
+          )}
+          {!wide && (
+            <Tooltip title="Open navigation: every screen with its name" placement="right">
+              <IconButton aria-label="Open navigation" onClick={() => setDrawerOpen(true)}
+                sx={{ width: 40, height: 40, borderRadius: "10px", bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, color: m3.primary, mb: 0.5 }}>
+                <Icon name="menu" size={20} />
+              </IconButton>
+            </Tooltip>
+          )}
+          {iconItems}
         </Box>
-        {wide && (
-          <Tooltip title={collapsed ? "Expand menu: show the labels" : "Collapse menu: icons only"} placement="right">
-            <IconButton aria-label={collapsed ? "Expand menu" : "Collapse menu"} aria-pressed={collapsed} onClick={() => setCollapsed(!collapsed)}
-              sx={{ width: 32, height: 32, borderRadius: "8px", border: `1px solid ${m3.outlineVar}`, color: m3.onSurfaceVar, mb: 0.5 }}>
-              <Icon name={collapsed ? "chevron-right" : "chevron-left"} size={18} />
-            </IconButton>
-          </Tooltip>
-        )}
-        {!wide && (
-          <Tooltip title="Open navigation: every screen and its sections" placement="right">
-            <IconButton aria-label="Open navigation" onClick={() => setDrawerOpen(true)}
-              sx={{ width: 40, height: 40, borderRadius: "10px", bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, color: m3.primary, mb: 1 }}>
-              <Icon name="menu" size={20} />
-            </IconButton>
-          </Tooltip>
-        )}
-        {items}
-        <Box data-testid="rail-administration" sx={{ mt: "auto", pt: 2, pb: 2, width: "100%", display: "flex", flexDirection: "column", alignItems: "center",
-                   position: "sticky", bottom: 0, bgcolor: m3.surface }}>
-          {railItem(admin)}
+      ) : (
+        <Box component="nav" aria-label="Primary" data-nav-layout="expanded" sx={{ ...frame, width: SIDEBAR_PX, px: 1, pt: 1.5, pb: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, pl: 1, pr: 0.5, pb: 1.5 }}>
+            <NexusMark size={36} />
+            {/* The mark only: the top bar beside it already shows the wordmark. */}
+            <Tooltip title="Collapse menu: icons only" placement="right">
+              <IconButton aria-label="Collapse menu" aria-pressed={false} onClick={() => setCollapsed(true)}
+                sx={{ ml: "auto", width: 32, height: 32, borderRadius: "8px", border: `1px solid ${m3.outlineVar}`, color: m3.onSurfaceVar }}>
+                <Icon name="chevron-left" size={18} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+          <NavList entries={entries} activeId={activeId} session={session} choices={choices} onToggle={onToggle} />
         </Box>
-      </Box>
+      )}
 
-      <Menu anchorEl={toolsAnchor} open={Boolean(toolsAnchor)} onClose={() => setToolsAnchor(null)}
-        anchorOrigin={{ vertical: "center", horizontal: "right" }} transformOrigin={{ vertical: "center", horizontal: "left" }}
-        MenuListProps={{ "aria-label": "Tools", dense: true }}>
-        {toolsDestinations.map((d) => (
-          <MenuItem key={d.id} component="a" href={href(d.screen)} selected={d.screen === active} aria-current={d.screen === active ? "page" : undefined}
-            sx={{ gap: 1.5, fontSize: 14 }}>
-            <Icon name={d.icon} size={18} />
-            {d.label}
-          </MenuItem>
-        ))}
+      <Menu anchorEl={menu?.anchor ?? null} open={Boolean(menu && menuGroup)} onClose={() => setMenu(null)}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "left" }}
+        MenuListProps={{ "aria-label": menuGroup?.label ?? "Navigation", dense: true }}>
+        {(menuGroup?.children ?? []).map((leaf: NavLeaf) => {
+          const on = leaf.id === activeId;
+          return (
+            <MenuItem key={leaf.id} component="a" href={leaf.href} selected={on} aria-current={on ? "page" : undefined}
+              data-locked={leafLocked(leaf, session) ? "true" : undefined} sx={{ gap: 1.5, fontSize: 14 }}>
+              {leaf.label}
+              {leafLocked(leaf, session) && <LockMark />}
+            </MenuItem>
+          );
+        })}
       </Menu>
 
       {!wide && (
         <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} PaperProps={{ sx: { width: 300, bgcolor: m3.scLow, p: 1.5 } }}>
-          <Box component="nav" aria-label="Primary navigation drawer" sx={{ display: "flex", flexDirection: "column", gap: "2px", minHeight: "100%" }}>
+          <Box component="nav" aria-label="Primary navigation drawer" sx={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, px: 1, pt: 1, pb: 1.5 }}>
               <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0, gap: "2px" }}>
                 <NexusWordmark height={24} color={m3.onSurface} />
@@ -292,31 +260,7 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
                 <Icon name="close" size={20} />
               </IconButton>
             </Box>
-
-            <DrawerItem label="Overview" on={active === "overview"} navHref="?screen=overview" />
-            <DrawerItem label="Reports" on={active === "reports"} navHref="?screen=reports" />
-
-            {allowedDrawerGroups.map((g) => (
-              <Box key={g.header}>
-                {g.screen ? (
-                  <DrawerItem label={g.header} on={active === g.screen} navHref={href(g.screen)} />
-                ) : (
-                  <Typography sx={{ ...GROUP_LABEL, px: 2, pt: 2, pb: 1 }}>{g.header}</Typography>
-                )}
-                {g.leaves.map((leaf) => (
-                  <DrawerItem
-                    key={leaf.label}
-                    label={leaf.label}
-                    // A leaf that opens the same screen as its group header, or a deep link into a screen, is not marked a second time.
-                    on={active === leaf.screen && g.screen !== leaf.screen && leaf.href === href(leaf.screen)}
-                    navHref={leaf.href}
-                    disabled={!leaf.href}
-                    nested={Boolean(g.screen)}
-                  />
-                ))}
-              </Box>
-            ))}
-
+            <NavList entries={entries} activeId={activeId} session={session} choices={choices} onToggle={onToggle} />
             <Box sx={{ mt: "auto", mx: 2, mb: 1, pt: 1.5, borderTop: `1px solid ${m3.outlineVar}` }}>
               <Typography variant="body2">Read-only evidence · class 0</Typography>
             </Box>
@@ -324,31 +268,5 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
         </Drawer>
       )}
     </>
-  );
-}
-
-function DrawerItem({ label, on, navHref, disabled, nested }: {
-  readonly label: string;
-  readonly on: boolean;
-  readonly navHref?: string;
-  readonly disabled?: boolean;
-  readonly nested?: boolean;
-}) {
-  const content = (
-    <Box sx={{ height: nested ? 40 : 48, display: "flex", alignItems: "center", gap: 1.5, px: 2, ml: nested ? 2 : 0, borderRadius: "24px",
-               fontSize: nested ? 13.5 : 14, fontWeight: 500, letterSpacing: "0.1px",
-               bgcolor: on ? m3.secondaryContainer : "transparent",
-               color: on ? m3.onSecondaryContainer : m3.onSurfaceVar,
-               opacity: disabled ? 0.38 : 1 }}>
-      {label}
-    </Box>
-  );
-  if (disabled || !navHref) {
-    return <Box aria-disabled="true" title="Not served by this build yet">{content}</Box>;
-  }
-  return (
-    <Box component="a" href={navHref} aria-current={on ? "page" : undefined} sx={{ textDecoration: "none" }}>
-      {content}
-    </Box>
   );
 }

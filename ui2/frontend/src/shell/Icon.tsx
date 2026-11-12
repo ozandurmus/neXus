@@ -34,6 +34,7 @@ export type IconName =
   | "external"
   | "chevron-left"
   | "chevron-right"
+  | "chevron-down"
   | "first-page"
   | "last-page"
   | "expand"
@@ -264,6 +265,12 @@ export function Icon({ name, size = 20 }: { readonly name: IconName; readonly si
       return (
         <svg {...props}>
           <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+        </svg>
+      );
+    case "chevron-down":
+      return (
+        <svg {...props}>
+          <path d="M6 9l6 6 6-6" />
         </svg>
       );
     case "expand":

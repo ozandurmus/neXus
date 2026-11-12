@@ -212,7 +212,7 @@ export function OperationsScreen() {
       setCpRows(byRef);
     }).catch(() => {});
   };
-  // UI review 2026-11-05, B3: the job figures belong to the Jobs tab, the readiness figure to HA & readiness.
+  // UI review 2026-11-05, B3: the job figures belong to the Jobs tab, the readiness figure to HA and readiness.
   const jobKpis = (
     <MetricGrid>
       {/* One window with the Overview: jobs FINISHED in 24 h, every terminal state counted (review 2026-09-23). */}
@@ -297,7 +297,7 @@ export function OperationsScreen() {
         onChange={setTab}
         tabs={[
           {
-            label: "HA & readiness",
+            label: "HA and readiness",
             panel: renderHaPanel(),
           },
           { label: "Jobs", panel: <Box>{jobKpis}<Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>All jobs</Typography><JobLogsPanel
