@@ -33,7 +33,28 @@ describe("legacy route rewrites", () => {
     for (const [slug, home] of Object.entries(LEGACY_ADMIN_TABS)) {
       expect(to(`?screen=administration&tab=${slug}`)).toEqual({ screen: "administration", tab: home.group, section: home.section });
     }
-    expect(Object.keys(LEGACY_ADMIN_TABS)).toHaveLength(13);
+    expect(Object.keys(LEGACY_ADMIN_TABS)).toHaveLength(12);
+  });
+
+  // PO 2026-11-13 (F1, F2): two former Platform sections live under Operations.
+  it("Administration > Platform > System is Operations > Platform status", () => {
+    expect(to("?screen=administration&tab=platform&section=system")).toEqual({ screen: "operations", tab: "platform-status" });
+    expect(to("?screen=administration&tab=system")).toEqual({ screen: "operations", tab: "platform-status" });
+    // the short-lived address of the first form of this change
+    expect(to("?screen=operations&tab=health&focus=platform")).toEqual({ screen: "operations", tab: "platform-status" });
+    expect(LEGACY_ADMIN_TABS.system).toBeUndefined();
+  });
+
+  it("Administration > Platform > Scheduled jobs is Operations > Scheduled jobs", () => {
+    expect(to("?screen=administration&tab=platform&section=scheduled-jobs")).toEqual({ screen: "operations", tab: "schedules" });
+  });
+
+  it("leaves Notifications and logging at its address: the page slug stays `platform`", () => {
+    for (const search of ["?screen=administration&tab=platform", "?screen=administration&tab=platform&section=notifications", "?screen=administration&tab=platform&section=system-logs",
+      "?screen=operations&tab=schedules", "?screen=operations&tab=health", "?screen=operations&tab=platform-status"]) {
+      expect(rewriteLegacyRoute(search)).toBeNull();
+    }
+    expect(to("?screen=administration&tab=system-logs")).toEqual({ screen: "administration", tab: "platform", section: "system-logs" });
   });
 
   it("leaves a current address alone, and the other screens' own tab slugs", () => {

@@ -23,8 +23,6 @@ import { AuditLogsPanel } from "./AuditLogsPanel";
 import { DirectorySettingsPanel } from "../components/settings/DirectorySettingsPanel";
 import { NotificationSettingsPanel } from "../components/settings/NotificationSettingsPanel";
 import { SystemLogSettingsPanel } from "../components/settings/SystemLogSettingsPanel";
-import { SystemStatusPanel } from "./SystemStatusPanel";
-import { ScheduledJobsPanel } from "./ScheduledJobsPanel";
 
 interface AdminSectionDef {
   readonly slug: string;
@@ -47,7 +45,7 @@ interface AdminPageDef {
 /**
  * Administration is five pages, and the pages are the children of the Administration group in the left navigation
  * (navigation redesign 2026-11-12, PO approved; it amends UI review 2026-11-05, C4): Device registry, Access and identity,
- * Platform, Audit log and Delivery plan. The screen no longer carries a second side menu or a "Product" heading. Each page
+ * Notifications and logging, Audit log and Delivery plan. The screen no longer carries a second side menu or a "Product" heading. Each page
  * is one screen: its heading is its menu label, and its sections are one tab strip, the one Operations uses. Only the open
  * tab is mounted, so a page that groups four heavy panels still reads one thing at a time. A page with a single section
  * (Audit log, Delivery plan) has no tab strip.
@@ -89,15 +87,14 @@ const PAGES: readonly AdminPageDef[] = [
   },
   {
     slug: "platform",
-    label: "Platform",
-    tabList: "Platform sections",
-    blurb: "The product's own health and settings: system status, which scheduled jobs run, notifications and log collection.",
+    // "Notifications and logging" since 2026-11-13 (was "Platform"); the address slug stays `platform`, so no address changes.
+    label: "Notifications and logging",
+    tabList: "Notifications and logging sections",
+    // System and Scheduled jobs moved to Operations (PO 2026-11-13, F1/F2); their old addresses are rewritten in `legacyRoutes`.
+    blurb: "The product's own settings: where notifications go, and which system logs are collected from the devices.",
     sections: [
-      { slug: "system", label: "System", panel: <SystemStatusPanel /> },
-      // Readable by every signed-in role (operator and the aiview inspection persona included); the server decides who may switch.
-      { slug: "scheduled-jobs", label: "Scheduled jobs", panel: <ScheduledJobsPanel /> },
       { slug: "notifications", administratorOnly: true, label: "Notifications", panel: <NotificationSettingsPanel /> },
-      { slug: "system-logs", administratorOnly: true, label: "Log collection settings", panel: <SystemLogSettingsPanel /> },
+      { slug: "system-logs", administratorOnly: true, label: "Log collection", panel: <SystemLogSettingsPanel /> },
     ],
   },
   {

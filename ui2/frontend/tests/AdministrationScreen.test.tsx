@@ -173,7 +173,7 @@ describe("AdministrationScreen tabs", () => {
   it.each([
     ["tab=registry", "Device registry", "Device registry sections", ["Device management", "Inventory exclusions", "Credentials", "SSH trust"]],
     ["tab=access", "Access and identity", "Access and identity sections", ["Local identities", "Sessions", "Roles and permissions", "LDAP settings"]],
-    ["tab=platform", "Platform", "Platform sections", ["System", "Scheduled jobs", "Notifications", "Log collection settings"]],
+    ["tab=platform", "Notifications and logging", "Notifications and logging sections", ["Notifications", "Log collection"]],
   ])("%s is one screen: its own heading and exactly one tab strip, with no second side menu", (query, heading, tabList, tabs) => {
     vi.stubGlobal("fetch", routedFetch({ ...NO_DEVICES, ...EMPTY_PROJECT_PLAN }));
     renderAt(query);
@@ -183,7 +183,7 @@ describe("AdministrationScreen tabs", () => {
     expect(within(screen.getByRole("tablist", { name: tabList })).getAllByRole("tab").map(t => t.textContent)).toEqual(tabs);
     // The pages are entries of the left navigation now, not tabs of this screen; the Product heading and Job Logs are gone.
     expect(screen.queryByRole("navigation", { name: "Administration navigation" })).toBeNull();
-    for (const page of ["Device registry", "Access and identity", "Platform", "Audit log", "Delivery plan", "Product"]) {
+    for (const page of ["Device registry", "Access and identity", "Notifications and logging", "Platform", "Audit log", "Delivery plan", "Product"]) {
       expect(screen.queryByRole("tab", { name: page })).toBeNull();
     }
     expect(screen.queryByRole("tab", { name: /Job Logs/i })).toBeNull();
@@ -263,8 +263,8 @@ describe("AdministrationScreen tabs", () => {
     expect(screen.queryByRole("button", { name: "Add device" })).toBeNull();
 
     // ... to another page, with and without a tab strip, and to an address from before the regrouping
-    go("?screen=administration&tab=platform&section=scheduled-jobs");
-    expect([heading(), selected()]).toEqual(["Platform", "Scheduled jobs"]);
+    go("?screen=administration&tab=platform&section=system-logs");
+    expect([heading(), selected()]).toEqual(["Notifications and logging", "Log collection"]);
     expect(screen.queryByText("No credential stored")).toBeNull();
     go("?screen=administration&tab=product");
     expect([heading(), selected()]).toEqual(["Delivery plan", null]);
@@ -616,25 +616,6 @@ describe("restricted Administration reads", () => {
       if (slug !== "audit-logs") expect(document.querySelector("[role='tab'][aria-selected='true'] [data-lock-badge]")).not.toBeNull();
       await waitFor(() => expect(fetch).not.toHaveBeenCalled());
     });
-  it("opens Platform > Scheduled jobs for a viewer without the administration-read grant: readable, not locked", async () => {
-    const fetch = routedFetch({ "/api/v2/config/scheduled-jobs": { body: {
-      master_enabled: true, master_env: "UI2_SCHEDULING_ENABLED", can_write: false, masked: true, business_hours: null,
-      families: [{ family: "discovery_refresh", label: "Discovery refresh", description: "Synthetic description.", cadence: "Every 6 hours",
-        enabled: true, state: "ON", will_run: true, lock_reason: null, note: null, window_open_now: false, next_window_at: "2026-11-11T00:00:00+03:00",
-        last_run_at: null, changed_by: "USR-0a1b2c3d4e", changed_at: "2026-11-10T18:05:00Z", reason: null }],
-    } } });
-    vi.stubGlobal("fetch", fetch);
-    window.history.replaceState(null, "", "/?screen=administration&tab=platform&section=scheduled-jobs");
-    render(withTheme(<SessionContext.Provider value={{ displayName: "Synthetic viewer", roleTokens: [],
-      permissions: [], canReadAdministration: false, onSignOut: () => {} }}>
-      <AdministrationScreen />
-    </SessionContext.Provider>));
-    const section = within(screen.getByRole("region", { name: "Scheduled jobs" }));
-    expect(await section.findByRole("heading", { name: "Discovery refresh" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Scheduled jobs" })).toHaveAttribute("data-locked", "false");
-    expect(section.getByText("Reason withheld (masked view)")).toBeInTheDocument();
-    expect(section.queryByRole("switch")).toBeNull();
-  });
   it("mounts Credentials when the server permits its read", async () => {
     const fetch = routedFetch({ "/credentials": { body: { credentials: [] } } });
     vi.stubGlobal("fetch", fetch);

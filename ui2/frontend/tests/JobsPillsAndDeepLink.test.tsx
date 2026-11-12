@@ -181,7 +181,9 @@ describe("Operations routes and headline", () => {
     expect(tabFromUrl("jobs")).toEqual({ tab: 1, pill: null });
     // Diagnostics (Tools) and the Change feed (Changes) left Operations; their old slugs land on the first tab here and are
     // rewritten to the new screens before this reads them (legacyRoutes).
-    expect(tabFromUrl("health")).toEqual({ tab: 2, pill: null });
+    expect(tabFromUrl("schedules")).toEqual({ tab: 2, pill: null });
+    expect(tabFromUrl("health")).toEqual({ tab: 3, pill: null });
+    expect(tabFromUrl("platform-status")).toEqual({ tab: 4, pill: null });
     expect(tabFromUrl("diagnostics")).toEqual({ tab: 0, pill: null });
     expect(tabFromUrl("changes")).toEqual({ tab: 0, pill: null });
     expect(tabFromUrl(null)).toEqual({ tab: 0, pill: null });

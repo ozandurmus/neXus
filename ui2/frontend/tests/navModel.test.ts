@@ -20,11 +20,11 @@ describe("the navigation model (NAVIGATION_REDESIGN_2026_11_12.md section 2)", (
       ["Compliance and security", ["Compliance", "Lifecycle and security"]],
       ["Policy and changes", ["Policy", "Trace", "Changes"]],
       ["Backups", null],
-      ["Operations", ["HA and readiness", "Jobs", "System health"]],
+      ["Operations", ["HA and readiness", "Jobs", "Scheduled jobs", "Device health", "Platform status"]],
       ["Tools", ["Packet analysis", "Data sanitizer", "Diagnostics", "Offline analysis"]],
-      ["Administration", ["Device registry", "Access and identity", "Platform", "Audit log", "Delivery plan"]],
+      ["Administration", ["Device registry", "Access and identity", "Notifications and logging", "Audit log", "Delivery plan"]],
     ]);
-    expect(NAV_LEAVES).toHaveLength(21);
+    expect(NAV_LEAVES).toHaveLength(23);
     // Only Administration starts closed.
     expect(NAV_ENTRIES.filter((e) => e.kind === "group" && e.startsClosed).map((e) => e.id)).toEqual(["administration"]);
   });
@@ -57,7 +57,7 @@ describe("the navigation model (NAVIGATION_REDESIGN_2026_11_12.md section 2)", (
     expect(group("administration").children.map((c) => [c.href, c.lock ?? null])).toEqual([
       ["?screen=administration&tab=registry", null],
       ["?screen=administration&tab=access", "adminRead"],
-      ["?screen=administration&tab=platform", null],
+      ["?screen=administration&tab=platform", "adminRead"],
       ["?screen=administration&tab=audit", "adminRead"],
       ["?screen=administration&tab=product", "adminPlane"],
     ]);
@@ -99,10 +99,12 @@ describe("the lit entry", () => {
     ["operations", "?screen=operations&job=j1", "operations-jobs"],
     ["operations", "?screen=operations&tab=jobs&job_type=backup", "operations-jobs"],
     ["operations", "?screen=operations&tab=health", "operations-health"],
+    ["operations", "?screen=operations&tab=platform-status", "operations-platform"],
+    ["operations", "?screen=operations&tab=schedules", "operations-schedules"],
     ["administration", "?screen=administration", "admin-registry"],
     ["administration", "?screen=administration&tab=registry&section=ssh-trust", "admin-registry"],
     ["administration", "?screen=administration&tab=access&section=ldap-settings", "admin-access"],
-    ["administration", "?screen=administration&tab=platform&section=scheduled-jobs", "admin-platform"],
+    ["administration", "?screen=administration&tab=platform&section=system-logs", "admin-platform"],
     ["administration", "?screen=administration&tab=audit", "admin-audit"],
     ["administration", "?screen=administration&tab=product", "admin-product"],
     ["administration", "?screen=administration&tab=nonsense", "admin-registry"],
@@ -121,9 +123,14 @@ describe("the lit entry", () => {
       ["?screen=operations&tab=diagnostics", "diagnostics"],
       ["?screen=administration&tab=job-logs", "operations-jobs"],
       ["?screen=administration&job=j1", "operations-jobs"],
+      // PO 2026-11-13: neXus' own status is Operations > Platform status; Scheduled jobs is a tab of Operations.
+      ["?screen=administration&tab=system", "operations-platform"],
+      ["?screen=administration&tab=platform&section=system", "operations-platform"],
+      ["?screen=operations&tab=health&focus=platform", "operations-platform"],
+      ["?screen=administration&tab=platform&section=scheduled-jobs", "operations-schedules"],
       ...Object.entries(LEGACY_ADMIN_TABS).map(([slug, home]): [string, string] => [`?screen=administration&tab=${slug}`, `admin-${home.group}`]),
     ];
-    expect(cases).toHaveLength(9 + 13);
+    expect(cases).toHaveLength(13 + 12);
     for (const [search, id] of cases) {
       // What the shell does: rewrite, then route on the rewritten screen.
       const rewritten = rewriteLegacyRoute(search);
@@ -156,9 +163,9 @@ describe("what a session is shown (plane checks only)", () => {
       ["Reports", null],
       ["Policy and changes", ["Policy", "Trace", "Changes"]],
       ["Backups", null],
-      ["Operations", ["HA and readiness", "Jobs", "System health"]],
+      ["Operations", ["HA and readiness", "Jobs", "Scheduled jobs", "Device health", "Platform status"]],
       ["Tools", ["Packet analysis", "Diagnostics", "Offline analysis"]],
-      ["Administration", ["Device registry", "Access and identity", "Platform", "Audit log", "Delivery plan"]],
+      ["Administration", ["Device registry", "Access and identity", "Notifications and logging", "Audit log", "Delivery plan"]],
     ]);
   });
 
@@ -189,7 +196,11 @@ describe("what a session is shown (plane checks only)", () => {
   it("lists the five Administration pages for every session and locks, never hides, what it may not use", () => {
     const pages = group("administration").children;
     const noGrant = { permissions: ["Devices", "Compliance", "Policy"], canReadAdministration: false };
-    expect(pages.filter((p) => leafLocked(p, noGrant)).map((p) => p.label)).toEqual(["Access and identity", "Audit log", "Delivery plan"]);
+    expect(pages.filter((p) => leafLocked(p, noGrant)).map((p) => p.label)).toEqual(["Access and identity", "Notifications and logging", "Audit log", "Delivery plan"]);
+    // Platform status came from an Administration section with no lock: it has none in the menu either.
+    expect(NAV_LEAVES.find((l) => l.id === "operations-platform")).toMatchObject({ label: "Platform status", href: "?screen=operations&tab=platform-status" });
+    expect(NAV_LEAVES.find((l) => l.id === "operations-platform")!.lock).toBeUndefined();
+    expect(NAV_LEAVES.find((l) => l.id === "operations-platform")!.requiredPlane).toBeUndefined();
     // The administration-read grant opens Access and Audit; the Delivery plan follows the Admin plane.
     expect(pages.filter((p) => leafLocked(p, { permissions: ["Devices"], canReadAdministration: true })).map((p) => p.label)).toEqual(["Delivery plan"]);
     expect(pages.filter((p) => leafLocked(p, { permissions: ["Admin"], canReadAdministration: true }))).toEqual([]);

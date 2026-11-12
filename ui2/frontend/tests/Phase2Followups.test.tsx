@@ -293,7 +293,7 @@ describe("the addressable job detail (item 5)", () => {
   it("lands on Jobs when only ?job= is given, and keeps the tab slug when both are", () => {
     expect(tabFromUrl(null, "job-1")).toEqual({ tab: 1, pill: null });
     expect(tabFromUrl("ha", "job-1")).toEqual({ tab: 0, pill: null });
-    expect(tabFromUrl("health", "job-1")).toEqual({ tab: 2, pill: null });
+    expect(tabFromUrl("health", "job-1")).toEqual({ tab: 3, pill: null });
     expect(tabFromUrl(null, null)).toEqual({ tab: 0, pill: null });
   });
 
