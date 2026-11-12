@@ -5,7 +5,6 @@ import IconButton from "@mui/material/IconButton";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import Tooltip from "@mui/material/Tooltip";
-import Typography from "@mui/material/Typography";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { m3 } from "../theme/m3Theme";
 import { Icon } from "./Icon";
@@ -34,6 +33,9 @@ import {
  * - **Narrow**, below {@link DRAWER_BELOW_PX} px: the folded icons plus `Open navigation`, whose drawer renders the
  *   expanded list itself.
  *
+ * The logo is shown once, at the top of whichever rendering is in view (brand area 2026-11-13): the wordmark on the
+ * expanded sidebar and in the drawer, the X mark alone where only icons fit. The top bar carries none.
+ *
  * Exactly one entry is the current page (`aria-current="page"`): the page itself, not its group. Folding changes
  * density only, never the entry set (D-NAV2). What is listed follows the session's plane list (the server decides
  * every request); Administration's pages are listed for every session and locked where it may not use them.
@@ -42,6 +44,9 @@ export const DRAWER_BELOW_PX = 1100;
 export const EXPANDED_BY_DEFAULT_PX = 1280;
 export const SIDEBAR_PX = 248;
 export const FOLDED_PX = 56;
+
+/** The header band that holds the logo: as tall as the top app bar, so the logo and the search field share a centre line. */
+const BRAND_BAND_PX = 64;
 
 const COLLAPSED_KEY = "nx.rail.collapsed";
 const GROUPS_KEY = "nx.nav.groups";
@@ -197,8 +202,9 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
       {iconsOnly ? (
         // The sidebar stays in view on a long page (sticky, one viewport tall); a window shorter than the list scrolls it.
         <Box component="nav" aria-label="Primary" data-nav-layout={wide ? "folded" : "narrow"}
-          sx={{ ...frame, width: FOLDED_PX, pt: 2, pb: 2, alignItems: "center", gap: 0.75 }}>
-          <Box sx={{ mb: 0.75 }}><NexusMark size={36} /></Box>
+          sx={{ ...frame, width: FOLDED_PX, pb: 2, alignItems: "center", gap: 0.75 }}>
+          {/* The logo where there is no room for the word: the X alone, on the top bar's centre line. */}
+          <Box data-brand-slot sx={{ height: BRAND_BAND_PX, flex: "none", display: "grid", placeItems: "center", mb: -0.75 }}><NexusMark size={28} /></Box>
           {wide && (
             <Tooltip title="Expand menu: show the labels" placement="right">
               <IconButton aria-label="Expand menu" aria-pressed onClick={() => setCollapsed(false)}
@@ -218,10 +224,10 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
           {iconItems}
         </Box>
       ) : (
-        <Box component="nav" aria-label="Primary" data-nav-layout="expanded" sx={{ ...frame, width: SIDEBAR_PX, px: 1, pt: 1.5, pb: 2 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, pl: 1, pr: 0.5, pb: 1.5 }}>
-            <NexusMark size={36} />
-            {/* The mark only: the top bar beside it already shows the wordmark. */}
+        <Box component="nav" aria-label="Primary" data-nav-layout="expanded" sx={{ ...frame, width: SIDEBAR_PX, px: 1, pb: 2 }}>
+          {/* The one logo of the shell: the wordmark, its left edge on the entries' icons, on the top bar's centre line. */}
+          <Box data-brand-slot sx={{ display: "flex", alignItems: "center", flex: "none", height: BRAND_BAND_PX, pl: 1.5, pr: 0.5 }}>
+            <NexusWordmark height={22} />
             <Tooltip title="Collapse menu: icons only" placement="right">
               <IconButton aria-label="Collapse menu" aria-pressed={false} onClick={() => setCollapsed(true)}
                 sx={{ ml: "auto", width: 32, height: 32, borderRadius: "8px", border: `1px solid ${m3.outlineVar}`, color: m3.onSurfaceVar }}>
@@ -251,19 +257,13 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
       {!wide && (
         <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} PaperProps={{ sx: { width: 300, bgcolor: m3.scLow, p: 1.5 } }}>
           <Box component="nav" aria-label="Primary navigation drawer" sx={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, px: 1, pt: 1, pb: 1.5 }}>
-              <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0, gap: "2px" }}>
-                <NexusWordmark height={24} color={m3.onSurface} />
-                <Typography variant="body2">Verified state</Typography>
-              </Box>
+            <Box data-brand-slot sx={{ display: "flex", alignItems: "center", flex: "none", height: 52, pl: 1.5, pr: 0.5, mb: 0.5 }}>
+              <NexusWordmark height={22} />
               <IconButton aria-label="Close navigation" onClick={() => setDrawerOpen(false)} sx={{ ml: "auto" }}>
                 <Icon name="close" size={20} />
               </IconButton>
             </Box>
             <NavList entries={entries} activeId={activeId} session={session} choices={choices} onToggle={onToggle} />
-            <Box sx={{ mt: "auto", mx: 2, mb: 1, pt: 1.5, borderTop: `1px solid ${m3.outlineVar}` }}>
-              <Typography variant="body2">Read-only evidence · class 0</Typography>
-            </Box>
           </Box>
         </Drawer>
       )}

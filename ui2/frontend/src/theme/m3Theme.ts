@@ -9,6 +9,9 @@ import { createTheme, type Theme } from "@mui/material/styles";
  * `cp`, `vsx` and `pan` are vendor identity, never state: nothing may infer a vendor, a state or a verdict
  * from a colour. `*Ink` tokens are the status colours darkened (light) or lifted (dark) for text, because the
  * status fills fail as text on white (warning 1.9:1).
+ *
+ * `brandInk`, `brandTeal` and `brandBlue` are the logo's three colours and nothing else's: the approved artwork's own
+ * values, `assets/wordmark.svg` in light and `assets/wordmark-light-on-dark.svg` (the sign-in screen's) in dark.
  */
 type TokenName =
   | "primary" | "onPrimary" | "primaryContainer" | "onPrimaryContainer"
@@ -22,7 +25,7 @@ type TokenName =
   | "attention" | "attentionContainer" | "onAttentionContainer"
   | "goodInk" | "warningInk" | "seriousInk" | "criticalInk" | "neutralInk"
   | "cp" | "vsx" | "pan"
-  | "brandTeal" | "brandBlue" | "brandBackdrop"
+  | "brandInk" | "brandTeal" | "brandBlue"
   | "e1" | "e2";
 
 export const LIGHT: Record<TokenName, string> = {
@@ -69,9 +72,9 @@ export const LIGHT: Record<TokenName, string> = {
   cp: "#c2338a",
   vsx: "#4a3aa7",
   pan: "#d9731a",
-  brandTeal: "#1f8f7c",
-  brandBlue: "#3b63d1",
-  brandBackdrop: "#ffffff",
+  brandInk: "#0c1a2b",
+  brandTeal: "#0a7f96",
+  brandBlue: "#1f5fe0",
   e1: "none",
   e2: "0 4px 14px rgba(15,23,42,0.08)",
 };
@@ -120,9 +123,9 @@ export const DARK: Record<TokenName, string> = {
   cp: "#e06ab0",
   vsx: "#9a8fe0",
   pan: "#f0a060",
-  brandTeal: "#1f8f7c",
-  brandBlue: "#3b63d1",
-  brandBackdrop: "#eef1f5",
+  brandInk: "#eaf1f8",
+  brandTeal: "#56c7dc",
+  brandBlue: "#6f9bff",
   e1: "none",
   e2: "0 4px 14px rgba(0,0,0,0.4)",
 };

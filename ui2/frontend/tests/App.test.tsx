@@ -49,6 +49,24 @@ describe("the UI 2.0 shell navigation", () => {
     expect(screen.getAllByRole("main")).toHaveLength(1);
     expect(within(screen.getByRole("main")).queryByRole("navigation", { name: "Primary" })).toBeNull();
   });
+  it("shows the logo exactly once, in the sidebar header, and no SX badge anywhere (brand area 2026-11-13)", () => {
+    const { container } = render(<App />);
+    const logos = screen.getAllByRole("img", { name: "neXus" });
+    expect(logos).toHaveLength(1);
+    expect(logos[0]).toHaveAttribute("data-brand", "wordmark");
+    expect(screen.getByRole("navigation", { name: "Primary" })).toContainElement(logos[0]);
+    expect(container.querySelectorAll("[data-brand]")).toHaveLength(1);
+    expect(screen.queryByText("SX")).toBeNull();
+    expect(container.querySelector("img")).toBeNull();
+  });
+  it("shows the wordmark once in the wall display's own bar, which has no sidebar", () => {
+    const { container } = render(<App search="?screen=overview&wall=1" />);
+    expect(screen.queryByRole("navigation", { name: "Primary" })).toBeNull();
+    const marks = container.querySelectorAll("[data-brand]");
+    expect(marks).toHaveLength(1);
+    expect(marks[0]).toHaveAttribute("data-brand", "wordmark");
+    expect(screen.queryByText("SX")).toBeNull();
+  });
   it("does not present non-interactive search text in the app bar", () => {
     render(<App />);
     expect(screen.queryByText(/Search devices, settings, evidence/)).toBeNull();
@@ -70,7 +88,7 @@ describe("the UI 2.0 shell navigation", () => {
     narrow();
     render(<App />);
     const rail = screen.getByRole("navigation", { name: "Primary" });
-    expect(within(rail).getByAltText("neXus")).toBeInTheDocument();
+    expect(within(rail).getByRole("img", { name: "neXus" })).toHaveAttribute("data-brand", "mark");
     fireEvent.click(within(rail).getByRole("button", { name: "Open navigation" }));
 
     const drawer = screen.getByRole("navigation", { name: "Primary navigation drawer" });

@@ -122,8 +122,9 @@ function AccountMenu({ initials, displayName, roles, onSignOut }: {
 }
 
 /**
- * The canvas's top app bar: product name, a search affordance and a
- * notification glyph. The canvas also shows a run-status chip and an
+ * The top app bar: search, display controls, a notification glyph and the
+ * account. The logo is in the sidebar header, not here; only the wall
+ * display's bar, which has no sidebar, shows the wordmark. The canvas also shows a run-status chip and an
  * operator initial badge, but both name a specific collection run and a
  * specific signed-in operator -- values this build has neither collected
  * nor authenticated, so showing them here would be fabricated certainty.
@@ -193,7 +194,8 @@ export function TopAppBar() {
     })();
     return (
       <Box sx={{ height: 56, flex: "none", display: "flex", alignItems: "center", gap: 2, px: 3 }}>
-        <NexusWordmark height={24} color={m3.onSurface} />
+        {/* The wall display has no sidebar, so its bar carries the logo. */}
+        <NexusWordmark height={24} />
         <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 2 }}>
           <MaskChip />
           <AsOfClock />
@@ -225,30 +227,9 @@ export function TopAppBar() {
     : "OP";
 
   return (
-    <Box sx={{ height: 64, flex: "none", display: "flex", alignItems: "center", gap: 2, px: 3, pl: 1 }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-        <Box
-          sx={{
-            width: 34,
-            height: 34,
-            borderRadius: "8px",
-            bgcolor: m3.primaryContainer,
-            color: m3.onPrimaryContainer,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontWeight: 700,
-            fontSize: 14,
-            letterSpacing: "0.5px",
-            boxShadow: m3.e1,
-            flexShrink: 0,
-          }}
-        >
-          SX
-        </Box>
-        <NexusWordmark height={26} color={m3.onSurface} />
-      </Box>
-      <Box sx={{ ml: 3, minWidth: 0, flex: "0 1 auto" }}><GlobalSearch /></Box>
+    <Box sx={{ height: 64, flex: "none", display: "flex", alignItems: "center", gap: 2, px: 3 }}>
+      {/* No logo here: the sidebar header beside this bar carries it, once (brand area 2026-11-13). */}
+      <Box sx={{ minWidth: 0, flex: "0 1 auto" }}><GlobalSearch /></Box>
       {/* At 1000 px the bar used to run past the viewport (post-release review 2026-10-18, R1 check): the right block
           now shrinks with the window and the two informational chips fold away below 1200 px; the zone is still stated
           beside every time on hover and the build in Administration › System. */}
