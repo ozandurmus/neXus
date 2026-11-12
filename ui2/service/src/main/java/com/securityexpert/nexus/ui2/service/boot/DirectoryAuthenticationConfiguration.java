@@ -153,19 +153,16 @@ public class DirectoryAuthenticationConfiguration {
     @Bean
     public LdapSettingsService ldapSettingsService(LdapSettingsRepository settings, RoleBindingRepository bindings,
             CredentialStoreCipher credentialStoreCipher, @Value("${ui2.credential-store.key-id}") String credentialStoreKeyId,
-            GroupReferenceCipher groupReferenceCipher, Clock clock, DirectoryProvider provider) {
+            GroupReferenceCipher groupReferenceCipher, DirectoryProvider provider) {
+        // No Clock parameter: a Clock bean is not visible to this configuration at context start (preview boot
+        // failed with "No qualifying bean of type java.time.Clock"), so the system clock is passed directly.
         return new LdapSettingsService(settings, bindings, credentialStoreCipher, credentialStoreKeyId,
-                groupReferenceCipher, clock, provider::reload);
+                groupReferenceCipher, Clock.systemUTC(), provider::reload);
     }
 
     @Bean
     public LdapMechanism ldapMechanism(DirectoryProvider provider) {
         return new LdapMechanism(provider);
-    }
-
-    @Bean
-    public LdapRevalidationPort ldapRevalidationAdapter(DirectoryProvider provider) {
-        return provider;
     }
 
     /** Stale directory group sets are refreshed on demand by the evaluator (design §6). */
