@@ -53,7 +53,14 @@ public sealed interface BackupResult {
     record CredentialUnresolvable(String reason) implements BackupResult {
     }
 
-    record ConnectFailed(String reason) implements BackupResult {
+    /**
+     * The SSH connect failed. {@code authentication} is true only when the cause is a rejected credential
+     * ({@code ConnectResult.AuthenticationFailed}); it drives the credential-failure alert.
+     */
+    record ConnectFailed(String reason, boolean authentication) implements BackupResult {
+        public ConnectFailed(String reason) {
+            this(reason, false);
+        }
     }
 
     /** BK-6: the free-space heuristic precondition failed -- refused before the submit. */

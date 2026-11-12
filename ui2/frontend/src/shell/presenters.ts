@@ -79,6 +79,7 @@ const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   pan_syslog_measure: "Palo Alto log measurement",
   cp_gaia_snapshot: "Check Point Gaia snapshot",
   cp_mds_export: "Check Point MDS export",
+  credential_canary: "Backup credential check",
   cp_gateway_backup: "Check Point backup",
   cp_spark_sftp_backup: "Check Point Spark backup",
   cp_backup: "Check Point backup",

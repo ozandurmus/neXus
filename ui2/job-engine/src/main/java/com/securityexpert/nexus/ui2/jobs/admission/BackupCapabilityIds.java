@@ -29,6 +29,11 @@ public final class BackupCapabilityIds {
     public static final String ASA_CONFIG_BACKUP = "asa_config_backup";
     /** FortiGate configuration ("show" at the top level, every VDOM) over SSH (V80, FORTINET_CONTRACT.md). */
     public static final String FGT_CONFIG_BACKUP = "fgt_config_backup";
+    /**
+     * The nightly credential canary (V207, MDS fork storm fix contract D.4): one SSH authentication with a backup
+     * credential on one device, no command sent. A class 0 read of the backup module; not a backup, hence not in {@link #ALL}.
+     */
+    public static final String CREDENTIAL_CANARY = "credential_canary";
     public static final Set<String> ALL = Set.of(CP_GAIA_BACKUP_LOCAL, CP_SPARK_SFTP_BACKUP, CP_GAIA_SNAPSHOT, PAN_DEVICE_STATE_BACKUP, CP_MDS_EXPORT,
             HTTPS_VENDOR_BACKUP, RDW_CC_CONFIG_BACKUP, ASA_CONFIG_BACKUP, FGT_CONFIG_BACKUP);
 

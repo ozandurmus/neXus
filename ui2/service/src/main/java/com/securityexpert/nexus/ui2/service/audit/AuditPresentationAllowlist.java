@@ -271,6 +271,11 @@ public final class AuditPresentationAllowlist {
                     "mode", "settings_id")),
             // V160 (system-log phase B): identifiers, enums, counters, timestamps and content digests. Name and
             // log-byte digests, wrapped keys, artefact locations and device-derived detail are in audit_redaction_policy.
+            // V207: identifiers, counters, timestamps and the 12-hex digest of a credential reference (never the reference).
+            Map.entry("credential_failure_alert", Set.of(
+                    "alert_id", "changed_at", "closed_at", "closed_reason", "credential_ref_digest", "failed_device_count",
+                    "failed_device_ids", "failed_job_count", "first_failure_at", "last_failure_at", "last_job_id",
+                    "run_device_ids", "scheduled_day", "vendor")),
             Map.entry("device_crash_alert", Set.of(
                     "alert_id", "created_at", "device_id", "file_count", "job_id", "newest_mtime", "notified_at")),
             Map.entry("device_crash_entry", Set.of(

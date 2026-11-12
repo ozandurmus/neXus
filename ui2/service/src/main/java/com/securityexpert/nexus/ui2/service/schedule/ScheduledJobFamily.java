@@ -27,9 +27,10 @@ public enum ScheduledJobFamily {
             "Runs the read-only failover readiness checks for every Check Point and Palo Alto HA unit, one unit at a time.",
             "Every 6 hours: 00:00, 06:00, 12:00, 18:00 GMT+3", List.of("system:failover-readiness-scheduler")),
     SCHEDULED_BACKUP("scheduled_backup", "Scheduled backup",
-            "The daily fleet backup, including the Check Point MDS export.",
-            "Daily at 02:00 GMT+3 (when the backup policy schedule is on)",
-            List.of(ScheduledBackupWindowPolicy.ACTOR, ScheduledBackupWindowPolicy.MDS_ACTOR)),
+            "The daily fleet backup, including the Check Point MDS export, and the credential canary that runs before it.",
+            "Daily at 02:00 GMT+3 (when the backup policy schedule is on); canary at 00:45",
+            List.of(ScheduledBackupWindowPolicy.ACTOR, ScheduledBackupWindowPolicy.MDS_ACTOR,
+                    ScheduledBackupWindowPolicy.CANARY_ACTOR)),
     SYSTEM_LOG_COLLECTION("system_log_collection", "System log collection",
             "Collects new device system-log lines, spread over the first 40 minutes of each window.",
             "Every 6 hours: 00:00, 06:00, 12:00, 18:00 GMT+3", List.of("system:system-log-collection"));

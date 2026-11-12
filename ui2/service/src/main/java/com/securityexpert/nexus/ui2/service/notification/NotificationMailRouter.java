@@ -151,6 +151,18 @@ final class NotificationMailRouter {
                             + r.get("job_type", String.class) + ": " + safe(identity.text(r.get("terminal_reason", String.class)))
                             + "  /operations/jobs/" + r.get("job_id", String.class));
                 }
+                if (type.equals("backup_failure")) {
+                    // V207: an open backup credential failure alert that opened, or whose failed device count changed, since the watermark.
+                    for (Record r : dsl.fetch("select credential_ref_digest, failed_device_count, first_failure_at, changed_at "
+                            + "from credential_failure_alert where closed_at is null and changed_at > {0} "
+                            + "order by changed_at, alert_id", Timestamp.from(from))) {
+                        newestTime = max(newestTime, at(r, "changed_at"));
+                        lines.add(at(r, "changed_at") + "  backup credential " + r.get("credential_ref_digest", String.class)
+                                + " failed authentication on " + r.get("failed_device_count", Integer.class)
+                                + " device(s) since " + at(r, "first_failure_at")
+                                + "; scheduled backups for it are held  /backups");
+                    }
+                }
             }
             case "config_change" -> {
                 rows = dsl.fetch("select n.notification_id, n.kind, n.summary, n.created_at, "

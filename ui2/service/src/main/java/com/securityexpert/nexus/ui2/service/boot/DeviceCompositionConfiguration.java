@@ -264,6 +264,9 @@ public class DeviceCompositionConfiguration {
                 paloAltoSetConfigCapability(gateRegistryPort),
                 checkPointMdsExportCapability(gateRegistryPort),
                 radwareCyberControllerBackupCapability(gateRegistryPort),
+                // V207: the credential canary authenticates and disconnects; it sends no command, so it has no gate rows
+                // (placeholder steps, class 0 read) -- the worker's CredentialCanaryJobExecutor never calls exec or fetch.
+                confirmCapability(BackupCapabilityIds.CREDENTIAL_CANARY, "check_point", "cp_gaia_gateway", TransportKind.SSH_EXEC),
                 // 14F DR-1: admitted through JobAdmissionService#submitForRun
                 // against a discovery_run row, never a device -- same
                 // gate-free placeholder shape (StepExecutor never runs
@@ -739,6 +742,17 @@ public class DeviceCompositionConfiguration {
                 LOG.warning("[BACKUP_SCHEDULE] tick failed: " + e.getMessage());
             }
         }
+
+        /** 00:45-00:59: the credential canary, 75 minutes before the fleet slot (see ScheduledBackupWindowPolicy.CANARY_ACTOR). */
+        @org.springframework.scheduling.annotation.Scheduled(
+                cron = com.securityexpert.nexus.ui2.platform.ScheduledBackupWindowPolicy.CANARY_CRON, zone = JobWindowPolicy.ZONE)
+        public void canaryTick() {
+            try {
+                scheduler.canaryTick(java.time.Instant.now());
+            } catch (RuntimeException e) {
+                LOG.warning("[BACKUP_SCHEDULE] credential canary failed: " + e.getMessage());
+            }
+        }
     }
 
     /** The service's artefact store, or {@code storeOrNull() == null} when the pod has no key/volume mounted. */
@@ -796,11 +810,15 @@ public class DeviceCompositionConfiguration {
     @Bean
     public BackupCollectService backupCollectService(DeviceRepository deviceRepository,
             JobAdmissionService jobAdmissionService,
-            com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts) {
+            com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts,
+            TransactionBoundary transactionBoundary) {
         java.util.Set<String> allowlist = parseCsvEnv("UI2_BACKUP_PILOT_DEVICE_IDS");
         boolean backupCredentialConfigured = !System.getenv().getOrDefault("UI2_CP_BACKUP_CREDENTIAL_REF", "").isBlank();
         return new BackupCollectService(deviceRepository, jobAdmissionService, allowlist, backupCredentialConfigured)
-                .withPlatformFacts(platformFacts);
+                .withPlatformFacts(platformFacts)
+                // V207: scheduled backups skip a credential with an open authentication-failure alert; the canary tests it.
+                .withCredentialAlerts(new com.securityexpert.nexus.ui2.persistence.artefact.JooqCredentialFailureAlertRepository(
+                        transactionBoundary), java.util.Optional.ofNullable(System.getenv("UI2_CP_BACKUP_CREDENTIAL_REF")));
     }
 
     private static java.util.Set<String> parseCsvEnv(String name) {

@@ -87,7 +87,8 @@ public final class MdsExportExecutor {
             return new BackupResult.CredentialUnresolvable(String.valueOf(unresolvable.getMessage()));
         }
         if (!(connect instanceof ConnectResult.Authenticated authenticated)) {
-            return new BackupResult.ConnectFailed("ssh connect: " + connect.getClass().getSimpleName());
+            return new BackupResult.ConnectFailed("ssh connect: " + connect.getClass().getSimpleName(),
+                    connect instanceof ConnectResult.AuthenticationFailed);
         }
         TransportSession session = authenticated.session();
         try {

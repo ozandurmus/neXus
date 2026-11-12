@@ -83,7 +83,7 @@ class ScheduledJobSwitchesTest {
         assertEquals("OFF", outcome.family().get("state"));
         assertEquals("Maintenance night", outcome.family().get("reason"));
         verify(repository).set("scheduled_backup", false, "Maintenance night", "admin-synthetic",
-                List.of("system:backup-scheduler", "system:mds-export-scheduler"));
+                List.of("system:backup-scheduler", "system:mds-export-scheduler", "system:credential-canary"));
     }
 
     @Test
