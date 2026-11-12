@@ -3,7 +3,7 @@ Description=Prepare read-only neXus security source and Deployment digests
 
 [Service]
 Type=oneshot
-WorkingDirectory=%h/nexus
+WorkingDirectory=/opt/nexus
 Environment=KUBECONFIG=%h/.kube/config
 ExecStart=/usr/bin/python3 tools/security/security_host.py snapshot --config %h/.config/nexus/security.json --rules %h/.config/nexus/security-rules
 UMask=0077

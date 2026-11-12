@@ -20,7 +20,7 @@ set -euo pipefail
 MODE=$1
 export KUBECONFIG=$HOME/.kube/config
 build_start=$SECONDS
-digest=$(python3 "$HOME/nexus/tools/e2e/hosta_e2e_image.py" ensure) || exit 2
+digest=$(python3 /opt/nexus/tools/e2e/hosta_e2e_image.py ensure) || exit 2
 printf 'TIMING e2e_image_wait %s\n' "$((SECONDS - build_start))"
 python3 - "$digest" "$MODE" <<'PY'
 import re,sys

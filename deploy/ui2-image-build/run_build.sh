@@ -15,12 +15,22 @@ report_failure() {
   fi
 }
 trap report_failure EXIT
-REPO="${REPO:-$HOME/nexus}"
+# The deploy tree is /opt/nexus, owned by the non-login service account `nexus` (docs/operations/HOST_A_RUNBOOK.md §2).
+# This script runs as the SSH deploy account, which only reads the tree: every write (git, deploy_info.json) goes
+# through sudo -u nexus, so ownership never drifts and each write is in the sudo log.
+REPO="${REPO:-/opt/nexus}"
+NEXUS_TREE_OWNER="${NEXUS_TREE_OWNER:-nexus}"
+# umask 0027: whatever the caller's umask, what the owner writes stays readable by group nexus (the deploy account).
+as_tree_owner() {
+  if [ "$(id -un)" = "$NEXUS_TREE_OWNER" ]; then (umask 0027 && "$@"); else (umask 0027 && sudo -n -u "$NEXUS_TREE_OWNER" "$@"); fi
+}
+# The deploy account cannot write the tree, so Python must not try to cache bytecode there.
+export PYTHONDONTWRITEBYTECODE=1
 cd "$REPO"
 NEXUS_DEPLOY_TARGETS="${NEXUS_DEPLOY_TARGETS:-service worker configuration compliance policy packet-analysis}"
-git fetch
-git checkout main
-git pull origin main
+as_tree_owner git fetch
+as_tree_owner git checkout main
+as_tree_owner git pull origin main
 
 # Use the updated checkout's scripts before any build or deployment changes.
 python3 "$REPO/tools/delivery/module_deploy.py" --validate-targets "$NEXUS_DEPLOY_TARGETS"
@@ -52,7 +62,7 @@ timing source_snapshot "$phase_start"
 phase_start=$SECONDS
 BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "Recording deploy_info.json: commit=$COMMIT_SHA built_at=$BUILT_AT"
-printf '{\n  "commit": "%s",\n  "built_at": "%s"\n}\n' "$COMMIT_SHA" "$BUILT_AT" > project/deploy_info.json
+printf '{\n  "commit": "%s",\n  "built_at": "%s"\n}\n' "$COMMIT_SHA" "$BUILT_AT" | as_tree_owner tee project/deploy_info.json >/dev/null
 
 echo "Starting loader..."
 CHANGES_STARTED=1

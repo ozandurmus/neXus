@@ -254,6 +254,7 @@ def ship_doubles(monkeypatch, diff, events, checks=None):
         return subprocess.CompletedProcess(args, code, output, "")
 
     monkeypatch.setattr(sa, "_git", git)
+    monkeypatch.setenv("NEXUS_HOST", "synthetic-host")
     monkeypatch.setattr(sa.subprocess, "run", run)
     monkeypatch.setattr(sa, "_preview_e2e", lambda *a: events.append(("preview",)))
     monkeypatch.setattr(sa, "_deploy", lambda *a: events.append(("deploy",)))
@@ -293,7 +294,8 @@ def test_docs_only_branch_skips_preview_build_and_deploy_but_keeps_every_gate(mo
         lambda e: e[:3] == ("gh", "pr", "create"),
         lambda e: e[0] == "checks",
         lambda e: e[:3] == ("gh", "pr", "merge"),
-        lambda e: e[:3] == ("push", "-q", "hosta"))]
+        lambda e: e[:3] == ("push", "-q", "--receive-pack=sudo -n -u nexus git-receive-pack")
+                  and e[3:] == ("ssh://synthetic-host/opt/nexus.git", "main"))]
     assert order == sorted(order), seq
 
 

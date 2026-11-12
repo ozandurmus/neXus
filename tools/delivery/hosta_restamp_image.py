@@ -134,7 +134,7 @@ if __name__ == "__main__":
     p.add_argument("action", choices=("build",))
     p.add_argument("--commit", required=True)
     p.add_argument("--tree", help="default: the tree of --commit in --repo")
-    p.add_argument("--repo", type=Path, default=Path.home() / "nexus")
+    p.add_argument("--repo", type=Path, default=Path("/opt/nexus"))
     args = p.parse_args()
     try:
         tree = args.tree or git_tree(args.repo, args.commit)

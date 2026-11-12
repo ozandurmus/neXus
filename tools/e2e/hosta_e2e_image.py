@@ -100,7 +100,7 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("action", choices=("start", "ensure"))
     p.add_argument("--commit")
-    p.add_argument("--repo", type=Path, default=Path.home() / "nexus")
+    p.add_argument("--repo", type=Path, default=Path("/opt/nexus"))
     args = p.parse_args()
     try:
         commit = args.commit or json.loads((args.repo / "project/deploy_info.json").read_text())["commit"]

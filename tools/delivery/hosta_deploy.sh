@@ -64,17 +64,20 @@ APPLY_NAMES=""
 for m in "${APPLY[@]:-}"; do [ -n "$m" ] && APPLY_NAMES="$APPLY_NAMES /tmp/$(basename "$m")"; done
 
 # Since the 2026-09-25 reinstall the host holds no GitHub credential: the code reaches it by a push to its own bare
-# repository (~/nexus.git), which ~/nexus (run_build.sh's checkout) pulls from.
-git -C "$(dirname "$0")/../.." push -q "ssh://$HOST/~/nexus.git" main || { echo "STOP: push to the host repository failed" >&2; exit 6; }
+# repository (/opt/nexus.git), which /opt/nexus (run_build.sh's checkout) pulls from. Both belong to the non-login
+# service account `nexus` (docs/operations/HOST_A_RUNBOOK.md §2); the SSH account writes only through sudo -u nexus,
+# so the receiving git process runs as that account.
+git -C "$(dirname "$0")/../.." push -q --receive-pack='sudo -n -u nexus git-receive-pack' "ssh://$HOST/opt/nexus.git" main \
+  || { echo "STOP: push to the host repository failed" >&2; exit 6; }
 
 ssh -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 "$HOST" "LIMIT=$LIMIT SKIP_SECURITY_B64='$SKIP_SECURITY_B64' APPLY_NAMES='$APPLY_NAMES' TARGETS='$TARGETS' PA_BUILD='$PA_BUILD' bash -s" <<'REMOTE'
 set -uo pipefail
 export KUBECONFIG=$HOME/.kube/config
 export NEXUS_SKIP_SECURITY_REASON="$(printf '%s' "$SKIP_SECURITY_B64" | base64 --decode)"
 # The committed run_build.sh is canonical: install it when the host copy differs (kept as a dated backup).
-if ! git --git-dir="$HOME/nexus.git" show main:deploy/ui2-image-build/run_build.sh | cmp -s - "$HOME/run_build.sh"; then
+if ! git --git-dir=/opt/nexus.git show main:deploy/ui2-image-build/run_build.sh | cmp -s - "$HOME/run_build.sh"; then
   cp -p "$HOME/run_build.sh" "$HOME/run_build.sh.bak-$(date -u +%Y%m%dT%H%MZ)" 2>/dev/null || true
-  git --git-dir="$HOME/nexus.git" show main:deploy/ui2-image-build/run_build.sh > "$HOME/run_build.sh"
+  git --git-dir=/opt/nexus.git show main:deploy/ui2-image-build/run_build.sh > "$HOME/run_build.sh"
   chmod 0755 "$HOME/run_build.sh"
   echo "run_build.sh synchronized from main"
 fi

@@ -52,9 +52,9 @@ remain in Secret references, never inline ConfigMaps or workload environments.
 Run on the deployment host:
 
 ```bash
-bash ~/nexus/tools/delivery/rollback.sh latest
-bash ~/nexus/tools/delivery/rollback.sh ~/release-snapshots/<snapshot-id>
-bash ~/nexus/tools/delivery/rollback.sh ~/release-snapshots/<snapshot-id> --apply
+bash /opt/nexus/tools/delivery/rollback.sh latest
+bash /opt/nexus/tools/delivery/rollback.sh ~/release-snapshots/<snapshot-id>
+bash /opt/nexus/tools/delivery/rollback.sh ~/release-snapshots/<snapshot-id> --apply
 ```
 
 Default behavior is read-only: verify checksums and schema, print `kubectl diff`
@@ -92,8 +92,8 @@ A snapshot schema lower than live refuses rollback by default. For the current
 additive migration policy, after confirming that the old images remain compatible:
 
 ```bash
-bash ~/nexus/tools/delivery/rollback.sh <snapshot-dir> --allow-newer-schema
-bash ~/nexus/tools/delivery/rollback.sh <snapshot-dir> --allow-newer-schema --apply
+bash /opt/nexus/tools/delivery/rollback.sh <snapshot-dir> --allow-newer-schema
+bash /opt/nexus/tools/delivery/rollback.sh <snapshot-dir> --allow-newer-schema --apply
 ```
 
 The flag permits old images on a newer schema; it does not change the schema.

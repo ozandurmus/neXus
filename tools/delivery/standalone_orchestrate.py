@@ -55,6 +55,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 HOME = REPO_ROOT.parent / f"{REPO_ROOT.name}-standalone"
 STATE_DIR = HOME / ".state"
 MODELS = ("gpt-6.1-sol", "gpt-6-luna", "gpt-6-sol", "gpt-6-astra")
+# The host's bare repository and the account that owns it (docs/operations/HOST_A_RUNBOOK.md section 2): the SSH
+# deploy account never writes it directly, so every push runs the receiving git as the tree owner.
+HOST_BARE_REPO = "/opt/nexus.git"
+HOST_RECEIVE_PACK = "sudo -n -u nexus git-receive-pack"
 SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{1,48}$")
 
 PREAMBLE = """You are a neXus engineer working on one small, well-defined change. Read AGENTS.md first (the project
@@ -642,6 +646,17 @@ def cmd_ship(args: argparse.Namespace) -> int:
         return _ship(args)
 
 
+def _host_mirror_url() -> str:
+    """ssh URL of the host's bare repository; the host itself is local configuration, never a repository literal."""
+    host = os.environ.get("NEXUS_HOST", "").strip()
+    if not host:
+        path = Path.home() / ".config" / "nexus" / "hosta"
+        host = path.read_text().splitlines()[0].strip() if path.is_file() else ""
+    if not host:
+        raise SystemExit("set NEXUS_HOST or write user@host to ~/.config/nexus/hosta")
+    return "ssh://" + host + HOST_BARE_REPO
+
+
 def _ship(args: argparse.Namespace) -> int:
     """Ship through a pull request (PO 2026-09-30): push the lane branch, open a PR, merge it, deploy from main."""
     skip_security = getattr(args, "skip_security", None)
@@ -765,7 +780,7 @@ def _ship(args: argparse.Namespace) -> int:
     subprocess.run(["git", "push", "-q", "origin", "--delete", branch], cwd=str(REPO_ROOT), capture_output=True)
     _git("fetch", "-q", "origin")
     _git("merge", "-q", "--ff-only", "origin/main")
-    _git("push", "-q", "hosta", "main")
+    _git("push", "-q", "--receive-pack=" + HOST_RECEIVE_PACK, _host_mirror_url(), "main")
     print(json.dumps({"pr": url, "merged": _git("rev-parse", "--short", "HEAD")}))
     if fast_path:
         print(json.dumps({"fast_path": "docs_only", "deployed": False, "pr": url}), flush=True)
