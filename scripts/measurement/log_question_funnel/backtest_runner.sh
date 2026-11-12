@@ -3,9 +3,9 @@
 # the filtered aggregates (labels and numbers). It starts only when the host is quiet: not before <not-before> Istanbul
 # time, no ship or deploy running on this workstation, no e2e pod running, every ui2 pod Running, the service pod older
 # than 10 minutes, all of it twice in a row. A run that loses its pod (a rollout) is repeated, at most three times.
-# Usage: backtest_runner.sh <payload-dir> <out-dir> [not-before HHMM, default 0315]
+# Usage: backtest_runner.sh <payload-dir> <out-dir> [not-before HHMM, default 0315] [set: backtest (default) | sweep]
 # <payload-dir> holds classes/, techvocab.txt, show_safe.sh and run_in_pod.sh (see the record's "How it was run").
-PAY=$1; OUT=$2; NB=${3:-0315}
+PAY=$1; OUT=$2; NB=${3:-0315}; SET=${4:-backtest}
 H=$(head -1 ~/.config/nexus/hosta)
 KEY=~/.ssh/id_ed25519
 mkdir -p "$OUT"
@@ -39,7 +39,7 @@ run_config() { # label, program arguments ...
     tar -C "$PAY" -cf - . | remote "export KUBECONFIG=\$HOME/.kube/config; kubectl -n ui2 exec -i $POD -- sh -c 'rm -rf /app/tmp/logbt; mkdir -p /app/tmp/logbt && tar xf - -C /app/tmp/logbt 2>/dev/null; LOGFUNNEL_DIR=/app/tmp/logbt sh /app/tmp/logbt/run_in_pod.sh $label 0 2400 $*'" > "$OUT/$label.start"
     pid=$(grep -o 'started [0-9]*' "$OUT/$label.start" | tail -1 | cut -d' ' -f2)
     [ -z "$pid" ] && { log "$label did not start"; continue; }
-    for i in $(seq 1 240); do   # up to 20 minutes
+    for i in $(seq 1 360); do   # up to 30 minutes of sleeping
       sleep 5
       state=$(remote "export KUBECONFIG=\$HOME/.kube/config; kubectl -n ui2 exec $POD -- sh -c '[ -d /proc/$pid ] && echo running || echo done'" | tail -1)
       [ "$state" = "done" ] && break
@@ -51,10 +51,19 @@ run_config() { # label, program arguments ...
   return 1
 }
 
-# A: no history before the test week (signatures only); B: the most history the pool has; C: the crash alert's week
-run_config A --end-day 2026-10-24 --test-days 7 --min-learn-days 7 --backtest 1
-run_config B --end-day 2026-10-23 --test-days 3 --min-learn-days 2 --backtest 1
-run_config C --test-days 7 --min-learn-days 7 --backtest 1 --only-event-devices 1
+# The pool is young: before 2026-10-24 no device-source pair has the 7 learning days of the 2026-11-11 rule, so the
+# configurations that look at the failover runs run with --signatures-ungated 1 (the rule off) to see what the detector finds.
+if [ "$SET" = "sweep" ]; then
+  # S1: the failover week, rule off, with the burst-threshold sweep and the pairs the rule would have let through
+  # S2: the newest week with the real 7-day gate, whole fleet: the steady-state background and the crash alert
+  run_config S1 --end-day 2026-10-24 --test-days 7 --min-learn-days 7 --backtest 1 --signatures-ungated 1
+  run_config S2 --test-days 7 --min-learn-days 7 --backtest 1
+else
+  # A: no history before the test week (signatures only); B: the most history the pool has; C: the crash alert's week
+  run_config A --end-day 2026-10-24 --test-days 7 --min-learn-days 7 --backtest 1 --signatures-ungated 1
+  run_config B --end-day 2026-10-23 --test-days 3 --min-learn-days 2 --backtest 1 --signatures-ungated 1
+  run_config C --test-days 7 --min-learn-days 7 --backtest 1 --only-event-devices 1 --signatures-ungated 1
+fi
 remote 'export KUBECONFIG=$HOME/.kube/config; P=$(kubectl -n ui2 get pods -l app.kubernetes.io/component=service -o name | head -1); kubectl -n ui2 exec $P -- rm -rf /app/tmp/logbt' >/dev/null
 log "done"
 echo DONE >> "$OUT/runner.log"

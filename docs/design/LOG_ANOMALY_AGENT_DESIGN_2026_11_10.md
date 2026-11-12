@@ -355,9 +355,18 @@ ATTENTION, UNKNOWN, NORMAL. There is no composite score. Each signature carries 
 `VENDOR_DOC` with a citation, or `PROVISIONAL`); a signature without provenance can produce INFO only.
 
 Baselines exclude windows with gaps, the first-run baseline, the day of a software version change and windows already
-flagged. A device with fewer than 14 usable days is `BASELINE_LEARNING` and gets only signature and new-template
-findings. Baselines need uninterrupted scheduled collection; while collection is switched off, rate detectors report
-UNKNOWN.
+flagged. A device-source pair with fewer than 7 usable days of history before the evaluated window is
+`NOT_EVALUABLE` (PO decision 2026-11-11, [PO_DECISION_RECORD_2026_11_11_LOG_FUNNEL_NOT_EVALUABLE_RULE.md](PO_DECISION_RECORD_2026_11_11_LOG_FUNNEL_NOT_EVALUABLE_RULE.md)):
+no line of that pair produces a finding that can become a question to the model, signature findings included, and
+the screen shows the state and the day count, never health. With 7 to 13 usable days the pair is
+`BASELINE_LEARNING` and gets only signature and new-template findings. Baselines need uninterrupted scheduled
+collection; while collection is switched off, rate detectors report UNKNOWN.
+
+*Amendment 2026-11-11:* the earlier sentence here gave a device with fewer than 14 usable days signature and
+new-template findings from the first day. The PO rule adds the lower band: below 7 days nothing is asked. The
+measurement behind it is [LOG_QUESTION_FUNNEL_MEASUREMENT_2026_11_10.md](LOG_QUESTION_FUNNEL_MEASUREMENT_2026_11_10.md)
+and [LOG_FUNNEL_BACKTEST_2026_11_11.md](LOG_FUNNEL_BACKTEST_2026_11_11.md): with two to five days of history the
+`base` policy would ask about 89 to 92 % of Check Point device-windows.
 
 Rejected for the first set: isolation forests, sequence models and other trained models. They need training
 infrastructure, are hard to explain to an operator and are not reproducible in the sense of rule 1.
@@ -801,6 +810,8 @@ Phase 0 measurements (counts, sizes, durations and booleans only; no raw value l
 - **Audit:** every call path writes the intent and result records; a failed intent write prevents the call.
 - **RBAC:** route tests per action and role; aiview never triggers a call and never sees real names.
 - **Determinism:** re-indexing the same chunks gives the same template ids and the same findings.
+- **Evaluability:** a pair with fewer than 7 usable days yields `NOT_EVALUABLE` and no question, a planted crash on
+  such a pair included; the same pair one day past the threshold yields its signature finding (§4.4).
 - **Cache:** golden test on the static prefix bytes.
 - **UI:** render harness with masked fixtures; model text rendered as plain text.
 - **Evaluation set:** known events (failover exercises, known crash nights) for detector recall; a rubric scored by the

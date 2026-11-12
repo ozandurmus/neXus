@@ -81,6 +81,90 @@ def backtest_tables(r):
     table(["Event kind", "Vendor", "Clock"] + bits, rows)
 
 
+BURST_N = [3, 10, 20, 30]
+FLAVOURS = [("ha", "an HA burst alone"), ("sig", "any signature (crash, restart, HA or link burst at the same threshold)"),
+            ("question", "the `base` question")]
+
+
+def ratio(a, b):
+    return f"{a} / {b} ({pct(a, b)})" if b else f"{a} / 0"
+
+
+def sweep_tables(r):
+    keys = sorted({(k[1], k[2]) for k in r if k[0] == "bt" and len(k) == 5 and k[3] == "all"})
+    if keys:
+        for flavour, label in FLAVOURS:
+            print(f"### Sweep: {label}, by burst threshold (device clock read as Istanbul time)\n")
+            rows = []
+            for kind, vendor in keys:
+                def g(m, reading="local"):
+                    return r.get(("bt", kind, vendor, reading, m), 0)
+                if not g("in_test_window"):
+                    continue
+                for t in BURST_N:
+                    f = f"{flavour}_n{t}"
+                    rows.append([kind, vendor, t, ratio(g("m_" + f), g("in_test_window")),
+                                 ratio(g("c_" + f), g("control_member_windows")), ratio(g("o_" + f), g("others_active")),
+                                 ratio(g("bg_" + f), g("bg_active"))])
+            table(["Event kind", "Vendor", "Lines per 10 min", "Event rows caught", "Own device, other days (same clock window)",
+                   "Other devices, same window", "Other devices, other days (background)"], rows)
+    if any(k[0] == "sweep" for k in r):
+        print("### Sweep: share of active device-days with a finding, by burst threshold (all devices of the test window)\n")
+        rows = []
+        for vendor in ("cp", "pan"):
+            days = r.get(("sweep", vendor, "active_device_days"), 0)
+            if not days:
+                continue
+            for t in BURST_N:
+                rows.append([vendor, t, n(days)] + [
+                    ratio(r.get(("sweep", vendor, f"{flavour}_n{t}", "device_days"), 0), days)
+                    for flavour in ("ha", "link", "sig", "question")])
+        table(["Vendor", "Lines per 10 min", "Active device-days", "HA burst", "Link burst", "Any signature",
+               "`base` question"], rows)
+        print("### Sweep: device-hours with a finding, by burst threshold\n")
+        rows = []
+        for vendor in ("cp", "pan"):
+            hours = r.get(("sweep", vendor, "active_device_hours"), 0)
+            if not hours:
+                continue
+            for t in BURST_N:
+                rows.append([vendor, t, n(hours)] + [
+                    ratio(r.get(("sweep", vendor, f"{flavour}_n{t}", "device_hours"), 0), hours)
+                    for flavour in ("ha", "link", "sig", "question")])
+        table(["Vendor", "Lines per 10 min", "Active device-hours", "HA burst", "Link burst", "Any signature",
+               "`base` question"], rows)
+        print("### Sweep: burst episodes in the test window, by threshold\n")
+        rows = []
+        for label, base in (("HA", "burst_ha"), ("link", "burst_link")):
+            rows.append([label] + [n(r.get(("sig", base if t == 3 else f"{base}_n{t}", "episodes"), 0)) for t in BURST_N])
+        table(["Class"] + [f"{t} lines" for t in BURST_N], rows)
+
+
+def rule_tables(r):
+    sources = [s for s in SOURCES if r.get(("days", s, "devices_enough_history"), 0) or r.get(("days", s, "devices_short_history"), 0)]
+    if not sources:
+        return
+    print("### The NOT_EVALUABLE rule: device-source pairs and what it withholds\n")
+    rows = []
+    for s in sources:
+        ok = r.get(("days", s, "devices_enough_history"), 0)
+        short = r.get(("days", s, "devices_short_history"), 0)
+        dropped = sum(v for k, v in r.items() if k[0] == "sig" and k[2] == s and k[3] == "not_evaluable_lines")
+        kept = sum(v for k, v in r.items() if k[0] == "sig" and k[2] == s and k[3] == "lines")
+        rows.append([f"`{s}`", n(ok + short), n(ok), n(short), pct(short, ok + short), n(dropped), n(kept)])
+    table(["Source", "Pairs (devices with the source)", "Evaluable", "NOT_EVALUABLE", "share", "Signature lines withheld",
+           "Signature lines kept"], rows)
+    rows = []
+    for kind, vendor in sorted({(k[1], k[2]) for k in r if k[0] == "bt" and len(k) == 5 and k[3] == "all"}):
+        present = r.get(("bt", kind, vendor, "all", "member_pairs_present"), 0)
+        ok = r.get(("bt", kind, vendor, "all", "member_pairs_evaluable"), 0)
+        if present:
+            rows.append([kind, vendor, present, ok, present - ok])
+    if rows:
+        print("Pairs of the event devices:\n")
+        table(["Event kind", "Vendor", "Pairs present", "Evaluable", "NOT_EVALUABLE"], rows)
+
+
 def main():
     r = load(sys.argv[1])
     g = lambda *k: r.get(tuple(k), 0)  # noqa: E731
@@ -208,6 +292,8 @@ def main():
            ["Devices on which the most widespread address occurs", n(g("self", "top_source_devices"))],
            ["Lines carrying that address", n(g("self", "top_source_lines"))]])
     backtest_tables(r)
+    sweep_tables(r)
+    rule_tables(r)
     meta = {k[1]: v for k, v in r.items() if k[0] == "meta"}
     print("Meta: " + ", ".join(f"{k}={v}" for k, v in sorted(meta.items())))
 
