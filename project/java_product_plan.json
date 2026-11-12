@@ -142,6 +142,7 @@
     "NXS-LOCAL-0158"
   ],
   "backlog_classifications": {
+    "CP-SHELL-M2-LAB-READ": "java_debt",
     "ubi_base_glibc_fix_pending": "java_debt",
     "hosta_apparmor_stacked_label_override": "java_debt",
     "enterprise_phase0_logging_monitoring_scans": "java_feature",
