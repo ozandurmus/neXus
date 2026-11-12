@@ -114,8 +114,12 @@ class PathValidationFenceTest {
         String after = caseBody(Files.readString(migrations.resolve("V188__path_analysis_validation.sql")));
         assertEquals(before.replace("'cp_spike_layout_review') THEN 'diagnostics'",
                 "'cp_spike_layout_review','path_validation') THEN 'diagnostics'"), after);
+        // V207 (credential canary, PO 2026-11-11) is V188's mapping plus one backup capability and nothing else.
+        String v207 = caseBody(Files.readString(migrations.resolve("V207__credential_failure_alert.sql")));
+        assertEquals(after.replace("'fgt_config_backup') THEN 'backup'", "'fgt_config_backup','credential_canary') THEN 'backup'"), v207);
         try (var files = Files.list(migrations)) {
-            assertEquals(List.of("V178__pan_config_sync_remediation.sql", "V188__path_analysis_validation.sql"),
+            assertEquals(List.of("V178__pan_config_sync_remediation.sql", "V188__path_analysis_validation.sql",
+                    "V207__credential_failure_alert.sql"),
                     files.map(p -> p.getFileName().toString()).filter(n -> {
                         try {
                             return Files.readString(migrations.resolve(n)).contains("CREATE OR REPLACE FUNCTION ui2_job_module")
