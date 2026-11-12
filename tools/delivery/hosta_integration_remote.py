@@ -18,7 +18,8 @@ def kubectl(*args, data=None):
 def run(name):
     if not re.fullmatch(r"ui2-integration-[a-f0-9]{12}", name):
         raise ValueError("invalid run name")
-    os.chdir(Path.home() / "nexus")
+    # The host deploy tree (docs/operations/HOST_A_RUNBOOK.md §2); the override exists for offline tests only.
+    os.chdir(os.environ.get("NEXUS_HOST_TREE", "/opt/nexus"))
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     if json.loads(Path("project/deploy_info.json").read_text())["commit"] != commit:
         raise ValueError("checkout does not match deployment marker")

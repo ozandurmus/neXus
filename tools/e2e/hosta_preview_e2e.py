@@ -29,6 +29,9 @@ import threading
 import time
 from zoneinfo import ZoneInfo
 
+# The host deploy tree, owned by the service account `nexus` (docs/operations/HOST_A_RUNBOOK.md §2).
+HOST_TREE = Path("/opt/nexus")
+
 NS = "ui2-preview"
 BUILD_NS = "ui2-build"
 LABEL = "nexus/preview-run"
@@ -163,7 +166,7 @@ def private_log():
 def overlay_host_inputs(repo):
     """Copy only the approved host-local build inputs into the archived candidate."""
     _set_step("overlay host inputs")
-    source = (Path.home() / "nexus").resolve()
+    source = HOST_TREE.resolve()
     repo = repo.resolve()
     patterns = ("ui2/.ca/*.pem",
                 "ui2/.gradle-home/wrapper/dists/gradle-8.14.3-bin/*/gradle-8.14.3-bin.zip")

@@ -29,6 +29,11 @@ operations (`kubectl -n ui2 ...`), and network reachability diagnostic probes
 (`ping`, `nc`, `traceroute`, SSH banner test). Agents MUST NOT invoke `sudo` or
 touch incumbent workloads.
 
+Superseded after the 2026-09-24 reinstall: the host belongs to neXus and the
+agent account has logged sudo, with the Product Owner's prior yes for removals
+and other irreversible steps
+(`docs/design/PO_DECISION_RECORD_2026_09_24_HOST_A_OWNED_BY_NEXUS_AGENT_SUDO.md`).
+
 Host-key trust was pinned by the human on first connection and must stay
 `StrictHostKeyChecking yes` (`15A` CR-3).
 
@@ -36,8 +41,20 @@ Host-key trust was pinned by the human on first connection and must stay
 
 On the host:
 
-- The repository is cloned in the operator's home directory. It is a plain
-  public clone; no credential is stored for it.
+- The deploy tree is `/opt/nexus` (the deployment staging location registered
+  in the corporate application inventory). Its origin is the bare repository
+  `/opt/nexus.git`, which `tools/delivery/hosta_deploy.sh` pushes to; no
+  credential is stored on the host. Both belong to the service account `nexus`
+  (system account, no login shell, locked password) and are mode `2750`.
+- The SSH deploy account is in group `nexus`, so it reads the tree, but it
+  never writes it directly: the push runs `sudo -n -u nexus git-receive-pack`,
+  and `run_build.sh` runs its git commands and the `deploy_info.json` write as
+  `sudo -n -u nexus`. Ownership cannot drift and every write is in the sudo
+  log. Its global git config lists both paths as `safe.directory`, because
+  read-only git commands there (rev-parse, show, archive) run as that account.
+- `~/run_build.sh`, `~/build-job-proxy.yaml`, `~/release-snapshots/` and the
+  user unit `security-source-refresh` (working directory `/opt/nexus`) stay in
+  the deploy account's home.
 - `kubectl` is k3s's own bundled binary. The operator's kubeconfig is a copy of
   the cluster's, in their home under `.kube/`, and `KUBECONFIG` is exported from
   their shell profile. Without that export, `kubectl` reads the root-owned

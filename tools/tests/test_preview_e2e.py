@@ -1113,6 +1113,7 @@ def synthetic_host_inputs(home):
 
 def test_context_preparation_matches_production_metadata_and_preserves_source(tmp_path, monkeypatch):
     monkeypatch.setattr(preview.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(preview, "HOST_TREE", tmp_path / "nexus")
     inputs = synthetic_host_inputs(tmp_path)
     source = tmp_path / "nexus"
     (source / "project").mkdir()
@@ -1125,8 +1126,11 @@ def test_context_preparation_matches_production_metadata_and_preserves_source(tm
     production = (ROOT / "deploy/ui2-image-build/run_build.sh").read_text()
     preparation = production.split('BUILT_AT="', 1)[1].split('echo "Starting loader...', 1)[0]
     # Fail if production gains another generated context input without preview parity.
-    assert re.findall(r">\s*(\S+)", preparation) == ["project/deploy_info.json"]
-    printf_line = next(line for line in preparation.splitlines() if line.startswith("printf "))
+    # (written as the tree owner: `printf ... | as_tree_owner tee <file> >/dev/null`)
+    assert re.findall(r"\btee\s+(\S+)", preparation) == ["project/deploy_info.json"]
+    assert [m for m in re.findall(r">\s*(\S+)", preparation) if m != "/dev/null"] == []
+    printf_line = next(line for line in preparation.splitlines() if line.startswith("printf ")).split(" | ", 1)[0]
+    printf_line += " > project/deploy_info.json"
     production_context = tmp_path / "production"
     (production_context / "project").mkdir(parents=True)
     subprocess.run(["bash", "-c", 'COMMIT_SHA=$1; BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"\n' + printf_line,
@@ -1149,6 +1153,7 @@ def test_context_preparation_matches_production_metadata_and_preserves_source(tm
 
 def test_host_overlay_copies_only_approved_globs_and_preserves_source(tmp_path, monkeypatch):
     monkeypatch.setattr(preview.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(preview, "HOST_TREE", tmp_path / "nexus")
     paths = synthetic_host_inputs(tmp_path)
     excluded = (".env", "ui2/.env", "ui2/.ca/private.key", "ui2/.ca/nested/extra.pem",
                 "ui2/.gradle-home/cache.bin",
@@ -1173,6 +1178,7 @@ def test_host_overlay_copies_only_approved_globs_and_preserves_source(tmp_path, 
 @pytest.mark.parametrize("fault", ["ca-missing", "zip-missing", "file-link", "directory-link", "candidate-link"])
 def test_host_overlay_fails_closed_before_build_for_missing_or_linked_inputs(tmp_path, monkeypatch, fault):
     monkeypatch.setattr(preview.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(preview, "HOST_TREE", tmp_path / "nexus")
     paths = synthetic_host_inputs(tmp_path)
     source = tmp_path / "nexus"
     candidate = tmp_path / "candidate"

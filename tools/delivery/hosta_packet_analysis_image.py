@@ -113,7 +113,7 @@ if __name__ == "__main__":
     p.add_argument("action", choices=("build",))
     p.add_argument("--commit", required=True)
     p.add_argument("--service-image", required=True, help="the main image, " + REPOSITORY + "@sha256:<digest>")
-    p.add_argument("--repo", type=Path, default=Path.home() / "nexus")
+    p.add_argument("--repo", type=Path, default=Path("/opt/nexus"))
     args = p.parse_args()
     try:
         print(REPOSITORY + "@" + build(args.commit, args.repo, args.service_image))

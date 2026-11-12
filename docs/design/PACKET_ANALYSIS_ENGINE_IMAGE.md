@@ -117,8 +117,8 @@ Egress `UNKNOWN` until the first build (as BP-6): the builder must reach `quay.i
 ## 5. Host commands (orchestrator; build + smoke test)
 
 ```bash
-# On HOST-A, ~/nexus at the commit to test, no deploy running (check in-flight jobs first).
-cd ~/nexus && COMMIT=$(git rev-parse HEAD)
+# On HOST-A, /opt/nexus at the commit to test, no deploy running (check in-flight jobs first).
+cd /opt/nexus && COMMIT=$(git rev-parse HEAD)
 # 1. Context + config map exactly as run_build.sh streams them.
 kubectl apply -f deploy/ui2-image-build/00-namespace.yaml -f deploy/ui2-image-build/10-context-pvc.yaml
 kubectl delete pod ui2-build-context-loader -n ui2-build --ignore-not-found --force --grace-period=0
