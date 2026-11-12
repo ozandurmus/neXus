@@ -1192,7 +1192,7 @@
     {
       "id": "ubi_base_glibc_fix_pending",
       "category": "security",
-      "title": "UBI9 runtime base: glibc MEDIUM findings wait for a Red Hat fixed package; refresh the base when the RHSA lands (CVE-2026-91403 acceptance stays: eMudhra roots are blocklisted in the image)",
+      "title": "UBI9 runtime base: glibc MEDIUM findings wait for a Red Hat fix; refresh the base when it lands",
       "status": "planned",
       "priority": "P2",
       "target": "BASE_IMAGE_REFRESH record s8",
@@ -1201,7 +1201,7 @@
     {
       "id": "hosta_apparmor_stacked_label_override",
       "category": "reliability",
-      "title": "HOST-A keeps its own cri-containerd AppArmor profile: kernels -42 and -43 still stack the label; remove it when Ubuntu restores the old labelling (ledger entry 5/6)",
+      "title": "HOST-A own cri-containerd AppArmor profile (kernels -42/-43); remove when Ubuntu fixes labelling",
       "status": "planned",
       "priority": "P3",
       "target": "HOST_LEDGER_HOST-A entries 5-6",
@@ -1264,7 +1264,7 @@
     {
       "id": "CP-SHELL-M2-LAB-READ",
       "category": "collection",
-      "title": "Check Point shell normalization: one-off lab read M2 (deferred by PO 2026-11-11)",
+      "title": "Check Point shell: one-off lab read M2 (PO deferred 2026-11-11)",
       "status": "planned",
       "priority": "P2",
       "target": "",

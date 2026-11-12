@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0383 · Track: PCP.x · Generated: 2026-11-12T19:41:38Z
+Build: NXS-LOCAL-0383 · Track: PCP.x · Generated: 2026-11-12T19:43:48Z
 
 ## Now
 - NXS-LOCAL-0383 — Enterprise stack alignment, phase 0: Spring Security sign-in, JSON logs, monitoring, secrets, scans (in_progress)
