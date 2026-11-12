@@ -17,10 +17,12 @@ regexes = [
 ]
 
 # PO-approved retired dashboard token; preserve history. No working-tree path exemption.
+# 42ee5549 (2026-11-12, advisory fetch workload): a set of environment variable NAMES put ..._FETCH_TOKEN and
+# ..._INGEST_URL on one line, read as token=value; no secret exists and the line is rewritten in the working tree.
 [[allowlists]]
-description = "Retired local dashboard bearer token, PO 2026-09-30; review 2026-12-31"
+description = "Retired local dashboard bearer token, PO 2026-09-30; advisory env-name false positive 2026-11-12; review 2026-12-31"
 targetRules = ["generic-api-key"]
-commits = ["8288cb4cd61178d049d348da39d95816f5e93852"]
+commits = ["8288cb4cd61178d049d348da39d95816f5e93852", "42ee5549bbbe89672e62d029043331404d736438"]
 
 # Exact synthetic fixture paths, scoped to this rule; all other rules remain active.
 # Configuration syntax: https://github.com/gitleaks/gitleaks#configuration
