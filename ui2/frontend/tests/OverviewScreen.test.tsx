@@ -86,6 +86,8 @@ describe("Overview -- what to look at today (OVERVIEW_ATTENTION_LIST_DESIGN_2026
     const links = within(row).getAllByRole("link");
     expect(links).toHaveLength(1);
     expect(links[0]).toHaveAttribute("href", "?screen=backups&artefact=none");
+    // the header keeps the populated-data line the e2e suite reads (e2e/screens.spec.ts)
+    expect(screen.getByText(/Estate assurance · [1-9]\d* (enrolled )?devices/)).toBeInTheDocument();
     // the list comes before the fleet summary and the framework bars
     const fleet = screen.getByTestId("fleet-summary");
     expect(list.compareDocumentPosition(fleet) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

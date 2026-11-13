@@ -702,7 +702,8 @@ export function OverviewScreen() {
     <ScreenRoot>
       <ScreenHeader
         title="Overview"
-        subtitle={`${estateDevicesLabel(d)} · ${clustersEnrolled} clusters · as of ${formatUtc(data.generated_at, false)} ${DISPLAY_TZ_LABEL}`}
+        // "Estate assurance · N enrolled devices" is also the e2e suite's populated-data check (e2e/screens.spec.ts).
+        subtitle={`Estate assurance · ${estateDevicesLabel(d)} · ${clustersEnrolled} clusters · as of ${formatUtc(data.generated_at, false)} ${DISPLAY_TZ_LABEL}`}
         actions={<FreshnessChip evidence={data.evidence} />}
       />
 
