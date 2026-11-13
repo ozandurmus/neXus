@@ -17,6 +17,10 @@ import java.util.*;
  * Synthetic fixtures: documentation addresses and masked names only.
  */
 class PolicyHygieneAccessRoleTest {
+    // Compares the earlier engine and its oracles, which model no extended construct (negated address cells, source
+    // ports, ICMP codes): run with the former resolution. PolicyHygieneExtendedResolutionTest covers the extension.
+    @org.junit.jupiter.api.BeforeEach void formerResolution() { PolicyNormalization.Resolver.EXTENDED.set(false); }
+    @org.junit.jupiter.api.AfterEach void restoreResolution() { PolicyNormalization.Resolver.EXTENDED.remove(); }
     // This class pins the disjointness bound of an access role. X1 (pass-over by non-containment) would also release some
     // of its fixtures for a different reason, so every verdict here is read with X1 off; X1 over access roles is in
     // PolicyHygieneNonContainmentTest.

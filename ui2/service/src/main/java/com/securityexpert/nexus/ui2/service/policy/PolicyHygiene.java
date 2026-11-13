@@ -578,9 +578,15 @@ public final class PolicyHygiene {
         private static long[] bounds(List<Selector> selectors) {
             long[] out = new long[WIDTH]; int at = 0;
             for (Selector s : selectors) for (String family : FAMILIES) {
-                var ranges = s.ranges().get(family); boolean absent = ranges == null || ranges.isEmpty();
-                out[at++] = s.any() ? Long.MIN_VALUE : absent ? Long.MAX_VALUE : ranges.get(0).start();
-                out[at++] = s.any() ? Long.MAX_VALUE : absent ? Long.MIN_VALUE : ranges.get(ranges.size() - 1).end();
+                // A source-port family (PolicyNormalization#sourceFamily) counts towards its protocol's slot: the bound
+                // stays a necessary condition for containment whichever source ports either side restricts.
+                long lo = Long.MAX_VALUE, hi = Long.MIN_VALUE;
+                for (var entry : s.ranges().entrySet()) {
+                    if (!PolicyNormalization.protocol(entry.getKey()).equals(family) || entry.getValue().isEmpty()) continue;
+                    lo = Math.min(lo, entry.getValue().get(0).start()); hi = Math.max(hi, entry.getValue().get(entry.getValue().size() - 1).end());
+                }
+                out[at++] = s.any() ? Long.MIN_VALUE : lo;
+                out[at++] = s.any() ? Long.MAX_VALUE : hi;
             }
             return out;
         }

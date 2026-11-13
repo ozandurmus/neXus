@@ -40,11 +40,13 @@ class PolicyHygieneTest {
         assertEquals("CONFLICT", conflict.shadowStatus());
         assertTrue(conflict.findings().stream().anyMatch(f -> f.findingClass().equals("conflict") && f.severity().equals("HIGH")));
     }
-    @Test void unresolvedNegationCyclesDynamicAndIdentityConstraintsStayUnknown() {
+    @Test void unresolvedCyclesDynamicAndIdentityConstraintsStayUnknownAndNegationResolves() {
         var objects = objects(); objects.put("cycle", new PolicyObject("cycle", "OBJ-GROUP-02", "group", List.of("cycle"), List.of(), "RESOLVED"));
         objects.put("dynamic", object("dynamic", "dynamic-object"));
         var first = rule("r1", "any", "any", "allow", true); var next = rule("r2", "host", "port", "allow", true);
-        for (Rule unknown : List.of(edit(next, new Cell(List.of("host"), true), Map.of()), edit(next, cell("missing"), Map.of()),
+        // A negated address cell resolves to its complement (shadowing resolver): the any/any rule covers it.
+        assertEquals("REDUNDANT", analyze(List.of(first, edit(next, new Cell(List.of("host"), true), Map.of())), objects).rules().get("r2").shadowStatus());
+        for (Rule unknown : List.of(edit(next, cell("missing"), Map.of()),
                 edit(next, cell("cycle"), Map.of()), edit(next, cell("dynamic"), Map.of()), edit(next, cell("host"), Map.of("source-user", List.of("OBJ-USER-01"))))) {
             var result = analyze(List.of(first, unknown), objects).rules().get("r2");
             assertEquals("UNKNOWN", result.shadowStatus()); assertNull(result.coveringRuleId());

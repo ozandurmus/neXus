@@ -408,17 +408,47 @@ final class PolicyNormalization {
     static boolean disjoint(Selector a, Selector b, Budget budget) {
         if (a.any() || b.any()) return false;
         if (!a.tokens().isEmpty() || !b.tokens().isEmpty()) return false;
-        for (var entry : a.ranges().entrySet()) {
-            var mine = entry.getValue(); var theirs = b.ranges().getOrDefault(entry.getKey(), List.of());
-            for (int i = 0, j = 0; i < mine.size() && j < theirs.size(); ) {
-                budget.spend();
-                Range x = mine.get(i), y = theirs.get(j);
-                if (x.end() < y.start()) i++;
-                else if (y.end() < x.start()) j++;
-                else return false;
-            }
+        // Families of one protocol meet when their source ports and their values both overlap (a plain family has every
+        // source port); families of different protocols never meet.
+        for (var mine : a.ranges().entrySet()) for (var theirs : b.ranges().entrySet()) {
+            if (!protocol(mine.getKey()).equals(protocol(theirs.getKey()))) continue;
+            if (overlap(sources(mine.getKey()), sources(theirs.getKey()), budget) && overlap(mine.getValue(), theirs.getValue(), budget)) return false;
         }
         return true;
+    }
+    private static boolean overlap(List<Range> mine, List<Range> theirs, Budget budget) {
+        for (int i = 0, j = 0; i < mine.size() && j < theirs.size(); ) {
+            budget.spend();
+            Range x = mine.get(i), y = theirs.get(j);
+            if (x.end() < y.start()) i++;
+            else if (y.end() < x.start()) j++;
+            else return true;
+        }
+        return false;
+    }
+    /** The two source-port fields of a Palo Alto service object (shadowing resolver only). */
+    static final Set<String> SOURCE_PORT_FIELDS = Set.of("protocol/tcp/source-port", "protocol/udp/source-port");
+    static final long IPV4_MAX = 0xFFFFFFFFL;
+    private static final List<Range> EVERY_PORT = List.of(new Range(0, 65535));
+    /**
+     * The family of a TCP or UDP service restricted to source ports: {@code tcp|s=a-b,c-d} with the merged, sorted source
+     * ranges, so equal restrictions share one family; its ranges are the destination ports. A plain {@code tcp} or
+     * {@code udp} family has every source port.
+     */
+    static String sourceFamily(String protocol, List<Range> sources) {
+        StringBuilder key = new StringBuilder(protocol).append("|s=");
+        for (int i = 0; i < sources.size(); i++) key.append(i == 0 ? "" : ",").append(sources.get(i).start()).append('-').append(sources.get(i).end());
+        return key.toString();
+    }
+    /** The protocol of a family: the family itself, or the part before a source-port restriction. */
+    static String protocol(String family) { int at = family.indexOf("|s="); return at < 0 ? family : family.substring(0, at); }
+    /** The source ports of a family: every port for a plain TCP/UDP family; for any other plain family, one whole range. */
+    static List<Range> sources(String family) {
+        int at = family.indexOf("|s=");
+        if (at < 0) return EVERY_PORT;
+        List<Range> out = new ArrayList<>();
+        for (String part : family.substring(at + 3).split(",")) { String[] ends = part.split("-"); out.add(new Range(Long.parseLong(ends[0]), Long.parseLong(ends[1]))); }
+        return out;
     }
     /**
      * X1: the partial prior provably cannot be the single earlier rule that covers the match. The prior's match lies
@@ -570,11 +600,53 @@ final class PolicyNormalization {
         // an application reference set holds its subsets.
         if (!a.tokens().containsAll(b.tokens())) return false;
         for (var entry : b.ranges().entrySet()) {
-            var outer = a.ranges().getOrDefault(entry.getKey(), List.of()); int i = 0;
-            for (Range inner : entry.getValue()) {
+            String family = entry.getKey();
+            if (family.contains("|s=") || a.ranges().keySet().stream().anyMatch(k -> k.startsWith(family + "|s="))) {
+                if (!containsWithSources(a, family, entry.getValue(), budget)) return false;
+                continue;
+            }
+            if (!within(a.ranges().getOrDefault(family, List.of()), entry.getValue(), budget)) return false;
+        }
+        return true;
+    }
+    /** Every inner range lies inside one merged outer range (both sorted and merged). */
+    private static boolean within(List<Range> outer, List<Range> innerRanges, Budget budget) {
+        int i = 0;
+        for (Range inner : innerRanges) {
+            budget.spend();
+            while (i < outer.size() && outer.get(i).end() < inner.start()) { budget.spend(); i++; }
+            if (i == outer.size() || outer.get(i).start() > inner.start() || outer.get(i).end() < inner.end()) return false;
+        }
+        return true;
+    }
+    /**
+     * Exact containment of a TCP/UDP family when source ports are in play on either side: every (source port,
+     * destination port) pair of the inner family lies in some outer family of the same protocol. The inner source ports
+     * are cut at every outer source-range boundary; on each piece the destination ports of the outer families whose
+     * sources hold the piece are merged and must hold the inner destinations.
+     */
+    private static boolean containsWithSources(Selector a, String family, List<Range> destinations, Budget budget) {
+        String protocol = protocol(family);
+        List<Map.Entry<String, List<Range>>> outer = new ArrayList<>();
+        for (var e : a.ranges().entrySet()) if (protocol(e.getKey()).equals(protocol)) outer.add(e);
+        TreeSet<Long> cuts = new TreeSet<>();
+        for (Range r : sources(family)) { cuts.add(r.start()); cuts.add(r.end() + 1); }
+        for (var e : outer) for (Range r : sources(e.getKey())) { budget.spend(); cuts.add(r.start()); cuts.add(r.end() + 1); }
+        for (Range r : sources(family)) {
+            for (Long from : cuts.subSet(r.start(), true, r.end(), true)) {
                 budget.spend();
-                while (i < outer.size() && outer.get(i).end() < inner.start()) { budget.spend(); i++; }
-                if (i == outer.size() || outer.get(i).start() > inner.start() || outer.get(i).end() < inner.end()) return false;
+                Long next = cuts.higher(from); long to = Math.min(r.end(), next == null ? r.end() : next - 1);
+                List<Range> merged = new ArrayList<>();
+                for (var e : outer) if (sources(e.getKey()).stream().anyMatch(s -> s.start() <= from && s.end() >= to)) merged.addAll(e.getValue());
+                merged.sort(Comparator.comparingLong(Range::start));
+                List<Range> union = new ArrayList<>();
+                for (Range m : merged) {
+                    budget.spend();
+                    if (!union.isEmpty() && union.get(union.size() - 1).end() + 1 >= m.start()) {
+                        var last = union.remove(union.size() - 1); union.add(new Range(last.start(), Math.max(last.end(), m.end())));
+                    } else union.add(m);
+                }
+                if (!within(union, destinations, budget)) return false;
             }
         }
         return true;
@@ -585,9 +657,20 @@ final class PolicyNormalization {
         final Map<String, Selector> memo = new HashMap<>();
         /** The snapshot id whose mapper references identify application-default and applications; null: not recognised. */
         private final String panSnapshot;
-        Resolver(Map<String, PolicyObject> objects, Budget budget) { this(objects, budget, null); }
-        private Resolver(Map<String, PolicyObject> objects, Budget budget, String panSnapshot) {
-            this.objects = objects; this.budget = budget; this.panSnapshot = panSnapshot;
+        /**
+         * Shadowing only: ICMP services, the Check Point comparison port forms, Palo Alto source ports and negated address
+         * cells resolve (see {@link #service}, {@link #cell}). Lookup, NAT and path analysis keep the plain resolver,
+         * whose queries read the "ipv4", "tcp" and "udp" families only, so for them these stay unresolved as before.
+         */
+        final boolean extended;
+        /**
+         * Reference switch for tests only: false gives the former resolution (no extended construct), against which the
+         * differential tests compare the earlier engine. Production never changes it.
+         */
+        static final ThreadLocal<Boolean> EXTENDED = ThreadLocal.withInitial(() -> true);
+        Resolver(Map<String, PolicyObject> objects, Budget budget) { this(objects, budget, null, false); }
+        private Resolver(Map<String, PolicyObject> objects, Budget budget, String panSnapshot, boolean extended) {
+            this.objects = objects; this.budget = budget; this.panSnapshot = panSnapshot; this.extended = extended;
         }
         /**
          * The resolver of shadowing ({@code PolicyHygiene}): for a Palo Alto snapshot it also resolves application-default
@@ -597,10 +680,13 @@ final class PolicyNormalization {
         static Resolver shadowing(PolicySnapshot snapshot, Budget budget) {
             var metadata = snapshot.metadata();
             boolean pan = metadata.vendor().equals("PAN") && metadata.id() != null && !metadata.id().isBlank();
-            return new Resolver(snapshot.objects(), budget, pan ? metadata.id() : null);
+            return new Resolver(snapshot.objects(), budget, pan ? metadata.id() : null, EXTENDED.get());
         }
         Selector cell(Cell cell, String family) {
-            if (cell.negated()) throw new Unknown("negated selector");
+            if (cell.negated()) {
+                if (!extended || !family.equals("address")) throw new Unknown("negated selector");
+                return complement(cell(new Cell(cell.refs(), false), family));
+            }
             if (cell.refs().isEmpty()) throw new Unknown("missing selector");
             if (family.equals("service") && applicationDefault(cell)) { budget.spend(); return APPLICATION_DEFAULT_SERVICE; }
             List<Selector> parts = new ArrayList<>();
@@ -822,21 +908,80 @@ final class PolicyNormalization {
         }
         Selector service(PolicyObject o) {
             var fields = fields(o); Map<String, List<Range>> ranges = new TreeMap<>();
+            String protocol = fields.get("protocol");
+            if (extended && ("icmp".equals(protocol) || "icmp6".equals(protocol))) return icmp(protocol, fields);
             for (var entry : fields.entrySet()) {
                 String key = entry.getKey(); if (key.equals("protocol")) continue;
-                String protocol = key.equals("port") ? fields.get("protocol") : key.equals("protocol/tcp/port") ? "tcp" : key.equals("protocol/udp/port") ? "udp" : null;
-                if (protocol == null || !Set.of("tcp", "udp").contains(protocol)) throw new Unknown("unsupported service constraint");
-                for (String port : entry.getValue().split(",", -1)) {
-                    budget.spend();
-                    if (!port.trim().matches("[0-9]+(?:-[0-9]+)?")) throw new Unknown("unsupported port expression");
-                    try {
-                        String[] ends = port.trim().split("-"); int a = Integer.parseInt(ends[0]), b = Integer.parseInt(ends[ends.length - 1]);
-                        if (a < 0 || b > 65535 || a > b) throw new NumberFormatException();
-                        ranges.computeIfAbsent(protocol, p -> new ArrayList<>()).add(new Range(a, b));
-                    } catch (NumberFormatException invalid) { throw new Unknown("invalid port range"); }
-                }
+                if (extended && SOURCE_PORT_FIELDS.contains(key)) continue;
+                String proto = key.equals("port") ? protocol : key.equals("protocol/tcp/port") ? "tcp" : key.equals("protocol/udp/port") ? "udp" : null;
+                if (proto == null || !Set.of("tcp", "udp").contains(proto)) throw new Unknown("unsupported service constraint");
+                for (String port : entry.getValue().split(",", -1)) { budget.spend(); ranges.computeIfAbsent(proto, p -> new ArrayList<>()).add(port(port)); }
+            }
+            // Palo Alto source port (extended only): the service's destination ports under a source-port family.
+            for (String proto : List.of("tcp", "udp")) {
+                String sources = extended ? fields.get("protocol/" + proto + "/source-port") : null;
+                if (sources == null) continue;
+                var destinations = ranges.remove(proto);
+                if (destinations == null) throw new Unknown("unsupported service constraint");
+                List<Range> list = new ArrayList<>();
+                for (String port : sources.split(",", -1)) { budget.spend(); list.add(port(port)); }
+                var merged = union(List.of(new Selector(false, Map.of(proto, list)))).ranges().get(proto);
+                boolean every = merged.size() == 1 && merged.get(0).start() <= 0 && merged.get(0).end() >= 65535;
+                ranges.put(every ? proto : sourceFamily(proto, merged), destinations);
             }
             if (ranges.isEmpty()) throw new Unknown("missing service values");
             return union(List.of(new Selector(false, ranges)));
+        }
+        /**
+         * One port expression: N or N-M (Management API add-service-tcp "port": "To specify a port range, place a hyphen
+         * between the lowest and highest port numbers"). The Check Point comparison forms {@code >N} / {@code <N} are not
+         * described by any official page read (2026-11-13), so they stay unresolved.
+         */
+        private Range port(String raw) {
+            String port = raw.trim();
+            try {
+                if (!port.matches("[0-9]+(?:-[0-9]+)?")) throw new Unknown("unsupported port expression");
+                String[] ends = port.split("-"); int a = Integer.parseInt(ends[0]), b = Integer.parseInt(ends[ends.length - 1]);
+                if (a < 0 || b > 65535 || a > b) throw new NumberFormatException();
+                return new Range(a, b);
+            } catch (NumberFormatException invalid) { throw new Unknown("invalid port range"); }
+        }
+        /**
+         * A Check Point ICMP or ICMPv6 service (extended only): family {@code icmp} / {@code icmp6}, value type x 256 + code
+         * ("ICMP Type and Code, as listed in RFC 792", SmartConsole R80.30 help "ICMP"). Only with a stored code: the
+         * Management API gives {@code icmp-code} the default 0 rather than "every code", and a stored object without the
+         * field does not say which code it has, so it stays unresolved. Any other field leaves it unresolved too.
+         */
+        private Selector icmp(String protocol, Map<String, String> fields) {
+            for (String key : fields.keySet()) if (!Set.of("protocol", "icmp-type", "icmp-code").contains(key)) throw new Unknown("unsupported service constraint");
+            budget.spend();
+            try {
+                int type = Integer.parseInt(Objects.requireNonNull(fields.get("icmp-type"), "type").trim());
+                if (type < 0 || type > 255) throw new NumberFormatException();
+                String code = fields.get("icmp-code");
+                if (code == null) throw new Unknown("unsupported service constraint");
+                int c = Integer.parseInt(code.trim());
+                if (c < 0 || c > 255) throw new NumberFormatException();
+                return new Selector(false, Map.of(protocol, List.of(new Range(type * 256L + c, type * 256L + c))));
+            } catch (NumberFormatException | NullPointerException invalid) { throw new Unknown("unsupported service constraint"); }
+        }
+        /**
+         * The complement of a resolved address selector (extended only, a negated cell): every IPv4 address outside it and
+         * every IPv6 address (family {@code ipv6}, one range; the engine resolves no IPv6 object, so a negated IPv4 cell
+         * also matches all IPv6 traffic). A negated any matches nothing and stays unresolved.
+         */
+        private Selector complement(Selector positive) {
+            if (positive.any() || !positive.tokens().isEmpty() || !positive.ranges().keySet().stream().allMatch("ipv4"::equals)) throw new Unknown("negated selector");
+            List<Range> out = new ArrayList<>(); long next = 0;
+            for (Range r : positive.ranges().getOrDefault("ipv4", List.of())) {
+                budget.spend();
+                if (r.start() > next) out.add(new Range(next, r.start() - 1));
+                next = Math.max(next, r.end() + 1);
+            }
+            if (next <= IPV4_MAX) out.add(new Range(next, IPV4_MAX));
+            Map<String, List<Range>> ranges = new TreeMap<>();
+            if (!out.isEmpty()) ranges.put("ipv4", List.copyOf(out));
+            ranges.put("ipv6", List.of(new Range(0, Long.MAX_VALUE)));
+            return new Selector(false, ranges);
         }
     }}

@@ -125,12 +125,16 @@ class PolicyHygienePartialPriorTest {
         var untimed = cp(SyntheticPolicies.withExtras(r1, "Accept", extras), cp("r2", 2, "Accept", "any", "other-net", "port"));
         assertUnknown(untimed, "r2", UNSUPPORTED);
     }
-    @Test void negationAndUnresolvedDimensionsNeverProveDisjointness() {
-        // r1 really matches only destinations outside 192.0.2.0/24, but a negated cell is not resolved and proves nothing.
+    @Test void negatedCellsProveDisjointnessAndUnresolvedDimensionsNever() {
+        // r1 matches only destinations outside 192.0.2.0/24 (a negated cell is its complement); r2's host is inside it.
         var negated = cp("r1", 1, "Accept", "role", "net", "port");
         negated = new Rule(negated.id(), negated.uuid(), 1, negated.name(), true, negated.source(), new Cell(List.of("net"), true), negated.service(),
             negated.application(), "Accept", negated.log(), negated.comment(), negated.extras());
-        assertUnknown(cp(negated, cp("r2", 2, "Accept", "any", "host", "port")), "r2", UNSUPPORTED);
+        assertClean(cp(negated, cp("r2", 2, "Accept", "any", "host", "port")), "r2");
+        // With the former resolution the negated cell proves nothing.
+        PolicyNormalization.Resolver.EXTENDED.set(false);
+        try { assertUnknown(cp(negated, cp("r2", 2, "Accept", "any", "host", "port")), "r2", UNSUPPORTED); }
+        finally { PolicyNormalization.Resolver.EXTENDED.remove(); }
         // A source and destination that both fail to resolve leave only the service, which overlaps.
         assertUnknown(cp(cp("r1", 1, "Accept", "role", "missing", "port"), cp("r2", 2, "Accept", "other-net", "other-net", "port")), "r2", UNSUPPORTED);
     }

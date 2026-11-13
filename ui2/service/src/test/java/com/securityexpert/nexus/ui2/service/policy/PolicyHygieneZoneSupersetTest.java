@@ -16,6 +16,10 @@ import java.util.*;
  * fixtures: documentation addresses and masked zone names only.
  */
 class PolicyHygieneZoneSupersetTest {
+    // Compares the earlier engine and its oracles, which model no extended construct (negated address cells, source
+    // ports, ICMP codes): run with the former resolution. PolicyHygieneExtendedResolutionTest covers the extension.
+    @org.junit.jupiter.api.BeforeEach void formerResolution() { PolicyNormalization.Resolver.EXTENDED.set(false); }
+    @org.junit.jupiter.api.AfterEach void restoreResolution() { PolicyNormalization.Resolver.EXTENDED.remove(); }
     static final String A = "ZONE-ALPHA-01", B = "ZONE-BRAVO-02", C = "ZONE-CHARLIE-03", D = "ZONE-DELTA-04", E = "ZONE-ECHO-05";
     static final String UNPROVEN = PartialPriorOracle.UNPROVEN, RULE_TYPE = PartialPriorOracle.RULE_TYPE;
 
