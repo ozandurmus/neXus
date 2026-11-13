@@ -30,6 +30,12 @@ public class PathQueryConfiguration {
         return new PathPseudonymResolver(PathPseudonymMap.over(ips, names));
     }
 
+    /** Routed-path targets for the pre-cutover impact analysis (ACI segmentation step 1, PO 2026-11-14). */
+    @Bean
+    public CutoverPathTargets cutoverPathTargets(TopologyService topologyService, PathPolicyBinder pathPolicyBinder) {
+        return new CutoverPathTargets(topologyService, pathPolicyBinder, Clock.systemUTC());
+    }
+
     @Bean
     public PathQueryService pathQueryService(TopologyService topologyService, PathPolicyBinder pathPolicyBinder,
             PathPseudonymResolver pathPseudonymResolver, SubnetPreservingIpMasker ips, TopologyNamePseudonymizer names) {

@@ -17,7 +17,7 @@ public final class OfflineAnalysis {
     public static final String SET_LIMIT = "Exact observed sets exceed 50 entries; no bounded narrowing suggestion is available.";
     private static final int WORK = 250_000;
     private static final int MAX_DISTINCT = 500_000;
-    private static final class RowProblem extends RuntimeException {
+    static final class RowProblem extends RuntimeException {
         RowProblem(String reason) { super(reason, null, false, false); }
     }
     private static final class Traffic {
@@ -156,14 +156,14 @@ public final class OfflineAnalysis {
         if (result.get("decidingRule") instanceof Map<?, ?> rule) out.add((String) rule.get("ruleId"));
     }
     private static int add(Map<Long, Long> values, long value, long count) { boolean fresh = !values.containsKey(value); values.merge(value, count, Long::sum); return fresh ? 1 : 0; }
-    private static String rawValue(List<String> row, Map<String, Integer> columns, String field) { return columns.containsKey(field) ? row.get(columns.get(field)) : ""; }
-    private static String value(List<String> row, Map<String, Integer> columns, String field) { return rawValue(row, columns, field).trim(); }
-    private static long count(String value, boolean present) {
+    static String rawValue(List<String> row, Map<String, Integer> columns, String field) { return columns.containsKey(field) ? row.get(columns.get(field)) : ""; }
+    static String value(List<String> row, Map<String, Integer> columns, String field) { return rawValue(row, columns, field).trim(); }
+    static long count(String value, boolean present) {
         if (!present) return 1;
         if (!value.matches("[0-9]{1,10}")) throw new RowProblem("invalid count");
         long count = Long.parseLong(value); if (count < 1 || count > 1_000_000_000) throw new RowProblem("invalid count"); return count;
     }
-    private static Instant time(String value, boolean present) {
+    static Instant time(String value, boolean present) {
         if (!present) return null;
         try {
             Instant time = value.matches("[0-9]{10}") ? Instant.ofEpochSecond(Long.parseLong(value))
@@ -172,7 +172,7 @@ public final class OfflineAnalysis {
             return time;
         } catch (RuntimeException invalid) { throw new RowProblem("invalid time (use ISO-8601 UTC or epoch seconds/milliseconds)"); }
     }
-    private static String address(String value) {
+    static String address(String value) {
         if (value.contains(":")) {
             if (!value.matches("[0-9a-fA-F:.]{2,45}")) throw new RowProblem("invalid IP address");
             try { java.net.InetAddress.getByName(value); return value; }
@@ -181,7 +181,7 @@ public final class OfflineAnalysis {
         try { if (!value.matches("[0-9.]{7,15}")) throw new IllegalArgumentException(); PolicyRuleQuery.interval(value); return value; }
         catch (IllegalArgumentException invalid) { throw new RowProblem("invalid IP address"); }
     }
-    private static String zone(String value) {
+    static String zone(String value) {
         if (value.length() > 200 || value.chars().anyMatch(Character::isISOControl)) throw new RowProblem("invalid zone"); return value;
     }
     private static String text(Instant value) { return value == null ? "" : value.toString(); }
