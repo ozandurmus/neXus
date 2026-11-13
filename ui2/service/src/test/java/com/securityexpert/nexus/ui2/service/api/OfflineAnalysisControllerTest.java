@@ -74,6 +74,32 @@ class OfflineAnalysisControllerTest {
         assertEquals(200, controller.delete("analysis-1", request(false, MAPPING, DATA, false)).getStatusCode().value());
         verify(analyses).delete("analysis-1", "synthetic-actor"); assertEquals(404, controller.read("missing").getStatusCode().value());
     }
+    @Test void oneRuleUploadKeepsRuleIdOutOfTheMappingAndRefusesUnknownRules() {
+        allow();
+        String withRule = MAPPING.replace("}", ",\"ruleId\":\"r1\"}");
+        assertEquals(201, controller.upload("p1", request(false, withRule, DATA, false)).getStatusCode().value());
+        verify(analyses).save(eq("p1"), eq("synthetic-actor"), eq("synthetic.csv"), argThat(body -> "ONE_RULE".equals(body.get("mode")) && "r1".equals(body.get("ruleId"))
+            && !body.containsKey("mapping") && ((List<?>) body.get("rules")).size() == 1));
+        clearInvocations(analyses);
+        var missing = controller.upload("p1", request(false, MAPPING.replace("}", ",\"ruleId\":\"nope\"}"), DATA, false));
+        assertEquals(400, missing.getStatusCode().value());
+        assertEquals(Map.of("error", "RULE_NOT_FOUND: no rule of the snapshot has this identifier"), missing.getBody());
+        verifyNoInteractions(analyses);
+    }
+    @Test void objectUsageEntriesKeepStatesAndLinksButPseudonymizeNames() {
+        var names = new TopologyNamePseudonymizer(new byte[32]); var ips = new SubnetPreservingIpMasker(new byte[32]);
+        var entry = new LinkedHashMap<String, Object>();
+        entry.put("dimension", "source"); entry.put("objectId", "OBJECT-SYNTHETIC"); entry.put("name", "NAME-SYNTHETIC"); entry.put("parentId", "PARENT-SYNTHETIC");
+        entry.put("depth", 1); entry.put("state", "NOT_SEEN"); entry.put("flowCount", 0L); entry.put("reason", "unresolved object");
+        var masked = (Map<?, ?>) PolicyPrivacy.mask(Map.of("mode", "ONE_RULE", "objectUsage", List.of(entry)), "", names, ips);
+        var item = (Map<?, ?>) ((List<?>) masked.get("objectUsage")).get(0);
+        assertEquals("ONE_RULE", masked.get("mode")); assertEquals("NOT_SEEN", item.get("state")); assertEquals("unresolved object", item.get("reason"));
+        assertEquals(1, item.get("depth")); assertEquals(0L, item.get("flowCount"));
+        for (String raw : List.of("OBJECT-SYNTHETIC", "NAME-SYNTHETIC", "PARENT-SYNTHETIC")) assertFalse(item.toString().contains(raw));
+        entry.put("reason", "free text SYNTHETIC-LEAK");
+        var leaked = (Map<?, ?>) ((List<?>) ((Map<?, ?>) PolicyPrivacy.mask(Map.of("objectUsage", List.of(entry)), "", names, ips)).get("objectUsage")).get(0);
+        assertEquals("UNKNOWN", leaked.get("reason"));
+    }
     @Test void projectionMasksEveryObservedAddressNameFilenameAndUploader() {
         var names = new TopologyNamePseudonymizer(new byte[32]); var ips = new SubnetPreservingIpMasker(new byte[32]);
         var sample = new LinkedHashMap<String, Object>(); sample.put("fileName", "synthetic-private.csv"); sample.put("uploader", "synthetic-actor");

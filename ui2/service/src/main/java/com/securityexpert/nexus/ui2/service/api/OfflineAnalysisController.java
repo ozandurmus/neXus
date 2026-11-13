@@ -70,6 +70,7 @@ public final class OfflineAnalysisController {
             Map<String, String> mapping;
             try { mapping = json.readValue(new String(mappingBytes, StandardCharsets.UTF_8), new TypeReference<Map<String, String>>() {}); }
             catch (IOException invalid) { return error(400, "CSV_MAPPING: mapping must be a JSON object of field/header names"); }
+            String ruleId = mapping.remove("ruleId");
             if (!parts.hasNext()) return error(400, "CSV_FILE_REQUIRED");
             var file = parts.next();
             if (file.isFormField() || !file.getFieldName().equals("file")) return error(400, "CSV_FILE_REQUIRED");
@@ -79,14 +80,14 @@ public final class OfflineAnalysisController {
             if (filename.isBlank() || filename.length() > 200 || filename.chars().anyMatch(Character::isISOControl)
                     || !filename.toLowerCase(Locale.ROOT).endsWith(".csv")) return error(400, "CSV_FILENAME: upload a .csv file with a name of at most 200 characters");
             Map<String, Object> result;
-            try (var stream = file.openStream()) { result = OfflineAnalysis.analyze(snapshot.get(), stream, mapping); }
+            try (var stream = file.openStream()) { result = OfflineAnalysis.analyze(snapshot.get(), stream, mapping, ruleId); }
             if (parts.hasNext()) return error(400, "MULTIPART_PARTS: exactly mapping and one file are allowed");
             String analysis = analyses.save(id, actor(request), filename, result);
             return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(new PolicyResponse(Map.of("id", analysis)));
         } catch (IllegalArgumentException invalid) {
             String message = invalid.getMessage();
             return error(message != null && message.startsWith("CSV_SIZE_LIMIT") ? 413 : 400,
-                message != null && message.matches("(?:CSV_[A-Z_]+|SNAPSHOT_IDENTITY|AGGREGATE_LIMIT): [A-Za-z0-9 ,;./()-]+") ? message : "CSV_INVALID");
+                message != null && message.matches("(?:CSV_[A-Z_]+|RULE_NOT_FOUND|RULE_AMBIGUOUS|SNAPSHOT_IDENTITY|AGGREGATE_LIMIT): [A-Za-z0-9 ,;./()-]+") ? message : "CSV_INVALID");
         } catch (IOException invalid) {
             // Multipart exceptions may contain filenames or raw data: never echo or log them.
             return error(400, "CSV_UPLOAD_INVALID: UTF-8 CSV only, maximum 100 MB, valid multipart required");

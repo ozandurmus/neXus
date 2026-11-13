@@ -14,8 +14,19 @@ describe("legacy route rewrites", () => {
     expect(to("?screen=policy&tab=lookup&policy_id=p1")).toEqual({ screen: "trace", mode: "lookup", policy_id: "p1" });
   });
 
-  it("Policy > Offline analysis is under Tools; Policy > Installation is the Rules & Containers tab", () => {
-    expect(to("?screen=policy&tab=offline&policy_id=p1")).toEqual({ screen: "offline_analysis", policy_id: "p1" });
+  // PO 2026-11-13 (RULE_OBJECT_USAGE_CONTRACT.md, ROU-7): every old Offline analysis address lands on Rule object usage.
+  it("Offline analysis is Rule object usage in Whole policy mode, its parameters kept", () => {
+    expect(to("?screen=offline_analysis")).toEqual({ screen: "rule_usage", mode: "policy" });
+    expect(to("?screen=offline_analysis&policy_id=p1")).toEqual({ screen: "rule_usage", mode: "policy", policy_id: "p1" });
+    expect(to("?screen=policy&tab=offline&policy_id=p1")).toEqual({ screen: "rule_usage", mode: "policy", policy_id: "p1" });
+    expect(to("?screen=policy&tab=offline-analysis&policy_id=p1&display=wall")).toEqual({ screen: "rule_usage", mode: "policy", policy_id: "p1", display: "wall" });
+    expect(to("?preview=offline_analysis")).toEqual({ preview: "rule_usage", mode: "policy" });
+    // a mode the address already names is kept, and the new address is left alone
+    expect(to("?screen=offline_analysis&mode=rule")).toEqual({ screen: "rule_usage", mode: "rule" });
+    for (const search of ["?screen=rule_usage", "?screen=rule_usage&mode=policy&policy_id=p1", "?screen=rule_usage&mode=rule"]) expect(rewriteLegacyRoute(search)).toBeNull();
+  });
+
+  it("Policy > Installation is the Rules & Containers tab", () => {
     expect(to("?screen=policy&tab=installation")).toEqual({ screen: "policy", tab: "rules" });
   });
 

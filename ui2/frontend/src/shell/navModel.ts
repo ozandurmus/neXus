@@ -63,6 +63,9 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     // The path query follows the inventory read (open to every signed-in role, masked for aiview): no plane gate.
     { id: "trace", label: "Trace", screen: "trace", href: "?screen=trace" },
     { id: "changes", label: "Changes", screen: "changes", href: "?screen=changes" },
+    // Rule object usage (RULE_OBJECT_USAGE_CONTRACT.md, PO 2026-11-13): which of one rule's objects carried traffic in an
+    // uploaded log export. It was Tools > Offline analysis; it is a question about a policy rule, so it sits here, last.
+    { id: "rule-usage", label: "Rule object usage", screen: "rule_usage", href: "?screen=rule_usage", requiredPlane: "Policy" },
   ] },
   { kind: "link", id: "backups", label: "Backups", icon: "backup", screen: "backups", href: "?screen=backups" },
   // Jobs stays a child of Operations (PO-NAV-8); the children are the tabs of the one screen.
@@ -76,12 +79,11 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     { id: "operations-health", label: "Device health", screen: "operations", href: "?screen=operations&tab=health" },
     { id: "operations-platform", label: "Platform status", screen: "operations", href: "?screen=operations&tab=platform-status" },
   ] },
-  // The four ad hoc, file-in or single-device engineering tools (UI review 2026-11-05, C4), listed in place.
+  // The three ad hoc, file-in or single-device engineering tools (UI review 2026-11-05, C4), listed in place.
   { kind: "group", id: "tools", label: "Tools", icon: "tools", children: [
     { id: "packet-analysis", label: "Packet analysis", screen: "packet_analysis", href: "?screen=packet_analysis", requiredPlane: "PacketAnalysis" },
     { id: "sanitizer", label: "Data sanitizer", screen: "sanitizer", href: "?screen=sanitizer", requiredPlane: "Sanitizer" },
     { id: "diagnostics", label: "Diagnostics", screen: "diagnostics", href: "?screen=diagnostics" },
-    { id: "offline-analysis", label: "Offline analysis", screen: "offline_analysis", href: "?screen=offline_analysis", requiredPlane: "Policy" },
   ] },
   // Listed for every session in every layout; a page the session may not use is locked, never hidden (amendment 6).
   { kind: "group", id: "administration", label: "Administration", icon: "admin", startsClosed: true, children: [
@@ -135,7 +137,7 @@ export function activeLeafId(screen: ScreenId, search: string): string {
       return `admin-${legacy ? legacy.group : "registry"}`;
     }
     case "packet_analysis": return "packet-analysis";
-    case "offline_analysis": return "offline-analysis";
+    case "rule_usage": return "rule-usage";
     default: return screen;
   }
 }

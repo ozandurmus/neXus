@@ -43,7 +43,7 @@ export const BACKUP_SECTIONS = ["Backup-capable", "Targets", "Targets without ar
 export const SCREEN_HEADINGS: Record<ScreenId, string> = {
   policy: "Policy", overview: "Overview", reports: "Reports", inventory: "Devices", configuration: "Devices", compliance: "Compliance",
   backups: "Backups", operations: "Operations", administration: "Device registry", packet_analysis: "Packet analysis",
-  sanitizer: "Data sanitizer", trace: "Trace", changes: "Changes", diagnostics: "Diagnostics", offline_analysis: "Offline analysis",
+  sanitizer: "Data sanitizer", trace: "Trace", changes: "Changes", diagnostics: "Diagnostics", rule_usage: "Rule object usage",
 };
 /** Administration's five pages: the address of each and the heading it shows (the same words as its navigation entry). */
 export const ADMIN_PAGES: readonly { readonly query: string; readonly heading: string }[] = [

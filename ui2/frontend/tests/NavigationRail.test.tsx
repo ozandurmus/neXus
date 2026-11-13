@@ -42,8 +42,8 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     expect(nav()).toHaveStyle({ width: `${SIDEBAR_PX}px` });
     const text = nav().textContent ?? "";
     let at = -1;
-    for (const label of ["Overview", "Reports", "Devices", "Compliance and security", "Lifecycle and security", "Policy and changes", "Trace", "Changes", "Backups",
-      "Operations", "HA and readiness", "Jobs", "Scheduled jobs", "Device health", "Platform status", "Tools", "Packet analysis", "Data sanitizer", "Diagnostics", "Offline analysis", "Administration"]) {
+    for (const label of ["Overview", "Reports", "Devices", "Compliance and security", "Lifecycle and security", "Policy and changes", "Trace", "Changes", "Rule object usage", "Backups",
+      "Operations", "HA and readiness", "Jobs", "Scheduled jobs", "Device health", "Platform status", "Tools", "Packet analysis", "Data sanitizer", "Diagnostics", "Administration"]) {
       const next = text.indexOf(label, at + 1);
       expect(next, label).toBeGreaterThan(at);
       at = next;
@@ -89,7 +89,8 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     ["packet_analysis", "?screen=packet_analysis", "Packet analysis", "Tools"],
     ["sanitizer", "?screen=sanitizer", "Data sanitizer", "Tools"],
     ["diagnostics", "?screen=diagnostics", "Diagnostics", "Tools"],
-    ["offline_analysis", "?screen=offline_analysis", "Offline analysis", "Tools"],
+    ["rule_usage", "?screen=rule_usage", "Rule object usage", "Policy and changes"],
+    ["rule_usage", "?screen=rule_usage&mode=policy&policy_id=p1", "Rule object usage", "Policy and changes"],
     ["administration", "?screen=administration", "Device registry", "Administration"],
     ["administration", "?screen=administration&tab=access&section=ldap-settings", "Access and identity", "Administration"],
     ["administration", "?screen=administration&tab=platform", "Notifications and logging", "Administration"],
@@ -151,7 +152,7 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     expect(within(nav()).getByRole("link", { name: "Backups" })).toBeInTheDocument();
     expect(within(nav()).getByRole("link", { name: "Jobs" })).toBeInTheDocument();
     const tools = document.getElementById("nav-group-tools")!;
-    expect(within(tools).getAllByRole("link").map((a) => a.textContent)).toEqual(["Packet analysis", "Diagnostics", "Offline analysis"]);
+    expect(within(tools).getAllByRole("link").map((a) => a.textContent)).toEqual(["Packet analysis", "Diagnostics"]);
   });
 
   it("keeps only the lit entry for a session without the Devices plane that opens Devices", () => {
@@ -306,7 +307,7 @@ describe("the sidebar folds to icons (PO 2026-10-20)", () => {
     window.localStorage.setItem(FOLD_KEY, "1");
     rail("operations", viewer);
     fireEvent.click(header("Tools"));
-    expect(within(screen.getByRole("menu", { name: "Tools" })).getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Packet analysis", "Diagnostics", "Offline analysis"]);
+    expect(within(screen.getByRole("menu", { name: "Tools" })).getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Packet analysis", "Diagnostics"]);
   });
 
   it("remembers the fold per viewer and reads it back on the next render", () => {

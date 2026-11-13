@@ -18,10 +18,10 @@ describe("the navigation model (NAVIGATION_REDESIGN_2026_11_12.md section 2)", (
       ["Reports", null],
       ["Devices", null],
       ["Compliance and security", ["Compliance", "Lifecycle and security"]],
-      ["Policy and changes", ["Policy", "Trace", "Changes"]],
+      ["Policy and changes", ["Policy", "Trace", "Changes", "Rule object usage"]],
       ["Backups", null],
       ["Operations", ["HA and readiness", "Jobs", "Scheduled jobs", "Device health", "Platform status"]],
-      ["Tools", ["Packet analysis", "Data sanitizer", "Diagnostics", "Offline analysis"]],
+      ["Tools", ["Packet analysis", "Data sanitizer", "Diagnostics"]],
       ["Administration", ["Device registry", "Access and identity", "Notifications and logging", "Audit log", "Delivery plan"]],
     ]);
     expect(NAV_LEAVES).toHaveLength(23);
@@ -42,7 +42,7 @@ describe("the navigation model (NAVIGATION_REDESIGN_2026_11_12.md section 2)", (
       expect(leaf.label.slice(1)).not.toMatch(/ [A-Z][a-z]/);
     }
     const heading = (id: string) => SCREEN_HEADINGS[NAV_LEAVES.find((l) => l.id === id)!.screen];
-    for (const id of ["overview", "reports", "devices", "compliance", "policy", "trace", "changes", "backups", "packet-analysis", "sanitizer", "diagnostics", "offline-analysis"]) {
+    for (const id of ["overview", "reports", "devices", "compliance", "policy", "trace", "changes", "backups", "packet-analysis", "sanitizer", "diagnostics", "rule-usage"]) {
       expect(NAV_LEAVES.find((l) => l.id === id)!.label).toBe(heading(id));
     }
     expect(group("operations").children.map((c) => c.label)).toEqual(TAB_COVERAGE.find((r) => r.tabList === "Operations sections")!.labels);
@@ -52,7 +52,7 @@ describe("the navigation model (NAVIGATION_REDESIGN_2026_11_12.md section 2)", (
   it("keeps the plane gates as they were and gives Administration's pages none", () => {
     expect(Object.fromEntries(NAV_LEAVES.filter((l) => l.requiredPlane).map((l) => [l.id, l.requiredPlane]))).toEqual({
       devices: "Devices", compliance: "Compliance", lifecycle: "Devices", policy: "Policy",
-      "packet-analysis": "PacketAnalysis", sanitizer: "Sanitizer", "offline-analysis": "Policy",
+      "packet-analysis": "PacketAnalysis", sanitizer: "Sanitizer", "rule-usage": "Policy",
     });
     expect(group("administration").children.map((c) => [c.href, c.lock ?? null])).toEqual([
       ["?screen=administration&tab=registry", null],
@@ -116,8 +116,10 @@ describe("the lit entry", () => {
     const cases: [string, string][] = [
       ["?screen=path_analysis", "trace"],
       ["?screen=policy&tab=lookup", "trace"],
-      ["?screen=policy&tab=offline", "offline-analysis"],
-      ["?screen=policy&tab=offline-analysis", "offline-analysis"],
+      ["?screen=policy&tab=offline", "rule-usage"],
+      ["?screen=policy&tab=offline-analysis", "rule-usage"],
+      ["?screen=offline_analysis", "rule-usage"],
+      ["?screen=offline_analysis&policy_id=p1", "rule-usage"],
       ["?screen=policy&tab=installation", "policy"],
       ["?screen=operations&tab=changes", "changes"],
       ["?screen=operations&tab=diagnostics", "diagnostics"],
@@ -130,7 +132,7 @@ describe("the lit entry", () => {
       ["?screen=administration&tab=platform&section=scheduled-jobs", "operations-schedules"],
       ...Object.entries(LEGACY_ADMIN_TABS).map(([slug, home]): [string, string] => [`?screen=administration&tab=${slug}`, `admin-${home.group}`]),
     ];
-    expect(cases).toHaveLength(13 + 12);
+    expect(cases).toHaveLength(15 + 12);
     for (const [search, id] of cases) {
       // What the shell does: rewrite, then route on the rewritten screen.
       const rewritten = rewriteLegacyRoute(search);
@@ -161,17 +163,22 @@ describe("what a session is shown (plane checks only)", () => {
     expect(labelsOf(visibleEntries(["Policy", "PacketAnalysis"], "operations-ha"))).toEqual([
       ["Overview", null],
       ["Reports", null],
-      ["Policy and changes", ["Policy", "Trace", "Changes"]],
+      ["Policy and changes", ["Policy", "Trace", "Changes", "Rule object usage"]],
       ["Backups", null],
       ["Operations", ["HA and readiness", "Jobs", "Scheduled jobs", "Device health", "Platform status"]],
-      ["Tools", ["Packet analysis", "Diagnostics", "Offline analysis"]],
+      ["Tools", ["Packet analysis", "Diagnostics"]],
       ["Administration", ["Device registry", "Access and identity", "Notifications and logging", "Audit log", "Delivery plan"]],
     ]);
   });
 
-  it("a session with Devices, Compliance and Policy sees Tools with Diagnostics and Offline analysis only", () => {
+  it("a session with Devices, Compliance and Policy sees Tools with Diagnostics only, and Rule object usage under Policy and changes", () => {
     const tools = visibleEntries(["Devices", "Compliance", "Policy"], "overview").find((e) => e.id === "tools")!;
-    expect(leavesOf(tools).map((l) => l.label)).toEqual(["Diagnostics", "Offline analysis"]);
+    expect(leavesOf(tools).map((l) => l.label)).toEqual(["Diagnostics"]);
+    const policy = visibleEntries(["Devices", "Compliance", "Policy"], "overview").find((e) => e.id === "policy-changes")!;
+    expect(leavesOf(policy).map((l) => l.label)).toEqual(["Policy", "Trace", "Changes", "Rule object usage"]);
+    // Without the Policy plane the entry is not listed, unless it is the open page.
+    expect(visibleEntries(["Devices"], "overview").flatMap(leavesOf).map((l) => l.id)).not.toContain("rule-usage");
+    expect(visibleEntries(["Devices"], "rule-usage").flatMap(leavesOf).map((l) => l.id)).toContain("rule-usage");
   });
 
   it("always keeps the entry of the open page, whatever the plane list says, and nothing else with it", () => {

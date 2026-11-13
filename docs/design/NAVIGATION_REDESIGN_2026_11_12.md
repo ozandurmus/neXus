@@ -327,3 +327,31 @@ Unchanged addresses: `?screen=operations&tab=health` (Device health), `?screen=a
 without `section=notifications` or `section=system-logs`, and the older `tab=notifications` and `tab=system-logs`.
 
 Lit entries: `tab=schedules` lights Scheduled jobs, `tab=health` Device health, `tab=platform-status` Platform status.
+
+## Amendment 2026-11-13 (Rule object usage)
+
+PO decision 2026-11-13, with `RULE_OBJECT_USAGE_CONTRACT.md` (section 2). This amendment supersedes the Offline
+analysis rows of sections 2, 3, 5 and 6 above.
+
+- Tools > Offline analysis is renamed **Rule object usage** and moves to **Policy and changes**, as its last child:
+  Policy; Trace; Changes; Rule object usage. It asks a question about a policy rule ("which of this rule's objects
+  carried traffic, and which never did?"), so it sits with the policy screens, not with the file tools.
+- Tools keeps Packet analysis; Data sanitizer; Diagnostics. Still 9 top-level entries and 23 destinations.
+- The screen has two modes on one address: One rule (the default) and Whole policy (the former Offline analysis,
+  unchanged). Address: `?screen=rule_usage`, with `mode=rule|policy` and `policy_id`. The screen id `offline_analysis`
+  no longer exists.
+- Access is unchanged: the entry is listed with the Policy plane (or when it is the open page); upload and delete need
+  `POLICY_OFFLINE_WRITE`; the replay viewer reads masked results and cannot upload.
+
+New redirects (in `shell/legacyRoutes.ts`, tested), each keeping its other parameters:
+
+| Old address | Lands on |
+|---|---|
+| `?screen=offline_analysis` | `?screen=rule_usage&mode=policy` |
+| `?screen=policy&tab=offline` | `?screen=rule_usage&mode=policy` |
+| `?screen=policy&tab=offline-analysis` | `?screen=rule_usage&mode=policy` |
+| `?preview=offline_analysis` | `?preview=rule_usage&mode=policy` |
+
+An old address opens Whole policy mode because that is what it showed before the rename; a `mode` the address already
+names is kept. Lit entry: `screen=rule_usage` in either mode, and every old address above, lights Rule object usage in
+Policy and changes; nothing in Tools is lit.

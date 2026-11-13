@@ -1,7 +1,7 @@
 /**
  * Old addresses keep working (UI review 2026-11-05, C2/C3/C4/B6). The information architecture moved screens and tabs
- * (Path and Policy > Lookup became Trace; the Change feed and Policy > Changes met on one Changes screen; Diagnostics and
- * Offline analysis moved under Tools; Administration's fourteen pages became four groups; Job Logs became Operations >
+ * (Path and Policy > Lookup became Trace; the Change feed and Policy > Changes met on one Changes screen; Diagnostics moved
+ * under Tools; Offline analysis became Rule object usage under Policy and changes; Administration's fourteen pages became four groups; Job Logs became Operations >
  * Jobs), and a bookmark, an audit link or a deep link in an e-mail written before that must land on the new home with its
  * own parameters kept. This is the one place that knows the old shapes: a pure function from a query string to the query
  * string of the new home, or `null` when the address is already current.
@@ -33,6 +33,9 @@ export const LEGACY_ADMIN_TABS: Readonly<Record<string, { readonly group: AdminG
 /** The Policy tab slugs of the four-tab layout (C2). */
 export const POLICY_TAB_SLUGS = ["rules", "objects", "hygiene", "changes"] as const;
 
+/** The Rule object usage mode an Offline analysis address opens: the whole-policy analysis it always was. */
+const RULE_USAGE_LEGACY_MODE = "policy";
+
 /** The new query string (no leading `?`) for an old address, or `null` when `search` needs no rewrite. */
 export function rewriteLegacyRoute(search: string): string | null {
   const params = new URLSearchParams(search);
@@ -45,14 +48,20 @@ export function rewriteLegacyRoute(search: string): string | null {
   if (screen === "path_analysis") {
     params.set(key, "trace");
     if (!params.get("mode")) params.set("mode", "path");
+  } else if (screen === "offline_analysis") {
+    // Offline analysis is Rule object usage (PO 2026-11-13). An old address meant the whole-policy analysis, so it opens
+    // that mode unless it names one; the screen's own default, One rule, is for addresses written after the rename.
+    params.set(key, "rule_usage");
+    if (!params.get("mode")) params.set("mode", RULE_USAGE_LEGACY_MODE);
   } else if (screen === "policy" && key === "screen") {
     if (tab === "lookup") {
       params.set("screen", "trace");
       params.set("mode", "lookup");
       params.delete("tab");
     } else if (tab === "offline" || tab === "offline-analysis") {
-      params.set("screen", "offline_analysis");
+      params.set("screen", "rule_usage");
       params.delete("tab");
+      if (!params.get("mode")) params.set("mode", RULE_USAGE_LEGACY_MODE);
     } else if (tab === "installation") {
       // Installation is a column and a section of Rules & Containers now.
       params.set("tab", "rules");
