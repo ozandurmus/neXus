@@ -664,6 +664,7 @@ def test_ship_gate_before_push_pr_merge_and_deploy(tmp_path, monkeypatch, mode):
         assert commit == COMMIT
         if mode == "red": raise SystemExit("synthetic preview red")
     monkeypatch.setattr(sa, "_git", git)
+    monkeypatch.setenv("NEXUS_HOST", "synthetic-host")  # the host is local configuration; CI has none
     monkeypatch.setattr(sa.subprocess, "run", run)
     monkeypatch.setattr(sa, "_preview_e2e", gate)
     monkeypatch.setattr(sa, "_wait_for_checks", lambda url: events.append(("checks",)))
