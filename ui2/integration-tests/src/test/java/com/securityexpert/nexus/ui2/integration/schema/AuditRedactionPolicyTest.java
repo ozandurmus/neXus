@@ -360,6 +360,9 @@ class AuditRedactionPolicyTest {
             // policy_offline_analysis
             "policy_offline_analysis.analysis_id", "policy_offline_analysis.created_at",
             "policy_offline_analysis.policy_id", "policy_offline_analysis.uploader",
+            // policy_target_binding (V185, 402ee7a3): opaque identifiers; context is tier-2 redacted
+            "policy_target_binding.binding_id", "policy_target_binding.device_id",
+            "policy_target_binding.install_on_ref", "policy_target_binding.policy_id",
             // provenance_records
             "provenance_records.capability_version", "provenance_records.capture_artifact_id",
             "provenance_records.collected_at", "provenance_records.fingerprint_sha256",
@@ -426,6 +429,9 @@ class AuditRedactionPolicyTest {
             "device_crash_entry.entry_id", "device_crash_entry.first_seen_at", "device_crash_entry.first_seen_job",
             "device_crash_entry.last_seen_job", "device_crash_entry.mtime", "device_crash_entry.removed_at",
             "device_crash_entry.size",
+            // scheduled_job_family (V203, 4805eb19): family key, switch, actor, time; the free-text reason is tier-2 redacted
+            "scheduled_job_family.changed_at", "scheduled_job_family.changed_by",
+            "scheduled_job_family.enabled", "scheduled_job_family.family_key",
             // system_log_chunk (V160)
             "system_log_chunk.bytes", "system_log_chunk.chunk_id", "system_log_chunk.ciphertext_bytes",
             "system_log_chunk.collected_at", "system_log_chunk.device_id", "system_log_chunk.end_offset",
@@ -517,7 +523,9 @@ class AuditRedactionPolicyTest {
             // A closed status enum (V90: UP/DOWN/OTHER/ABSENT), not a bearer token.
             "jobs.diagnostic_status_token",
             // A role name (role:<name>), not a bearer token -- as role_bindings.role_token.
-            "rbac_roles.token_string");
+            "rbac_roles.token_string",
+            // V184 (1bd8c8f6): a closed enum (RUNTIME / CONFIG_DERIVED) naming the evidence grade, never evidence.
+            "device_interface.evidence_grade");
 
     private static Ui2PostgresFixture fixture;
 
@@ -735,7 +743,13 @@ class AuditRedactionPolicyTest {
             "topology_link_override.a_context", 2, "topology_link_override.a_interface_name", 2,
             "topology_link_override.b_context", 2, "topology_link_override.b_interface_name", 2,
             "topology_link_override.assumed_subnet", 2, "topology_link_override.note", 2,
-            "topology_conflict.context", 2, "topology_conflict.network", 2);
+            "topology_conflict.context", 2, "topology_conflict.network", 2,
+            // V185 (402ee7a3): a device virtual-system reference.
+            "policy_target_binding.context", 2,
+            // V188 (decea8d5): the transient matcher plan of an (unaudited) validation hop.
+            "path_validation_hop.plan", 2,
+            // V203 (4805eb19): operator free text, as failover_approval.reason.
+            "scheduled_job_family.reason", 2);
 
     private static java.util.Map<String, Integer> declaredRedactions(Object... pairs) {
         java.util.Map<String, Integer> declared = new java.util.LinkedHashMap<>();

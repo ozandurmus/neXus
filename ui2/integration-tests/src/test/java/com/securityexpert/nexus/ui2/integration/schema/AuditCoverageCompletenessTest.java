@@ -126,7 +126,15 @@ class AuditCoverageCompletenessTest {
             Map.entry("topology_snapshot", "V186: derived header of an in-memory topology rebuild (counts and "
                     + "fingerprints); the rebuild's authorization is recorded in authz_decisions"),
             Map.entry("topology_conflict", "V186: derived conflicts of one rebuild, recomputed by the next one; pruned "
-                    + "with their snapshot"));
+                    + "with their snapshot"),
+            Map.entry("path_validation", "V188 (decea8d5): derived validation request written by the service; the "
+                    + "request is recorded in authz_decisions and the job through the jobs audit trigger; no trigger by "
+                    + "decision, so the transient plan is never re-captured into the audit log"),
+            Map.entry("path_validation_hop", "V188 (decea8d5): derived per-hop outcome written by the worker; the jobs "
+                    + "row is audited; no trigger by decision (transient plan, registered tier 2)"),
+            Map.entry("cp_domain_server_placement", "V197 (abb07013): parsed from the already-gated show-domains read "
+                    + "and replaced per source on every policy collection, never operator-written; the jobs row is "
+                    + "audited"));
 
     static final Set<String> AUDIT_TRIGGER_EXCLUSIONS = union(CONTRACT_EXCLUSIONS,
             AUDITED_BY_NAMED_TRIGGER.keySet(), NOT_MUTATION_BEARING.keySet());

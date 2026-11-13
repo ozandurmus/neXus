@@ -46,7 +46,8 @@ def test_workflow_yaml_parses():
     # GOV.ORCH.7 section 2.3 items 3/5: `po-scope-check` is a new,
     # gov/po-*-only job (PO write-scope enforcement) -- added, not a
     # replacement for either existing job.
-    assert set(data.get("jobs", {})) == {"validate", "full-regression", "po-scope-check", "regression-scope", "scope-blocked", "targeted-regression"}
+    # 2026-11-13: `integration` (real PostgreSQL 16 suite) gates the merge; see its own test below.
+    assert set(data.get("jobs", {})) == {"validate", "full-regression", "po-scope-check", "regression-scope", "scope-blocked", "targeted-regression", "integration"}
 
 
 def _job_block(text: str, job_id: str) -> str:
@@ -203,3 +204,28 @@ def test_ci_uses_only_tooling_python_dependencies_and_java_regression():
     assert "npx tsc --noEmit -p ." in full
     assert "npx vitest run" in full
     assert "npm run build" in full
+
+
+def test_integration_job_gates_the_merge_against_a_real_postgres_16():
+    """2026-11-13: ui2/integration-tests drifted red while it ran only after a `ship --full` merge. The job runs
+    before the merge on every pull request that touches Java, migration or SQL paths, and on manual dispatch; the
+    ship waits for it because it is not a post-merge check. It uses the fixture's UI2_TEST_JDBC_URL carrier against
+    a throwaway postgres:16 on the runner -- no password and no secret in the workflow."""
+    import sys
+    sys.path.insert(0, str(WORKFLOW_PATH.parents[2] / "tools" / "delivery"))
+    import standalone_orchestrate
+
+    workflow = yaml.safe_load(_read_workflow())
+    job = workflow["jobs"]["integration"]
+    assert job["if"] == "github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'"
+    assert "integration" not in standalone_orchestrate.POST_MERGE_CHECKS
+    runs = "\n".join(step.get("run", "") for step in job["steps"])
+    assert ":integration-tests:test" in runs
+    assert "postgres:16" in runs and "POSTGRES_HOST_AUTH_METHOD=trust" in runs
+    assert "POSTGRES_PASSWORD" not in _job_block(_read_workflow(), "integration")
+    suite = next(step for step in job["steps"] if step.get("name") == "PostgreSQL 16 integration suite")
+    assert suite["env"]["UI2_TEST_JDBC_URL"].startswith("jdbc:postgresql://127.0.0.1:5432/")
+    scope = next(step for step in job["steps"] if step.get("id") == "scope")
+    # Fail closed: a pull request whose changed paths cannot be listed runs the suite.
+    assert scope["run"].count('echo "run=true"') >= 3
+    assert "^ui2/frontend/" in scope["run"] and "docs/operations/sql/" in scope["run"]

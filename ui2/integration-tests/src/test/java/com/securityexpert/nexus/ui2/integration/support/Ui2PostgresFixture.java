@@ -91,8 +91,9 @@ public final class Ui2PostgresFixture implements AutoCloseable {
     private final String adminUser;
     private final String adminPassword;
     private final String databaseName;
-    private final String migratePassword;
-    private final String appPassword;
+    // Not final: bootstrap() replaces them with the server's shared role passwords (see ensureRoles).
+    private String migratePassword;
+    private String appPassword;
 
     private boolean migrated;
     private Path secretDir;
@@ -208,8 +209,7 @@ public final class Ui2PostgresFixture implements AutoCloseable {
 
     private void bootstrap() {
         try (Connection admin = adminConnection(); Statement statement = admin.createStatement()) {
-            ensureRole(statement, MIGRATE_ROLE, migratePassword);
-            ensureRole(statement, APP_ROLE, appPassword);
+            ensureRoles(admin);
             statement.execute("CREATE DATABASE " + quoteIdentifier(databaseName)
                     + " OWNER " + quoteIdentifier(MIGRATE_ROLE));
             // §7 test 1's ordering, enforced by the harness rather than
@@ -224,12 +224,72 @@ public final class Ui2PostgresFixture implements AutoCloseable {
         }
     }
 
-    private void ensureRole(Statement statement, String role, String password) throws SQLException {
+    /**
+     * Creates the two cluster-wide roles if missing and sets their passwords,
+     * serialised across every JVM that shares the server.
+     *
+     * <p>The Test task runs several forks side by side
+     * ({@code docs/design/TEST_SPEED_2026_11_05.md}). With Testcontainers each
+     * fork has its own server, but with {@link #JDBC_URL_ENV} all forks share
+     * one, and {@code ui2_migrate} / {@code ui2_app} are cluster-wide objects.
+     * Two forks altering the same role at once fail with {@code XX000 tuple
+     * concurrently updated}, and a fork setting its own random password would
+     * lock out a password-auth connection another fork opens next. So the role
+     * work runs under one transaction-scoped advisory lock, and the password
+     * of each role is drawn once per server and kept in an admin-only harness
+     * table that every fork reads back. The table lives in the admin database
+     * of a disposable test server, never in a product database; its values
+     * are random test passwords and are never logged or returned.</p>
+     */
+    private void ensureRoles(Connection admin) throws SQLException {
+        boolean autoCommit = admin.getAutoCommit();
+        admin.setAutoCommit(false);
+        try (Statement statement = admin.createStatement()) {
+            statement.execute("SELECT pg_advisory_xact_lock(hashtext('ui2_integration_harness_roles'))");
+            statement.execute("CREATE TABLE IF NOT EXISTS ui2_test_harness_role_secret "
+                    + "(role_name TEXT PRIMARY KEY, secret TEXT NOT NULL)");
+            statement.execute("REVOKE ALL ON ui2_test_harness_role_secret FROM PUBLIC");
+            migratePassword = ensureRole(admin, statement, MIGRATE_ROLE, migratePassword);
+            appPassword = ensureRole(admin, statement, APP_ROLE, appPassword);
+            admin.commit();
+        } catch (SQLException | RuntimeException e) {
+            admin.rollback();
+            throw e;
+        } finally {
+            admin.setAutoCommit(autoCommit);
+        }
+    }
+
+    /** Returns the password the role now carries: the stored one if present, else {@code candidate}. */
+    private static String ensureRole(Connection admin, Statement statement, String role, String candidate)
+            throws SQLException {
         statement.execute("DO $do$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = "
                 + sqlLiteral(role) + ") THEN CREATE ROLE " + quoteIdentifier(role) + " LOGIN; END IF; END $do$;");
-        // Set a per-run password so the fixture works identically against a
-        // trust-auth server (where it is ignored) and a password-auth one.
+        String password = candidate;
+        boolean stored = false;
+        try (var select = admin.prepareStatement(
+                "SELECT secret FROM ui2_test_harness_role_secret WHERE role_name = ?")) {
+            select.setString(1, role);
+            try (var rows = select.executeQuery()) {
+                if (rows.next()) {
+                    password = rows.getString(1);
+                    stored = true;
+                }
+            }
+        }
+        if (!stored) {
+            try (var insert = admin.prepareStatement(
+                    "INSERT INTO ui2_test_harness_role_secret (role_name, secret) VALUES (?, ?)")) {
+                insert.setString(1, role);
+                insert.setString(2, password);
+                insert.execute();
+            }
+        }
+        // Re-asserted every time (under the lock) so a role whose password was
+        // changed outside this harness is brought back to the stored one; works
+        // identically against a trust-auth server (ignored) and a password-auth one.
         statement.execute("ALTER ROLE " + quoteIdentifier(role) + " LOGIN PASSWORD " + sqlLiteral(password));
+        return password;
     }
 
     @Override
