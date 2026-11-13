@@ -10,6 +10,7 @@ import {
   getSystemHealth, requestSystemLogCollect, type ApiError, type HealthState, type SystemHealth, type SystemHealthDevice,
   type SystemLogCollectOutcome,
 } from "../auth/adminApi";
+import { isRecord, malformedResponse } from "../shell/malformedResponse";
 import { DataTable, type DataColumn } from "../shell/DataTable";
 import { KpiCard, KpiRow } from "../shell/KpiCard";
 import { M3Button } from "../shell/M3Widgets";
@@ -24,7 +25,7 @@ import { TYPE, type StateRole } from "../theme/tokens";
 import { describeSystemLogCollectError, explainSystemLogRefusalCode, type SystemLogCollectMessage } from "./DeviceLogsPanel";
 
 /**
- * Operations › System health ("who in the fleet is struggling"; mockup screen 2 of 2026-10-17, realised with stored data
+ * Operations › Device health ("who in the fleet is struggling"; mockup screen 2 of 2026-10-17, realised with stored data
  * only -- docs/design/SYSTEM_HEALTH_SCREEN_2026_10_20.md). Everything here is the server's `/api/v2/system-logs/health`
  * body: the state word is the server's fixed rule (shown under the KPI row), the sparkline is the stored sar days of the
  * window, a figure that is not evidenced is written UNKNOWN (never 0), and a fact the vendor has no source for is written
@@ -125,14 +126,37 @@ function FactValue({ level, value, title }: { readonly level: string; readonly v
   return <Box component="span" title={title}>{value}</Box>;
 }
 
+/** The facts one device row draws; a device without them would throw while the table renders. */
+function isHealthDevice(v: unknown): boolean {
+  if (!isRecord(v) || typeof v.device_id !== "string" || typeof v.state !== "string" || !(v.state in STATE_WORD)) return false;
+  return isRecord(v.cpu) && Array.isArray(v.cpu.days) && isRecord(v.memory) && isRecord(v.restarts) && isRecord(v.crash)
+    && isRecord(v.collection) && typeof v.collection.state === "string";
+}
+
+/** A health body the panel can draw. `{}` or a body without its computation, rules, KPIs or device list is malformed. */
+export function isSystemHealth(v: unknown): v is SystemHealth {
+  if (!isRecord(v) || !isRecord(v.computation) || typeof v.computation.state !== "string") return false;
+  const r = v.rules;
+  return typeof v.window_days === "number" && typeof v.cpu_p95_threshold_percent === "number"
+    && isRecord(r) && Array.isArray(r.critical) && Array.isArray(r.attention) && Array.isArray(r.state_order)
+    && isRecord(r.restart_rule) && isRecord(v.kpis) && Array.isArray(v.devices) && v.devices.every(isHealthDevice);
+}
+
+/** Reads the health body and refuses one of the wrong shape with the same rejection a failed request gives. */
+async function readDeviceHealth(): Promise<SystemHealth> {
+  const next: unknown = await getSystemHealth();
+  if (!isSystemHealth(next)) throw malformedResponse("device health read");
+  return next;
+}
+
 export function describeHealthError(err: unknown): string {
   if (isRestricted(err)) return "restricted";
   const e = err as { status?: number; name?: string; body?: { code?: string; message?: string; reason?: string; error?: string } };
   if (e?.status === 0 || e?.name === "AbortError" || e?.body?.error === "TIMEOUT") {
-    return "The system health read timed out after 20 s.";
+    return "The device health read timed out after 20 s.";
   }
   const body = e?.body;
-  return body?.message ?? body?.reason ?? body?.error ?? body?.code ?? "The system health read failed.";
+  return body?.message ?? body?.reason ?? body?.error ?? body?.code ?? "The device health read failed.";
 }
 
 export function describeFleetSystemLogCollectOutcome(outcome: Partial<SystemLogCollectOutcome>): SystemLogCollectMessage {
@@ -148,7 +172,7 @@ export function describeFleetSystemLogCollectOutcome(outcome: Partial<SystemLogC
 }
 
 export function SystemHealthPanel({ now = new Date() }: { readonly now?: Date }) {
-  const { data, error, rawError, refresh } = useFetchOnMount<SystemHealth>(getSystemHealth, describeHealthError);
+  const { data, error, rawError, refresh } = useFetchOnMount<SystemHealth>(readDeviceHealth, describeHealthError);
   const canCollect = useRoleAllows(PLANE_OPERATIONS);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [collecting, setCollecting] = useState(false);
@@ -217,22 +241,22 @@ export function SystemHealthPanel({ now = new Date() }: { readonly now?: Date })
   };
 
   if (error && isRestricted(rawError)) {
-    return <StatePanel variant="restricted" title="System health is not available for this role" announce="status"
+    return <StatePanel variant="restricted" title="Device health is not available for this role" announce="status"
       body="The fleet health view needs the system-log read permission (operator and above, aiview included)." />;
   }
   if (error) {
     const errCode = (rawError as { body?: { code?: string; error?: string } } | null)?.body?.code
       ?? (rawError as { body?: { error?: string } } | null)?.body?.error
       ?? "SYSTEM_HEALTH_READ_FAILED";
-    return <StatePanel variant="error" title="System health could not be read" body={error} announce="status"
+    return <StatePanel variant="error" title="Device health could not be read" body={error} announce="status"
       code={errCode} action={<M3Button emphasis="outlined" onClick={retry}>Retry</M3Button>} />;
   }
   if (!data && loadTimedOut) {
-    return <StatePanel variant="error" title="System health could not be read"
-      body="The system health read timed out after 20 s."
+    return <StatePanel variant="error" title="Device health could not be read"
+      body="The device health read timed out after 20 s."
       announce="status" code="TIMEOUT" action={<M3Button emphasis="outlined" onClick={retry}>Retry</M3Button>} />;
   }
-  if (!data) return <StatePanel variant="empty" title="Reading system health…" announce="status" />;
+  if (!data) return <StatePanel variant="empty" title="Reading device health…" announce="status" />;
 
   const today = now.toISOString().slice(0, 10);
   const k = data.kpis;
@@ -298,7 +322,7 @@ export function SystemHealthPanel({ now = new Date() }: { readonly now?: Date })
         body={`The first computation has not finished within ${(MAX_COMPUTING_POLLS * COMPUTING_POLL_MS) / 1000} s; the server still reports it running. This panel asks again every ${SLOW_COMPUTING_POLL_MS / 1000} s.`}
         action={<M3Button emphasis="outlined" onClick={retry}>Retry</M3Button>} /> : null}
       {notComputedYet ? <StatePanel variant={computationFailed ? "error" : "not_evaluated"}
-        title={computationFailed ? "System health computation failed" : schedulingOff ? "Not computed yet (scheduled computation is off)" : "Not computed yet"}
+        title={computationFailed ? "Device health computation failed" : schedulingOff ? "Not computed yet (scheduled computation is off)" : "Not computed yet"}
         announce="status"
         body={apiReason ?? (computationFailed
           ? "The computation failed; the server gave no reason."
@@ -365,7 +389,7 @@ export function SystemHealthPanel({ now = new Date() }: { readonly now?: Date })
           )}
         </DialogActions>
       </Dialog>
-      <KpiRow ariaLabel="System health summary">
+      <KpiRow ariaLabel="Device health summary">
         <KpiCard label="Monitored devices" value={k.monitored?.devices ?? null} {...noFigure}
           detail={k.monitored ? byVendor : undefined}
           sentence={k.monitored ? `gateways the collection covers · ${k.monitored.not_collected_listed} listed with collection off · ${asOf}` : asOf} />
@@ -384,7 +408,7 @@ export function SystemHealthPanel({ now = new Date() }: { readonly now?: Date })
         State word, worst fact wins ({data.rules.state_order.join(" › ")}). Critical: {data.rules.critical.join("; ")}. Attention: {data.rules.attention.join("; ")}.
         {" "}Normal: {data.rules.normal}. UNKNOWN: {data.rules.unknown}. p95: {data.rules.p95}. Restart rule {data.rules.restart_rule.id} ({data.rules.restart_rule.status}): {data.rules.restart_rule.text}.
       </Typography>
-      <DataTable ariaLabel="System health devices" columns={columns} rows={data.devices} rowKey={(d) => d.device_id} maxHeight="calc(100vh - 420px)"
+      <DataTable ariaLabel="Device health table" columns={columns} rows={data.devices} rowKey={(d) => d.device_id} maxHeight="calc(100vh - 420px)"
         emptyText={computing ? "No row until the first computation finishes." : notComputedYet ? `Not computed yet (${apiReason ?? "scheduled computation is off"}).` : "No Check Point or Palo Alto gateway is enrolled for system-log collection."}
         onRowClick={(d) => window.location.assign(logsHref(d))} testId="system-health-table" />
     </Box>

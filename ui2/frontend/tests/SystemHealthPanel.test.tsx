@@ -1,4 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
@@ -79,11 +79,11 @@ describe("SystemHealthPanel", () => {
   it("shows the four KPIs, the rule text and one row per device, worst first as the server sorted them", async () => {
     stub(() => ({ status: 200, body: body() }));
     render(withTheme(<SystemHealthPanel now={NOW} />));
-    const table = await screen.findByRole("table", { name: "System health devices" });
+    const table = await screen.findByRole("table", { name: "Device health table" });
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows.map((r) => within(r).getAllByRole("cell")[0].textContent)).toEqual(["FW-TANGO-04", "FW-ROMEO-01-M1", "FW-JULIET-06", "FW-BRAVO-02"]);
 
-    const kpis = screen.getByLabelText("System health summary");
+    const kpis = screen.getByLabelText("Device health summary");
     expect(within(kpis).getByText("Monitored devices")).toBeInTheDocument();
     expect(within(kpis).getByText("Check Point 3 · Palo Alto 1")).toBeInTheDocument();
     expect(within(kpis).getByText("CPU p95 above 85 %")).toBeInTheDocument();
@@ -106,7 +106,7 @@ describe("SystemHealthPanel", () => {
   it("writes UNKNOWN for a fact without evidence and No source for a vendor without one; never a 0 or a dash", async () => {
     stub(() => ({ status: 200, body: body() }));
     render(withTheme(<SystemHealthPanel now={NOW} />));
-    const table = await screen.findByRole("table", { name: "System health devices" });
+    const table = await screen.findByRole("table", { name: "Device health table" });
     const rows = within(table).getAllByRole("row").slice(1);
     const fresh = rows[2];
     const cells = within(fresh).getAllByRole("cell").map((c) => c.textContent);
@@ -142,7 +142,7 @@ describe("SystemHealthPanel", () => {
     const title = await screen.findByText("First computation running");
     expect(title.closest('[role="status"]')).not.toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
-    const kpis = screen.getByLabelText("System health summary");
+    const kpis = screen.getByLabelText("Device health summary");
     expect(within(kpis).getAllByText("Not evaluated")).toHaveLength(4);
     expect(within(kpis).queryByText("0")).toBeNull();
     computing = false;
@@ -155,15 +155,37 @@ describe("SystemHealthPanel", () => {
   it("a refused read is a restriction, a failed read an error, both announced as status", async () => {
     stub(() => ({ status: 403, body: { code: "ACTION_REFUSED" } }));
     const { unmount } = render(withTheme(<SystemHealthPanel now={NOW} />));
-    expect(await screen.findByText("System health is not available for this role")).toBeInTheDocument();
+    expect(await screen.findByText("Device health is not available for this role")).toBeInTheDocument();
     expect(screen.getByRole("status")).toBeInTheDocument();
     unmount();
     vi.unstubAllGlobals();
-    stub(() => ({ status: 500, body: { code: "SYSTEM_HEALTH_READ_FAILED", message: "The system health read failed." } }));
+    stub(() => ({ status: 500, body: { code: "SYSTEM_HEALTH_READ_FAILED", message: "The device health read failed." } }));
     render(withTheme(<SystemHealthPanel now={NOW} />));
-    expect(await screen.findByText("System health could not be read")).toBeInTheDocument();
+    expect(await screen.findByText("Device health could not be read")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.getByRole("status")).toBeInTheDocument();
+  });
+
+  it("a malformed body ({}) becomes the error state with Retry instead of crashing, and nothing of the body is logged", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    let answer: unknown = { sentinel: "synthetic-body-marker" };
+    stub(() => ({ status: 200, body: answer }));
+    render(withTheme(<SystemHealthPanel now={NOW} />));
+    expect(await screen.findByText("Device health could not be read")).toBeInTheDocument();
+    expect(screen.getByText("MALFORMED_RESPONSE")).toBeInTheDocument();
+    expect(log.mock.calls.map((c) => c.map(String).join(" ")).join("\n")).not.toContain("synthetic-body-marker");
+    answer = body();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("table", { name: "Device health table" })).toBeInTheDocument();
+    log.mockRestore();
+  });
+
+  it("a body whose device row lacks its facts is malformed too, not a render crash", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    stub(() => ({ status: 200, body: body({ devices: [{ device_id: "d-x" } as unknown as SystemHealthDevice] }) }));
+    render(withTheme(<SystemHealthPanel now={NOW} />));
+    expect(await screen.findByText("Device health could not be read")).toBeInTheDocument();
+    expect(screen.getByText("MALFORMED_RESPONSE")).toBeInTheDocument();
   });
 
   it("stops polling after bounded wait when COMPUTING never finishes and shows plain state or API failure reason", async () => {
@@ -199,7 +221,7 @@ describe("SystemHealthPanel", () => {
       }),
     }));
     render(withTheme(<SystemHealthPanel now={NOW} />));
-    expect(await screen.findByText("System health computation failed")).toBeInTheDocument();
+    expect(await screen.findByText("Device health computation failed")).toBeInTheDocument();
     expect(screen.getAllByText(/COMPUTATION_FAILED: IllegalStateException/).length).toBeGreaterThanOrEqual(1);
   });
 
@@ -238,7 +260,7 @@ describe("SystemHealthPanel", () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
     render(withTheme(<SystemHealthPanel now={NOW} />));
     await act(async () => { await vi.advanceTimersByTimeAsync(20_050); });
-    expect(await screen.findByText("System health could not be read")).toBeInTheDocument();
+    expect(await screen.findByText("Device health could not be read")).toBeInTheDocument();
     expect(screen.queryByText(/scheduled computation is off/i)).toBeNull();
   });
 

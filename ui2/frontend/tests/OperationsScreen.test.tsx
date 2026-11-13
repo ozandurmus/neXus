@@ -38,7 +38,7 @@ function stubFetch(devices: unknown[], summary: unknown | null) {
       families: [{ family: "discovery_refresh", label: "Discovery refresh", description: "Synthetic description.", cadence: "Every 6 hours",
         enabled: true, state: "ON", will_run: true, lock_reason: null, note: null, window_open_now: false, next_window_at: "2026-11-11T00:00:00+03:00",
         last_run_at: null, changed_by: "USR-0a1b2c3d4e", changed_at: "2026-11-10T18:05:00Z", reason: null }] });
-    if (url === "/api/v2/system-logs/health") return json(503, { code: "SYSTEM_HEALTH_READ_FAILED", message: "The system health read failed." });
+    if (url === "/api/v2/system-logs/health") return json(503, { code: "SYSTEM_HEALTH_READ_FAILED", message: "The device health read failed." });
     return json(200, {});
   }));
 }
@@ -48,7 +48,7 @@ afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState(null, "", "
 const TABS = [
   { label: "HA and readiness", marker: "No HA pair or cluster enrolled" },
   { label: "Jobs", marker: "All jobs" },
-  { label: "Device health", marker: "System health could not be read" },
+  { label: "Device health", marker: "Device health could not be read" },
 ];
 
 describe("OperationsScreen tabs", () => {
@@ -83,7 +83,7 @@ describe("OperationsScreen tabs", () => {
     window.history.replaceState(null, "", "/?screen=operations&tab=health");
     render(withTheme(<OperationsScreen />));
     expect(screen.getByRole("tab", { name: "Device health" })).toHaveAttribute("aria-selected", "true");
-    expect(await within(screen.getByRole("tabpanel", { name: "Device health" })).findByText("System health could not be read")).toBeInTheDocument();
+    expect(await within(screen.getByRole("tabpanel", { name: "Device health" })).findByText("Device health could not be read")).toBeInTheDocument();
     const urls = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map(([url]) => String(url));
     expect(urls.some((url) => url.startsWith("/api/v2/system/"))).toBe(false);
     expect(urls).not.toContain("/api/v2/config/scheduled-jobs");

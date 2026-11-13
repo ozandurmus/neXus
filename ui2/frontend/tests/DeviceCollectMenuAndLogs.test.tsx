@@ -429,13 +429,13 @@ describe("Fleet Collect logs (all supported devices) action and confirmation dia
 
     // Hidden for viewer
     const { unmount: unmountViewer } = render(withProviders(<SystemHealthPanel />, VIEWER_PERMS));
-    await screen.findByLabelText("System health summary");
+    await screen.findByLabelText("Device health summary");
     expect(screen.queryByRole("button", { name: "Collect logs (all supported devices)" })).toBeNull();
     unmountViewer();
 
     // Hidden for onboarding_admin
     const { unmount: unmountOnboarding } = render(withProviders(<SystemHealthPanel />, ONBOARDING_ADMIN_PERMS));
-    await screen.findByLabelText("System health summary");
+    await screen.findByLabelText("Device health summary");
     expect(screen.queryByRole("button", { name: "Collect logs (all supported devices)" })).toBeNull();
     unmountOnboarding();
 
