@@ -141,6 +141,7 @@ def test_ship_test_modes_and_pr_results(tmp_path, monkeypatch, full, integration
         return subprocess.CompletedProcess(args, code, output, "")
 
     monkeypatch.setattr(sa, "_git", git)
+    monkeypatch.setenv("NEXUS_HOST", "synthetic-host")  # the host is local configuration; CI has none
     monkeypatch.setattr(sa, "_preview_e2e", lambda *_: None)
     monkeypatch.setattr(sa, "_wait_for_checks", lambda url: None)
     monkeypatch.setattr(sa, "_deploy", lambda *_: None)
@@ -261,3 +262,16 @@ def test_start_holds_admission_lock_and_releases_on_failure(tmp_path, monkeypatc
         sa.cmd_start(_args())
     with (tmp_path / "start.lock").open("a+") as lock:
         sa.fcntl.flock(lock, sa.fcntl.LOCK_EX | sa.fcntl.LOCK_NB)
+
+
+def test_host_mirror_url_comes_from_local_configuration_only(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("NEXUS_HOST", raising=False)
+    with pytest.raises(SystemExit, match="set NEXUS_HOST or write user@host to ~/.config/nexus/hosta"):
+        sa._host_mirror_url()
+    config = tmp_path / ".config" / "nexus" / "hosta"
+    config.parent.mkdir(parents=True)
+    config.write_text("synthetic-user@synthetic-file-host\n")
+    assert sa._host_mirror_url() == "ssh://synthetic-user@synthetic-file-host/opt/nexus.git"
+    monkeypatch.setenv("NEXUS_HOST", "synthetic-env-host")
+    assert sa._host_mirror_url() == "ssh://synthetic-env-host/opt/nexus.git"
