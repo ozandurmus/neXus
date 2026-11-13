@@ -36,7 +36,7 @@ public final class CheckPointComplianceCatalog {
                     FrameworkMapping.satisfies(ComplianceFramework.CIS, "2.1.1", "1.1.0"),
                     FrameworkMapping.satisfies(ComplianceFramework.PCI_DSS, "8.3.6", "4.0.1"),
                     FrameworkMapping.contributesTo(ComplianceFramework.NIST_800_53, "IA-5(1)", "Rev 5"),
-                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "Access Control §3.1", "2026")
+                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "FB-ACCESS-01", "1")
                 ),
                 List.of(
                     new VendorBinding(
@@ -109,7 +109,7 @@ public final class CheckPointComplianceCatalog {
                     FrameworkMapping.satisfies(ComplianceFramework.CIS, "2.1.4", "1.1.0"),
                     FrameworkMapping.stricterThan(ComplianceFramework.PCI_DSS, "8.3.4", "4.0.1"),
                     FrameworkMapping.satisfies(ComplianceFramework.NIST_800_53, "AC-7", "Rev 5"),
-                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "Brute Force Protection §2.4", "2026")
+                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "FB-LOCKOUT-01", "1")
                 ),
                 List.of(
                     new VendorBinding(
@@ -158,7 +158,7 @@ public final class CheckPointComplianceCatalog {
                     FrameworkMapping.satisfies(ComplianceFramework.CIS, "2.5.2", "1.1.0"),
                     FrameworkMapping.stricterThan(ComplianceFramework.PCI_DSS, "8.2.8", "4.0.1"),
                     FrameworkMapping.satisfies(ComplianceFramework.NIST_800_53, "AC-11", "Rev 5"),
-                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "Session Governance §5.2", "2026")
+                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "FB-SESSION-01", "1")
                 ),
                 List.of(
                     new VendorBinding(
@@ -183,7 +183,7 @@ public final class CheckPointComplianceCatalog {
                     FrameworkMapping.satisfies(ComplianceFramework.CIS, "2.5.3", "1.1.0"),
                     FrameworkMapping.satisfies(ComplianceFramework.PCI_DSS, "2.2.5", "4.0.1"),
                     FrameworkMapping.satisfies(ComplianceFramework.NIST_800_53, "SC-8", "Rev 5"),
-                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "Transport Security §1.1", "2026")
+                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "FB-TRANSPORT-01", "1")
                 ),
                 List.of(
                     new VendorBinding(
@@ -280,7 +280,7 @@ public final class CheckPointComplianceCatalog {
                     FrameworkMapping.satisfies(ComplianceFramework.CIS, "2.3.1", "1.1.0"),
                     FrameworkMapping.satisfies(ComplianceFramework.PCI_DSS, "10.6.1", "4.0.1"),
                     FrameworkMapping.satisfies(ComplianceFramework.NIST_800_53, "AU-8", "Rev 5"),
-                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "Time Synchronization §4.2", "2026")
+                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "FB-TIME-01", "1")
                 ),
                 List.of(
                     new VendorBinding(
@@ -305,7 +305,7 @@ public final class CheckPointComplianceCatalog {
                     FrameworkMapping.satisfies(ComplianceFramework.CIS, "2.4.1", "1.1.0"),
                     FrameworkMapping.satisfies(ComplianceFramework.PCI_DSS, "10.2.1", "4.0.1"),
                     FrameworkMapping.satisfies(ComplianceFramework.NIST_800_53, "AU-4", "Rev 5"),
-                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "Audit Logging §6.1", "2026")
+                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "FB-AUDIT-01", "1")
                 ),
                 List.of(
                     new VendorBinding(
@@ -376,7 +376,7 @@ public final class CheckPointComplianceCatalog {
                     FrameworkMapping.satisfies(ComplianceFramework.CIS, "2.2.1", "1.1.0"),
                     FrameworkMapping.satisfies(ComplianceFramework.PCI_DSS, "1.2.1", "4.0.1"),
                     FrameworkMapping.satisfies(ComplianceFramework.NIST_800_53, "AC-8", "Rev 5"),
-                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "Warning Banners §1.3", "2026")
+                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "FB-BANNER-01", "1")
                 ),
                 List.of(
                     new VendorBinding(
@@ -516,7 +516,7 @@ public final class CheckPointComplianceCatalog {
                     FrameworkMapping.satisfies(ComplianceFramework.CIS, "2.5.4", "1.1.0"),
                     FrameworkMapping.satisfies(ComplianceFramework.PCI_DSS, "2.2.5", "4.0.1"),
                     FrameworkMapping.satisfies(ComplianceFramework.NIST_800_53, "SC-13", "Rev 5"),
-                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "Cryptographic Baseline §2.1", "2026")
+                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "FB-CRYPTO-01", "1")
                 ),
                 List.of(
                     new VendorBinding(
@@ -589,7 +589,7 @@ public final class CheckPointComplianceCatalog {
                     FrameworkMapping.satisfies(ComplianceFramework.CIS, "2.5.1", "1.1.0"),
                     FrameworkMapping.satisfies(ComplianceFramework.PCI_DSS, "1.3.1", "4.0.1"),
                     FrameworkMapping.satisfies(ComplianceFramework.NIST_800_53, "AC-17", "Rev 5"),
-                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "Segment Isolation §1.2", "2026")
+                    FrameworkMapping.satisfies(ComplianceFramework.FINANCIAL_BASELINE, "FB-SEGMENT-01", "1")
                 ),
                 List.of(
                     new VendorBinding(

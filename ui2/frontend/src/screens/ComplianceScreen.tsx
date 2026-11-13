@@ -80,6 +80,7 @@ import { StackedBar, STATUS } from "../shell/Charts";
 import { StatePanel, isRestricted } from "../shell/States";
 import { formatUtc } from "../shell/time";
 import { Presented } from "../shell/PresentedText";
+import { FINANCIAL_BASELINE_NOTICE } from "../shell/frameworkNotice";
 import { vendorLabel } from "../shell/presenters";
 import { MONO, m3 } from "../theme/m3Theme";
 import { responsesAreMasked } from "../auth/adminApi";
@@ -674,6 +675,12 @@ export function ComplianceScreen() {
               </select>
             </Stack>
           </Stack>
+
+          {frameworkFilter === "FINANCIAL" && (
+            <Typography data-testid="financial-baseline-notice" sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>
+              Financial baseline: {FINANCIAL_BASELINE_NOTICE}
+            </Typography>
+          )}
 
           {/* Status Filter Pills */}
           <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>

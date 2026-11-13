@@ -6,6 +6,7 @@ import Link from "@mui/material/Link";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 
+import { FINANCIAL_BASELINE_NOTICE } from "../shell/frameworkNotice";
 import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 import { Icon, type IconName } from "../shell/Icon";
 import { StatusChip } from "../shell/M3Widgets";
@@ -747,7 +748,8 @@ export function OverviewScreen() {
                 return (
                   <Box key={f.name} data-framework={f.name}>
                     <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1, mb: 0.5, flexWrap: "wrap" }}>
-                      <Link href={q({ screen: "compliance", framework: f.name })} underline="hover" sx={{ fontSize: 13.5, fontWeight: 600, color: m3.onSurface }}>{name}</Link>
+                      <Link href={q({ screen: "compliance", framework: f.name })} underline="hover" sx={{ fontSize: 13.5, fontWeight: 600, color: m3.onSurface }}
+                        title={f.name === "Financial Baseline" ? FINANCIAL_BASELINE_NOTICE : undefined}>{name}</Link>
                       <Tooltip title="A check is one control on one firewall. A check without evidence is not counted as failed.">
                         <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>
                           {t ? <><b style={{ color: m3.onSurface }}>{sh.passPct === null ? "UNKNOWN" : `${sh.passPct}%`}</b> of evidenced controls pass · {sh.noEvidencePct}% have no evidence</> : "Not assessed"}
