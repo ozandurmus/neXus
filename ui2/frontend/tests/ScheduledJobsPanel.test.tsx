@@ -278,6 +278,47 @@ describe("ScheduledJobsPanel", () => {
     expect(screen.queryByText("Loading scheduled jobs…")).toBeNull();
   });
 
+  it("a malformed body ({}) becomes the error state with Retry instead of crashing, and nothing of the body is logged", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const state = { view: { sentinel: "synthetic-body-marker" } as unknown as ScheduledJobsView };
+    server(state);
+    show();
+    const error = await screen.findByText("The scheduled jobs list is unavailable");
+    expect(error.closest("[data-state='error']")).toHaveTextContent("MALFORMED_RESPONSE");
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(log.mock.calls.map((c) => c.map(String).join(" ")).join("\n")).not.toContain("synthetic-body-marker");
+    // Retry reads again and shows the list once the server answers properly.
+    state.view = view();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("list", { name: "Scheduled job families" })).toBeInTheDocument();
+  });
+
+  it("a malformed re-read keeps the last good list and says it was not refreshed", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const state = { view: view() };
+    server(state);
+    show();
+    await screen.findByRole("list", { name: "Scheduled job families" });
+    state.view = {} as ScheduledJobsView;
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(await screen.findByTestId("scheduled-jobs-stale")).toHaveTextContent("The list was not refreshed");
+    expect(screen.getByRole("list", { name: "Scheduled job families" })).toBeInTheDocument();
+  });
+
+  it("a malformed save answer ({}) is a 'Not saved' problem, not a crash, and the list is read again", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const state = { view: view() };
+    const sent = server(state, () => ({ status: 200, body: {} }));
+    show();
+    fireEvent.click(await screen.findByLabelText("Discovery refresh: scheduled jobs on"));
+    const dialog = screen.getByRole("dialog", { name: "Turn OFF Discovery refresh?" });
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: "Vendor maintenance tonight" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    expect(await within(dialog).findByText("Not saved")).toBeInTheDocument();
+    expect(screen.queryByTestId("scheduled-jobs-notice")).toBeNull();
+    await waitFor(() => expect(sent.filter((s) => s.method === "GET" && s.url === "/api/v2/config/scheduled-jobs")).toHaveLength(2));
+  });
+
   it("words the time ahead and the saved sentence", () => {
     expect(untilText("2026-11-10T18:42:00Z", NOW)).toBe("in 12 min");
     expect(untilText("2026-11-13T18:30:00Z", NOW)).toBe("in 3 d");

@@ -16,6 +16,7 @@ import Typography from "@mui/material/Typography";
 import { m3 } from "../theme/m3Theme";
 import type { Tone } from "./tone";
 import { StatusPill } from "./StatusPill";
+import { PanelErrorBoundary } from "./PanelErrorBoundary";
 import { Icon, type IconName } from "./Icon";
 
 /**
@@ -200,7 +201,7 @@ export function M3Tabs({
             hidden={index !== safeValue}
             sx={{ display: index === safeValue ? "flex" : "none", flexDirection: "column", gap: 2, flex: 1, minHeight: 0, minWidth: 0 }}
           >
-            {t.panel}
+            <PanelErrorBoundary label={t.label} resetKey={t.label}>{t.panel}</PanelErrorBoundary>
           </Box>
         ) : null)
         : (
@@ -211,7 +212,7 @@ export function M3Tabs({
             aria-labelledby={tabId(value)}
             sx={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minHeight: 0, minWidth: 0 }}
           >
-            {tabs[value]?.panel}
+            <PanelErrorBoundary label={tabs[value]?.label} resetKey={value}>{tabs[value]?.panel}</PanelErrorBoundary>
           </Box>
         )}
     </>

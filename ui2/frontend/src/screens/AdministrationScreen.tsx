@@ -9,6 +9,7 @@ import { M3Tabs } from "../shell/M3Widgets";
 import { AddDeviceDialogTrigger, ImportFromManagerTrigger } from "../shell/AddDeviceDialog";
 import { Icon } from "../shell/Icon";
 import { RestrictedPanel } from "../shell/States";
+import { PanelErrorBoundary } from "../shell/PanelErrorBoundary";
 import { PLANE_ADMIN, planeGranted } from "../shell/actionAccess";
 import { LEGACY_ADMIN_TABS, type AdminGroupSlug } from "../shell/legacyRoutes";
 import { useLocationSearch, writeUrlParams } from "../shell/urlParams";
@@ -171,7 +172,7 @@ function SectionBody({ section, locked }: { readonly section: AdminSectionDef; r
       sx={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 }}>
       {locked
         ? <RestrictedPanel area={section.label} nextStep="The page is shown so its place in the product can be verified; its content is not available to this account." />
-        : section.panel}
+        : <PanelErrorBoundary label={`Administration > ${section.label}`} resetKey={section.slug}>{section.panel}</PanelErrorBoundary>}
     </Box>
   );
 }

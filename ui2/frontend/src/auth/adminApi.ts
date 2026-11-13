@@ -3807,7 +3807,7 @@ export const getSystemLogHcp = (deviceId: string) => call<SystemLogHcp>(`${syslo
 export const getSystemLogSpikeData = (deviceId: string) => call<SystemLogSpikeData>(`${syslogBase(deviceId)}/spike-data`, "GET");
 
 // ---------------------------------------------------------------------------------------------------------------
-// Operations › System health (`GET /api/v2/system-logs/health`, `syslog-health`; docs/design/SYSTEM_HEALTH_SCREEN_2026_10_20.md).
+// Operations › Device health (`GET /api/v2/system-logs/health`, `syslog-health`; docs/design/SYSTEM_HEALTH_SCREEN_2026_10_20.md).
 // Counters and state words over what the system-log programme already stores; the server computes a snapshot in the
 // background and says so (`computation.state`): COMPUTING until the first snapshot, REFRESHING while a stale one is served.
 // ---------------------------------------------------------------------------------------------------------------

@@ -4,6 +4,7 @@ import Box from "@mui/material/Box";
 import { NavigationRail } from "./shell/NavigationRail";
 import { TopAppBar } from "./shell/TopAppBar";
 import { PreviewBanner } from "./preview/PreviewBanner";
+import { PanelErrorBoundary } from "./shell/PanelErrorBoundary";
 const OverviewScreen = lazy(() => import("./screens/OverviewScreen").then((m) => ({ default: m.OverviewScreen })));
 const InventoryScreen = lazy(() => import("./screens/InventoryScreen").then((m) => ({ default: m.InventoryScreen })));
 const PolicyScreen = lazy(() => import("./screens/PolicyScreen").then(m => ({ default: m.PolicyScreen })));
@@ -124,7 +125,9 @@ export function App({ search = typeof window === "undefined" ? "" : window.locat
             <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
               <TopAppBar />
               <Box component="main" sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                <DeviceWorkspaceScreen deviceId={deviceId} />
+                <PanelErrorBoundary label="device workspace" resetKey={deviceId}>
+                  <DeviceWorkspaceScreen deviceId={deviceId} />
+                </PanelErrorBoundary>
               </Box>
             </Box>
           </Box>
@@ -150,7 +153,9 @@ export function App({ search = typeof window === "undefined" ? "" : window.locat
           <TopAppBar />
           {preview && <PreviewBanner />}
           <Box component="main" sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            <Suspense fallback={null}>{preview ? <Preview /> : <Product />}</Suspense>
+            <PanelErrorBoundary label={`screen ${screen}`} resetKey={`${screen}:${preview ? "preview" : "product"}`}>
+              <Suspense fallback={null}>{preview ? <Preview /> : <Product />}</Suspense>
+            </PanelErrorBoundary>
           </Box>
         </Box>
       </Box>

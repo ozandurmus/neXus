@@ -11,6 +11,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import { Icon } from "../shell/Icon";
+import { isRecord, malformedResponse } from "../shell/malformedResponse";
 import { M3Button } from "../shell/M3Widgets";
 import { StatePanel } from "../shell/States";
 import { StatusPill } from "../shell/StatusPill";
@@ -39,6 +40,31 @@ function problemOf(err: unknown): Problem {
   const code = typeof body.code === "string" ? body.code : typeof body.error === "string" ? body.error : null;
   if (typeof body.message === "string" && body.message) return { message: body.message, code };
   return { message: `The request failed${e?.status ? ` (status ${e.status})` : ""}.`, code };
+}
+
+const isString = (v: unknown): v is string => typeof v === "string";
+
+/** The fields the page reads from one family; anything else missing is drawn as absent, never as a crash. */
+function isFamily(v: unknown): boolean {
+  return isRecord(v) && isString(v.family) && isString(v.label) && isString(v.state) && typeof v.enabled === "boolean";
+}
+
+/** A list body the page can draw. `{}`, a missing `families`, or a family without its identity is malformed. */
+export function isScheduledJobsView(v: unknown): v is ScheduledJobsView {
+  return isRecord(v) && typeof v.master_enabled === "boolean" && typeof v.can_write === "boolean"
+    && Array.isArray(v.families) && v.families.every(isFamily);
+}
+
+/** A save answer the page can show: the family it names, with the switch state. */
+export function isFamilyUpdate(v: unknown): v is ScheduledJobFamilyUpdate {
+  return isFamily(v);
+}
+
+/** Reads the list and refuses a body of the wrong shape with the same rejection a failed request gives. */
+async function readScheduledJobs(): Promise<ScheduledJobsView> {
+  const next: unknown = await getScheduledJobs();
+  if (!isScheduledJobsView(next)) throw malformedResponse("scheduled jobs list");
+  return next;
 }
 
 /** `in 12 min`, `in 3 h`, `in 2 d` for an instant ahead of now; null when it is not ahead or not a date. */
@@ -230,7 +256,9 @@ function ChangeDialog({ family, enable, view, onCancel, onSaved, onSettled }: {
     setBusy(true);
     setProblem(null);
     try {
-      onSaved(await setScheduledJobFamily(family.family, enable, trimmed));
+      const update: unknown = await setScheduledJobFamily(family.family, enable, trimmed);
+      if (!isFamilyUpdate(update)) throw malformedResponse("scheduled jobs save answer");
+      onSaved(update);
     } catch (e) {
       setProblem(problemOf(e));
       setBusy(false);
@@ -292,7 +320,7 @@ export function ScheduledJobsPanel({ now }: { readonly now?: Date } = {}) {
   const load = useCallback(() => {
     setRefreshing(true);
     setLoadError(null);
-    getScheduledJobs()
+    readScheduledJobs()
       .then((next) => { setView(next); setReadAt(new Date().toISOString()); })
       .catch((e) => setLoadError(problemOf(e)))
       .finally(() => setRefreshing(false));
