@@ -118,4 +118,59 @@ class SessionStatusControllerTest {
         assertEquals("User Name", response.getBody().get("display_name"));
         assertEquals(List.of("role:security_admin"), response.getBody().get("role_tokens"));
     }
+
+    private static final String PROFILE = "synthetic-profile";
+    private static final String BIND_DN = "CN=Synthetic Person,OU=People,DC=example,DC=local";
+
+    /** A directory session shown through the real status endpoint; {@code displayName} is what V211 stores (null before it). */
+    private static Map<String, Object> directoryStatus(String displayName) {
+        byte[] key = new byte[32];
+        new java.security.SecureRandom().nextBytes(key);
+        var cipher = com.securityexpert.nexus.ui2.platform.GroupReferenceCipher.fromBase64Key(
+                java.util.Base64.getEncoder().encodeToString(key), "synthetic-key");
+        SessionRepository sessions = mock(SessionRepository.class);
+        LocalIdentityResolver identities = mock(LocalIdentityResolver.class);
+        var actors = mock(com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRepository.class);
+        var bindings = mock(com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository.class);
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getCookies()).thenReturn(new Cookie[]{new Cookie("ui2_session", "synthetic-cookie")});
+        Instant now = Instant.now();
+        SessionRecord session = new SessionRecord(SessionHasher.hash("synthetic-cookie"), "synthetic-directory-actor", "synthetic-csrf",
+                SessionState.ACTIVE, now.minusSeconds(10), now, now.plusSeconds(600), now.plusSeconds(1800),
+                Optional.empty(), Optional.empty(), Optional.empty());
+        when(sessions.findBySessionId(session.sessionId())).thenReturn(Optional.of(session));
+        when(identities.resolve("synthetic-directory-actor")).thenReturn(Optional.empty());
+        when(actors.find("synthetic-directory-actor")).thenReturn(Optional.of(
+                new com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRecord("synthetic-directory-actor",
+                        java.util.Set.of("synthetic-group"), now, now.plusSeconds(300), PROFILE,
+                        cipher.encryptDirectory(BIND_DN, PROFILE, com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_PRINCIPAL),
+                        cipher.keyId(), displayName)));
+        // A role bound to the bind DN: it must still match, whatever name is shown.
+        var kind = com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_PRINCIPAL;
+        when(bindings.findAllActive()).thenReturn(List.of(new com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRecord(
+                "synthetic-binding", RoleToken.OPERATOR, cipher.encryptDirectory(BIND_DN, PROFILE, kind), cipher.keyId(),
+                "synthetic-admin", now, Optional.empty(), Optional.empty(), kind, PROFILE)));
+        var controller = new SessionStatusController(sessions, identities, mock(LocalRoleTokenResolver.class), false, actors, bindings, cipher, null);
+        var rbac = mock(com.securityexpert.nexus.ui2.service.security.RbacEvaluator.class);
+        controller.setRbacEvaluator(rbac);
+        when(rbac.evaluate(anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new com.securityexpert.nexus.ui2.service.security.RbacEvaluator.Decision(
+                        com.securityexpert.nexus.ui2.platform.AuthzOutcome.DENIED, Optional.empty(), Optional.empty(), Optional.empty()));
+        return controller.status(request).getBody();
+    }
+
+    @Test
+    void directoryUserIsShownByTheAccountNameNotTheBindDnAndTheDnBindingStillGrantsItsRole() {
+        Map<String, Object> body = directoryStatus("jdoe");
+        assertEquals("jdoe", body.get("display_name"));
+        assertEquals(List.of(RoleToken.OPERATOR), body.get("role_tokens"));
+        assertFalse(body.toString().contains("CN="), "the bind DN is not part of the response");
+    }
+
+    @Test
+    void aDirectoryRowWrittenBeforeTheDisplayNameColumnKeepsTheEarlierValueUntilTheNextSignIn() {
+        Map<String, Object> body = directoryStatus(null);
+        assertEquals(BIND_DN, body.get("display_name"));
+        assertEquals(List.of(RoleToken.OPERATOR), body.get("role_tokens"));
+    }
 }

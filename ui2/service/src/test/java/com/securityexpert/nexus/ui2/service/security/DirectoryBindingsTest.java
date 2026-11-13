@@ -237,6 +237,22 @@ class DirectoryBindingsTest {
         assertInstanceOf(RoleBindingAdminService.Outcome.NotEvaluated.class, f.create(f.admin(false), "unrecognized", NOW));
     }
 
+    @Test void signInStoresTheDisplayNameBesideTheUnchangedEncryptedPrincipalAndARefreshKeepsIt() {
+        Fixture f = new Fixture(); f.states.clear(); f.sessionRows.clear();
+        LoginFlow flow = new LoginFlow(f.sessions, Duration.ofMinutes(5), Duration.ofHours(10), f.bindings, f.cipher);
+        var observation = new DirectoryObservation(PROFILE, PRINCIPAL, Set.of("opaque-group"), "  sperson\u0000 ", NOW,
+                NOW.plusSeconds(300), f::publish);
+        assertEquals("sperson", observation.displayName(), "trimmed, control characters dropped");
+        assertInstanceOf(LoginFlow.LoginResult.NewSession.class, flow.login(new AttemptOutcome.Success(ACTOR, observation), NOW));
+        var stored = f.states.get(ACTOR);
+        assertEquals("sperson", stored.directoryDisplayName());
+        assertEquals(PRINCIPAL, f.cipher.decryptDirectory(stored.principalReferenceEncrypted(), PROFILE,
+                DirectoryBindingKind.DIRECTORY_PRINCIPAL, stored.principalReferenceKeyId()), "the identity is still the principal reference");
+        assertNull(new DirectoryObservation(PROFILE, PRINCIPAL, Set.of(), f::publish).displayName());
+        assertNull(DirectoryObservation.cleanDisplayName(" \u0007 "));
+        assertEquals(DirectoryObservation.MAX_DISPLAY_NAME, DirectoryObservation.cleanDisplayName("x".repeat(500)).length());
+    }
+
     @Test void verifiedLoginConflictCarriesOnlyEncryptedProofAndNeverExtendsItsObservation() {
         Fixture f = new Fixture(); f.states.clear(); f.sessionRows.clear();
         LoginFlow flow = new LoginFlow(f.sessions, Duration.ofMinutes(5), Duration.ofHours(10), f.bindings, f.cipher);
@@ -262,6 +278,9 @@ class DirectoryBindingsTest {
 
     @Test void approvedRevalidationRefreshesBothKindsButDisabledFailedAndAmbiguousProofDoNot() {
         Fixture f = new Fixture();
+        var signedIn = f.states.get(ACTOR);
+        f.states.put(ACTOR, new ActorAuthzStateRecord(ACTOR, signedIn.groupReferences(), signedIn.resolvedAt(), signedIn.validUntil(),
+                PROFILE, signedIn.principalReferenceEncrypted(), signedIn.principalReferenceKeyId(), "sperson"));
         f.directory("group", BACKUP, DirectoryBindingKind.DIRECTORY_GROUP, "opaque-group", PROFILE);
         var calls = new java.util.concurrent.atomic.AtomicInteger();
         var enabled = new AtomicBoolean(false);
@@ -281,6 +300,7 @@ class DirectoryBindingsTest {
         enabled.set(true);
         assertTrue(refresh.refresh(ACTOR, NOW.plusSeconds(100)));
         assertEquals(NOW.plusSeconds(400), f.states.get(ACTOR).validUntil());
+        assertEquals("sperson", f.states.get(ACTOR).directoryDisplayName(), "a revalidation keeps the name shown at sign-in");
         assertEquals(AuthzOutcome.PERMITTED, f.evaluator().evaluate(ACTOR, Optional.of(RoleToken.BACKUP_ADMIN), NOW.plusSeconds(100)).outcome());
         f.directory("principal", BACKUP, DirectoryBindingKind.DIRECTORY_PRINCIPAL, PRINCIPAL, PROFILE);
         f.rows.remove("group"); assertEquals(AuthzOutcome.PERMITTED,

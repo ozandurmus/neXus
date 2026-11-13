@@ -3,11 +3,37 @@ package com.securityexpert.nexus.ui2.platform;
 import java.util.Set;
 import java.util.Objects;
 
-/** In-flight authenticated evidence; never a browser or audit value. */
+/**
+ * In-flight authenticated evidence; never a browser or audit value. {@code displayName} is the one exception: the
+ * directory account name (sAMAccountName) a sign-in shows in the app bar. It is display only -- never an identity,
+ * authorization or audit key -- and is null when the observation (a revalidation) did not read it.
+ */
 public record DirectoryObservation(String profileId, String principalReference, Set<String> groupReferences,
-        java.time.Instant resolvedAt, java.time.Instant validUntil, Publication publication) {
+        String displayName, java.time.Instant resolvedAt, java.time.Instant validUntil, Publication publication) {
+    /** Longest display name kept (an sAMAccountName is at most 20 characters; the bound only limits garbage). */
+    public static final int MAX_DISPLAY_NAME = 64;
+
     public DirectoryObservation(String profileId, String principalReference, Set<String> groupReferences, Publication publication) {
-        this(profileId, principalReference, groupReferences, java.time.Instant.now(), java.time.Instant.now().plusSeconds(300), publication);
+        this(profileId, principalReference, groupReferences, null, publication);
+    }
+
+    public DirectoryObservation(String profileId, String principalReference, Set<String> groupReferences,
+            String displayName, Publication publication) {
+        this(profileId, principalReference, groupReferences, displayName, java.time.Instant.now(),
+                java.time.Instant.now().plusSeconds(300), publication);
+    }
+
+    public DirectoryObservation(String profileId, String principalReference, Set<String> groupReferences,
+            java.time.Instant resolvedAt, java.time.Instant validUntil, Publication publication) {
+        this(profileId, principalReference, groupReferences, null, resolvedAt, validUntil, publication);
+    }
+
+    /** The name as shown: trimmed, control characters dropped, bounded; null when nothing printable is left. */
+    public static String cleanDisplayName(String raw) {
+        if (raw == null) return null;
+        String cleaned = raw.replaceAll("\\p{Cntrl}", "").trim();
+        if (cleaned.length() > MAX_DISPLAY_NAME) cleaned = cleaned.substring(0, MAX_DISPLAY_NAME);
+        return cleaned.isEmpty() ? null : cleaned;
     }
 
     public DirectoryObservation {
@@ -18,6 +44,7 @@ public record DirectoryObservation(String profileId, String principalReference, 
             throw new IllegalArgumentException("directory_observation_invalid");
         }
         groupReferences = Set.copyOf(groupReferences);
+        displayName = cleanDisplayName(displayName);
         Objects.requireNonNull(publication);
     }
 
