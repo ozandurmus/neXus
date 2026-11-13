@@ -131,6 +131,13 @@ class AsaFailoverChecksTest {
         assertEquals("PASS", r.status());
         assertEquals(1, ((Integer) r.evidence().get("notMonitored")).intValue());
     }
+    @Test void onlyNotMonitoredInterfacesIsUnknown() {
+        Consumer<Show> none = s -> {
+            s.thisInterfaces.replaceAll(x -> "Normal (Not-Monitored)");
+            s.otherInterfaces.replaceAll(x -> "Normal (Not-Monitored)");
+        };
+        expect(check(with(none, none), 4), "UNKNOWN", "NO_MONITORED_INTERFACE");
+    }
     @Test void noInterfaceLinesOrUnrecognisedStatusIsUnknown() {
         expect(check(with(s -> { s.thisInterfaces.clear(); s.otherInterfaces.clear(); }, s -> {}), 4), "UNKNOWN", "INTERFACE_LINES_MISSING");
         expect(check(with(s -> s.thisInterfaces.set(0, "Strange (Thing)"), s -> {}), 4), "UNKNOWN", "INTERFACE_STATUS_NOT_RECOGNISED");

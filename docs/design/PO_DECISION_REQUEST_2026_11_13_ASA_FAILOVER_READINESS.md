@@ -53,3 +53,15 @@ are not recorded in the job transcript.
 - **Q2.** Approve `show failover` twice per run (counter comparison) -- or once, with check 6 reduced to "counters
   present" (weaker)?
 - **Q3.** After approval: turn `UI2_ASA_FAILOVER_READINESS` on for all five pairs at once, or first for one pair?
+
+## 5. Implementation notes (built 2026-11-13, switched off)
+- **Gate rows** `asa_failover_*` (V212) are `DRAFTED` and use transport `SSH_INTERACTIVE` (the ASA reads run in an
+  interactive shell). The same four literals already exist as the one-time measurement rows `asa_measure_*` (V210,
+  `SSH_EXEC`); the registry allows one row per canonical key, so the readiness rows are a separate key. Approving
+  §1 means setting the four `asa_failover_*` rows to `SIGNED_OFF`; the `asa_measure_*` rows stay one-time.
+- **Fail-closed choices where §2 was silent:** `Failover Off` on either observer is a FAIL of check 1
+  (`FAILOVER_OFF`); a pair whose every interface line is `Normal (Not-Monitored)` is UNKNOWN for check 4
+  (`NO_MONITORED_INTERFACE`); an empty or unparsable history is UNKNOWN for check 9 (information only).
+- **No switch path:** no state-changing ASA command, gate row or code path exists; every execution, approval and
+  resume entry point refuses `cisco_asa` with `FAILOVER_VENDOR_NOT_AVAILABLE`, switch on or off.
+- **Routes:** `/api/v2/asa-failover` serves the unit list, summary, runs and "Run pre-checks" only.
