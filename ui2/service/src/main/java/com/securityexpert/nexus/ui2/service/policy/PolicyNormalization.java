@@ -198,19 +198,35 @@ final class PolicyNormalization {
         return normalize(snapshot, section, rule, resolver, false);
     }
     static Match normalize(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver, boolean lookup) {
-        return normalize(snapshot, section, rule, resolver, lookup, false);
+        return normalize(snapshot, section, rule, resolver, lookup, false, false);
     }
     /**
      * The full match of a Palo Alto intrazone or interzone rule whose only obstacle to {@link #normalize} is that rule
      * type, or {@code null}. Only {@code PolicyHygiene} reads it, and only as a rule an earlier universal rule may cover
      * (see {@link #zonesCover}); it is never an earlier rule, a lookup match or a partial prior.
      */
-    static Match typed(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver) {
+    static Match typed(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver) { return typed(snapshot, section, rule, resolver, false); }
+    static Match typed(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver, boolean upperBound) {
         if (!snapshot.metadata().vendor().equals("PAN")) return null;
-        var match = normalize(snapshot, section, rule, resolver, false, true);
+        var match = normalize(snapshot, section, rule, resolver, false, true, upperBound);
         return match.problem() == null ? match : null;
     }
-    private static Match normalize(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver, boolean lookup, boolean ruleTypes) {
+    /**
+     * The upper-bound match of a rule: its full match with every narrowing constraint dropped (time, schedule, VPN,
+     * content, URL category, Palo Alto source-user, and a Check Point time column that was not collected), so whatever
+     * the rule really matches lies inside it. Every selector must still resolve exactly as for {@link #normalize}: no
+     * bound stands in for a selector (in particular the Check Point access-role network bound,
+     * {@link Resolver#accessRoleBound}, is not used, so an access-role cell leaves the rule without an upper-bound
+     * match). A match from here may only ever be read as "matches at most this": it proves that a rule cannot match a
+     * packet outside it, never that the rule matches a packet inside it. The policy hygiene legacy mode and any
+     * "upper-bound match" consumer (zone matrix) read it; lookup and path analysis do not.
+     */
+    static Match upperBound(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver) {
+        return normalize(snapshot, section, rule, resolver, false, false, true);
+    }
+    /** Constraints the upper-bound match drops: each one only narrows what the rule matches ({@link #partial}). */
+    static final Set<String> UPPER_BOUND_DROPPED = Set.of("time", "schedule", "vpn", "content", "category", "source-user", "time-uncollected");
+    private static Match normalize(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver, boolean lookup, boolean ruleTypes, boolean upperBound) {
         try {
             if (!Set.of("CP", "PAN").contains(snapshot.metadata().vendor()) || PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section))
                 throw new Unknown("unsupported rulebase");
@@ -233,6 +249,7 @@ final class PolicyNormalization {
             for (var entry : rule.extras().entrySet()) {
                 String key = entry.getKey(); var values = entry.getValue();
                 if (applyLayer && key.equals("inline-layer")) continue;
+                if (upperBound && UPPER_BOUND_DROPPED.contains(key)) continue;
                 if (Set.of("time", "schedule", "vpn", "content").contains(key)) {
                     for (String id : values) {
                         resolver.budget.spend(); var object = snapshot.objects().get(id);
@@ -254,7 +271,7 @@ final class PolicyNormalization {
                 } else if (!Set.of("from", "to", "install-on", "source-user", "category", "rule-type", "tag", "layer-name", "last-modified", "last-modifier", "log-setting").contains(key)
                         && !key.startsWith("track-") && !key.startsWith("profile-setting/") && !untargeted(snapshot, rule, key)) throw new Unknown("unsupported rule constraint");
             }
-            if (snapshot.metadata().vendor().equals("CP") && !rule.extras().containsKey("time")) throw new Unknown("time evidence not collected");
+            if (!upperBound && snapshot.metadata().vendor().equals("CP") && !rule.extras().containsKey("time")) throw new Unknown("time evidence not collected");
             Map<String, Set<String>> placements = new HashMap<>();
             for (String key : List.of("from", "to", "install-on")) {
                 Set<String> values = new HashSet<>();
