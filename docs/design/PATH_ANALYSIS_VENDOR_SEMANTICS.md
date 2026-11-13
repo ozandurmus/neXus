@@ -225,3 +225,9 @@ source is disjoint (never to prove cover). With X-Forwarded-For identity detecti
 connection can take its identity from the header, so a role may match some packets from outside its networks; it still
 cannot match every packet of a later rule, which is all a single-rule NOT_SHADOWED verdict claims. Revisit if A6
 evidence contradicts this.
+
+## Amendment 2026-11-13 — shadowing resolution (PO approved)
+
+Negated address cells, Palo Alto service source ports and Check Point ICMP codes for the policy shadowing analysis;
+the Check Point comparison port forms stay UNKNOWN. Text, citations and the covering-rule revisit trigger:
+`PATH_ANALYSIS_VENDOR_SEMANTICS_AMENDMENT_2026_11_13.md` (FROZEN 2026-11-13, PO approval "Onaylıyorum").
