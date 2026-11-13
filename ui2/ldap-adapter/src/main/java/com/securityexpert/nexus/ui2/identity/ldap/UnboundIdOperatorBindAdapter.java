@@ -44,9 +44,12 @@ public final class UnboundIdOperatorBindAdapter implements LdapOperatorBindPort 
             boolean admin;
             boolean users;
             String userDn;
+            String displayName;
             try {
                 try {
-                    userDn = DirectoryConnection.findUser(service.connection(), profile, username);
+                    DirectoryConnection.FoundUser found = DirectoryConnection.findUserEntry(service.connection(), profile, username);
+                    userDn = found.dn();
+                    displayName = found.samAccountName();
                 } catch (LDAPException e) {
                     return failed(DirectoryConnection.afterAnswer(e));
                 }
@@ -80,7 +83,7 @@ public final class UnboundIdOperatorBindAdapter implements LdapOperatorBindPort 
             if (admin) groups.add(profile.adminGroupDn());
             if (users) groups.add(profile.usersGroupDn());
             DirectoryObservation observation = new DirectoryObservation(profile.profileId(), userDn, groups,
-                    write -> trust.publish(snapshot, write));
+                    displayName, write -> trust.publish(snapshot, write));
             if (!observation.publication().ifCurrent(() -> { })) return failed(DirectoryReason.SETTINGS_INVALID);
             return Result.ok(new OperatorBindOutcome(PrincipalFingerprint.of(userDn), Set.copyOf(groups), observation));
         } catch (DirectoryFailure failure) {

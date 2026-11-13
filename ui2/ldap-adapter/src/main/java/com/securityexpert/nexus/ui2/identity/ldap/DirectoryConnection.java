@@ -124,12 +124,20 @@ final class DirectoryConnection {
      */
     static String findUser(LDAPConnection connection, DirectoryProfile profile, String userName)
             throws DirectoryFailure, LDAPException {
+        return findUserEntry(connection, profile, userName).dn();
+    }
+
+    /** The matched entry's DN (the identity) and its sAMAccountName (display only; the typed name when the attribute is absent). */
+    record FoundUser(String dn, String samAccountName) { }
+
+    static FoundUser findUserEntry(LDAPConnection connection, DirectoryProfile profile, String userName)
+            throws DirectoryFailure, LDAPException {
         // objectCategory=person excludes computer and trust accounts, which inherit objectClass=user in AD.
         Filter filter = Filter.createANDFilter(Filter.createEqualityFilter("objectCategory", "person"),
                 Filter.createEqualityFilter("objectClass", "user"),
                 Filter.createEqualityFilter("sAMAccountName", userName));
         SearchRequest request = new SearchRequest(profile.domainDn(), SearchScope.SUB, DereferencePolicy.NEVER, 2,
-                profile.timeoutSeconds(), false, filter, "1.1");
+                profile.timeoutSeconds(), false, filter, "sAMAccountName");
         SearchResult result;
         try {
             result = connection.search(request);
@@ -140,7 +148,9 @@ final class DirectoryConnection {
         }
         if (result.getEntryCount() == 0) throw new DirectoryFailure(DirectoryReason.USER_NOT_FOUND);
         if (result.getEntryCount() > 1) throw new DirectoryFailure(DirectoryReason.USER_AMBIGUOUS);
-        String dn = result.getSearchEntries().get(0).getDN();
+        com.unboundid.ldap.sdk.SearchResultEntry entry = result.getSearchEntries().get(0);
+        String dn = entry.getDN();
+        String sam = entry.getAttributeValue("sAMAccountName");
         // The bind target must be a real entry below the domain DN: never the null DN (an anonymous bind) and
         // never an entry of another naming context.
         try {
@@ -151,7 +161,7 @@ final class DirectoryConnection {
         } catch (LDAPException e) {
             throw new DirectoryFailure(DirectoryReason.USER_NOT_FOUND);
         }
-        return dn;
+        return new FoundUser(dn, sam == null || sam.isBlank() ? userName : sam);
     }
 
     /** Transitive membership: the group itself answers whether the user is in it, directly or nested. */

@@ -104,7 +104,7 @@ public final class DirectoryAuthorizationRefresh {
                 return observation.publication().ifCurrent(() -> tx.actors().upsertDirectory(new ActorAuthzStateRecord(actor,
                         observation.groupReferences(), observation.resolvedAt(), observation.validUntil(), observation.profileId(),
                         cipher.encryptDirectory(principal, observation.profileId(), DirectoryBindingKind.DIRECTORY_PRINCIPAL),
-                        cipher.keyId())));
+                        cipher.keyId(), current.get().directoryDisplayName())));
             });
             if (Boolean.TRUE.equals(published)) return Outcome.REFRESHED;
             return result instanceof Result.Err<DirectoryObservation> err && "directory_unavailable".equals(err.code())

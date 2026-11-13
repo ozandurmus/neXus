@@ -99,7 +99,7 @@ public final class LoginFlow {
         PendingDirectory directory = new PendingDirectory(new ActorAuthzStateRecord(success.resolvedActorFingerprint(),
                 proof.groupReferences(), proof.resolvedAt(), proof.validUntil(), proof.profileId(),
                 cipher.encryptDirectory(proof.principalReference(), proof.profileId(), DirectoryBindingKind.DIRECTORY_PRINCIPAL),
-                cipher.keyId()), proof.publication());
+                cipher.keyId(), proof.displayName()), proof.publication());
         AtomicReference<LoginResult> result = new AtomicReference<>(new LoginResult.DirectoryUnavailable());
         long started = System.nanoTime();
         try {

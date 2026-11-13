@@ -131,15 +131,19 @@ public final class SessionStatusController {
             var authzState = actorAuthzStateRepository.find(session.get().actorFingerprint());
             if (authzState.isPresent()) {
                 var state = authzState.get();
-                String displayName = "Directory User";
+                // principalReference is the identity (bind DN) that principal bindings are matched against; the name
+                // shown in the app bar is the separate, display-only sAMAccountName stored at sign-in.
+                String principalReference = "Directory User";
                 if (state.hasDirectoryProof() && groupReferenceCipher != null) {
                     try {
-                        displayName = groupReferenceCipher.decryptDirectory(state.principalReferenceEncrypted(),
+                        principalReference = groupReferenceCipher.decryptDirectory(state.principalReferenceEncrypted(),
                                 state.directoryProfileId(), com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_PRINCIPAL,
                                 state.principalReferenceKeyId());
                     } catch (Exception ignored) { }
                 }
-                body.put("display_name", displayName);
+                // A row written before V211 has no display name: it keeps showing the previous value until the next sign-in.
+                body.put("display_name", state.directoryDisplayName() != null && !state.directoryDisplayName().isBlank()
+                        ? state.directoryDisplayName() : principalReference);
                 body.put("must_change_password", false);
                 List<String> roleTokens = new java.util.ArrayList<>();
                 // Roles are listed only from a fresh group set of the same directory profile the binding names.
@@ -159,7 +163,7 @@ public final class SessionStatusController {
                         try {
                             String principal = groupReferenceCipher.decryptDirectory(binding.groupReferenceEncrypted(),
                                     binding.directoryProfileId(), binding.bindingKind(), binding.groupReferenceKeyId());
-                            if (displayName.equals(principal)) {
+                            if (principalReference.equals(principal)) {
                                 roleTokens.add(binding.roleToken());
                             }
                         } catch (Exception ignored) { }

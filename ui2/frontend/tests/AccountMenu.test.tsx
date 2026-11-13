@@ -7,10 +7,10 @@ import { SessionContext } from "../src/auth/SessionContext";
 
 afterEach(() => vi.unstubAllGlobals());
 
-function mountBar() {
+function mountBar(displayName = "aiview") {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => new Response(JSON.stringify(url === "/project-plan"
     ? { deployed_commit: "0123456789abcdef", deployed_at: new Date().toISOString() } : url === "/notifications" ? { notifications: [] } : {}), { status: 200 })));
-  return render(<ThemeProvider theme={m3Theme}><SessionContext.Provider value={{ displayName: "aiview", roleTokens: ["role:compliance_admin", "role:replay_viewer"],
+  return render(<ThemeProvider theme={m3Theme}><SessionContext.Provider value={{ displayName, roleTokens: ["role:compliance_admin", "role:replay_viewer"],
     permissions: [], onSignOut: vi.fn() }}><TopAppBar /></SessionContext.Provider></ThemeProvider>);
 }
 
@@ -39,4 +39,12 @@ it("carries no logo and no SX badge: search and account controls only (brand are
   expect(screen.queryByText("SX")).toBeNull();
   expect(screen.getByRole("textbox", { name: "Search devices, settings and evidence" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Account menu" })).toBeInTheDocument();
+});
+
+it("shows a directory user by the account name alone, with initials from that name (never the bind DN)", () => {
+  mountBar("jdoe");
+  expect(screen.getByRole("button", { name: "Account menu" })).toHaveTextContent(/^JD$/);
+  expect(screen.getByText("jdoe")).toBeInTheDocument();
+  expect(screen.queryByText(/CN=|OU=|DC=/)).toBeNull();
+  expect(screen.queryByText("CN")).toBeNull();
 });
