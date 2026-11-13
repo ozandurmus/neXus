@@ -116,6 +116,8 @@ public final class AsaFailoverMeasure {
     private static final Pattern IPV4 = Pattern.compile("\\b\\d{1,3}(?:\\.\\d{1,3}){3}(?:/\\d{1,2})?\\b");
     private static final Pattern IPV6 = Pattern.compile("(?i)\\b(?:[0-9a-f]{1,4}:){2,7}[0-9a-f]{0,4}(?:/\\d{1,3})?");
     private static final Pattern MAC = Pattern.compile("(?i)\\b[0-9a-f]{4}\\.[0-9a-f]{4}\\.[0-9a-f]{4}\\b");
+    /** A wall-clock time (HH:MM:SS), shaped as a placeholder: left alone it matched the IPv6 pattern and shaped as an address. */
+    private static final Pattern CLOCK = Pattern.compile("\\b\\d{1,2}:\\d{2}:\\d{2}\\b");
     private static final Pattern WORD = Pattern.compile("[A-Za-z][A-Za-z_]*");
 
     /** ASA failover output vocabulary kept verbatim in a shape (vendor field names and state words only). */
@@ -156,7 +158,8 @@ public final class AsaFailoverMeasure {
     }
 
     static String shapeLine(String line) {
-        String s = MAC.matcher(line).replaceAll("<mac>");
+        String s = CLOCK.matcher(line).replaceAll("<time>");
+        s = MAC.matcher(s).replaceAll("<mac>");
         s = IPV4.matcher(s).replaceAll("<ip>");
         s = IPV6.matcher(s).replaceAll("<ip6>");
         StringBuilder out = new StringBuilder();

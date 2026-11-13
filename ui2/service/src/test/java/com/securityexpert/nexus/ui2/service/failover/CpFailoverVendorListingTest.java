@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.securityexpert.nexus.ui2.jobs.failover.AsaFailoverReadinessSwitch;
 import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
 import com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository;
 import com.securityexpert.nexus.ui2.persistence.device.*;
@@ -33,6 +34,12 @@ class CpFailoverVendorListingTest {
     private final CpFailoverService service = new CpFailoverService(devices, inventory, store, rbac, trust,
         new FailoverMutationSwitch(true), new JobWindowPolicy(
             java.time.Clock.fixed(Instant.parse("2026-10-08T09:10:00Z"), JobWindowPolicy.ZONE_ID), 60));
+
+    /** The same service with the Cisco ASA readiness switch on (UI2_ASA_FAILOVER_READINESS=on). */
+    private final CpFailoverService asaOn = new CpFailoverService(devices, inventory, store, rbac, trust,
+        new FailoverMutationSwitch(true), new JobWindowPolicy(
+            java.time.Clock.fixed(Instant.parse("2026-10-08T09:10:00Z"), JobWindowPolicy.ZONE_ID), 60),
+        new AsaFailoverReadinessSwitch(true));
 
     private static DeviceSummaryRecord member(String id, String vendor) {
         return new DeviceSummaryRecord(id, "gateway", vendor, DeviceEnrollmentState.ENROLLED,
@@ -113,5 +120,70 @@ class CpFailoverVendorListingTest {
         assertEquals(List.of(), service.approvals(CLUSTER_ID, CLUSTER_ID, "actor-1", "cisco_asa"));
         assertEquals(List.of(), service.runs(CLUSTER_ID, CLUSTER_ID, "actor-1", "cisco_asa"));
         verifyNoInteractions(store);
+    }
+
+    // ---- UI2_ASA_FAILOVER_READINESS=on: readiness only ----
+
+    @Test void switchOnOffersAsaReadinessAndNothingElse() {
+        pair("cisco_asa", "ssh_exec");
+        var rows = asaOn.summary("actor-1");
+        assertEquals(1, rows.size());
+        var row = rows.get(0);
+        assertEquals("cisco_asa", row.vendor());
+        assertTrue(row.readinessAvailable());
+        assertTrue(row.canRunReadiness());
+        assertNull(row.unit().vsId());
+        assertEquals(CLUSTER_ID, row.unit().id());
+        assertEquals(List.of(new CpFailoverService.ReadinessTarget(CLUSTER_ID, CLUSTER_ID, "cisco_asa")), asaOn.readinessTargets());
+        assertFalse(FailoverVendor.CISCO_ASA.executionAvailable(), "the vendor descriptor stays immutable: no execution");
+        assertFalse(FailoverVendor.CISCO_ASA.readinessAvailable());
+    }
+    @Test void switchOnAdmitsAnAsaReadinessRunAndRequiresTrustedHostKeys() {
+        pair("cisco_asa", "ssh_exec");
+        when(trust.findActiveAlgorithms(anyString(), eq(22))).thenReturn(List.of());
+        var untrusted = assertThrows(CpFailoverService.Refusal.class,
+            () -> asaOn.requestReadiness(CLUSTER_ID, CLUSTER_ID, "actor-1", "cisco_asa"));
+        assertEquals("TRUSTED_HOST_KEY_REQUIRED", untrusted.code());
+        verify(store, never()).requestReadiness(anyString(), any(), anyString(), anyString(), anyString());
+        when(trust.findActiveAlgorithms(anyString(), eq(22))).thenReturn(List.of("ssh-ed25519"));
+        when(store.requestReadiness(eq(CLUSTER), isNull(), eq("actor-1"), anyString(), eq("cisco_asa")))
+            .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED", "run-1"));
+        assertEquals("run-1", asaOn.requestReadiness(CLUSTER_ID, CLUSTER_ID, "actor-1", "cisco_asa"));
+        when(store.requestReadiness(eq(CLUSTER), isNull(), eq("system:failover-readiness-scheduler"), anyString(), eq("cisco_asa")))
+            .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED", "run-2"));
+        assertEquals("run-2", asaOn.requestScheduledReadiness(new CpFailoverService.ReadinessTarget(CLUSTER_ID, CLUSTER_ID, "cisco_asa")));
+        // FortiGate keeps refusing readiness: only Cisco ASA has a switch.
+        refused(() -> asaOn.requestReadiness(CLUSTER_ID, CLUSTER_ID, "actor-1", "fortinet"));
+    }
+    @Test void switchOnStillRefusesEveryExecutionApprovalAndResumeEntryPoint() {
+        pair("cisco_asa", "ssh_exec");
+        Instant from = now(), until = from.plusSeconds(600);
+        clearInvocations(store);
+        refused(() -> asaOn.request(CLUSTER_ID, CLUSTER_ID, null, "actor-1", "cisco_asa", "r", 1, "n", true));
+        refused(() -> asaOn.request(CLUSTER_ID, CLUSTER_ID, null, "actor-1", "cisco_asa"));
+        refused(() -> asaOn.approve(CLUSTER_ID, CLUSTER_ID, from, until, "x", "actor-1", "cisco_asa"));
+        refused(() -> asaOn.createApprovalRequest(UUID.randomUUID().toString(), CLUSTER_ID, CLUSTER_ID, from, until,
+            "x", "actor-1", "cisco_asa"));
+        refused(() -> asaOn.secondApproval("r", 1, CLUSTER_ID, CLUSTER_ID, "actor-1", "cisco_asa"));
+        assertEquals(List.of(), asaOn.approvals(CLUSTER_ID, CLUSTER_ID, "actor-1", "cisco_asa"));
+        verifyNoInteractions(store);
+    }
+    @Test void switchOnStartDueNeverStartsAnAsaRun() {
+        pair("cisco_asa", "ssh_exec");
+        var planned = new JooqCpFailoverRepository.Run("run-9", CLUSTER, null, "approval-9", "actor-1", Instant.now(), null,
+            "PLANNED", "PLANNED", null, null, null, "cisco_asa", "FAILOVER");
+        when(store.due()).thenReturn(List.of(planned));
+        asaOn.startDue();
+        verify(store, never()).startDue(anyString(), anyString());
+    }
+    @Test void switchOffIsPhaseZeroExactly() {
+        pair("cisco_asa", "ssh_exec");
+        var row = service.summary("actor-1").get(0);
+        assertFalse(row.readinessAvailable());
+        assertFalse(row.canRunReadiness());
+        assertEquals(List.of(), service.readinessTargets());
+        assertEquals(List.of(), service.runs(CLUSTER_ID, CLUSTER_ID, "actor-1", "cisco_asa"));
+        refused(() -> service.requestReadiness(CLUSTER_ID, CLUSTER_ID, "actor-1", "cisco_asa"));
+        assertFalse(AsaFailoverReadinessSwitch.fromValue(null).enabled());
     }
 }

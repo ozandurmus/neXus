@@ -480,7 +480,10 @@ public class JooqCpFailoverRepository {
             String vendor, String runKind) {
         windows.requireOpenFor(actor);
         String jobId = UUID.randomUUID().toString();
-        String kind = "palo_alto".equals(vendor)
+        if ("cisco_asa".equals(vendor) && !"READINESS".equals(runKind))
+            throw new IllegalStateException("A Cisco ASA pair has readiness runs only");
+        String kind = "cisco_asa".equals(vendor) ? "asa_cluster_failover"
+            : "palo_alto".equals(vendor)
             ? ("READINESS".equals(runKind) ? "pan_failover_readiness" : "pan_cluster_failover")
             : ("READINESS".equals(runKind) ? "cp_failover_readiness" : "cp_cluster_failover");
         String actionClass = "READINESS".equals(runKind) ? "read" : "operational-state-change";

@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.service.failover;
 
 import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
+import com.securityexpert.nexus.ui2.jobs.failover.AsaFailoverReadinessSwitch;
 import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
 
 import java.nio.charset.StandardCharsets;
@@ -71,6 +72,12 @@ public final class CpFailoverService {
     private final JooqCpFailoverRepository store;
     private final RbacEvaluator rbac;
     private final ManagementEndpointSshTrustRepository trust;
+    /**
+     * Cisco ASA failover readiness (docs/design/PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS.md), read once at
+     * startup. Readiness only: it never makes {@link FailoverVendor#executionAvailable()} true for ASA, and no
+     * request / approval / resume entry point reads it.
+     */
+    private final AsaFailoverReadinessSwitch asaReadiness;
 
     public CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
             JooqCpFailoverRepository store, RbacEvaluator rbac, ManagementEndpointSshTrustRepository trust) {
@@ -78,16 +85,29 @@ public final class CpFailoverService {
             FailoverMutationSwitch.fromEnvironment());
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
     public CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
             JooqCpFailoverRepository store, RbacEvaluator rbac, ManagementEndpointSshTrustRepository trust,
             FailoverMutationSwitch mutationSwitch) {
         this(devices, inventory, store, rbac, trust, mutationSwitch, JobWindowPolicy.SYSTEM);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    public CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
+            JooqCpFailoverRepository store, RbacEvaluator rbac, ManagementEndpointSshTrustRepository trust,
+            FailoverMutationSwitch mutationSwitch, AsaFailoverReadinessSwitch asaReadiness) {
+        this(devices, inventory, store, rbac, trust, mutationSwitch, JobWindowPolicy.SYSTEM, asaReadiness);
+    }
+
     CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
             JooqCpFailoverRepository store, RbacEvaluator rbac, ManagementEndpointSshTrustRepository trust,
             FailoverMutationSwitch mutationSwitch, JobWindowPolicy windows) {
+        this(devices, inventory, store, rbac, trust, mutationSwitch, windows, AsaFailoverReadinessSwitch.OFF);
+    }
+
+    CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
+            JooqCpFailoverRepository store, RbacEvaluator rbac, ManagementEndpointSshTrustRepository trust,
+            FailoverMutationSwitch mutationSwitch, JobWindowPolicy windows, AsaFailoverReadinessSwitch asaReadiness) {
+        this.asaReadiness = java.util.Objects.requireNonNull(asaReadiness);
         this.windows = windows;
         this.mutationSwitch=java.util.Objects.requireNonNull(mutationSwitch);
         this.devices=devices; this.inventory=inventory; this.store=store; this.rbac=rbac;
@@ -127,6 +147,10 @@ public final class CpFailoverService {
         return !replayViewer(actor) && (allowed(actor, RoleToken.SECURITY_ADMIN) || allowed(actor,RoleToken.OPERATION_ADMIN));
     }
     public boolean mayStart(String actor) { return mayApprove(actor); }
+    /** Who may request a readiness run: the failover starters, operators and the replay viewer (as {@link #requestReadiness}). */
+    public boolean mayRunReadiness(String actor) {
+        return mayStart(actor) || allowed(actor,RoleToken.OPERATOR) || allowed(actor, RoleToken.REPLAY_VIEWER);
+    }
     public List<Summary> summary(String actor) {
         requireReader(actor);
         return summaries(actor);
@@ -159,11 +183,24 @@ public final class CpFailoverService {
     private static void requireAvailable(String vendor) {
         if (unavailable(vendor)) throw new Refusal(VENDOR_NOT_AVAILABLE);
     }
-    private static boolean sshTrusted(String vendor) {
-        return FailoverVendor.of(vendor).filter(v -> v.requiresSshTrust() && v.readinessAvailable()).isPresent();
+    /**
+     * Readiness (never execution) is offered for a vendor that has it, and for Cisco ASA only while its readiness
+     * switch is on. FailoverVendor stays immutable; {@link #requireAvailable} keeps refusing every execution entry point.
+     */
+    private boolean readinessOn(FailoverVendor v) {
+        return v.readinessAvailable() || v == FailoverVendor.CISCO_ASA && asaReadiness.enabled();
+    }
+    private boolean readinessUnavailable(String vendor) {
+        return FailoverVendor.of(vendor).filter(v -> !readinessOn(v)).isPresent();
+    }
+    private void requireReadinessAvailable(String vendor) {
+        if (readinessUnavailable(vendor)) throw new Refusal(VENDOR_NOT_AVAILABLE);
+    }
+    private boolean sshTrusted(String vendor) {
+        return FailoverVendor.of(vendor).filter(v -> v.requiresSshTrust() && readinessOn(v)).isPresent();
     }
     /** One cluster's summary rows from already-read facts; shared by the fleet summary and the one-cluster read. */
-    private static java.util.stream.Stream<Summary> clusterSummaries(String clusterRef, List<DeviceSummaryRecord> members,
+    private java.util.stream.Stream<Summary> clusterSummaries(String clusterRef, List<DeviceSummaryRecord> members,
             boolean canRunReadiness, Map<String, List<JooqCpFailoverRepository.SummaryMember>> facts,
             Map<StatusKey, JooqCpFailoverRepository.SummaryStatus> statuses,
             Map<StatusKey, JooqCpFailoverRepository.ReadinessStatus> readiness) {
@@ -178,7 +215,7 @@ public final class CpFailoverService {
                 || descriptor.requiredTransportKind().filter(k -> !k.equalsIgnoreCase(rows.get(0).transportKind())).isPresent()
                 || (descriptor == FailoverVendor.PALO_ALTO && !rows.get(0).panSupported());
         })) return java.util.stream.Stream.<Summary>empty();
-        if (!descriptor.readinessAvailable()) {
+        if (!readinessOn(descriptor)) {
             // Listed only: one unit per pair, no virtual systems, no readiness, no actions.
             Unit only = new Unit(opaque(clusterRef), opaque(clusterRef), clusterRef, null, pair);
             var status = statuses.get(new StatusKey(clusterRef, null, vendor));
@@ -195,7 +232,7 @@ public final class CpFailoverService {
             m.virtualSystems().filter(v -> !v.isBlank()).isPresent() || facts.get(m.deviceId()).stream()
                 .anyMatch(r -> r.context() != null && !"physical".equals(r.context())));
         if (vsx && common.isEmpty()) return java.util.stream.Stream.<Summary>empty();
-        List<Unit> units = descriptor == FailoverVendor.PALO_ALTO
+        List<Unit> units = descriptor == FailoverVendor.PALO_ALTO || descriptor == FailoverVendor.CISCO_ASA
             ? List.of(new Unit(opaque(clusterRef), opaque(clusterRef), clusterRef, null, pair))
             : namedUnits(clusterRef, pair, common);
         return units.stream().map(u -> {
@@ -453,14 +490,14 @@ public final class CpFailoverService {
 
     public String requestReadiness(String clusterId, String unitId, String actor, String vendor) {
         if (!mayStart(actor) && !allowed(actor,RoleToken.OPERATOR) && !allowed(actor, RoleToken.REPLAY_VIEWER)) throw new Refusal("WRONG_ROLE");
-        requireAvailable(vendor);
+        requireReadinessAvailable(vendor);
         return submitReadiness(clusterId, unitId, actor, vendor);
     }
     public String requestScheduledReadiness(ReadinessTarget target) {
         return submitReadiness(target.clusterId(),target.unitId(),"system:failover-readiness-scheduler",target.vendor());
     }
     private String submitReadiness(String clusterId, String unitId, String actor, String vendor) {
-        requireAvailable(vendor);
+        requireReadinessAvailable(vendor);
         windows.requireOpenFor(actor);
         Unit u = unit(clusterId, unitId, actor, vendor);
         if (sshTrusted(vendor)) for (DeviceSummaryRecord member : u.members()) requireTrusted(member);
@@ -501,7 +538,7 @@ public final class CpFailoverService {
         return runs(clusterId,unitId,actor,"check_point");
     }
     public List<JooqCpFailoverRepository.Run> runs(String clusterId,String unitId,String actor,String vendor) {
-        if (unavailable(vendor)) return List.of();
+        if (readinessUnavailable(vendor)) return List.of();
         Unit u=unit(clusterId,unitId,actor,vendor);
         return isVendor(vendor,FailoverVendor.CHECK_POINT)
             ?store.runs(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId())

@@ -62,7 +62,9 @@ export function haReadinessItems(clusters: readonly Cluster[], rows: Record<stri
     const units = rows[cluster.ref] ?? [];
     const base = units.find(row => row.unitId === row.clusterId);
     const vendor = cluster.members[0]?.vendor_hint;
-    const unsupported = Boolean(vendor && !["check_point", "palo_alto"].includes(vendor));
+    // Cisco ASA is evaluated (readiness only) when the server says readinessAvailable; otherwise it is listed only.
+    const asaReadiness = vendor === "cisco_asa" && units.some(unit => unit.readinessAvailable === true);
+    const unsupported = Boolean(vendor && !["check_point", "palo_alto"].includes(vendor) && !asaReadiness);
     const status: Status = unsupported ? "UNSUPPORTED" : base?.readiness?.status ?? "UNKNOWN";
     return { cluster, units, base, vendor, status };
   });

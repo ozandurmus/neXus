@@ -250,7 +250,7 @@ public final class CiscoAsaExecutor {
     }
 
     /** The shell echoes the command on the first line and ends with the prompt: neither is device output. */
-    static String stripEcho(String out, String command) {
+    public static String stripEcho(String out, String command) {
         String text = out;
         int nl = text.indexOf('\n');
         if (nl >= 0 && text.substring(0, nl).contains(command)) {
