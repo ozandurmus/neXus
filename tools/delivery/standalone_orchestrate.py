@@ -30,6 +30,13 @@ Usage:
     whose every changed path is documentation/project-state text takes a docs-only fast path (privacy gate + gitleaks,
     PR, checks, merge; no preview, image build or deploy; `--no-fast-path`/`--full` opt out); `--early-pr` pushes and
     opens the PR before the preview so the checks run during it.
+    Frontend fast path (2026-11-13): a branch whose every changed path is frontend source/tests/e2e under
+    ui2/frontend (plus documentation) rolls out only ui2-service (the one module the ingress routes to), builds no
+    Packet Analysis image and opens its pull request early; preview e2e, GitHub checks, the security gate on the
+    service image, the rollback snapshot and the production e2e all stay. It is taken only when every other module
+    already runs a commit that differs from this branch in frontend/documentation paths alone; anything ambiguous
+    takes the full path. The ship prints the chosen path and why (`ship_path`). `classify --branch B
+    [--check-deployed]` prints the same decision without shipping.
 """
 from __future__ import annotations
 
@@ -339,17 +346,27 @@ def _registry_fetch_failed(deploy_log: str) -> bool:
     return "STOP: build failed" in deploy_log and re.search(r'error building image: Get "https://', deploy_log) is not None
 
 
-def _deploy(skip_security: str | None = None) -> None:
-    """tools/delivery/hosta_deploy.sh with its exit-4 retry (a job in flight), then ui2-configuration set to the service image."""
+def _deploy(skip_security: str | None = None, targets: tuple[str, ...] | None = None,
+            packet_analysis_image: bool = True) -> None:
+    """tools/delivery/hosta_deploy.sh with its exit-4 retry (a job in flight), then ui2-configuration set to the service image.
+
+    `targets` (frontend fast path: ("service",)) rolls out only those modules; the others keep their image, so the
+    ui2-configuration sync is skipped unless configuration is one of them. `packet_analysis_image=False` builds no
+    Packet Analysis image (NEXUS_BUILD_PACKET_ANALYSIS_IMAGE=0); the security gate then scans the service image only."""
     log = STATE_DIR / "last_deploy.log"
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     registry_retries = 2
+    env = dict(os.environ)
+    if not packet_analysis_image:
+        env["NEXUS_BUILD_PACKET_ANALYSIS_IMAGE"] = "0"
     for _ in range(30):
         with open(log, "w") as out:
             command = ["bash", "tools/delivery/hosta_deploy.sh"]
+            if targets is not None:
+                command += ["--targets", " ".join(targets)]
             if skip_security is not None:
                 command += ["--skip-security", skip_security]
-            rc = subprocess.run(command, cwd=str(REPO_ROOT), stdout=out, stderr=subprocess.STDOUT).returncode
+            rc = subprocess.run(command, cwd=str(REPO_ROOT), stdout=out, stderr=subprocess.STDOUT, env=env).returncode
         if rc == 1 and registry_retries and _registry_fetch_failed(log.read_text(errors="replace")):
             # The image build could not download a base-image layer (2026-10-18: the quay.io CDN failed the same
             # nodejs base layer on two deploys). Nothing was rolled out; the build is retried as is.
@@ -361,6 +378,11 @@ def _deploy(skip_security: str | None = None) -> None:
             break
         time.sleep(25)
     tail = log.read_text(errors="replace").strip().splitlines()[-3:]
+    # The deploy's own phase timings (numbers only) belong in the ship log: until 2026-11-13 they stayed in last_deploy.log
+    # and the 33-minute ship could not be broken down from the ship logs.
+    for line in log.read_text(errors="replace").splitlines():
+        if re.fullmatch(r"TIMING [a-z_0-9]+ [0-9]+", line):
+            print(line, flush=True)
     from tools.security.security_host import safe_summary
     security_passed = False
     snapshot_ids = set()
@@ -391,6 +413,10 @@ def _deploy(skip_security: str | None = None) -> None:
         print(json.dumps({"security_gate": "not_configured"}), flush=True)
     if skip_security is None and not security_passed and not not_configured:
         raise SystemExit("security gate success missing; ship stopped before configuration sync")
+    if targets is not None and "configuration" not in targets:
+        print(json.dumps({"deploy": "ok", "summary": [t[:160] for t in tail], "targets": list(targets),
+                          "configuration": "not part of this deploy; keeps its image"}))
+        return
     host = (Path.home() / ".config" / "nexus" / "hosta").read_text().splitlines()[0].strip()
     sync = ('export KUBECONFIG=$HOME/.kube/config; '
             'IMG=$(kubectl -n ui2 get deploy ui2-service -o jsonpath="{.spec.template.spec.containers[0].image}"); '
@@ -478,6 +504,204 @@ def _docs_only_change(branch: str) -> tuple[bool, list[str], list[str]]:
     if raw.returncode != 0:
         return False, ["<git diff failed>"], []
     return classify_changed_paths(raw.stdout)
+
+
+# --- Frontend fast path (PO 2026-11-11, built 2026-11-13) --------------------------------------------------------
+# A one-line UI fix took 33 minutes through the full ship. The bundle is compiled into the service image
+# (ui2/Containerfile stage 0), but only ui2-service is routed from the ingress (deploy/ui2/60-ingress.yaml), so a
+# change confined to the frontend has no reason to roll out the worker, policy, configuration, compliance and
+# packet-analysis modules (each followed by its own module e2e, about 100 s apiece), to build the Packet Analysis
+# image, or to wait for a Java pretest. What it keeps: tsc and vitest (the pretest profile), the isolated preview e2e,
+# GitHub's checks (which run the Java suites on the pull request), the rollback snapshot, the security gate on the
+# service image and the production e2e.
+# Closed list, like the docs one. Build configuration is NOT qualifying even though it sits under ui2/frontend:
+# package.json / package-lock.json (dependencies reach the image and the security gate), vite.config.ts,
+# tsconfig.json, index.html, public/, Dockerfile.e2e, playwright*.ts, .dockerignore, FIDELITY_NOTES.md.
+FRONTEND_TREE_PREFIXES = ("ui2/frontend/src/", "ui2/frontend/tests/", "ui2/frontend/e2e/")
+FRONTEND_EXTENSIONS = (".ts", ".tsx", ".mts", ".mjs", ".css", ".json", ".svg", ".png", ".jpg", ".jpeg", ".webp", ".woff2")
+FRONTEND_FORBIDDEN_SEGMENTS = ("node_modules", "dist", ".git")
+FRONTEND_DEPLOY_TARGETS = ("service",)
+# The modules that keep their current image on a frontend ship; each must already run a commit whose difference to
+# this branch is frontend/documentation only (see evaluate_deployed_modules).
+OTHER_MODULES = ("worker", "configuration", "compliance", "policy", "packet-analysis")
+BACKEND_PREFIXES = ("ui2/", "deploy/", "tools/", "scripts/", "utils/", "static/", "templates/", "config/", "bin/")
+DEPLOYED_PROBE = r"""export KUBECONFIG=$HOME/.kube/config
+for d in worker configuration compliance policy packet-analysis; do
+  img=$(kubectl -n ui2 get deploy ui2-$d -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null)
+  pod=$(kubectl -n ui2 get pods -l app.kubernetes.io/component=$d --field-selector=status.phase=Running -o name 2>/dev/null | head -1)
+  c=
+  [ -n "$pod" ] && c=$(kubectl -n ui2 exec "$pod" -- cat /app/project/deploy_info.json 2>/dev/null | tr -d ' \n' | sed -n 's/.*"commit":"\([0-9a-f]\{40\}\)".*/\1/p')
+  i=${img##*@}
+  echo "$d ${i:--} ${c:--}"
+done
+"""
+
+
+def is_frontend_path(path: str) -> bool:
+    """True when `path` is frontend source, unit test or e2e spec text under ui2/frontend (never build configuration)."""
+    if not path or path.startswith("/") or "\\" in path or any(part in ("", ".", "..") for part in path.split("/")):
+        return False
+    if any(part in FRONTEND_FORBIDDEN_SEGMENTS for part in path.split("/")):
+        return False
+    return path.startswith(FRONTEND_TREE_PREFIXES) and path.lower().endswith(FRONTEND_EXTENSIONS)
+
+
+def _diff_entries(raw_diff_z: str) -> list[tuple[bool, str]] | None:
+    """(regular 0644 file or deletion, path) per record of `git diff --raw -z --no-renames`; None if unparseable."""
+    fields = raw_diff_z.split("\0")
+    if fields and fields[-1] == "":
+        fields.pop()
+    if len(fields) % 2 or not fields:
+        return None
+    entries = []
+    for index in range(0, len(fields), 2):
+        parts = fields[index].lstrip(":").split()
+        entries.append((len(parts) >= 5 and all(mode in ("100644", "000000") for mode in parts[:2]), fields[index + 1]))
+    return entries
+
+
+def _offender_class(regular: bool, path: str) -> str:
+    if not regular:
+        return "irregular_file"
+    if path.startswith("ui2/frontend/"):
+        return "frontend_build_config"
+    if path.startswith(BACKEND_PREFIXES) or path.startswith(".github/workflows/"):
+        return "backend"
+    return "other"
+
+
+def classify_change(raw_diff_z: str) -> dict:
+    """Classify `git diff --raw -z --no-renames` output into the ship path it qualifies for.
+
+    kind: 'docs_only' (every path documentation), 'frontend' (every path frontend source/tests/e2e or documentation,
+    at least one frontend), or 'full' (anything else, an unparseable diff, or too many files). `offenders` lists the
+    paths that forced 'full', `classes` counts them by why (backend, frontend_build_config, irregular_file, other)."""
+    entries = _diff_entries(raw_diff_z)
+    if entries is None:
+        return {"kind": "full", "why": "no changed paths" if raw_diff_z == "" else "the diff could not be parsed", "offenders": ["<unparseable diff>"],
+                "classes": {"other": 1}, "paths": [], "frontend_files": 0}
+    docs = frontend = 0
+    offenders, classes = [], {}
+    for regular, path in entries:
+        if regular and is_docs_path(path):
+            docs += 1
+        elif regular and is_frontend_path(path):
+            frontend += 1
+        else:
+            offenders.append(path)
+            cls = _offender_class(regular, path)
+            classes[cls] = classes.get(cls, 0) + 1
+    paths = [path for _, path in entries]
+    if len(paths) > FASTPATH_MAX_FILES:
+        offenders.append("<more than %d files>" % FASTPATH_MAX_FILES)
+        classes["other"] = classes.get("other", 0) + 1
+    if offenders:
+        first = offenders[0]
+        worst = sorted(classes, key=lambda c: ("backend", "frontend_build_config", "irregular_file", "other").index(c))[0]
+        return {"kind": "full", "why": "%s change: %s" % (worst.replace("_", " "), first), "offenders": offenders,
+                "classes": classes, "paths": paths, "frontend_files": frontend}
+    if frontend == 0:
+        return {"kind": "docs_only", "why": "every changed path is documentation", "offenders": [], "classes": {},
+                "paths": paths, "frontend_files": 0}
+    return {"kind": "frontend", "offenders": [], "classes": {}, "paths": paths, "frontend_files": frontend,
+            "why": "every changed path is frontend source/tests/e2e under ui2/frontend or documentation "
+                   "(%d frontend file%s)" % (frontend, "" if frontend == 1 else "s")}
+
+
+def _change_verdict(branch: str, base: str = "origin/main", merge_base: bool = False) -> dict:
+    """classify_change of the branch against `base`; any git failure is a 'full' verdict (fail closed)."""
+    spec = [base + "..." + branch] if merge_base else [base, branch]
+    raw = subprocess.run(["git", "diff", "--raw", "-z", "--no-renames", *spec],
+                         cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=120)
+    if raw.returncode != 0:
+        return classify_change("")
+    return classify_change(raw.stdout)
+
+
+def evaluate_deployed_modules(listing: str, classify_since) -> tuple[bool, str]:
+    """Decide from the host probe whether every module that stays on its image is current enough.
+
+    `listing` has one line per module: '<module> <image digest or -> <deployed commit or ->'. A module whose pod is not
+    running (policy can be scaled to zero) borrows the commit of another module with the same digest. `classify_since(c)`
+    returns classify_change of the diff from commit `c` to the branch, or None when git cannot compute it. True only if
+    every module resolves to a commit and every such diff is documentation/frontend only: a main that carries backend
+    changes the other modules never received (e.g. an earlier merge whose deploy failed) must take the full path, or the
+    new service would run ahead of them."""
+    rows = {}
+    for line in listing.splitlines():
+        match = re.fullmatch(r"(\S+) (sha256:[0-9a-f]{64}|-) ([0-9a-f]{40}|-)", line.strip())
+        if match and match.group(1) in OTHER_MODULES:
+            rows[match.group(1)] = (match.group(2), match.group(3))
+    unreadable = [m for m in OTHER_MODULES if m not in rows or rows[m][0] == "-"]
+    if unreadable:
+        return False, "module image unreadable: " + ", ".join(unreadable)
+    by_digest: dict[str, str] = {}
+    for digest, commit in rows.values():
+        if commit != "-" and by_digest.setdefault(digest, commit) != commit:
+            return False, "one image digest reports two commits"
+    commits = set()
+    for module in OTHER_MODULES:
+        commit = by_digest.get(rows[module][0])
+        if commit is None:
+            return False, module + ": deployed commit unknown"
+        commits.add(commit)
+    for commit in sorted(commits):
+        verdict = classify_since(commit)
+        if verdict is None:
+            return False, "deployed commit " + commit[:12] + " is not in the local history"
+        if verdict["kind"] not in ("frontend", "docs_only"):
+            return False, "deployed commit %s differs from this branch beyond frontend/docs: %s" % (commit[:12], verdict["why"])
+    return True, "%d other modules run %d commit(s) that differ from this branch in frontend/docs paths only" % (
+        len(OTHER_MODULES), len(commits))
+
+
+def _host() -> str | None:
+    host = os.environ.get("NEXUS_HOST", "").strip()
+    if host:
+        return host
+    try:
+        return (Path.home() / ".config" / "nexus" / "hosta").read_text().splitlines()[0].strip() or None
+    except (OSError, IndexError):
+        return None
+
+
+def _deployed_state_check(branch: str) -> tuple[bool, str]:
+    """Read-only probe of HOST-A (kubectl get/exec of /app/project/deploy_info.json), then evaluate_deployed_modules."""
+    host = _host()
+    if host is None:
+        return False, "no host configured (NEXUS_HOST or ~/.config/nexus/hosta)"
+    try:
+        probe = subprocess.run(["ssh", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes", host, "bash", "-s"],
+                               input=DEPLOYED_PROBE, capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        return False, "host probe unavailable"
+    if probe.returncode != 0:
+        return False, "host probe failed"
+
+    def classify_since(commit: str) -> dict | None:
+        raw = subprocess.run(["git", "diff", "--raw", "-z", "--no-renames", commit, branch],
+                             cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=120)
+        if raw.returncode != 0:
+            return None
+        if raw.stdout == "":
+            # The module already runs exactly this tree (found live on 2026-11-13: an empty diff is not "unparseable").
+            return {"kind": "docs_only", "why": "no change", "offenders": [], "classes": {}, "paths": [],
+                    "frontend_files": 0}
+        return classify_change(raw.stdout)
+
+    return evaluate_deployed_modules(probe.stdout, classify_since)
+
+
+def cmd_classify(args: argparse.Namespace) -> int:
+    """Print the ship path a branch would take (for the pretest wrapper); read-only."""
+    verdict = _change_verdict(args.branch, merge_base=not args.two_dot)
+    path, why = verdict["kind"], verdict["why"]
+    if path == "frontend" and args.check_deployed:
+        current, detail = _deployed_state_check(args.branch)
+        if not current:
+            path, why = "full", "frontend-only change, but the other modules are not provably current: " + detail
+    print(json.dumps({"path": path, "why": why, "first_paths": verdict["offenders"][:3]}))
+    return 0
 
 
 def _gitleaks_added_content(branch: str) -> str:
@@ -714,10 +938,15 @@ def _ship(args: argparse.Namespace) -> int:
     if gate.returncode != 0 or "Gate:                 PASS" not in gate.stdout:
         raise SystemExit("privacy gate did not pass on the shipped branch; nothing pushed")
     fast_path = False
-    if not getattr(args, "full", False) and not getattr(args, "no_fast_path", False):
-        docs_only, offenders, paths = _docs_only_change(branch)
-        if docs_only:
+    frontend_path = False
+    if getattr(args, "full", False) or getattr(args, "no_fast_path", False):
+        print(json.dumps({"ship_path": "full", "why": "--full requested" if getattr(args, "full", False)
+                          else "--no-fast-path requested"}), flush=True)
+    else:
+        verdict = _change_verdict(branch)
+        if verdict["kind"] == "docs_only":
             fast_path = True
+            paths = verdict["paths"]
             secret_scan = _gitleaks_added_content(branch)
             print(json.dumps({
                 "fast_path": "docs_only", "files": len(paths), "privacy_gate": "pass", "gitleaks": secret_scan,
@@ -725,8 +954,27 @@ def _ship(args: argparse.Namespace) -> int:
                 "not_deployed_until_next_code_deploy": sorted(
                     p for p in paths if p in IMAGE_BAKED_PROJECT_FILES or p.startswith(IMAGE_BAKED_PROJECT_PREFIXES))[:10],
             }), flush=True)
+            print(json.dumps({"ship_path": "docs_only", "why": verdict["why"]}), flush=True)
+        elif verdict["kind"] == "frontend":
+            current, detail = _deployed_state_check(branch)
+            if current:
+                frontend_path = True
+                secret_scan = _gitleaks_added_content(branch)
+                print(json.dumps({
+                    "fast_path": "frontend", "files": len(verdict["paths"]), "frontend_files": verdict["frontend_files"],
+                    "privacy_gate": "pass", "gitleaks": secret_scan, "preview": "kept", "early_pr": True,
+                    "deploy_targets": list(FRONTEND_DEPLOY_TARGETS), "packet_analysis_image": "skipped",
+                    "other_modules": detail,
+                }), flush=True)
+                print(json.dumps({"ship_path": "frontend", "why": verdict["why"]}), flush=True)
+            else:
+                print(json.dumps({"fast_path": "not_applicable", "first_paths": [], "classes": {}}), flush=True)
+                print(json.dumps({"ship_path": "full", "why": "frontend-only change, but the other modules are not "
+                                  "provably current: " + detail}), flush=True)
         else:
-            print(json.dumps({"fast_path": "not_applicable", "first_paths": offenders[:3]}), flush=True)
+            print(json.dumps({"fast_path": "not_applicable", "first_paths": verdict["offenders"][:3],
+                              "classes": verdict["classes"]}), flush=True)
+            print(json.dumps({"ship_path": "full", "why": verdict["why"]}), flush=True)
     run_preview = skip_preview is None and not fast_path
     candidate_repo = wt if args.task else REPO_ROOT
 
@@ -739,6 +987,11 @@ def _ship(args: argparse.Namespace) -> int:
             body += ("\nDocs-only change (every changed path is documentation or project-state text): the isolated "
                      "preview, the image build and the production deploy were skipped by design; the privacy gate and "
                      "the GitHub checks gate the merge.\n")
+        if frontend_path:
+            body += ("\nFrontend-only change (every changed path is frontend source, tests or e2e under ui2/frontend, or "
+                     "documentation): tsc, vitest, the isolated preview e2e, GitHub's checks (including the Java "
+                     "suites), the rollback snapshot, the security gate on the service image and the production e2e all "
+                     "run; only ui2-service is rolled out and no Packet Analysis image is built.\n")
         pr = subprocess.run(["gh", "pr", "create", "--base", "main", "--head", branch, "--title", title,
                              "--body", body], cwd=str(REPO_ROOT), capture_output=True, text=True)
         found = pr.stdout.strip().splitlines()[-1] if pr.returncode == 0 else ""
@@ -753,7 +1006,9 @@ def _ship(args: argparse.Namespace) -> int:
     # Default order (unchanged): the isolated preview passes BEFORE anything is pushed or a pull request exists.
     # --early-pr (opt-in) pushes and opens the pull request first, so GitHub's `validate` check (about 95 s) runs while
     # the preview does; a failed preview then closes the pull request and deletes the pushed branch.
-    early_pr = bool(getattr(args, "early_pr", False)) and run_preview
+    # The frontend path always opens the pull request early: GitHub's validate (about 95 s, and the Java suites this path
+    # does not run locally) then overlaps the preview instead of following it.
+    early_pr = (bool(getattr(args, "early_pr", False)) or frontend_path) and run_preview
     url = open_pull_request() if early_pr else ""
     if run_preview:
         try:
@@ -791,9 +1046,16 @@ def _ship(args: argparse.Namespace) -> int:
             args.force = True
             cmd_clean(args)
         return 0
-    _deploy(skip_security)
+    deploy_started = time.monotonic()
+    if frontend_path:
+        _deploy(skip_security, targets=FRONTEND_DEPLOY_TARGETS, packet_analysis_image=False)
+    else:
+        _deploy(skip_security)
+    print(f"TIMING ship_deploy {time.monotonic() - deploy_started:.0f}", flush=True)
     # The in-cluster e2e screen suite after every deploy (PO 2026-09-27); a failure is reported, not rolled back.
+    e2e_started = time.monotonic()
     e2e = subprocess.run(["bash", "tools/e2e/hosta_e2e.sh", "--full" if getattr(args, "full", False) else "--quick"], cwd=str(REPO_ROOT), capture_output=True, text=True)
+    print(f"TIMING ship_e2e {time.monotonic() - e2e_started:.0f}", flush=True)
     lines = [l for l in e2e.stdout.splitlines() if l.strip()]
     verdict = "pass" if e2e.returncode == 0 and "E2E: PASS" in e2e.stdout else "FAIL"
     print(json.dumps({"e2e": verdict, "summary": lines[-6:]}))
@@ -847,7 +1109,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="push and open the pull request before the preview so GitHub's checks run during it "
                          "(default: nothing is pushed until the preview has passed)")
     sh.add_argument("--no-fast-path", action="store_true",
-                    help="never take the docs-only fast path (preview, image build and deploy always run)")
+                    help="never take the docs-only or frontend fast path (preview, image build and the full deploy always run)")
     sh.add_argument("--notes", help="extra lines for the PR body (live validation, measurements)")
     sh.add_argument("--skip-security", metavar="REASON", help="emergency bypass; a reason is mandatory and printed")
     preview = sh.add_mutually_exclusive_group()
@@ -857,9 +1119,14 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("clean")
     c.add_argument("--task", required=True)
     c.add_argument("--force", action="store_true")
+    cl = sub.add_parser("classify", help="print the ship path a branch qualifies for (read-only)")
+    cl.add_argument("--branch", required=True)
+    cl.add_argument("--check-deployed", action="store_true",
+                    help="also require the other modules to run commits that differ from the branch in frontend/docs only")
+    cl.add_argument("--two-dot", action="store_true", help="diff against origin/main directly (branch already rebased)")
     args = p.parse_args(argv)
     return {"start": cmd_start, "status": cmd_status, "wait": cmd_wait, "result": cmd_result,
-            "stop": cmd_stop, "clean": cmd_clean, "ship": cmd_ship}[args.cmd](args)
+            "stop": cmd_stop, "clean": cmd_clean, "ship": cmd_ship, "classify": cmd_classify}[args.cmd](args)
 
 
 if __name__ == "__main__":
