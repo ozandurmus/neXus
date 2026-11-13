@@ -392,3 +392,22 @@ it("lists a Cisco ASA pair as 'Readiness not available yet' with its vendor name
   expect(within(item).getByText("Readiness not available yet")).toBeInTheDocument();
   expect(within(item).queryByRole("button")).toBeNull();
 });
+it("evaluates a Cisco ASA pair in the main list when its readiness is available, with the same run action", () => {
+  const asa: CpFailoverSummary = { ...summary("CLS-DELTA-04", "READY"), vendor: "cisco_asa", readinessAvailable: true, canRunReadiness: true };
+  const { onRun } = setup({ rows: { ...rows, "CLS-DELTA-04": [asa] } });
+  expect(row("CLS-DELTA-04")).toBeInTheDocument();
+  expect(screen.queryByText("Readiness not available yet")).toBeNull();
+  expect(screen.queryByText(/Readiness pre-checks are not supported for these vendors/)).toBeNull();
+  fireEvent.click(within(row("CLS-DELTA-04")).getByRole("button", { name: "Run pre-checks" }));
+  expect(onRun).toHaveBeenCalledWith(asa);
+  // Readiness only: no failover, approval or resume control is offered for the pair.
+  expect(screen.queryByText(/Start failover|Resume return step/)).toBeNull();
+});
+it("keeps a Cisco ASA pair with readinessAvailable false in the listed-only block, without a run action", () => {
+  const asa: CpFailoverSummary = { ...summary("CLS-DELTA-04", "READY"), vendor: "cisco_asa", readiness: null, canRunReadiness: false, readinessAvailable: false };
+  setup({ rows: { ...rows, "CLS-DELTA-04": [asa] } });
+  expect(within(table()).queryByRole("row", { name: "CLS-DELTA-04" })).toBeNull();
+  const item = screen.getByText("CLS-DELTA-04").closest("li")!;
+  expect(within(item).getByText("Readiness not available yet")).toBeInTheDocument();
+  expect(within(item).queryByRole("button")).toBeNull();
+});

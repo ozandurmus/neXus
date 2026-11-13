@@ -261,6 +261,18 @@ class JooqCpFailoverRepositoryTest {
         assertTrue(db.statements.stream().anyMatch(sql -> sql.startsWith("insert into jobs")));
     }
 
+    /** PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS.md: a Cisco ASA readiness run is the job type asa_cluster_failover. */
+    @org.junit.jupiter.api.Test
+    void ciscoAsaReadinessIsAdmittedAsTheAsaClusterFailoverJob() {
+        var db = new ReadinessAdmissionDatabase();
+        assertEquals("ADMITTED", db.repository().requestReadiness("CLS-TEST-01", null, "actor-1", "FW-TEST-01", "cisco_asa").code());
+        int jobs = 0;
+        for (int i = 0; i < db.statements.size(); i++) if (db.statements.get(i).startsWith("insert into jobs")) jobs = i;
+        assertEquals("asa_cluster_failover", db.bindings.get(jobs)[1]);
+        Object[] bound = db.bindings.get(jobs);
+        assertEquals("read", bound[bound.length - 1]);
+    }
+
     @org.junit.jupiter.api.Test
     void aLiveRunStillRefusesReadinessAfterTheOrphanClose() {
         var db = new ReadinessAdmissionDatabase();

@@ -21,7 +21,7 @@ describe("vendor labels", () => {
 
 describe("job type labels", () => {
   it.each([
-    ["pan_failover_readiness", "Palo Alto readiness check"], ["cp_failover_readiness", "Check Point readiness check"],
+    ["pan_failover_readiness", "Palo Alto readiness check"], ["asa_cluster_failover", "Cisco ASA readiness check"], ["cp_failover_readiness", "Check Point readiness check"],
     ["cp_system_log_collect", "Check Point log collection"], ["pan_system_log_collect", "Palo Alto log collection"],
     ["cp_spike_layout_review", "Check Point Spike Detective layout review"],
     ["cp_inventory_collect", "Check Point inventory read"], ["fgt_configuration_collect", "FortiGate configuration read"],

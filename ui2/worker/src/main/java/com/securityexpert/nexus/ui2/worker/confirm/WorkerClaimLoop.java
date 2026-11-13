@@ -39,9 +39,12 @@ import com.securityexpert.nexus.ui2.worker.inventory.InventoryRequest;
  */
 public final class WorkerClaimLoop {
 
+    /** Cisco ASA failover readiness (readiness only; no execution capability exists for ASA). */
+    public static final String ASA_FAILOVER_READINESS = "asa_cluster_failover";
     private static final List<String> ALL_CAPABILITY_IDS = List.of(
             "cp_policy_collect", "pan_policy_collect",
             "cp_cluster_failover", "pan_cluster_failover", "cp_failover_readiness", "pan_failover_readiness",
+            ASA_FAILOVER_READINESS,
             com.securityexpert.nexus.ui2.persistence.JooqPanConfigSyncRepository.JOB_TYPE,
             com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CAPABILITY,
             com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure.CAPABILITY,
@@ -125,6 +128,10 @@ public final class WorkerClaimLoop {
         this.panConfigSyncExecutor=executor; return this;
     }
     private com.securityexpert.nexus.ui2.worker.failover.PanFailoverJobExecutor panFailoverExecutor;
+    private com.securityexpert.nexus.ui2.worker.failover.AsaFailoverJobExecutor asaFailoverExecutor;
+    public WorkerClaimLoop withAsaFailover(com.securityexpert.nexus.ui2.worker.failover.AsaFailoverJobExecutor executor) {
+        this.asaFailoverExecutor=executor; return this;
+    }
     public WorkerClaimLoop withPanFailover(com.securityexpert.nexus.ui2.worker.failover.PanFailoverJobExecutor executor) {
         this.panFailoverExecutor=executor; return this;
     }
@@ -280,6 +287,7 @@ public final class WorkerClaimLoop {
      */
     public static String purposeOf(String capability) {
         if (com.securityexpert.nexus.ui2.persistence.JooqPanConfigSyncRepository.JOB_TYPE.equals(capability)) return "CONFIGURATION_WRITE";
+        if (ASA_FAILOVER_READINESS.equals(capability)) return "FAILOVER_READINESS";
         return capability.contains("policy") ? "POLICY"
             : capability.contains("backup") || capability.equals("cp_gaia_snapshot")
             || capability.equals(BackupCapabilityIds.CREDENTIAL_CANARY) ? "BACKUP"
@@ -494,6 +502,13 @@ public final class WorkerClaimLoop {
                     com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,com.securityexpert.nexus.ui2.jobs.JobState.REJECTED,
                     "system:worker","pan_config_sync_claim_check","EXECUTOR_UNAVAILABLE");
                 else panConfigSyncExecutor.execute(claimed.jobId(),claimed.leaseEpoch());
+                return true;
+            }
+            if (ASA_FAILOVER_READINESS.equals(job.capabilityId())) {
+                if (asaFailoverExecutor == null) leaseRepository.transitionState(claimed.jobId(),claimed.leaseEpoch(),
+                    com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,com.securityexpert.nexus.ui2.jobs.JobState.REJECTED,
+                    "system:worker","asa_readiness_claim_check","EXECUTOR_UNAVAILABLE");
+                else asaFailoverExecutor.execute(claimed.jobId(),claimed.leaseEpoch());
                 return true;
             }
             if ("pan_failover_readiness".equals(job.capabilityId())) {
