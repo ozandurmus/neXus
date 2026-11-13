@@ -3,11 +3,16 @@ import { expect, it } from "vitest";
 
 import { OverviewPreview } from "../src/preview/OverviewPreview";
 
-it("previews the executive home with the live screen's verdict, banner and attention logic (UI review 2026-11-05, C1)", () => {
+it("previews the Overview attention list with the live screen's own rules (OVERVIEW_ATTENTION_LIST_DESIGN_2026_11_13.md)", () => {
   render(<OverviewPreview />);
-  expect(screen.getByText("AT RISK")).toBeInTheDocument();
-  expect(screen.getByRole("status", { name: "Data freshness warning" }).textContent).toContain("131 of 132 active devices were last read more than 24 h ago");
-  for (const pillar of ["Security posture", "Backup coverage", "HA readiness", "Data freshness"]) expect(screen.getByText(pillar)).toBeInTheDocument();
-  expect(screen.getByText("2 of 45 HA clusters not ready for failover")).toBeInTheDocument();
+  const list = screen.getByTestId("attention-list");
+  const order = [...list.querySelectorAll("[data-attention]")].map((e) => e.getAttribute("data-attention"));
+  expect(order.slice(0, 4)).toEqual(["ha-not-ready", "backup-missing", "advisory-exploited", "compliance-critical"]);
+  expect(screen.getByText("1 HA cluster not ready for failover")).toBeInTheDocument();
+  expect(screen.getByText("CLS-ROMEO-01")).toBeInTheDocument();
+  // eight rows, then "Show all": the Watch rows (ageing read, Live Patch, UNKNOWN readiness, unknown actor) wait behind it
+  expect(order).toHaveLength(8);
+  expect(screen.getByText("Show all 12")).toBeInTheDocument();
   expect(screen.getAllByText(/of evidenced controls pass/)[0].textContent).toBe("37.5% of evidenced controls pass · 19.9% have no evidence");
+  expect(document.body.textContent).not.toMatch(/AT RISK|Security posture|Change pulse/);
 });

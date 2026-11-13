@@ -25,7 +25,7 @@ const PRODUCT_MARKERS: Record<string, string> = {
 };
 
 const PREVIEW_MARKERS: Record<string, string> = {
-  overview: "2 of 45 HA clusters not ready for failover",
+  overview: "1 HA cluster not ready for failover",
   reports: "Never inventoried (192.0.2.15)",
   inventory: "FW-MIKE-08",
   configuration: "CLS-ROMEO-01",

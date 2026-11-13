@@ -2055,7 +2055,9 @@ export type EstateConditionReason = "not_evaluated" | "no_evidence" | "no_critic
 export interface EstateView {
   readonly devices: ReadonlyArray<{ device_id: string; hostname: string | null; vendor: string; model: string | null;
     condition: EstateCondition; condition_reason?: EstateConditionReason | null; no_archive: boolean; critical_fail: number | null;
-    last_read_at: string | null }>;
+    last_read_at: string | null;
+    /** The newest live backup archive and whether the device is a backup target (absent on an older backend). */
+    backup_target?: boolean; last_backup_at?: string | null }>;
   readonly counts: Readonly<Record<EstateCondition, number>>;
   readonly no_archive: number;
   readonly compliance_state: EvidenceState;

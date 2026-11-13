@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  attentionLines, evidencedHeadline, evidencedShares, executiveVerdict, freshnessSentence, MAX_ATTENTION_LINES,
+  evidencedHeadline, evidencedShares, executiveVerdict, freshnessSentence,
   noEvidenceFromCoverage, primaryFrameworksFirst, type ExecutiveFigures,
 } from "../src/screens/overview/executiveHome";
 
@@ -51,37 +51,6 @@ describe("freshness sentence", () => {
   });
   it("says UNKNOWN when the read times could not be read", () => {
     expect(freshnessSentence(null, null, null, now)).toMatch(/^Data freshness UNKNOWN/);
-  });
-});
-
-describe("needs attention", () => {
-  const ages = { haNotReadyAt: "2026-11-05T10:00:00Z", backupAt: "2026-11-04T02:00:00Z", complianceAt: "2026-11-05T09:00:00Z", oldestReadAt: "2026-11-03T12:00:00Z" };
-  const all = {
-    ...CLEAN, security: { failing: 97, of: 118 }, backups: { archived: 126, of: 130 }, ha: { total: 45, ready: 35, notReady: 2, unknown: 3, unsupported: 5 },
-    freshness: { fresh: 1, of: 132 }, ages, topControl: { id: "cp-1", title: "Account lockout", failing: 62, of: 62 },
-  };
-
-  it("keeps at most five lines, most severe first, each with an age and a link to the filtered problem", () => {
-    const lines = attentionLines(all);
-    expect(MAX_ATTENTION_LINES).toBe(5);
-    expect(lines).toHaveLength(5);
-    expect(lines.map((l) => l.key)).toEqual(["ha-not-ready", "backup-missing", "critical-failing", "top-control", "stale-devices"]);
-    expect(lines[0]).toMatchObject({ text: "2 of 45 HA clusters not ready for failover", href: "?screen=operations&readiness=NOT_READY", at: ages.haNotReadyAt });
-    expect(lines[1]).toMatchObject({ text: "4 of 130 backup targets have no stored backup", href: "?screen=backups&artefact=none", at: ages.backupAt });
-    expect(lines[2]).toMatchObject({ href: "?screen=compliance&severity=critical&result=fail", at: ages.complianceAt });
-    expect(lines[3]).toMatchObject({ href: "?screen=compliance&q=cp-1" });
-    expect(lines[4]).toMatchObject({ text: "131 of 132 active devices not read in the last 24 h", href: "?screen=inventory&inventory_age=stale", at: ages.oldestReadAt });
-  });
-
-  it("lists nothing for a clean, fresh estate, and never invents a line from an unread figure", () => {
-    expect(attentionLines({ ...CLEAN, freshness: { fresh: 132, of: 132 }, ages: {} })).toEqual([]);
-    // two devices not read in 24 h, above the banner threshold: one warning line, not a serious one
-    expect(attentionLines({ ...CLEAN, ages: {} })).toMatchObject([{ key: "stale-devices", severity: "warning", text: "2 of 132 active devices not read in the last 24 h" }]);
-    expect(attentionLines({ security: null, backups: null, ha: null, freshness: null, ages: {} })).toEqual([]);
-  });
-
-  it("carries a missing age as null (the screen writes UNKNOWN)", () => {
-    expect(attentionLines({ ...CLEAN, backups: { archived: 1, of: 2 }, ages: {} })[0].at).toBeNull();
   });
 });
 

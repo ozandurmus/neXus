@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import Collapse from "@mui/material/Collapse";
@@ -14,15 +14,19 @@ import { StatePanel, Ts, isRestricted } from "../shell/States";
 import { useDisplayMode } from "../shell/displayMode";
 import { DISPLAY_TZ_LABEL, formatStamp, formatUtc, relativeAge } from "../shell/time";
 import { MONO, m3 } from "../theme/m3Theme";
-import { getComplianceControls, getOverview, listCpFailoverSummary, listDevices, type ComplianceControlItem, type DeviceSummary, type CountTile, type EvidenceChip, type FailureReason, type OverviewView, type VersionSlice } from "../auth/adminApi";
-import { EXEC, EstateMap, HeroFact, PopulationBar } from "./overview/EstateMap";
+import { getChangeFeed, getComplianceControls, getLifecycle, getOverview, listCpFailoverSummary, listDevices, type ChangeFeedPage, type ComplianceControlItem, type CpFailoverSummary, type DeviceSummary, type CountTile, type EvidenceChip, type FailureReason, type LifecycleFleet, type OverviewView, type VersionSlice } from "../auth/adminApi";
+import { useSession } from "../auth/SessionContext";
+import { planeGranted } from "../shell/actionAccess";
+import { EXEC } from "./overview/EstateMap";
+import { AttentionList } from "./overview/AttentionList";
+import { buildAttention, CHANGE_WINDOW_DAYS, sourceWanted, type SourceRead } from "./overview/attentionRules";
 import { RankedBars, majorVersionVerdict, rankRows, reportedVersionVerdict } from "./overview/RankedBars";
 import { vendorDisplayName } from "../shell/States";
 import { jobTypeLabel } from "../shell/presenters";
 import { groupClusters, haReadinessItems, readinessCounts, readinessFreshness } from "./HaReadinessList";
 import { freshnessOf, FRESHNESS_COLOR, type FleetFreshness, type FreshnessLevel } from "../shell/freshness";
 import { StaleEvidenceBanner } from "../shell/StaleEvidenceBanner";
-import { attentionLines, evidencedShares, executiveVerdict, freshnessSentence, MAX_ATTENTION_LINES, primaryFrameworksFirst } from "./overview/executiveHome";
+import { evidencedShares, primaryFrameworksFirst } from "./overview/executiveHome";
 
 export { relativeAge } from "../shell/time";
 
@@ -37,6 +41,9 @@ export { relativeAge } from "../shell/time";
  *   F  configuration changes | cluster member DIFF | inventory evidence age
  * Every figure is a stored-evidence query with its evidence time; UNKNOWN is written as UNKNOWN, never 0; zero is
  * neutral; every figure opens the list behind it. `?wall=1` shows rows B, C and the failure causes beside the queue.
+ *
+ * The default view (PO direction 2026-11-13, docs/design/OVERVIEW_ATTENTION_LIST_DESIGN_2026_11_13.md, DRAFT) answers
+ * "what should I look at today": the attention list first, then a compact fleet summary and the framework bars.
  */
 
 const CARD = { borderRadius: "10px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, p: 2.25, boxShadow: "none" } as const;
@@ -491,18 +498,32 @@ export function OverviewScreen() {
   const [data, setData] = useState<OverviewView | null>(null);
   const [error, setError] = useState<{ message: string; restricted: boolean } | null>(null);
   const [controls, setControls] = useState<readonly ComplianceControlItem[] | null>(null);
-  const [details, setDetails] = useState(false);
   const { wall } = useDisplayMode();
-  // HA readiness and the Fortinet / Cisco ASA versions come from the same reads the Operations and Devices screens make.
-  // A failed read says UNKNOWN; it is never drawn as zero.
+  // HA readiness comes from the same reads the Operations screen makes; the lifecycle facts and the change feed feed the
+  // attention list. Each read is kept with its outcome: a refusal for this role is not a failure, and a failure is
+  // UNKNOWN, never drawn as zero.
+  const session = useSession();
+  const permissions = session?.permissions;
+  const planesKey = (permissions ?? []).join(",");
   const [ha, setHa] = useState<HaOverview | "loading" | "unknown">("loading");
-  const [fleet, setFleet] = useState<readonly DeviceSummary[] | null>(null);
+  const [failover, setFailover] = useState<SourceRead<{ devices: readonly DeviceSummary[]; rows: readonly CpFailoverSummary[] }> | null>(null);
+  const [lifecycle, setLifecycle] = useState<SourceRead<LifecycleFleet> | null>(null);
+  const [changes, setChanges] = useState<SourceRead<ChangeFeedPage> | null>(null);
   useEffect(() => {
     let active = true;
-    Promise.all([listDevices(), listCpFailoverSummary()]).then(([{ devices }, rows]) => {
+    const settle = <T,>(p: Promise<T>): Promise<SourceRead<T>> => p.then(
+      (value) => ({ state: "ok", value }) as SourceRead<T>,
+      (e: unknown) => ({ state: isRestricted(e) ? "restricted" : "failed" }) as SourceRead<T>);
+    Promise.all([settle(listDevices()), settle(listCpFailoverSummary())]).then(([dv, fo]) => {
       if (!active) return;
-      if (!Array.isArray(devices) || !Array.isArray(rows)) { setHa("unknown"); setFleet(Array.isArray(devices) ? devices : null); return; }
-      setFleet(devices);
+      const devices = dv.state === "ok" && Array.isArray(dv.value?.devices) ? dv.value.devices : null;
+      const rows = fo.state === "ok" && Array.isArray(fo.value) ? fo.value : null;
+      if (!devices || !rows) {
+        setHa("unknown");
+        setFailover(fo.state === "restricted" ? { state: "restricted" } : { state: "failed" });
+        return;
+      }
+      setFailover({ state: "ok", value: { devices, rows } });
       const byRef: Record<string, typeof rows> = {};
       for (const row of rows) (byRef[row.cluster_member_ref] ??= []).push(row);
       const items = haReadinessItems(groupClusters(devices), byRef);
@@ -511,9 +532,19 @@ export function OverviewScreen() {
         .filter((t): t is string => Boolean(t)).sort().at(-1) ?? null;
       setHa({ ...readinessCounts(items), evaluated: fresh.evaluatedAts.length, stale: fresh.staleAts.length, mostlyStale: fresh.mostlyStale,
         notReadyAt: newestOf("NOT_READY"), unknownAt: newestOf("UNKNOWN") });
-    }).catch(() => { if (active) { setHa("unknown"); setFleet(null); } });
+    });
+    const grants = planesKey ? planesKey.split(",") : undefined;
+    if (sourceWanted("lifecycle", grants)) settle(getLifecycle()).then((r) => {
+      if (active) setLifecycle(r.state === "ok" && !Array.isArray(r.value?.devices) ? { state: "failed" } : r);
+    });
+    else setLifecycle({ state: "skipped" });
+    if (sourceWanted("changes", grants)) {
+      settle(getChangeFeed({ from: new Date(Date.now() - CHANGE_WINDOW_DAYS * 86_400_000).toISOString(), kinds: ["USER"], limit: 200 })).then((r) => {
+        if (active) setChanges(r.state === "ok" && !Array.isArray(r.value?.events) ? { state: "failed" } : r);
+      });
+    } else setChanges({ state: "skipped" });
     return () => { active = false; };
-  }, []);
+  }, [planesKey]);
 
   const load = useCallback(() => {
     getOverview().then((d) => {
@@ -531,6 +562,11 @@ export function OverviewScreen() {
     window.addEventListener("focus", onFocus);
     return () => { clearInterval(t); window.removeEventListener("focus", onFocus); };
   }, [load]);
+
+  // The attention list (design note §3), once every source has answered; recomputed when any read changes.
+  const attention = useMemo(() => (data && failover && lifecycle && changes
+    ? buildAttention({ now: new Date(), overview: data, failover, lifecycle, changes, controls }, planesKey ? planesKey.split(",") : undefined)
+    : null), [data, failover, lifecycle, changes, controls, planesKey]);
 
   if (error) {
     return (
@@ -641,21 +677,11 @@ export function OverviewScreen() {
 
   const clustersEnrolled = d.clusters_enrolled ?? d.clusters;
 
-  // Executive home (UI review 2026-11-05, C1; Argon §3 amended by Fable): verdict word and freshness sentence, four
-  // pillars, at most five "needs attention" lines with their age, then -- below the fold -- the framework bars, the
-  // 24 h change pulse and the estate map. Plain words for an executive reader (C7): data freshness, backup coverage,
-  // policies. Every figure comes from the reads this screen already made; UNKNOWN is never drawn as zero.
+  // Below the attention list only what serves it: the fleet in four facts (each opening its list) and the framework
+  // bars. Plain words; every figure from the reads this screen already made; UNKNOWN is never drawn as zero.
   const est = data.estate;
-  const crit = est?.facts.critical;
   const bk = est?.facts.backups;
   const ev = est?.facts.evidence;
-  const widespread = (controls ?? []).filter((x) => x.severity === "CRITICAL" && x.fail_count > 0)
-    .sort((x, y) => y.fail_count - x.fail_count || (x.vendors?.[0] ?? "").localeCompare(y.vendors?.[0] ?? "") || x.control_id.localeCompare(y.control_id));
-  const top = widespread[0];
-  const changed = tileUnknown(a.config_changed) ? null : { count: a.config_changed.count, of: a.config_changed.of ?? 0 };
-  const cd = tileUnknown(a.cluster_diff) ? null : a.cluster_diff;
-
-  const security = crit && typeof crit.k === "number" && typeof crit.n === "number" ? { failing: crit.k, of: crit.n } : null;
   const backups = bk ? { archived: bk.a, of: bk.b }
     : !tileUnknown(a.backup_missing) && a.backup_missing.of !== undefined ? { archived: a.backup_missing.of - a.backup_missing.count, of: a.backup_missing.of } : null;
   const freshness: FleetFreshness | null = ev ? { fresh: ev.r, of: ev.d, never: ev.never }
@@ -663,141 +689,67 @@ export function OverviewScreen() {
   const haFig = typeof ha === "object" ? ha : null;
   const reads = (est?.devices ?? []).map((x) => x.last_read_at).filter((t): t is string => Boolean(t)).sort();
   const newestRead = data.evidence.inventory?.at ?? reads.at(-1) ?? null;
-  const oldestRead = reads[0] ?? null;
-  const figures = { security, backups, ha: haFig, freshness };
-  const verdict = ha === "loading" ? null : executiveVerdict(figures);
-  const attention = attentionLines({
-    ...figures,
-    ages: { haNotReadyAt: haFig?.notReadyAt, haUnknownAt: haFig?.unknownAt, backupAt: data.evidence.backup?.at,
-      complianceAt: data.evidence.compliance?.at, oldestReadAt: oldestRead },
-    topControl: top ? { id: top.control_id, title: top.title, failing: top.fail_count, of: top.target_device_count } : null,
-  });
-  const block = (titleText: string, hint: string | null, link: { href: string; label: string } | null, children: ReactNode, testId?: string) => (
-    <Card sx={{ ...CARD, display: "flex", flexDirection: "column", gap: 1.5 }} data-testid={testId}>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 1 }}>
-        <Box>
-          <Typography sx={{ fontSize: 16, fontWeight: 700 }}>{titleText}</Typography>
-          {hint && <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>{hint}</Typography>}
-        </Box>
-        {link && <Link href={link.href} underline="hover" sx={{ fontSize: 13, whiteSpace: "nowrap" }}>{link.label} →</Link>}
-      </Box>
-      {children}
-    </Card>
-  );
-  const verdictInk = verdict?.word === "HEALTHY" ? STATUS_INK.good : verdict?.word === "AT RISK" ? STATUS_INK.critical : m3.neutralInk;
-  const verdictBg = verdict?.word === "HEALTHY" ? `${STATUS.good}1f` : verdict?.word === "AT RISK" ? `${STATUS.critical}1f` : m3.sc;
-  const frameworks = primaryFrameworksFirst(c.frameworks ?? [], (f) => f.name);
-  const pi = data.policy_install;
-  const pulse: Array<{ key: string; label: string; value: string; hint: string; href: string }> = [
-    { key: "config", label: "Configuration changed", hint: "since each device's previous read",
-      value: changed && changed.of > 0 ? `${changed.count} of ${changed.of} devices` : "UNKNOWN", href: q({ screen: "inventory", change_state: "changed" }) },
-    { key: "cluster", label: "Cluster member differences", hint: "a review signal, not a fault",
-      value: cd && (cd.of ?? 0) > 0 ? `${cd.count} of ${cd.of} clusters${cd.unknown ? ` · ${cd.unknown} not comparable` : ""}` : "UNKNOWN",
-      href: q({ screen: "inventory", cluster_diff: "present" }) },
-    { key: "policy", label: "Policies installed today", hint: `as each gateway reports it${pi?.last_read_at ? ` · read ${relativeAge(pi.last_read_at)}` : ""}`,
-      value: pi && pi.state === "OK" ? `${pi.today ?? 0} of ${pi.of ?? 0} gateways` : "UNKNOWN", href: q({ screen: "policy" }) },
+  const devicesOpen = planeGranted(permissions, "Devices");
+  const facts: Array<{ key: string; value: string; label: string; href: string | null }> = [
+    { key: "devices", value: String(d.active_devices), label: "enrolled devices", href: devicesOpen ? q({ screen: "inventory" }) : null },
+    { key: "ha", value: haFig ? `${haFig.ready} of ${haFig.total}` : ha === "loading" ? "…" : "UNKNOWN", label: "clusters ready for failover", href: q({ screen: "operations" }) },
+    { key: "backups", value: backups ? `${backups.archived} of ${backups.of}` : "UNKNOWN", label: "backup targets backed up", href: q({ screen: "backups" }) },
+    { key: "freshness", value: freshness ? `${freshness.fresh} of ${freshness.of}` : "UNKNOWN", label: "devices read in 24 h", href: devicesOpen ? q({ screen: "inventory", inventory_age: "stale" }) : null },
   ];
+  const frameworks = primaryFrameworksFirst(c.frameworks ?? [], (f) => f.name);
 
   return (
     <ScreenRoot>
       <ScreenHeader
         title="Overview"
-        subtitle={`Estate assurance · ${estateDevicesLabel(d)} · ${clustersEnrolled} clusters · as of ${formatUtc(data.generated_at, false)} ${DISPLAY_TZ_LABEL}`}
+        subtitle={`${estateDevicesLabel(d)} · ${clustersEnrolled} clusters · as of ${formatUtc(data.generated_at, false)} ${DISPLAY_TZ_LABEL}`}
         actions={<FreshnessChip evidence={data.evidence} />}
       />
 
       <StaleEvidenceBanner freshness={freshness} newestAt={newestRead} />
 
-      {/* 1. The verdict word and the freshness sentence */}
-      <Card sx={{ ...CARD, p: { xs: 2, md: 2.5 } }} data-testid="executive-verdict">
-        <Box sx={{ display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
-          <Box aria-label={`Estate verdict: ${verdict?.word ?? "reading"}`} data-verdict={verdict?.word ?? "LOADING"}
-            sx={{ px: 2, py: 0.75, borderRadius: "10px", bgcolor: verdictBg, color: verdictInk, fontSize: 26, fontWeight: 800, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
-            {verdict?.word ?? "…"}
-          </Box>
-          <Box sx={{ minWidth: 0, flex: "1 1 260px" }}>
-            <Typography sx={{ fontSize: 15, fontWeight: 600, color: m3.onSurface }}>{verdict?.reason ?? "Reading the clusters and their readiness…"}</Typography>
-            <Typography data-testid="freshness-sentence" sx={{ fontSize: 13.5, color: m3.onSurfaceVar }}>{freshnessSentence(freshness, newestRead, oldestRead)}</Typography>
-          </Box>
+      <AttentionList result={attention} />
+
+      <Card sx={{ ...CARD, display: "flex", flexDirection: "column", gap: 1.5 }} data-testid="fleet-summary">
+        <Typography sx={{ fontSize: 16, fontWeight: 700 }}>Fleet</Typography>
+        <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4, 1fr)" } }}>
+          {facts.map((f) => {
+            const body = (
+              <>
+                <Typography sx={{ fontSize: 20, fontWeight: 700, color: f.value === "UNKNOWN" ? m3.neutralInk : m3.onSurface, fontVariantNumeric: "tabular-nums" }}>{f.value}</Typography>
+                <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>{f.label}</Typography>
+              </>
+            );
+            const box = { display: "block", border: `1px solid ${m3.outlineVar}`, borderRadius: "8px", px: 1.5, py: 1, color: "inherit" } as const;
+            return f.href
+              ? <Link key={f.key} href={f.href} underline="none" data-fact={f.key} sx={{ ...box, "&:hover": { borderColor: m3.outline } }}>{body}</Link>
+              : <Box key={f.key} data-fact={f.key} sx={box}>{body}</Box>;
+          })}
         </Box>
       </Card>
 
-      {/* 2. Four pillars */}
-      <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", lg: "repeat(4, 1fr)" } }}>
-        <Card sx={{ ...CARD, p: 0.5 }}>
-          <HeroFact label="Security posture" value={security?.failing ?? null} of={security?.of ?? null} unit="firewalls" bad={security?.failing ?? 0} color={EXEC.red}
-            sliverLabel="with a critical failure" unknownWord="UNKNOWN"
-            sentence={security?.of ? "firewalls with at least one critical check failing" : "No firewall is assessed yet"}
-            href={q({ screen: "compliance", severity: "critical", result: "fail" })} />
-        </Card>
-        <Card sx={{ ...CARD, p: 0.5 }}>
-          <HeroFact label="Backup coverage" value={backups ? backups.archived : null} of={backups ? backups.of : null} unit="targets backed up"
-            bad={backups ? backups.of - backups.archived : 0} color={EXEC.red} sliverLabel="without a backup" unknownWord="UNKNOWN"
-            sentence={backups && backups.of - backups.archived > 0 ? `${backups.of - backups.archived} backup targets have no stored backup` : "Every backup target holds a stored backup"}
-            href={q({ screen: "backups", artefact: "none" })} />
-        </Card>
-        <Card sx={{ ...CARD, p: 0.5 }}>
-          {/* HA readiness (UI review 2026-10-18, F-13): the same counts as Operations, with the age of the evaluations. */}
-          <HeroFact label="HA readiness" unit="clusters ready" unknownWord={ha === "loading" ? "Loading…" : ha === "unknown" ? "UNKNOWN" : "No clusters"}
-            value={haFig && haFig.total > 0 ? haFig.ready : null} of={haFig ? haFig.total : null}
-            bad={0} color={EXEC.red} href={q({ screen: "operations" })}
-            ariaLabel={haFig ? `HA readiness: ${haReadinessSentence(haFig)}` : `HA readiness: ${ha === "loading" ? "Loading" : "UNKNOWN"}`}
-            segments={haFig ? [
-              { count: haFig.notReady, color: EXEC.red, label: "not ready" },
-              { count: haFig.unknown, color: EXEC.hatch, label: "unknown" },
-            ] : undefined}
-            aside={haFig && haFig.mostlyStale ? (
-              <Tooltip title={`${haFig.stale} of ${haFig.evaluated} readiness evaluations are older than 24 h; the counts may no longer hold`}>
-                <Box component="span" data-stale-evaluation sx={{ px: 0.9, py: 0.1, borderRadius: "6px", fontSize: 11, fontWeight: 700,
-                  bgcolor: m3.warningContainer, color: m3.onWarningContainer }}>Stale</Box>
-              </Tooltip>) : undefined}
-            sentence={haFig ? haReadinessSentence(haFig) : ha === "loading" ? "Reading the clusters and their readiness…" : "UNKNOWN: the clusters or their readiness were not available."} />
-        </Card>
-        <Card sx={{ ...CARD, p: 0.5 }}>
-          <HeroFact label="Data freshness" value={freshness ? freshness.fresh : null} of={freshness ? freshness.of : null} unit="devices" bad={freshness ? freshness.of - freshness.fresh : 0}
-            color={FRESHNESS_COLOR.ageing} sliverLabel="not read in 24 h" unknownWord="UNKNOWN"
-            sentence={`read in the last 24 h${freshness?.never ? ` · ${freshness.never} never read` : ""}`} href={q({ screen: "inventory", inventory_age: "stale" })} />
-        </Card>
-      </Box>
-
-      {/* 3. Needs attention: at most five lines, most severe first, each with its age and one link to the filtered problem */}
-      {block("Needs attention", attention.length ? `${attention.length === MAX_ATTENTION_LINES ? "the five most severe" : "most severe first"} · each line opens the filtered list` : null, null,
-        attention.length === 0 ? (
-          <Typography sx={{ color: m3.onSurfaceVar }}>
-            {verdict?.word === "HEALTHY" ? "Nothing needs attention." : "No known problem in the data that could be read."}
-          </Typography>
-        ) : (
-          <Box component="ol" sx={{ listStyle: "none", m: 0, p: 0 }}>
-            {attention.map((l, i) => (
-              <Box component="li" key={l.key} data-attention={l.key} sx={{ borderTop: i ? `1px solid ${m3.outlineVar}` : "none" }}>
-                <Link href={l.href} underline="none" sx={{ color: "inherit", display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: 1.25, rowGap: 0.25, py: 1, "&:hover": { bgcolor: m3.scLow } }}>
-                  <Box component="span" aria-hidden sx={{ width: 10, height: 10, borderRadius: "50%", flex: "none", bgcolor: STATUS[l.severity], alignSelf: "center" }} />
-                  <Typography component="span" sx={{ fontSize: 14.5, fontWeight: 600, color: m3.onSurface, flex: "1 1 220px", minWidth: 0 }}>{l.text}</Typography>
-                  <Typography component="span" sx={{ fontSize: 12.5, color: m3.onSurfaceVar, whiteSpace: "nowrap", ml: "auto" }}>
-                    {l.ageOf} {l.at ? relativeAge(l.at) : "UNKNOWN"} →
-                  </Typography>
-                </Link>
-              </Box>
-            ))}
+      {planeGranted(permissions, "Compliance") && (
+        <Card sx={{ ...CARD, display: "flex", flexDirection: "column", gap: 1.5 }} data-testid="framework-bars">
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 1 }}>
+            <Box>
+              <Typography sx={{ fontSize: 16, fontWeight: 700 }}>Compliance by framework</Typography>
+              <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>Technical checks. Not an audit certification.</Typography>
+            </Box>
+            <Link href={q({ screen: "compliance" })} underline="hover" sx={{ fontSize: 13, whiteSpace: "nowrap" }}>Open →</Link>
           </Box>
-        ), "needs-attention")}
-
-      {/* Below the fold: framework bars and the 24 h change pulse */}
-      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" } }}>
-        {block("Compliance by framework", "Technical checks. Not an audit certification.", { href: q({ screen: "compliance" }), label: "Open" },
-          c.state === "OK" && frameworks.length > 0 ? (
+          {c.state === "OK" && frameworks.length > 0 ? (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1.75 }}>
               {frameworks.map((f) => {
                 const t = f.pass + f.fail + f.unavailable;
                 const name = f.name === "Financial Baseline" ? "Financial baseline" : f.name;
-                const s = evidencedShares(f.pass, f.fail, f.unavailable);
+                const sh = evidencedShares(f.pass, f.fail, f.unavailable);
                 return (
                   <Box key={f.name} data-framework={f.name}>
                     <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1, mb: 0.5, flexWrap: "wrap" }}>
                       <Link href={q({ screen: "compliance", framework: f.name })} underline="hover" sx={{ fontSize: 13.5, fontWeight: 600, color: m3.onSurface }}>{name}</Link>
                       <Tooltip title="A check is one control on one firewall. A check without evidence is not counted as failed.">
                         <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>
-                          {t ? <><b style={{ color: m3.onSurface }}>{s.passPct === null ? "UNKNOWN" : `${s.passPct}%`}</b> of evidenced controls pass · {s.noEvidencePct}% have no evidence</> : "Not assessed"}
+                          {t ? <><b style={{ color: m3.onSurface }}>{sh.passPct === null ? "UNKNOWN" : `${sh.passPct}%`}</b> of evidenced controls pass · {sh.noEvidencePct}% have no evidence</> : "Not assessed"}
                         </Typography>
                       </Tooltip>
                     </Box>
@@ -819,73 +771,9 @@ export function OverviewScreen() {
                 ))}
               </Box>
             </Box>
-          ) : <Typography sx={{ color: m3.onSurfaceVar }}>Compliance has not been evaluated yet.</Typography>)}
-        {block("Change pulse", "what moved in the estate", null,
-          <Box sx={{ display: "flex", flexDirection: "column" }}>
-            {pulse.map((p, i) => (
-              <Link key={p.key} href={p.href} underline="none" data-pulse={p.key}
-                sx={{ color: "inherit", display: "flex", justifyContent: "space-between", gap: 1.5, py: 1, borderTop: i ? `1px solid ${m3.outlineVar}` : "none", "&:hover": { bgcolor: m3.scLow } }}>
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography sx={{ fontSize: 13.5, fontWeight: 600, color: m3.onSurface }}>{p.label}</Typography>
-                  <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar }}>{p.hint}</Typography>
-                </Box>
-                <Typography sx={{ fontSize: 14, fontWeight: 700, color: p.value === "UNKNOWN" ? m3.neutralInk : m3.onSurface, whiteSpace: "nowrap" }}>{p.value} →</Typography>
-              </Link>
-            ))}
-          </Box>, "change-pulse")}
-      </Box>
-
-      {est && (
-        <Card sx={{ ...CARD, p: { xs: 2, md: 3 } }}>
-          <Typography sx={{ fontSize: 18, fontWeight: 700 }}>Estate map</Typography>
-          <Typography sx={{ fontSize: 13, color: m3.onSurfaceVar, mb: 2 }}>
-            Every device, coloured by the worst condition neXus can evidence · {freshness ? `${freshness.fresh} of ${freshness.of} read in the last 24 h` : "data freshness UNKNOWN"}
-          </Typography>
-          <EstateMap estate={est} />
+          ) : <Typography sx={{ color: m3.onSurfaceVar }}>Compliance has not been evaluated yet.</Typography>}
         </Card>
       )}
-
-      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" } }}>
-        {block("Most widespread critical failures", "firewalls failing, on one scale", { href: q({ screen: "compliance", severity: "critical", result: "fail" }), label: "All" },
-          widespread.length > 0 ? (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-              {widespread.slice(0, 5).map((x) => (
-                <Box key={x.control_id} component="a" href={q({ screen: "compliance", q: x.control_id })} sx={{ textDecoration: "none", color: "inherit" }}>
-                  <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1.5, alignItems: "baseline", mb: 0.5 }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
-                      {(x.vendors ?? []).map((v) => (
-                        <Box key={v} component="span" sx={{ fontSize: 10.5, fontWeight: 700, px: 0.75, py: 0.1, borderRadius: "4px",
-                          bgcolor: v === "check_point" ? m3.cp : v === "palo_alto" ? m3.pan : m3.outline, color: "#fff", whiteSpace: "nowrap" }}>
-                          {v === "check_point" ? "CP" : v === "palo_alto" ? "PAN" : vendorDisplayName(v)}</Box>
-                      ))}
-                      <Typography sx={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={x.title}>{x.title}</Typography>
-                    </Box>
-                    <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar, whiteSpace: "nowrap" }}>
-                      <b style={{ color: m3.onSurface }}>{x.fail_count}</b> of {x.target_device_count} checked · {x.data_unavailable_count} no evidence</Typography>
-                  </Box>
-                  <Box sx={{ height: 10, borderRadius: 5, bgcolor: m3.sc, overflow: "hidden" }}>
-                    <Box sx={{ width: `${(100 * x.fail_count) / Math.max(1, ...widespread.slice(0, 5).map((w) => w.target_device_count))}%`, height: "100%", bgcolor: EXEC.red, borderRadius: 5 }} />
-                  </Box>
-                </Box>
-              ))}
-            </Box>
-          ) : <Typography sx={{ color: controls === null ? m3.onSurfaceVar : EXEC.green }}>{controls === null ? "Checks not read." : "No critical check is failing"}</Typography>)}
-        {/* One home for the version charts (post-release review 2026-10-18, 3.5): the Devices Fleet summary. Here one line. */}
-        {block("Software in service", null, null,
-          <Typography data-software-link sx={{ fontSize: 13.5, color: m3.onSurfaceVar }}>
-            Versions per vendor, as the devices report them{p.evidence_at ? ` · facts ${relativeAge(p.evidence_at)}` : ""}:{" "}
-            <Link href={q({ screen: "inventory" })} underline="hover">Devices › Fleet summary →</Link>
-          </Typography>)}
-      </Box>
-
-      <Box>
-        <Link component="button" underline="hover" onClick={() => setDetails((v) => !v)} sx={{ fontSize: 13 }}>
-          {details ? "Hide estate details" : "Estate details: policies installed · hardware models · data freshness per device"}
-        </Link>
-      </Box>
-      <Collapse in={details} unmountOnExit>
-        <EstateDetails data={data} />
-      </Collapse>
     </ScreenRoot>
   );
 }
