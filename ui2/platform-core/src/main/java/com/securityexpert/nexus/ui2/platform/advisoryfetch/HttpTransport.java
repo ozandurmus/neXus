@@ -84,7 +84,7 @@ public final class HttpTransport implements AdvisoryFetchRun.Outbound, AdvisoryF
 
     @Override
     public boolean document(String source, String runId, URI readFrom, byte[] body) {
-        HttpRequest request = HttpRequest.newBuilder(ingestBase.resolve("/internal/advisories/" + source))
+        HttpRequest request = HttpRequest.newBuilder(ingestBase.resolve(AdvisorySources.ingestPath(source)))
                 .timeout(Duration.ofSeconds(120))
                 .header(TOKEN_HEADER, token).header(URL_HEADER, readFrom.toString()).header(RUN_HEADER, runId)
                 .header("Content-Type", "application/octet-stream")
@@ -96,7 +96,7 @@ public final class HttpTransport implements AdvisoryFetchRun.Outbound, AdvisoryF
     public boolean complete(String source, String runId, int fetched, int failed, String reason) {
         String json = "{\"documents_fetched\":" + fetched + ",\"documents_failed\":" + failed + ",\"reason\":"
                 + (reason == null || !reason.matches("[A-Z0-9_]{1,40}") ? "null" : "\"" + reason + "\"") + "}";
-        HttpRequest request = HttpRequest.newBuilder(ingestBase.resolve("/internal/advisories/" + source + "/complete"))
+        HttpRequest request = HttpRequest.newBuilder(ingestBase.resolve(AdvisorySources.ingestPath(source) + "/complete"))
                 .timeout(Duration.ofSeconds(120))
                 .header(TOKEN_HEADER, token).header(RUN_HEADER, runId).header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8)).build();

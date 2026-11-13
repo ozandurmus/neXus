@@ -68,7 +68,25 @@ public final class AdvisorySources {
     public static final Source CHECKPOINT = new Source("checkpoint", "sc1.checkpoint.com", CHECKPOINT_JUMBO_PAGES,
             CHECKPOINT_JUMBO_PAGES.getFirst(), Map.of(CVELIST_HOST, List.of(CVELIST_PREFIX)));
 
-    public static final List<Source> ALL = List.of(PALOALTO, FORTINET, CISCO, CISA_KEV, CHECKPOINT);
+    
+
+    /**
+     * The Cisco End-of-Sale and End-of-Life bulletins for the lifecycle catalog (LIFECYCLE_CATALOG_SOURCES_CONTRACT.md
+     * section 3.1): the two product listing pages, then the English bulletin pages they link under the security collateral
+     * path. Same approved host as {@link #CISCO}; its documents go to the lifecycle ingest endpoint, not the advisory one.
+     */
+    public static final String CISCO_EOL_ASA_LISTING = "/c/en/us/products/security/asa-firepower-services/eos-eol-notice-listing.html";
+    public static final String CISCO_EOL_FIREPOWER_LISTING = "/c/en/us/products/security/firepower-ngfw/eos-eol-notice-listing.html";
+    public static final String CISCO_EOL_BULLETINS = "/c/en/us/products/collateral/security/";
+    public static final Source CISCO_EOL = new Source("cisco_eol", "www.cisco.com",
+            List.of(CISCO_EOL_ASA_LISTING, CISCO_EOL_FIREPOWER_LISTING, CISCO_EOL_BULLETINS), CISCO_EOL_ASA_LISTING);
+
+    public static final List<Source> ALL = List.of(PALOALTO, FORTINET, CISCO, CISA_KEV, CHECKPOINT, CISCO_EOL);
+
+    /** The service's internal ingest path for a source: lifecycle sources and advisory sources have their own endpoints. */
+    public static String ingestPath(String sourceKey) {
+        return (CISCO_EOL.key().equals(sourceKey) ? "/internal/lifecycle-sources/" : "/internal/advisories/") + sourceKey;
+    }
 
     private static final int MAX_ADDRESS_LENGTH = 300;
 

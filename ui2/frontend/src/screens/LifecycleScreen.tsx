@@ -8,11 +8,18 @@ import { LifecycleCatalogPanel, lifecycleError } from "./LifecycleCatalogPanel";
 import { LifecycleVulnerabilitiesPanel, VulnerabilityCell, VulnerabilityDetail, severityWord, advisorySourceName, vulnerabilityRank, vulnerabilitySummary } from "./LifecycleVulnerabilitiesPanel";
 import { m3 } from "../theme/m3Theme";
 
-const cards = [["devices", "Devices"], ["past_end_of_support", "Past end of support"], ["within_180_days", "Within 180 days"], ["within_365_days", "Within 365 days"], ["no_lifecycle_data", "No lifecycle data"], ["licenses_within_60_days", "Licenses within 60 days"], ["license_problems", "License problems"], ["live_patch_not_active", "Live Patch not active"], ["live_patch_missing", "No Live Patch package"]];
+const cards = [["devices", "Devices"], ["past_end_of_support", "Past end of support"], ["within_180_days", "Within 180 days"], ["within_365_days", "Within 365 days"], ["no_lifecycle_data", "No lifecycle data"], ["lifecycle_not_evaluated", "Lifecycle not evaluated"], ["lifecycle_needs_review", "Lifecycle needs review"], ["licenses_within_60_days", "Licenses within 60 days"], ["license_problems", "License problems"], ["live_patch_not_active", "Live Patch not active"], ["live_patch_missing", "No Live Patch package"]];
 const headings = ["Device / cluster", "Vendor", "Model", "Version", "Vulnerabilities", "Hardware end of support", "Software end of support", "Next milestone", "Nearest license expiry", "Risk", "Match basis", "Licenses", "Live Patch"];
 /** Positions in {@link lifecycleCells} that the table draws as more than their text. Vulnerabilities sits beside the version it judges. */
 const COL = { device: 0, vulnerabilities: 4, hardware: 5, software: 6, basis: 10, licenses: 11, livePatch: 12 } as const;
 const shown = (value: string | null | undefined) => value || "UNKNOWN";
+/** A support date, or why there is none; a vendor date given only as a month is shown as that month. */
+export function supportText(m: LifecycleDevice["hardware"]): string {
+  if (m.status === "NOT_EVALUATED" || m.status === "NEEDS_REVIEW") return m.status;
+  const date = m.catalog?.end_of_support;
+  if (!date) return "UNKNOWN";
+  return m.catalog?.month_only?.includes("end_of_support") ? date.slice(0, 7) : date;
+}
 /** Rows shown before "+N more" (post-release review 2026-10-18, 1.7): the page was 22,000 px as one table. */
 export const LIFECYCLE_PAGE = 50;
 /** Compact license state of the table: "Problem", else the nearest expiry, else Collected / Unknown / Not collected. */
@@ -38,8 +45,8 @@ function livePatchBase(d: LifecycleDevice): string {
 const notActive = (d: LifecycleDevice) => (d.live_patch?.ready ?? 0) > 0;
 export function lifecycleCells(d: LifecycleDevice): string[] {
   return [shown(d.hostname) + (d.cluster_member_ref ? ` · ${d.cluster_member_ref}` : ""), d.vendor, shown(d.model), shown(d.software_version), vulnerabilitySummary(d.vulnerabilities),
-    shown(d.hardware.catalog?.end_of_support), shown(d.software.catalog?.end_of_support),
-    d.next_milestone ? `${d.next_milestone.name}: ${d.next_milestone.date} (${d.next_milestone.days_remaining} days)` : "UNKNOWN",
+    supportText(d.hardware), supportText(d.software),
+    d.next_milestone ? `${d.next_milestone.name}: ${d.next_milestone.precision === "MONTH" ? d.next_milestone.date.slice(0, 7) : d.next_milestone.date} (${d.next_milestone.days_remaining} days)` : "UNKNOWN",
     d.nearest_license?.expiry ?? "UNKNOWN", d.risk,
     [d.hardware.basis ?? d.hardware.reason, d.software.basis ?? d.software.reason].filter(Boolean).join(" · "),
     licensesCell(d), livePatchCell(d)];
@@ -155,7 +162,7 @@ export function LifecycleScreen() {
   const rows = fleet.data?.devices ?? [];
   // Devices affected by an exploited advisory come first, then the other affected devices; the rest keep the server's order.
   const filtered = rows.filter(d => (vendor === "all" || d.vendor === vendor) && (risk === "all" || d.risk === risk)
-    && (missing === "all" || d.status === "NO_LIFECYCLE_DATA") && vulnerabilityFilters[vulnerability]?.[1](d) !== false
+    && (missing === "all" || d.status !== "MATCHED") && vulnerabilityFilters[vulnerability]?.[1](d) !== false
     && lifecycleCells(d).join(" ").toLowerCase().includes(search.toLowerCase()))
     .map((d, i) => [d, i] as const).sort((a, b) => vulnerabilityRank(a[0].vulnerabilities) - vulnerabilityRank(b[0].vulnerabilities) || a[1] - b[1]).map(([d]) => d);
   // Paged at 50 with "+N more" (1.7): every row stays reachable, the CSV export still takes the whole filtered set.
@@ -175,13 +182,13 @@ export function LifecycleScreen() {
       <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
         <TextField label="Search lifecycle" size="small" value={search} onChange={e => setSearch(e.target.value)} />
         <TextField label="Vendor" select size="small" value={vendor} onChange={e => setVendor(e.target.value)}><MenuItem value="all">All vendors</MenuItem>{[...new Set(rows.map(d => d.vendor))].sort().map(v => <MenuItem key={v} value={v}>{v}</MenuItem>)}</TextField>
-        <TextField label="Risk" select size="small" value={risk} onChange={e => setRisk(e.target.value)}>{["all", "EXPIRED", "HIGH", "MEDIUM", "LOW", "UNKNOWN"].map(r => <MenuItem key={r} value={r}>{r === "all" ? "All risks" : r}</MenuItem>)}</TextField>
-        <TextField label="Lifecycle data" select size="small" value={missing} onChange={e => setMissing(e.target.value)}><MenuItem value="all">All devices</MenuItem><MenuItem value="missing">No lifecycle data</MenuItem></TextField>
+        <TextField label="Risk" select size="small" value={risk} onChange={e => setRisk(e.target.value)}>{["all", "EXPIRED", "HIGH", "MEDIUM", "LOW", "UNKNOWN", "NOT_EVALUATED"].map(r => <MenuItem key={r} value={r}>{r === "all" ? "All risks" : r}</MenuItem>)}</TextField>
+        <TextField label="Lifecycle data" select size="small" value={missing} onChange={e => setMissing(e.target.value)}><MenuItem value="all">All devices</MenuItem><MenuItem value="missing">Not matched (no data, not evaluated, needs review)</MenuItem></TextField>
         <TextField label="Vulnerability state" select size="small" value={vulnerability} sx={{ minWidth: 170 }} onChange={e => setVulnerability(e.target.value)}>{Object.entries(vulnerabilityFilters).map(([key, [label]]) => <MenuItem key={key} value={key}>{label}</MenuItem>)}</TextField>
         <M3Button emphasis="tonal" disabled={!filtered.length} onClick={() => downloadText("lifecycle.csv", lifecycleCsv(filtered))}>Export lifecycle CSV</M3Button>
         <M3Button emphasis="tonal" onClick={fleet.refresh}>Refresh</M3Button>
       </Stack>
-      <Typography variant="caption">Risk uses the earliest known hardware/software end of support: EXPIRED before today, HIGH under 180 days, MEDIUM under 365 days. LOW requires both support dates; missing dates remain UNKNOWN. End of sale and engineering are separate milestones.</Typography>
+      <Typography variant="caption">Risk uses the earliest known hardware/software end of support: EXPIRED before today, HIGH under 180 days, MEDIUM under 365 days. LOW requires both support dates; missing dates remain UNKNOWN. NOT_EVALUATED: no current vendor source or catalog row to compare with (see the Catalog tab). End of sale and engineering are separate milestones.</Typography>
       <Typography variant="caption">Vulnerabilities compares each device's software version with the vendor's security advisories. Affected: an advisory names this version (by version alone; exposure depends on configuration). Exploited: the advisory is listed in the CISA Known Exploited Vulnerabilities catalog. "None affected" is only said with what was compared; a device that was not evaluated is not known to be safe. Advisory sources turn amber after 7 days and red after 30, when their devices stop being evaluated.</Typography>
       <TableContainer><Table size="small" aria-label="Fleet lifecycle"><TableHead><TableRow>{headings.map(h => <TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead><TableBody>
         {visible.map(d => <Fragment key={d.device_id}><TableRow>{lifecycleCells(d).map((cell, i) => <TableCell key={i}>
@@ -194,7 +201,7 @@ export function LifecycleScreen() {
             End of sale: {shown((i === COL.hardware ? d.hardware : d.software).catalog?.end_of_sale)}
             {" · "}End of engineering: {shown((i === COL.hardware ? d.hardware : d.software).catalog?.end_of_engineering)}
           </Typography>}
-          {i === COL.basis && d.status === "NO_LIFECYCLE_DATA" && <Typography variant="caption" display="block">NO_LIFECYCLE_DATA</Typography>}
+          {i === COL.basis && d.status !== "MATCHED" && <Typography variant="caption" display="block">{d.status}</Typography>}
         </TableCell>)}</TableRow>
         {open.has(d.device_id) && <TableRow><TableCell colSpan={headings.length}><LifecycleDetail d={d} /></TableCell></TableRow>}</Fragment>)}
         {!filtered.length && <TableRow><TableCell colSpan={headings.length}>No devices match these filters</TableCell></TableRow>}
@@ -212,7 +219,8 @@ export function LifecycleScreen() {
 /** The one lifecycle sentence of a device: its risk word, then the support dates and licence expiry that explain it. */
 export function lifecycleSentence(data: LifecycleDevice | null | undefined, error: string | null): string {
   return `${error ? "Unavailable" : data?.risk ?? "UNKNOWN"}`
-    + `${data?.status === "NO_LIFECYCLE_DATA" ? " (no lifecycle data imported)" : ""}`
+    + `${data?.status === "NO_LIFECYCLE_DATA" ? " (no lifecycle data imported)" : data?.status === "NOT_EVALUATED" ? " (lifecycle not evaluated)"
+      : data?.status === "NEEDS_REVIEW" ? " (lifecycle entry needs review)" : ""}`
     + `${data?.hardware?.catalog?.end_of_support ? ` · Hardware support: ${data.hardware.catalog.end_of_support}` : ""}`
     + `${data?.software?.catalog?.end_of_support ? ` · Software support: ${data.software.catalog.end_of_support}` : ""}`
     + `${data?.nearest_license?.expiry ? ` · License expiry: ${data.nearest_license.expiry}` : ""}`

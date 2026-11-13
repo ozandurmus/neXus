@@ -51,6 +51,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("PUT /api/v2/lifecycle/catalog/*", ActionRegistry.LIFECYCLE_CATALOG_WRITE),
             Map.entry("POST /api/v2/lifecycle/catalog/*/delete", ActionRegistry.LIFECYCLE_CATALOG_WRITE),
             Map.entry("POST /api/v2/lifecycle/catalog/import", ActionRegistry.LIFECYCLE_CATALOG_WRITE),
+            Map.entry("GET /api/v2/lifecycle/catalog-sources", ActionRegistry.DEVICE_READ),
+            Map.entry("POST /api/v2/lifecycle/catalog/vendor-page", ActionRegistry.LIFECYCLE_CATALOG_WRITE),
             Map.entry("GET /api/v2/job-window", ActionRegistry.DEVICE_READ),
             // PO record 2026-11-03 D-8 (path analysis A3): topology read, overrides, rebuild.
             Map.entry("GET /api/v2/topology", ActionRegistry.TOPOLOGY_READ),
@@ -394,6 +396,11 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
         for (String source : com.securityexpert.nexus.ui2.service.advisorystore.AdvisorySources.KEYS) {
             routes.add("POST /internal/advisories/" + source);
             routes.add("POST /internal/advisories/" + source + "/complete");
+        }
+        // Lifecycle-source ingest (LIFECYCLE_CATALOG_SOURCES_CONTRACT.md section 3.1): the same token and port.
+        for (String source : com.securityexpert.nexus.ui2.service.lifecyclesource.LifecycleSources.FEED_KEYS) {
+            routes.add("POST /internal/lifecycle-sources/" + source);
+            routes.add("POST /internal/lifecycle-sources/" + source + "/complete");
         }
         return Set.copyOf(routes);
     }

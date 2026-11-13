@@ -3,6 +3,7 @@ import { Alert, Box, Button, MenuItem, Stack, Table, TableBody, TableCell, Table
 import { getLifecycleCatalog, saveLifecycleCatalog, importLifecycleCatalog, deleteLifecycleCatalog, type ApiError, type LifecycleCatalogInput } from "../auth/adminApi";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { M3Button } from "../shell/M3Widgets";
+import { LifecycleSourcesPanel } from "./LifecycleSourcesPanel";
 
 const vendors = ["CHECKPOINT", "PALOALTO", "FORTINET", "BLUECOAT", "INFOBLOX", "RADWARE", "CISCO_ASA", "PULSE_SECURE"];
 const empty = (): LifecycleCatalogInput => ({ vendor: "CHECKPOINT", kind: "HARDWARE", product: "", end_of_sale: null, end_of_support: null, end_of_engineering: null, note: "" });
@@ -29,7 +30,9 @@ export function LifecycleCatalogPanel({ onChanged }: { onChanged: () => void }) 
   if (catalog.error) return <Alert severity="error">{catalog.error}<M3Button emphasis="tonal" onClick={catalog.refresh}>Retry</M3Button></Alert>;
   if (!catalog.data) return <Typography>Loading catalog…</Typography>;
   return <Stack spacing={2}>
-    <Typography variant="body2">The catalog starts empty. Enter vendor-published milestones and their source; blank dates remain unknown. Imports replace the same vendor, kind and product atomically. An invalid file changes nothing.</Typography>
+    <LifecycleSourcesPanel canManage={catalog.data.can_manage} onChanged={onChanged} />
+    <Typography variant="subtitle1">Operator catalog</Typography>
+    <Typography variant="body2">Rows entered here are used before any vendor entry for the same product (for example a contracted extension, or Fortinet dates from the support portal). Enter vendor-published milestones and their source; blank dates remain unknown. A row older than 180 days is shown as NOT_EVALUATED until it is saved again. Imports replace the same vendor, kind and product atomically. An invalid file changes nothing.</Typography>
     {error && <Alert severity="error">{error}</Alert>}{message && <Alert severity="success">{message}</Alert>}
     {catalog.data.can_manage && <>
       <Stack direction="row" spacing={2} alignItems="center">
@@ -40,7 +43,7 @@ export function LifecycleCatalogPanel({ onChanged }: { onChanged: () => void }) 
           await mutate(async () => importLifecycleCatalog(await file.text()));
         }} /></Box>
       </Stack>
-      <Typography variant="caption">Columns: vendor,kind,product,end_of_sale,end_of_support,end_of_engineering,note. Dates: YYYY-MM-DD.</Typography>
+      <Typography variant="caption">Columns: vendor,kind,product,end_of_sale,end_of_support,end_of_engineering,note. Dates: YYYY-MM-DD. Product forms: Check Point 6600 or R81.20; Palo Alto PA-3220 or 11.1; Cisco FPR-4115 or 9.18; Fortinet FortiGate-600E, FortiOS 7.4 or FortiManager 7.4.</Typography>
       <Box component="form" onSubmit={e => { e.preventDefault(); void mutate(async () => {
         await saveLifecycleCatalog(entry, editing); setEntry(empty()); setEditing(undefined);
       }); }}>

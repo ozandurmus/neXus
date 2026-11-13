@@ -11,7 +11,7 @@ import type { LifecycleAdvisory, LifecycleAdvisoryDevice, LifecycleAdvisorySourc
 
 vi.mock("../src/auth/adminApi", async importOriginal => ({
   ...await importOriginal<typeof import("../src/auth/adminApi")>(),
-  getLifecycle: vi.fn(), getDeviceLifecycle: vi.fn(), getLifecycleCatalog: vi.fn(),
+  getLifecycle: vi.fn(), getDeviceLifecycle: vi.fn(), getLifecycleCatalog: vi.fn(), getLifecycleCatalogSources: vi.fn(),
   getLifecycleAdvisories: vi.fn(), getLifecycleAdvisory: vi.fn(), getLifecycleAdvisorySources: vi.fn(),
 }));
 
@@ -72,6 +72,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   loadFleet(fleet, { vuln_devices_exploited: 1, vuln_devices_affected: 2, vuln_devices_not_evaluated: 3, vuln_oldest_source_age_days: 9 });
   vi.mocked(api.getLifecycleCatalog).mockResolvedValue({ can_manage: false, entries: [] });
+  vi.mocked(api.getLifecycleCatalogSources).mockResolvedValue({ feeds: [], page_forms: [], uploads: [], needs_review: [], vendor_entries: 0, hand_loaded_fresh_days: 180 });
   loadTab();
 });
 

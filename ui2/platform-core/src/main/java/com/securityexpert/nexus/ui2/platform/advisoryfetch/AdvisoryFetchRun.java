@@ -78,6 +78,7 @@ public final class AdvisoryFetchRun {
             reason = switch (source.key()) {
                 case "fortinet" -> followUps(source, runId, FollowUps.fortinet(start.body()), false, counter);
                 case "cisco" -> followUps(source, runId, FollowUps.cisco(start.body(), ciscoSince), true, counter);
+                case "cisco_eol" -> ciscoEol(source, runId, start.body(), counter);
                 default -> handOver(source, runId, source.startUri(), start.body(), counter);
             };
         }
@@ -89,6 +90,25 @@ public final class AdvisoryFetchRun {
         log.accept("[ADVISORY_FETCH] source=" + result.source() + " fetched=" + result.fetched() + " failed=" + result.failed()
                 + " handed_over=" + result.handedOver() + " dropped=" + result.dropped() + " reason=" + (reason == null ? "none" : reason));
         return result;
+    }
+
+    /**
+     * The lifecycle bulletins (LIFECYCLE_CATALOG_SOURCES_CONTRACT.md section 3.1): the second listing page, then every
+     * bulletin either listing links. A listing that fails stops nothing but is counted; no bulletin named at all is a
+     * reason (the listing layout changed), so the source does not look fresh with nothing behind it.
+     */
+    private String ciscoEol(AdvisorySources.Source source, String runId, byte[] asaListing, Counter counter) {
+        URI second = URI.create("https://" + source.host() + AdvisorySources.CISCO_EOL_FIREPOWER_LISTING);
+        Fetched firepower = outbound.get(source, second);
+        if (firepower.succeeded()) {
+            counter.fetched++;
+        } else {
+            counter.failed++;
+            if (TLS_VALIDATION_FAILED.equals(firepower.failure())) return TLS_VALIDATION_FAILED;
+        }
+        List<URI> bulletins = FollowUps.ciscoEol(java.util.Arrays.asList(asaListing, firepower.body()));
+        if (bulletins.isEmpty()) return "NO_DOCUMENTS_NAMED";
+        return followUps(source, runId, bulletins, false, counter);
     }
 
     /** Fetches each named document and hands it on; returns the reason that stopped the source, or null. */
