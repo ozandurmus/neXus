@@ -28,14 +28,17 @@ export const ADVISORY_PAGE = 50;
 /** The sentence every affected verdict carries (contract rule 6): once per list, not per row. */
 export const AFFECTED_BY_VERSION = "Affected by version; exposure depends on configuration.";
 
-const SOURCE_NAMES = new Map([["paloalto", "Palo Alto Networks"], ["fortinet", "Fortinet"], ["cisco", "Cisco"], ["cisa_kev", "CISA Known Exploited Vulnerabilities"]]);
+const SOURCE_NAMES = new Map([["paloalto", "Palo Alto Networks"], ["fortinet", "Fortinet"], ["cisco", "Cisco"], ["cisa_kev", "CISA Known Exploited Vulnerabilities"],
+  ["checkpoint", "Check Point"]]);
 export const advisorySourceName = (key: string | null | undefined) => (key && SOURCE_NAMES.get(key)) || key || "UNKNOWN";
 const SEVERITY_WORDS = new Map([["CRITICAL", "Critical"], ["HIGH", "High"], ["MEDIUM", "Medium"], ["LOW", "Low"], ["NONE", "None"], ["UNKNOWN", "Unknown"]]);
 export const severityWord = (severity: string | null | undefined) => (severity && SEVERITY_WORDS.get(severity)) || severity || "Unknown";
 const REASON_WORDS = new Map([
   ["SOURCE_NEVER_LOADED", "advisory source never loaded"], ["SOURCE_STALE", "advisory source older than 30 days"],
   ["NO_COMPARATOR", "no version comparison for this product"], ["VERSION_MISSING", "no software version stored"],
-  ["VERSION_UNPARSED", "version form not recognised"]]);
+  ["VERSION_UNPARSED", "version form not recognised"], ["JUMBO_TAKE_MISSING", "no Jumbo Hotfix take stored"],
+  ["JUMBO_TRAIN_MISMATCH", "the stored Jumbo take is for another version"], ["SPARK_NOT_COVERED", "Quantum Spark firmware has no advisory source yet"],
+  ["TRAIN_NOT_COVERED", "no Check Point resolved-issues source for this version"]]);
 const reasonWord = (reason: string | null | undefined) => (reason ? REASON_WORDS.get(reason) ?? reason : null);
 const BASIS_SENTENCES = new Map([
   ["IN_RANGE", "The version lies inside the affected range."],
@@ -56,7 +59,16 @@ const BASIS_SENTENCES = new Map([
   ["BELOW_HOTFIX_UNAFFECTED", "The version is below the hotfix from which the vendor names the release affected."],
   ["PRODUCT_NOT_NAMED", "The advisory does not name this product."],
   ["TRAIN_NOT_NAMED", "The advisory does not name this release line."],
-  ["EVALUATION_ERROR", "The comparison stopped on an internal fault; there is no verdict."]]);
+  ["EVALUATION_ERROR", "The comparison stopped on an internal fault; there is no verdict."],
+  ["JUMBO_FIX_INCLUDED", "The device's Jumbo take is at or above the take whose resolved issues list this CVE."],
+  ["ABOVE_AFFECTED_TAKE", "The device's Jumbo take is above the last take the vendor names as affected."],
+  ["FIX_RULE_UNCONFIRMED", "Pending confirmation: the vendor's resolved-issues list names a later Jumbo take as the fix; the vendor did not say this take is affected."],
+  ["MULTIPLE_FIX_TAKES", "Pending confirmation: the resolved-issues list names this CVE in more than one Jumbo take; the device is below the highest."],
+  ["FIX_STATEMENT_UNCLEAR", "Pending confirmation: the resolved-issues list mentions this CVE without saying it was resolved."],
+  ["NO_FIX_TAKE_PUBLISHED", "The vendor names this version as affected and no Jumbo take is listed as resolving it."],
+  ["PRODUCT_SUBSET_UNKNOWN", "The advisory names only some gateways (for example Maestro or scalable platforms); neXus cannot tell whether this one is among them."]]);
+/** Bases of a verdict that waits for a fix rule confirmation (PO decision 2026-11-10): shown as pending, not as "could not be judged". */
+export const PENDING_BASES = new Set(["FIX_RULE_UNCONFIRMED", "MULTIPLE_FIX_TAKES", "FIX_STATEMENT_UNCLEAR"]);
 /** The rule that decided, as a sentence; a code word this build does not know is shown as it came. */
 export const basisSentence = (code: string | null | undefined) => (code ? BASIS_SENTENCES.get(code) ?? code : "UNKNOWN");
 
@@ -81,7 +93,8 @@ export function vulnerabilityBasis(v: LifecycleVulnerabilities | null | undefine
  */
 export function vulnerabilitySummary(v: LifecycleVulnerabilities | null | undefined): string {
   if (!v) return "No vulnerability data";
-  const notJudged = count(v.not_evaluable) ? ` · ${count(v.not_evaluable)} could not be judged` : "";
+  const notJudged = (count(v.not_evaluable) ? ` · ${count(v.not_evaluable)} could not be judged` : "")
+    + (count(v.pending) ? ` · ${count(v.pending)} pending confirmation` : "");
   const reason = reasonWord(v.reason);
   switch (v.state) {
     case "EVALUATED":
@@ -89,7 +102,7 @@ export function vulnerabilitySummary(v: LifecycleVulnerabilities | null | undefi
         ? `${count(v.affected)} affected${count(v.affected_exploited) ? ` · ${count(v.affected_exploited)} exploited` : ""}${notJudged}`
         : `None affected${notJudged}`;
     case "NOT_EVALUATED": return `Not evaluated${reason ? ` · ${reason}` : ""}`;
-    case "NOT_COVERED": return "No advisory source for this product";
+    case "NOT_COVERED": return `No advisory source for this product${reason && v.reason !== "NO_COMPARATOR" ? ` · ${reason}` : ""}`;
     case "VERSION_UNKNOWN": return `Version not known${reason ? ` · ${reason}` : ""}`;
     default: return `Not evaluated · ${String(v.state ?? "UNKNOWN")}`;
   }
@@ -107,7 +120,8 @@ const caption = (text: string, color: string = "text.secondary") => <Typography 
 export function VulnerabilityCell({ v }: { v: LifecycleVulnerabilities | null | undefined }) {
   if (!v) return <Typography variant="body2" component="span" sx={muted}>No vulnerability data</Typography>;
   const reason = reasonWord(v.reason);
-  const notJudged = count(v.not_evaluable) ? `${count(v.not_evaluable)} could not be judged` : null;
+  const notJudged = [count(v.not_evaluable) ? `${count(v.not_evaluable)} could not be judged` : null,
+    count(v.pending) ? `${count(v.pending)} pending confirmation` : null].filter(Boolean).join(" · ") || null;
   if (v.state === "EVALUATED" && count(v.affected)) {
     const notes = [count(v.affected_critical_high) ? `${count(v.affected_critical_high)} critical or high` : null, notJudged].filter(Boolean).join(" · ");
     return <Box data-vulnerability="affected" sx={{ minWidth: 180 }}><PillRow>
@@ -119,7 +133,10 @@ export function VulnerabilityCell({ v }: { v: LifecycleVulnerabilities | null | 
     <Typography variant="body2" component="span">None affected</Typography>
     {notJudged && caption(notJudged, m3.warningInk)}{caption(vulnerabilityBasis(v))}
   </Box>;
-  if (v.state === "NOT_COVERED") return <Typography variant="body2" component="span" sx={muted} data-vulnerability="not-covered">No advisory source for this product</Typography>;
+  if (v.state === "NOT_COVERED") return <Box data-vulnerability="not-covered">
+    <Typography variant="body2" component="span" sx={muted}>No advisory source for this product</Typography>
+    {reason && v.reason !== "NO_COMPARATOR" && caption(reason)}
+  </Box>;
   return <Box data-vulnerability="not-evaluated">
     <StatusPill tone="unknown" word={v.state === "VERSION_UNKNOWN" ? "Version not known" : "Not evaluated"} dense fact="vulnerability:not-evaluated" />
     {caption(reason ?? (v.state === "VERSION_UNKNOWN" || v.state === "NOT_EVALUATED" ? "reason not reported" : String(v.state)))}
@@ -135,7 +152,8 @@ export function VulnerabilityDetail({ v }: { v: LifecycleVulnerabilities }) {
     count(v.affected_critical_high) ? `${count(v.affected_critical_high)} critical or high` : null,
     count(v.affected) && v.worst_severity ? `worst severity ${severityWord(v.worst_severity)}` : null,
     count(v.fixed) ? `${count(v.fixed)} fixed in this version` : null,
-    count(v.not_evaluable) ? `${count(v.not_evaluable)} could not be judged` : null].filter(Boolean).join(" · ");
+    count(v.not_evaluable) ? `${count(v.not_evaluable)} could not be judged` : null,
+    count(v.pending) ? `${count(v.pending)} pending confirmation of a proposed fix rule` : null].filter(Boolean).join(" · ");
   return <Box>
     <Typography variant="subtitle2">Vulnerabilities</Typography>
     <Typography variant="caption" display="block">{evaluated ? counts : `${vulnerabilitySummary(v)}. This device is not known to be unaffected.`}</Typography>
@@ -168,6 +186,7 @@ function AdvisoryDevices({ advisory }: { advisory: LifecycleAdvisory }) {
   if (!devices.length) return <Typography variant="body2">No device has a verdict for this advisory.</Typography>;
   const visible = all ? devices : devices.slice(0, ADVISORY_PAGE);
   const verdict = (d: LifecycleAdvisoryDevice) => d.verdict === "AFFECTED" ? <StatusPill tone={advisory.exploited ? "bad" : "warn"} word="Affected" dense />
+    : d.verdict === "NOT_EVALUABLE" && PENDING_BASES.has(d.basis) ? <StatusPill tone="unknown" word="Pending confirmation" dense fact="advisory:pending" />
     : d.verdict === "NOT_EVALUABLE" ? <StatusPill tone="unknown" word="Could not be judged" dense />
     : <Typography variant="body2" component="span">{VERDICTS.get(d.verdict) ?? d.verdict}</Typography>;
   return <Stack spacing={1} role="group" aria-label={`Devices of ${advisory.advisory_id}`}>
@@ -177,7 +196,8 @@ function AdvisoryDevices({ advisory }: { advisory: LifecycleAdvisory }) {
       <TableBody>{visible.map(d => <TableRow key={d.device_id}>
         <TableCell><a href={`?screen=inventory&device_id=${encodeURIComponent(d.device_id)}`}>{d.hostname || "UNKNOWN"}</a></TableCell>
         <TableCell>{d.vendor}</TableCell><TableCell>{d.version || "UNKNOWN"}</TableCell><TableCell>{verdict(d)}</TableCell>
-        <TableCell>{basisSentence(d.basis)}</TableCell><TableCell>{d.fixed_text || "—"}</TableCell>
+        <TableCell>{basisSentence(d.basis)}{d.live_patch && caption(`Live Patch ${d.live_patch.patch}: ${d.live_patch.status} (shown only; not used in the verdict)`)}</TableCell>
+        <TableCell>{d.fixed_text || "—"}</TableCell>
       </TableRow>)}</TableBody>
     </Table>
     {devices.length > visible.length && <Box><M3Button emphasis="text" onClick={() => setAll(true)}>Show all {devices.length} devices</M3Button></Box>}
@@ -225,15 +245,18 @@ function SourcesTable({ sources }: { sources: LifecycleAdvisorySource[] }) {
 
 const headings = ["Severity", "Advisory", "Exploited", "Devices", "Published", "Vendor page"];
 const SEVERITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "NONE", "UNKNOWN"];
-const judgedDevices = (a: LifecycleAdvisory) => count(a.devices?.affected) + count(a.devices?.fixed) + count(a.devices?.not_affected) + count(a.devices?.not_evaluable);
+const judgedDevices = (a: LifecycleAdvisory) => count(a.devices?.affected) + count(a.devices?.fixed) + count(a.devices?.not_affected)
+  + count(a.devices?.not_evaluable) + count(a.devices?.pending);
 
 function AdvisoryRow({ a, open, onToggle, exploitedKnown }: { a: LifecycleAdvisory; open: boolean; onToggle: () => void; exploitedKnown: boolean }) {
   const affected = count(a.devices?.affected);
   const notJudged = count(a.devices?.not_evaluable);
+  const pending = count(a.devices?.pending);
   const link = vendorLink(a.source_url);
   const cves = (a.cve_ids ?? []).filter(cve => !a.advisory_id.includes(cve));
   const others = [count(a.devices?.fixed) ? `${count(a.devices?.fixed)} fixed` : null, count(a.devices?.not_affected) ? `${count(a.devices?.not_affected)} not affected` : null,
-    affected && notJudged ? `${notJudged} could not be judged` : null].filter(Boolean).join(" · ");
+    affected && notJudged ? `${notJudged} could not be judged` : null,
+    (affected || notJudged) && pending ? `${pending} pending confirmation` : null].filter(Boolean).join(" · ");
   const strong = a.severity === "CRITICAL" || a.severity === "HIGH";
   return <Fragment>
     <TableRow data-advisory={a.advisory_id}>
@@ -254,6 +277,7 @@ function AdvisoryRow({ a, open, onToggle, exploitedKnown }: { a: LifecycleAdviso
       <TableCell>
         {affected ? <StatusPill tone="warn" word={`${affected} affected`} dense fact="advisory:affected" />
           : notJudged ? <StatusPill tone="unknown" word={`${notJudged} could not be judged`} dense />
+          : pending ? <StatusPill tone="unknown" word={`${pending} pending confirmation`} dense fact="advisory:pending" />
           : <Typography variant="body2" component="span" sx={muted}>None affected</Typography>}
         {others && caption(others)}
       </TableCell>

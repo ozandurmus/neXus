@@ -12,7 +12,8 @@ import java.util.TreeSet;
 /**
  * The stored JSON form of a train's rules (contract section 5, column {@code rule}). The shape is written by hand and versioned:
  * {@code {"v":1,"rules":[{"k":"whole","status":"AFFECTED"}, {"k":"range","status":...,"from":...,"to":...,"toInclusive":...,
- * "changes":[{"at":...,"status":...}]}, {"k":"exact","status":...,"versions":[...]}]}}. No polymorphic typing is used, so the
+ * "changes":[{"at":...,"status":...}]}, {"k":"exact","status":...,"versions":[...]}, {"k":"jumbofix","status":"UNAFFECTED",
+ * "from":...,"exclusive":...,"basis":...}]}}. No polymorphic typing is used, so the
  * stored text can never select a class. Reading anything this codec did not write yields an empty list and never throws.
  */
 final class AdvisoryRuleCodec {
@@ -49,6 +50,13 @@ final class AdvisoryRuleCodec {
                         cn.put("at", c.at());
                         cn.put("status", c.status().name());
                     }
+                }
+                case AdvisoryModel.JumboFix j -> {
+                    n.put("k", "jumbofix");
+                    n.put("status", AdvisoryModel.Status.UNAFFECTED.name());
+                    n.put("from", j.clearFrom());
+                    n.put("exclusive", j.clearExclusive());
+                    n.put("basis", j.pendingBasis());
                 }
                 case AdvisoryModel.ExactVersions e -> {
                     n.put("k", "exact");
@@ -121,6 +129,15 @@ final class AdvisoryRuleCodec {
                     changes.add(new AdvisoryModel.ChangePoint(at, cs));
                 }
                 return new AdvisoryModel.Range(status, from, to, n.get("toInclusive").asBoolean(), changes);
+            }
+            case "jumbofix": {
+                String from = optText(n, "from");
+                String basis = text(n.get("basis"));
+                if (from == null && !n.path("from").isNull() || !n.path("exclusive").isBoolean() || basis == null
+                        || !basis.matches("[A-Z0-9_]{1,40}") || status != AdvisoryModel.Status.UNAFFECTED) {
+                    return null;
+                }
+                return new AdvisoryModel.JumboFix(from, n.get("exclusive").asBoolean(), basis);
             }
             case "exact": {
                 JsonNode vs = n.get("versions");

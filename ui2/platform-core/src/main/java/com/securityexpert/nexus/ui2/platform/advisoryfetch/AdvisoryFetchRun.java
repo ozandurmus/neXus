@@ -67,8 +67,10 @@ public final class AdvisoryFetchRun {
     public SourceResult run(AdvisorySources.Source source, String runId) {
         Counter counter = new Counter();
         String reason = null;
-        Fetched start = outbound.get(source, source.startUri());
-        if (!start.succeeded()) {
+        Fetched start = "checkpoint".equals(source.key()) ? null : outbound.get(source, source.startUri());
+        if (start == null) {
+            reason = checkpoint(source, runId, counter);
+        } else if (!start.succeeded()) {
             counter.failed++;
             reason = start.failure();
         } else {
@@ -114,6 +116,38 @@ public final class AdvisoryFetchRun {
             }
         }
         return null;
+    }
+
+    /**
+     * Check Point (amendment A-2026-11-13): every resolved-issues page is handed over first, so the ingest holds the
+     * Jumbo statements of this run before the CVE records that are joined with them arrive; then the CVE record of every
+     * CVE id the pages name. A page that fails is counted and the others go on; a certificate failure stops the source.
+     */
+    private String checkpoint(AdvisorySources.Source source, String runId, Counter counter) {
+        List<byte[]> pages = new java.util.ArrayList<>();
+        for (String path : AdvisorySources.CHECKPOINT_JUMBO_PAGES) {
+            URI address = URI.create("https://" + source.host() + path);
+            Fetched fetched = outbound.get(source, address);
+            if (!fetched.succeeded()) {
+                counter.failed++;
+                if (TLS_VALIDATION_FAILED.equals(fetched.failure())) {
+                    return TLS_VALIDATION_FAILED;
+                }
+                continue;
+            }
+            counter.fetched++;
+            byte[] body = fetched.body();
+            String refused = handOver(source, runId, address, body, counter);
+            if (refused != null) {
+                return refused;
+            }
+            pages.add(body);
+        }
+        if (pages.isEmpty()) {
+            return "NO_PAGE_READ";
+        }
+        List<URI> records = FollowUps.checkpointRecords(pages);
+        return records.isEmpty() ? "NO_DOCUMENTS_NAMED" : followUps(source, runId, records, false, counter);
     }
 
     private String handOver(AdvisorySources.Source source, String runId, URI readFrom, byte[] body, Counter counter) {

@@ -57,7 +57,7 @@ public final class LifecycleService {
         var loaded = load();
         var all = devices.listAll();
         var rows = all.stream().map(d -> LifecycleProjection.device(d, entries, inventory.get(d.deviceId()), today, loaded.of(d.deviceId()))).toList();
-        addVulnerabilities(all, rows, inventory);
+        addVulnerabilities(all, rows, inventory, loaded);
         return rows;
     }
 
@@ -66,13 +66,17 @@ public final class LifecycleService {
      * loaded once for the whole fleet. Model and version are the stored inventory values the rest of this payload shows.
      */
     private void addVulnerabilities(List<com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord> all,
-            List<Map<String, Object>> rows, Map<String, LifecycleCatalogRepository.StoredInventory> inventory) {
+            List<Map<String, Object>> rows, Map<String, LifecycleCatalogRepository.StoredInventory> inventory, Loaded loaded) {
         if (advisories == null) return;
         try {
             var facts = all.stream().map(d -> {
                 var inv = inventory.get(d.deviceId());
+                var platform = loaded.facts().get(d.deviceId());
+                // Check Point is compared by its software version and Jumbo take (amendment A-2026-11-13).
+                String version = AdvisoryReadService.comparedVersion(d.vendorHint(), inv == null ? null : inv.version(),
+                        platform == null ? null : platform.hotfixLevel().orElse(null));
                 return new AdvisoryEstate.DeviceFacts(d.deviceId(), d.vendorHint(), d.role(), inv == null ? null : inv.model(),
-                        inv == null ? null : inv.version(), d.observedHostname().orElse(null));
+                        version, d.observedHostname().orElse(null));
             }).toList();
             var byDevice = advisories.vulnerabilities(facts, Instant.now());
             for (var row : rows) row.put("vulnerabilities", byDevice.get((String) row.get("device_id")));
@@ -89,7 +93,7 @@ public final class LifecycleService {
         return devices.listAll().stream().filter(d -> d.deviceId().equals(id)).findFirst()
                 .map(d -> {
                     var row = LifecycleProjection.device(d, entries, inventory.get(id), LocalDate.now(ZoneOffset.UTC), loaded.of(id));
-                    addVulnerabilities(List.of(d), List.of(row), inventory);
+                    addVulnerabilities(List.of(d), List.of(row), inventory, loaded);
                     return row;
                 });
     }

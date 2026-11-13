@@ -36,7 +36,7 @@ class MachinePortConfigurationTest {
         String[] allowed = {"/internal/machine-session", "/internal/advisories/paloalto", "/internal/advisories/fortinet",
                 "/internal/advisories/cisco", "/internal/advisories/cisa_kev", "/internal/advisories/paloalto/complete",
                 "/internal/advisories/cisa_kev/complete"};
-        String[] refused = {"/internal", "/internal/", "/internal/advisories", "/internal/advisories/", "/internal/advisories/checkpoint",
+        String[] refused = {"/internal", "/internal/", "/internal/advisories", "/internal/advisories/", "/internal/advisories/infoblox",
                 "/internal/advisories/paloalto/complete/x", "/internal/advisories/paloalto/other", "/internal/advisories/paloalto/",
                 "/internal/advisories/../machine-session", "/internal/other", "/login", "/api/v2/lifecycle/advisories"};
         for (String path : allowed) {

@@ -53,14 +53,15 @@ public final class AdvisoryEstate {
         public boolean usable() { return !"NEVER".equals(ageState) && !"RED".equals(ageState); }
     }
 
-    public record Counts(int affected, int fixed, int notAffected, int notEvaluable) { }
+    /** {@code pending}: not evaluable because a fix rule waits for confirmation (kept out of the other counts). */
+    public record Counts(int affected, int fixed, int notAffected, int notEvaluable, int pending) { }
 
     /** One device's verdict on one advisory; never {@code NOT_LISTED}. */
     public record DeviceVerdict(DeviceFacts device, VerdictKind kind, String basis, String fixedText) { }
 
     /** The Vulnerabilities part of one device's Lifecycle row (contract section 7 and 8). */
     public record DeviceAssessment(String state, String reason, String productKey, int affected, int affectedExploited,
-            int affectedCriticalHigh, int notEvaluable, int fixed, String worstSeverity, SourceState compared) { }
+            int affectedCriticalHigh, int notEvaluable, int fixed, String worstSeverity, SourceState compared, int pending) { }
 
     /** One advisory with its exploited flag and the verdicts of the estate's devices. */
     public record AdvisoryRow(StoredAdvisory advisory, boolean exploited, LocalDate exploitedSince, Counts counts,
@@ -143,6 +144,13 @@ public final class AdvisoryEstate {
                 continue;
             }
             String product = productKey.get();
+            // Amendment A-2026-11-13: a product with a source can still leave some of its devices without one (a Gaia train
+            // whose resolved-issues page is not read, a Quantum Spark firmware).
+            Optional<String> notCovered = device.version() == null ? Optional.empty() : comparator.get().notCoveredReason(device.version());
+            if (notCovered.isPresent()) {
+                assessments.put(device.deviceId(), empty(NOT_COVERED, notCovered.get(), product, null));
+                continue;
+            }
             estateProducts.add(product);
             SourceState source = sources.get(sourceOf(product));
             if (source == null || !source.usable()) {
@@ -155,7 +163,7 @@ public final class AdvisoryEstate {
             boolean unparsed = !missing && comparator.get().canonical(version).isEmpty();
             List<Prepared> candidates = byProduct.getOrDefault(product, List.of());
             if (missing || unparsed) {
-                String reason = missing ? "VERSION_MISSING" : "VERSION_UNPARSED";
+                String reason = missing ? "VERSION_MISSING" : comparator.get().unparsedReason(version);
                 for (Prepared p : candidates) {
                     verdictsByAdvisory.computeIfAbsent(p.advisory().advisoryId(), k -> new ArrayList<>())
                             .add(new DeviceVerdict(device, VerdictKind.NOT_EVALUABLE, reason, null));
@@ -163,7 +171,7 @@ public final class AdvisoryEstate {
                 assessments.put(device.deviceId(), empty(VERSION_UNKNOWN, reason, product, compared(source)));
                 continue;
             }
-            int affected = 0, affectedExploited = 0, criticalHigh = 0, notEvaluable = 0, fixed = 0;
+            int affected = 0, affectedExploited = 0, criticalHigh = 0, notEvaluable = 0, fixed = 0, pending = 0;
             Severity worst = null;
             for (Prepared p : candidates) {
                 Verdict verdict;
@@ -182,32 +190,32 @@ public final class AdvisoryEstate {
                         if (p.severity() == Severity.CRITICAL || p.severity() == Severity.HIGH) criticalHigh++;
                         if (worst == null || p.severity().ordinal() < worst.ordinal()) worst = p.severity();
                     }
-                    case NOT_EVALUABLE -> notEvaluable++;
+                    case NOT_EVALUABLE -> { if (pending(verdict.basis())) pending++; else notEvaluable++; }
                     case FIXED -> fixed++;
                     default -> { }
                 }
             }
             assessments.put(device.deviceId(), new DeviceAssessment(EVALUATED, null, product, affected, affectedExploited,
-                    criticalHigh, notEvaluable, fixed, worst == null ? null : worst.name(), compared(source)));
+                    criticalHigh, notEvaluable, fixed, worst == null ? null : worst.name(), compared(source), pending));
         }
 
         List<AdvisoryRow> rows = new ArrayList<>(prepared.size());
         for (Prepared p : prepared) {
             List<DeviceVerdict> verdicts = verdictsByAdvisory.getOrDefault(p.advisory().advisoryId(), List.of());
-            int affected = 0, fixed = 0, notAffected = 0, notEvaluable = 0;
+            int affected = 0, fixed = 0, notAffected = 0, notEvaluable = 0, pending = 0;
             for (DeviceVerdict v : verdicts) {
                 switch (v.kind()) {
                     case AFFECTED -> affected++;
                     case FIXED -> fixed++;
                     case NOT_AFFECTED -> notAffected++;
-                    case NOT_EVALUABLE -> notEvaluable++;
+                    case NOT_EVALUABLE -> { if (pending(v.basis())) pending++; else notEvaluable++; }
                     default -> { }
                 }
             }
             boolean namesEstateProduct = p.rulesByProduct().keySet().stream().anyMatch(estateProducts::contains);
             boolean listed = !verdicts.isEmpty() || (p.state() == AdvisoryModel.ParseState.NEEDS_REVIEW && namesEstateProduct);
             rows.add(new AdvisoryRow(p.advisory(), p.exploited(), p.exploitedSince(),
-                    new Counts(affected, fixed, notAffected, notEvaluable), verdicts, listed));
+                    new Counts(affected, fixed, notAffected, notEvaluable, pending), verdicts, listed));
         }
         return new AdvisoryEstate(assessments, rows);
     }
@@ -220,7 +228,12 @@ public final class AdvisoryEstate {
             .thenComparing(r -> r.advisory().advisoryId());
 
     private static DeviceAssessment empty(String state, String reason, String product, SourceState compared) {
-        return new DeviceAssessment(state, reason, product, 0, 0, 0, 0, 0, null, compared);
+        return new DeviceAssessment(state, reason, product, 0, 0, 0, 0, 0, null, compared, 0);
+    }
+
+    /** True for a verdict that waits for a fix rule confirmation (PO decision 2026-11-10, question 4). */
+    public static boolean pending(String basis) {
+        return basis != null && AdvisoryModel.PENDING_BASES.contains(basis);
     }
 
     /** The basis of the comparison, null when the source never loaded (there is nothing it was compared against). */

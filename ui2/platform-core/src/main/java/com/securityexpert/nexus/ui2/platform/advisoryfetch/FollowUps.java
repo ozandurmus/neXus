@@ -26,6 +26,10 @@ public final class FollowUps {
     public static final String CISCO_ASA_FAMILY = "Adaptive Security Appliance (ASA) Software";
 
     static final int MAX_FOLLOW_UPS = 5000;
+    /** A CVE id as the Check Point resolved-issues pages write it. */
+    private static final Pattern CVE_ID = Pattern.compile("(?<![A-Za-z0-9-])CVE-(\\d{4})-(\\d{4,7})(?![0-9])");
+    /** At most this many CVE records are requested in one Check Point run (the four pages named 61 on 2026-11-13). */
+    static final int MAX_CHECKPOINT_RECORDS = 1000;
 
     private FollowUps() {
     }
@@ -74,6 +78,44 @@ public final class FollowUps {
             }
         }
         return List.copyOf(out);
+    }
+
+    /**
+     * The CVE records named by the Check Point resolved-issues pages (amendment A-2026-11-13): every CVE id in the pages,
+     * in page order without repeats, as its address in the CVE Program's public list
+     * ({@code /CVEProject/cvelistV5/main/cves/<year>/<number / 1000>xxx/CVE-<year>-<number>.json}). The address is built
+     * from the id alone; nothing about the estate is in it.
+     */
+    public static List<URI> checkpointRecords(List<byte[]> pages) {
+        Set<URI> out = new LinkedHashSet<>();
+        if (pages == null) {
+            return List.of();
+        }
+        for (byte[] page : pages) {
+            if (page == null) {
+                continue;
+            }
+            Matcher matcher = CVE_ID.matcher(new String(page, StandardCharsets.UTF_8));
+            while (matcher.find() && out.size() < MAX_CHECKPOINT_RECORDS) {
+                URI uri = cveRecord(matcher.group(1), matcher.group(2));
+                if (uri != null && AdvisorySources.allowed(AdvisorySources.CHECKPOINT, uri)) {
+                    out.add(uri);
+                }
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    /** The address of one CVE record in the public list; null for a number outside the list's layout. */
+    static URI cveRecord(String year, String number) {
+        long n;
+        try {
+            n = Long.parseLong(number);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+        return parse("https://" + AdvisorySources.CVELIST_HOST + AdvisorySources.CVELIST_PREFIX + year + "/" + (n / 1000) + "xxx/CVE-"
+                + year + "-" + number + ".json");
     }
 
     /** True when a fetched Cisco file names the ASA software family; the others are dropped unread. */

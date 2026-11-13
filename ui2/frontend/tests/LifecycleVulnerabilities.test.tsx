@@ -298,10 +298,44 @@ describe("Vulnerabilities tab", () => {
     expect(screen.queryByRole("table", { name: "Devices judged against paloalto:CVE-2026-0001" })).toBeNull();
   });
 
+  it("Check Point: a pending verdict says so, and a Live Patch is a label that never changes the verdict", async () => {
+    const cp = advisory("checkpoint:CVE-2026-90001", { source: "checkpoint", title: "Synthetic gateway overflow", cve_ids: ["CVE-2026-90001"],
+      source_url: "https://support.checkpoint.com/results/sk/sk9000001", parse_note: "THIRD_PARTY_CVE",
+      devices: { affected: 0, fixed: 2, not_affected: 0, not_evaluable: 0, pending: 3 } });
+    loadTab([cp], [...sources, source("checkpoint", { advisories: 61 })]);
+    vi.mocked(api.getLifecycleAdvisory).mockResolvedValue({ advisory: cp, devices: [
+      detailRow("FW-TANGO-04", "NOT_EVALUABLE", "FIX_RULE_UNCONFIRMED", { advisory_id: cp.advisory_id, vendor: "CHECKPOINT", version: "R81.20 Jumbo Take 64",
+        fixed_text: "R81.20 Jumbo Take 65: UPDATE: Resolved CVE-2026-90001. Refer to sk9000001.", live_patch: { patch: "PATCH:fwd", status: "armed", used_in_verdict: false } }),
+      detailRow("FW-BRAVO-02", "FIXED", "JUMBO_FIX_INCLUDED", { advisory_id: cp.advisory_id, vendor: "CHECKPOINT", version: "R81.20 Jumbo Take 170", live_patch: null }),
+    ] });
+    themed(<LifecycleVulnerabilitiesPanel />);
+    const list = await screen.findByRole("table", { name: "Security advisories" });
+    const row = list.querySelector('[data-advisory="checkpoint:CVE-2026-90001"]') as HTMLElement;
+    expect(within(row).getByText("Check Point · checkpoint:CVE-2026-90001")).toBeInTheDocument();
+    expect(within(row).getByText("3 pending confirmation").closest("[data-pill]")).toHaveAttribute("data-pill", "unknown");
+    fireEvent.click(within(row).getByRole("button", { name: "Show 5 devices" }));
+    const devices = await screen.findByRole("table", { name: "Devices judged against checkpoint:CVE-2026-90001" });
+    const tango = rowOf(devices, "FW-TANGO-04");
+    expect(within(tango).getByText("Pending confirmation").closest("[data-pill]")).toHaveAttribute("data-pill", "unknown");
+    expect(within(tango).getByText("R81.20 Jumbo Take 64")).toBeInTheDocument();
+    expect(within(tango).getByText("Live Patch PATCH:fwd: armed (shown only; not used in the verdict)")).toBeInTheDocument();
+    expect(within(rowOf(devices, "FW-BRAVO-02")).queryByText(/Live Patch/)).toBeNull();
+    expect(screen.queryByText(AFFECTED_BY_VERSION)).toBeNull();
+  });
+
+  it("Check Point: the cell words pending verdicts and the reason a device has no source", () => {
+    expect(vulnerabilitySummary({ state: "EVALUATED", reason: null, affected: 1, not_evaluable: 0, pending: 2, compared: null })).toBe("1 affected · 2 pending confirmation");
+    expect(vulnerabilitySummary({ state: "NOT_COVERED", reason: "SPARK_NOT_COVERED" })).toBe("No advisory source for this product · Quantum Spark firmware has no advisory source yet");
+    expect(vulnerabilitySummary({ state: "NOT_COVERED", reason: "NO_COMPARATOR" })).toBe("No advisory source for this product");
+    expect(vulnerabilitySummary({ state: "VERSION_UNKNOWN", reason: "JUMBO_TAKE_MISSING" })).toBe("Version not known · no Jumbo Hotfix take stored");
+  });
+
   it("maps every basis code word to a sentence and shows an unknown one as it is", () => {
     for (const code of ["IN_RANGE", "BELOW_HOTFIX", "EXACT_VERSION_LISTED", "AT_OR_ABOVE_FIX", "TRAIN_UNAFFECTED", "VERSION_NOT_LISTED_IN_TRAIN", "BELOW_AFFECTED_RANGE",
       "VERSION_UNPARSED", "ADVISORY_NEEDS_REVIEW", "NO_RULE_COVERS_VERSION", "NO_COMPARATOR", "TRAIN_AFFECTED", "CHANGE_POINT_AFFECTED", "IN_UNAFFECTED_RANGE",
-      "EXACT_VERSION_UNAFFECTED", "BELOW_HOTFIX_UNAFFECTED", "PRODUCT_NOT_NAMED", "TRAIN_NOT_NAMED", "EVALUATION_ERROR"]) {
+      "EXACT_VERSION_UNAFFECTED", "BELOW_HOTFIX_UNAFFECTED", "PRODUCT_NOT_NAMED", "TRAIN_NOT_NAMED", "EVALUATION_ERROR",
+      "JUMBO_FIX_INCLUDED", "ABOVE_AFFECTED_TAKE", "FIX_RULE_UNCONFIRMED", "MULTIPLE_FIX_TAKES", "FIX_STATEMENT_UNCLEAR", "NO_FIX_TAKE_PUBLISHED",
+      "PRODUCT_SUBSET_UNKNOWN"]) {
       expect(basisSentence(code)).toMatch(/^[A-Zn][^_]+\.$/);
     }
     expect(basisSentence("SOMETHING_ELSE")).toBe("SOMETHING_ELSE");

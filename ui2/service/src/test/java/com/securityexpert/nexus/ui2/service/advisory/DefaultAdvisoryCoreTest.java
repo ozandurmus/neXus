@@ -21,7 +21,10 @@ class DefaultAdvisoryCoreTest {
         assertEquals(Optional.of("fortinet:fortimanager"), core.productKey("fortinet", null, "fmg-200g"));
         assertEquals(Optional.of("fortinet:fortios"), core.productKey("fortinet", null, null));
         assertEquals(Optional.of("cisco:asa"), core.productKey("cisco_asa", "gateway", "ASA5516"));
-        assertEquals(Optional.empty(), core.productKey("check_point", "gateway", "x"));
+        // Amendment A-2026-11-13: Check Point by role.
+        assertEquals(Optional.of(AdvisoryModel.PRODUCT_CP_GATEWAY), core.productKey("check_point", "gateway", "x"));
+        assertEquals(Optional.of(AdvisoryModel.PRODUCT_CP_MANAGEMENT), core.productKey("check_point", "management_server", "x"));
+        assertEquals(Optional.empty(), core.productKey("check_point", null, "x"));
         assertEquals(Optional.empty(), core.productKey(null, null, null));
     }
 

@@ -12,4 +12,20 @@ public interface AdvisoryParser {
 
     /** {@code url} is the address the document was read from (already checked against the source's host list). */
     AdvisoryModel.ParseResult parse(String url, byte[] document);
+
+    /**
+     * As {@link #parse(String, byte[])}, with read access to what earlier documents of the same source stored (Check Point:
+     * the Jumbo statements a CVE record is joined with, amendment A-2026-11-13). The default ignores the context.
+     */
+    default AdvisoryModel.ParseResult parse(String url, byte[] document, ParseContext context) {
+        return parse(url, document);
+    }
+
+    /** What the ingest lets a parser read; nothing that is not public advisory data. */
+    interface ParseContext {
+        ParseContext EMPTY = cveId -> java.util.List.of();
+
+        /** The stored Jumbo statements that name this CVE id, every train. */
+        java.util.List<AdvisoryModel.JumboStatement> jumboStatements(String cveId);
+    }
 }

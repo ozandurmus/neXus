@@ -141,8 +141,8 @@ class AdvisoryReadServiceTest {
                 "D names no train of the device (not listed); E is a review naming the estate's product; the Fortinet review names no estate product");
         assertEquals(true, list.getFirst().get("exploited"));
         assertEquals("2026-06-01", list.getFirst().get("exploited_since"));
-        assertEquals(Map.of("affected", 1, "fixed", 0, "not_affected", 0, "not_evaluable", 0), list.getFirst().get("devices"));
-        assertEquals(Map.of("affected", 0, "fixed", 0, "not_affected", 0, "not_evaluable", 1), list.getLast().get("devices"));
+        assertEquals(Map.of("affected", 1, "fixed", 0, "not_affected", 0, "not_evaluable", 0, "pending", 0), list.getFirst().get("devices"));
+        assertEquals(Map.of("affected", 0, "fixed", 0, "not_affected", 0, "not_evaluable", 1, "pending", 0), list.getLast().get("devices"));
     }
 
     @Test void theDetailListsDevicesWithNameVendorVersionVerdictBasisAndFixText() {
@@ -191,7 +191,7 @@ class AdvisoryReadServiceTest {
         assertEquals(0, vulns("d1").get("affected"));
     }
 
-    @Test void sourcesListsAllFourWithAgeStates() {
+    @Test void sourcesListsAllFiveWithAgeStates() {
         store("paloalto", "CVE-A", Severity.HIGH, ParseState.NEEDS_REVIEW, List.of(), below(PRODUCT_PAN_OS, "11.1", 5, null));
         repo.seedRun("paloalto", "OK", 8, NOW);
         repo.seedRun("fortinet", "PARTIAL", 31, NOW);
@@ -200,7 +200,7 @@ class AdvisoryReadServiceTest {
                 new StoredKnownExploited("CVE-2026-0011", LocalDate.of(2026, 8, 1), false));
         repo.seedRun("cisa_kev", "OK", 0, NOW);
         @SuppressWarnings("unchecked") var rows = (List<Map<String, Object>>) service.sources(NOW).get("sources");
-        assertEquals(List.of("paloalto", "fortinet", "cisco", "cisa_kev"), rows.stream().map(r -> r.get("source")).toList());
+        assertEquals(List.of("paloalto", "fortinet", "cisco", "cisa_kev", "checkpoint"), rows.stream().map(r -> r.get("source")).toList());
         assertEquals("AMBER", rows.get(0).get("age_state"));
         assertEquals(8L, rows.get(0).get("age_days"));
         assertEquals(1, rows.get(0).get("needs_review"));
@@ -237,7 +237,7 @@ class AdvisoryReadServiceTest {
         assertEquals(List.of(), bare.list(NOW).get("advisories"));
         assertTrue(bare.detail("paloalto:x", NOW).isEmpty());
         assertEquals("NOT_COVERED", bare.vulnerabilities(List.of(AdvisoryReadService.facts(devices.listAll().getFirst())), NOW).get("d1").get("state"));
-        assertEquals(4, ((List<?>) bare.sources(NOW).get("sources")).size());
+        assertEquals(5, ((List<?>) bare.sources(NOW).get("sources")).size());
     }
 
     @Test void oneHundredFiftyDevicesAgainstFourHundredAdvisoriesIsFastAndParsesEachRuleOnce() {

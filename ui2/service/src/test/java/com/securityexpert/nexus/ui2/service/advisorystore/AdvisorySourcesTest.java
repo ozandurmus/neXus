@@ -40,9 +40,9 @@ class AdvisorySourcesTest {
         assertFalse(AdvisorySources.linkAllowed("paloalto", null));
     }
 
-    @Test void theFourSourceKeysAreKnown() {
-        assertEquals(4, AdvisorySources.KEYS.size());
+    @Test void theFiveSourceKeysAreKnown() {
+        assertEquals(5, AdvisorySources.KEYS.size(), "four of part 1 and Check Point (amendment A-2026-11-13)");
         AdvisorySources.KEYS.forEach(k -> assertTrue(AdvisorySources.known(k)));
-        assertFalse(AdvisorySources.known("checkpoint"));
+        assertFalse(AdvisorySources.known("infoblox"));
     }
 }
