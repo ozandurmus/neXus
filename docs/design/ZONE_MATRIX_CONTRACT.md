@@ -2,11 +2,13 @@
 
 ## Status
 
-DRAFT - 2026-11-13. Written by the engineering session for the decision council and the PO. Not implementation
-authority. Scope answers come from `PO_DECISION_RECORD_2026_11_13_ZONE_MATRIX.md` (RATIFIED: zones are IP blocks,
-first rule set BDDK, list + Overview + evidence report, nothing written to devices, ticket reconciliation later).
-Every item in section 11 stays open until the council has reviewed it and the PO has decided; the BDDK references of
-section 6 stay empty until the bank's compliance team fills and confirms them.
+DRAFT - 2026-11-13, revision 2. Revision 1 (commit 012fbbf7) was reviewed by the three-seat decision council on
+2026-11-13 (network/vendor semantics, compliance and change-control, security and adversarial; role-diverse review,
+same model family; seat outputs kept in the PO session's ops notes). The PO approved incorporating every council
+change ("Evet, hepsini işle") and decided four-eyes publishing ("Evet, şart"); both are recorded in
+`PO_DECISION_RECORD_2026_11_13_ZONE_MATRIX.md`. This document stays DRAFT, and is not implementation authority, until
+the PO freezes it. The BDDK reference fields of section 6 stay empty until the bank's compliance team fills and
+confirms them.
 
 ## 1. Purpose and non-goals
 
@@ -18,19 +20,27 @@ sector-leading products (Tufin, AlgoSec, FireMon), built on the neXus rule-resol
 Non-goals (first delivery): no device write, no rule change or suggestion pushed anywhere, no ticket and no
 integration with the bank's change system "smart" (PO decision 4), no SWIFT CSP or PCI DSS rule sets (PO decision 2),
 no live traffic or log analysis (Rule object usage covers logs), no routing or reachability claim, no new device
-command, no new collection.
+command, no new collection, no accepted-deviation (exception) records (section 8.6).
 
-Wording rule on every surface: results are **policy intent**, not observed traffic. "Violation" means "this rule, as
-configured, permits traffic the matrix does not allow"; it does not say that such traffic happened.
+Wording rules on every surface:
+
+- Results are **policy intent as defined in management**, not observed traffic. Panorama sync state and Check Point
+  install state are not verified. "Violation" means "this rule, as configured in management, permits traffic the
+  matrix does not allow"; it does not say that such traffic happened.
+- No surface, export or report says "BDDK compliant", "BDDK pass", or shows a BDDK score or percentage. The absence
+  of proven violations is worded "no proven violations in evaluated rules", never "compliant", "0" or green, unless
+  coverage is complete (section 7.2).
 
 ## 2. Terms
 
 - **Zone**: a named set of IPv4 and IPv6 blocks (CIDR) defined by the bank in neXus. Not a firewall zone.
 - **Matrix**: one statement per ordered pair of zones (source zone, destination zone), including a zone to itself.
-- **Segmentation policy version** ("matrix version"): the zones, the matrix and the rule-set template origin, published
+- **Segmentation policy version** ("matrix version"): the zones, the matrix and the template origin, published
   together as one immutable, numbered, hashed version.
-- **Evaluation**: one run of every in-scope rule of one stored policy snapshot against one matrix version.
-- **Finding**: the outcome for one rule in one evaluation (section 5.3).
+- **Evaluation run**: one run of every in-scope rule of one stored policy snapshot against one matrix version.
+- **Finding**: the outcome for one rule in one evaluation run (section 5.4).
+- **Policy source**: the stored policy a snapshot belongs to (Check Point package, Palo Alto device group or local
+  firewall policy), by its opaque id.
 - Synthetic examples in this document use documentation ranges only (`192.0.2.0/24`, `198.51.100.0/24`,
   `203.0.113.0/24`, `2001:db8::/32`) and invented zone names (`Z-USER`, `Z-APP`, `Z-DB`, `Z-DMZ`, `Z-MGMT`,
   `Z-PARTNER`).
@@ -43,83 +53,111 @@ A zone has an opaque id (UUID, never reused), a name (unique, 1-64 characters, n
 description, an optional role from the template (section 6, for example `DATABASE`), and a list of blocks. A block is
 an IPv4 or IPv6 CIDR in canonical form (host bits zero; `192.0.2.7/24` is refused, not silently corrected). A single
 address is a `/32` or `/128`. Ranges that are not CIDR are entered as their exact CIDR decomposition, which the screen
-offers and shows before saving. A zone may hold up to 10,000 blocks; a version up to 500 zones (bounds to be confirmed
-by the performance measurement of section 9).
+offers and shows before saving.
+
+Bounds: a total-block cap per version (proposed 200,000, set from the section 9 measurement, well below any size that
+stresses the database), a per-zone cap, at most 500 zones, and a request size limit on every edit route. A request
+over a bound is refused, never truncated.
 
 Vendor zone or interface names (Palo Alto zones, Check Point security zones, interfaces) are never used to place an
 address in a zone (PO decision 1). They may be shown beside a finding as context.
 
 ### 3.2 Overlap and the partition
 
-Every address belongs to exactly one zone or to `UNASSIGNED`, per address family. Proposed rule (open question
-Q5):
+Every address belongs to exactly one zone or to `UNASSIGNED`, per address family (council: accepted).
 
 - **Nesting is allowed; the longest prefix wins.** If `Z-APP` holds `198.51.100.0/24` and `Z-MGMT` holds
-  `198.51.100.128/28`, the `/28` addresses are `Z-MGMT`, the rest of the `/24` is `Z-APP` (the same rule a routing
-  table uses, so operators can predict it).
+  `198.51.100.128/28`, the `/28` addresses are `Z-MGMT`, the rest of the `/24` is `Z-APP`.
 - **The same block in two zones is refused** at save time (`ZONE_BLOCK_DUPLICATE`), naming both zones.
-- **A block inside one zone that duplicates or nests in another block of the same zone** is accepted and reported as
-  redundant (warning, not error).
-- The screen shows, for each zone, its effective address count after nesting, and an address lookup ("which zone is
-  this address in, under version N") that applies exactly the evaluation's rule.
+- A block of one zone that duplicates or nests in another block of the same zone is accepted with a warning.
+- The publish diff shows **addresses that move between zones** ("N addresses move from zone X to zone Y"), with each
+  zone's effective address count before and after, not only block-list changes.
+- Address lookup ("which zone is this address in, under version N") applies exactly the evaluation's rule. It is
+  available only with `zone_matrix_zones_read` and every lookup is audited (3.4).
 
 ### 3.3 Unassigned address space
 
 `UNASSIGNED` is a built-in pseudo-zone: every address of a family not covered by any block. It has a row and a column
-in the matrix like any zone and its own statements. It is never silently treated as "internet" or as "internal".
-The template proposes treating it as untrusted (deny to every internal zone unless stated), marked as PO/compliance
-input (Q6). Rules whose addresses fall in `UNASSIGNED` are counted on the screen ("rules touching unassigned space"),
-because they usually point at a zone definition gap.
+in the matrix like any zone and its own statements. It is never silently treated as "internet" or "internal".
 
-### 3.4 Who may edit, audit, versioning
+- `UNASSIGNED -> UNASSIGNED` defaults to `DENY_ALL`; it never inherits a template diagonal `ALLOW_ANY`.
+- Assigning every address before publishing is not required (impossible for internet space).
+- Rules whose addresses touch unassigned **private** ranges (RFC 1918 and IPv6 unique local addresses) are listed on
+  the Zones tab and in the report as a "zone definition gap".
+- Shrinking `UNASSIGNED` is a loosening change when the addresses move into a zone whose statements are less strict
+  (3.5).
 
-- New actions in `ActionRegistry` (proposed; Q7):
-  - `zone_matrix_read`: view zones, matrix, versions, findings. security_admin, compliance_admin, onboarding_admin,
-    viewer; replay_viewer (aiview) masked.
-  - `zone_matrix_edit`: change the draft version (zones, blocks, statements, severities, reference fields).
-    security_admin, compliance_admin.
-  - `zone_matrix_publish`: publish a draft as the active version. security_admin, compliance_admin, and **never the
-    same person as the last editor of that draft** (four-eyes; Q7).
-  - `zone_matrix_export`: export an evidence report with real names and addresses. security_admin,
-    compliance_admin. Masked roles export masked reports only.
-- Rule detail inside findings (rule names, object names, resolved addresses) is policy content. Today `policy_read` is
-  security_admin, onboarding_admin and replay_viewer; compliance_admin and viewer do not hold it. Proposed: a holder of
-  `zone_matrix_read` without `policy_read` sees findings with rule number, rule id, device and zone pair, but not
-  object names or addresses (Q8).
-- Audit: every draft change is an audit event (actor, time, change kind, zone id or cell, before and after values in
-  the audit store, which is access-controlled like the matrix itself). Publish is an audit event carrying the version
-  number, content hash, editor and publisher. Export is an audit event carrying the report hash and scope.
-- Versioning:
-  - At most one `DRAFT` and exactly one `ACTIVE` version once the first is published; earlier ones are `RETIRED`.
-    Published versions are immutable; an edit always goes to the draft.
-  - A version's content is canonical JSON (zones sorted by id, blocks canonical and sorted, cells sorted by pair);
-    its `sha256` is stored and shown.
-  - Every evaluation and every finding cites the version id, number and hash it was evaluated against. A finding is
-    never re-labelled to a later version; a later version produces new findings.
-  - Publishing a version triggers re-evaluation of the latest stored snapshot of every in-scope policy (section 5.1).
-  - The screen offers a diff between any two versions (zones, blocks, cells).
+### 3.4 Rights
+
+New actions in `ActionRegistry`:
+
+| Action | Holders | What it allows |
+| --- | --- | --- |
+| `zone_matrix_read` | security_admin, compliance_admin, onboarding_admin, viewer; replay_viewer masked | Grid, statements, severities, zone names, counts, findings, version history and diffs without blocks. No blocks, no address lookup, no witness addresses. |
+| `zone_matrix_zones_read` | security_admin, compliance_admin | Blocks, address lookup, witness addresses. Every raw view and every lookup writes an audit row. Never replay_viewer. |
+| `zone_matrix_edit` | security_admin, compliance_admin | Change the draft (zones, blocks, statements, services, severities, reference text). |
+| `zone_matrix_reference_confirm` | compliance_admin only | Set a cell's `referenceStatus` to `CONFIRMED`. |
+| `zone_matrix_publish` | security_admin, compliance_admin | Publish the draft, under the four-eyes rule below. |
+| `zone_matrix_evaluate` | security_admin, compliance_admin | Start an on-demand evaluation of one policy. |
+
+- Rule detail: a holder of `zone_matrix_read` without `policy_read` sees rule number, rule id and the rule name
+  through the `PolicyPrivacy` masked projection; object names and addresses are not shown.
+- Export (section 7.3) follows the caller's screen view; raw content needs both the screen right and the Reports R1
+  raw-view right (`report_raw_view`, security_admin, other roles only by the R1 rule for adding raw roles); never
+  replay_viewer.
+
+**Four-eyes publishing (PO decision, 2026-11-13: "Evet, şart").**
+
+- Two different people, compared by canonical immutable principal id (the same canonicalization the failover
+  approval uses), never by display name.
+- At least one of the two holds compliance_admin: the publisher, or a person who edited the draft since the last
+  publish.
+- The publisher has not edited the draft and has not confirmed any reference in it since the last publish (not only
+  "not the last editor").
+- The publish request carries the draft revision and content hash the publisher reviewed; it is refused
+  (`REQUEST_CHANGED`) when the draft changed since.
+- The local root administrator and replay_viewer never publish, even when the account also holds an admin role.
+- Refusals: `SELF_APPROVAL`, `COMPLIANCE_ROLE_MISSING`, `REQUEST_CHANGED`, `PRINCIPAL_NOT_ELIGIBLE`.
+
+**References.** Setting `referenceStatus` to `CONFIRMED` is the separate `zone_matrix_reference_confirm` action
+(compliance_admin only). Any later change to that cell's statement, services or severity sets it back to `PROPOSED`
+and clears `confirmedBy` and `confirmedAt`.
+
+### 3.5 Audit and versioning
+
+- Audit rows hold change kind, actor, time, version and revision ids and content hashes only (column allowlist on the
+  audit trigger). Full draft revisions go to an append-only `zone_matrix_revision` table, readable under
+  `zone_matrix_read` (blocks only under `zone_matrix_zones_read`), because the audit log itself is security_admin only.
+- Publish, reference confirmation, export, raw view and address lookup are audit events.
+- At most one `DRAFT` and exactly one `ACTIVE` version once the first is published; earlier ones are `RETIRED`.
+  Published versions are immutable; an edit always goes to the draft.
+- A version's content is canonical JSON (zones sorted by id, blocks canonical and sorted, cells sorted by pair); its
+  `sha256` is stored and shown.
+- Every evaluation run and finding cites the version id, number and hash it was evaluated against.
+- **Loosening changes** in the publish diff: statement relaxed (towards `ALLOW_ANY`), services added to a cell, the
+  version default changed, severity downgraded, addresses moved between zones, `UNASSIGNED` shrunk. Each needs a
+  rationale text before publish; the diff highlights them. Findings resolved by a version change are listed per
+  version, and the Overview shows them for 7 days.
+- The version default statement is `DENY_ALL` or `ALLOW_LISTED`; `ALLOW_ANY` exists only as an explicit cell.
+- Publishing triggers re-evaluation of the latest stored snapshot of every in-scope policy (5.1).
 
 ## 4. Matrix
 
 ### 4.1 Statements
 
-Each ordered pair (source zone, destination zone), including `UNASSIGNED` and the diagonal, has one statement:
-
 | Statement | Meaning |
 | --- | --- |
 | `DENY_ALL` | No allow rule may permit any traffic from the source zone to the destination zone. |
 | `ALLOW_LISTED` | Only the listed service entries (4.2) may be permitted. |
-| `ALLOW_ANY` | Any traffic may be permitted. |
+| `ALLOW_ANY` | Any traffic may be permitted (explicit cells only). |
 
-The version carries one default statement for pairs without an explicit cell; the screen marks cells that use the
-default. Each cell also carries: severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`; from the template, editable), an
-optional free-text rationale, and the BDDK reference fields of section 6 (empty until compliance fills them).
+Each cell also carries: severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`), an optional rationale, and the reference
+fields of section 6.1. The screen marks cells that use the version default.
 
 ### 4.2 Service vocabulary
 
-Entries are aligned with the dimensions the rule-resolution engine already produces (`PolicyNormalization.Selector`:
-merged ranges per protocol family, plus opaque tokens), so a matrix entry and a rule's resolved service are compared
-in one representation:
+Entries are aligned with the dimensions the rule-resolution engine produces (`PolicyNormalization.Selector`: merged
+ranges per protocol family, plus opaque tokens):
 
 | Entry kind | Form | Evaluable in the first delivery |
 | --- | --- | --- |
@@ -127,200 +165,258 @@ in one representation:
 | ICMP / ICMPv6 type and code | `icmp/8`, `icmp/8/0`, `icmp6/128` | after hygiene model R1 and its A0-1 citation |
 | IP protocol number | `ipproto/50` | after hygiene model R4 and collection fix C4 |
 | Application (by name, opaque) | `app:pan:<application-name>` | Palo Alto only, by identity (4.3) |
-| Named service set | a matrix-local name for a list of the above (for example `SET-DB-PORTS`) | yes (expanded before comparison) |
+| Named service set | a matrix-local name for a list of the above | yes (expanded before comparison) |
 
-Vendor service objects are not matrix entries: the matrix is vendor-independent. The screen may offer "add the ports
-of this service object" as a convenience that copies resolved values at that time.
+Vendor service objects are not matrix entries. The screen may offer "add the ports of this service object", which
+copies resolved values at that time.
 
 ### 4.3 Applications
 
-The engine treats applications as opaque identities that are never disjoint from anything, and Palo Alto App-ID
-default ports are not collected (hygiene note, collection fix C1). Therefore:
-
-- A Palo Alto rule with application `X` and service `application-default` is COMPLIANT in a cell when the cell lists
-  `app:pan:X` (same identity, exact string equality, no case folding).
+- A Palo Alto rule with application `X` and service `application-default` is COMPLIANT in a cell that lists
+  `app:pan:X` (exact string equality, no case folding).
 - The same rule in a cell that lists only ports is NOT_EVALUABLE "application ports not collected".
 - A rule with application `X` and an explicit service list is evaluated on its service list (the application only
-  narrows it): COMPLIANT when its services are inside the cell's port entries.
+  narrows it).
 - A rule with application `any` is a port rule.
-- Check Point application/site objects: the rule is evaluated on its port dimension as an upper bound (the
-  application only narrows); when that bound is not inside the cell, NOT_EVALUABLE "application constraint" (first
-  delivery).
+- Check Point application/site objects: the port dimension is used as an upper bound; when that bound is not inside
+  the cell, NOT_EVALUABLE "application constraint".
 
 ## 5. Evaluation
 
-### 5.1 When
+### 5.1 When and how it runs
 
-- After every **completed** policy collection (`cp_policy_collect`, `pan_policy_collect`, scheduled or manual) for that
-  policy only. Never on an intermediate checkpoint (hygiene collection fix C6: a running Check Point collection
-  overwrites the live row with partial checkpoints).
+- After every **completed** policy collection (`cp_policy_collect`, `pan_policy_collect`), for that policy only.
+  Never on an intermediate checkpoint (hygiene collection fix C6).
 - After a version is published: every policy's latest stored snapshot against the new version.
-- On demand by a holder of `zone_matrix_edit` for one policy (same code path).
-- Snapshots are overwritten by the next collection (only the latest is kept), so the evaluation stores what evidence
-  needs (5.5) at evaluation time; it never relies on re-reading an old snapshot.
+- On demand (`zone_matrix_evaluate`), same code path.
+- Placement (council Q13): in ui2-service, next to the engine, on its **own bounded pool**, never the interactive
+  `PolicyBulkhead`. Each run has a hard time limit and a measured heap ceiling; exceeding either ends the run
+  `FAILED`. A worker job is preferred once the engine moves to a shared module; an analysis container is rejected
+  (stored policy is not untrusted input, and it would add a transport and credential boundary).
+- **Durable runs.** Each run has a row: `RUNNING`, `COMPLETE` or `FAILED`. Findings and the `COMPLETE` state are
+  written in one transaction. Screens, Overview and reports read `COMPLETE` runs only. A run left `RUNNING` by a pod
+  kill is set `FAILED` at startup; partial findings never become visible.
+- Snapshots are overwritten by the next collection, so the run stores what evidence needs (8.1) at evaluation time.
 
 ### 5.2 What is evaluated
 
-- Rules of the security rulebase only, in the evaluation scopes the engine already supports (Check Point access
-  layers including inline layers; Palo Alto pre / local / post rulebases). NAT rules and rules outside the security
-  rulebase are "not analysed", counted separately, never NOT_EVALUABLE.
-- Enabled rules with an allow action (Check Point `Accept`, Palo Alto `allow`). Deny-type actions (Check Point `Drop`,
-  `Reject`; Palo Alto `deny`, `drop`, `reset-*`) cannot violate and are counted as "not applicable". Disabled rules are
-  counted, not evaluated. Unknown enabled state: NOT_EVALUABLE "enabled state is unknown". Any other action (for
-  example Check Point `Ask`, `Inform`): NOT_EVALUABLE "action semantics not modelled".
-- A rule inside a Check Point inline layer is evaluated on its own match intersected with its parent rule's match.
-- Implicit and default rules (Check Point implied rules and cleanup, Palo Alto `intrazone-default` /
-  `interzone-default`) are not collected and are not evaluated; this is a stated limitation on every result (Q11).
-- Device placement (Palo Alto from/to zones, Check Point install-on) only narrows where a rule applies; it is not used
-  to decide compliance and is shown as context (rule-level evaluation, Q1).
+- Rules of the security rulebase only, in the evaluation scopes the engine supports (Check Point access layers
+  including inline layers; Palo Alto pre / local / post rulebases). NAT rules and rules outside the security rulebase
+  are "not analysed", counted separately.
+- Enabled allow rules (Check Point `Accept`, Palo Alto `allow`). Deny-type rules (Check Point `Drop`, `Reject`; Palo
+  Alto `deny`, `drop`, `reset-*`) are counted "not applicable". Disabled rules are counted, not evaluated. Unknown
+  enabled state: NOT_EVALUABLE "enabled state is unknown".
+- Check Point `Ask` / `Inform`: COMPLIANT only through the upper bound; otherwise NOT_EVALUABLE "action semantics not
+  modelled".
+- **Check Point Apply Layer parent**: evaluated as an Accept upper bound. COMPLIANT when its match is compliant.
+  Otherwise, when its inline layer ends in an explicit catch-all rule, the parent is "not applicable (decided by its
+  inline layer)" and its child rules carry the findings; when it does not, NOT_EVALUABLE "inline layer cleanup not
+  collected". Never "action semantics not modelled".
+- **Check Point inline child rule**: its own match is enough to prove COMPLIANT; the intersection with the parent's
+  match is required to prove VIOLATION.
+- **Palo Alto default-rule overrides** (collected when present in pre, post or local rulebases): one whose action is
+  allow is evaluated as an allow rule for any source, destination and service, with flag `DEFAULT_RULE`.
+- Not collected, therefore not evaluated, and shown as coverage items (7.1), never only as a footnote:
+  - Palo Alto built-in `intrazone-default` allow: per device, "intrazone default allow; not evaluated" (two address
+    zones behind one firewall zone are open with no rule).
+  - Panorama mode: local firewall rules and firewall-level default overrides (`PAN_LOCAL_RULES_NOT_COLLECTED`,
+    `PAN_DEFAULT_RULE_LEVELS_NOT_COLLECTED`). Coverage of a Panorama-sourced policy is never "complete".
+  - Check Point implicit cleanup of each ordered and inline layer, and the Global Properties implied rules.
+- Device placement (Palo Alto from/to zones, Check Point install-on) only narrows; it is context, not a decision input,
+  except for the proven-cover check of `COVERED_BY_EARLIER_DENY` (5.5).
 
-### 5.3 Outcomes
+### 5.3 Upper-bound match function
 
-Exactly one per evaluated rule:
+The existing `normalize` returns no match at all for rules with source-user, time, VPN or content constraints, and the
+partial pieces of `partial` are only valid for proving disjointness. The evaluation therefore uses a new function
+`upperBoundMatch(rule)`:
+
+- It drops narrowing constraints: Palo Alto source-user and schedule; Check Point time, VPN and content columns;
+  applications (4.3); device placement. It records which were dropped.
+- Every remaining selector (source, destination, service) must resolve; otherwise the rule is NOT_EVALUABLE with the
+  resolution reason.
+- It returns the exact match when nothing was dropped, else the upper bound with the dropped kinds.
+- **Check Point access roles are never replaced by their networks for COMPLIANT.** The 2026-11-04 A0 access-role
+  bound is valid only for proving disjointness (X-Forwarded-For detection, not collected, can match a proxied
+  connection from outside those networks). For an access-role rule: COMPLIANT only when the rule is compliant with its
+  source read as any address; VIOLATION with `IDENTITY_IGNORED` when the rule read with the role's networks violates;
+  otherwise NOT_EVALUABLE "depends on user identity".
+
+### 5.4 Outcomes, reasons, flags
 
 | Outcome | Meaning |
 | --- | --- |
-| `VIOLATION` | Proven: the rule's resolved match contains traffic from a source address in zone A to a destination address in zone B that the statement of (A, B) does not allow. Carries every violated cell and, per cell, the part that is not allowed (services, or "any traffic" under `DENY_ALL`). |
-| `COMPLIANT` | Proven: every (A, B) pair the rule's resolved addresses touch allows every service the rule permits. |
-| `NOT_EVALUABLE` | The engine resolved the rule but a construct prevents a decision. Always carries a reason from the fixed list below. |
-| `UNKNOWN` | The evaluation itself could not run for the rule: analysis budget exceeded, unsupported evaluation scope, snapshot unreadable, internal error. Carries a reason. |
+| `VIOLATION` | Proven: the rule's match (or, with a flag, its upper bound) contains traffic from a source address in zone A to a destination address in zone B that the statement of (A, B) does not allow. Carries every violated cell and, per cell, the part that is not allowed. |
+| `COMPLIANT` | Proven: every (A, B) pair the rule's upper bound touches allows every service it permits, in every NAT view (5.6), and no part of it is undecided. |
+| `NOT_EVALUABLE` | A construct prevents a decision. Always carries a reason from the fixed list. |
+| `UNKNOWN` | The run could not decide the rule: analysis budget, unsupported evaluation scope, unreadable snapshot, internal error. Carries a reason. |
+| `NOT_APPLICABLE` | Counted, not a finding: deny-type, disabled, NAT / outside rulebase, Apply Layer parent decided by its layer, one-time schedule ended (with its end date). |
 
-**Never COMPLIANT unless every dimension was decided.** A rule with any unresolved or undecided part is
-NOT_EVALUABLE or UNKNOWN, unless a decided part already proves a VIOLATION (a violation proven on one cell stands even
-if another part is undecided; the undecided part is listed with it).
+**Never COMPLIANT unless every dimension, every address family and every NAT view was decided.** A violation proven
+on one cell stands even when another part is undecided; the undecided part is listed with it.
 
-NOT_EVALUABLE reasons (fixed vocabulary, extended only by contract amendment; most reuse the engine's own reasons):
-"unresolved object", "group cycle or depth limit", "empty or dynamic group", "dynamic or unsupported object type"
-(Check Point dynamic objects, updatable objects, DNS domains; Palo Alto dynamic address groups, external dynamic
-lists, FQDN objects), "negated selector" (until hygiene model R5 and its A0-4 citation), "unsupported service
-constraint" (ICMP, IP protocol, RPC until R1/R4), "unsupported port expression", "application ports not collected",
-"application constraint", "IPv6 not evaluated", "enabled state is unknown", "action semantics not modelled",
-"depends on user identity" (see 5.4), "time or content constraint" (see 5.4).
+Identity- and time-limited rules (council Q4): Palo Alto source-user and schedules, Check Point VPN, content and time
+columns are dropped by the upper bound. When the upper bound violates, the outcome is VIOLATION with flag
+`IDENTITY_IGNORED`, `TIME_IGNORED` or `CONDITION_IGNORED` (VPN, content), worded "conditionally permits", and counted
+in the headline. A one-time window that has ended (end before now minus the 14-hour timezone margin) is
+`NOT_APPLICABLE` "schedule ended <date>". A schedule that cannot be resolved does not change this: VIOLATION with
+`TIME_IGNORED` when the upper bound violates. Dynamic address objects (Check Point dynamic, updatable, DNS domain;
+Palo Alto dynamic address group, external dynamic list, FQDN) are not narrowing: NOT_EVALUABLE "dynamic or
+unsupported object type", unless the rule is compliant with the object read as any address.
 
-Additional flags (not outcomes) on a finding: `IDENTITY_IGNORED`, `TIME_IGNORED`, `COVERED_BY_EARLIER_DENY`,
-`NAT_MAY_APPLY`, `INSTALL_ON_UNRESOLVED` (sections 5.4 and 11).
+NOT_EVALUABLE reasons (fixed vocabulary): "unresolved object", "group cycle or depth limit", "empty or dynamic group",
+"dynamic or unsupported object type", "negated selector" (until hygiene R5 and A0-4), "unsupported service
+constraint", "unsupported port expression", "application ports not collected", "application constraint", "IPv6 not
+evaluated", "enabled state is unknown", "action semantics not modelled", "inline layer cleanup not collected",
+"depends on user identity", "NAT translation unresolved".
 
-### 5.4 The legacy IP model first
+Flags (not outcomes): `IDENTITY_IGNORED`, `TIME_IGNORED`, `CONDITION_IGNORED`, `COVERED_BY_EARLIER_DENY`,
+`INLINE_LAYER_COVER`, `DENIED_BY_OTHER_ORDERED_LAYER`, `OTHER_ORDERED_LAYERS_UNKNOWN`, `NAT_MAY_APPLY`,
+`NAT_PORT_SPLIT`, `DEFAULT_RULE`, `INSTALL_ON_UNRESOLVED`, `BECAME_UNDECIDED`.
 
-The PO priority is the classic first-match model on source, destination and service ("legacy" mode of the hygiene
-design). Constraints that only **narrow** an allow rule have a useful asymmetry for compliance:
+### 5.5 Latent rules and ordered layers
 
-- **Upper bound for COMPLIANT (sound).** Dropping a narrowing constraint (user identity, time window, application,
-  device placement) gives a superset of what the rule permits. If that superset is compliant, the rule is compliant.
-  So these rules can be proven COMPLIANT without modelling the constraint.
-- **VIOLATION needs more care.** If only the superset violates, the forbidden traffic exists only when the user,
-  window or application condition holds. Proposed (Q4): report VIOLATION with flag `IDENTITY_IGNORED` or
-  `TIME_IGNORED` ("permits this at IP level when the user/role or time condition holds"), shown under a separate
-  filter, counted in the headline with the flag visible. A Check Point access role counts as the networks it names
-  (A0 amendment 2026-11-04); a Palo Alto source-user condition is ignored with the flag. A one-time window that has
-  ended (with the 14-hour timezone margin of the hygiene design) makes the rule match nothing: not applicable, no
-  finding. Alternative for the council: NOT_EVALUABLE "depends on user identity" / "time or content constraint".
-- **Dynamic address objects are not narrowing** in this sense: their membership is runtime state and may be any
-  address. They give NOT_EVALUABLE unless the rule is COMPLIANT even with the object read as "any address".
+- **`COVERED_BY_EARLIER_DENY`**: set only when the hygiene analysis has proven a CONFLICT (one earlier deny rule of the
+  same evaluation scope and the same install targets / placement fully covers the rule). The covering rule's id is
+  stored in the finding. When hygiene is UNKNOWN, no flag. The finding stays a VIOLATION, counted in the headline and
+  shown as a split (7.2). Adding or removing the flag never resets first-observed.
+- **`INLINE_LAYER_COVER`**: a rule never reached because an earlier Apply Layer rule covers it. Same treatment as
+  `COVERED_BY_EARLIER_DENY` (counted, shown in the same split as "covered by an earlier rule").
+- **Check Point multiple ordered layers.** A packet is allowed only when every ordered layer accepts. For a VIOLATION
+  in a package with more than one ordered layer, the violation witness tuple (5.7 step 5, with one concrete TCP/UDP
+  port from the not-allowed part) is checked in every other ordered layer with the existing lookup:
+  - every other layer allows: VIOLATION;
+  - any layer denies: flag `DENIED_BY_OTHER_ORDERED_LAYER`;
+  - any layer UNKNOWN (cleanup not collected, no TCP/UDP witness, incomplete snapshot): flag
+    `OTHER_ORDERED_LAYERS_UNKNOWN`.
+  Findings with either flag are listed and reported but **outside the headline** (PO dissent resolution, 2026-11-13).
 
-### 5.5 Algorithm (per rule, deterministic)
+### 5.6 NAT dual view
 
-1. Resolve the rule through the existing engine (`PolicyNormalization` resolver, the same one used by Trace and Rule
-   object usage), in the legacy view, with the engine's per-rule work budget. Resolution problems map to the reasons
-   of 5.3.
-2. Source and destination: per family, the merged ranges of the cell (negation not supported in the first delivery).
-   IPv4 only in the first delivery; a cell holding only IPv6 values gives NOT_EVALUABLE "IPv6 not evaluated"; a cell
-   holding `any` covers every IPv4 zone and the IPv6 part is listed as not evaluated (Q12).
-3. Intersect the source ranges with the version's partition (3.2) to get the set of source zones touched, likewise
-   destination zones. This is exact interval arithmetic over a sorted, non-overlapping partition: no sampling.
-4. For each touched pair (A, B): compare the rule's service selector (and application tokens, 4.3) with the statement.
-   `DENY_ALL`: violated (the whole service set is not allowed). `ALLOW_ANY`: compliant. `ALLOW_LISTED`: compliant when
-   the rule's service ranges are contained in the union of the listed entries per family (the engine's `contains`);
-   otherwise violated, with the difference (rule ranges minus allowed ranges) as the not-allowed part. A rule service
-   `any` is never inside a finite list.
-5. Combine as in 5.3. Record the touched pairs, the violated cells with their not-allowed part, and a short address
-   witness per violated cell (one source range and one destination range inside the pair, masked in masked views).
+Palo Alto security rules match pre-NAT addresses (A0 4a, HIGH); Check Point access versus NAT order is UNKNOWN
+(A0 1b). Because a public address left in `UNASSIGNED` would otherwise give a false COMPLIANT, the first delivery
+evaluates two views when a rule's destination intersects the original destination of an enabled destination or
+static NAT rule of the same policy source:
 
-Determinism: same snapshot, same version, same engine version give the same findings byte for byte (test ZM-9).
+- the original destination as written, and the translated destination of each matching NAT rule;
+- COMPLIANT only when every view is compliant; VIOLATION when any view violates; when only a translated view violates,
+  flag `NAT_MAY_APPLY`;
+- a NAT rule whose translation does not resolve: the rule cannot be COMPLIANT; NOT_EVALUABLE "NAT translation
+  unresolved" unless another view already proves a VIOLATION;
+- one public address translated by port to servers in different zones (port-split VIP) is evaluated per translation
+  and flagged `NAT_PORT_SPLIT`, because address-only zones cannot express it.
 
-### 5.6 Device scope
+The guidance stays: the bank puts translated public addresses into the zone of their real servers where it can.
+
+### 5.7 Algorithm (per rule, deterministic)
+
+1. `upperBoundMatch` (5.3) in the legacy view, with the engine's per-rule work budget.
+2. Source and destination per family. The engine is IPv4 only: an IPv6 value anywhere in a cell fails the whole rule
+   today ("unsupported address representation"); this is mapped to NOT_EVALUABLE "IPv6 not evaluated". Per-family
+   resolution (so a mixed IPv4/IPv6 object keeps its IPv4 VIOLATION) is a delivery step (10.1). `any` includes IPv6 on
+   both vendors, so a rule with `any` in an address cell is never COMPLIANT while IPv6 is not evaluated; its IPv4
+   VIOLATION is still reported.
+3. Intersect source and destination ranges with the version's partition to get the touched zone pairs (exact interval
+   arithmetic, no sampling). Repeat for each NAT view (5.6).
+4. Per touched pair: `DENY_ALL` violated; `ALLOW_ANY` compliant; `ALLOW_LISTED` compliant when the rule's service
+   ranges are inside the listed entries per family, else violated with the difference as the not-allowed part. A rule
+   service `any` is never inside a finite list.
+5. Record touched pairs, violated cells, not-allowed parts, and per violated cell one witness tuple (one source range,
+   one destination range, one service), masked in masked views.
+6. Apply the latent and ordered-layer checks (5.5) and combine as in 5.4.
+
+Same snapshot, version and engine version give identical findings.
+
+### 5.8 Device scope
 
 | Vendor | Covered | Notes |
 | --- | --- | --- |
-| Check Point (SMS and MDS domains) | yes | Per policy package; the finding lists the package's install targets, narrowed by the rule's install-on when it resolves to enrolled devices (equality only, as the lookup engine does), else all targets with `INSTALL_ON_UNRESOLVED`. Multiple ordered layers: each rule is evaluated on its own (Q10). |
-| Palo Alto (Panorama device groups; local firewall policy when no Panorama node exists) | yes | Per device group / firewall; targets from the snapshot metadata. Pre / local / post rulebases. |
-| Cisco ASA | no | No policy collection exists. Listed on the screen as "not evaluated: policy not collected". Adding one is its own decision and command gate. |
+| Check Point (SMS and MDS domains) | yes | Per policy package; the finding lists install targets, narrowed by install-on when it resolves to enrolled devices by equality, else all targets with `INSTALL_ON_UNRESOLVED`. |
+| Palo Alto (Panorama device groups; local firewall policy when no Panorama node exists) | yes | Pre / local / post rulebases and collected default overrides. Panorama coverage is never complete (5.2). |
+| Cisco ASA | no | No policy collection exists: "not evaluated: policy not collected". |
 | FortiGate | no | Same as Cisco ASA. |
 
-Coverage is always shown: devices and policies evaluated, not evaluated (with reason: vendor not covered, no snapshot,
-snapshot incomplete), and the time of the snapshot each result is based on.
+### 5.9 Finding identity, lifecycle and staleness
 
-### 5.7 Incomplete snapshots
+- Identity: (policy source, rule uid, inline parent rule id path, violated zone pair set). Shared Panorama rules and
+  shared Check Point layers repeat a rule uid across policy sources; the policy source keeps them apart, and the parent
+  path keeps a shared inline layer under several parents apart. Ids are compared exactly (identity law).
+- `firstObservedAt` (this finding) and `firstObservedAnyVersion` (earliest observation of the same policy source, rule
+  uid and zone pair in any version). Publishing a new version or toggling a flag never hides "since when".
+- `lastObservedAt` is updated by each run that reproduces the finding.
+- **Resolution** only when the rule is collected in a complete scope and decided not violating, or removed or disabled
+  in a completely collected scope (reason: rule changed, rule removed or disabled, matrix version changed). A rule
+  missing from a scope that was not collected is never resolved.
+- **Became undecided**: a finding whose rule turns NOT_EVALUABLE or UNKNOWN stays open with flag `BECAME_UNDECIDED`,
+  highlighted on the screen.
+- **Staleness** per policy: `CURRENT` or `STALE`. `STALE` when the snapshot age exceeds the threshold (bank input,
+  6.2), the last run is `FAILED`, or the last `COMPLETE` run used a version that is not active. Stale findings stay
+  shown with their age; they never count as resolved.
+- Coverage per policy: `COMPLETE` or `INCOMPLETE` (collection failures, Panorama, uncollected default or implicit
+  rules). A snapshot with collection failures keeps its per-rule outcomes (evaluation is per rule) but is never shown
+  as "no violations".
 
-Evaluation is per rule and does not depend on other rules, so per-rule outcomes of a snapshot with collection failures
-remain valid for the rules that were collected. The policy's coverage is then `INCOMPLETE` ("N layers not collected"):
-the policy never shows "no violations", and the Overview row counts it as not fully evaluated.
+## 6. Template and BDDK references
 
-### 5.8 Finding lifecycle
-
-A finding's identity is (policy source, rule id or uid as stored, violated cell set). The first evaluation that
-produces it sets `firstObservedAt`; each later evaluation that reproduces it updates `lastObservedAt`; the first later
-evaluation of the same policy (same or later version) that does not reproduce it sets `resolvedAt` and the reason
-(rule changed, rule removed or disabled, matrix version changed). Rule ids are compared exactly (identity law).
-
-## 6. BDDK rule set (template)
-
-BDDK's information-systems regulation states principles (for example network segmentation, least privilege, separation
-of environments, protection of critical systems); it does not publish a zone matrix. neXus therefore ships a
-**template**, not a regulation mapping. neXus does not state which BDDK article requires what.
+BDDK's information-systems regulation states principles; it does not publish a zone matrix. neXus ships a template
+named **"neXus segmentation template (proposal)"**. The bank's matrix is "a bank-owned segmentation policy seeded from
+a neXus template", not a "BDDK rule set". neXus does not state which BDDK article requires what. The zone matrix is
+kept separate from the existing `FINANCIAL_BASELINE` compliance mappings, whose section-style labels get their own
+clean-up decision.
 
 ### 6.1 Template content
 
 Zone roles (the bank maps its own zones to roles inside the product; real zone names never enter the repository):
-`INTERNET_UNTRUSTED` (by default the `UNASSIGNED` space), `DMZ`, `USER`, `APPLICATION`, `DATABASE` (critical data),
-`MANAGEMENT`, `PARTNER` (third-party connections), `NON_PRODUCTION` (development / test).
+`INTERNET_UNTRUSTED` (by default the `UNASSIGNED` space), `DMZ`, `USER`, `APPLICATION`, `DATABASE`, `MANAGEMENT`,
+`PARTNER`, `NON_PRODUCTION`.
 
 Proposed default statements (neXus proposal based on general segmentation practice, **not on a BDDK clause**):
 
-| Source role -> destination role | Default | Severity | BDDK reference | Confirmed by |
+| Source role -> destination role | Default | Severity | Reference | Confirmed by |
 | --- | --- | --- | --- | --- |
-| INTERNET_UNTRUSTED -> DMZ | ALLOW_LISTED (empty list) | HIGH | *compliance input* | *compliance input* |
-| INTERNET_UNTRUSTED -> any internal role except DMZ | DENY_ALL | CRITICAL | *compliance input* | *compliance input* |
-| DMZ -> APPLICATION | ALLOW_LISTED (empty list) | HIGH | *compliance input* | *compliance input* |
-| DMZ -> DATABASE | DENY_ALL | CRITICAL | *compliance input* | *compliance input* |
-| USER -> DATABASE | DENY_ALL | CRITICAL | *compliance input* | *compliance input* |
-| USER -> MANAGEMENT | DENY_ALL | HIGH | *compliance input* | *compliance input* |
-| USER -> APPLICATION | ALLOW_LISTED (empty list) | MEDIUM | *compliance input* | *compliance input* |
-| APPLICATION -> DATABASE | ALLOW_LISTED (empty list) | HIGH | *compliance input* | *compliance input* |
-| MANAGEMENT -> any role | ALLOW_LISTED (empty list) | MEDIUM | *compliance input* | *compliance input* |
-| any role -> MANAGEMENT except MANAGEMENT | DENY_ALL | HIGH | *compliance input* | *compliance input* |
-| PARTNER -> any role except DMZ | DENY_ALL | CRITICAL | *compliance input* | *compliance input* |
-| NON_PRODUCTION <-> production roles (both directions) | DENY_ALL | HIGH | *compliance input* | *compliance input* |
-| same role -> same role (diagonal) | ALLOW_ANY | LOW | *compliance input* | *compliance input* |
-| internal role -> INTERNET_UNTRUSTED | ALLOW_LISTED (empty list) | MEDIUM | *compliance input* | *compliance input* |
-| any other pair | DENY_ALL (version default) | MEDIUM | *compliance input* | *compliance input* |
+| INTERNET_UNTRUSTED -> DMZ | ALLOW_LISTED (empty list) | HIGH | *compliance input* | *compliance_admin* |
+| INTERNET_UNTRUSTED -> any internal role except DMZ | DENY_ALL | CRITICAL | *compliance input* | *compliance_admin* |
+| UNASSIGNED -> UNASSIGNED | DENY_ALL | MEDIUM | *compliance input* | *compliance_admin* |
+| DMZ -> APPLICATION | ALLOW_LISTED (empty list) | HIGH | *compliance input* | *compliance_admin* |
+| DMZ -> DATABASE | DENY_ALL | CRITICAL | *compliance input* | *compliance_admin* |
+| USER -> DATABASE | DENY_ALL | CRITICAL | *compliance input* | *compliance_admin* |
+| USER -> MANAGEMENT | DENY_ALL | HIGH | *compliance input* | *compliance_admin* |
+| USER -> APPLICATION | ALLOW_LISTED (empty list) | MEDIUM | *compliance input* | *compliance_admin* |
+| APPLICATION -> DATABASE | ALLOW_LISTED (empty list) | HIGH | *compliance input* | *compliance_admin* |
+| MANAGEMENT -> any role | ALLOW_LISTED (empty list) | MEDIUM | *compliance input* | *compliance_admin* |
+| any role -> MANAGEMENT except MANAGEMENT | DENY_ALL | HIGH | *compliance input* | *compliance_admin* |
+| PARTNER -> any role except DMZ | DENY_ALL | CRITICAL | *compliance input* | *compliance_admin* |
+| NON_PRODUCTION <-> production roles (both directions) | DENY_ALL | HIGH | *compliance input* | *compliance_admin* |
+| same role -> same role (diagonal, assigned zones only) | ALLOW_ANY (explicit cells) | LOW | *compliance input* | *compliance_admin* |
+| internal role -> INTERNET_UNTRUSTED | ALLOW_LISTED (empty list) | MEDIUM | *compliance input* | *compliance_admin* |
+| any other pair | DENY_ALL (version default) | MEDIUM | *compliance input* | *compliance_admin* |
 
-"Empty list" means the bank must list the allowed services; until it does, every allow rule in that cell is a
-violation, which is the intended effect of a deny-by-default template.
+"Empty list" means the bank lists the allowed services; until it does, every allow rule in that cell is a violation.
 
-Per cell, three reference fields: `regulationReference` (free text: the document, its date or version and the
-article as the compliance team cites it), `referenceStatus` (`EMPTY`, `PROPOSED`, `CONFIRMED`), `confirmedBy` and
-`confirmedAt` (a user holding `zone_matrix_publish`, set when status becomes `CONFIRMED`). The evidence report prints
-the reference fields as entered and marks `EMPTY` and `PROPOSED` cells as "not confirmed by compliance". neXus never
-fills these fields.
+Per cell: `regulationReference` (free text: document, date or version, article as the compliance team cites it),
+`referenceStatus` (`EMPTY`, `PROPOSED`, `CONFIRMED`), `confirmedBy`, `confirmedAt`. Only compliance_admin confirms;
+a change to the cell resets the status to `PROPOSED` (3.4). neXus never fills these fields.
+
+**BDDK labelling rule.** The word BDDK appears in a report title only when the bank has named the regulation (title
+and date) and every cell that carries a reference is `CONFIRMED`. Otherwise the title is "Segmentation policy evidence
+report". Every report header prints "N of M cells confirmed by compliance".
 
 ### 6.2 Input needed from the bank (PO / compliance)
 
-1. The exact regulation text the bank maps to: title, date and version of the BDDK regulation and any internal
-   standard derived from it.
-2. The list of zone roles the bank uses, and whether the eight template roles fit (add, remove, rename).
-3. For each template cell: confirm or change the statement, the severity, and the regulation reference.
-4. For each `ALLOW_LISTED` cell: the allowed services (and, for Palo Alto, allowed applications by name).
-5. The IP blocks of each zone, entered in the product by an authorized user (never sent to engineering).
-6. How to treat unassigned address space (Q6), and whether public addresses translated by NAT belong to the zone of
-   their real servers (Q2).
+1. The regulation the bank maps to: title, date and version of the BDDK regulation and any internal standard
+   derived from it.
+2. Which team holds compliance_admin, and whether that role is bound today (four-eyes needs it, 3.4).
+3. The zone roles the bank uses, and whether the eight template roles fit.
+4. For each template cell: statement, severity and regulation reference.
+5. For each `ALLOW_LISTED` cell: the allowed services (and Palo Alto applications by name).
+6. The IP blocks of each zone, entered in the product by an authorized user (never sent to engineering), including
+   the zone of each translated public address.
 7. Whether IPv6 is in scope for the first audit.
-8. Who may edit and who may publish the matrix, and whether four-eyes publishing is required (Q7).
-9. How long evaluations, findings and reports must be kept (retention, 8.3).
-10. The evidence report fields and language the auditors expect (Turkish, English or both), and whether a signed
-    report is needed.
-11. Approved exceptions that exist today (rules the bank has already accepted as deviations), until an exception
-    feature exists (Q9).
+8. Retention of evaluations, findings and stored reports.
+9. The snapshot staleness threshold (5.9).
+10. The report fields, language (Turkish, English or both) and signature the auditors expect, and whether they need
+    zone blocks in the report.
+11. The bank's current list of accepted deviations (kept outside neXus until 8.6 is delivered).
 
 ## 7. Output
 
@@ -328,165 +424,257 @@ fills these fields.
 
 Menu **Policy and changes > Zone matrix** (name to confirm in the navigation review). Tabs:
 
-- **Matrix**: zones x zones grid of the active version. Each cell shows the statement (shape plus text, not colour
-  alone), severity, and the number of open violations; clicking a cell opens the violations of that pair. A version
-  selector shows any published version; the draft is shown only to editors, clearly labelled "draft, not evaluated".
-- **Violations**: table of findings of the latest evaluation of each policy. Filters: outcome (VIOLATION by default,
-  NOT_EVALUABLE, UNKNOWN, COMPLIANT), source zone, destination zone, severity, vendor, policy / package, device,
-  flag (`IDENTITY_IGNORED`, `TIME_IGNORED`, `COVERED_BY_EARLIER_DENY`, `NAT_MAY_APPLY`), reason, first observed
-  (range), state (open / resolved). Row: rule number, name, id, policy, devices, violated cells, not-allowed part,
-  flags, first and last observed, matrix version. Row action: open the rule in the policy viewer; open Trace with a
-  witness address pair from the violated cell.
-- **Zones**: zones, blocks, effective sizes, overlap warnings, address lookup, "rules touching unassigned space".
-- **Versions**: history, diff, publish (four-eyes), audit trail.
-- **Coverage** strip on every tab: policies evaluated / incomplete / not evaluated, vendors not covered, snapshot ages.
+- **Matrix**: zones x zones grid of the active version: statement (shape plus text, not colour alone), severity,
+  number of open violations; a cell opens its violations. Any published version can be shown; the draft only to
+  editors, labelled "draft, not evaluated".
+- **Violations**: findings of the latest `COMPLETE` run of each policy. Filters: outcome, source zone, destination
+  zone, severity, vendor, policy source, device, flag, reason, first observed, state (open, resolved, became
+  undecided), staleness. Row: rule number, name, id, policy, devices, violated cells, not-allowed part, flags,
+  covering rule id where flagged, first / first-any-version / last observed, matrix version. Actions: open the rule in
+  the policy viewer; open Trace with the witness tuple (only with `zone_matrix_zones_read`).
+- **Zones**: zones, effective sizes, overlap warnings, "zone definition gap" rules; blocks and address lookup only
+  with `zone_matrix_zones_read`.
+- **Versions**: history, diff with loosening changes and moved addresses, publish, reference confirmation,
+  resolved-by-version lists.
+- **Coverage** on every tab: per policy `CURRENT`/`STALE` and `COMPLETE`/`INCOMPLETE` with the coverage items of 5.2;
+  vendors and devices not evaluated with reasons; snapshot ages.
 
-### 7.2 Overview attention row
+### 7.2 Headline and Overview attention row
 
-One row in the Overview attention list when an active version exists: "Segmentation: N rules violate the zone matrix
-(vK) on M devices; C critical" with a link to the Violations tab filtered to open VIOLATION findings. When any covered
-policy's latest evaluation is older than its latest completed collection, or a covered policy has no evaluation, the
-row adds "UNKNOWN for P policies". No active version: no row. Coordinate the row shape with the Overview attention
-work in progress (separate session).
+Headline = number of **distinct open (policy source, rule uid)** with outcome VIOLATION in the latest `COMPLETE` runs
+against the **active version**, excluding `DENIED_BY_OTHER_ORDERED_LAYER` and `OTHER_ORDERED_LAYERS_UNKNOWN`. A rule's
+severity is the highest severity of the cells it violates.
+
+Shown together, in one row, never apart:
+
+- "N rules violate the zone matrix (vK) across P zone pairs; C critical, of which L covered by an earlier rule and
+  I conditional (identity / time)";
+- "+X outside the headline (other ordered layer denies or unknown)";
+- NOT_EVALUABLE count, UNKNOWN count, policies `STALE`, `INCOMPLETE`, not evaluated, or still on an older version;
+- findings resolved by a version change in the last 7 days.
+
+Never "0" or green unless every covered policy is `CURRENT` and `COMPLETE` and nothing is NOT_EVALUABLE or UNKNOWN;
+otherwise "at least N" and, when N is zero, "no proven violations in evaluated rules". No active version: no row.
+Per-cell counts appear on the Violations tab and in the report. The row shape is coordinated with the Overview
+attention work in progress.
 
 ### 7.3 Evidence report
 
-Exported as CSV and PDF (PDF through the Reports area when it exists). Contents:
+Generated through the Reports R1 pipeline and **stored as a file** in its file store; the audit row carries the
+stored file's sha256, written before the first byte is streamed. CSV and PDF. CSV output passes the R1 formula guard
+(cells starting with `=`, `+`, `-`, `@` and the like are escaped).
 
-- Header: product version, generated at (UTC), generated by (user), masked or raw, report hash (sha256 of the content).
-- Matrix version: number, hash, published at, editor and publisher, template origin, every cell with statement,
-  services, severity and the BDDK reference fields exactly as entered, unconfirmed cells marked.
-- Scope: each policy evaluated with vendor, device(s), snapshot collection time, evaluation time, coverage status;
-  vendors and devices not evaluated with reasons.
-- Summary: counts per outcome, per severity, per cell.
-- Violations: one line per finding with rule id, number, name, policy, device(s), violated cell, not-allowed part,
-  flags, first observed, last observed, evaluation id.
-- NOT_EVALUABLE and UNKNOWN findings with reasons: always included, never dropped from a report.
-- Limitations: the fixed text of section 5 (policy intent only, NAT and routing not evaluated, implicit rules not
-  collected, IPv4 only in the first delivery, rule-level evaluation).
+- **Period-based**: a from-to period; includes findings open at any time in the period and findings resolved within
+  it, with first, first-any-version, last and resolved dates.
+- **View**: the content follows the caller's screen view (masked or raw; blocks and witness addresses only with
+  `zone_matrix_zones_read`). Raw content also needs `report_raw_view`. The blocks appendix is opt-in.
+- Header: product version, generated at (UTC), generated by, masked or raw, period, filter (with counts for the
+  filtered and the whole scope), "N of M cells confirmed by compliance", title per the BDDK labelling rule (6.1).
+- Matrix version: number, hash, publish time, editors and publisher, template origin, every cell with statement,
+  services, severity and reference fields exactly as entered, unconfirmed cells marked.
+- Scope: each policy with vendor, devices, snapshot time, run time, `CURRENT`/`STALE`, `COMPLETE`/`INCOMPLETE` with
+  coverage items; vendors and devices not evaluated with reasons.
+- Summary: the headline of 7.2 with all its splits; counts per outcome, severity and cell.
+- Findings: VIOLATION (including flagged and outside-headline ones, labelled), NOT_EVALUABLE and UNKNOWN with reasons,
+  never dropped.
+- Fixed sentences: "Accepted deviations are not recorded in neXus; every rule that conflicts with the matrix is
+  listed." and the limitations text (policy intent as defined in management; implicit and default rules listed in
+  coverage; IPv4 only in the first delivery; rule-level evaluation; NAT dual view).
 
-An export is an audit event (8.4). The report may be filtered (one zone pair, one device); the filter is printed in
-the header and counts are printed for the filtered scope and for the whole scope.
+## 8. Storage, privacy, retention
 
-## 8. Storage, privacy, authorization
+### 8.1 Storage (one migration, dry-run in BEGIN/ROLLBACK on the live database before rollout)
 
-### 8.1 Storage (new tables, one migration, dry-run in BEGIN/ROLLBACK on the live database before rollout)
-
-- `zone_matrix_version`: id, number, state, content (canonical JSONB: zones, blocks, cells, default, template origin),
-  content_sha256, created/edited/published by and at.
-- `zone_matrix_evaluation`: id, version id, policy source id, snapshot collected_at and size (the row version the
-  engine already uses), engine version, started/finished, coverage status, counts per outcome.
-- `zone_matrix_finding`: evaluation id, rule id / uid / number / name / section as stored, targets, outcome, reason,
-  flags, violated cells with not-allowed part, witness ranges, first/last observed, resolved at and reason.
-- No raw device response, no full rule copy, no snapshot copy: only the fields listed (raw-evidence law).
+- `zone_matrix_version`: id, number, state, content (canonical JSONB), content_sha256, published by and at.
+- `zone_matrix_revision`: append-only draft revisions (revision id, version id, actor, time, change kind, content
+  hash, content, rationale for loosening changes).
+- `zone_matrix_reference_confirmation`: cell, status, confirmed by and at, the cell hash it confirmed.
+- `zone_matrix_run`: id, version id, policy source id, snapshot collected_at and size, engine version, state
+  (`RUNNING`, `COMPLETE`, `FAILED`), started / finished, coverage, counts.
+- `zone_matrix_finding`: run id, identity fields of 5.9, rule number / name / section as stored, targets, outcome,
+  reason, flags, covering rule id, violated cells with not-allowed parts, witness tuples, NAT view, observed and
+  resolved dates.
+- No raw device response, no full rule copy, no snapshot copy. No delete route for runs, findings or revisions; only
+  the retention janitor removes rows past the bank-defined retention.
 
 ### 8.2 Privacy
 
-- Zone names and blocks describe the bank's network and are treated like device identities: masked for
-  replay_viewer (zone names pseudonymised as `ZONE-<n>` by stable order of id; blocks and witness addresses through
-  the existing subnet-preserving IP masker; rule and object names through the existing `PolicyPrivacy` projection).
-- Logs and job records carry ids, version numbers and counts only, never zone names, blocks, addresses or rule names.
-- Masked reports are produced through the same projection; raw reports need `zone_matrix_export`.
+- Zone names and blocks describe the bank's network and are treated like device identities. For replay_viewer, zone
+  names are pseudonymised (`ZONE-<n>` by stable order of id), and blocks and witness addresses are never shown; rule
+  and object names pass through `PolicyPrivacy`.
+- Logs and job records carry ids, version numbers, hashes and counts only, never zone names, blocks, addresses or rule
+  names.
 - Repository, tests, fixtures and screenshots use synthetic names and documentation ranges only.
 
-### 8.3 Retention (PO / compliance input)
+### 8.3 Retention
 
-Proposed until the bank states its requirement: matrix versions kept while any stored finding cites them and at least
-as long as findings; evaluations and findings kept 400 days after the finding is resolved; summary counts per
-evaluation kept for the same period. Reports are not stored server-side (generated on demand from stored findings);
-only the export audit event with the report hash is kept.
+Set by the bank (6.2 item 8) for runs, findings, revisions and stored reports. Versions are kept as long as anything
+stored cites them. Until the bank states it, the Reports R1 retention applies to stored reports, and runs and findings
+are not deleted. A zone-matrix report class with a bank-defined retention needs a Reports R1 contract change.
 
 ### 8.4 Authorization summary
 
-See 3.4. Evaluation runs as a system job (no user credential, no device access). Every export, publish and on-demand
-evaluation is attributed to the requesting user in the audit log. aiview may read masked results and may not edit,
-publish or export raw.
+Section 3.4. Evaluation runs as a system job with no user credential and no device access. aiview reads masked results
+only and never edits, confirms, publishes, looks up addresses or exports raw.
+
+### 8.5 Abuse cases the contract closes
+
+Violation hidden by a broad deny above it (counted, split, 5.5); by a user or schedule condition (VIOLATION with flag,
+5.4); by a nested `/32` or a widened cell (loosening diff with rationale, 3.5); by a default `ALLOW_ANY` (not allowed,
+3.5); by severity downgrade (loosening diff); by merging rules (headline shows zone pairs too, 7.2); by resetting
+"since when" (first-observed any version, 5.9); by breaking collection (`STALE`, 5.9); by an incomplete snapshot
+(never resolved, 5.9); by two accounts of one person (canonical principal ids, compliance_admin in the pair, 3.4).
+Map leakage: blocks, lookup and witnesses behind `zone_matrix_zones_read` with audited views; masked export by
+default; CSV formula guard.
+
+### 8.6 Exceptions (accepted deviations)
+
+None in the first delivery. Before any report goes to an external auditor, a minimal exception record must exist,
+under its own contract change: (policy source, rule uid, cell, hash of the rule's resolved match), reason, four-eyes
+approval, mandatory expiry, version range. Any change to the rule or expiry cancels it. An excepted finding stays a
+VIOLATION, flagged `EXCEPTED`, counted separately and always printed; it is never COMPLIANT. Until then, a widened
+cell is not a substitute for an exception: every loosening change needs its rationale (3.5).
 
 ## 9. Performance budget
 
 Measured before release on the 10 largest stored policies (counts only, in the pod; the largest has about 16,500
 rules):
 
-- Evaluation of the largest policy against a 500-zone version: at most 30 seconds and 512 MB additional heap; all 10
-  within 3 minutes in sequence. Per-rule work budget as in the engine; a rule that exceeds it is UNKNOWN "analysis
-  budget", never dropped.
-- Evaluation runs off the request path, at most one at a time per policy and two in total, under the existing policy
-  bulkhead; where it runs (service or worker) is Q13.
+- The largest policy against a 500-zone version at the block cap: at most 30 seconds and 512 MB additional heap; all
+  10 within 3 minutes. These are the hard ceilings of 5.1; a run that exceeds one ends `FAILED`. A rule over the
+  per-rule work budget is UNKNOWN "analysis budget", never dropped.
+- Own pool: at most one run per policy and two in total. Interactive policy screens keep their p95 during a fleet
+  re-evaluation after a publish (measured).
 - Screens read stored findings only: Matrix and Violations first page within 2 seconds at p95 with 50,000 findings;
   Overview row from a stored count within 200 ms.
+- The block cap (3.1) is set from this measurement, including the cost of hashing and storing a revision.
 
 ## 10. Delivery order and acceptance criteria
 
 ### 10.1 Delivery order (small steps; each its own PR with targeted tests)
 
-1. Zone model, versions, publish, audit, RBAC, Zones tab with address lookup. No evaluation.
-2. Matrix statements and service vocabulary; BDDK template import with empty reference fields; Matrix tab (Fable).
-3. Evaluation engine as a pure function (IPv4, TCP/UDP, legacy model, outcomes and reasons) with synthetic fixtures,
-   plus a counts-only measurement on the 10 largest policies attached to the PR.
-4. Storage, triggers (collection completed, version published, on demand), finding lifecycle, Violations tab.
+1. Zone model, versions, revisions, four-eyes publish, reference confirmation, audit, rights, Zones tab with audited
+   address lookup. No evaluation.
+2. Matrix statements and service vocabulary; template import with empty reference fields; loosening diff; Matrix tab
+   (Fable).
+3. Evaluation engine as a pure function: `upperBoundMatch`, IPv4, TCP/UDP, outcomes, reasons and flags, NAT dual view,
+   ordered-layer witness check, Apply Layer handling, Palo Alto default overrides; synthetic fixtures; counts-only
+   measurement on the 10 largest policies attached to the PR.
+4. Durable runs on the own pool, triggers, finding lifecycle and staleness, Violations and Coverage tabs.
 5. Overview attention row.
-6. Evidence report (CSV, then PDF).
-7. Extensions as their prerequisites land: Palo Alto applications by name, ICMP / IP protocol (hygiene R1, R4),
-   negation (R5), NAT annotation (Q2), IPv6, exceptions (Q9).
+6. Evidence report (stored CSV, then PDF) through Reports R1.
+7. Per-family address resolution (IPv4 kept for mixed objects); then, as prerequisites land: Palo Alto applications
+   by name, ICMP / IP protocol (hygiene R1, R4), negation (R5), IPv6 evaluation, exception record (8.6).
 
 ### 10.2 Acceptance criteria
 
+Origin in brackets: `R1` revision 1; `N`, `C`, `S` the network/vendor, compliance and security seats.
+
 - `ZM-1` A version's partition puts every address in exactly one zone or `UNASSIGNED`; duplicate blocks across zones
-  are refused; nesting follows the longest prefix (property test over random synthetic blocks).
-- `ZM-2` Published versions are immutable; edits go to the draft; publish by the last editor is refused.
-- `ZM-3` Every evaluation and finding cites a version id, number and hash; the hash recomputes from stored content.
-- `ZM-4` A rule is COMPLIANT only when every touched pair allows every permitted service; any undecided part gives
-  NOT_EVALUABLE or UNKNOWN with a reason from the fixed list (unless a decided part proves VIOLATION).
+  are refused; nesting follows the longest prefix (property test over random synthetic blocks). [R1]
+- `ZM-2` Published versions are immutable; edits go to the draft. [R1]
+- `ZM-3` Every run and finding cites a version id, number and hash; the hash recomputes from stored content. [R1]
+- `ZM-4` A rule is COMPLIANT only when every touched pair allows every permitted service in every NAT view and every
+  address family is decided; any undecided part gives NOT_EVALUABLE or UNKNOWN with a reason from the fixed list
+  (unless a decided part proves VIOLATION). [R1]
 - `ZM-5` A rule with service `any` in an `ALLOW_LISTED` pair is a VIOLATION; a rule in a `DENY_ALL` pair is a
-  VIOLATION whatever its service.
-- `ZM-6` Disabled rules, deny-type rules and NAT rules never produce a VIOLATION and are counted separately.
-- `ZM-7` A snapshot with collection failures gives coverage `INCOMPLETE`; the policy never shows "no violations".
-- `ZM-8` Evaluation runs on completed collections only, never on a checkpoint.
-- `ZM-9` Same snapshot, version and engine version give identical findings.
-- `ZM-10` aiview sees masked zone names, blocks, addresses and rule names; logs contain none of them (log masking
-  test with planted names).
-- `ZM-11` The evidence report contains the version hash, every NOT_EVALUABLE and UNKNOWN finding, the limitations
-  text, and the BDDK reference fields exactly as entered; unconfirmed cells are marked.
-- `ZM-12` The performance budget of section 9 holds on the 10 largest stored policies (measurement attached).
-- `ZM-13` No code path of this feature issues a device command or writes to a device (architecture test).
+  VIOLATION whatever its service. [R1]
+- `ZM-6` Disabled, deny-type and NAT rules never produce a VIOLATION and are counted separately. [R1]
+- `ZM-7` A snapshot with collection failures gives coverage `INCOMPLETE`; the policy never shows "no violations". [R1]
+- `ZM-8` Runs start on completed collections only, never on a checkpoint. [R1]
+- `ZM-9` Same snapshot, version and engine version give identical findings. [R1]
+- `ZM-10` aiview sees pseudonymised zone names, no blocks or witness addresses, masked rule names; logs contain none of
+  them (log masking test with planted names). [R1]
+- `ZM-11` The report contains the version hash, every NOT_EVALUABLE and UNKNOWN finding, the limitations text and the
+  reference fields exactly as entered; unconfirmed cells are marked. [R1]
+- `ZM-12` The performance budget of section 9 holds on the 10 largest stored policies (measurement attached). [R1]
+- `ZM-13` No code path of this feature issues a device command or writes to a device (architecture test). [R1]
+- `ZM-14` A Palo Alto rule to a destination-NAT public address whose translated server is in a `DENY_ALL` cell is never
+  COMPLIANT. [N1]
+- `ZM-15` A Check Point access-role rule is COMPLIANT only when compliant with its source read as any (synthetic
+  fixture with an outside "proxy" address). [N2]
+- `ZM-16` An "Any Any Accept" in a second ordered layer, where layer 1 denies the witness, is not counted in the
+  headline. [N3]
+- `ZM-17` An Apply Layer parent is never "action semantics not modelled". [N4]
+- `ZM-18` A collected Palo Alto default override with action allow produces findings with `DEFAULT_RULE`. [N5]
+- `ZM-19` A mixed IPv4/IPv6 object yields "IPv6 not evaluated", and its IPv4 violation is reported once per-family
+  resolution lands. [N6]
+- `ZM-20` Panorama-sourced policies always show the coverage items "local rules not collected" and "intrazone
+  default". [N7]
+- `ZM-21` A rule uid shared across scopes is counted once per policy source in the headline. [N8]
+- `ZM-22` Publishing is refused (`SELF_APPROVAL`) for any principal who edited the draft or confirmed a reference in it
+  since the last publish (canonical principal ids); refused (`COMPLIANCE_ROLE_MISSING`) when neither the publisher nor
+  an editor holds compliance_admin; refused for the local root administrator and for replay_viewer even with an admin
+  role; refused (`REQUEST_CHANGED`) on a revision or hash mismatch. [C14, S1, PO]
+- `ZM-23` Only compliance_admin sets `CONFIRMED`; a later change to the cell's statement, services or severity resets
+  it to `PROPOSED` and clears `confirmedBy`. [C15, S2]
+- `ZM-24` A user- or time-limited rule in a `DENY_ALL` pair gives a VIOLATION with its flag; an ended one-time window
+  gives `NOT_APPLICABLE` with its date and is counted. [C16]
+- `ZM-25` `COVERED_BY_EARLIER_DENY` is set only on a proven hygiene conflict with the same install targets, carries the
+  covering rule id, and toggling it keeps first-observed. [C17]
+- `ZM-26` Headline = distinct open (policy source, rule uid) against the active version; a fixture with incomplete
+  coverage, a stale policy or one NOT_EVALUABLE rule never renders "0" or green. [C18, S5]
+- `ZM-27` IPv4 compliant plus IPv6 `any` gives NOT_EVALUABLE "IPv6 not evaluated". [C19]
+- `ZM-28` The stored report file's sha256 equals the hash in its audit row; CSV formula escaping passes a test with a
+  planted `=cmd`. [C20, S8]
+- `ZM-29` The publish diff lists addresses that move between zones, with effective counts. [C21]
+- `ZM-30` No surface shows "BDDK compliant", "BDDK pass" or a BDDK score; the report title omits BDDK while any
+  referenced cell is unconfirmed, and the header prints "N of M cells confirmed by compliance". [C22]
+- `ZM-31` The report content follows the caller's screen view (rights test). [C23]
+- `ZM-32` The report supports a period and includes findings resolved within it, with first, last and resolved
+  dates. [C24]
+- `ZM-33` viewer and aiview get no blocks, no address lookup and no witness ranges; every raw view or lookup writes an
+  audit row. [S3]
+- `ZM-34` VIOLATION turning NOT_EVALUABLE or UNKNOWN keeps the finding open with `BECAME_UNDECIDED`; a rule missing from
+  an uncollected scope is never resolved. [S4]
+- `ZM-35` A policy is `STALE` when its snapshot is older than the threshold, its last run is `FAILED`, or its version
+  is not active; the Overview shows "at least N" unless every covered policy is `CURRENT` and `COMPLETE`. [S5]
+- `ZM-36` The publish diff lists loosening changes (statement relaxed, services added, default changed, severity
+  downgraded, addresses moved, `UNASSIGNED` shrunk), each with a required rationale; findings resolved by a version
+  change are listed per version and shown on the Overview for 7 days. [S6]
+- `ZM-37` Audit rows hold hashes and change kind only (column allowlist trigger); full revisions are in the
+  append-only table; no delete route exists for runs, findings or revisions. [S7]
+- `ZM-38` The blocks appendix is opt-in; raw export only for roles holding `report_raw_view`. [S8]
+- `ZM-39` The run pool is separate from `PolicyBulkhead`; interactive policy p95 holds during a fleet re-evaluation;
+  the heap ceiling and timeout end a run `FAILED`; a pod kill leaves `FAILED`, never partial findings. [S9]
+- `ZM-40` A total-block cap per version and a request size limit are enforced (refused, never truncated). [S10]
+- `ZM-41` `UNASSIGNED -> UNASSIGNED` defaults to `DENY_ALL`; the version default cannot be `ALLOW_ANY`. [C, S]
+- `ZM-42` A first-observed date survives a new version: `firstObservedAnyVersion` equals the earliest observation of
+  the same policy source, rule uid and zone pair. [C]
 
-## 11. Open questions for the decision council
+## 11. Council verdicts and remaining questions
 
-- **Q1 Rule-level or flow-level evaluation.** Proposed: rule-level (each allow rule on its own match), as the
-  sector products report "violating rules", and because it does not depend on resolving every earlier rule. Flow-level
-  (what the whole rulebase effectively permits per pair) is more exact but inherits every UNKNOWN of earlier rules
-  (hygiene measurement: 12.7 % decided today in the sound mode). Option: flow-level as a later "effective exposure"
-  view per pair using the Trace engine.
-- **Q2 NAT.** Palo Alto security rules match pre-NAT addresses (A0 section 4a, HIGH); Check Point access on the
-  pre-NAT tuple is UNKNOWN (A0 1b). A destination-NAT rule for a public address may look like `UNASSIGNED ->
-  UNASSIGNED` while the real server is in `Z-DMZ`. Proposed for the first delivery: evaluate addresses as written in
-  the rule; ask the bank to put translated public addresses into the zone of their real servers (zone membership is
-  by blocks, so this is a data decision, not code); later, flag `NAT_MAY_APPLY` when a rule's destination intersects
-  the original destination of a collected NAT rule. No NAT translation in the evaluation until Check Point semantics
-  are documented.
-- **Q3 Rules shadowed by an earlier deny.** A rule fully covered by an earlier deny (hygiene verdict CONFLICT) has no
-  effect. Proposed: keep it a VIOLATION with flag `COVERED_BY_EARLIER_DENY` (it is still a latent permission that a
-  reorder or a deleted deny activates), filterable and excluded from the critical count. Alternative: not
-  applicable. Partially covered rules: no change.
-- **Q4 Identity- and time-limited rules.** VIOLATION with `IDENTITY_IGNORED` / `TIME_IGNORED` (proposed, 5.4) or
-  NOT_EVALUABLE.
-- **Q5 Overlapping blocks.** Longest prefix wins with duplicates refused (proposed), or refuse every overlap.
-- **Q6 Unassigned space.** A pseudo-zone with its own statements (proposed), or must every address used by a rule be
-  assigned before a version can be published.
-- **Q7 Edit and publish rights.** Roles of 3.4 and four-eyes publishing (proposed), or a single role.
-- **Q8 Rule detail for compliance users.** compliance_admin and viewer without `policy_read` see findings without
-  object names and addresses (proposed), or grant them a masked or full policy read for this screen.
-- **Q9 Exceptions.** Accepted deviations (rule, cell, reason, approver, expiry) before the "smart" ticket feature
-  exists, or none in the first delivery (proposed: none; the bank's list of accepted deviations, input 11, is kept
-  outside until a contract amendment adds them).
-- **Q10 Check Point multiple ordered layers.** A packet must be accepted by every ordered layer; rule-level
-  evaluation reports an allow rule in one layer even if another layer drops the traffic. Proposed: evaluate per rule
-  and print the layer; a flow-level view (Q1) resolves it later.
-- **Q11 Implicit and default rules.** Palo Alto `intrazone-default` allows traffic within a firewall zone by default
-  and its override is not collected; Check Point implied rules are not collected. Proposed: out of scope, stated as a
-  limitation; collecting the overrides is its own decision.
-- **Q12 IPv6.** Blocks stored from day one, evaluation IPv4 only with "IPv6 not evaluated" (proposed), or IPv6 out of
-  the model until the engine resolves it.
-- **Q13 Where the evaluation runs.** In ui2-service next to the engine under the policy bulkhead (proposed), or as a
-  worker job type with the engine moved to a shared module.
-- **Q14 Headline count.** Count open VIOLATION findings per rule (proposed) or per (rule, cell).
+### 11.1 Verdicts incorporated (council 2026-11-13, PO approval "Evet, hepsini işle")
+
+| Question | Verdict | Where |
+| --- | --- | --- |
+| Q1 rule-level or flow-level | Rule-level, with the upper-bound match function and the ordered-layer check; flow-level stays a later view (the lookup refuses incomplete snapshots, caps address cuts, TCP/UDP only) | 5.3, 5.5 |
+| Q2 NAT | Dual view for destination and static NAT in the first delivery; port-split VIPs flagged | 5.6 |
+| Q3 rule covered by an earlier deny | VIOLATION + `COVERED_BY_EARLIER_DENY` on proven conflict only, covering rule id stored; counted in the headline, shown as a split (dissent resolved by the PO) | 5.5, 7.2 |
+| Q4 identity / time | VIOLATION + flag, counted; access roles never read as their networks for COMPLIANT; ended windows `NOT_APPLICABLE` with date | 5.3, 5.4 |
+| Q5 overlap | Longest prefix wins, duplicates refused, moved addresses in the publish diff | 3.2 |
+| Q6 unassigned | Pseudo-zone; `UNASSIGNED -> UNASSIGNED` `DENY_ALL`; private unassigned ranges listed as gaps | 3.3 |
+| Q7 rights | Four-eyes by canonical principal, one of the two holds compliance_admin (PO), hash-bound, root and aiview excluded; confirmation compliance_admin only | 3.4 |
+| Q8 rule detail and blocks | Split read right; export follows the screen view; raw via `report_raw_view` | 3.4, 7.3 |
+| Q9 exceptions | None in delivery 1; report sentence; loosening rationale; record required before external-auditor use | 7.3, 8.6 |
+| Q10 ordered layers, Apply Layer | Witness check in other ordered layers, flagged findings outside the headline (PO); Apply Layer as Accept upper bound | 5.2, 5.5 |
+| Q11 implicit and default rules | Palo Alto default overrides evaluated (`DEFAULT_RULE`); intrazone default and Panorama local rules as coverage items; Panorama never complete | 5.2 |
+| Q12 IPv6 | Store blocks; map the engine's failure to "IPv6 not evaluated"; `any` never COMPLIANT; per-family resolution as a delivery step | 5.7 |
+| Q13 placement | ui2-service on its own pool with durable runs and ceilings; analysis container rejected | 5.1 |
+| Q14 headline | Distinct open (policy source, rule uid) against the active version, with splits, undecided counts and coverage alongside | 7.2 |
+
+### 11.2 Still open (evidence or bank input needed; none blocks freezing)
+
+- Check Point access versus NAT order (A0 1b): handled by the dual view; revisit if documented.
+- Whether Check Point implicit cleanup values can be collected (would shrink `OTHER_ORDERED_LAYERS_UNKNOWN`).
+- Whether the mapper duplicates shared inline layers per parent (finding identity uses the parent path either way).
+- Panorama default-rule placement (pre or post rulebase), marked unverified in the mapper.
+- Whether any gateway has X-Forwarded-For detection on (access-role rule stays conservative either way).
+- Whether Check Point `Ask` / `Inform` permit non-HTTP traffic (stays upper bound only).
+- Whether some installations have a single administrator or no bound compliance_admin, which blocks publishing.
+- Whether directory principals can be compared by an immutable directory identifier yet.
+- Root and break-glass alerting is not implemented yet (backlog NXS-LOCAL-0383).
+- How often identity-, time-limited and covered rules occur in real policies (measured in delivery step 3).
+- Whether hygiene results are reachable from the run within its budget (measured in delivery step 3).
+- A rule with `any` on one side and IPv4-only values on the other: whether its IPv6 part can be treated as empty
+  needs vendor evidence (NAT64); until then it is not COMPLIANT.
