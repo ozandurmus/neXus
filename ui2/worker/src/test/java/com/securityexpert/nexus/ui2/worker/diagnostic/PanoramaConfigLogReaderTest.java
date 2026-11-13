@@ -306,6 +306,23 @@ class PanoramaConfigLogReaderTest {
         assertTrue(rows.stream().allMatch(r -> r.adminName() == null));
     }
 
+    @Test void theRunNoteCarriesCountsOnlyShapesAndNoName() {
+        when(evidence.cursor(SOURCE)).thenReturn(Optional.empty());
+        when(evidence.save(any(), any(), any(), any())).thenReturn(2);
+        answers.add(ENQUEUED);
+        answers.add(fin(List.of(
+                entry(ts(2), "11", "synthetic-admin", RULE_PATH, "edit"),
+                entry(ts(1), "10", "synthetic-admin", RULE_PATH, "commit"))));
+        var result = run(reader(trial(), signed, OPEN, key()));
+        String note = result.note();
+        assertTrue(note.contains("shapes paths={OTHER_OBJECT=0, RULE_FIELD_PATH=0, RULE_PATH=1, SHARED_RULE_PATH=0, UNMATCHED=0}"), note);
+        assertTrue(note.contains("commits={commit/Succeeded=1}"), note);
+        for (String raw : List.of("synthetic-admin", "rule-alpha", "Synthetic DG")) assertFalse(note.contains(raw), raw);
+        assertEquals("PAN_CONFIG_LOG outcome=OFF entries=0 resultBytes=0 enqueueToFinMs=0 pages=0",
+                reader(PolicyCompletenessSettings.OFF, signed, OPEN, null).read(SOURCE, "j", true, OPEN, target, new char[0], () -> true).note(),
+                "an OFF or UNKNOWN run carries no shape fields");
+    }
+
     @Test void theContainerRefComesOnlyFromADeviceGroupPath() {
         assertEquals(PolicySnapshot.ref(SOURCE, "device-group", "Synthetic DG"), PanoramaConfigLogReader.containerRef(SOURCE, PATH_PREFIX + "/x"));
         assertEquals(PolicySnapshot.ref(SOURCE, "device-group", "Name 'quoted'"),

@@ -38,7 +38,26 @@ public final class PanRuleRef {
         String canonical() { return scope + "\u0000" + phase + "\u0000" + kind + "\u0000" + rule; }
     }
 
+    /** Path kinds for counts-only telemetry ({@link PanConfigLogShapes}); fixed words, never a name. */
+    static final String RULE_PATH = "RULE_PATH", SHARED_RULE_PATH = "SHARED_RULE_PATH", RULE_FIELD_PATH = "RULE_FIELD_PATH",
+            OTHER_OBJECT = "OTHER_OBJECT", UNMATCHED = "UNMATCHED";
+    private static final Pattern RULE_FIELD = Pattern.compile("^/config/(?:devices/entry\\[@name='localhost\\.localdomain'\\]/device-group/entry\\[@name="
+            + QUOTED + "\\]|shared)" + RULEBASE + "/.+");
+
     private PanRuleRef() {}
+
+    /**
+     * What kind of path a change entry carries: a device-group rule entry, a shared rule entry, something below a rule entry
+     * (a field of a rule), any other configuration path (an object, a rulebase container, a setting), or no usable path.
+     * The kind only; nothing of the path is kept.
+     */
+    static String shape(String path) {
+        if (path == null || path.isEmpty()) return UNMATCHED;
+        Optional<Parts> rule = fromPath(path);
+        if (rule.isPresent()) return SHARED.equals(rule.get().scope()) ? SHARED_RULE_PATH : RULE_PATH;
+        if (RULE_FIELD.matcher(path).matches()) return RULE_FIELD_PATH;
+        return path.startsWith("/config/") ? OTHER_OBJECT : UNMATCHED;
+    }
 
     /** The rule a configuration path names, or empty when the path names no rule of a Panorama rulebase. */
     public static Optional<Parts> fromPath(String path) {

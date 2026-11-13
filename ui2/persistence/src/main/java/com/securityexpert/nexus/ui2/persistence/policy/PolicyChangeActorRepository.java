@@ -41,14 +41,14 @@ public class PolicyChangeActorRepository {
 
     public PolicyChangeActorRepository(TransactionBoundary tx) { this.tx = tx; }
 
-    /** Non-initial history rows of the source's policies, collected since {@code since}, that have no link yet. */
+    /** Non-initial history rows of the source's policies, collected since {@code since}, that have no link yet; newest first, so rows deferred for missing evidence cannot starve newer ones. */
     public List<Pending> pending(String sourceId, Instant since, int limit) {
         return tx.inTransaction(db -> db.fetch("select h.revision_id, h.policy_id, h.rule_key, h.change_type, h.collected_at, "
             + "s.metadata->>'containerId' as container, case when h.change_type = 'removed' then h.changes::text end as removed_changes "
             + "from policy_rule_history h join policy_snapshot s on s.policy_id = h.policy_id "
             + "left join policy_change_actor_link l on l.revision_id = h.revision_id "
             + "where s.metadata->>'sourceId' = {0} and l.revision_id is null and not h.initial_capture "
-            + "and h.collected_at >= {1}::timestamptz order by h.revision_id limit {2}", sourceId, since.toString(), limit)
+            + "and h.collected_at >= {1}::timestamptz order by h.revision_id desc limit {2}", sourceId, since.toString(), limit)
             .map(r -> new Pending(r.get("revision_id", Long.class), r.get("policy_id", String.class), r.get("rule_key", String.class),
                 r.get("change_type", String.class), r.get("collected_at", java.time.OffsetDateTime.class).toInstant(),
                 r.get("container", String.class), r.get("removed_changes", String.class))));
