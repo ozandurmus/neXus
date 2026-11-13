@@ -17,6 +17,12 @@ public class FailoverConfiguration {
         return FailoverMutationSwitch.fromEnvironment();
     }
 
+    /** Cisco ASA failover readiness switch (UI2_ASA_FAILOVER_READINESS=on), read once at startup; readiness only. */
+    @Bean
+    public com.securityexpert.nexus.ui2.jobs.failover.AsaFailoverReadinessSwitch asaFailoverReadinessSwitch() {
+        return com.securityexpert.nexus.ui2.jobs.failover.AsaFailoverReadinessSwitch.fromEnvironment();
+    }
+
     @Bean
     public FailoverPilotAllowlist failoverPilotAllowlist(
             com.securityexpert.nexus.ui2.persistence.device.DeviceRepository devices) {

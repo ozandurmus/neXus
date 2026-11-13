@@ -190,4 +190,23 @@ class ReadinessCheckViewTest {
             for (String status:new String[]{"PASS","FAIL","WARN","UNKNOWN"})
                 assertFalse(row(pan,no,status,derived).get("summary").toString().contains("SYNTHETIC-PRIVATE-NAME"));
     }
+
+    /** Cisco ASA (PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS.md): own titles, check 9 informational. */
+    @Test void ciscoAsaChecksHaveTheirOwnTitlesAndOnlyTheLastFailoverIsInformational() throws Exception {
+        String[] titles={"Failover state and roles","Pair identity","Failover and state links","Monitored interfaces",
+            "Configuration sync","Stateful replication","Sessions carried","Version parity","Last failover (information)"};
+        for (int no=1;no<=9;no++) {
+            var view=ReadinessCheckView.fields("cisco_asa",no,"Member 1","PASS",JSON.readTree("{\"reason\":\"X\",\"monitoredNormal\":3}"),OBSERVED);
+            assertEquals(titles[no-1],view.get("title"));
+            assertEquals(no!=9,view.get("blocking"));
+            assertFalse(((String)view.get("summary")).isBlank());
+        }
+        assertEquals("Not read: the command is not approved yet",
+            ReadinessCheckView.fields("cisco_asa",3,"Member 1","UNKNOWN",JSON.readTree("{\"reason\":\"GATE_NOT_SIGNED_OFF\"}"),OBSERVED).get("summary"));
+        assertEquals("Failover groups or multiple contexts are not supported",
+            ReadinessCheckView.fields("cisco_asa",1,"Member 1","UNKNOWN",JSON.readTree("{\"reason\":\"UNSUPPORTED_MODE\"}"),OBSERVED).get("summary"));
+        // Check Point and Palo Alto output is untouched.
+        assertEquals("Cluster state",row(false,1,"PASS","{\"role\":\"ACTIVE\"}").get("title"));
+        assertEquals("HA mode and roles",row(true,1,"PASS","{\"role\":\"active\"}").get("title"));
+    }
 }

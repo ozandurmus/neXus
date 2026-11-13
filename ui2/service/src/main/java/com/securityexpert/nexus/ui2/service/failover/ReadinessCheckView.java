@@ -14,12 +14,55 @@ public final class ReadinessCheckView {
     private ReadinessCheckView() {}
 
     public static Map<String,Object> fields(String vendor,int no,String member,String status,JsonNode d,Instant observedAt) {
+        if ("cisco_asa".equals(vendor)) return Map.of("title",asaTitle(no),"member",member,"result",status,
+            "blocking",no!=9,"summary",asaSummary(no,status,d));
         boolean pan="palo_alto".equals(vendor);
         // A VSX chassis has no traffic interface in VS0: each Virtual System's unit measures its own traffic.
         boolean perVirtualSystem=!pan && no==8 && "NOT_EVALUATED".equals(status)
             && "TRAFFIC_MEASURED_PER_VIRTUAL_SYSTEM".equals(d.path("reason").asText());
         return Map.of("title",title(pan,no),"member",member,"result",status,
             "blocking",pan || (no!=5 && no!=13 && !perVirtualSystem),"summary",summary(pan,no,status,d,observedAt));
+    }
+
+    private static String asaTitle(int no) {
+        return switch(no) {
+            case 1 -> "Failover state and roles"; case 2 -> "Pair identity"; case 3 -> "Failover and state links";
+            case 4 -> "Monitored interfaces"; case 5 -> "Configuration sync"; case 6 -> "Stateful replication";
+            case 7 -> "Sessions carried"; case 8 -> "Version parity"; case 9 -> "Last failover (information)";
+            default -> "Check";
+        };
+    }
+    /** Cisco ASA: reason codes and counts only; never a serial, address, interface name or version value. */
+    private static String asaSummary(int no,String status,JsonNode d) {
+        String reason=d.path("reason").asText();
+        if ("GATE_NOT_SIGNED_OFF".equals(reason)) return "Not read: the command is not approved yet";
+        if ("GATE_UNAVAILABLE".equals(reason)) return "Not read: the command gate is unavailable";
+        if ("UNSUPPORTED_MODE".equals(reason)) return "Failover groups or multiple contexts are not supported";
+        boolean pass="PASS".equals(status);
+        return switch(no) {
+            case 1 -> pass ? "One Active and one Standby Ready; both views agree"
+                : "UNKNOWN".equals(status) ? "Failover state not recognised"
+                : "FAILOVER_OFF".equals(reason) ? "Failover is off" : "Roles are not one Active and one Standby Ready, or the views disagree";
+            case 2 -> pass ? "Pair serials match the recorded pair"
+                : "NO_RECORDED_PAIR".equals(reason) ? "No pair identity recorded yet"
+                : "UNKNOWN".equals(status) ? "Pair serials missing or inconsistent" : "A reported serial is not in the recorded pair";
+            case 3 -> pass ? "Failover and state links up on both members"
+                : "UNKNOWN".equals(status) ? "Link line missing" : "A failover or state link is not up";
+            case 4 -> pass ? count(d,"monitoredNormal"," monitored interfaces Normal")
+                : "UNKNOWN".equals(status) ? "Interface lines missing or not recognised" : "A monitored interface is not Normal";
+            case 5 -> pass ? "Configuration synchronised on both members"
+                : "UNKNOWN".equals(status) ? "Configuration state missing or not recognised" : "Configuration not synchronised";
+            case 6 -> pass ? "No error counter increased between two samples"
+                : "UNKNOWN".equals(status) ? "Stateful table missing or not recognised" : "Replication error counters increased or no traffic";
+            case 7 -> pass ? count(d,"activeCount"," active connections")+", "+count(d,"standbyCount"," on the standby")
+                : "UNKNOWN".equals(status) ? "Connection count missing or not recognised"
+                : count(d,"activeCount"," active connections")+", "+count(d,"standbyCount"," on the standby")+", below tolerance";
+            case 8 -> pass ? "Software versions match on both members"
+                : "UNKNOWN".equals(status) ? "Version line missing" : "Software versions differ";
+            case 9 -> "WARN".equals(status) ? "Last failover less than 6 hours ago"
+                : pass ? "Last failover more than 6 hours ago" : "Last failover time not available";
+            default -> "Check result unavailable";
+        };
     }
 
     private static String title(boolean pan,int no) {

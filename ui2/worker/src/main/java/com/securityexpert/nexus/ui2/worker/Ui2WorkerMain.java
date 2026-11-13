@@ -428,6 +428,12 @@ public final class Ui2WorkerMain {
                 System.getenv().getOrDefault("UI2_FAILOVER_COMMAND_PAUSE_SECONDS", "2")));
         System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.INFO,
                 "[CP_FAILOVER] " + cpShellMode.toString() + " execPauseMs=" + cpCommandPause.toMillis());
+        // Cisco ASA failover readiness (PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS.md): off unless
+        // UI2_ASA_FAILOVER_READINESS=on, read once here; readiness only.
+        var asaReadinessSwitch = com.securityexpert.nexus.ui2.jobs.failover.AsaFailoverReadinessSwitch.fromEnvironment();
+        var haPairIdentities = new com.securityexpert.nexus.ui2.persistence.device.JooqHaPairIdentityRepository(transactionBoundary);
+        System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.INFO,
+                "[ASA_FAILOVER] readiness " + (asaReadinessSwitch.enabled() ? "on" : "off"));
         for (int i = 0; i < 10; i++) {
             var cpFailoverExecutor = new com.securityexpert.nexus.ui2.worker.failover.CpFailoverJobExecutor(
                     new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary),
@@ -439,6 +445,10 @@ public final class Ui2WorkerMain {
                     deviceRepository, leaseRepository, attemptRepository, panTransport, panCredentialResolver, gateRegistry,
                     d -> Thread.sleep(d.toMillis()), Duration.ofSeconds(Long.parseLong(
                         System.getenv().getOrDefault("UI2_FAILOVER_COMMAND_PAUSE_SECONDS", "2"))));
+            var asaFailoverExecutor = new com.securityexpert.nexus.ui2.worker.failover.AsaFailoverJobExecutor(
+                    new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary),
+                    deviceRepository, leaseRepository, attemptRepository, strictFailoverSsh, gateRegistry,
+                    haPairIdentities, asaReadinessSwitch);
             WorkerClaimLoop claimLoop = new WorkerClaimLoop(leaseRepository, jobRecordDao, deviceRepository,
                     confirmJobExecutor, inventoryJobExecutor, configurationJobExecutor, discoveryJobExecutor,
                     backupJobExecutor, instance, Duration.ofMinutes(10), checkPointTrustRuleRef,
@@ -448,6 +458,7 @@ public final class Ui2WorkerMain {
                     .withFortiManagerDiagnostic(diagnosticJobExecutor)
                     .withCpFailover(cpFailoverExecutor)
                     .withPanFailover(panFailoverExecutor)
+                    .withAsaFailover(asaFailoverExecutor)
                     .withPanConfigSync(new com.securityexpert.nexus.ui2.worker.failover.PanConfigSyncJobExecutor(
                         new com.securityexpert.nexus.ui2.persistence.JooqPanConfigSyncRepository(transactionBoundary),
                         deviceRepository, leaseRepository, attemptRepository, panTransport, panCredentialResolver, gateRegistry))

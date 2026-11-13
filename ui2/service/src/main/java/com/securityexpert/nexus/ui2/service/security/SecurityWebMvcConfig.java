@@ -154,6 +154,14 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/pan-failover/config-syncs/*", ActionRegistry.CP_FAILOVER_READ),
             // Every failover GET is mapped under both prefixes; the Check Point one answers CONFIG_SYNC_NOT_SUPPORTED.
             Map.entry("GET /api/v2/cp-failover/config-syncs/*", ActionRegistry.CP_FAILOVER_READ),
+            // PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS.md: Cisco ASA is read-only plus the readiness request.
+            // Every other ASA route (approvals, runs POST, revoke, incident release, resume, config sync) stays unmapped.
+            Map.entry("GET /api/v2/asa-failover/units", ActionRegistry.CP_FAILOVER_READ),
+            Map.entry("GET /api/v2/asa-failover/units/*", ActionRegistry.CP_FAILOVER_READ),
+            Map.entry("GET /api/v2/asa-failover/summary", ActionRegistry.CP_FAILOVER_READ),
+            Map.entry("GET /api/v2/asa-failover/runs", ActionRegistry.CP_FAILOVER_READ),
+            Map.entry("GET /api/v2/asa-failover/runs/*", ActionRegistry.CP_FAILOVER_READ),
+            Map.entry("POST /api/v2/asa-failover/units/*/readiness", ActionRegistry.CP_READINESS_START),
             Map.entry("POST /role-bindings/selections", ActionRegistry.ROLE_BINDING_CREATE),
             Map.entry("GET /role-bindings", ActionRegistry.ROLE_BINDING_CREATE),
             Map.entry("POST /role-bindings", ActionRegistry.ROLE_BINDING_CREATE),

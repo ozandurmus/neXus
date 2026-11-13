@@ -222,7 +222,7 @@ public final class JobLogQueryService {
     private static final String FROM = " from jobs j left join devices d on d.device_id = j.target_device_id";
     /** Job types whose operational target is a cluster or failover unit rather than a single member device. */
     public static final List<String> FAILOVER_JOB_TYPES = List.of(
-            "cp_failover_readiness", "pan_failover_readiness",
+            "cp_failover_readiness", "pan_failover_readiness", "asa_cluster_failover",
             "cp_cluster_failover", "pan_cluster_failover",
             "cp_failover_resume", "pan_failover_config_sync");
     /** The job types whose run stores log chunks; only their rows carry {@code lines_stored} (the CASE keeps the subquery off every other row). */
@@ -262,7 +262,7 @@ public final class JobLogQueryService {
             + "    left join pan_config_sync pcs on pcs.job_id = j.job_id "
             + "    where fr.job_id is not null or fs.job_id is not null or pcs.job_id is not null "
             + "    limit 1 "
-            + ") fo on j.job_type in ('cp_failover_readiness', 'pan_failover_readiness', 'cp_cluster_failover', 'pan_cluster_failover', 'cp_failover_resume', 'pan_failover_config_sync') "
+            + ") fo on j.job_type in ('cp_failover_readiness', 'pan_failover_readiness', 'asa_cluster_failover', 'cp_cluster_failover', 'pan_cluster_failover', 'cp_failover_resume', 'pan_failover_config_sync') "
             + "left join lateral ( "
             + "    select coalesce(pcr.source_id, d_mgr.device_id) as source_device_id, "
             + "           nullif(btrim(pcr.domain_ref), '') as domain_ref, "
