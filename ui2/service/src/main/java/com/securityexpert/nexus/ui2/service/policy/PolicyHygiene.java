@@ -96,6 +96,19 @@ public final class PolicyHygiene {
      * always passes true; false is the reference the differential test compares against.
      */
     static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit, int ruleLimit, Map<String, PolicyObject> breadthObjects, boolean nonContainment) {
+        return analyze(snapshot, days, now, workLimit, ruleLimit, breadthObjects, nonContainment, false);
+    }
+    /**
+     * Legacy mode (POLICY_HYGIENE_MODES_AND_RESOLUTION_DESIGN_2026_11_13.md section 3.2, DRAFT): the analysis of a legacy
+     * view ({@link PolicyLegacyView#of}) in which every rule is matched by its upper-bound match
+     * ({@link PolicyNormalization#upperBound}: time, schedule, VPN, content, category and source-user dropped). Verdicts
+     * that rest on a dropped constraint or an ignored identity/dynamic cell are IP-level, never proven shadowing; the
+     * caller flags them ({@link PolicyLegacyView#flagged}). Not wired to the policy screen yet.
+     */
+    static Result analyzeLegacy(PolicySnapshot legacyView, int days, Instant now, int workLimit) {
+        return analyze(legacyView, days, now, workLimit, RULE_WORK, legacyView.objects(), true, true);
+    }
+    static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit, int ruleLimit, Map<String, PolicyObject> breadthObjects, boolean nonContainment, boolean upperBound) {
         if (days < 1 || days > 36500 || workLimit < 0 || ruleLimit < 0) throw new IllegalArgumentException("Invalid hygiene limits");
         Budget budget = new Budget(workLimit), side = budget.side();
         // Covering Palo Alto intrazone/interzone rules is work of its own pool (same total, same per-rule window): it only
@@ -160,7 +173,7 @@ public final class PolicyHygiene {
                 try {
                     budget.rule(ruleLimit); passBudget.rule(ruleLimit);
                     budget.spend();
-                    match = normalize(snapshot, section, rule, resolver);
+                    match = upperBound ? PolicyNormalization.upperBound(snapshot, section, rule, resolver) : normalize(snapshot, section, rule, resolver);
                     budget.spend();
                     reason = match.problem();
                     if (scope.unproven) reason = "earlier sections not analysed";
@@ -183,7 +196,7 @@ public final class PolicyHygiene {
                         // A Palo Alto intrazone or interzone rule stays UNKNOWN for its rule type unless an earlier universal
                         // rule provably covers every zone pair it matches (PolicyNormalization.zonesCover). It is never an
                         // earlier rule itself, so it remains a partial prior below exactly as before.
-                        Match prior = typedCover(snapshot, section, rule, earlier, typedBudget, typedResolver, ruleLimit);
+                        Match prior = typedCover(snapshot, section, rule, earlier, typedBudget, typedResolver, ruleLimit, upperBound);
                         if (prior != null) { covering = prior.rule().id(); status = covered(prior.rule(), rule, findings); reason = null; }
                     }
                 } catch (Unknown limit) { status = "UNKNOWN"; reason = limit.getMessage(); budgetReached = true; }
@@ -675,10 +688,10 @@ public final class PolicyHygiene {
         return status;
     }
     /** The earlier universal rule covering an intrazone/interzone rule, or null (not resolvable, not covered, or out of its budget). */
-    private static Match typedCover(PolicySnapshot snapshot, Section section, Rule rule, Earlier earlier, Budget typedBudget, Resolver typedResolver, int ruleLimit) {
+    private static Match typedCover(PolicySnapshot snapshot, Section section, Rule rule, Earlier earlier, Budget typedBudget, Resolver typedResolver, int ruleLimit, boolean upperBound) {
         try {
             typedBudget.rule(ruleLimit);
-            var typed = PolicyNormalization.typed(snapshot, section, rule, typedResolver);
+            var typed = PolicyNormalization.typed(snapshot, section, rule, typedResolver, upperBound);
             return typed == null ? null : earlier.cover(typed, typedBudget);
         } catch (Unknown limit) { return null; }
     }
