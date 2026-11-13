@@ -50,10 +50,11 @@ test("Operations Device health and the Changes timeline reach a settled state (n
 
 // Scheduled jobs (2026-11-10): every signed-in role reads the family list; only Security Admin and Operation Admin are
 // offered a switch. The aiview persona must see the six families, no control, and no change reason.
-test("aiview: Operations > Scheduled jobs is read-only and withholds the change reason", async ({ page, safety }) => {
-  // PO 2026-11-13 (F2): the panel moved from Administration > Platform; the old address is rewritten to this one.
-  await visit(page, "screen=operations&tab=schedules", "Operations");
-  const section = page.getByRole("tabpanel", { name: "Scheduled jobs", exact: true });
+test("aiview: Administration > Scheduled jobs is read-only and withholds the change reason", async ({ page, safety }) => {
+  // PO 2026-11-13 amendment of F2: its own Administration page, unlocked; the old Operations and Platform addresses are
+  // rewritten to this one (shell/legacyRoutes.ts).
+  await visit(page, "screen=administration&tab=scheduled-jobs", "Scheduled jobs");
+  const section = page.getByRole("region", { name: "Scheduled jobs", exact: true });
   const families = section.getByRole("list", { name: "Scheduled job families" });
   await expect(families).toBeVisible();
   await safety.checkpoint();

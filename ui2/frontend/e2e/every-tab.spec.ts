@@ -77,7 +77,7 @@ for (const { screen, tabList, labels, query, heading } of TAB_COVERAGE.filter(ro
     });
   }
 }
-// Administration's five pages (navigation redesign 2026-11-12): each is its own screen under its own heading; a page the
+// Administration's seven pages (navigation redesign 2026-11-12, PO amendment 2026-11-13): each is its own screen under its own heading; a page the
 // persona may not read shows the Restricted state, which is content.
 for (const { query, heading } of ADMIN_PAGES) {
   test(`full: administration page / ${heading}`, async ({ page, safety }) => {

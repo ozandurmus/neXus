@@ -81,7 +81,7 @@ const UNCONFIGURED_PROJECT_PLAN = {
   },
 };
 
-// Administration is five pages, each at its own address and chosen in the left navigation (navigation redesign 2026-11-12);
+// Administration is seven pages (PO amendment 2026-11-13 added Scheduled jobs and Platform status), each at its own address and chosen in the left navigation (navigation redesign 2026-11-12);
 // a page opens its first tab, the others open on a click. Each entry: the page's address, the tab to open (null = the one
 // the page opens, or a page without tabs), and that panel's marker.
 const PAGE_SECTIONS = [
@@ -89,7 +89,22 @@ const PAGE_SECTIONS = [
   { tab: "registry", section: "Inventory exclusions", marker: "No device excluded" },
   { tab: "registry", section: "Credentials", marker: "No credential stored" },
   { tab: "product", section: null, marker: "Declared roadmap completion" },
+  { tab: "scheduled-jobs", section: null, marker: "Discovery refresh" },
+  { tab: "platform-status", section: null, marker: "System status could not be read (status 503)" },
 ];
+
+/** Scheduled jobs as a viewer reads it: one family, masked, no switch. Synthetic values only. */
+const SCHEDULED_JOBS = {
+  "/api/v2/config/scheduled-jobs": { body: { master_enabled: true, master_env: "UI2_SCHEDULING_ENABLED", can_write: false, masked: true, business_hours: null,
+    families: [{ family: "discovery_refresh", label: "Discovery refresh", description: "Synthetic description.", cadence: "Every 6 hours",
+      enabled: true, state: "ON", will_run: true, lock_reason: null, note: null, window_open_now: false, next_window_at: "2026-11-11T00:00:00+03:00",
+      last_run_at: null, changed_by: "USR-0a1b2c3d4e", changed_at: "2026-11-10T18:05:00Z", reason: null }] } },
+};
+/** neXus' own status with no server behind it: the panel states the failed read. */
+const NO_SYSTEM_STATUS = {
+  "/api/v2/system/pods": { status: 503, body: { code: "SYSTEM_STATUS_READ_FAILED", message: "The system status read failed." } },
+  "/api/v2/system/storage": { status: 503, body: { code: "SYSTEM_STATUS_READ_FAILED", message: "The system status read failed." } },
+};
 
 /** Renders the screen as the shell does after a click in the navigation: the page is named by the address. */
 function renderAt(query: string, node: React.ReactElement = <AdministrationScreen />) {
@@ -158,7 +173,7 @@ describe("AdministrationScreen tabs", () => {
   it("renders each page's own tabs, and no other page's, page by page", async () => {
     vi.stubGlobal(
       "fetch",
-      routedFetch({ ...NO_DEVICES, ...EMPTY_PROJECT_PLAN, "/credentials": { body: { credentials: [] } } }),
+      routedFetch({ ...NO_DEVICES, ...EMPTY_PROJECT_PLAN, ...SCHEDULED_JOBS, ...NO_SYSTEM_STATUS, "/credentials": { body: { credentials: [] } } }),
     );
     for (const entry of PAGE_SECTIONS) {
       const { unmount } = renderAt(`tab=${entry.tab}`);
@@ -183,15 +198,15 @@ describe("AdministrationScreen tabs", () => {
     expect(within(screen.getByRole("tablist", { name: tabList })).getAllByRole("tab").map(t => t.textContent)).toEqual(tabs);
     // The pages are entries of the left navigation now, not tabs of this screen; the Product heading and Job Logs are gone.
     expect(screen.queryByRole("navigation", { name: "Administration navigation" })).toBeNull();
-    for (const page of ["Device registry", "Access and identity", "Notifications and logging", "Platform", "Audit log", "Delivery plan", "Product"]) {
+    for (const page of ["Device registry", "Access and identity", "Scheduled jobs", "Notifications and logging", "Platform", "Platform status", "System", "Audit log", "Delivery plan", "Product"]) {
       expect(screen.queryByRole("tab", { name: page })).toBeNull();
     }
     expect(screen.queryByRole("tab", { name: /Job Logs/i })).toBeNull();
     expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
   });
 
-  it.each([["tab=audit", "Audit log"], ["tab=product", "Delivery plan"]])("%s has a single section and therefore no tab strip", (query, heading) => {
-    vi.stubGlobal("fetch", routedFetch({ ...NO_DEVICES, ...EMPTY_PROJECT_PLAN, "/audit-events": { body: { events: [] } } }));
+  it.each([["tab=audit", "Audit log"], ["tab=product", "Delivery plan"], ["tab=scheduled-jobs", "Scheduled jobs"], ["tab=platform-status", "Platform status"]])("%s has a single section and therefore no tab strip", (query, heading) => {
+    vi.stubGlobal("fetch", routedFetch({ ...NO_DEVICES, ...EMPTY_PROJECT_PLAN, ...SCHEDULED_JOBS, ...NO_SYSTEM_STATUS, "/audit-events": { body: { events: [] } } }));
     renderAt(query);
     expect(screen.getByRole("heading", { level: 2, name: heading })).toBeInTheDocument();
     expect(screen.queryByRole("tablist")).toBeNull();
@@ -616,6 +631,35 @@ describe("restricted Administration reads", () => {
       if (slug !== "audit-logs") expect(document.querySelector("[role='tab'][aria-selected='true'] [data-lock-badge]")).not.toBeNull();
       await waitFor(() => expect(fetch).not.toHaveBeenCalled());
     });
+  // PO 2026-11-13 amendment: the two pages that came back from Operations keep the access they had there.
+  it("opens Scheduled jobs for a session without the administration-read grant: readable, masked, no switch, no lock", async () => {
+    vi.stubGlobal("fetch", routedFetch({ ...SCHEDULED_JOBS }));
+    window.history.replaceState(null, "", "/?screen=administration&tab=scheduled-jobs");
+    render(withTheme(<SessionContext.Provider value={{ displayName: "Synthetic viewer", roleTokens: [],
+      permissions: ["Devices"], canReadAdministration: false, onSignOut: () => {} }}>
+      <AdministrationScreen />
+    </SessionContext.Provider>));
+    const page = within(screen.getByRole("region", { name: "Scheduled jobs" }));
+    expect(await page.findByRole("heading", { name: "Discovery refresh" })).toBeInTheDocument();
+    expect(page.getByText("Reason withheld (masked view)")).toBeInTheDocument();
+    expect(page.queryByRole("switch")).toBeNull();
+    expect(document.querySelector("section[data-locked='true']")).toBeNull();
+  });
+
+  it("opens Platform status for a session without the administration-read grant and states the server's answer", async () => {
+    const fetch = routedFetch({ ...NO_SYSTEM_STATUS });
+    vi.stubGlobal("fetch", fetch);
+    window.history.replaceState(null, "", "/?screen=administration&tab=platform-status");
+    render(withTheme(<SessionContext.Provider value={{ displayName: "Synthetic viewer", roleTokens: [],
+      permissions: ["Devices"], canReadAdministration: false, onSignOut: () => {} }}>
+      <AdministrationScreen />
+    </SessionContext.Provider>));
+    expect(screen.getByRole("heading", { level: 2, name: "Platform status" })).toBeInTheDocument();
+    expect(await within(screen.getByRole("region", { name: "Platform status" })).findByRole("alert")).toBeInTheDocument();
+    expect(document.querySelector("section[data-locked='true']")).toBeNull();
+    expect(fetch).toHaveBeenCalled();
+  });
+
   it("mounts Credentials when the server permits its read", async () => {
     const fetch = routedFetch({ "/credentials": { body: { credentials: [] } } });
     vi.stubGlobal("fetch", fetch);

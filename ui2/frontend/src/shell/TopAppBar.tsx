@@ -16,6 +16,7 @@ import { NexusWordmark } from "../brand/NexusWordmark";
 import { useFetchOnMount } from "./useFetchOnMount";
 import { listNotifications, getProjectPlan, responsesAreMasked } from "../auth/adminApi";
 import { primaryRoleLabel, roleTokenLabel } from "./roleLabel";
+import { PlatformHealthIndicator } from "./PlatformHealthIndicator";
 
 /**
  * The minimal notification badge NXS-LOCAL-0165 adds (WORKER.md
@@ -232,8 +233,10 @@ export function TopAppBar() {
       <Box sx={{ minWidth: 0, flex: "0 1 auto" }}><GlobalSearch /></Box>
       {/* At 1000 px the bar used to run past the viewport (post-release review 2026-10-18, R1 check): the right block
           now shrinks with the window and the two informational chips fold away below 1200 px; the zone is still stated
-          beside every time on hover and the build in Administration › System. */}
+          beside every time on hover and the build in the account menu. */}
       <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: { xs: 1, lg: 2 }, color: m3.onSurfaceVar, minWidth: 0, flex: "0 1 auto" }}>
+        {/* neXus' own health for every signed-in user (PO 2026-11-13): quiet when OK, a link to Platform status where allowed. */}
+        {session ? <PlatformHealthIndicator session={session} /> : null}
         <MaskChip />
         <DisplayControls />
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>

@@ -16,9 +16,10 @@ export const TAB_COVERAGE: readonly TabCoverageRow[] = [
   { screen: "inventory", tabList: "Lifecycle view", labels: ["Fleet", "Catalog", "Vulnerabilities"] },
   // Navigation redesign 2026-11-12: "HA and readiness" (was "HA & readiness"), "Packet analysis", "Data sanitizer".
   // Diagnostics moved to Tools and the Change feed to the Changes screen (UI review 2026-11-05, C3/C4).
-  { screen: "operations", tabList: "Operations sections", labels: ["HA and readiness", "Jobs", "Scheduled jobs", "Device health", "Platform status"] },
-  // Administration's five pages are children of the navigation group (navigation redesign 2026-11-12); a page's sections
-  // are its one tab strip, reached at the page's own address. Audit log and Delivery plan have a single section and no strip.
+  { screen: "operations", tabList: "Operations sections", labels: ["HA and readiness", "Jobs", "Device health"] },
+  // Administration's seven pages are children of the navigation group (navigation redesign 2026-11-12, PO amendment
+  // 2026-11-13); a page's sections are its one tab strip, reached at the page's own address. Scheduled jobs, Platform
+  // status, Audit log and Delivery plan have a single section and no strip.
   { screen: "administration", tabList: "Device registry sections", labels: ["Device management", "Inventory exclusions", "Credentials", "SSH trust"],
     query: "screen=administration&tab=registry", heading: "Device registry" },
   { screen: "administration", tabList: "Access and identity sections", labels: ["Local identities", "Sessions", "Roles and permissions", "LDAP settings"],
@@ -45,11 +46,13 @@ export const SCREEN_HEADINGS: Record<ScreenId, string> = {
   backups: "Backups", operations: "Operations", administration: "Device registry", packet_analysis: "Packet analysis",
   sanitizer: "Data sanitizer", trace: "Trace", changes: "Changes", diagnostics: "Diagnostics", rule_usage: "Rule object usage",
 };
-/** Administration's five pages: the address of each and the heading it shows (the same words as its navigation entry). */
+/** Administration's seven pages: the address of each and the heading it shows (the same words as its navigation entry). */
 export const ADMIN_PAGES: readonly { readonly query: string; readonly heading: string }[] = [
   { query: "screen=administration&tab=registry", heading: "Device registry" },
   { query: "screen=administration&tab=access", heading: "Access and identity" },
+  { query: "screen=administration&tab=scheduled-jobs", heading: "Scheduled jobs" },
   { query: "screen=administration&tab=platform", heading: "Notifications and logging" },
+  { query: "screen=administration&tab=platform-status", heading: "Platform status" },
   { query: "screen=administration&tab=audit", heading: "Audit log" },
   { query: "screen=administration&tab=product", heading: "Delivery plan" },
 ];

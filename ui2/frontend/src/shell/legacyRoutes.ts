@@ -1,19 +1,22 @@
 /**
  * Old addresses keep working (UI review 2026-11-05, C2/C3/C4/B6). The information architecture moved screens and tabs
  * (Path and Policy > Lookup became Trace; the Change feed and Policy > Changes met on one Changes screen; Diagnostics moved
- * under Tools; Offline analysis became Rule object usage under Policy and changes; Administration's fourteen pages became four groups; Job Logs became Operations >
+ * under Tools; Operations > Scheduled jobs and Platform status became Administration pages; Offline analysis became Rule object usage under Policy and changes; Administration's fourteen pages became four groups; Job Logs became Operations >
  * Jobs), and a bookmark, an audit link or a deep link in an e-mail written before that must land on the new home with its
  * own parameters kept. This is the one place that knows the old shapes: a pure function from a query string to the query
  * string of the new home, or `null` when the address is already current.
  */
 
-/** Administration's four groups plus the Product heading (C4); the slug is the `tab` value. */
-export const ADMIN_GROUP_SLUGS = ["registry", "access", "platform", "audit", "product"] as const;
+/**
+ * Administration's pages (C4, navigation redesign 2026-11-12, PO amendment 2026-11-13); the slug is the `tab` value.
+ * Scheduled jobs and Platform status came back from Operations on 2026-11-13.
+ */
+export const ADMIN_GROUP_SLUGS = ["registry", "access", "scheduled-jobs", "platform", "platform-status", "audit", "product"] as const;
 export type AdminGroupSlug = (typeof ADMIN_GROUP_SLUGS)[number];
 
 /**
  * Every Administration tab slug that existed before the regrouping, with the group page and the section that now holds it.
- * The former `system` page is not here: it left Administration for Operations > Platform status (2026-11-13) and is rewritten below.
+ * The former `system` page is not here: it is the Platform status page (2026-11-13) and is rewritten below.
  */
 export const LEGACY_ADMIN_TABS: Readonly<Record<string, { readonly group: AdminGroupSlug; readonly section: string }>> = {
   "device-management": { group: "registry", section: "device-management" },
@@ -74,10 +77,16 @@ export function rewriteLegacyRoute(search: string): string | null {
     } else if (tab === "diagnostics") {
       params.set("screen", "diagnostics");
       params.delete("tab");
-    } else if (tab === "health" && params.get("focus") === "platform") {
-      // The first form of the 2026-11-13 change put neXus' own status inside System health; it is its own tab now.
+    } else if (tab === "platform-status" || (tab === "health" && params.get("focus") === "platform")) {
+      // neXus' own status was an Operations tab for a few hours on 2026-11-13 (and, before that, a focus of System
+      // health); the PO's amendment of the same day made it an Administration page.
+      params.set("screen", "administration");
       params.set("tab", "platform-status");
       params.delete("focus");
+    } else if (tab === "schedules") {
+      // Scheduled jobs was an Operations tab on 2026-11-13 only; it is an Administration page (PO amendment, same day).
+      params.set("screen", "administration");
+      params.set("tab", "scheduled-jobs");
     }
   } else if (screen === "administration" && key === "screen") {
     if (tab === "job-logs" || (!tab && params.get("job"))) {
@@ -85,14 +94,12 @@ export function rewriteLegacyRoute(search: string): string | null {
       params.set("screen", "operations");
       params.set("tab", "jobs");
     } else if (tab === "system" || (tab === "platform" && params.get("section") === "system")) {
-      // neXus' own storage and service view is Operations > Platform status (PO 2026-11-13, F1).
-      params.set("screen", "operations");
+      // neXus' own storage and service view is the Platform status page (PO 2026-11-13 amendment of F1).
       params.set("tab", "platform-status");
       params.delete("section");
     } else if (tab === "platform" && params.get("section") === "scheduled-jobs") {
-      // Scheduled jobs is a tab of Operations (PO 2026-11-13, F2).
-      params.set("screen", "operations");
-      params.set("tab", "schedules");
+      // Scheduled jobs is its own Administration page (PO 2026-11-13 amendment of F2).
+      params.set("tab", "scheduled-jobs");
       params.delete("section");
     } else if (tab && LEGACY_ADMIN_TABS[tab]) {
       const home = LEGACY_ADMIN_TABS[tab];

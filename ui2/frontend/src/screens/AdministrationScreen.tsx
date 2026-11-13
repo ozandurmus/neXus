@@ -17,6 +17,8 @@ import { LocalIdentitiesPanel } from "./LocalIdentitiesPanel";
 import { SessionsPanel } from "./SessionsPanel";
 import { DeviceManagementPane, InventoryExclusionsPanel } from "./DeviceRegistryPanel";
 import { ProjectPlanPanel } from "./ProjectPlanPanel";
+import { ScheduledJobsPanel } from "./ScheduledJobsPanel";
+import { SystemStatusPanel } from "./SystemStatusPanel";
 
 import { CustomRolesPanel } from "./CustomRolesPanel";
 import { AuditLogsPanel } from "./AuditLogsPanel";
@@ -43,12 +45,12 @@ interface AdminPageDef {
 }
 
 /**
- * Administration is five pages, and the pages are the children of the Administration group in the left navigation
- * (navigation redesign 2026-11-12, PO approved; it amends UI review 2026-11-05, C4): Device registry, Access and identity,
- * Notifications and logging, Audit log and Delivery plan. The screen no longer carries a second side menu or a "Product" heading. Each page
+ * Administration is seven pages, and the pages are the children of the Administration group in the left navigation
+ * (navigation redesign 2026-11-12, PO approved, amended 2026-11-13; it amends UI review 2026-11-05, C4): Device registry,
+ * Access and identity, Scheduled jobs, Notifications and logging, Platform status, Audit log and Delivery plan. The screen no longer carries a second side menu or a "Product" heading. Each page
  * is one screen: its heading is its menu label, and its sections are one tab strip, the one Operations uses. Only the open
  * tab is mounted, so a page that groups four heavy panels still reads one thing at a time. A page with a single section
- * (Audit log, Delivery plan) has no tab strip.
+ * (Scheduled jobs, Platform status, Audit log, Delivery plan) has no tab strip.
  *
  * The address is unchanged: `?screen=administration&tab=<page>&section=<slug>`; `section` now selects a tab, and a tab
  * switch writes it back. The screen reads the address on every change, so Back and Forward move between pages and tabs. Every older slug (`?tab=ssh-trust`) lands on its page with that tab open (`LEGACY_ADMIN_TABS`).
@@ -86,15 +88,35 @@ const PAGES: readonly AdminPageDef[] = [
     ],
   },
   {
+    slug: "scheduled-jobs",
+    label: "Scheduled jobs",
+    // Back from Operations (PO 2026-11-13 amendment of F2): which job families run is product configuration. Every
+    // signed-in role reads the list; the server decides who may switch a family, and the panel offers no switch otherwise.
+    blurb: "Which scheduled job families run, and who stopped one and why. Device jobs still run only inside the job window.",
+    sections: [
+      { slug: "scheduled-jobs", label: "Scheduled jobs", panel: <ScheduledJobsPanel /> },
+    ],
+  },
+  {
     slug: "platform",
     // "Notifications and logging" since 2026-11-13 (was "Platform"); the address slug stays `platform`, so no address changes.
     label: "Notifications and logging",
     tabList: "Notifications and logging sections",
-    // System and Scheduled jobs moved to Operations (PO 2026-11-13, F1/F2); their old addresses are rewritten in `legacyRoutes`.
+    // System and Scheduled jobs are pages of their own (PO 2026-11-13 amendment); old addresses are rewritten in `legacyRoutes`.
     blurb: "The product's own settings: where notifications go, and which system logs are collected from the devices.",
     sections: [
       { slug: "notifications", administratorOnly: true, label: "Notifications", panel: <NotificationSettingsPanel /> },
       { slug: "system-logs", administratorOnly: true, label: "Log collection", panel: <SystemLogSettingsPanel /> },
+    ],
+  },
+  {
+    slug: "platform-status",
+    label: "Platform status",
+    // neXus' own health (PO 2026-11-13 amendment of F1): readable by every signed-in role, as it was under Operations;
+    // the indicator in the top bar summarises it on every screen and links here.
+    blurb: "neXus itself: what the evidence takes on disk and the state of the product's own service pods.",
+    sections: [
+      { slug: "platform-status", label: "Platform status", panel: <SystemStatusPanel /> },
     ],
   },
   {

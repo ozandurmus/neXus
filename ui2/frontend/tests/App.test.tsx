@@ -75,8 +75,8 @@ describe("the UI 2.0 shell navigation", () => {
   it("renders the nine entries of the one navigation model in order, Administration last", () => {
     render(<App />);
     const rail = screen.getByRole("navigation", { name: "Primary" });
-    // Reports R1: Reports sits directly under Overview (REPORTS_R1_CONTRACT.md "UI").
-    expect(NAV_ENTRIES.map((e) => e.label)).toEqual(["Overview", "Reports", "Devices", "Compliance and security", "Policy and changes", "Backups", "Operations", "Tools", "Administration"]);
+    // PO 2026-11-13 amendment: Reports moved below Operations; Policy and changes before Compliance and security.
+    expect(NAV_ENTRIES.map((e) => e.label)).toEqual(["Overview", "Devices", "Policy and changes", "Compliance and security", "Backups", "Operations", "Reports", "Tools", "Administration"]);
     for (const entry of NAV_ENTRIES) expect(within(rail).getByText(entry.label)).toBeInTheDocument();
     // The three tools and Rule object usage are listed in place (no popup); Administration's pages open with its group. The wide sidebar has no drawer.
     for (const label of ["Packet analysis", "Data sanitizer", "Diagnostics", "Rule object usage"]) expect(within(rail).getByRole("link", { name: label })).toBeInTheDocument();
@@ -138,8 +138,11 @@ describe("the six product screens", () => {
     ["?screen=operations&tab=changes", "changes", "Who changed what, and when"],
     ["?screen=operations&tab=diagnostics", "diagnostics", "Run an approved read-only diagnostic"],
     ["?screen=administration&tab=job-logs", "operations", "All jobs"],
-    // PO 2026-11-13: Scheduled jobs is a tab of Operations.
-    ["?screen=administration&tab=platform&section=scheduled-jobs", "operations", "The scheduled jobs list is unavailable"],
+    // PO 2026-11-13 amendment: Scheduled jobs and Platform status are Administration pages, from every address they had.
+    ["?screen=administration&tab=platform&section=scheduled-jobs", "administration", "The scheduled jobs list is unavailable"],
+    ["?screen=operations&tab=schedules", "administration", "The scheduled jobs list is unavailable"],
+    ["?screen=operations&tab=platform-status", "administration", "neXus itself: what the evidence takes"],
+    ["?screen=administration&tab=system", "administration", "neXus itself: what the evidence takes"],
   ])("lands %s on its new screen", async (search, screenId, marker) => {
     const { unmount } = render(<App search={search} />);
     expect(await screen.findByText(new RegExp(marker))).toBeInTheDocument();

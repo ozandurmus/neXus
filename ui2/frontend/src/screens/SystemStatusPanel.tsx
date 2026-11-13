@@ -52,7 +52,7 @@ function Usage({ used, limit, format }: { readonly used: number | null; readonly
   );
 }
 
-/** Administration › System: the product's own pods (a read-only top) and how much space its evidence takes. */
+/** Administration › Platform status: the product's own pods (a read-only top) and how much space its evidence takes. */
 export function SystemStatusPanel() {
   const [observedAt, setObservedAt] = useState<string | null>(null);
   const [pods, setPods] = useState<PodsView | null>(null);
