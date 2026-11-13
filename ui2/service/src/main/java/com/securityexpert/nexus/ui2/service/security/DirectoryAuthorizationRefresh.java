@@ -80,6 +80,14 @@ public final class DirectoryAuthorizationRefresh {
             Boolean published = bindings.directoryMutation(tx -> {
                 Optional<ActorAuthzStateRecord> current = tx.actors().find(actor).filter(ActorAuthzStateRecord::hasDirectoryProof);
                 Instant at = now.plusNanos(System.nanoTime() - started);
+                // The adapter stamps the observation with the wall clock after the directory round trip, while the
+                // caller's now was taken when its request began (gate chain, session and binding reads, a wait for
+                // another refresh of this actor). Measured from now alone, a refresh that started late found its own
+                // observation "from the future" and published nothing, so a signed-in administrator was refused as
+                // actor_group_set_stale once the five-minute set expired (ldap admin roles 2026-11-13). An observation
+                // is from the future only when it is later than both clocks.
+                Instant wall = Instant.now();
+                Instant latest = wall.isAfter(at) ? wall : at;
                 var active = tx.sessions().findActiveByActor(actor).filter(s -> s.isActive(at));
                 if (current.isEmpty() || active.isEmpty() || !active.get().sessionId().equals(session.get().sessionId())
                         || !current.get().directoryProfileId().equals(state.get().directoryProfileId())
@@ -97,7 +105,7 @@ public final class DirectoryAuthorizationRefresh {
                 DirectoryObservation observation = ((Result.Ok<DirectoryObservation>) result).value();
                 if (!current.get().directoryProfileId().equals(observation.profileId())
                         || !principal.equals(observation.principalReference())
-                        || at.isBefore(observation.resolvedAt()) || observation.resolvedAt().isBefore(current.get().resolvedAt())
+                        || latest.isBefore(observation.resolvedAt()) || observation.resolvedAt().isBefore(current.get().resolvedAt())
                         || !at.isBefore(observation.validUntil())) {
                     return false;
                 }
