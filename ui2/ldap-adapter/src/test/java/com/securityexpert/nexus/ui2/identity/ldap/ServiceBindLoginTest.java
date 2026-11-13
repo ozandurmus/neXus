@@ -56,6 +56,26 @@ class ServiceBindLoginTest {
     }
 
     @Test
+    void displayNameIsTheSamAccountNameWhileTheIdentityStaysTheBindDn() throws Exception {
+        // The entry's CN differs from its account name, as a real directory's usually does.
+        String dn = "CN=Synthetic Person,OU=People,DC=example,DC=local";
+        ad.server.add(new com.unboundid.ldap.sdk.Entry(dn,
+                new com.unboundid.ldap.sdk.Attribute("objectClass", "top", "person", "organizationalPerson", "user"),
+                new com.unboundid.ldap.sdk.Attribute("cn", "Synthetic Person"),
+                new com.unboundid.ldap.sdk.Attribute("sAMAccountName", "sperson"),
+                new com.unboundid.ldap.sdk.Attribute("objectCategory", "person"),
+                new com.unboundid.ldap.sdk.Attribute("userAccountControl", "512"),
+                new com.unboundid.ldap.sdk.Attribute("userPassword", "pw-sperson-1")));
+        ad.addMember(ActiveDirectoryFixture.ADMIN_GROUP, dn);
+        var outcome = ((Result.Ok<LdapOperatorBindPort.OperatorBindOutcome>) adapter.bind("sperson", "pw-sperson-1".toCharArray())).value();
+        assertEquals("sperson", outcome.observation().displayName());
+        assertNotEquals(dn, outcome.observation().displayName());
+        // Identity is untouched: the fingerprint and the principal reference are still the matched entry's DN.
+        assertEquals(PrincipalFingerprint.of(dn), outcome.actorFingerprint());
+        assertEquals(dn, outcome.observation().principalReference());
+    }
+
+    @Test
     void usersGroupMemberGetsOnlyTheUsersGroup() throws Exception {
         ad.addUser("bob", "pw-bob-1", ActiveDirectoryFixture.USERS_GROUP);
         var outcome = ((Result.Ok<LdapOperatorBindPort.OperatorBindOutcome>) adapter.bind("bob", "pw-bob-1".toCharArray())).value();
