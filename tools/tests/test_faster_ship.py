@@ -203,6 +203,7 @@ elif name == 'git' and args == ['pull', 'origin', 'main']:
     (delivery / 'release_snapshot.sh').write_text(
         'exec python3 tools/delivery/release_snapshot.py snapshot "$@"\\n')
     (delivery / 'hosta_packet_analysis_image.py').write_text('# Synthetic analysis image builder\\n')
+    (delivery / 'tree_modes.py').write_text('# Synthetic tree-mode check\\n')
 elif name == 'python3':
     if args[0] == '-c':
         print(json.load(sys.stdin)['snapshot'])
@@ -232,6 +233,7 @@ elif name == 'python3':
             ['tools/security/security_host.py', 'snapshot'],
             ['tools/e2e/hosta_e2e_image.py', 'start'],
             ['tools/e2e/hosta_e2e_image.py', 'ensure'],
+            ['tools/delivery/tree_modes.py', 'check'],
         ], args
 elif name == 'kubectl':
     if '-i' in args or ('-f' in args and args[args.index('-f') + 1] == '-'):
@@ -265,8 +267,10 @@ elif name == 'kubectl':
         assert "no changes applied" in result.stderr
         assert not (home / "nexus/project/deploy_info.json").exists()
         return
-    assert executed[4][:2] == ["git", "rev-parse"]
-    assert executed[5][:3] == ["python3", "tools/delivery/release_snapshot.py", "snapshot"]
+    # The tree-mode check runs after target validation and before any change.
+    assert executed[4] == ["python3", "tools/delivery/tree_modes.py", "check", "--repo", str(home / "nexus")]
+    assert executed[5][:2] == ["git", "rev-parse"]
+    assert executed[6][:3] == ["python3", "tools/delivery/release_snapshot.py", "snapshot"]
     rolled = any(c[:3] == ["python3", "tools/delivery/module_deploy.py", "--targets"] for c in executed)
     assert rolled == (mode not in ("gate-failure", "pa-failure"))
     scanned = any(c[:3] == ["python3", "tools/security/security_host.py", "start"] for c in executed)
