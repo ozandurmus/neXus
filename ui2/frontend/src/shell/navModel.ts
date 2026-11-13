@@ -7,7 +7,8 @@ import { ADMIN_GROUP_SLUGS, LEGACY_ADMIN_TABS, rewriteLegacyRoute, type AdminGro
  * icons and the narrow drawer are three renderings of this list; nothing else lists a destination.
  *
  * Nine top-level entries in the order of the product principle (SEE, VERIFY, TRACE, RECOVER, OPERATE; the words are no
- * longer printed). A domain with one screen is a link, a domain with several is a group that opens in place (D-NAV3).
+ * longer printed), as amended by the PO on 2026-11-13: Overview, Devices, Policy and changes, Compliance and security,
+ * Backups, Operations, Reports, Tools, Administration. A domain with one screen is a link, a domain with several is a group that opens in place (D-NAV3).
  * One level of nesting. A label is the heading of the screen, or the tab on that screen, that the entry opens.
  *
  * Everything here is pure: what is listed for a plane list, and which single entry is lit for an address.
@@ -49,15 +50,8 @@ const adminPage = (slug: AdminGroupSlug, label: string, lock?: NavLock): NavLeaf
 
 export const NAV_ENTRIES: readonly NavEntry[] = [
   { kind: "link", id: "overview", label: "Overview", icon: "grid", screen: "overview", href: "?screen=overview" },
-  // Reports R1 (REPORTS_R1_CONTRACT.md "UI"): directly under Overview, because it is executive-facing.
-  { kind: "link", id: "reports", label: "Reports", icon: "report", screen: "reports", href: "?screen=reports" },
   // Devices is a first-class top-level entry (D-NAV4).
   { kind: "link", id: "devices", label: "Devices", icon: "devices", screen: "inventory", href: "?screen=inventory", requiredPlane: "Devices" },
-  { kind: "group", id: "compliance-security", label: "Compliance and security", icon: "compliance", children: [
-    { id: "compliance", label: "Compliance", screen: "compliance", href: "?screen=compliance", requiredPlane: "Compliance" },
-    // A view of the Devices screen (licences, end of support, vulnerabilities, Live Patch); it keeps the Devices plane.
-    { id: "lifecycle", label: "Lifecycle and security", screen: "inventory", href: "?screen=inventory&view=lifecycle", requiredPlane: "Devices" },
-  ] },
   { kind: "group", id: "policy-changes", label: "Policy and changes", icon: "policy", children: [
     { id: "policy", label: "Policy", screen: "policy", href: "?screen=policy", requiredPlane: "Policy" },
     // The path query follows the inventory read (open to every signed-in role, masked for aiview): no plane gate.
@@ -67,18 +61,21 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     // uploaded log export. It was Tools > Offline analysis; it is a question about a policy rule, so it sits here, last.
     { id: "rule-usage", label: "Rule object usage", screen: "rule_usage", href: "?screen=rule_usage", requiredPlane: "Policy" },
   ] },
+  { kind: "group", id: "compliance-security", label: "Compliance and security", icon: "compliance", children: [
+    { id: "compliance", label: "Compliance", screen: "compliance", href: "?screen=compliance", requiredPlane: "Compliance" },
+    // A view of the Devices screen (licences, end of support, vulnerabilities, Live Patch); it keeps the Devices plane.
+    { id: "lifecycle", label: "Lifecycle and security", screen: "inventory", href: "?screen=inventory&view=lifecycle", requiredPlane: "Devices" },
+  ] },
   { kind: "link", id: "backups", label: "Backups", icon: "backup", screen: "backups", href: "?screen=backups" },
+  // Operations is the fleet's live activity (PO 2026-11-13 amendment of F1/F2): readiness, jobs, the firewalls' health.
   // Jobs stays a child of Operations (PO-NAV-8); the children are the tabs of the one screen.
   { kind: "group", id: "operations", label: "Operations", icon: "operations", children: [
     { id: "operations-ha", label: "HA and readiness", screen: "operations", href: "?screen=operations" },
     { id: "operations-jobs", label: "Jobs", screen: "operations", href: "?screen=operations&tab=jobs" },
-    // Which scheduled job families run (PO 2026-11-13, F2: from Administration); every signed-in role reads it.
-    { id: "operations-schedules", label: "Scheduled jobs", screen: "operations", href: "?screen=operations&tab=schedules" },
-    // Two subjects, two entries (PO 2026-11-13, F1): the firewalls' own health, then neXus' own storage and services.
-    // Platform status had no lock under Administration and has none here; the server decides what it returns.
     { id: "operations-health", label: "Device health", screen: "operations", href: "?screen=operations&tab=health" },
-    { id: "operations-platform", label: "Platform status", screen: "operations", href: "?screen=operations&tab=platform-status" },
   ] },
+  // Reports below the fleet screens (PO 2026-11-13): it reads the same evidence, it is not the second question of the day.
+  { kind: "link", id: "reports", label: "Reports", icon: "report", screen: "reports", href: "?screen=reports" },
   // The three ad hoc, file-in or single-device engineering tools (UI review 2026-11-05, C4), listed in place.
   { kind: "group", id: "tools", label: "Tools", icon: "tools", children: [
     { id: "packet-analysis", label: "Packet analysis", screen: "packet_analysis", href: "?screen=packet_analysis", requiredPlane: "PacketAnalysis" },
@@ -89,8 +86,14 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   { kind: "group", id: "administration", label: "Administration", icon: "admin", startsClosed: true, children: [
     adminPage("registry", "Device registry"),
     adminPage("access", "Access and identity", "adminRead"),
+    // Which scheduled job families run (PO 2026-11-13 amendment): job configuration, beside the product's other settings.
+    // Every signed-in role reads it and the server decides who may switch, so it has no lock.
+    adminPage("scheduled-jobs", "Scheduled jobs"),
     // Renamed from "Platform" (PO 2026-11-13); the address slug stays `platform`. Both its tabs need the administration-read grant.
     adminPage("platform", "Notifications and logging", "adminRead"),
+    // neXus' own storage and service pods (PO 2026-11-13 amendment). No lock: every signed-in role reads it, as it did
+    // under Operations; the top bar's health indicator links here.
+    adminPage("platform-status", "Platform status"),
     adminPage("audit", "Audit log", "adminRead"),
     adminPage("product", "Delivery plan", "adminPlane"),
   ] },
@@ -115,7 +118,11 @@ export function groupOfLeaf(leafId: string): NavGroup | null {
  * address is read through the same rewrite the shell applies, so a bookmark lights the entry of its new home.
  */
 export function activeLeafId(screen: ScreenId, search: string): string {
-  const params = new URLSearchParams(rewriteLegacyRoute(search) ?? search);
+  const rewritten = rewriteLegacyRoute(search);
+  const params = new URLSearchParams(rewritten ?? search);
+  // An old address that moved to another screen (Operations > Platform status is an Administration page) lights the new home.
+  const moved = rewritten !== null && new URLSearchParams(search).get("screen") === screen ? params.get("screen") : null;
+  if (moved && moved !== screen) return activeLeafId(moved as ScreenId, rewritten!);
   switch (screen) {
     case "inventory":
     case "configuration":
@@ -124,8 +131,6 @@ export function activeLeafId(screen: ScreenId, search: string): string {
       const tab = params.get("tab");
       if (tab === "jobs" || tab === "queue" || tab === "history") return "operations-jobs";
       if (tab === "health") return "operations-health";
-      if (tab === "schedules") return "operations-schedules";
-      if (tab === "platform-status") return "operations-platform";
       if (tab === "ha") return "operations-ha";
       // A job link that names only `?job=<id>` lands on Jobs (roadmap 3.6).
       return params.get("job") ? "operations-jobs" : "operations-ha";

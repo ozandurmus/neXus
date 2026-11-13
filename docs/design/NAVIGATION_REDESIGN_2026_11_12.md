@@ -355,3 +355,69 @@ New redirects (in `shell/legacyRoutes.ts`, tested), each keeping its other param
 An old address opens Whole policy mode because that is what it showed before the rename; a `mode` the address already
 names is kept. Lit entry: `screen=rule_usage` in either mode, and every old address above, lights Rule object usage in
 Policy and changes; nothing in Tools is lit.
+
+## Amendment 2026-11-13 (PO approved, second amendment of F1 and F2; Reports position)
+
+PO decision 2026-11-13, relayed by the PO session. It amends F1 and F2 of the first 2026-11-13 amendment above and
+the Reports row of section 2. Frontend only: no API, schema, permission or device command changes.
+
+The PO's judgement: Platform status and Scheduled jobs are about neXus itself and its configuration, so they are
+Administration content; Operations should answer one question, "what is the fleet doing right now"; and Reports is
+not the second most important thing a user opens.
+
+| # | Change | Before | After |
+|---|---|---|---|
+| F1' | Platform status | Operations > Platform status, `?screen=operations&tab=platform-status` | Administration > **Platform status**, `?screen=administration&tab=platform-status`, directly after Notifications and logging. One section, so no tab strip (the page model of Audit log). |
+| F2' | Scheduled jobs | Operations > Scheduled jobs, `?screen=operations&tab=schedules` | Administration > **Scheduled jobs**, `?screen=administration&tab=scheduled-jobs`, before Notifications and logging: which job families run is product configuration, beside where notifications and logs go. One section, no tab strip. |
+| F1'' | neXus health in the top bar | Platform status sat in Operations so that every signed-in user could see it | A small indicator in the top app bar for every signed-in user: one state (OK, degraded, down) with a one-line reason in its tooltip, from the existing `GET /api/v2/system/pods` read. For a session that may open the Platform status page it links there. |
+| R | Reports position | Directly under Overview (Reports R1) | Below Operations. |
+
+Resulting order of the nine top-level entries (this replaces section 2's order):
+
+1. Overview
+2. Devices
+3. Policy and changes (Policy; Trace; Changes; Rule object usage)
+4. Compliance and security (Compliance; Lifecycle and security)
+5. Backups
+6. Operations (HA and readiness; Jobs; Device health)
+7. Reports
+8. Tools (Packet analysis; Data sanitizer; Diagnostics)
+9. Administration (Device registry; Access and identity; Scheduled jobs; Notifications and logging; Platform status;
+   Audit log; Delivery plan)
+
+Still 9 top-level entries and 23 destinations. Operations is the fleet's live activity only: readiness, job tracking
+(active and finished, with the Queue and History pills), and the firewalls' own health.
+
+Access, unchanged for every session:
+
+- Scheduled jobs and Platform status carry no lock in the menu or on their pages, as under Operations: every signed-in
+  role reads them, and the server decides what it returns and who may switch a job family.
+- The indicator reads with the same grant as the page (`SYSTEM_STATUS_READ`, every signed-in role). A refused read
+  (401/403) draws nothing rather than a false alarm. Its link follows the menu's own checks for the Platform status
+  entry (plane and lock), so it is shown to every signed-in user today and would follow a lock if one were ever added.
+
+How the indicator decides, from the one read (no new backend data):
+
+| State | When | Look |
+|---|---|---|
+| OK | Every long-running pod is Running with all containers ready, and no permit or task lease is quarantined. A finished one-off pod (phase Succeeded) is not counted. | Quiet: a small dot and the word "neXus" in the muted text colour, no fill. |
+| degraded | A long-running pod is not Running or not fully ready; or work is quarantined; or the pod view is unavailable (no service account, Kubernetes API unreadable); or no pod is reported. | "neXus degraded" on the warning container colour. |
+| down | The status read failed for any reason other than 401/403 (no answer, timeout, 5xx). | "neXus down" on the error container colour. |
+
+It reads on mount and every 60 s while the page is visible (the Platform status page itself refreshes every 15 s).
+
+New redirects (in `shell/legacyRoutes.ts`, tested), each keeping its other parameters:
+
+| Old address | Lands on |
+|---|---|
+| `?screen=operations&tab=platform-status` | `?screen=administration&tab=platform-status` |
+| `?screen=operations&tab=schedules` | `?screen=administration&tab=scheduled-jobs` |
+| `?screen=administration&tab=platform&section=system` | `?screen=administration&tab=platform-status` |
+| `?screen=administration&tab=system` (older slug) | `?screen=administration&tab=platform-status` |
+| `?screen=administration&tab=platform&section=scheduled-jobs` | `?screen=administration&tab=scheduled-jobs` |
+| `?screen=operations&tab=health&focus=platform` | `?screen=administration&tab=platform-status` |
+
+The four redirects of the first 2026-11-13 amendment now land on the Administration pages directly, with no second hop.
+
+Lit entries: `tab=scheduled-jobs` and `tab=platform-status` on Administration light those pages; the two old Operations
+addresses light the same Administration pages. `?screen=operations&tab=health` still lights Device health.

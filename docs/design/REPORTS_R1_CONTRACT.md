@@ -179,3 +179,10 @@ adds, in the same change as the `report` artefact class:
   history;
 - a retention test that ages a synthetic `report` artefact past 30 days and proves it is removed and a younger one and
   all backup artefacts are kept.
+
+## Amendment 2026-11-13 — rail position (PO decision)
+
+The PO decided on 2026-11-13 that Reports is not the second most important entry: the top-level "Reports" entry moves
+from directly under Overview to directly below Operations (`NAVIGATION_REDESIGN_2026_11_12.md`, amendment "second
+amendment of F1 and F2; Reports position"). This replaces the first bullet of "UI" above. Nothing else in this contract
+changes: the address `?screen=reports`, the three tabs and every access rule stay as they are.

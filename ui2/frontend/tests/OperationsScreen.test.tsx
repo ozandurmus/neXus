@@ -48,9 +48,7 @@ afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState(null, "", "
 const TABS = [
   { label: "HA and readiness", marker: "No HA pair or cluster enrolled" },
   { label: "Jobs", marker: "All jobs" },
-  { label: "Scheduled jobs", marker: "Discovery refresh" },
   { label: "Device health", marker: "System health could not be read" },
-  { label: "Platform status", marker: "System status could not be read (status 503)" },
 ];
 
 describe("OperationsScreen tabs", () => {
@@ -70,50 +68,28 @@ describe("OperationsScreen tabs", () => {
     }
   });
 
-  it("has five tabs: Diagnostics moved to Tools, the Change feed to Changes (C3/C4); Scheduled jobs and Platform status came from Administration (PO 2026-11-13)", async () => {
+  it("has three tabs, the fleet's live activity only: Scheduled jobs and Platform status are Administration pages (PO 2026-11-13 amendment)", async () => {
     stubFetch([], null);
     render(withTheme(<OperationsScreen />));
     await screen.findByText("No HA pair or cluster enrolled");
     const tablist = screen.getByRole("tablist", { name: "Operations sections" });
-    expect(within(tablist).getAllByRole("tab").map(t => t.textContent)).toEqual(["HA and readiness", "Jobs", "Scheduled jobs", "Device health", "Platform status"]);
+    expect(within(tablist).getAllByRole("tab").map(t => t.textContent)).toEqual(["HA and readiness", "Jobs", "Device health"]);
+    expect(screen.queryByRole("tab", { name: "Scheduled jobs" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Platform status" })).toBeNull();
   });
 
-  it("keeps the two health subjects apart: Device health at its old address, Platform status at its own", async () => {
+  it("opens Device health at its old address and reads only the fleet there, never neXus' own status", async () => {
     stubFetch([], null);
     window.history.replaceState(null, "", "/?screen=operations&tab=health");
-    const first = render(withTheme(<OperationsScreen />));
+    render(withTheme(<OperationsScreen />));
     expect(screen.getByRole("tab", { name: "Device health" })).toHaveAttribute("aria-selected", "true");
     expect(await within(screen.getByRole("tabpanel", { name: "Device health" })).findByText("System health could not be read")).toBeInTheDocument();
-    // neXus' own status is not read on the fleet's tab
-    expect((fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.some(([url]) => String(url).startsWith("/api/v2/system/"))).toBe(false);
-    first.unmount();
-
-    window.history.replaceState(null, "", "/?screen=operations&tab=platform-status");
-    render(withTheme(<OperationsScreen />));
-    expect(screen.getByRole("tab", { name: "Platform status" })).toHaveAttribute("aria-selected", "true");
-    // No lock and no Restricted state from the screen: the panel makes its read and states the server's answer.
-    expect(await within(screen.getByRole("tabpanel", { name: "Platform status" })).findByRole("alert")).toBeInTheDocument();
-    expect(screen.queryByText("System health could not be read")).toBeNull();
-    expect(document.querySelector("[data-lock-badge]")).toBeNull();
+    const urls = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map(([url]) => String(url));
+    expect(urls.some((url) => url.startsWith("/api/v2/system/"))).toBe(false);
+    expect(urls).not.toContain("/api/v2/config/scheduled-jobs");
+    fireEvent.click(screen.getByRole("tab", { name: "Jobs" }));
     fireEvent.click(screen.getByRole("tab", { name: "Device health" }));
     expect(new URLSearchParams(window.location.search).get("tab")).toBe("health");
-    fireEvent.click(screen.getByRole("tab", { name: "Platform status" }));
-    expect(new URLSearchParams(window.location.search).get("tab")).toBe("platform-status");
-  });
-
-  it("opens Scheduled jobs from its address for a viewer: the families are readable and no switch is offered", async () => {
-    stubFetch([], null);
-    window.history.replaceState(null, "", "/?screen=operations&tab=schedules");
-    render(withTheme(<OperationsScreen />));
-    expect(screen.getByRole("tab", { name: "Scheduled jobs" })).toHaveAttribute("aria-selected", "true");
-    const panel = within(screen.getByRole("tabpanel", { name: "Scheduled jobs" }));
-    expect(await panel.findByRole("heading", { name: "Discovery refresh" })).toBeInTheDocument();
-    expect(panel.getByText("Reason withheld (masked view)")).toBeInTheDocument();
-    expect(panel.queryByRole("switch")).toBeNull();
-    // a click writes the tab into the address, so the navigation lights "Scheduled jobs"
-    fireEvent.click(screen.getByRole("tab", { name: "Jobs" }));
-    fireEvent.click(screen.getByRole("tab", { name: "Scheduled jobs" }));
-    expect(new URLSearchParams(window.location.search).get("tab")).toBe("schedules");
   });
 
   it("defaults to the HA and readiness tab, empty", async () => {

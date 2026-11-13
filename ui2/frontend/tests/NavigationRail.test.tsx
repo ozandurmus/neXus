@@ -42,8 +42,9 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     expect(nav()).toHaveStyle({ width: `${SIDEBAR_PX}px` });
     const text = nav().textContent ?? "";
     let at = -1;
-    for (const label of ["Overview", "Reports", "Devices", "Compliance and security", "Lifecycle and security", "Policy and changes", "Trace", "Changes", "Rule object usage", "Backups",
-      "Operations", "HA and readiness", "Jobs", "Scheduled jobs", "Device health", "Platform status", "Tools", "Packet analysis", "Data sanitizer", "Diagnostics", "Administration"]) {
+    // PO 2026-11-13 amendment of F1/F2: Operations is fleet activity only; Reports sits below it.
+    for (const label of ["Overview", "Devices", "Policy and changes", "Trace", "Changes", "Rule object usage", "Compliance and security", "Lifecycle and security", "Backups",
+      "Operations", "HA and readiness", "Jobs", "Device health", "Reports", "Tools", "Packet analysis", "Data sanitizer", "Diagnostics", "Administration"]) {
       const next = text.indexOf(label, at + 1);
       expect(next, label).toBeGreaterThan(at);
       at = next;
@@ -84,8 +85,6 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     ["operations", "?screen=operations", "HA and readiness", "Operations"],
     ["operations", "?screen=operations&tab=jobs", "Jobs", "Operations"],
     ["operations", "?screen=operations&tab=health", "Device health", "Operations"],
-    ["operations", "?screen=operations&tab=platform-status", "Platform status", "Operations"],
-    ["operations", "?screen=operations&tab=schedules", "Scheduled jobs", "Operations"],
     ["packet_analysis", "?screen=packet_analysis", "Packet analysis", "Tools"],
     ["sanitizer", "?screen=sanitizer", "Data sanitizer", "Tools"],
     ["diagnostics", "?screen=diagnostics", "Diagnostics", "Tools"],
@@ -94,6 +93,11 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     ["administration", "?screen=administration", "Device registry", "Administration"],
     ["administration", "?screen=administration&tab=access&section=ldap-settings", "Access and identity", "Administration"],
     ["administration", "?screen=administration&tab=platform", "Notifications and logging", "Administration"],
+    ["administration", "?screen=administration&tab=scheduled-jobs", "Scheduled jobs", "Administration"],
+    ["administration", "?screen=administration&tab=platform-status", "Platform status", "Administration"],
+    // The Operations tabs of earlier on 2026-11-13 light their Administration pages.
+    ["operations", "?screen=operations&tab=platform-status", "Platform status", "Administration"],
+    ["operations", "?screen=operations&tab=schedules", "Scheduled jobs", "Administration"],
     ["administration", "?screen=administration&tab=audit", "Audit log", "Administration"],
     ["administration", "?screen=administration&tab=product", "Delivery plan", "Administration"],
   ])("lights exactly one entry for %s %s: %s", (screenId, search, label, groupLabel) => {
@@ -184,7 +188,9 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     expect(pages.map((a) => [a.textContent, a.getAttribute("href"), a.getAttribute("data-locked")])).toEqual([
       ["Device registry", "?screen=administration&tab=registry", null],
       ["Access and identity", "?screen=administration&tab=access", "true"],
+      ["Scheduled jobs", "?screen=administration&tab=scheduled-jobs", null],
       ["Notifications and logging", "?screen=administration&tab=platform", "true"],
+      ["Platform status", "?screen=administration&tab=platform-status", null],
       ["Audit log", "?screen=administration&tab=audit", "true"],
       ["Delivery plan", "?screen=administration&tab=product", "true"],
     ]);
@@ -232,7 +238,7 @@ describe("the narrow layout", () => {
   });
 
   // PO 2026-11-12, question 2: the drawer used to hide the Administration pages without the Admin plane.
-  it("lists the five Administration pages, locked, in the drawer of a session without the Admin plane", () => {
+  it("lists the seven Administration pages, locked where restricted, in the drawer of a session without the Admin plane", () => {
     viewport(900);
     rail("overview", viewer);
     fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
@@ -240,7 +246,8 @@ describe("the narrow layout", () => {
     fireEvent.click(header("Administration", drawer));
     const pages = within(drawer).getAllByRole("link").filter((a) => (a.getAttribute("href") ?? "").startsWith("?screen=administration"));
     expect(pages.map((a) => [a.textContent, a.getAttribute("data-locked")])).toEqual([
-      ["Device registry", null], ["Access and identity", "true"], ["Notifications and logging", "true"], ["Audit log", "true"], ["Delivery plan", "true"],
+      ["Device registry", null], ["Access and identity", "true"], ["Scheduled jobs", null], ["Notifications and logging", "true"], ["Platform status", null],
+      ["Audit log", "true"], ["Delivery plan", "true"],
     ]);
   });
 
@@ -265,8 +272,8 @@ describe("the sidebar folds to icons (PO 2026-10-20)", () => {
     expect(within(nav()).queryByText("Devices")).toBeNull();
     expect(within(nav()).getByRole("link", { name: "Devices" })).toHaveAttribute("aria-current", "page");
     // the same nine entries (D-NAV2): four links, five groups
-    expect(within(nav()).getAllByRole("link").map((a) => a.getAttribute("aria-label"))).toEqual(["Overview", "Reports", "Devices", "Backups"]);
-    for (const name of ["Compliance and security", "Policy and changes", "Operations", "Tools", "Administration"]) {
+    expect(within(nav()).getAllByRole("link").map((a) => a.getAttribute("aria-label"))).toEqual(["Overview", "Devices", "Backups", "Reports"]);
+    for (const name of ["Policy and changes", "Compliance and security", "Operations", "Tools", "Administration"]) {
       expect(header(name)).toHaveAttribute("aria-haspopup", "menu");
     }
     expect(current()).toHaveLength(1);
@@ -293,8 +300,7 @@ describe("the sidebar folds to icons (PO 2026-10-20)", () => {
     expect(operations).toHaveAttribute("aria-expanded", "true");
     const items = within(menu).getAllByRole("menuitem");
     expect(items.map((i) => [i.textContent, i.getAttribute("href")])).toEqual([
-      ["HA and readiness", "?screen=operations"], ["Jobs", "?screen=operations&tab=jobs"], ["Scheduled jobs", "?screen=operations&tab=schedules"],
-      ["Device health", "?screen=operations&tab=health"], ["Platform status", "?screen=operations&tab=platform-status"],
+      ["HA and readiness", "?screen=operations"], ["Jobs", "?screen=operations&tab=jobs"], ["Device health", "?screen=operations&tab=health"],
     ]);
     for (const item of items) expect(item.tagName).toBe("A");
     expect(items[1]).toHaveAttribute("aria-current", "page");

@@ -15,8 +15,6 @@ import { StatePanel } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
 import { JobLogsPanel, type JobPill } from "./JobLogsPanel";
 import { SystemHealthPanel } from "./SystemHealthPanel";
-import { SystemStatusPanel } from "./SystemStatusPanel";
-import { ScheduledJobsPanel } from "./ScheduledJobsPanel";
 import { urlParam, writeUrlParams } from "../shell/urlParams";
 import { useJobWindow } from "../shell/JobWindow";
 import { getJobStats, getCpFailoverRun, listDevices, listCpFailoverSummary, newBusinessHoursAckScope, runCpFailoverReadiness, type BusinessHoursAckScope, type CpFailoverSummary, type DeviceSummary } from "../auth/adminApi";
@@ -28,9 +26,11 @@ import { readinessReasonLabel } from "../shell/presenters";
  * Device health (PO 2026-10-20, mockup screen 2; named System health until 2026-11-13) is a tab here rather than a rail entry: it is fleet-level operational
  * triage over the same OPERATE question as HA readiness and Jobs, and it adds no screen id of its own. Diagnostics moved to
  * Tools and the Change feed to the Changes screen (UI review 2026-11-05, C3/C4); their old `tab=` addresses are rewritten
- * to those screens before this one reads them (`legacyRoutes`).
+ * to those screens before this one reads them (`legacyRoutes`). Scheduled jobs and Platform status were tabs here for part
+ * of 2026-11-13; the PO's amendment of that day made them Administration pages, so Operations is the fleet's live activity
+ * only, and their `tab=` addresses are rewritten to those pages the same way.
  */
-const TAB_SLUGS = ["ha", "jobs", "schedules", "health", "platform-status"] as const;
+const TAB_SLUGS = ["ha", "jobs", "health"] as const;
 /**
  * `?tab=<slug>` to a tab index and, for the retired Queue / History routes, the pill that stands for them. A job link
  * that names only `?job=<id>` (roadmap 3.6) lands on Jobs, where the id is opened; the tab slug wins when both are given.
@@ -40,9 +40,7 @@ export function tabFromUrl(slug: string | null, jobId: string | null = null): { 
     case "jobs": return { tab: 1, pill: null };
     case "queue": return { tab: 1, pill: "active" };
     case "history": return { tab: 1, pill: "finished" };
-    case "schedules": return { tab: 2, pill: null };
-    case "health": return { tab: 3, pill: null };
-    case "platform-status": return { tab: 4, pill: null };
+    case "health": return { tab: 2, pill: null };
     case "ha": return { tab: 0, pill: null };
     default: return jobId ? { tab: 1, pill: null } : { tab: 0, pill: null };
   }
@@ -308,13 +306,9 @@ export function OperationsScreen() {
             initialState={urlParam("state") ?? ""} initialJobType={urlParam("job_type") ?? ""}
             initialSinceHours={urlParam("since_hours") ? Number(urlParam("since_hours")) : undefined} initialText={urlParam("q") ?? ""}
             pillRequest={pillRequest} /></Box> },
-          // From Administration (PO 2026-11-13, F2): every signed-in role reads it; the server decides who may switch.
-          { label: "Scheduled jobs", panel: <ScheduledJobsPanel /> },
-          // Two subjects, two tabs (PO 2026-11-13, F1). Device health is the firewalls: stored sar and watchdog facts per
-          // gateway (`tab=health`, the address it always had). Platform status is neXus itself: what the evidence takes on
-          // disk and the service pods; it was Administration > Platform > System and is readable by the same sessions.
+          // The firewalls' own health: stored sar and watchdog facts per gateway (`tab=health`, the address it always had).
+          // neXus' own health is Administration > Platform status and the indicator in the top bar (PO 2026-11-13).
           { label: "Device health", panel: <SystemHealthPanel /> },
-          { label: "Platform status", panel: <SystemStatusPanel /> },
         ]}
       />
     </ScreenRoot>

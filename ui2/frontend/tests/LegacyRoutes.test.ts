@@ -47,23 +47,35 @@ describe("legacy route rewrites", () => {
     expect(Object.keys(LEGACY_ADMIN_TABS)).toHaveLength(12);
   });
 
-  // PO 2026-11-13 (F1, F2): two former Platform sections live under Operations.
-  it("Administration > Platform > System is Operations > Platform status", () => {
-    expect(to("?screen=administration&tab=platform&section=system")).toEqual({ screen: "operations", tab: "platform-status" });
-    expect(to("?screen=administration&tab=system")).toEqual({ screen: "operations", tab: "platform-status" });
-    // the short-lived address of the first form of this change
-    expect(to("?screen=operations&tab=health&focus=platform")).toEqual({ screen: "operations", tab: "platform-status" });
+  // PO 2026-11-13 amendment of F1/F2: Platform status and Scheduled jobs are Administration pages. Every address either
+  // ever had (Administration > Platform > System / Scheduled jobs, and the Operations tabs of earlier the same day) lands there.
+  it("Administration > Platform > System and Operations > Platform status are the Platform status page", () => {
+    const home = { screen: "administration", tab: "platform-status" };
+    expect(to("?screen=administration&tab=platform&section=system")).toEqual(home);
+    expect(to("?screen=administration&tab=system")).toEqual(home);
+    expect(to("?screen=operations&tab=platform-status")).toEqual(home);
+    // the short-lived address of the first form of the 2026-11-13 change
+    expect(to("?screen=operations&tab=health&focus=platform")).toEqual(home);
     expect(LEGACY_ADMIN_TABS.system).toBeUndefined();
   });
 
-  it("Administration > Platform > Scheduled jobs is Operations > Scheduled jobs", () => {
-    expect(to("?screen=administration&tab=platform&section=scheduled-jobs")).toEqual({ screen: "operations", tab: "schedules" });
+  it("Administration > Platform > Scheduled jobs and Operations > Scheduled jobs are the Scheduled jobs page", () => {
+    const home = { screen: "administration", tab: "scheduled-jobs" };
+    expect(to("?screen=administration&tab=platform&section=scheduled-jobs")).toEqual(home);
+    expect(to("?screen=operations&tab=schedules")).toEqual(home);
   });
 
-  it("leaves Notifications and logging at its address: the page slug stays `platform`", () => {
+  it("keeps an old address's own parameters, and a rewritten address is current", () => {
+    expect(to("?screen=operations&tab=schedules&q=x")).toEqual({ screen: "administration", tab: "scheduled-jobs", q: "x" });
+    for (const search of ["?screen=operations&tab=schedules", "?screen=operations&tab=platform-status", "?screen=administration&tab=system"]) {
+      expect(rewriteLegacyRoute(rewriteLegacyRoute(search)!), search).toBeNull();
+    }
+  });
+
+  it("leaves Notifications and logging and the two new pages at their addresses: the page slug stays `platform`", () => {
     for (const search of ["?screen=administration&tab=platform", "?screen=administration&tab=platform&section=notifications", "?screen=administration&tab=platform&section=system-logs",
-      "?screen=operations&tab=schedules", "?screen=operations&tab=health", "?screen=operations&tab=platform-status"]) {
-      expect(rewriteLegacyRoute(search)).toBeNull();
+      "?screen=administration&tab=scheduled-jobs", "?screen=administration&tab=platform-status", "?screen=operations&tab=health"]) {
+      expect(rewriteLegacyRoute(search), search).toBeNull();
     }
     expect(to("?screen=administration&tab=system-logs")).toEqual({ screen: "administration", tab: "platform", section: "system-logs" });
   });
