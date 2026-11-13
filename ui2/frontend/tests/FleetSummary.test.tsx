@@ -99,13 +99,12 @@ describe("the summary itself", () => {
     expect(screen.queryByRole("link", { name: "Open Configuration" })).toBeNull();
   });
 
-  it("is the same component the Overview discloses as Estate details", async () => {
+  it("is the one home of the estate details: the Overview no longer discloses them (OVERVIEW_ATTENTION_LIST_DESIGN_2026_11_13.md)", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("/compliance/controls") ? json({ total_controls: 0, controls: [] }) : json(overview())));
     mount(<OverviewScreen />);
-    fireEvent.click(await screen.findByRole("button", { name: /Estate details: policies installed · hardware models · data freshness per device/ }));
-    expect(await screen.findByText("Policy installed")).toBeInTheDocument();
-    expect(screen.getByText("Software and hardware")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open Configuration" })).toHaveAttribute("href", "?screen=inventory");
+    await screen.findByTestId("attention-list");
+    expect(screen.queryByRole("button", { name: /Estate details/ })).toBeNull();
+    expect(screen.queryByText("Software and hardware")).toBeNull();
   });
 
   it("says so, without an alert, when the summary cannot be shown, and a restriction is a restriction", async () => {

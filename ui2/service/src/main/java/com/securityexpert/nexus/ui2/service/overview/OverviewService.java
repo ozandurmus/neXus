@@ -474,9 +474,14 @@ public class OverviewService {
      */
     private Object estate(Fleet fleet, Instant now) {
         Map<String, Instant> lastRead = latestInventoryAll();
-        java.util.Set<String> withArchive = new java.util.HashSet<>(q(dsl -> dsl.fetch(
-                "select distinct a.device_id from backup_artefact a where a.artefact_class = 'backup'" + LIVE_ARTEFACT)
-                .getValues(0, String.class)));
+        // The newest live backup archive per device: its presence is "has an archive", its time feeds the attention
+        // list's stale-backup rule (OVERVIEW_ATTENTION_LIST_DESIGN_2026_11_13.md, DRAFT).
+        Map<String, Instant> newestArchive = new HashMap<>();
+        for (Record r : q(dsl -> dsl.fetch("select a.device_id, max(a.created_at) as at from backup_artefact a "
+                + "where a.artefact_class = 'backup'" + LIVE_ARTEFACT + " group by a.device_id"))) {
+            Timestamp at = r.get("at", Timestamp.class);
+            if (at != null) newestArchive.put(r.get("device_id", String.class), at.toInstant());
+        }
         boolean complianceWarm = complianceService.isEvaluationCacheWarm();
         Map<String, ComplianceService.DeviceCriticals> criticals = complianceWarm ? complianceService.criticalsByDevice() : Map.of();
         List<Map<String, Object>> devices = new ArrayList<>();
@@ -500,7 +505,8 @@ public class OverviewService {
                 criticalDevices++;
             }
             counts.merge(condition, 1, Integer::sum);
-            boolean missing = d.backupTarget() && !withArchive.contains(d.deviceId());
+            Instant newestBackup = newestArchive.get(d.deviceId());
+            boolean missing = d.backupTarget() && newestBackup == null;
             if (d.backupTarget()) backupTargets++;
             if (missing) noArchive++;
             Map<String, Object> row = new LinkedHashMap<>();
@@ -510,7 +516,7 @@ public class OverviewService {
             row.put("model", d.observedModel().orElse(null));
             row.put("condition", condition);
             row.put("condition_reason", estateConditionReason(cr, condition));
-            row.put("no_archive", missing);
+            row.putAll(backupFacts(d.backupTarget(), newestBackup));
             row.put("critical_fail", cr == null ? null : cr.criticalFail());
             row.put("last_read_at", read == null ? null : read.toString());
             devices.add(row);
@@ -525,6 +531,19 @@ public class OverviewService {
         out.put("no_archive", noArchive);
         out.put("facts", facts);
         out.put("compliance_state", complianceWarm ? "OK" : "UNKNOWN");
+        return out;
+    }
+
+    /**
+     * A device's backup facts on the estate map: whether it is a backup target, whether a target lacks a stored archive,
+     * and the time of its newest live archive (null when there is none). A device that is not a backup target never
+     * counts as missing one.
+     */
+    static Map<String, Object> backupFacts(boolean backupTarget, Instant newestArchive) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("no_archive", backupTarget && newestArchive == null);
+        out.put("backup_target", backupTarget);
+        out.put("last_backup_at", newestArchive == null ? null : newestArchive.toString());
         return out;
     }
 

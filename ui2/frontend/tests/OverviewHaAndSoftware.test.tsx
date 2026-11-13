@@ -50,6 +50,8 @@ function stub(devices: DeviceSummary[], summary: unknown, summaryStatus = 200) {
     if (url.includes("/compliance/controls")) return json(200, { total_controls: 0, controls: [] });
     if (url === "/devices") return json(200, { devices });
     if (url === "/api/v2/cp-failover/summary") return json(summaryStatus, summary);
+    if (url.startsWith("/api/v2/lifecycle")) return json(200, { as_of: NOW, devices: [], summary: {} });
+    if (url.startsWith("/api/v2/changes/feed")) return json(200, { events: [] });
     return json(200, {});
   }));
 }
@@ -58,41 +60,44 @@ describe("Overview HA readiness (UI review 2026-10-18, F-13)", () => {
   const fleet = [member("CLS-A", 1), member("CLS-A", 2), member("CLS-B", 1), member("CLS-B", 2), member("CLS-C", 1), member("CLS-C", 2),
     member("CLS-D", 1, "cisco_asa"), member("CLS-D", 2, "cisco_asa")];
 
-  it("states how many clusters are ready, not ready and unknown, and links to Operations", async () => {
+  it("counts ready clusters in the fleet summary, linking to Operations", async () => {
     stub(fleet, [unit("CLS-A", "READY", HOURS(1)), unit("CLS-B", "NOT_READY", HOURS(2)), unit("CLS-C", "UNKNOWN", HOURS(3))]);
     render(<OverviewScreen />);
-    const link = await screen.findByLabelText("HA readiness: 1 ready of 4 clusters · 1 not ready · 1 unknown · 1 not supported");
-    expect(link).toHaveAttribute("href", "?screen=operations");
-    expect(within(link).getByText("HA readiness")).toBeInTheDocument();
-    expect(within(link).getByText("of 4 clusters ready")).toBeInTheDocument();
-    expect(within(link).getByText("1 ready of 4 clusters · 1 not ready · 1 unknown · 1 not supported")).toBeInTheDocument();
-    expect(within(link).queryByText("Stale")).toBeNull();
+    const fact = await screen.findByText("1 of 4");
+    expect(fact.closest("[data-fact]")).toHaveAttribute("href", "?screen=operations");
+    expect(fact.closest("[data-fact]")?.textContent).toBe("1 of 4clusters ready for failover");
   });
 
-  it("names each sliver of the bar in-line and keeps the shortfall-only bar", async () => {
+  it("names the not-ready cluster as an Act now row and the unknown one as a Watch row, with the evaluation age", async () => {
     stub(fleet, [unit("CLS-A", "READY", HOURS(1)), unit("CLS-B", "NOT_READY", HOURS(2)), unit("CLS-C", "UNKNOWN", HOURS(3))]);
     render(<OverviewScreen />);
-    const link = await screen.findByLabelText(/^HA readiness: /);
-    expect(within(link).getByText("not ready")).toBeInTheDocument();
-    expect(within(link).getByText("unknown")).toBeInTheDocument();
-    // BACKUPS and EVIDENCE name their slivers the same way
-    expect(await screen.findByText("without a backup")).toBeInTheDocument();
-    expect(screen.getByText("not read in 24 h")).toBeInTheDocument();
-  });
-
-  it("marks the row Stale when most evaluations are older than 24 h, and never changes the counts", async () => {
-    stub(fleet, [unit("CLS-A", "READY", HOURS(80)), unit("CLS-B", "NOT_READY", HOURS(90)), unit("CLS-C", "UNKNOWN", HOURS(1))]);
-    render(<OverviewScreen />);
-    const link = await screen.findByLabelText("HA readiness: 1 ready of 4 clusters · 1 not ready · 1 unknown · 1 not supported");
-    expect(within(link).getByText("Stale")).toBeInTheDocument();
+    const notReady = (await screen.findByText("1 HA cluster not ready for failover")).closest("[data-attention]") as HTMLElement;
+    expect(within(notReady).getByText("CLS-B")).toBeInTheDocument();
+    expect(within(notReady).getByText("Act now")).toBeInTheDocument();
+    expect(within(notReady).getByText("checked 2 h ago")).toBeInTheDocument();
+    expect(within(notReady).getByRole("link")).toHaveAttribute("href", "?screen=operations&readiness=NOT_READY");
+    const unknown = screen.getByText("1 HA cluster has UNKNOWN readiness").closest("[data-attention]") as HTMLElement;
+    expect(within(unknown).getByText("CLS-C")).toBeInTheDocument();
+    expect(within(unknown).getByText("Watch")).toBeInTheDocument();
+    // a cluster whose vendor has no readiness (Cisco ASA) is not a finding
+    expect(screen.queryByText(/CLS-D/)).toBeNull();
   });
 
   it("writes UNKNOWN, never zero, when the readiness read fails", async () => {
     stub(fleet, { error: "x" }, 500);
     render(<OverviewScreen />);
-    const link = await screen.findByLabelText("HA readiness: UNKNOWN");
-    expect(within(link).getByText("UNKNOWN")).toBeInTheDocument();
-    expect(link.textContent).not.toMatch(/\b0 ready/);
+    const row = (await screen.findByText("HA readiness could not be read")).closest("[data-attention]") as HTMLElement;
+    expect(row.getAttribute("data-attention")).toBe("unknown-failover");
+    const fact = document.querySelector('[data-fact="ha"]') as HTMLElement;
+    expect(fact.textContent).toBe("UNKNOWNclusters ready for failover");
+  });
+
+  it("shows nothing about HA, not even UNKNOWN, when the server refuses the readiness read for this role", async () => {
+    stub(fleet, { error: "ACTION_REFUSED" }, 403);
+    render(<OverviewScreen />);
+    await screen.findByTestId("attention-list");
+    await screen.findByText(/backup target has no stored backup/);
+    expect(screen.queryByText("HA readiness could not be read")).toBeNull();
   });
 
   it("builds the sentence from parts that add up", () => {
@@ -126,14 +131,15 @@ describe("Overview Software in service: Fortinet and Cisco ASA", () => {
     expect(card.textContent).not.toMatch(/outdated|behind|newest|end of life/i);
   });
 
-  it("draws no row for a vendor with no devices, and the Overview itself keeps only the one-line link", async () => {
+  it("draws no row for a vendor with no devices, and the Overview itself carries no version charts or links", async () => {
     const { unmount } = render(<EstateDetails data={overview()} onDevicesScreen fleet={[dev("a", "fortinet", "7.2.8")]} />);
     expect(await screen.findByText("Fortinet · 1 device")).toBeInTheDocument();
     expect(screen.queryByText(/^Cisco ASA/)).toBeNull();
     unmount();
     stub([dev("a", "fortinet", "7.2.8")], []);
     render(<OverviewScreen />);
-    expect(await screen.findByRole("link", { name: "Devices › Fleet summary →" })).toHaveAttribute("href", "?screen=inventory");
+    await screen.findByTestId("fleet-summary");
+    expect(screen.queryByText("Software in service")).toBeNull();
     expect(screen.queryByText(/^Fortinet ·/)).toBeNull();
   });
 });
