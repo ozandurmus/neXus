@@ -49,4 +49,16 @@ class PanRuleRefTest {
         assertEquals(PanRuleRef.fromSnapshot("DG-EXAMPLE", "Pre rules", "Name 'quoted'").orElseThrow(),
                 PanRuleRef.fromPath(DG + "/pre-rulebase/security/rules/entry[@name=\"Name 'quoted'\"]").orElseThrow());
     }
+
+    @Test void pathKindsAreCountedWithoutKeepingAnyPart() {
+        assertEquals("RULE_PATH", PanRuleRef.shape(DG + "/pre-rulebase/security/rules/entry[@name='R']"));
+        assertEquals("SHARED_RULE_PATH", PanRuleRef.shape("/config/shared/post-rulebase/nat/rules/entry[@name='R']"));
+        assertEquals("RULE_FIELD_PATH", PanRuleRef.shape(DG + "/pre-rulebase/security/rules/entry[@name='R']/source"));
+        assertEquals("RULE_FIELD_PATH", PanRuleRef.shape("/config/shared/pre-rulebase/security/rules/entry[@name='R']/action"));
+        assertEquals("OTHER_OBJECT", PanRuleRef.shape(DG + "/address/entry[@name='obj']"));
+        assertEquals("OTHER_OBJECT", PanRuleRef.shape(DG + "/pre-rulebase/security/rules"));
+        assertEquals("UNMATCHED", PanRuleRef.shape(""));
+        assertEquals("UNMATCHED", PanRuleRef.shape(null));
+        assertEquals("UNMATCHED", PanRuleRef.shape("synthetic text that is not a path"));
+    }
 }

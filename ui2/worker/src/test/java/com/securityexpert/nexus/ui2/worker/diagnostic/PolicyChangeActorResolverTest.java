@@ -61,6 +61,20 @@ class PolicyChangeActorResolverTest {
         return links.getValue().get(0);
     }
 
+    /** A row whose answer depends on evidence the log has not (yet) given: no link is written, the row stays pending. */
+    private PolicyChangeActorResolver.Result deferred(String type, String reason) {
+        when(repository.pending(eq("src"), any(), anyInt())).thenReturn(List.of(row(type)));
+        var result = resolver.resolve("src", "job-1", NOW);
+        @SuppressWarnings("unchecked") ArgumentCaptor<List<Link>> links = ArgumentCaptor.forClass(List.class);
+        verify(repository).saveLinks(eq("job-1"), links.capture());
+        assertTrue(links.getValue().isEmpty(), "an evidence gap is never persisted as the row's answer");
+        assertEquals(1, result.deferred());
+        assertEquals(0, result.unknown());
+        assertEquals(Map.of(reason, 1), result.reasons());
+        assertTrue(result.note().contains("deferred=1"));
+        return result;
+    }
+
     @Test void oneAdministratorBeforeTheCommitIsMatchedEvenWithSeveralEntries() {
         when(repository.edits("src", "2026-11-11 17:00:00", "2026-11-12 11:50:00")).thenReturn(List.of(
                 edit("e1", REF, "ref-a", "admin-a", "edit"), edit("e2", REF, "ref-a", "admin-a", "set"), edit("e3", OTHER_REF, "ref-b", "admin-b", "edit")));
@@ -101,27 +115,40 @@ class PolicyChangeActorResolverTest {
         assertEquals(List.of("admin-b"), links.getValue().get(0).names());
     }
 
-    @Test void noCommitInTheCollectionWindowIsUnknown() {
+    @Test void noCommitInTheCollectionWindowLeavesTheRowPendingNotUnknown() {
         when(repository.commitTimes("src", "2026-11-12 05:55:00", "2026-11-12 12:05:00")).thenReturn(List.of());
-        assertEquals("NO_COMMIT_SEEN", only("modified").reason());
+        deferred("modified", "NO_COMMIT_SEEN");
         verify(repository, never()).edits(any(), any(), any());
     }
 
-    @Test void aWindowWithoutAnEarlierStoredCommitIsNotCoveredAndNeverNamesAnyone() {
+    @Test void aWindowWithoutAnEarlierStoredCommitIsNotCoveredAndNeverNamesAnyoneButStaysPending() {
         when(repository.commitBefore("src", "2026-11-12 11:50:00")).thenReturn(Optional.empty());
-        Link link = only("modified");
-        assertEquals("WINDOW_NOT_COVERED", link.reason());
+        deferred("modified", "WINDOW_NOT_COVERED");
         verify(repository, never()).edits(any(), any(), any());
     }
 
-    @Test void aWindowLongerThanThirtyDaysIsNotCovered() {
+    @Test void aWindowLongerThanThirtyDaysIsNotCoveredAndStaysPending() {
         when(repository.commitBefore("src", "2026-11-12 11:50:00")).thenReturn(Optional.of("2026-10-01 08:00:00"));
-        assertEquals("WINDOW_NOT_COVERED", only("modified").reason());
+        deferred("modified", "WINDOW_NOT_COVERED");
     }
 
-    @Test void withoutAPreviousCollectionTheWindowIsUnknown() {
+    @Test void withoutAPreviousCollectionTheRowStaysPending() {
         when(repository.previousObservation(any(), any(), any())).thenReturn(Optional.empty());
-        assertEquals("PREVIOUS_COLLECTION_UNKNOWN", only("modified").reason());
+        deferred("modified", "PREVIOUS_COLLECTION_UNKNOWN");
+    }
+
+    @Test void aLaterRunLinksARowThatWasDeferredOnceTheEvidenceArrives() {
+        when(repository.pending(eq("src"), any(), anyInt())).thenReturn(List.of(row("modified")));
+        when(repository.commitTimes("src", "2026-11-12 05:55:00", "2026-11-12 12:05:00")).thenReturn(List.of());
+        resolver.resolve("src", "job-1", NOW);
+        when(repository.commitTimes("src", "2026-11-12 05:55:00", "2026-11-12 12:05:00")).thenReturn(List.of("2026-11-12 11:50:00"));
+        when(repository.edits("src", "2026-11-11 17:00:00", "2026-11-12 11:50:00")).thenReturn(List.of(edit("e1", REF, "ref-a", "admin-a", "edit")));
+        resolver.resolve("src", "job-2", NOW);
+        @SuppressWarnings("unchecked") ArgumentCaptor<List<Link>> links = ArgumentCaptor.forClass(List.class);
+        verify(repository).saveLinks(eq("job-1"), links.capture());
+        assertTrue(links.getValue().isEmpty());
+        verify(repository).saveLinks(eq("job-2"), links.capture());
+        assertEquals("MATCHED", links.getValue().get(0).state());
     }
 
     @Test void aRuleInALocalOrDefaultSectionHasNoReference() {

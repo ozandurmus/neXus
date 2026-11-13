@@ -88,11 +88,14 @@ rule name; change type) and collection time C, the previous collection time P of
 trigger compared against; how the resolver reads P is an implementation detail — UNKNOWN until built).
 
 1. **Commit boundary.** Take the successful `commit` entries (`command_class = commit`, `result_class = Succeeded`) of
-   the same Panorama with device time in (P − margin, C + margin]. None → outcome `UNKNOWN`, reason `NO_COMMIT_SEEN`
+   the same Panorama with device time in (P − margin, C + margin]. None → the row is **deferred** (reason `NO_COMMIT_SEEN`)
    (also the outcome when the reader reported `BACKLOG` for that run: the log was not read up to C).
 2. **Edit window.** From the previous successful `commit` entry before the first commit of step 1 (call its time B) up
    to the last commit of step 1 (call it E). If no earlier commit is stored (evidence floor later than P), the window
-   start is not covered, or lies more than 30 days before E: outcome `UNKNOWN`, reason `WINDOW_NOT_COVERED`. A partial window never produces a name.
+   start is not covered, or lies more than 30 days before E: the row is **deferred** (reason `WINDOW_NOT_COVERED`).
+   A deferred row gets **no link**: it stays pending and the next run tries it again, until it is 14 days old (fix of
+   2026-11-13: phase 1 stored these reasons as final answers, which the first measurement showed to be wrong). Only the
+   outcomes of the table in step 4 and `RULE_REF_UNAVAILABLE` are stored. A partial window never produces a name.
 3. **Candidates.** Entries in (B, E] from the same source with: `result_class = Succeeded`; a configuration-change
    command class (`add`, `clone`, `delete`, `edit`, `move`, `rename`, `set` — the documented `cmd` values); a rule
    reference equal to H's rule reference (§4.3); a command compatible with H's change type:
@@ -319,3 +322,28 @@ history trigger work.
 `AGENTS.md` (command gate, privacy); `docs/AI_DEVELOPMENT_PROTOCOL.md` ("Network-device command gate"); `docs/design/POLICY_COLLECTION_COMPLETENESS_PLAN.md` (§6, §8);
 `docs/design/PO_DECISION_RECORD_2026_10_18_POLICY_COMPLETENESS.md`; `docs/design/DEVICE_SYSTEM_LOG_MEASUREMENT_FINDINGS_2026_10_17.md` (§5);
 `docs/design/DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md`; migrations V120, V122, V132, V150, V163; the classes named in §2.
+
+## 13. Measurement record - first Panorama run, 2026-11-13 (counts only)
+
+Commands: the three signed-off literals only (P-3 seed, P-4 poll; no P-2 page because the seed was the first run), through
+the policy job of one manual collection of the one trial Panorama, started as aiview. Setting
+`UI2_POLICY_PAN_CONFIG_LOG_TRIAL_SOURCE` on, run 04:10-04:21 device time, setting off again at 04:22. No name, host or path
+is recorded here.
+
+| Item | Count |
+|---|---|
+| entries read (seed) | 100, covering about 0.3 day |
+| `commit-all` / Succeeded | 74 |
+| `commit` / **Submitted** | 2 (no `commit` / Succeeded) |
+| change entries (`edit` 5, `move` 6, `rename` 4, `set` 9) | 24, all with a `path`, 3 distinct administrators |
+| change entries whose path gave a rule reference | 0 |
+| history rows linked | 2000, all `UNKNOWN` / `NO_COMMIT_SEEN` (5742 more pending in the 14-day bound) |
+| matched / ambiguous | 0 / 0 |
+
+What it settles and what it does not (section 8): item 3 is partly answered - on this Panorama a commit is logged as `commit`
+with result `Submitted`, so the phase-1 anchor (`commit` and `Succeeded`) never matched; whether a later entry completes it is
+not known (the fix adds a counts-only telemetry of that). Item 2 is not answered - none of the 24 paths matched the rule-entry
+form, and a count cannot tell an object edit from a field of a rule or another form; the fix adds counts-only path-kind
+telemetry (`RULE_PATH`, `SHARED_RULE_PATH`, `RULE_FIELD_PATH`, `OTHER_OBJECT`, `UNMATCHED`) and commit-shape telemetry
+(result per `commit` / `commit-all`, and whether a Submitted commit has a later Succeeded or Failed one by the same administrator in
+the same read). The commit anchor of section 4.2 is not changed until that telemetry has been read.

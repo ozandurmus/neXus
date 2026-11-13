@@ -56,11 +56,19 @@ public final class PolicyChangeActorResolver {
             "removed", Set.of("delete"),
             "modified", Set.of("edit", "set", "move", "rename"));
 
-    /** Counts only (safe telemetry); reasons are fixed codes. */
-    public record Result(int examined, int matched, int ambiguous, int unknown, Map<String, Integer> reasons, int namesCleared) {
+    /**
+     * Reasons that describe missing <i>evidence</i>, not the row: the log has not (yet) been read far enough, or the commit
+     * that would anchor the window is not in it. Such a row is never given a link, so it stays pending and the next run tries
+     * again, until it is older than {@link #PENDING_AGE}. A link is the final answer for a row (measured 2026-11-13: 2000
+     * rows were linked UNKNOWN for a commit anchor that did not match this Panorama's commit entries).
+     */
+    static final Set<String> EVIDENCE_GAP_REASONS = Set.of("NO_COMMIT_SEEN", "WINDOW_NOT_COVERED", "PREVIOUS_COLLECTION_UNKNOWN");
+
+    /** Counts only (safe telemetry); reasons are fixed codes. {@code deferred} rows were left pending, {@code reasons} counts both kinds. */
+    public record Result(int examined, int matched, int ambiguous, int unknown, int deferred, Map<String, Integer> reasons, int namesCleared) {
         public String note() {
             return "PAN_ACTOR_LINK examined=" + examined + " matched=" + matched + " ambiguous=" + ambiguous + " unknown=" + unknown
-                    + (reasons.isEmpty() ? "" : " reasons=" + reasons);
+                    + " deferred=" + deferred + (reasons.isEmpty() ? "" : " reasons=" + reasons);
         }
     }
 
@@ -85,19 +93,22 @@ public final class PolicyChangeActorResolver {
         keysByPolicy.forEach((policy, keys) -> identities.put(policy, new HashMap<>(repository.identities(policy, keys))));
         List<Link> links = new ArrayList<>();
         Map<String, Integer> reasons = new LinkedHashMap<>();
-        int matched = 0, ambiguous = 0, unknown = 0;
+        int matched = 0, ambiguous = 0, unknown = 0, deferred = 0;
         for (Pending row : pending) {
             Link link = link(sourceId, row, identities, previous, commitCache, beforeCache, editCache);
-            links.add(link);
             switch (link.state()) {
-                case PolicyChangeActorRepository.MATCHED -> matched++;
-                case PolicyChangeActorRepository.AMBIGUOUS -> ambiguous++;
-                default -> { unknown++; reasons.merge(link.reason(), 1, Integer::sum); }
+                case PolicyChangeActorRepository.MATCHED -> { matched++; links.add(link); }
+                case PolicyChangeActorRepository.AMBIGUOUS -> { ambiguous++; links.add(link); }
+                default -> {
+                    reasons.merge(link.reason(), 1, Integer::sum);
+                    if (EVIDENCE_GAP_REASONS.contains(link.reason())) deferred++;
+                    else { unknown++; links.add(link); }
+                }
             }
         }
         repository.saveLinks(jobId, links);
         int cleared = repository.clearExpiredNames(sourceId, LocalDateTime.ofInstant(now, DEVICE_ZONE).minusDays(LOOKBACK_DAYS).format(SQL_TIME));
-        return new Result(pending.size(), matched, ambiguous, unknown, reasons, cleared);
+        return new Result(pending.size(), matched, ambiguous, unknown, deferred, reasons, cleared);
     }
 
     private Link link(String sourceId, Pending row, Map<String, Map<String, RuleIdentity>> identities,

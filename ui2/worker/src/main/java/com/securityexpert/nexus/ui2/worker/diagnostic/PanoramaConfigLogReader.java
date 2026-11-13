@@ -88,13 +88,15 @@ public final class PanoramaConfigLogReader {
     private static final Comparator<String> SEQNO_ORDER = Comparator.comparing(java.math.BigInteger::new);
 
     /** @param outcome OFF, COLLECTED, NO_NEW_DATA, BACKLOG or UNKNOWN; {@code reason} is a fixed code for UNKNOWN. */
-    public record Result(String outcome, String reason, int pages, int entries, int stored, long resultBytes, long enqueueToFinMs) {
-        static Result off() { return new Result("OFF", null, 0, 0, 0, 0, 0); }
-        static Result unknown(String reason, int pages, long bytes, long ms) { return new Result("UNKNOWN", reason, pages, 0, 0, bytes, ms); }
-        /** The safe telemetry of plan section 6 (P-2: entries, resultBytes, enqueueToFinMs, pages) and nothing else. */
+    public record Result(String outcome, String reason, int pages, int entries, int stored, long resultBytes, long enqueueToFinMs,
+            PanConfigLogShapes.Counts shapes) {
+        static Result off() { return new Result("OFF", null, 0, 0, 0, 0, 0, PanConfigLogShapes.Counts.NONE); }
+        static Result unknown(String reason, int pages, long bytes, long ms) { return new Result("UNKNOWN", reason, pages, 0, 0, bytes, ms, PanConfigLogShapes.Counts.NONE); }
+        /** The safe telemetry of plan section 6 (P-2: entries, resultBytes, enqueueToFinMs, pages), plus counts-only shapes (never a name). */
         public String note() {
             return "PAN_CONFIG_LOG outcome=" + outcome + (reason == null ? "" : " reason=" + reason) + " entries=" + entries
-                    + " resultBytes=" + resultBytes + " enqueueToFinMs=" + enqueueToFinMs + " pages=" + pages;
+                    + " resultBytes=" + resultBytes + " enqueueToFinMs=" + enqueueToFinMs + " pages=" + pages
+                    + (shapes == PanConfigLogShapes.Counts.NONE ? "" : " " + shapes.note());
         }
     }
 
@@ -221,7 +223,7 @@ public final class PanoramaConfigLogReader {
             throw new Unknown("EVIDENCE_NOT_STORED");
         }
         String outcome = backlog ? "BACKLOG" : fresh.isEmpty() ? "NO_NEW_DATA" : "COLLECTED";
-        return new Result(outcome, null, pages[0], fresh.size(), storedRows, bytes[0], latency[0]);
+        return new Result(outcome, null, pages[0], fresh.size(), storedRows, bytes[0], latency[0], PanConfigLogShapes.of(fresh));
     }
 
     /** One page: enqueue (P-3 or P-2), bounded poll to FIN (P-4), parse. */
