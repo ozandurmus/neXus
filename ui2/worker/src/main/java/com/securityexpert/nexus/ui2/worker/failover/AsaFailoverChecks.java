@@ -292,6 +292,8 @@ final class AsaFailoverChecks {
         boolean noLines = all.size() < 4 || all.stream().anyMatch(i -> i.total() == 0);
         if (noLines) return result(4, UNKNOWN, "INTERFACE_LINES_MISSING", "monitoredNormal", ok, "notMonitored", notMonitored);
         if (other > 0) return result(4, UNKNOWN, "INTERFACE_STATUS_NOT_RECOGNISED", "monitoredNormal", ok, "unrecognised", other);
+        // Fail-closed: a pair whose every interface line is Not-Monitored proves nothing about interface health.
+        if (ok == 0) return result(4, UNKNOWN, "NO_MONITORED_INTERFACE", "monitoredNormal", ok, "notMonitored", notMonitored);
         return result(4, PASS, "INTERFACES_NORMAL", "monitoredNormal", ok, "notMonitored", notMonitored);
     }
 
