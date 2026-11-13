@@ -95,6 +95,15 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             }
             return report.body();
         }
+        if (body instanceof com.securityexpert.nexus.ui2.service.policy.CutoverResponse cutover) {
+            // Cutover segments and assessments mask themselves (CutoverPrivacy allowlist); the body passes through,
+            // and an unmasked body never reaches aiview.
+            if (Boolean.TRUE.equals(isReplayViewer)) {
+                if (!cutover.masked()) throw new IllegalStateException("cutover projection required");
+                if (response != null) response.getHeaders().set(MASKED_HEADER, "true");
+            }
+            return cutover.body();
+        }
         if (body instanceof com.securityexpert.nexus.ui2.service.policy.PolicyResponse policy) {
             if (!Boolean.TRUE.equals(isReplayViewer)) return policy.body();
             if (response != null) response.getHeaders().set(MASKED_HEADER, "true");

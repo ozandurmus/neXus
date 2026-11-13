@@ -145,6 +145,7 @@ final class NexusSessionCli {
         System.out.println("  pa-delete <caseId>");
         FailoverCli.printUsage();
         SanitizerCli.printUsage();
+        CutoverCli.printUsage();
     }
 
     /** @return exit code, or -1 when {@code args[0]} is not one of this class's commands */
@@ -371,7 +372,9 @@ final class NexusSessionCli {
                 }
                 default -> {
                     int failover = new FailoverCli(this).run(args);
-                    yield failover != -1 ? failover : new SanitizerCli(this).run(args);
+                    if (failover != -1) yield failover;
+                    int cutover = new CutoverCli(this).run(args);
+                    yield cutover != -1 ? cutover : new SanitizerCli(this).run(args);
                 }
             };
         } catch (IllegalArgumentException e) {

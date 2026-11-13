@@ -29,6 +29,13 @@ public final class ActionRegistry {
     public static final String POLICY_COLLECT = "policy_collect";
     public static final String POLICY_READ = "policy_read";
     /**
+     * ACI segmentation support step 1 (docs/design/ACI_SEGMENTATION_SUPPORT_DESIGN_2026_11_13.md section 4.8, PO decision
+     * record 2026-11-14): read cutover segments and pre-cutover impact assessments; replay_viewer always masked.
+     */
+    public static final String CUTOVER_ASSESSMENT_READ = "cutover_assessment_read";
+    /** Edit segments, upload traffic-log files and run an assessment; security_admin and onboarding_admin, never aiview. */
+    public static final String CUTOVER_ASSESSMENT_WRITE = "cutover_assessment_write";
+    /**
      * NXS-LOCAL-0160 "Routes": {@code POST /devices/{id}/inventory/collect}
      * -- a class-0-read collection job, but the submission itself is a
      * write (a job row), so it keeps {@code device_register}'s own
@@ -296,6 +303,10 @@ public final class ActionRegistry {
                 java.util.Set.of(RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(POLICY_READ, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER)));
+        register(new ActionDescriptor(CUTOVER_ASSESSMENT_READ, true, Optional.of(RoleToken.SECURITY_ADMIN),
+                java.util.Set.of(RoleToken.COMPLIANCE_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.VIEWER, RoleToken.REPLAY_VIEWER)));
+        register(new ActionDescriptor(CUTOVER_ASSESSMENT_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN),
+                java.util.Set.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(DATA_SANITIZE_RUN, true, Optional.of(RoleToken.OPERATOR),
                 java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(DATA_SANITIZE_REVERT, true, Optional.of(RoleToken.SECURITY_ADMIN),

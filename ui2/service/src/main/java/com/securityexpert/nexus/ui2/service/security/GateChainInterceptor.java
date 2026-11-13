@@ -129,6 +129,7 @@ public final class GateChainInterceptor implements HandlerInterceptor {
                         ? Optional.of(path.split("/")[2])
                         // getParameter can make the servlet container spool a multipart file before authorization.
                         : ActionRegistry.POLICY_OFFLINE_WRITE.equals(actionId)
+                                || ActionRegistry.CUTOVER_ASSESSMENT_WRITE.equals(actionId)
                                 || ActionRegistry.PACKET_ANALYSIS_RUN.equals(actionId)
                                 || ActionRegistry.DATA_SANITIZE_RUN.equals(actionId)
                                 || ActionRegistry.DATA_SANITIZE_REVERT.equals(actionId) ? Optional.empty()

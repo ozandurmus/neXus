@@ -71,12 +71,16 @@ class AiviewDiagnosticReadOnlyTest {
                 // configuration collection and discovery run start (PO_DECISION_RECORD_2026_11_11_AIVIEW_CONFIGURATION_AND_DISCOVERY.md)
                 ActionRegistry.DEVICE_CONFIGURATION_COLLECT, ActionRegistry.DISCOVERY_RUN_START,
                 // zone matrix read, masked: zone names pseudonymised, no blocks (docs/design/ZONE_MATRIX_CONTRACT.md 3.4, FROZEN 2026-11-13)
-                ActionRegistry.ZONE_MATRIX_READ)), held);
+                ActionRegistry.ZONE_MATRIX_READ,
+                // pre-cutover impact analysis read, masked (PO_DECISION_RECORD_2026_11_14_ACI_SEGMENTATION_SUPPORT.md,
+                // step 1 under ACI-6); never cutover_assessment_write
+                ActionRegistry.CUTOVER_ASSESSMENT_READ)), held);
         // the sibling writes stay closed to the replay viewer
         for (String closed : new String[]{ActionRegistry.DISCOVERY_RUN_IMPORT, ActionRegistry.DISCOVERY_ACKNOWLEDGE,
                 ActionRegistry.DEVICE_CONFIGURATION_TEXT_READ, ActionRegistry.DEVICE_REGISTER, ActionRegistry.DEVICE_DELETE,
                 ActionRegistry.DISCOVERY_SSH_TRUST_ENROLL, ActionRegistry.DISCOVERY_PAN_TRUST_ENROLL,
-                ActionRegistry.ZONE_MATRIX_ZONES_READ, ActionRegistry.ZONE_MATRIX_EDIT, ActionRegistry.ZONE_MATRIX_PUBLISH}) {
+                ActionRegistry.ZONE_MATRIX_ZONES_READ, ActionRegistry.ZONE_MATRIX_EDIT, ActionRegistry.ZONE_MATRIX_PUBLISH,
+                ActionRegistry.CUTOVER_ASSESSMENT_WRITE}) {
             assertFalse(all.get(closed).requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER), closed);
         }
         assertFalse(all.get(ActionRegistry.REPORT_RAW_VIEW).requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER));

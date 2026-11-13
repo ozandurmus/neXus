@@ -8,6 +8,45 @@ until the Product Owner approves each exact literal (AGENTS.md "Network action t
 zone matrix contract and the legacy upper-bound match this design builds on are themselves unmerged DRAFT work on
 their own branches (section 3).
 
+## 0. PO answers and step 1 implementation (2026-11-14)
+
+The PO's answers are recorded in `PO_DECISION_RECORD_2026_11_14_ACI_SEGMENTATION_SUPPORT.md` (RATIFIED). In short:
+a segment is its own record (Q2); upload-based evidence first, counter reads decided after one real cutover (Q5);
+Cisco ASA and FortiGate are redirect targets, `NOT_EVALUABLE` until the separate `asa-forti-policy` lane collects their
+policy, then evaluated through the same lookup seam (Q8); the APIC, Citrix ADC and F5 are topology sources only, read
+for routing, IP and VIP tables in a separate `topology-sources` lane, so section 6 is input to that lane, not an
+approved read list (Q6); the other recommendations stand.
+
+The PO then clarified ("ACI may send traffic anywhere; the next hop comes from IP, routes and contracts"; record item
+6): there is no configured target list. **Each flow's target firewall comes from path computation** (the Trace engine
+over the held topology and stored policies); an operator-named target is an explicit override labelled
+`OPERATOR_OVERRIDE`. Until the topology-sources overlay models contracts and service graph / PBR, the routed path is
+the path before the redirect, so every routed result carries `FABRIC_REDIRECT_NOT_MODELLED`; Cisco ASA and FortiGate
+units are not in the topology yet, so a path through one leaves the known topology and stays `NOT_DECIDED`
+(`EXITS_KNOWN_TOPOLOGY`). Section 4.2's "target firewall" and "zone pair" inputs apply to the override only. The UI is
+built by Carbon (record item 7).
+
+Step 1 (section 4) is implemented on branch `feat/cutover-assessment-1114`: engine `CutoverAssessment`, service,
+`/api/v2/cutover/**` routes, actions `cutover_assessment_read` / `cutover_assessment_write`, migration
+`V212__cutover_assessment.sql`, CLI `cutover-*` commands. Differences from section 4, decided by the engineering
+session within step 1's scope:
+
+- Flags not implemented yet: `NAT_NOT_EVALUATED` is a policy-level coverage item (the target has a NAT rulebase), not a
+  per-flow flag; `ASYMMETRY_RISK` and `LOG_RULE_DISAGREES` are deferred (the typed scope always covers both
+  initiation directions, so the one-direction case cannot arise yet).
+- The `action` column is read with a closed generic vocabulary (`drop`, `deny`, `reject`, `block` = dropped today);
+  any other value keeps the flow in evaluation and is counted as `ACTION_VALUES_UNRECOGNISED`. Vendor presets replace
+  this only after their measurement records.
+- Routed-path mode (the default) evaluates each tuple with `PathEngine.analyze`; path `ALLOWED` / `DENIED` become
+  `WOULD_ALLOW` / `WOULD_DROP` (with the blocking hop's rule), every other path verdict is `NOT_DECIDED` with the path
+  reason; the firewalls on the path are listed per flow. No held topology: the request is refused
+  (`TOPOLOGY_NOT_BUILT`). A routed assessment is `STALE` when the held topology snapshot changes.
+- An overridden Palo Alto target without both zones gives `NOT_DECIDED (zone or target required)` for every flow, even where a
+  rule with `any` zones would match (ACI-4 taken literally).
+- Segment blocks are shown raw to every non-replay role that holds `cutover_assessment_read`, as Rule object usage
+  shows observed addresses; a separate raw-view right for blocks is not added in step 1.
+- Retention (Q7) is not enforced yet.
+
 ## 1. Context and goal
 
 The bank's data-centre network runs a Cisco ACI fabric. The fabric can send traffic between data-centre layers
