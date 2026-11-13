@@ -5,7 +5,7 @@ import { m3Theme } from "../src/theme/m3Theme";
 import { TraceScreen, traceModeFromUrl } from "../src/screens/TraceScreen";
 import { ChangesScreen, changesViewFromUrl } from "../src/screens/ChangesScreen";
 import { DiagnosticsScreen } from "../src/screens/DiagnosticsScreen";
-import { OfflineAnalysisScreen } from "../src/screens/OfflineAnalysisScreen";
+import { RuleUsageScreen } from "../src/screens/RuleUsageScreen";
 import type { PolicyMetadata } from "../src/auth/adminApi";
 
 const policy: PolicyMetadata = { id: "p1", sourceId: "s1", sourceName: "MGR-ALPHA-01", vendor: "PAN", containerId: "c1", containerName: "DG-ALPHA-01", name: "POL-ALPHA-01",
@@ -116,7 +116,7 @@ describe("Changes (C3): one entry for the timeline and the policy rule revisions
   });
 });
 
-describe("Tools (C4): Diagnostics and Offline analysis are screens of their own", () => {
+describe("Diagnostics and Rule object usage are screens of their own", () => {
   it("renders Diagnostics with its own panel", async () => {
     stub();
     render(themed(<DiagnosticsScreen />));
@@ -125,16 +125,16 @@ describe("Tools (C4): Diagnostics and Offline analysis are screens of their own"
     expect(await screen.findByText("Diagnostics could not be loaded or access is unavailable.")).toBeInTheDocument();
   });
 
-  it("renders Offline analysis with the policy it is checked against named on the screen, not borrowed from Policy", async () => {
+  it("renders Rule object usage with the policy it is checked against named on the screen, not borrowed from Policy", async () => {
     stub({ "/api/v2/policy/policies/p1/offline-analyses": { analyses: [], canManage: true } });
-    render(themed(<OfflineAnalysisScreen />));
-    expect(screen.getByRole("heading", { name: "Offline analysis" })).toBeInTheDocument();
+    render(themed(<RuleUsageScreen />));
+    expect(screen.getByRole("heading", { name: "Rule object usage" })).toBeInTheDocument();
     expect(await screen.findByLabelText("Policy snapshot")).toBeInTheDocument();
   });
 
   it("says plainly when there is no stored policy to analyse against", async () => {
     stub({ "/api/v2/policy/devices": { policies: [], devices: [] } });
-    render(themed(<OfflineAnalysisScreen />));
+    render(themed(<RuleUsageScreen />));
     expect(await screen.findByText("No stored policy to analyse against")).toBeInTheDocument();
   });
 });

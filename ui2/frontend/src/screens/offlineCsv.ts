@@ -9,6 +9,9 @@ const aliases: Record<CsvField, string[]> = {
   sourceZone: ["srczone", "sourcezone", "srcintf", "sourceinterface"], destinationZone: ["dstzone", "destinationzone", "dstintf", "destinationinterface"],
   rule: ["rule", "ruleid", "rulename", "policyid", "policyname", "policy", "ruleuid"], count: ["count", "eventcount", "flowcount", "logcount"],
 };
+/** One quoted CSV cell; a value a spreadsheet would read as a formula is prefixed so it stays text. */
+export const csvCell = (cell: string) => `"${(/^[\s]*[=+@-]/.test(cell) ? "'" : "") + cell.replace(/"/g, '""')}"`;
+export const csvText = (rows: readonly (readonly string[])[]) => rows.map(row => row.map(csvCell).join(",")).join("\r\n");
 export function detectMapping(headers: string[]): Partial<Record<CsvField, string>> {
   const mapping: Partial<Record<CsvField, string>> = {};
   for (const field of fields) {

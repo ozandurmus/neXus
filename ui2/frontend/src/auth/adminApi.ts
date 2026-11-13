@@ -2357,6 +2357,16 @@ export const lookupPolicy = (id: string, query: PolicyLookupQuery) =>
 export interface OfflineAnalysisSummary {
   id: string; policyId: string; fileName: string; uploader: string; createdAt: string;
   rowCount: number; periodStart: string; periodEnd: string;
+  /** Rule object usage (RULE_OBJECT_USAGE_CONTRACT.md): absent from an analysis stored before the modes existed, which is a whole-policy one. */
+  mode?: OfflineAnalysisMode; ruleId?: string | null;
+}
+export type OfflineAnalysisMode = "ONE_RULE" | "WHOLE_POLICY";
+export type RuleObjectDimension = "source" | "destination" | "service";
+export type RuleObjectState = "USED" | "NOT_SEEN" | "NOT_AUDITABLE" | "UNKNOWN";
+/** One object or nested member of a rule cell, in tree order; `parentId` is null for an object the rule names directly. */
+export interface RuleObjectUsage {
+  dimension: RuleObjectDimension; objectId: string; name: string; parentId: string | null; depth: number;
+  state: RuleObjectState; flowCount: number; reason?: string | null;
 }
 export interface OfflineRule {
   ruleId: string; name: string; number: number; action: string; sectionName: string; flowCount: number;
@@ -2366,6 +2376,8 @@ export interface OfflineRule {
   unseenMembers: { memberId: string; name: string; dimension: string }[];
   narrowing: { memberStatus?: string; suggestionNote?: string; observedSource?: string[]; observedDestination?: string[];
     observedService?: string[]; coveragePercent?: number; coveredFlows?: number; caution?: string };
+  /** One-rule mode only: every object and nested member of the rule's source, destination and service cells. */
+  objectUsage?: RuleObjectUsage[];
 }
 export interface OfflineAnalysisResult extends OfflineAnalysisSummary {
   /** Collection time of the stored policy snapshot the sample was evaluated against; absent from an analysis stored before it was recorded. */
@@ -2374,6 +2386,8 @@ export interface OfflineAnalysisResult extends OfflineAnalysisSummary {
   comparisonUnknownCount: number; comparisonEnabled: boolean; comparisonNote: string; attributionNote: string; limitations: string; caution: string;
   parseStats: { statReason: string; count: number }[]; unknownStats: { statReason: string; count: number }[];
   verdictStats: { statReason: string; count: number }[]; rules: OfflineRule[];
+  /** One-rule mode: rows that belong to other rules, counted and set aside. */
+  otherRuleRows?: number;
 }
 export function listOfflineAnalyses(policy: string, page = 0): Promise<{ analyses: OfflineAnalysisSummary[]; canManage: boolean }> {
   return call(`/api/v2/policy/policies/${encodeURIComponent(policy)}/offline-analyses?page=${page}`, "GET");
@@ -2390,6 +2404,7 @@ async function offlineMutation<T>(path: string, method: "POST" | "DELETE", body?
   if (!response.ok) throw { status: response.status, body: parsed } satisfies ApiError;
   return parsed as T;
 }
+/** `mapping` is the column mapping; One-rule mode adds the chosen rule to it as `ruleId` (the server reads both from the one JSON part). */
 export function uploadOfflineAnalysis(policy: string, file: File, mapping: Record<string, string>): Promise<{ id: string }> {
   const body = new FormData(); body.append("mapping", JSON.stringify(mapping)); body.append("file", file);
   return offlineMutation(`/api/v2/policy/policies/${encodeURIComponent(policy)}/offline-analyses`, "POST", body);

@@ -68,6 +68,12 @@ public final class PolicyPrivacy {
                 else if (field.equals("name") && v instanceof String text) out.put(field, names.maskPolicyName(
                     map.containsKey("sourceId") ? "policy" : map.containsKey("number") ? "rule"
                         : map.containsKey("type") ? objectNameType(String.valueOf(map.get("type"))) : "name", text));
+                // Rule object usage entries (OfflineAnalysis.Usage): object references keep their link, reasons come from a closed set.
+                else if (map.containsKey("objectId") && map.containsKey("dimension") && v instanceof String text && !text.isEmpty()) {
+                    if (field.equals("objectId") || field.equals("parentId")) out.put(field, names.maskPolicyName("member", text));
+                    else if (field.equals("reason")) out.put(field, objectUsageReason(text));
+                    else out.put(field, mask(v, field, names, ips));
+                }
                 else out.put(field, mask(v, field, names, ips));
             });
             return out;
@@ -122,6 +128,8 @@ public final class PolicyPrivacy {
 
         if (OPAQUE.contains(key) || key.equals("refs") || key.equals("members") || key.equals("collectedAt")) return text;
         if (key.equals("status") && Set.of("COLLECTING", "COLLECTED", "REUSED").contains(text)) return text;
+        if (key.equals("mode")) return Set.of("ONE_RULE", "WHOLE_POLICY").contains(text) ? text : "UNKNOWN";
+        if (key.equals("state") && Set.of("USED", "NOT_SEEN", "NOT_AUDITABLE").contains(text)) return text;
         if (key.equals("state")) return Set.of("REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING", "COMPLETED", "FAILED", "REJECTED", "CANCELLED", "OUTCOME_UNKNOWN", "RECONCILED").contains(text) ? text : "UNKNOWN";
         if (key.equals("outcome")) return Set.of("COMPLETED", "PARTIAL", "FAILED", "UNKNOWN").contains(text) ? text : "UNKNOWN";
         if (key.equals("unitFailureCodes")) return failureCode(text);
@@ -209,6 +217,15 @@ public final class PolicyPrivacy {
             : "COLLECTION_FAILED";
     }
 
+    private static final Set<String> OBJECT_USAGE_REASONS = Set.of("any", "negated cell", "not matchable", "unresolved object", "group cycle or depth limit",
+        "snapshot collection incomplete", "work budget exceeded", "object limit", "a member is not matchable", "enclosing group not resolved",
+        "dynamic or unsupported object type", "empty or dynamic group", "missing address values", "missing service values");
+    private static String objectUsageReason(String text) {
+        if (OBJECT_USAGE_REASONS.contains(text)) return text;
+        String prefix = "rule cannot be evaluated: ";
+        if (text.startsWith(prefix)) return PolicyLookup.REASONS.contains(text.substring(prefix.length())) || HYGIENE_REASONS.contains(text.substring(prefix.length())) ? text : "rule cannot be evaluated";
+        return "UNKNOWN";
+    }
     private static String safeReason(String text) {
         if (Set.of("INLINE_LAYER_NAME_MISSING", "COLLECTION_PENDING", "THROTTLED", "VENDOR_NAME_NOT_UNIQUE").contains(text)) return text;
         int delimiter = text.lastIndexOf(": ");

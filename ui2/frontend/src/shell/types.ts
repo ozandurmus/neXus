@@ -12,7 +12,7 @@ export type ScreenId =
   | "operations"
   | "administration"
   | "diagnostics"
-  | "offline_analysis"
+  | "rule_usage"
   | "packet_analysis"
   | "sanitizer";
 
@@ -29,7 +29,7 @@ export const SCREEN_IDS: readonly ScreenId[] = [
   "operations",
   "administration",
   "diagnostics",
-  "offline_analysis",
+  "rule_usage",
   "packet_analysis",
   "sanitizer",
 ];

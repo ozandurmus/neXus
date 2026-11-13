@@ -11,7 +11,7 @@ const PolicyPreview = lazy(() => import("./screens/PolicyScreen").then(m => ({ d
 const TraceScreen = lazy(() => import("./screens/TraceScreen").then((m) => ({ default: m.TraceScreen })));
 const ChangesScreen = lazy(() => import("./screens/ChangesScreen").then((m) => ({ default: m.ChangesScreen })));
 const DiagnosticsScreen = lazy(() => import("./screens/DiagnosticsScreen").then((m) => ({ default: m.DiagnosticsScreen })));
-const OfflineAnalysisScreen = lazy(() => import("./screens/OfflineAnalysisScreen").then((m) => ({ default: m.OfflineAnalysisScreen })));
+const RuleUsageScreen = lazy(() => import("./screens/RuleUsageScreen").then((m) => ({ default: m.RuleUsageScreen })));
 const ConfigurationScreen = lazy(() => import("./screens/ConfigurationScreen").then((m) => ({ default: m.ConfigurationScreen })));
 const ComplianceScreen = lazy(() => import("./screens/ComplianceScreen").then((m) => ({ default: m.ComplianceScreen })));
 const BackupScreen = lazy(() => import("./screens/BackupScreen").then((m) => ({ default: m.BackupScreen })));
@@ -62,7 +62,7 @@ const PRODUCT_SCREENS: Record<ScreenId, ComponentType> = {
   operations: OperationsScreen,
   administration: AdministrationScreen,
   diagnostics: DiagnosticsScreen,
-  offline_analysis: OfflineAnalysisScreen,
+  rule_usage: RuleUsageScreen,
   packet_analysis: PacketAnalysisScreen,
   sanitizer: SanitizerScreen,
 };
@@ -82,7 +82,7 @@ const PREVIEW_SCREENS: Record<ScreenId, ComponentType> = {
   operations: OperationsPreview,
   administration: AdministrationPreview,
   diagnostics: OperationsPreview,
-  offline_analysis: PolicyPreview,
+  rule_usage: PolicyPreview,
   packet_analysis: PacketAnalysisPreview,
   sanitizer: SanitizerPreview,
 };

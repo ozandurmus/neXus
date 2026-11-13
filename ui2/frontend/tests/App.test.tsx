@@ -78,8 +78,8 @@ describe("the UI 2.0 shell navigation", () => {
     // Reports R1: Reports sits directly under Overview (REPORTS_R1_CONTRACT.md "UI").
     expect(NAV_ENTRIES.map((e) => e.label)).toEqual(["Overview", "Reports", "Devices", "Compliance and security", "Policy and changes", "Backups", "Operations", "Tools", "Administration"]);
     for (const entry of NAV_ENTRIES) expect(within(rail).getByText(entry.label)).toBeInTheDocument();
-    // The four tools are listed in place (no popup); Administration's pages open with its group. The wide sidebar has no drawer.
-    for (const label of ["Packet analysis", "Data sanitizer", "Diagnostics", "Offline analysis"]) expect(within(rail).getByRole("link", { name: label })).toBeInTheDocument();
+    // The three tools and Rule object usage are listed in place (no popup); Administration's pages open with its group. The wide sidebar has no drawer.
+    for (const label of ["Packet analysis", "Data sanitizer", "Diagnostics", "Rule object usage"]) expect(within(rail).getByRole("link", { name: label })).toBeInTheDocument();
     expect(within(rail).queryByText("Device registry")).toBeNull();
     expect(screen.queryByRole("button", { name: "Open navigation" })).toBeNull();
   });

@@ -234,7 +234,7 @@ type PolicyTab = "Rules & Containers" | "Objects" | "Hygiene" | "Changes";
  * containers and their installation, and the objects, searchable across containers), judge it (hygiene, with a fleet
  * summary until one container is open), trace its changes. The seven tabs of the 2026-10-18 layout are not lost: Installation is a
  * column and a section of Rules & Containers, Lookup is Trace > Policy rule lookup (reached from the "Search in this
- * policy" link), and Offline analysis is under Tools. `?tab=` takes the slug of a tab; the old slugs are rewritten in
+ * policy" link), and Offline analysis is Rule object usage, a screen of its own. `?tab=` takes the slug of a tab; the old slugs are rewritten in
  * `legacyRoutes`.
  */
 export const POLICY_TAB_GROUPS: ReadonlyArray<{ readonly group: string; readonly tabs: readonly PolicyTab[] }> = [
