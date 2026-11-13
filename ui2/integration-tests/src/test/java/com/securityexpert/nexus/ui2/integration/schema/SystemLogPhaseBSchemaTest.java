@@ -173,12 +173,20 @@ class SystemLogPhaseBSchemaTest {
         try (var resource = getClass().getResourceAsStream("/db/migration/V160__system_log_phase_b.sql")) {
             assertNotNull(resource);
             String sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
-            try (var db = fixture.migrateConnection(); var statement = db.createStatement()) {
-                db.setAutoCommit(false);
-                statement.execute(sql);
-                statement.execute(sql);
-                assertEquals("13", scalar(db, "select count(*) from gate_registry where gate_id like '%\\_syslog\\_collect\\_%'"));
-                db.rollback();
+            // Repeatability is a property of V160 on the schema it was written for, so it is proved on a database
+            // migrated to V160 only. On the head schema a re-run is not meaningful: V189 (15e75f8d, backup size
+            // anomaly) widened notification_routes_type_check and seeded a backup_size_anomaly route, which V160's
+            // own narrower check rejects. Flyway applies V160 exactly once, before V189, so that is not a defect.
+            try (var atV160 = Ui2PostgresFixture.create("system_log_phase_b_v160")) {
+                org.flywaydb.core.Flyway.configure().dataSource(atV160.migrateDataSource())
+                        .locations("filesystem:" + Ui2PostgresFixture.migrationDirectory()).target("160").load().migrate();
+                try (var db = atV160.migrateConnection(); var statement = db.createStatement()) {
+                    db.setAutoCommit(false);
+                    statement.execute(sql);
+                    statement.execute(sql);
+                    assertEquals("13", scalar(db, "select count(*) from gate_registry where gate_id like '%\\_syslog\\_collect\\_%'"));
+                    db.rollback();
+                }
             }
         }
         try (var db = fixture.migrateConnection()) {
