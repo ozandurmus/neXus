@@ -72,4 +72,22 @@ public interface AdvisoryRepository {
     List<FeedRun> lastGoodRuns();
 
     List<SourceSummary> sourceSummaries();
+
+    /**
+     * One statement of a Check Point Jumbo resolved-issues page (V212, amendment A-2026-11-13): the take of a train that
+     * names a CVE, with the kind ({@code FIX} or {@code MENTION}), the page's product cell, the sk article the line refers
+     * to and the line itself (public text).
+     */
+    record StoredJumboStatement(String train, int take, String cveId, String kind, String productText, String skRef,
+            String evidence, String sourceUrl, String contentSha256) { }
+
+    /** Replaces every statement of one train in one transaction (a page read in full). */
+    default void replaceJumboStatements(String train, List<StoredJumboStatement> statements) {
+        throw new UnsupportedOperationException("jumbo statements are not stored by this repository");
+    }
+
+    /** The stored statements that name one CVE id, every train, ordered by train and take. */
+    default List<StoredJumboStatement> jumboStatements(String cveId) {
+        return List.of();
+    }
 }

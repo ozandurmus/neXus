@@ -28,6 +28,8 @@ public final class DefaultAdvisoryEvaluator implements AdvisoryEvaluator {
     private static final int RANK_NAMED_UNAFFECTED = 4;
     private static final int RANK_FIXED = 3;
     private static final int RANK_WEAK = 2;
+    /** A Check Point Jumbo rule that cannot clear the version: an open question, the weakest statement. */
+    private static final int RANK_PENDING = 1;
 
     private record Hit(int rank, AdvisoryModel.VerdictKind kind, String basis) {
     }
@@ -124,6 +126,7 @@ public final class DefaultAdvisoryEvaluator implements AdvisoryEvaluator {
                             : new Hit(RANK_NAMED_UNAFFECTED, AdvisoryModel.VerdictKind.NOT_AFFECTED, "TRAIN_UNAFFECTED");
                     case AdvisoryModel.ExactVersions e -> exact(e, version);
                     case AdvisoryModel.Range r -> range(r, version, cmp, panOs);
+                    case AdvisoryModel.JumboFix j -> jumbo(j, version, cmp);
                 };
                 if (h != null && (best == null || h.rank() > best.rank())) {
                     best = h;
@@ -131,6 +134,20 @@ public final class DefaultAdvisoryEvaluator implements AdvisoryEvaluator {
             }
         }
         return best;
+    }
+
+    /**
+     * Amendment A-2026-11-13: at or above the take the vendor's resolved-issues list names as carrying the fix (or above
+     * the last take the vendor names affected), the version is FIXED; otherwise it is NOT_EVALUABLE with the rule's basis.
+     */
+    private static Hit jumbo(AdvisoryModel.JumboFix j, String version, ProductComparator cmp) {
+        if (j.clearFrom() != null) {
+            int c = cmp.compare(version, j.clearFrom());
+            if (j.clearExclusive() ? c > 0 : c >= 0) {
+                return new Hit(RANK_FIXED, AdvisoryModel.VerdictKind.FIXED, j.clearExclusive() ? "ABOVE_AFFECTED_TAKE" : "JUMBO_FIX_INCLUDED");
+            }
+        }
+        return new Hit(RANK_PENDING, AdvisoryModel.VerdictKind.NOT_EVALUABLE, j.pendingBasis());
     }
 
     private static Hit exact(AdvisoryModel.ExactVersions e, String version) {

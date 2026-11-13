@@ -31,14 +31,14 @@ class AdvisorySecurityTest {
     }
 
     @Test void theIngestRoutesAreExplicitlyUngatedForEachKnownSourceOnly() {
-        for (String source : List.of("paloalto", "fortinet", "cisco", "cisa_kev")) {
+        for (String source : List.of("paloalto", "fortinet", "cisco", "cisa_kev", "checkpoint")) {
             assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/advisories/" + source), source);
             assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/advisories/" + source + "/complete"), source);
         }
-        assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/advisories/checkpoint"));
+        assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/advisories/infoblox"));
         assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("GET /internal/advisories/paloalto"));
         assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/machine-session"));
-        assertEquals(11 + 8, SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.size());
+        assertEquals(11 + 10, SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.size());
     }
 
     @Test void anIngestRouteReachesItsOwnTokenCheckAndAnUnknownSourceIsRefused() throws Exception {
@@ -53,7 +53,7 @@ class AdvisorySecurityTest {
         HttpServletResponse response = Mockito.mock(HttpServletResponse.class);
         StringWriter body = new StringWriter();
         Mockito.when(unknown.getMethod()).thenReturn("POST");
-        Mockito.when(unknown.getServletPath()).thenReturn("/internal/advisories/checkpoint");
+        Mockito.when(unknown.getServletPath()).thenReturn("/internal/advisories/infoblox");
         Mockito.when(response.getWriter()).thenReturn(new PrintWriter(body));
         assertFalse(interceptor.preHandle(unknown, response, null));
         Mockito.verify(response).setStatus(403);

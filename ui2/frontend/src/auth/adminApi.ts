@@ -358,9 +358,12 @@ export interface LifecycleVulnerabilityBasis {
 export interface LifecycleVulnerabilities {
   /** Only EVALUATED is a judgement; the other three states say why the device was not judged. */
   state: "EVALUATED" | "NOT_EVALUATED" | "NOT_COVERED" | "VERSION_UNKNOWN";
-  reason?: "SOURCE_NEVER_LOADED" | "SOURCE_STALE" | "NO_COMPARATOR" | "VERSION_MISSING" | "VERSION_UNPARSED" | null;
+  reason?: "SOURCE_NEVER_LOADED" | "SOURCE_STALE" | "NO_COMPARATOR" | "VERSION_MISSING" | "VERSION_UNPARSED"
+    | "JUMBO_TAKE_MISSING" | "JUMBO_TRAIN_MISMATCH" | "SPARK_NOT_COVERED" | "TRAIN_NOT_COVERED" | null;
   product_key?: string | null;
   affected?: number; affected_exploited?: number; affected_critical_high?: number; not_evaluable?: number; fixed?: number;
+  /** Check Point: not judged because a proposed fix rule waits for a security_admin's confirmation; kept out of the other counts. */
+  pending?: number;
   worst_severity?: AdvisorySeverity | null;
   compared?: LifecycleVulnerabilityBasis | null;
 }
@@ -378,7 +381,7 @@ export interface LifecycleAdvisory {
   /** Untrusted public text like every other advisory field: a link only when it starts with https://. Null when the server dropped it. */
   source_url: string | null;
   parse_state: "PARSED" | "NEEDS_REVIEW"; parse_note: string | null;
-  devices: { affected: number; fixed: number; not_affected: number; not_evaluable: number };
+  devices: { affected: number; fixed: number; not_affected: number; not_evaluable: number; pending?: number };
 }
 export interface LifecycleAdvisoryDevice {
   /** `hostname` is the display name (the key the server masks for a masked session). */
@@ -386,6 +389,8 @@ export interface LifecycleAdvisoryDevice {
   verdict: "AFFECTED" | "FIXED" | "NOT_AFFECTED" | "NOT_EVALUABLE";
   /** The code word of the rule that decided (IN_RANGE, AT_OR_ABOVE_FIX, ...); the set is open, an unknown word is shown as it is. */
   basis: string; fixed_text: string | null;
+  /** Check Point only: the Live Patch that names this advisory on the device. A label; the verdict never uses it. */
+  live_patch?: { patch: string; status: string; used_in_verdict: false } | null;
 }
 export interface LifecycleAdvisorySource {
   source: string; last_run_at: string | null; outcome: "OK" | "PARTIAL" | "FAILED" | null; reason: string | null;

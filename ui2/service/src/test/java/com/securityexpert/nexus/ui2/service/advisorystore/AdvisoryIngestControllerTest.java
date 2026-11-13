@@ -101,7 +101,7 @@ class AdvisoryIngestControllerTest {
         assertEquals(400, send(c, fetchToken, URL, "short", new byte[] {1}));
         assertEquals(400, send(c, fetchToken, URL, "bad run id with spaces", new byte[] {1}));
         assertEquals(400, send(c, fetchToken, URL, null, new byte[] {1}));
-        assertEquals(404, c.document("checkpoint", fetchToken, URL, RUN, post(new byte[] {1})).getStatusCode().value());
+        assertEquals(404, c.document("infoblox", fetchToken, URL, RUN, post(new byte[] {1})).getStatusCode().value());
         assertEquals(400, c.complete("paloalto", fetchToken, "short", post(new byte[] {1})).getStatusCode().value());
         assertTrue(env.repo.runs.isEmpty());
     }

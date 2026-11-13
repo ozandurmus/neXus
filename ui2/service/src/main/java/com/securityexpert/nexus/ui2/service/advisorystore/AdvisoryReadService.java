@@ -20,7 +20,12 @@ import com.securityexpert.nexus.ui2.persistence.advisory.AdvisoryRepository.Feed
 import com.securityexpert.nexus.ui2.persistence.advisory.AdvisoryRepository.StoredAdvisory;
 import com.securityexpert.nexus.ui2.persistence.advisory.AdvisoryRepository.StoredKnownExploited;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
+import com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts;
+import com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
+import com.securityexpert.nexus.ui2.persistence.lifecycle.DeviceLifecycleRepository;
+import com.securityexpert.nexus.ui2.service.advisory.AdvisoryModel;
+import com.securityexpert.nexus.ui2.service.advisory.CheckPointGaiaComparator;
 import com.securityexpert.nexus.ui2.service.advisory.AdvisoryCore;
 import com.securityexpert.nexus.ui2.service.advisory.AdvisoryModel.VerdictKind;
 import com.securityexpert.nexus.ui2.service.advisorystore.AdvisoryEstate.AdvisoryRow;
@@ -47,22 +52,62 @@ public final class AdvisoryReadService {
     private final AdvisoryRepository repository;
     private final DeviceRepository devices;
     private final Supplier<Optional<AdvisoryCore>> core;
+    /** Hotfix level per device id (Check Point: {@code R81.20 Jumbo Take 119}); read once per request. */
+    private final Supplier<Map<String, String>> hotfixLevels;
+    /** Check Point Live Patch rows per device id: a label on a verdict only, never a verdict (amendment A-2026-11-13). */
+    private final Supplier<Map<String, List<DeviceLifecycleRepository.LivePatchItem>>> livePatches;
 
     @Autowired
-    public AdvisoryReadService(AdvisoryRepository repository, DeviceRepository devices, ObjectProvider<AdvisoryCore> core) {
-        this(repository, devices, () -> Optional.ofNullable(core.getIfAvailable()));
+    public AdvisoryReadService(AdvisoryRepository repository, DeviceRepository devices, ObjectProvider<AdvisoryCore> core,
+            ObjectProvider<DevicePlatformFactsRepository> platformFacts, ObjectProvider<DeviceLifecycleRepository> lifecycle) {
+        this(repository, devices, () -> Optional.ofNullable(core.getIfAvailable()), () -> {
+            DevicePlatformFactsRepository facts = platformFacts.getIfAvailable();
+            return facts == null ? Map.of() : hotfixLevels(facts.findAll());
+        }, () -> {
+            DeviceLifecycleRepository stored = lifecycle.getIfAvailable();
+            return stored == null ? Map.of() : stored.livePatchByDevice();
+        });
     }
 
     public AdvisoryReadService(AdvisoryRepository repository, DeviceRepository devices, Supplier<Optional<AdvisoryCore>> core) {
+        this(repository, devices, core, Map::of, Map::of);
+    }
+
+    public AdvisoryReadService(AdvisoryRepository repository, DeviceRepository devices, Supplier<Optional<AdvisoryCore>> core,
+            Supplier<Map<String, String>> hotfixLevels, Supplier<Map<String, List<DeviceLifecycleRepository.LivePatchItem>>> livePatches) {
         this.repository = repository;
         this.devices = devices;
         this.core = core;
+        this.hotfixLevels = hotfixLevels;
+        this.livePatches = livePatches;
+    }
+
+    /** The hotfix level of each device that has one stored. */
+    public static Map<String, String> hotfixLevels(Map<String, DevicePlatformFacts> facts) {
+        Map<String, String> out = new HashMap<>();
+        if (facts != null) {
+            facts.forEach((id, f) -> f.hotfixLevel().ifPresent(level -> out.put(id, level)));
+        }
+        return out;
     }
 
     /** The device facts the verdicts need, from the device directory (the same stored columns the Lifecycle view reads). */
     public static DeviceFacts facts(DeviceSummaryRecord d) {
+        return facts(d, null);
+    }
+
+    /** As {@link #facts(DeviceSummaryRecord)}; a Check Point device is compared by its software version and Jumbo take. */
+    public static DeviceFacts facts(DeviceSummaryRecord d, String hotfixLevel) {
         return new DeviceFacts(d.deviceId(), d.vendorHint(), d.role(), d.observedModel().orElse(null),
-                d.observedSoftwareVersion().orElse(null), d.observedHostname().orElse(null));
+                comparedVersion(d.vendorHint(), d.observedSoftwareVersion().orElse(null), hotfixLevel), d.observedHostname().orElse(null));
+    }
+
+    /**
+     * The version a device is compared by: the stored software version, and for Check Point that version joined with the
+     * stored Jumbo take (amendment A-2026-11-13, {@link CheckPointGaiaComparator#compose}).
+     */
+    public static String comparedVersion(String vendorHint, String softwareVersion, String hotfixLevel) {
+        return "check_point".equals(vendorHint) ? CheckPointGaiaComparator.compose(softwareVersion, hotfixLevel) : softwareVersion;
     }
 
     /** The Vulnerabilities object of each device (key: device id) for the Lifecycle fleet payload. */
@@ -71,7 +116,7 @@ public final class AdvisoryReadService {
         Optional<AdvisoryCore> available = core.get();
         if (available.isEmpty()) {
             for (DeviceFacts d : facts) result.put(d.deviceId(), assessmentJson(new DeviceAssessment(
-                    AdvisoryEstate.NOT_COVERED, "NO_COMPARATOR", null, 0, 0, 0, 0, 0, null, null)));
+                    AdvisoryEstate.NOT_COVERED, "NO_COMPARATOR", null, 0, 0, 0, 0, 0, null, null, 0)));
             return result;
         }
         AdvisoryEstate estate = estate(available.get(), facts, sourceStates(now), now);
@@ -102,7 +147,15 @@ public final class AdvisoryReadService {
         return estate.advisories().stream().filter(r -> r.advisory().advisoryId().equals(advisoryId)).findFirst().map(row -> {
             var body = new LinkedHashMap<String, Object>();
             body.put("advisory", advisoryJson(row));
-            body.put("devices", row.verdicts().stream().sorted(VERDICT_ORDER).map(v -> verdictJson(advisoryId, v)).toList());
+            Map<String, List<DeviceLifecycleRepository.LivePatchItem>> patches =
+                    AdvisoryModel.SOURCE_CHECKPOINT.equals(row.advisory().source()) ? livePatches.get() : Map.of();
+            body.put("devices", row.verdicts().stream().sorted(VERDICT_ORDER).map(v -> {
+                Map<String, Object> json = verdictJson(advisoryId, v);
+                if (AdvisoryModel.SOURCE_CHECKPOINT.equals(row.advisory().source())) {
+                    json.put("live_patch", livePatchLabel(row.advisory(), patches.get(v.device().deviceId())));
+                }
+                return json;
+            }).toList());
             return body;
         });
     }
@@ -135,7 +188,8 @@ public final class AdvisoryReadService {
     // ---- loading ------------------------------------------------------------------------------------------------
 
     private List<DeviceFacts> deviceFacts() {
-        return devices.listAll().stream().map(AdvisoryReadService::facts).toList();
+        Map<String, String> hotfix = hotfixLevels.get();
+        return devices.listAll().stream().map(d -> facts(d, hotfix.get(d.deviceId()))).toList();
     }
 
     private AdvisoryEstate estate(AdvisoryCore advisoryCore, List<DeviceFacts> facts, Map<String, SourceState> sources, Instant now) {
@@ -157,7 +211,7 @@ public final class AdvisoryReadService {
             int count = summary == null ? 0 : summary.advisories();
             LocalDate oldest = summary == null ? null : summary.oldest();
             LocalDate newest = summary == null ? null : summary.newest();
-            if (AdvisorySources.KEYS.get(3).equals(key)) {
+            if ("cisa_kev".equals(key)) {
                 // The known-exploited catalog holds entries, not advisories: its count and dates are those of the entries.
                 count = kev.size();
                 oldest = kev.stream().map(StoredKnownExploited::dateAdded).min(Comparator.naturalOrder()).orElse(null);
@@ -184,6 +238,7 @@ public final class AdvisoryReadService {
         body.put("affected_critical_high", a.affectedCriticalHigh());
         body.put("not_evaluable", a.notEvaluable());
         body.put("fixed", a.fixed());
+        body.put("pending", a.pending());
         body.put("worst_severity", a.worstSeverity());
         if (a.compared() == null) {
             body.put("compared", null);
@@ -217,7 +272,8 @@ public final class AdvisoryReadService {
         body.put("parse_state", a.parseState());
         body.put("parse_note", a.parseNote());
         body.put("devices", Map.of("affected", row.counts().affected(), "fixed", row.counts().fixed(),
-                "not_affected", row.counts().notAffected(), "not_evaluable", row.counts().notEvaluable()));
+                "not_affected", row.counts().notAffected(), "not_evaluable", row.counts().notEvaluable(),
+                "pending", row.counts().pending()));
         return body;
     }
 
@@ -246,6 +302,32 @@ public final class AdvisoryReadService {
         body.put("basis", v.basis());
         body.put("fixed_text", v.fixedText());
         return body;
+    }
+
+    private static final java.util.regex.Pattern SK_IN_LINK = java.util.regex.Pattern.compile("/results/sk/(sk[0-9]{1,10})$");
+
+    /**
+     * The Live Patch label of one Check Point device row (amendment A-2026-11-13): the patch whose references name one of
+     * the advisory's CVE ids or its sk article, with the status {@code cplp list} gave. A label only: the verdict never uses
+     * it (contract: verdicts that use Live Patch facts are out of scope). Null when the device lists no such patch.
+     */
+    static Map<String, Object> livePatchLabel(StoredAdvisory advisory, List<DeviceLifecycleRepository.LivePatchItem> patches) {
+        if (patches == null || patches.isEmpty()) return null;
+        java.util.Set<String> refs = new java.util.HashSet<>(advisory.cveIds());
+        if (advisory.sourceUrl() != null) {
+            var m = SK_IN_LINK.matcher(advisory.sourceUrl());
+            if (m.find()) refs.add(m.group(1));
+        }
+        for (var p : patches) {
+            if (p.refs() != null && p.refs().stream().anyMatch(refs::contains)) {
+                var label = new LinkedHashMap<String, Object>();
+                label.put("patch", p.patchId());
+                label.put("status", p.status());
+                label.put("used_in_verdict", false);
+                return label;
+            }
+        }
+        return null;
     }
 
     private static String text(LocalDate date) { return date == null ? null : date.toString(); }

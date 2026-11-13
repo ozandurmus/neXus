@@ -171,6 +171,36 @@ public final class JooqAdvisoryRepository implements AdvisoryRepository {
                         local(row.get("newest", Date.class)))).toList());
     }
 
+    @Override
+    public void replaceJumboStatements(String train, List<StoredJumboStatement> statements) {
+        Objects.requireNonNull(train, "train");
+        List<StoredJumboStatement> rows = statements == null ? List.of() : statements;
+        transactions.inTransaction(dsl -> {
+            dsl.execute("delete from checkpoint_jumbo_statement where train = {0}", train);
+            for (StoredJumboStatement j : rows) {
+                if (!train.equals(j.train())) {
+                    throw new IllegalArgumentException("statement of another train");
+                }
+                dsl.execute("insert into checkpoint_jumbo_statement(train, take, cve_id, kind, product_text, sk_ref, evidence, "
+                        + "source_url, content_sha256, loaded_at) values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, now()) "
+                        + "on conflict (train, take, cve_id, kind) do nothing",
+                        j.train(), j.take(), j.cveId(), j.kind(), j.productText(), j.skRef(), j.evidence(), j.sourceUrl(),
+                        j.contentSha256());
+            }
+            return null;
+        });
+    }
+
+    @Override
+    public List<StoredJumboStatement> jumboStatements(String cveId) {
+        return transactions.inTransaction(dsl -> dsl.fetch("select train, take, cve_id, kind, product_text, sk_ref, evidence, "
+                + "source_url, content_sha256 from checkpoint_jumbo_statement where cve_id = {0} order by train, take, kind", cveId)
+                .stream().map(row -> new StoredJumboStatement(row.get("train", String.class), number(row.get("take")),
+                        row.get("cve_id", String.class), row.get("kind", String.class), row.get("product_text", String.class),
+                        row.get("sk_ref", String.class), row.get("evidence", String.class), row.get("source_url", String.class),
+                        row.get("content_sha256", String.class))).toList());
+    }
+
     private static FeedRun run(Record row) {
         OffsetDateTime started = row.get("started_at", OffsetDateTime.class);
         OffsetDateTime ended = row.get("ended_at", OffsetDateTime.class);

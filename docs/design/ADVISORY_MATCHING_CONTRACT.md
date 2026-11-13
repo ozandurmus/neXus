@@ -219,3 +219,170 @@ Read access follows the existing Lifecycle view (Devices plane); there is no new
   section 6.6). A difference is investigated before the view is called correct.
 - The fetch workload is shown to hold no secret other than its token and to reach nothing but DNS, the proxy and
   the ingest port.
+
+## Amendment A-2026-11-13: Check Point advisories
+
+**Status: DRAFT (2026-11-13), for the Product Owner to freeze.** Written by an engineering session. It lifts "Check
+Point advisories" out of the "Not in this contract" list and defines the proposed fix rules of PO decision 2026-11-10
+question 4 (`PO_DECISION_RECORD_2026_11_10_ADVISORY_INTAKE_PROXY_SOURCES_AND_FIX_RULES.md`) for Check Point. The confirm
+action of those rules is specified here (A.9) and built in a second step; until then a proposal stays pending. Verdicts
+that use Live Patch facts stay out of this contract (A.10). The implementation of A.1 to A.8 and A.10 is on the branch
+named in the session report; nothing is live until the amendment is frozen and shipped.
+
+### A.1 What Check Point publishes (measured 2026-11-13)
+
+Plain public `GET` requests from a workstation, without cookies or estate data, on 2026-11-13:
+
+- **No machine-readable advisory feed on an approved host.** `support.checkpoint.com/security-advisories` is a script
+  page; its list comes from an undocumented JSON interface on `iapi-services-ucs.checkpoint.com`, a host that is not
+  approved (question Q1). The sk articles are readable pages, but nothing lists which sk articles are advisories.
+- **CPAI advisories** (`advisories.checkpoint.com`) are IPS protections for other vendors' products. They are not
+  advisories about Check Point products and are not used.
+- **Jumbo Hotfix Accumulator "All Resolved Issues" pages** on `sc1.checkpoint.com` are static pages, one per Gaia
+  train. Each take is a section `id="All_Resolved_Issues__Take_<n>"` with a table of three columns (ID, Product,
+  Description). The Description names CVE ids, for example "Resolved CVE-... Refer to sk...". The four pages of the
+  trains below named 61 distinct CVE ids. The older addresses (`.../R82/R82.00/R82-List-of-all-Resolved-Issues.htm`
+  and alike) are redirect pages and are not used; the R81.10 page has an older layout and is not read.
+- **CVE records (CVE JSON 5)** of Check Point as CVE Numbering Authority carry `affected[].versions[].version` as free
+  text in three forms seen: `"R81.20 with Jumbo Hotfix Take 165 or below"` (one entry per train, records of 2026),
+  a bare train, and a sentence `"<products> versions R81.20, R81.10, R81 and <products> versions ..."` (records of
+  2024). None uses `lessThan`, `versionType` or `changes`. `references[]` is the sk article. Listing records by
+  assigner needs CNA credentials, so the record of a CVE is reached only through its id.
+
+### A.2 Source (section 2)
+
+| Source key | Hosts | Documents | Notes |
+| --- | --- | --- | --- |
+| `checkpoint` | `sc1.checkpoint.com`; `raw.githubusercontent.com` | the four fixed pages `/documents/Jumbo_HFA/<train>/All_Resolved_Issues.html` for `R81.20`, `R82`, `R82.10`, `R82.20`; then, for every CVE id those pages name, `/CVEProject/cvelistV5/main/cves/<year>/<number div 1000>xxx/CVE-<year>-<number>.json` | coverage: the CVE ids the resolved-issues pages of these trains name (A.5) |
+
+Rule 1 holds: the page addresses are constants of the build; a record address is built from a CVE id read from one of
+those pages and carries nothing about the estate. `cveawg.mitre.org` stays approved and unused (the same record is
+served by the public list). `support.checkpoint.com` is a link host only (the sk article of an advisory); it is not
+fetched.
+
+### A.3 Fetch (section 3)
+
+The four pages are fetched and handed over first, in the order above; then the record of every CVE id they name,
+without repeats, at most 1000 per run. A page that fails is counted and the run goes on; a certificate failure stops
+the source (PO stop rule). With no page read the run ends with `NO_PAGE_READ`. Pacing (one request per second) is per
+host. The default source list of the workload includes `checkpoint`; no manifest change is needed.
+
+### A.4 Ingest and storage (sections 4 and 5)
+
+- **A page** yields no advisory. Each table line whose Description names a CVE id becomes one statement per CVE id:
+  train, take, CVE id, kind (A.6), the Product cell, the sk article the line refers to, and the line itself (public
+  text, at most 300 characters). The statements of a train are replaced as a set when its page is recognised (at
+  least one take section). A page without a take section changes nothing and is counted as rejected; a CVE line of
+  another shape is counted as rejected and not guessed.
+- **A record** yields one advisory `checkpoint:<CVE id>`: title (`cna.title`, else the English description), severity
+  and score (CVSS 4.0, else 3.1, else 3.0 of `cna.metrics`), published and updated dates of `cveMetadata`, link = the
+  record's sk article, else the sk article of a resolved-issues line. Its rules are built from the record and the
+  stored statements of the same CVE id (A.7). A record that is not `PUBLISHED` or not JSON is rejected.
+- Storage: migration `V212` adds `checkpoint` to the source checks of `advisory` and `advisory_feed_run` and the table
+  `checkpoint_jumbo_statement` (train, take, CVE id, kind, product text, sk article, line, page address, page SHA-256,
+  load time). Public data only, no audit trigger, as V205.
+
+### A.5 Products and the comparison basis (sections 6 and 7, rule 4)
+
+| Product key | Devices | Compared version (example) | Parsed as |
+| --- | --- | --- | --- |
+| `checkpoint:gaia-gateway` | Check Point devices with role `gateway` (appliances, open servers, ClusterXL and VSX members) | `R81.20 Jumbo Take 119` | train `R81.20`, take 119 |
+| `checkpoint:gaia-management` | Check Point devices with role `management_server` (Security Management, Multi-Domain Server) | `R82 Jumbo Take 127` | train `R82`, take 127 |
+
+- The compared version joins two values neXus already stores: the software version (`R81.20`) and the hotfix level
+  read from `cpinfo -y all` (`R81.20 Jumbo Take 119`). It is used only when the hotfix level names the same train.
+  No hotfix level: `VERSION_UNKNOWN` with `JUMBO_TAKE_MISSING` (never "take 0"). Another train: `VERSION_UNKNOWN` with
+  `JUMBO_TRAIN_MISMATCH`.
+- Takes compare as whole numbers inside one train; two trains are never compared. A Jumbo Hotfix Accumulator take
+  contains every earlier take of its train, so a take at or above the take whose resolved issues list a CVE carries
+  that resolution.
+- `NOT_COVERED` with a reason: a Quantum Spark firmware (`R81.10.15`, three parts): `SPARK_NOT_COVERED`; a Gaia train
+  without a page read here (`R81.10`, `R81`, ...): `TRAIN_NOT_COVERED`; a Check Point device without a known role: no
+  product.
+- **Comparison basis shown (rule 4):** "Check Point: N advisories from the CVE records named by the resolved-issues
+  pages of R81.20, R82, R82.10 and R82.20", with oldest and newest advisory date and the age of the last good load.
+  **Coverage limit, stated where the basis is shown:** a Check Point CVE that no resolved-issues page of these trains
+  names yet (published but not yet resolved in a Jumbo take, or resolved by a separate hotfix only) is not seen by
+  this source (question Q1).
+
+### A.6 Kinds of resolved-issues lines
+
+- `FIX` when the Description contains `Resolved CVE-`, `to fix CVE-` or `to fix: CVE-`, or starts with
+  `CVE-<id> - ` (optionally after `UPDATE: `).
+- `MENTION` for any other line naming a CVE id, for example "Check Point response to CVE-...", or a defence described
+  in other words. A mention is not read as a resolution.
+
+### A.7 Rules (per product key and train)
+
+| What the record says for the product and train | Rule | Verdicts |
+| --- | --- | --- |
+| A Check Point record: `"<train> with Jumbo Hotfix Take M or below"` | affected range up to take M | take <= M `AFFECTED` (`IN_RANGE`); above M `FIXED`. Self-check: a `FIX` line of the same train at a take <= M contradicts it: the advisory is `NEEDS_REVIEW` (`SELF_CHECK_FAILED`) |
+| A Check Point record: the train without a take | proposal from the `FIX` line | take >= the resolving take `FIXED` (`JUMBO_FIX_INCLUDED`); below it pending (`FIX_RULE_UNCONFIRMED`), **never `AFFECTED`**; several `FIX` takes: at or above the highest `FIXED`, below pending (`MULTIPLE_FIX_TAKES`); only mentions: pending (`FIX_STATEMENT_UNCLEAR`); no line: `NOT_EVALUABLE` (`NO_FIX_TAKE_PUBLISHED`) |
+| A Check Point record naming only part of the gateways (Maestro, scalable platforms, CloudGuard Network) | as the two rows above, without an affected range | above take M, or at or above the resolving take, `FIXED`; otherwise `NOT_EVALUABLE` (`PRODUCT_SUBSET_UNKNOWN`): neXus cannot tell these gateways apart |
+| A record of another CVE authority (a third-party component Check Point resolved) | proposal from the `FIX` line, for both product keys, only on the trains whose page names the CVE | as the proposal row; parse note `THIRD_PARTY_CVE` |
+
+- The product names of a Check Point record are matched exactly against a closed table (gateway: Quantum (Security)
+  Gateway(s), Security Gateway(s), Quantum Appliances, ClusterXL; management: (Quantum) Security Management,
+  Multi-Domain Security Management, Multi-Domain Server; both: Gaia, Gaia OS; part of the gateways: Quantum Maestro,
+  Quantum Scalable Chassis, Scalable Platforms, CloudGuard Network; not covered: Spark, Spark Gateway, Quantum Spark).
+  A text that is not a known name is split at commas and "and" outside parentheses and each part matched; one
+  unknown part makes the advisory `NEEDS_REVIEW`.
+- In the sentence form each group's own product names decide its trains. A product class the entry's `product` field
+  names but no group names (a field listing management while the sentence speaks of gateways) gets the sentence's
+  trains as a train named without a take (proposal row, never `AFFECTED`) when the sentence has one group; with several
+  groups the advisory is `NEEDS_REVIEW` (`RECORD_CONFLICT`).
+- The record decides which products and trains are named (rule 3, vendor first). A train a resolved-issues page names
+  but a parsed Check Point record does not is not listed for that advisory.
+- The fix statement shown is "<train> Jumbo Take <n>: <the resolved-issues line>", or "Affected up to <train> Jumbo
+  Take <M> (vendor CVE record)".
+- Rule 6 holds: every affected verdict is "affected by version; exposure depends on configuration" (many Check Point
+  advisories concern one blade, such as Remote Access or Mobile Access).
+
+### A.8 Parse states and what stays open
+
+| Code word | State | Effect |
+| --- | --- | --- |
+| (none) | `PARSED` | rules as A.7 |
+| `THIRD_PARTY_CVE` | `PARSED` | proposals only (A.7 last row) |
+| `UNKNOWN_PRODUCT`, `UNKNOWN_VERSION_FORM`, `UNKNOWN_STATUS`, `NO_AFFECTED`, `RECORD_CONFLICT`, `SELF_CHECK_FAILED` | `NEEDS_REVIEW` | `NOT_EVALUABLE` for both product keys on every train the record or its resolved-issues lines name, or the whole product when none is known |
+
+### A.9 Pending proposals and their confirmation
+
+- A verdict whose basis is `FIX_RULE_UNCONFIRMED`, `MULTIPLE_FIX_TAKES` or `FIX_STATEMENT_UNCLEAR` is **pending**: it
+  is shown as "Pending confirmation" with the proposed take and the line it was read from, and it is counted only in
+  its own `pending` count (per device and per advisory). It is not in `affected`, not in `not_evaluable` and not in
+  any summary counter, as PO decision question 4 requires.
+- **Confirm action (second step, not built yet).** A `security_admin` confirms or rejects one proposal: advisory,
+  product key, train, proposed take and the SHA-256 of the page line it was read from. Confirmed: below that take the
+  verdict is `AFFECTED` (`CONFIRMED_FIX_RULE`), at or above it `FIXED`. Rejected: the verdict stays `NOT_EVALUABLE`
+  with `FIX_RULE_REJECTED` and leaves the pending count. A confirmation is bound to the line it was given for: when
+  the stored line or take changes, the proposal is pending again. Each decision is audited (actor, time, the four
+  values), has a CLI equivalent, and is a new action in the action registry (security_admin only).
+
+### A.10 Live Patch
+
+Unchanged: no verdict uses a Live Patch fact. On the device list of a Check Point advisory, a device whose stored
+`cplp list` rows name one of the advisory's CVE ids or its sk article shows a label "Live Patch <id>: <status> (shown
+only; not used in the verdict)". `FIXED_BY_LIVE_PATCH` and the 12-week deadline of the design stay for their own
+amendment.
+
+### A.11 Acceptance
+
+- Parser, comparator and flow tests on synthetic documents in the shapes of A.1: every line kind, every record form,
+  the self-check, each `NEEDS_REVIEW` code word, pending counting, `NOT_COVERED` reasons, and the Live Patch label
+  that leaves the verdict unchanged.
+- After the first live load, counts only: statements per train and kind; advisories per parse state and note;
+  Check Point devices per state and reason; devices affected and pending. Three advisories are checked by hand
+  against their sk articles before the Check Point column is called correct.
+
+### A.12 Questions for the Product Owner
+
+- **Q1. A new host for full coverage.** `iapi-services-ucs.checkpoint.com` serves Check Point's own list of its
+  security advisories (161 on 2026-11-13, with CVE, sk article and affected take per train, including advisories not
+  yet resolved in a Jumbo take). It is the interface behind the vendor's advisory page, but undocumented. Approve it
+  as a second Check Point document host (one fixed address, same rules as A.2), or keep the coverage limit of A.5?
+- **Q2. Take statements without confirmation.** This draft treats a Check Point record's `"<train> with Jumbo Hotfix
+  Take M or below"`, checked against the resolved-issues page, as the vendor's machine-readable statement: such
+  verdicts are final without an administrator's confirmation (as for the other vendors). Agree, or should these also
+  wait for confirmation?
+- **Q3. Order.** Build the confirm action (A.9) as the next step, before the first live load is called correct?

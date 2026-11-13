@@ -19,12 +19,24 @@ public final class AdvisoryModel {
     public static final String SOURCE_FORTINET = "fortinet";
     public static final String SOURCE_CISCO = "cisco";
     public static final String SOURCE_CISA_KEV = "cisa_kev";
+    /** Amendment A-2026-11-13. */
+    public static final String SOURCE_CHECKPOINT = "checkpoint";
 
     /** Product keys (contract section 6). */
     public static final String PRODUCT_PAN_OS = "paloalto:pan-os";
     public static final String PRODUCT_FORTIOS = "fortinet:fortios";
     public static final String PRODUCT_FORTIMANAGER = "fortinet:fortimanager";
     public static final String PRODUCT_CISCO_ASA = "cisco:asa";
+    /** Check Point Gaia gateways (appliances, open servers, ClusterXL and VSX members), amendment A-2026-11-13. */
+    public static final String PRODUCT_CP_GATEWAY = "checkpoint:gaia-gateway";
+    /** Check Point Gaia management: Security Management Server and Multi-Domain Server, amendment A-2026-11-13. */
+    public static final String PRODUCT_CP_MANAGEMENT = "checkpoint:gaia-management";
+
+    /**
+     * The bases of a verdict that waits for a fix rule a {@code security_admin} has not confirmed yet (PO decision
+     * 2026-11-10, question 4): shown as pending, kept out of every summary count until the rule is confirmed.
+     */
+    public static final Set<String> PENDING_BASES = Set.of("FIX_RULE_UNCONFIRMED", "MULTIPLE_FIX_TAKES", "FIX_STATEMENT_UNCLEAR");
 
     /** The train value of a rule that covers the whole product. */
     public static final String ALL_TRAINS = "*";
@@ -37,7 +49,7 @@ public final class AdvisoryModel {
     public enum Status { AFFECTED, UNAFFECTED }
 
     /** One normalised statement about versions of one train. A train's rules are evaluated together (section 6). */
-    public sealed interface VersionRule permits WholeTrain, Range, ExactVersions {
+    public sealed interface VersionRule permits WholeTrain, Range, ExactVersions, JumboFix {
     }
 
     /** Every version of the train (or of the product, for the train {@link #ALL_TRAINS}) has this status. */
@@ -66,6 +78,25 @@ public final class AdvisoryModel {
         }
     }
 
+    /**
+     * Check Point (amendment A-2026-11-13): a version above {@code clearFrom} (or at it, when {@code clearExclusive} is
+     * false) is {@code FIXED}, because the vendor names that Jumbo take as carrying the fix or names every take above it as
+     * unaffected; any other version is {@code NOT_EVALUABLE} with {@code pendingBasis}, because what the vendor published
+     * does not say it is affected. {@code clearFrom} null: no take clears it. Never yields {@code AFFECTED}.
+     */
+    public record JumboFix(String clearFrom, boolean clearExclusive, String pendingBasis) implements VersionRule {
+    }
+
+    /**
+     * One statement of a Check Point Jumbo "All Resolved Issues" page: the take of a train that names a CVE. {@code kind}
+     * {@code FIX} when the line says the CVE was resolved or fixed, {@code MENTION} when it names the CVE in another way
+     * ("Check Point response to ..."). {@code evidence} is the table line it was read from (public text, at most 300
+     * characters).
+     */
+    public record JumboStatement(String train, int take, String cveId, String kind, String productText, String skRef,
+            String evidence) {
+    }
+
     /** The rules of one advisory for one product and train, with the vendor's fix statement for that train (or null). */
     public record ProductRule(String productKey, String train, List<VersionRule> rules, String fixedText) {
         public ProductRule {
@@ -92,10 +123,16 @@ public final class AdvisoryModel {
      * Fortinet feed names its CSAF files; the Cisco change list names files): data for the fetcher's own logic only, never
      * fetched by the service. {@code rejected} counts entries that could not be read at all.
      */
-    public record ParseResult(List<ParsedAdvisory> advisories, List<KnownExploited> knownExploited, int rejected) {
+    public record ParseResult(List<ParsedAdvisory> advisories, List<KnownExploited> knownExploited, int rejected,
+            String jumboTrain, List<JumboStatement> jumboStatements) {
         public ParseResult {
             advisories = List.copyOf(advisories);
             knownExploited = List.copyOf(knownExploited);
+            jumboStatements = jumboStatements == null ? List.of() : List.copyOf(jumboStatements);
+        }
+
+        public ParseResult(List<ParsedAdvisory> advisories, List<KnownExploited> knownExploited, int rejected) {
+            this(advisories, knownExploited, rejected, null, List.of());
         }
 
         public static ParseResult empty() {
@@ -109,7 +146,8 @@ public final class AdvisoryModel {
      * The verdict for one device and one advisory. {@code basis} is a fixed code word (for example {@code IN_RANGE},
      * {@code BELOW_HOTFIX}, {@code EXACT_VERSION_LISTED}, {@code AT_OR_ABOVE_FIX}, {@code TRAIN_UNAFFECTED},
      * {@code VERSION_UNPARSED}, {@code ADVISORY_NEEDS_REVIEW}, {@code TRAIN_NOT_NAMED}); {@code fixedText} is the vendor's
-     * fix statement for the device's train, or null.
+     * fix statement for the device's train, or null. A {@code NOT_EVALUABLE} verdict whose basis is in
+     * {@link #PENDING_BASES} is pending a fix rule confirmation.
      */
     public record Verdict(VerdictKind kind, String basis, String fixedText) {
     }

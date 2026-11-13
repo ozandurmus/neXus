@@ -70,7 +70,8 @@ class AdvisoryFetchTest {
         assertFalse(AdvisorySources.allowed(null, AdvisorySources.CISCO.startUri()));
         assertFalse(AdvisorySources.allowed(AdvisorySources.CISCO, null));
         assertTrue(AdvisorySources.byKey("cisa_kev").isPresent());
-        assertTrue(AdvisorySources.byKey("checkpoint").isEmpty());
+        assertTrue(AdvisorySources.byKey("checkpoint").isPresent(), "amendment A-2026-11-13");
+        assertTrue(AdvisorySources.byKey("infoblox").isEmpty());
     }
 
     // ------------------------------------------------------------------------------------------------ follow-ups
@@ -235,6 +236,79 @@ class AdvisoryFetchTest {
         assertEquals(List.of("cisa_kev fetched=1 failed=0 reason=INGEST_REFUSED"), ports.completed);
     }
 
+    // ------------------------------------------------------------------------------------------------ Check Point
+
+    private static final String SC1 = "https://sc1.checkpoint.com";
+    private static final String CVELIST = "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/";
+
+    @Test
+    void checkPointRequestsOnlyItsFourPagesAndTheCveRecordsOfThePublicList() {
+        for (String path : AdvisorySources.CHECKPOINT_JUMBO_PAGES) {
+            assertTrue(AdvisorySources.allowed(AdvisorySources.CHECKPOINT, URI.create(SC1 + path)), path);
+        }
+        assertTrue(AdvisorySources.allowed(AdvisorySources.CHECKPOINT, URI.create(CVELIST + "2026/85xxx/CVE-2026-85103.json")));
+        for (String refused : List.of(
+                SC1 + "/documents/Jumbo_HFA/R81.10/All_Resolved_Issues.html",
+                SC1 + "/documents/Jumbo_HFA/R82/All_Resolved_Issues.html?take=1",
+                SC1 + "/documents/",
+                "https://support.checkpoint.com/results/sk/sk185114",
+                "https://iapi-services-ucs.checkpoint.com/public/api/support-center-mms/api/securityAdvisories/getAllActive",
+                "https://raw.githubusercontent.com/someone/else/main/cves/2026/85xxx/CVE-2026-85103.json",
+                "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/",
+                "https://cveawg.mitre.org/api/cve/CVE-2026-85103",
+                "http://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2026/85xxx/CVE-2026-85103.json")) {
+            assertFalse(AdvisorySources.allowed(AdvisorySources.CHECKPOINT, URI.create(refused)), refused);
+        }
+        // Another source's hosts never reach the Check Point list, and its hosts never reach another source.
+        assertFalse(AdvisorySources.allowed(AdvisorySources.PALOALTO, URI.create(CVELIST + "2026/85xxx/CVE-2026-85103.json")));
+    }
+
+    @Test
+    void theCveRecordAddressIsBuiltFromTheIdAloneInTheListsLayout() {
+        List<URI> records = FollowUps.checkpointRecords(List.of(
+                bytes("<td>UPDATE: Resolved CVE-2026-85103 and CVE-2025-0060. Refer to sk1000001.</td>"),
+                bytes("<a href=\"https://www.cve.org/CVERecord?id=CVE-2026-120490\">CVE-2026-120490</a> CVE-2026-85103 XCVE-2026-1111")));
+        assertEquals(List.of(URI.create(CVELIST + "2026/85xxx/CVE-2026-85103.json"), URI.create(CVELIST + "2025/0xxx/CVE-2025-0060.json"),
+                URI.create(CVELIST + "2026/120xxx/CVE-2026-120490.json")), records);
+        assertEquals(List.of(), FollowUps.checkpointRecords(List.of(bytes("no ids here"))));
+    }
+
+    @Test
+    void checkPointHandsOverEveryPageBeforeTheRecordsTheyName() {
+        Ports ports = new Ports();
+        List<String> pages = AdvisorySources.CHECKPOINT_JUMBO_PAGES.stream().map(p -> SC1 + p).toList();
+        ports.bodies.put(pages.get(0), bytes("<td>UPDATE: Resolved CVE-2026-85103.</td>"));
+        ports.bodies.put(pages.get(1), bytes("<td>UPDATE: Resolved CVE-2026-85103 and CVE-2026-1234.</td>"));
+        ports.failures.put(pages.get(2), "HTTP_404");
+        ports.bodies.put(pages.get(3), bytes("<td>nothing</td>"));
+        String first = CVELIST + "2026/85xxx/CVE-2026-85103.json";
+        String second = CVELIST + "2026/1xxx/CVE-2026-1234.json";
+        ports.bodies.put(first, bytes("{}"));
+        ports.bodies.put(second, bytes("{}"));
+        AdvisoryFetchRun.SourceResult result = run(ports, new ArrayList<>()).run(AdvisorySources.CHECKPOINT, "run-00000001");
+        assertEquals(List.of(pages.get(0), pages.get(1), pages.get(2), pages.get(3), first, second), ports.requested);
+        assertEquals(List.of("checkpoint " + pages.get(0), "checkpoint " + pages.get(1), "checkpoint " + pages.get(3),
+                "checkpoint " + first, "checkpoint " + second), ports.handedOver, "pages first, the missing page counted");
+        assertEquals(new AdvisoryFetchRun.SourceResult("checkpoint", 5, 1, 5, 0, null), result);
+        assertEquals(List.of("checkpoint fetched=5 failed=1 reason=null"), ports.completed);
+    }
+
+    @Test
+    void aCertificateFailureStopsCheckPointAtOnce() {
+        Ports ports = new Ports();
+        List<String> pages = AdvisorySources.CHECKPOINT_JUMBO_PAGES.stream().map(p -> SC1 + p).toList();
+        ports.bodies.put(pages.get(0), bytes("<td>UPDATE: Resolved CVE-2026-85103.</td>"));
+        ports.failures.put(pages.get(1), AdvisoryFetchRun.TLS_VALIDATION_FAILED);
+        AdvisoryFetchRun.SourceResult result = run(ports, new ArrayList<>()).run(AdvisorySources.CHECKPOINT, "run-00000001");
+        assertEquals(List.of(pages.get(0), pages.get(1)), ports.requested, "no record is requested after the failure");
+        assertEquals("TLS_VALIDATION_FAILED", result.reason());
+
+        Ports none = new Ports();
+        AdvisoryFetchRun.SourceResult nothing = run(none, new ArrayList<>()).run(AdvisorySources.CHECKPOINT, "run-00000001");
+        assertEquals("NO_PAGE_READ", nothing.reason());
+        assertEquals(List.of(), none.handedOver);
+    }
+
     // ------------------------------------------------------------------------------------------------ settings
 
     private static Map<String, String> settings() {
@@ -282,7 +356,7 @@ class AdvisoryFetchTest {
         assertEquals(1100, chosen.ciscoDays());
         assertEquals("proxy.example.test", chosen.proxyHost());
 
-        for (Map.Entry<String, String> bad : Map.of("UI2_ADVISORY_SOURCES", "paloalto,checkpoint", "UI2_ADVISORY_CISCO_DAYS", "0",
+        for (Map.Entry<String, String> bad : Map.of("UI2_ADVISORY_SOURCES", "paloalto,infoblox", "UI2_ADVISORY_CISCO_DAYS", "0",
                 "UI2_ADVISORY_INGEST_URL", "https://example.org").entrySet()) {
             Map<String, String> broken = settings();
             broken.put(bad.getKey(), bad.getValue());

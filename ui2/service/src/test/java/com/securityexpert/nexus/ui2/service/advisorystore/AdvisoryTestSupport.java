@@ -158,6 +158,14 @@ final class AdvisoryTestSupport {
                     e.getValue().stream().map(StoredAdvisory::publishedOn).filter(java.util.Objects::nonNull).min(java.util.Comparator.naturalOrder()).orElse(null),
                     e.getValue().stream().map(StoredAdvisory::publishedOn).filter(java.util.Objects::nonNull).max(java.util.Comparator.naturalOrder()).orElse(null))).toList();
         }
+        final List<StoredJumboStatement> jumbo = new ArrayList<>();
+        @Override public void replaceJumboStatements(String train, List<StoredJumboStatement> statements) {
+            jumbo.removeIf(j -> j.train().equals(train));
+            jumbo.addAll(statements);
+        }
+        @Override public List<StoredJumboStatement> jumboStatements(String cveId) {
+            return jumbo.stream().filter(j -> j.cveId().equals(cveId)).toList();
+        }
         /** Seeds a finished run of the given outcome that ended {@code daysAgo} days before {@code now}. */
         void seedRun(String source, String outcome, long daysAgo, Instant now) {
             Instant end = now.minus(java.time.Duration.ofDays(daysAgo));

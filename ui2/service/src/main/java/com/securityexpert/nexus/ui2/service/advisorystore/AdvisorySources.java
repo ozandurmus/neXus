@@ -20,10 +20,19 @@ public final class AdvisorySources {
      * One source. {@code documentPaths}: a path ending in {@code /} is a prefix, any other path must match exactly.
      * {@code linkHosts}: hosts an advisory page link of this source may have (the document host is always one of them).
      */
-    public record Spec(String key, String host, List<String> documentPaths, Set<String> linkHosts) { }
+    public record Spec(String key, String host, List<String> documentPaths, Set<String> linkHosts, Map<String, List<String>> moreHosts) {
+        public Spec(String key, String host, List<String> documentPaths, Set<String> linkHosts) {
+            this(key, host, documentPaths, linkHosts, Map.of());
+        }
 
-    /** The four source keys in display order (contract section 2). */
-    public static final List<String> KEYS = List.of("paloalto", "fortinet", "cisco", "cisa_kev");
+        List<String> pathsFor(String requestHost) {
+            if (host.equals(requestHost)) return documentPaths;
+            return requestHost == null ? List.of() : moreHosts.getOrDefault(requestHost, List.of());
+        }
+    }
+
+    /** The source keys in display order (contract section 2 and amendment A-2026-11-13). */
+    public static final List<String> KEYS = List.of("paloalto", "fortinet", "cisco", "cisa_kev", "checkpoint");
 
     private static final Map<String, Spec> SPECS = Map.of(
             "paloalto", new Spec("paloalto", "security.paloaltonetworks.com",
@@ -34,7 +43,13 @@ public final class AdvisorySources {
             "cisco", new Spec("cisco", "www.cisco.com", List.of("/.well-known/csaf/"),
                     Set.of("www.cisco.com", "sec.cloudapps.cisco.com", "tools.cisco.com")),
             "cisa_kev", new Spec("cisa_kev", "www.cisa.gov",
-                    List.of("/sites/default/files/feeds/known_exploited_vulnerabilities.json"), Set.of("www.cisa.gov")));
+                    List.of("/sites/default/files/feeds/known_exploited_vulnerabilities.json"), Set.of("www.cisa.gov")),
+            // Amendment A-2026-11-13: the Jumbo resolved-issues pages, then the CVE records they name.
+            "checkpoint", new Spec("checkpoint", "sc1.checkpoint.com",
+                    List.of("/documents/Jumbo_HFA/R81.20/All_Resolved_Issues.html", "/documents/Jumbo_HFA/R82/All_Resolved_Issues.html",
+                            "/documents/Jumbo_HFA/R82.10/All_Resolved_Issues.html", "/documents/Jumbo_HFA/R82.20/All_Resolved_Issues.html"),
+                    Set.of("sc1.checkpoint.com", "support.checkpoint.com", "raw.githubusercontent.com"),
+                    Map.of("raw.githubusercontent.com", List.of("/CVEProject/cvelistV5/main/cves/"))));
 
     /** The document host of a source, or null for an unknown source. */
     public static String hostFor(String source) {
@@ -50,11 +65,13 @@ public final class AdvisorySources {
     public static boolean documentUrlAllowed(String source, String url) {
         Spec spec = source == null ? null : SPECS.get(source);
         URI uri = parse(url);
-        if (spec == null || uri == null || !spec.host().equals(uri.getHost().toLowerCase(Locale.ROOT))) return false;
+        if (spec == null || uri == null) return false;
+        List<String> paths = spec.pathsFor(uri.getHost().toLowerCase(Locale.ROOT));
+        if (paths.isEmpty()) return false;
         if (uri.getRawQuery() != null || uri.getRawFragment() != null) return false;
         String path = uri.getRawPath();
         if (path == null || path.contains("%") || path.contains("..") || path.contains("//") || path.contains("\\")) return false;
-        for (String allowed : spec.documentPaths()) {
+        for (String allowed : paths) {
             if (allowed.endsWith("/") ? path.startsWith(allowed) && path.length() > allowed.length() : path.equals(allowed)) return true;
         }
         return false;

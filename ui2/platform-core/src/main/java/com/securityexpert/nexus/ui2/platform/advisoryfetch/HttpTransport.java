@@ -58,7 +58,7 @@ public final class HttpTransport implements AdvisoryFetchRun.Outbound, AdvisoryF
         if (!AdvisorySources.allowed(source, uri)) {
             return AdvisoryFetchRun.Fetched.failed("ADDRESS_NOT_ALLOWED");
         }
-        pace(source.host());
+        pace(uri.getHost());
         HttpRequest request = HttpRequest.newBuilder(uri).GET().timeout(REQUEST_TIMEOUT)
                 .header("User-Agent", USER_AGENT).header("Accept", "*/*").build();
         try {

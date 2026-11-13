@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.securityexpert.nexus.ui2.persistence.advisory.AdvisoryRepository;
 import com.securityexpert.nexus.ui2.persistence.advisory.AdvisoryRepository.StoredAdvisory;
 import com.securityexpert.nexus.ui2.persistence.advisory.AdvisoryRepository.StoredKnownExploited;
+import com.securityexpert.nexus.ui2.persistence.advisory.AdvisoryRepository.StoredJumboStatement;
 import com.securityexpert.nexus.ui2.persistence.advisory.AdvisoryRepository.StoredRule;
 import com.securityexpert.nexus.ui2.service.advisory.AdvisoryCore;
 import com.securityexpert.nexus.ui2.service.advisory.AdvisoryModel;
@@ -111,7 +112,7 @@ public final class AdvisoryIngestService {
 
             AdvisoryModel.ParseResult parsed;
             try {
-                parsed = parser.get().parse(url, document);
+                parsed = parser.get().parse(url, document, cveId -> jumboStatements(cveId));
             } catch (RuntimeException e) {
                 // A parser must not throw (AdvisoryParser); if one does, the document counts as rejected and changes nothing.
                 LOG.warn("advisory ingest source={} run={} code=PARSER_THREW", source, runId);
@@ -131,6 +132,18 @@ public final class AdvisoryIngestService {
                 if (row.isPresent()) stored.add(row.get()); else rejected++;
             }
             repository.upsertAdvisories(stored);
+            // Check Point (amendment A-2026-11-13): a resolved-issues page read in full replaces the statements of its train.
+            // A page that was not recognised yields no train and changes nothing.
+            if (AdvisoryModel.SOURCE_CHECKPOINT.equals(source) && parsed.jumboTrain() != null) {
+                List<StoredJumboStatement> statements = new ArrayList<>();
+                for (AdvisoryModel.JumboStatement j : parsed.jumboStatements()) {
+                    Optional<StoredJumboStatement> row = toStored(parsed.jumboTrain(), url, sha, j);
+                    if (row.isPresent()) statements.add(row.get()); else rejected++;
+                }
+                repository.replaceJumboStatements(parsed.jumboTrain(), statements);
+                LOG.info("advisory ingest source={} run={} jumbo_train={} statements={}", source, runId, parsed.jumboTrain(),
+                        statements.size());
+            }
             // The known-exploited set is replaced as a whole, but only by a document that yielded entries: an empty or
             // unreadable catalog must not erase the flag (contract rule 4 spirit, section 4 "changes nothing").
             if (AdvisoryModel.SOURCE_CISA_KEV.equals(source) && !parsed.knownExploited().isEmpty()) {
@@ -201,6 +214,29 @@ public final class AdvisoryIngestService {
             LOG.error("advisory run close source={} run={} code=STORE_FAILED type={}", source, runId, e.getClass().getSimpleName());
             return Outcome.STORE_FAILED;
         }
+    }
+
+    private static final Pattern JUMBO_TRAIN = Pattern.compile("^R[0-9]{2}(\\.[0-9]{1,2})?$");
+    private static final Pattern SK_REF = Pattern.compile("^sk[0-9]{1,10}$");
+
+    /** A Jumbo statement in the form the V212 constraints accept, or empty when it cannot be stored as it is. */
+    static Optional<StoredJumboStatement> toStored(String train, String url, String sha, AdvisoryModel.JumboStatement j) {
+        if (j == null || train == null || !JUMBO_TRAIN.matcher(train).matches() || !train.equals(j.train()) || j.take() < 1
+                || j.take() > 100_000 || j.cveId() == null || !CVE.matcher(j.cveId()).matches()
+                || !("FIX".equals(j.kind()) || "MENTION".equals(j.kind())) || j.evidence() == null || j.evidence().isBlank()
+                || url == null || !url.startsWith("https://sc1.checkpoint.com/") || url.length() > 300) return Optional.empty();
+        String evidence = j.evidence().strip();
+        if (evidence.length() > 300) evidence = evidence.substring(0, 300);
+        String product = j.productText() == null || j.productText().isBlank() || j.productText().length() > 80 ? null : j.productText().strip();
+        String sk = j.skRef() != null && SK_REF.matcher(j.skRef()).matches() ? j.skRef() : null;
+        return Optional.of(new StoredJumboStatement(train, j.take(), j.cveId(), j.kind(), product, sk, evidence, url, sha));
+    }
+
+    /** The stored statements that name a CVE id, as the parser model; empty when the store cannot be read. */
+    private List<AdvisoryModel.JumboStatement> jumboStatements(String cveId) {
+        if (cveId == null) return List.of();
+        return repository.jumboStatements(cveId).stream().map(j -> new AdvisoryModel.JumboStatement(j.train(), j.take(), j.cveId(),
+                j.kind(), j.productText(), j.skRef(), j.evidence())).toList();
     }
 
     /** The parsed advisory in the form the V205 constraints accept, or empty when it cannot be stored as it is. */

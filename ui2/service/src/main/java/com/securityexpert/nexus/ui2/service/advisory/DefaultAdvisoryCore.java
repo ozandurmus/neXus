@@ -9,7 +9,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * The entry points of advisory matching (contract sections 4 to 7): the parsers of every source (injected, one per source key),
- * the four product comparators, the evaluator and the rule codec.
+ * the product comparators (the four of part 1 and the two Check Point Gaia ones of amendment A-2026-11-13), the evaluator
+ * and the rule codec.
  */
 @Component
 public final class DefaultAdvisoryCore implements AdvisoryCore {
@@ -25,7 +26,9 @@ public final class DefaultAdvisoryCore implements AdvisoryCore {
         for (ProductComparator c : List.of(new PanOsComparator(),
                 new FortinetComparator(AdvisoryModel.PRODUCT_FORTIOS),
                 new FortinetComparator(AdvisoryModel.PRODUCT_FORTIMANAGER),
-                new CiscoAsaComparator())) {
+                new CiscoAsaComparator(),
+                new CheckPointGaiaComparator(AdvisoryModel.PRODUCT_CP_GATEWAY),
+                new CheckPointGaiaComparator(AdvisoryModel.PRODUCT_CP_MANAGEMENT))) {
             comparators.put(c.productKey(), c);
         }
         this.evaluator = new DefaultAdvisoryEvaluator(comparators.values());
@@ -56,6 +59,12 @@ public final class DefaultAdvisoryCore implements AdvisoryCore {
             }
             case "cisco_asa":
                 return Optional.of(AdvisoryModel.PRODUCT_CISCO_ASA);
+            case "check_point":
+                // Amendment A-2026-11-13: the role decides; a device without a known role has no product here.
+                if ("gateway".equals(role)) {
+                    return Optional.of(AdvisoryModel.PRODUCT_CP_GATEWAY);
+                }
+                return "management_server".equals(role) ? Optional.of(AdvisoryModel.PRODUCT_CP_MANAGEMENT) : Optional.empty();
             default:
                 return Optional.empty();
         }

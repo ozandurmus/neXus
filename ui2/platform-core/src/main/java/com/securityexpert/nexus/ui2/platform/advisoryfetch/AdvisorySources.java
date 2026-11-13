@@ -2,19 +2,44 @@ package com.securityexpert.nexus.ui2.platform.advisoryfetch;
 
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
- * The closed list of sources, hosts and path prefixes the fetcher may request (contract section 2). Every outbound
+ * The closed list of sources, hosts and path prefixes the fetcher may request (contract section 2 and amendment
+ * A-2026-11-13). Every outbound
  * address is checked against it immediately before the request is sent; nothing else is ever requested.
  */
 public final class AdvisorySources {
 
-    /** One source: its key, its one host, the path prefixes documents may have, and its fixed start document. */
-    public record Source(String key, String host, List<String> pathPrefixes, String startPath) {
+    /**
+     * One source: its key, its main host, the path prefixes documents may have there, its fixed start document, and any
+     * further hosts with their own path prefixes (Check Point: the CVE records the resolved-issues pages name).
+     */
+    public record Source(String key, String host, List<String> pathPrefixes, String startPath, Map<String, List<String>> moreHosts) {
+
+        public Source(String key, String host, List<String> pathPrefixes, String startPath) {
+            this(key, host, pathPrefixes, startPath, Map.of());
+        }
+
+        public Source {
+            pathPrefixes = List.copyOf(pathPrefixes);
+            moreHosts = Map.copyOf(moreHosts);
+        }
 
         public URI startUri() {
             return URI.create("https://" + host + startPath);
+        }
+
+        /** The path prefixes of {@code requestHost} for this source, or empty when the host is not one of its hosts. */
+        List<String> prefixesFor(String requestHost) {
+            if (requestHost == null) {
+                return List.of();
+            }
+            if (host.equals(requestHost)) {
+                return pathPrefixes;
+            }
+            return moreHosts.getOrDefault(requestHost, List.of());
         }
     }
 
@@ -28,7 +53,22 @@ public final class AdvisorySources {
             List.of("/sites/default/files/feeds/known_exploited_vulnerabilities.json"),
             "/sites/default/files/feeds/known_exploited_vulnerabilities.json");
 
-    public static final List<Source> ALL = List.of(PALOALTO, FORTINET, CISCO, CISA_KEV);
+    /**
+     * The Jumbo Hotfix Accumulator "All Resolved Issues" pages of the Gaia trains this source covers (amendment
+     * A-2026-11-13), in fetch order. Each is a fixed document; the first one is the source's start document.
+     */
+    public static final List<String> CHECKPOINT_JUMBO_PAGES = List.of(
+            "/documents/Jumbo_HFA/R81.20/All_Resolved_Issues.html",
+            "/documents/Jumbo_HFA/R82/All_Resolved_Issues.html",
+            "/documents/Jumbo_HFA/R82.10/All_Resolved_Issues.html",
+            "/documents/Jumbo_HFA/R82.20/All_Resolved_Issues.html");
+    /** The CVE records of the CVE Program's public list, by the fixed layout of that list. */
+    public static final String CVELIST_HOST = "raw.githubusercontent.com";
+    public static final String CVELIST_PREFIX = "/CVEProject/cvelistV5/main/cves/";
+    public static final Source CHECKPOINT = new Source("checkpoint", "sc1.checkpoint.com", CHECKPOINT_JUMBO_PAGES,
+            CHECKPOINT_JUMBO_PAGES.getFirst(), Map.of(CVELIST_HOST, List.of(CVELIST_PREFIX)));
+
+    public static final List<Source> ALL = List.of(PALOALTO, FORTINET, CISCO, CISA_KEV, CHECKPOINT);
 
     private static final int MAX_ADDRESS_LENGTH = 300;
 
@@ -49,7 +89,8 @@ public final class AdvisorySources {
             return false;
         }
         String text = uri.toString();
-        if (text.length() > MAX_ADDRESS_LENGTH || !"https".equals(uri.getScheme()) || !source.host().equals(uri.getHost())
+        List<String> prefixes = source.prefixesFor(uri.getHost());
+        if (text.length() > MAX_ADDRESS_LENGTH || !"https".equals(uri.getScheme()) || prefixes.isEmpty()
                 || uri.getPort() != -1 || uri.getRawUserInfo() != null || uri.getRawQuery() != null || uri.getRawFragment() != null) {
             return false;
         }
@@ -58,7 +99,7 @@ public final class AdvisorySources {
                 || !path.matches("[A-Za-z0-9/._~-]+")) {
             return false;
         }
-        for (String prefix : source.pathPrefixes()) {
+        for (String prefix : prefixes) {
             if (prefix.endsWith("/") ? path.startsWith(prefix) && path.length() > prefix.length() : path.equals(prefix)) {
                 return true;
             }
