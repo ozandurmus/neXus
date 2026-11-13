@@ -37,6 +37,23 @@ final class ComplianceFacts {
         FRAMEWORK_NAMES.put("FINANCIAL_BASELINE", "Financial Baseline");
     }
 
+    /**
+     * The statement that goes wherever the Financial baseline is described (PO decision 2026-11-13). The set is a neXus
+     * baseline; its identifiers (FB-AREA-NN) are not clauses of any regulation.
+     */
+    static final String FINANCIAL_BASELINE_NOTICE = "Financial baseline: neXus baseline for financial institutions; "
+            + "not a mapping to any regulation. Regulatory mapping is the bank compliance team's input.";
+
+    /**
+     * Evaluations stored before 2026-11-13 carry the retired references ("Access Control §3.1"); they are shown under
+     * the family of the identifier that replaced them until the next evaluation overwrites them.
+     */
+    private static final Map<String, String> RETIRED_FINANCIAL_BASELINE_AREAS = Map.of(
+            "Access Control", "FB-ACCESS", "Brute Force Protection", "FB-LOCKOUT", "Session Governance", "FB-SESSION",
+            "Transport Security", "FB-TRANSPORT", "Time Synchronization", "FB-TIME", "Audit Logging", "FB-AUDIT",
+            "Warning Banners", "FB-BANNER", "Cryptographic Baseline", "FB-CRYPTO", "Segment Isolation", "FB-SEGMENT",
+            "Password Lifecycle", "FB-PASSWORD");
+
     /** One control on one firewall. {@code frameworks}: framework key to its reference (null when none is given). */
     record Check(String deviceId, String controlId, String title, String severity, Outcome outcome,
             Map<String, String> frameworks) {
@@ -147,6 +164,10 @@ final class ComplianceFacts {
     static String family(String key, String reference) {
         if (reference == null || reference.isBlank()) return "Unmapped";
         String ref = reference.strip();
+        if ("FINANCIAL_BASELINE".equals(key) && ref.contains("\u00a7")) {
+            String retired = RETIRED_FINANCIAL_BASELINE_AREAS.get(ref.substring(0, ref.indexOf('\u00a7')).strip());
+            return retired != null ? retired : "Unmapped";
+        }
         if ("NIST_800_53".equals(key) && ref.matches("^[A-Za-z]{2}-.*")) return ref.substring(0, 2).toUpperCase(Locale.ROOT);
         int dot = ref.indexOf('.');
         if (dot > 0) return ref.substring(0, dot);

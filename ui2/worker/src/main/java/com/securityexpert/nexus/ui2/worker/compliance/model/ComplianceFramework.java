@@ -4,7 +4,8 @@ public enum ComplianceFramework {
     CIS("CIS Benchmark", "Center for Internet Security"),
     PCI_DSS("PCI-DSS", "Payment Card Industry Data Security Standard"),
     NIST_800_53("NIST SP 800-53", "National Institute of Standards and Technology"),
-    FINANCIAL_BASELINE("Financial Baseline", "Banking & Fintech Hardening Baseline"),
+    FINANCIAL_BASELINE("Financial Baseline", "neXus baseline for financial institutions; not a mapping to any regulation. "
+            + "Regulatory mapping is the bank compliance team's input."),
     COBIT("COBIT 2019", "Control Objectives for Information Technologies");
 
     private final String displayName;

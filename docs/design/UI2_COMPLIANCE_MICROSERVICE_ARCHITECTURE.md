@@ -20,7 +20,7 @@ The neXus platform requires an enterprise-grade, dedicated **Compliance Microser
 - **CIS Benchmark** (CIS Check Point Gaia Firewall Benchmark v1.1.0, CIS Palo Alto PAN-OS Benchmark)
 - **PCI-DSS v4.0.1** (Requirements 1.2, 1.3, 2.2, 8.2, 8.3, 10.2 covering network security controls)
 - **NIST SP 800-53 Rev 5 / SP 800-41 Rev 1** (CM-6 Configuration Settings, CM-7 Least Functionality, AC-7, AC-11/12, AU-8)
-- **Financial Baseline / BDDK / COBIT 2019** (Banking security baselines, change governance contributions, continuous technical audit)
+- **Financial baseline** (neXus baseline for financial institutions; not a mapping to any regulation. Regulatory mapping is the bank compliance team's input. Control identifiers `FB-<AREA>-NN`, see `PO_DECISION_RECORD_2026_11_13_FINANCIAL_BASELINE_REFERENCES.md`) and **COBIT 2019** (change governance contributions, continuous technical audit)
 - **Vendor-proven operational best practices** inspired by market leaders (BackBox, Indeni, Tufin, Opinnate).
 
 ### Core Product Directives
@@ -109,7 +109,7 @@ The neXus platform requires an enterprise-grade, dedicated **Compliance Microser
     { "framework": "CIS", "reference": "2.1.1", "version": "1.1.0", "profile": "Level 1", "mapping_strength": "SATISFIES" },
     { "framework": "PCI-DSS", "reference": "8.3.6", "version": "4.0.1", "mapping_strength": "SATISFIES" },
     { "framework": "NIST-800-53", "reference": "IA-5(1)", "version": "Rev 5", "mapping_strength": "CONTRIBUTES_TO" },
-    { "framework": "FINANCIAL_BASELINE", "reference": "Identity & Access §4.1", "mapping_strength": "SATISFIES" }
+    { "framework": "FINANCIAL_BASELINE", "reference": "FB-ACCESS-01", "mapping_strength": "SATISFIES" }
   ],
   "bindings": [
     {

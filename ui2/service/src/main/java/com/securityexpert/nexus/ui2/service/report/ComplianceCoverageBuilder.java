@@ -57,8 +57,7 @@ final class ComplianceCoverageBuilder implements ReportBuilder {
                                 "no_evidence", "No evidence", "evidenced_pass", "Pass share of evidenced",
                                 "no_evidence_share", "No-evidence share"),
                         matrix, "No stored compliance evaluation.")),
-                List.of("Pass share of evidenced = pass / (pass + fail). No evidence is counted apart and never as pass "
-                        + "or fail. Management servers are not evaluated.")));
+                summaryNotes(keys)));
 
         for (String key : keys) {
             List<List<Cell>> rows = new ArrayList<>();
@@ -70,13 +69,20 @@ final class ComplianceCoverageBuilder implements ReportBuilder {
                             ReportBuilder.columns("family", "Family", "pass", "Pass", "fail", "Fail", "no_evidence",
                                     "No evidence", "evidenced_pass", "Pass share of evidenced"),
                             rows, "No check of this framework has been evaluated.")),
-                    List.of()));
+                    "FINANCIAL_BASELINE".equals(key) ? List.of(ComplianceFacts.FINANCIAL_BASELINE_NOTICE) : List.of()));
         }
 
         sections.add(topFailing(facts, keys, compliance));
         return ReportBuilder.document(ctx, List.of(compliance), facts.unreadable > 0
                 ? List.of("UNKNOWN: " + facts.unreadable + " stored evaluation(s) could not be read; those firewalls count "
                         + "as without evidence.") : List.of(), sections);
+    }
+
+    private static List<String> summaryNotes(List<String> keys) {
+        List<String> notes = new ArrayList<>(List.of("Pass share of evidenced = pass / (pass + fail). No evidence is "
+                + "counted apart and never as pass or fail. Management servers are not evaluated."));
+        if (keys.contains("FINANCIAL_BASELINE")) notes.add(ComplianceFacts.FINANCIAL_BASELINE_NOTICE);
+        return notes;
     }
 
     static PlaneAsOf compliancePlane(ComplianceFacts facts, Map<String, java.time.Instant> configuration,
