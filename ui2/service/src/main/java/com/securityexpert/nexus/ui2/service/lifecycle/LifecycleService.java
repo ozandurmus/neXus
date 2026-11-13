@@ -14,6 +14,7 @@ import com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsReposi
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.lifecycle.DeviceLifecycleRepository;
 import com.securityexpert.nexus.ui2.persistence.lifecycle.LifecycleCatalogRepository;
+import com.securityexpert.nexus.ui2.persistence.lifecycle.LifecycleVendorRepository;
 import com.securityexpert.nexus.ui2.service.advisorystore.AdvisoryEstate;
 import com.securityexpert.nexus.ui2.service.advisorystore.AdvisoryReadService;
 
@@ -26,17 +27,31 @@ public final class LifecycleService {
     private final DeviceLifecycleRepository stored;
     private final DevicePlatformFactsRepository facts;
     private final AdvisoryReadService advisories;
+    private final LifecycleVendorRepository vendor;
 
     /** Without the advisory read service the payload carries no {@code vulnerabilities} object (the pre-V205 shape). */
     public LifecycleService(LifecycleCatalogRepository catalog, DeviceRepository devices,
             DeviceLifecycleRepository stored, DevicePlatformFactsRepository facts) {
-        this(catalog, devices, stored, facts, null);
+        this(catalog, devices, stored, facts, null, null);
     }
 
-    @Autowired
     public LifecycleService(LifecycleCatalogRepository catalog, DeviceRepository devices,
             DeviceLifecycleRepository stored, DevicePlatformFactsRepository facts, AdvisoryReadService advisories) {
+        this(catalog, devices, stored, facts, advisories, null);
+    }
+
+    /** Without the vendor repository only the operator catalog is matched (the pre-V214 shape, with the age rule). */
+    @Autowired
+    public LifecycleService(LifecycleCatalogRepository catalog, DeviceRepository devices,
+            DeviceLifecycleRepository stored, DevicePlatformFactsRepository facts, AdvisoryReadService advisories,
+            LifecycleVendorRepository vendor) {
         this.catalog = catalog; this.devices = devices; this.stored = stored; this.facts = facts; this.advisories = advisories;
+        this.vendor = vendor;
+    }
+
+    /** The operator catalog and the vendor entries, loaded once per request (V144 and V214). */
+    private LifecycleMatcher.Catalog lifecycleCatalog() {
+        return new LifecycleMatcher.Catalog(catalog.list(), vendor == null ? List.of() : vendor.entries(), Instant.now());
     }
 
     /** The three stored maps and the platform facts are loaded once per request, never per device. */
@@ -52,7 +67,7 @@ public final class LifecycleService {
     private Loaded load() { return new Loaded(stored.readsByDevice(), stored.licenseItemsByDevice(), stored.livePatchByDevice(), facts.findAll()); }
 
     public List<Map<String, Object>> fleet(LocalDate today) {
-        var entries = catalog.list();
+        var entries = lifecycleCatalog();
         var inventory = catalog.storedInventory();
         var loaded = load();
         var all = devices.listAll();
@@ -87,7 +102,7 @@ public final class LifecycleService {
     }
 
     public Optional<Map<String, Object>> device(String id) {
-        var entries = catalog.list();
+        var entries = lifecycleCatalog();
         var inventory = catalog.storedInventory();
         var loaded = load();
         return devices.listAll().stream().filter(d -> d.deviceId().equals(id)).findFirst()
@@ -105,6 +120,8 @@ public final class LifecycleService {
         summary.put("within_180_days", rows.stream().filter(r -> days(r, 0, 180)).count());
         summary.put("within_365_days", rows.stream().filter(r -> days(r, 0, 365)).count());
         summary.put("no_lifecycle_data", rows.stream().filter(r -> "NO_LIFECYCLE_DATA".equals(r.get("status"))).count());
+        summary.put("lifecycle_not_evaluated", rows.stream().filter(r -> "NOT_EVALUATED".equals(r.get("status"))).count());
+        summary.put("lifecycle_needs_review", rows.stream().filter(r -> "NEEDS_REVIEW".equals(r.get("status"))).count());
         summary.put("licenses_within_60_days", rows.stream().filter(LifecycleService::licenseSoon).count());
         summary.put("license_problems", rows.stream().filter(r -> Boolean.TRUE.equals(r.get("license_problem"))).count());
         summary.put("licenses_collected", rows.stream().filter(r -> "COLLECTED".equals(r.get("license_status"))).count());

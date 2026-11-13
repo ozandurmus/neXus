@@ -159,6 +159,43 @@ class AdvisoryFetchTest {
     }
 
     @Test
+    void theCiscoLifecycleSourceReadsBothListingsThenTheEnglishBulletinsAndHandsThemToTheLifecycleEndpoint() {
+        String asa = "https://www.cisco.com" + AdvisorySources.CISCO_EOL_ASA_LISTING;
+        String firepower = "https://www.cisco.com" + AdvisorySources.CISCO_EOL_FIREPOWER_LISTING;
+        String b1 = "https://www.cisco.com/c/en/us/products/collateral/security/asa-firepower-services/asa-9-18-eol.html";
+        String b2 = "https://www.cisco.com/c/en/us/products/collateral/security/firepower-ngfw/firepower-4100-series-eol.html";
+        Ports ports = new Ports();
+        ports.bodies.put(asa, bytes("<a href=\"/c/en/us/products/collateral/security/asa-firepower-services/asa-9-18-eol.html\">9.18</a>"
+                + "<a href=\"/c/en/us/products/collateral/security/asa-firepower-services/asa-9-18-eol-fr.html\">fr</a>"
+                + "<a href=\"/c/en/us/products/collateral/routers/800-series-routers/eol_C51-730374.html\">old</a>"
+                + "<a href=\"https://www.example.org/c/en/us/products/collateral/security/x/y.html\">elsewhere</a>"));
+        ports.bodies.put(firepower, bytes("<a href=\"https://www.cisco.com/c/en/us/products/collateral/security/firepower-ngfw/firepower-4100-series-eol.html\">"
+                + "<a href=\"/c/en/us/products/collateral/security/asa-firepower-services/asa-9-18-eol.html\">again</a>"));
+        ports.bodies.put(b1, bytes("<html>bulletin one</html>"));
+        ports.bodies.put(b2, bytes("<html>bulletin two</html>"));
+        var result = run(ports, new ArrayList<>()).run(AdvisorySources.CISCO_EOL, "run-00000001");
+        assertTrue(result.ok());
+        assertEquals(List.of(asa, firepower, b1, b2), ports.requested);
+        assertEquals(List.of("cisco_eol " + b1, "cisco_eol " + b2), ports.handedOver, "listings are not handed over, bulletins are");
+        assertEquals(List.of("cisco_eol fetched=4 failed=0 reason=null"), ports.completed);
+        assertEquals("/internal/lifecycle-sources/cisco_eol", AdvisorySources.ingestPath("cisco_eol"));
+        assertEquals("/internal/advisories/cisco", AdvisorySources.ingestPath("cisco"));
+    }
+
+    @Test
+    void ciscoLifecycleListingsThatNameNoBulletinAreAReasonNotAFreshSource() {
+        Ports ports = new Ports();
+        ports.bodies.put("https://www.cisco.com" + AdvisorySources.CISCO_EOL_ASA_LISTING, bytes("<html>moved</html>"));
+        var result = run(ports, new ArrayList<>()).run(AdvisorySources.CISCO_EOL, "run-00000001");
+        assertFalse(result.ok());
+        assertEquals("NO_DOCUMENTS_NAMED", result.reason());
+        assertFalse(AdvisorySources.allowed(AdvisorySources.CISCO_EOL, URI.create("https://www.cisco.com/c/en/us/products/security/other-listing.html")));
+        assertFalse(AdvisorySources.allowed(AdvisorySources.CISCO_EOL, URI.create("https://www.cisco.com/c/en/us/products/collateral/security/")));
+        assertTrue(AdvisorySources.allowed(AdvisorySources.CISCO_EOL,
+                URI.create("https://www.cisco.com/c/en/us/products/collateral/security/firepower-ngfw/x.html")));
+    }
+
+    @Test
     void aSingleDocumentSourceIsFetchedOnceAndHandedOver() {
         Ports ports = new Ports();
         ports.bodies.put(AdvisorySources.PALOALTO.startUri().toString(), bytes("{\"success\":true,\"data\":[]}"));

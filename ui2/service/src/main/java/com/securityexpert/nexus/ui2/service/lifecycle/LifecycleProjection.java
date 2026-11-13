@@ -50,19 +50,10 @@ public final class LifecycleProjection {
         return match.matches() ? match.group(1).toUpperCase(java.util.Locale.ROOT) : null;
     }
 
+    /** The operator catalog alone, without the age rule (the V144 entry point; see {@link LifecycleMatcher}). */
     public static Map<String, Object> match(String vendor, String kind, String observed, List<LifecycleCatalogEntry> catalog) {
-        boolean hardware = "HARDWARE".equals(kind);
-        boolean normalized = !hardware && ("CHECKPOINT".equals(vendor) || "PALOALTO".equals(vendor));
-        String key = normalized ? train(vendor, observed) : observed;
-        var candidates = catalog.stream().filter(e -> e.vendor().equals(vendor) && e.kind().equals(kind))
-                .filter(e -> key != null && key.equals(normalized ? train(vendor, e.product()) : e.product())).toList();
-        var body = new LinkedHashMap<String, Object>();
-        body.put("status", candidates.size() == 1 ? "MATCHED" : "NO_LIFECYCLE_DATA");
-        body.put("reason", candidates.size() == 1 ? null : candidates.size() > 1 ? "Ambiguous catalog matches"
-                : key == null ? "Model/version missing or software train unsupported" : "No catalog match");
-        body.put("basis", candidates.size() == 1 ? hardware ? "model exact" : normalized ? "version train" : "version exact" : null);
-        body.put("catalog", candidates.size() == 1 ? catalog(candidates.getFirst(), false) : null);
-        return body;
+        return LifecycleMatcher.match(vendor, kind, false, "HARDWARE".equals(kind) ? observed : null, observed,
+                LifecycleMatcher.Catalog.operatorOnly(catalog));
     }
 
     public static Map<String, Object> catalog(LifecycleCatalogEntry e, boolean masked) {
@@ -223,16 +214,23 @@ public final class LifecycleProjection {
         return device(d, catalog, inventory, today, Stored.EMPTY);
     }
 
-    @SuppressWarnings("unchecked")
     public static Map<String, Object> device(DeviceSummaryRecord d, List<LifecycleCatalogEntry> catalog,
+            com.securityexpert.nexus.ui2.persistence.lifecycle.LifecycleCatalogRepository.StoredInventory inventory, LocalDate today,
+            Stored stored) {
+        return device(d, LifecycleMatcher.Catalog.operatorOnly(catalog), inventory, today, stored);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static Map<String, Object> device(DeviceSummaryRecord d, LifecycleMatcher.Catalog catalog,
             com.securityexpert.nexus.ui2.persistence.lifecycle.LifecycleCatalogRepository.StoredInventory inventory, LocalDate today,
             Stored stored) {
         String vendor = vendor(d.vendorHint());
         String model = inventory == null ? null : inventory.model();
         String version = inventory == null ? null : inventory.version();
         String licensesJson = inventory == null ? null : inventory.licensesJson();
-        var hw = match(vendor, "HARDWARE", model, catalog);
-        var sw = match(vendor, "SOFTWARE", version, catalog);
+        boolean manager = "management_server".equals(d.role());
+        var hw = LifecycleMatcher.match(vendor, "HARDWARE", manager, model, model, catalog);
+        var sw = LifecycleMatcher.match(vendor, "SOFTWARE", manager, model, version, catalog);
         var licenses = new ArrayList<Map<String, Object>>(licenses(vendor, licensesJson, today));
         licenses.addAll(latestPerLabel(stored.items().stream().map(i -> storedLicense(i, today)).toList()));
         var licenseReads = stored.reads().stream().filter(r -> !LIVE_PATCH_READ.equals(r.readKind())).toList();
@@ -247,7 +245,10 @@ public final class LifecycleProjection {
             for (String field : List.of("end_of_sale", "end_of_support", "end_of_engineering")) {
                 if (dates.get(field) instanceof String date) {
                     long days = ChronoUnit.DAYS.between(today, LocalDate.parse(date));
-                    milestones.add(Map.of("name", part.getKey() + " " + field.replace('_', ' '), "date", date, "days_remaining", days));
+                    boolean monthOnly = dates.get("month_only") instanceof List<?> months && months.contains(field);
+                    // A month-only vendor date is stored as the first day of the month and shown as the month.
+                    milestones.add(Map.of("name", part.getKey() + " " + field.replace('_', ' '), "date", date, "days_remaining", days,
+                            "precision", monthOnly ? "MONTH" : "DAY"));
                     if (field.equals("end_of_support")) supportDays.add(days);
                 }
             }
@@ -262,11 +263,16 @@ public final class LifecycleProjection {
         String risk = minimum != null && minimum < 0 ? "EXPIRED" : minimum != null && minimum < 180 ? "HIGH"
                 : minimum != null && minimum < 365 ? "MEDIUM" : supportDays.size() == 2 ? "LOW" : "UNKNOWN";
         boolean matched = "MATCHED".equals(hw.get("status")) && "MATCHED".equals(sw.get("status"));
+        boolean review = "NEEDS_REVIEW".equals(hw.get("status")) || "NEEDS_REVIEW".equals(sw.get("status"));
+        boolean notEvaluated = "NOT_EVALUATED".equals(hw.get("status")) || "NOT_EVALUATED".equals(sw.get("status"));
+        String status = matched ? "MATCHED" : review ? "NEEDS_REVIEW" : notEvaluated ? "NOT_EVALUATED" : "NO_LIFECYCLE_DATA";
+        // A part that could not be evaluated never leaves the device looking "unknown but fine" (contract rule 4).
+        if ("UNKNOWN".equals(risk) && (review || notEvaluated)) risk = "NOT_EVALUATED";
         var body = new LinkedHashMap<String, Object>();
         body.put("device_id", d.deviceId()); body.put("hostname", d.observedHostname().orElse(null));
         body.put("cluster_member_ref", d.clusterMemberRef().orElse(null)); body.put("vendor", vendor);
         body.put("model", model); body.put("software_version", version);
-        body.put("hardware", hw); body.put("software", sw); body.put("status", matched ? "MATCHED" : "NO_LIFECYCLE_DATA");
+        body.put("hardware", hw); body.put("software", sw); body.put("status", status);
         body.put("risk", risk); body.put("support_days", minimum); body.put("next_milestone", next);
         body.put("licenses", licenses); body.put("license_status", licenseStatus);
         body.put("license_reads", licenseReads.stream().map(r -> {

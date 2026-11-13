@@ -291,17 +291,28 @@ export interface LifecycleCatalogEntry {
   end_of_sale: string | null;
   end_of_support: string | null;
   end_of_engineering: string | null;
-  source: "IMPORT" | "MANUAL";
+  /** IMPORT or MANUAL for an operator row; a vendor source key (cisco_eol, paloalto_eol, checkpoint_lifecycle) for a vendor entry. */
+  source: string;
   note: string | null;
   imported_by: string;
   imported_at: string;
+  /** Vendor entries only (LIFECYCLE_CATALOG_SOURCES_CONTRACT.md): how it got in, its age and where it was read. */
+  origin?: "OPERATOR_ENTRY" | "FEED" | "OPERATOR_PAGE";
+  age_days?: number | null;
+  month_only?: string[];
+  document_ref?: string;
+  source_url?: string;
+  end_of_security_support?: string | null;
+  end_of_extended_support?: string | null;
 }
 export type LifecycleCatalogInput = Pick<LifecycleCatalogEntry, "vendor" | "kind" | "product" | "end_of_sale" | "end_of_support" | "end_of_engineering" | "note">;
 export interface LifecycleMatch {
-  status: "MATCHED" | "NO_LIFECYCLE_DATA";
+  /** NOT_EVALUATED: nothing current to compare with (no source, or the source is too old). NEEDS_REVIEW: the vendor entry could not be read safely. */
+  status: "MATCHED" | "NO_LIFECYCLE_DATA" | "NOT_EVALUATED" | "NEEDS_REVIEW";
   reason: string | null;
   basis: string | null;
   catalog: LifecycleCatalogEntry | null;
+  key?: string | null;
 }
 export interface LifecycleLicense {
   name?: string;
@@ -344,9 +355,9 @@ export interface LifecycleDevice {
   hardware: LifecycleMatch;
   software: LifecycleMatch;
   status: string;
-  risk: "EXPIRED" | "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN";
+  risk: "EXPIRED" | "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN" | "NOT_EVALUATED";
   support_days: number | null;
-  next_milestone: { name: string; date: string; days_remaining: number } | null;
+  next_milestone: { name: string; date: string; days_remaining: number; precision?: "DAY" | "MONTH" } | null;
   nearest_license: LifecycleLicense | null;
   licenses: LifecycleLicense[];
   license_status: string;
@@ -420,6 +431,24 @@ export const saveLifecycleCatalog = (entry: LifecycleCatalogInput, id?: string) 
   call(id ? `/api/v2/lifecycle/catalog/${encodeURIComponent(id)}` : "/api/v2/lifecycle/catalog", id ? "PUT" : "POST", entry);
 export const importLifecycleCatalog = (csv: string) => call<{ imported: number }>("/api/v2/lifecycle/catalog/import", "POST", { csv });
 export const deleteLifecycleCatalog = (id: string) => call(`/api/v2/lifecycle/catalog/${encodeURIComponent(id)}/delete`, "POST");
+export interface LifecycleCatalogFeed {
+  source: string; origin: "FEED"; last_run_outcome: string | null; last_run_reason: string | null; last_run_at: string | null;
+  last_good_at: string | null; age_days: number | null; age_state: "GREEN" | "AMBER" | "RED"; fresh_days: number;
+  entries: number; entries_needing_review: number;
+}
+export interface LifecyclePageForm { page_form: string; vendor: string; label: string; page_url: string; online: boolean; }
+export interface LifecycleCatalogUpload {
+  upload_id: string; page_form: string; vendor: string; entries_parsed: number; entries_needing_review: number; rows_skipped: number;
+  uploaded_by: string; uploaded_at: string | null; age_days: number | null; age_state: "GREEN" | "AMBER" | "RED";
+}
+export interface LifecycleReviewEntry { entry_id: string; vendor: string; kind: string; product: string; key: string; source: string; origin: string; parse_note: string | null; source_url: string; }
+export interface LifecycleCatalogSources {
+  feeds: LifecycleCatalogFeed[]; page_forms: LifecyclePageForm[]; uploads: LifecycleCatalogUpload[]; needs_review: LifecycleReviewEntry[];
+  vendor_entries: number; hand_loaded_fresh_days: number;
+}
+export const getLifecycleCatalogSources = () => call<LifecycleCatalogSources>("/api/v2/lifecycle/catalog-sources", "GET");
+export const uploadLifecycleVendorPage = (page_form: string, page: string) =>
+  call<{ upload_id: string; parsed: number; needs_review: number; skipped: number }>("/api/v2/lifecycle/catalog/vendor-page", "POST", { page_form, page });
 
 /**
  * The server marks a masked (aiview) response with `X-Nexus-Masked: true`; the shell shows the mask chip on every

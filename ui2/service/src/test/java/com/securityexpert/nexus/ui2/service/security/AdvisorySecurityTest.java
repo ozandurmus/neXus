@@ -30,6 +30,15 @@ class AdvisorySecurityTest {
         }
     }
 
+    @Test void theLifecycleSourceIngestRoutesAreExplicitlyUngatedForTheKnownSourceOnly() {
+        assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/lifecycle-sources/cisco_eol"));
+        assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/lifecycle-sources/cisco_eol/complete"));
+        assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/lifecycle-sources/paloalto_eol"));
+        assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /api/v2/lifecycle/catalog/vendor-page"));
+        assertEquals(ActionRegistry.LIFECYCLE_CATALOG_WRITE, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/lifecycle/catalog/vendor-page"));
+        assertEquals(ActionRegistry.DEVICE_READ, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("GET /api/v2/lifecycle/catalog-sources"));
+    }
+
     @Test void theIngestRoutesAreExplicitlyUngatedForEachKnownSourceOnly() {
         for (String source : List.of("paloalto", "fortinet", "cisco", "cisa_kev", "checkpoint")) {
             assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/advisories/" + source), source);
@@ -38,7 +47,7 @@ class AdvisorySecurityTest {
         assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/advisories/infoblox"));
         assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("GET /internal/advisories/paloalto"));
         assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/machine-session"));
-        assertEquals(11 + 10, SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.size());
+        assertEquals(11 + 10 + 2, SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.size(), "the two lifecycle-source ingest routes");
     }
 
     @Test void anIngestRouteReachesItsOwnTokenCheckAndAnUnknownSourceIsRefused() throws Exception {

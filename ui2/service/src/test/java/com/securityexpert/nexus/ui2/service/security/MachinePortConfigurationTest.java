@@ -35,10 +35,13 @@ class MachinePortConfigurationTest {
         var filter = new MachinePortConfiguration().machinePortFilter();
         String[] allowed = {"/internal/machine-session", "/internal/advisories/paloalto", "/internal/advisories/fortinet",
                 "/internal/advisories/cisco", "/internal/advisories/cisa_kev", "/internal/advisories/paloalto/complete",
-                "/internal/advisories/cisa_kev/complete"};
+                "/internal/advisories/cisa_kev/complete", "/internal/advisories/checkpoint", "/internal/lifecycle-sources/cisco_eol",
+                "/internal/lifecycle-sources/cisco_eol/complete"};
         String[] refused = {"/internal", "/internal/", "/internal/advisories", "/internal/advisories/", "/internal/advisories/infoblox",
                 "/internal/advisories/paloalto/complete/x", "/internal/advisories/paloalto/other", "/internal/advisories/paloalto/",
-                "/internal/advisories/../machine-session", "/internal/other", "/login", "/api/v2/lifecycle/advisories"};
+                "/internal/advisories/../machine-session", "/internal/other", "/login", "/api/v2/lifecycle/advisories",
+                "/internal/lifecycle-sources/", "/internal/lifecycle-sources/paloalto_eol", "/internal/lifecycle-sources/cisco_eol/x",
+                "/internal/advisories/cisco_eol"};
         for (String path : allowed) {
             assertEquals(200, run(filter, 8086, "POST", path), path);
             assertEquals(404, run(filter, 8080, "POST", path), path + " on the main port");

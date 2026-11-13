@@ -18,11 +18,12 @@ class LifecycleServiceTest {
         var lifecycle = mock(com.securityexpert.nexus.ui2.persistence.lifecycle.DeviceLifecycleRepository.class);
         var facts = mock(com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository.class);
         when(devices.listAll()).thenReturn(List.of(LifecycleProjectionTest.device("device-1", "check_point", "CLS-ROMEO-01")));
-        when(catalog.list()).thenReturn(List.of(new LifecycleCatalogEntry("row-1", "CHECKPOINT", "HARDWARE", "Example Appliance",
+        when(catalog.list()).thenReturn(List.of(new LifecycleCatalogEntry("row-1", "CHECKPOINT", "HARDWARE", "6600 Appliance",
                 null, LocalDate.of(2030, 1, 1), null, "MANUAL", "Synthetic source", "synthetic-actor", Instant.EPOCH)));
         when(catalog.storedInventory()).thenReturn(Map.of("device-1", new LifecycleCatalogRepository.StoredInventory(null, null, null)));
         var row = new LifecycleService(catalog, devices, lifecycle, facts).fleet(LocalDate.of(2026, 10, 9)).getFirst();
         assertNull(row.get("model")); assertNull(row.get("software_version"));
+        // No stored model: no key, so no match and nothing guessed from the catalog.
         assertEquals("NO_LIFECYCLE_DATA", row.get("status")); assertEquals("UNKNOWN", row.get("risk"));
         assertEquals("CLS-ROMEO-01", row.get("cluster_member_ref"));
     }

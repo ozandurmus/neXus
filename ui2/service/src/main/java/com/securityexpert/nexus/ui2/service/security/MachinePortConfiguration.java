@@ -18,8 +18,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import com.securityexpert.nexus.ui2.service.advisorystore.AdvisorySources;
 
 /**
- * The internal port 8086 serves exactly three POST paths: the e2e machine session and the two advisory ingest paths of the
- * fetch workload (docs/design/ADVISORY_MATCHING_CONTRACT.md section 4). Every other path answers 404 there, and every
+ * The internal port 8086 serves exactly these POST paths: the e2e machine session, the two advisory ingest paths of the
+ * fetch workload (docs/design/ADVISORY_MATCHING_CONTRACT.md section 4) and the two lifecycle-source ingest paths
+ * (docs/design/LIFECYCLE_CATALOG_SOURCES_CONTRACT.md section 3.1). Every other path answers 404 there, and every
  * {@code /internal/**} path answers 404 on the main port.
  */
 @Configuration
@@ -29,6 +30,12 @@ public class MachinePortConfiguration {
     static boolean internalPortAllows(String method, String uri) {
         if (!"POST".equals(method) || uri == null) return false;
         if ("/internal/machine-session".equals(uri)) return true;
+        String lifecycle = "/internal/lifecycle-sources/";
+        if (uri.startsWith(lifecycle)) {
+            String rest = uri.substring(lifecycle.length());
+            if (rest.endsWith("/complete")) rest = rest.substring(0, rest.length() - "/complete".length());
+            return com.securityexpert.nexus.ui2.service.lifecyclesource.LifecycleSources.feedKnown(rest);
+        }
         String prefix = "/internal/advisories/";
         if (!uri.startsWith(prefix)) return false;
         String rest = uri.substring(prefix.length());
