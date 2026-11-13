@@ -18,6 +18,10 @@ import java.util.*;
  * later rule stays UNKNOWN. A shape nobody parsed is no partial prior. Synthetic names and serials only.
  */
 class PolicyHygienePanTargetTest {
+    // Compares the earlier engine and its oracles, which model no extended construct (negated address cells, source
+    // ports, ICMP codes): run with the former resolution. PolicyHygieneExtendedResolutionTest covers the extension.
+    @org.junit.jupiter.api.BeforeEach void formerResolution() { PolicyNormalization.Resolver.EXTENDED.set(false); }
+    @org.junit.jupiter.api.AfterEach void restoreResolution() { PolicyNormalization.Resolver.EXTENDED.remove(); }
     private static final Metadata META = new Metadata("policy-1", "manager-1", "Synthetic manager", "PAN", "container-1", "Synthetic group",
             "Synthetic policy", "2026-11-03T12:00:00Z", "artifact-1", List.of(new Target("device-1", "FW-TANGO-04", "vsys1", "UNKNOWN")));
 

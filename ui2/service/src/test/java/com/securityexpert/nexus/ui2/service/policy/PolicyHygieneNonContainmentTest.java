@@ -21,6 +21,10 @@ import java.util.*;
  */
 @Execution(ExecutionMode.CONCURRENT)
 class PolicyHygieneNonContainmentTest {
+    // Compares the earlier engine and its oracles, which model no extended construct (negated address cells, source
+    // ports, ICMP codes): run with the former resolution. PolicyHygieneExtendedResolutionTest covers the extension.
+    @org.junit.jupiter.api.BeforeEach void formerResolution() { PolicyNormalization.Resolver.EXTENDED.set(false); }
+    @org.junit.jupiter.api.AfterEach void restoreResolution() { PolicyNormalization.Resolver.EXTENDED.remove(); }
     static final Instant NOW = PolicyHygieneTest.NOW;
     static final Map<String, List<String>> USER = Map.of("source-user", List.of("OBJ-USER-01"));
 
