@@ -20,7 +20,7 @@ def checkout(tmp_path):
         "tools/delivery/module_deploy.py", "tools/delivery/release_snapshot.py",
         "tools/delivery/release_snapshot.sh", "tools/delivery/rollback.sh",
         "tools/e2e/hosta_e2e_image.py", "tools/delivery/hosta_packet_analysis_image.py",
-        "tools/delivery/hosta_restamp_image.py",
+        "tools/delivery/hosta_restamp_image.py", "tools/delivery/tree_modes.py",
         "tools/security/security_host.py",
         "tools/security/security_manifests.py",
     ):
@@ -71,9 +71,10 @@ def test_all_build_python_scripts_and_rollback_wrappers_import_outside_checkout(
 
 @pytest.mark.parametrize("failure,apply_files,events_expected", [
     ("targets", "", ["git"] * 3), ("git", "", ["git"]),
-    ("snapshot", "synthetic.yaml", ["git"] * 4 + ["snapshot"]),
-    ("apply", "synthetic.yaml", ["git"] * 4 + ["snapshot", "apply"]),
-    ("apply", "", ["git"] * 4 + ["snapshot", "apply"]),
+    # git x5: fetch, checkout, pull, the tree-mode check's ls-files, rev-parse.
+    ("snapshot", "synthetic.yaml", ["git"] * 5 + ["snapshot"]),
+    ("apply", "synthetic.yaml", ["git"] * 5 + ["snapshot", "apply"]),
+    ("apply", "", ["git"] * 5 + ["snapshot", "apply"]),
 ])
 def test_build_failure_reports_no_changes_only_before_mutation(checkout, tmp_path, failure, apply_files, events_expected):
     bin_dir = tmp_path / "bin"
@@ -110,6 +111,9 @@ def test_build_defaults_to_the_service_owned_tree_and_writes_only_as_its_owner()
     for command in ("git fetch", "git checkout main", "git pull origin main"):
         assert re.search(r"^as_tree_owner " + command + "$", source, re.M), command
     assert re.search(r"^printf .*\| as_tree_owner tee project/deploy_info\.json >/dev/null$", source, re.M)
+    # Owner writes are world-readable (images keep file modes), and the tree-mode check runs before any change.
+    assert "(umask 0022 && \"$@\")" in source and "(umask 0022 && sudo -n -u" in source and "0027" not in source
+    assert source.index("tree_modes.py\" check") < source.index("RELEASE_SNAPSHOT=")
     deploy = (ROOT / "tools/delivery/hosta_deploy.sh").read_text()
     assert "--receive-pack='sudo -n -u nexus git-receive-pack' \"ssh://$HOST/opt/nexus.git\"" in deploy
     assert "nexus.git" not in deploy.replace("/opt/nexus.git", "")
@@ -146,3 +150,26 @@ def test_build_snapshot_id_python_invocation_is_cwd_independent(checkout):
     result = outside_run(["bash", "-c", assignment + '\nprintf "%s" "$SNAPSHOT_ID"'],
                          env={"RELEASE_SNAPSHOT": '{"snapshot": "synthetic-snapshot"}'})
     assert result.returncode == 0 and result.stdout == "synthetic-snapshot"
+
+
+def test_tree_writes_are_world_readable_whatever_the_caller_umask(checkout, tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    body = '[ "$1" != pull ] || echo synthetic > "$PWD/written-by-pull"; echo synthetic-commit'
+    (bin_dir / "git").write_text("#!/bin/bash\n" + body + "\n")
+    (bin_dir / "git").chmod(0o755)
+    (bin_dir / "python3").symlink_to(sys.executable)
+    script = str(checkout / "deploy/ui2-image-build/run_build.sh")
+    result = outside_run(["bash", "-c", 'umask 077; exec bash "$0"', script], env={
+        "HOME": str(tmp_path / "unrelated-home"), "REPO": str(checkout), "NEXUS_TREE_OWNER": getpass.getuser(),
+        "PATH": str(bin_dir) + os.pathsep + os.defpath,
+        "NEXUS_DEPLOY_TARGETS": "unknown", "NEXUS_SKIP_SECURITY_REASON": "synthetic test",
+    })
+    assert result.returncode != 0 and "no changes applied" in result.stderr
+    assert (checkout / "written-by-pull").stat().st_mode & 0o777 == 0o644
+
+
+def test_build_context_is_made_world_readable_after_extraction():
+    source = (ROOT / "deploy/ui2-image-build/run_build.sh").read_text()
+    loader = next(line for line in source.splitlines() if line.startswith("tar -cf - ui2 project docs |"))
+    assert loader.endswith('tar -xf - -C /workspace && chmod -R a+rX /workspace/ui2 /workspace/project /workspace/docs"')

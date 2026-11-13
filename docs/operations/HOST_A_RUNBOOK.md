@@ -45,7 +45,14 @@ On the host:
   in the corporate application inventory). Its origin is the bare repository
   `/opt/nexus.git`, which `tools/delivery/hosta_deploy.sh` pushes to; no
   credential is stored on the host. Both belong to the service account `nexus`
-  (system account, no login shell, locked password) and are mode `2750`.
+  (system account, no login shell, locked password). The top directories are
+  mode `2750`; everything inside is world-readable (`o+rX`), because image
+  builds copy file modes into the images and an image's runtime user is neither
+  owner nor group (a `0640` file broke the e2e suite on 2026-11-13). Writes as
+  `nexus` run under `umask 0022`, and `run_build.sh` stops before any change
+  (`tools/delivery/tree_modes.py check`) if a tracked path lost its world-read
+  bit; the build context loaders also run `chmod -R a+rX` after extraction.
+  Repair: `sudo chmod -R o+rX /opt/nexus && sudo chmod o-rwx /opt/nexus`.
 - The SSH deploy account is in group `nexus`, so it reads the tree, but it
   never writes it directly: the push runs `sudo -n -u nexus git-receive-pack`,
   and `run_build.sh` runs its git commands and the `deploy_info.json` write as

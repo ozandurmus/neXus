@@ -20,9 +20,11 @@ trap report_failure EXIT
 # through sudo -u nexus, so ownership never drifts and each write is in the sudo log.
 REPO="${REPO:-/opt/nexus}"
 NEXUS_TREE_OWNER="${NEXUS_TREE_OWNER:-nexus}"
-# umask 0027: whatever the caller's umask, what the owner writes stays readable by group nexus (the deploy account).
+# umask 0022: what the owner writes is world-readable inside the closed top directory (2750). Image builds copy
+# file modes into the image, where the runtime user is neither owner nor group: a 0640 file broke the e2e suite
+# on 2026-11-13 (EACCES on /suite/playwright.config.ts).
 as_tree_owner() {
-  if [ "$(id -un)" = "$NEXUS_TREE_OWNER" ]; then (umask 0027 && "$@"); else (umask 0027 && sudo -n -u "$NEXUS_TREE_OWNER" "$@"); fi
+  if [ "$(id -un)" = "$NEXUS_TREE_OWNER" ]; then (umask 0022 && "$@"); else (umask 0022 && sudo -n -u "$NEXUS_TREE_OWNER" "$@"); fi
 }
 # The deploy account cannot write the tree, so Python must not try to cache bytecode there.
 export PYTHONDONTWRITEBYTECODE=1
@@ -34,6 +36,8 @@ as_tree_owner git pull origin main
 
 # Use the updated checkout's scripts before any build or deployment changes.
 python3 "$REPO/tools/delivery/module_deploy.py" --validate-targets "$NEXUS_DEPLOY_TARGETS"
+# Stop before any change if a tracked file or directory lost its world-read bit (images would carry the mode).
+python3 "$REPO/tools/delivery/tree_modes.py" check --repo "$REPO"
 
 # Capture the RUNNING release before security loaders, optional manifests or build mutations.
 COMMIT_SHA="$(git rev-parse HEAD)"
@@ -73,7 +77,9 @@ kubectl apply -f deploy/ui2-image-build/20-context-loader.yaml
 kubectl wait --for=condition=Ready pod/ui2-build-context-loader -n ui2-build --timeout=60s
 
 echo "Streaming context..."
-tar -cf - ui2 project docs | kubectl exec -i -n ui2-build ui2-build-context-loader -- sh -c "rm -rf /workspace/ui2 /workspace/project /workspace/docs && tar -xf - -C /workspace"
+# The chmod after extraction makes every image independent of host file modes: the context is world-readable
+# whatever the tree's modes, so a COPY never yields a file the image's runtime user cannot read.
+tar -cf - ui2 project docs | kubectl exec -i -n ui2-build ui2-build-context-loader -- sh -c "rm -rf /workspace/ui2 /workspace/project /workspace/docs && tar -xf - -C /workspace && chmod -R a+rX /workspace/ui2 /workspace/project /workspace/docs"
 
 echo "Deleting loader to free PVC..."
 kubectl delete -f deploy/ui2-image-build/20-context-loader.yaml
