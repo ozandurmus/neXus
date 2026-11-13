@@ -50,8 +50,11 @@ PG_ENV = 'unset PGPASSWORD; export PGUSER="${POSTGRESQL_USER:-${POSTGRES_USER:-u
 PHASE = "preview_setup"
 STEP = "get namespace"
 LOG = None
+# chmod: images built from this context must not depend on the host tree's file modes (a 0640 file is unreadable
+# to an image's runtime user; e2e EACCES 2026-11-13).
 LOAD_CONTEXT = """set -e
 tar -xf - -C /workspace
+chmod -R a+rX /workspace/ui2 /workspace/project /workspace/docs
 for input in /workspace/project/deploy_info.json /workspace/ui2/.ca/*.pem /workspace/ui2/.gradle-home/wrapper/dists/gradle-8.14.3-bin/*/gradle-8.14.3-bin.zip; do
     test -s "$input" || { echo CONTEXT_INCOMPLETE >&2; exit 1; }
 done
