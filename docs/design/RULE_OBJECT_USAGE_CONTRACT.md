@@ -1,7 +1,7 @@
 # Rule object usage - contract
 
-**Status: DRAFT -- awaiting Product Owner approval (proposed 2026-11-13). Not implementation authority until its status
-reads FROZEN.** Scope decided by the PO on 2026-11-13 (answers R1-R4, relayed by the PO session). Builds on the W3-B
+**Status: FROZEN - 2026-11-13.** Approved as written by the Product Owner in the PO session on 2026-11-13
+("Onaylıyorum"); implementation authority for the delivery order of section 8. Scope decided by the PO on 2026-11-13 (answers R1-R4, relayed by the PO session). Builds on the W3-B
 offline analyzer approved in direction by
 [PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md](PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md) and implemented in
 `ui2/service/.../policy/OfflineAnalysis.java` (storage `V146__policy_offline_analysis.sql`).
