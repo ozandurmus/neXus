@@ -289,7 +289,7 @@ host. The default source list of the workload includes `checkpoint`; no manifest
   and score (CVSS 4.0, else 3.1, else 3.0 of `cna.metrics`), published and updated dates of `cveMetadata`, link = the
   record's sk article, else the sk article of a resolved-issues line. Its rules are built from the record and the
   stored statements of the same CVE id (A.7). A record that is not `PUBLISHED` or not JSON is rejected.
-- Storage: migration `V213` adds `checkpoint` to the source checks of `advisory` and `advisory_feed_run` and the table
+- Storage: migration `V214` adds `checkpoint` to the source checks of `advisory` and `advisory_feed_run` and the table
   `checkpoint_jumbo_statement` (train, take, CVE id, kind, product text, sk article, line, page address, page SHA-256,
   load time) and `checkpoint_jumbo_page_load` (train, time of the last accepted page, statement count, page address and
   SHA-256). Public data only, no audit trigger, as V205.
