@@ -38,7 +38,10 @@ const REASON_WORDS = new Map([
   ["NO_COMPARATOR", "no version comparison for this product"], ["VERSION_MISSING", "no software version stored"],
   ["VERSION_UNPARSED", "version form not recognised"], ["JUMBO_TAKE_MISSING", "no Jumbo Hotfix take stored"],
   ["JUMBO_TRAIN_MISMATCH", "the stored Jumbo take is for another version"], ["SPARK_NOT_COVERED", "Quantum Spark firmware has no advisory source yet"],
-  ["TRAIN_NOT_COVERED", "no Check Point resolved-issues source for this version"]]);
+  ["TRAIN_NOT_COVERED", "no Check Point resolved-issues source for this version"],
+  ["TRAIN_NEVER_LOADED", "the Check Point resolved-issues list of this version was never read in full"],
+  ["TRAIN_STALE", "the Check Point resolved-issues list of this version is older than 30 days"],
+  ["TRAIN_RECORDS_MISSING", "some CVE records named by the Check Point resolved-issues list of this version were not loaded"]]);
 const reasonWord = (reason: string | null | undefined) => (reason ? REASON_WORDS.get(reason) ?? reason : null);
 const BASIS_SENTENCES = new Map([
   ["IN_RANGE", "The version lies inside the affected range."],
@@ -66,6 +69,9 @@ const BASIS_SENTENCES = new Map([
   ["MULTIPLE_FIX_TAKES", "Pending confirmation: the resolved-issues list names this CVE in more than one Jumbo take; the device is below the highest."],
   ["FIX_STATEMENT_UNCLEAR", "Pending confirmation: the resolved-issues list mentions this CVE without saying it was resolved."],
   ["NO_FIX_TAKE_PUBLISHED", "The vendor names this version as affected and no Jumbo take is listed as resolving it."],
+  ["VERSION_MISSING", "No software version is stored for the device."],
+  ["JUMBO_TAKE_MISSING", "No Jumbo Hotfix take is stored for the device; it is never taken as take 0."],
+  ["JUMBO_TRAIN_MISMATCH", "The stored Jumbo Hotfix take is for another version than the device's software version."],
   ["PRODUCT_SUBSET_UNKNOWN", "The advisory names only some gateways (for example Maestro or scalable platforms); neXus cannot tell whether this one is among them."]]);
 /**
  * What the Check Point source can see (ADVISORY_MATCHING_CONTRACT.md amendment A-2026-11-13, A.5; PO 2026-11-14 keeps the
@@ -73,6 +79,14 @@ const BASIS_SENTENCES = new Map([
  */
 export const CHECKPOINT_COVERAGE = "Check Point coverage: the CVEs named in the Jumbo Hotfix resolved-issues lists of R81.20, R82, R82.10 and R82.20. "
   + "A Check Point CVE that no Jumbo take of these versions resolves yet is not seen.";
+/** One Check Point version's list in plain words: when it was last read in full, and why its devices are not judged. */
+export function checkpointTrainWords(t: NonNullable<LifecycleAdvisorySource["trains"]>[number]): string {
+  if (t.age_state === "NEVER") return `${t.train}: never read in full; its devices are not judged`;
+  const age = typeof t.age_days === "number" ? (t.age_days <= 0 ? "read today" : `read ${t.age_days} d ago`) : "read";
+  if (t.age_state === "RED") return `${t.train}: ${age}, older than 30 days; its devices are not judged`;
+  if (t.cves_without_advisory > 0) return `${t.train}: ${age}; ${t.cves_without_advisory} of ${t.cves} CVE records not loaded; its devices are not judged`;
+  return `${t.train}: ${age}, ${plural(t.cves, "CVE")}`;
+}
 /** Bases of a verdict that waits for a fix rule confirmation (PO decision 2026-11-10): shown as pending, not as "could not be judged". */
 export const PENDING_BASES = new Set(["FIX_RULE_UNCONFIRMED", "MULTIPLE_FIX_TAKES", "FIX_STATEMENT_UNCLEAR"]);
 /** The rule that decided, as a sentence; a code word this build does not know is shown as it came. */
@@ -243,7 +257,7 @@ function SourcesTable({ sources }: { sources: LifecycleAdvisorySource[] }) {
         <TableCell>{sourceOutcome(s)}</TableCell>
         <TableCell>{s.advisories ?? 0}</TableCell>
         <TableCell>{count(s.needs_review) ? <Typography variant="body2" component="span" sx={{ color: m3.warningInk }}>{s.needs_review}</Typography> : 0}</TableCell>
-        <TableCell>{s.oldest && s.newest ? `from ${s.oldest} to ${s.newest}` : "—"}{s.source === "checkpoint" && caption(CHECKPOINT_COVERAGE)}</TableCell>
+        <TableCell>{s.oldest && s.newest ? `from ${s.oldest} to ${s.newest}` : "—"}{s.source === "checkpoint" && caption(CHECKPOINT_COVERAGE)}{s.trains?.map(t => <Fragment key={t.train}>{caption(checkpointTrainWords(t), t.usable ? undefined : m3.warningInk)}</Fragment>)}</TableCell>
         <TableCell>{sourceAge(s)}</TableCell>
       </TableRow>)}</TableBody>
     </Table></TableContainer>

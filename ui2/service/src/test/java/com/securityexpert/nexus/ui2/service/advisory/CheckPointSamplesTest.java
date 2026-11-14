@@ -44,6 +44,7 @@ class CheckPointSamplesTest {
                     + " cves=" + result.jumboStatements().stream().map(AdvisoryModel.JumboStatement::cveId).distinct().count()
                     + " rejected=" + result.rejected());
             assertTrue(!result.jumboStatements().isEmpty(), train);
+            assertEquals(0, result.rejected(), "every CVE line of the real page is read: " + train);
             statements.addAll(result.jumboStatements());
         }
         try (var files = Files.list(Path.of(dir))) {
@@ -53,6 +54,8 @@ class CheckPointSamplesTest {
                 assertEquals(1, result.advisories().size(), record.getFileName().toString());
                 var a = result.advisories().getFirst();
                 assertNotNull(a.parseState());
+                assertEquals(AdvisoryModel.ParseState.PARSED, a.parseState(), "the real records of 2026-11-13 are known forms: "
+                        + record.getFileName());
                 System.out.println("[CP_SAMPLES] record state=" + a.parseState() + " note=" + a.parseNote() + " rules="
                         + a.rules().stream().map(r -> r.productKey().substring(11) + "/" + r.train() + "/"
                                 + r.rules().stream().map(v -> v.getClass().getSimpleName()).collect(Collectors.joining("+")))

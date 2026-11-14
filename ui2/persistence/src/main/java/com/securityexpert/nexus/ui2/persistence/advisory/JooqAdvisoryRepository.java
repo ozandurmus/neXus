@@ -187,8 +187,38 @@ public final class JooqAdvisoryRepository implements AdvisoryRepository {
                         j.train(), j.take(), j.cveId(), j.kind(), j.productText(), j.skRef(), j.evidence(), j.sourceUrl(),
                         j.contentSha256());
             }
+            if (!rows.isEmpty()) {
+                StoredJumboStatement first = rows.getFirst();
+                dsl.execute("insert into checkpoint_jumbo_page_load(train, loaded_at, statements, source_url, content_sha256) "
+                        + "values ({0}, now(), {1}, {2}, {3}) on conflict (train) do update set loaded_at = now(), "
+                        + "statements = excluded.statements, source_url = excluded.source_url, content_sha256 = excluded.content_sha256",
+                        train, rows.size(), first.sourceUrl(), first.contentSha256());
+            }
             return null;
         });
+    }
+
+    @Override
+    public java.util.Set<Integer> jumboTakes(String train) {
+        return transactions.inTransaction(dsl -> dsl.fetch("select distinct take from checkpoint_jumbo_statement where train = {0}", train)
+                .stream().map(row -> number(row.get("take"))).collect(java.util.stream.Collectors.toSet()));
+    }
+
+    @Override
+    public Map<String, java.util.Set<String>> jumboCveIdsByTrain() {
+        return transactions.inTransaction(dsl -> {
+            Map<String, java.util.Set<String>> out = new LinkedHashMap<>();
+            dsl.fetch("select distinct train, cve_id from checkpoint_jumbo_statement order by train, cve_id").forEach(row -> out
+                    .computeIfAbsent(row.get("train", String.class), k -> new java.util.TreeSet<>()).add(row.get("cve_id", String.class)));
+            return out;
+        });
+    }
+
+    @Override
+    public List<JumboPageLoad> jumboPageLoads() {
+        return transactions.inTransaction(dsl -> dsl.fetch("select train, loaded_at, statements from checkpoint_jumbo_page_load order by train")
+                .stream().map(row -> new JumboPageLoad(row.get("train", String.class), row.get("loaded_at", OffsetDateTime.class).toInstant(),
+                        number(row.get("statements")))).toList());
     }
 
     @Override

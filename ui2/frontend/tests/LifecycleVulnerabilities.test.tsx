@@ -302,7 +302,10 @@ describe("Vulnerabilities tab", () => {
     const cp = advisory("checkpoint:CVE-2026-90001", { source: "checkpoint", title: "Synthetic gateway overflow", cve_ids: ["CVE-2026-90001"],
       source_url: "https://support.checkpoint.com/results/sk/sk9000001", parse_note: "THIRD_PARTY_CVE",
       devices: { affected: 0, fixed: 2, not_affected: 0, not_evaluable: 0, pending: 3 } });
-    loadTab([cp], [...sources, source("checkpoint", { advisories: 61 })]);
+    loadTab([cp], [...sources, source("checkpoint", { advisories: 61, trains: [
+      { train: "R81.20", loaded_at: "2026-11-14T03:00:00Z", age_days: 0, age_state: "OK", cves: 45, cves_without_advisory: 0, usable: true },
+      { train: "R82", loaded_at: null, age_days: null, age_state: "NEVER", cves: 0, cves_without_advisory: 0, usable: false },
+      { train: "R82.10", loaded_at: "2026-11-14T03:00:00Z", age_days: 0, age_state: "OK", cves: 31, cves_without_advisory: 2, usable: false }] })]);
     vi.mocked(api.getLifecycleAdvisory).mockResolvedValue({ advisory: cp, devices: [
       detailRow("FW-TANGO-04", "NOT_EVALUABLE", "FIX_RULE_UNCONFIRMED", { advisory_id: cp.advisory_id, vendor: "CHECKPOINT", version: "R81.20 Jumbo Take 64",
         fixed_text: "R81.20 Jumbo Take 65: UPDATE: Resolved CVE-2026-90001. Refer to sk9000001.", live_patch: { patch: "PATCH:fwd", status: "armed", used_in_verdict: false } }),
@@ -315,6 +318,10 @@ describe("Vulnerabilities tab", () => {
     const sourceTable = screen.getByRole("table", { name: "Advisory sources" });
     expect(within(rowOf(sourceTable, "Check Point")).getByText(CHECKPOINT_COVERAGE)).toBeInTheDocument();
     expect(within(rowOf(sourceTable, "Palo Alto Networks")).queryByText(CHECKPOINT_COVERAGE)).toBeNull();
+    const cpRow = rowOf(sourceTable, "Check Point");
+    expect(within(cpRow).getByText("R81.20: read today, 45 CVEs")).toBeInTheDocument();
+    expect(within(cpRow).getByText("R82: never read in full; its devices are not judged")).toBeInTheDocument();
+    expect(within(cpRow).getByText("R82.10: read today; 2 of 31 CVE records not loaded; its devices are not judged")).toBeInTheDocument();
     expect(within(row).getByText("3 pending confirmation").closest("[data-pill]")).toHaveAttribute("data-pill", "unknown");
     fireEvent.click(within(row).getByRole("button", { name: "Show 5 devices" }));
     const devices = await screen.findByRole("table", { name: "Devices judged against checkpoint:CVE-2026-90001" });
@@ -341,7 +348,7 @@ describe("Vulnerabilities tab", () => {
       "VERSION_UNPARSED", "ADVISORY_NEEDS_REVIEW", "NO_RULE_COVERS_VERSION", "NO_COMPARATOR", "TRAIN_AFFECTED", "CHANGE_POINT_AFFECTED", "IN_UNAFFECTED_RANGE",
       "EXACT_VERSION_UNAFFECTED", "BELOW_HOTFIX_UNAFFECTED", "PRODUCT_NOT_NAMED", "TRAIN_NOT_NAMED", "EVALUATION_ERROR",
       "JUMBO_FIX_INCLUDED", "ABOVE_AFFECTED_TAKE", "FIX_RULE_UNCONFIRMED", "MULTIPLE_FIX_TAKES", "FIX_STATEMENT_UNCLEAR", "NO_FIX_TAKE_PUBLISHED",
-      "PRODUCT_SUBSET_UNKNOWN"]) {
+      "PRODUCT_SUBSET_UNKNOWN", "VERSION_MISSING", "JUMBO_TAKE_MISSING", "JUMBO_TRAIN_MISMATCH"]) {
       expect(basisSentence(code)).toMatch(/^[A-Zn][^_]+\.$/);
     }
     expect(basisSentence("SOMETHING_ELSE")).toBe("SOMETHING_ELSE");

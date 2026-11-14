@@ -180,6 +180,19 @@ public final class AdvisoryReadService {
             row.put("newest", text(s.newest()));
             row.put("age_days", s.ageDays());
             row.put("age_state", s.ageState());
+            if (AdvisoryModel.SOURCE_CHECKPOINT.equals(key)) {
+                row.put("trains", checkpointTrains(repository.advisories(Optional.of(key)), now).values().stream().map(t -> {
+                    var train = new LinkedHashMap<String, Object>();
+                    train.put("train", t.train());
+                    train.put("loaded_at", text(t.loadedAt()));
+                    train.put("age_days", t.ageDays());
+                    train.put("age_state", t.ageState());
+                    train.put("cves", t.cves());
+                    train.put("cves_without_advisory", t.cvesWithoutAdvisory());
+                    train.put("usable", t.usable());
+                    return train;
+                }).toList());
+            }
             rows.add(row);
         }
         return Map.of("sources", rows);
@@ -195,7 +208,29 @@ public final class AdvisoryReadService {
     private AdvisoryEstate estate(AdvisoryCore advisoryCore, List<DeviceFacts> facts, Map<String, SourceState> sources, Instant now) {
         List<StoredAdvisory> advisories = repository.advisories(Optional.empty());
         List<StoredKnownExploited> kev = repository.knownExploited();
-        return AdvisoryEstate.evaluate(advisoryCore, advisories, kev, sources, facts);
+        return AdvisoryEstate.evaluate(advisoryCore, advisories, kev, sources, checkpointTrains(advisories, now), facts);
+    }
+
+    /**
+     * The state of each Check Point train with a resolved-issues page (amendment A-2026-11-13, corrected 2026-11-14): age of
+     * the last page accepted in full, and how many CVE ids that page names have no stored advisory.
+     */
+    Map<String, AdvisoryEstate.TrainState> checkpointTrains(List<StoredAdvisory> advisories, Instant now) {
+        java.util.Set<String> stored = new java.util.HashSet<>();
+        for (StoredAdvisory a : advisories) if (AdvisoryModel.SOURCE_CHECKPOINT.equals(a.source())) stored.add(a.advisoryId());
+        Map<String, java.util.Set<String>> cves = repository.jumboCveIdsByTrain();
+        Map<String, AdvisoryRepository.JumboPageLoad> loads = new HashMap<>();
+        repository.jumboPageLoads().forEach(l -> loads.put(l.train(), l));
+        Map<String, AdvisoryEstate.TrainState> out = new LinkedHashMap<>();
+        for (String train : CheckPointGaiaComparator.COVERED_TRAINS) {
+            var load = loads.get(train);
+            Instant loadedAt = load == null ? null : load.loadedAt();
+            Long age = AdvisoryEstate.ageDays(loadedAt, now);
+            var named = cves.getOrDefault(train, java.util.Set.of());
+            int missing = (int) named.stream().filter(c -> !stored.contains(AdvisoryModel.SOURCE_CHECKPOINT + ":" + c)).count();
+            out.put(train, new AdvisoryEstate.TrainState(train, loadedAt, age, AdvisoryEstate.ageState(age), named.size(), missing));
+        }
+        return out;
     }
 
     /** One state per source key: counts and dates from the store, the age from the last OK or PARTIAL run. */

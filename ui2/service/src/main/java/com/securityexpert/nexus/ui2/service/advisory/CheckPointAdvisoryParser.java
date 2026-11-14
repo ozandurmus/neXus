@@ -436,45 +436,87 @@ public final class CheckPointAdvisoryParser implements AdvisoryParser {
                     rules.add(proposal(product, train, statements, BASIS_UNCONFIRMED));
                 }
             }
-        } else if (note != null) {
-            // Not read in full: an open question for every train it or its resolved-issues lines name, for both products.
-            state = AdvisoryModel.ParseState.NEEDS_REVIEW;
-            Set<String> trains = new TreeSet<>(trains(statements));
-            if (trains.isEmpty()) {
-                trains.add(AdvisoryModel.ALL_TRAINS);
-            }
-            for (String train : trains) {
-                for (String product : List.of(AdvisoryModel.PRODUCT_CP_GATEWAY, AdvisoryModel.PRODUCT_CP_MANAGEMENT)) {
-                    rules.add(new AdvisoryModel.ProductRule(product, train, List.of(), null));
-                }
-            }
         } else {
-            for (var byProduct : named.entrySet()) {
-                for (var entry : byProduct.getValue().entrySet()) {
-                    String train = entry.getKey();
-                    Named n = entry.getValue();
-                    AdvisoryModel.ProductRule rule = recordRule(byProduct.getKey(), train, n, statements);
-                    if (rule == null) {
-                        note = NOTE_SELF_CHECK_FAILED;
-                        state = AdvisoryModel.ParseState.NEEDS_REVIEW;
-                        rule = new AdvisoryModel.ProductRule(byProduct.getKey(), train, List.of(), null);
+            Set<String> statementTrains = trains(statements);
+            if (note == null && named.isEmpty() && !statementTrains.isEmpty()) {
+                // A Gaia resolved-issues page names the CVE but the record names no Gaia product: the two disagree.
+                note = NOTE_RECORD_CONFLICT;
+            }
+            if (note == null) {
+                for (var byProduct : named.entrySet()) {
+                    for (var entry : byProduct.getValue().entrySet()) {
+                        AdvisoryModel.ProductRule rule = recordRule(byProduct.getKey(), entry.getKey(), entry.getValue(), statements);
+                        if (rule == null) {
+                            note = NOTE_SELF_CHECK_FAILED;
+                        } else {
+                            rules.add(rule);
+                        }
                     }
-                    rules.add(rule);
+                    // A train a resolved-issues line names and the record does not: a proposal for this product, never "not
+                    // listed" (amendment A-2026-11-13, corrected 2026-11-14).
+                    for (String train : statementTrains) {
+                        if (!byProduct.getValue().containsKey(train)) {
+                            rules.add(proposal(byProduct.getKey(), train, statements, BASIS_UNCONFIRMED));
+                        }
+                    }
                 }
             }
             if (note != null) {
-                // One contradiction makes the advisory an open question for every train it names.
-                List<AdvisoryModel.ProductRule> open = new ArrayList<>();
-                for (AdvisoryModel.ProductRule r : rules) {
-                    open.add(new AdvisoryModel.ProductRule(r.productKey(), r.train(), List.of(), null));
+                // Not read in full, or contradicted: an open question for both products on every train the record or its
+                // resolved-issues lines name, and for the whole product when a version text names no train.
+                state = AdvisoryModel.ParseState.NEEDS_REVIEW;
+                Set<String> trains = new TreeSet<>(statementTrains);
+                boolean unknownTrain = recordTrains(cna, trains);
+                for (Map<String, Named> byTrain : named.values()) {
+                    trains.addAll(byTrain.keySet());
                 }
-                rules = open;
+                if (trains.isEmpty() || unknownTrain) {
+                    trains.add(AdvisoryModel.ALL_TRAINS);
+                }
+                rules = new ArrayList<>();
+                for (String train : trains) {
+                    for (String product : List.of(AdvisoryModel.PRODUCT_CP_GATEWAY, AdvisoryModel.PRODUCT_CP_MANAGEMENT)) {
+                        rules.add(new AdvisoryModel.ProductRule(product, train, List.of(), null));
+                    }
+                }
             }
         }
         List<String> cves = List.of(cveId);
         AdvisoryModel.ParsedAdvisory advisory = new AdvisoryModel.ParsedAdvisory(AdvisoryModel.SOURCE_CHECKPOINT + ":" + cveId,
                 AdvisoryModel.SOURCE_CHECKPOINT, title, severity, score, cves, published, updated, sourceUrl, state, note, rules);
         return new AdvisoryModel.ParseResult(List.of(advisory), List.of(), 0);
+    }
+
+    private static final Pattern TRAIN_IN_TEXT = Pattern.compile("(?<![A-Za-z0-9])" + CheckPointGaiaComparator.TRAIN_TEXT + "(?![0-9])");
+
+    /**
+     * Adds every Gaia train any version text of the record names, read or not, to {@code into}; true when some version text
+     * names no train at all (or the record has no readable {@code affected} list), so that only the whole product is safe.
+     */
+    static boolean recordTrains(JsonNode cna, Set<String> into) {
+        JsonNode affected = cna.get("affected");
+        if (affected == null || !affected.isArray() || affected.isEmpty()) {
+            return true;
+        }
+        boolean unknown = false;
+        for (JsonNode entry : affected) {
+            JsonNode versions = entry.get("versions");
+            if (versions == null || !versions.isArray() || versions.isEmpty()) {
+                unknown = true;
+                continue;
+            }
+            for (JsonNode v : versions) {
+                String version = text(v.get("version"));
+                Matcher m = TRAIN_IN_TEXT.matcher(version == null ? "" : version.length() > MAX_VERSION_TEXT ? "" : version);
+                boolean any = false;
+                while (m.find()) {
+                    into.add(m.group());
+                    any = true;
+                }
+                unknown |= !any;
+            }
+        }
+        return unknown;
     }
 
     /** The rule of one product and train of a Check Point record, or null when the resolved-issues page contradicts it. */
@@ -622,18 +664,44 @@ public final class CheckPointAdvisoryParser implements AdvisoryParser {
             }
             rest = m.group(3);
         }
-        Set<ProductClass> extra = new LinkedHashSet<>(entryClasses);
-        extra.removeAll(named);
-        extra.remove(ProductClass.OUTSIDE);
-        if (extra.isEmpty()) {
+        // Compared by the product key each class stands for (gateway or management), not by class: a full-gateway name in
+        // the product field and a subset name in the sentence both mean gateways (review 2026-11-14, finding 6).
+        Set<String> extraKeys = keys(entryClasses);
+        extraKeys.removeAll(keys(named));
+        if (extraKeys.isEmpty()) {
             return;
         }
         if (groups > 1) {
             throw new Review(NOTE_RECORD_CONFLICT);
         }
+        Set<ProductClass> extra = new LinkedHashSet<>();
+        if (extraKeys.contains(AdvisoryModel.PRODUCT_CP_GATEWAY)) {
+            boolean full = entryClasses.contains(ProductClass.GATEWAY) || entryClasses.contains(ProductClass.BOTH);
+            extra.add(full ? ProductClass.GATEWAY : ProductClass.SUBSET);
+        }
+        if (extraKeys.contains(AdvisoryModel.PRODUCT_CP_MANAGEMENT)) {
+            extra.add(ProductClass.MANAGEMENT);
+        }
         for (String train : allTrains) {
             add(out, extra, train, null);
         }
+    }
+
+    /** The product keys a set of classes stands for. */
+    private static Set<String> keys(Set<ProductClass> classes) {
+        Set<String> out = new LinkedHashSet<>();
+        for (ProductClass c : classes) {
+            switch (c) {
+                case GATEWAY, SUBSET -> out.add(AdvisoryModel.PRODUCT_CP_GATEWAY);
+                case MANAGEMENT -> out.add(AdvisoryModel.PRODUCT_CP_MANAGEMENT);
+                case BOTH -> {
+                    out.add(AdvisoryModel.PRODUCT_CP_GATEWAY);
+                    out.add(AdvisoryModel.PRODUCT_CP_MANAGEMENT);
+                }
+                case OUTSIDE -> { }
+            }
+        }
+        return out;
     }
 
     /** Adds one statement for every product key the classes name; a different statement for the same train is a conflict. */

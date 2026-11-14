@@ -24,6 +24,8 @@ public final class CheckPointGaiaComparator implements ProductComparator {
     private static final Pattern SPARK = Pattern.compile("R[0-9]{2}\\.[0-9]{1,2}\\.[0-9A-Za-z]{1,6}(?:\\s.*)?");
     /** The form {@link #compose} gives when the hotfix level names another train than the software version. */
     private static final String MISMATCH_MARK = " (hotfix level of ";
+    /** The form {@link #compose} gives when a stored hotfix level is not a Jumbo take this class reads. */
+    private static final String UNREAD_MARK = " (hotfix level not recognised)";
 
     private final String productKey;
 
@@ -46,7 +48,8 @@ public final class CheckPointGaiaComparator implements ProductComparator {
         }
         Matcher m = CANONICAL.matcher(hotfixLevel.strip());
         if (!m.matches()) {
-            return version;
+            // A hotfix level that is stored but not read is not "no take": it is a version not understood.
+            return version + UNREAD_MARK;
         }
         return m.group(1).equals(version) ? m.group() : version + MISMATCH_MARK + m.group(1) + ")";
     }
@@ -86,6 +89,11 @@ public final class CheckPointGaiaComparator implements ProductComparator {
             return Optional.empty();
         }
         String text = storedVersion.strip();
+        // The software version decides coverage, whatever the hotfix level says (review 2026-11-14, finding 7).
+        int mark = text.indexOf(" (hotfix level");
+        if (mark > 0) {
+            text = text.substring(0, mark);
+        }
         if (SPARK.matcher(text).matches()) {
             return Optional.of("SPARK_NOT_COVERED");
         }
@@ -98,6 +106,9 @@ public final class CheckPointGaiaComparator implements ProductComparator {
 
     @Override
     public String unparsedReason(String storedVersion) {
+        if (storedVersion != null && storedVersion.contains(UNREAD_MARK)) {
+            return "VERSION_UNPARSED";
+        }
         if (storedVersion != null && storedVersion.contains(MISMATCH_MARK)) {
             return "JUMBO_TRAIN_MISMATCH";
         }

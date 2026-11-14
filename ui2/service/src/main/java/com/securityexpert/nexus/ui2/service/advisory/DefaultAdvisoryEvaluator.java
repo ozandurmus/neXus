@@ -65,7 +65,7 @@ public final class DefaultAdvisoryEvaluator implements AdvisoryEvaluator {
         Optional<String> canonical = storedVersion == null ? Optional.empty() : cmp.canonical(storedVersion);
         Optional<String> train = canonical.flatMap(cmp::train);
         if (canonical.isEmpty() || train.isEmpty()) {
-            return verdict(AdvisoryModel.VerdictKind.NOT_EVALUABLE, "VERSION_UNPARSED", null);
+            return verdict(AdvisoryModel.VerdictKind.NOT_EVALUABLE, storedVersion == null ? "VERSION_UNPARSED" : cmp.unparsedReason(storedVersion), null);
         }
         List<AdvisoryModel.ProductRule> own = new ArrayList<>();
         List<AdvisoryModel.ProductRule> star = new ArrayList<>();
