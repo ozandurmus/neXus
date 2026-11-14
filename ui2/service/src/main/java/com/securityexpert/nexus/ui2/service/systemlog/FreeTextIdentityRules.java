@@ -249,7 +249,7 @@ final class FreeTextIdentityRules {
             "local", "internal", "lan", "corp", "intranet", "localdomain", "home", "priv", "test", "invalid");
     private static final Pattern P_FIELD = Pattern.compile("(?i)" + B
             + "(?:(?:user(?:[-_ ]?name)?|account|principal)\\s*[=:](?!//)|(?:admin(?:istrator)?(?:[-_ ]?name)?|login|uname|ruser"
-            + "|luser|acct|suser|duser|usr)\\s*=)\\s*[\"']?" + NAME);
+            + "|luser|acct|suser|duser|usr|owner|euid|ruid|suid|auid|fsuid)\\s*=)\\s*[\"']?" + NAME);
     private static final Pattern P_QUOTED = Pattern.compile("(?i)" + BH
             + "(?:user(?:name)?|admin(?:istrator)?|account|login)\\s+[\"'‘’`]([^\"'‘’`\\s][^\"'‘’`]{0,63})[\"'‘’`]");
     private static final Pattern P_SSHD = Pattern.compile("(?i)" + B
@@ -257,6 +257,14 @@ final class FreeTextIdentityRules {
             + NAME + "\\s+from(?![\\p{L}\\p{N}_])");
     private static final Pattern P_ROLE = Pattern.compile("(?i)" + B
             + "(?:by|for|from|of)\\s+(?:(?:invalid|illegal|unknown|local|remote)\\s+)?(?:user|admin|administrator|account)\\s+[\"']?" + NAME);
+    /** Account name inside a home directory path ({@code /home/x/}, {@code /Users/x/}, {@code C:\\Users\\x\\}). */
+    private static final Pattern P_HOME_PATH = Pattern.compile("(?i)(?<![\\p{L}\\p{N}_])(?:/home/|/Users/|[A-Z]:\\\\Users\\\\|/export/home/)"
+            + "([\\p{L}\\p{N}_][\\p{L}\\p{N}._-]{0,63})(?=[/\\\\\\s\"'),;:]|$)");
+    private static final Set<String> SHARED_HOME_NAMES = Set.of("shared", "public", "default", "all", "root", "lost+found",
+            "guest", "user", "users", "home", "ftp", "nobody");
+    /** {@code sudo: name : TTY=...} and {@code su: name to root}: the account is the first word after the command tag. */
+    private static final Pattern P_SUDO = Pattern.compile("(?i)" + B + "sudo(?:\\[\\d+\\])?:\\s+" + NAME + "\\s+:\\s");
+    private static final Pattern P_SU = Pattern.compile("(?i)" + B + "su(?:\\[\\d+\\])?:\\s+" + NAME + "\\s+to\\s+[\\p{L}\\p{N}_]");
     private static final Pattern P_BARE = Pattern.compile("(?i)" + BH + "(?:user|admin|administrator)\\s+" + NAME);
     private static final Pattern P_BY = Pattern.compile("(?i)" + BH + "by\\s+" + NAME);
     /** A single host word after a keyword: a letter first; not the start of a dotted name. */
@@ -367,6 +375,11 @@ final class FreeTextIdentityRules {
 
     private void principals(String line, List<Edit> edits) {
         selfIdentifyingPrincipals(line, edits);
+        homePaths(line, edits);
+        if (lineHas(line, "sudo") || lineHas(line, "su:") || lineHas(line, "su[")) {
+            principal(line, P_SUDO, true, edits);
+            principal(line, P_SU, true, edits);
+        }
         if (!mayHavePrincipal(line)) return;
         principal(line, P_FIELD, false, edits);
         principal(line, P_QUOTED, false, edits);
@@ -465,9 +478,26 @@ final class FreeTextIdentityRules {
                 || lower.contains("realm") || lower.contains("sso") || lower.contains("saml") || lower.contains("bind");
     }
 
+    private static boolean lineHas(String line, String needle) {
+        return line.toLowerCase(Locale.ROOT).contains(needle);
+    }
+
+    private void homePaths(String line, List<Edit> edits) {
+        if (line.indexOf('/') < 0 && line.indexOf('\\') < 0) return;
+        Matcher m = P_HOME_PATH.matcher(line);
+        while (m.find()) {
+            String name = m.group(1);
+            if (written(name) || name.startsWith("<") || SHARED_HOME_NAMES.contains(name.toLowerCase(Locale.ROOT))
+                    || name.chars().allMatch(c -> c == '.')) {
+                continue;
+            }
+            add(edits, new Edit(m.start(1), m.end(1), tokens.user(name), PRINCIPAL, m.start(1), m.end(1)));
+        }
+    }
+
     private static boolean mayHavePrincipal(String line) {
         String lower = line.toLowerCase(Locale.ROOT);
-        return lower.contains("user") || lower.contains("admin") || lower.contains("by ") || lower.contains("login")
+        return lower.contains("owner") || lower.contains("uid") || lower.contains("user") || lower.contains("admin") || lower.contains("by ") || lower.contains("login")
                 || lower.contains("account") || lower.contains("principal") || lower.contains(" for ") || lower.contains("usr");
     }
 

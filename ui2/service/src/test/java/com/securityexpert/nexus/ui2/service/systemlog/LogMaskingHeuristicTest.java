@@ -304,4 +304,21 @@ class LogMaskingHeuristicTest {
         String vocab = "Sizes 64KB 100MB 4GB 15ms in Jan, Feb, October, December during 1st, 2nd, 3rd, first, second pass";
         assertEquals(vocab, session().maskLine(vocab));
     }
+
+    @Test
+    void masksAccountsInHomePathsSudoSuAndOwnerKeysAndKeepsSharedDirectories() {
+        String u1 = letters(7, 901), u2 = letters(8, 902), u3 = letters(6, 903), u4 = letters(9, 904), u5 = letters(7, 905);
+        LogMasking.Session s = session();
+        String home = s.maskLine("opened /home/" + u1 + "/.ssh/id_rsa and C:\\Users\\" + u1 + "\\Desktop");
+        String sudo = s.maskLine("sudo:   " + u2 + " : TTY=pts/0 ; PWD=/home/" + u2 + " ; USER=root ; COMMAND=/bin/ls");
+        String su = s.maskLine("su: " + u3 + " to root on /dev/pts/0");
+        String owner = s.maskLine("file owner=" + u4 + " euid=" + u5 + " mode=0644");
+        String combined = String.join("\n", home, sudo, su, owner);
+        assertFalse(containsAny(combined, u1, u2, u3, u4, u5), "account leaked (value withheld)");
+        assertTrue(home.matches("opened /home/(?:USR-[0-9A-F]{10}|h-[0-9a-f]{10})/\\.ssh/id_rsa and C:\\\\Users\\\\(?:USR-[0-9A-F]{10}|h-[0-9a-f]{10})\\\\Desktop"), home);
+        String shared = "reading /home/shared/readme and /Users/Public/Documents plus /home/lost+found/x";
+        assertEquals(shared, session().maskLine(shared));
+        String vocab = "su: failed, sudo: 3 incorrect password attempts, file mode=0644 size 64KB in October";
+        assertEquals(vocab, session().maskLine(vocab));
+    }
 }

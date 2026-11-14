@@ -51,6 +51,10 @@ final class Patterns {
             "(?<![" + NAME_CHAR + "_./:\\\\-])([A-Za-z][A-Za-z0-9._-]{1,31})(\\\\{1,2})([A-Za-z0-9_][A-Za-z0-9._$-]{1,63})(?!["
                     + NAME_CHAR + "_./\\\\-])");
 
+    /** Account name inside a home directory path: group 1 is the name. */
+    static final Pattern HOME_PATH = Pattern.compile("(?i)(?<![\\p{L}\\p{N}_])(?:/home/|/Users/|[A-Z]:\\\\{1,2}Users\\\\{1,2}|/export/home/)"
+            + "([\\p{L}\\p{N}_][\\p{L}\\p{N}._-]{0,63})(?=[/\\\\\\s\"'),;:]|$)");
+
     private static final String DN_ATTR = "(?:cn|uid|ou|o|dc|l|st|c|mail|emailaddress|street|title|sn|givenname|serialnumber|domaincomponent)";
 
     /** LDAP / X.509 Distinguished Names starting with {@code CN=} or {@code UID=} (or slash-separated {@code /CN=...}). */
