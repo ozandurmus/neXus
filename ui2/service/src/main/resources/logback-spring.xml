@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Spring Boot's default console logging (base.xml) with the last-line address masking: the message and the stack
+  trace pass through LogAddressMasker (IPv4/IPv6 literals become <ip>). Lab escape hatch NEXUS_LOG_RAW_ADDRESSES=1
+  is forbidden in production.
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <conversionRule conversionWord="m" class="com.securityexpert.nexus.ui2.service.logging.MaskingMessageConverter"/>
+    <conversionRule conversionWord="msg" class="com.securityexpert.nexus.ui2.service.logging.MaskingMessageConverter"/>
+    <conversionRule conversionWord="message" class="com.securityexpert.nexus.ui2.service.logging.MaskingMessageConverter"/>
+    <conversionRule conversionWord="wEx" class="com.securityexpert.nexus.ui2.service.logging.MaskingThrowableConverter"/>
+    <conversionRule conversionWord="ex" class="com.securityexpert.nexus.ui2.service.logging.MaskingThrowableConverter"/>
+    <conversionRule conversionWord="exception" class="com.securityexpert.nexus.ui2.service.logging.MaskingThrowableConverter"/>
+    <conversionRule conversionWord="throwable" class="com.securityexpert.nexus.ui2.service.logging.MaskingThrowableConverter"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

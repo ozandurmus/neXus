@@ -91,6 +91,8 @@ public final class Ui2WorkerMain {
     }
 
     public static void main(String[] args) {
+        // Last-line masking of IPv4/IPv6 literals in java.util.logging output (NEXUS_LOG_RAW_ADDRESSES=1 is lab-only).
+        com.securityexpert.nexus.ui2.platform.logging.MaskingFormatter.install();
         com.securityexpert.nexus.ui2.platform.JobWindowPolicy.SYSTEM.logPolicy();
         String role = resolveRole(args, System.getenv("NEXUS_WORKLOAD_ROLE"));
         boolean policyFallback = Boolean.parseBoolean(System.getProperty("ui2.worker.claim-policy-fallback", "false"));
