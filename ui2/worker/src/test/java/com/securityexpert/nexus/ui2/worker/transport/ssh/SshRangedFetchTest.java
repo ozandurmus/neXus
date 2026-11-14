@@ -46,7 +46,7 @@ import com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope;
 /**
  * The SFTP ranged read of {@link SshExecTransport#fetchRange} (phase B contract §4.3) against a fake at the JSch
  * channel boundary: the repository has no in-process SFTP server fixture, so {@link ChannelSftp} is a mock whose
- * {@code get(path, monitor, skip)} behaves as JSch 0.1.55 does -- it reports the stat size to the monitor, then
+ * {@code get(path, monitor, skip)} behaves as JSch does -- it reports the stat size to the monitor, then
  * serves file bytes from {@code skip}, signalling end of file with {@code -1}.
  */
 class SshRangedFetchTest {
