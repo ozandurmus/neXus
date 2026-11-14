@@ -461,6 +461,13 @@ public class TopologyNamePseudonymizer {
         if (text == null || text.isBlank()) {
             return text;
         }
+        // Masking audit 2026-11-15: a name enters the text dictionary only when a response first masks it as a name, so
+        // after a restart (or on the first row of a page) a hostname inside free text -- a job's terminal reason, an
+        // approval's reason -- went out raw. Every registered device's hostname is known before any text is masked; the
+        // directory read is cached for DIRECTORY_TTL and a failed read keeps the earlier state.
+        if (deviceDirectory != null) {
+            disambiguation();
+        }
         java.util.regex.Pattern pattern = knownNamesPattern();
         if (pattern == null) {
             return text;
