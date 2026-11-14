@@ -88,6 +88,9 @@ class ZoneMatrixStepTwoTest {
         assertEquals("SERVICE_SET_NOT_FOUND", assertThrows(Refused.class,
                 () -> cell("security-1", db, app, "ALLOW_LISTED", List.of("set:missing"), "HIGH", "")).code);
         assertEquals("INVALID_STATEMENT", assertThrows(Refused.class, () -> cell("security-1", db, app, "PERMIT", List.of(), "HIGH", "")).code);
+        assertEquals("INVALID_STATEMENT", assertThrows(Refused.class, () -> cell("security-1", db, app, null, List.of(), "HIGH", "")).code);
+        assertEquals("INVALID_SEVERITY", assertThrows(Refused.class, () -> cell("security-1", db, app, "DENY_ALL", List.of(), null, "")).code);
+        assertEquals("INVALID_DEFAULT", assertThrows(Refused.class, () -> service.setDefault("security-1", revision(), null, "LOW")).code);
         assertEquals("CELL_ZONE_NOT_FOUND", assertThrows(Refused.class,
                 () -> cell("security-1", "00000000-0000-4000-8000-00000000ffff", app, "DENY_ALL", List.of(), "HIGH", "")).code);
         assertEquals("INVALID_DEFAULT", assertThrows(Refused.class, () -> service.setDefault("security-1", revision(), "ALLOW_ANY", "LOW")).code);
