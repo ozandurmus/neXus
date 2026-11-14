@@ -38,13 +38,16 @@ export async function run(args = process.argv.slice(2), env = process.env,
       && !url.search && !url.hash) || base.pathname !== '/' || machine.pathname !== '/internal/machine-session') {
     throw new Error('Invalid deployment origin or machine-session URL');
   }
-  if (!env.NEXUS_E2E_MACHINE_TOKEN) throw new Error('Machine token is missing');
+  const token = env.NEXUS_PROBE_MACHINE_TOKEN || env.NEXUS_E2E_MACHINE_TOKEN;
+  if (!token) throw new Error('Machine token is missing');
   async function send(url, init = {}) {
     const response = await request(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(30_000) });
     if (!response.ok) throw new Error(`Diagnostic API refused the request (HTTP ${response.status})`);
     return response;
   }
-  const login = await send(machine, { method: 'POST', headers: { 'X-Nexus-Machine-Token': env.NEXUS_E2E_MACHINE_TOKEN } });
+  const login = await send(machine, { method: 'POST', headers: {
+    'X-Nexus-Machine-Token': token, 'X-Nexus-Machine-Purpose': 'probe',
+  } });
   const cookie = /^ui2_session=[^;]+/.exec(login.headers.get('set-cookie') ?? '')?.[0];
   const { csrf_token: csrf } = await login.json();
   if (!cookie || typeof csrf !== 'string') throw new Error('Machine session is incomplete');
