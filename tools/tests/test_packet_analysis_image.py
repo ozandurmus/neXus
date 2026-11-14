@@ -173,8 +173,9 @@ def test_job_inherits_host_proxy_and_ca_and_builds_the_sibling_file_from_the_mai
     assert "--build-arg=SERVICE_IMAGE=" + MAIN in args
     assert "--cache=true" in args and "--cache=false" not in args
     assert args[-1] == "--digest-file=/dev/termination-log"
-    for owned in ("--dockerfile=", "--destination=", "--digest-file=", "--cache="):
+    for owned in ("--dockerfile=", "--destination=", "--digest-file=", "--cache=", "--image-download-retry="):
         assert sum(a.startswith(owned) for a in args) == 1, owned
+    assert "--image-download-retry=5" in args
     assert builder["resources"]["limits"]["memory"] == "8Gi"
     assert builder["terminationMessagePolicy"] == "File"
     assert ("delete", "job", pa.NAME, "--ignore-not-found", "--wait=true") in calls
@@ -183,6 +184,7 @@ def test_job_inherits_host_proxy_and_ca_and_builds_the_sibling_file_from_the_mai
 def test_a_template_without_a_cache_repository_gets_the_build_cache():
     args = pa.builder_args(["--context=dir:///workspace", "--cache=false"], COMMIT, MAIN)
     assert "--cache-repo=" + pa.CACHE_REPO in args
+    assert "--image-download-retry=5" in args
 
 
 @pytest.mark.parametrize("base", ["", pa.REPOSITORY + ":latest", pa.REPOSITORY + ":" + COMMIT[:12],

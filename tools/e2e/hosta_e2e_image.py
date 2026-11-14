@@ -66,8 +66,13 @@ def start(commit, repo):
     pod = build["spec"]["template"]
     pod["metadata"] = dict(labels={"app.kubernetes.io/component": "e2e-image-build"})
     builder = pod["spec"]["containers"][0]
-    builder["args"] = [a for a in runner["spec"]["template"]["spec"]["containers"][0]["args"]
-                       if not a.startswith("--digest-file=")] + ["--digest-file=/dev/termination-log"]
+    runner_args = [a for a in runner["spec"]["template"]["spec"]["containers"][0]["args"]
+                   if not a.startswith(("--digest-file=", "--image-download-retry="))]
+    if "--cache=false" in runner_args:
+        runner_args.insert(runner_args.index("--cache=false") + 1, "--image-download-retry=5")
+    else:
+        runner_args.append("--image-download-retry=5")
+    builder["args"] = runner_args + ["--digest-file=/dev/termination-log"]
     builder["terminationMessagePath"] = "/dev/termination-log"
     builder["terminationMessagePolicy"] = "File"
     # Freeze the tag too: a later ConfigMap update cannot retag this build.

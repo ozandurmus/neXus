@@ -871,6 +871,117 @@ def test_every_deploy_workload_has_security_context_or_exact_documented_exceptio
     assert used == set(exceptions), "Stale security exceptions"
 
 
+def test_every_kaniko_args_list_carries_image_download_retry(monkeypatch):
+    """Every Kaniko build template and generated build Job args list must carry --image-download-retry=5
+    (next to --cache=false where --cache=false is used) to survive transient proxy EOFs on base layers."""
+    import copy
+    import json
+
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "tools" / "e2e"))
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "tools" / "delivery"))
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "tools" / "security"))
+    import hosta_e2e_image as e2e_image
+    import hosta_packet_analysis_image as pa_image
+    import hosta_preview_e2e as preview
+    import hosta_restamp_image as restamp
+    import mirror_security_images as mirror
+
+    def assert_retry_flag(args: list[str], label: str) -> None:
+        assert "--image-download-retry=5" in args, f"{label}: missing --image-download-retry=5"
+        assert sum(a.startswith("--image-download-retry=") for a in args) == 1, f"{label}: duplicate retry flag"
+        if "--cache=false" in args:
+            assert args[args.index("--cache=false") + 1] == "--image-download-retry=5", (
+                f"{label}: --image-download-retry=5 must follow --cache=false"
+            )
+
+    documents = []
+    for path in sorted((REPO_ROOT / "deploy").rglob("*")):
+        if path.name.endswith((".yaml", ".yml", ".yaml.template")):
+            documents.extend((path, doc) for doc in load_documents(path.read_text()))
+    kaniko_templates = set()
+    for path, owner, spec in _pod_specs(documents):
+        location = path.relative_to(REPO_ROOT).as_posix()
+        for container in spec.get("initContainers", []) + spec.get("containers", []):
+            if "kaniko-project/executor" in container.get("image", ""):
+                kaniko_templates.add(location)
+                assert_retry_flag(container.get("args", []), f"{location}:{owner}:{container['name']}")
+    assert kaniko_templates == {
+        "deploy/ui2-image-build/30-build-job.yaml",
+        "deploy/ui2-image-build/31-build-job-proxy.yaml.template",
+        "deploy/ui2-image-build/32-e2e-build-job.yaml",
+    }
+
+    commit = "a" * 40
+    base = restamp.REPOSITORY + "@sha256:" + "1" * 64
+    loader = next(
+        doc for doc in load_documents((REPO_ROOT / "deploy/ui2-image-build/20-context-loader.yaml").read_text())
+        if doc["kind"] == "Pod"
+    )
+    for template_name in ("30-build-job.yaml", "31-build-job-proxy.yaml.template"):
+        raw_template = next(
+            doc for doc in load_documents((REPO_ROOT / "deploy/ui2-image-build" / template_name).read_text())
+            if doc["kind"] == "Job"
+        )
+        stripped_template = copy.deepcopy(raw_template)
+        stripped_template["spec"]["template"]["spec"]["containers"][0]["args"] = [
+            a for a in stripped_template["spec"]["template"]["spec"]["containers"][0]["args"]
+            if not a.startswith("--image-download-retry=")
+        ]
+        for variant_label, tpl in (("committed", raw_template), ("stripped", stripped_template)):
+            for dockerfile in ("ui2/Containerfile", "ui2/frontend/Dockerfile.e2e"):
+                job = preview.build_manifest(
+                    tpl, loader, "synthetic-preview", commit, "synthetic-owner",
+                    dockerfile, "registry.example.invalid/preview:" + commit[:12],
+                )
+                assert_retry_flag(
+                    job["spec"]["template"]["spec"]["containers"][0]["args"],
+                    f"preview.build_manifest({template_name},{variant_label},{dockerfile})",
+                )
+            assert_retry_flag(
+                restamp.builder_args(tpl["spec"]["template"]["spec"]["containers"][0]["args"], commit, base),
+                f"restamp.builder_args({template_name},{variant_label})",
+            )
+            assert_retry_flag(
+                pa_image.builder_args(tpl["spec"]["template"]["spec"]["containers"][0]["args"], commit, base),
+                f"pa_image.builder_args({template_name},{variant_label})",
+            )
+
+    e2e_doc = next(
+        doc for doc in load_documents((REPO_ROOT / "deploy/ui2-image-build/32-e2e-build-job.yaml").read_text())
+        if doc["kind"] == "Job"
+    )
+    proxy_doc = next(
+        doc for doc in load_documents((REPO_ROOT / "deploy/ui2-image-build/31-build-job-proxy.yaml.template").read_text())
+        if doc["kind"] == "Job"
+    )
+    created_e2e = []
+    monkeypatch.setattr(
+        e2e_image, "kubectl",
+        lambda *args, **kwargs: (
+            json.dumps({"data": {"commit": commit}}) if args[:2] == ("get", "configmap")
+            else json.dumps(e2e_doc if "32-e2e-build-job.yaml" in str(args) else proxy_doc) if "--dry-run=client" in args
+            else (created_e2e.append(json.loads(kwargs["input"])) or "") if args[0] == "create"
+            else ""
+        ),
+    )
+    e2e_image.start(commit, REPO_ROOT)
+    assert_retry_flag(created_e2e[0]["spec"]["template"]["spec"]["containers"][0]["args"], "hosta_e2e_image.start")
+
+    created_mirror = []
+    digest = "sha256:" + "2" * 64
+    monkeypatch.setattr(
+        mirror, "command",
+        lambda *args, **kwargs: (
+            (created_mirror.append(json.loads(kwargs["input"].decode())) or b"") if args[:2] == ("kubectl", "create")
+            else json.dumps({"status": {"conditions": [{"type": "Complete", "status": "True"}]}}).encode() if "job" in args and "get" in args
+            else json.dumps({"items": [{"status": {"containerStatuses": [{"state": {"terminated": {"message": digest}}}]}}]}).encode() if "pods" in args
+            else b""
+        ),
+    )
+    mirror.mirror("trivy", "aquasec/trivy@" + digest, "http://192.0.2.10:3128")
+    assert_retry_flag(created_mirror[0]["spec"]["template"]["spec"]["containers"][0]["args"], "mirror_security_images.mirror")
+
+
 def test_all_java_workloads_mount_the_images_writable_paths():
     for _, owner, spec in _pod_specs():
         if not owner.startswith("Deployment/"):

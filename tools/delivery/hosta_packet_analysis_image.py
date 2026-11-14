@@ -28,7 +28,7 @@ RESOURCES = {"requests": {"cpu": "500m", "memory": "2Gi"}, "limits": {"cpu": "3"
 DEADLINE_S = 5400
 # Owned by this tool; any template value for them is replaced, never merged.
 OWNED = ("--dockerfile=", "--destination=", "--digest-file=", "--cache=", "--cache-ttl=", "--target=",
-         "--build-arg=", "--insecure-registry=", "--skip-tls-verify-registry=")
+         "--build-arg=", "--insecure-registry=", "--skip-tls-verify-registry=", "--image-download-retry=")
 
 
 def service_image(value):
@@ -51,6 +51,7 @@ def builder_args(template_args, commit, base):
         # Pinned inputs only, so cached layers stay valid; the tshark stage is rebuilt only when it changes.
         "--cache=true",
         "--cache-ttl=2160h",
+        "--image-download-retry=5",
         "--digest-file=/dev/termination-log",
     ]
 
