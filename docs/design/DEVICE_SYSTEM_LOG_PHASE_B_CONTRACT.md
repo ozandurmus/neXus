@@ -479,6 +479,8 @@ When a device reaches its cap before the retention ends, its oldest chunks are p
 ledgered and shown as `RETENTION_SHORTENED_BY_CAP`; new data is never refused for the cap. The alternative is
 §13 Q4 (not chosen).
 
+The `cp_spike_data` cap (`spike_data_cap_bytes`, default 512 MiB) is enforced per device by the daily pruner, oldest file first, after the age rule, ledgered the same way; the environment variable `NEXUS_SYSTEM_LOG_SPIKE_DATA_CAP_BYTES` (positive integer, bytes) overrides the stored setting.
+
 **Fleet estimate (formula; PAN and HCP terms measured, Check Point terms `PENDING`).**
 
 `stored ≈ Σ_devices Σ_sources growth_per_day × 30 / r + Σ HCP sizes × 7`, where `r` is the gzip ratio. Plain-text

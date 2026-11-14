@@ -27,6 +27,7 @@ import com.securityexpert.nexus.ui2.persistence.diagnostic.CheckPointSystemLogRe
 import com.securityexpert.nexus.ui2.persistence.diagnostic.CheckPointSystemLogRepository.SpikeWrite;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogCollectionRepository;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogReadRepository;
+import com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogRetentionRepository;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.SystemLogCollectionRepository.Gap;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.SystemLogCollectionRepository.Run;
 
@@ -129,6 +130,56 @@ class CpSpikeDirectoryStorageTest {
 
     private static void refused(Connection db, String sql) {
         assertThrows(SQLException.class, () -> audited(db, sql), sql);
+    }
+
+    @Test
+    void spikeCapQueriesSumLiveSpikeFilesPerDeviceAndListThemOldestFirst() throws Exception {
+        try (var fixture = Ui2PostgresFixture.create("cp_spike_cap_queries")) {
+            fixture.runFlyway();
+            String device, other, job;
+            try (var db = fixture.migrateConnection()) {
+                var credential = Ui2Rows.insertCredentialReference(db);
+                device = Ui2Rows.insertDevice(db, credential, "ENROLLED");
+                other = Ui2Rows.insertDevice(db, Ui2Rows.insertCredentialReference(db), "ENROLLED");
+                job = CollectionEngineRows.insertJobWithCapability(db, device, "cp_system_log_collect");
+                audited(db, "update jobs set state='CLAIMED', lease_worker_id='general-synthetic', lease_epoch=1, "
+                        + "lease_expires_at=now()+interval '10 minutes' where job_id='" + job + "'");
+                audited(db, "update jobs set state='EXECUTING' where job_id='" + job + "'");
+            }
+            var boundary = new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES));
+            var repository = new JooqSystemLogCollectionRepository(boundary);
+            String[] hmacs = {HEX, HEX_B, HEX_C};
+            for (int i = 0; i < 3; i++) {
+                var file = new FileRow("sf" + i, "cp_spike_data", hmacs[i], null, 100, 1_760_000_000L + i, "STORED", List.of(), HEX,
+                        manifest("artefact-sf" + i, device), Instant.now().plusSeconds(30 * 86400));
+                var dir = new SpikeDirectory("sd" + i, hmacs[i], CLASS, 1_760_000_000L + i, SpikeDirectoryState.COLLECTED, 1, 1,
+                        100, 100, "{}", "sf" + i);
+                assertEquals(SpikeWrite.STORED, repository.recordSpikeDirectory(job, 1, device, dir, Optional.of(file)));
+            }
+            try (var db = fixture.migrateConnection()) {
+                // Out of insertion order on purpose: sf2 oldest, then sf0, then sf1; sizes 100, 200, 300 bytes.
+                audited(db, "update system_log_file set collected_at = now() - interval '3 days', ciphertext_bytes = 300 where file_id = 'sf2'");
+                audited(db, "update system_log_file set collected_at = now() - interval '2 days', ciphertext_bytes = 100 where file_id = 'sf0'");
+                audited(db, "update system_log_file set collected_at = now() - interval '1 day', ciphertext_bytes = 200 where file_id = 'sf1'");
+            }
+            var retention = new JooqSystemLogRetentionRepository(boundary);
+
+            assertTrue(retention.devicesOverSpikeCap(600).isEmpty(), "exactly at the cap is not over it");
+            var over = retention.devicesOverSpikeCap(599);
+            assertEquals(1, over.size());
+            assertEquals(device, over.get(0).deviceId());
+            assertEquals(600, over.get(0).ciphertextBytes());
+            assertTrue(retention.devicesOverSpikeCap(100).stream().noneMatch(u -> u.deviceId().equals(other)), "per device");
+
+            var oldest = retention.oldestSpike(device, 10);
+            assertEquals(List.of("sf2", "sf0", "sf1"), oldest.stream().map(c -> c.rowId()).toList());
+            assertEquals(List.of("sf2"), retention.oldestSpike(device, 1).stream().map(c -> c.rowId()).toList());
+            assertTrue(retention.oldestSpike(other, 10).isEmpty());
+
+            assertTrue(retention.markPruned(oldest.get(0), "RETENTION_SHORTENED_BY_CAP"));
+            assertEquals(300, retention.devicesOverSpikeCap(299).get(0).ciphertextBytes(), "a pruned file no longer counts");
+            assertEquals(List.of("sf0", "sf1"), retention.oldestSpike(device, 10).stream().map(c -> c.rowId()).toList());
+        }
     }
 
     private static void audited(Connection db, String sql) throws SQLException {
