@@ -364,6 +364,21 @@ class DiscoveryRunServiceTest {
     }
 
     @Test
+    void startWithNullOrBlankInputsIsValidationFailedWithoutNpe() {
+        Fixture fx = fixture();
+
+        assertEquals(new DiscoveryRunService.StartOutcome.ValidationFailed(DiscoveryRunService.REASON_VENDOR_INVALID),
+                fx.service.start(ACTOR, null, null, null));
+        assertEquals(new DiscoveryRunService.StartOutcome.ValidationFailed(DiscoveryRunService.REASON_ADDRESS_INVALID),
+                fx.service.start(ACTOR, null, "check_point", CREDENTIAL_REF));
+        assertEquals(new DiscoveryRunService.StartOutcome.ValidationFailed(DiscoveryRunService.REASON_CREDENTIAL_REFERENCE_NOT_FOUND),
+                fx.service.start(ACTOR, MANAGEMENT_ADDRESS, "check_point", null));
+        assertEquals(new DiscoveryRunService.StartOutcome.ValidationFailed(DiscoveryRunService.REASON_CREDENTIAL_REFERENCE_NOT_FOUND),
+                fx.service.start(ACTOR, MANAGEMENT_ADDRESS, "check_point", "   "));
+        assertTrue(fx.runs.runs.isEmpty());
+    }
+
+    @Test
     void readReturnsNotFoundForUnknownRun() {
         Fixture fx = fixture();
 

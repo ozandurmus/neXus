@@ -4,11 +4,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -113,12 +116,36 @@ public final class DiscoveryController {
                 ? HttpStatus.OK : HttpStatus.CONFLICT).body(Map.of("relationship", outcome.name()));
     }
 
+    private static final Set<String> START_REQUEST_FIELDS =
+            Set.of("management_address", "vendor", "credential_reference_id");
+
     @PostMapping("/discovery/runs")
-    public ResponseEntity<Map<String, Object>> start(@RequestBody StartRequest request,
+    public ResponseEntity<Map<String, Object>> start(@RequestBody(required = false) Map<String, Object> request,
             HttpServletRequest servletRequest) {
+        if (request == null || request.isEmpty()) {
+            return badRequest("invalid_request",
+                    "a JSON object body with management_address, vendor, and credential_reference_id is required");
+        }
+        if (!START_REQUEST_FIELDS.containsAll(request.keySet())) {
+            return badRequest("invalid_request",
+                    "only management_address, vendor, and credential_reference_id may be supplied");
+        }
+        if (!(request.get("management_address") instanceof String managementAddress) || managementAddress.isBlank()) {
+            return badRequest(DiscoveryRunService.REASON_ADDRESS_INVALID,
+                    "management_address is required and must be a non-blank string");
+        }
+        if (!(request.get("vendor") instanceof String vendor) || vendor.isBlank()) {
+            return badRequest(DiscoveryRunService.REASON_VENDOR_INVALID,
+                    "vendor is required and must be a non-blank string");
+        }
+        if (!(request.get("credential_reference_id") instanceof String credentialReferenceId)
+                || credentialReferenceId.isBlank()) {
+            return badRequest(DiscoveryRunService.REASON_CREDENTIAL_REFERENCE_NOT_FOUND,
+                    "credential_reference_id is required and must be a non-blank string");
+        }
         String actorFingerprint = actingUser(servletRequest);
         DiscoveryRunService.StartOutcome outcome = discoveryRunService.start(actorFingerprint,
-                request.managementAddress(), request.vendor(), request.credentialReferenceId());
+                managementAddress, vendor, credentialReferenceId);
         return switch (outcome) {
             case DiscoveryRunService.StartOutcome.Admitted admitted -> {
                 Map<String, Object> body = new LinkedHashMap<>();
@@ -140,6 +167,20 @@ public final class DiscoveryController {
                 yield ResponseEntity.status(HttpStatus.CONFLICT).body(body);
             }
         };
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> unreadableBody() {
+        return badRequest("invalid_request",
+                "a JSON object body with management_address, vendor, and credential_reference_id is required");
+    }
+
+    private static ResponseEntity<Map<String, Object>> badRequest(String reasonCode, String reason) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("error", "VALIDATION_FAILED");
+        body.put("reason_code", reasonCode);
+        body.put("reason", reason);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
     @GetMapping("/discovery/runs/{runId}")
