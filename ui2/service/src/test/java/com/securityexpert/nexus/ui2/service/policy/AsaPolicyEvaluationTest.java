@@ -122,9 +122,9 @@ class AsaPolicyEvaluationTest {
         var identity = run(s, "203.0.113.5", "198.51.100.20", "tcp/443", "outside", "inside");
         assertEquals("UNKNOWN", identity.get("verdict"));
         assertEquals("earlier rule could match", identity.get("lookupReason"));
-        // An identity ACE is not evaluated at all (A0-ASA-16 UNKNOWN; whether it only narrows is not established), so it
-        // stays "could match" even for another destination.
-        assertEquals("UNKNOWN", verdict(s, "203.0.113.5", "198.51.100.21", "tcp/443", "outside", "inside"));
+        // An identity ACE only narrows (A0-ASA-16a, PO approved 2026-11-14): its address cells bound it, so for another
+        // destination it is passed over and the later permit decides; for its own destination it stays "could match".
+        assertEquals("ALLOWED", verdict(s, "203.0.113.5", "198.51.100.21", "tcp/443", "outside", "inside"));
         var inactive = asa("""
                 access-list ACL-OUT extended deny tcp any host 198.51.100.21 eq https inactive
                 access-list ACL-OUT extended permit tcp any any eq https time-range TR-1
@@ -171,5 +171,22 @@ class AsaPolicyEvaluationTest {
         var notEvaluated = s.sections().stream().filter(x -> x.name().equals("ASA not evaluated")).findFirst().orElseThrow();
         var orphan = result.rules().get(notEvaluated.rules().get(0).id());
         assertTrue(orphan.findings().stream().anyMatch(f -> f.evidence().equals(PolicyHygiene.ASA_ACL_NOT_REFERENCED)));
+    }
+
+    @Test void anIdentityAceBoundsItsMatchForShadowingButNeverCoversOrDecides() {
+        var s = asa("""
+                access-list ACL-OUT extended permit tcp user-group LAB\\\\Ops any host 198.51.100.20 eq https
+                access-list ACL-OUT extended deny tcp any host 198.51.100.21 eq https
+                access-list ACL-OUT extended permit tcp any host 198.51.100.20 eq https
+                access-group ACL-OUT in interface outside
+                """);
+        var result = PolicyHygiene.analyze(s, 90, Instant.parse("2026-11-14T12:00:00Z"), 250000);
+        var rules = s.sections().get(0).rules();
+        assertEquals("UNKNOWN", result.rules().get(rules.get(0).id()).shadowStatus(), "the identity ACE itself is not evaluated");
+        assertEquals("NOT_SHADOWED", result.rules().get(rules.get(1).id()).shadowStatus(), "disjoint from the identity ACE's bound");
+        assertEquals("UNKNOWN", result.rules().get(rules.get(2).id()).shadowStatus(), "inside the bound: the identity ACE may cover it");
+        // The lookup never allows by identity: for the identity ACE's own destination the answer stays UNKNOWN.
+        assertEquals("UNKNOWN", verdict(s, "203.0.113.5", "198.51.100.20", "tcp/443", "outside", "inside"));
+        assertEquals("DENIED", verdict(s, "203.0.113.5", "198.51.100.21", "tcp/443", "outside", "inside"));
     }
 }
