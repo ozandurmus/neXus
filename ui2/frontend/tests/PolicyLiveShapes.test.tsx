@@ -61,7 +61,7 @@ it("renders the masked live policy page, rule details and empty history without 
   expect(fetch.mock.calls.some(([url]) => url.includes(`history?rule=${rule.id}&page=0`))).toBe(true);
   expect(document.body.textContent).not.toMatch(/could not be loaded/i);
   expect(debug).not.toHaveBeenCalled();
-}, 15_000);
+}, 45_000); // 4.6 s at load 45; missed 15 s when the machine load average passed 200
 
 it.each([
   ["snapshots", "/api/v2/policy/sources", "Policy snapshots could not be loaded.", 503],
