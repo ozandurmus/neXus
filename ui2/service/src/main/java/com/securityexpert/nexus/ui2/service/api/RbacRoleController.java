@@ -27,6 +27,15 @@ public class RbacRoleController {
         this.roleRepository = roleRepository;
     }
 
+    private static boolean hasText(Map<String, Object> payload, String key) {
+        return payload.get(key) instanceof String text && !text.isBlank();
+    }
+
+    private static ResponseEntity<?> validationFailed() {
+        return ResponseEntity.status(422).body(Map.of("error", "VALIDATION_FAILED",
+                "reason_code", "ROLE_NAME_AND_TOKEN_REQUIRED"));
+    }
+
     @GetMapping
     public ResponseEntity<List<RbacRoleRecord>> listRoles() {
         return ResponseEntity.ok(roleRepository.findAll());
@@ -34,6 +43,7 @@ public class RbacRoleController {
 
     @PostMapping
     public ResponseEntity<?> createRole(@RequestBody Map<String, Object> payload) {
+        if (!hasText(payload, "name") || !hasText(payload, "token_string")) return validationFailed();
         List<String> permissions = payload.get("permissions") instanceof List<?> list
                 ? list.stream().map(Object::toString).toList() : List.of();
         RbacRoleRecord record = new RbacRoleRecord(
@@ -50,6 +60,7 @@ public class RbacRoleController {
 
     @PutMapping("/{id}")
     public ResponseEntity<?> updateRole(@PathVariable UUID id, @RequestBody Map<String, Object> payload) {
+        if (!hasText(payload, "name") || !hasText(payload, "token_string")) return validationFailed();
         var existing = roleRepository.findById(id);
         if (existing.isEmpty()) {
             return ResponseEntity.notFound().build();

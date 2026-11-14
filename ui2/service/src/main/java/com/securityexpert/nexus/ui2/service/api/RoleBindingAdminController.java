@@ -85,6 +85,12 @@ public final class RoleBindingAdminController {
     @PostMapping("/role-bindings/revoke")
     public ResponseEntity<Map<String, Object>> revoke(@RequestBody RevokeRequest request,
             HttpServletRequest servletRequest) {
+        if (request.bindingId() == null || request.bindingId().isBlank()) {
+            Map<String, Object> invalid = new LinkedHashMap<>();
+            invalid.put("error", "VALIDATION_FAILED");
+            invalid.put("reason_code", "BINDING_ID_REQUIRED");
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(invalid);
+        }
         String actorFingerprint = (String) servletRequest.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
         RoleBindingAdminService.Outcome outcome =
                 roleBindingAdminService.revoke(actorFingerprint,

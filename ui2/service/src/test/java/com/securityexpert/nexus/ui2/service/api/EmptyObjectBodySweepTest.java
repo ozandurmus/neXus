@@ -14,12 +14,17 @@ import org.springframework.mock.web.MockHttpServletResponse;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialsRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.RbacRoleRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.SessionRepository;
 import com.securityexpert.nexus.ui2.platform.LocalIdentityAdministrationPort;
 import com.securityexpert.nexus.ui2.service.failover.FailoverScheduleLedger;
 import com.securityexpert.nexus.ui2.service.failover.FailoverScheduleService;
+import com.securityexpert.nexus.ui2.persistence.identity.AuthzDecisionRepository;
 import com.securityexpert.nexus.ui2.service.security.LoginFlow;
+import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
+import com.securityexpert.nexus.ui2.service.security.RoleBindingAdminService;
 import com.securityexpert.nexus.ui2.service.security.MechanismRegistry;
 import com.securityexpert.nexus.ui2.service.security.PasswordChangeService;
 
@@ -94,5 +99,35 @@ class EmptyObjectBodySweepTest {
         assertEquals(422, response.getStatusCode().value());
         assertEquals("VALIDATION_FAILED", response.getBody().get("error"));
         verifyNoInteractions(port);
+    }
+
+    @Test
+    void createRoleWithEmptyObjectIsValidationFailedAndWritesNothing() throws Exception {
+        var repository = mock(RbacRoleRepository.class);
+        var response = new RbacRoleController(repository).createRole(empty(Map.class));
+        assertEquals(422, response.getStatusCode().value());
+        assertEquals("VALIDATION_FAILED", ((Map<?, ?>) response.getBody()).get("error"));
+        verifyNoInteractions(repository);
+    }
+
+    @Test
+    void revokeRoleBindingWithEmptyObjectIsValidationFailedAndWritesNothing() throws Exception {
+        var service = mock(RoleBindingAdminService.class);
+        var response = new RoleBindingAdminController(service).revoke(
+                empty(RoleBindingAdminController.RevokeRequest.class), new MockHttpServletRequest());
+        assertEquals(422, response.getStatusCode().value());
+        assertEquals("VALIDATION_FAILED", response.getBody().get("error"));
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void httpsStrictWithEmptyObjectIsValidationFailed() throws Exception {
+        var controller = new HttpsCertificateController(mock(TransactionBoundary.class),
+                new com.securityexpert.nexus.ui2.service.security.ActionRegistry(), mock(RbacEvaluator.class),
+                mock(AuthzDecisionRepository.class));
+        ResponseEntity<?> response = controller.strict("synthetic-device",
+                empty(HttpsCertificateController.StrictRequest.class), new MockHttpServletRequest());
+        assertEquals(422, response.getStatusCode().value());
+        assertEquals("VALIDATION_FAILED", ((Map<?, ?>) response.getBody()).get("error"));
     }
 }
