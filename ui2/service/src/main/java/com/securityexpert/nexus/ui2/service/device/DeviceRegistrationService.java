@@ -48,6 +48,11 @@ public final class DeviceRegistrationService {
     public static final String REASON_VENDOR_HINT_INVALID = "vendor_hint_invalid";
     /** 14I MS-1: the role is not one of the two values the database will accept. */
     public static final String REASON_ROLE_INVALID = "role_invalid";
+    /**
+     * The one declaration of the device-role vocabulary in Java. It must equal the latest {@code chk_devices_role}
+     * migration (DeviceRoleVocabularyTest fails on drift) and the frontend {@code DeviceRole} type.
+     */
+    public static final java.util.Set<String> DEVICE_ROLES = java.util.Set.of("gateway", "management_server", "appliance");
     /** Vendors enrolled with role "appliance" (V64/V65). */
     static final java.util.Set<String> APPLIANCE_VENDORS = java.util.Set.of("infoblox", "radware", "pulse_secure");
 
@@ -89,7 +94,7 @@ public final class DeviceRegistrationService {
             String addressRef, String credentialReferenceId, boolean isTestTarget, String registrationSource,
             Optional<String> clusterMemberRef, Optional<String> virtualSystemRef, Optional<String> discoveryMatchKey,
             String actionId) {
-        if (role == null || (!role.equals("gateway") && !role.equals("management_server") && !role.equals("appliance"))) {
+        if (role == null || !DEVICE_ROLES.contains(role)) {
             return new Outcome.ValidationFailed(REASON_ROLE_INVALID);
         }
         if (vendorHint == null || vendorHint.isBlank()) {
