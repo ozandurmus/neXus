@@ -28,7 +28,10 @@ public final class DiagnosticRead {
         // ASA failover one-time measurement (PO 2026-11-13, "tek çift, tek sefer"): only the window-gated inventory step
         // issues them; regular use needs its own approval.
         "asa_measure_show_failover", "asa_measure_show_failover_state", "asa_measure_show_failover_history",
-        "asa_measure_show_conn_count");
+        "asa_measure_show_conn_count",
+        // ASA failover readiness (PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS.md): only the readiness job issues them.
+        "asa_failover_show_failover", "asa_failover_show_failover_state", "asa_failover_show_failover_history",
+        "asa_failover_show_conn_count");
     // Phase A measurement reads whose "%s" is a literal field of the remote command (stat -c "%i %s %Y",
     // ls --time-style=+%s), not a template placeholder. The placeholder guard in eligible() would otherwise hide them.
     public static final Set<String> LITERAL_PERCENT_S_GATES = Set.of(

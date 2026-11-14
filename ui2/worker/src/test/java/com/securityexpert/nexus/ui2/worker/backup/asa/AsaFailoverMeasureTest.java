@@ -236,4 +236,9 @@ class AsaFailoverMeasureTest {
             assertTrue(com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.DIAGNOSTIC_EXCLUDED.contains(read.gateId()));
         }
     }
+
+    /** The measured pair's clock "HH:MM:SS" was taken for an IPv6 address and shaped as one; it is a clock. */
+    @Test void aWallClockIsNotShapedAsAnIpv6Address() {
+        assertEquals("Last Failover at: <time> +99 Nov 99 9999", AsaFailoverMeasure.shapeLine("Last Failover at: 10:11:12 +03 Nov 10 2026"));
+    }
 }

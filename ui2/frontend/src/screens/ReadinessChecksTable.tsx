@@ -98,7 +98,7 @@ export function ReadinessCard({ checks, members, status, cluster, vendor, observ
   const observed = observedAt ? Date.parse(observedAt) : NaN;
   const minutes = Math.max(0, Math.floor((Date.now() - observed) / 60_000));
   const age = Number.isFinite(minutes) ? minutes < 60 ? `${minutes} min ago` : `${Math.floor(minutes / 60)} h ago` : "Not evaluated";
-  const vendorLabel = vendor === "palo_alto" ? "Palo Alto · Active/passive" : "Check Point · ClusterXL HA";
+  const vendorLabel = vendor === "palo_alto" ? "Palo Alto · Active/passive" : vendor === "cisco_asa" ? "Cisco ASA · Active/standby failover" : "Check Point · ClusterXL HA";
   return <Card component="section" aria-label="Readiness checks" sx={{ p: { xs: 2, md: 3 }, bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: 3 }}>
     <Stack direction="row" alignItems="center" spacing={2} useFlexGap sx={{ flexWrap: "wrap" }}>
       <Box sx={{ display: "flex", p: 1.25, borderRadius: "50%", bgcolor: ready ? m3.successContainer : notReady ? m3.errorContainer : m3.warningContainer,

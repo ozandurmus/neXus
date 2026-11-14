@@ -16,9 +16,13 @@ import com.securityexpert.nexus.ui2.service.failover.ReadinessCheckView;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAdvice;
 
-/** Opaque-unit API for the Check Point and Palo Alto failover screens. */
+/**
+ * Opaque-unit API for the Check Point and Palo Alto failover screens. The Cisco ASA prefix serves the read endpoints and
+ * the readiness request only (docs/design/PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS.md): its other routes
+ * are unmapped at the gate chain, and every write entry point here and in the service refuses a Cisco ASA vendor.
+ */
 @RestController
-@RequestMapping({"/api/v2/cp-failover", "/api/v2/pan-failover"})
+@RequestMapping({"/api/v2/cp-failover", "/api/v2/pan-failover", "/api/v2/asa-failover"})
 public final class CpFailoverController {
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
     public record ApprovalRequest(String clusterId, String unitId, Instant windowFrom, Instant windowUntil, String reason, String requestId) {}
@@ -69,7 +73,12 @@ public final class CpFailoverController {
         return (String)request.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
     }
     private static String vendor(HttpServletRequest request) {
-        return request.getServletPath().startsWith("/api/v2/pan-failover") ? "palo_alto" : "check_point";
+        String path=request.getServletPath();
+        return path.startsWith("/api/v2/asa-failover") ? "cisco_asa"
+            : path.startsWith("/api/v2/pan-failover") ? "palo_alto" : "check_point";
+    }
+    private static void refuseAsa(HttpServletRequest request) {
+        if ("cisco_asa".equals(vendor(request))) throw new CpFailoverService.Refusal(CpFailoverService.VENDOR_NOT_AVAILABLE);
     }
     private static Map<String,Object> approval(JooqCpFailoverRepository.Approval a) {
         Map<String,Object> m=new LinkedHashMap<>();
@@ -189,9 +198,12 @@ public final class CpFailoverController {
                 m.put("masked",masked);
                 // Role facts; a unit the server never fails over says so in failoverRefusal (the VSX chassis), and every
                 // approval or start for it is refused server-side whatever these flags say.
-                m.put("canApprove",canApprove);
-                m.put("canStart",canStart);
-                m.put("canSchedule",canStart);
+                boolean asa="cisco_asa".equals(vendor);
+                // Cisco ASA is readiness only: no approval, start or schedule control, whatever the role.
+                m.put("canApprove",!asa && canApprove);
+                m.put("canStart",!asa && canStart);
+                m.put("canSchedule",!asa && canStart);
+                if (asa) { m.put("canRunReadiness",canStart || service.mayRunReadiness(actor)); m.put("failoverRefusal",CpFailoverService.VENDOR_NOT_AVAILABLE); }
                 eligibility(m,u,readiness.get(u.id()),incidents);
                 putConfigSync(m,u,vendor,readiness.get(u.id()),masked,actor);
                 return m;
@@ -258,7 +270,7 @@ public final class CpFailoverController {
     }
     @PostMapping("/approvals/{approvalId}/revoke")
     public ResponseEntity<?> revoke(@PathVariable String approvalId,HttpServletRequest request) {
-        return result(() -> Map.of("revoked",service.revoke(approvalId,actor(request))));
+        return result(() -> { refuseAsa(request); return Map.of("revoked",service.revoke(approvalId,actor(request))); });
     }
     @PostMapping("/runs")
     public ResponseEntity<?> start(@RequestBody RunRequest body,HttpServletRequest request) {
@@ -423,6 +435,7 @@ public final class CpFailoverController {
     public ResponseEntity<?> resumeReturn(@PathVariable String runId,
             @RequestBody(required = false) Map<String,Object> body, HttpServletRequest request) {
         return result(() -> {
+            refuseAsa(request);
             if (body!=null && !RESUME_FIELDS.containsAll(body.keySet())) throw new IllegalArgumentException("unexpected field");
             if (!"check_point".equals(vendor(request))) throw new CpFailoverService.Refusal("RESUME_RUN_NOT_ELIGIBLE");
             var decision=service.resumeReturn(runId,text(body,"expectedIncidentId"),text(body,"reason"),
@@ -441,6 +454,7 @@ public final class CpFailoverController {
     public ResponseEntity<?> approveResume(@PathVariable String runId,
             @RequestBody(required = false) Map<String,Object> body, HttpServletRequest request) {
         return result(() -> {
+            refuseAsa(request);
             if (body!=null && !RESUME_APPROVE_FIELDS.containsAll(body.keySet())) throw new IllegalArgumentException("unexpected field");
             if (!"check_point".equals(vendor(request))) throw new CpFailoverService.Refusal("RESUME_RUN_NOT_ELIGIBLE");
             var decision=service.approveResume(runId,text(body,"resumeId"),flag(body,"businessHoursAck"),actor(request));
@@ -487,6 +501,7 @@ public final class CpFailoverController {
     public ResponseEntity<?> releaseIncident(@PathVariable String runId,
             @RequestBody(required = false) Map<String,Object> body, HttpServletRequest request) {
         return result(() -> {
+            refuseAsa(request);
             if (body!=null && !java.util.Set.of("reason").containsAll(body.keySet()))
                 throw new IllegalArgumentException("only a reason may be supplied");
             Object reason=body==null ? null : body.get("reason");

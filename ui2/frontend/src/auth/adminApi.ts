@@ -2075,7 +2075,7 @@ export function getOverview(): Promise<OverviewView> {
 export type CpFailoverState = "PLANNED" | "PRECHECK" | "FAILING_OVER" | "SWITCHED" | "POSTCHECK" | "RETURNING" | "DONE" | "STOPPED";
 export type CpFailoverCheckStatus = "PASS" | "FAIL" | "UNKNOWN" | "WARN";
 export interface ReadinessMember { device_id: string; hostname: string | null; ha_role: string | null }
-export interface CpFailoverUnit { maskedName?: string; maskedMembers?: Array<Omit<ReadinessMember, "hostname"> & { maskedLabel: string }>; masked?: boolean; members?: ReadinessMember[]; unitId: string; clusterId: string; cluster_member_ref: string; vendor?: "check_point" | "palo_alto"; virtual_system?: string;
+export interface CpFailoverUnit { maskedName?: string; maskedMembers?: Array<Omit<ReadinessMember, "hostname"> & { maskedLabel: string }>; masked?: boolean; members?: ReadinessMember[]; unitId: string; clusterId: string; cluster_member_ref: string; vendor?: "check_point" | "palo_alto" | "cisco_asa"; virtual_system?: string;
   /** VSX: the chassis and each Virtual System are separate units; the chassis is listed first (VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md). */
   unitKind?: "CLUSTER" | "VSX_CHASSIS" | "VIRTUAL_SYSTEM";
   /** Set when the server never fails this unit over (the VSX chassis); approvals and starts are refused with this code. */
@@ -2096,7 +2096,7 @@ export interface PanConfigSyncFacts { offered: boolean; canRun: boolean; refusal
 export interface ReadinessCheck { device_id?: string; checkNo: number; title: string; member: string; result: CpFailoverCheckStatus; summary: string; blocking: boolean }
 export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system" | "members" | "masked" | "mode" | "refusalReason" | "readinessObservedAt" | "unitKind" | "failoverRefusal" | "configSync"> {
   activeWindow: boolean; lastRunState: string | null; lastRunOutcome: string | null; lastRunAt: string | null; canRunReadiness: boolean;
-  /** False for a listed pair whose vendor has no readiness yet (Cisco ASA): shown, never run. */
+  /** False for a listed pair whose vendor has no readiness yet (Cisco ASA while its readiness switch is off): shown, never run. */
   readinessAvailable?: boolean;
   readiness: { status: "READY" | "NOT_READY" | "UNKNOWN"; observedAt: string; failedCheck: string; stopCode?: string; checks: Array<ReadinessCheck & { status: CpFailoverCheckStatus; derived: Record<string, unknown> }> } | null;
 }
@@ -2121,7 +2121,8 @@ export interface CpFailoverResume {
 export interface CpFailoverCheck extends ReadinessCheck { phase: "pre" | "post" | "post_return" | "final"; device_id: string; hostname: string | null; cluster_member_ref: string; checkNo: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15; status: CpFailoverCheckStatus; derived: string; observedAt: string }
 export interface CpFailoverRunDetail extends CpFailoverRun { checks: CpFailoverCheck[] }
 
-const failoverPath = (vendor?: string) => vendor === "palo_alto" ? "/api/v2/pan-failover" : "/api/v2/cp-failover";
+/** Cisco ASA has the read endpoints and the readiness request only (PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS.md). */
+const failoverPath = (vendor?: string) => vendor === "palo_alto" ? "/api/v2/pan-failover" : vendor === "cisco_asa" ? "/api/v2/asa-failover" : "/api/v2/cp-failover";
 const cpQuery = (unit: CpFailoverUnit) => `clusterId=${encodeURIComponent(unit.clusterId)}&unitId=${encodeURIComponent(unit.unitId)}`;
 /** By a member's device id; display names are masked by the server for aiview. */
 export const listCpFailoverUnits = (memberDeviceId: string, vendor?: string) => call<CpFailoverUnit[]>(`${failoverPath(vendor)}/units?memberDeviceId=${encodeURIComponent(memberDeviceId)}`, "GET");

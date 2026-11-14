@@ -29,12 +29,14 @@ class CpFailoverSecurityRouteTest {
     @Test
     void everyControllerGetMappingIsRegisteredUnderBothPrefixes() {
         var prefixes = CpFailoverController.class.getAnnotation(RequestMapping.class).value();
-        assertEquals(Set.of("/api/v2/cp-failover", "/api/v2/pan-failover"), Set.of(prefixes));
+        assertEquals(Set.of("/api/v2/cp-failover", "/api/v2/pan-failover", "/api/v2/asa-failover"), Set.of(prefixes));
         int registered = 0;
         for (var method : CpFailoverController.class.getDeclaredMethods()) {
             var mapping = method.getAnnotation(GetMapping.class);
             if (mapping == null) continue;
             for (String prefix : prefixes) {
+                // Cisco ASA maps its read endpoints only (AsaFailoverReadinessFenceTest names them); the rest stay unmapped.
+                if (prefix.endsWith("/asa-failover")) continue;
                 for (String path : mapping.value()) {
                     String route = "GET " + prefix + path.replaceAll("\\{[^}]+}", "*");
                     assertEquals(ActionRegistry.CP_FAILOVER_READ,

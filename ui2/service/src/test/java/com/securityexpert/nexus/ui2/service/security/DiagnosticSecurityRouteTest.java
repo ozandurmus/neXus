@@ -10,12 +10,13 @@ import com.securityexpert.nexus.ui2.platform.RoleToken;
 
 class DiagnosticSecurityRouteTest {
     @Test
-    void readinessActionIsExclusiveToTheTwoVendorReadinessPosts() {
+    void readinessActionIsExclusiveToTheVendorReadinessPosts() {
         var routes = SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.entrySet().stream()
                 .filter(entry -> ActionRegistry.CP_READINESS_START.equals(entry.getValue()))
                 .map(java.util.Map.Entry::getKey).collect(java.util.stream.Collectors.toSet());
+        // Cisco ASA readiness (PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS.md): the third readiness post.
         assertEquals(java.util.Set.of("POST /api/v2/cp-failover/units/*/readiness",
-                "POST /api/v2/pan-failover/units/*/readiness"), routes);
+                "POST /api/v2/pan-failover/units/*/readiness", "POST /api/v2/asa-failover/units/*/readiness"), routes);
         assertEquals(ActionRegistry.CP_FAILOVER_START,
                 SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/cp-failover/runs"));
     }
