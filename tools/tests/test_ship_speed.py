@@ -316,7 +316,7 @@ def test_docs_only_with_baked_project_state_reports_that_it_is_not_deployed(monk
 def test_anything_else_takes_the_full_path(monkeypatch, capsys, diff, flags):
     events = []
     ship_doubles(monkeypatch, diff, events)
-    assert sa._ship(ship_args(**flags)) == 0
+    assert sa._ship(ship_args(no_early_pr=True, **flags)) == 0
     assert ("preview",) in events and ("deploy",) in events
     assert '"fast_path": "docs_only"' not in capsys.readouterr().out
     order = names(events)
@@ -360,7 +360,20 @@ def test_failing_checks_stop_the_ship_before_merge_and_before_deploy(monkeypatch
     assert ("deploy",) not in events and not any(e[:3] == ("gh", "pr", "merge") for e in events)
 
 
-def test_early_pr_is_opt_in_and_a_red_preview_closes_the_pull_request(monkeypatch):
+def test_early_pr_is_the_default_for_a_previewed_ship_and_no_early_pr_restores_the_old_order(monkeypatch):
+    events = []
+    ship_doubles(monkeypatch, text("ui2/service/A.java"), events)
+    assert sa._ship(ship_args()) == 0
+    order = names(events)
+    assert order.index("push") < order.index("preview") < order.index("checks") < order.index("gh pr merge")
+    events.clear()
+    ship_doubles(monkeypatch, text("ui2/service/A.java"), events)
+    assert sa._ship(ship_args(no_early_pr=True)) == 0
+    order = names(events)
+    assert order.index("preview") < order.index("push") < order.index("checks")
+
+
+def test_early_pr_flag_and_a_red_preview_closes_the_pull_request(monkeypatch):
     events = []
     ship_doubles(monkeypatch, text("ui2/service/A.java"), events)
     assert sa._ship(ship_args(early_pr=True)) == 0
@@ -384,6 +397,9 @@ def test_early_pr_is_opt_in_and_a_red_preview_closes_the_pull_request(monkeypatc
 def test_cli_flags(monkeypatch):
     monkeypatch.setattr(sa, "cmd_ship", lambda args: (args.early_pr, args.no_fast_path))
     assert sa.main(["ship", "--branch", "feature/x"]) == (False, False)
+    monkeypatch.setattr(sa, "cmd_ship", lambda args: args.no_early_pr)
+    assert sa.main(["ship", "--branch", "feature/x", "--no-early-pr"]) is True
+    monkeypatch.setattr(sa, "cmd_ship", lambda args: (args.early_pr, args.no_fast_path))
     assert sa.main(["ship", "--branch", "feature/x", "--early-pr", "--no-fast-path"]) == (True, True)
 
 
