@@ -61,7 +61,7 @@ class FreeTextEstateMaskingTest {
     }
 
     @Test
-    void anUnavailableDictionaryLeavesTheTextAndRetriesLater() {
+    void neverLoadedEstateDictionaryWithholdsTheTextAndRetriesLater() {
         int[] calls = {0};
         var failing = new FreeTextEstate(() -> {
             calls[0]++;
@@ -69,8 +69,62 @@ class FreeTextEstateMaskingTest {
         });
         var names = new TopologyNamePseudonymizer(KEY);
         names.useFreeTextEstate(failing);
-        assertThat(names.maskText("unit " + serial)).isEqualTo("unit " + serial);
-        assertThat(names.maskText("unit " + serial)).isEqualTo("unit " + serial);
+        assertThat(names.maskText("unit " + serial)).isEqualTo(FreeTextEstate.UNAVAILABLE);
+        assertThat(names.maskText("unit " + serial)).isEqualTo(FreeTextEstate.UNAVAILABLE);
         assertThat(calls[0]).as("no read storm while waiting to retry").isEqualTo(1);
+    }
+
+    @Test
+    void neverLoadedDeviceDirectoryWithholdsTheTextUntilItLoads() {
+        boolean[] down = {true};
+        var names = new TopologyNamePseudonymizer(KEY);
+        names.setDeviceDirectory(() -> {
+            if (down[0]) throw new IllegalStateException("db down");
+            return List.of();
+        });
+        var advice = new PrivacyMaskingResponseBodyAdvice(new SubnetPreservingIpMasker(KEY), names);
+        Object out = advice.maskObject(Map.of("message", "ssh to some-host failed"), null);
+        assertThat(((Map<?, ?>) out).get("message")).isEqualTo(FreeTextEstate.UNAVAILABLE);
+        // Hostname keys are still masked as names; only free text is withheld.
+        down[0] = false;
+        long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+        while (FreeTextEstate.UNAVAILABLE.equals(names.maskText("ssh to some-host failed")) && System.nanoTime() < until) {
+            try {
+                Thread.sleep(250);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        assertThat(names.maskText("ssh to some-host failed")).isEqualTo("ssh to some-host failed");
+    }
+
+    @Test
+    void refreshFailureAfterASuccessfulLoadKeepsThePreviousState() {
+        boolean[] fail = {false};
+        var estate = FreeTextEstateConfiguration.create(KEY, () -> {
+            if (fail[0]) throw new IllegalStateException("db down");
+            return List.of(EstateIdentity.serial(serial));
+        }, List::of);
+        assertThat(estate.mask("unit " + serial)).contains("SN-").doesNotContain(serial);
+        fail[0] = true;
+        // Within the source's TTL the cached dictionary answers; the failed-refresh branch never yields the placeholder.
+        assertThat(estate.mask("unit " + serial)).contains("SN-").doesNotContain(serial);
+    }
+
+    @Test
+    void unmaskedResponsesNeverReachTheMaskingPath() {
+        var names = new TopologyNamePseudonymizer(KEY);
+        names.useFreeTextEstate(new FreeTextEstate(() -> {
+            throw new IllegalStateException("store down");
+        }));
+        var advice = new PrivacyMaskingResponseBodyAdvice(new SubnetPreservingIpMasker(KEY), names);
+        var request = org.mockito.Mockito.mock(jakarta.servlet.http.HttpServletRequest.class);
+        var serverRequest = org.mockito.Mockito.mock(org.springframework.http.server.ServletServerHttpRequest.class);
+        org.mockito.Mockito.when(serverRequest.getServletRequest()).thenReturn(request);
+        org.mockito.Mockito.when(request.getAttribute(
+                com.securityexpert.nexus.ui2.service.security.GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(false);
+        Map<String, Object> body = Map.of("terminal_reason", "unit " + serial);
+        assertThat(advice.beforeBodyWrite(body, null, null, null, serverRequest, null)).isSameAs(body);
     }
 }

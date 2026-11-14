@@ -306,6 +306,7 @@ public class TopologyNamePseudonymizer {
             }
             disambiguation = computeDisambiguation(entries);
             disambiguationAt = now;
+            directoryLoaded = true;
             return disambiguation;
         }
     }
@@ -484,9 +485,36 @@ public class TopologyNamePseudonymizer {
         if (text == null || text.isBlank()) {
             return text;
         }
+        // Fail closed on a cold process: a device directory that was configured but never read, or an estate dictionary
+        // that never loaded, would leave hostnames, serials and user names in the text. After one successful load a
+        // failed refresh keeps the previous state. Only masked (aiview) paths call this method.
+        if (deviceDirectory != null) {
+            disambiguation();
+            if (!directoryLoaded) {
+                warnUnavailable("device directory");
+                return FreeTextEstate.UNAVAILABLE;
+            }
+        }
         String named = maskKnownNames(text);
         FreeTextEstate estate = freeTextEstate();
-        return estate == null ? named : estate.mask(named);
+        if (estate == null) return named;
+        return estate.mask(named);
+    }
+
+    private static final System.Logger LOG = System.getLogger(TopologyNamePseudonymizer.class.getName());
+    private volatile boolean directoryLoaded;
+    private final java.util.concurrent.atomic.AtomicLong lastUnavailableWarning = new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.concurrent.atomic.AtomicLong unavailableCount = new java.util.concurrent.atomic.AtomicLong();
+
+    /** Counts only, at most once per 10 s. */
+    private void warnUnavailable(String source) {
+        long n = unavailableCount.incrementAndGet();
+        long now = System.nanoTime();
+        long last = lastUnavailableWarning.get();
+        if ((last == 0 || now - last > 10_000_000_000L) && lastUnavailableWarning.compareAndSet(last, now == 0 ? 1 : now)) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "free text withheld, {0} never loaded since start; withheld so far={1}", source, n);
+        }
     }
 
     private String maskKnownNames(String text) {

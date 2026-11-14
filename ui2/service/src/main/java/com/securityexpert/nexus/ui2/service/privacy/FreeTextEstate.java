@@ -13,17 +13,21 @@ import com.securityexpert.nexus.ui2.sanitizer.core.EstateDictionary;
  * approval reason or a message went to aiview raw. The forms are the ones the key-based rules and the change feed
  * already give ({@code SN-} and {@code USR-} tokens), from the same keyed dictionary the system-log view uses.
  *
- * <p>Failure behaviour matches the device-directory read: the source keeps the previous dictionary when a refresh
- * fails, and when none was ever built the text is returned as it was and the next attempt waits {@link #RETRY_NANOS}
- * (no read storm against a failing store).</p>
+ * <p>Failure behaviour: the source keeps the previous dictionary when a refresh fails after a successful load. When no
+ * dictionary was ever built the answer is {@link #UNAVAILABLE} (fail closed: a cold pod with a failing store is the
+ * leak window), and the next attempt waits {@link #RETRY_NANOS} (no read storm against a failing store). Only masked
+ * (aiview) paths call this; raw operator views never reach {@code maskText}.</p>
  */
 public final class FreeTextEstate {
     private static final System.Logger LOG = System.getLogger(FreeTextEstate.class.getName());
+    /** What a free-text field shows while the dictionary has never loaded. */
+    public static final String UNAVAILABLE = "<masked: estate dictionary unavailable>";
     static final long RETRY_NANOS = java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
 
     private final Supplier<EstateDictionary> dictionary;
     private volatile long retryAfterNanos;
     private volatile boolean waiting;
+    private volatile boolean everLoaded;
 
     public FreeTextEstate(Supplier<EstateDictionary> dictionary) {
         this.dictionary = Objects.requireNonNull(dictionary, "dictionary");
@@ -32,17 +36,18 @@ public final class FreeTextEstate {
     /** {@code text} with every known serial and administrator name replaced; unchanged when none is known. */
     public String mask(String text) {
         if (text == null || text.isBlank()) return text;
-        if (waiting && System.nanoTime() - retryAfterNanos < 0) return text;
+        if (waiting && System.nanoTime() - retryAfterNanos < 0) return everLoaded ? text : UNAVAILABLE;
         EstateDictionary current;
         try {
             current = dictionary.get();
             waiting = false;
+            everLoaded = true;
         } catch (RuntimeException unavailable) {
             LOG.log(System.Logger.Level.WARNING, "free-text estate dictionary unavailable cause={0}",
                     unavailable.getClass().getSimpleName());
             retryAfterNanos = System.nanoTime() + RETRY_NANOS;
             waiting = true;
-            return text;
+            return everLoaded ? text : UNAVAILABLE;
         }
         return current.replacer().replace(text, new Counts());
     }
