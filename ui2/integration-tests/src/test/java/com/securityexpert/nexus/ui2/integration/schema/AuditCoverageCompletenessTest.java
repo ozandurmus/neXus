@@ -64,6 +64,8 @@ class AuditCoverageCompletenessTest {
      */
     static final Map<String, Set<String>> AUDITED_BY_NAMED_TRIGGER = Map.of(
             "ldap_settings", Set.of("tr_audit_ldap_settings"),                         // V204
+            "zone_matrix_revision", Set.of("tr_audit_zone_matrix_revision"),           // V216
+            "zone_matrix_access_log", Set.of("tr_audit_zone_matrix_access_log"),       // V216
             "module_runtime_control", Set.of("module_runtime_control_audit"),          // V128
             "endpoint_admission", Set.of("endpoint_quarantine_release_audit"),         // V131
             "runtime_task_lease", Set.of("task_quarantine_release_audit"),             // V131
@@ -110,6 +112,9 @@ class AuditCoverageCompletenessTest {
                     + "OPERATOR_PAGE rows tied by upload_id to the audited lifecycle_catalog_upload row of the same transaction"),
             Map.entry("lifecycle_feed_run", "V219: record of one lifecycle fetch run, written by the ingest endpoint; holds "
                     + "counts and code words only"),
+            Map.entry("zone_matrix_version", "V216: every draft change, discard and publish appends, in the same "
+                    + "transaction, a zone_matrix_revision row audited by tr_audit_zone_matrix_revision; published and "
+                    + "discarded versions are immutable (tr_zone_matrix_version_guard)"),
             Map.entry("ha_pair_identity", "V209: a failover pair's unit serials recorded and compared by the inventory job from its own reads; the jobs row is audited"),
             Map.entry("cluster_member_diff", "V52: server-side recomputed summary of collected texts"),
             Map.entry("pseudonym_registry", "V53: derived AIView pseudonym claims, keyed by HMAC"),
