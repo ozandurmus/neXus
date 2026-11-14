@@ -4,7 +4,7 @@ import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { LifecycleScreen, lifecycleCsv } from "../src/screens/LifecycleScreen";
 import {
-  ADVISORY_PAGE, AFFECTED_BY_VERSION, LifecycleVulnerabilitiesPanel, basisSentence, vendorLink, vulnerabilityBasis, vulnerabilitySummary,
+  ADVISORY_PAGE, AFFECTED_BY_VERSION, CHECKPOINT_COVERAGE, LifecycleVulnerabilitiesPanel, VulnerabilityDetail, basisSentence, vendorLink, vulnerabilityBasis, vulnerabilitySummary,
 } from "../src/screens/LifecycleVulnerabilitiesPanel";
 import * as api from "../src/auth/adminApi";
 import type { LifecycleAdvisory, LifecycleAdvisoryDevice, LifecycleAdvisorySource, LifecycleDevice, LifecycleVulnerabilities } from "../src/auth/adminApi";
@@ -312,6 +312,9 @@ describe("Vulnerabilities tab", () => {
     const list = await screen.findByRole("table", { name: "Security advisories" });
     const row = list.querySelector('[data-advisory="checkpoint:CVE-2026-90001"]') as HTMLElement;
     expect(within(row).getByText("Check Point · checkpoint:CVE-2026-90001")).toBeInTheDocument();
+    const sourceTable = screen.getByRole("table", { name: "Advisory sources" });
+    expect(within(rowOf(sourceTable, "Check Point")).getByText(CHECKPOINT_COVERAGE)).toBeInTheDocument();
+    expect(within(rowOf(sourceTable, "Palo Alto Networks")).queryByText(CHECKPOINT_COVERAGE)).toBeNull();
     expect(within(row).getByText("3 pending confirmation").closest("[data-pill]")).toHaveAttribute("data-pill", "unknown");
     fireEvent.click(within(row).getByRole("button", { name: "Show 5 devices" }));
     const devices = await screen.findByRole("table", { name: "Devices judged against checkpoint:CVE-2026-90001" });
@@ -328,6 +331,9 @@ describe("Vulnerabilities tab", () => {
     expect(vulnerabilitySummary({ state: "NOT_COVERED", reason: "SPARK_NOT_COVERED" })).toBe("No advisory source for this product · Quantum Spark firmware has no advisory source yet");
     expect(vulnerabilitySummary({ state: "NOT_COVERED", reason: "NO_COMPARATOR" })).toBe("No advisory source for this product");
     expect(vulnerabilitySummary({ state: "VERSION_UNKNOWN", reason: "JUMBO_TAKE_MISSING" })).toBe("Version not known · no Jumbo Hotfix take stored");
+    themed(<VulnerabilityDetail v={evaluated({ product_key: "checkpoint:gaia-gateway", pending: 1, compared: { ...compared, source: "checkpoint", advisories: 61 } })} />);
+    expect(screen.getByText(CHECKPOINT_COVERAGE)).toBeInTheDocument();
+    expect(screen.getByText(/1 pending confirmation of a proposed fix rule/)).toBeInTheDocument();
   });
 
   it("maps every basis code word to a sentence and shows an unknown one as it is", () => {

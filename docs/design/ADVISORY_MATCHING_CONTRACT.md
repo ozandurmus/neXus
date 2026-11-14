@@ -222,12 +222,13 @@ Read access follows the existing Lifecycle view (Devices plane); there is no new
 
 ## Amendment A-2026-11-13: Check Point advisories
 
-**Status: DRAFT (2026-11-13), for the Product Owner to freeze.** Written by an engineering session. It lifts "Check
+**Status: FROZEN (2026-11-14)** by the engineering session under the Product Owner's instruction relayed by the PO
+session ("FROZEN yap"), with the answers to the questions of A.12 recorded there. Drafted 2026-11-13. It lifts "Check
 Point advisories" out of the "Not in this contract" list and defines the proposed fix rules of PO decision 2026-11-10
 question 4 (`PO_DECISION_RECORD_2026_11_10_ADVISORY_INTAKE_PROXY_SOURCES_AND_FIX_RULES.md`) for Check Point. The confirm
 action of those rules is specified here (A.9) and built in a second step; until then a proposal stays pending. Verdicts
-that use Live Patch facts stay out of this contract (A.10). The implementation of A.1 to A.8 and A.10 is on the branch
-named in the session report; nothing is live until the amendment is frozen and shipped.
+that use Live Patch facts stay out of this contract (A.10). A.1 to A.8 and A.10 are built with this amendment; the
+confirm action of A.9 is the next step (PO 2026-11-14).
 
 ### A.1 What Check Point publishes (measured 2026-11-13)
 
@@ -278,7 +279,7 @@ host. The default source list of the workload includes `checkpoint`; no manifest
   and score (CVSS 4.0, else 3.1, else 3.0 of `cna.metrics`), published and updated dates of `cveMetadata`, link = the
   record's sk article, else the sk article of a resolved-issues line. Its rules are built from the record and the
   stored statements of the same CVE id (A.7). A record that is not `PUBLISHED` or not JSON is rejected.
-- Storage: migration `V212` adds `checkpoint` to the source checks of `advisory` and `advisory_feed_run` and the table
+- Storage: migration `V213` adds `checkpoint` to the source checks of `advisory` and `advisory_feed_run` and the table
   `checkpoint_jumbo_statement` (train, take, CVE id, kind, product text, sk article, line, page address, page SHA-256,
   load time). Public data only, no audit trigger, as V205.
 
@@ -375,14 +376,17 @@ amendment.
   Check Point devices per state and reason; devices affected and pending. Three advisories are checked by hand
   against their sk articles before the Check Point column is called correct.
 
-### A.12 Questions for the Product Owner
+### A.12 Questions for the Product Owner, with the answers
 
 - **Q1. A new host for full coverage.** `iapi-services-ucs.checkpoint.com` serves Check Point's own list of its
   security advisories (161 on 2026-11-13, with CVE, sk article and affected take per train, including advisories not
   yet resolved in a Jumbo take). It is the interface behind the vendor's advisory page, but undocumented. Approve it
   as a second Check Point document host (one fixed address, same rules as A.2), or keep the coverage limit of A.5?
+  **Answer (PO 2026-11-14): "Hayır".** The host is not added; the coverage limit of A.5 stays and is stated on screen.
 - **Q2. Take statements without confirmation.** This draft treats a Check Point record's `"<train> with Jumbo Hotfix
   Take M or below"`, checked against the resolved-issues page, as the vendor's machine-readable statement: such
   verdicts are final without an administrator's confirmation (as for the other vendors). Agree, or should these also
-  wait for confirmation?
+  wait for confirmation? **Answer (PO 2026-11-14): agreed.** A take statement consistent with the resolved-issues page
+  is final without review.
 - **Q3. Order.** Build the confirm action (A.9) as the next step, before the first live load is called correct?
+  **Answer (PO 2026-11-14): the confirm action is the next step, not part of this change.**
