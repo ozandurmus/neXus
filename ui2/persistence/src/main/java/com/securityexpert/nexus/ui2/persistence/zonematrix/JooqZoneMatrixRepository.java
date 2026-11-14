@@ -12,7 +12,7 @@ import org.jooq.DSLContext;
 import org.jooq.Record;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 
-/** jOOQ implementation of {@link ZoneMatrixRepository} over the V215 tables. */
+/** jOOQ implementation of {@link ZoneMatrixRepository} over the V216 tables and the step-2 confirmation table. */
 public final class JooqZoneMatrixRepository implements ZoneMatrixRepository {
     /** Transaction-scoped advisory lock key serializing every zone-matrix write. */
     static final long LOCK_KEY = 0x7a6d_7631L;
@@ -99,6 +99,13 @@ public final class JooqZoneMatrixRepository implements ZoneMatrixRepository {
             dsl.execute("insert into zone_matrix_revision (version_id, revision, actor, occurred_at, change_kind, zone_id, "
                     + "content_sha256, content, rationale) values ({0},{1},{2},{3},{4},{5},{6},{7},{8})",
                     versionId, revision, actor, odt(now), changeKind, zoneId, sha256, content, rationale);
+        }
+
+        @Override public void recordConfirmation(String versionId, long revision, String source, String destination,
+                String cellSha256, String actor, Instant now) {
+            dsl.execute("insert into zone_matrix_reference_confirmation (version_id, revision, source_zone, destination_zone, "
+                    + "status, cell_sha256, confirmed_by, confirmed_at) values ({0},{1},{2},{3},'CONFIRMED',{4},{5},{6})",
+                    versionId, revision, source, destination, cellSha256, actor, odt(now));
         }
 
         @Override public void retire(String versionId) {

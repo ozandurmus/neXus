@@ -15,7 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * Zone matrix, delivery step 1 (docs/design/ZONE_MATRIX_CONTRACT.md sections 3 and 10.1, FROZEN 2026-11-13). The gate
+ * Zone matrix, delivery steps 1 and 2 (docs/design/ZONE_MATRIX_CONTRACT.md sections 3, 4, 6.1 and 10.1, FROZEN 2026-11-13). The gate
  * admits each route by its action (SecurityWebMvcConfig); this controller adds the second checks the contract names: the
  * blocks view needs {@code zone_matrix_zones_read}, the masked persona never sees or changes blocks, and the response
  * carries the caller's affordances so the screen computes no visibility of its own.
@@ -33,6 +33,13 @@ public final class ZoneMatrixController {
     public record ZoneRequest(Long revision, String name, String description, String role, java.util.List<String> blocks) {}
     public record RevisionRequest(Long revision) {}
     public record LookupRequest(String address, String version_id) {}
+    public record CellRequest(Long revision, String source, String destination, String statement, java.util.List<String> services,
+            String severity, String rationale, String regulation_reference) {}
+    public record PairRequest(Long revision, String source, String destination) {}
+    public record DefaultRequest(Long revision, String statement, String severity) {}
+    public record ServiceSetRequest(Long revision, String name, java.util.List<String> entries) {}
+    public record TemplateImportRequest(Long revision, Boolean replace) {}
+    public record ConfirmRequest(Long revision, String source, String destination, String cell_sha256) {}
 
     @GetMapping("/api/v2/zone-matrix/versions")
     public ResponseEntity<?> versions(HttpServletRequest request) {
@@ -82,6 +89,72 @@ public final class ZoneMatrixController {
         });
     }
 
+    @GetMapping("/api/v2/zone-matrix/template")
+    public ResponseEntity<?> template(HttpServletRequest request) { return run(() -> with(service.template(), request)); }
+
+    @PostMapping("/api/v2/zone-matrix/draft/cells")
+    public ResponseEntity<?> setCell(@RequestBody CellRequest body, HttpServletRequest request) {
+        return run(() -> {
+            writable(request);
+            if (body == null) throw new Refused(400, "INVALID_CELL", "cell body missing");
+            return service.setCell(actor(request), body.revision(), new ZoneMatrixService.CellInput(body.source(), body.destination(),
+                    body.statement(), body.services(), body.severity(), body.rationale(), body.regulation_reference()));
+        });
+    }
+
+    @PostMapping("/api/v2/zone-matrix/draft/cells/clear")
+    public ResponseEntity<?> clearCell(@RequestBody PairRequest body, HttpServletRequest request) {
+        return run(() -> {
+            writable(request);
+            if (body == null) throw new Refused(400, "INVALID_CELL", "cell body missing");
+            return service.clearCell(actor(request), body.revision(), body.source(), body.destination());
+        });
+    }
+
+    @PostMapping("/api/v2/zone-matrix/draft/default")
+    public ResponseEntity<?> setDefault(@RequestBody DefaultRequest body, HttpServletRequest request) {
+        return run(() -> {
+            writable(request);
+            if (body == null) throw new Refused(400, "INVALID_DEFAULT", "default body missing");
+            return service.setDefault(actor(request), body.revision(), body.statement(), body.severity());
+        });
+    }
+
+    @PostMapping("/api/v2/zone-matrix/draft/service-sets")
+    public ResponseEntity<?> saveServiceSet(@RequestBody ServiceSetRequest body, HttpServletRequest request) {
+        return run(() -> {
+            writable(request);
+            if (body == null) throw new Refused(400, "INVALID_SERVICE_SET", "service set body missing");
+            return service.saveServiceSet(actor(request), body.revision(), body.name(), body.entries());
+        });
+    }
+
+    @PostMapping("/api/v2/zone-matrix/draft/service-sets/delete")
+    public ResponseEntity<?> deleteServiceSet(@RequestBody ServiceSetRequest body, HttpServletRequest request) {
+        return run(() -> {
+            writable(request);
+            if (body == null) throw new Refused(400, "INVALID_SERVICE_SET", "service set body missing");
+            return service.deleteServiceSet(actor(request), body.revision(), body.name());
+        });
+    }
+
+    @PostMapping("/api/v2/zone-matrix/draft/template-import")
+    public ResponseEntity<?> importTemplate(@RequestBody TemplateImportRequest body, HttpServletRequest request) {
+        return run(() -> {
+            writable(request);
+            return service.importTemplate(actor(request), body == null ? null : body.revision(), body != null && Boolean.TRUE.equals(body.replace()));
+        });
+    }
+
+    @PostMapping("/api/v2/zone-matrix/draft/cells/confirm-reference")
+    public ResponseEntity<?> confirmReference(@RequestBody ConfirmRequest body, HttpServletRequest request) {
+        return run(() -> {
+            if (body == null) throw new Refused(400, "INVALID_CONFIRMATION", "confirmation body missing");
+            return service.confirmReference(actor(request), masked(request), body.revision(), body.source(), body.destination(),
+                    body.cell_sha256());
+        });
+    }
+
     @PostMapping("/api/v2/zone-matrix/draft/publish")
     public ResponseEntity<?> publish(@RequestBody ZoneMatrixService.PublishRequest body, HttpServletRequest request) {
         return run(() -> service.publish(actor(request), masked(request), body));
@@ -122,6 +195,7 @@ public final class ZoneMatrixController {
         out.put("view_blocks", !masked && permitted(request, ActionRegistry.ZONE_MATRIX_ZONES_READ));
         out.put("edit", !masked && permitted(request, ActionRegistry.ZONE_MATRIX_EDIT));
         out.put("publish", !masked && permitted(request, ActionRegistry.ZONE_MATRIX_PUBLISH));
+        out.put("confirm_reference", !masked && permitted(request, ActionRegistry.ZONE_MATRIX_REFERENCE_CONFIRM));
         return out;
     }
 

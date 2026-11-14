@@ -20,10 +20,37 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-/** V216 (docs/design/ZONE_MATRIX_CONTRACT.md, FROZEN 2026-11-13) against a real PostgreSQL. Synthetic data only. */
+/**
+ * V216 and the delivery-step-2 migration (docs/design/ZONE_MATRIX_CONTRACT.md, FROZEN 2026-11-13) against a real
+ * PostgreSQL. Synthetic data only.
+ *
+ * <p>The step-2 migration waits in {@code db/pending} until the ship order gives it a version number; until then this
+ * test applies it after Flyway, and once it is numbered and in {@code db/migration} Flyway has applied it already.</p>
+ */
 class ZoneMatrixSchemaTest {
     private static Ui2PostgresFixture fixture;
-    @BeforeAll static void migrate() { fixture = Ui2PostgresFixture.createAndMigrate("zone_matrix"); }
+    private static final String STEP_TWO = "zone_matrix_cells.sql";
+
+    @BeforeAll static void migrate() throws Exception {
+        fixture = Ui2PostgresFixture.createAndMigrate("zone_matrix");
+        try (Connection db = fixture.migrateConnection(); var s = db.createStatement()) {
+            try (var rows = s.executeQuery("SELECT to_regclass('zone_matrix_reference_confirmation') IS NULL")) {
+                rows.next();
+                if (rows.getBoolean(1)) s.execute(stepTwoSql());
+            }
+        }
+    }
+
+    /** The step-2 migration's text, from db/migration once numbered, else from db/pending. */
+    private static String stepTwoSql() throws java.io.IOException {
+        java.nio.file.Path migrations = Ui2PostgresFixture.migrationDirectory();
+        for (java.nio.file.Path dir : List.of(migrations, migrations.resolveSibling("pending")))
+            try (var files = java.nio.file.Files.list(dir)) {
+                var found = files.filter(f -> f.getFileName().toString().endsWith("__" + STEP_TWO)).findFirst();
+                if (found.isPresent()) return java.nio.file.Files.readString(found.get());
+            }
+        throw new IllegalStateException("the step-2 zone matrix migration is missing");
+    }
     @AfterAll static void close() { if (fixture != null) fixture.close(); }
 
     private static final String ID = "00000000-0000-4000-8000-000000000001";
@@ -36,10 +63,12 @@ class ZoneMatrixSchemaTest {
                 assertNotNull(resource); sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
             }
             db.setAutoCommit(false);
-            statement.execute("DROP TABLE zone_matrix_access_log, zone_matrix_revision, zone_matrix_version CASCADE");
+            statement.execute("DROP TABLE zone_matrix_reference_confirmation, zone_matrix_access_log, zone_matrix_revision, "
+                    + "zone_matrix_version CASCADE");
             statement.execute("DROP FUNCTION fn_zone_matrix_version_guard, fn_zone_matrix_append_only, "
                     + "fn_audit_capture_zone_matrix_revision, fn_audit_capture_zone_matrix_access");
             statement.execute(sql);
+            statement.execute(stepTwoSql());
             db.rollback();
         }
     }
@@ -101,16 +130,103 @@ class ZoneMatrixSchemaTest {
                 Map<String, Object> versions = Map.of("list", service.versions(ZoneMatrixService.View.NAMES, false));
                 assertEquals(1, ((List<?>) versions.get("list")).size());
             } finally {
-                // The app role cannot delete; the migration role (table owner) cleans up with the guards off.
-                try (Connection admin = fixture.migrateConnection(); var s = admin.createStatement()) {
-                    s.execute("ALTER TABLE zone_matrix_version DISABLE TRIGGER tr_zone_matrix_version_guard");
-                    s.execute("ALTER TABLE zone_matrix_revision DISABLE TRIGGER tr_zone_matrix_revision_append_only");
-                    s.execute("ALTER TABLE zone_matrix_access_log DISABLE TRIGGER tr_zone_matrix_access_log_append_only");
-                    s.execute("DELETE FROM zone_matrix_access_log; DELETE FROM zone_matrix_revision; DELETE FROM zone_matrix_version");
-                    s.execute("ALTER TABLE zone_matrix_version ENABLE TRIGGER tr_zone_matrix_version_guard");
-                    s.execute("ALTER TABLE zone_matrix_revision ENABLE TRIGGER tr_zone_matrix_revision_append_only");
-                    s.execute("ALTER TABLE zone_matrix_access_log ENABLE TRIGGER tr_zone_matrix_access_log_append_only");
+                cleanUp();
+            }
+        }
+    }
+
+    /** The app role cannot delete; the migration role (table owner) cleans up with the guards off. */
+    private static void cleanUp() throws SQLException {
+        try (Connection admin = fixture.migrateConnection(); var s = admin.createStatement()) {
+            s.execute("ALTER TABLE zone_matrix_version DISABLE TRIGGER tr_zone_matrix_version_guard");
+            s.execute("ALTER TABLE zone_matrix_revision DISABLE TRIGGER tr_zone_matrix_revision_append_only");
+            s.execute("ALTER TABLE zone_matrix_access_log DISABLE TRIGGER tr_zone_matrix_access_log_append_only");
+            s.execute("ALTER TABLE zone_matrix_reference_confirmation DISABLE TRIGGER tr_zone_matrix_reference_confirmation_append_only");
+            s.execute("DELETE FROM zone_matrix_reference_confirmation; DELETE FROM zone_matrix_access_log; "
+                    + "DELETE FROM zone_matrix_revision; DELETE FROM zone_matrix_version");
+            s.execute("ALTER TABLE zone_matrix_version ENABLE TRIGGER tr_zone_matrix_version_guard");
+            s.execute("ALTER TABLE zone_matrix_revision ENABLE TRIGGER tr_zone_matrix_revision_append_only");
+            s.execute("ALTER TABLE zone_matrix_access_log ENABLE TRIGGER tr_zone_matrix_access_log_append_only");
+            s.execute("ALTER TABLE zone_matrix_reference_confirmation ENABLE TRIGGER tr_zone_matrix_reference_confirmation_append_only");
+        }
+    }
+
+    @Test void stepTwoChangeKindsConfirmationsAndTheirAuditAction() throws Exception {
+        try (Connection db = fixture.appConnection(); var s = db.createStatement()) {
+            db.setAutoCommit(false);
+            s.execute("INSERT INTO zone_matrix_version (version_id,state,revision,content,content_sha256,created_by,updated_by) "
+                    + "VALUES ('" + ID + "','DRAFT',2,'{}','" + SHA + "','synthetic-a','synthetic-a')");
+            s.execute("INSERT INTO zone_matrix_revision (version_id,revision,actor,change_kind,content_sha256,content) "
+                    + "VALUES ('" + ID + "',1,'synthetic-a','CELL_SET','" + SHA + "','{}')");
+            s.execute("INSERT INTO zone_matrix_revision (version_id,revision,actor,change_kind,content_sha256,content) "
+                    + "VALUES ('" + ID + "',2,'synthetic-c','REFERENCE_CONFIRM','" + SHA + "','{}')");
+            s.execute("INSERT INTO zone_matrix_reference_confirmation (version_id,revision,source_zone,destination_zone,status,"
+                    + "cell_sha256,confirmed_by,confirmed_at) VALUES ('" + ID + "',2,'UNASSIGNED','" + ID + "','CONFIRMED','"
+                    + SHA + "','synthetic-c',now())");
+            s.execute("SAVEPOINT p");
+            assertThrows(SQLException.class, () -> s.execute("INSERT INTO zone_matrix_revision (version_id,revision,actor,change_kind,"
+                    + "content_sha256,content) VALUES ('" + ID + "',3,'synthetic-a','CELL_RENAME','" + SHA + "','{}')"));
+            s.execute("ROLLBACK TO SAVEPOINT p");
+            assertThrows(SQLException.class, () -> s.execute("INSERT INTO zone_matrix_reference_confirmation (version_id,revision,"
+                    + "source_zone,destination_zone,status,cell_sha256,confirmed_by,confirmed_at) VALUES ('" + ID + "',9,'UNASSIGNED',"
+                    + "'UNASSIGNED','CONFIRMED','" + SHA + "','synthetic-c',now())"));
+            s.execute("ROLLBACK TO SAVEPOINT p");
+            assertThrows(SQLException.class, () -> s.execute("INSERT INTO zone_matrix_reference_confirmation (version_id,revision,"
+                    + "source_zone,destination_zone,status,cell_sha256,confirmed_by,confirmed_at) VALUES ('" + ID + "',2,'Z-APP',"
+                    + "'UNASSIGNED','CONFIRMED','" + SHA + "','synthetic-c',now())"));
+            s.execute("ROLLBACK TO SAVEPOINT p");
+            assertThrows(SQLException.class, () -> s.execute("UPDATE zone_matrix_reference_confirmation SET confirmed_by='someone-else'"));
+            s.execute("ROLLBACK TO SAVEPOINT p");
+            assertThrows(SQLException.class, () -> s.execute("DELETE FROM zone_matrix_reference_confirmation"));
+            s.execute("ROLLBACK TO SAVEPOINT p");
+            try (var rows = s.executeQuery("SELECT action_id FROM audit_log WHERE table_name='zone_matrix_revision' AND row_pk LIKE '"
+                    + ID + ":%' ORDER BY row_pk")) {
+                assertTrue(rows.next()); assertEquals("zone_matrix_edit", rows.getString(1));
+                assertTrue(rows.next()); assertEquals("zone_matrix_reference_confirm", rows.getString(1));
+                assertFalse(rows.next());
+            }
+            db.rollback();
+        }
+    }
+
+    @Test void theServiceRunsTheStepTwoFlowOnTheRealSchema() throws Exception {
+        try (Connection db = fixture.appConnection()) {
+            var repository = new JooqZoneMatrixRepository(new JooqTransactionBoundary(DSL.using(db, SQLDialect.POSTGRES)));
+            Set<String> compliance = Set.of("synthetic-compliance");
+            var service = new ZoneMatrixService(repository, new ZoneMatrixService.Principals() {
+                @Override public boolean holdsComplianceAdmin(String actor) { return compliance.contains(actor); }
+                @Override public boolean isRoot(String actor) { return false; }
+            }, new ObjectMapper(), Clock.systemUTC());
+            try {
+                var app = service.createZone("synthetic-security", null,
+                        new ZoneMatrixService.ZoneInput("Z-APP", "", "APPLICATION", List.of("198.51.100.0/24")));
+                var dbZone = service.createZone("synthetic-security", ((Number) app.get("revision")).longValue(),
+                        new ZoneMatrixService.ZoneInput("Z-DB", "", "DATABASE", List.of("203.0.113.0/25")));
+                var imported = service.importTemplate("synthetic-security", ((Number) dbZone.get("revision")).longValue(), false);
+                String appId = (String) app.get("zone_id"), dbId = (String) dbZone.get("zone_id");
+                var cell = service.setCell("synthetic-security", ((Number) imported.get("revision")).longValue(),
+                        new ZoneMatrixService.CellInput(appId, dbId, "ALLOW_LISTED", List.of("tcp/5432"), "HIGH", null,
+                                "Synthetic standard 1, article 2"));
+                @SuppressWarnings("unchecked") var draft = (Map<String, Object>) service.draft(ZoneMatrixService.View.NAMES,
+                        "synthetic-compliance", false, true).get("draft");
+                @SuppressWarnings("unchecked") var cells = (List<Map<String, Object>>) ((Map<String, Object>) draft.get("matrix")).get("cells");
+                String cellSha = (String) cells.stream().filter(c -> c.get("source").equals(appId) && c.get("destination").equals(dbId))
+                        .findFirst().orElseThrow().get("cell_sha256");
+                var confirmed = service.confirmReference("synthetic-compliance", false, ((Number) cell.get("revision")).longValue(),
+                        appId, dbId, cellSha);
+                long revision = ((Number) confirmed.get("revision")).longValue();
+                String sha = (String) confirmed.get("content_sha256");
+                assertEquals("SELF_APPROVAL", assertThrows(Refused.class, () -> service.publish("synthetic-compliance", false,
+                        new ZoneMatrixService.PublishRequest(revision, sha, null))).code);
+                assertEquals(1, service.publish("synthetic-security-2", false, new ZoneMatrixService.PublishRequest(revision, sha, null))
+                        .get("number"));
+                try (var s = db.createStatement(); var rows = s.executeQuery("SELECT (SELECT count(*) FROM zone_matrix_reference_confirmation "
+                        + "WHERE cell_sha256='" + cellSha + "'), (SELECT count(*) FROM audit_log WHERE action_id='zone_matrix_reference_confirm' "
+                        + "AND table_name='zone_matrix_revision' AND NOT (after_state ? 'content'))")) {
+                    assertTrue(rows.next()); assertEquals(1, rows.getInt(1)); assertEquals(1, rows.getInt(2));
                 }
+            } finally {
+                cleanUp();
             }
         }
     }
