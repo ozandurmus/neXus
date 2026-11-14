@@ -32,7 +32,7 @@ compared by (section 5).
    resolving anything external, and dropped; its SHA-256 and address are stored. No vendor text is rendered as HTML.
 5. **No device contact.** Nothing here sends anything to a managed device or adds a device command.
 
-## 2. Storage (V214)
+## 2. Storage (V219)
 
 | Table | One row per | Notes |
 | --- | --- | --- |

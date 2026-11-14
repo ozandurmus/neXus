@@ -90,7 +90,7 @@ public class DeviceCompositionConfiguration {
         return new com.securityexpert.nexus.ui2.persistence.lifecycle.JooqLifecycleCatalogRepository(transactionBoundary);
     }
 
-    /** The vendor side of the lifecycle catalog (V214, docs/design/LIFECYCLE_CATALOG_SOURCES_CONTRACT.md). */
+    /** The vendor side of the lifecycle catalog (V219, docs/design/LIFECYCLE_CATALOG_SOURCES_CONTRACT.md). */
     @Bean
     public com.securityexpert.nexus.ui2.persistence.lifecycle.LifecycleVendorRepository lifecycleVendorRepository(
             TransactionBoundary transactionBoundary) {

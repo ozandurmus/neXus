@@ -14,7 +14,7 @@ import org.jooq.Record;
 import com.securityexpert.nexus.ui2.persistence.AuditedTransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 
-/** Plain-SQL implementation of {@link LifecycleVendorRepository} over the V214 tables. */
+/** Plain-SQL implementation of {@link LifecycleVendorRepository} over the V219 tables. */
 public final class JooqLifecycleVendorRepository implements LifecycleVendorRepository {
 
     static final String WRITE_ACTION = "lifecycle_catalog_write";

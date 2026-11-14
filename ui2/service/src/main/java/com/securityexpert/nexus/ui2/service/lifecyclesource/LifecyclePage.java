@@ -16,7 +16,7 @@ public final class LifecyclePage {
     public static final String PARSED = "PARSED";
     public static final String NEEDS_REVIEW = "NEEDS_REVIEW";
 
-    /** The date fields of an entry, in the order of the V214 columns. */
+    /** The date fields of an entry, in the order of the V219 columns. */
     public static final List<String> DATE_FIELDS = List.of("end_of_sale", "end_of_engineering", "end_of_support",
             "end_of_security_support", "end_of_extended_support");
 

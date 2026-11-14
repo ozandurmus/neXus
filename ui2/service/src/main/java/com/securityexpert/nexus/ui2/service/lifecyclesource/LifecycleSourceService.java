@@ -25,7 +25,7 @@ import com.securityexpert.nexus.ui2.service.lifecycle.LifecycleMatcher;
  * The two ways vendor lifecycle entries get in (docs/design/LIFECYCLE_CATALOG_SOURCES_CONTRACT.md section 3): a document
  * the advisory-fetch workload read online and hands over on the internal port, and a vendor page an operator saved and
  * uploads. Both go through the same parsers; both replace the stored entries of exactly the publications the document
- * stands for. Everything is untrusted: a value outside what the V214 constraints allow drops that entry, never the batch,
+ * stands for. Everything is untrusted: a value outside what the V219 constraints allow drops that entry, never the batch,
  * and the log carries counts and code words only.
  */
 @Service
@@ -293,7 +293,7 @@ public final class LifecycleSourceService {
         row.put("entries_needing_review", entries.stream().filter(e -> !LifecyclePage.PARSED.equals(e.parseState())).count());
     }
 
-    /** The entry in the form the V214 constraints accept, or empty. */
+    /** The entry in the form the V219 constraints accept, or empty. */
     static Optional<VendorEntry> toStored(LifecyclePage.Entry e, String origin, String source, String uploadId, String url, String sha) {
         if (e == null || e.productKey() == null || !PRODUCT_KEY.matcher(e.productKey()).matches()
                 || e.documentRef() == null || !DOCUMENT_REF.matcher(e.documentRef()).matches()

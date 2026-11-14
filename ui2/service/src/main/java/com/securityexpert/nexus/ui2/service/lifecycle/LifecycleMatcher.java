@@ -16,7 +16,7 @@ import com.securityexpert.nexus.ui2.persistence.lifecycle.LifecycleVendorReposit
 /**
  * Matches one device part (hardware model or software version) against the lifecycle catalog
  * (docs/design/LIFECYCLE_CATALOG_SOURCES_CONTRACT.md section 5). Two kinds of catalog row exist: operator rows (V144,
- * typed or imported as CSV by a security_admin) and vendor entries (V214, read from a vendor publication online or from an
+ * typed or imported as CSV by a security_admin) and vendor entries (V219, read from a vendor publication online or from an
  * uploaded page). The order, and every state:
  * <ol>
  *   <li>No key for the device's model or version: {@code NO_LIFECYCLE_DATA}, with the reason.</li>

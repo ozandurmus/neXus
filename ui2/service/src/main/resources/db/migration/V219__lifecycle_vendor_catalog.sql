@@ -1,4 +1,4 @@
--- V214 -- Lifecycle catalog from vendor publications (docs/design/LIFECYCLE_CATALOG_SOURCES_CONTRACT.md, 2026-11-13).
+-- V219 -- Lifecycle catalog from vendor publications (docs/design/LIFECYCLE_CATALOG_SOURCES_CONTRACT.md, 2026-11-13).
 --
 -- The operator catalog of V144 (lifecycle_catalog) stays as it is: rows typed or imported as CSV by a security_admin.
 -- This migration adds the vendor side next to it:

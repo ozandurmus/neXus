@@ -40,7 +40,7 @@ public final class LifecycleService {
         this(catalog, devices, stored, facts, advisories, null);
     }
 
-    /** Without the vendor repository only the operator catalog is matched (the pre-V214 shape, with the age rule). */
+    /** Without the vendor repository only the operator catalog is matched (the pre-V219 shape, with the age rule). */
     @Autowired
     public LifecycleService(LifecycleCatalogRepository catalog, DeviceRepository devices,
             DeviceLifecycleRepository stored, DevicePlatformFactsRepository facts, AdvisoryReadService advisories,
@@ -49,7 +49,7 @@ public final class LifecycleService {
         this.vendor = vendor;
     }
 
-    /** The operator catalog and the vendor entries, loaded once per request (V144 and V214). */
+    /** The operator catalog and the vendor entries, loaded once per request (V144 and V219). */
     private LifecycleMatcher.Catalog lifecycleCatalog() {
         return new LifecycleMatcher.Catalog(catalog.list(), vendor == null ? List.of() : vendor.entries(), Instant.now());
     }
