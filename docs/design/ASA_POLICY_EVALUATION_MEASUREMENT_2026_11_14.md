@@ -43,3 +43,28 @@ counts left the pod.
 - The PO question that would move most of the rest: may an ASA ACE's identity criterion (`user`, `user-group`,
   `object-group-user`, TrustSec) be treated as narrowing only, so its address and port cells bound what it can match,
   as the 2026-11-04 amendment did for Check Point access roles? Not decided here.
+
+## Identity criteria narrowing (A0-ASA-16a), before and after
+
+Same harness, same 12 stored configurations (no collection ran in between; the "before" run reproduces the final run
+above exactly), 2026-11-14 evening. Before: Trace branch head (identity ACEs UNKNOWN and never passed over). After:
+A0-ASA-16a (PO approved 2026-11-14 evening; amendment section 15): an identity ACE's address and port cells bound
+it, used only to prove it does not cover a flow. Both runs ended `done`, `filtered_lines 0`, 0 collection failures,
+hygiene budget never reached.
+
+| Count | Before | After |
+|---|---|---|
+| Shadow status UNKNOWN | 91,592 | 61,334 (-30,258) |
+| NOT_SHADOWED | 15,120 | 45,378 |
+| REDUNDANT / CONFLICT | 7,829 / 588 | 7,829 / 588 (the bound never proves cover) |
+| UNKNOWN reason "earlier rule has unsupported constraints" | 65,563 | 35,305 |
+| Hygiene findings "unknown" | 197,074 | 166,816 |
+| Lookups (1,022): ALLOWED / DENIED / UNKNOWN | 37 / 166 / 819 | 37 / 515 / 470 |
+| Lookup UNKNOWN "analysis budget" / "earlier rule could match" | 550 / 269 | 0 / 470 |
+| DENIED by the list's implicit deny | 100 | 449 |
+| Hygiene / lookup time, 12 units | 2.7 s / 2.2 s | 3.5 s / 2.4 s |
+
+Reading: no ALLOWED appeared or disappeared (an allow is never decided by identity); the new decisions are denies a
+packet reaches only after passing identity ACEs whose addresses or ports it does not meet, and NOT_SHADOWED proofs
+for rules disjoint from earlier identity ACEs. The remaining 470 lookup UNKNOWNs are packets inside an identity ACE's
+bound (or another undecidable rule's) before any decision.

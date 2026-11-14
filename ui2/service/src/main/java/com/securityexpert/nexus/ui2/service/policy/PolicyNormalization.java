@@ -254,16 +254,16 @@ final class PolicyNormalization {
             for (var entry : rule.extras().entrySet()) {
                 String key = entry.getKey(); var values = entry.getValue();
                 if (applyLayer && key.equals("inline-layer")) continue;
-                if (upperBound && UPPER_BOUND_DROPPED.contains(key)) continue;
+                if (upperBound && (UPPER_BOUND_DROPPED.contains(key) || asaIdentity(snapshot, key))) continue;
                 if (Set.of("time", "schedule", "vpn", "content").contains(key)) {
                     for (String id : values) {
                         resolver.budget.spend(); var object = snapshot.objects().get(id);
                         if (object == null || !object.status().equals("RESOLVED") || !object.type().equals("any")) throw new Unknown("time or content constraint");
                     }
                 } else if (Set.of("source-user", "category").contains(key) && !values.equals(List.of("any"))) throw new Unknown("user or category constraint");
-                // ASA identity firewall and TrustSec criteria (A0-ASA-16): UNKNOWN, never an upper bound (PO decision record
-                // 2026-11-14 item 4 keeps uncertain ASA semantics UNKNOWN).
-                else if (ASA_IDENTITY.contains(key) && snapshot.metadata().vendor().equals("ASA")) throw new Unknown("user or category constraint");
+                // ASA identity firewall and TrustSec criteria (A0-ASA-16): a full match never decides by identity, so the
+                // rule stays UNKNOWN here; the criterion only narrows (A0-ASA-16a), see #partial and the upper bound above.
+                else if (asaIdentity(snapshot, key)) throw new Unknown("user or category constraint");
                 else if (key.equals("rule-type") && !values.equals(List.of("universal"))
                         && !(ruleTypes && (values.equals(List.of("intrazone")) || values.equals(List.of("interzone"))))) throw new Unknown("zone rule type constraint");
                 else if (key.equals("install-on")) {
@@ -304,6 +304,13 @@ final class PolicyNormalization {
     static final Set<String> ASA_INERT = Set.of("asa-direction", "asa-acl");
     /** ASA identity firewall users/groups and TrustSec security groups on an ACE. */
     static final Set<String> ASA_IDENTITY = Set.of("user", "security-group");
+    /**
+     * An ASA identity criterion. A0-ASA-16a (PO approved 2026-11-14): it only narrows what the ACE matches, so the ACE's
+     * address and port cells bound its match; the bound proves only that the ACE does not cover a flow, never an allow.
+     */
+    static boolean asaIdentity(PolicySnapshot snapshot, String key) {
+        return ASA_IDENTITY.contains(key) && "ASA".equals(snapshot.metadata().vendor());
+    }
     /** Install-on object statuses shadowing accepts as opaque placement tokens (see {@link #normalize}). */
     static final Set<String> OPAQUE_PLACEMENTS = Set.of("UNSUPPORTED", "UNRESOLVED");
     /**
@@ -369,6 +376,9 @@ final class PolicyNormalization {
      * <li>A Check Point source or destination naming a gateway-class object is resolved, where it can be, to that
      * object's management addresses (PO decision D-1, {@link Resolver#gatewayBound}): an upper bound that may prove
      * disjointness and nothing else, exactly like the access-role bound.</li>
+     * <li>An ASA identity firewall or TrustSec criterion (user, user-group, security-group) is the same kind of narrowing
+     * condition (A0-ASA-16a, PO approved 2026-11-14): the ACE matches within its address and port cells or not at all, so
+     * those cells may prove disjointness; the ACE itself is never a full match, so it never covers or decides.</li>
      * <li>A Palo Alto zone rule type other than universal changes how the from/to zones apply, so those zones are not
      * used; missing zone or install-on evidence is an unknown placement. A Check Point rule whose time column was not
      * collected is an incompletely collected rule record and is not used. Rules outside the security rulebase are not
@@ -383,7 +393,8 @@ final class PolicyNormalization {
         for (var entry : rule.extras().entrySet()) {
             String key = entry.getKey();
             resolver.budget.spend();
-            if (NARROWING.contains(key) || INERT.contains(key) || asa && ASA_INERT.contains(key) || Set.of("from", "to", "install-on").contains(key)
+            if (NARROWING.contains(key) || INERT.contains(key) || asa && ASA_INERT.contains(key) || asaIdentity(snapshot, key)
+                    || Set.of("from", "to", "install-on").contains(key)
                     || key.startsWith("track-") || key.startsWith("profile-setting/") || untargeted(snapshot, rule, key)
                     || targetNarrows(snapshot, rule, key)) continue;
             if (key.equals("rule-type")) { zones &= entry.getValue().equals(List.of("universal")); continue; }
