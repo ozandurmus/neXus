@@ -5,9 +5,12 @@
 DRAFT - 2026-11-14. Design and measurement plan only; not implementation authority (AGENTS.md "Contract-status law").
 Written without any device contact and without reading any device configuration text. The database facts in section
 3 are counts, byte sizes and presence booleans from the live ui2 database (AIView mentality); no name, address or
-configuration line was read or printed. The vendor semantics are a proposed amendment to the frozen
+configuration line was read or printed. The vendor semantics are an amendment to the frozen
 `PATH_ANALYSIS_VENDOR_SEMANTICS.md` (A0): `PATH_ANALYSIS_VENDOR_SEMANTICS_AMENDMENT_2026_11_14_ASA_FORTIGATE.md`
-(DRAFT; ids `A0-ASA-n`, `A0-FG-n` below).
+(FROZEN 2026-11-14; ids `A0-ASA-n`, `A0-FG-n` below). The PO's answers to section 10 are recorded in
+`PO_DECISION_RECORD_2026_11_14_ASA_FORTIGATE_POLICY_MODEL.md` (Q1 "Evet, başla"; ASA first). Since this draft was
+written, the quote re-check resolved two gaps listed in section 3: the ASA port and protocol literal tables are
+official (A0-ASA-15, HIGH) and a FortiOS 7.4 address with no `subnet` line defaults to `0.0.0.0 0.0.0.0` (A0-FG-24).
 
 Trigger: PO decision 2026-11-14 (relayed by the PO session): Cisco ASA and FortiGate firewalls get policy collection
 and a policy model like Check Point and Palo Alto, so Trace/topology, policy hygiene, the zone matrix and the ACI
