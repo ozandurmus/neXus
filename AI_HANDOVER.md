@@ -1,20 +1,21 @@
 # NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY
 
-## Snapshot (2026-11-10)
-Development mode: scheduled jobs are off, except the system-log collection (own switch, 00/06/12/18).
-PRs up to 784 are on main. Schema V197. `CURRENT_STATE.md` and `project/QUEUE.md` win over this file.
+## Snapshot (2026-11-14)
+main is at e70dbdf1, schema V211. Scheduled jobs are on (per-family switches, V203).
+NOW is NXS-LOCAL-0391: four ship batches (V212-V220) are built and tested but not on main.
+`CURRENT_STATE.md` and `project/QUEUE.md` win over this file.
 
 ## What changed this session
-- Project plan refreshed: builds NXS-LOCAL-0375..0383 recorded (0383 enterprise alignment phase 0 is NOW).
-- Features: Policy, Path analysis, Packet Analysis added; inventory, backup, readiness, scheduler, operations criteria advanced on recorded live evidence.
-- Backlog: six items closed; glibc wait, HOST-A AppArmor override, enterprise phase 0, path phase B, analysis container, Reports R2 added.
+- State reconciled from 0d13c450 to e70dbdf1: builds NXS-LOCAL-0384..0391 recorded through the project tool.
+- CURRENT_STATE: product today, release queue (not live), open PO decisions; stale development-mode and failover-trial lines corrected.
 
 ## Exact next action
-PO confirms NEXT (proposed: finish the failover pilot on one Check Point cluster). Base acceptances review 2026-11-14.
-Check the per-Domain placement view live as aiview (V197).
+Ship batches 1-4 in order, each after its live migration dry run; then refresh this state.
+PO decides: product name, ASA identity ACE narrowing, DB NetworkPolicy conflict, off-host recovery target.
+Reconcile Next: java_product_plan.json says off-host key custody, roadmap.json says Overview acceptance.
 
 ## Test delta
-None in product code; tools tests and ProjectPlan service tests run for the plan data.
+None in product code; tools tests and the Java ProjectPlanReaderTest run for the plan data.
 
 ## New risks
-Project data budgets are nearly full (backlog, terminal reserve, feature registry); the next refresh needs a compaction decision.
+Migration numbers V212-V220 are reserved by queue order; Flyway runs without outOfOrder, so a lane shipped out of order must be renumbered.

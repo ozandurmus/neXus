@@ -3,6 +3,116 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0391",
+      "status": "in_progress",
+      "title": "Release queue: ASA readiness, integration gate, CP advisories, zone matrix, ACI step 1, API latency, Backups batch",
+      "summary": "Four ship batches carry the work that is built and tested but not on main: ASA readiness (V212), the V208 fix with the integration CI gate (V213), Check Point advisories (V214), zone matrix steps 1-2 (V216, V220), ACI step 1 (V217), API lat",
+      "started": "2026-11-13",
+      "movement": "IMPLEMENTATION",
+      "docs": {
+        "agreement": "docs/design/ZONE_MATRIX_CONTRACT.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0391.md"
+    },
+    {
+      "build": "NXS-LOCAL-0390",
+      "status": "complete",
+      "title": "Designs, contracts and governance: zone matrix FROZEN, ACI, topology sources, ASA/FortiGate policy, recertification, backlog truth",
+      "summary": "The zone matrix contract is FROZEN; the ACI segmentation design and rule recertification contract are DRAFT; topology sources and ASA/FortiGate policy designs carry recorded PO decisions; the Financial baseline cites neXus identifiers. The",
+      "started": "2026-11-10",
+      "completed": "2026-11-14",
+      "movement": "DOCS",
+      "docs": {
+        "agreement": "docs/design/ZONE_MATRIX_CONTRACT.md",
+        "validation": "docs/design/GOV_ORCH_9_BACKLOG_ACTIVE_SET_AND_TERMINAL_RESERVE.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0390.md"
+    },
+    {
+      "build": "NXS-LOCAL-0389",
+      "status": "automated_validated",
+      "title": "Failover vendors phase 0: Cisco ASA and FortiGate identity and HA facts, ASA readiness measurement",
+      "summary": "Cisco ASA and FortiGate unit serials, pair serial identity and HA facts are stored (V209), a FailoverVendor descriptor lists ASA pairs as readiness not available yet, and the four PO-approved ASA reads were measured once with the PO attendi",
+      "started": "2026-11-12",
+      "completed": "2026-11-13",
+      "movement": "IMPLEMENTATION",
+      "docs": {
+        "agreement": "docs/design/PO_DECISION_RECORD_2026_11_13_FAILOVER_ASA_FORTIGATE_PHASE0.md",
+        "validation": "docs/design/ASA_FAILOVER_MEASUREMENT_2026_11_13.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0389.md"
+    },
+    {
+      "build": "NXS-LOCAL-0388",
+      "status": "automated_validated",
+      "title": "Policy: rule object usage, shadowing resolution with the A0 amendment, legacy hygiene mode, PAN change actor, ASA parser",
+      "summary": "Rule object usage (contract FROZEN) gives a one-rule mode with per-object usage states; shadowing resolves negated cells, Palo Alto source ports and Check Point ICMP codes under the frozen A0 amendment; hygiene legacy mode is built but not",
+      "started": "2026-11-11",
+      "completed": "2026-11-14",
+      "movement": "IMPLEMENTATION",
+      "docs": {
+        "agreement": "docs/design/RULE_OBJECT_USAGE_CONTRACT.md",
+        "validation": "docs/design/ASA_POLICY_MAPPER_VALIDATION_2026_11_14.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0388.md"
+    },
+    {
+      "build": "NXS-LOCAL-0387",
+      "status": "automated_validated",
+      "title": "Navigation and Overview: nine task groups, Administration pages, attention list, health light, error boundaries",
+      "summary": "One navigation model with nine task groups puts every screen and sub-view in the menu, Administration has five pages, Platform status and Scheduled jobs moved there, a neXus health light sits in the top bar, the Overview answers what to loo",
+      "started": "2026-11-12",
+      "completed": "2026-11-14",
+      "movement": "UI",
+      "docs": {
+        "agreement": "docs/design/PO_DECISION_RECORD_2026_11_12_NAVIGATION_AND_ADMINISTRATION_REDESIGN.md",
+        "validation": "docs/design/OVERVIEW_ATTENTION_LIST_DESIGN_2026_11_13.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0387.md"
+    },
+    {
+      "build": "NXS-LOCAL-0386",
+      "status": "automated_validated",
+      "title": "Platform and operations: /opt/nexus deploy tree, scheduled-job switches, credential canary, frontend fast path",
+      "summary": "The HOST-A deploy tree moved to /opt/nexus under the service account (live since 2026-11-12), scheduled collection resumed with per-family switches (V203), the MDS export runs without a login shell, credential failures alert and a nightly c",
+      "started": "2026-11-10",
+      "completed": "2026-11-14",
+      "movement": "IMPLEMENTATION",
+      "docs": {
+        "agreement": "docs/design/PO_DECISION_RECORD_2026_11_10_SCHEDULED_JOB_SWITCHES.md",
+        "validation": "docs/design/OPT_NEXUS_CUTOVER_2026_11_12_ARGON.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0386.md"
+    },
+    {
+      "build": "NXS-LOCAL-0385",
+      "status": "automated_validated",
+      "title": "Directory sign-in: Active Directory service bind, TLS handshake, display name and role refresh fixes",
+      "summary": "Sign-in uses an Active Directory service-bind model with group-to-role sync bindings; the TLS handshake completes once and names its failures, users show by sAMAccountName, and a directory group set refreshed on its own observation clock no",
+      "started": "2026-11-11",
+      "completed": "2026-11-13",
+      "movement": "IMPLEMENTATION",
+      "docs": {
+        "agreement": "docs/design/PO_DECISION_RECORD_2026_11_11_LDAP_SERVICE_BIND.md",
+        "validation": "docs/design/LDAP_SERVICE_BIND_DESIGN_2026_11_11.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0385.md"
+    },
+    {
+      "build": "NXS-LOCAL-0384",
+      "status": "real_env_validated",
+      "title": "Lifecycle and security checks: license, contract and Live Patch reads fleet-wide, advisory intake and matching",
+      "summary": "License, support-contract and Check Point Live Patch reads run fleet-wide at each inventory (V200, gate groups A and B, Infoblox member version, PAN-OS 12 reads), and the Lifecycle and security view shows license problems, Live Patch and a",
+      "started": "2026-11-10",
+      "completed": "2026-11-12",
+      "movement": "IMPLEMENTATION",
+      "docs": {
+        "agreement": "docs/design/PO_DECISION_RECORD_2026_11_10_LIFECYCLE_READS_FLEET_WIDE.md",
+        "validation": "docs/design/LIFECYCLE_READS_MEASUREMENTS_2026_11_10.md"
+      },
+      "detail": "docs/history/builds/NXS-LOCAL-0384.md"
+    },
+    {
       "build": "NXS-LOCAL-0383",
       "status": "in_progress",
       "title": "Enterprise stack alignment, phase 0: Spring Security sign-in, JSON logs, monitoring, secrets, scans",

@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
-  "reviewed_at": "2026-11-10",
-  "reviewed_current_build": "NXS-LOCAL-0383",
+  "reviewed_at": "2026-11-14",
+  "reviewed_current_build": "NXS-LOCAL-0391",
   "authority": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_ARCHITECTURE_CONTRACT.md"
@@ -111,6 +111,13 @@
     }
   ],
   "product_build_ids": [
+    "NXS-LOCAL-0391",
+    "NXS-LOCAL-0389",
+    "NXS-LOCAL-0388",
+    "NXS-LOCAL-0387",
+    "NXS-LOCAL-0386",
+    "NXS-LOCAL-0385",
+    "NXS-LOCAL-0384",
     "NXS-LOCAL-0383",
     "NXS-LOCAL-0382",
     "NXS-LOCAL-0381",
