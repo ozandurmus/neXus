@@ -7,6 +7,8 @@
 --    replaced as a set per train when a page is read in full. The evidence column holds the one table line the statement
 --    was read from (public vendor text, at most 300 characters); the raw page is never stored.
 --
+-- 3. checkpoint_jumbo_page_load: when each train's page was last accepted in full (per-train freshness).
+--
 -- Public data only. No audit trigger: machine-written rows, never entered by a person (the same rule as V205).
 
 ALTER TABLE advisory DROP CONSTRAINT IF EXISTS advisory_source_check;
@@ -32,4 +34,15 @@ CREATE TABLE IF NOT EXISTS checkpoint_jumbo_statement (
 );
 CREATE INDEX IF NOT EXISTS checkpoint_jumbo_statement_cve ON checkpoint_jumbo_statement (cve_id);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON checkpoint_jumbo_statement TO ui2_app;
+-- One row per train: the last resolved-issues page of that train that was accepted in full (every CVE line read, no
+-- take of the stored set missing). A Check Point device is judged only on a train with a row here that is at most 30
+-- days old (amendment A-2026-11-13, A.5, corrected 2026-11-14).
+CREATE TABLE IF NOT EXISTS checkpoint_jumbo_page_load (
+    train          TEXT        PRIMARY KEY CHECK (train ~ '^R[0-9]{2}(\.[0-9]{1,2})?$'),
+    loaded_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    statements     INTEGER     NOT NULL CHECK (statements >= 0),
+    source_url     TEXT        NOT NULL CHECK (source_url LIKE 'https://sc1.checkpoint.com/%' AND length(source_url) <= 300),
+    content_sha256 TEXT        NOT NULL CHECK (content_sha256 ~ '^[0-9a-f]{64}$')
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON checkpoint_jumbo_statement, checkpoint_jumbo_page_load TO ui2_app;

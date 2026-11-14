@@ -159,10 +159,21 @@ final class AdvisoryTestSupport {
                     e.getValue().stream().map(StoredAdvisory::publishedOn).filter(java.util.Objects::nonNull).max(java.util.Comparator.naturalOrder()).orElse(null))).toList();
         }
         final List<StoredJumboStatement> jumbo = new ArrayList<>();
+        final Map<String, JumboPageLoad> pageLoads = new java.util.TreeMap<>();
         @Override public void replaceJumboStatements(String train, List<StoredJumboStatement> statements) {
             jumbo.removeIf(j -> j.train().equals(train));
             jumbo.addAll(statements);
+            if (!statements.isEmpty()) pageLoads.put(train, new JumboPageLoad(train, Instant.now(), statements.size()));
         }
+        @Override public java.util.Set<Integer> jumboTakes(String train) {
+            return jumbo.stream().filter(j -> j.train().equals(train)).map(StoredJumboStatement::take).collect(java.util.stream.Collectors.toSet());
+        }
+        @Override public Map<String, java.util.Set<String>> jumboCveIdsByTrain() {
+            Map<String, java.util.Set<String>> out = new java.util.TreeMap<>();
+            jumbo.forEach(j -> out.computeIfAbsent(j.train(), k -> new java.util.TreeSet<>()).add(j.cveId()));
+            return out;
+        }
+        @Override public List<JumboPageLoad> jumboPageLoads() { return List.copyOf(pageLoads.values()); }
         @Override public List<StoredJumboStatement> jumboStatements(String cveId) {
             return jumbo.stream().filter(j -> j.cveId().equals(cveId)).toList();
         }

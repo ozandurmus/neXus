@@ -132,17 +132,29 @@ public final class AdvisoryIngestService {
                 if (row.isPresent()) stored.add(row.get()); else rejected++;
             }
             repository.upsertAdvisories(stored);
-            // Check Point (amendment A-2026-11-13): a resolved-issues page read in full replaces the statements of its train.
-            // A page that was not recognised yields no train and changes nothing.
+            // Check Point (amendment A-2026-11-13, corrected 2026-11-14): a resolved-issues page replaces the statements of its
+            // train only when it was read in full: every CVE line understood, at least one statement, every statement storable,
+            // and no take of the stored set missing (an accumulator's history only grows; a page that lost takes was cut short
+            // or changed form). Anything else keeps the last good statements, and the train ages towards "not evaluated".
             if (AdvisoryModel.SOURCE_CHECKPOINT.equals(source) && parsed.jumboTrain() != null) {
+                String train = parsed.jumboTrain();
                 List<StoredJumboStatement> statements = new ArrayList<>();
+                boolean storable = true;
                 for (AdvisoryModel.JumboStatement j : parsed.jumboStatements()) {
-                    Optional<StoredJumboStatement> row = toStored(parsed.jumboTrain(), url, sha, j);
-                    if (row.isPresent()) statements.add(row.get()); else rejected++;
+                    Optional<StoredJumboStatement> row = toStored(train, url, sha, j);
+                    if (row.isPresent()) statements.add(row.get()); else storable = false;
                 }
-                repository.replaceJumboStatements(parsed.jumboTrain(), statements);
-                LOG.info("advisory ingest source={} run={} jumbo_train={} statements={}", source, runId, parsed.jumboTrain(),
-                        statements.size());
+                java.util.Set<Integer> takes = new java.util.HashSet<>();
+                statements.forEach(j -> takes.add(j.take()));
+                String refused = parsed.rejected() > 0 ? "PAGE_ROWS_UNREAD" : statements.isEmpty() ? "PAGE_WITHOUT_STATEMENTS"
+                        : !storable ? "PAGE_STATEMENT_REFUSED" : !takes.containsAll(repository.jumboTakes(train)) ? "PAGE_LOST_TAKES" : null;
+                if (refused == null) {
+                    repository.replaceJumboStatements(train, statements);
+                    LOG.info("advisory ingest source={} run={} jumbo_train={} statements={}", source, runId, train, statements.size());
+                } else {
+                    if (parsed.rejected() == 0) rejected++;
+                    LOG.warn("advisory ingest source={} run={} jumbo_train={} code={}", source, runId, train, refused);
+                }
             }
             // The known-exploited set is replaced as a whole, but only by a document that yielded entries: an empty or
             // unreadable catalog must not erase the flag (contract rule 4 spirit, section 4 "changes nothing").
@@ -203,6 +215,16 @@ public final class AdvisoryIngestService {
             int received = existing.map(AdvisoryRepository.FeedRun::documentsReceived).orElse(0);
             int rejected = existing.map(AdvisoryRepository.FeedRun::rejected).orElse(0);
             String outcome = outcome(received, rejected, fetched, failed, reason);
+            // Check Point (amendment A-2026-11-13, corrected 2026-11-14): a run that accepted no resolved-issues page is not a
+            // load, whatever else it received; it never refreshes the age of the source.
+            if (AdvisoryModel.SOURCE_CHECKPOINT.equals(source) && !"FAILED".equals(outcome)) {
+                java.time.Instant started = existing.map(AdvisoryRepository.FeedRun::startedAt).orElse(null);
+                boolean accepted = started != null && repository.jumboPageLoads().stream().anyMatch(p -> !p.loadedAt().isBefore(started));
+                if (!accepted) {
+                    outcome = "FAILED";
+                    if (reason == null) reason = "NO_PAGE_ACCEPTED";
+                }
+            }
             if (reason == null && !"OK".equals(outcome)) {
                 reason = received == 0 ? "NOTHING_RECEIVED" : failed > 0 ? "SOME_DOCUMENTS_FAILED" : "SOME_ENTRIES_REJECTED";
             }

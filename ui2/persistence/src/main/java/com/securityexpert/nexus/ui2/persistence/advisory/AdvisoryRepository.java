@@ -81,9 +81,30 @@ public interface AdvisoryRepository {
     record StoredJumboStatement(String train, int take, String cveId, String kind, String productText, String skRef,
             String evidence, String sourceUrl, String contentSha256) { }
 
-    /** Replaces every statement of one train in one transaction (a page read in full). */
+    /** When one train's page was last accepted in full, and how many statements it gave. */
+    record JumboPageLoad(String train, Instant loadedAt, int statements) { }
+
+    /**
+     * Replaces every statement of one train and records the page as accepted, in one transaction (a page read in full).
+     * {@code sourceUrl} and {@code contentSha256} are those of the page.
+     */
     default void replaceJumboStatements(String train, List<StoredJumboStatement> statements) {
         throw new UnsupportedOperationException("jumbo statements are not stored by this repository");
+    }
+
+    /** The takes the stored statements of one train name. */
+    default java.util.Set<Integer> jumboTakes(String train) {
+        return java.util.Set.of();
+    }
+
+    /** The CVE ids the stored statements name, per train. */
+    default java.util.Map<String, java.util.Set<String>> jumboCveIdsByTrain() {
+        return java.util.Map.of();
+    }
+
+    /** The last accepted page of each train that has one. */
+    default List<JumboPageLoad> jumboPageLoads() {
+        return List.of();
     }
 
     /** The stored statements that name one CVE id, every train, ordered by train and take. */

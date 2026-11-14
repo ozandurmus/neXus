@@ -88,12 +88,19 @@ class CheckPointAdvisoryFlowTest {
         assertEquals("OK", run.outcome());
         assertEquals(4, run.documentsReceived());
         assertEquals(2, run.advisoriesStored());
-        // A page read again replaces its own train only; one that is not this page form changes nothing.
+        // A page read again replaces its own train only, when it still holds every stored take; one that is not this page
+        // form, or lost a take, changes nothing.
         ingest.ingest("checkpoint", "run-checkpoint-0002", PAGE_R8120, page(170, row("VPN", "UPDATE: Resolved CVE-2026-90009.")));
+        assertEquals(3, repo.jumbo.size(), "take 166 is missing: not accepted");
+        byte[] grown = (new String(page(170, row("VPN", "UPDATE: Resolved CVE-2026-90009.")), StandardCharsets.UTF_8)
+                + new String(page(166, row("VPN", "UPDATE: Resolved CVE-2026-90001.")), StandardCharsets.UTF_8)).getBytes(StandardCharsets.UTF_8);
+        ingest.ingest("checkpoint", "run-checkpoint-0002", PAGE_R8120, grown);
         assertEquals(List.of("R82", "R81.20"), repo.jumbo.stream().map(j -> j.train()).distinct().toList());
-        assertEquals(2, repo.jumbo.size());
+        assertEquals(3, repo.jumbo.size());
+        assertEquals(List.of("CVE-2026-90001", "CVE-2026-90009"), repo.jumbo.stream().filter(j -> j.train().equals("R81.20"))
+                .map(j -> j.cveId()).sorted().toList(), "the line naming CVE-2026-90002 is gone from the new page");
         ingest.ingest("checkpoint", "run-checkpoint-0002", PAGE_R8120, "<html>changed layout</html>".getBytes(StandardCharsets.UTF_8));
-        assertEquals(2, repo.jumbo.size());
+        assertEquals(3, repo.jumbo.size());
     }
 
     @Test

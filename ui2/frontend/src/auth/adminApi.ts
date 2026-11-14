@@ -359,7 +359,8 @@ export interface LifecycleVulnerabilities {
   /** Only EVALUATED is a judgement; the other three states say why the device was not judged. */
   state: "EVALUATED" | "NOT_EVALUATED" | "NOT_COVERED" | "VERSION_UNKNOWN";
   reason?: "SOURCE_NEVER_LOADED" | "SOURCE_STALE" | "NO_COMPARATOR" | "VERSION_MISSING" | "VERSION_UNPARSED"
-    | "JUMBO_TAKE_MISSING" | "JUMBO_TRAIN_MISMATCH" | "SPARK_NOT_COVERED" | "TRAIN_NOT_COVERED" | null;
+    | "JUMBO_TAKE_MISSING" | "JUMBO_TRAIN_MISMATCH" | "SPARK_NOT_COVERED" | "TRAIN_NOT_COVERED"
+    | "TRAIN_NEVER_LOADED" | "TRAIN_STALE" | "TRAIN_RECORDS_MISSING" | null;
   product_key?: string | null;
   affected?: number; affected_exploited?: number; affected_critical_high?: number; not_evaluable?: number; fixed?: number;
   /** Check Point: not judged because a proposed fix rule waits for a security_admin's confirmation; kept out of the other counts. */
@@ -396,6 +397,9 @@ export interface LifecycleAdvisorySource {
   source: string; last_run_at: string | null; outcome: "OK" | "PARTIAL" | "FAILED" | null; reason: string | null;
   advisories: number; needs_review: number; oldest: string | null; newest: string | null; age_days: number | null;
   age_state: "OK" | "AMBER" | "RED" | "NEVER";
+  /** Check Point only: each Gaia version's resolved-issues list; a device is judged only on a usable one. */
+  trains?: { train: string; loaded_at: string | null; age_days: number | null; age_state: "OK" | "AMBER" | "RED" | "NEVER";
+    cves: number; cves_without_advisory: number; usable: boolean }[];
 }
 export const getLifecycle = () => call<LifecycleFleet>("/api/v2/lifecycle", "GET");
 export const getDeviceLifecycle = (id: string) => call<LifecycleDevice>(`/devices/${encodeURIComponent(id)}/lifecycle`, "GET");

@@ -54,6 +54,20 @@ public final class AdvisoryEstate {
     }
 
     /** {@code pending}: not evaluable because a fix rule waits for confirmation (kept out of the other counts). */
+    /**
+     * One Check Point train (amendment A-2026-11-13, A.5, corrected 2026-11-14): when its resolved-issues page was last
+     * accepted in full ({@code loadedAt} null = never), how many CVE ids that page names, and how many of them have no stored
+     * advisory. A device of the train is judged only when the train is usable.
+     */
+    public record TrainState(String train, Instant loadedAt, Long ageDays, String ageState, int cves, int cvesWithoutAdvisory) {
+        public boolean usable() { return !"NEVER".equals(ageState) && !"RED".equals(ageState) && cvesWithoutAdvisory == 0; }
+
+        public String reason() {
+            return "NEVER".equals(ageState) ? "TRAIN_NEVER_LOADED" : "RED".equals(ageState) ? "TRAIN_STALE"
+                    : cvesWithoutAdvisory > 0 ? "TRAIN_RECORDS_MISSING" : null;
+        }
+    }
+
     public record Counts(int affected, int fixed, int notAffected, int notEvaluable, int pending) { }
 
     /** One device's verdict on one advisory; never {@code NOT_LISTED}. */
@@ -100,6 +114,12 @@ public final class AdvisoryEstate {
 
     public static AdvisoryEstate evaluate(AdvisoryCore core, List<StoredAdvisory> stored, List<StoredKnownExploited> exploited,
             Map<String, SourceState> sources, List<DeviceFacts> deviceFacts) {
+        return evaluate(core, stored, exploited, sources, Map.of(), deviceFacts);
+    }
+
+    /** As above; {@code checkpointTrains}: the state of each Check Point train (a train without an entry is never loaded). */
+    public static AdvisoryEstate evaluate(AdvisoryCore core, List<StoredAdvisory> stored, List<StoredKnownExploited> exploited,
+            Map<String, SourceState> sources, Map<String, TrainState> checkpointTrains, List<DeviceFacts> deviceFacts) {
         Map<String, LocalDate> kev = new HashMap<>();
         for (StoredKnownExploited k : exploited) kev.merge(k.cveId(), k.dateAdded(), (a, b) -> a.isBefore(b) ? a : b);
 
@@ -170,6 +190,16 @@ public final class AdvisoryEstate {
                 }
                 assessments.put(device.deviceId(), empty(VERSION_UNKNOWN, reason, product, compared(source)));
                 continue;
+            }
+            // Check Point: the device's own train must have been loaded in full and recently (fail closed per train).
+            if (AdvisoryModel.SOURCE_CHECKPOINT.equals(sourceOf(product))) {
+                String train = comparator.get().train(comparator.get().canonical(version).orElseThrow()).orElse("");
+                TrainState ts = checkpointTrains.get(train);
+                if (ts == null || !ts.usable()) {
+                    assessments.put(device.deviceId(), empty(NOT_EVALUATED, ts == null ? "TRAIN_NEVER_LOADED" : ts.reason(), product,
+                            compared(source)));
+                    continue;
+                }
             }
             int affected = 0, affectedExploited = 0, criticalHigh = 0, notEvaluable = 0, fixed = 0, pending = 0;
             Severity worst = null;

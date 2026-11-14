@@ -93,6 +93,7 @@ class AuditCoverageCompletenessTest {
             Map.entry("known_exploited_cve", "V205: public known-exploited catalog written by the ingest endpoint"),
             Map.entry("advisory_feed_run", "V205: record of one fetch run, written by the ingest endpoint; holds counts and code words only"),
             Map.entry("checkpoint_jumbo_statement", "V213: public Check Point Jumbo resolved-issues statements written by the advisory ingest endpoint"),
+            Map.entry("checkpoint_jumbo_page_load", "V213: when each public Check Point resolved-issues page was last accepted, written by the advisory ingest endpoint"),
             Map.entry("ha_pair_identity", "V209: a failover pair's unit serials recorded and compared by the inventory job from its own reads; the jobs row is audited"),
             Map.entry("cluster_member_diff", "V52: server-side recomputed summary of collected texts"),
             Map.entry("pseudonym_registry", "V53: derived AIView pseudonym claims, keyed by HMAC"),

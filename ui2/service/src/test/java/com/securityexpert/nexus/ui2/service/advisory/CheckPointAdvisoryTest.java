@@ -163,8 +163,9 @@ class CheckPointAdvisoryTest {
         assertEquals(VerdictKind.AFFECTED, verdict(a, GW, "R82 Jumbo Take 1").kind());
         assertEquals(VerdictKind.FIXED, verdict(a, GW, "R82 Jumbo Take 130").kind());
         assertEquals(VerdictKind.AFFECTED, verdict(a, MGMT, "R81.20 Jumbo Take 100").kind());
-        assertEquals(new Verdict(VerdictKind.NOT_LISTED, "TRAIN_NOT_NAMED", null), verdict(a, MGMT, "R82 Jumbo Take 1"),
-                "the record names R82 for gateways only");
+        assertEquals("FIX_RULE_UNCONFIRMED", verdict(a, MGMT, "R82 Jumbo Take 1").basis(),
+                "the record names R82 for gateways only, but the R82 page resolved it: a proposal, never 'not listed'");
+        assertEquals(VerdictKind.FIXED, verdict(a, MGMT, "R82 Jumbo Take 126").kind());
         assertEquals(VerdictKind.NOT_EVALUABLE, verdict(a, GW, "R81.20").kind(), "no take: never judged");
     }
 
@@ -209,6 +210,29 @@ class CheckPointAdvisoryTest {
         ParsedAdvisory twoGroups = parseRecord(record("CVE-2026-90001", "checkpoint", "[" + entry("Quantum Security Management, Quantum Gateway",
                 "Quantum Gateway versions R81.20 and Spark versions R81.10") + "]"));
         assertEquals("RECORD_CONFLICT", twoGroups.parseNote(), "several groups: which trains the other products have is not said");
+    }
+
+    /** Review 2026-11-14, finding 6: product classes are compared by the product key they stand for. */
+    @Test
+    void theSentenceAndTheProductFieldAreComparedByProductKey() {
+        ParsedAdvisory maestro = parseRecord(record("CVE-2026-90001", "checkpoint", "[" + entry("Quantum Security Gateways, Quantum Maestro",
+                "Check Point Quantum Maestro versions R81.20") + "]"), fix("R81.20", 50, "CVE-2026-90001"));
+        assertEquals("PRODUCT_SUBSET_UNKNOWN", verdict(maestro, GW, "R81.20 Jumbo Take 40").basis(), "the sentence narrows to Maestro");
+        ParsedAdvisory twoGroups = parseRecord(record("CVE-2026-90001", "checkpoint", "[" + entry("Quantum Security Gateways, Quantum Maestro, Spark",
+                "Check Point Quantum Security Gateways versions R81.20 and Check Point Spark versions R81.10") + "]"));
+        assertEquals(ParseState.PARSED, twoGroups.parseState(), "gateways are named: no conflict");
+    }
+
+    /** Review 2026-11-14, finding 7 and 8: an unread hotfix level and an uncovered software version say so. */
+    @Test
+    void anUnreadHotfixLevelIsNotAMissingTakeAndTheSoftwareVersionDecidesCoverage() {
+        var c = new CheckPointGaiaComparator(GW);
+        assertEquals("VERSION_UNPARSED", c.unparsedReason(CheckPointGaiaComparator.compose("R81.20", "Jumbo Hotfix Take 99")));
+        assertEquals(Optional.of("TRAIN_NOT_COVERED"), c.notCoveredReason(CheckPointGaiaComparator.compose("R81.10", "R81.20 Jumbo Take 1")));
+        assertEquals(Optional.empty(), c.notCoveredReason(CheckPointGaiaComparator.compose("R82", "R81.20 Jumbo Take 1")));
+        ParsedAdvisory a = parseRecord(record("CVE-2026-90001", "checkpoint", "[" + entry("Quantum Security Gateway",
+                "R81.20 with Jumbo Hotfix Take 165 or below") + "]"));
+        assertEquals("JUMBO_TAKE_MISSING", verdict(a, GW, "R81.20").basis(), "the evaluator gives the comparator's reason");
     }
 
     @Test

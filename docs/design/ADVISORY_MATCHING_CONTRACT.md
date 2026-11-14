@@ -230,6 +230,12 @@ action of those rules is specified here (A.9) and built in a second step; until 
 that use Live Patch facts stay out of this contract (A.10). A.1 to A.8 and A.10 are built with this amendment; the
 confirm action of A.9 is the next step (PO 2026-11-14).
 
+**Correction C-2026-11-14 (fail closed).** An independent review of the first build (`ARGON_CPADV_REVIEW_1114`, kept by
+the PO session) found that a failed or changed page, a missing CVE record or an unread advisory could leave a Check Point
+device shown as judged ("None affected"). On the PO session's instruction ("fix every confirmed one fail-closed") the
+rules below were corrected before the first ship: page acceptance (A.4), per-train usability (A.5), the run outcome
+(A.3), and the trains an open question covers (A.7, A.8). Nothing in the corrections makes a verdict less strict.
+
 ### A.1 What Check Point publishes (measured 2026-11-13)
 
 Plain public `GET` requests from a workstation, without cookies or estate data, on 2026-11-13:
@@ -265,23 +271,28 @@ fetched.
 
 The four pages are fetched and handed over first, in the order above; then the record of every CVE id they name,
 without repeats, at most 1000 per run. A page that fails is counted and the run goes on; a certificate failure stops
-the source (PO stop rule). With no page read the run ends with `NO_PAGE_READ`. Pacing (one request per second) is per
+the source (PO stop rule). With no page read the run ends with `NO_PAGE_READ`. A run in which no page was **accepted**
+(A.4) closes `FAILED` (`NO_PAGE_ACCEPTED`) whatever else it received, so it never counts as a load. Pacing (one request per second) is per
 host. The default source list of the workload includes `checkpoint`; no manifest change is needed.
 
 ### A.4 Ingest and storage (sections 4 and 5)
 
 - **A page** yields no advisory. Each table line whose Description names a CVE id becomes one statement per CVE id:
   train, take, CVE id, kind (A.6), the Product cell, the sk article the line refers to, and the line itself (public
-  text, at most 300 characters). The statements of a train are replaced as a set when its page is recognised (at
-  least one take section). A page without a take section changes nothing and is counted as rejected; a CVE line of
-  another shape is counted as rejected and not guessed.
+  text, at most 300 characters). The statements of a train are replaced as a set only when its page is **accepted**:
+  at least one take section and one statement, every CVE line read (a line of another shape is counted as rejected and
+  not guessed), every statement storable, and every take of the stored set still present (an accumulator's history
+  only grows; a page that lost a take was cut short or changed form). A page that is not accepted changes nothing: the
+  last good statements stay, and the train ages towards `NOT_EVALUATED` (A.5). Each accepted page records the time of
+  its train's last good load (`checkpoint_jumbo_page_load`).
 - **A record** yields one advisory `checkpoint:<CVE id>`: title (`cna.title`, else the English description), severity
   and score (CVSS 4.0, else 3.1, else 3.0 of `cna.metrics`), published and updated dates of `cveMetadata`, link = the
   record's sk article, else the sk article of a resolved-issues line. Its rules are built from the record and the
   stored statements of the same CVE id (A.7). A record that is not `PUBLISHED` or not JSON is rejected.
 - Storage: migration `V213` adds `checkpoint` to the source checks of `advisory` and `advisory_feed_run` and the table
   `checkpoint_jumbo_statement` (train, take, CVE id, kind, product text, sk article, line, page address, page SHA-256,
-  load time). Public data only, no audit trigger, as V205.
+  load time) and `checkpoint_jumbo_page_load` (train, time of the last accepted page, statement count, page address and
+  SHA-256). Public data only, no audit trigger, as V205.
 
 ### A.5 Products and the comparison basis (sections 6 and 7, rule 4)
 
@@ -293,10 +304,15 @@ host. The default source list of the workload includes `checkpoint`; no manifest
 - The compared version joins two values neXus already stores: the software version (`R81.20`) and the hotfix level
   read from `cpinfo -y all` (`R81.20 Jumbo Take 119`). It is used only when the hotfix level names the same train.
   No hotfix level: `VERSION_UNKNOWN` with `JUMBO_TAKE_MISSING` (never "take 0"). Another train: `VERSION_UNKNOWN` with
-  `JUMBO_TRAIN_MISMATCH`.
+  `JUMBO_TRAIN_MISMATCH`. A hotfix level in another form: `VERSION_UNKNOWN` with `VERSION_UNPARSED`. Coverage
+  (`NOT_COVERED`) is decided by the software version alone.
 - Takes compare as whole numbers inside one train; two trains are never compared. A Jumbo Hotfix Accumulator take
   contains every earlier take of its train, so a take at or above the take whose resolved issues list a CVE carries
   that resolution.
+- **Usability per train (rule 4 per train).** A Check Point device with a readable version is judged only when its
+  own train is usable: its page was accepted in the last 30 days, and every CVE id that page names has a stored
+  advisory. Otherwise the device is `NOT_EVALUATED` with `TRAIN_NEVER_LOADED`, `TRAIN_STALE` or
+  `TRAIN_RECORDS_MISSING`; it is never "nothing matched". The source table lists each train's state.
 - `NOT_COVERED` with a reason: a Quantum Spark firmware (`R81.10.15`, three parts): `SPARK_NOT_COVERED`; a Gaia train
   without a page read here (`R81.10`, `R81`, ...): `TRAIN_NOT_COVERED`; a Check Point device without a known role: no
   product.
@@ -332,8 +348,12 @@ host. The default source list of the workload includes `checkpoint`; no manifest
   names but no group names (a field listing management while the sentence speaks of gateways) gets the sentence's
   trains as a train named without a take (proposal row, never `AFFECTED`) when the sentence has one group; with several
   groups the advisory is `NEEDS_REVIEW` (`RECORD_CONFLICT`).
-- The record decides which products and trains are named (rule 3, vendor first). A train a resolved-issues page names
-  but a parsed Check Point record does not is not listed for that advisory.
+- The record decides which products are named (rule 3, vendor first). A train a resolved-issues page names but a
+  parsed Check Point record does not name for one of its products gets the proposal row for that product (never "not
+  listed"). A Check Point record that names no Gaia product (only Spark, for example) for a CVE a Gaia page names is a
+  contradiction: `NEEDS_REVIEW` (`RECORD_CONFLICT`).
+- Product names are compared by the product key they stand for (gateway, management): a subset name and a full gateway
+  name both stand for gateways.
 - The fix statement shown is "<train> Jumbo Take <n>: <the resolved-issues line>", or "Affected up to <train> Jumbo
   Take <M> (vendor CVE record)".
 - Rule 6 holds: every affected verdict is "affected by version; exposure depends on configuration" (many Check Point
@@ -345,7 +365,7 @@ host. The default source list of the workload includes `checkpoint`; no manifest
 | --- | --- | --- |
 | (none) | `PARSED` | rules as A.7 |
 | `THIRD_PARTY_CVE` | `PARSED` | proposals only (A.7 last row) |
-| `UNKNOWN_PRODUCT`, `UNKNOWN_VERSION_FORM`, `UNKNOWN_STATUS`, `NO_AFFECTED`, `RECORD_CONFLICT`, `SELF_CHECK_FAILED` | `NEEDS_REVIEW` | `NOT_EVALUABLE` for both product keys on every train the record or its resolved-issues lines name, or the whole product when none is known |
+| `UNKNOWN_PRODUCT`, `UNKNOWN_VERSION_FORM`, `UNKNOWN_STATUS`, `NO_AFFECTED`, `RECORD_CONFLICT`, `SELF_CHECK_FAILED` | `NEEDS_REVIEW` | `NOT_EVALUABLE` for both product keys on every train named anywhere in the record's version texts (read or not) or in its resolved-issues lines; also the whole product when the record has no readable `affected` list or a version text names no train |
 
 ### A.9 Pending proposals and their confirmation
 
