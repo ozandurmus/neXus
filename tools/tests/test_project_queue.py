@@ -563,6 +563,15 @@ def test_reopening_a_cold_shard_row_moves_it_back_to_the_active_set(queue_env):
     assert "item_done" in _ids(queue_env["backlog"])
 
 
+def test_retitle_priority_re_rates_an_item_and_keeps_its_status(queue_env):
+    assert pq.main(["retitle", "--id", "item_open_p0", "--priority", "P2"]) == 0
+    item = next(i for i in json.loads(queue_env["backlog"].read_text(encoding="utf-8"))["items"]
+                if i["id"] == "item_open_p0")
+    assert item["priority"] == "P2"
+    assert item["status"] == "planned"
+    assert item["title"] == "An open P0 item, planned"
+
+
 # --- GOV.ORCH.5 amendment (proposed, section 8): migrate-open-notes -------
 
 def test_migrate_open_notes_requires_include_open_flag(queue_env):
