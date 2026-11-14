@@ -1005,7 +1005,10 @@ def _ship(args: argparse.Namespace) -> int:
     # the preview does; a failed preview then closes the pull request and deletes the pushed branch.
     # The frontend path always opens the pull request early: GitHub's validate (about 95 s, and the Java suites this path
     # does not run locally) then overlaps the preview instead of following it.
-    early_pr = (bool(getattr(args, "early_pr", False)) or frontend_path) and run_preview
+    # 2026-11-15: early PR is now the default for every previewed ship (the 334 s checks wait of 2026-11-14 ran after the
+    # 564 s preview although GitHub only needs the pushed branch); `--no-early-pr` restores push-after-preview.
+    early_pr = (not bool(getattr(args, "no_early_pr", False)) or bool(getattr(args, "early_pr", False))
+                or frontend_path) and run_preview
     url = open_pull_request() if early_pr else ""
     if run_preview:
         try:
@@ -1104,7 +1107,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="emergency: merge without waiting for GitHub's checks; a reason is mandatory and printed")
     sh.add_argument("--early-pr", action="store_true",
                     help="push and open the pull request before the preview so GitHub's checks run during it "
-                         "(default: nothing is pushed until the preview has passed)")
+                         "(now the default for every previewed ship; kept for compatibility)")
+    sh.add_argument("--no-early-pr", action="store_true",
+                    help="push nothing until the preview has passed (the early pull request is the default)")
     sh.add_argument("--no-fast-path", action="store_true",
                     help="never take the docs-only or frontend fast path (preview, image build and the full deploy always run)")
     sh.add_argument("--notes", help="extra lines for the PR body (live validation, measurements)")

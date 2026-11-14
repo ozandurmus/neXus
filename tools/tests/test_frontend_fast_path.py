@@ -367,7 +367,7 @@ def test_other_modules_not_current_takes_the_full_path(monkeypatch, capsys):
     events, deploys = [], []
     ship_doubles(monkeypatch, FRONTEND_DIFF, events, current=(False, "deployed commit abc differs beyond frontend/docs"),
                  deploys=deploys)
-    assert sa._ship(ship_args()) == 0
+    assert sa._ship(ship_args(no_early_pr=True)) == 0
     out = lines(capsys)
     path = next(o for o in out if o.get("ship_path"))
     assert path["ship_path"] == "full" and "not provably current" in path["why"]
