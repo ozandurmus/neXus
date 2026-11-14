@@ -32,6 +32,15 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /api/v2/zone-matrix/draft/zones/*/delete", ActionRegistry.ZONE_MATRIX_EDIT),
             Map.entry("POST /api/v2/zone-matrix/draft/discard", ActionRegistry.ZONE_MATRIX_EDIT),
             Map.entry("POST /api/v2/zone-matrix/draft/publish", ActionRegistry.ZONE_MATRIX_PUBLISH),
+            // Zone matrix, delivery step 2 (sections 3.4, 4 and 6.1): the matrix, the template and reference confirmation.
+            Map.entry("GET /api/v2/zone-matrix/template", ActionRegistry.ZONE_MATRIX_READ),
+            Map.entry("POST /api/v2/zone-matrix/draft/cells", ActionRegistry.ZONE_MATRIX_EDIT),
+            Map.entry("POST /api/v2/zone-matrix/draft/cells/clear", ActionRegistry.ZONE_MATRIX_EDIT),
+            Map.entry("POST /api/v2/zone-matrix/draft/default", ActionRegistry.ZONE_MATRIX_EDIT),
+            Map.entry("POST /api/v2/zone-matrix/draft/service-sets", ActionRegistry.ZONE_MATRIX_EDIT),
+            Map.entry("POST /api/v2/zone-matrix/draft/service-sets/delete", ActionRegistry.ZONE_MATRIX_EDIT),
+            Map.entry("POST /api/v2/zone-matrix/draft/template-import", ActionRegistry.ZONE_MATRIX_EDIT),
+            Map.entry("POST /api/v2/zone-matrix/draft/cells/confirm-reference", ActionRegistry.ZONE_MATRIX_REFERENCE_CONFIRM),
             Map.entry("GET /devices/*/lifecycle", ActionRegistry.DEVICE_READ),
             Map.entry("GET /api/v2/lifecycle/catalog", ActionRegistry.DEVICE_READ),
             // Advisory matching part 1 (ADVISORY_MATCHING_CONTRACT.md section 8): read access follows the Lifecycle view.

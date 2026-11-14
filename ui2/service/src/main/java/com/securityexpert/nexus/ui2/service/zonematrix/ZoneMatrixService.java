@@ -7,12 +7,15 @@ import java.math.BigInteger;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.*;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 /**
- * Zone matrix delivery step 1 (ZONE_MATRIX_CONTRACT.md section 10.1 step 1, FROZEN 2026-11-13): the zone model, the
- * draft and its revisions, four-eyes publishing, the version views and the audited address lookup. No statement, cell
- * or evaluation exists yet (steps 2 to 4).
+ * Zone matrix delivery steps 1 and 2 (ZONE_MATRIX_CONTRACT.md section 10.1, FROZEN 2026-11-13). Step 1: the zone model,
+ * the draft and its revisions, four-eyes publishing, the version views and the audited address lookup. Step 2: the
+ * matrix (version default, explicit cells, service vocabulary and named service sets), the template import with empty
+ * reference fields, reference confirmation by compliance_admin, and the loosening diff that needs a rationale before
+ * publish. No evaluation exists yet (steps 3 and 4).
  */
 public final class ZoneMatrixService {
     /** How much of a version the caller may see (section 3.4 and 8.2). */
@@ -44,6 +47,10 @@ public final class ZoneMatrixService {
 
     /** One zone as the editor submits it. */
     public record ZoneInput(String name, String description, String role, List<String> blocks) {}
+
+    /** One explicit cell as the editor submits it (section 4.1); reference status is never submitted, it is derived. */
+    public record CellInput(String source, String destination, String statement, List<String> services, String severity,
+            String rationale, String regulation_reference) {}
 
     private final ZoneMatrixRepository repository;
     private final Principals principals;
@@ -83,8 +90,7 @@ public final class ZoneMatrixService {
         if (draft.isEmpty() || !reviewer) { out.put("draft", null); out.put("diff", null); out.put("publish_check", null); return out; }
         if (view == View.BLOCKS) record(actor, "BLOCKS_VIEW", draft.get().versionId());
         out.put("draft", detail(draft.get(), view));
-        ZoneMatrixContent before = active.map(this::content).orElse(ZoneMatrixContent.empty());
-        out.put("diff", diff(before, content(draft.get()), view));
+        out.put("diff", diff(active.map(this::content), content(draft.get()), view));
         out.put("publish_check", publishCheck(draft.get(), active, actor, replayViewer));
         return out;
     }
@@ -116,22 +122,175 @@ public final class ZoneMatrixService {
         return edit(actor, expectedRevision, "ZONE_CREATE", zoneId, content -> {
             List<ZoneMatrixContent.Zone> zones = new ArrayList<>(content.zones());
             zones.add(zone(zoneId, input));
-            return new ZoneMatrixContent(zones);
+            return content.withZones(zones);
         });
     }
 
     public Map<String, Object> updateZone(String actor, Long expectedRevision, String zoneId, ZoneInput input) {
         return edit(actor, expectedRevision, "ZONE_UPDATE", zoneId, content -> {
             if (content.zone(zoneId).isEmpty()) throw new Refused(404, "ZONE_NOT_FOUND", "no such zone in the draft");
-            return new ZoneMatrixContent(content.zones().stream().map(z -> z.id().equals(zoneId) ? zone(zoneId, input) : z).toList());
+            return content.withZones(content.zones().stream().map(z -> z.id().equals(zoneId) ? zone(zoneId, input) : z).toList());
         });
     }
 
     public Map<String, Object> deleteZone(String actor, Long expectedRevision, String zoneId) {
         return edit(actor, expectedRevision, "ZONE_DELETE", zoneId, content -> {
             if (content.zone(zoneId).isEmpty()) throw new Refused(404, "ZONE_NOT_FOUND", "no such zone in the draft");
-            return new ZoneMatrixContent(content.zones().stream().filter(z -> !z.id().equals(zoneId)).toList());
+            return content.withZones(content.zones().stream().filter(z -> !z.id().equals(zoneId)).toList());
         });
+    }
+
+    // ---------------------------------------------------------------- matrix edits (step 2)
+
+    /**
+     * Sets one explicit cell. A change to its statement, services, severity or reference text sets a confirmed
+     * reference back to PROPOSED and clears who confirmed it (section 3.4 "References", ZM-23); an empty reference is
+     * EMPTY.
+     */
+    public Map<String, Object> setCell(String actor, Long expectedRevision, CellInput input) {
+        if (input == null || input.source() == null || input.destination() == null)
+            throw new Refused(400, "INVALID_CELL", "source and destination are required");
+        List<String> services = services(input.services());
+        String reference = input.regulation_reference() == null ? "" : input.regulation_reference().strip();
+        String rationale = input.rationale() == null || input.rationale().isBlank() ? null : input.rationale().strip();
+        return edit(actor, expectedRevision, "CELL_SET", null, content -> {
+            Optional<ZoneMatrixContent.Cell> old = content.matrix().cell(input.source(), input.destination());
+            var draft = new ZoneMatrixContent.Cell(input.source(), input.destination(), input.statement(), services,
+                    input.severity(), rationale, reference, "PROPOSED", null, null);
+            boolean keep = old.isPresent() && "CONFIRMED".equals(old.get().referenceStatus())
+                    && old.get().statement().equals(draft.statement()) && old.get().services().equals(draft.services())
+                    && old.get().severity().equals(draft.severity()) && old.get().regulationReference().equals(reference);
+            var cell = new ZoneMatrixContent.Cell(draft.source(), draft.destination(), draft.statement(), draft.services(),
+                    draft.severity(), rationale, reference, reference.isBlank() ? "EMPTY" : keep ? "CONFIRMED" : "PROPOSED",
+                    keep ? old.get().confirmedBy() : null, keep ? old.get().confirmedAt() : null);
+            List<ZoneMatrixContent.Cell> cells = new ArrayList<>(content.matrix().cells());
+            cells.removeIf(c -> c.pair().equals(cell.pair()));
+            cells.add(cell);
+            return content.withMatrix(content.matrix().withCells(cells));
+        }, null);
+    }
+
+    /** Removes one explicit cell; the pair then follows the version default. */
+    public Map<String, Object> clearCell(String actor, Long expectedRevision, String source, String destination) {
+        return edit(actor, expectedRevision, "CELL_CLEAR", null, content -> {
+            if (content.matrix().cell(source, destination).isEmpty()) throw new Refused(404, "CELL_NOT_FOUND", "no explicit cell for this pair");
+            return content.withMatrix(content.matrix().withCells(content.matrix().cells().stream()
+                    .filter(c -> !(c.source().equals(source) && c.destination().equals(destination))).toList()));
+        }, null);
+    }
+
+    /** Sets the version default: DENY_ALL or ALLOW_LISTED, never ALLOW_ANY (section 3.5, ZM-41). */
+    public Map<String, Object> setDefault(String actor, Long expectedRevision, String statement, String severity) {
+        return edit(actor, expectedRevision, "DEFAULT_SET", null, content -> {
+            var m = content.matrix();
+            return content.withMatrix(new ZoneMatrixContent.Matrix(statement, severity, m.templateOrigin(), m.serviceSets(), m.cells()));
+        }, null);
+    }
+
+    /**
+     * Creates or replaces a named service set. A confirmed cell that uses the set has its services changed, so its
+     * reference goes back to PROPOSED (section 3.4).
+     */
+    public Map<String, Object> saveServiceSet(String actor, Long expectedRevision, String name, List<String> entries) {
+        List<String> parsed = services(entries);
+        return edit(actor, expectedRevision, "SERVICE_SET_SAVE", null, content -> {
+            var m = content.matrix();
+            var set = new ZoneMatrixContent.ServiceSet(name == null ? "" : name, parsed);
+            boolean changed = m.set(set.name()).map(old -> !old.entries().equals(set.entries())).orElse(false);
+            List<ZoneMatrixContent.ServiceSet> sets = new ArrayList<>(m.serviceSets());
+            sets.removeIf(s -> s.name().equals(set.name()));
+            sets.add(set);
+            List<ZoneMatrixContent.Cell> cells = m.cells().stream().map(c -> changed && c.services().contains("set:" + set.name())
+                    && "CONFIRMED".equals(c.referenceStatus()) ? unconfirmed(c) : c).toList();
+            return content.withMatrix(new ZoneMatrixContent.Matrix(m.defaultStatement(), m.defaultSeverity(), m.templateOrigin(), sets, cells));
+        }, null);
+    }
+
+    /** Deletes a named service set no cell uses. */
+    public Map<String, Object> deleteServiceSet(String actor, Long expectedRevision, String name) {
+        return edit(actor, expectedRevision, "SERVICE_SET_DELETE", null, content -> {
+            var m = content.matrix();
+            if (m.set(name == null ? "" : name).isEmpty()) throw new Refused(404, "SERVICE_SET_NOT_FOUND", "no such service set");
+            if (m.cells().stream().anyMatch(c -> c.services().contains("set:" + name)))
+                throw new Refused(409, "SERVICE_SET_IN_USE", "a cell uses this service set; change the cell first");
+            return content.withMatrix(new ZoneMatrixContent.Matrix(m.defaultStatement(), m.defaultSeverity(), m.templateOrigin(),
+                    m.serviceSets().stream().filter(s -> !s.name().equals(name)).toList(), m.cells()));
+        }, null);
+    }
+
+    /**
+     * Seeds the draft's cells from the template by zone role (section 6.1), with every reference field empty. A draft
+     * that already has cells is replaced only when the editor says so.
+     */
+    public Map<String, Object> importTemplate(String actor, Long expectedRevision, boolean replace) {
+        return edit(actor, expectedRevision, "TEMPLATE_IMPORT", null, content -> {
+            if (!content.matrix().cells().isEmpty() && !replace)
+                throw new Refused(409, "TEMPLATE_REPLACES_CELLS", "the draft already has cells; importing the template replaces them all");
+            return content.withMatrix(ZoneMatrixTemplate.seed(content));
+        }, null);
+    }
+
+    /**
+     * Confirms one cell's reference (section 3.4 and 6.1): compliance_admin only, never the local root administrator
+     * or aiview. The request carries the hash of the cell the confirmer read; a different cell is REQUEST_CHANGED. The
+     * confirmation is a draft revision (so the confirmer is a participant of the four-eyes rule, ZM-22) and a row in
+     * the append-only confirmation table.
+     */
+    public Map<String, Object> confirmReference(String actor, boolean replayViewer, Long expectedRevision, String source,
+            String destination, String cellSha256) {
+        if (replayViewer || principals.isRoot(actor) || !principals.holdsComplianceAdmin(actor))
+            throw new Refused(403, "COMPLIANCE_ROLE_REQUIRED", "only a compliance administrator confirms a reference");
+        if (source == null || destination == null || cellSha256 == null)
+            throw new Refused(400, "INVALID_CONFIRMATION", "source, destination and cell_sha256 are required");
+        Instant now = clock.instant();
+        return edit(actor, expectedRevision, "REFERENCE_CONFIRM", null, content -> {
+            var cell = content.matrix().cell(source, destination)
+                    .orElseThrow(() -> new Refused(404, "CELL_NOT_FOUND", "no explicit cell for this pair"));
+            if (!content.cellSha256(cell).equals(cellSha256)) throw changed();
+            if (cell.referenceStatus().equals("EMPTY")) throw new Refused(409, "REFERENCE_EMPTY", "the cell has no reference to confirm");
+            if (cell.referenceStatus().equals("CONFIRMED")) throw new Refused(409, "ALREADY_CONFIRMED", "the reference is already confirmed");
+            var confirmed = new ZoneMatrixContent.Cell(cell.source(), cell.destination(), cell.statement(), cell.services(),
+                    cell.severity(), cell.rationale(), cell.regulationReference(), "CONFIRMED", actor, now.toString());
+            return content.withMatrix(content.matrix().withCells(content.matrix().cells().stream()
+                    .map(c -> c.pair().equals(cell.pair()) ? confirmed : c).toList()));
+        }, (tx, draftId, revision) -> tx.recordConfirmation(draftId, revision, source, destination, cellSha256, actor, now));
+    }
+
+    private static ZoneMatrixContent.Cell unconfirmed(ZoneMatrixContent.Cell c) {
+        return new ZoneMatrixContent.Cell(c.source(), c.destination(), c.statement(), c.services(), c.severity(), c.rationale(),
+                c.regulationReference(), "PROPOSED", null, null);
+    }
+
+    /** Parses submitted service entries; refused lines are reported one by one, never dropped (section 3.1). */
+    private static List<String> services(List<String> texts) {
+        List<String> values = texts == null ? List.of() : texts;
+        if (values.size() > ZoneMatrixContent.MAX_SERVICES_PER_CELL)
+            throw new Refused(400, "TOO_MANY_SERVICES", "at most " + ZoneMatrixContent.MAX_SERVICES_PER_CELL + " services");
+        List<String> out = new ArrayList<>();
+        List<Map<String, Object>> errors = new ArrayList<>();
+        for (int i = 0; i < values.size(); i++) {
+            String text = values.get(i) == null ? "" : values.get(i).strip();
+            try { out.add(ServiceEntry.parse(text).text()); }
+            catch (IllegalArgumentException e) { errors.add(Map.of("index", i, "reason", e.getMessage())); }
+        }
+        if (!errors.isEmpty()) throw new Refused(400, "INVALID_SERVICES", "some services are not canonical entries", Map.of("errors", errors));
+        return out;
+    }
+
+    /** The template rows and how they are read, for the Matrix tab (section 6.1). */
+    public Map<String, Object> template() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("name", ZoneMatrixTemplate.NAME);
+        out.put("revision", ZoneMatrixTemplate.REVISION);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (var row : ZoneMatrixTemplate.ROWS) rows.add(Map.of("row", row.text(), "statement", row.statement(), "severity", row.severity()));
+        var u = ZoneMatrixTemplate.UNASSIGNED_ROW;
+        rows.add(Map.of("row", u.text(), "statement", u.statement(), "severity", u.severity()));
+        rows.add(Map.of("row", "any other pair (version default)", "statement", "DENY_ALL", "severity", "MEDIUM"));
+        out.put("rows", rows);
+        out.put("basis", "neXus proposal based on general segmentation practice, not on a BDDK clause");
+        out.put("roles", ZoneMatrixContent.ROLES.stream().sorted().toList());
+        return out;
     }
 
     public Map<String, Object> discardDraft(String actor, long expectedRevision) {
@@ -146,7 +305,16 @@ public final class ZoneMatrixService {
         });
     }
 
+    /** Work done in the edit's transaction after its revision row is written. */
+    @FunctionalInterface
+    private interface AfterRevision { void run(ZoneMatrixRepository.DraftTransaction tx, String draftId, long revision); }
+
     private Map<String, Object> edit(String actor, Long expectedRevision, String kind, String zoneId, UnaryOperator<ZoneMatrixContent> change) {
+        return edit(actor, expectedRevision, kind, zoneId, change, null);
+    }
+
+    private Map<String, Object> edit(String actor, Long expectedRevision, String kind, String zoneId, UnaryOperator<ZoneMatrixContent> change,
+            AfterRevision after) {
         Instant now = clock.instant();
         return repository.locked(tx -> {
             Optional<Version> existing = tx.draft();
@@ -173,6 +341,7 @@ public final class ZoneMatrixService {
             String json = next.canonicalJson(), sha = next.sha256();
             tx.updateDraft(draftId, revision, revision + 1, json, sha, actor, now);
             tx.appendRevision(draftId, revision + 1, actor, now, kind, zoneId, sha, json, null);
+            if (after != null) after.run(tx, draftId, revision + 1);
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("version_id", draftId);
             out.put("revision", revision + 1);
@@ -233,13 +402,12 @@ public final class ZoneMatrixService {
             if (refusal != null) throw refusal(refusal);
             Optional<Version> active = tx.active();
             ZoneMatrixContent next = content(draft);
-            ZonePartition after = validate(next);
-            if (active.isPresent() && active.get().contentSha256().equals(draft.contentSha256()))
+            validate(next);
+            Optional<ZoneMatrixContent> base = active.map(this::content);
+            if (base.isPresent() && base.get().sha256().equals(next.sha256()))
                 throw new Refused(409, "NOTHING_TO_PUBLISH", "the draft equals the active version");
-            ZonePartition before = active.map(v -> content(v).partition()).orElse(ZoneMatrixContent.empty().partition());
-            boolean leaving = ZonePartition.moves(before, after).stream().anyMatch(m -> m.fromZoneId() != null);
-            if (leaving && rationale == null)
-                throw new Refused(409, "RATIONALE_REQUIRED", "addresses leave a zone in this version; give a rationale");
+            if (!loosening(base, next).isEmpty() && rationale == null)
+                throw new Refused(409, "RATIONALE_REQUIRED", "this version loosens the segmentation policy; give a rationale");
             int number = tx.nextNumber();
             active.ifPresent(v -> tx.retire(v.versionId()));
             tx.activate(draft.versionId(), number, actor, now);
@@ -264,7 +432,7 @@ public final class ZoneMatrixService {
 
     private Map<String, Object> publishCheck(Version draft, Optional<Version> active, String actor, boolean replayViewer) {
         String reason = replayViewer || principals.isRoot(actor) ? "PRINCIPAL_NOT_ELIGIBLE"
-                : active.isPresent() && active.get().contentSha256().equals(draft.contentSha256()) ? "NOTHING_TO_PUBLISH"
+                : active.isPresent() && content(active.get()).sha256().equals(content(draft).sha256()) ? "NOTHING_TO_PUBLISH"
                 : fourEyes(actor, participants(draft.versionId()));
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("eligible", reason == null);
@@ -342,6 +510,7 @@ public final class ZoneMatrixService {
             zones.add(zone);
         }
         out.put("zones", zones);
+        out.put("matrix", matrixView(content, names, actors, view));
         out.put("unassigned_addresses", sizeView(sizes.get(null)));
         out.put("redundant_blocks", view == View.BLOCKS ? partition.redundant().stream().map(r -> Map.of(
                 "zone", names.of(r.zoneId(), name(content, r.zoneId())), "block", r.block(), "within", r.within())).toList()
@@ -360,7 +529,8 @@ public final class ZoneMatrixService {
         return out;
     }
 
-    private Map<String, Object> diff(ZoneMatrixContent before, ZoneMatrixContent after, View view) {
+    private Map<String, Object> diff(Optional<ZoneMatrixContent> base, ZoneMatrixContent after, View view) {
+        ZoneMatrixContent before = base.orElse(ZoneMatrixContent.empty());
         Set<String> ids = new TreeSet<>();
         before.zones().forEach(z -> ids.add(z.id()));
         after.zones().forEach(z -> ids.add(z.id()));
@@ -402,12 +572,211 @@ public final class ZoneMatrixService {
             row.put("leaves_a_zone", m.fromZoneId() != null);
             moves.add(row);
         }
+        List<Loosening> loosening = loosening(base, after);
+        Map<String, List<String>> looseningByPair = new HashMap<>();
+        for (Loosening l : loosening) if (l.source() != null && l.family() == null)
+            looseningByPair.computeIfAbsent(l.source() + "->" + l.destination(), k -> new ArrayList<>()).add(l.kind());
+        Function<String, String> endpoint = id -> id.equals(ZoneMatrixContent.UNASSIGNED) ? "UNASSIGNED"
+                : names.of(id, after.zone(id).or(() -> before.zone(id)).map(ZoneMatrixContent.Zone::name).orElse(id));
+        Map<String, ZoneMatrixContent.Cell> cellsBefore = new TreeMap<>(), cellsAfter = new TreeMap<>();
+        before.matrix().cells().forEach(c -> cellsBefore.put(c.pair(), c));
+        after.matrix().cells().forEach(c -> cellsAfter.put(c.pair(), c));
+        Set<String> pairs = new TreeSet<>(cellsBefore.keySet()); pairs.addAll(cellsAfter.keySet());
+        var statementsBefore = before.statements();
+        var statementsAfter = after.statements();
+        List<Map<String, Object>> cells = new ArrayList<>();
+        for (String pair : pairs) {
+            ZoneMatrixContent.Cell a = cellsBefore.get(pair), b = cellsAfter.get(pair);
+            if (a != null && a.equals(b) && before.expand(a.services()).equals(after.expand(b.services()))) continue;
+            ZoneMatrixContent.Cell any = b != null ? b : a;
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("source", any.source());
+            row.put("destination", any.destination());
+            row.put("source_name", endpoint.apply(any.source()));
+            row.put("destination_name", endpoint.apply(any.destination()));
+            row.put("change", a == null ? "ADDED" : b == null ? "REMOVED" : "CHANGED");
+            row.put("before", a == null && !hasEndpoints(before, any) ? null : statementView(statementsBefore.of(any.source(), any.destination()), a));
+            row.put("after", b == null && !hasEndpoints(after, any) ? null : statementView(statementsAfter.of(any.source(), any.destination()), b));
+            row.put("loosening", looseningByPair.getOrDefault(pair, List.of()));
+            cells.add(row);
+        }
+        Map<String, Object> defaults = new LinkedHashMap<>();
+        defaults.put("statement_before", base.map(c -> c.matrix().defaultStatement()).orElse(null));
+        defaults.put("statement_after", after.matrix().defaultStatement());
+        defaults.put("severity_before", base.map(c -> c.matrix().defaultSeverity()).orElse(null));
+        defaults.put("severity_after", after.matrix().defaultSeverity());
+        List<Map<String, Object>> looseningRows = new ArrayList<>();
+        for (Loosening l : loosening) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("kind", l.kind());
+            row.put("source", l.source());
+            row.put("destination", l.destination());
+            row.put("source_name", l.source() == null ? null : endpoint.apply(l.source()));
+            row.put("destination_name", l.destination() == null ? null : endpoint.apply(l.destination()));
+            row.put("family", l.family());
+            row.put("addresses", l.addresses());
+            looseningRows.add(row);
+        }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("zones", zones);
         out.put("moves", moves);
-        out.put("rationale_required", moves.stream().anyMatch(m -> Boolean.TRUE.equals(m.get("leaves_a_zone"))));
+        out.put("cells", cells);
+        out.put("default", defaults);
+        out.put("loosening", looseningRows);
+        out.put("rationale_required", !loosening.isEmpty());
         out.put("unassigned_before", sizeView(sizesBefore.get(null)));
         out.put("unassigned_after", sizeView(sizesAfter.get(null)));
+        return out;
+    }
+
+    private static boolean hasEndpoints(ZoneMatrixContent content, ZoneMatrixContent.Cell cell) {
+        return (cell.source().equals(ZoneMatrixContent.UNASSIGNED) || content.zone(cell.source()).isPresent())
+                && (cell.destination().equals(ZoneMatrixContent.UNASSIGNED) || content.zone(cell.destination()).isPresent());
+    }
+
+    /** A pair's statement in a diff: effective services with sets expanded, so no set name is needed to read it. */
+    private static Map<String, Object> statementView(ZoneMatrixContent.Effective effective, ZoneMatrixContent.Cell cell) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("explicit", effective.explicit());
+        out.put("statement", effective.statement());
+        out.put("services", effective.services());
+        out.put("severity", effective.severity());
+        out.put("reference_status", cell == null ? null : cell.referenceStatus());
+        return out;
+    }
+
+    /**
+     * One loosening change of the publish diff (section 3.5, ZM-36). {@code family} and {@code addresses} are set for
+     * address moves only.
+     */
+    record Loosening(String kind, String source, String destination, String family, String addresses) {}
+
+    /**
+     * The loosening changes from the active version to {@code after}; each needs a rationale before publish (section
+     * 3.5). Without an active version nothing is loosened: the first version is a definition, not a change.
+     *
+     * <ul>
+     *   <li>{@code DEFAULT_CHANGED}: the version default statement changed, or its severity went down;</li>
+     *   <li>{@code STATEMENT_RELAXED}, {@code SERVICES_ADDED}, {@code SEVERITY_DOWNGRADED}: per pair, for every pair
+     *       with an explicit cell in either version and both endpoints in both versions (other pairs follow the
+     *       default, covered by {@code DEFAULT_CHANGED}); services compare with sets expanded;</li>
+     *   <li>{@code ADDRESSES_MOVED}: addresses leave a zone (section 3.2);</li>
+     *   <li>{@code UNASSIGNED_SHRUNK}: addresses move from UNASSIGNED into a zone whose statements towards some endpoint,
+     *       in either direction, are less strict than UNASSIGNED's were (section 3.3).</li>
+     * </ul>
+     */
+    List<Loosening> loosening(Optional<ZoneMatrixContent> base, ZoneMatrixContent after) {
+        if (base.isEmpty()) return List.of();
+        ZoneMatrixContent before = base.get();
+        List<Loosening> out = new ArrayList<>();
+        var mb = before.matrix();
+        var ma = after.matrix();
+        if (!mb.defaultStatement().equals(ma.defaultStatement()) || severity(ma.defaultSeverity()) < severity(mb.defaultSeverity()))
+            out.add(new Loosening("DEFAULT_CHANGED", null, null, null, null));
+        Set<String> both = new HashSet<>(before.endpoints());
+        both.retainAll(after.endpoints());
+        var sb = before.statements();
+        var sa = after.statements();
+        Set<String> pairs = new TreeSet<>();
+        List<String[]> ordered = new ArrayList<>();
+        for (var c : mb.cells()) if (pairs.add(c.pair())) ordered.add(new String[]{c.source(), c.destination()});
+        for (var c : ma.cells()) if (pairs.add(c.pair())) ordered.add(new String[]{c.source(), c.destination()});
+        ordered.sort(Comparator.comparing((String[] p) -> p[0]).thenComparing(p -> p[1]));
+        for (String[] p : ordered) {
+            if (!both.contains(p[0]) || !both.contains(p[1])) continue;
+            var eb = sb.of(p[0], p[1]);
+            var ea = sa.of(p[0], p[1]);
+            int rb = ZoneMatrixContent.STATEMENTS.indexOf(eb.statement()), ra = ZoneMatrixContent.STATEMENTS.indexOf(ea.statement());
+            if (ra > rb) out.add(new Loosening("STATEMENT_RELAXED", p[0], p[1], null, null));
+            else if (ra == rb && ea.statement().equals("ALLOW_LISTED") && ZoneMatrixContent.servicesAdded(eb.services(), ea.services()))
+                out.add(new Loosening("SERVICES_ADDED", p[0], p[1], null, null));
+            if (severity(ea.severity()) < severity(eb.severity())) out.add(new Loosening("SEVERITY_DOWNGRADED", p[0], p[1], null, null));
+        }
+        Map<String, Boolean> receivesLooser = new HashMap<>();
+        for (ZonePartition.Move m : ZonePartition.moves(before.partition(), after.partition())) {
+            String from = m.fromZoneId() == null ? ZoneMatrixContent.UNASSIGNED : m.fromZoneId();
+            String to = m.toZoneId() == null ? ZoneMatrixContent.UNASSIGNED : m.toZoneId();
+            if (m.fromZoneId() != null)
+                out.add(new Loosening("ADDRESSES_MOVED", from, to, m.family().name(), m.addresses().toString()));
+            else if (receivesLooser.computeIfAbsent(to, z -> looserThanUnassigned(before, sb, after, sa, z)))
+                out.add(new Loosening("UNASSIGNED_SHRUNK", from, to, m.family().name(), m.addresses().toString()));
+        }
+        return out;
+    }
+
+    /** Whether zone {@code zone} of {@code after} is less strict, towards any endpoint, than UNASSIGNED was before. */
+    private static boolean looserThanUnassigned(ZoneMatrixContent before, ZoneMatrixContent.Statements sb, ZoneMatrixContent after,
+            ZoneMatrixContent.Statements sa, String zone) {
+        String u = ZoneMatrixContent.UNASSIGNED;
+        for (String x : after.endpoints()) {
+            String xb = x.equals(zone) ? u : x;
+            if (!xb.equals(u) && before.zone(xb).isEmpty()) continue;
+            if (ZoneMatrixContent.looser(sb.of(u, xb), sa.of(zone, x)) || ZoneMatrixContent.looser(sb.of(xb, u), sa.of(x, zone))) return true;
+        }
+        return false;
+    }
+
+    private static int severity(String severity) { return ZoneMatrixContent.SEVERITIES.indexOf(severity); }
+
+    /** The matrix of one version as the caller may see it (section 3.4 and 8.2). */
+    private Map<String, Object> matrixView(ZoneMatrixContent content, ZoneNames names, ActorTokens actors, View view) {
+        var m = content.matrix();
+        Map<String, String> setNames = new HashMap<>();
+        for (int i = 0; i < m.serviceSets().size(); i++)
+            setNames.put(m.serviceSets().get(i).name(), view == View.MASKED ? "SET-" + (i + 1) : m.serviceSets().get(i).name());
+        Function<String, String> endpoint = id -> id.equals(ZoneMatrixContent.UNASSIGNED) ? "UNASSIGNED"
+                : names.of(id, name(content, id));
+        Function<String, Map<String, Object>> entry = text -> {
+            ServiceEntry parsed = ServiceEntry.parse(text);
+            String reason = parsed.kind() == ServiceEntry.Kind.SET
+                    ? m.set(parsed.token()).map(s -> s.entries().stream().map(e -> ServiceEntry.parse(e).notEvaluableReason())
+                            .filter(Objects::nonNull).findFirst().orElse(null)).orElse("unknown service set")
+                    : parsed.notEvaluableReason();
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("entry", parsed.kind() == ServiceEntry.Kind.SET ? "set:" + setNames.getOrDefault(parsed.token(), "SET-?") : text);
+            row.put("evaluable", reason == null);
+            row.put("not_evaluable_reason", reason);
+            return row;
+        };
+        List<Map<String, Object>> sets = new ArrayList<>();
+        for (var set : m.serviceSets()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", setNames.get(set.name()));
+            row.put("entries", set.entries().stream().map(entry).toList());
+            sets.add(row);
+        }
+        List<Map<String, Object>> cells = new ArrayList<>();
+        int withReference = 0, confirmed = 0;
+        for (var c : m.cells()) {
+            if (!c.referenceStatus().equals("EMPTY")) withReference++;
+            if (c.referenceStatus().equals("CONFIRMED")) confirmed++;
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("source", c.source());
+            row.put("destination", c.destination());
+            row.put("source_name", endpoint.apply(c.source()));
+            row.put("destination_name", endpoint.apply(c.destination()));
+            row.put("statement", c.statement());
+            row.put("services", c.services().stream().map(entry).toList());
+            row.put("severity", c.severity());
+            row.put("rationale", view == View.MASKED ? null : c.rationale());
+            row.put("regulation_reference", view == View.MASKED ? null : c.regulationReference());
+            row.put("reference_status", c.referenceStatus());
+            row.put("confirmed_by", c.confirmedBy() == null ? null : actors.token(c.confirmedBy()));
+            row.put("confirmed_at", c.confirmedAt());
+            row.put("cell_sha256", content.cellSha256(c));
+            cells.add(row);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("default_statement", m.defaultStatement());
+        out.put("default_severity", m.defaultSeverity());
+        out.put("unassigned_to_unassigned", "DENY_ALL unless an explicit cell says otherwise");
+        out.put("template_origin", m.templateOrigin() == null ? null
+                : Map.of("name", m.templateOrigin().name(), "revision", m.templateOrigin().revision()));
+        out.put("service_sets", sets);
+        out.put("cells", cells);
+        out.put("cells_total", m.cells().size());
+        out.put("cells_with_reference", withReference);
+        out.put("cells_confirmed", confirmed);
         return out;
     }
 
