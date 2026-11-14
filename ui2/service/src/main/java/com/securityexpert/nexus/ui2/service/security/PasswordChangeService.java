@@ -5,6 +5,8 @@ import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialsRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.LocalPasswordPolicyRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.LocalPasswordPolicySettings;
 import com.securityexpert.nexus.ui2.platform.Argon2PasswordHasher;
 
 /**
@@ -33,14 +35,24 @@ public final class PasswordChangeService {
         }
 
         /** PW-1/PW-2/PW-3 (§4); {@code violationCode} is a closed vocabulary, safe to surface. */
-        record PolicyViolation(String violationCode) implements Result {
+        record PolicyViolation(String violationCode, String message) implements Result {
+            public PolicyViolation(String violationCode) {
+                this(violationCode, LocalPasswordPolicy.describe(violationCode, LocalPasswordPolicySettings.DEFAULTS));
+            }
         }
     }
 
     private final LocalCredentialsRepository repository;
+    /** {@code null}: no configurable policy exists, behaviour is exactly the original. */
+    private final LocalPasswordPolicyRepository policyRepository;
 
     public PasswordChangeService(LocalCredentialsRepository repository) {
+        this(repository, null);
+    }
+
+    public PasswordChangeService(LocalCredentialsRepository repository, LocalPasswordPolicyRepository policyRepository) {
         this.repository = Objects.requireNonNull(repository, "repository");
+        this.policyRepository = policyRepository;
     }
 
     public Result changePassword(String localIdentityName, char[] currentPassword, char[] newPassword) {
@@ -54,15 +66,37 @@ public final class PasswordChangeService {
         }
         LocalCredentialRecord record = row.get();
 
-        Optional<String> violation = LocalPasswordPolicy.violation(newPassword == null ? new char[0] : newPassword, record.localIdentityName());
+        LocalPasswordPolicySettings policy = policyRepository == null
+                ? LocalPasswordPolicySettings.DEFAULTS : policyRepository.read().settings();
+        Optional<String> violation = LocalPasswordPolicy.violation(
+                newPassword == null ? new char[0] : newPassword, record.localIdentityName(), policy);
         if (violation.isPresent()) {
-            return new Result.PolicyViolation(violation.get());
+            return new Result.PolicyViolation(violation.get(), LocalPasswordPolicy.describe(violation.get(), policy));
+        }
+        if (policy.enabled() && policy.historyCount() > 0 && reused(record, newPassword, policy.historyCount())) {
+            return new Result.PolicyViolation("password_reused", LocalPasswordPolicy.describe("password_reused", policy));
         }
 
         Argon2PasswordHasher.Verifier newVerifier =
                 Argon2PasswordHasher.hash(newPassword, Argon2PasswordHasher.DEFAULT_PARAMETERS);
         String actorFingerprint = LocalMechanism.actorFingerprintFor(record.localIdentityId());
+        if (policy.enabled() && policy.historyCount() > 0) {
+            policyRepository.retire(record.localIdentityId(), record.toVerifier(), policy.historyCount());
+        }
         repository.changePassword(record.localIdentityId(), newVerifier, actorFingerprint);
         return new Result.Ok();
+    }
+
+    /** The new password equals the current one or one of the retired ones, together the last {@code count}. */
+    private boolean reused(LocalCredentialRecord current, char[] newPassword, int count) {
+        if (Argon2PasswordHasher.verify(newPassword, current.toVerifier())) {
+            return true;
+        }
+        for (Argon2PasswordHasher.Verifier retired : policyRepository.recentRetired(current.localIdentityId(), count - 1)) {
+            if (Argon2PasswordHasher.verify(newPassword, retired)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

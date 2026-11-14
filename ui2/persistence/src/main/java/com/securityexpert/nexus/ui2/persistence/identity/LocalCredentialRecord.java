@@ -34,6 +34,13 @@ public record LocalCredentialRecord(
                 new Argon2PasswordHasher.Parameters(memoryCostKib, timeCost, parallelism));
     }
 
+    /** A stored verifier read back from a history row (the one other place a verifier is rebuilt from its parts). */
+    public static Argon2PasswordHasher.Verifier verifierFrom(byte[] verifier, byte[] salt, String algorithmId,
+            int memoryCostKib, int timeCost, int parallelism) {
+        return new Argon2PasswordHasher.Verifier(verifier, salt, algorithmId,
+                new Argon2PasswordHasher.Parameters(memoryCostKib, timeCost, parallelism));
+    }
+
     public boolean isLocked(Instant asOf) {
         return lockedUntil.isPresent() && asOf.isBefore(lockedUntil.get());
     }

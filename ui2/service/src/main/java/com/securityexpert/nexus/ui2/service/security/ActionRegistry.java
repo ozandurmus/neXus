@@ -68,6 +68,10 @@ public final class ActionRegistry {
     public static final String SYSTEM_LOG_SETTINGS_READ = "system_log_settings_read";
     /** Phase B section 14: writes the settings row ({@code PUT /api/v2/config/system-logs}); security_admin, never aiview. */
     public static final String SYSTEM_LOG_SETTINGS_WRITE = "system_log_settings_write";
+    /** The configurable local-account password policy ({@code GET /api/v2/config/local-password-policy}); security_admin, never aiview. */
+    public static final String LOCAL_PASSWORD_POLICY_READ = "local_password_policy_read";
+    /** Writes the local password policy ({@code PUT /api/v2/config/local-password-policy}); security_admin, never aiview. */
+    public static final String LOCAL_PASSWORD_POLICY_WRITE = "local_password_policy_write";
     /**
      * V203 (PO 2026-11-10): the per-family scheduled-job switches, {@code GET /api/v2/config/scheduled-jobs}; every signed-in
      * role reads them (aiview masked: the actor becomes a user token, the reason is withheld).
@@ -355,6 +359,8 @@ public final class ActionRegistry {
         // Settings read and write are security_admin only (contract section 14), like the notification settings.
         register(new ActionDescriptor(SYSTEM_LOG_SETTINGS_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SYSTEM_LOG_SETTINGS_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(LOCAL_PASSWORD_POLICY_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(LOCAL_PASSWORD_POLICY_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         // V203: reading the schedule switches is open to every signed-in session; changing one is for the two administrator
         // roles that already own the job windows' manual bypass (PO decision 2026-10-20). The controller refuses aiview.
         register(new ActionDescriptor(SCHEDULED_JOBS_READ, true, Optional.empty()));

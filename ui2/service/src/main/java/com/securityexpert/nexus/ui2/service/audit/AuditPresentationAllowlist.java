@@ -312,6 +312,10 @@ public final class AuditPresentationAllowlist {
                     "reads_issued", "run_id", "source_key")),
             // V203: the per-family scheduled-job switches; the free-text reason is tier-2 redacted (audit_redaction_policy).
             Map.entry("scheduled_job_family", Set.of("changed_at", "changed_by", "enabled", "family_key")),
+            // The password-policy switches and bounds hold no secret; the retired-verifier table is not audited.
+            Map.entry("local_password_policy_settings", Set.of(
+                    "enabled", "history_count", "max_age_days", "min_length", "require_digit", "require_lower",
+                    "require_symbol", "require_upper", "settings_id", "updated_at", "updated_by")),
             Map.entry("system_log_settings", Set.of(
                     "device_cap_bytes", "hcp_retention_days", "include_management_servers", "ledger_retention_days",
                     "raw_retention_days", "settings_id", "spike_data_cap_bytes", "spike_data_enabled",
