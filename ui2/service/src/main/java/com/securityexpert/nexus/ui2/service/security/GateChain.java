@@ -67,6 +67,14 @@ public final class GateChain {
         this.enforcePasswordChangeOnFirstLogin = enforcePasswordChangeOnFirstLogin;
     }
 
+    private volatile java.util.function.BiPredicate<LocalCredentialRecord, Instant> passwordExpiry = (record, now) -> false;
+
+    /** Optional: an over-age password (configurable policy) is held to the same must-change gate; default never. */
+    public GateChain withPasswordExpiry(java.util.function.BiPredicate<LocalCredentialRecord, Instant> expiry) {
+        this.passwordExpiry = java.util.Objects.requireNonNull(expiry, "expiry");
+        return this;
+    }
+
     public GateOutcome evaluate(GateRequest request, Instant now) {
         // E1: session authenticity.
         if (request.sessionCookieRawValue().isEmpty()) {
@@ -120,7 +128,7 @@ public final class GateChain {
         // restricted by this gate.
         if (!session.machine() && enforcePasswordChangeOnFirstLogin && localCredentialsRepository != null
                 && new LocalIdentityResolver(localCredentialsRepository)
-                .resolve(actorFingerprint).map(LocalCredentialRecord::mustChangePassword).orElse(false)) {
+                .resolve(actorFingerprint).map(r -> r.mustChangePassword() || passwordExpiry.test(r, now)).orElse(false)) {
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("error", "PASSWORD_CHANGE_REQUIRED");
             return new GateOutcome.Refused("PWD", 403, body);

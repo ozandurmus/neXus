@@ -77,12 +77,14 @@ public class RbacConfiguration {
     public GateChain gateChain(SessionRepository sessionRepository, ActionRegistry actionRegistry,
             RbacEvaluator rbacEvaluator, AuthzDecisionRepository authzDecisionRepository,
             LocalCredentialsRepository localCredentialsRepository,
+            com.securityexpert.nexus.ui2.service.security.LocalPasswordPolicyService localPasswordPolicyService,
             @Value("${ui2.local-auth.enforce-password-change-on-first-login:false}") boolean enforcePasswordChangeOnFirstLogin) {
         // NXS-LOCAL-0152's server-side gate was constructed without its repository in
         // production (the four-argument form), so it never ran; wired here, behind the
         // PO's 2026-09-14 switch (development default: off).
         return new GateChain(sessionRepository, actionRegistry, rbacEvaluator, authzDecisionRepository,
-                localCredentialsRepository, enforcePasswordChangeOnFirstLogin);
+                localCredentialsRepository, enforcePasswordChangeOnFirstLogin)
+                .withPasswordExpiry(localPasswordPolicyService::passwordExpired);
     }
 
     /** PO 2026-10-20: security_admin / operation_admin manual submissions are not held to the job windows. */

@@ -47,6 +47,7 @@ public final class PasswordChangeController {
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("error", "PASSWORD_POLICY_VIOLATION");
             body.put("reason_code", violation.violationCode());
+            body.put("message", violation.message());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
         }
         // Result.InvalidCredentials -- the same generic surface a login
