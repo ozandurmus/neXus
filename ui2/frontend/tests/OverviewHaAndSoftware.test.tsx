@@ -34,7 +34,7 @@ function overview(): OverviewView {
 }
 
 const member = (ref: string, n: number, vendor = "check_point"): DeviceSummary => ({
-  device_id: `${ref}-${n}`, vendor_hint: vendor, enrollment_state: "ENROLLED", hostname: `FW-${ref}-M${n}`, model: null, software_version: null,
+  device_id: `${ref}-${n}`, vendor_hint: vendor, enrollment_state: "ENROLLED", hostname: `${ref.replace(/^CLS-/, "FW-")}-M${n}`, model: null, software_version: null,
   ha_role: n === 1 ? "active" : "standby", cluster_member_ref: ref,
 });
 const unit = (ref: string, status: "READY" | "NOT_READY" | "UNKNOWN", observedAt: string) => ({
@@ -57,11 +57,11 @@ function stub(devices: DeviceSummary[], summary: unknown, summaryStatus = 200) {
 }
 
 describe("Overview HA readiness (UI review 2026-10-18, F-13)", () => {
-  const fleet = [member("CLS-A", 1), member("CLS-A", 2), member("CLS-B", 1), member("CLS-B", 2), member("CLS-C", 1), member("CLS-C", 2),
-    member("CLS-D", 1, "cisco_asa"), member("CLS-D", 2, "cisco_asa")];
+  const fleet = [member("CLS-ALPHA-01", 1), member("CLS-ALPHA-01", 2), member("CLS-BRAVO-02", 1), member("CLS-BRAVO-02", 2), member("CLS-CHARLIE-03", 1), member("CLS-CHARLIE-03", 2),
+    member("CLS-DELTA-04", 1, "cisco_asa"), member("CLS-DELTA-04", 2, "cisco_asa")];
 
   it("counts ready clusters in the fleet summary, linking to Operations", async () => {
-    stub(fleet, [unit("CLS-A", "READY", HOURS(1)), unit("CLS-B", "NOT_READY", HOURS(2)), unit("CLS-C", "UNKNOWN", HOURS(3))]);
+    stub(fleet, [unit("CLS-ALPHA-01", "READY", HOURS(1)), unit("CLS-BRAVO-02", "NOT_READY", HOURS(2)), unit("CLS-CHARLIE-03", "UNKNOWN", HOURS(3))]);
     render(<OverviewScreen />);
     const fact = await screen.findByText("1 of 4");
     expect(fact.closest("[data-fact]")).toHaveAttribute("href", "?screen=operations");
@@ -69,18 +69,18 @@ describe("Overview HA readiness (UI review 2026-10-18, F-13)", () => {
   });
 
   it("names the not-ready cluster as an Act now row and the unknown one as a Watch row, with the evaluation age", async () => {
-    stub(fleet, [unit("CLS-A", "READY", HOURS(1)), unit("CLS-B", "NOT_READY", HOURS(2)), unit("CLS-C", "UNKNOWN", HOURS(3))]);
+    stub(fleet, [unit("CLS-ALPHA-01", "READY", HOURS(1)), unit("CLS-BRAVO-02", "NOT_READY", HOURS(2)), unit("CLS-CHARLIE-03", "UNKNOWN", HOURS(3))]);
     render(<OverviewScreen />);
     const notReady = (await screen.findByText("1 HA cluster not ready for failover")).closest("[data-attention]") as HTMLElement;
-    expect(within(notReady).getByText("CLS-B")).toBeInTheDocument();
+    expect(within(notReady).getByText("CLS-BRAVO-02")).toBeInTheDocument();
     expect(within(notReady).getByText("Act now")).toBeInTheDocument();
     expect(within(notReady).getByText("checked 2 h ago")).toBeInTheDocument();
     expect(within(notReady).getByRole("link")).toHaveAttribute("href", "?screen=operations&readiness=NOT_READY");
     const unknown = screen.getByText("1 HA cluster has UNKNOWN readiness").closest("[data-attention]") as HTMLElement;
-    expect(within(unknown).getByText("CLS-C")).toBeInTheDocument();
+    expect(within(unknown).getByText("CLS-CHARLIE-03")).toBeInTheDocument();
     expect(within(unknown).getByText("Watch")).toBeInTheDocument();
     // a cluster whose vendor has no readiness (Cisco ASA) is not a finding
-    expect(screen.queryByText(/CLS-D/)).toBeNull();
+    expect(screen.queryByText(/CLS-DELTA-04/)).toBeNull();
   });
 
   it("writes UNKNOWN, never zero, when the readiness read fails", async () => {
@@ -108,7 +108,7 @@ describe("Overview HA readiness (UI review 2026-10-18, F-13)", () => {
 
 describe("Overview Software in service: Fortinet and Cisco ASA", () => {
   const dev = (id: string, vendor: string, version: string | null, extra: Partial<DeviceSummary> = {}): DeviceSummary => ({
-    device_id: id, vendor_hint: vendor, enrollment_state: "ENROLLED", hostname: `FW-${id}`, model: null, software_version: version, ha_role: null, cluster_member_ref: null, ...extra,
+    device_id: id, vendor_hint: vendor, enrollment_state: "ENROLLED", hostname: `FW-TANGO-0${id.charCodeAt(0) - 96}`, model: null, software_version: version, ha_role: null, cluster_member_ref: null, ...extra,
   });
 
   it("groups the versions the devices report, counts a missing version as Unknown and leaves out managers and drafts", () => {

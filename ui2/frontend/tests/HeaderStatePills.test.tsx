@@ -21,7 +21,7 @@ const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.
 afterEach(() => vi.unstubAllGlobals());
 
 const device = (over: Partial<DeviceSummary> = {}): DeviceSummary => ({
-  device_id: "dev-1", hostname: "FW-SYNTH-01", vendor_hint: "check_point", role: "gateway", enrollment_state: "ENROLLED", model: "Quantum",
+  device_id: "dev-1", hostname: "FW-TANGO-01", vendor_hint: "check_point", role: "gateway", enrollment_state: "ENROLLED", model: "Quantum",
   software_version: "R81.20", ha_role: null, cluster_member_ref: null, ip_addresses: "192.0.2.10", backup_target: true, ...over,
 });
 const item = (severity: string, displayStatus: string) => ({ controlId: `c-${severity}-${displayStatus}-${Math.random()}`, title: "t", severity, frameworks: [], verdict: displayStatus, reasonCode: "", displayStatus });
@@ -32,7 +32,7 @@ const items = (critical: number, fail: number, pass: number, unavailable: number
 ];
 const backup = (collectedAt: string, validation = "V1"): BackupArtefact => ({ artefact_id: `a-${collectedAt}`, device_id: "dev-1", collected_at: collectedAt, size_bytes: 10, digest_prefix: "ab", validation_level: validation, deviation_state: null });
 const summaryRow = (status: "READY" | "NOT_READY" | "UNKNOWN" | null, observedAt = ago(4 * H)): CpFailoverSummary => ({
-  unitId: "u-1", clusterId: "u-1", cluster_member_ref: "CLS-SYNTH-01", vendor: "check_point", activeWindow: false, lastRunState: null, lastRunOutcome: null, lastRunAt: null, canRunReadiness: false,
+  unitId: "u-1", clusterId: "u-1", cluster_member_ref: "CLS-ROMEO-01", vendor: "check_point", activeWindow: false, lastRunState: null, lastRunOutcome: null, lastRunAt: null, canRunReadiness: false,
   readiness: status ? { status, observedAt, failedCheck: status === "NOT_READY" ? "Check 3" : "", stopCode: status === "NOT_READY" ? "CLUSTER_STATE_NOT_READY" : undefined, checks: [] } : null,
 });
 const configuration = (over: Partial<DeviceConfiguration> = {}): DeviceConfiguration => ({ device_id: "dev-1", collected_at: ago(10 * H), vendor: "check_point", read_kind: "cp_show_configuration", canonical_hash: "h",
@@ -89,22 +89,22 @@ describe("the fact words", () => {
   });
 
   it("words readiness as Ready / Not ready / Unknown with its age, Not read yet without a record, nothing without rows", () => {
-    expect(readinessFact([summaryRow("READY")], "CLS-SYNTH-01")).toMatchObject({ label: "Readiness Ready · 4 h ago", tone: "ok", href: "?screen=operations&cluster_ref=CLS-SYNTH-01" });
-    const notReady = readinessFact([summaryRow("NOT_READY")], "CLS-SYNTH-01")!;
+    expect(readinessFact([summaryRow("READY")], "CLS-ROMEO-01")).toMatchObject({ label: "Readiness Ready · 4 h ago", tone: "ok", href: "?screen=operations&cluster_ref=CLS-ROMEO-01" });
+    const notReady = readinessFact([summaryRow("NOT_READY")], "CLS-ROMEO-01")!;
     expect(notReady).toMatchObject({ label: "Readiness Not ready · 4 h ago", tone: "bad" });
     expect(notReady.title).toContain("Cluster state not ready");
-    expect(readinessFact([summaryRow("UNKNOWN")], "CLS-SYNTH-01")).toMatchObject({ label: "Readiness Unknown · 4 h ago", tone: "neutral" });
-    expect(readinessFact([summaryRow(null)], "CLS-SYNTH-01")).toMatchObject({ label: "Readiness · Not read yet", tone: "neutral" });
-    expect(readinessFact([], "CLS-SYNTH-01")).toMatchObject({ label: "Readiness · Not read yet" });
-    expect(readinessFact(null, "CLS-SYNTH-01")).toBeNull();
+    expect(readinessFact([summaryRow("UNKNOWN")], "CLS-ROMEO-01")).toMatchObject({ label: "Readiness Unknown · 4 h ago", tone: "neutral" });
+    expect(readinessFact([summaryRow(null)], "CLS-ROMEO-01")).toMatchObject({ label: "Readiness · Not read yet", tone: "neutral" });
+    expect(readinessFact([], "CLS-ROMEO-01")).toMatchObject({ label: "Readiness · Not read yet" });
+    expect(readinessFact(null, "CLS-ROMEO-01")).toBeNull();
     // a virtual system's unit never stands in for the cluster's own
     const vs = { ...summaryRow("NOT_READY"), unitId: "vs-13" };
-    expect(readinessFact([vs, summaryRow("READY")], "CLS-SYNTH-01")?.label).toBe("Readiness Ready · 4 h ago");
+    expect(readinessFact([vs, summaryRow("READY")], "CLS-ROMEO-01")?.label).toBe("Readiness Ready · 4 h ago");
     // R-04 / B1: a Ready evaluation takes the one freshness scale's colour: amber 24-72 h, red over 72 h
-    const staleReady = readinessFact([summaryRow("READY", ago(31 * H))], "CLS-SYNTH-01")!;
-    expect(staleReady).toMatchObject({ label: "Readiness Ready · 31 h ago", tone: "warn", href: "?screen=operations&cluster_ref=CLS-SYNTH-01" });
+    const staleReady = readinessFact([summaryRow("READY", ago(31 * H))], "CLS-ROMEO-01")!;
+    expect(staleReady).toMatchObject({ label: "Readiness Ready · 31 h ago", tone: "warn", href: "?screen=operations&cluster_ref=CLS-ROMEO-01" });
     expect(staleReady.title).toContain("Stale (over 24 h)");
-    const veryStale = readinessFact([summaryRow("READY", ago(80 * H))], "CLS-SYNTH-01")!;
+    const veryStale = readinessFact([summaryRow("READY", ago(80 * H))], "CLS-ROMEO-01")!;
     expect(veryStale).toMatchObject({ tone: "bad" });
     expect(veryStale.title).toContain("Stale (over 72 h)");
   });
@@ -138,7 +138,7 @@ describe("the device header's state row", () => {
     const d = device({ platform_facts_observed_at: ago(4 * H) });
     stub({ ...base(d),
       "/devices/dev-1/configuration": () => json(configuration()),
-      "/devices/dev-1/compliance": () => json({ device_id: "dev-1", hostname: "FW-SYNTH-01", vendor: "check_point", totalAssigned: 59, passCount: 56, failCount: 3, dataUnavailableCount: 0, observedCompliance: 0, evidenceCoverage: 0, assuredCompliance: 0, items: items(3, 0, 56, 0) }),
+      "/devices/dev-1/compliance": () => json({ device_id: "dev-1", hostname: "FW-TANGO-01", vendor: "check_point", totalAssigned: 59, passCount: 56, failCount: 3, dataUnavailableCount: 0, observedCompliance: 0, evidenceCoverage: 0, assuredCompliance: 0, items: items(3, 0, 56, 0) }),
       "/devices/dev-1/backups": () => json({ backups: [backup(ago(8 * H))] }),
     });
     mount(<DeviceInventoryPanels device={d} configuration={<DeviceConfigurationDetail device={d} embedded />} />);
@@ -155,10 +155,10 @@ describe("the device header's state row", () => {
   });
 
   it("adds Readiness for a cluster member and links its cluster chip to the parent, and the certificate pill closes the row", async () => {
-    const d = device({ cluster_member_ref: "CLS-SYNTH-01", ha_role: "ACTIVE" });
+    const d = device({ cluster_member_ref: "CLS-ROMEO-01", ha_role: "ACTIVE" });
     const fetchMock = stub({ ...base(d),
-      "/clusters/CLS-SYNTH-01/inventory": () => json({ cluster_member_ref: "CLS-SYNTH-01", members: [{ device_id: "dev-1", hostname: "FW-SYNTH-01" }], contexts: [], virtual_systems: [] }),
-      "/devices/dev-1/https-certificate": () => json({ available: true, strict: false, certificates: [{ trust_entry_id: "t-1", status: "ACTIVE", fingerprint_sha256: "00", subject_cn: "FW-SYNTH-01", issuer_cn: "Synthetic CA", not_after: ago(-223 * 24 * H) }] }),
+      "/clusters/CLS-ROMEO-01/inventory": () => json({ cluster_member_ref: "CLS-ROMEO-01", members: [{ device_id: "dev-1", hostname: "FW-TANGO-01" }], contexts: [], virtual_systems: [] }),
+      "/devices/dev-1/https-certificate": () => json({ available: true, strict: false, certificates: [{ trust_entry_id: "t-1", status: "ACTIVE", fingerprint_sha256: "00", subject_cn: "FW-TANGO-01", issuer_cn: "Synthetic CA", not_after: ago(-223 * 24 * H) }] }),
       "/devices/dev-1/configuration": () => json(configuration({ change_state: "unchanged" })),
       "/devices/dev-1/backups": () => json({ backups: [] }),
       "/api/v2/cp-failover/summary": () => json([summaryRow("NOT_READY")]),
@@ -170,21 +170,21 @@ describe("the device header's state row", () => {
     await waitFor(() => expect(pillTexts(r)).toEqual(["Compliance · Not assessed", "Config unchanged", "Backup · no archive", "Readiness Not ready · 4 h ago"]));
     expect(within(r).getByText("Backup · no archive")).toHaveStyle({ backgroundColor: m3.warningContainer });
     expect(within(r).getByText(/^Readiness/)).toHaveStyle({ backgroundColor: m3.errorContainer });
-    expect(within(r).getByRole("link", { name: /^Readiness/ })).toHaveAttribute("href", "?screen=operations&cluster_ref=CLS-SYNTH-01");
-    expect(within(r).getByRole("link", { name: /^Backup/ })).toHaveAttribute("href", "?screen=backups&q=CLS-SYNTH-01");
+    expect(within(r).getByRole("link", { name: /^Readiness/ })).toHaveAttribute("href", "?screen=operations&cluster_ref=CLS-ROMEO-01");
+    expect(within(r).getByRole("link", { name: /^Backup/ })).toHaveAttribute("href", "?screen=backups&q=CLS-ROMEO-01");
     // the certificate state is the last pill of the row, not an identity chip
     const chips = Array.from(r.querySelectorAll("[data-pill]")).map((c) => c.textContent);
     expect(chips.some((c) => /^Certificate expires in/.test(c ?? ""))).toBe(true);
     expect(within(screen.getByTestId("entity-header")).getAllByText(/^Certificate expires in/)).toHaveLength(1);
     expect(fetchMock.mock.calls.some(([u]) => u === "/api/v2/cp-failover/summary")).toBe(true);
-    const parent = screen.getByRole("button", { name: "Check Point ClusterXL · CLS-SYNTH-01" });
+    const parent = screen.getByRole("button", { name: "Check Point ClusterXL · CLS-ROMEO-01" });
     fireEvent.click(parent);
-    expect(onOpenCluster).toHaveBeenCalledWith("CLS-SYNTH-01");
+    expect(onOpenCluster).toHaveBeenCalledWith("CLS-ROMEO-01");
     expect(screen.queryByRole("tab", { name: "Cluster members" })).toBeNull();
   });
 
   it("gives a management server Config changed and Backup only: no compliance (never evaluated), no readiness", async () => {
-    const d = device({ role: "management_server", vendor_hint: "palo_alto", hostname: "PANO-SYNTH-01" });
+    const d = device({ role: "management_server", vendor_hint: "palo_alto", hostname: "MGR-BRAVO-01" });
     const fetchMock = stub({ ...base(d),
       "/devices/dev-1/configuration": () => json(configuration({ vendor: "palo_alto", read_kind: "pan_effective_running" })),
       "/devices/dev-1/backups": () => json({ backups: [backup(ago(23 * 24 * H))] }),
@@ -228,14 +228,14 @@ describe("the device header's state row", () => {
 
 describe("the cluster header's state row and its one Collect now", () => {
   const members: DeviceSummary[] = [
-    device({ device_id: "m-1", hostname: "FW-SYNTH-M1", cluster_member_ref: "CLS-SYNTH-01", ha_role: "ACTIVE" }),
-    device({ device_id: "m-2", hostname: "FW-SYNTH-M2", cluster_member_ref: "CLS-SYNTH-01", ha_role: "STANDBY" }),
+    device({ device_id: "m-1", hostname: "FW-ROMEO-01-M1", cluster_member_ref: "CLS-ROMEO-01", ha_role: "ACTIVE" }),
+    device({ device_id: "m-2", hostname: "FW-ROMEO-01-M2", cluster_member_ref: "CLS-ROMEO-01", ha_role: "STANDBY" }),
   ];
-  const inventory = () => json({ cluster_member_ref: "CLS-SYNTH-01", members: members.map((m) => ({ device_id: m.device_id, hostname: m.hostname })), virtual_systems: [], contexts: [] });
+  const inventory = () => json({ cluster_member_ref: "CLS-ROMEO-01", members: members.map((m) => ({ device_id: m.device_id, hostname: m.hostname })), virtual_systems: [], contexts: [] });
 
   it("pools compliance, names the member that changed, gives one Backup pill per member and the cluster's readiness, all as links", async () => {
     stub({
-      "/clusters/CLS-SYNTH-01/inventory": inventory,
+      "/clusters/CLS-ROMEO-01/inventory": inventory,
       "/devices/m-1/backups": () => json({ backups: [backup(ago(8 * H))] }),
       "/devices/m-2/backups": () => json({ backups: [backup(ago(9 * H), "NONE")] }),
       "/devices/m-1/configuration": () => json(configuration()),
@@ -244,13 +244,13 @@ describe("the cluster header's state row and its one Collect now", () => {
       "/devices/m-2/compliance": () => json({ items: items(0, 0, 59, 0) }),
       "/api/v2/cp-failover/summary": () => json([summaryRow("READY")]),
     });
-    mount(<ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={members} configuration={<div>cfg</div>} />);
+    mount(<ClusterDetailPanels clusterRef="CLS-ROMEO-01" members={members} configuration={<div>cfg</div>} />);
     const r = await row();
     await waitFor(() => expect(pillTexts(r)).toEqual([
       "Compliance 3 critical failing · 118 checked", "Config changed · M1 2 sections", "Backup M1 8 h ago · Checked", "Backup M2 9 h ago · NONE", "Readiness Ready · 4 h ago",
     ]));
-    expect(within(r).getByRole("link", { name: /^Readiness/ })).toHaveAttribute("href", "?screen=operations&cluster_ref=CLS-SYNTH-01");
-    expect(within(r).getByRole("link", { name: /^Backup M1/ })).toHaveAttribute("href", "?screen=backups&q=CLS-SYNTH-01");
+    expect(within(r).getByRole("link", { name: /^Readiness/ })).toHaveAttribute("href", "?screen=operations&cluster_ref=CLS-ROMEO-01");
+    expect(within(r).getByRole("link", { name: /^Backup M1/ })).toHaveAttribute("href", "?screen=backups&q=CLS-ROMEO-01");
     expect(within(r).getByText(/^Readiness/)).toHaveStyle({ backgroundColor: m3.successContainer });
     // the plain Backups / Readiness links are not repeated once the pills carry them
     expect(within(r).queryByRole("link", { name: "Backups" })).toBeNull();
@@ -258,18 +258,18 @@ describe("the cluster header's state row and its one Collect now", () => {
   });
 
   it("falls back to the plain Backups and Readiness links when those reads are refused, so both ways in stay", async () => {
-    stub({ "/clusters/CLS-SYNTH-01/inventory": inventory });
-    mount(<ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={members} />);
+    stub({ "/clusters/CLS-ROMEO-01/inventory": inventory });
+    mount(<ClusterDetailPanels clusterRef="CLS-ROMEO-01" members={members} />);
     const header = await screen.findByTestId("entity-header");
-    await waitFor(() => expect(within(header).getByRole("link", { name: "Backups" })).toHaveAttribute("href", "?screen=backups&q=CLS-SYNTH-01"));
-    expect(within(header).getByRole("link", { name: "Readiness" })).toHaveAttribute("href", "?screen=operations&cluster_ref=CLS-SYNTH-01");
+    await waitFor(() => expect(within(header).getByRole("link", { name: "Backups" })).toHaveAttribute("href", "?screen=backups&q=CLS-ROMEO-01"));
+    expect(within(header).getByRole("link", { name: "Readiness" })).toHaveAttribute("href", "?screen=operations&cluster_ref=CLS-ROMEO-01");
     expect(header.querySelectorAll("[data-fact]")).toHaveLength(0);
   });
 
   it("keeps the plain Readiness link for a vendor without a readiness check, instead of an UNKNOWN pill", async () => {
     const fortinet = members.map((m) => ({ ...m, vendor_hint: "fortinet" }));
-    const fetchMock = stub({ "/clusters/CLS-SYNTH-01/inventory": inventory, "/devices/m-1/backups": () => json({ backups: [] }), "/devices/m-2/backups": () => json({ backups: [] }) });
-    mount(<ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={fortinet} />);
+    const fetchMock = stub({ "/clusters/CLS-ROMEO-01/inventory": inventory, "/devices/m-1/backups": () => json({ backups: [] }), "/devices/m-2/backups": () => json({ backups: [] }) });
+    mount(<ClusterDetailPanels clusterRef="CLS-ROMEO-01" members={fortinet} />);
     const r = await row();
     await waitFor(() => expect(pillTexts(r)).toEqual(["Backup M1 · no archive", "Backup M2 · no archive"]));
     expect(within(r).getByRole("link", { name: "Readiness" })).toBeInTheDocument();
@@ -277,17 +277,17 @@ describe("the cluster header's state row and its one Collect now", () => {
   });
 
   it("has exactly one Collect button, in the header, aimed at the member the M1 / M2 pills pick; the member cards carry none", async () => {
-    stub({ "/clusters/CLS-SYNTH-01/inventory": inventory });
-    mount(<ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={members} />);
+    stub({ "/clusters/CLS-ROMEO-01/inventory": inventory });
+    mount(<ClusterDetailPanels clusterRef="CLS-ROMEO-01" members={members} />);
     const header = await screen.findByTestId("entity-header");
     expect(screen.getAllByRole("button", { name: "Collect" })).toHaveLength(1);
     const pills = within(header).getByRole("group", { name: "Collect from member" });
     const [m1, m2] = within(pills).getAllByRole("button");
     expect(m1).toHaveAttribute("aria-pressed", "true");
-    expect(m1).toHaveAttribute("title", "FW-SYNTH-M1");
+    expect(m1).toHaveAttribute("title", "FW-ROMEO-01-M1");
     fireEvent.click(m2);
     expect(m2).toHaveAttribute("aria-pressed", "true");
-    expect(m2).toHaveAttribute("title", "FW-SYNTH-M2");
+    expect(m2).toHaveAttribute("title", "FW-ROMEO-01-M2");
     for (const card of Array.from(header.querySelectorAll("[data-member-card]"))) {
       expect(within(card as HTMLElement).queryByRole("button", { name: /^Collect$/ })).toBeNull();
     }
@@ -295,11 +295,11 @@ describe("the cluster header's state row and its one Collect now", () => {
 
   it("wires member cards and M1 / M2 pills to select that member and renders stale Ready in warning tone (R-04)", async () => {
     stub({
-      "/clusters/CLS-SYNTH-01/inventory": inventory,
+      "/clusters/CLS-ROMEO-01/inventory": inventory,
       "/api/v2/cp-failover/summary": () => json([summaryRow("READY", ago(31 * H))]),
     });
     const onSelectMember = vi.fn();
-    mount(<ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={members} onSelectMember={onSelectMember} />);
+    mount(<ClusterDetailPanels clusterRef="CLS-ROMEO-01" members={members} onSelectMember={onSelectMember} />);
     const r = await row();
     await waitFor(() => expect(within(r).getByText("Readiness Ready · 31 h ago")).toHaveStyle({ backgroundColor: m3.warningContainer }));
     const header = screen.getByTestId("entity-header");

@@ -34,7 +34,7 @@ describe("ConfigurationScreen device list", () => {
             devices: [
               {
                 device_id: "dev-1",
-                hostname: "fw-edge-1",
+                hostname: "FW-TANGO-04",
                 vendor: "check_point",
                 last_collected_at: "2026-09-14T10:00:00Z",
                 change_state: "changed",
@@ -46,7 +46,7 @@ describe("ConfigurationScreen device list", () => {
     );
     render(withTheme(<ConfigurationScreen />));
 
-    await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("FW-TANGO-04")).toBeInTheDocument());
     // Labelled filter dropdowns (PO, 2026-09-24), options written "Label · n".
     const state = screen.getByRole("combobox", { name: "State" });
     expect(within(state).getByRole("option", { name: "Changed · 1" })).toBeInTheDocument();
@@ -91,8 +91,8 @@ describe("the configuration list presents the cluster as the unit (design langua
       const url = String(input);
       if (url === "/devices") {
         return Promise.resolve(jsonResponse(200, { devices: [
-          { device_id: "x1", hostname: "FW-x1", vendor_hint: "check_point", enrollment_state: "ENROLLED", model: null, software_version: null, ha_role: "active", cluster_member_ref: "CLS-JULIET-02" },
-          { device_id: "x2", hostname: "FW-x2", vendor_hint: "check_point", enrollment_state: "ENROLLED", model: null, software_version: null, ha_role: "standby", cluster_member_ref: "CLS-JULIET-02" },
+          { device_id: "x1", hostname: "FW-JULIET-02-M1", vendor_hint: "check_point", enrollment_state: "ENROLLED", model: null, software_version: null, ha_role: "active", cluster_member_ref: "CLS-JULIET-02" },
+          { device_id: "x2", hostname: "FW-JULIET-02-M2", vendor_hint: "check_point", enrollment_state: "ENROLLED", model: null, software_version: null, ha_role: "standby", cluster_member_ref: "CLS-JULIET-02" },
         ] }));
       }
       if (url === "/configuration") {

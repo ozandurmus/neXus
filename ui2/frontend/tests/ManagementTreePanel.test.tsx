@@ -21,7 +21,7 @@ const tree: ManagementTree = {
     { domain: "DOM-TANGO-04", nodes: [
       { ...base, kind: "PLAIN_HIGH_AVAILABILITY_CLUSTER", category: "cluster", cluster_member_ref: "CLS-ROMEO-01", candidate_id: "cand-c",
         children: [member("FW-ROMEO-01-M1", "dev-1", "ACTIVE"), member("FW-ROMEO-01-M2", "dev-2", "STANDBY")] },
-      { ...base, kind: "STANDALONE_PRODUCT_GATEWAY", category: "management_appliance", hostname: "FW-LOG-01", model: "Smart-1" },
+      { ...base, kind: "STANDALONE_PRODUCT_GATEWAY", category: "management_appliance", hostname: "MGR-ECHO-01", model: "Smart-1" },
     ] },
     { domain: "DOM-BRAVO-02", nodes: [{ ...member("FW-KILO-03", null, null), kind: "STANDALONE_PRODUCT_GATEWAY", model: "1570/1590 Appliances" }] },
   ],
@@ -96,33 +96,33 @@ it("words a read standalone gateway as Standalone, keeps a member's own UNKNOWN,
 const haTree: ManagementTree = {
   ...tree,
   domains: [
-    { domain: "DOMAIN-SYNTH-A", nodes: tree.domains[0].nodes },
-    { domain: "DOMAIN-SYNTH-B", nodes: tree.domains[1].nodes },
-    { domain: "DOMAIN-SYNTH-C", nodes: [] },
+    { domain: "DOM-ALPHA-01", nodes: tree.domains[0].nodes },
+    { domain: "DOM-BRAVO-02", nodes: tree.domains[1].nodes },
+    { domain: "DOM-CHARLIE-03", nodes: [] },
   ],
   domain_ha: {
     observed_at: "2026-11-09T06:00:00Z",
     domains: [
-      { domain: "DOMAIN-SYNTH-A", servers: [{ hostname: "MDS-SYNTH-01", active: true }, { hostname: "MDS-SYNTH-02", active: false }] },
-      { domain: "DOMAIN-SYNTH-B", servers: [{ hostname: "MDS-SYNTH-02", active: true }] },
-      { domain: "DOMAIN-SYNTH-C", servers: [{ hostname: "MDS-SYNTH-01", active: false }, { hostname: "MDS-SYNTH-02", active: false }] },
-      { domain: "Global", servers: [{ hostname: "MDS-SYNTH-01", active: true }, { hostname: "MDS-SYNTH-02", active: false }, { hostname: "MDS-SYNTH-03", active: false }] },
+      { domain: "DOM-ALPHA-01", servers: [{ hostname: "MGR-TANGO-01", active: true }, { hostname: "MGR-TANGO-02", active: false }] },
+      { domain: "DOM-BRAVO-02", servers: [{ hostname: "MGR-TANGO-02", active: true }] },
+      { domain: "DOM-CHARLIE-03", servers: [{ hostname: "MGR-TANGO-01", active: false }, { hostname: "MGR-TANGO-02", active: false }] },
+      { domain: "Global", servers: [{ hostname: "MGR-TANGO-01", active: true }, { hostname: "MGR-TANGO-02", active: false }, { hostname: "MGR-TANGO-03", active: false }] },
     ],
   },
 };
 
 it("words a Domain's HA placement plainly: standby list, no standby, no active server -- never an invented one", () => {
   const [a, b, c, g] = haTree.domain_ha!.domains;
-  expect(domainHaLine(a)).toBe("Active on MDS-SYNTH-01, standby on MDS-SYNTH-02");
-  expect(domainHaLine(b)).toBe("Active on MDS-SYNTH-02, no standby");
-  expect(domainHaLine(c)).toBe("No active server listed, standby on MDS-SYNTH-01 and MDS-SYNTH-02");
-  expect(domainHaLine(g)).toBe("Active on MDS-SYNTH-01, standby on MDS-SYNTH-02 and MDS-SYNTH-03");
+  expect(domainHaLine(a)).toBe("Active on MGR-TANGO-01, standby on MGR-TANGO-02");
+  expect(domainHaLine(b)).toBe("Active on MGR-TANGO-02, no standby");
+  expect(domainHaLine(c)).toBe("No active server listed, standby on MGR-TANGO-01 and MGR-TANGO-02");
+  expect(domainHaLine(g)).toBe("Active on MGR-TANGO-01, standby on MGR-TANGO-02 and MGR-TANGO-03");
   expect(domainHaLine({ servers: [] })).toBe("No active server listed, no standby");
 });
 
 it("matches HA entries to Domain sections by name and keeps the rest (Global) apart", () => {
   const split = splitDomainHa(haTree.domain_ha, haTree.domains);
-  expect([...split.bySection.keys()]).toEqual(["DOMAIN-SYNTH-A", "DOMAIN-SYNTH-B", "DOMAIN-SYNTH-C"]);
+  expect([...split.bySection.keys()]).toEqual(["DOM-ALPHA-01", "DOM-BRAVO-02", "DOM-CHARLIE-03"]);
   expect(split.unsectioned.map((e) => e.domain)).toEqual(["Global"]);
   expect(splitDomainHa(undefined, haTree.domains).bySection.size).toBe(0);
   expect(splitDomainHa(haTree.domain_ha, [{ domain: null, nodes: [] }]).unsectioned).toHaveLength(4);
@@ -131,17 +131,17 @@ it("matches HA entries to Domain sections by name and keeps the rest (Global) ap
 it("shows each Domain's Active/Standby MDS under its name, Global in the header list, and when it was read", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(haTree))));
   render(<ManagementTreePanel deviceId="mds-1" onOpenDevice={vi.fn()} onOpenCluster={vi.fn()} />);
-  await waitFor(() => expect(screen.getByText("DOMAIN-SYNTH-A")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText("DOM-ALPHA-01")).toBeTruthy());
   const lines = [...document.querySelectorAll("[data-domain-ha-line]")].map((el) => el.textContent);
   expect(lines).toEqual([
-    "Active on MDS-SYNTH-01, standby on MDS-SYNTH-02",
-    "Active on MDS-SYNTH-02, no standby",
-    "No active server listed, standby on MDS-SYNTH-01 and MDS-SYNTH-02",
+    "Active on MGR-TANGO-01, standby on MGR-TANGO-02",
+    "Active on MGR-TANGO-02, no standby",
+    "No active server listed, standby on MGR-TANGO-01 and MGR-TANGO-02",
   ]);
-  expect(document.querySelector('[data-domain="DOMAIN-SYNTH-A"] [data-domain-ha-line]')!.textContent).toContain("MDS-SYNTH-01");
+  expect(document.querySelector('[data-domain="DOM-ALPHA-01"] [data-domain-ha-line]')!.textContent).toContain("MGR-TANGO-01");
   const global = screen.getByLabelText("Domain HA of Domains with no gateways listed here");
   expect(global.textContent).toContain("Global");
-  expect(global.textContent).toContain("Active on MDS-SYNTH-01, standby on MDS-SYNTH-02 and MDS-SYNTH-03");
+  expect(global.textContent).toContain("Active on MGR-TANGO-01, standby on MGR-TANGO-02 and MGR-TANGO-03");
   expect(screen.getByText(/comes from the latest policy collection, read/)).toBeTruthy();
   expect(document.querySelector('[data-domain-ha="collected"] time')).toHaveAttribute("datetime", "2026-11-09T06:00:00Z");
   expect(document.querySelector('[data-domain-ha="not_collected"]')).toBeNull();
@@ -150,7 +150,7 @@ it("shows each Domain's Active/Standby MDS under its name, Global in the header 
 it("says Domain HA is not collected yet when observed_at is null or the key is missing, and says nothing for other vendors", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ...haTree, domain_ha: { observed_at: null, domains: [] } }))));
   const { unmount } = render(<ManagementTreePanel deviceId="mds-1" onOpenDevice={vi.fn()} onOpenCluster={vi.fn()} />);
-  await waitFor(() => expect(screen.getByText("DOMAIN-SYNTH-A")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText("DOM-ALPHA-01")).toBeTruthy());
   expect(screen.getByText(/has not been collected yet/)).toBeTruthy();
   expect(document.querySelector("[data-domain-ha-line]")).toBeNull();
   unmount();
@@ -161,6 +161,6 @@ it("says Domain HA is not collected yet when observed_at is null or the key is m
   second.unmount();
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ...haTree, vendor: "palo_alto", domain_ha: undefined }))));
   render(<ManagementTreePanel deviceId="pan-1" onOpenDevice={vi.fn()} onOpenCluster={vi.fn()} />);
-  await waitFor(() => expect(screen.getByText("DOMAIN-SYNTH-A")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText("DOM-ALPHA-01")).toBeTruthy());
   expect(screen.queryByText(/Domain HA/)).toBeNull();
 });

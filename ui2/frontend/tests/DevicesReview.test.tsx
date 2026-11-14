@@ -23,9 +23,9 @@ const base = (id: string, extra: Partial<DeviceSummary> = {}): DeviceSummary => 
 });
 
 // Listed M2 first on purpose: the screens must still show M1, M2.
-const M2 = base("tango-02", { hostname: "FW-TANGO-02", ha_role: "ACTIVE", cluster_member_ref: "CLS-ROMEO-01", virtual_systems: "vs-a, vs-b",
+const M2 = base("tango-02", { hostname: "FW-TANGO-02", ha_role: "ACTIVE", cluster_member_ref: "CLS-ROMEO-01", virtual_systems: "VS-ROMEO-01-01, VS-ROMEO-01-02",
   serial_number: "SN-00000002", hotfix_level: "Take 99", platform_facts_observed_at: "2026-09-22T22:57:54Z", inventory_collected_at: "2026-09-22T23:00:00Z" });
-const M1 = base("tango-01", { hostname: "FW-TANGO-01", ha_role: "STANDBY", cluster_member_ref: "CLS-ROMEO-01", virtual_systems: "vs-a",
+const M1 = base("tango-01", { hostname: "FW-TANGO-01", ha_role: "STANDBY", cluster_member_ref: "CLS-ROMEO-01", virtual_systems: "VS-ROMEO-01-01",
   serial_number: null, hotfix_level: "Take 99", management_ip: "192.0.2.11" });
 const DRAFT_CLUSTER = base("juliet-01", { hostname: "FW-JULIET-01", enrollment_state: "DRAFT", cluster_member_ref: "CLS-JULIET-02", ip_addresses: null });
 const STANDALONE = base("bravo-02", { hostname: "FW-BRAVO-02", vendor_hint: "palo_alto" });
@@ -120,7 +120,7 @@ describe("Devices screen after the Fable review", () => {
     const idRows = within(table).getAllByRole("row").slice(1);
     expect(within(idRows[0]).getByText("FW-TANGO-01")).toBeInTheDocument();
     expect(within(idRows[0]).getByText("1 · differs")).toBeInTheDocument();
-    expect(within(idRows[0]).getByText("vs-b")).toBeInTheDocument();
+    expect(within(idRows[0]).getByText("VS-ROMEO-01-02")).toBeInTheDocument();
     expect(within(idRows[1]).getByText("2 · same as cluster")).toBeInTheDocument();
     expect(within(idRows[1]).getByText("SN-00000002")).toBeInTheDocument();
     expect(within(idRows[1]).getByText("2026-09-23 01:57 GMT+3")).toBeInTheDocument();
@@ -162,9 +162,9 @@ describe("Devices screen after the Fable review", () => {
 describe("shared device pieces", () => {
   it("orders members by name suffix, M1 before M2 and 2 before 10", () => {
     const names = orderMembers([
-      { device_id: "c", hostname: "FW-X-10" }, { device_id: "b", hostname: "FW-X-2" }, { device_id: "a", hostname: "FW-X-1" },
+      { device_id: "c", hostname: "FW-TANGO-10" }, { device_id: "b", hostname: "FW-TANGO-2" }, { device_id: "a", hostname: "FW-TANGO-1" },
     ]).map((m) => m.hostname);
-    expect(names).toEqual(["FW-X-1", "FW-X-2", "FW-X-10"]);
+    expect(names).toEqual(["FW-TANGO-1", "FW-TANGO-2", "FW-TANGO-10"]);
   });
 
   it("writes a reported zero as reported, and an unread content version as UNKNOWN", () => {

@@ -45,7 +45,7 @@ const STANDALONE_DEVICE = {
   device_id: "dev-1",
   vendor_hint: "check_point",
   enrollment_state: "ENROLLED",
-  hostname: "fw-edge-1",
+  hostname: "FW-TANGO-04",
   model: "Quantum",
   software_version: "R81.20",
   ha_role: null,
@@ -56,17 +56,17 @@ const CLUSTER_MEMBER_A = {
   device_id: "dev-a",
   vendor_hint: "check_point",
   enrollment_state: "ENROLLED",
-  hostname: "member-a",
+  hostname: "FW-ROMEO-01-M1",
   model: "Quantum",
   software_version: "R81.20",
   ha_role: "active",
-  cluster_member_ref: "cluster-1",
+  cluster_member_ref: "CLS-ROMEO-01",
 };
 
 const CLUSTER_MEMBER_B = {
   ...CLUSTER_MEMBER_A,
   device_id: "dev-b",
-  hostname: "member-b",
+  hostname: "FW-ROMEO-01-M2",
   ha_role: "standby",
 };
 
@@ -177,10 +177,10 @@ describe("InventoryScreen device selection and panels", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("FW-TANGO-04")).toBeInTheDocument());
     // R2: the tree row carries no HA sentence; the header states it once the device is open
     expect(screen.queryByText(/peer named, not confirmed/)).toBeNull();
-    fireEvent.click(screen.getByText("fw-edge-1"));
+    fireEvent.click(screen.getByText("FW-TANGO-04"));
 
     await waitFor(() => expect(screen.getByText("eth0")).toBeInTheDocument());
     expect(screen.getAllByText(/^HA: peer named, not confirmed/)).toHaveLength(1);
@@ -232,8 +232,8 @@ describe("InventoryScreen device selection and panels", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("fw-edge-1"));
+    await waitFor(() => expect(screen.getByText("FW-TANGO-04")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("FW-TANGO-04"));
 
     await waitFor(() => expect(screen.getByText("eth0.100")).toBeInTheDocument());
     expect(screen.getByText("100")).toBeInTheDocument();
@@ -253,13 +253,13 @@ describe("InventoryScreen device selection and panels", () => {
           { ...CLUSTER_MEMBER_A, vendor_hint: vendor }, { ...CLUSTER_MEMBER_B, vendor_hint: vendor },
         ] }));
       }
-      if (url === "/clusters/cluster-1/inventory") {
+      if (url === "/clusters/CLS-ROMEO-01/inventory") {
         return Promise.resolve(
           jsonResponse(200, {
-            cluster_member_ref: "cluster-1",
+            cluster_member_ref: "CLS-ROMEO-01",
             members: [
-              { device_id: "dev-a", hostname: "member-a" },
-              { device_id: "dev-b", hostname: "member-b" },
+              { device_id: "dev-a", hostname: "FW-ROMEO-01-M1" },
+              { device_id: "dev-b", hostname: "FW-ROMEO-01-M2" },
             ],
             contexts: [
               {
@@ -284,11 +284,11 @@ describe("InventoryScreen device selection and panels", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("cluster-1")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("cluster-1"));
+    await waitFor(() => expect(screen.getByText("CLS-ROMEO-01")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("CLS-ROMEO-01"));
 
     // The membership marker names both members, and the VIP appears exactly once.
-    await waitFor(() => expect(screen.getAllByText("member-b").length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText("FW-ROMEO-01-M2").length).toBeGreaterThan(0));
     expect(screen.getAllByText("192.0.2.100/24")).toHaveLength(1);
     expect(screen.getByText("VIP")).toBeInTheDocument();
     expect(screen.getByText(/state = down/)).toBeInTheDocument();
@@ -296,24 +296,24 @@ describe("InventoryScreen device selection and panels", () => {
   });
 
   it.each([
-    { roles: ["active", "standby"], labels: ["FW-X (active)", "FW-X (standby)"] },
-    { roles: [null, null], labels: ["FW-X #1", "FW-X #2"] },
+    { roles: ["active", "standby"], labels: ["FW-TANGO-01 (active)", "FW-TANGO-01 (standby)"] },
+    { roles: [null, null], labels: ["FW-TANGO-01 #1", "FW-TANGO-01 #2"] },
   ])("distinguishes duplicate cluster member names and hides unmatched ids", async ({ roles, labels }) => {
     const unknownId = "123e4567-e89b-12d3-a456-426614174000";
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/devices") {
         return Promise.resolve(jsonResponse(200, { devices: [
-          { ...CLUSTER_MEMBER_A, hostname: "FW-X", ha_role: roles[0] },
-          { ...CLUSTER_MEMBER_B, hostname: "FW-X", ha_role: roles[1] },
+          { ...CLUSTER_MEMBER_A, hostname: "FW-TANGO-01", ha_role: roles[0] },
+          { ...CLUSTER_MEMBER_B, hostname: "FW-TANGO-01", ha_role: roles[1] },
         ] }));
       }
-      if (url === "/clusters/cluster-1/inventory") {
+      if (url === "/clusters/CLS-ROMEO-01/inventory") {
         return Promise.resolve(jsonResponse(200, {
-          cluster_member_ref: "cluster-1",
+          cluster_member_ref: "CLS-ROMEO-01",
           members: [
-            { device_id: "dev-a", hostname: "FW-X", ha_role: roles[0] },
-            { device_id: "dev-b", hostname: "FW-X", ha_role: roles[1] },
+            { device_id: "dev-a", hostname: "FW-TANGO-01", ha_role: roles[0] },
+            { device_id: "dev-b", hostname: "FW-TANGO-01", ha_role: roles[1] },
           ],
           contexts: [{
             context: "physical",
@@ -332,8 +332,8 @@ describe("InventoryScreen device selection and panels", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("cluster-1")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("cluster-1"));
+    await waitFor(() => expect(screen.getByText("CLS-ROMEO-01")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("CLS-ROMEO-01"));
     for (const label of labels) await waitFor(() => expect(screen.getAllByText(label).length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole("tab", { name: "Interfaces" }));
     await waitFor(() => expect(screen.getByText("eth0")).toBeInTheDocument());
@@ -384,8 +384,8 @@ describe("InventoryScreen device selection and panels", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("fw-edge-1"));
+    await waitFor(() => expect(screen.getByText("FW-TANGO-04")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("FW-TANGO-04"));
 
     const collectButton = await screen.findByRole("button", { name: "Collect" });
     fireEvent.click(collectButton);
@@ -688,36 +688,36 @@ describe("buildUnifiedContextTabs", () => {
   it("formats Check Point virtual systems without duplicating (VSID n)", () => {
     const contexts = [
       { context: "physical", interfaces: [] },
-      { context: "2", vs_name: "vs-finance (VSID 2)", interfaces: [] },
-      { context: "3", vs_name: "vs-dmz", interfaces: [] },
+      { context: "2", vs_name: "VS-ROMEO-01-02 (VSID 2)", interfaces: [] },
+      { context: "3", vs_name: "VS-ROMEO-01-03", interfaces: [] },
     ];
-    const virtualSystems = ["vs-finance (VSID 2)", "vs-dmz"];
+    const virtualSystems = ["VS-ROMEO-01-02 (VSID 2)", "VS-ROMEO-01-03"];
 
     const { tabs, resolveContext } = buildUnifiedContextTabs(contexts, virtualSystems);
 
     expect(tabs).toHaveLength(3);
     expect(tabs[0].label).toBe("Physical / VS0");
-    // Should NOT be "VS: vs-finance (VSID 2) (VSID 2)"
-    expect(tabs[1].label).toBe("VS: vs-finance (VSID 2)");
-    // Should append (VSID 3) because vs-dmz doesn't have parens
-    expect(tabs[2].label).toBe("VS: vs-dmz (VSID 3)");
+    // Should NOT be "VS: VS-ROMEO-01-02 (VSID 2) (VSID 2)"
+    expect(tabs[1].label).toBe("VS: VS-ROMEO-01-02 (VSID 2)");
+    // Should append (VSID 3) because VS-ROMEO-01-03 doesn't have parens
+    expect(tabs[2].label).toBe("VS: VS-ROMEO-01-03 (VSID 3)");
 
-    expect(resolveContext("vs-finance (VSID 2)")).toBe(contexts[1]);
+    expect(resolveContext("VS-ROMEO-01-02 (VSID 2)")).toBe(contexts[1]);
     expect(resolveContext("2")).toBe(contexts[1]);
   });
 
   it("formats Palo Alto virtual systems with VR name first and VSYS prefix", () => {
     const contexts = [
       { context: "vsys1", vs_name: "default (vsys1)", interfaces: [] },
-      { context: "vsys2", vs_name: "VR-DMZ (vsys2)", interfaces: [] },
+      { context: "vsys2", vs_name: "VS-ROMEO-01-02 (vsys2)", interfaces: [] },
     ];
-    const virtualSystems = ["default (vsys1)", "VR-DMZ (vsys2)"];
+    const virtualSystems = ["default (vsys1)", "VS-ROMEO-01-02 (vsys2)"];
 
     const { tabs, resolveContext } = buildUnifiedContextTabs(contexts, virtualSystems);
 
     expect(tabs).toHaveLength(2);
     expect(tabs[0].label).toBe("VSYS: default (vsys1)");
-    expect(tabs[1].label).toBe("VSYS: VR-DMZ (vsys2)");
+    expect(tabs[1].label).toBe("VSYS: VS-ROMEO-01-02 (vsys2)");
 
     expect(resolveContext("default (vsys1)")).toBe(contexts[0]);
     expect(resolveContext("vsys1")).toBe(contexts[0]);

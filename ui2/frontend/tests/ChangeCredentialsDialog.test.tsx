@@ -19,7 +19,7 @@ it("replaces a draft Radware device's login credential and checks it again (PO, 
     }
     return Promise.resolve(json({ ok: true, changed: true, admitted: true, job_id: "j1" }));
   }));
-  const device = { device_id: "d1", vendor_hint: "radware", enrollment_state: "DRAFT", hostname: "FW-RADWARE-01" } as unknown as DeviceSummary;
+  const device = { device_id: "d1", vendor_hint: "radware", enrollment_state: "DRAFT", hostname: "FW-TANGO-04" } as unknown as DeviceSummary;
   const onChanged = vi.fn();
   render(<ChangeCredentialsDialog device={device} onClose={() => {}} onChanged={onChanged} />);
 

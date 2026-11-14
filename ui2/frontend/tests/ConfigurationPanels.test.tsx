@@ -18,7 +18,7 @@ function withTheme(node: React.ReactElement) {
 
 const CP_DEVICE = {
   device_id: "dev-1",
-  hostname: "fw-edge-1",
+  hostname: "FW-TANGO-04",
   vendor: "check_point",
   last_collected_at: "2026-09-14T12:00:00Z",
   change_state: "unchanged",
@@ -80,8 +80,8 @@ describe("ConfigurationScreen device selection and panels", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(withTheme(<ConfigurationScreen />));
 
-    await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("fw-edge-1"));
+    await waitFor(() => expect(screen.getByText("FW-TANGO-04")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("FW-TANGO-04"));
     fireEvent.click(await screen.findByRole("tab", { name: "Details" }));
 
     await waitFor(() => expect(screen.getByText("interface")).toBeInTheDocument(), { timeout: 4000 });
@@ -142,8 +142,8 @@ describe("ConfigurationScreen device selection and panels", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(withTheme(<ConfigurationScreen />));
 
-    await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("fw-edge-1"));
+    await waitFor(() => expect(screen.getByText("FW-TANGO-04")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("FW-TANGO-04"));
     fireEvent.click(await screen.findByRole("tab", { name: "Details" }));
 
     await waitFor(() => expect(screen.getByText("override")).toBeInTheDocument(), { timeout: 4000 });
@@ -207,8 +207,8 @@ describe("ConfigurationScreen device selection and panels", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(withTheme(<ConfigurationScreen />));
 
-    await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("fw-edge-1"));
+    await waitFor(() => expect(screen.getByText("FW-TANGO-04")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("FW-TANGO-04"));
     fireEvent.click(await screen.findByRole("tab", { name: "Details" }));
 
     const collectButton = await screen.findByRole("button", { name: "Read configuration" });

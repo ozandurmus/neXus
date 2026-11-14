@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 const device = (over: Partial<DeviceSummary> = {}): DeviceSummary => ({
-  device_id: "dev-1", hostname: "FW-SYNTH-01", vendor_hint: "check_point", role: "gateway", enrollment_state: "ENROLLED", model: "Quantum",
+  device_id: "dev-1", hostname: "FW-TANGO-01", vendor_hint: "check_point", role: "gateway", enrollment_state: "ENROLLED", model: "Quantum",
   software_version: "R81.20", ha_role: null, cluster_member_ref: null, ip_addresses: "192.0.2.10", ...over,
 });
 const check = (state: IdentityCheckView["state"], over: Partial<IdentityCheckView> = {}): IdentityCheckView => ({
@@ -61,16 +61,16 @@ describe("read ages in the header", () => {
   });
 
   it("gives a cluster the oldest member's read ages, each member on hover (R13)", async () => {
-    const m1 = device({ device_id: "m-1", hostname: "FW-SYNTH-M1", cluster_member_ref: "CLS-SYNTH-01", ha_role: "ACTIVE", platform_facts_observed_at: ago(2 * H) });
-    const m2 = device({ device_id: "m-2", hostname: "FW-SYNTH-M2", cluster_member_ref: "CLS-SYNTH-01", ha_role: "STANDBY", platform_facts_observed_at: ago(9 * H) });
+    const m1 = device({ device_id: "m-1", hostname: "FW-ROMEO-01-M1", cluster_member_ref: "CLS-ROMEO-01", ha_role: "ACTIVE", platform_facts_observed_at: ago(2 * H) });
+    const m2 = device({ device_id: "m-2", hostname: "FW-ROMEO-01-M2", cluster_member_ref: "CLS-ROMEO-01", ha_role: "STANDBY", platform_facts_observed_at: ago(9 * H) });
     stub({
-      "/clusters/CLS-SYNTH-01/inventory": () => json({ cluster_member_ref: "CLS-SYNTH-01", members: [m1, m2], virtual_systems: [], contexts: [] }),
+      "/clusters/CLS-ROMEO-01/inventory": () => json({ cluster_member_ref: "CLS-ROMEO-01", members: [m1, m2], virtual_systems: [], contexts: [] }),
       "/devices/m-1/configuration": () => json({ ...configuration(ago(5 * H)), device_id: "m-1" }),
       "/devices/m-2/configuration": () => json({ ...configuration(ago(30 * H)), device_id: "m-2" }),
       "/devices/m-1/backups": () => json({ backups: [] }), "/devices/m-2/backups": () => json({ backups: [] }),
       "/devices/m-1/compliance": () => json({ items: [] }), "/devices/m-2/compliance": () => json({ items: [] }),
     });
-    mount(<ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={[m1, m2]} configuration={<p>side by side</p>} />);
+    mount(<ClusterDetailPanels clusterRef="CLS-ROMEO-01" members={[m1, m2]} configuration={<p>side by side</p>} />);
     const ages = await screen.findByTestId("header-read-ages");
     await waitFor(() => expect(ages).toHaveTextContent("Platform read 9 h ago·Config read 30 h ago"));
     fireEvent.mouseOver(within(ages).getByText(/^Platform read/));
@@ -110,7 +110,7 @@ describe("read ages in the header", () => {
 
   // Post-release review 2026-10-20: a manager's read ages come from the reads it really has.
   it("heads a management server with its inventory read when it has no platform-facts read, and Not applicable for a configuration plane it has not got", async () => {
-    const d = device({ device_id: "fmg-1", hostname: "FM-SYNTH-01", vendor_hint: "fortinet", role: "management_server", model: "FMG-VM64", inventory_collected_at: ago(22 * H), platform_facts_observed_at: null });
+    const d = device({ device_id: "fmg-1", hostname: "MGR-ECHO-01", vendor_hint: "fortinet", role: "management_server", model: "FMG-VM64", inventory_collected_at: ago(22 * H), platform_facts_observed_at: null });
     stub({ ...base(d), [`/devices/${d.device_id}/inventory`]: () => json({ device_id: d.device_id, collected_at: ago(22 * H), contexts: [] }),
       "/devices/fmg-1/configuration": () => json({ ...configuration(null), device_id: "fmg-1", vendor: "fortinet" }) });
     mount(<DeviceInventoryPanels device={d} configuration={<p>configuration tab</p>} />);
@@ -131,7 +131,7 @@ describe("read ages in the header", () => {
   });
 
   it("heads a Radware manager with its inventory read and Not applicable although the screen offers it no configuration tab", async () => {
-    const d = device({ device_id: "rdw-1", hostname: "RW-SYNTH-MC", vendor_hint: "radware", role: "management_server", model: "Cyber Controller", platform_facts_observed_at: null });
+    const d = device({ device_id: "rdw-1", hostname: "MGR-SIERRA-01", vendor_hint: "radware", role: "management_server", model: "Cyber Controller", platform_facts_observed_at: null });
     const fetchMock = stub({ ...base(d), "/devices/rdw-1/inventory": () => json({ device_id: "rdw-1", collected_at: ago(5 * H), contexts: [] }) });
     mount(<DeviceInventoryPanels device={d} />);
     const ages = await screen.findByTestId("header-read-ages");
@@ -142,7 +142,7 @@ describe("read ages in the header", () => {
   });
 
   it("keeps a Check Point management server on its own configuration read (it runs Gaia and has the gated read)", async () => {
-    const d = device({ device_id: "mds-1", hostname: "MDS-SYNTH-01", role: "management_server", platform_facts_observed_at: ago(2 * H) });
+    const d = device({ device_id: "mds-1", hostname: "MGR-BRAVO-01", role: "management_server", platform_facts_observed_at: ago(2 * H) });
     expect(configurationNotApplicable(d)).toBeUndefined();
     stub({ ...base(d), "/devices/mds-1/configuration": () => json({ ...configuration(null), device_id: "mds-1" }) });
     mount(withGrid(d));
@@ -260,7 +260,7 @@ describe("the header card", () => {
     const header = await screen.findByTestId("entity-header");
     expect(within(header).getByText("Palo Alto · Standalone")).toBeInTheDocument();
     expect(header.querySelector("[data-role]")).toBeNull();
-    expect(identitySummaryLine(device({ role: "management_server", ha_role: "UNKNOWN", serial_number: "SN-SYNTH" }))).toBe("Check Point · Quantum · R81.20 · serial read");
+    expect(identitySummaryLine(device({ role: "management_server", ha_role: "UNKNOWN", serial_number: "SN-00000001" }))).toBe("Check Point · Quantum · R81.20 · serial read");
     expect(identitySummaryLine(device({ ha_role: "active" }))).toBe("Check Point · Quantum · R81.20 · ACTIVE");
     const mdsTiles = identityTiles(device({ role: "management_server", ha_role: "UNKNOWN" }), null);
     const ha = mdsTiles.find((t) => t.label === "HA role");
@@ -279,22 +279,22 @@ describe("the header card", () => {
   });
 
   it("fits a cluster member's header in two pill rows of at most ten pills, without the Members line or a job tick (R13)", async () => {
-    const d = device({ cluster_member_ref: "CLS-SYNTH-01", ha_role: "ACTIVE", platform_facts_observed_at: ago(4 * H), model: "Quantum 29200",
+    const d = device({ cluster_member_ref: "CLS-ROMEO-01", ha_role: "ACTIVE", platform_facts_observed_at: ago(4 * H), model: "Quantum 29200",
       latest_job_state: "COMPLETED", latest_job_type: "cp_inventory_collect" });
     stub({ ...base(d),
-      "/clusters/CLS-SYNTH-01/inventory": () => json({ cluster_member_ref: "CLS-SYNTH-01", members: [{ device_id: "dev-1", hostname: "FW-SYNTH-01" }, { device_id: "dev-2", hostname: "FW-SYNTH-02" }], contexts: [], virtual_systems: [] }),
+      "/clusters/CLS-ROMEO-01/inventory": () => json({ cluster_member_ref: "CLS-ROMEO-01", members: [{ device_id: "dev-1", hostname: "FW-TANGO-01" }, { device_id: "dev-2", hostname: "FW-TANGO-02" }], contexts: [], virtual_systems: [] }),
       "/devices/dev-1/configuration": () => json({ ...configuration(ago(16 * H)), change_state: "unchanged" }),
       "/devices/dev-1/backups": () => json({ backups: [{ artefact_id: "a-1", collected_at: ago(14 * H), validation_level: "V1", size_bytes: 1 }] }),
       "/devices/dev-1/compliance": () => json({ items: [{ displayStatus: "FAIL", severity: "CRITICAL" }] }),
-      "/api/v2/cp-failover/summary": () => json([{ cluster_member_ref: "CLS-SYNTH-01", unitId: "CLS-SYNTH-01", clusterId: "CLS-SYNTH-01", readiness: { status: "READY", observedAt: ago(3 * H) } }]),
+      "/api/v2/cp-failover/summary": () => json([{ cluster_member_ref: "CLS-ROMEO-01", unitId: "CLS-ROMEO-01", clusterId: "CLS-ROMEO-01", readiness: { status: "READY", observedAt: ago(3 * H) } }]),
     });
     mount(withGrid(d));
     const header = await screen.findByTestId("entity-header");
     await waitFor(() => expect(within(header).getByText(/^Readiness Ready/)).toBeInTheDocument());
     // the identity row: Live · badge · cluster link · role · one platform pill · counts; the state row: four facts
-    const identityRow = within(header).getByRole("heading", { name: "FW-SYNTH-01" }).parentElement as HTMLElement;
+    const identityRow = within(header).getByRole("heading", { name: "FW-TANGO-01" }).parentElement as HTMLElement;
     const identityPills = Array.from(identityRow.querySelectorAll("[data-pill], [data-role], a, button")).map((p) => p.textContent);
-    expect(identityPills).toEqual(["Live", "Not verified yet", "Check Point ClusterXL · CLS-SYNTH-01", "ACTIVE", "Quantum 29200 · R81.20 · Gaia", "0 interfaces · 0 routes"]);
+    expect(identityPills).toEqual(["Live", "Not verified yet", "Check Point ClusterXL · CLS-ROMEO-01", "ACTIVE", "Quantum 29200 · R81.20 · Gaia", "0 interfaces · 0 routes"]);
     const statePills = Array.from(within(header).getByTestId("header-state-row").querySelectorAll("[data-fact]")).map((p) => p.textContent);
     expect(statePills).toEqual(["Compliance 1 critical failing · 1 checked", "Config unchanged", "Backup 14 h ago · Checked", "Readiness Ready · 3 h ago"]);
     expect(identityPills.length + statePills.length).toBeLessThanOrEqual(10);
@@ -392,7 +392,7 @@ describe("the header's Platform identity panel holds the grid (roadmap 2.6; PO 2
   it("collapses the grid to one line on the Configuration tab, whose link opens the header panel on the grid", async () => {
     const scroll = vi.fn();
     window.HTMLElement.prototype.scrollIntoView = scroll;
-    const d = device({ identity_check: check("VERIFIED"), serial_number: "SN-SYNTH-01" });
+    const d = device({ identity_check: check("VERIFIED"), serial_number: "SN-00000001" });
     stub({ ...base(d), "/devices/dev-1/configuration": () => json(configuration(ago(H))) });
     mount(withGrid(d));
     fireEvent.click(await screen.findByRole("tab", { name: "Configuration" }));
@@ -423,7 +423,7 @@ describe("the header's collapsible Platform identity panel (PO 2026-11-06)", () 
   const fact = (label: string) => screen.getByTestId("platform-identity-headline").querySelector(`[data-fact="${label}"]`) as HTMLElement;
 
   it("is collapsed by default, under the state row, with the most-asked facts on one line and no Identity tab", async () => {
-    const d = device({ serial_number: "SN-SYNTH-01", hotfix_level: "Take 41", ha_role: "ACTIVE", inventory_collected_at: ago(14 * H), platform_facts_observed_at: ago(14 * H) });
+    const d = device({ serial_number: "SN-00000001", hotfix_level: "Take 41", ha_role: "ACTIVE", inventory_collected_at: ago(14 * H), platform_facts_observed_at: ago(14 * H) });
     stub(base(d));
     mount(<DeviceInventoryPanels device={d} />);
     const header = await screen.findByTestId("entity-header");
@@ -437,7 +437,7 @@ describe("the header's collapsible Platform identity panel (PO 2026-11-06)", () 
     expect(fact("Model")).toHaveTextContent("ModelQuantum");
     expect(fact("Software version")).toHaveTextContent("Software versionR81.20");
     expect(fact("Hotfix / Jumbo take")).toHaveTextContent("Take 41");
-    expect(fact("Serial number")).toHaveTextContent("SN-SYNTH-01");
+    expect(fact("Serial number")).toHaveTextContent("SN-00000001");
     expect(fact("Last inventory read")).toHaveTextContent("14 h ago");
     // R16, one HA statement per device: the title row shows the role chip, so the collapsed line does not repeat it
     expect(within(within(header).getByTestId("object-title-row")).getByText("ACTIVE")).toHaveAttribute("data-role", "ACTIVE");
@@ -525,7 +525,7 @@ describe("the header's collapsible Platform identity panel (PO 2026-11-06)", () 
   });
 
   it("says not read yet on the collapsed line for a Check Point management server without a hotfix, as the grid does", async () => {
-    const d = device({ hostname: "MGR-SYNTH-01", role: "management_server", hotfix_level: null, serial_number: null, software_version: "R81.20", inventory_collected_at: null });
+    const d = device({ hostname: "MGR-BRAVO-01", role: "management_server", hotfix_level: null, serial_number: null, software_version: "R81.20", inventory_collected_at: null });
     stub(base(d));
     mount(<DeviceInventoryPanels device={d} />);
     await screen.findByTestId("platform-identity-headline");
@@ -570,8 +570,8 @@ describe("the HA role line", () => {
 
 describe("the cluster Logs tab (F-21)", () => {
   const members: DeviceSummary[] = [
-    device({ device_id: "m-1", hostname: "FW-SYNTH-M1", cluster_member_ref: "CLS-SYNTH-01", ha_role: "ACTIVE" }),
-    device({ device_id: "m-2", hostname: "FW-SYNTH-M2", cluster_member_ref: "CLS-SYNTH-01", ha_role: "STANDBY" }),
+    device({ device_id: "m-1", hostname: "FW-ROMEO-01-M1", cluster_member_ref: "CLS-ROMEO-01", ha_role: "ACTIVE" }),
+    device({ device_id: "m-2", hostname: "FW-ROMEO-01-M2", cluster_member_ref: "CLS-ROMEO-01", ha_role: "STANDBY" }),
   ];
   const sources = (id: string) => ({ device_id: id, collection_state: "NO_COLLECTION_YET", can_view_unmasked: false, default_page_bytes: 65536, max_page_bytes: 262144, last_job: null, sources: [] });
 
@@ -585,32 +585,32 @@ describe("the cluster Logs tab (F-21)", () => {
     const [m1, m2] = within(pills).getAllByRole("button");
     expect([m1.textContent, m2.textContent]).toEqual(["M1", "M2"]);
     expect(m1).toHaveAttribute("aria-pressed", "true");
-    expect(pills).toHaveTextContent("FW-SYNTH-M1 · ACTIVE");
+    expect(pills).toHaveTextContent("FW-ROMEO-01-M1 · ACTIVE");
     await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => u === "/api/v2/system-logs/m-1/sources")).toBe(true));
     fireEvent.click(m2);
     expect(m2).toHaveAttribute("aria-pressed", "true");
-    expect(pills).toHaveTextContent("FW-SYNTH-M2 · STANDBY");
+    expect(pills).toHaveTextContent("FW-ROMEO-01-M2 · STANDBY");
     await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => u === "/api/v2/system-logs/m-2/sources")).toBe(true));
   });
 
   it("is a tab of the cluster pane for Check Point and Palo Alto only", async () => {
-    stub({ "/clusters/CLS-SYNTH-01/inventory": () => json({ cluster_member_ref: "CLS-SYNTH-01", members, virtual_systems: [], contexts: [] }) });
-    const cp = mount(<ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={members} />);
+    stub({ "/clusters/CLS-ROMEO-01/inventory": () => json({ cluster_member_ref: "CLS-ROMEO-01", members, virtual_systems: [], contexts: [] }) });
+    const cp = mount(<ClusterDetailPanels clusterRef="CLS-ROMEO-01" members={members} />);
     expect(await screen.findByRole("tab", { name: "Logs" })).toBeInTheDocument();
     cp.unmount();
     const fortinet = members.map((m) => ({ ...m, vendor_hint: "fortinet" }));
-    mount(<ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={fortinet} />);
+    mount(<ClusterDetailPanels clusterRef="CLS-ROMEO-01" members={fortinet} />);
     await screen.findByRole("tablist", { name: "Cluster detail" });
     expect(screen.queryByRole("tab", { name: "Logs" })).toBeNull();
   });
 
   it("titles the cluster without a CLS > prefix and shows Backups and Readiness as header pills", async () => {
-    stub({ "/clusters/CLS-SYNTH-01/inventory": () => json({ cluster_member_ref: "CLS-SYNTH-01", members, virtual_systems: [], contexts: [] }) });
-    mount(<ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={members} />);
+    stub({ "/clusters/CLS-ROMEO-01/inventory": () => json({ cluster_member_ref: "CLS-ROMEO-01", members, virtual_systems: [], contexts: [] }) });
+    mount(<ClusterDetailPanels clusterRef="CLS-ROMEO-01" members={members} />);
     const header = await screen.findByTestId("entity-header");
-    expect(within(header).getByRole("heading", { name: "CLS-SYNTH-01" })).toBeInTheDocument();
-    expect(within(header).getByRole("link", { name: "Backups" })).toHaveAttribute("href", "?screen=backups&q=CLS-SYNTH-01");
-    expect(within(header).getByRole("link", { name: "Readiness" })).toHaveAttribute("href", "?screen=operations&cluster_ref=CLS-SYNTH-01");
+    expect(within(header).getByRole("heading", { name: "CLS-ROMEO-01" })).toBeInTheDocument();
+    expect(within(header).getByRole("link", { name: "Backups" })).toHaveAttribute("href", "?screen=backups&q=CLS-ROMEO-01");
+    expect(within(header).getByRole("link", { name: "Readiness" })).toHaveAttribute("href", "?screen=operations&cluster_ref=CLS-ROMEO-01");
     expect(screen.queryByText("This cluster in:")).toBeNull();
   });
 });

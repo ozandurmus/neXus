@@ -11,10 +11,10 @@ const policy = (id: string, container: string, targets: PolicyMetadata["targets"
   collectedAt: "2026-10-05T00:00:00Z", artefactRef: "artifact-1", targets, ruleCount: 4,
 });
 const catalog = [
-  policy("p1", "one", [{ deviceId: "d1", name: "FW-SYNTH-01", context: "", syncStatus: "IN_SYNC" }, { deviceId: "d2", name: "FW-SYNTH-02", context: "", syncStatus: "IN_SYNC" }]),
-  policy("p2", "two", []),
+  policy("p1", "ALPHA-01", [{ deviceId: "d1", name: "FW-TANGO-01", context: "", syncStatus: "IN_SYNC" }, { deviceId: "d2", name: "FW-TANGO-02", context: "", syncStatus: "IN_SYNC" }]),
+  policy("p2", "BRAVO-02", []),
 ];
-const installationPage = { installations: [{ id: "g1", policyId: "p1", policyName: "POL-p1", name: "FW-SYNTH-01", deviceId: "d1", allTargets: true, targeted: true, installed: null }],
+const installationPage = { installations: [{ id: "g1", policyId: "p1", policyName: "POL-p1", name: "FW-TANGO-01", deviceId: "d1", allTargets: true, targeted: true, installed: null }],
   types: [{ type: "hosts", status: "RESOLVED", collectedAt: "2026-10-05T00:00:00Z", objects: 1 }], total: 1, page: 0, pageSize: 200 };
 
 function stub() {
@@ -39,8 +39,8 @@ it("shows Installation as two columns of the container table, with the managemen
   expect(headers).toEqual(["Container", "Source", "Policies", "Rules", "Installation targets", "Installation status", "Last collected", ""]);
   const rows = within(table).getAllByRole("row").slice(1);
   expect(rows).toHaveLength(2);
-  expect(within(rows[0]).getByText("DOM-one")).toBeInTheDocument();
-  expect(within(rows[0]).getByText("FW-SYNTH-01, FW-SYNTH-02")).toBeInTheDocument();
+  expect(within(rows[0]).getByText("DOM-ALPHA-01")).toBeInTheDocument();
+  expect(within(rows[0]).getByText("FW-TANGO-01, FW-TANGO-02")).toBeInTheDocument();
   expect(within(rows[0]).getByText("2 in sync")).toHaveAttribute("data-installation", "good");
   expect(within(rows[1]).getByText("Unassigned")).toBeInTheDocument();
   expect(within(rows[1]).getByText("No target")).toBeInTheDocument();
@@ -51,12 +51,12 @@ it("shows Installation as two columns of the container table, with the managemen
 it("opens a container from the list, then the Installation section shows that container's installation table", async () => {
   stub(); mount();
   await screen.findByRole("button", { name: "MGR-BRAVO-01", expanded: true });
-  fireEvent.click(await screen.findByRole("button", { name: "Open DOM-one" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open DOM-ALPHA-01" }));
   const section = await screen.findByRole("region", { name: "Installation" });
   // Nothing is read until the section is asked for.
   expect(within(section).queryByRole("table", { name: "Policy installation" })).toBeNull();
   fireEvent.click(within(section).getByRole("button", { name: /Installation: where this container's packages are installed/ }));
-  expect(await within(section).findByRole("table", { name: "Policy installation" })).toHaveTextContent("FW-SYNTH-01");
+  expect(await within(section).findByRole("table", { name: "Policy installation" })).toHaveTextContent("FW-TANGO-01");
   expect(screen.getByRole("tab", { name: "Rules & Containers" })).toHaveAttribute("aria-selected", "true");
 });
 

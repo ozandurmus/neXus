@@ -75,7 +75,7 @@ it("keeps job and device UUIDs in the expandable details", async () => {
 
 it("names every job target in masked form (device, cluster/failover unit, policy source/container, fleet) and says No target recorded only when none exists", async () => {
   expect(jobTargetLabel({ job_type: "cp_inventory_collect", target_device_id: "d1", device_name: "FW-TANGO-04" })).toBe("FW-TANGO-04");
-  expect(jobTargetLabel({ job_type: "cp_failover_readiness", target_device_id: "d1" }, { d1: { name: "FW-ROMEO-M1", cluster: "CLS-ROMEO-01", vendor: "check_point" } })).toBe("CLS-ROMEO-01");
+  expect(jobTargetLabel({ job_type: "cp_failover_readiness", target_device_id: "d1" }, { d1: { name: "FW-ROMEO-01-M1", cluster: "CLS-ROMEO-01", vendor: "check_point" } })).toBe("CLS-ROMEO-01");
   expect(jobTargetLabel({ job_type: "cp_cluster_failover", target_device_id: "d1", device_name: "VS-ROMEO-01-V1", target_kind: "failover_unit" })).toBe("VS-ROMEO-01-V1");
   expect(jobTargetLabel({ job_type: "cp_policy_collect", target_device_id: null, device_name: "DOM-ALPHA-01", target_kind: "policy_container" })).toBe("DOM-ALPHA-01");
   expect(jobTargetLabel({ job_type: "pan_policy_collect", target_device_id: "mgr-1", device_name: "FW-BRAVO-02", target_kind: "policy_source" })).toBe("FW-BRAVO-02");
@@ -101,7 +101,7 @@ it("names every job target in masked form (device, cluster/failover unit, policy
     }
     if (url === "/devices") {
       return Promise.resolve(new Response(JSON.stringify({
-        devices: [{ device_id: "member-01", hostname: "FW-ROMEO-M1", cluster_member_ref: "CLS-ROMEO-01", vendor_hint: "palo_alto" }],
+        devices: [{ device_id: "member-01", hostname: "FW-ROMEO-01-M1", cluster_member_ref: "CLS-ROMEO-01", vendor_hint: "palo_alto" }],
       })));
     }
     return Promise.resolve(new Response("{}", { status: 404 }));

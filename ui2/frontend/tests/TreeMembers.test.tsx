@@ -20,9 +20,9 @@ const dev = (id: string, hostname: string, extra: Partial<DeviceSummary> = {}): 
 const devices = [
   dev("m2", "FW-ROMEO-01-M2", { cluster_member_ref: "CLS-ROMEO-01", ha_role: "STANDBY" }),
   dev("m1", "FW-ROMEO-01-M1", { cluster_member_ref: "CLS-ROMEO-01", ha_role: "ACTIVE" }),
-  dev("v1", "FW-VSX-01-M1", { cluster_member_ref: "CLS-VSX-01", virtual_systems: "VS-SYNTH-01, VS-SYNTH-02" }),
-  dev("v2", "FW-VSX-01-M2", { cluster_member_ref: "CLS-VSX-01", virtual_systems: "VS-SYNTH-01, VS-SYNTH-02" }),
-  dev("solo", "FW-SOLO-09"),
+  dev("v1", "FW-BRAVO-01-M1", { cluster_member_ref: "CLS-BRAVO-01", virtual_systems: "VS-BRAVO-01-01, VS-BRAVO-01-02" }),
+  dev("v2", "FW-BRAVO-01-M2", { cluster_member_ref: "CLS-BRAVO-01", virtual_systems: "VS-BRAVO-01-01, VS-BRAVO-01-02" }),
+  dev("solo", "FW-TANGO-09"),
 ];
 const clusterRow = (ref: string) => screen.getByText(ref).closest('[data-row="cluster"]') as HTMLElement;
 const props = { selectedDeviceId: null, selectedClusterRef: null, onSelectDevice: vi.fn(), onSelectCluster: vi.fn() };
@@ -56,12 +56,12 @@ describe("member rows", () => {
   it("keeps a cluster with virtual systems as it was: its virtual systems, no member rows", () => {
     mount(<DeviceList devices={devices} {...props} />);
     // UI review 2026-11-05, C5: collapsed by default, the count on the row
-    expect(screen.queryByText("VS-SYNTH-01")).toBeNull();
-    expect(within(clusterRow("CLS-VSX-01")).getByText("2 VS")).toBeInTheDocument();
-    fireEvent.click(within(clusterRow("CLS-VSX-01")).getByTitle("Expand virtual systems"));
-    expect(screen.getByText("VS-SYNTH-01")).toBeInTheDocument();
-    expect(screen.queryByText("FW-VSX-01-M1")).toBeNull();
-    expect(within(clusterRow("CLS-VSX-01")).getByTitle("Collapse virtual systems")).toBeInTheDocument();
+    expect(screen.queryByText("VS-BRAVO-01-01")).toBeNull();
+    expect(within(clusterRow("CLS-BRAVO-01")).getByText("2 VS")).toBeInTheDocument();
+    fireEvent.click(within(clusterRow("CLS-BRAVO-01")).getByTitle("Expand virtual systems"));
+    expect(screen.getByText("VS-BRAVO-01-01")).toBeInTheDocument();
+    expect(screen.queryByText("FW-BRAVO-01-M1")).toBeNull();
+    expect(within(clusterRow("CLS-BRAVO-01")).getByTitle("Collapse virtual systems")).toBeInTheDocument();
   });
 
   it("shows no chevron where it would open nothing", () => {
@@ -80,7 +80,7 @@ describe("the open device", () => {
     expect(member).toHaveAttribute("data-selected", "true");
     expect(screen.getByText("FW-ROMEO-01-M2").closest('[data-row="device"]')).not.toHaveAttribute("data-selected");
     // another cluster is not highlighted
-    expect(clusterRow("CLS-VSX-01")).not.toHaveAttribute("data-holds-selected");
+    expect(clusterRow("CLS-BRAVO-01")).not.toHaveAttribute("data-holds-selected");
   });
 
   it("marks the cluster itself as selected, not as a parent, when the cluster is open", () => {
@@ -100,8 +100,8 @@ describe("the open device", () => {
   it("scrolls to an open cluster and to its virtual system", () => {
     const scroll = vi.fn();
     window.HTMLElement.prototype.scrollIntoView = scroll;
-    mount(<DeviceList devices={devices} {...props} selectedClusterRef="CLS-VSX-01" selectedVs="VS-SYNTH-02" />);
-    expect((scroll.mock.contexts.at(-1) as HTMLElement).textContent).toContain("VS-SYNTH-02");
+    mount(<DeviceList devices={devices} {...props} selectedClusterRef="CLS-BRAVO-01" selectedVs="VS-BRAVO-01-02" />);
+    expect((scroll.mock.contexts.at(-1) as HTMLElement).textContent).toContain("VS-BRAVO-01-02");
   });
 
   it("opens the manager and domain that hold the open member, so the tree can scroll to it", async () => {
@@ -111,9 +111,9 @@ describe("the open device", () => {
       ha_role: null, enrollment_state: null, last_collection_state: null, last_collection_at: null, model: null, candidate_id: null,
       ack_token: null, acknowledged: false, acknowledged_reason: null, children });
     const tree = { device_id: "mds", vendor: "check_point", run_id: "r", discovered_at: "2026-09-20T00:00:00Z", counts: {},
-      domains: [{ domain: "DOM-ONE", nodes: [node(null, [node("m1")])] }, { domain: "DOM-TWO", nodes: [node("solo")] }] };
+      domains: [{ domain: "DOM-ALPHA-01", nodes: [node(null, [node("m1")])] }, { domain: "DOM-BRAVO-02", nodes: [node("solo")] }] };
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(tree))));
-    const all = [dev("mds", "FW-MDS-01", { role: "management_server" }), ...devices];
+    const all = [dev("mds", "MGR-BRAVO-01", { role: "management_server" }), ...devices];
     await act(async () => { mount(<DeviceList groupByManager devices={all} {...props} selectedDeviceId="m1" />); });
     await waitFor(() => expect(screen.getByText("FW-ROMEO-01-M1")).toBeInTheDocument());
     expect(scroll).toHaveBeenCalled();
@@ -154,25 +154,25 @@ describe("on the Devices screen", () => {
 });
 
 describe("tree rows (post-release review 2026-10-18, R2)", () => {
-  const fortigate = dev("fg", "FW-SYNTH-FORTIGATE-WITH-A-LONG-NAME-07", { vendor_hint: "fortinet", ha_role: "PRIMARY", ha_peer_unconfirmed: true, virtual_systems: "root, dmz, guest" } as Partial<DeviceSummary>);
-  const panStandalone = dev("pa", "FW-SYNTH-PA-01", { vendor_hint: "palo_alto", ha_role: "STANDALONE", virtual_systems: "vsys1, vsys2" });
-  const mdsUnknown = dev("mds", "FW-MDS-UNKNOWN", { role: "management_server", ha_role: "UNKNOWN" });
+  const fortigate = dev("fg", "FW-TANGO-07-WITH-A-LONG-NAME-07", { vendor_hint: "fortinet", ha_role: "PRIMARY", ha_peer_unconfirmed: true, virtual_systems: "root, dmz, guest" } as Partial<DeviceSummary>);
+  const panStandalone = dev("pa", "FW-TANGO-01", { vendor_hint: "palo_alto", ha_role: "STANDALONE", virtual_systems: "vsys1, vsys2" });
+  const mdsUnknown = dev("mds", "MGR-BRAVO-02", { role: "management_server", ha_role: "UNKNOWN" });
   const rowOf = (name: string) => screen.getByText(name).closest('[data-row="device"]') as HTMLElement;
 
   it("gives the name its own line and never cuts it, even on a selected row full of pills", () => {
     mount(<DeviceList devices={[fortigate, panStandalone, mdsUnknown]} {...props} selectedDeviceId="fg" />);
-    const name = screen.getByText("FW-SYNTH-FORTIGATE-WITH-A-LONG-NAME-07");
+    const name = screen.getByText("FW-TANGO-07-WITH-A-LONG-NAME-07");
     expect(name).toHaveAttribute("data-device-name");
     expect(getComputedStyle(name).whiteSpace).toBe("normal");
     expect(getComputedStyle(name).textOverflow).not.toBe("ellipsis");
-    expect(rowOf("FW-SYNTH-FORTIGATE-WITH-A-LONG-NAME-07")).toHaveAttribute("data-selected", "true");
+    expect(rowOf("FW-TANGO-07-WITH-A-LONG-NAME-07")).toHaveAttribute("data-selected", "true");
     // the VDOM pill is on the second line, which wraps, beside vendor · model · version
-    const row = rowOf("FW-SYNTH-FORTIGATE-WITH-A-LONG-NAME-07");
+    const row = rowOf("FW-TANGO-07-WITH-A-LONG-NAME-07");
     let line: HTMLElement | null = within(row).getByText("3 VDOM");
     while (line && line !== row && getComputedStyle(line).flexWrap !== "wrap") line = line.parentElement;
     expect(line).not.toBe(row);
     expect(line).toHaveTextContent("Fortinet · Quantum · R81.20");
-    expect(line).not.toHaveTextContent("FW-SYNTH-FORTIGATE-WITH-A-LONG-NAME-07");
+    expect(line).not.toHaveTextContent("FW-TANGO-07-WITH-A-LONG-NAME-07");
   });
 
   it("carries no HA sentence and no role pill outside a cluster: STANDALONE, UNKNOWN and a named peer belong to the header", () => {
@@ -188,8 +188,8 @@ describe("tree rows (post-release review 2026-10-18, R2)", () => {
   });
 
   it("shows no green tick: a completed latest job is no glyph in the tree", () => {
-    mount(<DeviceList devices={[dev("done", "FW-SYNTH-DONE", { latest_job_state: "COMPLETED", latest_job_type: "cp_inventory_collect" })]} {...props} />);
+    mount(<DeviceList devices={[dev("done", "FW-TANGO-04", { latest_job_state: "COMPLETED", latest_job_type: "cp_inventory_collect" })]} {...props} />);
     expect(screen.queryByText("✓")).toBeNull();
-    expect(rowOf("FW-SYNTH-DONE")).toHaveTextContent("FW-SYNTH-DONE");
+    expect(rowOf("FW-TANGO-04")).toHaveTextContent("FW-TANGO-04");
   });
 });

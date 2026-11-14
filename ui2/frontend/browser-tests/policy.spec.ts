@@ -29,7 +29,7 @@ test("policy local: 54 containers, three tabs, rule table with inline details, r
     else if (path === "/api/v2/policy/sources") body = { canCollect: false, sources: [{ sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "PAN",
       collection: { jobId: "job-latest", state: "COMPLETED", outcome: "COMPLETED", reason: "COLLECTION_FAILED", step: 221, total: 60, collectedAt: new Date(Date.now() - 7200000).toISOString() } }] };
     else if (path === "/api/v2/policy/devices") body = { policies, devices: targets };
-    else if (path.includes("/domains/") && path.endsWith("/objects")) body = { objects: [{ id: "inventory-1", uid: "uid-1", name: "ADDR-ROMEO-01", type: "host", values: ["ipv4-address: 240.12.0.8"],
+    else if (path.includes("/domains/") && path.endsWith("/objects")) body = { objects: [{ id: "inventory-1", uid: "uid-1", name: "ADDR-ROMEO-01", type: "host", values: ["ipv4-address: 192.0.2.8"],
       members: [], unused: true, emptyGroup: false, singleMember: false, duplicateId: null, ruleCount: 1, groupCount: 0 }], types: [], total: 1, page: 0, pageSize: 200 };
     else if (path.includes("/domains/") && path.endsWith("/installation")) body = { installations: [{ id: "gateway-1", policyId: "policy-53", policyName: "POL-ALPHA-53",
       name: "FW-TANGO-04", deviceId: "device-1", allTargets: true, targeted: true, installed: null }], types: [], total: 1, page: 0, pageSize: 200 };
@@ -87,7 +87,7 @@ test("policy local: 54 containers, three tabs, rule table with inline details, r
   await page.getByRole("tab", { name: "Objects", exact: true }).click();
   const objectTable = page.getByRole("table", { name: "Policy objects" });
   await expect(objectTable.getByText("ADDR-ROMEO-01")).toBeVisible();
-  await expect(objectTable.getByText("ipv4-address: 240.12.0.8")).toBeVisible();
+  await expect(objectTable.getByText("ipv4-address: 192.0.2.8")).toBeVisible();
   // Installation is a section of Rules & Containers (UI review 2026-11-05, C2), opened on demand.
   await page.getByRole("tab", { name: "Rules & Containers", exact: true }).click();
   await page.getByRole("region", { name: "Installation" }).getByRole("button", { name: /Installation: where/ }).click();

@@ -15,7 +15,7 @@ const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.
 afterEach(() => vi.unstubAllGlobals());
 
 const manager = (vendor: string, over: Partial<DeviceSummary> = {}): DeviceSummary => ({
-  device_id: `mgr-${vendor}`, hostname: "FW-SYNTH-MGR", vendor_hint: vendor, role: "management_server", enrollment_state: "ENROLLED", model: "Management", software_version: "1.0",
+  device_id: `mgr-${vendor}`, hostname: "MGR-BRAVO-01", vendor_hint: vendor, role: "management_server", enrollment_state: "ENROLLED", model: "Management", software_version: "1.0",
   ha_role: null, cluster_member_ref: null, ...over,
 });
 const base = {
@@ -25,11 +25,11 @@ const base = {
 const tree = (vendor: string): ManagementTree => ({
   device_id: `mgr-${vendor}`, vendor, run_id: "run-1", discovered_at: "2026-10-18T03:00:00Z",
   counts: { domains: 1, clusters: 1, gateways: 3, virtual_systems: 0, imported: 2, management_appliances: 1, not_in_nexus: 1, acknowledged: 0 },
-  domains: [{ domain: "DOM-SYNTH", nodes: [
-    { ...base, kind: "PLAIN_HIGH_AVAILABILITY_CLUSTER", category: "cluster", cluster_member_ref: "CLS-SYNTH-01", children: [
-      { ...base, kind: "PLAIN_CLUSTER_MEMBER", category: "device", hostname: "FW-SYNTH-M1", device_id: "m1", imported: true, ha_role: "ACTIVE", last_collection_state: "COMPLETED", last_collection_at: "2026-10-18T02:00:00Z" }] },
-    { ...base, kind: "STANDALONE_PRODUCT_GATEWAY", category: "management_appliance", hostname: "FW-LOG-01", model: "Smart-1" },
-    { ...base, kind: "STANDALONE_PRODUCT_GATEWAY", category: "device", hostname: "FW-MISSING-01", ack_token: "tok", candidate_id: "cand-1" },
+  domains: [{ domain: "DOM-TANGO-04", nodes: [
+    { ...base, kind: "PLAIN_HIGH_AVAILABILITY_CLUSTER", category: "cluster", cluster_member_ref: "CLS-ROMEO-01", children: [
+      { ...base, kind: "PLAIN_CLUSTER_MEMBER", category: "device", hostname: "FW-ROMEO-01-M1", device_id: "m1", imported: true, ha_role: "ACTIVE", last_collection_state: "COMPLETED", last_collection_at: "2026-10-18T02:00:00Z" }] },
+    { ...base, kind: "STANDALONE_PRODUCT_GATEWAY", category: "management_appliance", hostname: "MGR-ECHO-01", model: "Smart-1" },
+    { ...base, kind: "STANDALONE_PRODUCT_GATEWAY", category: "device", hostname: "FW-KILO-03", ack_token: "tok", candidate_id: "cand-1" },
   ] }],
 });
 
@@ -43,12 +43,12 @@ describe("Managed estate is a tab under the device header", () => {
       return json({}, 404);
     }));
     render(<ThemeProvider theme={m3Theme}><InventoryScreen /></ThemeProvider>);
-    fireEvent.click(await screen.findByText("FW-SYNTH-MGR"));
+    fireEvent.click(await screen.findByText("MGR-BRAVO-01"));
     const tabs = await screen.findByRole("tablist", { name: "Device detail" });
     const estate = within(tabs).getByRole("tab", { name: "Managed estate" });
     expect(estate).toHaveAttribute("aria-selected", "true");
     expect(within(tabs).getAllByRole("tab")[0]).toBe(estate);
-    const header = screen.getByRole("heading", { name: "FW-SYNTH-MGR" });
+    const header = screen.getByRole("heading", { name: "MGR-BRAVO-01" });
     const card = await screen.findByLabelText("Managed estate", { selector: ".MuiCard-root" });
     // the device header is first; the discovery card is inside the tab panel under it
     // eslint-disable-next-line no-bitwise
@@ -56,9 +56,9 @@ describe("Managed estate is a tab under the device header", () => {
     expect(screen.getByRole("tabpanel")).toContainElement(card);
     // every row, chevron, pill and read time stays
     expect(within(card).getByText("Domains, clusters and gateways")).toBeInTheDocument();
-    expect(within(card).getByText("DOM-SYNTH")).toBeInTheDocument();
-    expect(within(card).getByRole("button", { name: /DOM-SYNTH/ })).toHaveAttribute("aria-expanded", "true");
-    expect(within(card).getByText("FW-SYNTH-M1")).toBeInTheDocument();
+    expect(within(card).getByText("DOM-TANGO-04")).toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: /DOM-TANGO-04/ })).toHaveAttribute("aria-expanded", "true");
+    expect(within(card).getByText("FW-ROMEO-01-M1")).toBeInTheDocument();
     expect(within(card).getByText("ACTIVE")).toBeInTheDocument();
     expect(within(card).getAllByText("1 not in neXus").length).toBeGreaterThan(0);
     expect(within(card).getByText(/read /)).toBeInTheDocument();
@@ -83,13 +83,13 @@ describe("Managed estate is a tab under the device header", () => {
   });
 
   it.each(["fortinet", "bluecoat"])("reuses the existing tab pattern for %s: the managed devices, under the same name", async (vendor) => {
-    const members = [{ virtual_system: "FW-SYNTH-01", address: "192.0.2.1", platform: "ProxySG", hardware_type: "SG", hypervisor: "SGOS", node_status: "FULLY_MANAGED", services: [],
+    const members = [{ virtual_system: "FW-TANGO-01", address: "192.0.2.1", platform: "ProxySG", hardware_type: "SG", hypervisor: "SGOS", node_status: "FULLY_MANAGED", services: [],
       grid_master: false, master_candidate: false, ha_enabled: false }];
     vi.stubGlobal("fetch", vi.fn(() => json({ device_id: "x", collected_at: "2026-10-18T03:00:00Z", contexts: [], grid_members: members, job: null })));
     render(<ThemeProvider theme={m3Theme}><DeviceInventoryPanels device={manager(vendor)} /></ThemeProvider>);
     expect(await screen.findByRole("tab", { name: "Managed estate" })).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByRole("tab", { name: "Managed devices" })).toBeNull();
-    expect(await screen.findByRole("button", { name: "FW-SYNTH-01" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "FW-TANGO-01" })).toBeInTheDocument();
     // Fixed column widths (UI review 2026-10-18, P2-1B / roadmap 3.4): a long value clips in its cell. The Deployment
     // column is left out when no device reports one (post-release review 2026-10-18, R17): a column of dashes said nothing.
     const table = document.querySelector("table[data-managed-devices]") as HTMLTableElement;
@@ -102,14 +102,14 @@ describe("Managed estate is a tab under the device header", () => {
 
   it("keeps the Deployment column when a device reports one, and words FortiManager's UP neutrally (P2-1B)", async () => {
     const members = [
-      { virtual_system: "MD-SYNTH-01", address: "192.0.2.1", platform: "FortiGate-100F", hardware_type: "FortiGate-100F", hypervisor: "v7.4.12", node_status: "UP",
+      { virtual_system: "MD-BRAVO-01", address: "192.0.2.1", platform: "FortiGate-100F", hardware_type: "FortiGate-100F", hypervisor: "v7.4.12", node_status: "UP",
         services: [{ service: "DEPLOYMENT", status: "HA primary" }], grid_master: false, master_candidate: false, ha_enabled: false },
-      { virtual_system: "MD-SYNTH-02", address: "192.0.2.2", platform: "FortiGate-100F", hardware_type: "FortiGate-100F", hypervisor: "v7.4.12", node_status: "DOWN",
+      { virtual_system: "MD-BRAVO-02", address: "192.0.2.2", platform: "FortiGate-100F", hardware_type: "FortiGate-100F", hypervisor: "v7.4.12", node_status: "DOWN",
         services: [], grid_master: false, master_candidate: false, ha_enabled: false },
     ];
     vi.stubGlobal("fetch", vi.fn(() => json({ device_id: "x", collected_at: "2026-10-18T03:00:00Z", contexts: [], grid_members: members, job: null })));
     render(<ThemeProvider theme={m3Theme}><DeviceInventoryPanels device={manager("fortinet")} /></ThemeProvider>);
-    await screen.findByRole("button", { name: "MD-SYNTH-01" });
+    await screen.findByRole("button", { name: "MD-BRAVO-01" });
     expect(screen.getByRole("columnheader", { name: "Deployment" })).toBeInTheDocument();
     expect(screen.getByText("HA primary")).toBeInTheDocument();
     expect(screen.getByText("Up").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.scHigh });
@@ -119,11 +119,11 @@ describe("Managed estate is a tab under the device header", () => {
   // Post-release review 2026-10-20 (N12): the Blue Coat MC table no longer clips its header words; long values clip in
   // their own cell, machine values in mono with the full value on hover, the deployment state in the label map.
   it("keeps the Blue Coat MC headers whole and clips a long address or version inside its own cell", async () => {
-    const members = [{ virtual_system: "SG-SYNTH-01", address: "198.51.100.123", platform: "ProxySG", hardware_type: "SG-S400-30", hypervisor: "SGOS 7.4.15.1 Proxy Edition", node_status: "FULLY_MANAGED",
+    const members = [{ virtual_system: "FW-JULIET-06", address: "198.51.100.123", platform: "ProxySG", hardware_type: "SG-S400-30", hypervisor: "SGOS 7.4.15.1 Proxy Edition", node_status: "FULLY_MANAGED",
       services: [{ service: "DEPLOYMENT", status: "INSTALLED" }], grid_master: false, master_candidate: false, ha_enabled: false }];
     vi.stubGlobal("fetch", vi.fn(() => json({ device_id: "x", collected_at: "2026-10-18T03:00:00Z", contexts: [], grid_members: members, job: null })));
     render(<ThemeProvider theme={m3Theme}><DeviceInventoryPanels device={manager("bluecoat")} /></ThemeProvider>);
-    await screen.findByRole("button", { name: "SG-SYNTH-01" });
+    await screen.findByRole("button", { name: "FW-JULIET-06" });
     const table = document.querySelector("table[data-managed-devices]") as HTMLTableElement;
     expect(table.querySelectorAll("colgroup col")).toHaveLength(7);
     within(table).getAllByRole("columnheader").forEach((th) => expect(getComputedStyle(th).whiteSpace).toBe("nowrap"));

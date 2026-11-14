@@ -14,7 +14,7 @@ vi.mock("../src/auth/adminApi", async importOriginal => ({
 }));
 const noMatch = { status: "NO_LIFECYCLE_DATA" as const, reason: "No catalog match", basis: null, catalog: null };
 const row = (id: string, risk: LifecycleDevice["risk"] = "UNKNOWN"): LifecycleDevice => ({
-  device_id: id, hostname: id === "member-a" ? "FW-TANGO-04" : "FW-JULIET-06", cluster_member_ref: "CLS-ROMEO-01",
+  device_id: id, hostname: id === "dev-1" ? "FW-TANGO-04" : "FW-JULIET-06", cluster_member_ref: "CLS-ROMEO-01",
   vendor: "CHECKPOINT", model: "Example Appliance", software_version: "R81.20 Jumbo Hotfix Take 99",
   hardware: noMatch, software: noMatch, status: "NO_LIFECYCLE_DATA", risk, support_days: null, next_milestone: null,
   nearest_license: null, licenses: [], license_status: "NOT_COLLECTED", support_contract_status: "NOT_COLLECTED",
@@ -25,7 +25,7 @@ function themed(node: React.ReactNode) { return render(<ThemeProvider theme={m3T
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(api.getLifecycle).mockResolvedValue({ as_of: "2026-10-09", devices: [row("member-a"), row("member-b", "HIGH")],
+  vi.mocked(api.getLifecycle).mockResolvedValue({ as_of: "2026-10-09", devices: [row("dev-1"), row("dev-2", "HIGH")],
     summary: { devices: 2, no_lifecycle_data: 2, past_end_of_support: 0, within_180_days: 0, within_365_days: 0, licenses_within_60_days: 0, license_problems: 1, licenses_collected: 0, live_patch_not_active: 2 } });
   vi.mocked(api.getLifecycleCatalog).mockResolvedValue({ can_manage: false, entries: [] });
 });
@@ -56,13 +56,13 @@ describe("fleet lifecycle", () => {
     fireEvent.click(screen.getByRole("option", { name: "HIGH" }));
     expect(screen.queryByText("FW-TANGO-04")).not.toBeInTheDocument();
     expect(screen.getByText("FW-JULIET-06")).toBeInTheDocument();
-    const csv = lifecycleCsv([{ ...row("member-a"), hostname: "=synthetic_formula" }]);
+    const csv = lifecycleCsv([{ ...row("dev-1"), hostname: "=synthetic_formula" }]);
     expect(csv).toContain("'=synthetic_formula");
     expect(csv).toContain("CLS-ROMEO-01");
     expect(csv).toContain("UNKNOWN");
   });
   it("preserves unknown stored license labels and shows dated license evidence", async () => {
-    const device = { ...row("member-a"), vendor: "INFOBLOX", license_status: "COLLECTED", licenses: [
+    const device = { ...row("dev-1"), vendor: "INFOBLOX", license_status: "COLLECTED", licenses: [
       { name: "DNS", member: "FW-BRAVO-02", label: "Never", expiry: null, status: "UNKNOWN" },
       { name: "DHCP", member: "FW-BRAVO-02", label: "2026-10-20", expiry: "2026-10-20", status: "DATED" },
     ], nearest_license: { label: "2026-10-20", expiry: "2026-10-20", status: "DATED" } };
@@ -75,7 +75,7 @@ describe("fleet lifecycle", () => {
     expect(lifecycleCsv([device])).toContain("DNS · FW-BRAVO-02 · Never · UNKNOWN");
   });
   it("shows and exports sale and engineering milestones as separate dates", async () => {
-    const device = { ...row("member-a"), hardware: { status: "MATCHED" as const, reason: null, basis: "model exact",
+    const device = { ...row("dev-1"), hardware: { status: "MATCHED" as const, reason: null, basis: "model exact",
       catalog: { ...entry, end_of_sale: "2025-01-01", end_of_engineering: "2029-01-01" } } };
     vi.mocked(api.getLifecycle).mockResolvedValue({ as_of: "2026-10-09", summary: {}, devices: [device] });
     themed(<LifecycleScreen />);
@@ -84,7 +84,7 @@ describe("fleet lifecycle", () => {
     expect(lifecycleCsv([device])).toContain("2025-01-01,2029-01-01");
   });
   it("pages the fleet at 50 with '+N more' and keeps every row reachable (post-release review 2026-10-18, 1.7)", async () => {
-    const many = Array.from({ length: LIFECYCLE_PAGE + 12 }, (_, i) => ({ ...row(`member-${i}`), hostname: `FW-SYNTH-${String(i).padStart(3, "0")}` }));
+    const many = Array.from({ length: LIFECYCLE_PAGE + 12 }, (_, i) => ({ ...row(`member-${i}`), hostname: `FW-TANGO-${String(i + 1).padStart(3, "0")}` }));
     vi.mocked(api.getLifecycle).mockResolvedValue({ as_of: "2026-10-09", summary: {}, devices: many });
     themed(<LifecycleScreen />);
     const table = await screen.findByRole("table", { name: "Fleet lifecycle" });
@@ -95,7 +95,7 @@ describe("fleet lifecycle", () => {
     expect(document.querySelector("[data-lifecycle-page]")).toHaveTextContent(`1–${LIFECYCLE_PAGE + 12} of ${LIFECYCLE_PAGE + 12}`);
     expect(screen.queryByRole("button", { name: /^Show next/ })).toBeNull();
     // a new filter starts again at the first page
-    fireEvent.change(screen.getByLabelText("Search lifecycle"), { target: { value: "FW-SYNTH-0" } });
+    fireEvent.change(screen.getByLabelText("Search lifecycle"), { target: { value: "FW-TANGO-0" } });
     expect(within(table).getAllByRole("row")).toHaveLength(LIFECYCLE_PAGE + 1);
   });
   it("shows empty and failed reads without fabricating data", async () => {
@@ -105,10 +105,10 @@ describe("fleet lifecycle", () => {
     expect(screen.queryByRole("table", { name: "Fleet lifecycle" })).not.toBeInTheDocument();
   });
   it("shows a compact device lifecycle line", async () => {
-    vi.mocked(api.getDeviceLifecycle).mockResolvedValue({ ...row("member-a"), hardware: { status: "MATCHED", reason: null, basis: "model exact", catalog: entry } });
-    themed(<DeviceLifecycleLine deviceId="member-a" />);
+    vi.mocked(api.getDeviceLifecycle).mockResolvedValue({ ...row("dev-1"), hardware: { status: "MATCHED", reason: null, basis: "model exact", catalog: entry } });
+    themed(<DeviceLifecycleLine deviceId="dev-1" />);
     expect(await screen.findByText(/Hardware support: 2030-01-01/)).toBeInTheDocument();
-    expect(api.getDeviceLifecycle).toHaveBeenCalledWith("member-a");
+    expect(api.getDeviceLifecycle).toHaveBeenCalledWith("dev-1");
   });
 });
 
@@ -119,7 +119,7 @@ const patchBlock = (o: Partial<api.LifecycleLivePatch> = {}): api.LifecycleLiveP
     { patch: "PATCH-SYNTH-02", status: "ready", mode: "auto", running: 0, total: 2, installed_at: null, refs: ["CVE-2026-0001", "sk000001"] }], ...o });
 
 describe("license and Live Patch view", () => {
-  const problemDevice: LifecycleDevice = { ...row("member-a"), license_status: "COLLECTED", support_contract_status: "COLLECTED", license_problem: true,
+  const problemDevice: LifecycleDevice = { ...row("dev-1"), license_status: "COLLECTED", support_contract_status: "COLLECTED", license_problem: true,
     license_problems: [{ label: "CPSB-IPS", status: "EXPIRED" }], nearest_license: lic({ expiry: "2026-10-06", status: "EXPIRED" }),
     licenses: [lic({}), lic({ name: "CPSB-IPS", expiry: "2026-10-06", label: "2026-10-06", status: "EXPIRED", days_remaining: -3 }),
       lic({ name: "AV", category: "SUBSCRIPTION", kind: "SUBSCRIPTION", expiry: "2026-11-01", label: "2026-11-01", status: "DATED", days_remaining: 23 }),
@@ -127,7 +127,7 @@ describe("license and Live Patch view", () => {
       lic({ name: "Smart Licensing", category: "SMART_LICENSING", kind: "SMART_LICENSING", label: "UNREGISTERED", status: "UNREGISTERED" }),
       lic({ name: "Web Filter", member: "FW-BRAVO-02", evidence: "MANAGER_REPORTED", expiry: "2026-10-20", label: "2026-10-20", status: "DATED", days_remaining: 11 })],
     live_patch: patchBlock() };
-  const cleanDevice: LifecycleDevice = { ...row("member-b"), license_status: "COLLECTED", nearest_license: lic({ expiry: "2027-02-02", status: "DATED" }), live_patch: patchBlock({ ready: 0, items: [] }) };
+  const cleanDevice: LifecycleDevice = { ...row("dev-2"), license_status: "COLLECTED", nearest_license: lic({ expiry: "2027-02-02", status: "DATED" }), live_patch: patchBlock({ ready: 0, items: [] }) };
   const plainDevice: LifecycleDevice = { ...row("device-3"), hostname: "FW-PAPA-03", vendor: "PALOALTO", license_status: "COLLECTED", live_patch: null };
   const unknownDevice: LifecycleDevice = { ...row("device-4"), hostname: "FW-OSCAR-05", vendor: "FORTINET", license_status: "UNKNOWN", live_patch: null,
     license_reads: [{ kind: "fgt_update_info_contract", outcome: "FAILED", reason: "TIMEOUT", item_count: 0, observed_at: null }] };
