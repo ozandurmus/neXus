@@ -149,9 +149,9 @@ public record ZoneMatrixContent(List<Zone> zones, Matrix matrix) {
 
     /** The matrix rules of sections 3.5, 4 and 6.1; {@code zoneIds} are this version's zones. */
     private void validateMatrix(Set<String> zoneIds) {
-        if (!matrix.defaultStatement().equals("DENY_ALL") && !matrix.defaultStatement().equals("ALLOW_LISTED"))
+        if (!"DENY_ALL".equals(matrix.defaultStatement()) && !"ALLOW_LISTED".equals(matrix.defaultStatement()))
             throw new Invalid("INVALID_DEFAULT", "the version default is DENY_ALL or ALLOW_LISTED; ALLOW_ANY exists only as an explicit cell");
-        if (!SEVERITIES.contains(matrix.defaultSeverity())) throw new Invalid("INVALID_SEVERITY", "unknown severity");
+        if (!in(SEVERITIES, matrix.defaultSeverity())) throw new Invalid("INVALID_SEVERITY", "unknown severity");
         if (matrix.serviceSets().size() > MAX_SERVICE_SETS) throw new Invalid("TOO_MANY_SERVICE_SETS", "at most " + MAX_SERVICE_SETS + " service sets");
         Set<String> setNames = new HashSet<>();
         for (ServiceSet set : matrix.serviceSets()) {
@@ -173,8 +173,8 @@ public record ZoneMatrixContent(List<Zone> zones, Matrix matrix) {
             for (String end : List.of(cell.source(), cell.destination()))
                 if (!end.equals(UNASSIGNED) && !zoneIds.contains(end)) throw new Invalid("CELL_ZONE_NOT_FOUND", "a cell names a zone that is not in this version");
             if (!pairs.add(cell.pair())) throw new Invalid("CELL_DUPLICATE", "two cells for one zone pair");
-            if (!STATEMENTS.contains(cell.statement())) throw new Invalid("INVALID_STATEMENT", "unknown statement");
-            if (!SEVERITIES.contains(cell.severity())) throw new Invalid("INVALID_SEVERITY", "unknown severity");
+            if (!in(STATEMENTS, cell.statement())) throw new Invalid("INVALID_STATEMENT", "unknown statement");
+            if (!in(SEVERITIES, cell.severity())) throw new Invalid("INVALID_SEVERITY", "unknown severity");
             if (!cell.statement().equals("ALLOW_LISTED") && !cell.services().isEmpty())
                 throw new Invalid("SERVICES_NOT_ALLOWED", "only an ALLOW_LISTED cell lists services");
             if (cell.services().size() > MAX_SERVICES_PER_CELL)
@@ -191,7 +191,7 @@ public record ZoneMatrixContent(List<Zone> zones, Matrix matrix) {
             String status = cell.referenceStatus();
             boolean empty = cell.regulationReference().isBlank();
             boolean confirmed = "CONFIRMED".equals(status);
-            if (!REFERENCE_STATUSES.contains(status) || empty != "EMPTY".equals(status)
+            if (!in(REFERENCE_STATUSES, status) || empty != "EMPTY".equals(status)
                     || confirmed != (cell.confirmedBy() != null && cell.confirmedAt() != null)
                     || !confirmed && (cell.confirmedBy() != null || cell.confirmedAt() != null))
                 throw new Invalid("INVALID_REFERENCE_STATUS", "reference status does not match the reference fields");
@@ -201,6 +201,9 @@ public record ZoneMatrixContent(List<Zone> zones, Matrix matrix) {
             validateText(matrix.templateOrigin().revision(), "INVALID_TEMPLATE_ORIGIN");
         }
     }
+
+    /** Membership that refuses null; immutable collections throw on {@code contains(null)}. */
+    private static boolean in(Collection<String> values, String value) { return value != null && values.contains(value); }
 
     private static void validateText(String text, String code) {
         if (text == null) return;
