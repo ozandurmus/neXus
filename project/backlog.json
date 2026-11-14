@@ -230,7 +230,7 @@
       "id": "scheduled_fleet_backup_enable_decision",
       "category": "backup",
       "title": "Backup store: disk headroom alert (daily backups run)",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P1",
       "target": "INCIDENT_2026_10_10_BACKUP_FREQUENCY_DISK_FULL.md",
       "note": ""
@@ -338,7 +338,7 @@
       "id": "module_e2e_fail_fast",
       "category": "Delivery",
       "title": "module_e2e: wait for Complete or Failed and fail fast",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P2",
       "target": "tools/delivery/module_deploy.py",
       "note": ""
@@ -347,7 +347,7 @@
       "id": "machine_session_probe_isolation",
       "category": "Testing / Authentication",
       "title": "Probes displace the e2e runner's machine session",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P2",
       "target": "",
       "note": ""
@@ -374,7 +374,7 @@
       "id": "manifest_drift_service_worker_configuration_policy",
       "category": "ui2",
       "title": "Worker still image+fallback patched; others use manifests",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P2",
       "target": "tools/delivery/module_deploy.py (SYNCED_MANIFESTS)",
       "note": ""
@@ -464,7 +464,7 @@
       "id": "discovery-run-start-empty-body-500",
       "category": "ui2",
       "title": "POST /discovery/runs with an empty JSON body answers 500 instead of a 400 validation error",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P3",
       "target": "",
       "note": ""
@@ -593,6 +593,69 @@
       "status": "planned",
       "priority": "P3",
       "target": "PO approval on/after 2026-11-20",
+      "note": ""
+    },
+    {
+      "id": "asa_identity_ace_narrowing_decision",
+      "category": "failover",
+      "title": "Decision: narrow the ASA identity ACEs (PO)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "PO decision open 2026-11-14",
+      "note": ""
+    },
+    {
+      "id": "recertification_council",
+      "category": "governance",
+      "title": "Decision council on the recertification contract before freeze",
+      "status": "planned",
+      "priority": "P1",
+      "target": "After revision 2 (batch 3)",
+      "note": ""
+    },
+    {
+      "id": "asa_trace_wiring_nameif_map",
+      "category": "policy",
+      "title": "ASA Trace wiring: physical interface to nameif map",
+      "status": "planned",
+      "priority": "P1",
+      "target": "After ASA wiring (batch 4)",
+      "note": ""
+    },
+    {
+      "id": "fortigate_policy_wiring",
+      "category": "policy",
+      "title": "FortiGate policy into the policy model and Trace",
+      "status": "planned",
+      "priority": "P2",
+      "target": "After the ASA wiring",
+      "note": ""
+    },
+    {
+      "id": "zone_matrix_steps_3_plus",
+      "category": "policy",
+      "title": "Zone matrix steps 3 and later (designed, not built)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "After step 2 (batch 4)",
+      "note": ""
+    },
+    {
+      "id": "support_bundles",
+      "category": "operations",
+      "title": "Support bundles: finish the design, then build",
+      "status": "planned",
+      "priority": "P2",
+      "target": "Design in progress 2026-11-14",
+      "note": ""
+    },
+    {
+      "id": "kaniko_download_retry_templates",
+      "category": "ci",
+      "title": "Kaniko build templates: retry base-layer downloads",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
       "note": ""
     }
   ]

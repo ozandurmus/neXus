@@ -1,10 +1,10 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-14T15:22:09Z
+Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-14T15:41:33Z
 
 ## Now
 - NXS-LOCAL-0391 — Release queue: ASA readiness, integration gate, CP advisories, zone matrix, ACI step 1, API latency, Backups batch (in_progress)
 ## Next
-- overview_acceptance_and_member_specific_tuning — Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today) (planned)
+- recovery_offhost_key_custody — Off-host copy of the platform backups and recorded custody of the decryption key (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
 - P1/in_progress aci_segmentation_step1 — ACI step 1: pre-cutover impact analysis, one segment
 - P1/in_progress asa_fortigate_policy_model — ASA and FortiGate policy model for lookup and hygiene
@@ -13,15 +13,21 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-14T15:22:09Z
 - P1/in_progress integration_ci_gate_and_v208_check — Integration suite as CI gate; close the V208 NULL hole
 - P1/in_progress policy_collection_gaps — Policy collection gaps: CP gateway objects (D-1), PAN App-
 - P1/in_progress rule_recertification_campaigns — Rule recertification and cleanup campaigns
+- P1/in_progress scheduled_fleet_backup_enable_decision — Backup store: disk headroom alert (daily backups run)
 - P1/in_progress zone_matrix_delivery — Zone matrix: freeze contract, then deliver in steps
 - P1/planned aiview_masking_leak_audit
+- P1/planned asa_identity_ace_narrowing_decision
+- P1/planned asa_trace_wiring_nameif_map
 - P1/planned enterprise_phase0_logging_monitoring_scans
 - P1/planned masking_residual_gaps_system_log_and_sanitizer
+- P1/planned recertification_council
 - P1/planned recovery_offhost_key_custody
-- P1/planned scheduled_fleet_backup_enable_decision
 - P1/planned spring_boot_4_spring_security_migration
 - P1/planned ui2_networkpolicy_in_cluster_db_reach
 - P2/in_progress lifecycle_vendor_catalog
+- P2/in_progress machine_session_probe_isolation
+- P2/in_progress manifest_drift_service_worker_configuration_policy
+- P2/in_progress module_e2e_fail_fast
 - P2/in_progress topology_sources_apic_citrix_f5
 - P2/planned aiview_masked_readonly_admin
 - P2/planned analysis_container
@@ -31,20 +37,22 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-14T15:22:09Z
 - P2/planned change_ticket_matching
 - P2/planned cp_spark_backup_settings_sftp
 - P2/planned deploy1_evidence_egress_policy
+- P2/planned fortigate_policy_wiring
 - P2/planned https_configuration_collect
-- P2/planned machine_session_probe_isolation
-- P2/planned manifest_drift_service_worker_configuration_policy
-- P2/planned module_e2e_fail_fast
+- P2/planned kaniko_download_retry_templates
 - P2/planned module_per_pod_split
 - P2/planned nspm_wave1_acceptance
 - P2/planned path_analysis_phase_b
 - P2/planned product_rename_identity
 - P2/planned reports_r2
 - P2/planned script_execution_module
+- P2/planned support_bundles
 - P2/planned task_executor_automation_module
 - P2/planned ubi_base_glibc_fix_pending
 - P2/planned ui2_database_roles_and_data_ownership
 - P2/planned vault_has_no_enforced_quota_on_a_shared_host
+- P2/planned zone_matrix_steps_3_plus
+- P3/in_progress discovery-run-start-empty-body-500
 - P3/planned CP-SHELL-M2-LAB-READ
 - P3/planned cluster_membership_lost_at_enrollment
 - P3/planned corporate_inspection_ca_verify_with_it
@@ -53,7 +61,6 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-14T15:22:09Z
 - P3/planned device_admin_accounts_and_privileges
 - P3/planned device_role_vocabulary_declared_twice
 - P3/planned diagnostic_mask_overreach
-- P3/planned discovery-run-start-empty-body-500
 - P3/planned discovery_connection_state_never_populated
 - P3/planned enterprise_platform_conformance
 - P3/planned fmg_link_state_diagnose_nic

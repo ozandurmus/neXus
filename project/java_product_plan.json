@@ -44,6 +44,24 @@
   },
   "upcoming": [
     {
+      "build": "zone_matrix_steps_3_plus",
+      "title": "Zone matrix steps 3 and later, after steps 1-2 ship (batches 1 and 4)",
+      "status": "planned",
+      "detail": "docs/design/ZONE_MATRIX_CONTRACT.md"
+    },
+    {
+      "build": "asa_trace_wiring_nameif_map",
+      "title": "Cisco ASA in Trace: physical interface to nameif map, after the ASA wiring ships",
+      "status": "planned",
+      "detail": "docs/design/ASA_FORTIGATE_POLICY_DESIGN_2026_11_14.md"
+    },
+    {
+      "build": "recertification_council",
+      "title": "Decision council on the recertification contract (revision 2 in batch 3), then freeze",
+      "status": "planned",
+      "detail": "docs/design/RULE_RECERTIFICATION_CONTRACT.md"
+    },
+    {
       "build": "overview_acceptance_and_member_specific_tuning",
       "title": "Overview acceptance under aiview (per-member settings no longer count as drift: done, backlog truth 2026-11-14)",
       "status": "planned",
@@ -330,6 +348,13 @@
     "cyber_controller_known_hosts_after_hosta_rebuild": "agent_operations",
     "discovery-run-start-empty-body-500": "java_debt",
     "zone_matrix_delivery": "java_feature",
+    "asa_identity_ace_narrowing_decision": "java_debt",
+    "recertification_council": "java_feature",
+    "asa_trace_wiring_nameif_map": "java_feature",
+    "fortigate_policy_wiring": "java_feature",
+    "zone_matrix_steps_3_plus": "java_feature",
+    "support_bundles": "java_feature",
+    "kaniko_download_retry_templates": "agent_operations",
     "aci_segmentation_step1": "java_feature",
     "asa_fortigate_policy_model": "java_feature",
     "topology_sources_apic_citrix_f5": "java_feature",

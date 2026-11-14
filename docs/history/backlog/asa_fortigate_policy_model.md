@@ -3,3 +3,5 @@
 status: in_progress · target: ACI decision 2026-11-14
 
 2026-11-14: policy lookup covers Check Point and Palo Alto only; ASA/FortiGate targets are NOT_EVALUABLE. Lane asa-forti-policy started after the PO's ACI decision. Configuration artefacts for both vendors already exist (ASA 313, FortiGate 228 live).
+
+2026-11-14: steps 0-2 on main (shapes, ASA parser, mapper); output shaping in batch 2, wiring in batch 4.

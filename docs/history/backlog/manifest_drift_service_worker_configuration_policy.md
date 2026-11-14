@@ -7,3 +7,5 @@ status: in_progress · target: tools/delivery/module_deploy.py (SYNCED_MANIFESTS
 2026-10-20: still open, restated as the follow-up 'worker manifest drift sync'. The release path syncs the policy, service, configuration and compliance manifests (1d059c56); the worker is still patched at run time (image plus the JAVA_TOOL_OPTIONS fallback flag), so its committed manifest can drift from the live object. Closure: render the fallback flag into the committed worker manifest, add the worker to SYNCED_MANIFESTS, validate on the next release. Real-env validation of the four synced modules is also pending.
 
 2026-11-14 backlog truth: still open (P2, size S). Today: Worker manifest can drift from the live object. Evidence: module_deploy.py SYNCED_MANIFESTS has service, configuration, compliance, policy; worker absent (patched at run time)
+
+2026-11-14: worker manifest sync in ship batch 3.
