@@ -127,3 +127,18 @@ CREATE TRIGGER trg_guard_cutover_assessment_flow BEFORE INSERT OR UPDATE ON cuto
 GRANT SELECT, INSERT, UPDATE, DELETE ON cutover_segment TO ui2_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON cutover_assessment TO ui2_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON cutover_assessment_flow TO ui2_app;
+
+-- Audit classification (V5/V153 convention): the audit rows carry opaque identities and revisions only, but every column of
+-- an audited table is classified. Segment name, the two address block lists and the assessment summary (upload names,
+-- coverage detail) are operator-entered or address-bearing content and are tier-2 redacted; identifiers, revisions,
+-- enums, timestamps, policy and device references, engine version and actor fingerprints are audited in full.
+-- cutover_assessment_flow carries no trg_audit trigger: its rows exist only inside the audited assessment insert and
+-- go with its cascade (fn_guard_cutover_assessment_flow refuses any other write).
+SELECT set_config('app.actor_fingerprint', 'migration:V217_cutover_assessment', true);
+SELECT set_config('app.action_id', 'audit_redaction_policy_seed_by_migration', true);
+INSERT INTO audit_redaction_policy (table_name, column_name, tier, reason) VALUES
+    ('cutover_segment', 'name', 2, 'operator-entered segment name'),
+    ('cutover_segment', 'blocks', 2, 'address blocks of the segment'),
+    ('cutover_segment', 'peer_blocks', 2, 'address blocks of the peer side'),
+    ('cutover_assessment', 'summary', 2, 'assessment counts, coverage and upload detail')
+ON CONFLICT (table_name, column_name) DO NOTHING;

@@ -238,6 +238,14 @@ public final class AuditPresentationAllowlist {
                     "artefact_id", "data_as_of_json", "error_code", "expires_at", "finished_at", "format",
                     "parameters_json", "plaintext_bytes", "projection_mode", "requested_at", "requested_by", "run_id",
                     "state", "template_id")),
+            // V217 cutover assessment: identities, revisions, enums, timestamps and references audited in full;
+            // segment name, blocks, peer_blocks and the assessment summary are redacted.
+            Map.entry("cutover_segment", Set.of(
+                    "created_at", "created_by", "revision", "segment_id", "updated_at", "updated_by")),
+            Map.entry("cutover_assessment", Set.of(
+                    "actor", "assessment_id", "created_at", "engine_version", "old_collected_at", "old_policy_id",
+                    "readiness", "segment_id", "segment_revision", "status", "target_collected_at",
+                    "target_device_id", "target_policy_id", "target_source", "topology_snapshot_id")),
             Map.entry("role_bindings", Set.of(
                     "binding_id", "binding_kind", "created_at", "created_by_actor_fingerprint",
                     "directory_profile_id", "group_reference_key_id", "revoked_at",
