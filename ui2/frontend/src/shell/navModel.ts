@@ -61,6 +61,9 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     // Zone matrix (ZONE_MATRIX_CONTRACT.md section 7.1): the bank's zones and their published versions. Delivery step 1
     // has the zones and the publish flow; the matrix statements arrive with step 2.
     { id: "zone-matrix", label: "Zone matrix", screen: "zone_matrix", href: "?screen=zone_matrix", requiredPlane: "Policy" },
+    // Cutover impact (ACI_SEGMENTATION_SUPPORT_DESIGN_2026_11_13.md step 1, PO 2026-11-14): a segment's uploaded logs
+    // replayed against the stored policy of the firewalls its flows would cross. A policy question, next to Rule object usage.
+    { id: "cutover", label: "Cutover impact", screen: "cutover", href: "?screen=cutover", requiredPlane: "Policy" },
   ] },
   { kind: "group", id: "compliance-security", label: "Compliance and security", icon: "compliance", children: [
     { id: "compliance", label: "Compliance", screen: "compliance", href: "?screen=compliance", requiredPlane: "Compliance" },

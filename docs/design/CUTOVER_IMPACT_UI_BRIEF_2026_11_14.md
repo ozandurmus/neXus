@@ -6,6 +6,14 @@ DRAFT - 2026-11-14. UI brief for the Carbon (Antigravity) lane that builds the s
 `ACI_SEGMENTATION_SUPPORT_DESIGN_2026_11_13.md`; the backend is on branch `feat/cutover-assessment-1114`. It adds no
 backend route and decides no product semantics beyond that design and `PO_DECISION_RECORD_2026_11_14_ACI_SEGMENTATION_SUPPORT.md`.
 
+Built 2026-11-14 by the engineering session instead of the Carbon lane (the PO session relayed that the Antigravity
+quota was exhausted): branch `feat/cutover-ui-1114`, screen `?screen=cutover` (`ui2/frontend/src/screens/CutoverScreen.tsx`
+and `src/screens/cutover/`), tests `ui2/frontend/tests/Cutover.test.tsx`. Two deviations: (1) Trace takes no tuple
+from its address today, so a flow's Trace link opens Trace's path mode and names the tuple to enter; a prefilled link
+needs Trace to read `src`/`dst`/`protocol`/`port` from the address (follow-up). (2) The segment list shows block counts
+and the last update, not the last verdict: `GET /segments` carries no assessment head, and one read per segment was not
+worth it; the verdicts are on each segment's page (follow-up: add the newest head to the list answer).
+
 Design:
 `docs/design/ACI_SEGMENTATION_SUPPORT_DESIGN_2026_11_13.md` section 4 (+ section 0 for step-1 differences), PO record
 `PO_DECISION_RECORD_2026_11_14_ACI_SEGMENTATION_SUPPORT.md`.

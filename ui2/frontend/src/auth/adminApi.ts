@@ -4545,3 +4545,76 @@ export const listReportRuns = () => call<{ readonly runs: readonly ReportRunView
 export const getReportRun = (runId: string) => call<ReportRunView>(`/api/v2/reports/runs/${encodeURIComponent(runId)}`, "GET");
 /** A plain GET with the session cookie: the server audits the download before the first byte. */
 export const reportDownloadHref = (runId: string) => `/api/v2/reports/runs/${encodeURIComponent(runId)}/download`;
+
+/*
+ * Pre-cutover impact analysis (ACI_SEGMENTATION_SUPPORT_DESIGN_2026_11_13.md section 4, step 1;
+ * CUTOVER_IMPACT_UI_BRIEF_2026_11_14.md). Reads stored policies, the held topology and uploaded traffic-log CSV files;
+ * aiview answers arrive masked from the server. The browser computes no verdict.
+ */
+export type CutoverDecision = "WOULD_DROP" | "NOT_DECIDED" | "NOT_EVALUABLE" | "WOULD_ALLOW";
+export type CutoverReadiness = "BLOCKERS_FOUND" | "NOT_DECIDED" | "NO_BLOCKERS_IN_EVALUATED_FLOWS" | "NO_EVIDENCE";
+export type CutoverTargetSource = "PATH" | "OPERATOR_OVERRIDE";
+export interface CutoverSegment {
+  segmentId: string; name: string; revision: number; blocks: string[]; peerBlocks: string[];
+  createdBy?: string; createdAt?: string; updatedBy?: string; updatedAt?: string;
+}
+export interface CutoverCounts {
+  tuples?: number; flows?: number; blockingTuples?: number; openTuples?: number; alreadyDroppedTuples?: number; missingRuleGroups?: number;
+  WOULD_DROP?: number; NOT_DECIDED?: number; NOT_EVALUABLE?: number; WOULD_ALLOW?: number;
+}
+export interface CutoverAssessmentHead {
+  assessmentId: string; segmentId: string; segmentRevision: number; createdAt: string; actor?: string;
+  targetSource: CutoverTargetSource | string; targetDeviceId?: string | null; topologySnapshotId?: string | null;
+  targetPolicyId?: string | null; targetCollectedAt?: string | null; oldPolicyId?: string | null; oldCollectedAt?: string | null;
+  engineVersion?: string; status: "COMPLETE" | "INCOMPLETE" | string; readiness: CutoverReadiness | string; headline?: string; counts?: CutoverCounts;
+}
+export interface CutoverCoverageItem { code: string; count?: number; periodStart?: string; periodEnd?: string }
+export interface CutoverUpload { index: number; rowCount: number; invalidRows: number; inScopeFlows: number; periodStart?: string; periodEnd?: string;
+  parseStats?: { statReason: string; count: number }[] }
+export interface CutoverAssessmentView extends CutoverAssessmentHead {
+  coverage?: CutoverCoverageItem[]; uploads?: CutoverUpload[]; targetVendor?: string; segmentZone?: string; peerZone?: string;
+  oldDeviceId?: string; stale?: boolean; staleReasons?: string[];
+}
+export interface CutoverRule { ruleId?: string; number?: number | string | null; name?: string; sectionName?: string; action?: string }
+export interface CutoverPathFirewall { deviceId: string; vendor?: string; hopVerdict?: string; decidingRule?: CutoverRule | null }
+export interface CutoverFlowItem {
+  direction: string; flowSource: string; flowDestination: string; protocol: string; port: number; flowCount: number;
+  firstSeen?: string; lastSeen?: string; decision: CutoverDecision | string; decisionReason?: string; targetSource?: string;
+  pathFirewalls?: CutoverPathFirewall[]; decidingRule?: CutoverRule | null; flags?: string[];
+  conditionalRule?: CutoverRule | null; droppedConstraints?: string[]; oldPathDecision?: string; oldPathReason?: string; oldPathRule?: CutoverRule | null;
+}
+export interface CutoverMissingRuleItem {
+  direction: string; flowDestination: string; protocol: string; port: number; sourceCount: number; flowSources?: string[]; sourceRange?: string;
+  flowCount: number; firstSeen?: string; lastSeen?: string; decisionCounts?: { decision: string; count: number }[]; oldPathRule?: CutoverRule | null;
+}
+export interface CutoverFlowPage<T> { total: number; page: number; items: T[] }
+export interface CutoverTargetOverride { deviceId: string; policyId?: string; context?: string; segmentZone?: string; peerZone?: string }
+export interface CutoverSpec {
+  targetOverride?: CutoverTargetOverride; oldPolicyId?: string; oldDeviceId?: string; oldContext?: string;
+  mappings: Record<string, string>[];
+}
+export interface CutoverSegmentInput { name: string; blocks: string[]; peerBlocks: string[] }
+
+const CUTOVER = "/api/v2/cutover";
+export const listCutoverSegments = () => call<{ segments: CutoverSegment[]; canManage: boolean }>(`${CUTOVER}/segments`, "GET");
+export const getCutoverSegment = (id: string) =>
+  call<CutoverSegment & { assessments: CutoverAssessmentHead[]; canManage: boolean }>(`${CUTOVER}/segments/${encodeURIComponent(id)}`, "GET");
+export const createCutoverSegment = (input: CutoverSegmentInput) => call<{ segmentId: string }>(`${CUTOVER}/segments`, "POST", input);
+export const updateCutoverSegment = (id: string, revision: number, input: CutoverSegmentInput) =>
+  call<{ segmentId: string; revision: number }>(`${CUTOVER}/segments/${encodeURIComponent(id)}`, "PUT", { ...input, revision });
+export const deleteCutoverSegment = (id: string) => offlineMutation<{ deleted: boolean }>(`${CUTOVER}/segments/${encodeURIComponent(id)}`, "DELETE");
+/** Multipart in the server's order: the `spec` field first, then one `file` part per mapping, in the same order. */
+export function runCutoverAssessment(segmentId: string, spec: CutoverSpec, files: readonly File[]) {
+  const body = new FormData(); body.append("spec", JSON.stringify(spec));
+  for (const file of files) body.append("file", file);
+  return offlineMutation<{ assessmentId: string; readiness: string; status: string }>(`${CUTOVER}/segments/${encodeURIComponent(segmentId)}/assessments`, "POST", body);
+}
+export const getCutoverAssessment = (id: string) => call<CutoverAssessmentView>(`${CUTOVER}/assessments/${encodeURIComponent(id)}`, "GET");
+export function getCutoverFlows(id: string, kind: "FLOW", decision: CutoverDecision | null, page: number): Promise<CutoverFlowPage<CutoverFlowItem>>;
+export function getCutoverFlows(id: string, kind: "MISSING_RULE", decision: null, page: number): Promise<CutoverFlowPage<CutoverMissingRuleItem>>;
+export function getCutoverFlows(id: string, kind: "FLOW" | "MISSING_RULE", decision: CutoverDecision | null, page: number) {
+  const query = new URLSearchParams({ kind, page: String(page) });
+  if (decision) query.set("decision", decision);
+  return call(`${CUTOVER}/assessments/${encodeURIComponent(id)}/flows?${query}`, "GET");
+}
+export const deleteCutoverAssessment = (id: string) => offlineMutation<{ deleted: boolean }>(`${CUTOVER}/assessments/${encodeURIComponent(id)}`, "DELETE");
