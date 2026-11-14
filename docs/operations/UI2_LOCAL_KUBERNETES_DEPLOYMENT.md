@@ -296,6 +296,15 @@ line, hostname, or secret value at any point (AGENTS.md raw-evidence law) --
 only the job/run identifiers and outcome tokens the C2 discipline already
 logs for every other job kind.
 
+## 7b. Optional: JSON console logs for a SIEM (NEXUS_LOG_FORMAT)
+
+Environment variable `NEXUS_LOG_FORMAT`, read at service start. Unset (the default) keeps today's text console format.
+`NEXUS_LOG_FORMAT=json` writes one JSON object per line (Spring Boot's logstash structured format) with `@timestamp`,
+`level`, `logger_name`, `thread_name`, `message`, every MDC key, and `stack_trace` for an exception. It changes the
+format only, not what is logged: the application writes no log-time masking pass, so log call sites must carry
+pseudonyms or opaque ids, as before. It covers the service role; worker roles are not switched yet (they log through
+`java.util.logging`). No deploy manifest sets it; add it to the manifest first when a deployment wants it.
+
 ## 8. Reset the database to empty
 
 The reset is the destruction of the claim, performed entirely through the
