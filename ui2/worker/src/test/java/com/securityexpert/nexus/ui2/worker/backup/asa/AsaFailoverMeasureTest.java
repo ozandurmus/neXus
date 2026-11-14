@@ -161,6 +161,64 @@ class AsaFailoverMeasureTest {
     }
 
     @Test
+    void aTimestampKeepsItsShapeAndIsNotMaskedAsAnIpv6Address() {
+        assertEquals("Last Failover at: 99:99:99 UTC Nov 99 9999", AsaFailoverMeasure.shapeLine("Last Failover at: 12:34:56 UTC Nov 13 2026"));
+        assertEquals("99:99:99 +99 Nov 99 9999", AsaFailoverMeasure.shapeLine("12:34:56 +03 Nov 13 2026"));
+    }
+
+    @Test
+    void realIpv6FormsAreStillMasked() {
+        // The placeholder is <ip6>; the shape's own digit rule then writes its 6 as 9.
+        for (String address : List.of("2001:db8::1", "2001:db8:0:0:0:0:0:1", "fe80::1/64", "::1", "2001:db8::", "2001:DB8:A::B:1")) {
+            String shaped = AsaFailoverMeasure.shapeLine("Interface x (" + address + "): Normal (Monitored)");
+            assertEquals("Interface a (<ip9>): Normal (Monitored)", shaped, address);
+        }
+        assertEquals("Failover a <ip9> up", AsaFailoverMeasure.shapeLine("Failover x 2001:db8::5 up"));
+    }
+
+    @Test
+    void aLongHistoryKeepsTheNewestLinesNotTheOldest() {
+        StringBuilder history = new StringBuilder("From State To State Reason\n");
+        for (int i = 1; i <= 200; i++) {
+            history.append("Standby Ready Just Active entry").append(i).append(" 10:11:12 UTC Nov ").append(i % 28 + 1).append(" 2026\n");
+        }
+        // Distinct synthetic markers that survive no shaping must be told apart by line COUNT: the last line is a Failed row.
+        history.append("Failed Standby Ready Interface check\n");
+        List<String> tail = AsaFailoverMeasure.shapeTail(history.toString(), 5);
+        assertEquals(6, tail.size());
+        assertEquals("[earlier]", tail.get(0));
+        assertEquals("Failed Standby Ready Interface check", tail.get(5));
+        for (int i = 1; i < 5; i++) {
+            assertTrue(tail.get(i).startsWith("Standby Ready Just Active a"), tail.get(i));
+        }
+        assertFalse(tail.contains("From State To State Reason"));
+        // A short history is kept whole, with no marker.
+        List<String> whole = AsaFailoverMeasure.shapeTail("Active\n\nFailed\n", 5);
+        assertEquals(List.of("Active", "Failed"), whole);
+        // The head cap of the other reads is unchanged.
+        assertEquals("From State To State Reason", AsaFailoverMeasure.shape(history.toString(), 2).get(0));
+        assertEquals("[more]", AsaFailoverMeasure.shape(history.toString(), 2).get(2));
+    }
+
+    @Test
+    void theHistoryReadKeepsTheTailAndTheOthersKeepTheHead() {
+        assertTrue(AsaFailoverMeasure.Read.SHOW_FAILOVER_HISTORY.keepTail());
+        assertFalse(AsaFailoverMeasure.Read.SHOW_FAILOVER.keepTail());
+        assertFalse(AsaFailoverMeasure.Read.SHOW_FAILOVER_STATE.keepTail());
+        assertFalse(AsaFailoverMeasure.Read.SHOW_CONN_COUNT.keepTail());
+        StringBuilder history = new StringBuilder();
+        int cap = AsaFailoverMeasure.Read.SHOW_FAILOVER_HISTORY.maxLines();
+        for (int i = 0; i < cap + 20; i++) {
+            history.append("Active\n");
+        }
+        history.append("Failed Newest entry\n");
+        List<String> shaped = AsaFailoverMeasure.Read.SHOW_FAILOVER_HISTORY.shape(history.toString());
+        assertEquals(cap + 1, shaped.size());
+        assertEquals("[earlier]", shaped.get(0));
+        assertEquals("Failed a a", shaped.get(shaped.size() - 1));
+    }
+
+    @Test
     void connCountGivesTheTwoCountsOnly() {
         long[] n = AsaFailoverMeasure.connCount(CONN).orElseThrow();
         assertEquals(4321L, n[0]);

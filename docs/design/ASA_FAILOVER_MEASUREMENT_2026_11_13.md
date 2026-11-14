@@ -52,7 +52,7 @@ and the PO's go on 2026-11-13 ("Şimdi yapalım", PO present). Design: `FAILOVER
    used), the other 3,801 in use (573,185 most used): the standby holds replicated connections, about 80 % of the
    active's count, which supports check 6's rule.
 10. **Timestamps:** `HH:MM:SS <+zz> Mon DD YYYY` (a numeric zone offset, not `UTC`). The shape masked the clock as
-    `<ip9>` (the IPv6 placeholder matched `HH:MM:SS`): harmless here, fixed in the Phase 1 projector.
+    `<ip9>` (the IPv6 placeholder matched `HH:MM:SS`): harmless here, fixed in the Phase 1 projector. **Follow-up 2026-11-14:** the shape formatter's IPv6 matcher now requires a real IPv6 form (eight groups or `::`), so a clock keeps its shape; the `show failover history` read caps by keeping the newest lines (`[earlier]` marks dropped older ones).
 
 ## 3. Consequences for Phase 1 (to carry into the contract)
 - Check 5 (stateful replication): two samples, `xerr`/`rerr` must not increase; never an absolute zero rule.
