@@ -231,3 +231,10 @@ evidence contradicts this.
 Negated address cells, Palo Alto service source ports and Check Point ICMP codes for the policy shadowing analysis;
 the Check Point comparison port forms stay UNKNOWN. Text, citations and the covering-rule revisit trigger:
 `PATH_ANALYSIS_VENDOR_SEMANTICS_AMENDMENT_2026_11_13.md` (FROZEN 2026-11-13, PO approval "Onaylıyorum").
+
+## Amendment 2026-11-14 — Cisco ASA and FortiGate policy (PO approved)
+
+Access-rule order, security-level and same-security defaults, real-address matching, NAT sections, contexts and port
+literals for Cisco ASA; policy order, implicit deny, defaults, VIP/NAT order, zones and address/service objects for
+FortiGate. Text, citations and grades (sections 8-14): `PATH_ANALYSIS_VENDOR_SEMANTICS_AMENDMENT_2026_11_14_ASA_FORTIGATE.md`
+(FROZEN 2026-11-14 after the HIGH quotes were re-verified on the source pages, PO approval relayed by the PO session).
