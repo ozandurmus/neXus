@@ -275,6 +275,14 @@ async function call<T>(path: string, method: "GET" | "POST" | "PUT", body?: unkn
   return parsed as T;
 }
 
+/**
+ * The one JSON request path (CSRF token, masking notice, timeouts, `ApiError` on refusal) for an API client kept in its
+ * own file beside its screen, so this file does not grow with every feature.
+ */
+export function apiCall<T>(path: string, method: "GET" | "POST" | "PUT", body?: unknown): Promise<T> {
+  return call<T>(path, method, body);
+}
+
 export interface LifecycleCatalogEntry {
   catalog_id: string;
   vendor: string;

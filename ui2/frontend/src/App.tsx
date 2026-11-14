@@ -12,6 +12,7 @@ import { TraceScreen } from "./screens/TraceScreen";
 import { ChangesScreen } from "./screens/ChangesScreen";
 import { DiagnosticsScreen } from "./screens/DiagnosticsScreen";
 import { RuleUsageScreen } from "./screens/RuleUsageScreen";
+import { ZoneMatrixScreen } from "./screens/zonematrix/ZoneMatrixScreen";
 import { ConfigurationScreen } from "./screens/ConfigurationScreen";
 import { ComplianceScreen } from "./screens/ComplianceScreen";
 import { BackupScreen } from "./screens/BackupScreen";
@@ -65,6 +66,7 @@ const PRODUCT_SCREENS: Record<ScreenId, ComponentType> = {
   administration: AdministrationScreen,
   diagnostics: DiagnosticsScreen,
   rule_usage: RuleUsageScreen,
+  zone_matrix: ZoneMatrixScreen,
   packet_analysis: PacketAnalysisScreen,
   sanitizer: SanitizerScreen,
 };
@@ -85,6 +87,7 @@ const PREVIEW_SCREENS: Record<ScreenId, ComponentType> = {
   administration: AdministrationPreview,
   diagnostics: OperationsPreview,
   rule_usage: PolicyPreview,
+  zone_matrix: PolicyPreview,
   packet_analysis: PacketAnalysisPreview,
   sanitizer: SanitizerPreview,
 };

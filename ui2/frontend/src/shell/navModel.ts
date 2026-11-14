@@ -58,6 +58,9 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     // Rule object usage (RULE_OBJECT_USAGE_CONTRACT.md, PO 2026-11-13): which of one rule's objects carried traffic in an
     // uploaded log export. It was Tools > Offline analysis; it is a question about a policy rule, so it sits here, last.
     { id: "rule-usage", label: "Rule object usage", screen: "rule_usage", href: "?screen=rule_usage", requiredPlane: "Policy" },
+    // Zone matrix (ZONE_MATRIX_CONTRACT.md section 7.1): the bank's zones and their published versions. Delivery step 1
+    // has the zones and the publish flow; the matrix statements arrive with step 2.
+    { id: "zone-matrix", label: "Zone matrix", screen: "zone_matrix", href: "?screen=zone_matrix", requiredPlane: "Policy" },
   ] },
   { kind: "group", id: "compliance-security", label: "Compliance and security", icon: "compliance", children: [
     { id: "compliance", label: "Compliance", screen: "compliance", href: "?screen=compliance", requiredPlane: "Compliance" },
@@ -141,6 +144,7 @@ export function activeLeafId(screen: ScreenId, search: string): string {
     }
     case "packet_analysis": return "packet-analysis";
     case "rule_usage": return "rule-usage";
+    case "zone_matrix": return "zone-matrix";
     default: return screen;
   }
 }
