@@ -136,6 +136,27 @@ class AsaPolicyEvaluationTest {
         assertEquals(1, ((List<?>) timed.get("undecidableRules")).size());
     }
 
+    @Test void aRuleTheLookupCannotDecideIsPassedOverOnlyWhenWhatResolvedIsDisjoint() {
+        var s = asa("""
+                access-list ACL-OUT extended deny tcp any host 198.51.100.30 eq https time-range TR-1
+                access-list ACL-OUT extended deny tcp any object-group OG-FQDN eq 22
+                access-list ACL-OUT extended permit tcp any any eq https
+                object network OBJ-FQDN
+                 fqdn host.example.test
+                object-group network OG-FQDN
+                 network-object object OBJ-FQDN
+                access-group ACL-OUT in interface outside
+                """);
+        // the time-ranged deny names another destination, the FQDN deny another port: neither can match this packet
+        var passed = run(s, "203.0.113.5", "198.51.100.20", "tcp/443", "outside", "inside");
+        assertEquals("ALLOWED", passed.get("verdict"));
+        assertEquals("first matching rule", passed.get("lookupReason"));
+        // the same time-ranged deny for its own destination could match: UNKNOWN, never ALLOWED
+        assertEquals("UNKNOWN", verdict(s, "203.0.113.5", "198.51.100.30", "tcp/443", "outside", "inside"));
+        // the FQDN group is not resolved: for port 22 it could match
+        assertEquals("UNKNOWN", verdict(s, "203.0.113.5", "198.51.100.20", "tcp/22", "outside", "inside"));
+    }
+
     @Test void hygieneShadowsWithinOneAccessListAndReportsUnreferencedLists() {
         var s = asa("""
                 access-list ACL-OUT extended permit tcp any host 198.51.100.20 eq https

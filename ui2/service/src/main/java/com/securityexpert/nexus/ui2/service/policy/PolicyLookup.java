@@ -39,16 +39,27 @@ public final class PolicyLookup {
                 "sourceZone", sourceZone, "destinationZone", destinationZone, "target", target, "context", context);
         }
     }
-    private record Entry(Section section, Rule rule, Match match, int layer) {}
+    /** {@code prior}: for an ASA rule without a full match, what of it did resolve (null when nothing may be relied on). */
+    private record Entry(Section section, Rule rule, Match match, int layer, Partial prior) {
+        Entry(Section section, Rule rule, Match match, int layer) { this(section, rule, match, layer, null); }
+    }
     private record Evaluation(List<Entry> entries, List<Integer> layers, Asa asa) {
         Evaluation(List<Entry> entries, List<Integer> layers) { this(entries, layers, null); }
     }
+    /**
+     * Normalization work for one ASA access list, spent once per list and prepared lookup. An ASA policy can hold tens of
+     * thousands of access rules (one measured unit: about 26,000), far more than the query budget could normalize up
+     * front, while one packet meets at most three lists (ingress "in", global, egress "out"): those are normalized when
+     * a query first needs them, each with this budget, and kept for the following rows of a streamed sample.
+     */
+    static final int ASA_LIST_WORK = 2_000_000;
     /**
      * An ASA snapshot's access lists by binding ("in:IF", "out:IF", "global", each a layer number) and its interface
      * table (nameif to security level; null level = unknown) with the same-security-traffic flags, all as the mapper stored
      * them (section identity verified by its opaque id, never by display name).
      */
-    private record Asa(Map<String, Integer> lists, Map<String, Integer> levels, Set<String> interfaces, boolean inter, boolean intra, boolean known) {}
+    private record Asa(Map<String, Integer> lists, Map<String, Integer> levels, Set<String> interfaces, boolean inter, boolean intra, boolean known,
+            Map<Integer, Section> sections, Map<Integer, List<Entry>> normalized) {}
     private record Decision(String verdict, String reason, Map<String, Object> rule, List<Map<String, Object>> undecidable,
             List<Map<String, Object>> layers) {
         Decision(String verdict, String reason, Map<String, Object> rule, List<Map<String, Object>> undecidable) {
@@ -100,6 +111,12 @@ public final class PolicyLookup {
                     (query.context().isEmpty() || t.context().equals(query.context())) && (query.target().isEmpty() || t.deviceId().equals(query.target()))))
                 throw new Unknown("target context unproven");
             if (problem != null) throw new Unknown(problem);
+            if (evaluation.asa() != null) {
+                evaluation = asaLists(snapshot, evaluation, query);
+                // An ASA list holds up to thousands of rules with large object groups; the query's own first-match pass over
+                // its (at most three) lists gets the list budget, still a bounded, request-sized amount of work.
+                budget = new Budget(Math.max(workLimit, ASA_LIST_WORK));
+            }
             List<Entry> entries = evaluation.entries();
             Range source = address(query.source()), destination = address(query.destination());
             var sources = partitions(source, entries, 0, budget); var destinations = partitions(destination, entries, 1, budget);
@@ -133,6 +150,7 @@ public final class PolicyLookup {
         Set<Integer> layers = new LinkedHashSet<>();
         Set<String> inlineParents = new HashSet<>();
         Map<String, Integer> asaLists = new LinkedHashMap<>();
+        Map<Integer, Section> asaSections = new HashMap<>();
         for (Section section : snapshot.sections()) {
             budget.spend();
             if (PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) continue;
@@ -150,6 +168,11 @@ public final class PolicyLookup {
                 if (binding == null || asaLists.containsKey(binding)) throw new Unknown("unsupported evaluation scope");
                 layer = asaLists.size(); asaLists.put(binding, layer);
             } else throw new Unknown("unsupported evaluation scope");
+            if (layer >= 0 && snapshot.metadata().vendor().equals("ASA")) {
+                asaSections.put(layer, section);
+                for (Rule rule : section.rules()) { budget.spend(); if (!ruleIds.add(rule.id())) throw new Unknown("unsupported evaluation scope"); }
+                continue;
+            }
             for (Rule rule : section.rules()) {
                 budget.spend();
                 if (!ruleIds.add(rule.id())) throw new Unknown("unsupported evaluation scope");
@@ -158,7 +181,7 @@ public final class PolicyLookup {
                 entries.add(new Entry(section, rule, normalize(snapshot, section, rule, resolver, true), layer));
             }
         }
-        if (snapshot.metadata().vendor().equals("ASA")) return new Evaluation(entries, List.of(), asaInterfaces(snapshot, asaLists));
+        if (snapshot.metadata().vendor().equals("ASA")) return new Evaluation(entries, List.of(), asaInterfaces(snapshot, asaLists, asaSections));
         if (sectionIds.isEmpty()) throw new Unknown("unsupported evaluation scope");
         return new Evaluation(entries, List.copyOf(layers));
     }
@@ -235,6 +258,9 @@ public final class PolicyLookup {
                 }
             }
             if ("NO_MATCH".equals(problem)) continue;
+            // An ASA rule the lookup cannot fully evaluate still cannot match a packet outside what did resolve of it
+            // (PolicyNormalization#partial: its other conditions only narrow). Disjoint from this query: pass over it.
+            if (problem != null && entry.prior() != null && disjoint(entry.prior(), source, destination, query)) continue;
             if (problem == null && entry.rule().action().equals("Apply Layer")) {
                 boolean hasChild = false;
                 for (Section section : snapshot.sections()) {
@@ -261,6 +287,34 @@ public final class PolicyLookup {
             : query.sourceZone().equals(query.destinationZone()) ? PAN_INTRAZONE : PAN_INTERZONE;
         return new Decision("UNKNOWN", unknown.isEmpty() ? reason : "earlier rule could match", null, List.copyOf(unknown));
     }
+    /**
+     * The evaluation a query needs on an ASA policy: the ingress "in" list, then the global list, then the egress "out"
+     * list, each normalized once (with {@link #ASA_LIST_WORK}) and reused. A list too large for that budget makes the
+     * query UNKNOWN ("analysis budget"), never a partial answer.
+     */
+    private static Evaluation asaLists(PolicySnapshot snapshot, Evaluation evaluation, Query query) {
+        Asa asa = evaluation.asa(); List<Entry> entries = new ArrayList<>();
+        for (String key : List.of("in:" + query.sourceZone(), "global", "out:" + query.destinationZone())) {
+            Integer layer = asa.lists().get(key);
+            if (layer == null) continue;
+            List<Entry> list = asa.normalized().computeIfAbsent(layer, l -> {
+                var budget = new Budget(ASA_LIST_WORK); var resolver = new Resolver(snapshot.objects(), budget); Section section = asa.sections().get(l);
+                List<Entry> out = new ArrayList<>();
+                try {
+                    for (Rule rule : section.rules()) {
+                        budget.spend();
+                        if (Boolean.FALSE.equals(rule.enabled())) continue;
+                        Match match = normalize(snapshot, section, rule, resolver, true);
+                        out.add(new Entry(section, rule, match, l, match.problem() == null ? null : partial(snapshot, section, rule, resolver)));
+                    }
+                } catch (Unknown exhausted) { return null; }
+                return List.copyOf(out);
+            });
+            if (list == null) throw new Unknown("analysis budget");
+            entries.addAll(list);
+        }
+        return new Evaluation(entries, List.of(), asa);
+    }
     /** The binding an ASA access-group section stands for, proven by the mapper's opaque section id, or null. */
     private static String asaBinding(PolicySnapshot snapshot, Section section) {
         String id = snapshot.metadata().id(), name = section.name();
@@ -276,7 +330,7 @@ public final class PolicyLookup {
         return null;
     }
     /** The mapper's interface table object ("asa-interfaces": nameif / security-level pairs and the same-security flags). */
-    private static Asa asaInterfaces(PolicySnapshot snapshot, Map<String, Integer> lists) {
+    private static Asa asaInterfaces(PolicySnapshot snapshot, Map<String, Integer> lists, Map<Integer, Section> sections) {
         Map<String, Integer> levels = new HashMap<>(); Set<String> interfaces = new HashSet<>();
         boolean inter = false, intra = false, known = false; int found = 0;
         for (var object : snapshot.objects().values()) {
@@ -299,7 +353,8 @@ public final class PolicyLookup {
                 }
             }
         }
-        return new Asa(Map.copyOf(lists), Collections.unmodifiableMap(levels), Set.copyOf(interfaces), inter, intra, known && found == 1);
+        return new Asa(Map.copyOf(lists), Collections.unmodifiableMap(levels), Set.copyOf(interfaces), inter, intra, known && found == 1,
+            Map.copyOf(sections), Collections.synchronizedMap(new HashMap<>()));
     }
     /**
      * Cisco ASA, one packet from ingress interface {@code sourceZone} to egress interface {@code destinationZone} (nameif):
@@ -348,6 +403,22 @@ public final class PolicyLookup {
         Decision decision = decide(snapshot, evaluation.entries(), query, source, destination, budget, null, layers, 0);
         if (decision.rule() == null && decision.undecidable().isEmpty()) return new Decision("DENIED", ASA_IMPLICIT_DENY, null, List.of());
         return decision;
+    }
+    private static boolean disjoint(Partial prior, Range source, Range destination, Query query) {
+        var selectors = prior.selectors();
+        if (selectors.get(0) != null && !overlaps(selectors.get(0), "ipv4", source)) return true;
+        if (selectors.get(1) != null && !overlaps(selectors.get(1), "ipv4", destination)) return true;
+        if (selectors.get(2) != null && !query.service().equals("any")) {
+            long port = Long.parseLong(query.service().substring(4));
+            if (!overlaps(selectors.get(2), query.service().substring(0, 3), new Range(port, port))) return true;
+        }
+        return false;
+    }
+    /** Some address or port of {@code range} lies in the selector (an any selector overlaps everything). */
+    private static boolean overlaps(Selector selector, String family, Range range) {
+        if (selector.any()) return true;
+        for (Range r : selector.ranges().getOrDefault(family, List.of())) if (r.start() <= range.end() && r.end() >= range.start()) return true;
+        return false;
     }
     private static boolean covers(Selector selector, String family, Range range, Budget budget) {
         return contains(selector, new Selector(false, Map.of(family, List.of(range))), budget);
