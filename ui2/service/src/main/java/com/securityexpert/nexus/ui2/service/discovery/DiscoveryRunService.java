@@ -154,14 +154,15 @@ public final class DiscoveryRunService {
     /** 14F DR-1: {@code POST /discovery/runs} -- creates the run row and admits the discovery capability against it, in one transaction. */
     public StartOutcome start(String actorFingerprint, String managementAddress, String vendor,
             String credentialReferenceId) {
-        String capabilityId = START_CAPABILITY_BY_VENDOR.get(vendor);
+        String capabilityId = vendor == null ? null : START_CAPABILITY_BY_VENDOR.get(vendor);
         if (capabilityId == null) {
             return new StartOutcome.ValidationFailed(REASON_VENDOR_INVALID);
         }
         if (managementAddress == null || managementAddress.isBlank() || containsWhitespace(managementAddress)) {
             return new StartOutcome.ValidationFailed(REASON_ADDRESS_INVALID);
         }
-        if (credentialReferenceId == null || !credentialReferenceRepository.exists(credentialReferenceId)) {
+        if (credentialReferenceId == null || credentialReferenceId.isBlank()
+                || !credentialReferenceRepository.exists(credentialReferenceId)) {
             return new StartOutcome.ValidationFailed(REASON_CREDENTIAL_REFERENCE_NOT_FOUND);
         }
 
