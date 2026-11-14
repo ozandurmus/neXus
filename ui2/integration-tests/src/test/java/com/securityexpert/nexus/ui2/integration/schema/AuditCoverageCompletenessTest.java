@@ -70,7 +70,9 @@ class AuditCoverageCompletenessTest {
             "failover_dispatch_intent", Set.of("failover_dispatch_audit"),             // V138
             "notification_settings", Set.of("trg_audit_notification_settings_config"), // V100
             "notification_routes", Set.of("trg_audit_notification_routes_config",      // V100
-                    "trg_audit_notification_routes_row"));
+                    "trg_audit_notification_routes_row"),
+            "zone_matrix_revision", Set.of("tr_audit_zone_matrix_revision"),           // V216
+            "zone_matrix_access_log", Set.of("tr_audit_zone_matrix_access_log"));      // V216
 
     /**
      * Tables that are not operator- or configuration-mutation-bearing, each
@@ -94,6 +96,9 @@ class AuditCoverageCompletenessTest {
             Map.entry("advisory_feed_run", "V205: record of one fetch run, written by the ingest endpoint; holds counts and code words only"),
             Map.entry("checkpoint_jumbo_statement", "V214: public Check Point Jumbo resolved-issues statements written by the advisory ingest endpoint"),
             Map.entry("checkpoint_jumbo_page_load", "V214: when each public Check Point resolved-issues page was last accepted, written by the advisory ingest endpoint"),
+            Map.entry("zone_matrix_version", "V216: every draft change and publish appends a zone_matrix_revision row in the "
+                    + "same transaction, captured by tr_audit_zone_matrix_revision (ZONE_MATRIX_CONTRACT 3.5); the "
+                    + "version row itself holds the full content, which the audit log must never carry"),
             Map.entry("ha_pair_identity", "V209: a failover pair's unit serials recorded and compared by the inventory job from its own reads; the jobs row is audited"),
             Map.entry("cluster_member_diff", "V52: server-side recomputed summary of collected texts"),
             Map.entry("pseudonym_registry", "V53: derived AIView pseudonym claims, keyed by HMAC"),

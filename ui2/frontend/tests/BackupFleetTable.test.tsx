@@ -369,14 +369,15 @@ describe("every header sorts the whole filtered set, not the page (Product Owner
     // oldest attempt first over the 108 devices that have one: rows 101-108 of the list are devices 112-119, then the 12 without
     await waitFor(() => {
       expect(names().slice(0, 8)).toEqual(["FW-TANGO-112", "FW-TANGO-113", "FW-TANGO-114", "FW-TANGO-115", "FW-TANGO-116", "FW-TANGO-117", "FW-TANGO-118", "FW-TANGO-119"]);
-    }, { timeout: 4000 });
+    }, { timeout: 15000 });
     expect(rows().slice(-12).map((r) => within(r).queryByText("No attempt") !== null)).toEqual(Array(12).fill(true));
     fireEvent.click(header("Latest attempt"));
     expect(header("Latest attempt").closest("th")).toHaveAttribute("aria-sort", "descending");
     expect(names().slice(0, 2)).toEqual(["FW-TANGO-119", "FW-TANGO-118"]);
     next(); next();
     expect(rows().slice(-12).map((r) => within(r).queryByText("No attempt") !== null)).toEqual(Array(12).fill(true));
-  });
+    // 120 rows, three page steps and two sorts render slowly on a shared CI runner (the file took 37 s there)
+  }, 60000);
 
   it("returns to page 1 when any header changes the order, and the Large backups chip still leads with the largest", async () => {
     stubWithAttempts();
