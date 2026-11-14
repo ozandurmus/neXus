@@ -21,6 +21,17 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
 
     static final Map<String, String> ACTION_ID_BY_ROUTE = Map.ofEntries(
             Map.entry("GET /api/v2/lifecycle", ActionRegistry.DEVICE_READ),
+            // Zone matrix, delivery step 1 (ZONE_MATRIX_CONTRACT.md section 3.4, FROZEN 2026-11-13). The blocks view
+            // (?blocks=1) and the lookup are checked again in the controller against zone_matrix_zones_read.
+            Map.entry("GET /api/v2/zone-matrix/versions", ActionRegistry.ZONE_MATRIX_READ),
+            Map.entry("GET /api/v2/zone-matrix/versions/*", ActionRegistry.ZONE_MATRIX_READ),
+            Map.entry("GET /api/v2/zone-matrix/draft", ActionRegistry.ZONE_MATRIX_READ),
+            Map.entry("POST /api/v2/zone-matrix/lookup", ActionRegistry.ZONE_MATRIX_ZONES_READ),
+            Map.entry("POST /api/v2/zone-matrix/draft/zones", ActionRegistry.ZONE_MATRIX_EDIT),
+            Map.entry("PUT /api/v2/zone-matrix/draft/zones/*", ActionRegistry.ZONE_MATRIX_EDIT),
+            Map.entry("POST /api/v2/zone-matrix/draft/zones/*/delete", ActionRegistry.ZONE_MATRIX_EDIT),
+            Map.entry("POST /api/v2/zone-matrix/draft/discard", ActionRegistry.ZONE_MATRIX_EDIT),
+            Map.entry("POST /api/v2/zone-matrix/draft/publish", ActionRegistry.ZONE_MATRIX_PUBLISH),
             Map.entry("GET /devices/*/lifecycle", ActionRegistry.DEVICE_READ),
             Map.entry("GET /api/v2/lifecycle/catalog", ActionRegistry.DEVICE_READ),
             // Advisory matching part 1 (ADVISORY_MATCHING_CONTRACT.md section 8): read access follows the Lifecycle view.

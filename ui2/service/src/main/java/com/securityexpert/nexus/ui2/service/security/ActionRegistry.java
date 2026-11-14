@@ -37,6 +37,14 @@ public final class ActionRegistry {
      */
     public static final String DEVICE_INVENTORY_COLLECT = "device_inventory_collect";
     public static final String LIFECYCLE_CATALOG_WRITE = "lifecycle_catalog_write";
+    /** ZONE_MATRIX_CONTRACT.md section 3.4: zones, names, sizes, versions and diffs without blocks; aiview masked. */
+    public static final String ZONE_MATRIX_READ = "zone_matrix_read";
+    /** Section 3.4: blocks, address lookup and witness addresses; every view audited; never aiview. */
+    public static final String ZONE_MATRIX_ZONES_READ = "zone_matrix_zones_read";
+    /** Section 3.4: change the draft (zones, blocks); security_admin and compliance_admin. */
+    public static final String ZONE_MATRIX_EDIT = "zone_matrix_edit";
+    /** Section 3.4: publish the draft under the four-eyes rule (PO 2026-11-13); security_admin and compliance_admin. */
+    public static final String ZONE_MATRIX_PUBLISH = "zone_matrix_publish";
     public static final String FMG_DIAGNOSTIC_READ = "fmg_diagnostic_read";
     public static final String FMG_DIAGNOSTIC_RUN = "fmg_diagnostic_run";
     /** System-log programme phase A (M3/M4): admits one Palo Alto log measurement job per enrolled firewall; administrators only. */
@@ -276,6 +284,14 @@ public final class ActionRegistry {
         register(new ActionDescriptor(POLICY_OFFLINE_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(LIFECYCLE_CATALOG_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(ZONE_MATRIX_READ, true, Optional.of(RoleToken.SECURITY_ADMIN),
+                java.util.Set.of(RoleToken.COMPLIANCE_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.VIEWER, RoleToken.REPLAY_VIEWER)));
+        register(new ActionDescriptor(ZONE_MATRIX_ZONES_READ, true, Optional.of(RoleToken.SECURITY_ADMIN),
+                java.util.Set.of(RoleToken.COMPLIANCE_ADMIN)));
+        register(new ActionDescriptor(ZONE_MATRIX_EDIT, true, Optional.of(RoleToken.SECURITY_ADMIN),
+                java.util.Set.of(RoleToken.COMPLIANCE_ADMIN)));
+        register(new ActionDescriptor(ZONE_MATRIX_PUBLISH, true, Optional.of(RoleToken.SECURITY_ADMIN),
+                java.util.Set.of(RoleToken.COMPLIANCE_ADMIN)));
         register(new ActionDescriptor(POLICY_COLLECT, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(POLICY_READ, true, Optional.of(RoleToken.SECURITY_ADMIN),

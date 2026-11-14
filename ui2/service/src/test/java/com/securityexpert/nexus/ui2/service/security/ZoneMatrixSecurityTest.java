@@ -1,0 +1,39 @@
+package com.securityexpert.nexus.ui2.service.security;
+
+import static org.junit.jupiter.api.Assertions.*;
+import java.lang.reflect.Method;
+import java.util.Map;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+import com.securityexpert.nexus.ui2.platform.RoleToken;
+
+/** ZONE_MATRIX_CONTRACT.md section 3.4: every zone-matrix route resolves to its closed action with the contract's roles. */
+class ZoneMatrixSecurityTest {
+    @Test void everyRouteResolvesToItsActionAndTheRolesMatchTheContract() throws Exception {
+        var interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE);
+        Method resolve = GateChainInterceptor.class.getDeclaredMethod("actionIdFor", String.class, String.class);
+        resolve.setAccessible(true);
+        Map<String, String> routes = Map.of(
+                "GET /api/v2/zone-matrix/versions", ActionRegistry.ZONE_MATRIX_READ,
+                "GET /api/v2/zone-matrix/versions/00000000-0000-4000-8000-000000000001", ActionRegistry.ZONE_MATRIX_READ,
+                "GET /api/v2/zone-matrix/draft", ActionRegistry.ZONE_MATRIX_READ,
+                "POST /api/v2/zone-matrix/lookup", ActionRegistry.ZONE_MATRIX_ZONES_READ,
+                "POST /api/v2/zone-matrix/draft/zones", ActionRegistry.ZONE_MATRIX_EDIT,
+                "PUT /api/v2/zone-matrix/draft/zones/zone-1", ActionRegistry.ZONE_MATRIX_EDIT,
+                "POST /api/v2/zone-matrix/draft/zones/zone-1/delete", ActionRegistry.ZONE_MATRIX_EDIT,
+                "POST /api/v2/zone-matrix/draft/discard", ActionRegistry.ZONE_MATRIX_EDIT,
+                "POST /api/v2/zone-matrix/draft/publish", ActionRegistry.ZONE_MATRIX_PUBLISH);
+        for (var route : routes.entrySet()) {
+            var parts = route.getKey().split(" ", 2);
+            assertEquals(route.getValue(), resolve.invoke(interceptor, parts[0], parts[1]), route.getKey());
+        }
+        var registry = new ActionRegistry();
+        assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.COMPLIANCE_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.VIEWER,
+                RoleToken.REPLAY_VIEWER), registry.find(ActionRegistry.ZONE_MATRIX_READ).orElseThrow().requiredRoleTokens());
+        for (String action : new String[]{ActionRegistry.ZONE_MATRIX_ZONES_READ, ActionRegistry.ZONE_MATRIX_EDIT, ActionRegistry.ZONE_MATRIX_PUBLISH}) {
+            var tokens = registry.find(action).orElseThrow().requiredRoleTokens();
+            assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.COMPLIANCE_ADMIN), tokens, action);
+            assertFalse(tokens.contains(RoleToken.REPLAY_VIEWER), action);
+        }
+    }
+}

@@ -32,6 +32,8 @@ export const TAB_COVERAGE: readonly TabCoverageRow[] = [
   // Trace is two modes of one screen; Changes is two views of one question (C3).
   { screen: "trace", tabList: "Trace modes", labels: ["Topology path", "Policy rule lookup"] },
   { screen: "changes", tabList: "Changes views", labels: ["Timeline", "Policy rule revisions"] },
+  // Zone matrix delivery step 1 (ZONE_MATRIX_CONTRACT.md 10.1): zones and versions only; Matrix and Violations come later.
+  { screen: "zone_matrix", tabList: "Zone matrix views", labels: ["Zones", "Versions"] },
   // Cluster members is a cluster-page tab only (roadmap 2.2); a member page links to its cluster from the header. The
   // device's Identity tab is gone (PO 2026-11-06): the Platform identity grid is a collapsible panel in the device header.
   { screen: "inventory", tabList: "Device detail", labels: ["Interfaces", "Routing", "Grid members", "Managed estate", "Configuration", "Backup", "Logs"] },
@@ -48,6 +50,7 @@ export const SCREEN_HEADINGS: Record<ScreenId, string> = {
   policy: "Policy", overview: "Overview", reports: "Reports", inventory: "Devices", configuration: "Devices", compliance: "Compliance",
   backups: "Backups", operations: "Operations", administration: "Device registry", packet_analysis: "Packet analysis",
   sanitizer: "Data sanitizer", trace: "Trace", changes: "Changes", diagnostics: "Diagnostics", rule_usage: "Rule object usage",
+  zone_matrix: "Zone matrix",
 };
 /** Administration's seven pages: the address of each and the heading it shows (the same words as its navigation entry). */
 export const ADMIN_PAGES: readonly { readonly query: string; readonly heading: string }[] = [
