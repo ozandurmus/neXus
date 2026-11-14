@@ -3,12 +3,16 @@ from copy import deepcopy
 import gzip
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
+# The shell scripts finish in about a second on an idle machine; the limit only exists to stop a real hang, so it is
+# generous and can be scaled (NEXUS_TEST_SUBPROCESS_TIMEOUT, seconds) for a machine under heavy load.
+SUBPROCESS_TIMEOUT = float(os.environ.get("NEXUS_TEST_SUBPROCESS_TIMEOUT", "120"))
 SPEC = importlib.util.spec_from_file_location("release_snapshot", ROOT / "tools/delivery/release_snapshot.py")
 rs = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(rs)
@@ -289,7 +293,7 @@ else:
     fake.chmod(0o755)
     env = dict(os.environ, HOME=str(tmp_path), PATH=str(binary) + os.pathsep + os.environ["PATH"])
     result = subprocess.run(["bash", str(ROOT / "tools/delivery/release_snapshot.sh")],
-                            env=env, capture_output=True, text=True, timeout=10)
+                            env=env, capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT)
     assert result.returncode == 0, result.stderr
     snapshot_id = json.loads(result.stdout)["snapshot"]
     directory = tmp_path / "release-snapshots" / snapshot_id
@@ -298,7 +302,7 @@ else:
     assert (directory / "manifest.json").is_file()
 
     preview = subprocess.run(["bash", str(ROOT / "tools/delivery/rollback.sh"), "latest"],
-                             env=env, capture_output=True, text=True, timeout=10)
+                             env=env, capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT)
     assert preview.returncode == 0, preview.stderr
     assert "Dry run only" in preview.stdout and "synthetic shell diff" in preview.stdout
 

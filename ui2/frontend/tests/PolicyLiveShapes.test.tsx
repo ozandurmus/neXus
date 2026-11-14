@@ -87,7 +87,7 @@ it.each([
   expect(error.closest("[data-error-code]")).toHaveAttribute("data-error-code", code);
   expect(debug).toHaveBeenCalledWith("policy-load", scope, code);
   expect(debug.mock.calls.flat()).not.toContain("Withheld in AIView");
-});
+}, 30_000); // each case mounts the full 200-rule page; 2-3 s idle, several times that on a loaded machine
 
 it.each([
   [new Error("Empty policy response"), "INVALID_RESPONSE_SHAPE"],

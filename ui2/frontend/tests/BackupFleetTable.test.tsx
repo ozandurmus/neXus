@@ -6,6 +6,7 @@ import { m3Theme } from "../src/theme/m3Theme";
 import { TONE_COLORS } from "../src/shell/tone";
 import { SessionContext, type SessionInfo } from "../src/auth/SessionContext";
 import { JobWindowContext } from "../src/shell/JobWindow";
+import { getByAria } from "./fastQueries";
 import { BACKUP_PAGE_SIZE, BackupScreen, FLEET_COLUMNS } from "../src/screens/BackupScreen";
 
 /**
@@ -46,6 +47,21 @@ function stub(devices: object[], backups: object[], deviations = { active_major_
     return json({});
   }));
 }
+
+/**
+ * Plain-selector lookups. A role-with-name query computes an accessible name for every element on a 50-row page and is
+ * most of this file's run time (and why it missed its timeout on a loaded machine); these match the same elements by
+ * structure and attribute, so every assertion still checks the same thing.
+ */
+// The 50-row page renders slowly (about a second per page step on an idle machine, several times that under load);
+// the describe blocks that step through 120-131 rows carry a 30 s per-test limit instead of vitest's 5 s default.
+const bodyRows = () => Array.from(document.querySelectorAll<HTMLElement>("table tbody tr"));
+const nextPage = () => fireEvent.click(getByAria(document.body, "Go to next page"));
+const headerButton = (name: string): HTMLElement => {
+  const found = Array.from(document.querySelectorAll<HTMLElement>('table thead th [role="button"]')).filter((b) => b.textContent?.trim() === name);
+  if (found.length !== 1) throw new Error(`Expected exactly one header button "${name}", found ${found.length}`);
+  return found[0];
+};
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -119,7 +135,7 @@ describe("one line per row, every action in the row menu", () => {
   });
 });
 
-describe("pagination at 50", () => {
+describe("pagination at 50", { timeout: 30_000 }, () => {
   const many = Array.from({ length: 131 }, (_, i) => device(i + 1));
 
   it("shows 1–50 of 131 and moves page by page without losing a row", async () => {
@@ -128,13 +144,13 @@ describe("pagination at 50", () => {
     await screen.findByText("FW-SYNTH-001");
     expect(BACKUP_PAGE_SIZE).toBe(50);
     expect(screen.getByText("1–50 of 131")).toBeInTheDocument();
-    const rows = () => screen.getAllByRole("row").slice(1);
+    const rows = () => bodyRows();
     expect(rows()).toHaveLength(50);
     expect(screen.queryByText("FW-SYNTH-051")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
+    nextPage();
     expect(screen.getByText("51–100 of 131")).toBeInTheDocument();
     expect(screen.getByText("FW-SYNTH-051")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
+    nextPage();
     expect(screen.getByText("101–131 of 131")).toBeInTheDocument();
     expect(rows()).toHaveLength(31);
     expect(screen.getByText("FW-SYNTH-131")).toBeInTheDocument();
@@ -144,22 +160,22 @@ describe("pagination at 50", () => {
     stub(many, []);
     render(as(adminPlanes, <BackupScreen />));
     await screen.findByText("FW-SYNTH-001");
-    fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
+    nextPage();
     expect(screen.getByText("51–100 of 131")).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Filter the backup fleet" }), { target: { value: "SYNTH-12" } });
     expect(screen.getByText("1–10 of 10")).toBeInTheDocument();
   });
 });
 
-describe("Size column sort and the large-backup marker (Product Owner, 2026-11-02)", () => {
+describe("Size column sort and the large-backup marker (Product Owner, 2026-11-02)", { timeout: 30_000 }, () => {
   const MB = 1024 * 1024;
   // 131 Check Point targets: 120 with a ~0.2 GB archive, 11 without one, device 77 with a 28 GB archive on page 2 in hostname order.
   const estate = Array.from({ length: 131 }, (_, i) => device(i + 1));
   const archives = Array.from({ length: 120 }, (_, i) => artefact(i + 1, { size_bytes: (160 + (i % 7)) * MB }));
   archives[76] = artefact(77, { size_bytes: 28_537 * MB });
   // the Device cell's hostname (the vendor badge's letters sit beside it in the same cell)
-  const names = () => screen.getAllByRole("row").slice(1).map((r) => within(r).getByText(/^FW-SYNTH-\d{3}$/).textContent);
-  const sizeHeader = () => screen.getByRole("button", { name: "Size" });
+  const names = () => bodyRows().map((r) => within(r).getByText(/^FW-SYNTH-\d{3}$/).textContent);
+  const sizeHeader = () => headerButton("Size");
 
   it("sorts the whole filtered set by size, largest first, then smallest first with no-archive rows last, then back to hostname order", async () => {
     stub(estate, archives);
@@ -168,16 +184,16 @@ describe("Size column sort and the large-backup marker (Product Owner, 2026-11-0
     expect(screen.queryByText("FW-SYNTH-077")).toBeNull();
     fireEvent.click(sizeHeader());
     expect(names()[0]).toBe("FW-SYNTH-077");
-    expect(within(screen.getAllByRole("row")[1]).getByText("28537.0 MB")).toBeInTheDocument();
+    expect(within(bodyRows()[0]).getByText("28537.0 MB")).toBeInTheDocument();
     expect(screen.getByText("1–50 of 131")).toBeInTheDocument();
     expect(sizeHeader().closest("th")).toHaveAttribute("aria-sort", "descending");
     fireEvent.click(sizeHeader());
     expect(sizeHeader().closest("th")).toHaveAttribute("aria-sort", "ascending");
     // smallest first: the 160 MB archives lead ...
-    expect(within(screen.getAllByRole("row")[1]).getByText("160.0 MB")).toBeInTheDocument();
+    expect(within(bodyRows()[0]).getByText("160.0 MB")).toBeInTheDocument();
     // ... and the eleven rows without an archive sit at the very end, after the 28 GB one
-    fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
-    fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
+    nextPage();
+    nextPage();
     expect(screen.getByText("101–131 of 131")).toBeInTheDocument();
     const last = names();
     expect(last.slice(-11)).toEqual(Array.from({ length: 11 }, (_, i) => `FW-SYNTH-${121 + i}`));
@@ -192,7 +208,7 @@ describe("Size column sort and the large-backup marker (Product Owner, 2026-11-0
     stub(estate, archives);
     render(as(adminPlanes, <BackupScreen />));
     await screen.findByText("FW-SYNTH-001");
-    fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
+    nextPage();
     expect(screen.getByText("51–100 of 131")).toBeInTheDocument();
     fireEvent.click(sizeHeader());
     expect(screen.getByText("1–50 of 131")).toBeInTheDocument();
@@ -287,7 +303,7 @@ describe("fixed column widths (post-release review 2026-10-18, R3 / R11)", () =>
   });
 });
 
-describe("every header sorts the whole filtered set, not the page (Product Owner, 2026-11-04)", () => {
+describe("every header sorts the whole filtered set, not the page (Product Owner, 2026-11-04)", { timeout: 30_000 }, () => {
   // 120 targets named without zero padding, so plain text order (FW-TANGO-1, FW-TANGO-10, FW-TANGO-100 ...) differs
   // from numeric order; every third device standalone; an archive on all but every ninth; an attempt on all but every tenth.
   const estate = Array.from({ length: 120 }, (_, k) => {
@@ -320,11 +336,11 @@ describe("every header sorts the whole filtered set, not the page (Product Owner
       return inner(input);
     });
   }
-  const rows = () => screen.getAllByRole("row").slice(1);
+  const rows = () => bodyRows();
   const names = () => rows().map((r) => within(r).getByText(/^FW-TANGO-\d+$/).textContent);
-  const cell = (row: HTMLElement, index: number) => within(row).getAllByRole("cell")[index];
-  const header = (name: string) => screen.getByRole("button", { name });
-  const next = () => fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
+  const cell = (row: HTMLElement, index: number) => row.querySelectorAll<HTMLElement>("td")[index];
+  const header = headerButton;
+  const next = nextPage;
 
   it("orders Device over all 120 rows with numeric collation, page 2 continues it, descending flips it, the third click restores hostname order", async () => {
     stubWithAttempts();
