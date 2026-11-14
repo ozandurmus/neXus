@@ -32,15 +32,22 @@ public final class AsaFailoverMeasure {
     public enum Read {
         SHOW_FAILOVER("asa_measure_show_failover", "show failover", 30, 160),
         SHOW_FAILOVER_STATE("asa_measure_show_failover_state", "show failover state", 30, 60),
-        SHOW_FAILOVER_HISTORY("asa_measure_show_failover_history", "show failover history", 60, 80),
+        /** Printed oldest first: a line cap keeps the TAIL (the newest entries), never the head. */
+        SHOW_FAILOVER_HISTORY("asa_measure_show_failover_history", "show failover history", 60, 80, true),
         SHOW_CONN_COUNT("asa_measure_show_conn_count", "show conn count", 30, 10);
 
         private final String gateId;
         private final String command;
         private final int timeoutS;
         private final int maxLines;
+        private final boolean keepTail;
 
         Read(String gateId, String command, int timeoutS, int maxLines) {
+            this(gateId, command, timeoutS, maxLines, false);
+        }
+
+        Read(String gateId, String command, int timeoutS, int maxLines, boolean keepTail) {
+            this.keepTail = keepTail;
             this.gateId = gateId;
             this.command = command;
             this.timeoutS = timeoutS;
@@ -51,6 +58,13 @@ public final class AsaFailoverMeasure {
         public String command() { return command; }
         public int timeoutS() { return timeoutS; }
         public int maxLines() { return maxLines; }
+        /** True when the answer is oldest first and a cap must keep the newest (last) lines. */
+        public boolean keepTail() { return keepTail; }
+
+        /** The shape of {@code output} under this read's own cap and direction. */
+        public List<String> shape(String output) {
+            return keepTail ? shapeTail(output, maxLines) : AsaFailoverMeasure.shape(output, maxLines);
+        }
     }
 
     private static final System.Logger LOG = System.getLogger(AsaFailoverMeasure.class.getName());
@@ -114,7 +128,15 @@ public final class AsaFailoverMeasure {
     }
 
     private static final Pattern IPV4 = Pattern.compile("\\b\\d{1,3}(?:\\.\\d{1,3}){3}(?:/\\d{1,2})?\\b");
-    private static final Pattern IPV6 = Pattern.compile("(?i)\\b(?:[0-9a-f]{1,4}:){2,7}[0-9a-f]{0,4}(?:/\\d{1,3})?");
+    /**
+     * A real IPv6 form only: eight full groups, or a {@code ::}-compressed form. A clock such as {@code 12:34:56}
+     * (three groups, no {@code ::}) is not an address and keeps its shape.
+     */
+    private static final String H16 = "[0-9a-f]{1,4}";
+    private static final Pattern IPV6 = Pattern.compile("(?i)(?<![0-9a-f:.])(?:"
+            + "(?:" + H16 + ":){7}" + H16
+            + "|(?:" + H16 + "(?::" + H16 + "){0,6})?::(?:" + H16 + "(?::" + H16 + "){0,6})?"
+            + ")(?:/\\d{1,3})?(?![0-9a-f:])");
     private static final Pattern MAC = Pattern.compile("(?i)\\b[0-9a-f]{4}\\.[0-9a-f]{4}\\.[0-9a-f]{4}\\b");
     /** A wall-clock time (HH:MM:SS), shaped as a placeholder: left alone it matched the IPv6 pattern and shaped as an address. */
     private static final Pattern CLOCK = Pattern.compile("\\b\\d{1,2}:\\d{2}:\\d{2}\\b");
@@ -152,6 +174,36 @@ public final class AsaFailoverMeasure {
                 lines.add("[more]");
                 break;
             }
+            lines.add(shapeLine(line));
+        }
+        return lines;
+    }
+
+    /**
+     * As {@link #shape} but for an oldest-first answer: when more than {@code maxLines} non-empty lines were answered
+     * the OLDEST are dropped (marked by a leading {@code [earlier]}) and the newest {@code maxLines} are kept.
+     */
+    public static List<String> shapeTail(String output, int maxLines) {
+        List<String> lines = new ArrayList<>();
+        if (output == null) {
+            return lines;
+        }
+        java.util.ArrayDeque<String> window = new java.util.ArrayDeque<>();
+        boolean dropped = false;
+        for (String line : output.split("\\R")) {
+            if (line.isBlank()) {
+                continue;
+            }
+            if (window.size() >= maxLines) {
+                window.removeFirst();
+                dropped = true;
+            }
+            window.addLast(line);
+        }
+        if (dropped) {
+            lines.add("[earlier]");
+        }
+        for (String line : window) {
             lines.add(shapeLine(line));
         }
         return lines;

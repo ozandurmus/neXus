@@ -156,7 +156,7 @@ public final class CiscoAsaExecutor {
                         () -> ssh.execInteractive(s, new ExecSpec(read.command(), true), Duration.ofSeconds(read.timeoutS())));
                 if (r instanceof ExecResult.Completed c && !CiscoAsaPlan.isCliError(c.output())) {
                     String answer = stripEcho(c.output(), read.command());
-                    java.util.List<String> shape = AsaFailoverMeasure.shape(answer, read.maxLines());
+                    java.util.List<String> shape = read.shape(answer);
                     String counts = read == AsaFailoverMeasure.Read.SHOW_CONN_COUNT
                             ? AsaFailoverMeasure.connCount(answer).map(n -> " in_use=" + n[0] + " most_used=" + n[1]).orElse(" counts=unparsed")
                             : "";
