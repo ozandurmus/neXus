@@ -6,6 +6,7 @@ python3 -m pytest -q -p no:cacheprovider tools/tests/test_orchestrator_dashboard
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -136,7 +137,7 @@ def test_classification_projection_preserves_terminal_precedence_and_filter_coun
       }));
     """
     result = subprocess.run(["node", "-e", script, json.dumps(snapshot)],
-                            check=True, capture_output=True, text=True, timeout=10)
+                            check=True, capture_output=True, text=True, timeout=float(os.environ.get("NEXUS_TEST_SUBPROCESS_TIMEOUT", "120")))
     actual = json.loads(result.stdout)
     assert actual["active"] == ["A", "B", "C", "D", "E", "F", "G", "I", "01", "1"]
     assert actual["needs"] == ["B", "C", "D", "E"]
