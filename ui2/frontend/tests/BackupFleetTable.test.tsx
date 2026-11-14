@@ -302,7 +302,17 @@ describe("every header sorts the whole filtered set, not the page (Product Owner
     base.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith("/api/v2/jobs")) {
-        const n = Number(new URLSearchParams(url.slice(url.indexOf("?"))).get("device_id")?.slice(1));
+        const params = new URLSearchParams(url.slice(url.indexOf("?")));
+        if (params.get("latest_per_device") === "true") {
+          const items = estate.flatMap((_, k) => {
+            const n = k + 1;
+            if (n % 10 === 0) return [];
+            const submitted_at = new Date(Date.UTC(2026, 9, 1) + n * 3_600_000).toISOString();
+            return [{ job_id: `job-${n}`, job_type: "backup", target_device_id: `d${n}`, submitted_at, state: "COMPLETED", terminal_reason: "COMPLETED", has_transcript: false }];
+          });
+          return json({ items, total: items.length, page: 1, page_size: 500 });
+        }
+        const n = Number(params.get("device_id")?.slice(1));
         if (n % 10 === 0) return json({ items: [], total: 0, page: 1, page_size: 1 });
         const submitted_at = new Date(Date.UTC(2026, 9, 1) + n * 3_600_000).toISOString();
         return json({ items: [{ job_id: `job-${n}`, job_type: "backup", target_device_id: `d${n}`, submitted_at, state: "COMPLETED", terminal_reason: "COMPLETED", has_transcript: false }], total: 1, page: 1, page_size: 1 });
@@ -377,6 +387,8 @@ describe("every header sorts the whole filtered set, not the page (Product Owner
     next(); next();
     expect(rows().slice(-12).map((r) => within(r).queryByText("No attempt") !== null)).toEqual(Array(12).fill(true));
     // 120 rows, three page steps and two sorts render slowly on a shared CI runner (the file took 37 s there)
+    const jobCalls = vi.mocked(fetch).mock.calls.map(([u]) => String(u)).filter((u) => u.startsWith("/api/v2/jobs"));
+    expect(jobCalls).toEqual(["/api/v2/jobs?job_type=backup&latest_per_device=true"]);
   }, 60000);
 
   it("returns to page 1 when any header changes the order, and the Large backups chip still leads with the largest", async () => {

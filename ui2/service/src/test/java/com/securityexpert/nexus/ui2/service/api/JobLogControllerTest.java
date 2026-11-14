@@ -177,4 +177,34 @@ class JobLogControllerTest {
         org.mockito.Mockito.verify(other).query(plainCaptor.capture());
         assertFalse(plainCaptor.getValue().masked());
     }
+
+    @Test
+    void latestPerDeviceUsesBatchedQueryAndAppliesIdenticalSessionRbacAndReplayMasking() {
+        var jobs = mock(JobLogQueryService.class);
+        var rbac = mock(RbacEvaluator.class);
+        var controller = new JobLogController(jobs, mock(PrivacyMaskingResponseBodyAdvice.class),
+                new ActionRegistry(), rbac);
+        var existing = new JobEvent("job-d1", "cp_gateway_backup", "d1", null, "COMPLETED", null,
+                null, Instant.parse("2026-11-14T02:00:00Z"), null, null, true);
+        var absent = new JobEvent("job-d2", "pan_device_state_backup", "d2", null, "FAILED", null,
+                "Synthetic failure", Instant.parse("2026-11-14T02:01:00Z"), null, null, false);
+        when(jobs.latestPerDevice(any())).thenReturn(
+                new JobPage(List.of(existing, absent), 1, JobLogQueryService.MAX_LATEST_PER_DEVICE_ROWS, 2));
+
+        for (String actor : List.of("viewer-only", "replay-viewer", "backup-admin", "security-admin")) {
+            boolean granted = actor.endsWith("admin");
+            when(rbac.evaluateAny(eq(actor), anySet(), any())).thenReturn(new RbacEvaluator.Decision(
+                    granted ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED, Optional.empty(), Optional.empty(), Optional.empty()));
+            var request = new MockHttpServletRequest();
+            request.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, actor);
+            if (actor.equals("replay-viewer")) request.setAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE, true);
+
+            // the batched read is the same route (GET /api/v2/jobs, job_log_read) with one more parameter
+            var page = controller.listJobs(null, "backup", null, null, null, null, 1, 50, null, null, true, request).getBody();
+            if (granted) assertTrue(page.items().get(0).hasTranscript(), actor);
+            else assertFalse(page.items().get(0).hasTranscript(), actor);
+            assertFalse(page.items().get(1).hasTranscript(), actor);
+        }
+        org.mockito.Mockito.verify(jobs, org.mockito.Mockito.never()).query(any());
+    }
 }
