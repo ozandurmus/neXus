@@ -13,8 +13,27 @@
     <conversionRule conversionWord="ex" class="com.securityexpert.nexus.ui2.service.logging.MaskingThrowableConverter"/>
     <conversionRule conversionWord="exception" class="com.securityexpert.nexus.ui2.service.logging.MaskingThrowableConverter"/>
     <conversionRule conversionWord="throwable" class="com.securityexpert.nexus.ui2.service.logging.MaskingThrowableConverter"/>
-    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+    <!-- Text console (the default); denied when NEXUS_LOG_FORMAT=json. -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="com.securityexpert.nexus.ui2.service.logging.LogFormatFilter"><json>false</json></filter>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>${CONSOLE_LOG_THRESHOLD}</level>
+        </filter>
+        <encoder>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+            <charset>${CONSOLE_LOG_CHARSET}</charset>
+        </encoder>
+    </appender>
+    <!-- JSON console (NEXUS_LOG_FORMAT=json): Boot's logstash format; application.yml's customizer masks the values. -->
+    <appender name="CONSOLE_JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="com.securityexpert.nexus.ui2.service.logging.LogFormatFilter"><json>true</json></filter>
+        <encoder class="org.springframework.boot.logging.logback.StructuredLogEncoder">
+            <format>logstash</format>
+            <charset>${CONSOLE_LOG_CHARSET}</charset>
+        </encoder>
+    </appender>
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="CONSOLE_JSON"/>
     </root>
 </configuration>

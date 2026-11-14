@@ -22,6 +22,9 @@ class LogbackAddressMaskingTest {
         ByteArrayOutputStream captured = new ByteArrayOutputStream();
         LoggerContext context = new LoggerContext();
         context.setMDCAdapter(new ch.qos.logback.classic.util.LogbackMDCAdapter());
+        // Spring Boot registers its Environment in the logger context; the JSON appender's encoder needs it.
+        context.putObject(org.springframework.core.env.Environment.class.getName(),
+                new org.springframework.core.env.StandardEnvironment());
         try {
             System.setOut(new PrintStream(captured, true));
             URL config = LogbackAddressMaskingTest.class.getClassLoader().getResource("logback-spring.xml");
