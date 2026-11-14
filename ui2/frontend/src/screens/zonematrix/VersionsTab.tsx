@@ -13,9 +13,10 @@ import { m3 } from "../../theme/m3Theme";
 import type { ZoneNotice, ZoneTabProps } from "./ZoneMatrixScreen";
 import { Hash, Hint, SectionTitle, mono, panelSx } from "./zoneMatrixUi";
 import {
-  PUBLISH_FINAL_TEXT, addressCount, discardZoneDraft, publishCheckText, publishZoneDraft, zoneErrorLines, zoneRoleLabel,
-  type FamilySizes, type PublishCheck, type ZoneDiff, type ZoneDiffRow, type ZoneMove, type ZoneRevision, type ZoneVersionDetail,
-  type ZoneVersionState, type ZoneVersionSummary,
+  PUBLISH_FINAL_TEXT, addressCount, discardZoneDraft, publishCheckText, publishZoneDraft, referenceStatusWord,
+  severityWord, statementWord, zoneErrorLines, zoneRoleLabel,
+  type CellDiffRow, type CellDiffSide, type FamilySizes, type LooseningRow, type PublishCheck, type ZoneDiff,
+  type ZoneDiffRow, type ZoneMove, type ZoneRevision, type ZoneVersionDetail, type ZoneVersionState, type ZoneVersionSummary,
 } from "./zoneMatrixApi";
 
 export const RATIONALE_LIMIT = 2000;
@@ -29,6 +30,9 @@ const STATE_WORD: Record<ZoneVersionState, { readonly word: string; readonly ton
 
 const CHANGE_KIND: Record<string, string> = {
   DRAFT_CREATE: "Draft started", ZONE_CREATE: "Zone added", ZONE_UPDATE: "Zone changed", ZONE_DELETE: "Zone removed",
+  CELL_SET: "Cell set", CELL_CLEAR: "Cell cleared", DEFAULT_SET: "Version default changed",
+  SERVICE_SET_SAVE: "Service set saved", SERVICE_SET_DELETE: "Service set removed",
+  TEMPLATE_IMPORT: "Template imported", REFERENCE_CONFIRM: "Reference confirmed",
   DRAFT_DISCARD: "Draft discarded", PUBLISH: "Published",
 };
 
@@ -40,6 +44,29 @@ const placeName = (name: string) => (name === "UNASSIGNED" ? "unassigned" : name
 /** "256 IPv4 addresses move from Z-APP to Z-DB" (contract 3.2). */
 export function moveText(move: ZoneMove): string {
   return `${addressCount(move.addresses)} ${familyWord(move.family)} ${move.addresses === "1" ? "address moves" : "addresses move"} from ${placeName(move.from)} to ${placeName(move.to)}`;
+}
+
+/** One loosening change in plain words (contract 3.5). */
+export function looseningText(item: LooseningRow): string {
+  const src = item.source_name ? placeName(item.source_name) : "UNKNOWN";
+  const dst = item.destination_name ? placeName(item.destination_name) : "UNKNOWN";
+  switch (item.kind) {
+    case "DEFAULT_CHANGED": return "the version default changed";
+    case "STATEMENT_RELAXED": return `${src} -> ${dst}: statement relaxed`;
+    case "SERVICES_ADDED": return `${src} -> ${dst}: services added`;
+    case "SEVERITY_DOWNGRADED": return `${src} -> ${dst}: severity lowered`;
+    case "ADDRESSES_MOVED": return `${addressCount(item.addresses)} ${item.addresses === "1" ? "address moves" : "addresses move"} from ${src} to ${dst}`;
+    case "UNASSIGNED_SHRUNK": return `${addressCount(item.addresses)} unassigned ${item.addresses === "1" ? "address moves" : "addresses move"} into ${dst}, which is less strict`;
+    default: return `${item.kind}`;
+  }
+}
+
+function cellSideText(side: CellDiffSide | null): string {
+  if (!side) return "No endpoints";
+  const mode = side.explicit ? "explicit" : "default";
+  const services = side.services.length > 0 ? `: ${side.services.join(", ")}` : "";
+  const ref = side.reference_status ? ` · reference ${referenceStatusWord(side.reference_status).toLowerCase()}` : "";
+  return `${statementWord(side.statement)} (${severityWord(side.severity)}, ${mode})${services}${ref}`;
 }
 
 /** One changed zone as a headline and its detail lines (the sizes have their own columns). */
@@ -131,16 +158,39 @@ function Revisions({ revisions }: { readonly revisions: readonly ZoneRevision[] 
   );
 }
 
-/** What publishing the draft would change against the active version: a summary, the address moves, then the zones. */
+/** What publishing the draft would change against the active version: loosening changes first, then cells, moves and zones. */
 function DraftChanges({ diff }: { readonly diff: ZoneDiff }) {
-  if (diff.zones.length === 0 && diff.moves.length === 0) {
+  const cells = diff.cells ?? [];
+  const looseningList = diff.loosening ?? [];
+  const defaultChanged = Boolean(
+    diff.default
+      && diff.default.statement_before !== null
+      && (diff.default.statement_before !== diff.default.statement_after
+        || diff.default.severity_before !== diff.default.severity_after),
+  );
+  if (diff.zones.length === 0 && diff.moves.length === 0 && cells.length === 0 && !defaultChanged && looseningList.length === 0) {
     return <Typography variant="body2">The draft is the same as the active version. There is nothing to publish.</Typography>;
   }
-  const loosening = diff.moves.filter((m) => m.leaves_a_zone);
-  const ordered = [...loosening, ...diff.moves.filter((m) => !m.leaves_a_zone)];
+  const moveLoosening = diff.moves.filter((m) => m.leaves_a_zone);
+  const ordered = [...moveLoosening, ...diff.moves.filter((m) => !m.leaves_a_zone)];
+  const looseningCount = diff.loosening !== undefined ? looseningList.length : moveLoosening.length;
   const added = diff.zones.filter((z) => z.change === "ADDED").length;
   const removed = diff.zones.filter((z) => z.change === "REMOVED").length;
   const changed = diff.zones.length - added - removed;
+  const cellColumns: DataColumn<CellDiffRow>[] = [
+    { key: "pair", header: "Pair", wrap: true, title: () => undefined, render: (row) => (
+      <Box>
+        <Typography component="span" variant="body2" sx={{ fontWeight: 600 }}>
+          {placeName(row.source_name)} {"->"} {placeName(row.destination_name)} ({row.change.toLowerCase()})
+        </Typography>
+        {row.loosening && row.loosening.length > 0 ? (
+          <Box component="span" sx={{ ml: 1 }}><StatusChip dense tone="warn" label="Loosening change" /></Box>
+        ) : null}
+      </Box>
+    ) },
+    { key: "before", header: "Before", wrap: true, title: () => undefined, render: (row) => cellSideText(row.before) },
+    { key: "after", header: "After", wrap: true, title: () => undefined, render: (row) => cellSideText(row.after) },
+  ];
   const columns: DataColumn<ZoneDiffRow>[] = [
     { key: "zone", header: "Zone", wrap: true, title: () => undefined, render: (row) => {
       const { headline, details } = zoneChangeLines(row);
@@ -160,9 +210,34 @@ function DraftChanges({ diff }: { readonly diff: ZoneDiff }) {
         {[
           plural(added, "zone added", "zones added"), plural(removed, "zone removed", "zones removed"), plural(changed, "zone changed", "zones changed"),
           plural(diff.moves.length, "address move", "address moves"),
+          ...(cells.length > 0 ? [plural(cells.length, "cell changed", "cells changed")] : []),
         ].join(", ")}
-        {loosening.length > 0 ? `; ${plural(loosening.length, "loosening change", "loosening changes")}` : ""}.
+        {looseningCount > 0 ? `; ${plural(looseningCount, "loosening change", "loosening changes")}` : ""}.
       </Typography>
+
+      {looseningList.length > 0 ? (
+        <Box component="ul" aria-label="Loosening changes" sx={{ ...panelSx, m: 0, listStyle: "none", gap: 1 }}>
+          {looseningList.map((item, index) => (
+            <li key={index} data-loosening="true">
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                <StatusChip dense tone="warn" label="Loosening change" />
+                <Box component="span" sx={{ ml: 1 }}>{looseningText(item)}</Box>
+              </Typography>
+            </li>
+          ))}
+        </Box>
+      ) : null}
+
+      {defaultChanged && diff.default ? (
+        <Typography variant="body2" data-testid="default-diff">
+          Version default: {statementWord(diff.default.statement_before)} ({severityWord(diff.default.severity_before)}) before;{" "}
+          {statementWord(diff.default.statement_after)} ({severityWord(diff.default.severity_after)}) after.
+        </Typography>
+      ) : null}
+
+      {cells.length > 0 ? (
+        <DataTable ariaLabel="Changed cells" columns={cellColumns} rows={cells} rowKey={(r) => `${r.source}->${r.destination}`} />
+      ) : null}
 
       {diff.moves.length > 0 ? (
         <Box component="ul" aria-label="Address moves" sx={{ ...panelSx, m: 0, listStyle: "none", gap: 1 }}>
@@ -230,7 +305,7 @@ function PublishPanel({ draft, check, rationaleRequired, refresh, notify }: {
       {rationaleRequired ? (
         <TextField label="Rationale" required multiline minRows={2} value={rationale} onChange={(e) => setRationale(e.target.value)}
           inputProps={{ maxLength: RATIONALE_LIMIT }}
-          helperText={`Required: addresses leave a zone in this draft. Say why. ${rationale.length} / ${RATIONALE_LIMIT}`} />
+          helperText={`Required: this version loosens the segmentation policy (for example when addresses leave a zone in this draft or a statement is relaxed). Say why. ${rationale.length} / ${RATIONALE_LIMIT}`} />
       ) : null}
       {confirming && ready ? (
         <Box role="group" aria-label="Confirm publish" sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
