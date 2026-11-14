@@ -135,6 +135,11 @@ final class PolicyNormalization {
             if (metadata.vendor().equals("CP") && "CP access layer".equals(section.source())) state = checkPoint(section);
             else {
                 boolean joined = false;
+                if (metadata.vendor().equals("ASA") && "ASA access-group".equals(section.source())) {
+                    // One ASA access-group binding = one ACL, an independent first-match list (A0-ASA-1/2). Which lists a
+                    // packet meets, and in what order (interface, then global), is the lookup's business, not shadowing's.
+                    open.clear(); previous = section; current = fresh.get(); return current;
+                }
                 if (metadata.vendor().equals("PAN")) {
                     int phase = panPhase(section);
                     boolean ordered = phase >= 0 && phase >= lastPhase && sectionIds.add(section.id());
@@ -228,14 +233,14 @@ final class PolicyNormalization {
     static final Set<String> UPPER_BOUND_DROPPED = Set.of("time", "schedule", "vpn", "content", "category", "source-user", "time-uncollected");
     private static Match normalize(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver, boolean lookup, boolean ruleTypes, boolean upperBound) {
         try {
-            if (!Set.of("CP", "PAN").contains(snapshot.metadata().vendor()) || PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section))
+            if (!EVALUATED_VENDORS.contains(snapshot.metadata().vendor()) || PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section))
                 throw new Unknown("unsupported rulebase");
             Selector source = resolver.cell(rule.source(), "address"), destination = resolver.cell(rule.destination(), "address"),
                 service = resolver.cell(rule.service(), "service");
-            List<Selector> cells = List.of(source, destination, service, snapshot.metadata().vendor().equals("CP") && rule.application().refs().isEmpty()
+            List<Selector> cells = List.of(source, destination, service, Set.of("CP", "ASA").contains(snapshot.metadata().vendor()) && rule.application().refs().isEmpty()
                 && !rule.application().negated() ? new Selector(true, Map.of()) : service.applicationDefault()
                     ? resolver.applications(rule.application()) : resolver.cell(rule.application(), "application"));
-            if (snapshot.metadata().vendor().equals("PAN") && (rule.extras().getOrDefault("from", List.of()).isEmpty()
+            if (Set.of("PAN", "ASA").contains(snapshot.metadata().vendor()) && (rule.extras().getOrDefault("from", List.of()).isEmpty()
                     || rule.extras().getOrDefault("to", List.of()).isEmpty())) throw new Unknown("zone evidence not collected");
             if (snapshot.metadata().vendor().equals("CP") && rule.extras().getOrDefault("install-on", List.of()).isEmpty())
                 throw new Unknown("install-on evidence not collected");
@@ -244,7 +249,7 @@ final class PolicyNormalization {
             // it is a terminal rule of the parent layer; it must name exactly one inline layer. The lookup descends into it.
             boolean applyLayer = snapshot.metadata().vendor().equals("CP") && rule.action().equals("Apply Layer")
                 && (lookup || rule.extras().getOrDefault("inline-layer", List.of()).size() == 1);
-            if (!applyLayer && !Set.of("Accept", "Drop", "Reject", "allow", "deny", "drop", "reset-client", "reset-server", "reset-both").contains(rule.action()))
+            if (!applyLayer && !TERMINAL_ACTIONS.contains(rule.action()))
                 throw new Unknown("non-terminal or unknown action");
             for (var entry : rule.extras().entrySet()) {
                 String key = entry.getKey(); var values = entry.getValue();
@@ -256,6 +261,9 @@ final class PolicyNormalization {
                         if (object == null || !object.status().equals("RESOLVED") || !object.type().equals("any")) throw new Unknown("time or content constraint");
                     }
                 } else if (Set.of("source-user", "category").contains(key) && !values.equals(List.of("any"))) throw new Unknown("user or category constraint");
+                // ASA identity firewall and TrustSec criteria (A0-ASA-16): UNKNOWN, never an upper bound (PO decision record
+                // 2026-11-14 item 4 keeps uncertain ASA semantics UNKNOWN).
+                else if (ASA_IDENTITY.contains(key) && snapshot.metadata().vendor().equals("ASA")) throw new Unknown("user or category constraint");
                 else if (key.equals("rule-type") && !values.equals(List.of("universal"))
                         && !(ruleTypes && (values.equals(List.of("intrazone")) || values.equals(List.of("interzone"))))) throw new Unknown("zone rule type constraint");
                 else if (key.equals("install-on")) {
@@ -269,6 +277,7 @@ final class PolicyNormalization {
                             throw new Unknown("unresolved install-on selector");
                     }
                 } else if (!Set.of("from", "to", "install-on", "source-user", "category", "rule-type", "tag", "layer-name", "last-modified", "last-modifier", "log-setting").contains(key)
+                        && !(snapshot.metadata().vendor().equals("ASA") && ASA_INERT.contains(key))
                         && !key.startsWith("track-") && !key.startsWith("profile-setting/") && !untargeted(snapshot, rule, key)) throw new Unknown("unsupported rule constraint");
             }
             if (!upperBound && snapshot.metadata().vendor().equals("CP") && !rule.extras().containsKey("time")) throw new Unknown("time evidence not collected");
@@ -284,6 +293,17 @@ final class PolicyNormalization {
             return new Match(rule, List.of(), Map.of(), problem.getMessage());
         }
     }
+    /** Vendors whose security rulebases are evaluated. ASA: ASA_FORTIGATE_POLICY_DESIGN_2026_11_14.md, A0-ASA-1..20. */
+    static final Set<String> EVALUATED_VENDORS = Set.of("CP", "PAN", "ASA");
+    /** Actions that end matching; ASA ACEs permit or deny (A0-ASA-1). */
+    static final Set<String> TERMINAL_ACTIONS = Set.of("Accept", "Drop", "Reject", "allow", "deny", "drop", "reset-client", "reset-server",
+            "reset-both", "permit");
+    /** Actions that let the matched traffic through. */
+    static final Set<String> ALLOWING_ACTIONS = Set.of("Accept", "allow", "permit");
+    /** ASA mapper provenance keys: the binding direction and the ACL a rule came from; they never change what matches. */
+    static final Set<String> ASA_INERT = Set.of("asa-direction", "asa-acl");
+    /** ASA identity firewall users/groups and TrustSec security groups on an ACE. */
+    static final Set<String> ASA_IDENTITY = Set.of("user", "security-group");
     /** Install-on object statuses shadowing accepts as opaque placement tokens (see {@link #normalize}). */
     static final Set<String> OPAQUE_PLACEMENTS = Set.of("UNSUPPORTED", "UNRESOLVED");
     /**
@@ -354,13 +374,13 @@ final class PolicyNormalization {
      */
     static Partial partial(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver) {
         String vendor = snapshot.metadata().vendor();
-        if (!Set.of("CP", "PAN").contains(vendor) || PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) return null;
-        boolean cp = vendor.equals("CP"), zones = true;
+        if (!EVALUATED_VENDORS.contains(vendor) || PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) return null;
+        boolean cp = vendor.equals("CP"), asa = vendor.equals("ASA"), zones = true;
         if (cp && !rule.extras().containsKey("time")) return null;
         for (var entry : rule.extras().entrySet()) {
             String key = entry.getKey();
             resolver.budget.spend();
-            if (NARROWING.contains(key) || INERT.contains(key) || Set.of("from", "to", "install-on").contains(key)
+            if (NARROWING.contains(key) || INERT.contains(key) || asa && ASA_INERT.contains(key) || Set.of("from", "to", "install-on").contains(key)
                     || key.startsWith("track-") || key.startsWith("profile-setting/") || untargeted(snapshot, rule, key)
                     || targetNarrows(snapshot, rule, key)) continue;
             if (key.equals("rule-type")) { zones &= entry.getValue().equals(List.of("universal")); continue; }
@@ -374,7 +394,7 @@ final class PolicyNormalization {
         for (int i = 0; i < 4; i++) {
             var cell = cells.get(i);
             try {
-                selectors[i] = i == 3 && cp && cell.refs().isEmpty() && !cell.negated() ? new Selector(true, Map.of())
+                selectors[i] = i == 3 && (cp || asa) && cell.refs().isEmpty() && !cell.negated() ? new Selector(true, Map.of())
                     : i == 3 && selectors[2] != null && selectors[2].applicationDefault() ? resolver.applications(cell) : resolver.cell(cell, families.get(i));
                 resolved |= !selectors[i].any();
             } catch (Unknown unresolved) {
