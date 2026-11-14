@@ -96,6 +96,13 @@ refreshes them. That directory is git-ignored and normally empty. **Before every
 build on this network, copy the CA chain into `ui2/.ca/` and rename to `.pem`** —
 the glob matches only that extension.
 
+The frontend stage's `npm ci` verifies TLS (`strict-ssl` stays true; a test forbids switching it
+off). Node does not read the OS trust store, so that stage sets `NODE_EXTRA_CA_CERTS` and npm's
+`cafile` to `/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem`, the bundle `update-ca-trust`
+regenerates from the base image roots plus `ui2/.ca/*.pem`. If `npm ci` fails with a certificate
+error, the chain in `ui2/.ca/` is incomplete (root and intermediates are both needed); fix the
+chain, never the verification.
+
 **Java does not read proxy environment variables.** `curl` and `npm` honour
 `HTTPS_PROXY`; the JVM needs `-Dhttps.proxyHost` and `-Dhttps.proxyPort`. And
 `GRADLE_OPTS` must contain no shell metacharacter: a `nonProxyHosts` value with

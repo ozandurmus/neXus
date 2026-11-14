@@ -30,7 +30,17 @@ COPY ui2/.ca/ /tmp/corp-ca/
 RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
       cp /tmp/corp-ca/*.pem /etc/pki/ca-trust/source/anchors/ && update-ca-trust; \
     fi
-RUN npm config set strict-ssl false && npm ci --no-audit
+# TLS verification stays ON. Node does not read the OS trust store (it ships its
+# own root list), so the anchors installed above are invisible to npm unless it
+# is pointed at the system-extracted bundle, which holds the base image's roots
+# plus any ui2/.ca/*.pem anchors. NODE_EXTRA_CA_CERTS covers Node itself and
+# `cafile` covers npm's own registry client. Both paths are build-stage only.
+# The test -s guard fails the build early if the bundle is absent or empty.
+ENV NODE_EXTRA_CA_CERTS=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+RUN test -s "$NODE_EXTRA_CA_CERTS" \
+ && npm config set cafile "$NODE_EXTRA_CA_CERTS" \
+ && npm config set strict-ssl true \
+ && npm ci --no-audit
 COPY ui2/frontend/ ./
 COPY docs/design/ui2_mockups/ /build/docs/design/ui2_mockups/
 RUN npm run build
