@@ -46,10 +46,12 @@ for (const screen of SCREEN_IDS) {
     await content(page);
   });
 }
-for (const label of ["Fleet", "Catalog", "Vulnerabilities"]) {
+// The Lifecycle and security view of the Devices screen, at its own address under its own heading (tabCoverage.ts).
+const lifecycle = TAB_COVERAGE.find(row => row.tabList === "Lifecycle view")!;
+for (const label of lifecycle.labels) {
   test(`full: inventory / Lifecycle / ${label}`, async ({ page, safety }) => {
-    await visit(page, "screen=inventory&view=lifecycle", "Devices");
-    await page.getByRole("tablist", { name: "Lifecycle view", exact: true }).getByRole("tab", { name: label, exact: true }).click();
+    await visit(page, lifecycle.query!, lifecycle.heading!);
+    await page.getByRole("tablist", { name: lifecycle.tabList, exact: true }).getByRole("tab", { name: label, exact: true }).click();
     await safety.checkpoint();
     await content(page, page.getByRole("tabpanel", { name: label, exact: true }));
     if (label === "Catalog") {

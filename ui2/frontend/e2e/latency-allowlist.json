@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "path": "/api/v2/changes/feed",
+    "reason": "Nightly full e2e 2026-11-14: an unmapped Overview read took 4210 ms while the Overview's other reads ran beside it. Of its two unmapped /api reads, measured alone on HOST-A, the 7-day USER change feed took 3094 ms cold and about 1100 ms warm (300 KB, limit 200); /api/v2/lifecycle took 680-740 ms. The feed read needs a backend look; until then its budget is 6 s.",
+    "expires": "2026-12-14",
+    "budgetMs": 6000
+  }
+]

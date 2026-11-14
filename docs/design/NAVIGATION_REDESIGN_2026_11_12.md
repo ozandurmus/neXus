@@ -406,6 +406,26 @@ How the indicator decides, from the one read (no new backend data):
 
 It reads on mount and every 60 s while the page is visible (the Platform status page itself refreshes every 15 s).
 
+**Amendment 2026-11-14 (health light semantics; PO directive relayed by the PO session).** The indicator showed
+"degraded" because finished pods of old and one-off Jobs were counted as long-running pods while every service ran.
+The rule above is replaced for the degraded row as follows; OK and down are unchanged.
+
+- A service pod is one owned by a ReplicaSet, StatefulSet or DaemonSet (or by an owner the rule does not know, so a
+  problem is shown rather than hidden). A running service pod that is not fully ready, including one waiting to restart
+  (CrashLoopBackOff), makes the light degraded. A finished pod of a service (evicted and already replaced) is not counted.
+- For each CronJob only its latest scheduled run counts: when every pod of that run failed, the light is degraded and the
+  tooltip names the CronJob and the run. Older runs do not count; a run still going does not count.
+- A one-off Job (any Job not started by a CronJob's schedule, including one started by hand from a CronJob) and a bare
+  pod never change the light. The Platform status page lists them, says what each pod is (service, CronJob latest or
+  older run, one-off job), shows the light's reason above the pod table, and colours a state red only where it counts.
+- How a scheduled run is recognised: the pod view gains three read-only fields per pod, `owner_kind`, `owner_name` (the
+  controlling owner from the pod's own metadata) and `created_at`. The Job's own owner is not read (that needs a Job read
+  the service account is not granted, and no RBAC change is made), so the Kubernetes CronJob controller's naming is
+  used: it names each Job `<cronjob>-<scheduled minute since the epoch>`. A name is taken as a scheduled run only when
+  the pod was created between one minute before that minute and one day after it.
+- Rules live in `ui2/frontend/src/shell/PlatformHealthIndicator.tsx` (`podRoles`, `failedLatestRuns`, `platformHealth`);
+  the page uses the same functions.
+
 New redirects (in `shell/legacyRoutes.ts`, tested), each keeping its other parameters:
 
 | Old address | Lands on |

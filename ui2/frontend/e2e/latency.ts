@@ -10,6 +10,8 @@ const templates = [
   "/api/v2/search", "/api/v2/backups/policies", "/api/v2/backups/deviations",
   "/api/v2/overview", "/api/v2/compliance/controls/{id}", "/api/v2/config/notifications",
   "/api/v2/system/pods", "/api/v2/system/storage",
+  // Overview attention list reads (2026-11-13): named so a slow read is reported by its route, not as {unmapped}.
+  "/api/v2/changes/feed", "/api/v2/lifecycle",
   ...["cp-failover", "pan-failover"].flatMap(vendor => [
     `/api/v2/${vendor}/summary`, `/api/v2/${vendor}/units`, `/api/v2/${vendor}/runs`,
     `/api/v2/${vendor}/runs/{id}`, `/api/v2/${vendor}/approvals`,

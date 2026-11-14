@@ -1968,6 +1968,10 @@ export interface PodStatusView {
   readonly cpu_limit_millicores: number | null;
   readonly memory_bytes: number | null;
   readonly memory_limit_bytes: number | null;
+  /** The pod's controlling owner (ReplicaSet, StatefulSet, DaemonSet, Job), `null` for a bare pod; absent from older servers. */
+  readonly owner_kind?: string | null;
+  readonly owner_name?: string | null;
+  readonly created_at?: string | null;
 }
 
 export interface ModuleStatusView {
