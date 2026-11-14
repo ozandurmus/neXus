@@ -111,6 +111,14 @@ public final class BackupCapabilityExecutor {
                             + "collection credential) -- refused before any device contact");
         }
 
+        try {
+            artefactStore.checkQuota();
+        } catch (ArtefactStore.QuotaExceededException e) {
+            return new BackupResult.ArtefactStoreFailed(e.getMessage());
+        } catch (IOException e) {
+            return new BackupResult.ArtefactStoreFailed("artefact store quota check failed: " + e.getMessage());
+        }
+
         ConnectSpec spec = new ConnectSpec(request.credentialRef().get(), request.trustRuleRef(), Optional.empty());
         ConnectResult connectResult;
         try {
@@ -233,6 +241,8 @@ public final class BackupCapabilityExecutor {
         ArtefactStore.ArtefactHandle handle;
         try {
             handle = artefactStore.open(deviceId, jobId, "check_point", false);
+        } catch (ArtefactStore.QuotaExceededException e) {
+            return new BackupResult.ArtefactStoreFailed(e.getMessage());
         } catch (IOException e) {
             return new BackupResult.ArtefactStoreFailed("artefact store open failed: " + e.getMessage());
         }
@@ -243,6 +253,10 @@ public final class BackupCapabilityExecutor {
         } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             closeQuietly(handle);
+            var quota = ArtefactStore.QuotaExceededException.reasonIn(e);
+            if (quota.isPresent()) {
+                return new BackupResult.ArtefactStoreFailed(quota.get());
+            }
             // Measured live 2026-09-22: three runs ended "sftp fetch failed: " with nothing after the colon --
             // an exception with no message. The class name is the reason then, and the stack goes to the log.
             LOG.log(System.Logger.Level.WARNING, "[BACKUP] sftp fetch threw " + e.getClass().getName(), e);
@@ -253,11 +267,18 @@ public final class BackupCapabilityExecutor {
         if (!(fetchResult instanceof FetchStreamResult.Fetched)) {
             closeQuietly(handle);
             String reason = fetchResult instanceof FetchStreamResult.Failed failed ? failed.reason() : "unknown";
+            if (reason != null && reason.startsWith(
+                    ArtefactStore.QUOTA_EXCEEDED_REASON)) {
+                return new BackupResult.ArtefactStoreFailed(reason);
+            }
             return new BackupResult.ArtefactStoreFailed("sftp fetch failed: " + reason);
         }
         ArtefactStore.ArtefactMetadata metadata;
         try {
             metadata = handle.finish();
+        } catch (ArtefactStore.QuotaExceededException e) {
+            closeQuietly(handle);
+            return new BackupResult.ArtefactStoreFailed(e.getMessage());
         } catch (IOException e) {
             closeQuietly(handle);
             return new BackupResult.ArtefactStoreFailed("artefact store finish failed: " + e.getMessage());

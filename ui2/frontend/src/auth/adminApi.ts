@@ -2164,7 +2164,20 @@ export interface StorageView {
   readonly top_devices: ReadonlyArray<{ device_id: string; hostname: string | null; artefacts: number; stored_bytes: number }>;
   readonly configuration: { artefacts: number; stored_bytes: number; text_in_database_bytes: number };
   readonly database_bytes: number;
-  readonly artefact_volume: { total_bytes?: number; usable_bytes?: number; used_percent?: number | null; level?: DiskLevel; note?: string };
+  readonly artefact_volume: {
+    total_bytes?: number;
+    usable_bytes?: number;
+    used_percent?: number | null;
+    level?: DiskLevel;
+    quota_bytes?: number;
+    used_bytes?: number;
+    remaining_bytes?: number;
+    usage_percent?: number;
+    near_limit?: boolean;
+    quota_exceeded?: boolean;
+    warning?: string | null;
+    note?: string;
+  };
 }
 
 export function getSystemStorage(): Promise<StorageView> {

@@ -114,12 +114,22 @@ export function SystemStatusPanel() {
       <Card sx={{ p: 2, borderRadius: "16px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}` }}>
         <Typography variant="overline" sx={{ color: m3.onSurfaceVar }}>Storage</Typography>
         <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5, mb: 1.5 }}>What the evidence takes</Typography>
+        {(vol.quota_exceeded || vol.near_limit) && vol.quota_bytes !== undefined && (
+          <Alert severity={vol.quota_exceeded ? "error" : "warning"} sx={{ mb: 1.5 }} title={vol.warning ?? undefined}>
+            {vol.quota_exceeded
+              ? `The artefact store is full: ${formatBytes(vol.used_bytes)} of its ${formatBytes(vol.quota_bytes)} quota. New backups and collections are refused until retention frees space or the quota is raised. Nothing is deleted automatically.`
+              : `The artefact store is at ${vol.usage_percent ?? "?"}% of its quota (${formatBytes(vol.used_bytes)} of ${formatBytes(vol.quota_bytes)}). New writes are refused at 100%; nothing is deleted automatically.`}
+          </Alert>
+        )}
         <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", mb: 2 }}>
           {[
             ["Backups (encrypted)", formatBytes(backupStored), `${backupCount} archives`],
             ["Configuration evidence", formatBytes(storage.configuration.stored_bytes), `${storage.configuration.artefacts} reads · ${formatBytes(storage.configuration.text_in_database_bytes)} text in the database`],
             ["Database", formatBytes(storage.database_bytes), "PostgreSQL, all tables"],
             ["Artefact volume free", formatBytes(vol.usable_bytes), vol.total_bytes ? `of ${formatBytes(vol.total_bytes)}${typeof vol.used_percent === "number" ? ` · ${vol.used_percent}% used` : ""} · ${vol.note ?? ""}` : vol.note ?? ""],
+            ...(vol.quota_bytes !== undefined
+              ? [["Artefact store quota", `${vol.usage_percent ?? 0}%`, `${formatBytes(vol.used_bytes)} of ${formatBytes(vol.quota_bytes)} · writes refused when full`]]
+              : []),
           ].map(([label, value, note]) => (
             <Box key={label} sx={{ p: 1.5, borderRadius: "12px", border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLow }}>
               <Typography variant="caption" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.06em" }}>{label.toUpperCase()}</Typography>

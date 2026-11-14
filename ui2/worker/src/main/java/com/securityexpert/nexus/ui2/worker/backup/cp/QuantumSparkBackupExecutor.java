@@ -149,6 +149,8 @@ public final class QuantumSparkBackupExecutor {
                 try { handle.close(); } catch (IOException ignored) { }
                 throw e;
             }
+        } catch (ArtefactStore.QuotaExceededException e) {
+            return new BackupResult.ArtefactStoreFailed(e.getMessage());
         } catch (IOException e) {
             return new BackupResult.ArtefactStoreFailed("Spark upload or store failed: " + e.getClass().getSimpleName());
         } finally {

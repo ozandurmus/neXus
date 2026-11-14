@@ -93,3 +93,44 @@ it("shows no disk alert while every volume is under its threshold", async () => 
   await screen.findByText(/What the evidence takes/);
   expect(screen.queryByText(/Disk (warning|critical)/)).not.toBeInTheDocument();
 });
+
+it("renders artefact volume near-limit warning when storage approaches quota", async () => {
+  vi.mocked(api.getSystemPods).mockResolvedValue({
+    available: true, read_at: "2026-10-06T00:00:00Z", pods: [], modules: [], quarantined_by_role: [],
+  });
+  vi.mocked(api.getSystemStorage).mockResolvedValue({
+    read_at: "2026-10-06T00:00:00Z", backups: [], top_devices: [], database_bytes: 0,
+    configuration: { stored_bytes: 0, artefacts: 0, text_in_database_bytes: 0 },
+    artefact_volume: {
+      quota_bytes: 1000,
+      used_bytes: 850,
+      remaining_bytes: 150,
+      usage_percent: 85,
+      near_limit: true,
+      quota_exceeded: false,
+      warning: "artefact_store_near_quota: artefact store usage (850 of 1000 bytes, 85%) has reached the 80% warning threshold",
+    },
+  });
+  render(<SystemStatusPanel />);
+  expect(await screen.findByText(/artefact store is at 85% of its quota/)).toBeInTheDocument();
+  expect(screen.getByText(/nothing is deleted automatically/)).toBeInTheDocument();
+  expect(screen.getAllByRole("alert")).toHaveLength(1);
+  expect(screen.getByText("ARTEFACT STORE QUOTA")).toBeInTheDocument();
+});
+
+it("renders the store-full error when the quota is reached", async () => {
+  vi.mocked(api.getSystemPods).mockResolvedValue({
+    available: true, read_at: "2026-10-06T00:00:00Z", pods: [], modules: [], quarantined_by_role: [],
+  });
+  vi.mocked(api.getSystemStorage).mockResolvedValue({
+    read_at: "2026-10-06T00:00:00Z", backups: [], top_devices: [], database_bytes: 0,
+    configuration: { stored_bytes: 0, artefacts: 0, text_in_database_bytes: 0 },
+    artefact_volume: {
+      quota_bytes: 1000, used_bytes: 1000, remaining_bytes: 0, usage_percent: 100,
+      near_limit: true, quota_exceeded: true, warning: "artefact_store_quota_exceeded: synthetic",
+    },
+  });
+  render(<SystemStatusPanel />);
+  expect(await screen.findByText(/artefact store is full/)).toBeInTheDocument();
+  expect(screen.getByText(/New backups and collections are refused/)).toBeInTheDocument();
+});

@@ -572,7 +572,9 @@ public final class BackupJobExecutor {
             case BackupResult.InsufficientFreeSpace r -> "insufficient_free_space: " + r.reason();
             case BackupResult.SubmitOutputUnparseable r -> "submit_output_unparseable: " + r.reason();
             case BackupResult.SubmitRefused r -> "submit_refused: " + r.reason();
-            case BackupResult.ArtefactStoreFailed r -> "artefact_store_failed: " + r.reason();
+            // A quota refusal is its own named terminal reason (artefact_store_quota_exceeded: ...).
+            case BackupResult.ArtefactStoreFailed r -> ArtefactStore.QuotaExceededException.reasonIn(r.reason())
+                    .orElse("artefact_store_failed: " + r.reason());
             case BackupResult.DigestMismatch r ->
                     "digest_mismatch: device_digest=" + r.deviceDigest() + " received_digest=" + r.receivedDigest();
             case BackupResult.Completed ignored ->
