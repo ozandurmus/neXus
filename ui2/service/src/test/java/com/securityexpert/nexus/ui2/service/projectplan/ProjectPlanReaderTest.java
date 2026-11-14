@@ -331,11 +331,15 @@ class ProjectPlanReaderTest {
         assertFalse(tracksOf(payload).isEmpty());
         assertTrue(payload.get("current_build") != null);
         assertEquals(List.of(), warningsOf(payload), "Project authorities and explicit Java selections must reconcile");
+        // These rows once had to stay planned; the 2026-11-14 backlog-truth pass closed all three
+        // (done / superseded). The durable invariant is that a classified Java feature row is never
+        // lost from the product projection, whatever its status -- including rows in the reserve
+        // and its cold shards (GOV.ORCH.9 amendment A-2026-11-14).
         List<?> backlog = (List<?>) payload.get("backlog");
         for (String id : List.of("tufin_access_query_tab", "network_topology_path_analysis", "transcript_per_run_listing")) {
             assertTrue(backlog.stream().anyMatch(row -> row instanceof Map<?, ?> item
-                    && id.equals(item.get("id")) && "java_feature".equals(item.get("classification"))
-                    && "planned".equals(item.get("status"))), id + " must remain a planned Java feature");
+                    && id.equals(item.get("id")) && "java_feature".equals(item.get("classification"))),
+                    id + " must remain a Java feature row in the product projection");
         }
         assertEquals("java_ui2", payload.get("product_scope"));
         assertEquals("UNKNOWN", ((Map<?, ?>) payload.get("source_metadata")).get("freshness"));
