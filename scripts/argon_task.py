@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Run one development task on Argon (Google Antigravity CLI, `agy`) inside a git worktree.
+"""Run one development task on Argon or Carbon (Google Antigravity CLI, `agy`) inside a git worktree.
 
 PO decision 2026-10-15 (docs/design/PO_DECISION_RECORD_2026_10_15_ARGON_WORKER.md): Argon takes development lanes
-next to Claude so parallel work fits the usage budget. Argon writes code and commits on the worktree's branch; it never
+next to Claude so parallel work fits the usage budget. The worker writes code and commits on the worktree's branch
+with a `Co-Authored-By` trailer derived from `--model` (`gemini-4-argon-*` -> `Gemini 4 Argon`,
+`gemini-4-carbon-*` -> `Gemini 4 Carbon`, with no e-mail address; any other model family is refused); it never
 pushes, opens PRs, deploys, touches HOST-A or devices. Claude reviews, tests and ships.
 
 Usage:
-    python3 scripts/argon_task.py --worktree ~/Codo/nexus-<lane> --brief BRIEF.md [--model gemini-4-argon-high]
-        [--effort high] [--timeout 0] [--log FILE]
+    python3 scripts/argon_task.py --worktree ~/Codo/nexus-<lane> --brief BRIEF.md
+        [--model gemini-4-argon-high | gemini-4-carbon-high] [--effort high] [--timeout 0] [--log FILE]
 
-Guard rails: the worktree must be a git worktree named ~/Codo/nexus-* (never the main checkout); file writes and
-commands are limited by the CLI's own settings (~/.gemini/antigravity-cli/settings.json allow/deny rules: no ssh,
-scp, curl, wget, git push, gh, kubectl, sudo).
+Guard rails: the worktree must be a git worktree named ~/Codo/nexus-* (never the main checkout); `--model` must belong
+to `gemini-4-argon-*` or `gemini-4-carbon-*`; file writes and commands are limited by the CLI's own settings
+(~/.gemini/antigravity-cli/settings.json allow/deny rules: no ssh, scp, curl, wget, git push, gh, kubectl, sudo).
 """
 
 from __future__ import annotations
@@ -23,10 +25,14 @@ import time
 from pathlib import Path
 
 DEFAULT_MODEL = "gemini-4-argon-high"
-WORKER_RULES = """
+MODEL_FAMILIES: dict[str, str] = {
+    "gemini-4-argon-": "Gemini 4 Argon",
+    "gemini-4-carbon-": "Gemini 4 Carbon",
+}
+WORKER_RULES_TEMPLATE = """
 ## Standing rules for every Argon task (neXus)
 - Work ONLY in this worktree; commit on its current branch with English messages ending with
-  `Co-Authored-By: Gemini 4 Argon` (no e-mail address: the repository privacy gate forbids one).
+  `Co-Authored-By: {co_author}` (no e-mail address: the repository privacy gate forbids one).
 - Never push, never open a PR, never deploy, never ssh or reach HOST-A or any network device, never print secrets.
 - Read AGENTS.md first; it is the constitution (masking law, raw-evidence law, migrations rules, English artefacts).
 - Run the tests the task names before you finish and report the exact counts; if you cannot make something pass,
@@ -35,7 +41,26 @@ WORKER_RULES = """
 """
 
 
-def main() -> int:
+def co_author_for_model(model: str) -> str:
+    for prefix, name in MODEL_FAMILIES.items():
+        if model.startswith(prefix) and len(model) > len(prefix):
+            return name
+    allowed = ", ".join(f"{prefix}*" for prefix in MODEL_FAMILIES)
+    raise ValueError(f"unsupported --model {model!r}; allowed families: {allowed}")
+
+
+def trailer_for_model(model: str) -> str:
+    return f"Co-Authored-By: {co_author_for_model(model)}"
+
+
+def worker_rules(model: str = DEFAULT_MODEL) -> str:
+    return WORKER_RULES_TEMPLATE.format(co_author=co_author_for_model(model))
+
+
+WORKER_RULES = worker_rules(DEFAULT_MODEL)
+
+
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--worktree", required=True, type=Path)
     p.add_argument("--brief", required=True, type=Path)
@@ -45,7 +70,13 @@ def main() -> int:
     p.add_argument("--log", type=Path)
     p.add_argument("--add-dir", type=Path, action="append", default=[],
                    help="extra read-only context directory (e.g. a frozen reference checkout); repeatable")
-    a = p.parse_args()
+    a = p.parse_args(argv)
+
+    try:
+        rules = worker_rules(a.model)
+    except ValueError as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return 2
 
     wt = a.worktree.expanduser().resolve()
     if not wt.name.startswith("nexus-") or wt.parent != (Path.home() / "Codo").resolve():
@@ -60,7 +91,7 @@ def main() -> int:
         print("refused: worktree must be on a feature branch", file=sys.stderr)
         return 2
 
-    prompt = a.brief.expanduser().read_text(encoding="utf-8") + "\n" + WORKER_RULES
+    prompt = a.brief.expanduser().read_text(encoding="utf-8") + "\n" + rules
     log = a.log or Path("/tmp") / f"argon-{wt.name}-{int(time.time())}.log"
     cmd = ["agy", "-p", prompt, "--model", a.model, "--effort", a.effort, "--mode", "accept-edits",
            "--print-timeout", a.timeout]
