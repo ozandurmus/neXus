@@ -91,10 +91,12 @@ public final class LogMasking {
      * an address delimiter (2026-11-10), {@code logmask-v6} plus the Turkish case fold of estate names ({@code İ}, {@code ı}
      * and {@code I} are one letter) and the hex-encoded address rule ({@code 0x} plus eight hex digits after an address
      * keyword; 2026-11-11), {@code logmask-v7} plus single-word host names without a keyword and principal formats
-     * ({@code DOMAIN&#92;user}, {@code user@realm}, {@code CN=} DNs; 2026-11-14). Returned with every masked page
+     * ({@code DOMAIN&#92;user}, {@code user@realm}, {@code CN=} DNs; 2026-11-14), {@code logmask-v8} plus accounts in home
+     * paths, {@code sudo:}/{@code su:} lines and {@code owner}/{@code euid} keys, user query parameters and dash-form
+     * IPv4 addresses (2026-11-15). Returned with every masked page
      * ({@code X-Syslog-Mask-Rules}).
      */
-    public static final String RULE_SET = "logmask-v7";
+    public static final String RULE_SET = "logmask-v8";
 
     /** {@code hcp_report_<host>_<dd>_<mm>_<yy>_<HH>_<MM>}: prefix, host, time parts. */
     private static final Pattern HCP_REPORT = Pattern.compile("(?i)(hcp_report_)(.+?)((?:_\\d{1,4}){5})");
