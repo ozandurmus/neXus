@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { listPolicies, type PolicyMetadata, type PolicyTarget } from "../auth/adminApi";
+import { PRODUCT_NAME } from "../brand/product";
 import { M3Tabs } from "../shell/M3Widgets";
 import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 import { RestrictedPanel, StatePanel, isRestricted } from "../shell/States";
@@ -35,7 +36,7 @@ export function ChangesScreen() {
   return (
     <ScreenRoot screenType="list">
       <ScreenHeader title="Changes"
-        subtitle="Who changed what, and when: user changes, neXus jobs and device events in one timeline, and the stored policy rule revisions with their before and after." />
+        subtitle={`Who changed what, and when: user changes, ${PRODUCT_NAME} jobs and device events in one timeline, and the stored policy rule revisions with their before and after.`} />
       <M3Tabs ariaLabel="Changes views" value={CHANGES_VIEWS.indexOf(view)} onChange={select}
         tabs={[
           { label: "Timeline", panel: <ChangeFeedPanel initialDevice={urlParam("device_id") ?? ""} initialVendor={urlParam("vendor") ?? ""} /> },

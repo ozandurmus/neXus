@@ -33,6 +33,7 @@ import {
   type PacketTopologyPoint,
 } from "../../auth/adminApi";
 import { M3Button, StatusChip } from "../../shell/M3Widgets";
+import { PRODUCT_NAME, PRODUCT_SHORT } from "../../brand/product";
 import { statusWord } from "../../shell/presenters";
 import { m3, MONO } from "../../theme/m3Theme";
 import type { Tone } from "../../shell/tone";
@@ -190,7 +191,7 @@ export function PacketTopologyTab({
                 </div>
                 {hopCorr && (
                   <small style={{ display: "block", fontWeight: 600 }}>
-                    neXus: {hopCorr.status}
+                    {PRODUCT_SHORT}: {hopCorr.status}
                     {hopCorr.status === "MATCH"
                       ? ` · ${hopCorr.hostname ?? hopCorr.device_id} · ${hopCorr.interface_name ?? hopCorr.interface_id}${hopCorr.zone ? ` (${hopCorr.zone})` : ""}`
                       : ""}
@@ -650,7 +651,7 @@ function NexusCorrelationCard({
   return (
     <Card
       sx={{ p: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}` }}
-      aria-label="neXus hop & policy correlation"
+      aria-label={`${PRODUCT_NAME} hop & policy correlation`}
     >
       <Stack
         direction="row"
@@ -660,7 +661,7 @@ function NexusCorrelationCard({
         sx={{ flexWrap: "wrap", gap: 1, mb: 0.5 }}
       >
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          neXus inventory & policy correlation
+          {PRODUCT_NAME} inventory & policy correlation
         </Typography>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", gap: 1 }}>
           <StatusChip

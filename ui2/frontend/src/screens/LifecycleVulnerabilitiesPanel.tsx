@@ -5,6 +5,7 @@ import {
   type LifecycleAdvisory, type LifecycleAdvisoryDevice, type LifecycleAdvisorySource, type LifecycleVulnerabilities,
 } from "../auth/adminApi";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
+import { PRODUCT_NAME } from "../brand/product";
 import { M3Button } from "../shell/M3Widgets";
 import { PillRow, StatusPill } from "../shell/StatusPill";
 import { plural } from "../shell/plural";
@@ -54,7 +55,7 @@ const BASIS_SENTENCES = new Map([
   ["VERSION_UNPARSED", "The device's version text was not recognised."],
   ["ADVISORY_NEEDS_REVIEW", "The advisory was not read in full."],
   ["NO_RULE_COVERS_VERSION", "No rule of the advisory covers this version."],
-  ["NO_COMPARATOR", "neXus has no version comparison for this product."],
+  ["NO_COMPARATOR", `${PRODUCT_NAME} has no version comparison for this product.`],
   ["TRAIN_AFFECTED", "The vendor names this whole release line as affected."],
   ["CHANGE_POINT_AFFECTED", "The version is at or above the point from which the vendor names the release line affected."],
   ["IN_UNAFFECTED_RANGE", "The version lies inside a range the vendor names as unaffected."],
@@ -339,7 +340,7 @@ export function LifecycleVulnerabilitiesPanel() {
   const unread = advisories.filter(a => a.parse_state === "NEEDS_REVIEW").length;
 
   return <Stack spacing={2}>
-    <Typography variant="caption">A vendor security advisory names the software versions it affects; neXus compares each device's stored version with it. Affected means affected by version: whether the device is exposed depends on its configuration. Exploited: listed in the CISA Known Exploited Vulnerabilities catalog (attacks seen in the wild). Nothing here contacts a device.</Typography>
+    <Typography variant="caption">A vendor security advisory names the software versions it affects; {PRODUCT_NAME} compares each device's stored version with it. Affected means affected by version: whether the device is exposed depends on its configuration. Exploited: listed in the CISA Known Exploited Vulnerabilities catalog (attacks seen in the wild). Nothing here contacts a device.</Typography>
     {sources.error && <Alert severity="error">{sources.error}<M3Button emphasis="tonal" onClick={sources.refresh}>Retry</M3Button></Alert>}
     {!sources.data && !sources.error && <Typography>Loading advisory sources…</Typography>}
     {nothingLoaded && <Alert severity="info" action={<M3Button emphasis="text" onClick={refresh}>Refresh</M3Button>}>No advisory source has been loaded yet. Devices are not evaluated.</Alert>}

@@ -9,6 +9,7 @@
  * Exported for the device screens too: `vendorLabel`, `jobTypeLabel`, `readinessReasonLabel`, `jobStateWord`,
  * `outcomeLine`, `presentRaw`, `completedReasonOutcome`, `actorLabel`.
  */
+import { PRODUCT_NAME } from "../brand/product";
 import { DISPLAY_TZ, formatDuration, formatStamp } from "./time";
 
 /** A presented value: the plain label, and the raw identifier it came from (null when the raw value is the label). */
@@ -252,7 +253,7 @@ export function actorLabel(actor: string | null | undefined): PresentedValue {
   const value = (actor ?? "").trim();
   if (!value) return { label: "UNKNOWN", raw: null, known: false };
   const service = /^system:([a-z0-9-]+)$/i.exec(value);
-  if (service) return { label: `service \u00b7 neXus ${service[1].replace(/-/g, " ")}`, raw: value, known: true };
+  if (service) return { label: `service \u00b7 ${PRODUCT_NAME} ${service[1].replace(/-/g, " ")}`, raw: value, known: true };
   if (/^SN-[0-9A-F]{10}$/.test(value)) return { label: "Masked actor", raw: value, known: true };
   return { label: value, raw: null, known: false };
 }

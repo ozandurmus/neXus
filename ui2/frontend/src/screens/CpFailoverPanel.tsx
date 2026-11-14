@@ -14,6 +14,7 @@ import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Typography from "@mui/material/Typography";
 import { M3Button } from "../shell/M3Widgets";
+import { PRODUCT_NAME } from "../brand/product";
 import { m3 } from "../theme/m3Theme";
 import { DISPLAY_TZ_LABEL, displayInputToIso, isoToDisplayInput, relativeAge } from "../shell/time";
 import { clusterModeWord, readinessReasonLabel, requestFailure, statusWord } from "../shell/presenters";
@@ -90,7 +91,7 @@ export function resumeStep(state: CpFailoverResumeState, step?: string): number 
 /** The server's refusal and stop codes in plain words; an unknown code is shown as sent. */
 const resumeWords: Record<string, string> = {
   RESUME_RUN_NOT_ELIGIBLE: "Resume is not available: this is not a stopped Check Point ClusterXL failover run.",
-  RESUME_DOWN_NOT_CONFIRMED: "Resume is not available: neXus did not confirm that this run took the member down.",
+  RESUME_DOWN_NOT_CONFIRMED: `Resume is not available: ${PRODUCT_NAME} did not confirm that this run took the member down.`,
   RESUME_RETURN_ALREADY_ATTEMPTED: "Resume is not available: this run's return command may already have been sent.",
   RESUME_ALREADY_USED: "Resume is not available: the return step of this run was already resumed once.",
   INCIDENT_NOT_OPEN: "Resume is not available: this run has no open incident.",
@@ -167,8 +168,8 @@ export function ResumeReturn({ run, unit, onChanged }: { run: CpFailoverRunDetai
       <DialogTitle>Resume the return step of this failover run?</DialogTitle>
       <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
         <Typography>Run {run.runId} on {label} stopped after clusterXL_admin down ({run.message ?? run.outcome ?? "unknown"}). {formerActive} is down by admin and {peer} carries the traffic.</Typography>
-        <Typography>neXus will first read the cluster state on both members. Only if {peer} is Active, {formerActive} is Down and the cluster is in Active Up mode, it sends clusterXL_admin up once to {formerActive}. Then it waits up to 60 s for it to rejoin as Standby and repeats the post-checks. Traffic stays on {peer}.</Typography>
-        <Typography>Nothing is retried. If anything does not match, neXus stops and the incident stays open.</Typography>
+        <Typography>{PRODUCT_NAME} will first read the cluster state on both members. Only if {peer} is Active, {formerActive} is Down and the cluster is in Active Up mode, it sends clusterXL_admin up once to {formerActive}. Then it waits up to 60 s for it to rejoin as Standby and repeats the post-checks. Traffic stays on {peer}.</Typography>
+        <Typography>Nothing is retried. If anything does not match, {PRODUCT_NAME} stops and the incident stays open.</Typography>
         {dialog === "request" && <TextField label="Reason" value={reason} onChange={e => setReason(e.target.value)} inputProps={{ maxLength: 500 }} />}
         {needsAck && <FormControlLabel control={<Checkbox checked={ack} onChange={e => setAck(e.target.checked)} />}
           label={`I acknowledge this runs during business hours (${resume.businessHours} Europe/Istanbul).`} />}

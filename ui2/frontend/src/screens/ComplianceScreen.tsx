@@ -1,5 +1,6 @@
 import { Fragment, useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { ComplianceGuidance, observedValue } from "./ComplianceGuidance";
+import { PRODUCT_NAME } from "../brand/product";
 import { downloadRemediationReport } from "./complianceReport";
 import { urlParam, useUrlParamSync, writeUrlParams } from "../shell/urlParams";
 import { evidencedHeadline, evidencedShares, noEvidenceFromCoverage, primaryFrameworksFirst } from "./overview/executiveHome";
@@ -377,7 +378,7 @@ export function ComplianceScreen() {
     const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const now = new Date().toISOString();
     const lines: string[] = [];
-    lines.push(`# neXus compliance audit report`);
+    lines.push(`# ${PRODUCT_NAME} compliance audit report`);
     lines.push(`# as of,${esc(now)} (UTC)`);
     lines.push(`# frameworks evaluated,${esc((overview?.frameworks ?? []).map((f) => f.framework).join("; "))}`);
     lines.push(`# device scope,${esc(overview ? `${overview.evaluated_firewalls} of ${overview.total_firewalls} firewalls evaluated` : "UNKNOWN")}`);

@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 
 import markLightOnDark from "../assets/app-mark-light-on-dark.svg";
 import wordmarkLightOnDark from "../assets/wordmark-light-on-dark.svg";
+import { hasBespokeWordmark, PRODUCT_NAME } from "../brand/product";
 import { ConstellationCanvas } from "./ConstellationCanvas";
 import "./LoginScreen.css";
 
@@ -47,7 +48,16 @@ async function submitLogin(username: string, password: string, mechanism: LoginM
  * screen is reachable from here: a successful submission calls
  * onAuthenticated, which is the only way past this component (see AuthGate).
  */
-export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () => void }) {
+export function LoginScreen({
+  onAuthenticated,
+  productName = PRODUCT_NAME,
+}: {
+  readonly onAuthenticated: () => void;
+  readonly productName?: string;
+}) {
+  if (typeof document !== "undefined" && document.title !== productName) {
+    document.title = productName;
+  }
   const [username, setUsername] = useState("");
   const [mechanism, setMechanism] = useState<LoginMechanism>("local");
   const [password, setPassword] = useState("");
@@ -114,10 +124,16 @@ export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () 
       <ConstellationCanvas />
       <div className="lx-vignette" aria-hidden="true" />
       <main className="lx-page">
-        <section className="lx-hero" aria-label="neXus">
+        <section className="lx-hero" aria-label={productName}>
           <div className="lx-logo">
             <img className="lx-logo-mark" src={markLightOnDark} alt="" />
-            <img className="lx-logo-word" src={wordmarkLightOnDark} alt="neXus" />
+            {hasBespokeWordmark(productName) ? (
+              <img className="lx-logo-word" src={wordmarkLightOnDark} alt={productName} />
+            ) : (
+              <span className="lx-logo-word lx-logo-word-text" role="img" aria-label={productName}>
+                {productName}
+              </span>
+            )}
           </div>
           <div className="lx-meta">Isolated network · no outbound connections · all evidence stays on premises</div>
         </section>
@@ -224,7 +240,7 @@ export function LoginScreen({ onAuthenticated }: { readonly onAuthenticated: () 
               </button>
             )}
 
-            <div className="lx-foot">neXus · on-premises</div>
+            <div className="lx-foot">{productName} · on-premises</div>
           </form>
         </section>
       </main>

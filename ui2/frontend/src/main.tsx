@@ -4,6 +4,7 @@ import { JobWindowProvider } from "./shell/JobWindow";
 import { BusinessHoursConfirmProvider } from "./shell/BusinessHoursConfirm";
 import { App } from "./App";
 import { AuthGate } from "./auth/AuthGate";
+import { PRODUCT_NAME } from "./brand/product";
 import { installTokenStyles } from "./theme/m3Theme";
 
 // Build-time entry point; the compiled output is a static bundle that
@@ -15,6 +16,9 @@ import { installTokenStyles } from "./theme/m3Theme";
 // they render the already-authenticated shell, which AuthGate is what
 // decides to mount.
 installTokenStyles();
+if (typeof document !== "undefined") {
+  document.title = PRODUCT_NAME;
+}
 const container = document.getElementById("root");
 if (container) {
   ReactDOM.createRoot(container).render(

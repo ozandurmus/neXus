@@ -16,6 +16,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import { M3Button } from "../../shell/M3Widgets";
+import { PRODUCT_NAME } from "../../brand/product";
 import { RestrictedPanel, StatePanel, isRestricted } from "../../shell/States";
 import { Timestamp } from "../../shell/Timestamp";
 import { roleTokenLabel } from "../../shell/roleLabel";
@@ -354,7 +355,7 @@ export function DirectorySettingsPanel() {
         <TextField label="LDAP bind DN" fullWidth value={form.bindDn} autoComplete="off"
           placeholder="CN=svc-nexus,OU=Service Accounts,DC=example,DC=local or svc-nexus@example.local"
           onChange={(e) => change("bindDn", e.target.value)}
-          {...fieldError("bindDn", "The service account neXus uses to look up users and group membership. A DN or name@domain.")} />
+          {...fieldError("bindDn", `The service account ${PRODUCT_NAME} uses to look up users and group membership. A DN or name@domain.`)} />
         <TextField label="LDAP bind password" type="password" fullWidth value={form.bindPassword} autoComplete="new-password"
           onChange={(e) => change("bindPassword", e.target.value)}
           {...fieldError("bindPassword", passwordHelper)} />
@@ -381,7 +382,7 @@ export function DirectorySettingsPanel() {
             </FormControl>
             {form.trustMode === "TRUST_ANY" ? (
               <Alert severity="warning">
-                neXus will accept any certificate, including one from a machine impersonating the directory. Use only on a
+                {PRODUCT_NAME} will accept any certificate, including one from a machine impersonating the directory. Use only on a
                 trusted internal network; this risk was accepted by the Product Owner.
               </Alert>
             ) : (
