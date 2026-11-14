@@ -55,4 +55,34 @@ class MgmtCliEnumerationAdapterTest {
         assertEquals(List.of(MgmtCliCommands.domainList()), transport.commandsIssued());
         assertEquals(1, transport.disconnectCount());
     }
+
+    private static Optional<String> stateFor(String extraFields) {
+        String gateways = "{\"objects\":[{\"uid\":\"gw-1\",\"type\":\"simple-gateway\","
+                + "\"name\":\"fixture-gw\",\"ipv4-address\":\"192.0.2.10\"" + extraFields + "}]}";
+        FakeDeviceTransport transport = new FakeDeviceTransport(command -> {
+            if (command.equals(MgmtCliCommands.domainList())) return new ExecResult.Completed(DOMAINS, 0);
+            if (command.equals(MgmtCliCommands.showGatewaysAndServers("DOM-A"))) return new ExecResult.Completed(gateways, 0);
+            return new ExecResult.Completed("", 0);
+        });
+        var result = assertInstanceOf(ManagementPlaneEnumerationResult.Completed.class, adapter(transport).run(request()));
+        return result.candidates().get(0).managementPlaneConnectionState();
+    }
+
+    @Test
+    void connectedStateIsCarriedIntoTheCandidate() {
+        assertEquals(Optional.of("communicating"), stateFor(",\"sic-state\":\"communicating\""));
+    }
+
+    @Test
+    void disconnectedStateIsCarriedIntoTheCandidate() {
+        assertEquals(Optional.of("uninitialized"), stateFor(",\"sic-state\":\"uninitialized\""));
+    }
+
+    @Test
+    void missingBlankOrNonTextStateIsUnknown() {
+        assertEquals(Optional.empty(), stateFor(""));
+        assertEquals(Optional.empty(), stateFor(",\"sic-state\":\"  \""));
+        assertEquals(Optional.empty(), stateFor(",\"sic-state\":null"));
+        assertEquals(Optional.empty(), stateFor(",\"sic-state\":5"));
+    }
 }

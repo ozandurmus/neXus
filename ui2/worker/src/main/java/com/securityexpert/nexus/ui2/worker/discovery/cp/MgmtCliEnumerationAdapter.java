@@ -282,7 +282,7 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
 
                     results.add(new RawCandidateInput(
                         new CandidateKey(domainId, OpaqueId.of(uid)),
-                        objType, flags, name, ipv4, mgmtIp, clusterRef, model, version, Optional.empty(), Optional.empty()
+                        objType, flags, name, ipv4, mgmtIp, clusterRef, model, version, sicState(obj), Optional.empty()
                     ));
                 }
             }
@@ -297,6 +297,19 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
         parseCounts.put(ObjectType.GATEWAY, new ParseCounts(previous.parsed() + parsed, previous.missingStableIdentifier() + missingStableIdentifier));
 
         return results;
+    }
+
+    /**
+     * The management-API connection (secure internal communication) state the
+     * manager already returned for this object, carried as-is. Absent, null,
+     * non-text or blank means unknown: empty, never a guessed value.
+     */
+    static Optional<String> sicState(JsonNode obj) {
+        JsonNode node = obj.get("sic-state");
+        if (node == null || !node.isTextual() || node.asText().isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(node.asText().trim());
     }
 
     private List<ConnectionTableRow> readConnectionTableObservation(TransportSession session) {
