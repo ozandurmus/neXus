@@ -24,8 +24,12 @@ public final class LocalIdentityResolver {
     }
 
     public Optional<LocalCredentialRecord> resolve(String actorFingerprint) {
-        return localCredentialsRepository.findAll().stream()
+        var all = localCredentialsRepository.findAll();
+        return all.stream()
                 .filter(record -> LocalMechanism.actorFingerprintFor(record.localIdentityId()).equals(actorFingerprint))
-                .findFirst();
+                .findFirst()
+                .or(() -> all.stream()
+                        .filter(record -> LocalMechanism.probeActorFingerprintFor(record.localIdentityId()).equals(actorFingerprint))
+                        .findFirst());
     }
 }

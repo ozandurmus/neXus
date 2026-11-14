@@ -32,6 +32,7 @@ test('machine login resolves a pseudonym, submits once with CSRF, polls and prin
   assert.deepEqual(f.output, ['Status: UP\n']);
   const submitted = f.calls.filter(call => new URL(call.url).pathname === '/api/v2/diagnostics');
   assert.equal(submitted.length, 1);
+  assert.equal(f.calls[0].init.headers['X-Nexus-Machine-Purpose'], 'probe');
   assert.equal(submitted[0].init.headers.Origin, 'https://example.invalid');
   assert.equal(submitted[0].init.headers['X-CSRF-Token'], 'synthetic-csrf');
   assert.equal(submitted[0].init.headers.Cookie, 'ui2_session=synthetic-cookie');
