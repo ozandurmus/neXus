@@ -277,6 +277,7 @@ def ship_doubles(monkeypatch, diff, events, current=(True, "5 other modules run 
         if deploys is not None:
             deploys.append((args, kwargs))
 
+    monkeypatch.setenv("NEXUS_HOST", "synthetic-host")  # the host is local configuration; CI has none
     monkeypatch.setattr(sa, "_git", git)
     monkeypatch.setattr(sa.subprocess, "run", run)
     monkeypatch.setattr(sa, "_preview_e2e", lambda *a: events.append(("preview",)))

@@ -872,10 +872,7 @@ def cmd_ship(args: argparse.Namespace) -> int:
 
 def _host_mirror_url() -> str:
     """ssh URL of the host's bare repository; the host itself is local configuration, never a repository literal."""
-    host = os.environ.get("NEXUS_HOST", "").strip()
-    if not host:
-        path = Path.home() / ".config" / "nexus" / "hosta"
-        host = path.read_text().splitlines()[0].strip() if path.is_file() else ""
+    host = _host()
     if not host:
         raise SystemExit("set NEXUS_HOST or write user@host to ~/.config/nexus/hosta")
     return "ssh://" + host + HOST_BARE_REPO
