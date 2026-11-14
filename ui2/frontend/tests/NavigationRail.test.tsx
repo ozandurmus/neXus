@@ -36,23 +36,23 @@ afterEach(() => {
 });
 
 describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
-  it("reads the nine entries in order, groups by domain, prints no verb word, and keeps Administration closed until it is used", () => {
+  it("reads the nine entries in order, groups by domain, prints no verb word, and opens no group on a top-level page", () => {
     rail("overview");
     expect(nav()).toHaveAttribute("data-nav-layout", "expanded");
     expect(nav()).toHaveStyle({ width: `${SIDEBAR_PX}px` });
     const text = nav().textContent ?? "";
     let at = -1;
     // PO 2026-11-13 amendment of F1/F2: Operations is fleet activity only; Reports sits below it.
-    for (const label of ["Overview", "Devices", "Policy and changes", "Trace", "Changes", "Rule object usage", "Compliance and security", "Lifecycle and security", "Backups",
-      "Operations", "HA and readiness", "Jobs", "Device health", "Reports", "Tools", "Packet analysis", "Data sanitizer", "Diagnostics", "Administration"]) {
+    // The groups are closed on a top-level page (accordion); their children's order is pinned in navModel.test.ts.
+    for (const label of ["Overview", "Devices", "Policy and changes", "Compliance and security", "Backups",
+      "Operations", "Reports", "Tools", "Administration"]) {
       const next = text.indexOf(label, at + 1);
       expect(next, label).toBeGreaterThan(at);
       at = next;
     }
     for (const word of ["SEE", "VERIFY", "TRACE", "RECOVER", "OPERATE"]) expect(text).not.toContain(word);
     expect(text.trim().endsWith("Administration")).toBe(true);
-    for (const name of ["Compliance and security", "Policy and changes", "Operations", "Tools"]) expect(header(name)).toHaveAttribute("aria-expanded", "true");
-    expect(header("Administration")).toHaveAttribute("aria-expanded", "false");
+    for (const name of ["Compliance and security", "Policy and changes", "Operations", "Tools", "Administration"]) expect(header(name)).toHaveAttribute("aria-expanded", "false");
     expect(within(nav()).queryByText("Device registry")).toBeNull();
     // the sidebar itself is the navigation: no drawer button, and it stays in view on a long page
     expect(screen.queryByRole("button", { name: "Open navigation" })).toBeNull();
@@ -61,9 +61,13 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
 
   it("links every entry to its address; a group header is a button, never a link or the current page", () => {
     rail("overview");
-    fireEvent.click(header("Administration"));
-    const links = within(nav()).getAllByRole("link");
-    expect(links.map((a) => [a.textContent, a.getAttribute("href")])).toEqual(NAV_LEAVES.map((l) => [l.label, l.href]));
+    // One group open at a time: open each in turn and collect the links it shows.
+    const seen = new Map<string, string | null>();
+    const collect = () => within(nav()).getAllByRole("link").forEach((a) => seen.set(a.textContent ?? "", a.getAttribute("href")));
+    collect();
+    for (const entry of NAV_ENTRIES.filter((e) => e.kind === "group")) { fireEvent.click(header(entry.label)); collect(); }
+    expect(NAV_LEAVES.map((l) => [l.label, seen.get(l.label)])).toEqual(NAV_LEAVES.map((l) => [l.label, l.href]));
+    expect(seen.size).toBe(NAV_LEAVES.length);
     for (const entry of NAV_ENTRIES.filter((e) => e.kind === "group")) {
       const button = header(entry.label);
       expect(button.tagName).toBe("BUTTON");
@@ -125,28 +129,54 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     expect(current()[0]).toHaveTextContent("Device health");
   });
 
-  it("opens and closes a group in place, remembers it per viewer, and never closes the group of the open page", () => {
-    const first = rail("overview");
-    fireEvent.click(header("Tools"));
-    expect(header("Tools")).toHaveAttribute("aria-expanded", "false");
-    expect(within(nav()).queryByText("Diagnostics")).toBeNull();
+  it("is an accordion: the open page's group is open, opening a group closes the others, nothing is remembered", () => {
+    const first = rail("diagnostics");
+    const expanded = () => ["Policy and changes", "Compliance and security", "Operations", "Tools", "Administration"]
+      .filter((name) => header(name).getAttribute("aria-expanded") === "true");
+    expect(expanded()).toEqual(["Tools"]);
     fireEvent.click(header("Administration"));
+    expect(expanded()).toEqual(["Administration"]);
+    expect(within(nav()).queryByText("Diagnostics")).toBeNull();
     expect(within(nav()).getByRole("link", { name: "Notifications and logging" })).toHaveAttribute("href", "?screen=administration&tab=platform");
-    expect(window.localStorage.getItem(GROUPS_KEY)).toBe("tools:0,administration:1");
+    fireEvent.click(header("Operations"));
+    expect(expanded()).toEqual(["Operations"]);
+    fireEvent.click(header("Operations"));
+    expect(expanded()).toEqual([]);
+    expect(window.localStorage.getItem(GROUPS_KEY)).toBeNull();
     first.unmount();
 
-    const second = rail("overview");
-    expect(header("Tools")).toHaveAttribute("aria-expanded", "false");
-    expect(header("Administration")).toHaveAttribute("aria-expanded", "true");
-    expect(header("Operations")).toHaveAttribute("aria-expanded", "true");
-    second.unmount();
-
-    // Tools was closed by the viewer, but Diagnostics is the open page: its group is open, and stays open on a click.
+    // A new visit opens the open page's group again, not the last choice.
     rail("diagnostics");
-    expect(header("Tools")).toHaveAttribute("aria-expanded", "true");
-    fireEvent.click(header("Tools"));
-    expect(header("Tools")).toHaveAttribute("aria-expanded", "true");
-    expect(current()[0]).toHaveTextContent("Diagnostics");
+    expect(expanded()).toEqual(["Tools"]);
+  });
+
+  it("follows a navigation: the new page's group opens, the others close, and exactly one entry is lit", () => {
+    const view = rail("diagnostics");
+    fireEvent.click(header("Compliance and security"));
+    act(() => { window.history.pushState(null, "", "/?screen=operations&tab=jobs"); });
+    // The shell passes the resolved screen as a prop: re-render with it, as App does after pushState.
+    view.rerender(<SessionContext.Provider value={null}><NavigationRail active="operations" /></SessionContext.Provider>);
+    act(() => { window.dispatchEvent(new PopStateEvent("popstate")); });
+    expect(header("Operations")).toHaveAttribute("aria-expanded", "true");
+    for (const name of ["Compliance and security", "Tools", "Administration", "Policy and changes"]) {
+      expect(header(name)).toHaveAttribute("aria-expanded", "false");
+    }
+    expect(current()).toHaveLength(1);
+    expect(current()[0]).toHaveTextContent("Jobs");
+    // One highlighted row: no other row keeps the lit background after the navigation (hover aside).
+    const lit = getComputedStyle(current()[0]).backgroundColor;
+    const rows = [...nav().querySelectorAll("a, button")].filter((el) => getComputedStyle(el).backgroundColor === lit);
+    expect(rows).toEqual([current()[0]]);
+  });
+
+  it("never lets a long label squeeze a group's icon: every icon keeps its size and does not shrink", () => {
+    rail("overview");
+    const icons = [...nav().querySelectorAll("li > button > svg, li > a > svg")];
+    expect(icons.length).toBeGreaterThan(5);
+    for (const svg of icons) {
+      expect(svg).toHaveAttribute("width", "20");
+      expect((svg as SVGElement).style.flexShrink).toBe("0");
+    }
   });
 
   it("lists by plane as before: no Devices or Compliance for a session without those planes, Tools without the Data sanitizer", () => {
@@ -155,6 +185,7 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     expect(within(nav()).queryByText("Compliance and security")).toBeNull();
     expect(within(nav()).getByRole("link", { name: "Backups" })).toBeInTheDocument();
     expect(within(nav()).getByRole("link", { name: "Jobs" })).toBeInTheDocument();
+    fireEvent.click(header("Tools"));
     const tools = document.getElementById("nav-group-tools")!;
     expect(within(tools).getAllByRole("link").map((a) => a.textContent)).toEqual(["Packet analysis", "Diagnostics"]);
   });
@@ -218,7 +249,8 @@ describe("the narrow layout", () => {
     const drawer = screen.getByRole("navigation", { name: "Primary navigation drawer" });
     for (const entry of NAV_ENTRIES) {
       expect(within(drawer).getByText(entry.label)).toBeInTheDocument();
-      if (entry.kind === "group" && !entry.startsClosed) for (const leaf of entry.children) expect(within(drawer).getByRole("link", { name: leaf.label })).toHaveAttribute("href", leaf.href);
+      if (entry.kind === "group") fireEvent.click(within(drawer).getByRole("button", { name: entry.label }));
+      if (entry.kind === "group") for (const leaf of entry.children) expect(within(drawer).getByRole("link", { name: leaf.label })).toHaveAttribute("href", leaf.href);
     }
     // no placeholder, nothing disabled (D-NAV6b)
     expect(within(drawer).queryByText("Discovery")).toBeNull();
@@ -364,7 +396,7 @@ describe("the sidebar folds to icons (PO 2026-10-20)", () => {
       rail("overview");
       expect(within(nav()).getByText("Devices")).toBeInTheDocument();
       fireEvent.click(header("Tools"));
-      expect(header("Tools")).toHaveAttribute("aria-expanded", "false");
+      expect(header("Tools")).toHaveAttribute("aria-expanded", "true");
       fireEvent.click(within(nav()).getByRole("button", { name: "Collapse menu" }));
       expect(within(nav()).queryByText("Devices")).toBeNull();
     } finally {

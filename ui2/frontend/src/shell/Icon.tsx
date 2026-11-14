@@ -53,7 +53,8 @@ const common: SVGProps<SVGSVGElement> = {
 };
 
 export function Icon({ name, size = 20 }: { readonly name: IconName; readonly size?: number }) {
-  const props = { ...common, width: size, height: size, "aria-hidden": true } as const;
+  // flexShrink 0: in a flex row a long label must never squeeze the glyph (the shield drew smaller than the others).
+  const props = { ...common, width: size, height: size, "aria-hidden": true, style: { flexShrink: 0 } } as const;
   switch (name) {
     case "grid":
       return (

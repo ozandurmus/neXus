@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  NAV_ENTRIES, NAV_LEAVES, activeLeafId, formatGroupChoices, groupOfLeaf, groupOpen, leafLocked, leavesOf, parseGroupChoices, visibleEntries,
+  NAV_ENTRIES, NAV_LEAVES, activeLeafId, defaultOpenGroup, groupOfLeaf, leafLocked, leavesOf, visibleEntries,
   type NavGroup,
 } from "../src/shell/navModel";
 import { LEGACY_ADMIN_TABS, rewriteLegacyRoute } from "../src/shell/legacyRoutes";
@@ -27,8 +27,6 @@ describe("the navigation model (NAVIGATION_REDESIGN_2026_11_12.md section 2)", (
       ["Administration", ["Device registry", "Access and identity", "Scheduled jobs", "Notifications and logging", "Platform status", "Audit log", "Delivery plan"]],
     ]);
     expect(NAV_LEAVES).toHaveLength(23);
-    // Only Administration starts closed.
-    expect(NAV_ENTRIES.filter((e) => e.kind === "group" && e.startsClosed).map((e) => e.id)).toEqual(["administration"]);
   });
 
   it("gives every destination one entry: ids and addresses are unique, and every screen has a home", () => {
@@ -229,19 +227,12 @@ describe("what a session is shown (plane checks only)", () => {
   });
 });
 
-describe("open and closed groups", () => {
-  it("opens every group but Administration on a first visit, follows the viewer's choice, and never closes the active group", () => {
-    expect(groupOpen(group("tools"), {}, "overview")).toBe(true);
-    expect(groupOpen(group("administration"), {}, "overview")).toBe(false);
-    expect(groupOpen(group("tools"), { tools: false }, "overview")).toBe(false);
-    expect(groupOpen(group("administration"), { administration: true }, "overview")).toBe(true);
-    expect(groupOpen(group("tools"), { tools: false }, "diagnostics")).toBe(true);
-    expect(groupOpen(group("administration"), {}, "admin-platform")).toBe(true);
-  });
-
-  it("stores the choices as text and ignores what it does not know", () => {
-    expect(parseGroupChoices(formatGroupChoices({ tools: false, administration: true }))).toEqual({ tools: false, administration: true });
-    expect(parseGroupChoices(null)).toEqual({});
-    expect(parseGroupChoices("tools:0,nonsense:1,operations:x,,:1")).toEqual({ tools: false });
+describe("open and closed groups (accordion, PO 2026-11-14)", () => {
+  it("opens only the group that holds the open page, and none for a top-level page", () => {
+    expect(defaultOpenGroup("diagnostics")).toBe("tools");
+    expect(defaultOpenGroup("admin-platform")).toBe("administration");
+    expect(defaultOpenGroup("operations-jobs")).toBe("operations");
+    expect(defaultOpenGroup("overview")).toBeNull();
+    expect(defaultOpenGroup("backups")).toBeNull();
   });
 });

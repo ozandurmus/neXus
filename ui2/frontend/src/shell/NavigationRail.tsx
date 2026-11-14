@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
@@ -15,7 +15,7 @@ import { useSession } from "../auth/SessionContext";
 import { readPreference, writePreference } from "./preference";
 import { handleInAppLinkClick, useLocationSearch } from "./urlParams";
 import {
-  activeLeafId, formatGroupChoices, groupOpen, leafLocked, parseGroupChoices, visibleEntries,
+  activeLeafId, defaultOpenGroup, leafLocked, visibleEntries,
   type NavEntry, type NavGroup, type NavLeaf, type NavSessionGrants,
 } from "./navModel";
 
@@ -24,8 +24,8 @@ import {
  * renderings:
  *
  * - **Expanded sidebar**, {@link SIDEBAR_PX} px, from {@link DRAWER_BELOW_PX} px up: icon and label per top-level
- *   entry; a group opens and closes in place by its header. Every group starts open except Administration; the
- *   viewer's choice is remembered, and the group that holds the open page is always open.
+ *   entry; the groups are an accordion: one open at a time, the one that holds the open page on arrival and after
+ *   every navigation (PO 2026-11-14); opening a group closes the others, and nothing is remembered across visits.
  * - **Folded**, {@link FOLDED_PX} px: the same entries as icons, each named for the tooltip and the screen reader. A
  *   link icon navigates; a group icon opens a small menu of its children. The viewer folds and unfolds with
  *   `Collapse menu` / `Expand menu` (PO 2026-10-20, remembered as `nx.rail.collapsed`); between {@link DRAWER_BELOW_PX}
@@ -49,7 +49,6 @@ export const FOLDED_PX = 56;
 const BRAND_BAND_PX = 64;
 
 const COLLAPSED_KEY = "nx.rail.collapsed";
-const GROUPS_KEY = "nx.nav.groups";
 
 const LOCK_TITLE = "Restricted for this account";
 
@@ -65,12 +64,15 @@ const ROW = { display: "flex", alignItems: "center", boxSizing: "border-box", wi
   font: "inherit", textAlign: "left", whiteSpace: "nowrap", letterSpacing: "0.1px",
   "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: -2 } } as const;
 
+/** A row's label: it may shorten with an ellipsis, never squeeze the icon (a long label used to shrink the shield). */
+const LABEL = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" } as const;
+
 /** The labelled list: the expanded sidebar's body and the drawer's body are this one component. */
-function NavList({ entries, activeId, session, choices, onToggle }: {
+function NavList({ entries, activeId, session, openGroup, onToggle }: {
   readonly entries: readonly NavEntry[];
   readonly activeId: string;
   readonly session: NavSessionGrants | null;
-  readonly choices: Readonly<Record<string, boolean>>;
+  readonly openGroup: string | null;
   readonly onToggle: (group: NavGroup, open: boolean) => void;
 }) {
   const top = (on: boolean, strong: boolean) => ({ ...ROW, height: 36, gap: "10px", pl: 1.5, pr: 1.25, borderRadius: "18px", fontSize: 14,
@@ -92,21 +94,21 @@ function NavList({ entries, activeId, session, choices, onToggle }: {
             <Box component="li" key={entry.id}>
               <Box component="a" href={entry.href} aria-current={on ? "page" : undefined} sx={top(on, false)}>
                 <Icon name={entry.icon} size={20} />
-                <span>{entry.label}</span>
+                <Box component="span" sx={LABEL}>{entry.label}</Box>
               </Box>
             </Box>
           );
         }
         const holdsActive = entry.children.some((c) => c.id === activeId);
-        const open = groupOpen(entry, choices, activeId);
+        const open = entry.id === openGroup;
         const listId = `nav-group-${entry.id}`;
         return [divider, (
           <Box component="li" key={entry.id}>
             <Box component="button" type="button" aria-expanded={open} aria-controls={listId} data-holds-current={holdsActive ? "true" : undefined}
               onClick={() => onToggle(entry, !open)} sx={{ ...top(false, holdsActive), bgcolor: "transparent" }}>
               <Icon name={entry.icon} size={20} />
-              <span>{entry.label}</span>
-              <Box component="span" sx={{ ml: "auto", display: "inline-flex" }}><Icon name={open ? "chevron-down" : "chevron-right"} size={16} /></Box>
+              <Box component="span" sx={LABEL}>{entry.label}</Box>
+              <Box component="span" sx={{ ml: "auto", display: "inline-flex", flex: "none" }}><Icon name={open ? "chevron-down" : "chevron-right"} size={16} /></Box>
             </Box>
             {open && (
               <Box component="ul" id={listId} aria-label={entry.label} sx={{ listStyle: "none", m: 0, p: 0, pt: "2px", display: "flex", flexDirection: "column", gap: "2px" }}>
@@ -143,17 +145,15 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
   });
   const collapsed = foldChoice ?? !roomy;
   const setCollapsed = (next: boolean) => { setFoldChoice(next); writePreference(COLLAPSED_KEY, next ? "1" : "0"); };
-  const [choices, setChoices] = useState(() => parseGroupChoices(readPreference(GROUPS_KEY)));
-  const onToggle = (group: NavGroup, open: boolean) => {
-    const next = { ...choices, [group.id]: open };
-    setChoices(next);
-    writePreference(GROUPS_KEY, formatGroupChoices(next));
-  };
   const [menu, setMenu] = useState<{ readonly anchor: HTMLElement; readonly groupId: string } | null>(null);
 
   const session = useSession();
   const search = useLocationSearch();
   const activeId = activeLeafId(active, search);
+  // The accordion: one open group, reset to the open page's group on every navigation.
+  const [openGroup, setOpenGroup] = useState<string | null>(() => defaultOpenGroup(activeId));
+  useEffect(() => { setOpenGroup(defaultOpenGroup(activeId)); }, [activeId]);
+  const onToggle = (group: NavGroup, open: boolean) => setOpenGroup(open ? group.id : null);
   const entries = visibleEntries(session?.permissions, activeId);
   // Icons without words: the narrow layout, or the wide one folded.
   const iconsOnly = !wide || collapsed;
@@ -238,7 +238,7 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
               </IconButton>
             </Tooltip>
           </Box>
-          <NavList entries={entries} activeId={activeId} session={session} choices={choices} onToggle={onToggle} />
+          <NavList entries={entries} activeId={activeId} session={session} openGroup={openGroup} onToggle={onToggle} />
         </Box>
       )}
 
@@ -269,7 +269,7 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
                 <Icon name="close" size={20} />
               </IconButton>
             </Box>
-            <NavList entries={entries} activeId={activeId} session={session} choices={choices} onToggle={onToggle} />
+            <NavList entries={entries} activeId={activeId} session={session} openGroup={openGroup} onToggle={onToggle} />
           </Box>
         </Drawer>
       )}
