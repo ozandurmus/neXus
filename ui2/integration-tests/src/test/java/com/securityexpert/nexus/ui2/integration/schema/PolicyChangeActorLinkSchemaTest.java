@@ -42,6 +42,20 @@ class PolicyChangeActorLinkSchemaTest {
         }
     }
 
+    @Test void v213IsRepeatableInsideOneRolledBackTransaction() throws Exception {
+        try (var resource = getClass().getResourceAsStream("/db/migration/V213__policy_change_evidence_admin_name_scope_not_null.sql")) {
+            assertNotNull(resource);
+            String sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+            try (var db = fixture.migrateConnection(); var statement = db.createStatement()) {
+                db.setAutoCommit(false);
+                statement.execute(sql);
+                statement.execute(sql);
+                assertEquals("1", scalar(db, "select count(*) from pg_constraint where conname = 'policy_change_evidence_admin_name_scope_check'"));
+                db.rollback();
+            }
+        }
+    }
+
     @Test void anAdministratorNameIsOnlyAcceptedForASuccessfulChangeThatNamesARule() throws Exception {
         String when = "timestamp '2026-11-12 10:00:00', 'DEVICE_LOCAL', '" + HEX + "'";
         run(HEAD + "('n1', 'pan-1', 'palo_alto', 'PAN_CONFIG_LOG', null, 'j1', '1', " + when + ", 'edit', 'Succeeded', null, 'synthetic-admin', '" + HEX + "')");
@@ -50,6 +64,8 @@ class PolicyChangeActorLinkSchemaTest {
         assertThrows(SQLException.class, () -> run(HEAD + "('n3', 'pan-1', 'palo_alto', 'PAN_CONFIG_LOG', null, 'j1', '3', " + when + ", 'edit', 'Failed', null, 'synthetic-admin', '" + HEX + "')"));
         assertThrows(SQLException.class, () -> run(HEAD + "('n4', 'pan-1', 'palo_alto', 'PAN_CONFIG_LOG', null, 'j1', '4', " + when + ", 'edit', 'Succeeded', null, 'synthetic-admin', null)"));
         assertThrows(SQLException.class, () -> run(HEAD + "('n5', 'pan-1', 'palo_alto', 'PAN_CONFIG_LOG', null, 'j1', '5', " + when + ", null, 'Succeeded', null, 'synthetic-admin', '" + HEX + "')"));
+        // V213: a missing result is refused too (V208's check let both NULL comparisons through).
+        assertThrows(SQLException.class, () -> run(HEAD + "('n5b', 'pan-1', 'palo_alto', 'PAN_CONFIG_LOG', null, 'j1', '5b', " + when + ", 'edit', null, null, 'synthetic-admin', '" + HEX + "')"));
         assertThrows(SQLException.class, () -> run(HEAD + "('n6', 'mds-1', 'check_point', 'CP_SHOW_CHANGES', 'd1', 'j1', 'sess-1', timestamp '2026-11-12 10:00:00', 'UTC', 'UNKNOWN', null, null, null, 'synthetic-admin', '" + HEX + "')"));
         // Shape: 1 to 128 characters, no control characters; the rule reference is a 64-hex digest.
         assertThrows(SQLException.class, () -> run(HEAD + "('n7', 'pan-1', 'palo_alto', 'PAN_CONFIG_LOG', null, 'j1', '7', " + when + ", 'edit', 'Succeeded', null, '', '" + HEX + "')"));
