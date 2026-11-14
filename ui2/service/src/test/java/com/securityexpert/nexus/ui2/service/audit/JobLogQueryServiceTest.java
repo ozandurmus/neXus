@@ -391,4 +391,32 @@ class JobLogQueryServiceTest {
         assertEquals(true, plain.targetSortable());
         assertEquals("full", plain.searchScope());
     }
+
+    @Test
+    void latestPerDevicePicksNewestPerDeviceBoundedBeforeTargetJoins() throws Exception {
+        JobQuery query = new JobQuery(Optional.empty(), Optional.of("backup"), Optional.empty(), Optional.empty(),
+                Optional.empty(), Optional.empty(), 1, 50);
+        Where where = JobLogQueryService.whereOf(query);
+        String sql = JobLogQueryService.latestPerDeviceSelect(where);
+
+        int innerStart = sql.indexOf(" from (select latest.job_id, row_number() over (");
+        int innerEnd = sql.indexOf(") page_ids");
+        assertTrue(innerStart > 0 && innerEnd > innerStart, sql);
+        String inner = sql.substring(innerStart, innerEnd);
+        String outer = sql.substring(innerEnd);
+        assertTrue(inner.contains("select distinct on (j.target_device_id) j.job_id, j.submitted_at"), inner);
+        assertTrue(inner.contains("where (j.job_type = ? or j.job_type like ?) and j.target_device_id is not null"), inner);
+        assertTrue(inner.contains("order by j.target_device_id, j.submitted_at desc nulls last, j.job_id desc"), inner);
+        assertTrue(inner.endsWith("order by latest.submitted_at desc nulls last, latest.job_id desc limit ?"), inner);
+        assertTrue(!inner.contains("lateral") && !inner.contains("discovery_candidate")
+                && !inner.contains("system_log_chunk"), "no target resolution before the limit: " + inner);
+        assertTrue(outer.contains(" join jobs j on j.job_id = page_ids.job_id") && outer.contains("left join lateral"), outer);
+        assertTrue(outer.endsWith(" order by page_ids.ord"), outer);
+        assertEquals(500, JobLogQueryService.MAX_LATEST_PER_DEVICE_ROWS);
+
+        Where emptyWhere = JobLogQueryService.whereOf(new JobQuery(Optional.empty(), Optional.empty(), Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.empty(), 1, 50));
+        assertTrue(JobLogQueryService.latestPerDeviceSelect(emptyWhere).contains(" where j.target_device_id is not null order by "));
+
+    }
 }

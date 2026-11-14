@@ -50,7 +50,12 @@ public final class JobLogController {
 
     public ResponseEntity<JobPage> listJobs(String state, String jobType, String deviceId, String since, String until,
             String q, int page, int pageSize, HttpServletRequest request) {
-        return listJobs(state, jobType, deviceId, since, until, q, page, pageSize, null, null, request);
+        return listJobs(state, jobType, deviceId, since, until, q, page, pageSize, null, null, false, request);
+    }
+
+    public ResponseEntity<JobPage> listJobs(String state, String jobType, String deviceId, String since, String until,
+            String q, int page, int pageSize, String sort, String order, HttpServletRequest request) {
+        return listJobs(state, jobType, deviceId, since, until, q, page, pageSize, sort, order, false, request);
     }
 
     @GetMapping("/api/v2/jobs")
@@ -61,20 +66,29 @@ public final class JobLogController {
             @RequestParam(required = false) String q, @RequestParam(defaultValue = "1") int page,
             @RequestParam(name = "page_size", defaultValue = "50") int pageSize,
             @RequestParam(required = false) String sort, @RequestParam(required = false) String order,
+            @RequestParam(name = "latest_per_device", defaultValue = "false") boolean latestPerDevice,
             HttpServletRequest request) {
         Optional<JobQuery> query = parse(state, jobType, deviceId, since, until, q, page, pageSize, sort, order,
                 PrivacyMaskingResponseBodyAdvice.isReplayViewer(request));
         if (query.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
+        JobPage result = latestPerDevice
+                ? jobLogQueryService.latestPerDevice(query.get())
+                : jobLogQueryService.query(query.get());
+        return ResponseEntity.ok(applySessionAccess(result, request));
+    }
+
+    private JobPage applySessionAccess(JobPage page, HttpServletRequest request) {
         String actor = (String) request.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
-        boolean allowed = actor != null && !PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)
+        boolean replayViewer = PrivacyMaskingResponseBodyAdvice.isReplayViewer(request);
+        boolean allowed = actor != null && !replayViewer
                 && rbacEvaluator.evaluateAny(actor, actionRegistry.find(ActionRegistry.JOB_TRANSCRIPT_READ)
                         .orElseThrow().requiredRoleTokens(), Instant.now()).outcome().proceeds();
-        boolean canCancel = actor != null && !PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)
+        boolean canCancel = actor != null && !replayViewer
                 && rbacEvaluator.evaluateAny(actor, actionRegistry.find(ActionRegistry.JOB_CANCEL)
                         .orElseThrow().requiredRoleTokens(), Instant.now()).outcome() == com.securityexpert.nexus.ui2.platform.AuthzOutcome.PERMITTED;
-        return ResponseEntity.ok(jobLogQueryService.query(query.get()).withTranscriptAccess(allowed).withCancellationAccess(canCancel));
+        return page.withTranscriptAccess(allowed).withCancellationAccess(canCancel);
     }
 
     @GetMapping("/api/v2/jobs/stats")

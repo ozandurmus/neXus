@@ -28,6 +28,8 @@ public final class JobLogQueryService {
 
     private static final int RECENT_LIMIT = 50;
     public static final int MAX_PAGE_SIZE = 200;
+    /** Maximum number of per-device latest job rows returned in one batched read. */
+    public static final int MAX_LATEST_PER_DEVICE_ROWS = 500;
     /** The export is one HTTP response; beyond this the operator narrows the filter. */
     public static final int MAX_EXPORT_ROWS = 50_000;
 
@@ -350,6 +352,29 @@ public final class JobLogQueryService {
                 + " order by page_ids.ord";
     }
 
+    /**
+     * One newest job per {@code target_device_id} matching {@code where}, bounded to {@code limit ?} rows
+     * ({@link #MAX_LATEST_PER_DEVICE_ROWS}). The inner {@code distinct on (j.target_device_id)} picks each device's
+     * newest job in the default list order (submitted_at, then job_id) from {@code jobs}/{@code devices} alone; the
+     * outer query runs {@link #TARGET_JOINS} for those winning job ids only. Live 2026-11-14: the inner part is 20 ms
+     * for 130 devices over 6.9 k backup jobs with no extra index.
+     */
+    static String latestPerDeviceSelect(Where where) {
+        String whereSql = where.sql().isEmpty()
+                ? " where j.target_device_id is not null"
+                : where.sql() + " and j.target_device_id is not null";
+        String latestOrder = "order by latest.submitted_at desc nulls last, latest.job_id desc";
+        return COLUMNS
+                + " from (select latest.job_id, row_number() over (" + latestOrder + ") as ord"
+                + " from (select distinct on (j.target_device_id) j.job_id, j.submitted_at" + FROM + whereSql
+                + " order by j.target_device_id, j.submitted_at desc nulls last, j.job_id desc) latest"
+                + " " + latestOrder + " limit ?) page_ids"
+                + " join jobs j on j.job_id = page_ids.job_id"
+                + " left join devices d on d.device_id = j.target_device_id"
+                + TARGET_JOINS
+                + " order by page_ids.ord";
+    }
+
     /** Closed allow-list of sortable columns mapped to constant SQL expressions; client text is never interpolated. */
     static final Map<String, String> SORT_COLUMNS = Map.ofEntries(
             Map.entry("device", "lower(nullif(d.observed_hostname, ''))"),
@@ -414,6 +439,22 @@ public final class JobLogQueryService {
             List<JobEvent> items = dsl.fetch(pagedSelect(where, orderBy, " limit ? offset ?"),
                     pageBindings.toArray()).map(JobLogQueryService::toEvent);
             return new JobPage(items, query.page(), query.pageSize(), total, false, !query.masked(),
+                    query.masked() ? SEARCH_SCOPE_IDS : SEARCH_SCOPE_FULL);
+        });
+    }
+
+    /**
+     * Batched read of the newest job per device matching {@code query}, bounded at
+     * {@link #MAX_LATEST_PER_DEVICE_ROWS} rows.
+     */
+    public JobPage latestPerDevice(JobQuery query) {
+        Where where = whereOf(query);
+        return transactionBoundary.inTransaction(dsl -> {
+            List<Object> bindings = new ArrayList<>(where.bindings());
+            bindings.add(MAX_LATEST_PER_DEVICE_ROWS);
+            List<JobEvent> items = dsl.fetch(latestPerDeviceSelect(where), bindings.toArray())
+                    .map(JobLogQueryService::toEvent);
+            return new JobPage(items, 1, MAX_LATEST_PER_DEVICE_ROWS, items.size(), false, !query.masked(),
                     query.masked() ? SEARCH_SCOPE_IDS : SEARCH_SCOPE_FULL);
         });
     }

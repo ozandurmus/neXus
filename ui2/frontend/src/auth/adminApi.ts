@@ -1824,6 +1824,7 @@ export interface JobQueryParams {
   readonly page_size?: number;
   readonly sort?: string;
   readonly order?: "asc" | "desc";
+  readonly latest_per_device?: boolean;
 }
 
 export const cancelJob = (id: string) => call<{ jobId: string; state: string; cancelRequested: boolean }>(`/api/v2/jobs/${encodeURIComponent(id)}/cancel`, "POST");
@@ -1857,6 +1858,11 @@ function jobQueryString(params: JobQueryParams): string {
 /** Jobs screen (PO P0, 2026-09-22): the whole history, filtered and paged on the server. */
 export function listJobs(params: JobQueryParams = {}): Promise<JobPageView> {
   return call(`/api/v2/jobs${jobQueryString(params)}`, "GET");
+}
+
+/** Latest job per target device in one batched call (Backups fleet table). */
+export function listLatestJobsByDevice(params: Pick<JobQueryParams, "job_type" | "state"> = {}): Promise<JobPageView> {
+  return listJobs({ ...params, latest_per_device: true });
 }
 
 /** One window for every headline job count: terminal states FINISHED in the last 24 h (total_24h = the five below). */
