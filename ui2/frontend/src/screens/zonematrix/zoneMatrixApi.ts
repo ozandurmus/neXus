@@ -198,6 +198,10 @@ function detail(err: unknown, key: string): unknown {
 }
 
 export const REQUEST_CHANGED_TEXT = "The draft changed since you loaded it. The latest draft is loaded now; check it and try again.";
+export const RATIONALE_REQUIRED_TEXT = "Addresses leave a zone in this version; give a rationale.";
+export const AUDIT_UNAVAILABLE_TEXT = "The view was refused because its audit row could not be written.";
+/** Said before every publish: the contract makes a published version immutable. */
+export const PUBLISH_FINAL_TEXT = "A published version cannot be changed afterwards. A later change is a new draft that another person publishes.";
 
 /** Why the publish control is closed, as a plain sentence. An unknown code is shown as it is. */
 export function publishCheckText(reason: string | null | undefined): string {
@@ -206,6 +210,7 @@ export function publishCheckText(reason: string | null | undefined): string {
     case "COMPLIANCE_ROLE_MISSING": return "The publisher or an editor of this draft must hold the compliance administrator role.";
     case "PRINCIPAL_NOT_ELIGIBLE": return "This account cannot publish.";
     case "NOTHING_TO_PUBLISH": return "The draft equals the active version; there is nothing to publish.";
+    case "RATIONALE_REQUIRED": return RATIONALE_REQUIRED_TEXT;
     default: return reason ? `This draft cannot be published by this account (${reason}).` : "This draft cannot be published by this account.";
   }
 }
@@ -219,9 +224,15 @@ export function zoneErrorLines(err: unknown, sentBlocks: readonly string[] = [])
   const code = zoneErrorCode(err);
   if (failure?.status === 0) return ["The request did not complete. Check the connection and try again."];
   if (code === "REQUEST_CHANGED") return [REQUEST_CHANGED_TEXT];
-  if (code === "SELF_APPROVAL" || code === "COMPLIANCE_ROLE_MISSING" || code === "PRINCIPAL_NOT_ELIGIBLE") return [publishCheckText(code)];
+  if (code === "SELF_APPROVAL" || code === "COMPLIANCE_ROLE_MISSING" || code === "PRINCIPAL_NOT_ELIGIBLE"
+    || code === "NOTHING_TO_PUBLISH" || code === "RATIONALE_REQUIRED") return [publishCheckText(code)];
   const reason = failure?.body?.reason;
-  const lines = [typeof reason === "string" && reason ? sentence(reason) : code ? `The request was refused (${code}).` : "The request failed."];
+  // The server's own reason first; the sentences below are only for a refusal that arrives without one.
+  const fallback = code === "ZONE_MATRIX_AUDIT_UNAVAILABLE" ? AUDIT_UNAVAILABLE_TEXT
+    : code === "READ_ONLY_PERSONA" ? "This session is read only and cannot change or look up zones."
+    : code === "ZONE_BLOCKS_NOT_PERMITTED" ? "This account may not view zone blocks."
+    : code ? `The request was refused (${code}).` : "The request failed.";
+  const lines = [typeof reason === "string" && reason ? sentence(reason) : fallback];
   if (code === "INVALID_BLOCKS") {
     const errors = detail(err, "errors");
     if (Array.isArray(errors)) {
