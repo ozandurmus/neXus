@@ -115,6 +115,9 @@ class PanoramaPolicyCollectorTest {
     // "no hit metrics" path, and the signed cases above map it to SIGNED_OFF explicitly.
     private final GateRegistryPort gates = key -> GateRegistryFixtureLoader.loadFromStream(getClass()
             .getResourceAsStream("/capabilities/gate_registry_fixture.yaml")).stream().filter(row -> row.key().equals(key))
+            // The optional predefined App-ID read (V212) is left out here so these cases keep their exact call sequence;
+            // PanoramaPolicyCollectorTest#predefinedApplications* cover it.
+            .filter(row -> !row.gateId().equals("pan_policy_predefined_applications"))
             .map(r -> r.gateId().equals("pan_policy_rule_hit_count")
                 ? new GateRow(r.gateId(), r.vendor(), r.platformRoleScope(), r.shellContext(), r.transportKind(), r.canonicalCommandKey(),
                     r.actionClass(), SignOffState.DRAFTED, r.timeoutS(), r.retryRule(), r.maxFrequency(), r.sessionReuseRule(),
@@ -441,6 +444,49 @@ class PanoramaPolicyCollectorTest {
             }
         }).when(transport).xmlApiCallStreaming(any(), any(), any(), any());
         return new PanoramaPolicyCollector(transport, gates, ref -> new PanCredentialMaterial("synthetic-user", password), repository);
+    }
+    /** The fixture's gate rows as they are, the predefined App-ID read signed off (V212). */
+    private final GateRegistryPort allGates = key -> GateRegistryFixtureLoader.loadFromStream(getClass()
+            .getResourceAsStream("/capabilities/gate_registry_fixture.yaml")).stream().filter(row -> row.key().equals(key))
+            .filter(row -> !row.gateId().equals("pan_policy_rule_hit_count")).toList();
+    private PanoramaPolicyCollector catalogueCollector(String catalogue, List<XmlApiSpec> sent, List<java.time.Duration> timeouts) throws Exception {
+        var transport = mock(DeviceTransport.class);
+        List<String> replies = responses();
+        AtomicInteger index = new AtomicInteger();
+        doAnswer(invocation -> {
+            XmlApiSpec spec = invocation.getArgument(1);
+            sent.add(spec); timeouts.add(invocation.getArgument(2));
+            boolean predefined = "/config/predefined/application".equals(spec.formParams().get("xpath"));
+            @SuppressWarnings("unchecked") var handler = (XmlApiStreamHandler<Object>) invocation.getArgument(3);
+            try (var input = new ByteArrayInputStream((predefined ? catalogue : replies.get(index.getAndIncrement())).getBytes(StandardCharsets.UTF_8))) {
+                return new XmlApiStreamOutcome.Completed<>(200, handler.handle(input));
+            }
+        }).when(transport).xmlApiCallStreaming(any(), any(), any(), any());
+        return new PanoramaPolicyCollector(transport, allGates, ref -> new PanCredentialMaterial("synthetic-user", "synthetic-password".toCharArray()), repository);
+    }
+    /** PO approval 2026-11-14 (option A): one call, the exact literal, 120 s, after the shared read, same session key. */
+    @Test void predefinedApplicationsAreReadOnceWithTheApprovedLiteral() throws Exception {
+        List<XmlApiSpec> sent = new ArrayList<>(); List<java.time.Duration> timeouts = new ArrayList<>();
+        var snapshots = catalogueCollector("<response status='success'><result><application><entry name='APP-ALPHA-01'><default><port>"
+            + "<member>tcp/443</member></port></default></entry></application></result></response>", sent, timeouts).collect(run, scope, () -> true);
+        assertEquals(2, snapshots.size());
+        assertTrue(snapshots.stream().allMatch(s -> s.failures().isEmpty()));
+        assertEquals(7, sent.size());
+        var spec = sent.get(4);
+        assertEquals(PanPolicyGates.PREDEFINED_APPLICATIONS, "type=" + spec.type() + "&action=" + spec.formParams().get("action") + "&xpath=" + spec.formParams().get("xpath"));
+        assertEquals(Set.of("X-PAN-KEY"), spec.headers().keySet());
+        assertEquals(java.time.Duration.ofSeconds(120), timeouts.get(4));
+        assertEquals(1, sent.stream().filter(s -> "/config/predefined/application".equals(s.formParams().get("xpath"))).count());
+    }
+    @Test void anUnusableCatalogueNeverFailsTheCollection() throws Exception {
+        for (String reply : List.of("<response status='error'><msg>synthetic</msg></response>", "not xml",
+                "<response status='success'><result><application><entry name='bad name'/></application></result></response>")) {
+            List<XmlApiSpec> sent = new ArrayList<>(); List<java.time.Duration> timeouts = new ArrayList<>();
+            var snapshots = catalogueCollector(reply, sent, timeouts).collect(run, scope, () -> true);
+            assertEquals(2, snapshots.size(), reply);
+            assertTrue(snapshots.stream().allMatch(s -> s.failures().isEmpty()), reply);
+            assertTrue(snapshots.stream().flatMap(s -> s.objects().values().stream()).noneMatch(o -> o.type().equals("application-defaults")), reply);
+        }
     }
     private List<String> responses() throws Exception { return responses("panorama.xml"); }
     private List<String> responses(String fixtureName) throws Exception {

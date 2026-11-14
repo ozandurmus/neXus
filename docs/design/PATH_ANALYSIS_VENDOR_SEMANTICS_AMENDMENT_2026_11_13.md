@@ -51,3 +51,17 @@ list; every address valid; every interface with an address; a classic cluster wi
 Data: a parse-scope extension of the read already issued (gate `cp_policy_collect`, object type
 `gateways-and-servers`); no new command.
 
+## Section D6 (2026-11-14) — application default ports in the legacy analysis
+
+Status: FROZEN — 2026-11-14, PO approval relayed by the PO session, verbatim: "Onaylıyorum" ("I approve"), for the
+Panorama read `type=config&action=get&xpath=/config/predefined/application` (option A) and for using application-default
+ports in the legacy engine. Vendor meaning: A0 section 6 (HIGH: application-default allows an application only on its
+standard ports); the data that section left UNKNOWN now comes from the predefined catalogue (and a custom
+application's own `default/port`).
+
+| Id | Claim | Basis | Grade | Used as |
+|---|---|---|---|---|
+| A0-D6 | Under `application-default`, application t matches only on the `default/port` entries the catalogue lists for t | A0 §6 (PA-CSR 11.1, PA-AD) + the PO-approved catalogue read | HIGH meaning; data per Panorama content version | legacy analysis only (`PolicyNormalization.defaultPortsHold`): an explicit-port rule holds an application-default rule iff every standard port of every later application lies in its ports, and the reverse; application any, an application identified by IP protocol or ICMP type, or any unparsed port keeps the pair undecided |
+
+Residual (stated): the Panorama's content version may differ from a firewall's; matching before App-ID identifies the
+application stays UNKNOWN (A0 §6) and is ignored in the legacy (IP-level) view only.

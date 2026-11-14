@@ -105,6 +105,30 @@ public final class PanoramaPolicyMapper {
         return new PolicySnapshot(metadata, descendant.sections(), objects);
     }
 
+    /**
+     * The standard ports of the predefined App-ID applications a snapshot names (PO approval 2026-11-14, catalogue read
+     * {@code type=config&action=get&xpath=/config/predefined/application}). For every application the mapper left
+     * without a definition -- an UNRESOLVED object of type unresolved under {@code ref(snapshot, "application", name)},
+     * left exactly as it is -- whose name the catalogue lists, one more object is added under
+     * {@code ref(snapshot, "predefined-application", name)}: type {@code application-defaults}, status RESOLVED, the
+     * catalogue's kept values ({@code default/port: tcp/80,443}, ...). The application's own reference and identity do
+     * not change; only the legacy shadowing analysis reads the added object. An empty or null catalogue changes nothing.
+     */
+    public static PolicySnapshot withPredefinedApplications(PolicySnapshot snapshot, Map<String, List<String>> catalogue) {
+        if (catalogue == null || catalogue.isEmpty()) return snapshot;
+        String id = snapshot.metadata().id();
+        Map<String, PolicyObject> objects = new LinkedHashMap<>(snapshot.objects());
+        for (var object : snapshot.objects().values()) {
+            if (!object.type().equals("unresolved") || !object.status().equals("UNRESOLVED") || !object.members().isEmpty()
+                    || !object.values().isEmpty() || !object.id().equals(ref(id, "application", object.name()))) continue;
+            List<String> values = catalogue.get(object.name());
+            if (values == null) continue;
+            String defaults = ref(id, "predefined-application", object.name());
+            objects.put(defaults, new PolicyObject(defaults, object.name(), "application-defaults", List.of(), values, "RESOLVED"));
+        }
+        return new PolicySnapshot(snapshot.metadata(), snapshot.sections(), objects, snapshot.failures());
+    }
+
     /** Stored effective-running only; never fetches a firewall or treats inherited rules as local. */
     public List<PolicySnapshot> local(String deviceId, String collectedAt, String artefactRef, String xml) {
         return local(deviceId, collectedAt, artefactRef,

@@ -147,6 +147,7 @@ public final class PanoramaPolicyCollector {
             hierarchy(hierarchy, "", parents, 0);
             if (!parents.keySet().equals(members.keySet())) throw failure();
             var shared = result(read(target, checked(0, "", key, lease), timer, deadline, bytes), "shared");
+            Map<String, List<String>> predefined = predefinedApplications(target, key, lease, timer, deadline, bytes);
             var document = shared.getOwnerDocument();
             Element config = document.createElement("config");
             config.appendChild(shared.cloneNode(true));
@@ -192,7 +193,8 @@ public final class PanoramaPolicyCollector {
                     }
                     var metadata = new Metadata(ref(container, "policy"), scope.sourceId(), "Panorama " + scope.sourceId(), "PAN", container,
                             name, name, collectedAt, "", targets(run, scope.sourceId(), members.get(name)));
-                    var snapshot = new PanoramaPolicyMapper().mapUnverifiedPrecedence(metadata, config, name, parents);
+                    var snapshot = PanoramaPolicyMapper.withPredefinedApplications(
+                            new PanoramaPolicyMapper().mapUnverifiedPrecedence(metadata, config, name, parents), predefined);
                     long rules = snapshot.sections().stream().mapToLong(section -> section.rules().size()).sum();
                     // NAT and default-rule sections do not count against the security-rule bound that existed before
                     // they were parsed; they get a bound of their own, so adding them cannot fail a DG that fitted.
@@ -479,6 +481,55 @@ public final class PanoramaPolicyCollector {
             throw PolicyCollectionTrace.failure("CHECKPOINT_VERSION_NOT_EVALUABLE");
         }
     }
+
+    /**
+     * The predefined App-ID catalogue, reduced to standard ports (PanPredefinedApplications; PO approval 2026-11-14,
+     * option A): one call on this Panorama session, timeout 120 s, no retry, 64 MB cap, only when its gate row is
+     * signed off. Optional enrichment: any failure leaves the catalogue empty, so applications keep unknown default
+     * ports exactly as before, and the collection itself is unaffected. The masked note carries counts and a fixed
+     * outcome code only, never an application name or value.
+     */
+    private Map<String, List<String>> predefinedApplications(ApiTarget target, char[] key, BooleanSupplier lease,
+            ScheduledExecutorService timer, long deadline, long[] bytes) {
+        if (!PanPolicyGates.predefinedApplicationsAvailable(gates)) return Map.of();
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
+        if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
+        long remaining = deadline - clock.getAsLong();
+        if (remaining <= 0) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
+        Duration timeout = Duration.ofNanos(Math.min(remaining, PREDEFINED_TIMEOUT.toNanos()));
+        var spec = new XmlApiSpec("POST", "config", "not_applicable", "no_target",
+                Map.of("action", "get", "xpath", PanPredefinedApplications.XPATH), Map.of(PanoramaApiRoutes.KEY_HEADER_NAME, new String(key)));
+        PolicyCollectionTrace.step("predefined applications " + PanPolicyGates.PREDEFINED_APPLICATIONS, target.endpointId());
+        long started = System.nanoTime(), before = bytes[0];
+        long readDeadline = System.nanoTime() + timeout.toNanos();
+        String[] code = {"OK"};
+        var outcome = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(() -> transport.xmlApiCallStreaming(target, spec, timeout, input -> {
+            var expiry = timer.schedule(() -> { try { input.close(); } catch (IOException ignored) {} },
+                    Math.max(0, readDeadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+            var counted = new FilterInputStream(PanPredefinedApplications.capped(input, PanPredefinedApplications.MAX_BYTES)) {
+                @Override public int read() throws IOException { int n = in.read(); if (n >= 0) bytes[0]++; return n; }
+                @Override public int read(byte[] b, int off, int len) throws IOException { int n = in.read(b, off, len); if (n > 0) bytes[0] += n; return n; }
+            };
+            try { return PanPredefinedApplications.parse(counted); }
+            catch (PanPredefinedApplications.Unreadable unreadable) { code[0] = bytes[0] - before > PanPredefinedApplications.MAX_BYTES ? "SIZE_LIMIT" : unreadable.getMessage(); return null; }
+            finally { expiry.cancel(false); }
+        }));
+        PolicyCollectionTrace.result(started, bytes[0] - before, outcome.getClass().getSimpleName());
+        Map<String, List<String>> catalogue = Map.of();
+        if (System.nanoTime() >= readDeadline) code[0] = "TIMEOUT";
+        else if (outcome instanceof XmlApiStreamOutcome.Completed<Map<String, List<String>>> completed && completed.httpStatus() == 200
+                && completed.handled() != null) catalogue = completed.handled();
+        else if (code[0].equals("OK")) code[0] = outcome instanceof XmlApiStreamOutcome.Completed<?> completed ? "HTTP_" + completed.httpStatus()
+                : outcome instanceof XmlApiStreamOutcome.Failed<?> failed ? transportFailure(failed.reason()) : "UNKNOWN";
+        if (!code[0].equals("OK")) catalogue = Map.of();
+        String note = "PAN_PREDEFINED_APPLICATIONS outcome=" + code[0] + " applications=" + catalogue.size()
+            + " withPorts=" + catalogue.values().stream().filter(v -> v.stream().anyMatch(x -> x.startsWith("default/port: "))).count()
+            + " bytes=" + (bytes[0] - before);
+        com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", note);
+        System.getLogger(getClass().getName()).log(System.Logger.Level.INFO, note);
+        return catalogue;
+    }
+    static final Duration PREDEFINED_TIMEOUT = Duration.ofSeconds(120);
 
     private void checkHitRead(BooleanSupplier lease) {
         com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();

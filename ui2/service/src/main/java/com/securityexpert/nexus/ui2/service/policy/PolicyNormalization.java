@@ -633,7 +633,61 @@ final class PolicyNormalization {
         if (service.any()) return contains(application, laterApplication, budget) ? true : null;
         if (service.applicationDefault() && laterService.applicationDefault()
                 && (application.any() ? laterApplication.any() : !laterApplication.any() && contains(application, laterApplication, budget))) return true;
-        return null;
+        return defaultPortsHold(service, application, laterService, laterApplication, budget);
+    }
+    /**
+     * Legacy analysis only ({@link PolicyHygiene#analyzeLegacy}): the standard ports of the applications, where known
+     * ({@link Resolver#defaultPorts}), decide the application-default pairs {@link #holds} leaves undecided. Null outside
+     * the legacy analysis, and whenever one application's ports are unknown.
+     * <ul>
+     * <li>Earlier explicit ports S, later application-default with applications T (not any), the earlier applications
+     * holding T: the later rule matches each t of T only on its standard ports P(t). TRUE when every P(t) lies in S;
+     * otherwise FALSE -- application t on a standard port outside S is a packet of the later rule the earlier one does
+     * not match.</li>
+     * <li>Earlier application-default with applications holding the later explicit applications T (not any), later
+     * explicit ports Q (not any): TRUE when Q lies in every P(t); otherwise FALSE -- application t on a port of Q outside
+     * P(t) is matched by the later rule and not by the earlier one.</li>
+     * </ul>
+     * Every other pair keeps its former answer (undecided). Semantics: A0 section 6 (application-default allows an
+     * application only on its standard ports) with the catalogue the PO approved on 2026-11-14.
+     */
+    static final ThreadLocal<java.util.function.Function<String, Selector>> DEFAULT_PORTS = new ThreadLocal<>();
+    private static Boolean defaultPortsHold(Selector service, Selector application, Selector laterService, Selector laterApplication, Budget budget) {
+        var ports = DEFAULT_PORTS.get();
+        if (ports == null || service.applicationDefault() == laterService.applicationDefault()) return null;
+        if (laterApplication.any() || laterApplication.tokens().isEmpty() || !laterApplication.ranges().isEmpty()) return null;
+        if (!contains(application, laterApplication, budget)) return null;
+        if (laterService.applicationDefault()) {
+            if (service.any() || !service.tokens().isEmpty()) return null;
+            List<Selector> standard = new ArrayList<>();
+            for (String token : laterApplication.tokens()) {
+                budget.spend();
+                var p = ports.apply(token);
+                if (p == null) return null;
+                standard.add(p);
+            }
+            Map<String, List<Range>> merged = new TreeMap<>();
+            for (Selector p : standard) p.ranges().forEach((family, ranges) -> merged.computeIfAbsent(family, f -> new ArrayList<>()).addAll(ranges));
+            for (var entry : merged.entrySet()) {
+                entry.getValue().sort(Comparator.comparingLong(Range::start));
+                List<Range> out = new ArrayList<>();
+                for (Range r : entry.getValue()) {
+                    budget.spend();
+                    if (!out.isEmpty() && out.get(out.size() - 1).end() + 1 >= r.start()) { var last = out.remove(out.size() - 1); out.add(new Range(last.start(), Math.max(last.end(), r.end()))); }
+                    else out.add(r);
+                }
+                entry.setValue(out);
+            }
+            return contains(service, new Selector(false, merged), budget);
+        }
+        if (laterService.any() || !laterService.tokens().isEmpty()) return null;
+        for (String token : laterApplication.tokens()) {
+            budget.spend();
+            var p = ports.apply(token);
+            if (p == null) return null;
+            if (!contains(p, laterService, budget)) return false;
+        }
+        return true;
     }
     static boolean contains(Selector a, Selector b, Budget budget) {
         if (a.any()) return true;
@@ -881,6 +935,39 @@ final class PolicyNormalization {
             }
             if (ranges.isEmpty()) throw new Unknown("missing address values");
             var result = union(List.of(new Selector(false, Map.of("ipv4", ranges, "ipv6", List.of(new Range(0, Long.MAX_VALUE))))));
+            memo.put(key, result); return result;
+        }
+        /**
+         * The standard ports of one application reference of an application-default rule, or null when they are not
+         * known: a predefined App-ID application (contentApplication) through the catalogue object the mapper added under
+         * {@code ref(snapshot, "predefined-application", name)} (PanoramaPolicyMapper#withPredefinedApplications), or a
+         * stored custom application (type application, RESOLVED) through its own {@code default/port} values. Only
+         * {@code default/port: tcp|udp/<ports>} values are read; an application identified by IP protocol or ICMP type,
+         * one without ports, or any value outside that shape has unknown ports (null). Read only by the legacy analysis.
+         */
+        Selector defaultPorts(String id) {
+            if (panSnapshot == null) return null;
+            budget.spend(); String key = "default-ports:" + id;
+            if (memo.containsKey(key)) return memo.get(key);
+            var o = objects.get(id);
+            PolicyObject source = o == null ? null
+                : contentApplication(id, o) ? objects.get(ref(panSnapshot, "predefined-application", o.name()))
+                : o.type().equals("application") && o.status().equals("RESOLVED") && o.members().isEmpty() ? o : null;
+            Selector result = null;
+            if (source != null && source.status().equals("RESOLVED") && (source == o || source.type().equals("application-defaults"))) {
+                Map<String, List<Range>> ranges = new TreeMap<>(); boolean known = true;
+                for (String value : source.values()) {
+                    budget.spend();
+                    if (value.startsWith("default/ident-by-")) { known = false; break; }
+                    if (!value.startsWith("default/port: ")) continue;
+                    String spec = value.substring("default/port: ".length()).trim(); int slash = spec.indexOf('/');
+                    String protocol = slash < 0 ? "" : spec.substring(0, slash);
+                    if (!Set.of("tcp", "udp").contains(protocol)) { known = false; break; }
+                    try { for (String port : spec.substring(slash + 1).split(",", -1)) ranges.computeIfAbsent(protocol, k -> new ArrayList<>()).add(port(port)); }
+                    catch (Unknown invalid) { known = false; break; }
+                }
+                if (known && !ranges.isEmpty()) result = union(List.of(new Selector(false, ranges)));
+            }
             memo.put(key, result); return result;
         }
         private Selector accessRole(String id, PolicyObject o) {
