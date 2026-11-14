@@ -111,11 +111,11 @@ public final class JooqRoleBindingRepository implements RoleBindingRepository {
     }
 
     @Override
-    public void revoke(String bindingId, String revokedByActorFingerprint, String actionId) {
-        auditedTransactionBoundary.inTransaction(revokedByActorFingerprint, actionId, dsl -> dsl.execute(
+    public boolean revoke(String bindingId, String revokedByActorFingerprint, String actionId) {
+        return auditedTransactionBoundary.inTransaction(revokedByActorFingerprint, actionId, dsl -> dsl.execute(
                 "update role_bindings set revoked_at = {0}, revoked_by_actor_fingerprint = {1} "
                         + "where binding_id = {2} and revoked_at is null",
-                Timestamp.from(java.time.Instant.now()), revokedByActorFingerprint, bindingId));
+                Timestamp.from(java.time.Instant.now()), revokedByActorFingerprint, bindingId) > 0);
     }
 
     private static RoleBindingRecord toRecord(Record row) {

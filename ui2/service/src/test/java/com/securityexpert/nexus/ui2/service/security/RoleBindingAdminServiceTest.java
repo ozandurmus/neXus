@@ -78,8 +78,8 @@ class RoleBindingAdminServiceTest {
         }
 
         @Override
-        public void revoke(String bindingId, String revokedByActorFingerprint, String actionId) {
-            bindings.removeIf(b -> b.bindingId().equals(bindingId));
+        public boolean revoke(String bindingId, String revokedByActorFingerprint, String actionId) {
+            return bindings.removeIf(b -> b.bindingId().equals(bindingId));
         }
     }
 
@@ -273,5 +273,7 @@ class RoleBindingAdminServiceTest {
 
         assertTrue(outcome instanceof RoleBindingAdminService.Outcome.Revoked, "expected Revoked, got " + outcome);
         assertTrue(bindings.find("binding-1").isEmpty());
+        assertTrue(service.revoke("another-admin", "binding-1", now) instanceof RoleBindingAdminService.Outcome.AlreadyRevoked,
+                "a second revoke that changes nothing must say AlreadyRevoked");
     }
 }

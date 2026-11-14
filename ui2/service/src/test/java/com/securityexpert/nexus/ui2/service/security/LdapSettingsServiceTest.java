@@ -55,13 +55,15 @@ class LdapSettingsServiceTest {
         @Override public <T> T directoryMutation(java.util.function.Function<DirectoryMutationRepositories, T> work) {
             return work.apply(new DirectoryMutationRepositories(this, null, null, null));
         }
-        @Override public void revoke(String id, String by, String action) {
+        @Override public boolean revoke(String id, String by, String action) {
+            boolean changed = false;
             for (int i = 0; i < rows.size(); i++) {
                 RoleBindingRecord r = rows.get(i);
-                if (r.bindingId().equals(id)) rows.set(i, new RoleBindingRecord(r.bindingId(), r.roleToken(), r.groupReferenceEncrypted(),
+                if (r.bindingId().equals(id)) { changed = true; rows.set(i, new RoleBindingRecord(r.bindingId(), r.roleToken(), r.groupReferenceEncrypted(),
                         r.groupReferenceKeyId(), r.createdByActorFingerprint(), r.createdAt(), Optional.of(Instant.now()),
-                        Optional.of(by), r.bindingKind(), r.directoryProfileId()));
+                        Optional.of(by), r.bindingKind(), r.directoryProfileId())); }
             }
+            return changed;
         }
     }
 

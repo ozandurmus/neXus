@@ -79,7 +79,7 @@ class DirectoryBindingsTest {
                     var row = (RoleBindingRecord) a[0]; rows.put(row.bindingId(), row);
                     audit.add(a[1] + ":" + row.bindingId() + ":" + row.bindingKind()); yield row.bindingId();
                 }
-                case "revoke" -> { rows.remove(a[0]); audit.add(a[2] + ":" + a[0]); yield null; }
+                case "revoke" -> { boolean had = rows.remove(a[0]) != null; audit.add(a[2] + ":" + a[0]); yield had; }
                 case "directoryMutation" -> {
                     beforeMutation.run();
                     @SuppressWarnings("unchecked") var work = (java.util.function.Function<DirectoryMutationRepositories, Object>) a[0];

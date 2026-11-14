@@ -32,5 +32,6 @@ public interface RoleBindingRepository {
         throw new UnsupportedOperationException("directory_mutation_boundary_unavailable");
     }
 
-    void revoke(String bindingId, String revokedByActorFingerprint, String actionId);
+    /** @return true if this call revoked the binding; false if no active row changed (already revoked or unknown). */
+    boolean revoke(String bindingId, String revokedByActorFingerprint, String actionId);
 }
