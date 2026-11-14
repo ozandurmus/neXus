@@ -70,14 +70,17 @@ public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<Stri
      * part of security evaluation (lookup, shadowing, hit joins). Only the vendor-fixed names of PAN sections count;
      * a Check Point section name is user-controlled and must never be classified by name.
      */
+    public static final java.util.Set<String> ASA_NON_SECURITY_SOURCES = java.util.Set.of("ASA NAT", "ASA implicit", "ASA not evaluated");
     public static boolean panNonSecurity(Metadata metadata, Section section) {
         return metadata != null && "PAN".equals(metadata.vendor()) && PAN_NON_SECURITY_SECTIONS.contains(section.name());
     }
-    /** True for a Check Point/ASA NAT rulebase section, an ASA implicit section, or a Palo Alto NAT/default section: not a security rulebase. */
+    /**
+     * True for a Check Point NAT rulebase section, a Palo Alto NAT/default section, or an ASA NAT, implicit or
+     * not-evaluated section (ACLs used by VPN, crypto or control-plane bindings, A0-ASA-9): not a security rulebase.
+     */
     public static boolean outsideSecurityEvaluation(Metadata metadata, Section section) {
         return "CP NAT rulebase".equals(section.source())
-                || "ASA NAT".equals(section.source())
-                || "ASA implicit".equals(section.source())
+                || ASA_NON_SECURITY_SOURCES.contains(section.source())
                 || panNonSecurity(metadata, section);
     }
     public PolicySnapshot {
