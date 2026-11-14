@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -130,5 +131,165 @@ class FileArtefactStoreTest {
         java.io.IOException refused = org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class,
                 () -> store.retrieve(new ArtefactRef("check_point/dev/legacy.enc"), cipher.wrapKey(dataKey), false));
         org.junit.jupiter.api.Assertions.assertTrue(refused.getMessage().contains("pre-streaming"), refused.getMessage());
+    }
+
+    @Test
+    void defaultQuotaIsSafeShareOfVolumeAndConfigurableViaEnvOrFactory(@TempDir Path root) {
+        long halfTiB = 500L * 1024L * 1024L * 1024L;
+        assertEquals(200L * 1024L * 1024L * 1024L, FileArtefactStore.defaultQuotaBytes(halfTiB),
+                "40% of a 500 GiB volume is 200 GiB");
+        long twoTiB = 2048L * 1024L * 1024L * 1024L;
+        assertEquals(FileArtefactStore.DEFAULT_MAX_QUOTA_BYTES, FileArtefactStore.defaultQuotaBytes(twoTiB),
+                "default volume share is capped at the 400 GiB recovery volume budget");
+
+        assertEquals(1_048_576L,
+                FileArtefactStore.resolveQuotaBytes(root, java.util.Map.of(FileArtefactStore.QUOTA_ENV_VAR, "1048576")));
+        // One variable only: an unrelated name is not read.
+        assertEquals(FileArtefactStore.defaultQuotaBytes(root),
+                FileArtefactStore.resolveQuotaBytes(root, java.util.Map.of("UI2_ARTEFACT_STORE_MAX_BYTES", "2097152")));
+        assertThrows(IllegalStateException.class,
+                () -> FileArtefactStore.resolveQuotaBytes(root, java.util.Map.of(FileArtefactStore.QUOTA_ENV_VAR, "0")));
+        assertThrows(IllegalStateException.class,
+                () -> FileArtefactStore.resolveQuotaBytes(root, java.util.Map.of(FileArtefactStore.QUOTA_ENV_VAR, "not-a-number")));
+
+        ArtefactStoreCipher cipher = ArtefactStoreCipher.fromBase64Key(randomKeyBase64());
+        FileArtefactStore configured = FileArtefactStore.withQuota(root, cipher, 4096L);
+        assertEquals(4096L, configured.quotaBytes());
+    }
+
+    @Test
+    void refusesWriteBeforeOpeningWhenQuotaAlreadyReachedAndPreservesExistingBackups(@TempDir Path root) throws IOException {
+        ArtefactStoreCipher cipher = ArtefactStoreCipher.fromBase64Key(randomKeyBase64());
+        byte[] firstBackup = "first-backup-archive-bytes".getBytes(StandardCharsets.UTF_8);
+
+        // Measure the exact ciphertext size of the first backup, then set quota equal to that size.
+        FileArtefactStore probe = new FileArtefactStore(root.resolve("probe"), cipher);
+        ArtefactStore.ArtefactMetadata probeMeta;
+        try (ArtefactStore.ArtefactHandle h = probe.open("device-1", "job-probe", "check_point", false)) {
+            h.sink().write(firstBackup);
+            probeMeta = h.finish();
+        }
+
+        Path storeRoot = root.resolve("store");
+        FileArtefactStore store = FileArtefactStore.withQuota(storeRoot, cipher, probeMeta.ciphertextBytes());
+        ArtefactStore.ArtefactMetadata existingMeta;
+        try (ArtefactStore.ArtefactHandle h = store.open("device-1", "job-1", "check_point", false)) {
+            h.sink().write(firstBackup);
+            existingMeta = h.finish();
+        }
+        assertEquals(probeMeta.ciphertextBytes(), store.usedBytes());
+
+        FileArtefactStore.QuotaExceededException checkEx = assertThrows(
+                FileArtefactStore.QuotaExceededException.class,
+                store::checkQuota);
+        org.junit.jupiter.api.Assertions.assertTrue(
+                checkEx.getMessage().startsWith(FileArtefactStore.QUOTA_EXCEEDED_REASON),
+                checkEx.getMessage());
+
+        FileArtefactStore.QuotaExceededException openEx = assertThrows(
+                FileArtefactStore.QuotaExceededException.class,
+                () -> store.open("device-1", "job-2", "check_point", false));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                openEx.getMessage().startsWith(FileArtefactStore.QUOTA_EXCEEDED_REASON),
+                openEx.getMessage());
+
+        try (var walk = Files.walk(storeRoot)) {
+            java.util.List<Path> files = walk.filter(Files::isRegularFile).toList();
+            assertEquals(1, files.size(), "only the pre-existing backup file may exist; no .tmp file may be created");
+            org.junit.jupiter.api.Assertions.assertFalse(files.get(0).toString().endsWith(".tmp"));
+        }
+        try (var in = store.retrieve(existingMeta.ref(), existingMeta.wrappedDataKey(), false)) {
+            assertArrayEquals(firstBackup, in.readAllBytes(), "existing backup must never be deleted or corrupted");
+        }
+    }
+
+    @Test
+    void refusesStreamingWriteThatExceedsQuotaWithoutLeavingPartialFilesOrDeletingExistingBackups(@TempDir Path root)
+            throws IOException {
+        ArtefactStoreCipher cipher = ArtefactStoreCipher.fromBase64Key(randomKeyBase64());
+        byte[] firstBackup = "existing-backup-payload".getBytes(StandardCharsets.UTF_8);
+
+        // Allow the first backup plus 32 extra bytes, then stream a second backup that exceeds the remaining budget.
+        FileArtefactStore probe = new FileArtefactStore(root.resolve("probe"), cipher);
+        long firstCiphertextBytes;
+        try (ArtefactStore.ArtefactHandle h = probe.open("device-1", "job-probe", "check_point", false)) {
+            h.sink().write(firstBackup);
+            firstCiphertextBytes = h.finish().ciphertextBytes();
+        }
+
+        Path storeRoot = root.resolve("store");
+        FileArtefactStore store = FileArtefactStore.withQuota(storeRoot, cipher, firstCiphertextBytes + 32L);
+        ArtefactStore.ArtefactMetadata firstMeta;
+        try (ArtefactStore.ArtefactHandle h = store.open("device-1", "job-1", "check_point", false)) {
+            h.sink().write(firstBackup);
+            firstMeta = h.finish();
+        }
+
+        byte[] oversizedSecondBackup = new byte[4096];
+        new SecureRandom().nextBytes(oversizedSecondBackup);
+        FileArtefactStore.QuotaExceededException streamEx = assertThrows(
+                FileArtefactStore.QuotaExceededException.class, () -> {
+                    try (ArtefactStore.ArtefactHandle h = store.open("device-1", "job-2", "check_point", false)) {
+                        h.sink().write(oversizedSecondBackup);
+                        h.finish();
+                    }
+                });
+        org.junit.jupiter.api.Assertions.assertTrue(
+                streamEx.getMessage().startsWith(FileArtefactStore.QUOTA_EXCEEDED_REASON),
+                streamEx.getMessage());
+
+        try (var walk = Files.walk(storeRoot)) {
+            java.util.List<Path> files = walk.filter(Files::isRegularFile).toList();
+            assertEquals(1, files.size(), "refused write must leave zero .tmp or partial .enc files behind");
+            assertEquals(storeRoot.resolve(firstMeta.ref().value()), files.get(0));
+        }
+        try (var in = store.retrieve(firstMeta.ref(), firstMeta.wrappedDataKey(), false)) {
+            assertArrayEquals(firstBackup, in.readAllBytes(), "existing backup must be preserved untouched");
+        }
+    }
+
+    @Test
+    void aQuotaRefusalIsFoundWrappedInACauseChainOrFlattenedIntoAReason() {
+        var refusal = new ArtefactStore.QuotaExceededException(90L, 100L, 20L);
+        assertTrue(refusal.getMessage().startsWith(ArtefactStore.QUOTA_EXCEEDED_REASON + ": "));
+        assertEquals(java.util.Optional.of(refusal.getMessage()),
+                ArtefactStore.QuotaExceededException.reasonIn(new RuntimeException("sftp", new java.io.UncheckedIOException(refusal))));
+        assertEquals(java.util.Optional.of(refusal.getMessage()),
+                ArtefactStore.QuotaExceededException.reasonIn("download failed: " + refusal.getMessage()));
+        assertEquals(java.util.Optional.empty(), ArtefactStore.QuotaExceededException.reasonIn("connect timed out"));
+        assertEquals(java.util.Optional.empty(), ArtefactStore.QuotaExceededException.reasonIn((String) null));
+        assertEquals(java.util.Optional.empty(), ArtefactStore.QuotaExceededException.reasonIn(new IllegalStateException()));
+    }
+
+    @Test
+    void nearLimitWarningTriggersAtEightyPercentOfQuota(@TempDir Path root) throws IOException {
+        ArtefactStoreCipher cipher = ArtefactStoreCipher.fromBase64Key(randomKeyBase64());
+        byte[] payload = new byte[256];
+        new SecureRandom().nextBytes(payload);
+
+        FileArtefactStore probe = new FileArtefactStore(root.resolve("probe"), cipher);
+        long oneArtefactBytes;
+        try (ArtefactStore.ArtefactHandle h = probe.open("device-1", "job-probe", "check_point", false)) {
+            h.sink().write(payload);
+            oneArtefactBytes = h.finish().ciphertextBytes();
+        }
+
+        // Quota = 2 artefacts; 1 artefact = 50% (below 80% threshold), 2 artefacts = 100% (>= 80% threshold).
+        FileArtefactStore store = FileArtefactStore.withQuota(root.resolve("store"), cipher, oneArtefactBytes * 2L);
+        org.junit.jupiter.api.Assertions.assertFalse(store.isNearLimit());
+
+        try (ArtefactStore.ArtefactHandle h = store.open("device-1", "job-1", "check_point", false)) {
+            h.sink().write(payload);
+            h.finish();
+        }
+        org.junit.jupiter.api.Assertions.assertFalse(store.isNearLimit(), "50% usage is below the 80% warning threshold");
+
+        byte[] secondPayload = new byte[256];
+        new SecureRandom().nextBytes(secondPayload);
+        try (ArtefactStore.ArtefactHandle h = store.open("device-1", "job-2", "check_point", false)) {
+            h.sink().write(secondPayload);
+            h.finish();
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(store.isNearLimit(), ">= 80% usage must trigger near-limit warning");
     }
 }

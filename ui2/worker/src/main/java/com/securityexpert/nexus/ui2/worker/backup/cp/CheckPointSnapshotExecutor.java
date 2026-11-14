@@ -67,6 +67,14 @@ public final class CheckPointSnapshotExecutor {
             return new BackupResult.CredentialUnresolvable("no distinct backup credential configured for check_point");
         }
 
+        try {
+            artefactStore.checkQuota();
+        } catch (ArtefactStore.QuotaExceededException e) {
+            return new BackupResult.ArtefactStoreFailed(e.getMessage());
+        } catch (IOException e) {
+            return new BackupResult.ArtefactStoreFailed("artefact store quota check failed: " + e.getMessage());
+        }
+
         ConnectSpec spec = new ConnectSpec(request.credentialRef().get(), request.trustRuleRef(), Optional.empty());
         ConnectResult connectResult;
         try {
@@ -148,6 +156,8 @@ public final class CheckPointSnapshotExecutor {
         ArtefactStore.ArtefactHandle handle;
         try {
             handle = artefactStore.open(deviceId, jobId, "check_point", false);
+        } catch (ArtefactStore.QuotaExceededException e) {
+            return new BackupResult.ArtefactStoreFailed(e.getMessage());
         } catch (IOException e) {
             return new BackupResult.ArtefactStoreFailed("artefact store open failed: " + e.getMessage());
         }
@@ -161,17 +171,29 @@ public final class CheckPointSnapshotExecutor {
         } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             closeQuietly(handle);
+            var quota = ArtefactStore.QuotaExceededException.reasonIn(e);
+            if (quota.isPresent()) {
+                return new BackupResult.ArtefactStoreFailed(quota.get());
+            }
             return new BackupResult.ArtefactStoreFailed("snapshot fetch streaming failed: " + e.getMessage());
         }
 
         if (!(fetchResult instanceof FetchStreamResult.Fetched)) {
             closeQuietly(handle);
+            String reason = fetchResult instanceof FetchStreamResult.Failed failed ? failed.reason() : null;
+            if (reason != null && reason.startsWith(
+                    ArtefactStore.QUOTA_EXCEEDED_REASON)) {
+                return new BackupResult.ArtefactStoreFailed(reason);
+            }
             return new BackupResult.ArtefactStoreFailed("snapshot SCP transfer incomplete");
         }
 
         ArtefactStore.ArtefactMetadata metadata;
         try {
             metadata = handle.finish();
+        } catch (ArtefactStore.QuotaExceededException e) {
+            closeQuietly(handle);
+            return new BackupResult.ArtefactStoreFailed(e.getMessage());
         } catch (IOException e) {
             closeQuietly(handle);
             return new BackupResult.ArtefactStoreFailed("artefact store finish failed: " + e.getMessage());

@@ -521,4 +521,74 @@ class BackupJobExecutorEndToEndTest {
         assertEquals("backup", harness.manifestRepo.recorded.get(0).artefactClass());
         assertEquals("snapshot", harness.manifestRepo.recorded.get(0).backupType());
     }
+
+    @Test
+    void quotaExceededRefusesBackupJobWithNamedReasonLeavesNoPartialFileAndPreservesExistingBackups(@TempDir Path tempDir)
+            throws Exception {
+        String base64Key = Base64.getEncoder().encodeToString(new byte[32]);
+        ArtefactStoreCipher cipher = ArtefactStoreCipher.fromBase64Key(base64Key);
+        String firstArchiveContent = "first-valid-backup-archive-bytes";
+
+        // Measure the encrypted size of the first archive so we can set a tight quota.
+        Path probeDir = tempDir.resolve("probe");
+        FileArtefactStore probeStore = new FileArtefactStore(probeDir, cipher);
+        long firstStoredBytes;
+        try (ArtefactStore.ArtefactHandle h = probeStore.open(DEVICE_ID, "probe-job", "check_point", false)) {
+            h.sink().write(firstArchiveContent.getBytes(StandardCharsets.UTF_8));
+            firstStoredBytes = h.finish().ciphertextBytes();
+        }
+
+        // Recovery volume allows the first archive + 16 bytes, so the first backup succeeds and a second backup overflows mid-stream.
+        Path recoveryDir = tempDir.resolve("recovery");
+        FileArtefactStore quotaStore = FileArtefactStore.withQuota(recoveryDir, cipher, firstStoredBytes + 16L);
+
+        ScriptedBackupTransport firstTransport = happyPathTransportUpTo("succeeded");
+        firstTransport.fetchedContent = firstArchiveContent;
+        firstTransport.execOutputs.put(BackupReadPlan.archiveDigestCommand(ARCHIVE_NAME),
+                sha256Hex(firstArchiveContent) + "  " + ARCHIVE_NAME + "\n");
+        firstTransport.execOutputs.put(BackupReadPlan.deleteBackupCommand(ARCHIVE_NAME), "");
+
+        Harness firstHarness = new Harness(firstTransport, quotaStore, Duration.ofMillis(5), Duration.ofSeconds(5), recoveryDir);
+        JobOutcome firstOutcome = firstHarness.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request());
+        assertTrue(firstOutcome instanceof JobOutcome.Completed, "first backup within quota must succeed: " + firstOutcome);
+        assertEquals(1, firstHarness.manifestRepo.recorded.size());
+        var firstManifest = firstHarness.manifestRepo.recorded.get(0);
+
+        // Second backup streams an archive that exceeds the remaining 16-byte quota -> FAILED with named reason, no partial file.
+        String secondArchiveContent = "second-backup-archive-that-exceeds-remaining-quota-budget";
+        ScriptedBackupTransport secondTransport = happyPathTransportUpTo("succeeded");
+        secondTransport.fetchedContent = secondArchiveContent;
+        secondTransport.execOutputs.put(BackupReadPlan.archiveDigestCommand(ARCHIVE_NAME),
+                sha256Hex(secondArchiveContent) + "  " + ARCHIVE_NAME + "\n");
+        secondTransport.execOutputs.put(BackupReadPlan.deleteBackupCommand(ARCHIVE_NAME), "");
+
+        Harness secondHarness = new Harness(secondTransport, quotaStore, Duration.ofMillis(5), Duration.ofSeconds(5), recoveryDir);
+        JobOutcome secondOutcome = secondHarness.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request());
+        var secondFailed = org.junit.jupiter.api.Assertions.assertInstanceOf(JobOutcome.Failed.class, secondOutcome);
+        assertTrue(secondFailed.terminalReason().startsWith(FileArtefactStore.QUOTA_EXCEEDED_REASON + ":"),
+                "expected named quota reason, got: " + secondFailed.terminalReason());
+        assertEquals(JobState.FAILED, secondHarness.leaseRepo.currentState);
+        assertEquals(0, secondHarness.manifestRepo.recorded.size(), "refused backup must record no manifest row");
+
+        try (var walk = java.nio.file.Files.walk(recoveryDir)) {
+            java.util.List<Path> files = walk.filter(java.nio.file.Files::isRegularFile).toList();
+            assertEquals(1, files.size(), "existing backup must be kept and zero partial/temp files may remain");
+            assertFalse(files.get(0).toString().endsWith(".tmp"));
+        }
+        try (InputStream in = quotaStore.retrieve(new ArtefactRef(firstManifest.recoveryVolumePath()),
+                firstManifest.wrappedDataKey(), false)) {
+            assertEquals(firstArchiveContent, new String(in.readAllBytes(), StandardCharsets.UTF_8),
+                    "existing backup must remain intact and readable");
+        }
+
+        // When the store is already at 100% of quota before the job starts, it refuses before any SSH command is issued.
+        FileArtefactStore fullStore = FileArtefactStore.withQuota(recoveryDir, cipher, firstStoredBytes);
+        ScriptedBackupTransport thirdTransport = happyPathTransportUpTo("succeeded");
+        Harness thirdHarness = new Harness(thirdTransport, fullStore, Duration.ofMillis(5), Duration.ofSeconds(5), recoveryDir);
+        JobOutcome thirdOutcome = thirdHarness.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request());
+        var thirdFailed = org.junit.jupiter.api.Assertions.assertInstanceOf(JobOutcome.Failed.class, thirdOutcome);
+        assertTrue(thirdFailed.terminalReason().startsWith(FileArtefactStore.QUOTA_EXCEEDED_REASON + ":"),
+                "expected named quota reason, got: " + thirdFailed.terminalReason());
+        assertTrue(thirdTransport.commandsIssued.isEmpty(), "when already at quota, refuses before contacting the device");
+    }
 }

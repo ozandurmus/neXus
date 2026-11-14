@@ -64,4 +64,76 @@ class SystemStatusStorageLivenessTest {
         assertEquals(List.of(), body.get("backups"));
         assertEquals(List.of(), body.get("top_devices"));
     }
+
+    @Test
+    void storageExposesQuotaUsageAndNearLimitOrExceededWarning(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path tempDir) throws Exception {
+        DSLContext create = DSL.using(SQLDialect.POSTGRES);
+        DSLContext dsl = DSL.using(new MockConnection(ctx -> {
+            String statement = ctx.sql();
+            if (statement.contains("from configuration_artefact")) {
+                var result = create.newResult(DSL.field("artefacts", Long.class), DSL.field("stored_bytes", Long.class));
+                var row = create.newRecord(DSL.field("artefacts", Long.class), DSL.field("stored_bytes", Long.class));
+                row.values(0L, 0L);
+                result.add(row);
+                return new MockResult[] {new MockResult(1, result)};
+            }
+            if (statement.contains("octet_length") || statement.contains("pg_database_size")) {
+                var result = create.newResult(DSL.field("v", Long.class));
+                var row = create.newRecord(DSL.field("v", Long.class));
+                row.values(0L);
+                result.add(row);
+                return new MockResult[] {new MockResult(1, result)};
+            }
+            return new MockResult[] {new MockResult(0, create.newResult())};
+        }), SQLDialect.POSTGRES);
+        DeviceRepository devices = (DeviceRepository) Proxy.newProxyInstance(DeviceRepository.class.getClassLoader(),
+                new Class<?>[] {DeviceRepository.class}, (proxy, method, args) -> {
+                    if (method.getName().equals("listAll")) return List.of();
+                    throw new UnsupportedOperationException(method.getName());
+                });
+
+        SystemStatusService service = new SystemStatusService(new JooqTransactionBoundary(dsl), devices);
+        java.nio.file.Path archiveFile = tempDir.resolve("check_point").resolve("device-1").resolve("sample.enc");
+        java.nio.file.Files.createDirectories(archiveFile.getParent());
+
+        // 1. 500 / 1000 bytes (50%): below the 80% warning threshold.
+        java.nio.file.Files.write(archiveFile, new byte[500]);
+        @SuppressWarnings("unchecked")
+        var belowWarn = (java.util.Map<String, Object>) service.storage(tempDir, 1000L).get("artefact_volume");
+        assertEquals(1000L, belowWarn.get("quota_bytes"));
+        assertEquals(500L, belowWarn.get("used_bytes"));
+        assertEquals(500L, belowWarn.get("remaining_bytes"));
+        assertEquals(50L, belowWarn.get("usage_percent"));
+        assertEquals(false, belowWarn.get("near_limit"));
+        assertEquals(false, belowWarn.get("quota_exceeded"));
+        org.junit.jupiter.api.Assertions.assertNull(belowWarn.get("warning"));
+
+        // 2. 850 / 1000 bytes (85%): near-limit warning exposed.
+        java.nio.file.Files.write(archiveFile, new byte[850]);
+        @SuppressWarnings("unchecked")
+        var nearLimit = (java.util.Map<String, Object>) service.storage(tempDir, 1000L).get("artefact_volume");
+        assertEquals(850L, nearLimit.get("used_bytes"));
+        assertEquals(85L, nearLimit.get("usage_percent"));
+        assertEquals(true, nearLimit.get("near_limit"));
+        assertEquals(false, nearLimit.get("quota_exceeded"));
+        String nearWarning = String.valueOf(nearLimit.get("warning"));
+        assertTrue(nearWarning.startsWith(
+                com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore.NEAR_QUOTA_WARNING_CODE + ":"),
+                nearWarning);
+
+        // 3. 1000 / 1000 bytes (100%): quota-exceeded warning exposed.
+        java.nio.file.Files.write(archiveFile, new byte[1000]);
+        @SuppressWarnings("unchecked")
+        var atLimit = (java.util.Map<String, Object>) service.storage(tempDir, 1000L).get("artefact_volume");
+        assertEquals(1000L, atLimit.get("used_bytes"));
+        assertEquals(0L, atLimit.get("remaining_bytes"));
+        assertEquals(100L, atLimit.get("usage_percent"));
+        assertEquals(true, atLimit.get("near_limit"));
+        assertEquals(true, atLimit.get("quota_exceeded"));
+        String exceededWarning = String.valueOf(atLimit.get("warning"));
+        assertTrue(exceededWarning.startsWith(
+                com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore.QUOTA_EXCEEDED_REASON + ":"),
+                exceededWarning);
+    }
 }

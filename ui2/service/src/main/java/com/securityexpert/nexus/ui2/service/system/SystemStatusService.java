@@ -29,6 +29,7 @@ import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.artefact.JooqRetentionQueries;
 
@@ -333,28 +334,40 @@ public class SystemStatusService {
 
     /** Stored artefacts only: a pruned artefact keeps its manifest row, so every backup_artefact read here is live-filtered. */
     Map<String, Object> readStorage() {
+        String root = System.getenv().getOrDefault("UI2_ARTEFACT_STORE_ROOT", "");
+        Path rootPath = root.isBlank() ? null : Path.of(root);
+        return storage(rootPath, null);
+    }
+
+    Map<String, Object> storage(Path rootPath, Long configuredQuotaBytes) {
         // Names as the device list serves them (observed hostname, else the discovery name) -- F21, 2026-09-23.
         Map<String, com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord> summaries = new HashMap<>();
         deviceRepository.listAll().forEach(d -> summaries.put(d.deviceId(), d));
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("read_at", Instant.now().toString());
+        long[] manifestStoredBytes = {0L};
         transactionBoundary.inTransaction(dsl -> {
             List<Map<String, Object>> backups = new ArrayList<>();
+            long backupBytes = 0L;
             for (Record r : dsl.fetch("select vendor, artefact_class, count(*) as artefacts, count(distinct device_id) as devices, "
                     + "coalesce(sum(ciphertext_bytes), 0) as stored_bytes, coalesce(sum(plaintext_bytes), 0) as original_bytes, "
                     + "min(created_at) as oldest, max(created_at) as newest from backup_artefact a where true"
                     + JooqRetentionQueries.andNotRemoved("a")
                     + " group by vendor, artefact_class order by vendor, artefact_class")) {
                 Map<String, Object> row = new LinkedHashMap<>();
+                Long rowStoredBytes = r.get("stored_bytes", Long.class);
                 row.put("vendor", r.get("vendor", String.class));
                 row.put("class", r.get("artefact_class", String.class));
                 row.put("artefacts", r.get("artefacts", Long.class));
                 row.put("devices", r.get("devices", Long.class));
-                row.put("stored_bytes", r.get("stored_bytes", Long.class));
+                row.put("stored_bytes", rowStoredBytes);
                 row.put("original_bytes", r.get("original_bytes", Long.class));
                 row.put("oldest", ts(r.get("oldest", Timestamp.class)));
                 row.put("newest", ts(r.get("newest", Timestamp.class)));
                 backups.add(row);
+                if (rowStoredBytes != null) {
+                    backupBytes += rowStoredBytes;
+                }
             }
             body.put("backups", backups);
             List<Map<String, Object>> top = new ArrayList<>();
@@ -375,34 +388,84 @@ public class SystemStatusService {
             Record c = dsl.fetchOne("select count(*) as artefacts, coalesce(sum(ciphertext_bytes), 0) as stored_bytes "
                     + "from configuration_artefact");
             Map<String, Object> configuration = new LinkedHashMap<>();
+            Long configStoredBytes = c.get("stored_bytes", Long.class);
             configuration.put("artefacts", c.get("artefacts", Long.class));
-            configuration.put("stored_bytes", c.get("stored_bytes", Long.class));
+            configuration.put("stored_bytes", configStoredBytes);
             configuration.put("text_in_database_bytes", dsl.fetchOne(
                     "select coalesce(sum(octet_length(sanitized_text)), 0) from device_configuration_run").get(0, Long.class));
             body.put("configuration", configuration);
             body.put("database_bytes", dsl.fetchOne("select pg_database_size(current_database())").get(0, Long.class));
+            manifestStoredBytes[0] = backupBytes + (configStoredBytes == null ? 0L : configStoredBytes);
             return null;
         });
-        String root = System.getenv().getOrDefault("UI2_ARTEFACT_STORE_ROOT", "");
         Map<String, Object> volume = new LinkedHashMap<>();
-        if (!root.isBlank() && Files.isDirectory(Path.of(root))) {
+        if (rootPath != null && Files.isDirectory(rootPath)) {
+            long diskUsedBytes = 0L;
             try {
-                FileStore store = Files.getFileStore(Path.of(root));
-                volume.put("total_bytes", store.getTotalSpace());
+                diskUsedBytes = FileArtefactStore.usedBytes(rootPath);
+            } catch (RuntimeException ignored) {
+                // Fall back to manifestStoredBytes if directory traversal fails.
+            }
+            long usedBytes = Math.max(manifestStoredBytes[0], diskUsedBytes);
+            try {
+                FileStore store = Files.getFileStore(rootPath);
+                long totalBytes = store.getTotalSpace();
+                volume.put("total_bytes", totalBytes);
                 volume.put("usable_bytes", store.getUsableSpace());
                 DiskVolumeReading reading = DiskVolumeReading.measured("artefact_store", store.getTotalSpace(),
                         store.getUnallocatedSpace(), store.getUsableSpace(), diskHeadroom.policy());
                 volume.put("used_percent", reading.usedPercent());
                 volume.put("level", reading.level().token());
                 volume.put("note", "the artefact volume is a host-path volume: its size is the host disk's, not the 5 Gi the claim declares");
+                long quotaBytes = configuredQuotaBytes != null
+                        ? configuredQuotaBytes
+                        : FileArtefactStore.resolveConfiguredQuotaBytes(System.getenv())
+                                .orElseGet(() -> FileArtefactStore.defaultQuotaBytes(totalBytes));
+                populateQuotaStatus(volume, usedBytes, quotaBytes);
             } catch (IOException e) {
                 volume.put("note", "the artefact volume could not be measured: " + e.getMessage());
+                long quotaBytes = configuredQuotaBytes != null
+                        ? configuredQuotaBytes
+                        : FileArtefactStore.resolveConfiguredQuotaBytes(System.getenv())
+                                .orElse(FileArtefactStore.DEFAULT_MAX_QUOTA_BYTES);
+                populateQuotaStatus(volume, usedBytes, quotaBytes);
             }
         } else {
             volume.put("note", "this pod has no artefact store mounted");
+            long quotaBytes = configuredQuotaBytes != null
+                    ? configuredQuotaBytes
+                    : FileArtefactStore.resolveConfiguredQuotaBytes(System.getenv())
+                            .orElse(FileArtefactStore.DEFAULT_MAX_QUOTA_BYTES);
+            populateQuotaStatus(volume, manifestStoredBytes[0], quotaBytes);
         }
         body.put("artefact_volume", volume);
         return body;
+    }
+
+    private static void populateQuotaStatus(Map<String, Object> volume, long usedBytes, long quotaBytes) {
+        long safeUsed = Math.max(0L, usedBytes);
+        long safeQuota = Math.max(1L, quotaBytes);
+        boolean nearLimit = FileArtefactStore.isNearLimit(safeUsed, safeQuota);
+        boolean quotaExceeded = safeUsed >= safeQuota;
+        long usagePercent = Math.min(100L, Math.round((100.0 * safeUsed) / safeQuota));
+        volume.put("quota_bytes", safeQuota);
+        volume.put("used_bytes", safeUsed);
+        volume.put("remaining_bytes", Math.max(0L, safeQuota - safeUsed));
+        volume.put("usage_percent", usagePercent);
+        volume.put("near_limit", nearLimit);
+        volume.put("quota_exceeded", quotaExceeded);
+        if (quotaExceeded) {
+            volume.put("warning", FileArtefactStore.QUOTA_EXCEEDED_REASON
+                    + ": artefact store usage (" + safeUsed + " bytes) has reached or exceeded the enforced quota ("
+                    + safeQuota + " bytes); new backup writes are refused until retention pruning or quota adjustment frees capacity");
+        } else if (nearLimit) {
+            long warnThresholdPct = Math.round(FileArtefactStore.NEAR_LIMIT_WARN_FRACTION * 100);
+            volume.put("warning", FileArtefactStore.NEAR_QUOTA_WARNING_CODE
+                    + ": artefact store usage (" + safeUsed + " of " + safeQuota + " bytes, " + usagePercent
+                    + "%) has reached the " + warnThresholdPct + "% warning threshold");
+        } else {
+            volume.put("warning", null);
+        }
     }
 
     private static String ts(Timestamp t) {
