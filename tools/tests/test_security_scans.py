@@ -598,3 +598,33 @@ def test_trivy_scan_script_skips_db_update_only_for_a_fresh_cached_db():
     text = (manifests.ROOT / "tools" / "security" / "security_scan.sh").read_text()
     assert "TRIVY_SKIP_DB_UPDATE=true" in text and "-mmin" in text and "TRIVY_DB_MAX_AGE_HOURS" in text
     assert "--skip-db-update" not in text  # never unconditional
+
+
+def test_ci_dependency_scan_reuses_baseline_for_lockfile_findings(tmp_path):
+    reports, output = tmp_path / "trivy-reports", tmp_path / "trivy-summary"
+    reports.mkdir()
+    (reports / "manifest.json").write_text(json.dumps([dict(tool="trivy", file="trivy-fs.json")]))
+    (reports / "trivy-fs.json.exit").write_text("0")
+    soon = (date.today() + timedelta(days=7)).isoformat()
+    baseline = tmp_path / "baseline.yaml"
+    baseline.write_text(json.dumps(dict(accepted=[
+        acceptance("CVE-2026-00010", "ui2/frontend/package-lock.json: synthetic-pkg", soon),
+    ])))
+    report = {
+        "SchemaVersion": 2,
+        "Results": [{
+            "Target": "ui2/frontend/package-lock.json",
+            "Vulnerabilities": [
+                {"VulnerabilityID": "CVE-2026-00010", "PkgName": "synthetic-pkg", "Severity": "CRITICAL"},
+                {"VulnerabilityID": "CVE-2026-00011", "PkgName": "synthetic-pkg", "Severity": "MEDIUM"},
+            ],
+        }],
+    }
+    (reports / "trivy-fs.json").write_text(json.dumps(report))
+    assert summary.main(["--reports", str(reports), "--baseline", str(baseline), "--output", str(output)]) == 0
+    # Adding an unaccepted HIGH lockfile finding fails the CI dependency scan gate.
+    report["Results"][0]["Vulnerabilities"].append(
+        {"VulnerabilityID": "CVE-2026-00012", "PkgName": "synthetic-pkg", "Severity": "HIGH"}
+    )
+    (reports / "trivy-fs.json").write_text(json.dumps(report))
+    assert summary.main(["--reports", str(reports), "--baseline", str(baseline), "--output", str(output)]) == 1

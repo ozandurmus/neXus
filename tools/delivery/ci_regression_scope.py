@@ -52,6 +52,7 @@ SHELL_PREFIXES = (
     "ui2/frontend/tests/",
 )
 DELIVERY_FILES = {
+    ".github/workflows/codeql.yml",
     ".github/workflows/validation.yml",
     "AI_HANDOVER.md",
     "docs/AI_DEVELOPMENT_PROTOCOL.md",
