@@ -254,6 +254,29 @@ public class TopologyNamePseudonymizer {
         this.disambiguationAt = null;
     }
 
+    private volatile org.springframework.beans.factory.ObjectProvider<FreeTextEstate> freeTextEstateProvider;
+    private volatile FreeTextEstate freeTextEstate;
+
+    /** Lazy: the estate dictionary needs this bean to build its device names, so it is looked up on first use. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setFreeTextEstate(org.springframework.beans.factory.ObjectProvider<FreeTextEstate> provider) {
+        this.freeTextEstateProvider = provider;
+    }
+
+    /** Fixed estate (tests, and wiring without the device tables). */
+    public void useFreeTextEstate(FreeTextEstate estate) {
+        this.freeTextEstate = estate;
+    }
+
+    private FreeTextEstate freeTextEstate() {
+        FreeTextEstate current = freeTextEstate;
+        if (current == null && freeTextEstateProvider != null) {
+            current = freeTextEstateProvider.getIfAvailable();
+            freeTextEstate = current;
+        }
+        return current;
+    }
+
     private record DeviceNameOverride(String hostname, String pseudonym) {
     }
 
@@ -461,6 +484,12 @@ public class TopologyNamePseudonymizer {
         if (text == null || text.isBlank()) {
             return text;
         }
+        String named = maskKnownNames(text);
+        FreeTextEstate estate = freeTextEstate();
+        return estate == null ? named : estate.mask(named);
+    }
+
+    private String maskKnownNames(String text) {
         // Masking audit 2026-11-15: a name enters the text dictionary only when a response first masks it as a name, so
         // after a restart (or on the first row of a page) a hostname inside free text -- a job's terminal reason, an
         // approval's reason -- went out raw. Every registered device's hostname is known before any text is masked; the
