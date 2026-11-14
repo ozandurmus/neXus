@@ -1,4 +1,4 @@
-"""A release applies the committed manifest of the policy, service, configuration and compliance deployments.
+"""A release applies the committed manifest of the policy, service, configuration, compliance and worker deployments.
 
 The 2026-10-18 incident: a release added the fingerprint-key env, secret mount and 8Gi memory to the policy manifest,
 but the tool only swapped the image of an existing deployment, so the new pod ran the old manifest and crashed. The
@@ -140,7 +140,7 @@ def test_a_first_release_still_creates_the_disabled_deployment(monkeypatch):
     assert deployment(manifest)['spec']['replicas'] == 0
 
 
-@pytest.mark.parametrize('target', ['service', 'configuration', 'compliance'])
+@pytest.mark.parametrize('target', ['service', 'configuration', 'compliance', 'worker'])
 def test_other_deployments_apply_their_manifest_after_the_diff_keeping_live_replicas(monkeypatch, target):
     events, diffs = cluster(monkeypatch, replicas='1')
     deploy.replace(target, IMAGE, 'synthetic-snapshot', 20)
@@ -161,9 +161,46 @@ def test_other_deployments_roll_back_by_image_only(monkeypatch, target):
     assert not applies(events) and not diffs
 
 
-def test_the_worker_keeps_its_runtime_fallback_patch_and_is_not_manifest_applied():
-    assert 'worker' not in deploy.SYNCED_MANIFESTS and 'packet-analysis' not in deploy.SYNCED_MANIFESTS
-    assert set(deploy.SYNCED_MANIFESTS) == {'service', 'configuration', 'compliance', 'policy'}
+def test_the_worker_manifest_is_in_the_synced_set_and_packet_analysis_keeps_its_own_path():
+    assert deploy.SYNCED_MANIFESTS['worker'] == 'deploy/ui2/52-worker-deployment.yaml'
+    assert 'packet-analysis' not in deploy.SYNCED_MANIFESTS
+    assert set(deploy.SYNCED_MANIFESTS) == {'service', 'configuration', 'compliance', 'policy', 'worker'}
+
+
+def test_the_worker_is_rendered_like_the_others_with_its_committed_env_unchanged():
+    committed = deployment((ROOT / deploy.SYNCED_MANIFESTS['worker']).read_text())
+    rendered = deployment(deploy.render_manifest('worker', IMAGE, 1))
+    container, = rendered['spec']['template']['spec']['containers']
+    assert container['image'] == IMAGE and rendered['spec']['replicas'] == 1
+    # Only the image and the replica count differ from the committed file: no env is added, dropped or rewritten.
+    assert container['env'] == committed['spec']['template']['spec']['containers'][0]['env']
+    assert [c['name'] for c in rendered['spec']['template']['spec']['containers']] == ['worker']
+    assert {d['kind'] for d in yaml.safe_load_all(deploy.render_manifest('worker', IMAGE))} == {'Deployment'}
+
+
+def test_a_worker_release_applies_the_manifest_after_the_drain_and_not_the_runtime_patch(monkeypatch):
+    events, diffs = cluster(monkeypatch, replicas='1')
+    deploy.replace('worker', IMAGE, 'synthetic-snapshot', 20)
+    (apply_index, manifest), = applies(events)
+    assert manifest == deploy.render_manifest('worker', IMAGE, 1) and diffs == [manifest]
+    barrier = index(events, lambda a: a[0] == 'query' and 'drain_ack_generation=drain_generation' in a[1])
+    assert index(events, lambda a: a == ('diff',)) < barrier < apply_index < index(events, lambda a: 'rollout' in a)
+    assert not any('patch' in args or 'set' in args for args, _ in events)
+
+
+def test_a_worker_rollback_restores_only_the_recorded_image_with_the_runtime_patch(monkeypatch):
+    events, diffs = cluster(monkeypatch)
+    inner = deploy.run
+    worker = {'name': 'worker', 'image': IMAGE, 'env': [{'name': 'JAVA_TOOL_OPTIONS', 'value': '-Dsynthetic=1'}]}
+    def run(*args, input=None, timeout=660):
+        if args[-3:] == ('deployment/ui2-worker', '-o', 'json'):
+            return json.dumps({'spec': {'template': {'spec': {'containers': [worker]}}}})
+        return inner(*args, input=input, timeout=timeout)
+    monkeypatch.setattr(deploy, 'run', run)
+    deploy.replace('worker', OLD, 'synthetic-snapshot', 20, rollback=True)
+    assert not applies(events) and not diffs, 'the forward manifest is not applied or diffed on rollback'
+    patch, = [args for args, _ in events if 'patch' in args]
+    assert json.loads(patch[-1])['spec']['template']['spec']['containers'][0]['image'] == OLD
 
 
 @pytest.mark.parametrize('target', sorted(deploy.SYNCED_MANIFESTS))

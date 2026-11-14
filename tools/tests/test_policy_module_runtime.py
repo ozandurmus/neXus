@@ -177,12 +177,59 @@ def test_module_e2e_resolves_runner_and_template_outside_checkout(tmp_path, monk
         if args[0] == "python3":
             return "sha256:" + "a" * 64
         if "get" in args:
-            return "1"
+            return "Complete=True\n" if any("conditions" in a for a in args) else "1"
         return ""
     monkeypatch.setattr(deploy, "run", run)
     deploy.module_e2e("a" * 40)
     assert calls[0] == ("python3", str(ROOT / "tools/e2e/hosta_e2e_image.py"), "ensure", "--commit", "a" * 40)
     assert any("apply" in call for call in calls)
+
+
+def e2e_cluster(monkeypatch, polls):
+    """A synthetic e2e job whose condition read answers from `polls`, one answer per look; the clock is simulated."""
+    calls, clock, answers = [], [0], iter(polls)
+    def run(*args, **kwargs):
+        calls.append(args)
+        if args[0] == "python3":
+            return "sha256:" + "a" * 64
+        if any("conditions" in a for a in args):
+            return next(answers)
+        return "1" if any("succeeded" in a for a in args) else ""
+    def sleep(seconds):
+        clock[0] += seconds
+    monkeypatch.setattr(deploy, "run", run)
+    monkeypatch.setattr(deploy.time, "sleep", sleep)
+    monkeypatch.setattr(deploy.time, "monotonic", lambda: clock[0])
+    return calls, clock
+
+
+def test_a_failed_e2e_job_stops_the_release_at_once_instead_of_waiting_the_full_timeout(monkeypatch, capsys):
+    calls, clock = e2e_cluster(monkeypatch, ["", "", "Failed=True\n"])
+    with pytest.raises(deploy.Blocked, match="masked e2e failed; further replacement stopped"):
+        deploy.module_e2e("a" * 40)
+    assert clock[0] == 2 * deploy.E2E_POLL_S, "no simulated time beyond the polls that preceded the Failed condition"
+    assert "Module e2e: Failed" in capsys.readouterr().out
+    assert not any("wait" in call for call in calls)
+
+
+def test_a_complete_e2e_job_passes_and_reports_which_condition_ended_the_wait(monkeypatch, capsys):
+    calls, clock = e2e_cluster(monkeypatch, ["", "Complete=True\n"])
+    deploy.module_e2e("a" * 40)
+    assert "Module e2e: Complete" in capsys.readouterr().out
+    assert clock[0] == deploy.E2E_POLL_S
+
+
+def test_an_e2e_job_with_a_false_condition_keeps_waiting(monkeypatch):
+    assert e2e_cluster(monkeypatch, ["Failed=False\n", "Complete=False\nFailed=False\n", "Complete=True\n"])
+    assert deploy.wait_e2e_outcome() == "Complete"
+
+
+def test_an_e2e_job_that_never_finishes_times_out_within_the_unchanged_overall_limit(monkeypatch, capsys):
+    calls, clock = e2e_cluster(monkeypatch, [""] * 1000)
+    with pytest.raises(deploy.Blocked, match="masked e2e did not complete; further replacement stopped"):
+        deploy.module_e2e("a" * 40)
+    assert deploy.E2E_TIMEOUT_S == 900 and deploy.E2E_TIMEOUT_S <= clock[0] < deploy.E2E_TIMEOUT_S + deploy.E2E_POLL_S
+    assert "no Complete or Failed condition within 900 s" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("output,ready", [
