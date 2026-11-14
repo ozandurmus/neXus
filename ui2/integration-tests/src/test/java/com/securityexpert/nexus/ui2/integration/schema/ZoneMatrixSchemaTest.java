@@ -20,7 +20,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-/** V212 (docs/design/ZONE_MATRIX_CONTRACT.md, FROZEN 2026-11-13) against a real PostgreSQL. Synthetic data only. */
+/** V215 (docs/design/ZONE_MATRIX_CONTRACT.md, FROZEN 2026-11-13) against a real PostgreSQL. Synthetic data only. */
 class ZoneMatrixSchemaTest {
     private static Ui2PostgresFixture fixture;
     @BeforeAll static void migrate() { fixture = Ui2PostgresFixture.createAndMigrate("zone_matrix"); }
@@ -32,7 +32,7 @@ class ZoneMatrixSchemaTest {
     @Test void migrationIsDryRunnableInsideATransaction() throws Exception {
         try (Connection db = fixture.migrateConnection(); var statement = db.createStatement()) {
             String sql;
-            try (var resource = getClass().getResourceAsStream("/db/migration/V212__zone_matrix_versions.sql")) {
+            try (var resource = getClass().getResourceAsStream("/db/migration/V215__zone_matrix_versions.sql")) {
                 assertNotNull(resource); sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
             }
             db.setAutoCommit(false);

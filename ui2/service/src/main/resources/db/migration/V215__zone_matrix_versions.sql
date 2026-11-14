@@ -1,4 +1,4 @@
--- V212 -- Zone matrix, delivery step 1: zone-model versions, draft revisions, publish, access log
+-- V215 -- Zone matrix, delivery step 1: zone-model versions, draft revisions, publish, access log
 -- (docs/design/ZONE_MATRIX_CONTRACT.md sections 3.1-3.5 and 8.1, FROZEN 2026-11-13).
 --
 -- Zones are sets of IP blocks the bank maintains (PO decision 1). A version's content is the canonical JSON the

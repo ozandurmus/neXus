@@ -7,7 +7,7 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * Storage of zone-matrix versions (V212; docs/design/ZONE_MATRIX_CONTRACT.md sections 3.5 and 8.1, FROZEN 2026-11-13).
+ * Storage of zone-matrix versions (V215; docs/design/ZONE_MATRIX_CONTRACT.md sections 3.5 and 8.1, FROZEN 2026-11-13).
  * Content is opaque canonical JSON here; the service owns its meaning and its hash.
  */
 public interface ZoneMatrixRepository {

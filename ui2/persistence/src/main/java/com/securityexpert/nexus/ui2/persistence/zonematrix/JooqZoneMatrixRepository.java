@@ -12,7 +12,7 @@ import org.jooq.DSLContext;
 import org.jooq.Record;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 
-/** jOOQ implementation of {@link ZoneMatrixRepository} over the V212 tables. */
+/** jOOQ implementation of {@link ZoneMatrixRepository} over the V215 tables. */
 public final class JooqZoneMatrixRepository implements ZoneMatrixRepository {
     /** Transaction-scoped advisory lock key serializing every zone-matrix write. */
     static final long LOCK_KEY = 0x7a6d_7631L;
