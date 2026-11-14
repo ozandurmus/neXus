@@ -15,6 +15,24 @@ Written without any host, device or database contact. Every size and duration be
 record. Values that are not in the repository are marked `UNKNOWN`. All names are role names or synthetic
 (`HOST-A`, `HOST-B`, `192.0.2.x`, `*.example.invalid`).
 
+## Amendment 2026-11-14 evening: target is CyberArk custody, no off-host copy
+
+The Product Owner decided on 2026-11-14 (`PO_DECISION_RECORD_2026_11_14_EVENING_NAME_BACKUPS_CYBERARK_DB_POLICY.md`):
+
+- **Backups stay on HOST-A.** PO: "yedekler sunucuda kalacak" ("the backups will stay on the server"). No off-host
+  copy is built. The PO accepts the risk that a lost HOST-A disk loses the database, the platform backups and the
+  device backups together. Section 3 (off-host target) and the off-host steps of sections 5 to 7 are therefore not
+  pursued.
+- **Keys go to CyberArk.** PO: "Anahtar, key, şifre, account için CyberArk var" ("For keys, secrets, passwords and
+  accounts there is CyberArk"). The target of section 4 is CyberArk custody: the archive and master keys (artefact
+  store, platform backup identity, failover and schedule keys) are held in CyberArk, neXus fetches a key when it needs
+  it, and nothing is kept on HOST-A. Device credentials also move to CyberArk.
+
+What remains useful here: the inventory of what exists (section 1), the key list and today's custody gaps (section 4),
+and restore testing (section 6), now against HOST-A only. Backlog: `cyberark_archive_key_custody` (P1) and
+`cyberark_device_credentials` (P2); `recovery_offhost_key_custody` is closed as superseded. The rest of this document
+stays DRAFT and is kept as the record of the options that were weighed.
+
 ## 0. Summary for the decision maker
 
 - **Today, one lost disk loses everything.** The database, the daily encrypted platform archives, every device backup
