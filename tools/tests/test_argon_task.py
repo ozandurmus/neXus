@@ -22,6 +22,8 @@ from scripts import argon_task  # noqa: E402
         ("gemini-4-argon-low", "Gemini 4 Argon", "Co-Authored-By: Gemini 4 Argon"),
         ("gemini-4-carbon-high", "Gemini 4 Carbon", "Co-Authored-By: Gemini 4 Carbon"),
         ("gemini-4-carbon-medium", "Gemini 4 Carbon", "Co-Authored-By: Gemini 4 Carbon"),
+        ("claude-sonnet-5-5-high", "Claude Sonnet 5.5", "Co-Authored-By: Claude Sonnet 5.5"),
+        ("claude-opus-5-5-high", "Claude Opus 5.5", "Co-Authored-By: Claude Opus 5.5"),
     ],
 )
 def test_trailer_and_worker_rules_follow_model_family(model: str, expected_author: str, expected_trailer: str) -> None:
@@ -38,6 +40,7 @@ def test_trailer_and_worker_rules_follow_model_family(model: str, expected_autho
     "bad_model",
     [
         "claude-sonnet-5",
+        "claude-opus-5-5",
         "gemini-3-pro",
         "gemini-4-other-high",
         "gemini-4-argon",
