@@ -164,7 +164,7 @@ public final class AsaPolicyMapper {
         addNatSection(snapshotId, 2, orderedSec2, c, objects, sections);
         addNatSection(snapshotId, 3, natSec3, c, objects, sections);
 
-        // 6. "ASA not evaluated" (source "ASA not evaluated", A0-ASA-9) and unreferenced ACL count
+        // 6. "ASA not evaluated" (source "ASA not evaluated", A0-ASA-9): ACLs used elsewhere, and ACLs with no use found ("none")
         Set<String> transitBoundAcls = new HashSet<>();
         Set<String> cpBoundAcls = new LinkedHashSet<>();
         for (AccessGroup ag : c.accessGroups()) {
@@ -207,8 +207,12 @@ public final class AsaPolicyMapper {
             if (transitBoundAcls.contains(aclName) || emittedNotEvaluated.contains(aclName)) {
                 continue;
             }
-            Set<String> uses = c.aclUses().getOrDefault(aclName, Set.of());
-            if (!uses.isEmpty()) {
+            // An ACL with no access-group binding and no use found is listed too, with the use "none": it is not
+            // enforced as an access rule (A0-ASA-2) and hygiene reports it. It is no collection failure: every rule is
+            // in the snapshot, and any failure would make lookup and hygiene treat the whole policy as incomplete.
+            Set<String> found = c.aclUses().getOrDefault(aclName, Set.of());
+            Set<String> uses = found.isEmpty() ? Set.of("none") : found;
+            {
                 emittedNotEvaluated.add(aclName);
                 int num = notEvaluatedRules.size() + 1;
                 Cell emptyCell = new Cell(List.of(), false);
@@ -236,22 +240,6 @@ public final class AsaPolicyMapper {
                     "ASA not evaluated",
                     null,
                     notEvaluatedRules));
-        }
-
-        int unreferencedAclCount = 0;
-        for (String aclName : c.acls().keySet()) {
-            if (!transitBoundAcls.contains(aclName)
-                    && !cpBoundAcls.contains(aclName)
-                    && c.aclUses().getOrDefault(aclName, Set.of()).isEmpty()) {
-                unreferencedAclCount++;
-            }
-        }
-        if (unreferencedAclCount > 0) {
-            failures.add(new CollectionFailure(
-                    ref(snapshotId, "unreferenced-acls"),
-                    "ASA_ACL_NOT_REFERENCED",
-                    String.valueOf(unreferencedAclCount),
-                    0));
         }
 
         return new PolicySnapshot(metadata, sections, objects, failures);

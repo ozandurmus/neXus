@@ -8,7 +8,7 @@ import com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker;
 public final class PolicyPrivacy {
     private PolicyPrivacy() {}
     private static final Set<String> OPAQUE = Set.of("id", "sourceId", "containerId", "deviceId", "artefactRef", "parentRuleId", "layerRef", "jobId", "ruleId", "policyId", "uid", "duplicateId", "sectionId", "coveringRuleId", "blockingRuleId");
-    private static final Set<String> ENUMS = Set.of("CP", "PAN", "static", "hide", "any", "address", "group", "service", "service-group", "address-group",
+    private static final Set<String> ENUMS = Set.of("CP", "PAN", "ASA", "permit", "log", "asa-interfaces", "static", "hide", "any", "address", "group", "service", "service-group", "address-group",
             "simple-gateway", "simple-cluster", "cluster", "gateway", "checkpoint-host", "vsx-cluster", "vsx-gateway", "vsx-cluster-member", "CpmiGatewayCluster", "CpmiVsClusterNetobj", "CpmiVsxClusterNetobj", "CpmiVsxNetobj", "CpmiVsxClusterMember",
             "COLLECTION_FAILED", "host", "network", "address-range", "group-with-exclusion", "service-tcp", "service-udp", "service-icmp", "service-icmp6", "service-other", "service-sctp", "service-dce-rpc", "service-rpc", "access-role", "dynamic-object", "dns-domain", "security-zone",
             "times", "time-groups", "gateways-and-servers", "hosts", "networks", "groups", "groups-with-exclusion", "address-ranges", "services-tcp", "services-udp", "services-icmp", "services-icmp6", "services-other", "services-sctp", "services-dce-rpc", "services-rpc", "service-groups", "access-roles", "dynamic-objects", "dns-domains", "security-zones", "unused-objects",
@@ -16,6 +16,10 @@ public final class PolicyPrivacy {
             "application", "application-filter", "external-list", "region", "dynamic-user-group", "profile-group",
             "source-nat", "destination-nat", "source-and-destination-nat", "no-nat",
             "MATCH", "MISMATCH", "IN_SYNC", "OUT_OF_SYNC", "PENDING", "Accept", "Drop", "Reject", "allow", "deny", "drop", "reject", "reset-client", "reset-server", "reset-both", "Apply Layer", "Log", "None", "Alert");
+    /** Section names fixed by the mappers (never configuration text): shown as they are. ASA interface sections are masked. */
+    private static final Set<String> FIXED_SECTION_NAMES = Set.of("Pre rules", "Post rules", "Local rules", "Inline layer unavailable",
+            "Pre NAT rules", "Post NAT rules", "Pre default rules", "Post default rules", "Local NAT rules", "Local default rules",
+            "global", "ASA security-level default", "ASA NAT section 1", "ASA NAT section 2", "ASA NAT section 3", "ASA not evaluated");
     private static final Set<String> HYGIENE_REASONS = PolicyHygiene.REASONS;
     private static final Set<String> HYGIENE_EVIDENCE = PolicyHygiene.EVIDENCE;
     public static Object mask(Object value, String key, TopologyNamePseudonymizer names, SubnetPreservingIpMasker ips) {
@@ -59,7 +63,7 @@ public final class PolicyPrivacy {
                 String field = String.valueOf(k);
                 if (field.equals("name") && "UNKNOWN".equals(v) && map.containsKey("ruleId")) out.put(field, "UNKNOWN");
                 else if (field.equals("name") && "any".equals(map.get("type"))) out.put(field, "ANY");
-                else if (field.equals("name") && map.containsKey("rules") && Set.of("Pre rules", "Post rules", "Local rules", "Inline layer unavailable", "Pre NAT rules", "Post NAT rules", "Pre default rules", "Post default rules", "Local NAT rules", "Local default rules").contains(v)) out.put(field, mask(v, "refs", names, ips));
+                else if (field.equals("name") && map.containsKey("rules") && FIXED_SECTION_NAMES.contains(v)) out.put(field, mask(v, "refs", names, ips));
                 else if (field.equals("name") && map.containsKey("deviceId")) out.put(field, names.maskDeviceName((String) v, null, map.get("deviceId") instanceof String id ? id : null));
                 // One canonical field per source (UI review 2026-10-18, F-2): the tree and the container table both
                 // carry the source device's own hostname, masked with its device ID like the Devices screen does.
@@ -163,7 +167,8 @@ public final class PolicyPrivacy {
         if (key.equals("sourceName")) return names.maskDeviceName(text, null);
         if (key.equals("containerName")) return names.maskDomainName(text);
         if (key.equals("level")) return Set.of("zero", "low", "medium", "high").contains(text) ? text : "UNKNOWN";
-        if (key.equals("source")) return Set.of("device", "mds", "Shared", "CP access layer", "CP NAT rulebase").contains(text) ? text : names.maskDomainName(text);
+        if (key.equals("source")) return Set.of("device", "mds", "Shared", "CP access layer", "CP NAT rulebase",
+                "ASA access-group", "ASA NAT", "ASA implicit", "ASA not evaluated").contains(text) ? text : names.maskDomainName(text);
         if (key.equals("type") || key.equals("status") || key.equals("vendor") || key.equals("action") || key.equals("syncStatus") || key.equals("policyKind"))
             return ENUMS.contains(text) ? text : "UNKNOWN";
         if (key.equals("log")) return ENUMS.contains(text) || text.matches("start=(yes|no|UNKNOWN), end=(yes|no|UNKNOWN)") ? text : "UNKNOWN";
