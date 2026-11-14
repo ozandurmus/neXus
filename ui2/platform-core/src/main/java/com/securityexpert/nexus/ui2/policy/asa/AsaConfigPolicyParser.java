@@ -638,7 +638,7 @@ public final class AsaConfigPolicyParser {
         // user U, user-group G, object-group-user G, security-group name|tag X, object-group-security X
         List<String> users = new ArrayList<>();
         List<String> securityGroups = new ArrayList<>();
-        idx = consumeIdentityAndSecurityCriteria(w, idx, users, securityGroups);
+        idx = consumeIdentityAndSecurityCriteria(w, idx, users, securityGroups, names);
         if (idx < 0 || idx >= w.size()) {
             return unparsedExtendedAce(aclName, w, remarks);
         }
@@ -777,11 +777,45 @@ public final class AsaConfigPolicyParser {
                 List.of(), List.of(), false, null, inactive, remarks, true);
     }
 
+    /** Tokens that start a source address or another criterion: they end a multi-word user or group name. */
+    private static final Set<String> IDENTITY_NAME_STOP = Set.of("any", "any4", "any6", "host", "object", "object-group",
+            "interface", "user", "user-group", "object-group-user", "security-group", "object-group-security");
+
+    /**
+     * A {@code user} / {@code user-group} name: the running configuration prints directory names as they are, so a name
+     * can contain spaces (measured 2026-11-14 on the estate: {@code DOMAIN\\group name ...}). A quoted name runs to
+     * its closing quote; an unquoted one runs until the next token that starts an address or another criterion. A
+     * continuation word that is an IPv4/IPv6 literal or a {@code names} alias is ambiguous: the ACE stays unparsed.
+     */
+    private static int consumeIdentityName(List<String> w, int idx, List<String> users, Map<String, String> names) {
+        if (idx >= w.size()) return -1;
+        StringBuilder name = new StringBuilder(w.get(idx));
+        int i = idx + 1;
+        if (w.get(idx).startsWith("\"")) {
+            while (!(name.length() > 1 && name.charAt(name.length() - 1) == '"')) {
+                if (i >= w.size()) return -1;
+                name.append(' ').append(w.get(i++));
+            }
+        } else {
+            while (i < w.size() && !IDENTITY_NAME_STOP.contains(w.get(i))) {
+                String t = w.get(i);
+                if (isValidIpv4(t) || isIpv6Literal(t) || names.containsKey(t)) return -1;
+                name.append(' ').append(t);
+                i++;
+            }
+        }
+        users.add(name.toString());
+        return i;
+    }
+
     private static int consumeIdentityAndSecurityCriteria(
-            List<String> w, int idx, List<String> users, List<String> securityGroups) {
+            List<String> w, int idx, List<String> users, List<String> securityGroups, Map<String, String> names) {
         while (idx < w.size()) {
             String tok = w.get(idx);
-            if ("user".equals(tok) || "user-group".equals(tok) || "object-group-user".equals(tok)) {
+            if ("user".equals(tok) || "user-group".equals(tok)) {
+                idx = consumeIdentityName(w, idx + 1, users, names);
+                if (idx < 0) return -1;
+            } else if ("object-group-user".equals(tok)) {
                 if (idx + 1 >= w.size()) return -1;
                 users.add(w.get(idx + 1));
                 idx += 2;

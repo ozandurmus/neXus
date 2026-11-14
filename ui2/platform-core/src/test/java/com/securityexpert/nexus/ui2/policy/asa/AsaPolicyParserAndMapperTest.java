@@ -425,6 +425,10 @@ class AsaPolicyParserAndMapperTest {
         assertTrue(secLevelDefault.rules().isEmpty());
         assertEquals("ASA implicit", secLevelDefault.source());
         assertTrue(PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), secLevelDefault));
+        // VPN, crypto and control-plane ACLs are listed, never evaluated as access rules (A0-ASA-9)
+        assertTrue(PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), notEvaluated));
+        for (Section access : List.of(outsideIn, dmzIn, insideOut, globalSec))
+            assertFalse(PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), access));
         PolicyObject ifObj = snapshot.objects().values().stream()
                 .filter(o -> "asa-interfaces".equals(o.type()))
                 .findFirst()
@@ -721,5 +725,43 @@ class AsaPolicyParserAndMapperTest {
         PolicyObject obj = snapshot.objects().get(cell.refs().get(0));
         assertNotNull(obj);
         return obj;
+    }
+
+    /** Directory group names are printed unquoted and may contain spaces (estate measurement 2026-11-14). */
+    @Test
+    void multiWordIdentityNamesParseAndAmbiguousNamesStayUnparsed() {
+        String config = """
+                ASA Version 9.18(4)22
+                names
+                name 198.51.100.40 SRV-ALIAS
+                access-list ACL-IN extended permit tcp user-group LAB\\\\Network Admins Team any host 198.51.100.20 eq https
+                access-list ACL-IN extended permit udp user LAB\\\\first.last any 198.51.100.0 255.255.255.0 eq domain time-range TR-1
+                access-list ACL-IN extended permit tcp user-group "LAB\\\\Quoted Group Name" any4 object-group OG-WEB eq 8443
+                access-list ACL-IN extended permit tcp user-group LAB\\\\Team SRV-ALIAS host 198.51.100.21 eq 443
+                access-list ACL-IN extended permit tcp user-group LAB\\\\Team 198.51.100.5 host 198.51.100.21 eq 443
+                object-group network OG-WEB
+                 network-object host 198.51.100.30
+                access-group ACL-IN in interface outside
+                """;
+        AsaPolicyConfig parsed = AsaConfigPolicyParser.parse(config);
+        List<AsaPolicyConfig.Ace> aces = parsed.acls().get("ACL-IN");
+        assertEquals(5, aces.size());
+        assertFalse(aces.get(0).unparsed());
+        assertEquals(List.of("LAB\\\\Network Admins Team"), aces.get(0).users());
+        assertEquals("any", aces.get(0).source().kind());
+        assertFalse(aces.get(1).unparsed());
+        assertEquals(1, aces.get(1).users().size());
+        assertEquals("TR-1", aces.get(1).timeRange());
+        assertFalse(aces.get(2).unparsed());
+        assertEquals(List.of("\"LAB\\\\Quoted Group Name\""), aces.get(2).users());
+        // A continuation word that is a names alias or an IPv4 literal is ambiguous: never guessed
+        assertTrue(aces.get(3).unparsed());
+        assertTrue(aces.get(4).unparsed());
+
+        PolicySnapshot snapshot = AsaPolicyMapper.map("dev-asa-01", "FW-TANGO-04", "2026-11-14T10:00:00Z", "artefact-01", parsed);
+        Section in = snapshot.sections().get(0);
+        assertEquals(List.of("LAB\\\\Network Admins Team"), in.rules().get(0).extras().get("user"));
+        assertFalse(in.rules().get(0).extras().containsKey("asa-unparsed"));
+        assertEquals(List.of("true"), in.rules().get(3).extras().get("asa-unparsed"));
     }
 }
