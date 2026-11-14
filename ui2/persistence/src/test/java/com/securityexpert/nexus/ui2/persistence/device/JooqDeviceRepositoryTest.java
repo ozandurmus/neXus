@@ -133,6 +133,26 @@ class JooqDeviceRepositoryTest {
     }
 
     @Test
+    void confirmSuccessKeepsDiscoveredClusterAndVirtualSystemRefWhenConfirmObservesNone() {
+        List<String> sql = new ArrayList<>();
+        var repository = new JooqDeviceRepository(new JooqTransactionBoundary(DSL.using(
+                new MockConnection(context -> {
+                    if (context.sql().startsWith("update devices set enrollment_state")) {
+                        sql.add(context.sql());
+                    }
+                    return new MockResult[] { new MockResult(1, null) };
+                }), SQLDialect.POSTGRES)));
+        var facts = new DeviceConfirmFacts(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                Optional.empty(), Optional.empty(), DeviceConfirmFacts.IDENTITY_MISMATCH_NONE, Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.empty(), DeviceConfirmFacts.PEER_FOLLOW_NONE,
+                Optional.empty());
+        assertTrue(repository.recordConfirmSuccess("device-1", facts, "synthetic-actor", "confirm_completed"));
+        assertEquals(1, sql.size());
+        assertTrue(sql.get(0).contains("cluster_member_ref = coalesce("));
+        assertTrue(sql.get(0).contains("virtual_system_ref = coalesce("));
+    }
+
+    @Test
     void observedRoleRefreshWritesPresentRoleAndKeepsItWhenAbsent() {
         AtomicReference<String> storedRole = new AtomicReference<>();
         List<String> updates = new ArrayList<>();
