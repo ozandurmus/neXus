@@ -368,7 +368,8 @@ public final class JooqDeviceRepository implements DeviceRepository {
                         + "identity_mismatch_state = {7}, identity_mismatch_presented_primary = {8}, "
                         + "identity_mismatch_presented_secondary = {9}, "
                         + "identity_mismatch_detected_at = case when {7} = 'OPEN' then {6} else null end, "
-                        + "cluster_member_ref = {10}, virtual_system_ref = {11}, "
+                        + "cluster_member_ref = coalesce({10}, cluster_member_ref), "
+                        + "virtual_system_ref = coalesce({11}, virtual_system_ref), "
                         + "peer_follow_outcome = {12}, peer_follow_reason = {13} "
                         + "where device_id = {14} and enrollment_state = 'DRAFT'",
                 facts.observedHostname().orElse(null), facts.observedModel().orElse(null),
