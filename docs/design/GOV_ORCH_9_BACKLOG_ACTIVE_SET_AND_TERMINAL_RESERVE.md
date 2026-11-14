@@ -110,9 +110,10 @@ reserve, and every budget other than the two named in §3.
 
 ## Amendment A-2026-11-14 — cold shards of the reserve
 
-**Status: AGENT-RECORDED under the PO's 2026-11-03 "decide routine, record the
-amendment" standing instruction; for PO-session ratification with the
-backlog-truth branch `docs/backlog-truth-1114`.**
+**Status: RATIFIED by the PO session, 2026-11-14,** under the PO's standing
+rule that backlog upkeep is the PO session's job ("bana sormadan yapman
+gerekirdi", PO 2026-11-14). Recorded with the backlog-truth branch
+`docs/backlog-truth-1114`.
 
 Finding: on 2026-11-14 the reserve held 179 rows at 61,395 of 61,440 bytes.
 The backlog-truth pass closes dozens of stale open items; even with every

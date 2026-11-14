@@ -37,12 +37,18 @@
     }
   ],
   "next": {
-    "build": "overview_acceptance_and_member_specific_tuning",
-    "title": "Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today)",
+    "build": "recovery_offhost_key_custody",
+    "title": "Off-host copy of the platform backups and recorded custody of the decryption key (today a lost HOST-A disk loses database, backups and device backups together)",
     "status": "planned",
-    "detail": "docs/design/OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md"
+    "detail": "docs/history/backlog/recovery_offhost_key_custody.md"
   },
   "upcoming": [
+    {
+      "build": "overview_acceptance_and_member_specific_tuning",
+      "title": "Overview acceptance under aiview (per-member settings no longer count as drift: done, backlog truth 2026-11-14)",
+      "status": "planned",
+      "detail": "docs/design/OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md"
+    },
     {
       "build": "path_analysis_phase_b",
       "title": "Path analysis phase B: UDP matchers (command literals await PO approval), chained NAT, return path",
