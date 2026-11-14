@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -139,6 +140,38 @@ class CiscoAsaPlanTest {
         assertEquals(InventoryRoute.PROTOCOL_HOST, routes.get(2).protocol());
         assertEquals(InventoryRoute.PROTOCOL_OSPF, routes.get(3).protocol());
         assertEquals("203.0.113.0/24", routes.get(3).destination());
+        // The nameif is the last field: the age in between is not an interface.
+        assertEquals(Optional.of("inside"), routes.get(3).interfaceName());
+        // Every routing-table entry forwards (Cisco 9.22 Routing Overview): stored active, with its next-hop kind.
+        assertTrue(routes.stream().allMatch(r -> r.active().equals(Optional.of(true))));
+        assertEquals(Optional.of(InventoryRoute.NEXT_HOP_IP), routes.get(0).nextHopKind());
+        assertEquals(Optional.of(InventoryRoute.NEXT_HOP_CONNECTED), routes.get(1).nextHopKind());
+        assertTrue(routes.stream().allMatch(r -> r.ecmp().isEmpty()));
+    }
+
+    @Test
+    void equalCostPathsWrappedEntriesAndUnknownFormsAreParsedFailClosed() {
+        String route = """
+                S*       0.0.0.0 0.0.0.0 [1/0] via 198.51.100.1, outside
+                                         [1/0] via 198.51.100.2, outside
+                O        203.0.113.0 255.255.255.0
+                           [110/20] via 192.0.2.254, 1d02h, inside
+                C        192.0.2.0 255.255.255.0 is directly connected, inside
+                V        198.18.0.0 255.255.0.0 connected by VPN (advertised), outside
+                """;
+        var routes = CiscoAsaPlan.parseRoutes(route);
+        assertEquals(5, routes.size());
+        assertEquals(List.of("198.51.100.1", "198.51.100.2"), routes.subList(0, 2).stream().map(r -> r.nextHop().orElseThrow()).toList());
+        assertTrue(routes.subList(0, 2).stream().allMatch(r -> r.ecmp().equals(Optional.of(true)) && r.destination().equals("0.0.0.0/0")));
+        var wrapped = routes.get(2);
+        assertEquals("203.0.113.0/24", wrapped.destination());
+        assertEquals(Optional.of("192.0.2.254"), wrapped.nextHop());
+        assertEquals(Optional.of("inside"), wrapped.interfaceName());
+        assertEquals(Optional.of(true), wrapped.active());
+        assertTrue(wrapped.ecmp().isEmpty(), "one path is not ECMP");
+        assertTrue(routes.get(3).ecmp().isEmpty());
+        var vpn = routes.get(4);
+        assertTrue(vpn.active().isEmpty() && vpn.nextHopKind().isEmpty(), "a form not recognised stays UNKNOWN");
     }
 
     @Test
