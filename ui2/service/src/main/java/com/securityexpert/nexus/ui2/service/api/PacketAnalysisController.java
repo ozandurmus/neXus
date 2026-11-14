@@ -466,7 +466,7 @@ public final class PacketAnalysisController {
         body.put("case_id", run.caseId());
         if (masked(request) || !(canRun(request) || canRaw(request))) {
             body.put("projection", "masked");
-            body.put("summary", parse(run.maskedSummaryJson()));
+            body.put("summary", parseSummary(run.maskedSummaryJson(), masked(request)));
             return ok(body);
         }
         var file = store.reportFile(run.caseId(), run.jobId());
@@ -1108,8 +1108,14 @@ public final class PacketAnalysisController {
         view.put("finished_at", run.finishedAt() == null ? null : run.finishedAt().toString());
         view.put("engine_version", run.engineVersion());
         view.put("failure_reason", run.failureReason());
-        view.put("summary", parse(run.maskedSummaryJson()));
+        view.put("summary", parseSummary(run.maskedSummaryJson(), masked));
         return view;
+    }
+
+    private Object parseSummary(String maskedSummary, boolean masked) {
+        Object parsed = parse(maskedSummary);
+        if (parsed == null) return null;
+        return PayloadMasker.mask(parsed, payloadTokens(), masked);
     }
 
     private Object parse(String maskedSummary) {

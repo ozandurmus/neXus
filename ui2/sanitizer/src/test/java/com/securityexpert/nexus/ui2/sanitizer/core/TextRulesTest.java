@@ -292,4 +292,22 @@ class TextRulesTest {
         String syntheticFqdn = "h-0000000000." + domainLabelToken;
         assertEquals(syntheticFqdn, reverter.revert(syntheticFqdn), "compound FQDN with unknown label must stay as-is");
     }
+
+    @Test
+    void masksSingleWordHostsAndPrincipalFormatsWithoutMaskingVocabulary() {
+        String hosts = s("ankara01 is down; sync lost with berlinfw; name (istanbulla)");
+        assertFalse(hosts.contains("ankara01"), hosts);
+        assertFalse(hosts.contains("berlinfw"), hosts);
+        assertFalse(hosts.contains("istanbulla"), hosts);
+
+        String principals = s(
+                "Account CORP\\jdoevarol911 and ticket jdoevarol911@CORP.LOCAL and user:jdoevarol911@CORP "
+                        + "and subject CN=jdoevarol911,OU=NetOps,DC=corp,DC=local");
+        for (String canary : List.of("jdoevarol911", "CORP.LOCAL", "NetOps")) {
+            assertFalse(principals.contains(canary), "canary leaked in sanitizer: " + canary + " -> " + principals);
+        }
+
+        String vocab = "Buffer 64KB, 100MB, 4GB, 15ms in Jan, Feb, October, December on 1st, 2nd, 3rd, first, second check";
+        assertEquals(vocab, s(vocab), "sizes, month names, and ordinals stay readable");
+    }
 }

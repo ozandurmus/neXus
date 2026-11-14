@@ -36,8 +36,8 @@ public final class TextSanitizer {
     public static final String SERIAL = SerialRule.SERIAL;
 
     private enum Type {
-        URL(90), EMAIL(80), USER_AT_HOST(75), MAC(70), IPV6(65), IPV4(60), KNOWN(55), FQDN(50), LEARNED(45), CONTEXT_HOST(40),
-        SYSLOG_HOST(40), BARE_HOST(10);
+        URL(90), EMAIL(80), DOMAIN_USER(78), DN(77), USER_AT_HOST(75), MAC(70), IPV6(65), IPV4(60), KNOWN(55), FQDN(50),
+        LEARNED(45), CONTEXT_HOST(40), SYSLOG_HOST(40), BARE_HOST(10);
 
         final int priority;
 
@@ -59,15 +59,21 @@ public final class TextSanitizer {
     private final Mappers mappers;
     private final TokenSink sink;
     private final Counts counts;
+    private final boolean freeTextHostContext;
     private final PublicSuffixes suffixes = PublicSuffixes.get();
     /** Host names this job has seen in a host context; their bare mentions elsewhere in the file follow. */
     private final java.util.Set<String> learned = new java.util.HashSet<>();
     static final int MAX_LEARNED = 200_000;
 
     public TextSanitizer(Mappers mappers, TokenSink sink, Counts counts) {
+        this(mappers, sink, counts, true);
+    }
+
+    public TextSanitizer(Mappers mappers, TokenSink sink, Counts counts, boolean freeTextHostContext) {
         this.mappers = mappers;
         this.sink = sink == null ? TokenSink.DISCARD : sink;
         this.counts = counts;
+        this.freeTextHostContext = freeTextHostContext;
     }
 
     public Counts counts() {
@@ -163,6 +169,34 @@ public final class TextSanitizer {
         while (m.find()) {
             learn(m.group(1));
             out.add(new Candidate(m.start(1), m.end(1), Type.CONTEXT_HOST, new String[] {m.group(1)}));
+        }
+        if (freeTextHostContext && mayHaveNonKeywordContextHost(text)) {
+            m = Patterns.NON_KEYWORD_CONTEXT_HOST.matcher(text);
+            while (m.find()) {
+                int g = m.group(1) != null ? 1 : (m.group(2) != null ? 2 : 3);
+                String host = m.group(g);
+                String lower = host.toLowerCase(Locale.ROOT);
+                if (!Patterns.HOST_STOPWORDS.contains(lower) && !Patterns.NON_HOST_TOKEN.matcher(host).matches()
+                        && !NameMapper.isLabelToken(host) && !IdentityTokens.isToken(host)) {
+                    learn(host);
+                    out.add(new Candidate(m.start(g), m.end(g), Type.CONTEXT_HOST, new String[] {host}));
+                }
+            }
+        }
+        if (text.indexOf('\\') >= 0) {
+            m = Patterns.DOMAIN_USER.matcher(text);
+            while (m.find()) {
+                out.add(new Candidate(m.start(), m.end(), Type.DOMAIN_USER,
+                        new String[] {m.group(1), m.group(2), m.group(3)}));
+            }
+        }
+        if (text.indexOf('=') >= 0) {
+            m = Patterns.CN_DN.matcher(text);
+            while (m.find()) out.add(new Candidate(m.start(), m.end(), Type.DN, new String[] {m.group()}));
+            if (text.indexOf('/') >= 0) {
+                m = Patterns.SLASH_DN.matcher(text);
+                while (m.find()) out.add(new Candidate(m.start(), m.end(), Type.DN, new String[] {m.group()}));
+            }
         }
         for (var pattern : List.of(Patterns.SYSLOG_3164, Patterns.SYSLOG_5424)) {
             Matcher s = pattern.matcher(text);
@@ -262,10 +296,14 @@ public final class TextSanitizer {
             case FQDN -> fqdn(p[0], FQDN, false);
             case EMAIL -> email(p[0], p[1]);
             case USER_AT_HOST -> {
-                String user = label(p[0], null);
+                String user = p[0].contains("/")
+                        ? label(p[0].substring(0, p[0].indexOf('/')), null) + "/" + label(p[0].substring(p[0].indexOf('/') + 1), null)
+                        : label(p[0], null);
                 String host = host(p[1], EMAIL);
                 yield user + "@" + (host == null ? p[1] : host);
             }
+            case DOMAIN_USER -> domainUser(p[0], p[1], p[2]);
+            case DN -> distinguishedName(p[0]);
             case CONTEXT_HOST, SYSLOG_HOST, LEARNED -> host(p[0], HOSTNAME);
             case BARE_HOST -> {
                 learn(p[0]);
@@ -445,9 +483,46 @@ public final class TextSanitizer {
     /** A single-label host name (keyword, syslog header, host column): the device pseudonym or a label token. */
     private String host(String name, String category) {
         if (mappers.known().pseudonymFor(name).isPresent()) return device(name);
-        if (Patterns.HOST_STOPWORDS.contains(name.toLowerCase(Locale.ROOT))) return null;
+        if (Patterns.HOST_STOPWORDS.contains(name.toLowerCase(Locale.ROOT))
+                || Patterns.NON_HOST_TOKEN.matcher(name).matches()
+                || NameMapper.isLabelToken(name)
+                || IdentityTokens.isToken(name)) return null;
         if (category != null) counts.add(category);
         return label(name, null);
+    }
+
+    private String domainUser(String domain, String sep, String user) {
+        String domLower = domain.toLowerCase(Locale.ROOT);
+        String usrLower = user.toLowerCase(Locale.ROOT);
+        if (Patterns.HOST_STOPWORDS.contains(domLower) || Patterns.FILE_LIKE_TLDS.contains(usrLower)
+                || NameMapper.isLabelToken(domain) || NameMapper.isLabelToken(user)
+                || IdentityTokens.isToken(domain) || IdentityTokens.isToken(user)) {
+            return null;
+        }
+        if ("\\".equals(sep) && user.matches("(?i)u[0-9a-f]{4}.*")) return null;
+        return label(domain, null) + sep + label(user, HOSTNAME);
+    }
+
+    private String distinguishedName(String dn) {
+        Matcher m = Patterns.DN_RDN.matcher(dn);
+        StringBuilder out = new StringBuilder(dn.length() + 16);
+        int last = 0;
+        boolean changed = false;
+        while (m.find()) {
+            String val = m.group(2).strip();
+            if (val.isEmpty() || NameMapper.isLabelToken(val) || IdentityTokens.isToken(val)) continue;
+            out.append(dn, last, m.start()).append(m.group(1));
+            if (val.length() >= 2 && val.startsWith("\"") && val.endsWith("\"")) {
+                out.append('"').append(label(val.substring(1, val.length() - 1), null)).append('"');
+            } else {
+                out.append(label(val, null));
+            }
+            last = m.end();
+            changed = true;
+        }
+        if (!changed) return null;
+        counts.add(HOSTNAME);
+        return out.append(dn, last, dn.length()).toString();
     }
 
     private String device(String name) {
@@ -516,5 +591,14 @@ public final class TextSanitizer {
         byte[] out = a.clone();
         for (int i = bits; i < a.length * 8; i++) out[i >> 3] &= (byte) ~(0x80 >>> (i & 7));
         return out;
+    }
+
+    private static boolean mayHaveNonKeywordContextHost(String text) {
+        if (text.indexOf(' ') < 0 && text.indexOf('\t') < 0) return false;
+        String lower = text.toLowerCase(Locale.ROOT);
+        return lower.contains(" is ") || lower.contains(" was ") || lower.contains(" went ")
+                || lower.contains(" became ") || lower.contains(" with ") || lower.contains(" via ")
+                || lower.contains(" on ") || lower.contains("name (") || lower.contains("found (")
+                || lower.contains("failed over") || lower.contains("timed out");
     }
 }
