@@ -9,8 +9,9 @@ import com.securityexpert.nexus.ui2.policy.*;
 
 /**
  * Policies derived on read from stored device configurations: Palo Alto local firewalls (offline fallback only when the
- * existing management tree contains no Panorama node) and Cisco ASA firewalls (always: they have no management server;
- * ASA_FORTIGATE_POLICY_DESIGN_2026_11_14.md, PO_DECISION_RECORD_2026_11_14_ASA_FORTIGATE_POLICY_MODEL.md item 1).
+ * existing management tree contains no Panorama node), Cisco ASA firewalls and FortiGate firewalls (always: their own
+ * configuration is their policy; ASA_FORTIGATE_POLICY_DESIGN_2026_11_14.md,
+ * PO_DECISION_RECORD_2026_11_14_ASA_FORTIGATE_POLICY_MODEL.md item 1).
  */
 @Service
 public final class LocalFirewallPolicyService {
@@ -27,6 +28,9 @@ public final class LocalFirewallPolicyService {
      */
     private static final long DEFAULT_ASA_MAX_WEIGHT = 400_000;
     private final VersionedWeightedCache<List<PolicySnapshot>> asaParsed;
+    /** FortiGate: one snapshot per VDOM, a cache of its own like ASA (4,426 policies over the measured units). */
+    private static final long DEFAULT_FGT_MAX_WEIGHT = 200_000;
+    private final VersionedWeightedCache<List<PolicySnapshot>> fgtParsed;
     @org.springframework.beans.factory.annotation.Autowired
     public LocalFirewallPolicyService(TransactionBoundary tx, ArtefactStoreAccess store) {
         this(tx, store, DEFAULT_MAX_WEIGHT, DEFAULT_TTL_NANOS, System::nanoTime);
@@ -35,12 +39,16 @@ public final class LocalFirewallPolicyService {
             java.util.function.LongSupplier nanoClock) {
         this.tx = tx; this.store = store; this.parsed = new VersionedWeightedCache<>(maxWeight, ttlNanos, nanoClock);
         this.asaParsed = new VersionedWeightedCache<>(Math.max(maxWeight, DEFAULT_ASA_MAX_WEIGHT), ttlNanos, nanoClock);
+        this.fgtParsed = new VersionedWeightedCache<>(Math.max(maxWeight, DEFAULT_FGT_MAX_WEIGHT), ttlNanos, nanoClock);
     }
     /** Number of decrypt-and-parse runs, for tests and diagnostics. */
     long parseCount() { return parses.get(); }
     private final java.util.concurrent.atomic.AtomicLong asaParses = new java.util.concurrent.atomic.AtomicLong();
     /** Number of ASA decrypt-and-parse runs, for tests and diagnostics. */
     long asaParseCount() { return asaParses.get(); }
+    private final java.util.concurrent.atomic.AtomicLong fgtParses = new java.util.concurrent.atomic.AtomicLong();
+    /** Number of FortiGate decrypt-and-parse runs, for tests and diagnostics. */
+    long fgtParseCount() { return fgtParses.get(); }
 
     /**
      * The listing query is cheap and runs on every call; the decrypt and XML parse run only when a device's effective-running
@@ -51,6 +59,7 @@ public final class LocalFirewallPolicyService {
     public List<PolicySnapshot> snapshots() {
         List<PolicySnapshot> result = new ArrayList<>(panSnapshots());
         result.addAll(asaSnapshots());
+        result.addAll(fgtSnapshots());
         return result;
     }
 
@@ -104,6 +113,62 @@ public final class LocalFirewallPolicyService {
         }
         asaParsed.retainOnly(listed);
         if (unreadable > 0) LOG.log(System.Logger.Level.WARNING, "[POLICY] ASA configurations not readable: {0}", unreadable);
+        return result;
+    }
+
+    /**
+     * FortiGate: the latest stored configuration ({@code show}, configuration read kind {@code show_configuration}) of
+     * each enrolled FortiGate gateway, parsed and mapped in memory into one snapshot per VDOM; the text is discarded. The
+     * FortiOS version comes from the configuration header, else from the device's observed software version (the
+     * defaults table is per minor version, A0-FG-5/6). A device whose artefact cannot be read, or whose text is not a
+     * FortiGate configuration (no header and no policy), is left out (logged as a count, never with a name).
+     */
+    public List<PolicySnapshot> fgtSnapshots() {
+        var rows = tx.inTransaction(db -> db.fetch("select distinct on (d.device_id) d.device_id, d.observed_software_version, "
+            + "r.collected_at, r.artefact_ref, a.wrapped_data_key, c.compression from devices d "
+            + "join device_configuration_run r on r.device_id = d.device_id and r.read_kind = 'show_configuration' "
+            + "join configuration_artefact c on c.artefact_ref = r.artefact_ref "
+            + "join backup_artefact a on a.recovery_volume_path = r.artefact_ref and a.device_id = d.device_id "
+            + "where d.vendor_hint = 'fortinet' and d.role in ('gateway', 'firewall') and not d.disabled "
+            + "and d.enrollment_state in ('ENROLLED', 'DEGRADED') "
+            + "and not exists (select 1 from artefact_retention_ledger l where l.artefact_id = a.artefact_id and l.event = 'removed') "
+            + "order by d.device_id, r.collected_at desc"));
+        if (!rows.isEmpty() && store.storeOrNull() == null) throw new IllegalStateException("LOCAL_POLICY_CONFIGURATION_UNAVAILABLE");
+        List<PolicySnapshot> result = new ArrayList<>();
+        Set<String> listed = new HashSet<>();
+        int unreadable = 0;
+        for (var row : rows) {
+            String deviceId = row.get("device_id", String.class);
+            String collectedAt = row.get("collected_at", java.sql.Timestamp.class).toInstant().toString();
+            String softwareVersion = row.get("observed_software_version", String.class);
+            String version = row.get("artefact_ref", String.class) + "|" + collectedAt + "|" + softwareVersion;
+            listed.add(deviceId);
+            var cached = fgtParsed.get(deviceId, version);
+            if (cached != null) { result.addAll(cached); continue; }
+            List<PolicySnapshot> fresh;
+            try (var input = store.storeOrNull().retrieve(new ArtefactRef(row.get("artefact_ref", String.class)),
+                    row.get("wrapped_data_key", byte[].class), "gzip".equals(row.get("compression", String.class)))) {
+                fgtParses.incrementAndGet();
+                String text = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                var config = com.securityexpert.nexus.ui2.policy.fortigate.FortiGateConfigPolicyParser.parse(text, softwareVersion);
+                // A FortiGate "show" starts with its "#config-version=" header; text without it and without any policy is
+                // not a FortiGate configuration (the parser alone would read it as one empty root VDOM).
+                boolean header = text.lines().limit(20).anyMatch(line -> line.strip().startsWith("#config-version="));
+                if (config.vdoms().isEmpty() || !header && config.vdoms().values().stream().allMatch(v -> v.policies().isEmpty()))
+                    throw new IllegalStateException("not a FortiGate configuration");
+                fresh = com.securityexpert.nexus.ui2.policy.fortigate.FortiGatePolicyMapper.map(deviceId, "FortiGate " + deviceId,
+                        collectedAt, PolicySnapshot.ref("configuration-artefact", row.get("artefact_ref", String.class)), config);
+            } catch (Exception unavailable) {
+                unreadable++;
+                continue;
+            }
+            long weight = 0;
+            for (var snapshot : fresh) weight += snapshot.sections().stream().mapToLong(section -> section.rules().size()).sum() + snapshot.objects().size();
+            fgtParsed.put(deviceId, version, fresh, weight);
+            result.addAll(fresh);
+        }
+        fgtParsed.retainOnly(listed);
+        if (unreadable > 0) LOG.log(System.Logger.Level.WARNING, "[POLICY] FortiGate configurations not readable: {0}", unreadable);
         return result;
     }
 
