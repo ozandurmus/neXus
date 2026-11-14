@@ -189,6 +189,30 @@ def clear_drain(target, generation, snapshot):
           " and drain_generation=" + str(generation) + ";commit;")
 
 
+E2E_TIMEOUT_S = 900
+E2E_POLL_S = 5
+
+
+def wait_e2e_outcome(timeout=E2E_TIMEOUT_S, sleep=None, clock=None):
+    """Wait for the e2e job to reach Complete OR Failed, whichever comes first; the overall timeout is unchanged.
+
+    `kubectl wait --for=condition=Complete` alone leaves a failed job waiting for the whole timeout (a failed e2e held
+    a release for 15 minutes). The Job's conditions are polled instead: returns "Complete", "Failed", or "Timeout"."""
+    sleep, clock = sleep or time.sleep, clock or time.monotonic
+    deadline = clock() + timeout
+    while True:
+        conditions = run("kubectl", "-n", "ui2", "get", "job/ui2-e2e", "-o",
+                         "jsonpath={range .status.conditions[*]}{.type}={.status}{\"\\n\"}{end}").split()
+        for outcome in ("Failed", "Complete"):
+            if outcome + "=True" in conditions:
+                print("Module e2e: " + outcome, flush=True)
+                return outcome
+        if clock() >= deadline:
+            print("Module e2e: no Complete or Failed condition within " + str(timeout) + " s", flush=True)
+            return "Timeout"
+        sleep(E2E_POLL_S)
+
+
 def module_e2e(commit=None):
     args = ("--commit", commit) if commit else ()
     digest = run("python3", str(REPO / "tools/e2e/hosta_e2e_image.py"), "ensure", *args)
@@ -201,9 +225,9 @@ def module_e2e(commit=None):
     job = jobs[0].replace("nexus-ui2-e2e:SET_AT_DEPLOY", "nexus-ui2-e2e@" + digest).replace("  suspend: true\n", "  suspend: false\n", 1)
     run("kubectl", "-n", "ui2", "delete", "job", "ui2-e2e", "--ignore-not-found")
     run("kubectl", "-n", "ui2", "apply", "-f", "-", input=job)
-    run("kubectl", "-n", "ui2", "wait", "--for=condition=Complete", "job/ui2-e2e", "--timeout=900s", timeout=960)
-    if run("kubectl", "-n", "ui2", "get", "job/ui2-e2e", "-o", "jsonpath={.status.succeeded}") != "1":
-        raise Blocked("masked e2e failed; further replacement stopped")
+    outcome = wait_e2e_outcome()
+    if outcome != "Complete" or run("kubectl", "-n", "ui2", "get", "job/ui2-e2e", "-o", "jsonpath={.status.succeeded}") != "1":
+        raise Blocked("masked e2e " + ("failed" if outcome == "Failed" else "did not complete") + "; further replacement stopped")
 
 
 def prepare_policy_public_trust():
@@ -231,12 +255,14 @@ PACKET_ANALYSIS_MANIFEST = "deploy/ui2/58-packet-analysis-deployment.yaml"
 
 # Deployments whose committed manifest is rendered with the candidate image, diffed before the drain and applied after
 # it on every forward release, so env, mounts and resources ship together with the code that requires them
-# (2026-10-18: the policy pod crashed on the old manifest because a release only swapped its image). The worker is not
-# here: its JAVA_TOOL_OPTIONS carry a fallback flag the release adds at run time (see replace_image).
+# (2026-10-18: the policy pod crashed on the old manifest because a release only swapped its image). The worker is
+# here too (2026-11-05 outage class: its manifest was only patched at deploy time and drifted). Its env values come from the committed manifest, which already carries the fallback flag in JAVA_TOOL_OPTIONS; the
+# run-time fallback patch in replace_image remains only for a rollback, which restores the recorded digest.
 SYNCED_MANIFESTS = {"service": "deploy/ui2/50-service-deployment.yaml",
                     "configuration": "deploy/ui2/54-configuration-deployment.yaml",
                     "compliance": "deploy/ui2/55-compliance-deployment.yaml",
-                    "policy": "deploy/ui2/57-policy-deployment.yaml"}
+                    "policy": "deploy/ui2/57-policy-deployment.yaml",
+                    "worker": "deploy/ui2/52-worker-deployment.yaml"}
 
 
 def render_manifest(target, image, replicas=None):
