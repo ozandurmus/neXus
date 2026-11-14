@@ -9,6 +9,7 @@ import { actorLabel } from "../../shell/presenters";
 import { useFetchOnMount } from "../../shell/useFetchOnMount";
 import { m3 } from "../../theme/m3Theme";
 import { RADIUS } from "../../theme/tokens";
+import { MatrixTab } from "./MatrixTab";
 import { ZonesTab } from "./ZonesTab";
 import { VersionsTab } from "./VersionsTab";
 import {
@@ -101,9 +102,10 @@ function DraftBanner({ data }: { readonly data: ZoneMatrixData }) {
 }
 
 /**
- * Zone matrix (ZONE_MATRIX_CONTRACT.md section 7.1), delivery step 1: the zones (named sets of IP blocks), the draft, the
- * published versions and the four-eyes publish flow, plus the audited address lookup. There is no matrix statement,
- * cell or evaluation yet, so the screen has only the Zones and Versions tabs.
+ * Zone matrix (ZONE_MATRIX_CONTRACT.md section 7.1), delivery steps 1 and 2: the Matrix, Zones and Versions tabs
+ * (the zone matrix grid, explicit cells, version default, named service sets, template import, compliance reference
+ * confirmation, zones, draft diff with loosening changes, four-eyes publish flow and audited address lookup). Nothing
+ * is evaluated against firewall rules yet.
  *
  * The raw blocks are read only when the user asks ("Show blocks"), because the server writes an audit row for every
  * such read. Every control is drawn from the response's `can` booleans and `publish_check`. The "names masked" badge is
@@ -129,7 +131,7 @@ export function ZoneMatrixScreen() {
   return (
     <ScreenRoot screenType="tool">
       <ScreenHeader title="Zone matrix"
-        subtitle="Zones are sets of IP blocks the bank maintains. The matrix statements arrive in the next delivery step." />
+        subtitle="Zones are sets of IP blocks the bank maintains. Statements are policy intent; nothing is evaluated against firewall rules yet." />
       {data === null || common === null
         ? (error === null ? <StatePanel variant="empty" title="Reading the zones…" announce="status" />
           : isRestricted(rawError) ? <RestrictedPanel area="Zone matrix" />
@@ -142,6 +144,7 @@ export function ZoneMatrixScreen() {
           {notice ? <Notice notice={notice} /> : null}
           <DraftBanner data={data} />
           <M3Tabs ariaLabel="Zone matrix views" tabs={[
+            { label: "Matrix", panel: <MatrixTab {...common} /> },
             { label: "Zones", panel: <ZonesTab {...common} onShowBlocks={showBlocks} /> },
             { label: "Versions", panel: <VersionsTab {...common} /> },
           ]} />

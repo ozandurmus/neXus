@@ -110,6 +110,7 @@ function serve(world: World) {
 
 const world = (over: Partial<World> = {}): World => ({ can: ALL, hasDraft: true, publishCheck: { eligible: true, reason: null }, writes: {}, ...over });
 const gets = (sent: Sent[]) => sent.filter((s) => s.method === "GET").map((s) => s.path);
+const openZones = async () => { fireEvent.click(await screen.findByRole("tab", { name: "Zones" })); };
 const openVersions = async () => { fireEvent.click(await screen.findByRole("tab", { name: "Versions" })); await screen.findByRole("table", { name: "Version history" }); };
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); window.history.replaceState(null, "", "/"); });
@@ -126,8 +127,9 @@ describe("Zone matrix: Zones tab", () => {
   it("lists the active version's zones without asking for blocks, and shows no editor to a reader", async () => {
     const sent = serve(world({ can: READ_ONLY, hasDraft: false }));
     render(<ZoneMatrixScreen />);
+    await openZones();
     const table = await screen.findByRole("table", { name: "Zones" });
-    expect(screen.getByText("Zones are sets of IP blocks the bank maintains. The matrix statements arrive in the next delivery step.")).toBeInTheDocument();
+    expect(screen.getByText("Zones are sets of IP blocks the bank maintains. Statements are policy intent; nothing is evaluated against firewall rules yet.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Version 3/ })).toBeInTheDocument();
     const app = within(table).getByText("Z-APP").closest("tr")!;
     expect(within(app).getByText("Application")).toBeInTheDocument();
@@ -142,8 +144,7 @@ describe("Zone matrix: Zones tab", () => {
     for (const name of ["Add zone", "Edit", "Delete", "Show blocks"]) expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
     expect(screen.queryByText(/recorded in the audit log/)).not.toBeInTheDocument();
     expect(screen.queryByRole("form", { name: "Address lookup" })).not.toBeInTheDocument();
-    // Only the two tabs of step 1.
-    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Zones", "Versions"]);
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Matrix", "Zones", "Versions"]);
   });
 
   it("renders a masked response as it is", async () => {
@@ -153,6 +154,7 @@ describe("Zone matrix: Zones tab", () => {
     vi.mocked(fetch).mockImplementation(async (input, init) => String(input).startsWith("/api/v2/zone-matrix/versions/v-active")
       ? new Response(JSON.stringify(masked), { status: 200 }) : inner(input, init));
     render(<ZoneMatrixScreen />);
+    await openZones();
     const row = (await screen.findByText("ZONE-1")).closest("tr")!;
     expect(within(row).getByText("None")).toBeInTheDocument();
   });
@@ -161,6 +163,7 @@ describe("Zone matrix: Zones tab", () => {
     const sent = serve(world({ hasDraft: false, writes: { "POST /api/v2/zone-matrix/lookup": { status: 200,
       body: { version_id: "v-active", number: 3, state: "ACTIVE", family: "IPV4", zone_id: "z1", zone_name: "Z-APP" } } } }));
     render(<ZoneMatrixScreen />);
+    await openZones();
     // The action and its audit line sit together; nothing but the action reads blocks.
     expect(await screen.findByText("Viewing blocks is recorded in the audit log")).toBeInTheDocument();
     expect(gets(sent).some((path) => path.includes("blocks=1"))).toBe(false);
@@ -180,6 +183,7 @@ describe("Zone matrix: Zones tab", () => {
     const sent = serve(world({ writes: { "POST /api/v2/zone-matrix/draft/zones": { status: 200,
       body: { version_id: "v-draft", revision: 6, content_sha256: HASH_DRAFT, zone_id: "z9" } } } }));
     render(<ZoneMatrixScreen />);
+    await openZones();
     expect(await screen.findByText("Draft r5, not published")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Draft r5/ })).toBeInTheDocument();
     expect(screen.getByText("Changes apply only after another person publishes the draft.")).toBeInTheDocument();
@@ -201,6 +205,7 @@ describe("Zone matrix: Zones tab", () => {
     const sent = serve(world({ hasDraft: false, writes: { "POST /api/v2/zone-matrix/draft/zones": { status: 400,
       body: { error: "INVALID_BLOCKS", reason: "some blocks are not canonical CIDR blocks", errors: [{ index: 1, reason: "host bits are set" }] } } } }));
     render(<ZoneMatrixScreen />);
+    await openZones();
     fireEvent.click(await screen.findByRole("button", { name: "Add zone" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText(/Name/), { target: { value: "Z-PARTNER" } });
@@ -215,6 +220,7 @@ describe("Zone matrix: Zones tab", () => {
     const sent = serve(world({ writes: { "POST /api/v2/zone-matrix/draft/zones/z3/delete": { status: 409,
       body: { error: "REQUEST_CHANGED", reason: "the draft changed since you loaded it; reload and try again" } } } }));
     render(<ZoneMatrixScreen />);
+    await openZones();
     const row = (await screen.findByText("Z-MGMT")).closest("tr")!;
     fireEvent.click(within(row).getByRole("button", { name: "Delete" }));
     const dialog = await screen.findByRole("dialog");
@@ -358,6 +364,7 @@ describe("Zone matrix: states and refusals", () => {
     expect(screen.getByText("The zones could not be loaded.")).toBeInTheDocument();
     failing = false;
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await openZones();
     expect(await screen.findByRole("table", { name: "Zones" })).toBeInTheDocument();
   });
 
@@ -365,6 +372,7 @@ describe("Zone matrix: states and refusals", () => {
     serve(world({ noActive: true, hasDraft: false }));
     render(<ZoneMatrixScreen />);
     expect(await screen.findByText("No version has been published")).toBeInTheDocument();
+    await openZones();
     expect(screen.getByRole("button", { name: "Add zone" })).toBeInTheDocument();
     await openVersions();
     expect(screen.getByText("No version has been published.")).toBeInTheDocument();
@@ -377,12 +385,14 @@ describe("Zone matrix: states and refusals", () => {
     vi.mocked(fetch).mockImplementation(async (input, init) => String(input).startsWith("/api/v2/zone-matrix/versions/v-active")
       ? new Response(JSON.stringify(empty), { status: 200 }) : inner(input, init));
     render(<ZoneMatrixScreen />);
+    await openZones();
     expect(await screen.findByText("This version has no zones. Every address is unassigned.")).toBeInTheDocument();
   });
 
   it("reads the draft's blocks on request only, and the active version's blocks on a second request", async () => {
     const sent = serve(world());
     render(<ZoneMatrixScreen />);
+    await openZones();
     await screen.findByRole("table", { name: "Zones" });
     expect(gets(sent).some((path) => path.includes("blocks=1"))).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Show blocks" }));
@@ -402,6 +412,7 @@ describe("Zone matrix: states and refusals", () => {
     const sent = serve(world({ hasDraft: false, override: (method, url) => (method === "GET" && url.includes("blocks=1")
       ? { status: 503, body: { error: "ZONE_MATRIX_AUDIT_UNAVAILABLE", reason: "the view was refused because its audit row could not be written" } } : undefined) }));
     render(<ZoneMatrixScreen />);
+    await openZones();
     fireEvent.click(await screen.findByRole("button", { name: "Show blocks" }));
     expect(await screen.findByText(/The view was refused because its audit row could not be written\./)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Show blocks" })).toBeEnabled();
@@ -414,6 +425,7 @@ describe("Zone matrix: states and refusals", () => {
     const sent = serve(world({ writes: { "PUT /api/v2/zone-matrix/draft/zones/z3": { status: 200,
       body: { version_id: "v-draft", revision: 6, content_sha256: HASH_DRAFT, zone_id: "z3" } } } }));
     render(<ZoneMatrixScreen />);
+    await openZones();
     fireEvent.click(await screen.findByRole("button", { name: "Show blocks" }));
     const row = (await screen.findByText("Z-MGMT")).closest("tr")!;
     await within(row).findByText("203.0.113.0/24");
@@ -431,6 +443,7 @@ describe("Zone matrix: states and refusals", () => {
     serve(world({ writes: { "POST /api/v2/zone-matrix/draft/zones": { status: 409,
       body: { error: "ZONE_BLOCK_DUPLICATE", reason: "the same block is in two zones", block: "192.0.2.0/24", zones: ["Z-APP", "Z-PARTNER"] } } } }));
     render(<ZoneMatrixScreen />);
+    await openZones();
     fireEvent.click(await screen.findByRole("button", { name: "Add zone" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText(/Name/), { target: { value: "Z-PARTNER" } });
@@ -444,6 +457,7 @@ describe("Zone matrix: states and refusals", () => {
     serve(world({ hasDraft: false, writes: { "POST /api/v2/zone-matrix/lookup": { status: 200,
       body: { version_id: "v-active", number: 3, state: "ACTIVE", family: "IPV6", zone_id: null, zone_name: "UNASSIGNED" } } } }));
     render(<ZoneMatrixScreen />);
+    await openZones();
     fireEvent.change(await screen.findByLabelText("Address"), { target: { value: "2001:db8:ffff::1" } });
     fireEvent.click(screen.getByRole("button", { name: "Look up" }));
     expect(await screen.findByTestId("lookup-result")).toHaveTextContent("2001:db8:ffff::1 is not in any zone (unassigned).");
@@ -452,13 +466,13 @@ describe("Zone matrix: states and refusals", () => {
 
   it("says why publishing was refused when the server refuses it after all", async () => {
     serve(world({ writes: { "POST /api/v2/zone-matrix/draft/publish": { status: 409,
-      body: { error: "RATIONALE_REQUIRED", reason: "addresses leave a zone in this version; give a rationale" } } } }));
+      body: { error: "RATIONALE_REQUIRED", reason: "this version loosens the segmentation policy; give a rationale" } } } }));
     render(<ZoneMatrixScreen />);
     await openVersions();
     fireEvent.change(screen.getByLabelText(/Rationale/), { target: { value: "x" } });
     fireEvent.click(screen.getByRole("button", { name: "Publish draft" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm publish" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Addresses leave a zone in this version; give a rationale.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("This version loosens the segmentation policy; give a rationale.");
   });
 
   it("asks for no rationale when nothing leaves a zone, and sends none", async () => {
@@ -507,7 +521,7 @@ describe("Zone matrix: states and refusals", () => {
 describe("Zone matrix: words", () => {
   it("maps the publish refusals to plain sentences", () => {
     expect(publishCheckText("NOTHING_TO_PUBLISH")).toBe("The draft equals the active version; there is nothing to publish.");
-    expect(publishCheckText("RATIONALE_REQUIRED")).toBe("Addresses leave a zone in this version; give a rationale.");
+    expect(publishCheckText("RATIONALE_REQUIRED")).toBe("This version loosens the segmentation policy; give a rationale.");
     expect(publishCheckText("SELF_APPROVAL")).toBe("You changed this draft; another person must publish it.");
     expect(publishCheckText("COMPLIANCE_ROLE_MISSING")).toBe("The publisher or an editor of this draft must hold the compliance administrator role.");
     expect(publishCheckText("PRINCIPAL_NOT_ELIGIBLE")).toBe("This account cannot publish.");
@@ -517,7 +531,7 @@ describe("Zone matrix: words", () => {
     expect(zoneErrorLines({ status: 409, body: { error: "ZONE_BLOCK_DUPLICATE", reason: "the same block is in two zones", block: "192.0.2.0/24", zones: ["Z-APP", "Z-DB"] } }))
       .toEqual(["The same block is in two zones.", "192.0.2.0/24 is in Z-APP and Z-DB."]);
     expect(zoneErrorLines({ status: 400, body: { error: "INVALID_ADDRESS", reason: "not an IP address" } })).toEqual(["Not an IP address."]);
-    expect(zoneErrorLines({ status: 409, body: { error: "RATIONALE_REQUIRED", reason: "x" } })).toEqual(["Addresses leave a zone in this version; give a rationale."]);
+    expect(zoneErrorLines({ status: 409, body: { error: "RATIONALE_REQUIRED", reason: "x" } })).toEqual(["This version loosens the segmentation policy; give a rationale."]);
     expect(zoneErrorLines({ status: 503, body: { error: "ZONE_MATRIX_AUDIT_UNAVAILABLE" } })).toEqual(["The view was refused because its audit row could not be written."]);
     expect(zoneErrorLines({ status: 403, body: { error: "READ_ONLY_PERSONA", reason: "the masked persona cannot change or look up zones" } })).toEqual(["The masked persona cannot change or look up zones."]);
     expect(zoneErrorLines({ status: 403, body: { error: "ZONE_BLOCKS_NOT_PERMITTED", reason: "viewing zone blocks needs zone_matrix_zones_read" } })).toEqual(["Viewing zone blocks needs zone_matrix_zones_read."]);
