@@ -594,10 +594,12 @@ def cmd_retitle(args: argparse.Namespace) -> int:
     could only ever *add* a title -- never shorten or correct one. That left
     an overlong title written by mistake permanently in the file, pushing
     `backlog.json` against its regression ceiling with no sanctioned remedy.
-    This closes that gap. It never changes an item's id, status or priority.
+    This closes that gap. It never changes an item's id or status.
+    `--priority` (2026-11-14, backlog-truth pass) re-rates an open item whose
+    impact changed; the reason belongs in its history note.
     """
-    if args.title is None and args.target is None:
-        raise QueueToolError("retitle: pass --title and/or --target")
+    if args.title is None and args.target is None and args.priority is None:
+        raise QueueToolError("retitle: pass --title, --target and/or --priority")
 
     backlog, backlog_terminal = load_backlog_both()
     item, _home = find_backlog_item(backlog, backlog_terminal, args.id)
@@ -608,6 +610,10 @@ def cmd_retitle(args: argparse.Namespace) -> int:
         item["title"] = args.title
     if args.target is not None:
         item["target"] = args.target
+    if args.priority is not None:
+        if not args.priority.strip():
+            raise QueueToolError("retitle: --priority must not be empty")
+        item["priority"] = args.priority
 
     validate_backlog_item(item)
     validate_backlog_split(backlog, backlog_terminal)
@@ -1166,6 +1172,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_retitle.add_argument("--id", required=True)
     p_retitle.add_argument("--title", default=None)
     p_retitle.add_argument("--target", default=None)
+    p_retitle.add_argument("--priority", default=None)
     p_retitle.set_defaults(func=cmd_retitle)
 
     p_migrate_terminal = sub.add_parser(

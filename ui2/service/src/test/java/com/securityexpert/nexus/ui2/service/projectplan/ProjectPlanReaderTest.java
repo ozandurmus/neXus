@@ -246,6 +246,10 @@ class ProjectPlanReaderTest {
                 {"schema_version":"1.0","items":[{"id":"cold_done","status":"done"},{"id":"cold_deferred","status":"deferred"}]}
                 """);
         Files.writeString(directory.resolve("archive/backlog_terminal_zz.json"), "{ not valid json");
+        Files.writeString(directory.resolve("java_product_plan.json"), """
+                {"schema_version":"1.0","tracks":[],"backlog_classifications":{"open_one":"java_debt",
+                 "hot_done":"java_debt","cold_done":"java_feature","cold_deferred":"java_feature"}}
+                """);
 
         Map<String, Object> payload = new ProjectPlanReader(directory).read();
 
