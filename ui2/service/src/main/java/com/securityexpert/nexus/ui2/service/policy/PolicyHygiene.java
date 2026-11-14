@@ -111,6 +111,17 @@ public final class PolicyHygiene {
         return analyze(legacyView, days, now, workLimit, RULE_WORK, legacyView.objects(), true, true);
     }
     static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit, int ruleLimit, Map<String, PolicyObject> breadthObjects, boolean nonContainment, boolean upperBound) {
+        // Legacy only: Palo Alto application-default pairs are decided on the applications' standard ports where known
+        // (PolicyNormalization#defaultPortsHold); the sound analysis keeps them undecided.
+        boolean ports = upperBound && snapshot.metadata().vendor().equals("PAN") && workLimit >= 0;
+        if (ports) {
+            var portsResolver = Resolver.shadowing(snapshot, new Budget(workLimit));
+            PolicyNormalization.DEFAULT_PORTS.set(portsResolver::defaultPorts);
+        }
+        try { return analyzeScoped(snapshot, days, now, workLimit, ruleLimit, breadthObjects, nonContainment, upperBound); }
+        finally { if (ports) PolicyNormalization.DEFAULT_PORTS.remove(); }
+    }
+    private static Result analyzeScoped(PolicySnapshot snapshot, int days, Instant now, int workLimit, int ruleLimit, Map<String, PolicyObject> breadthObjects, boolean nonContainment, boolean upperBound) {
         if (days < 1 || days > 36500 || workLimit < 0 || ruleLimit < 0) throw new IllegalArgumentException("Invalid hygiene limits");
         Budget budget = new Budget(workLimit), side = budget.side();
         // Covering Palo Alto intrazone/interzone rules is work of its own pool (same total, same per-rule window): it only
@@ -429,8 +440,10 @@ public final class PolicyHygiene {
             int[] orders = bucket.orders; long[] outer = bucket.bounds;
             for (int j = 0, n = bucket.matches.size(); j < n && orders[j] < bestOrder[0]; j++) {
                 budget.spend();
-                if (!bounded(outer, j * WIDTH, inner)) continue;
                 var prior = bucket.matches.get(j);
+                // With standard ports (legacy analysis only, PolicyNormalization#defaultPortsHold) an application-default
+                // prior can hold a rule, so only its address slots are a necessary condition.
+                if (!bounded(outer, j * WIDTH, inner, PolicyNormalization.DEFAULT_PORTS.get() != null && defaults(prior, match) ? ADDRESS_WIDTH : WIDTH)) continue;
                 if (Boolean.TRUE.equals(holds(prior.selectors(), match.selectors(), budget))) { best[0] = prior; bestOrder[0] = orders[j]; return; }
             }
         }

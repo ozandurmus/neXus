@@ -3542,6 +3542,23 @@ gates:
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_01_PAN_POLICY_READS.md"
     canonical_command_key: "type=op&cmd=<show><dg-hierarchy></dg-hierarchy></show>"
 
+  - gate_id: "pan_policy_predefined_applications"
+    vendor: "palo_alto"
+    platform_role_scope: "panorama"
+    shell_context: "not_applicable"
+    transport_kind: "PAN_XML_API"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 120
+    retry_rule: "none"
+    max_frequency: "once per policy collection run, with the policy reads"
+    session_reuse_rule: "the policy collection's existing-authentication API key; serial"
+    unsupported_behavior_ref: "any failure, an unexpected shape or more than 64 MB: no catalogue, application default ports stay unknown, the collection continues"
+    secret_output_risk: "vendor content data, no customer secret; streamed, only default ports and identification protocol kept, raw reply discarded"
+    safe_telemetry_fields: ["outcome", "applications", "withPorts", "bytes"]
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_11_14_GATEWAY_BOUND_AND_APPID_PORTS.md"
+    canonical_command_key: "type=config&action=get&xpath=/config/predefined/application"
+
   - gate_id: "cp_policy_access_rulebase_hits"
     vendor: "check_point"
     platform_role_scope: "cp_multi_domain_server"

@@ -238,3 +238,7 @@ Access-rule order, security-level and same-security defaults, real-address match
 literals for Cisco ASA; policy order, implicit deny, defaults, VIP/NAT order, zones and address/service objects for
 FortiGate. Text, citations and grades (sections 8-14): `PATH_ANALYSIS_VENDOR_SEMANTICS_AMENDMENT_2026_11_14_ASA_FORTIGATE.md`
 (FROZEN 2026-11-14 after the HIGH quotes were re-verified on the source pages, PO approval relayed by the PO session).
+
+Same document, sections G1 and D6 (FROZEN 2026-11-14, PO "Kabul" / "Onaylıyorum"): a Check Point gateway object as an
+upper bound of its management addresses (skip only, never cover), and application default ports from the Panorama's
+predefined App-ID catalogue in the legacy analysis.
