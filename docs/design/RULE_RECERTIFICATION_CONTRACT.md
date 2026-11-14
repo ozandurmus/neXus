@@ -1,11 +1,15 @@
 # Rule recertification and cleanup campaigns - contract
 
-**Status: DRAFT - 2026-11-13.** Written by an engineering session at the PO session's request, after the PO chose,
-following the zone matrix, to plan rule recertification and cleanup campaigns. Not implementation authority. It goes
-to the three-seat decision council (identity and authorization, compliance and evidence semantics, security and
-adversarial) convened by the PO session, then to the PO for freezing. Every open point is listed in section 14; none
-of them is decided by this draft. Examples are synthetic only (`FW-TANGO-04`, documentation address ranges, invented
-team names, the nil-like UUID `00000000-0000-4000-8000-000000000001`).
+**Status: DRAFT - 2026-11-14, revision 2.** Revision 1 (2026-11-13) was written by an engineering session at the PO
+session's request, after the PO chose, following the zone matrix, to plan rule recertification and cleanup campaigns.
+Revision 2 folds in the PO's product answers of 2026-11-14 (Q1, Q4, Q13 as PO decisions; Q5, Q10, Q11, Q12, Q15, Q17
+as PO session recommendations the PO saw and did not object to), recorded in
+[PO_DECISION_RECORD_2026_11_14_RULE_RECERTIFICATION_PRODUCT_ANSWERS.md](PO_DECISION_RECORD_2026_11_14_RULE_RECERTIFICATION_PRODUCT_ANSWERS.md);
+section 14.1 lists them. Not implementation authority. It goes next to the three-seat decision council (identity and
+authorization, compliance and evidence semantics, security and adversarial) convened by the PO session for the eight
+open questions of section 14.3 and the new Q20 (definition of internet-facing), then to the PO for freezing. Two points wait for bank input (section 14.2). Examples are
+synthetic only (`FW-TANGO-04`, documentation address ranges, invented team names, the UUID
+`00000000-0000-4000-8000-000000000001`).
 
 Builds on, without changing them:
 
@@ -80,11 +84,17 @@ Wording rules on every surface:
 
 | Type | Enrols | Typical cadence |
 | --- | --- | --- |
-| `PERIODIC` | Every in-scope security rule whose certification is not `CERTIFIED` at launch, or whose next review date falls before the campaign due date. | Yearly or by risk tier (open question Q1). |
+| `PERIODIC` | Every in-scope security rule whose certification is not `CERTIFIED` at launch, or whose next review date falls before the campaign due date. | Yearly for all rules; every 6 months for high-risk rules (3.3, PO 2026-11-14). |
 | `CLEANUP` | In-scope rules with at least one **proven** finding of the selected classes (3.2). | On demand, or after a large hygiene change. |
 
 A campaign has: name (1-120 characters, no control characters), type, scope, parameters, due date, campaign manager
-(the principal who launched it), state, and a free-text purpose.
+(the principal who launched it), the campaign's team mailbox for reminders (section 9), state, and a free-text
+purpose.
+
+**Review intervals (PO 2026-11-14, Q1).** A KEEP decision is valid for at most 12 months; on a high-risk rule (3.3)
+for at most 6 months. The reviewer may choose an earlier next review date, never a later one; the screen refuses a
+later date (`REVIEW_INTERVAL_EXCEEDED`). Disabled rules are in scope of `PERIODIC` campaigns (PO session
+recommendation, Q10): a disabled rule can be re-enabled without a review.
 
 Scope: a set of policy sources (by opaque id), optionally narrowed to sections or layers by stored id, and to vendors.
 A scope is frozen at launch: rules added to the policy later are not enrolled in that campaign (they become
@@ -108,7 +118,7 @@ and the snapshot `collected_at` the finding was computed on. Only these proven o
 | --- | --- | --- |
 | Shadowed (`shadowed`, status `REDUNDANT`) | Sound-mode hygiene proves an earlier enabled rule fully covers the rule with the same action, or an Apply Layer rule covers it (`INLINE_LAYER_COVER`). | Covering rule number, name and id. |
 | Conflict (`conflict`, status `CONFLICT`) | Sound-mode hygiene proves an earlier rule fully covers it with a different action. | Covering rule; "this rule is never reached and its action is not applied". |
-| Unused N days (`unused`) | Hygiene's `unused` finding with the campaign's N as the threshold. Two evidence forms exist today: "Last hit predates the threshold at counter collection time." and "Zero collected hits; counter reset/window is unknown."; the campaign parameter says whether the second form enrols (open question Q4). | Hit count, last hit, counter collection time, the counter-window text hygiene computes, hit source (management or per firewall); the latest Rule object usage result for the rule, if any, by id and period. |
+| Unused 180 days (`unused`) | Hygiene's `unused` finding with evidence "Last hit predates the threshold at counter collection time." computed with a threshold of **180 days** (PO 2026-11-14, Q4). "Zero collected hits; counter reset/window is unknown." does **not** enrol: a rule whose counter window is unknown is listed under "could not be evaluated". | Hit count, last hit, counter collection time, the counter-window text hygiene computes, hit source (management or per firewall); the latest Rule object usage result for the rule, if any, by id and period. |
 | Expired (`expired`) | "Stored schedule has expired." Rules whose schedule only expires within 14 days are listed on the campaign screen, not enrolled. | The schedule end as stored. |
 | Overly broad (`broad`) | "Accept rule matches any source, destination, service and application." enrols by default; "Broad selectors are present" enrols only when the campaign selects it. | The permissiveness explanation hygiene already produces. |
 | Disabled (`disabled`) | Only when the campaign selects it ("Rule is disabled."). | Since when it is disabled, from rule history, when known. |
@@ -117,17 +127,39 @@ and the snapshot `collected_at` the finding was computed on. Only these proven o
 Never enrolled as a candidate (listed on the campaign screen and in the report as "could not be evaluated", with
 counts per reason): hygiene `unknown` findings and every `UNKNOWN` shadow status, unknown enabled state, "Hit counts
 were not collected or are invalid.", "Hit counts are missing for a target.", "Zero-hit counter window is shorter than
-the threshold.", "Zero hits contradict a recorded last hit.", "Last-hit time was not collected.", "Schedule evidence is
+the threshold.", "Zero hits contradict a recorded last hit.", "Zero collected hits; counter reset/window is unknown.",
+"Last-hit time was not collected.", "Schedule evidence is
 incomplete.", and zone matrix `NOT_EVALUABLE` / `UNKNOWN`. The scale matters: on the ten largest stored policies the
 sound-mode shadowing analysis decided about 7,200 rules and left about 47,400 undecided (counts from the hygiene legacy
 phase 2 measurement, 2026-11-13); a cleanup campaign must show that the undecided part exists, not only the
 candidates.
 
-Legacy-mode hygiene results (upper bound: time, user and other narrowing constraints dropped) do not enrol a rule as
-shadowed or conflicting, because an upper bound proves disjointness, not coverage. Whether they may be shown as a
-separate, labelled "possible" list is open question Q5.
+Legacy-mode hygiene results (upper bound: time, user and other narrowing constraints dropped) never enrol a rule as
+shadowed or conflicting, because an upper bound proves disjointness, not coverage. They are shown on the campaign
+screen as a separate list labelled "Possible (legacy analysis, not proven); not enrolled", with the constraints the
+analysis dropped (PO session recommendation, Q5). The list is not counted as candidates on any headline, and a rule
+on it can reach a review only through a `PERIODIC` campaign or an explicit, audited manual enrolment by the campaign
+manager in `DRAFT` state (item flag `MANUALLY_ENROLLED`, with the reason).
 
-### 3.3 Rule object usage as supporting evidence
+### 3.3 High-risk rules
+
+A rule is high-risk when any of these holds (PO 2026-11-14, Q1, categories named by the PO):
+
+- **any-any**: hygiene's `broad` finding "Accept rule matches any source, destination, service and application.";
+- **internet-facing**: the rule's resolved source or destination cell is `any` or contains an address outside the
+  ranges the bank declares internal. The internal ranges come from the zone matrix (every zone except `UNASSIGNED`,
+  once a matrix version is active) or, until then, from the private ranges (RFC 1918, RFC 4193) plus a list the bank
+  confirms. The exact definition is frozen with this contract after the council (open question Q20);
+- **zone matrix violation**: the rule has an open `VIOLATION` finding against the active matrix version (only after
+  zone matrix delivery step 4).
+
+Fail-closed: a rule whose risk cannot be decided (an unresolved object, a group cycle or depth limit, an incomplete
+snapshot, a zone matrix `NOT_EVALUABLE` or `UNKNOWN` outcome) is treated as high-risk, with the flag
+`RISK_UNDECIDED` and its reason. Risk is recomputed at enrolment and at every decision; a KEEP's maximum interval
+follows the risk at decision time, and a rule that becomes high-risk later has its next review date shortened to at
+most 6 months from the decision (event `RISK_RAISED`).
+
+### 3.4 Rule object usage as supporting evidence
 
 A reviewer of an unused or broad candidate can open the rule in Rule object usage and attach the id of a stored
 One-rule result to the decision as evidence. The attachment is a reference (analysis id, period, counts); no row of
@@ -144,11 +176,11 @@ the uploaded period. This is not proof that the object is unused ..."). An attac
 | `TEAM` | Any member of a team defined in neXus (a named list of principals kept in neXus). | Opaque team id; membership changes are audited. |
 | `DIRECTORY_GROUP` | Any signed-in principal whose current directory group set contains the group. | The group reference, stored and compared exactly like the existing `DIRECTORY_GROUP` role bindings (encrypted, exact equality, the 300-second group-set validity and on-demand refresh). neXus does not enumerate the group's members. |
 
-Every owner has: a display label (1-120 characters), an optional contact mailbox for reminders, an optional
-escalation mailbox, and a state `ACTIVE` or `RETIRED`. A `PERSON` owner whose local identity is disabled or deleted
-becomes `RETIRED` automatically; for directory principals neXus cannot know that a person has left, so a `PERSON`
-owner on a directory principal that has not signed in for a configurable number of days is flagged
-`OWNER_NOT_SEEN` (open question Q7), never retired automatically.
+Every owner has: a display label (1-120 characters) and a state `ACTIVE` or `RETIRED`. Owners carry no mail address:
+reminders go to one team mailbox per campaign (section 9, PO session recommendation Q15). A `PERSON` owner whose
+local identity is disabled or deleted becomes `RETIRED` automatically; for directory principals neXus cannot know that
+a person has left, so a `PERSON` owner on a directory principal that has not signed in for a configurable number of
+days is flagged `OWNER_NOT_SEEN` (open question Q7), never retired automatically.
 
 ### 4.2 Assignment
 
@@ -231,12 +263,14 @@ are recomputed for rules that have an open item or a current decision. Then, per
 | `objectsHash` becomes `UNKNOWN` | stays recorded, certification becomes `UNKNOWN` (7) | unchanged |
 | rule absent from a **complete** snapshot of its scope | `INVALIDATED`, reason `RULE_REMOVED` | REMOVE: removal observed (6.4) |
 | rule absent from an incomplete snapshot | nothing changes; certification `UNKNOWN` | nothing changes |
-| rule disabled | `INVALIDATED`, reason `RULE_DISABLED` | REMOVE: `DISABLED_NOT_REMOVED` (open question Q10) |
+| rule disabled | `INVALIDATED`, reason `RULE_DISABLED` | REMOVE: stays open, flag `DISABLED_NOT_REMOVED` (Q10) |
 
 An invalidation records the snapshot `collected_at`, the old and new hashes, and the `policy_rule_history` revision id
 when one exists, so the report can show who changed the rule on the manager when the change actor is known. An
-invalidated KEEP puts the rule back to `DUE` immediately (it is enrolled in the next campaign, or in an open
-`PERIODIC` campaign of its scope as a late item, open question Q11).
+invalidated KEEP puts the rule back to `DUE` immediately and enrols it as a **late item** in the open `PERIODIC`
+campaign whose scope covers it (item flag `LATE`, due date = the campaign due date or 30 days from enrolment, whichever
+is later); with no such campaign open, it waits for the next one (PO session recommendation, Q11). Late items are
+counted separately in the campaign and closure summaries.
 
 ## 6. Decisions
 
@@ -244,7 +278,7 @@ invalidated KEEP puts the rule back to `DUE` immediately (it is enrolled in the 
 
 | Choice | Required | Optional | Result |
 | --- | --- | --- | --- |
-| `KEEP` | justification (20-2000 characters); next review date, not later than the campaign's maximum interval (default 12 months, open question Q1); for cleanup items, an answer to the finding (for example why a broad rule is needed) | business or change reference (free text, 1-200 characters); attached Rule object usage result ids | The rule is `CERTIFIED` until the next review date while its version is unchanged. |
+| `KEEP` | justification (20-2000 characters); next review date, at most 12 months ahead, at most 6 months for a high-risk rule (3.1, 3.3); for cleanup items, an answer to the finding (for example why a broad rule is needed) | business or change reference (free text, 1-200 characters); attached Rule object usage result ids | The rule is `CERTIFIED` until the next review date while its version is unchanged. |
 | `REMOVE` | reason (20-2000 characters); a target date by which the bank's change process is expected to remove it (default campaign due date + 30 days) | change reference | `REMOVAL_REQUESTED` until verification (6.4). |
 | `MODIFY` | description of the intended change (20-2000 characters); target date | change reference; attached Rule object usage result ids (for example the `NOT_SEEN` members to drop) | `MODIFICATION_REQUESTED` until a change is observed; then the new version needs its own KEEP (6.4). |
 
@@ -252,8 +286,9 @@ Non-decision actions on an item:
 
 - `REASSIGN`: "not my rule"; returns the item to the fallback queue with a reason (20-500 characters). Audited.
 - `COMMENT`: append a note to the item (does not change its state).
-- No "skip", no "defer". The due date of an item can be extended only by the campaign manager, with a reason, once per
-  item without four-eyes (open question Q12 for further extensions).
+- No "skip", no "defer". The due date of an item can be extended only by the campaign manager, with a reason. The
+  first extension of an item needs no second person; every further extension of the same item needs four-eyes
+  approval (8.2) (PO session recommendation, Q12). Extensions are counted in the closure summary and the report.
 
 Free text is checked for control characters and length only. It is shown masked to `replay_viewer` (as "justification
 present", not its content), because it may name systems or people. Every text field carries the warning "Do not
@@ -293,8 +328,10 @@ the change through the bank's change process; neXus will show it when a later po
 After each completed policy collection, for every open `REMOVE` or `MODIFY` request of that policy source:
 
 - `REMOVE`: **removal observed** when the rule is absent from a complete snapshot of its scope (date = that
-  snapshot's `collected_at`, plus the history revision and change actor when known). Disabled but present:
-  `DISABLED_NOT_REMOVED`, shown apart (Q10). Absent from an incomplete snapshot: nothing is concluded.
+  snapshot's `collected_at`, plus the history revision and change actor when known). Disabled but present: the
+  request **stays open** with flag `DISABLED_NOT_REMOVED`, shown apart, and still escalates as `CHANGE_OVERDUE` after
+  its target date; a disabled rule is never counted as removed (PO session recommendation, Q10). Absent from an
+  incomplete snapshot: nothing is concluded.
 - `MODIFY`: **change observed** when `ruleHash` or `objectsHash` changed. neXus cannot judge whether the change matches
   the intent; the item becomes `CHANGED_REVIEW_PENDING` and the owner must record a new decision (normally KEEP) on the
   new version. Until then the rule is not `CERTIFIED`.
@@ -306,10 +343,12 @@ Verification never contacts a device; it reads the snapshot the normal collectio
 ### 6.5 Bulk decisions
 
 An owner may apply one choice with one justification to several selected items at once. Each item still gets its own
-decision row with its own rule version, flagged `BULK` with the bulk operation id and size. Bulk KEEP is limited to 50
-items per operation and is never available for cleanup items of the classes `conflict`, `broad` (any-any) or zone
-matrix violation (open question Q13). Bulk decisions are counted separately in the report so a reviewer who certified
-hundreds of rules in minutes is visible.
+decision row with its own evidence record (6.2) and its own rule version, flagged `BULK` with the bulk operation id
+and size. **Bulk KEEP is limited to 50 items per operation** (PO 2026-11-14, Q13); a larger selection is refused
+(`BULK_LIMIT_EXCEEDED`), never truncated. **High-risk rules (3.3, including `RISK_UNDECIDED`) are excluded from bulk
+KEEP** (PO 2026-11-14): a selection containing one is refused with the rules named, and each must be decided on its
+own. Bulk decisions are counted separately in the report so a reviewer who certified many rules in minutes is
+visible.
 
 ### 6.6 Alignment with the zone matrix exception record
 
@@ -345,8 +384,8 @@ Rules:
 - Staleness uses the single product-wide freshness scale (UI review item B1; until it lands, the same interim threshold
   the reports use). A certification read from a stale snapshot is `UNKNOWN` "policy not collected since <date>", not
   `CERTIFIED`.
-- Disabled rules are in scope of `PERIODIC` campaigns by default (a disabled rule can be re-enabled without a review),
-  counted separately (open question Q10).
+- Disabled rules are in scope of `PERIODIC` campaigns (a disabled rule can be re-enabled without a review), counted
+  separately (PO session recommendation, Q10).
 - NAT rules and rules outside the security rulebase are out of scope in the first delivery and counted as "not in
   scope".
 
@@ -367,16 +406,18 @@ Rules:
   is an identity-authority decision for the council (open question Q2).
 - replay_viewer (aiview) reads masked results only; it never decides, approves, assigns, launches, imports or exports
   raw. The local root identity never decides or approves (break-glass account; same rule as zone matrix publishing).
-- Report export follows Reports R1: masked by default; raw needs `report_raw_view`.
+- Report export follows Reports R1: masked by default; raw needs `report_raw_view` (PO session recommendation, Q17).
 
 ### 8.2 Four-eyes decisions
 
 A decision needs a second person's approval before it takes effect when any of these holds (proposed; Q3):
 
 - KEEP on a cleanup item of class `conflict`, `broad` (any-any) or zone matrix violation;
-- KEEP whose next review date is beyond the campaign's default interval;
 - KEEP recorded from the fallback queue (`DECIDED_WITHOUT_OWNER`);
-- any decision on a rule the campaign marks high-risk (risk tier, Q1).
+- any decision on a high-risk rule (3.3), including `RISK_UNDECIDED`;
+- a second or later due-date extension of the same item (6.1, Q12).
+
+A KEEP beyond the maximum interval (12 months; 6 months for high-risk rules) is refused outright, not approvable.
 
 Rules (same pattern as the zone matrix publish and the failover approvals):
 
@@ -400,21 +441,22 @@ per state, per owner, per choice, bulk counts, unknown counts) is stored as cano
 ## 9. Reminders and escalation
 
 Mail goes through the existing SMTP relay and the notification forwarder (single leader, advisory lock, own
-watermark per route, retry on failure). The routing contract is **type-based with fixed recipient lists**; reminders
-to individual owners need an amendment of `NOTIFICATION_ROUTING_CONTRACT.md` (one new type `recertification` whose
-recipients are resolved per owner from the owner's contact mailbox, plus a fallback list). neXus does not read mail
-addresses from the directory today; a `PERSON` or `DIRECTORY_GROUP` owner without a contact mailbox gets no mail and
-is listed as "no reminder address" on the campaign screen (Q15).
+watermark per route, retry on failure). Reminders go to **one team mailbox per campaign** (PO session recommendation,
+Q15): the campaign manager enters it at launch (validated with the existing e-mail rule; launch is refused without
+it). Owners carry no mail address, and neXus reads no mail attribute from the directory. The routing contract is
+type-based with fixed recipient lists, so this needs a small amendment of `NOTIFICATION_ROUTING_CONTRACT.md`: one new
+type `recertification` whose recipients are the campaign's team mailbox for campaign events, and the type's route
+list for escalations. The team behind the mailbox passes the reminders to the owners.
 
-Schedule per item (defaults; per campaign):
+Schedule per campaign (defaults; per campaign):
 
 | When | To |
 | --- | --- |
-| Launch (one digest per owner) | owner contact mailbox |
-| Due date - 14 days, - 3 days | owner contact mailbox, only for items still undecided |
-| Due date passed, then every 7 days | owner contact mailbox and owner escalation mailbox |
-| Due date + 14 days | campaign manager's route recipients; the item is shown on the Overview attention row |
-| `CHANGE_OVERDUE` (6.4) | owner and campaign manager's route recipients |
+| Launch (one digest: items per owner) | campaign team mailbox |
+| Due date - 14 days, - 3 days | campaign team mailbox, counts of items still undecided per owner |
+| Due date passed, then every 7 days | campaign team mailbox |
+| Due date + 14 days | the `recertification` route recipients; the item is shown on the Overview attention row |
+| `CHANGE_OVERDUE` (6.4) | campaign team mailbox and the `recertification` route recipients |
 | `PENDING_APPROVAL` older than 3 days | `recert_approve` route recipients |
 
 Mail content: campaign name, counts per state, due date, the link path. **No rule names, object names, addresses or
@@ -453,14 +495,15 @@ references for the review cycle are left empty for the bank's compliance team to
 
 ### 11.1 Storage (one migration per delivery step, each dry-run in BEGIN/ROLLBACK on the live database before rollout)
 
-- `recert_owner` (id, kind, principal reference or team id or encrypted group reference, label, contact mailbox,
-  escalation mailbox, state, created / updated by and at).
+- `recert_owner` (id, kind, principal reference or team id or encrypted group reference, label, state, created /
+  updated by and at).
 - `recert_team`, `recert_team_member` (team id, canonical principal id, added by / at; removal is a row state, not a
   delete).
 - `recert_assignment` (scope kind `RULE` / `SECTION` / `POLICY_SOURCE`, scope ids, owner id, set by / at,
   superseded by / at): append-only.
-- `recert_campaign` (id, type, name, purpose, scope JSON, parameters JSON, due date, state, launched by / at, closed
-  by / at, closure summary JSON and SHA-256).
+- `recert_campaign` (id, type, name, purpose, scope JSON, parameters JSON (including the unused threshold and the
+  review intervals in force at launch), team mailbox, due date, state, launched by / at, closed by / at, closure
+  summary JSON and SHA-256).
 - `recert_item` (id, campaign id, policy source id, rule key, inline parent path, flags, enrolment rule version and
   snapshot time, enrolling evidence JSON (ids, classes, evidence strings, times; no rule copy), owner id at enrolment,
   current owner id, due date, state, state changed at).
@@ -498,13 +541,16 @@ row expires. Until the bank states a retention, nothing is deleted; stored repor
 2. **Owners and assignment**: owner kinds, teams, assignment precedence, CSV import, owner hints from the change actor,
    unknown-owner listing; Policy and changes > Rule owners (Fable).
 3. **Periodic campaign and decisions**: campaign model, enrolment from complete snapshots, KEEP / REMOVE / MODIFY,
-   REASSIGN, COMMENT, evidence rows, refusal on version change; "My reviews" for owners (Fable). No four-eyes yet:
-   decisions that will need it are recorded `PENDING_APPROVAL` and stay uncertified.
+   REASSIGN, COMMENT, evidence rows, refusal on version change, high-risk classification with `RISK_UNDECIDED` and
+   the 12 / 6-month intervals, bulk KEEP (50, high-risk excluded), late items; "My reviews" for owners (Fable). No
+   four-eyes yet: decisions that will need it are recorded `PENDING_APPROVAL` and stay uncertified.
 4. **Invalidation and verification** after completed collections; certification states and the fail-closed headline.
 5. **Four-eyes approvals** and campaign closure sign-off.
-6. **Cleanup campaigns** from sound-mode hygiene (shadowed, conflict, unused, expired, broad, disabled), with the
-   "could not be evaluated" counts; Rule object usage attachments.
-7. **Reminders and escalation** (after the notification routing amendment); Overview attention row.
+6. **Cleanup campaigns** from sound-mode hygiene (shadowed, conflict, unused 180 days on a known last hit, expired,
+   broad, disabled), with the "could not be evaluated" counts and the labelled legacy "possible" list; Rule object
+   usage attachments.
+7. **Reminders and escalation** to the campaign team mailbox (after the notification routing amendment); Overview
+   attention row.
 8. **Evidence reports** RPT-RC1 and RPT-RC2 (after the R1 amendment): stored CSV first, then PDF.
 9. **Zone matrix violations** as a cleanup source and the exception alignment of 6.6, after zone matrix delivery step
    4 and its contract amendment.
@@ -543,32 +589,43 @@ Each step lands behind the menu gate of the Policy plane; nothing is shown to ow
 - `RC-14` RPT-RC1 contains every never-reviewed, unknown and owner-less rule of the scope, the fixed sentences, and
   the hashes of every decision; the stored file's SHA-256 is in the audit row before the first byte is streamed.
 - `RC-15` A closed campaign and its closure summary are immutable; the summary hash recomputes from stored content.
+- `RC-16` A KEEP with a next review date more than 12 months ahead, or more than 6 months ahead on a high-risk rule, is
+  refused (`REVIEW_INTERVAL_EXCEEDED`); a rule whose risk cannot be decided is treated as high-risk (`RISK_UNDECIDED`).
+- `RC-17` A bulk KEEP over 50 items, or containing a high-risk rule, is refused as a whole with the reason; every item
+  of an accepted bulk operation has its own decision row and evidence.
+- `RC-18` Only "Last hit predates the threshold" with a 180-day threshold enrols an unused rule; "Zero collected hits;
+  counter reset/window is unknown." appears in the "could not be evaluated" counts and never enrols.
+- `RC-19` Legacy-mode results appear only in the labelled "possible" list and in no candidate count or headline.
+- `RC-20` A disabled rule never satisfies a REMOVE request; the request stays open with `DISABLED_NOT_REMOVED`.
+- `RC-21` A second extension of the same item without an approval is refused; the first needs none.
 
-## 14. Open questions
+## 14. Questions: answered and open
 
-### 14.1 For the PO (product decisions)
+### 14.1 Answered by the PO (2026-11-14)
 
-- `Q1` Review cadence and risk tiers: one yearly cycle for all rules, or a shorter cycle for high-risk rules (any-any,
-  internet-facing, zone matrix violations)? Default maximum KEEP interval (draft: 12 months)? What makes a rule
-  high-risk?
-- `Q4` Unused N: default N (for example 90 or 180 days), and may "zero collected hits, counter window unknown" enrol a
-  rule, or only "last hit older than N"?
-- `Q5` Legacy-mode (upper-bound) hygiene results: hide, or show as a labelled "possible" list that never enrols?
+Recorded in
+[PO_DECISION_RECORD_2026_11_14_RULE_RECERTIFICATION_PRODUCT_ANSWERS.md](PO_DECISION_RECORD_2026_11_14_RULE_RECERTIFICATION_PRODUCT_ANSWERS.md).
+
+| Question | Answer | Kind | Where |
+| --- | --- | --- | --- |
+| `Q1` Cadence, risk tiers, maximum KEEP interval | Yearly for all rules; every 6 months for high-risk rules (any-any, internet-facing, zone matrix violation); a KEEP is valid at most 12 months | PO decision | 3.1, 3.3, 6.1 |
+| `Q4` Unused threshold | 180 days, on a known last hit only; rules whose counter window is unknown do not enrol | PO decision | 3.2 |
+| `Q13` Bulk KEEP | Allowed, at most 50 per operation, each item its own evidence record, high-risk rules excluded | PO decision | 6.5 |
+| `Q5` Legacy-mode results | A labelled "possible" list that never enrols | PO session recommendation, not objected to | 3.2 |
+| `Q10` Disabled instead of removed | The REMOVE request stays open until the rule is removed; disabled rules are in periodic scope | PO session recommendation, not objected to | 3.1, 5.3, 6.4, 7 |
+| `Q11` KEEP invalidated during an open campaign | Joins the open periodic campaign as a late item | PO session recommendation, not objected to | 5.3 |
+| `Q12` Due-date extensions | At most one extension without four-eyes | PO session recommendation, not objected to | 6.1, 8.2 |
+| `Q15` Reminder addresses | One team mailbox per campaign | PO session recommendation, not objected to | 4.1, 9 |
+| `Q17` Auditor report view | Masked by default; raw only with `report_raw_view` | PO session recommendation, not objected to | 8.1, 10 |
+
+### 14.2 Waiting for bank input (do not block the council)
+
 - `Q6` Does the bank already record owners in rule comments or a CMDB export we could import, and in what form
   (synthetic sample only)?
-- `Q10` A rule disabled instead of removed after a REMOVE request: count as done, or keep it open until removed? Are
-  disabled rules in scope of periodic review?
-- `Q11` A KEEP invalidated during an open periodic campaign: add the rule to that campaign as a late item, or wait for
-  the next one?
-- `Q12` Due-date extensions: how many without four-eyes?
-- `Q13` Bulk KEEP: allowed at all? Limit per operation (draft: 50)?
-- `Q15` Reminder addresses: entered per owner in neXus (draft), read from the directory (a new LDAP attribute read,
-  which needs its own review), or one team mailbox per campaign?
 - `Q16` Retention of decision evidence and the BDDK / internal-audit reference for the review cycle: to be stated by
   the bank's compliance team.
-- `Q17` Who receives the auditor report and in which view: masked by default, raw only with `report_raw_view`?
 
-### 14.2 For the decision council (durable semantics)
+### 14.3 For the decision council (durable semantics)
 
 - `Q2` Identity and authorization authority for rule owners who hold no neXus role: a new narrow role bound to a
   directory group, scoped to their own items; or decisions only by existing admin roles on the owner's behalf (which
@@ -590,3 +647,9 @@ Each step lands behind the menu gate of the Policy plane; nothing is shown to ow
   be hash-chained (each row carrying the previous row's hash) so a database administrator's edit is detectable?
 - `Q19` Can a change reference ever be checked (for example a ticket id format), or does it stay free text until a
   change-system integration is decided?
+
+New in revision 2, for the council together with Q3:
+
+- `Q20` "Internet-facing" (3.3): is "source or destination is `any` or contains an address outside the declared
+  internal ranges" the right test, and which internal ranges apply before a zone matrix version is active (private
+  ranges plus a bank-confirmed list, as drafted)?
