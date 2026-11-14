@@ -56,6 +56,7 @@ public final class PanXmlApiTransport implements DeviceTransport {
 
     private final String trustRuleRef;
     private final PanTrustRuleResolver trustRuleResolver;
+    private final PanKeygenRetry.Policy keygenPolicy = PanKeygenRetry.Policy.fromEnvironment();
 
     public PanXmlApiTransport(String trustRuleRef, PanTrustRuleResolver trustRuleResolver) {
         this.trustRuleRef = Objects.requireNonNull(trustRuleRef, "trustRuleRef");
@@ -100,6 +101,13 @@ public final class PanXmlApiTransport implements DeviceTransport {
     /** T-1/T-2/T-4: one POST to {@code target.baseUrl() + "/api/"}, never any other path or host. */
     @Override
     public XmlApiResult xmlApiCall(ApiTarget target, XmlApiSpec spec, Duration timeout) {
+        if (!PanKeygenRetry.isKeygen(spec)) return xmlApiCallOnce(target, spec, timeout);
+        return PanKeygenRetry.run(keygenPolicy, s -> xmlApiCallOnce(target, s, timeout), spec, ms -> {
+            try { Thread.sleep(ms); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        });
+    }
+
+    private XmlApiResult xmlApiCallOnce(ApiTarget target, XmlApiSpec spec, Duration timeout) {
         try {
         com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         HttpClient client;
