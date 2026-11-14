@@ -98,6 +98,26 @@ is chosen; the behind-a-cloud tie of F§4.2 is unchanged. A `NO_ROUTE` branch na
 enrolled unit is the caveat `SOURCE_IS_UNIT_ADDRESS` / `DESTINATION_IS_UNIT_ADDRESS` (to/from-the-box traffic is not
 modelled).
 
+Amendment 2026-11-14 (engineer decisions under the PO freeze delegation, Cisco ASA step 8 of
+`ASA_FORTIGATE_POLICY_DESIGN_2026_11_14.md`; vendor claims in the FROZEN ASA/FortiGate A0 amendment unless quoted
+here): Cisco ASA gateways (`cisco_asa`) join the topology. (1) Interface names: the ASA inventory names interfaces as
+`show ip address` does, routes and access groups name them by `nameif`; the builder renames an ASA interface to its
+`nameif`, which is also its zone, only from the interface table of the device's own stored configuration (`interface
+<name>` block with `nameif`, the policy mapper's `asa-interfaces` object). A device without a table, an interface the
+table does not name, a repeated name or `nameif`, or two snapshots for one device keep the inventory name and no zone,
+so those hops stay UNKNOWN. (2) Routes: an ASA `show route` row is a routing-table entry used for forwarding -- Cisco
+ASA 9.22 general operations CLI guide, Routing Overview: "Use the show route command to view the entries in the
+routing table." and "If the destination matches a single entry in the routing table, the packet is forwarded through
+the interface associated with that route." (HIGH) -- so a row in a recognised form (`via` or `is directly connected`) is
+stored `is_active = true` with next-hop kind `IP` / `CONNECTED`; equal-cost continuation lines are stored as further
+paths with `is_ecmp = true` ("If there are multiple paths to the same destination with equal metrics, load balancing is
+done on these equal cost paths.", same page); any other form keeps UNKNOWN. Stored rows change on the next inventory
+collection. (3) Hop: access rules on the real tuple with the ingress and egress `nameif`s (A0-ASA-1..6); ASA NAT
+translation is not evaluated (A0-ASA-18 UNKNOWN), so a hop is UNKNOWN (`NAT_UNKNOWN`, NAT reason
+`ASA_NAT_NOT_EVALUATED`) whenever an enabled NAT rule's real or mapped source, or for a rule with a destination clause
+its real or mapped destination, contains a tuple address or does not resolve; the tuple is never translated. A deny is
+undone by a route taint as for Palo Alto (the egress interface came from the route).
+
 ## 5. Path engine
 
 Query, ingress, output contract: F§4.1, F§4.2, F§4.7, plus A's `executive_summary` block. IPv4 only. Source port not

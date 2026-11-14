@@ -31,9 +31,10 @@ public class TopologyConfiguration {
     @Bean
     public TopologyService topologyService(DeviceRepository deviceRepository,
             DeviceInventoryRepository deviceInventoryRepository, TopologyRepository topologyRepository,
-            ManagementVsSource managementVsSource) {
+            ManagementVsSource managementVsSource,
+            org.springframework.beans.factory.ObjectProvider<InterfaceNameSource> interfaceNameSource) {
         return new TopologyService(deviceRepository, deviceInventoryRepository, topologyRepository, Clock.systemUTC(),
-                managementVsSource);
+                managementVsSource, interfaceNameSource.getIfAvailable(() -> InterfaceNameSource.NONE));
     }
 
     /**

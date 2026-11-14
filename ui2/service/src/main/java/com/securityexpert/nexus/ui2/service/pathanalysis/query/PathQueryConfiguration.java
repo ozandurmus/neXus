@@ -8,7 +8,10 @@ import org.springframework.context.annotation.Configuration;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository;
+import com.securityexpert.nexus.ui2.service.pathanalysis.topology.InterfaceNameSource;
 import com.securityexpert.nexus.ui2.service.pathanalysis.topology.TopologyService;
+import com.securityexpert.nexus.ui2.service.policy.AsaInterfaceNames;
+import com.securityexpert.nexus.ui2.service.policy.LocalFirewallPolicyService;
 import com.securityexpert.nexus.ui2.service.policy.PolicyFirewallNames;
 import com.securityexpert.nexus.ui2.service.policy.PolicyQueryService;
 import com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker;
@@ -23,6 +26,12 @@ public class PathQueryConfiguration {
             DeviceRepository deviceRepository) {
         return new PathPolicyBinder(new StoredPathPolicyCatalog(policyQueryService,
                 new PolicyCollectionRepository(transactionBoundary), new PolicyFirewallNames(deviceRepository)));
+    }
+
+    /** Cisco ASA interface names for the topology build, from the stored configurations (ASA policy step 8). */
+    @Bean
+    public InterfaceNameSource asaInterfaceNameSource(LocalFirewallPolicyService localFirewallPolicyService) {
+        return new AsaInterfaceNames(localFirewallPolicyService::asaSnapshots);
     }
 
     @Bean

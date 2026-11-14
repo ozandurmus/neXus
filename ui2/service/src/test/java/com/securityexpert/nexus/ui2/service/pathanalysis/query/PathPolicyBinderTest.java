@@ -144,4 +144,22 @@ class PathPolicyBinderTest {
         var changed = (HopPolicySource.Bound) binder.forQuery(NOW).policyFor(t04);
         assertFalse(first.prepared() == changed.prepared());
     }
+    @Test
+    void aCiscoAsaUnitBindsItsOwnConfigurationPolicyInThePhysicalContextOnly() {
+        var asa = com.securityexpert.nexus.ui2.policy.asa.AsaPolicyMapper.map("dev-asa-1", "Cisco ASA dev-asa-1",
+                "2026-11-04T05:00:00Z", "artefact", com.securityexpert.nexus.ui2.policy.asa.AsaConfigPolicyParser.parse(
+                        "ASA Version 9.18(4)22\ninterface GigabitEthernet0/1\n nameif inside\n security-level 100\n"));
+        var catalog = new InMemoryPathPolicyCatalog().add(asa).add(PathGoldenAccess.cpChain("dev-t04"));
+        assertEquals(Optional.of(""), PathPolicyBinder.policyContext(TopologyInput.VENDOR_CISCO_ASA, "physical"));
+        assertEquals(Optional.empty(), PathPolicyBinder.policyContext(TopologyInput.VENDOR_CISCO_ASA, "ctx1"));
+        var bound = assertInstanceOf(HopPolicySource.Bound.class,
+                bind(catalog, node(TopologyInput.VENDOR_CISCO_ASA, "physical", "dev-asa-1"), NOW));
+        assertFalse(bound.stale());
+        assertSame(asa, bound.prepared().snapshot());
+        // Another vendor's snapshot of the same device id is never bound to an ASA unit, nor an ASA one to it.
+        assertEquals(new HopPolicySource.Unbound(PathReasons.POLICY_BINDING_UNPROVEN),
+                bind(catalog, node(TopologyInput.VENDOR_CISCO_ASA, "physical", "dev-t04"), NOW));
+        assertEquals(new HopPolicySource.Unbound(PathReasons.POLICY_CONTEXT_UNPROVEN),
+                bind(catalog, node(TopologyInput.VENDOR_CISCO_ASA, "ctx1", "dev-asa-1"), NOW));
+    }
 }

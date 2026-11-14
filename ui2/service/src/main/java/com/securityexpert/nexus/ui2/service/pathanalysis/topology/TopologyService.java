@@ -76,6 +76,7 @@ public final class TopologyService {
     private final TopologyRepository repository;
     private final Clock clock;
     private final ManagementVsSource managementVs;
+    private final InterfaceNameSource interfaceNames;
     private final SecureRandom random = new SecureRandom();
     private final ReentrantLock rebuildLock = new ReentrantLock();
     private final AtomicReference<TopologyGraph> current = new AtomicReference<>();
@@ -87,7 +88,13 @@ public final class TopologyService {
 
     public TopologyService(DeviceRepository devices, DeviceInventoryRepository inventory, TopologyRepository repository,
             Clock clock, ManagementVsSource managementVs) {
+        this(devices, inventory, repository, clock, managementVs, InterfaceNameSource.NONE);
+    }
+
+    public TopologyService(DeviceRepository devices, DeviceInventoryRepository inventory, TopologyRepository repository,
+            Clock clock, ManagementVsSource managementVs, InterfaceNameSource interfaceNames) {
         this.managementVs = Objects.requireNonNull(managementVs, "managementVs");
+        this.interfaceNames = Objects.requireNonNull(interfaceNames, "interfaceNames");
         this.devices = Objects.requireNonNull(devices, "devices");
         this.inventory = Objects.requireNonNull(inventory, "inventory");
         this.repository = Objects.requireNonNull(repository, "repository");
@@ -130,7 +137,9 @@ public final class TopologyService {
             Instant builtAt = clock.instant();
             String snapshotId = "tps-" + UUID.randomUUID();
             TopologyGraph graph = TopologyBuilder.build(new TopologyInput(snapshotId, builtAt, facts,
-                    repository.listOverrides(), salt, loadManagementVs(builtAt)));
+                    repository.listOverrides(), salt, loadManagementVs(builtAt),
+                    candidates.stream().anyMatch(d -> TopologyInput.VENDOR_CISCO_ASA.equals(d.vendorHint()))
+                            ? loadInterfaceNames() : Map.of()));
             long millis = (System.nanoTime() - started) / 1_000_000;
             var header = new TopologyRepository.SnapshotHeader(snapshotId, builtAt, actorFingerprint,
                     graph.fingerprints(), graph.counts(), 0, millis);
@@ -152,11 +161,19 @@ public final class TopologyService {
         }
     }
 
+    /** A failing configuration read must never fail a rebuild: no table means the ASA interfaces keep their names. */
+    private Map<String, Map<String, String>> loadInterfaceNames() {
+        try {
+            return interfaceNames.load();
+        } catch (RuntimeException unreadable) {
+            return Map.of();
+        }
+    }
+
     /** The devices a topology is built from; refused above {@link #MAX_DEVICES}. */
     private List<DeviceSummaryRecord> candidates() {
         List<DeviceSummaryRecord> candidates = devices.listAll().stream()
-                .filter(d -> TopologyInput.VENDOR_CHECK_POINT.equals(d.vendorHint())
-                        || TopologyInput.VENDOR_PALO_ALTO.equals(d.vendorHint()))
+                .filter(d -> TopologyInput.supportedVendor(d.vendorHint()))
                 .filter(d -> "gateway".equals(d.role()))
                 .filter(d -> d.enrollmentState() != DeviceEnrollmentState.DRAFT)
                 .toList();
