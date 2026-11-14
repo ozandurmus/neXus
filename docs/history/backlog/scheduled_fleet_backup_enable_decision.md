@@ -15,3 +15,5 @@ Target (full): docs/design/INCIDENT_2026_10_10_BACKUP_FREQUENCY_DISK_FULL.md
 2026-11-14: retitled. Daily backups run (02:00); the open part is an alert before the host disk fills (the 2026-10-10 disk-full incident). HOST-A root file system 72% used on 2026-11-14; SystemStatusService only displays usable bytes, no threshold or alert. Pairs with vault_has_no_enforced_quota_on_a_shared_host.
 
 2026-11-14: disk headroom alert in ship batch 3.
+
+Disk headroom alert implemented 2026-11-14 (AUTOMATED_VALIDATED): warning 80/critical 90 percent, status payload, health light, syslog DISK_HEADROOM. See docs/operations/DISK_HEADROOM_ALERT.md. Live crossing not yet observed.

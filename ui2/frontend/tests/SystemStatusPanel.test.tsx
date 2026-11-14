@@ -59,3 +59,37 @@ it("explains the top-bar light and lists one-off jobs and older scheduled runs w
   expect(screen.getByText("One-off job")).toBeInTheDocument();
   expect(screen.getByText("Service")).toBeInTheDocument();
 });
+
+const emptyStorage = {
+  read_at: "2026-10-06T00:00:00Z", backups: [], top_devices: [], database_bytes: 0,
+  configuration: { stored_bytes: 0, artefacts: 0, text_in_database_bytes: 0 },
+  artefact_volume: { total_bytes: 1000, usable_bytes: 70, used_percent: 93, level: "critical" as const, note: "synthetic volume" },
+};
+const diskView = (level: "ok" | "warning" | "critical", volumes: Array<{ name: string; used_percent: number; level: "ok" | "warning" | "critical" }>) => ({
+  level, thresholds: { warning_percent: 80, critical_percent: 90 },
+  volumes: volumes.map((v) => ({ ...v, total_bytes: 1000, usable_bytes: 1000 - v.used_percent * 10 })),
+});
+
+it("shows the disk headroom alert with the volume name and percentage, and the artefact volume percentage", async () => {
+  vi.mocked(api.getSystemPods).mockResolvedValue({
+    available: true, read_at: "2026-10-06T00:00:00Z", pods: [],
+    disk: diskView("critical", [{ name: "root", used_percent: 72, level: "ok" }, { name: "artefact_store", used_percent: 93, level: "critical" }]),
+  });
+  vi.mocked(api.getSystemStorage).mockResolvedValue(emptyStorage);
+  render(<SystemStatusPanel />);
+  const alert = await screen.findByText(/Disk critical: artefact_store 93% used \(critical\)/);
+  expect(alert).toBeInTheDocument();
+  expect(alert).not.toHaveTextContent("root 72%");
+  expect(alert).toHaveTextContent("Thresholds: warning 80%, critical 90%.");
+  expect(screen.getByText(/93% used · synthetic volume/)).toBeInTheDocument();
+});
+
+it("shows no disk alert while every volume is under its threshold", async () => {
+  vi.mocked(api.getSystemPods).mockResolvedValue({
+    available: true, read_at: "2026-10-06T00:00:00Z", pods: [], disk: diskView("ok", [{ name: "root", used_percent: 72, level: "ok" }]),
+  });
+  vi.mocked(api.getSystemStorage).mockResolvedValue({ ...emptyStorage, artefact_volume: {} });
+  render(<SystemStatusPanel />);
+  await screen.findByText(/What the evidence takes/);
+  expect(screen.queryByText(/Disk (warning|critical)/)).not.toBeInTheDocument();
+});

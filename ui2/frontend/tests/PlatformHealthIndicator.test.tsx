@@ -7,7 +7,7 @@ import { TopAppBar } from "../src/shell/TopAppBar";
 import {
   PLATFORM_STATUS_HREF, PlatformHealthBadge, canOpenPlatformStatus, cronRunOf, platformHealth, podRoles, type PlatformHealth,
 } from "../src/shell/PlatformHealthIndicator";
-import type { PodsView, PodStatusView } from "../src/auth/adminApi";
+import type { DiskHeadroomView, DiskVolumeView, PodsView, PodStatusView } from "../src/auth/adminApi";
 
 /**
  * neXus' own health in the top bar (PO 2026-11-13 amendment of navigation decisions F1/F2): one state from the existing
@@ -21,6 +21,42 @@ const pod = (name: string, over: Partial<PodStatusView> = {}): PodStatusView => 
 });
 const view = (pods: PodStatusView[], over: Partial<PodsView> = {}): PodsView => ({ available: true, read_at: "2026-11-13T09:00:00Z", pods, ...over });
 const HEALTHY = view([pod("svc-a-0"), pod("svc-b-0"), pod("db-0"), pod("nightly-check-1", { phase: "Succeeded", state: "Succeeded", ready: "0/1" })]);
+
+const volume = (name: string, used: number | null, level: DiskVolumeView["level"]): DiskVolumeView =>
+  ({ name, total_bytes: used === null ? null : 1000, usable_bytes: used === null ? null : 1000 - used * 10, used_percent: used, level });
+const disk = (level: DiskHeadroomView["level"], volumes: DiskVolumeView[]): DiskHeadroomView =>
+  ({ level, thresholds: { warning_percent: 80, critical_percent: 90 }, volumes });
+
+describe("the disk headroom rule", () => {
+  it("is degraded, naming the volume and its percentage, when a volume is critically full right now", () => {
+    const health = platformHealth({ pods: { ...HEALTHY, disk: disk("critical", [volume("root", 72, "ok"), volume("artefact_store", 93, "critical")]) } });
+    expect(health).toEqual({ state: "degraded", reason: "Disk critical: artefact_store is 93% used." });
+  });
+
+  it("counts the other critical volumes", () => {
+    const health = platformHealth({ pods: { ...HEALTHY, disk: disk("critical", [volume("root", 95, "critical"), volume("artefact_store", 93, "critical")]) } });
+    expect(health).toEqual({ state: "degraded", reason: "Disk critical: root is 95% used and 1 other volume." });
+  });
+
+  it("does not degrade the light for a warning, an unmeasurable volume, a healthy disk or a service that sends no disk section", () => {
+    expect(platformHealth({ pods: { ...HEALTHY, disk: disk("warning", [volume("root", 85, "warning")]) } })?.state).toBe("ok");
+    expect(platformHealth({ pods: { ...HEALTHY, disk: disk("ok", [volume("root", null, "unknown")]) } })?.state).toBe("ok");
+    expect(platformHealth({ pods: { ...HEALTHY, disk: disk("ok", [volume("root", 72, "ok")]) } })?.state).toBe("ok");
+    expect(platformHealth({ pods: HEALTHY })?.state).toBe("ok");
+  });
+
+  it("is a current condition: the same view with the disk back under the threshold is OK again", () => {
+    const full = { ...HEALTHY, disk: disk("critical", [volume("root", 91, "critical")]) };
+    const recovered = { ...HEALTHY, disk: disk("ok", [volume("root", 70, "ok")]) };
+    expect(platformHealth({ pods: full })?.state).toBe("degraded");
+    expect(platformHealth({ pods: recovered })?.state).toBe("ok");
+  });
+
+  it("keeps the pod reasons first: a not-ready pod is reported before a full disk", () => {
+    const health = platformHealth({ pods: view([pod("svc-a-0", { state: "Pending", ready: "0/1" })], { disk: disk("critical", [volume("root", 95, "critical")]) }) });
+    expect(health?.reason).toMatch(/^1 service pod not ready: svc-a-0/);
+  });
+});
 
 describe("the one state", () => {
   it("is OK when every long-running pod is running and ready; a finished one-off pod does not count", () => {

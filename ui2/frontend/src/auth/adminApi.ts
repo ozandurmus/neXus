@@ -2091,8 +2091,26 @@ export interface ModuleStatusView {
   readonly quarantined_permits: number;
 }
 
+/** One measured volume of the disk headroom check; `used_percent` is `df`'s figure, null when it could not be measured. */
+export interface DiskVolumeView {
+  readonly name: string;
+  readonly total_bytes: number | null;
+  readonly usable_bytes: number | null;
+  readonly used_percent: number | null;
+  readonly level: DiskLevel;
+}
+export type DiskLevel = "ok" | "warning" | "critical" | "unknown";
+export interface DiskHeadroomView {
+  /** The worst measured level; an unmeasurable volume never makes it worse. */
+  readonly level: DiskLevel;
+  readonly thresholds: { readonly warning_percent: number; readonly critical_percent: number };
+  readonly volumes: readonly DiskVolumeView[];
+}
+
 export interface PodsView {
   readonly available: boolean;
+  /** Current disk usage against the headroom thresholds (absent from an older service). */
+  readonly disk?: DiskHeadroomView;
   readonly reason?: string;
   readonly metrics_note?: string | null;
   readonly read_at: string;
@@ -2111,7 +2129,7 @@ export interface StorageView {
   readonly top_devices: ReadonlyArray<{ device_id: string; hostname: string | null; artefacts: number; stored_bytes: number }>;
   readonly configuration: { artefacts: number; stored_bytes: number; text_in_database_bytes: number };
   readonly database_bytes: number;
-  readonly artefact_volume: { total_bytes?: number; usable_bytes?: number; note?: string };
+  readonly artefact_volume: { total_bytes?: number; usable_bytes?: number; used_percent?: number | null; level?: DiskLevel; note?: string };
 }
 
 export function getSystemStorage(): Promise<StorageView> {

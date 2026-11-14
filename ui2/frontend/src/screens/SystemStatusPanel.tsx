@@ -100,8 +100,16 @@ export function SystemStatusPanel() {
   const backupCount = storage.backups.reduce((s, r) => s + r.artefacts, 0);
   const vol = storage.artefact_volume;
 
+  const disk = pods.disk;
+  const fullVolumes = (disk?.volumes ?? []).filter((v) => v.level === "warning" || v.level === "critical");
+
   return (
     <Stack spacing={2}>
+      {disk && fullVolumes.length > 0 && (
+        <Alert severity={disk.level === "critical" ? "error" : "warning"} data-disk-headroom={disk.level}>
+          {`Disk ${disk.level === "critical" ? "critical" : "warning"}: ${fullVolumes.map((v) => `${v.name} ${v.used_percent}% used (${v.level})`).join(", ")}. Thresholds: warning ${disk.thresholds.warning_percent}%, critical ${disk.thresholds.critical_percent}%.`}
+        </Alert>
+      )}
       <Card sx={{ p: 2, borderRadius: "16px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}` }}>
         <Typography variant="overline" sx={{ color: m3.onSurfaceVar }}>Storage</Typography>
         <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5, mb: 1.5 }}>What the evidence takes</Typography>
@@ -110,7 +118,7 @@ export function SystemStatusPanel() {
             ["Backups (encrypted)", formatBytes(backupStored), `${backupCount} archives`],
             ["Configuration evidence", formatBytes(storage.configuration.stored_bytes), `${storage.configuration.artefacts} reads · ${formatBytes(storage.configuration.text_in_database_bytes)} text in the database`],
             ["Database", formatBytes(storage.database_bytes), "PostgreSQL, all tables"],
-            ["Artefact volume free", formatBytes(vol.usable_bytes), vol.total_bytes ? `of ${formatBytes(vol.total_bytes)} · ${vol.note ?? ""}` : vol.note ?? ""],
+            ["Artefact volume free", formatBytes(vol.usable_bytes), vol.total_bytes ? `of ${formatBytes(vol.total_bytes)}${typeof vol.used_percent === "number" ? ` · ${vol.used_percent}% used` : ""} · ${vol.note ?? ""}` : vol.note ?? ""],
           ].map(([label, value, note]) => (
             <Box key={label} sx={{ p: 1.5, borderRadius: "12px", border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLow }}>
               <Typography variant="caption" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.06em" }}>{label.toUpperCase()}</Typography>
