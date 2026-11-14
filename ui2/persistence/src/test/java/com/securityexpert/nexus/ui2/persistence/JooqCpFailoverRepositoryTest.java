@@ -130,8 +130,9 @@ class JooqCpFailoverRepositoryTest {
             count.incrementAndGet();
             String sql = query.sql();
             assertTrue(sql.contains("distinct on (vendor,cluster_ref,coalesce(vs_id,''))"));
-            assertTrue(sql.contains("join latest l on l.run_id=c.run_id"));
-            assertTrue(sql.contains("where c.phase='pre' group by c.run_id"));
+            // check rows per latest run through the (run_id, phase, ...) unique index, never a hash of every check row
+            assertTrue(sql.contains("left join lateral ("));
+            assertTrue(sql.contains("where c.run_id=r.run_id and c.phase='pre'"));
             assertTrue(sql.contains("failed_check,message"));
             assertTrue(sql.contains("r.failed_check,r.message"));
             assertTrue(sql.contains("coalesce(c.checks,'[]'::jsonb)"));

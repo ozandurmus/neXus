@@ -109,8 +109,10 @@ class JooqDeviceInventoryRepositoryTest {
         assertEquals(1,queries.size());
         assertTrue(queries.get(0).contains("distinct on (device_id)"));
         assertTrue(queries.get(0).contains("collected_at desc"));
-        assertTrue(queries.get(0).contains("join device_interface"));
-        assertTrue(queries.get(0).contains("join device_route"));
+        // contexts read per latest run through the run_id index (cross join lateral), not a hash of every row
+        assertTrue(queries.get(0).contains("cross join lateral"));
+        assertTrue(queries.get(0).contains("from device_interface i where i.run_id=l.run_id"));
+        assertTrue(queries.get(0).contains("from device_route r where r.run_id=l.run_id"));
     }
 
     @Test

@@ -64,7 +64,13 @@ public final class JooqDeviceRepository implements DeviceRepository {
             + "left join lateral ( "
             + "    select string_agg(distinct substring(c_vs.display_name from length(dc.display_name) + 2), ', ' order by substring(c_vs.display_name from length(dc.display_name) + 2)) as virtual_systems "
             + "    from discovery_candidate c_vs "
-            + "    where dc.display_name is not null and c_vs.display_name like dc.display_name || '_%' "
+            // The "C"-collation range is the prefix as an index condition (V216); the LIKE stays as the exact test.
+            // The range drops only a LIKE match through a wildcard inside the name itself (0 of 1112 live pairs,
+            // 2026-11-14) -- not a virtual system of that gateway.
+            + "    where dc.display_name is not null "
+            + "      and c_vs.display_name collate \"C\" > dc.display_name collate \"C\" "
+            + "      and c_vs.display_name collate \"C\" < (dc.display_name || chr(1114111)) collate \"C\" "
+            + "      and c_vs.display_name like dc.display_name || '_%' "
             + ") vs_info on true "
             + "left join lateral ( "
             + "    select virtual_systems from device_inventory_run dir where dir.device_id = d.device_id order by collected_at desc limit 1 "

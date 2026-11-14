@@ -1,6 +1,6 @@
 package com.securityexpert.nexus.ui2.service.api;
 
-import java.time.Instant;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -16,20 +16,24 @@ import org.springframework.web.bind.annotation.RestController;
 import com.securityexpert.nexus.ui2.service.overview.OverviewService;
 import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAdvice;
 import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
+import com.securityexpert.nexus.ui2.service.system.BackgroundSnapshot;
 
 /**
  * {@code GET /api/v2/overview} (OVERVIEW_EXCEPTION_SCREEN_CONTRACT §4.1). Cached 60 s per persona; labels and
  * cluster references are masked here for the AIView persona (the counts were computed on raw references).
+ * Since 2026-11-14 (API latency work: 2.1 s on every cache miss, and the Compliance screen reads it too) the body is
+ * rebuilt in the background ({@link BackgroundSnapshot}): a request returns the last body at once, a body older than
+ * 60 s triggers one rebuild, and while somebody reads the Overview it is kept at most about 60 s old. Only the first
+ * read after a pod start builds on the request thread. {@code generated_at} states the body's age, as before.
  */
 @RestController
 public final class OverviewController {
 
-    private record Cached(Instant at, Map<String, Object> body) {
-    }
+    static final Duration FRESH_FOR = Duration.ofSeconds(60);
 
     private final OverviewService overviewService;
     private final TopologyNamePseudonymizer pseudonymizer;
-    private final Map<Boolean, Cached> cache = new ConcurrentHashMap<>();
+    private final Map<Boolean, BackgroundSnapshot<Map<String, Object>>> cache = new ConcurrentHashMap<>();
 
     public OverviewController(OverviewService overviewService, TopologyNamePseudonymizer pseudonymizer) {
         this.overviewService = overviewService;
@@ -39,23 +43,24 @@ public final class OverviewController {
     @GetMapping("/api/v2/overview")
     public ResponseEntity<Map<String, Object>> overview(HttpServletRequest request) {
         boolean masked = PrivacyMaskingResponseBodyAdvice.isReplayViewer(request);
-        Cached cached = cache.get(masked);
-        if (cached == null || cached.at().isBefore(Instant.now().minusSeconds(60))) {
-            Map<String, Object> body = overviewService.build();
-            if (masked) {
-                maskLabels(body);
-            } else {
-                renameClusterField(body);
-            }
-            body.put("masked", masked);
-            cached = new Cached(Instant.now(), body);
-            cache.put(masked, cached);
-        }
+        BackgroundSnapshot.Value<Map<String, Object>> cached = cache.computeIfAbsent(masked, m -> new BackgroundSnapshot<>(
+                m ? "overview-masked" : "overview", () -> build(m), FRESH_FOR, Duration.ofMinutes(10))).get();
         // no-cache, never max-age: the browser must ask each time, so the server -- not a cached copy from another
         // login in the same browser -- decides whether the body is masked (2026-09-24: real names showed under aiview
         // for up to 60 s after an admin session). The ETag still spares the body when nothing changed.
         return ResponseEntity.ok().cacheControl(CacheControl.noCache().cachePrivate()).header("Vary", "Cookie")
-                .eTag("\"" + cached.at().toEpochMilli() + (masked ? "m" : "u") + "\"").body(cached.body());
+                .eTag("\"" + cached.computedAt().toEpochMilli() + (masked ? "m" : "u") + "\"").body(cached.value());
+    }
+
+    private Map<String, Object> build(boolean masked) {
+        Map<String, Object> body = overviewService.build();
+        if (masked) {
+            maskLabels(body);
+        } else {
+            renameClusterField(body);
+        }
+        body.put("masked", masked);
+        return body;
     }
 
     @SuppressWarnings("unchecked")

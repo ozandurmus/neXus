@@ -17,11 +17,42 @@ public final class PolicySnapshotRepository {
         return transactions.inTransaction(db -> db.fetch("select metadata::text as metadata from policy_snapshot order by policy_id")
                 .map(row -> row.get("metadata", String.class)));
     }
+    /** A rule count and the row version it was counted on. */
+    private record CountedRules(String version, int ruleCount) {}
+    /**
+     * Rule counts by policy id. Counting decompresses the whole snapshot document (99 rows, 261 MB of compressed jsonb on
+     * the live DB, about 1 s per catalog read until 2026-11-14), so a count is kept until the row's version changes:
+     * {@link #save} replaces a row only with a strictly newer collected_at, so a changed snapshot always has a new version.
+     */
+    private final java.util.Map<String, CountedRules> ruleCounts = new java.util.concurrent.ConcurrentHashMap<>();
+
     public List<CatalogEntry> catalogEntries() {
-        return transactions.inTransaction(db -> db.fetch("select metadata::text as metadata, "
-                + "(select coalesce(sum(jsonb_array_length(s->'rules')), 0)::int from jsonb_array_elements(snapshot->'sections') s) as rule_count "
-                + "from policy_snapshot order by policy_id")
-                .map(row -> new CatalogEntry(row.get("metadata", String.class), row.get("rule_count", Integer.class))));
+        return transactions.inTransaction(db -> {
+            var rows = db.fetch("select policy_id, " + VERSION + " as version, metadata::text as metadata "
+                    + "from policy_snapshot order by policy_id");
+            var stale = rows.stream().filter(row -> {
+                CountedRules counted = ruleCounts.get(row.get("policy_id", String.class));
+                return counted == null || !counted.version().equals(row.get("version", String.class));
+            }).map(row -> row.get("policy_id", String.class)).toArray(String[]::new);
+            if (stale.length > 0) {
+                db.fetch("select policy_id, " + VERSION + " as version, "
+                        + "(select coalesce(sum(jsonb_array_length(s->'rules')), 0)::int from jsonb_array_elements(snapshot->'sections') s) as rule_count "
+                        + "from policy_snapshot where policy_id = any({0})", (Object) stale)
+                        .forEach(row -> ruleCounts.put(row.get("policy_id", String.class),
+                                new CountedRules(row.get("version", String.class), row.get("rule_count", Integer.class))));
+            }
+            var present = new java.util.HashSet<String>();
+            var entries = new java.util.ArrayList<CatalogEntry>();
+            for (var row : rows) {
+                String id = row.get("policy_id", String.class);
+                present.add(id);
+                CountedRules counted = ruleCounts.get(id);
+                // a row replaced between the two reads: its count is for the newer version, read on the next call
+                entries.add(new CatalogEntry(row.get("metadata", String.class), counted == null ? 0 : counted.ruleCount()));
+            }
+            ruleCounts.keySet().retainAll(present);
+            return List.copyOf(entries);
+        });
     }
     public Optional<String> find(String id) {
         return transactions.inTransaction(db -> db.fetch("select snapshot::text as snapshot from policy_snapshot where policy_id = {0}", id)

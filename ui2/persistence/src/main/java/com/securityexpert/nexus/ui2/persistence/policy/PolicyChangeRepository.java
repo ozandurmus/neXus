@@ -97,8 +97,8 @@ public final class PolicyChangeRepository {
             firstJoin = "";
         }
         // Labels come from the rule's own history, for the page's rows only (after the limit). A row still missing a label falls
-        // back to the policy's current snapshot; the snapshot is expanded once per policy on the page (not once per row), keeping
-        // only the wanted rule keys, and the first rule in expansion order wins exactly as "limit 1" over the expansion did.
+        // back to the policy's current snapshot (currentLabels): the snapshot is expanded once per policy and snapshot version
+        // and kept, and the first rule in expansion order wins exactly as "limit 1" over the expansion did.
         String sql = "with " + selection + ", "
             + "lab as materialized (select p.ts, h.revision_id, h.policy_id, h.rule_key, labels.name, labels.number from page p "
             + "join policy_rule_history h on h.revision_id = p.revision_id "
@@ -106,27 +106,74 @@ public final class PolicyChangeRepository {
             + "(select coalesce(c->>'after', c->>'before') from policy_rule_history r, jsonb_array_elements(r.changes) c "
             + "where r.policy_id=h.policy_id and r.rule_key=h.rule_key and r.revision_id<=h.revision_id and c->>'field'='name' order by r.revision_id desc limit 1) as name, "
             + "(select coalesce(nullif(c->'after', 'null'::jsonb), c->'before') from policy_rule_history r, jsonb_array_elements(r.changes) c "
-            + "where r.policy_id=h.policy_id and r.rule_key=h.rule_key and r.revision_id<=h.revision_id and c->>'field'='number' order by r.revision_id desc limit 1) as number) labels on true), "
-            + "missing as materialized (select distinct policy_id, rule_key from lab where name is null or number is null), "
-            + "expanded as materialized (select distinct on (m.policy_id, x.rule_key) m.policy_id, x.rule_key, x.rule "
-            + "from (select distinct policy_id from missing) m join policy_snapshot ps on ps.policy_id = m.policy_id "
-            + "cross join lateral (select array_agg(w.rule_key) as keys from missing w where w.policy_id = m.policy_id) k "
-            + "cross join lateral fn_policy_history_rules(ps.snapshot) with ordinality as x(rule_key, rule, ordinal) "
-            + "where x.rule_key = any(k.keys) "
-            + "order by m.policy_id, x.rule_key, x.ordinal) "
+            + "where r.policy_id=h.policy_id and r.rule_key=h.rule_key and r.revision_id<=h.revision_id and c->>'field'='number' order by r.revision_id desc limit 1) as number) labels on true) "
             + "select h.revision_id, h.policy_id, h.rule_id, h.rule_key, h.change_type, "
             + "to_char(" + TIME + UTC_ISO + " as time, "
             + "to_char(h.collected_at" + UTC_ISO + " as collected_at, " + initial + " as initial_capture, "
             + "fn_policy_change_time(h.changed_on) is null as observed, h.changed_by, h.changes::text as changes, s.metadata::text as metadata, "
-            + "coalesce(l.name, current_rule.rule->>'name') as name, coalesce(l.number, current_rule.rule->'number')::text as number, (l.name is null or l.number is null) and current_rule.rule is not null as current_label "
+            + "l.name, l.number::text as number, (l.name is null or l.number is null) as label_missing, " + SNAPSHOT_VERSION + " as snapshot_version "
             + "from lab l join policy_rule_history h on h.revision_id = l.revision_id join policy_snapshot s on s.policy_id=h.policy_id " + firstJoin
-            + "left join expanded current_rule on current_rule.policy_id = h.policy_id and current_rule.rule_key = h.rule_key and (l.name is null or l.number is null) "
             + "order by l.ts desc, h.revision_id desc";
-        return transactions.inTransaction(db -> db.fetch(sql, args.toArray()).map(r -> new Row(
-            r.get("revision_id", Long.class), r.get("policy_id", String.class), r.get("rule_id", String.class), r.get("rule_key", String.class),
-            r.get("change_type", String.class), r.get("time", String.class), r.get("observed", Boolean.class), r.get("changed_by", String.class),
-            r.get("changes", String.class), r.get("metadata", String.class), r.get("name", String.class), number(r.get("number", String.class)), r.get("current_label", Boolean.class),
-            r.get("collected_at", String.class), Boolean.TRUE.equals(r.get("initial_capture", Boolean.class)))));
+        return transactions.inTransaction(db -> {
+            var records = db.fetch(sql, args.toArray());
+            Map<String, String> versionsMissing = new java.util.LinkedHashMap<>();
+            for (var r : records) {
+                if (Boolean.TRUE.equals(r.get("label_missing", Boolean.class))) {
+                    versionsMissing.put(r.get("policy_id", String.class), r.get("snapshot_version", String.class));
+                }
+            }
+            Map<String, Map<String, String[]>> current = new HashMap<>();
+            versionsMissing.forEach((policy, version) -> current.put(policy, currentLabels(db, policy, version)));
+            return records.map(r -> {
+                String name = r.get("name", String.class);
+                String number = r.get("number", String.class);
+                boolean currentLabel = false;
+                if (Boolean.TRUE.equals(r.get("label_missing", Boolean.class))) {
+                    String[] rule = current.getOrDefault(r.get("policy_id", String.class), Map.of()).get(r.get("rule_key", String.class));
+                    if (rule != null) {
+                        name = name != null ? name : rule[0];
+                        number = number != null ? number : rule[1];
+                        currentLabel = true;
+                    }
+                }
+                return new Row(
+                    r.get("revision_id", Long.class), r.get("policy_id", String.class), r.get("rule_id", String.class), r.get("rule_key", String.class),
+                    r.get("change_type", String.class), r.get("time", String.class), r.get("observed", Boolean.class), r.get("changed_by", String.class),
+                    r.get("changes", String.class), r.get("metadata", String.class), name, number(number), currentLabel,
+                    r.get("collected_at", String.class), Boolean.TRUE.equals(r.get("initial_capture", Boolean.class)));
+            });
+        });
+    }
+
+    /** The snapshot row's version without reading the document (collected_at only grows on replace; the size comes from the TOAST pointer). */
+    private static final String SNAPSHOT_VERSION = "to_char(s.collected_at at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US') "
+        + "|| '|' || pg_column_size(s.snapshot)::text";
+    /** A policy's current rule labels (rule key -> {name, number as jsonb text}) and the snapshot version they were read from. */
+    private record CurrentLabels(String version, Map<String, String[]> byRuleKey) {}
+    /**
+     * Current-snapshot labels by policy. Expanding a snapshot costs about 33 ms per policy (2026-11-14: 14 policies, 471 ms
+     * of every 7-day change-feed read); the expansion is kept until the policy's snapshot version changes.
+     */
+    private final Map<String, CurrentLabels> currentLabels = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private Map<String, String[]> currentLabels(org.jooq.DSLContext db, String policy, String version) {
+        CurrentLabels cached = currentLabels.get(policy);
+        if (cached != null && cached.version().equals(version)) {
+            return cached.byRuleKey();
+        }
+        Map<String, String[]> byRuleKey = new HashMap<>();
+        String[] readVersion = {version};
+        db.fetch("select " + SNAPSHOT_VERSION + " as version, x.rule_key, x.rule->>'name' as name, (x.rule->'number')::text as number "
+                + "from policy_snapshot s cross join lateral fn_policy_history_rules(s.snapshot) with ordinality as x(rule_key, rule, ordinal) "
+                + "where s.policy_id = {0} order by x.ordinal", policy)
+            .forEach(r -> {
+                readVersion[0] = r.get("version", String.class);
+                // a null key never matched a history row's rule key in the SQL join either
+                if (r.get("rule_key", String.class) != null) byRuleKey.putIfAbsent(r.get("rule_key", String.class), new String[] {r.get("name", String.class), r.get("number", String.class)});
+            });
+        Map<String, String[]> labels = Map.copyOf(byRuleKey);
+        currentLabels.put(policy, new CurrentLabels(readVersion[0], labels));
+        return labels;
     }
     public Map<String, Object> summary(Filter filter, long ceiling) {
         var args = new ArrayList<Object>();

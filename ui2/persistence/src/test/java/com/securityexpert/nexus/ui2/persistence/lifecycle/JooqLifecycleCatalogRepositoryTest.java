@@ -43,8 +43,9 @@ class JooqLifecycleCatalogRepositoryTest {
         }), SQLDialect.POSTGRES)));
         assertEquals(java.util.Map.of("device-1", new LifecycleCatalogRepository.StoredInventory("Example Appliance", "R81.20", "[]")), repository.storedInventory());
         assertEquals(1, queries.size());
-        assertTrue(queries.getFirst().contains("distinct on (device_id)"));
-        assertTrue(queries.getFirst().contains("collected_at desc"));
+        // the latest run per device through the (device_id, collected_at) index
+        assertTrue(queries.getFirst().contains("left join lateral (select run_id from device_inventory_run r where r.device_id=d.device_id"));
+        assertTrue(queries.getFirst().contains("collected_at desc, run_id desc limit 1"));
         assertFalse(queries.getFirst().contains("device_route"));
         assertFalse(queries.getFirst().contains("grid_member"));
         assertFalse(queries.getFirst().contains("discovery_candidate"));

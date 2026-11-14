@@ -131,14 +131,47 @@ class PolicyChangeRepositoryTest {
         int limit = sql.indexOf("limit 500"), labels = sql.indexOf("lab as materialized");
         assertTrue(limit > 0 && labels > limit, "the page is limited before any label lookup");
         assertEquals(1, sql.split("limit 500", -1).length - 1);
-        // The snapshot is expanded in one CTE, for the distinct policies of the page rows that still lack a label, and
-        // only the wanted rule keys are kept; it is never expanded per row.
-        assertEquals(1, sql.split("fn_policy_history_rules", -1).length - 1, sql);
-        assertTrue(sql.contains("from (select distinct policy_id from missing) m join policy_snapshot ps"), sql);
-        assertTrue(sql.contains("where name is null or number is null"), sql);
-        assertTrue(sql.contains("where x.rule_key = any(k.keys)"), "only the wanted rule keys are kept");
-        assertTrue(sql.contains("order by m.policy_id, x.rule_key, x.ordinal"), "the first rule in expansion order wins");
-        assertFalse(sql.contains("lateral (select rule from fn_policy_history_rules"));
+        // The page read never expands a snapshot (2026-11-14: 14 expansions, 471 ms of every 7-day change-feed read); it
+        // says which rows still lack a label and the version of their policy's snapshot.
+        assertFalse(sql.contains("fn_policy_history_rules"), sql);
+        assertTrue(sql.contains("(l.name is null or l.number is null) as label_missing"), sql);
+        assertTrue(sql.contains("|| '|' || pg_column_size(s.snapshot)::text as snapshot_version"), sql);
+    }
+
+    @Test void aSnapshotIsExpandedOncePerPolicyAndVersionAndTheFirstRuleInExpansionOrderWins() {
+        var sql = new ArrayList<String>();
+        var version = new String[] {"v1"};
+        var create = DSL.using(SQLDialect.POSTGRES);
+        var repository = new PolicyChangeRepository(new JooqTransactionBoundary(DSL.using(new MockConnection(context -> {
+            sql.add(context.sql());
+            if (context.sql().contains("fn_policy_history_rules")) {
+                // two rules with the same key: the first in expansion order is the label, as "distinct on ... ordinal" was
+                return new MockResult[] { new MockResult(0, create.fetchFromStringData(new String[][] {
+                    {"version", "rule_key", "name", "number"},
+                    {version[0], "uuid:r1", "RULE-FIRST-" + version[0], "3"},
+                    {version[0], "uuid:r1", "RULE-SECOND", "4"}})) };
+            }
+            return new MockResult[] { new MockResult(0, create.fetchFromStringData(new String[][] {
+                {"revision_id", "policy_id", "rule_id", "rule_key", "change_type", "time", "observed", "changed_by", "changes", "metadata",
+                    "name", "number", "label_missing", "snapshot_version", "collected_at", "initial_capture"},
+                {"2", "p1", "r1", "uuid:r1", "modified", "2026-10-08T01:00:00.000000Z", "false", null, "[]", "{}", null, null, "true", version[0],
+                    "2026-10-08T01:00:00.000000Z", "false"},
+                {"1", "p1", "r1", "uuid:r1", "modified", "2026-10-08T00:00:00.000000Z", "false", null, "[]", "{}", "RULE-OWN", null, "true", version[0],
+                    "2026-10-08T00:00:00.000000Z", "false"}})) };
+        }), SQLDialect.POSTGRES)));
+        var filter = new PolicyChangeRepository.Filter(FROM, TO, "", "", "", "", false);
+        var rows = repository.rows(filter, 1, null);
+        assertEquals("RULE-FIRST-v1", rows.get(0).name());
+        assertEquals(3, rows.get(0).number());
+        assertTrue(rows.get(0).currentLabel());
+        assertEquals("RULE-OWN", rows.get(1).name(), "a label from the rule's own history is kept");
+        assertEquals(3, rows.get(1).number());
+        assertEquals(1, sql.stream().filter(q -> q.contains("fn_policy_history_rules")).count(), "one expansion for the policy");
+        sql.clear();
+        repository.rows(filter, 1, null);
+        assertEquals(0, sql.stream().filter(q -> q.contains("fn_policy_history_rules")).count(), "the same version is not expanded again");
+        version[0] = "v2";
+        assertEquals("RULE-FIRST-v2", repository.rows(filter, 1, null).get(0).name(), "a replaced snapshot is expanded again");
     }
 
     @Test void theInitialFlagOfEveryRowAndTheInitialCountUseTheSameDefinition() {
