@@ -35,6 +35,12 @@ public interface SystemLogRetentionRepository {
     /** The device's live chunks and sar files, oldest first, at most {@code limit}. */
     List<Candidate> oldestCapped(String deviceId, int limit);
 
+    /** Devices whose live {@code cp_spike_data} files exceed {@code capBytes} (the separate spike data cap). */
+    List<DeviceUsage> devicesOverSpikeCap(long capBytes);
+
+    /** The device's live {@code cp_spike_data} files, oldest first, at most {@code limit}. */
+    List<Candidate> oldestSpike(String deviceId, int limit);
+
     /**
      * Audited: the {@code removed} ledger row and the index row's {@code pruned_at} (and, for a chunk, its
      * {@code prune_reason}: {@code RETENTION} or {@code RETENTION_SHORTENED_BY_CAP}). False when the row was already

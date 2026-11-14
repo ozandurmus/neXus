@@ -599,7 +599,9 @@ public final class Ui2WorkerMain {
         var systemLogPruner = new com.securityexpert.nexus.ui2.worker.diagnostic.SystemLogRetentionPruner(
                 new com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogRetentionRepository(transactionBoundary),
                 new com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogCollectionRepository(transactionBoundary)::settings,
-                artefactStoreRoot, java.time.Clock.systemUTC());
+                artefactStoreRoot, java.time.Clock.systemUTC(),
+                com.securityexpert.nexus.ui2.worker.diagnostic.SystemLogRetentionPruner.parseSpikeCapOverride(
+                        System.getenv(com.securityexpert.nexus.ui2.worker.diagnostic.SystemLogRetentionPruner.SPIKE_CAP_ENV)));
         reconcilerExecutor.scheduleWithFixedDelay(() -> {
             try {
                 moduleRuntime.runTask(role, instance, "SystemLogRetentionPruner.runIfDue", systemLogPruner::runIfDue);
