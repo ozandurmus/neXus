@@ -15,3 +15,5 @@ status: planned · target: docs/design/UI2_INVENTORY_AND_CONFIGURATION_DESIGN_LA
 Title (full): Apply the inventory and configuration design language: cluster as the unit with virtual systems beneath it, agreement rendered once and difference rendered explicitly, stated identity, freshness, coverage counters and provenance
 
 Target (full): docs/design/UI2_INVENTORY_AND_CONFIGURATION_DESIGN_LANGUAGE.md (DRAFT, needs freeze with D-UI1 and D-UI2 answered)
+
+2026-11-14 backlog truth: OBSOLETE/SUPERSEDED. Mostly applied (commits 8f96a53, 30dbab8); superseded by PRs #642 (design language) and #746 (UI review IA). Remaining collapsible identity tiles covered by later UI review

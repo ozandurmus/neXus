@@ -11,3 +11,5 @@ The connect-on-mismatch-warn-with posture switch exists in the worker's HostKeyV
 Title (full): UI2 SSH host-key trust: on mismatch connect, warn with the MDS view alongside, audit -- strict refusal is a configurable production option, off by default (PO 2026-09-13, record 13F)
 
 Target (full): ui2 worker HostKeyVerifier / TrustRuleResolver; successor to cp_production_ssh_host_key_trust_hardening + cp_ssh_trust_r2_prod_server
+
+2026-11-14 backlog truth: DONE. Evidence: PR 574 warn-by-default, STRICT optional (SshHostKeyController, SshHostKeyPanel); PO record 2026-10-14. Behavior the PO chose is live; strict mode switchable

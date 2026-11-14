@@ -7,3 +7,5 @@ status: planned · target: scripts/ci_regression_scope.py; follow-on to the fron
 Title (full): The regression mapping still leaves the backend trees unnamed: worker, job-engine and capability-registry paths block, so each will cost a round the first time it is touched
 
 Target (full): scripts/ci_regression_scope.py; follow-on to the frontend coverage closed by NXS-LOCAL-0355
+
+2026-11-14 backlog truth: OBSOLETE/SUPERSEDED. PO amendment 2026-11-03 (PR #709): unmapped paths run full suite instead of blocking (tools/delivery/ci_regression_scope.py). Unmapped backend paths no longer block a PR

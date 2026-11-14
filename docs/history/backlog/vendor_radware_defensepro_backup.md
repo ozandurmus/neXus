@@ -7,3 +7,5 @@ Product Owner, 2026-09-22: add as P1 with the Backbox trail as the measured refe
 2026-09-22: measurement record written from the Backbox trail -- docs/design/VENDOR_BACKUP_MEASUREMENTS_2026_09_22.md (transport, sequence, artefact, secret risk, neXus fit). Prerequisites before this vendor's contract: Add-device vendor value + endpoint kind, a confirm (identity) capability, the vendor CHECK constraints (V16/V17 allow only check_point/palo_alto), and for HTTPS vendors the generic HTTPS client. Proposed order in the record.
 
 NXS-LOCAL-0369: confirm and backup through the Cyber Controller REST API (V67/V68), discovery tree and import; Cyber Controller own backup via SFTP push (V69) completed live 37 MB. Open: a real DefensePro getcfg run (radware_defensepro_getcfg_measurement).
+
+2026-11-14 backlog truth: DONE. Evidence: commit ff379fcd (V67 via Cyber Controller); live: 4 DefensePro devices, 20 backups in 7 days. DefensePro backed up daily through the controller (PO 2026-09-24 route)

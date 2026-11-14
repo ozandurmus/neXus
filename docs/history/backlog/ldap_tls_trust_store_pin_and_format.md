@@ -7,3 +7,5 @@ status: planned · target: docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP_2026_09_12.m
 Title (full): LDAP TLS trust store cannot be given a PIN or format; a protected PKCS12 loads empty
 
 Target (full): docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP_2026_09_12.md
+
+2026-11-14 backlog truth: OBSOLETE/SUPERSEDED. PR 418 / 7ca608a5: TrustStoreTrustManager removed; DirectoryTrustPolicy uses in-memory PEM anchors (C3C); LDAPS live 11-13. Truststore file/PIN path no longer exists

@@ -9,3 +9,5 @@ Title (full): Parked: Maven; Bitbucket/Jenkins S2I/ArgoCD/Artifactory; OpenShift
 Target (full): Only if a move to the corporate platform is decided
 
 2026-11-10 (plan refresh): the PO ratified the enterprise alignment direction and order (PO_DECISION_RECORD_2026_11_10_ENTERPRISE_STACK_ALIGNMENT.md). Phase 0 is tracked in enterprise_phase0_logging_monitoring_scans and spring_boot_4_spring_security_migration; this row covers phases 1-4 (Maven, Bitbucket/Jenkins and ship tooling port, Spring Boot workers and job engine, Spring Data JDBC, OpenShift/ArgoCD) and stays parked until phase 1 starts, after the PO has followed the access-request flows. Spring Cloud Data Flow has a hard limit (commercial only since 2025).
+
+2026-11-14 backlog truth: still open (P3, size L). Today: Parked on purpose; nothing to do now. Evidence: PO_DECISION_RECORD_2026_11_10_ENTERPRISE_STACK_ALIGNMENT phases 1-4 stay parked until phase 1 starts

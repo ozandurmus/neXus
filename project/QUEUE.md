@@ -1,174 +1,131 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0383 · Track: PCP.x · Generated: 2026-11-12T19:43:48Z
+Build: NXS-LOCAL-0383 · Track: PCP.x · Generated: 2026-11-14T08:47:47Z
 
 ## Now
 - NXS-LOCAL-0383 — Enterprise stack alignment, phase 0: Spring Security sign-in, JSON logs, monitoring, secrets, scans (in_progress)
 ## Next
 - overview_acceptance_and_member_specific_tuning — Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
-- P0/in_progress aiview_masking_manufactures_names_from_any_string — The AIView pseudonymizer turns any non-blank string into.. (target: TopologyNamePseudonymizer.computeDeviceN)
-- P0/in_progress cyber_controller_known_hosts_after_hosta_rebuild — Cyber Controller SFTP push to HOST-A fails after the... (target: HOST_A_REBUILD_RUNBOOK.md)
-- P0/in_progress hosta_rebuild_real_env_acceptance — HOST-A rebuilt 2026-09-25: PO browser acceptance under... (target: HOST_A_REBUILD_RUNBOOK.md)
-- P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on... (target: Pre-CLASS-2 (OP.0b/OP.2), independent of)
-- P0/in_progress pan_tls_trust_rejects_corporate_ca — Palo Alto discovery cannot reach a Panorama fronted by a.. (target: PanXmlApiTransport certificate verificat)
-- P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test... (target: PRIVATE_REPLAY_ARCHITECTURE.md)
-- P0/in_progress recovery_offhost_key_custody — Off-host recovery artifacts and encryption-key custody (target: DEPLOY.1; blocks reliance on RB.3b recov)
-- P0/planned cluster_membership_lost_at_enrollment — Cluster membership is known at discovery but does not... (target: enrollment/confirm path writing...)
-- P0/planned deploy1_evidence_egress_policy — DEPLOY.1 — Evidence Egress & Sharing Policy (target: DEPLOY.1)
-- P0/planned discovery_lateral_join_drops_cluster_members — Device display falls back to the management IP for every.. (target: JooqDeviceRepository DEVICE_SELECT later)
-- P0/planned job_failure_reason_is_never_recorded — A FAILED job records no reason: outcome, terminal_reason.. (target: jobs.outcome/terminal_reason/finished_at)
-- P0/planned ui2_microservices_deployment_split — Split K3s deployment into true independent microservices (target: )
-- P0/planned ui2_service_cannot_bootstrap_an_empty_database — The service cannot start against an empty database (target: MigrationStartupRunner vs...)
-- P0/planned ui2_ssh_strict_host_key_trust_in_production — UI2 SSH host-key trust: on mismatch connect (target: ui2 worker HostKeyVerifier / TrustRuleRe)
-- P1/in_progress backup_screen_backbox_model — Backup screen on the Backbox model: per-device history
-- P1/in_progress cp_management_server_collect_duration — Check Point management server Collect took 243 s: vsx stat
-- P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction
-- P1/in_progress failover_p0_closure_set — Failover plan implementation landed; integration gate
-- P1/in_progress https_inventory_collect_radware — Radware Collect: Cyber Controller and DefensePro inventory
-- P1/in_progress manifest_drift_service_worker_configuration_policy — Worker still image+fallback patched; others use manifests
-- P1/in_progress module_per_pod_split — Module runtime landed; policy/configuration/compliance...
-- P1/in_progress nspm_wave1_acceptance — Policy hygiene and V144 lifecycle catalog landed
-- P1/in_progress scheduled_fleet_backup_enable_decision — Fleet backups enabled: daily 02:00 Istanbul
-- P1/in_progress ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- Gradle multi-module skeleton under ui2/
-- P1/in_progress ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind
-- P1/in_progress ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry
-- P1/in_progress ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log
-- P1/in_progress vendor_radware_defensepro_backup — Radware DefensePro: configuration backup (HTTPS)
-- P1/planned aiview_masked_readonly_admin
+- P1/in_progress aci_segmentation_step1 — ACI step 1: pre-cutover impact analysis, one segment
+- P1/in_progress asa_fortigate_policy_model — ASA and FortiGate policy model for lookup and hygiene
+- P1/in_progress asa_readiness_signoff_migration — ASA readiness: record the PO approval of four reads
+- P1/in_progress cp_advisories_jumbo — Check Point advisories from Jumbo resolved-issues pages
+- P1/in_progress integration_ci_gate_and_v208_check — Integration suite as CI gate; close the V208 NULL hole
+- P1/in_progress policy_collection_gaps — Policy collection gaps: CP gateway objects (D-1), PAN App-
+- P1/in_progress rule_recertification_campaigns — Rule recertification and cleanup campaigns
+- P1/in_progress zone_matrix_delivery — Zone matrix: freeze contract, then deliver in steps
 - P1/planned aiview_masking_leak_audit
-- P1/planned asa_fortinet_cluster_view
-- P1/planned asa_fortinet_configuration_plane
-- P1/planned backup_plane_separate_service
-- P1/planned c7_c2_contract_shape_guard
-- P1/planned cluster_diff_member_specific_tuning
-- P1/planned cluster_member_model_needs_second_query
-- P1/planned cp_backup_empty_status_poll_loop
-- P1/planned cp_backup_free_space_parse_refusal
-- P1/planned cp_cphaprob_command_gate
-- P1/planned cp_failover_command_gate_batch
-- P1/planned cp_platform_facts_empty_on_nine_gateways
-- P1/planned cp_spark_backup_settings_sftp
-- P1/planned discovery_connection_state_never_populated
-- P1/planned discovery_failure_summary_stores_certificate_subject
 - P1/planned enterprise_phase0_logging_monitoring_scans
-- P1/planned failover_peer_reciprocal_agreement_check
-- P1/planned failover_pilot_fence_is_compiled_in
-- P1/planned failover_readiness_check_contract
-- P1/planned failover_recheck_on_request
-- P1/planned failover_vsx_vsls_mentality_contract
-- P1/planned github_open_pr_triage
-- P1/planned gov_orch_budget_ceiling_not_persisted_or_enforced
-- P1/planned https_configuration_collect
-- P1/planned inventory_row_does_not_say_why_a_device_is_unconfirmed
-- P1/planned ldap_tls_trust_store_pin_and_format
-- P1/planned legacy_python_separation
 - P1/planned masking_residual_gaps_system_log_and_sanitizer
-- P1/planned pan_active_active_not_excluded_as_failover_unit
-- P1/planned pan_collection_contract_from_measurement
-- P1/planned platform_identity_facts_on_configuration
-- P1/planned radware_defensepro_getcfg_measurement
-- P1/planned relay_id_reuse_when_record_uncommitted
-- P1/planned script_execution_module
-- P1/planned spike_data_cap_not_enforced_by_pruner
+- P1/planned recovery_offhost_key_custody
+- P1/planned scheduled_fleet_backup_enable_decision
 - P1/planned spring_boot_4_spring_security_migration
-- P1/planned task_executor_automation_module
-- P1/planned top_app_bar_search_is_not_an_input
-- P1/planned transcript_per_run_listing
-- P1/planned ui2_audit_logging
-- P1/planned ui2_auth_placement_second_authenticated_surface
-- P1/planned ui2_b1_08_audit_logs_screen
-- P1/planned ui2_b1_09_device_workspace_first_read_screen
-- P1/planned ui2_b1_10_acceptance_scenario_concurrent_admins
-- P1/planned ui2_b1_11_acceptance_scenario_worker_loss
-- P1/planned ui2_database_roles_and_data_ownership
-- P1/planned ui2_device_session_one_per_device
-- P1/planned ui2_inventory_and_configuration_design_language
-- P1/planned ui2_ldap_config
 - P1/planned ui2_networkpolicy_in_cluster_db_reach
-- P1/planned ui2_pan_transport_no_credentials_in_url
-- P1/planned ui2_private_play_and_mockup_view
-- P1/planned ui2_reproducible_in_cluster_image_build
-- P1/planned vault_has_no_enforced_quota_on_a_shared_host
-- P1/planned vendor_bluecoat_proxysg_backup
-- P1/planned vendor_cisco_asa_backup
-- P1/planned vendor_fortinet_fortigate_backup
-- P1/planned vendor_panorama_backup
-- P1/planned version_advisory_exposure
-- P2/in_progress cp_policy_chunked_hits_acceptance
-- P2/in_progress cp_spark_exec_channel_rejected
-- P2/in_progress cp_vsx_interfaces_identical_to_physical
-- P2/in_progress fmg_link_state_diagnose_nic
-- P2/in_progress release_snapshot_preview_acceptance
-- P2/in_progress ui2_m3_design_transfer_pass
-- P2/in_progress ui_device_workspace_and_overview
-- P2/planned CP-SHELL-M2-LAB-READ
+- P2/in_progress lifecycle_vendor_catalog
+- P2/in_progress topology_sources_apic_citrix_f5
+- P2/planned aiview_masked_readonly_admin
 - P2/planned analysis_container
-- P2/planned antigravity_provider_adapter
-- P2/planned auth_radius_mechanism
-- P2/planned auth_tacacs_mechanism
-- P2/planned backup_remaining_vendors
-- P2/planned cp_aiview_readiness_script_client_error
-- P2/planned cp_backup_sftp_fetch_failed_on_cluster_member
-- P2/planned cp_cluster_vip_never_observed_in_fleet
-- P2/planned cp_vsx_config_collected_without_vs_context
-- P2/planned device_admin_accounts_and_privileges
-- P2/planned diagnostic_mask_overreach
-- P2/planned discovery-run-start-empty-body-500
-- P2/planned failover_phase_d_has_no_build_record
-- P2/planned gov_orch_turn_counter_blind_to_codex_stream
-- P2/planned hosta_export_include_build_namespace
-- P2/planned infoblox_member_facts
-- P2/planned m3_design_alignment_review
+- P2/planned asa_fortinet_cluster_view
+- P2/planned backup_plane_separate_service
+- P2/planned backup_screen_backbox_model
+- P2/planned change_ticket_matching
+- P2/planned cp_spark_backup_settings_sftp
+- P2/planned deploy1_evidence_egress_policy
+- P2/planned https_configuration_collect
 - P2/planned machine_session_probe_isolation
+- P2/planned manifest_drift_service_worker_configuration_policy
 - P2/planned module_e2e_fail_fast
-- P2/planned orchestrator_worktree_lacks_frontend_dependencies
-- P2/planned pan_ha_serial_identity_hardening
-- P2/planned pan_keygen_no_usable_key_under_load
+- P2/planned module_per_pod_split
+- P2/planned nspm_wave1_acceptance
 - P2/planned path_analysis_phase_b
-- P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
-- P2/planned project_plan_crypto_placeholder_sentinel_lost
-- P2/planned radware_cc_identity_and_defensepro_reads
-- P2/planned regression_mapping_backend_trees_unmapped
+- P2/planned product_rename_identity
 - P2/planned reports_r2
-- P2/planned test_fixture_realistic_names_cleanup
-- P2/planned tufin_access_query_tab
+- P2/planned script_execution_module
+- P2/planned task_executor_automation_module
 - P2/planned ubi_base_glibc_fix_pending
-- P2/planned ui2_password_policy_configurable
-- P2/planned ui2_role_display
+- P2/planned ui2_database_roles_and_data_ownership
+- P2/planned vault_has_no_enforced_quota_on_a_shared_host
+- P3/planned CP-SHELL-M2-LAB-READ
+- P3/planned cluster_membership_lost_at_enrollment
 - P3/planned corporate_inspection_ca_verify_with_it
-- P3/planned cp_cphaprob_peer_observation_corroboration
+- P3/planned cp_policy_chunked_hits_acceptance
+- P3/planned cp_vsx_config_collected_without_vs_context
+- P3/planned device_admin_accounts_and_privileges
 - P3/planned device_role_vocabulary_declared_twice
+- P3/planned diagnostic_mask_overreach
+- P3/planned discovery-run-start-empty-body-500
+- P3/planned discovery_connection_state_never_populated
+- P3/planned enterprise_platform_conformance
+- P3/planned fmg_link_state_diagnose_nic
+- P3/planned github_open_pr_triage
 - P3/planned hosta_apparmor_stacked_label_override
-- P3/planned network_topology_path_analysis
+- P3/planned hosta_export_include_build_namespace
+- P3/planned https_inventory_collect_radware
+- P3/planned legacy_python_separation
 - P3/planned old_export_copies_disposal
-- P3/planned pytest_xdist_privacy_scan_scratch_file_race
-- P3/planned run_build_sets_configuration_image
-- P3/planned ui2_select_all
+- P3/planned opt_nexus_step_d_delete_old_copies
+- P3/planned pan_keygen_no_usable_key_under_load
+- P3/planned radware_cc_identity_and_defensepro_reads
+- P3/planned spike_data_cap_not_enforced_by_pruner
+- P3/planned test_fixture_realistic_names_cleanup
+- P3/planned ui2_b1_10_acceptance_scenario_concurrent_admins
+- P3/planned ui2_b1_11_acceptance_scenario_worker_loss
+- P3/planned ui2_password_policy_configurable
 - P3/planned waf_fortiweb_capability_scope_and_measurement
-- P3/planned workbench_borrow_from_agent_orchestration_tools
-- Parked/planned enterprise_platform_conformance
 ## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)
 - P0 deploy1_oidc_viewer
+- P0 hosta_rebuild_real_env_acceptance
+- P0 pan_serial_representation_identity_evidence_closure
+- P0 pan_tls_trust_rejects_corporate_ca
+- P0 private_replay_agent_operated_test_environment
+- P1 cluster_member_model_needs_second_query
 - P1 cp_preflight_ccp_tablestat_evidence
+- P1 credential_profiles
+- P1 discovery_failure_summary_stores_certificate_subject
 - P1 event_signal_intake
 - P1 failover_readiness_assessment
+- P1 gov_orch_budget_ceiling_not_persisted_or_enforced
+- P1 ldap_tls_trust_store_pin_and_format
 - P1 native_backup
 - P1 operator_console
+- P1 pan_collection_contract_from_measurement
 - P1 pcp_collector_target_selection_seams
+- P1 relay_id_reuse_when_record_uncommitted
+- P1 ui2_auth_placement_second_authenticated_surface
 - P1 ui2_b1_05_extract_cp_inventory_subset
 - P1 ui2_b1_06_implement_cp_inventory_capability
 - P1 ui2_b1_13_second_flow_pan_config_export_artefact
+- P1 ui2_inventory_and_configuration_design_language
+- P1 ui2_private_play_and_mockup_view
+- P1 ui2_reproducible_in_cluster_image_build
+- P2 antigravity_provider_adapter
+- P2 auth_radius_mechanism
+- P2 auth_tacacs_mechanism
 - P2 bulk_fleet_ops
 - P2 compliance_assignment_ui_and_registry
 - P2 compliance_check_engine_ui
 - P2 compliance_remediation_checks
+- P2 cp_aiview_readiness_script_client_error
+- P2 cp_backup_sftp_fetch_failed_on_cluster_member
 - P2 failover_controlled_execution
+- P2 failover_phase_d_has_no_build_record
+- P2 gov_orch_turn_counter_blind_to_codex_stream
 - P2 inventory_exclusions_management_ui
+- P2 m3_design_alignment_review
+- P2 pan_ha_serial_identity_hardening
 - P2 passive_ti_enrichment
 - P2 per_vendor_worker_split
 - P2 policy_rule_hygiene_and_path_placement_brief
+- P2 privacy_baseline_tests_not_idempotent_runtime_trust_material
+- P2 project_plan_crypto_placeholder_sentinel_lost
+- P2 regression_mapping_backend_trees_unmapped
 - P2 snmpv3_fast_telemetry_plane
+- P2 tufin_access_query_tab
+- P2 ui2_m3_design_transfer_pass
 - P3 BK-CP-STATUS-EMPTY
+- P3 cp_cphaprob_peer_observation_corroboration
+- P3 network_topology_path_analysis
+- P3 workbench_borrow_from_agent_orchestration_tools
 - P4 pan_ha_peer_ipv6_pairing
 ## Open decisions
 - op_track_id — Track id: keep OP.x as a dedicated OPERATE track, or fold into 1.x after

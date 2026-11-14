@@ -7,3 +7,5 @@ Measured 2026-09-20 in TopAppBar.tsx. The element is a Box carrying the literal 
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): The top app bar search is a styled box containing static text, not an input: it has no field, no state and no handler, so it looks like a search and can never search
+
+2026-11-14 backlog truth: DONE. Evidence: PR #437 removed the fake box; commit 3ca228d9 added GlobalSearch.tsx used in TopAppBar.tsx. App bar search is a real cross-screen search

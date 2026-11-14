@@ -9,3 +9,5 @@ status: in_progress · target: PO directive 2026-09-22 (Backbox standard); downl
 Title (full): Backup screen on the Backbox model: per-device history, schedule, baseline, run-now, download, compare in one view
 
 Target (full): PO directive 2026-09-22 (Backbox standard); download/contents/compare shipped 2026-09-22, history/schedule/baseline remain
+
+2026-11-14 backlog truth: still open (P2, size S). Today: Only the per-store storage quota is missing; screen otherwise complete. Evidence: History/schedule/baseline/compare/retention shipped (129abc10, 53afe43a); no storage quota code in ui2

@@ -13,3 +13,5 @@ status: planned · target: docs/design/RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_
 Title (full): Radware Collect: https_inventory_collect for the Cyber Controller (managed device list as inventory) and DefensePro (observed facts via the controller's list); DefensePro interfaces/routes/policies need new gated REST reads -- propose to the PO
 
 Target (full): docs/design/RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_ENTRIES.md
+
+2026-11-14 backlog truth: still open (P3, size M). Today: Controller and DefensePro basic facts work; interfaces and policies of DefensePro still unread. Evidence: Controller+DefensePro-via-list built (6ba0904e, 9f0a5299, validated 09-25); DefensePro interfaces/routes/policy reads never approved/gated

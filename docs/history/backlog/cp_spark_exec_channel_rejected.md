@@ -19,3 +19,5 @@ Follow-up, 2026-09-22: Product Owner correctly pointed out inventory collection 
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): Check Point Gaia Embedded/Quantum Spark: exec channel rejected outright, needs interactive shell
+
+2026-11-14 backlog truth: DONE. Evidence: commit 45f0838a + InteractiveShellSession; inventory REAL_ENV_VALIDATED on a real Spark 2026-09-22; Spark SFTP backup 688bafe4. Spark appliances confirm and collect over interactive shell

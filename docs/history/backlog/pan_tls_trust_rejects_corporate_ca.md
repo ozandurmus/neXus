@@ -11,3 +11,5 @@ Product Owner decision 2026-09-20: the transport must not refuse a certificate m
 Title (full): Palo Alto discovery cannot reach a Panorama fronted by a corporate CA certificate: without a pinned fingerprint the transport accepts only certificates carrying O=Palo Alto Networks
 
 Target (full): PanXmlApiTransport certificate verification; EnvironmentPanTrustRuleResolver
+
+2026-11-14 backlog truth: OBSOLETE/SUPERSEDED. PO_DECISION_RECORD_2026_09_21_PAN_TLS_VERIFICATION_DISABLED; PR #448 (PanXmlApiTransport.paloAltoDeviceTrustManager accepts any cert). Corporate CA no longer refused; verification deliberately removed

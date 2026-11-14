@@ -11,3 +11,5 @@ status: in_progress · target: ui2/worker/src/main/java/com/securityexpert/nexus
 Title (full): Check Point management server Collect took 243 s: vsx stat, cphaprob stat/-a if and the batched read hang until their 30 s timeout on an SMS/MDS (measured 2026-09-25); skipped for role management_server since deploy 10; cpinfo -y all also hangs on the R82 MDS (30 s, no jumbo line) -- measure whether cpinfo needs another form on R82
 
 Target (full): ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/InventoryCapabilityExecutor.java
+
+2026-11-14 backlog truth: DONE. Evidence: PRs 764, 767, 772 (V195 cpinfo direct); live 4/4 management servers have hotfix level, MDS collect about 13 s (was 243 s). MDS Collect is fast and hotfix level is filled

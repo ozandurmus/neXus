@@ -7,3 +7,5 @@ tests/ pins contract STATUSES but nothing pins the SHAPE of a frozen contract's 
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): Contract-shape guard for C7 §5.3 and C2 §6 admission batteries
+
+2026-11-14 backlog truth: DONE. Evidence: 2acc0edc test: pin frozen contract clause shapes; tools/tests/test_frozen_contract_shapes.py (C7 5.3, C2 6). Contract clause lists are pinned by a test

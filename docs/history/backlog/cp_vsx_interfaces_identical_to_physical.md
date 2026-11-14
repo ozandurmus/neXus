@@ -27,3 +27,5 @@ Interface State full-coverage fix (2026-09-21), confirmed against real DB eviden
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): Check Point VSX per-VS interface/route reads return the physical member's data, not the virtual system's own
+
+2026-11-14 backlog truth: DONE. Evidence: commits 4b9ce686, a18f9ae5 (bash -lc per-VSID reads); VSX VIP prefixes 02d70502. Root cause fixed 2026-09-21; per-VS reads scoped

@@ -13,3 +13,5 @@ Product Owner, 2026-09-22 (with Backbox screenshots as the reference shape): an 
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): Task Executor / Automation module: operator-authored, ordered command runbooks per firewall (Backbox-style)
+
+2026-11-14 backlog truth: still open (P2, size L). Today: Operators cannot author/run command runbooks in the product yet; backups and failover cover core needs. Evidence: Contract frozen (TASK_EXECUTOR_AUTOMATION_CONTRACT.md); no executor/migration in ui2 or merged PRs

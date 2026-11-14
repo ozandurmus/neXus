@@ -9,3 +9,5 @@ Observed on NXS-LOCAL-0180, the first dispatch rendered into the ledger: --max-b
 Title (full): The dispatch budget ceiling is neither recorded nor enforceable for the default provider
 
 Target (full): GOV.ORCH.13 DL-3 budget column; scripts/orchestrator.py state record
+
+2026-11-14 backlog truth: OBSOLETE/SUPERSEDED. Ceiling persisted (commit 03969188, tools/delivery/orchestrator.py); Codex default provider retired (PR #588). Enforcement gap belonged to the retired Codex provider

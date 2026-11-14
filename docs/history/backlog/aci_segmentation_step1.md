@@ -1,0 +1,5 @@
+# ACI step 1: pre-cutover impact analysis, one segment
+
+status: in_progress · target: PO started 2026-11-14
+
+2026-11-14: design DRAFT merged (PR 855, docs/design/ACI_SEGMENTATION_SUPPORT_DESIGN_2026_11_13.md). PO decision 11-14: segment separate, logs first; ASA/FortiGate as targets go to the policy-model lane; APIC/Citrix/F5 are topology sources only. Step 1 = impact analysis on existing data for one Phase 2 segment (~8-10 engineer-days). Bank input pending: old-path log export.

@@ -13,3 +13,5 @@ status: planned · target: Contract docs/design/PLATFORM_IDENTITY_FACTS_CONTRACT
 Title (full): PO 2026-09-22 'kesinlikle': serial number, software version, hotfix / jumbo take, content versions, uptime on the Configuration screen -- what industry-leading tools collect
 
 Target (full): Contract docs/design/PLATFORM_IDENTITY_FACTS_CONTRACT.md. PAN: parse-scope extension of the already-gated show system info (serial, sw-version, app/threat/av/wildfire/url versions, uptime, family). CP: new gate rows needed (show asset system for serial; jumbo take), PO sign-off before real-device use. Serial shown in the clear per PO; masked for the aiview persona.
+
+2026-11-14 backlog truth: DONE. Evidence: V46-V48, device_platform_facts; live: CP 63 rows (hotfix all, serial 61), PAN 40 rows; NXS-LOCAL-0381 identity panel. Serial, version, hotfix, uptime shown for CP and PAN

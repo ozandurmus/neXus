@@ -9,3 +9,5 @@ Product Owner, 2026-09-22: add as P1 with the Backbox trail as the measured refe
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): Cisco ASA: running/startup config + native backup tar over SSH/SCP (priv 15)
+
+2026-11-14 backlog truth: DONE. Evidence: commits 1f32595e (V78), eee7f328 (V79), PR 455 (SCP session); live: 59 asa_config_backup COMPLETED in 7 days. ASA configuration and archive backed up daily
