@@ -53,7 +53,7 @@ class SystemStatusStorageLivenessTest {
                     throw new UnsupportedOperationException(method.getName());
                 });
 
-        var body = new SystemStatusService(new JooqTransactionBoundary(dsl), devices).storage();
+        var body = new SystemStatusService(new JooqTransactionBoundary(dsl), devices, new DiskHeadroomService(DiskHeadroomPolicy.DEFAULT)).storage();
 
         List<String> artefactReads = sql.stream().filter(s -> s.contains("from backup_artefact")).toList();
         assertEquals(2, artefactReads.size(), "the per-vendor table and the top-devices table");

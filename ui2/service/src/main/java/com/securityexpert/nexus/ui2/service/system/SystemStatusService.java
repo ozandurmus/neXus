@@ -52,11 +52,14 @@ public class SystemStatusService {
 
     private final TransactionBoundary transactionBoundary;
     private final com.securityexpert.nexus.ui2.persistence.device.DeviceRepository deviceRepository;
+    private final DiskHeadroomService diskHeadroom;
 
     public SystemStatusService(TransactionBoundary transactionBoundary,
-            com.securityexpert.nexus.ui2.persistence.device.DeviceRepository deviceRepository) {
+            com.securityexpert.nexus.ui2.persistence.device.DeviceRepository deviceRepository,
+            DiskHeadroomService diskHeadroom) {
         this.transactionBoundary = Objects.requireNonNull(transactionBoundary, "transactionBoundary");
         this.deviceRepository = Objects.requireNonNull(deviceRepository, "deviceRepository");
+        this.diskHeadroom = Objects.requireNonNull(diskHeadroom, "diskHeadroom");
     }
 
     /**
@@ -91,6 +94,8 @@ public class SystemStatusService {
     Map<String, Object> readPods() {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("read_at", Instant.now().toString());
+        // Current disk usage against the headroom thresholds; present on every answer, also when pods cannot be read.
+        body.put("disk", diskHeadroom.payload());
         body.put("quarantined_by_role", transactionBoundary.inTransaction(db -> db.fetch(
             "select owner_role as owner,count(*) as quarantined_permits from ("
             + "select owner_role from endpoint_admission where state='QUARANTINED' union all "
@@ -385,6 +390,10 @@ public class SystemStatusService {
                 FileStore store = Files.getFileStore(Path.of(root));
                 volume.put("total_bytes", store.getTotalSpace());
                 volume.put("usable_bytes", store.getUsableSpace());
+                DiskVolumeReading reading = DiskVolumeReading.measured("artefact_store", store.getTotalSpace(),
+                        store.getUnallocatedSpace(), store.getUsableSpace(), diskHeadroom.policy());
+                volume.put("used_percent", reading.usedPercent());
+                volume.put("level", reading.level().token());
                 volume.put("note", "the artefact volume is a host-path volume: its size is the host disk's, not the 5 Gi the claim declares");
             } catch (IOException e) {
                 volume.put("note", "the artefact volume could not be measured: " + e.getMessage());

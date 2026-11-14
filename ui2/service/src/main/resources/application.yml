@@ -37,6 +37,12 @@ spring:
 ui2:
   scheduling:
     enabled: ${UI2_SCHEDULING_ENABLED:true}
+  disk-headroom:
+    # Disk headroom alert (docs/operations/DISK_HEADROOM_ALERT.md): percent of a volume used. Warning raises a syslog
+    # notification; critical also makes the top-bar health light read "degraded". Invalid values fall back to 80/90/2.
+    warning-percent: ${UI2_DISK_WARNING_PERCENT:80}
+    critical-percent: ${UI2_DISK_CRITICAL_PERCENT:90}
+    hysteresis-percent: ${UI2_DISK_HYSTERESIS_PERCENT:2}
   system-log:
     # Scheduled system-log collection (DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md section 3.1). OFF by default in the code;
     # the service deployment manifest turns it on for the fleet (PO 2026-10-18). Manual syslog-collect-start works regardless.

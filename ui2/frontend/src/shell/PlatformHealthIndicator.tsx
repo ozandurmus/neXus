@@ -115,6 +115,9 @@ const notReady = (p: PodStatusView) => {
  *    covers a pod waiting to restart (CrashLoopBackOff): degraded;
  *  - the latest scheduled run of a CronJob failed: degraded, naming the run. Older runs do not count;
  *  - work is quarantined: degraded;
+ *  - a volume is critically full right now (`disk.level === "critical"`, 90 % by default): degraded, naming the volume
+ *    and its percentage. This is the current reading, never a past alert; a warning (80 %) does not degrade the light
+ *    (it is raised as a notification and shown on the Platform status page), and an unmeasurable volume is not full;
  *  - otherwise OK. A one-off Job (one not started by a CronJob's schedule) never changes the state; the Platform status
  *    page lists it.
  */
@@ -151,6 +154,12 @@ export function platformHealth(read: PlatformRead): PlatformHealth | null {
   }
   if (quarantined > 0) {
     return { state: "degraded", reason: `${plural(quarantined, "permit or task lease", "permits or task leases")} quarantined; collection may be blocked.` };
+  }
+  const full = (view.disk?.volumes ?? []).filter((v) => v.level === "critical");
+  if (full.length > 0) {
+    const first = full[0];
+    const more = full.length > 1 ? ` and ${plural(full.length - 1, "other volume", "other volumes")}` : "";
+    return { state: "degraded", reason: `Disk critical: ${first.name} is ${first.used_percent ?? "?"}% used${more}.` };
   }
   if (services.length === 0) {
     return { state: "degraded", reason: "No service pod is reported." };
