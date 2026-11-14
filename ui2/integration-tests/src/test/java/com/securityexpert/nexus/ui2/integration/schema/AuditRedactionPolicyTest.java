@@ -304,6 +304,12 @@ class AuditRedactionPolicyTest {
             "lifecycle_catalog.end_of_sale", "lifecycle_catalog.end_of_support",
             "lifecycle_catalog.imported_at", "lifecycle_catalog.kind", "lifecycle_catalog.product",
             "lifecycle_catalog.source", "lifecycle_catalog.vendor",
+            // lifecycle_catalog_upload (V219): page form, vendor, page hash and counts of one operator page upload;
+            // uploaded_by is redacted (tier 2)
+            "lifecycle_catalog_upload.content_sha256", "lifecycle_catalog_upload.entries_needing_review",
+            "lifecycle_catalog_upload.entries_parsed", "lifecycle_catalog_upload.page_form",
+            "lifecycle_catalog_upload.rows_skipped", "lifecycle_catalog_upload.upload_id",
+            "lifecycle_catalog_upload.uploaded_at", "lifecycle_catalog_upload.vendor",
             // local_credentials
             "local_credentials.algorithm_id", "local_credentials.created_at",
             "local_credentials.created_by_actor_fingerprint", "local_credentials.enabled",
@@ -714,7 +720,7 @@ class AuditRedactionPolicyTest {
             "jobs.diagnostic_masked_output", 2, "jobs.diagnostic_output_key", 1,
             "jobs.diagnostic_output_ref", 2, "jobs.transcript_artefact_key", 1,
             "jobs.transcript_artefact_ref", 2, "lifecycle_catalog.imported_by", 2,
-            "lifecycle_catalog.note", 2, "local_credentials.local_identity_name", 2,
+            "lifecycle_catalog.note", 2, "lifecycle_catalog_upload.uploaded_by", 2, "local_credentials.local_identity_name", 2,
             "local_credentials.salt", 1, "local_credentials.verifier", 1,
             "management_endpoint_pan_cert_trust.authorized_by", 2,
             "management_endpoint_pan_cert_trust.fingerprint_sha256", 2,

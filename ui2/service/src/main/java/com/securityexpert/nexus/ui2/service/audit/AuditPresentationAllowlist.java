@@ -179,6 +179,9 @@ public final class AuditPresentationAllowlist {
             Map.entry("lifecycle_catalog", Set.of(
                     "catalog_id", "end_of_engineering", "end_of_sale", "end_of_support",
                     "imported_at", "kind", "product", "source", "vendor")),
+            Map.entry("lifecycle_catalog_upload", Set.of(
+                    "content_sha256", "entries_needing_review", "entries_parsed", "page_form",
+                    "rows_skipped", "upload_id", "uploaded_at", "vendor")),
             Map.entry("local_credentials", Set.of(
                     "algorithm_id", "created_at", "created_by_actor_fingerprint", "enabled",
                     "failed_attempt_count", "local_identity_id", "locked_until", "memory_cost_kib",
