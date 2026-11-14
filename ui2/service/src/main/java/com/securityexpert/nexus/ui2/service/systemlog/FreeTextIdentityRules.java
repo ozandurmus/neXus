@@ -95,6 +95,7 @@ final class FreeTextIdentityRules {
     static final String SERIAL = "heuristic_serial";
     static final String HOST_CONTEXT = "heuristic_host_context";
     static final String HEX_ADDRESS_COUNT = "heuristic_hex_address";
+    static final String DASH_IP_COUNT = "heuristic_dash_ip";
 
     /** File-name extensions (and systemd unit kinds) that make a dotted token a file name, not a host name. */
     static final Set<String> EXTENSIONS = Set.of("log", "elg", "txt", "csv", "json", "xml", "conf", "cfg", "ini", "gz",
@@ -265,6 +266,11 @@ final class FreeTextIdentityRules {
     /** {@code sudo: name : TTY=...} and {@code su: name to root}: the account is the first word after the command tag. */
     private static final Pattern P_SUDO = Pattern.compile("(?i)" + B + "sudo(?:\\[\\d+\\])?:\\s+" + NAME + "\\s+:\\s");
     private static final Pattern P_SU = Pattern.compile("(?i)" + B + "su(?:\\[\\d+\\])?:\\s+" + NAME + "\\s+to\\s+[\\p{L}\\p{N}_]");
+    private static final String OCTET = "(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)";
+    /** Dash-form IPv4 ({@code a-b-c-d}, each part 0-255); a dash-, dot-, letter- or digit-joined neighbour disqualifies it. */
+    private static final Pattern DASH_IP = Pattern.compile("(?<![A-Za-z0-9_.-])" + OCTET + "(?:-" + OCTET + "){3}(?![A-Za-z0-9_]|-[A-Za-z0-9]|\\.\\d)");
+    /** The value of a user-identifying URL query parameter. */
+    private static final Pattern QUERY_USER = Pattern.compile("(?i)(?<=[?&;])(?:u|user|username|user_name|login)=([^&\\s\"'#;,)<>]{1,64})");
     private static final Pattern P_BARE = Pattern.compile("(?i)" + BH + "(?:user|admin|administrator)\\s+" + NAME);
     private static final Pattern P_BY = Pattern.compile("(?i)" + BH + "by\\s+" + NAME);
     /** A single host word after a keyword: a letter first; not the start of a dotted name. */
@@ -322,6 +328,8 @@ final class FreeTextIdentityRules {
         if (line == null || line.length() < 2) return line;
         List<Edit> edits = new ArrayList<>();
         hexAddresses(line, edits);
+        queryUsers(line, edits);
+        dashIps(line, edits);
         principals(line, edits);
         elgHosts(line, edits);
         List<int[]> enumSpans = enumSpans(line);
@@ -340,6 +348,22 @@ final class FreeTextIdentityRules {
     }
 
     // ---------------------------------------------------------------- hex-encoded addresses
+
+    private void queryUsers(String line, List<Edit> edits) {
+        if (line.indexOf('=') < 0 || line.indexOf('?') < 0 && line.indexOf('&') < 0 && line.indexOf(';') < 0) return;
+        Matcher m = QUERY_USER.matcher(line);
+        while (m.find()) {
+            String value = m.group(1);
+            if (written(value) || value.startsWith("<")) continue;
+            add(edits, new Edit(m.start(1), m.end(1), tokens.user(value), PRINCIPAL, m.start(), m.end(1)));
+        }
+    }
+
+    private void dashIps(String line, List<Edit> edits) {
+        if (line.length() < 7 || line.indexOf('-') < 0) return;
+        Matcher m = DASH_IP.matcher(line);
+        while (m.find()) add(edits, new Edit(m.start(), m.end(), "<ip>", DASH_IP_COUNT, m.start(), m.end()));
+    }
 
     private void hexAddresses(String line, List<Edit> edits) {
         if (line.length() < 10 || line.indexOf('x') < 0 && line.indexOf('X') < 0) return;

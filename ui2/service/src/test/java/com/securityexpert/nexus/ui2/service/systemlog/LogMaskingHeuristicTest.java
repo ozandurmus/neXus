@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
@@ -320,5 +321,22 @@ class LogMaskingHeuristicTest {
         assertEquals(shared, session().maskLine(shared));
         String vocab = "su: failed, sudo: 3 incorrect password attempts, file mode=0644 size 64KB in October";
         assertEquals(vocab, session().maskLine(vocab));
+    }
+
+    @Test
+    void masksUserQueryValuesAndDashFormIpv4AndKeepsDatesVersionsSizesAndUuids() {
+        String u1 = letters(7, 911), u2 = letters(8, 912), u3 = letters(6, 913), u4 = letters(9, 914);
+        LogMasking.Session s = session();
+        String q = s.maskLine("GET /api/x?u=" + u1 + "&user=" + u2 + "&username=" + u3 + "&login=" + u4 + "&page=2 done");
+        assertFalse(containsAny(q, u1, u2, u3, u4), "query user leaked (value withheld)");
+        assertTrue(q.contains("&page=2 done"), q);
+        assertTrue(q.matches("GET /api/x\\?u=USR-[0-9A-F]{10}&user=USR-[0-9A-F]{10}&username=USR-[0-9A-F]{10}&login=USR-[0-9A-F]{10}&page=2 done"), q);
+        String a = (10 + 0) + "-" + 20 + "-" + 30 + "-" + 40, b = 192 + "-" + 168 + "-" + 1 + "-" + 7;
+        String ip = s.maskLine("ip-" + a + " ec2 host " + a + " and " + b + ".compute");
+        assertFalse(ip.contains(a) || ip.contains(b), ip);
+        assertTrue(ip.contains("<ip>"), ip);
+        String keep = "2026-11-15 and 1-2-3 and v1-2-3-4567 and 2026-11-15-10 size 64KB uuid "
+                + UUID.nameUUIDFromBytes(new byte[] {1, 2, 3}) + " and 300-1-2-3 and 1-2-3-4-5";
+        assertEquals(keep, session().maskLine(keep));
     }
 }
