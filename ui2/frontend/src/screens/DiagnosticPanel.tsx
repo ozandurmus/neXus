@@ -1,4 +1,5 @@
 import { JobButton } from "../shell/JobWindow";
+import { PRODUCT_NAME } from "../brand/product";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Chip, Divider, List, ListItemButton, ListItemText, ListSubheader,
   Paper, Stack, Step, StepLabel, Stepper, Table, TableBody, TableCell, TableContainer, TableHead,
@@ -148,7 +149,7 @@ export function DiagnosticPanel() {
 
   return <Box sx={{ display: "grid", gap: 2, minWidth: 0 }}>
     <Box><Typography variant="h5">Diagnostics</Typography>
-      <Typography color="text.secondary">Run an approved read command on one device and read its output. Only commands neXus already uses are listed.</Typography></Box>
+      <Typography color="text.secondary">Run an approved read command on one device and read its output. Only commands {PRODUCT_NAME} already uses are listed.</Typography></Box>
     {allowed === null && <Typography role="status">Loading devices and approved commands…</Typography>}
     {allowed === false && <Alert severity="error">Diagnostics could not be loaded or access is unavailable.</Alert>}
     {message && <Alert severity="warning" onClose={() => setMessage("")}>{message}</Alert>}

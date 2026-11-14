@@ -33,6 +33,7 @@ import {
   type PacketWaterfallView,
 } from "../../auth/adminApi";
 import { M3Button, StatusChip } from "../../shell/M3Widgets";
+import { PRODUCT_NAME, PRODUCT_SHORT } from "../../brand/product";
 import { statusWord } from "../../shell/presenters";
 import { m3, MONO } from "../../theme/m3Theme";
 import { LadderChart, PacketChart, paNum, paTime } from "./PacketCharts";
@@ -174,7 +175,7 @@ export function PacketFlowsTab({
                         <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.5, flexWrap: "wrap", gap: 0.5 }}>
                           <StatusChip
                             tone={correlationStatusTone(flowCorr.status)}
-                            label={`neXus: ${statusWord(flowCorr.status)}`}
+                            label={`${PRODUCT_SHORT}: ${statusWord(flowCorr.status)}`}
                             dense
                           />
                           {flowCorr.status === "MATCH" && (
@@ -306,7 +307,7 @@ function FlowNexusCorrelationPanel({
   return (
     <Card
       sx={{ p: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}` }}
-      aria-label="Flow neXus correlation"
+      aria-label={`Flow ${PRODUCT_NAME} correlation`}
     >
       <Stack
         direction="row"
@@ -316,7 +317,7 @@ function FlowNexusCorrelationPanel({
         sx={{ flexWrap: "wrap", gap: 1, mb: 0.5 }}
       >
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          neXus policy & path correlation
+          {PRODUCT_NAME} policy & path correlation
         </Typography>
         <Stack direction="row" spacing={0.75} alignItems="center" sx={{ flexWrap: "wrap", gap: 0.75 }}>
           <StatusChip tone={correlationStatusTone(fl.status)} label={statusWord(fl.status)} dense />

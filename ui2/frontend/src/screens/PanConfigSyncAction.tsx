@@ -7,6 +7,7 @@ import DialogTitle from "@mui/material/DialogTitle";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { M3Button } from "../shell/M3Widgets";
+import { PRODUCT_NAME } from "../brand/product";
 import { m3 } from "../theme/m3Theme";
 import { getCpFailoverRun, getPanConfigSync, requestPanConfigSync,
   type CpFailoverUnit, type PanConfigSyncRecord, type ReadinessMember } from "../auth/adminApi";
@@ -145,7 +146,7 @@ export function PanConfigSyncAction({ unit, members, onDone, pollMs = 3000 }: {
       <DialogContent><Stack spacing={1.5} sx={{ pt: 1 }}>
         <Typography>Source (active): {source}</Typography>
         <Typography>Target (passive): {target}</Typography>
-        <Typography>neXus sends <Box component="code">{CONFIG_SYNC_COMMAND}</Box> once, to {source} only. The running configuration of {source} replaces the running configuration of {target}.</Typography>
+        <Typography>{PRODUCT_NAME} sends <Box component="code">{CONFIG_SYNC_COMMAND}</Box> once, to {source} only. The running configuration of {source} replaces the running configuration of {target}.</Typography>
         <Typography>First it reads the HA state of both members. It sends nothing unless {source} is still active, {target} is still passive and the configuration is still not synchronized.</Typography>
         <Typography>Nothing is retried. Afterwards the pre-checks run again for this unit.</Typography>
         {error && <Typography role="alert" color="error">{error}</Typography>}

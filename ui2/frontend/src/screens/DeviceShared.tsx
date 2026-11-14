@@ -15,6 +15,7 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 
 import { MONO, m3 } from "../theme/m3Theme";
+import { PRODUCT_NAME } from "../brand/product";
 import { RoleChip, Ts, Unknown } from "../shell/States";
 import { StatusChip } from "../shell/M3Widgets";
 import { Icon } from "../shell/Icon";
@@ -58,7 +59,7 @@ export function knownHaRole(device: { readonly ha_role?: string | null; readonly
  * device's latest job when there is one. It never speaks of identity, which the identity badge owns.
  */
 export function liveBasis(latestJobSentence: string | null): string {
-  return "Live means neXus confirmed this device and has read evidence from it (interface addresses or a completed inventory run). "
+  return `Live means ${PRODUCT_NAME} confirmed this device and has read evidence from it (interface addresses or a completed inventory run). `
     + `It is not an identity check; the identity badge says that.${latestJobSentence ? ` ${latestJobSentence}` : ""}`;
 }
 

@@ -24,6 +24,7 @@ import { SanitizerPreview } from "./preview/SanitizerPreview";
 import { ReportsScreen } from "./screens/ReportsScreen";
 import { AdministrationScreen } from "./screens/AdministrationScreen";
 import { DeviceWorkspaceScreen } from "./screens/DeviceWorkspaceScreen";
+import { PRODUCT_NAME } from "./brand/product";
 import { OverviewPreview } from "./preview/OverviewPreview";
 import { ReportsPreview } from "./preview/ReportsPreview";
 import { InventoryPreview } from "./preview/InventoryPreview";
@@ -123,6 +124,9 @@ export function App({
   readonly search?: string;
   readonly pathname?: string;
 }) {
+  if (typeof document !== "undefined" && document.title !== PRODUCT_NAME) {
+    document.title = PRODUCT_NAME;
+  }
   const liveSearch = useLocationSearch();
   const livePathname = useLocationPathname();
   const initialRef = useRef({

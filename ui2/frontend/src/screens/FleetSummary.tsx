@@ -4,6 +4,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 
 import { getOverview, type DeviceSummary, type OverviewView } from "../auth/adminApi";
+import { PRODUCT_NAME } from "../brand/product";
 import { RestrictedPanel, StatePanel, isRestricted } from "../shell/States";
 import { vendorLabel } from "../shell/presenters";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
@@ -117,7 +118,7 @@ export function FleetSummary({ countLabel, fleet }: { readonly countLabel: strin
             // A finding about this one panel, not a failed screen: announced as a status, never as an alert.
             : <StatePanel variant="empty" title="Estate summary is not shown" body="The stored-evidence summary did not return data. Devices below are not affected; reload to try again." code={overview.error} />
           : overview.data
-            ? <StatePanel variant="empty" title="Estate summary is not shown" body="The stored-evidence summary came back without its platform and neXus figures. Devices below are not affected." />
+            ? <StatePanel variant="empty" title="Estate summary is not shown" body={`The stored-evidence summary came back without its platform and ${PRODUCT_NAME} figures. Devices below are not affected.`} />
             : <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>Reading the estate summary…</Typography>}
     </Stack>
   );

@@ -21,6 +21,7 @@ import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 
 import { m3 } from "../theme/m3Theme";
+import { PRODUCT_NAME } from "../brand/product";
 import { CreateCredentialDialog } from "../screens/CredentialsPanel";
 import { M3Button, StatusChip } from "./M3Widgets";
 import { PLANE_ADMIN } from "./actionAccess";
@@ -118,7 +119,7 @@ function describeApiError(err: unknown): ApiErrorDescription {
   if (serverError === "ADMISSION_REFUSED") {
     const messages: Record<string, string> = {
       DUPLICATE_ADDRESS: "A device is already registered at this address. Open it in Devices, or delete it first to add it again.",
-      VENDOR_UNSUPPORTED: "neXus cannot read this vendor/role yet.",
+      VENDOR_UNSUPPORTED: `${PRODUCT_NAME} cannot read this vendor/role yet.`,
       MANAGEMENT_SERVER_UNGATED: "Reads for this management server are not approved yet.",
       ROLE_UNRECOGNISED: "This role is not recognised for the selected vendor.",
       UNAVAILABLE: "The job queue is unavailable; try again in a minute.",

@@ -1,4 +1,5 @@
 import { useGate } from "../shell/JobWindow";
+import { PRODUCT_NAME } from "../brand/product";
 import { BackupAttempts, LatestAttemptCell, latestAttemptTime, useLatestBackupAttempts } from "./BackupAttempts";
 import { DeviationChip, ValidationChip, deviationState } from "./backupWords";
 import { BackupDeviationCard, MajorDeviationDrawer, majorDeviceIds } from "./BackupDeviationCard";
@@ -616,7 +617,7 @@ export function BackupScreen() {
         <DialogContent>
           <Stack spacing={1.5} sx={{ pt: 1 }}>
             <Typography variant="body2" color="text.secondary">
-              This device is no longer in neXus. Every stored backup of it is removed from the backup store for good -- keep a
+              This device is no longer in {PRODUCT_NAME}. Every stored backup of it is removed from the backup store for good -- keep a
               copy first (Download) if you need one. Who asked and why is recorded in the audit log.
             </Typography>
             <TextField label="Reason" value={orphanReason} onChange={(e) => setOrphanReason(e.target.value)} fullWidth size="small"
@@ -1218,7 +1219,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", gap: 1 }}>
           <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>Show:</Typography>
           {chip("all", "Backup-capable", summaries.length, counts.enrolled > counts.backupCapable
-            ? `Enrolled devices neXus can back up: ${counts.enrolled - counts.backupCapable} of ${counts.enrolled} enrolled devices have no backup method`
+            ? `Enrolled devices ${PRODUCT_NAME} can back up: ${counts.enrolled - counts.backupCapable} of ${counts.enrolled} enrolled devices have no backup method`
             : `Every enrolled device (${counts.enrolled}) can be backed up`)}
           {chip("targets", "Targets", targetCount)}
           {chip("without_archive", "Targets without archive", withoutArchive)}
@@ -1339,7 +1340,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                         <GateMenuItem disabled={!item?.artefactId} note="No archive" onClick={() => item && onCompare(item)}>Compare</GateMenuItem>
                         <GateMenuItem disabled={!item?.artefactId} note="No archive" onClick={() => item && onDownload(item)}>Download</GateMenuItem>
                         {!summary && item ? (
-                          <GateMenuItem destructive title="This device is no longer in neXus: remove its stored backups (asks for a reason; audited)"
+                          <GateMenuItem destructive title={`This device is no longer in ${PRODUCT_NAME}: remove its stored backups (asks for a reason; audited)`}
                             onClick={() => onDeleteOrphan(item)}>Delete</GateMenuItem>
                         ) : null}
                       </RowMenu>

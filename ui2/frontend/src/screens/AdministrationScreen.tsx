@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import Box from "@mui/material/Box";
 
 import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
+import { PRODUCT_NAME } from "../brand/product";
 import { M3Tabs } from "../shell/M3Widgets";
 import { AddDeviceDialogTrigger, ImportFromManagerTrigger } from "../shell/AddDeviceDialog";
 import { Icon } from "../shell/Icon";
@@ -115,7 +116,7 @@ const PAGES: readonly AdminPageDef[] = [
     label: "Platform status",
     // neXus' own health (PO 2026-11-13 amendment of F1): readable by every signed-in role, as it was under Operations;
     // the indicator in the top bar summarises it on every screen and links here.
-    blurb: "neXus itself: what the evidence takes on disk and the state of the product's own service pods.",
+    blurb: `${PRODUCT_NAME} itself: what the evidence takes on disk and the state of the product's own service pods.`,
     sections: [
       { slug: "platform-status", label: "Platform status", panel: <SystemStatusPanel /> },
     ],

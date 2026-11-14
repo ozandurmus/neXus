@@ -1,15 +1,16 @@
 import { useId } from "react";
 import { m3 } from "../theme/m3Theme";
+import { PRODUCT_NAME } from "./product";
 
 /**
  * The neXus mark on its own: the app mark's X, four nodes and hub (geometry of `assets/app-mark.svg`) without the navy
  * tile, in the same three theme colours as the wordmark. It is the logo where there is no room for the word: the folded
  * sidebar and the narrow strip (brand area 2026-11-13). The tile itself stays on the sign-in screen and the tab icon.
  */
-export function NexusMark({ size = 40 }: { readonly size?: number }) {
+export function NexusMark({ size = 40, name = PRODUCT_NAME }: { readonly size?: number; readonly name?: string }) {
   const maskId = `nx-mark-${useId().replace(/:/g, "")}`;
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="11 11 42 42" role="img" aria-label="neXus" data-brand="mark"
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="11 11 42 42" role="img" aria-label={name} data-brand="mark"
       width={size} height={size} style={{ display: "block", flex: "none" }}>
       <defs>
         <mask id={maskId} maskUnits="userSpaceOnUse" x="11" y="11" width="42" height="42">

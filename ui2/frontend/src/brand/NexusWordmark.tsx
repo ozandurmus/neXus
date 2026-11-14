@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { m3 } from "../theme/m3Theme";
+import { hasBespokeWordmark, PRODUCT_NAME } from "./product";
 
 /**
  * The neXus wordmark, drawn in place (geometry of `assets/wordmark.svg`, option D): lettering, nodes and hub in one ink,
@@ -7,11 +8,43 @@ import { m3 } from "../theme/m3Theme";
  * light-on-dark artwork's own values, so the mark sits straight on the surface in both modes with no box behind it
  * (brand area 2026-11-13). The sign-in screen keeps its own always-dark artwork files.
  */
-export function NexusWordmark({ height = 40 }: { readonly height?: number }) {
+export function NexusWordmark({
+  height = 40,
+  name = PRODUCT_NAME,
+}: {
+  readonly height?: number;
+  readonly name?: string;
+}) {
   // The hub is cut out of the X by a mask; the wordmark can be on a page more than once, so the mask id is per instance.
   const maskId = `nx-wordmark-${useId().replace(/:/g, "")}`;
+  if (!hasBespokeWordmark(name)) {
+    const viewWidth = Math.max(120, name.length * 24 + 44);
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox={`-2 -2 ${viewWidth} 44`} role="img" aria-label={name} data-brand="wordmark"
+        height={height} width={Math.round((height * viewWidth / 44) * 100) / 100} style={{ display: "block", flex: "none" }}>
+        <defs>
+          <mask id={maskId} maskUnits="userSpaceOnUse" x="-2" y="-2" width="38" height="44">
+            <rect x="-2" y="-2" width="38" height="44" fill="#fff" />
+            <circle cx="16" cy="20" r="4.8" fill="#000" />
+          </mask>
+        </defs>
+        <g mask={`url(#${maskId})`} strokeWidth="5.2" strokeLinecap="round" fill="none">
+          <path d="M5 7L27 33" style={{ stroke: m3.brandTeal }} />
+          <path d="M27 7L5 33" style={{ stroke: m3.brandBlue }} />
+        </g>
+        <g style={{ fill: m3.brandInk }}>
+          <circle cx="5" cy="7" r="3.6" /><circle cx="27" cy="7" r="3.6" /><circle cx="5" cy="33" r="3.6" /><circle cx="27" cy="33" r="3.6" />
+        </g>
+        <circle cx="16" cy="20" r="4.8" fill="none" strokeWidth="2.4" style={{ stroke: m3.brandInk }} />
+        <text x="38" y="31" fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" fontSize="30" fontWeight="700"
+          letterSpacing="-0.5" style={{ fill: m3.brandInk }}>
+          {name}
+        </text>
+      </svg>
+    );
+  }
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 200 44" role="img" aria-label="neXus" data-brand="wordmark"
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 200 44" role="img" aria-label={name} data-brand="wordmark"
       height={height} width={Math.round((height * 200 / 44) * 100) / 100} style={{ display: "block", flex: "none" }}>
       <defs>
         <mask id={maskId} maskUnits="userSpaceOnUse" x="80" y="-2" width="48" height="44">

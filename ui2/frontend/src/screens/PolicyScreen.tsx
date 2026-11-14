@@ -2,6 +2,7 @@ import { JobButton, jobWindowUsable, useJobWindow } from "../shell/JobWindow";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, Tabs, Tab, Checkbox, Chip, Drawer, IconButton, InputAdornment, Menu, MenuItem, type MenuItemProps, Table, TableBody, TableCell, TableHead, TableRow, Tooltip, FormControl, InputLabel, Select, Stack, TextField, Typography } from "@mui/material";
 import { ScreenRoot, ScreenHeader, EmptyPanel } from "../shell/ScreenLayout";
+import { PRODUCT_NAME } from "../brand/product";
 import { Ts, VendorBadge } from "../shell/States";
 import { Icon } from "../shell/Icon";
 import { relativeAge } from "../shell/time";
@@ -803,7 +804,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         </>}
         {tab === "Changes" && <>
           <Typography variant="body2" sx={{ mb: 1 }}>
-            The stored rule revisions of every policy, with filters and a CSV export. The estate-wide timeline of user changes, neXus jobs and device events is on{" "}
+            The stored rule revisions of every policy, with filters and a CSV export. The estate-wide timeline of user changes, {PRODUCT_NAME} jobs and device events is on{" "}
             <Box component="a" href={changesHref("feed")} sx={{ color: m3.primary }}>Changes</Box>.
           </Typography>
           <PolicyChangesTab key={revision} policies={catalog} devices={targets} openRule={(policy, rule) => void openRuleId(rule, 90, policy)} />

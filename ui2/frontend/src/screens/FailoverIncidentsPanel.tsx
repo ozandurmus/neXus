@@ -8,6 +8,7 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { M3Button } from "../shell/M3Widgets";
+import { PRODUCT_NAME } from "../brand/product";
 import { m3 } from "../theme/m3Theme";
 import { requestFailure } from "../shell/presenters";
 import { listFailoverIncidents, releaseFailoverIncident, type FailoverIncident, type FailoverIncidents } from "../auth/adminApi";
@@ -67,7 +68,7 @@ export function FailoverIncidentsPanel({ clusterId, onReleased }: { clusterId?: 
       <DialogTitle>Release failover incident</DialogTitle>
       <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
         <Typography>Unit: {target?.maskedName ?? target?.cluster_member_ref} · Run: {target?.incidentRef}</Typography>
-        <Typography>Release only after the cluster state was verified out of band. neXus sends nothing to a device;
+        <Typography>Release only after the cluster state was verified out of band. {PRODUCT_NAME} sends nothing to a device;
           an unobserved write is recorded as outcome unknown, never as confirmed. Your account and the reason are recorded on the incident.</Typography>
         <TextField label="Reason" required multiline minRows={2} value={reason}
           inputProps={{ maxLength: RELEASE_REASON_MAX }} onChange={e => setReason(e.target.value)} />
