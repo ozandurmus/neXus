@@ -352,7 +352,7 @@ describe("AdministrationScreen tabs", () => {
                 device_id: "dev-1",
                 vendor_hint: "check_point",
                 enrollment_state: "ENROLLED",
-                hostname: "fw-edge-1",
+                hostname: "FW-TANGO-04",
                 model: "Quantum",
                 software_version: "R81.20",
                 ha_role: "active",
@@ -365,7 +365,7 @@ describe("AdministrationScreen tabs", () => {
     );
     render(withTheme(<AdministrationScreen />));
     await waitFor(() => expect(screen.getByText("Device registry · 1 entry")).toBeInTheDocument());
-    expect(screen.getByText("fw-edge-1")).toBeInTheDocument();
+    expect(screen.getByText("FW-TANGO-04")).toBeInTheDocument();
     // "Enrolled" appears both as the device's own status chip and as the
     // Enrollment summary card's row label -- assert both are present rather
     // than picking one with an ambiguous getByText.

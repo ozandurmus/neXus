@@ -283,13 +283,13 @@ it("summarizes every stored container until one is opened, using only loaded dat
   expect(screen.queryByRole("status", { name: "No assigned policy snapshot" })).toBeNull();
 });
 it("states unknown rule counts and many gateways honestly in the summary", async () => {
-  const many = { ...metadata, ruleCount: undefined, targets: ["a", "b", "c", "d", "e"].map(n => ({ deviceId: `dev-${n}`, name: `FW-SYNTH-${n}`, context: "", syncStatus: "UNKNOWN" })) };
+  const many = { ...metadata, ruleCount: undefined, targets: [1, 2, 3, 4, 5].map(n => ({ deviceId: `dev-${n}`, name: `FW-TANGO-0${n}`, context: "", syncStatus: "UNKNOWN" })) };
   vi.stubGlobal("fetch", vi.fn(async (input: string) => new Response(JSON.stringify(input === "/api/v2/policy/sources"
     ? { canCollect: false, sources: [{ sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "PAN" }] } : { policies: [many], devices: [] }), { status: 200 })));
   mount();
   const row = within(await screen.findByRole("region", { name: "Stored policy containers" })).getAllByRole("row")[1];
   expect(row).toHaveTextContent("UNKNOWN");
-  expect(row).toHaveTextContent("FW-SYNTH-a, FW-SYNTH-b, FW-SYNTH-c +2 more");
+  expect(row).toHaveTextContent("FW-TANGO-01, FW-TANGO-02, FW-TANGO-03 +2 more");
 });
 it("filters the summary with the tree search and says so when nothing matches", async () => {
   mockTwoSources(); mount();
@@ -563,12 +563,12 @@ it("keeps every collection failure sentence clear of the screen load-error guard
   const reasons = ["TIMEOUT", "TimedOut", "JOB_DEADLINE", "HTTP_403", "AuthenticationFailed", "HostKeyRejected",
     "PARSE", "INVALID", "RESPONSE", "XML", "COLLECTION_FAILED", ""];
   const sources = reasons.flatMap(reason => [reason, `PARTIAL_SNAPSHOT ${reason}`]).map((reason, index) => ({
-    sourceId: `source-${index}`, sourceName: `MGR-SYNTHETIC-${index}`, vendor: "CP",
+    sourceId: `source-${index}`, sourceName: `MGR-TANGO-${String(index + 1).padStart(2, "0")}`, vendor: "CP",
     collection: { jobId: `job-${index}`, state: "FAILED", reason, step: 2, total: index % 2 ? 0 : 8 },
   }));
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ canCollect: false, sources }), { status: 200 })));
   mount();
-  await screen.findByRole("button", { name: "MGR-SYNTHETIC-0" });
+  await screen.findByRole("button", { name: "MGR-TANGO-01" });
   const sentences = screen.getAllByText(/^Last collection/);
   expect(sentences).toHaveLength(sources.length);
   for (const sentence of sentences) expect(sentence.textContent).not.toMatch(loadErrorText);

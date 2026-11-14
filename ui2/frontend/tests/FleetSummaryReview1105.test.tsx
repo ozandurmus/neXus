@@ -75,7 +75,7 @@ describe("the version verdict line", () => {
 });
 
 describe("the device tree: collapsed children and Problems only", () => {
-  const dev = (over: Partial<DeviceSummary>): DeviceSummary => ({ device_id: "x", hostname: "FW-X", vendor_hint: "check_point", role: "gateway", enrollment_state: "ENROLLED",
+  const dev = (over: Partial<DeviceSummary>): DeviceSummary => ({ device_id: "x", hostname: "FW-TANGO-01", vendor_hint: "check_point", role: "gateway", enrollment_state: "ENROLLED",
     model: "Quantum", software_version: "R81.20", ha_role: null, cluster_member_ref: null, ip_addresses: "192.0.2.10", ...over } as DeviceSummary);
   const FLEET = [
     dev({ device_id: "ok", hostname: "FW-TANGO-04" }),

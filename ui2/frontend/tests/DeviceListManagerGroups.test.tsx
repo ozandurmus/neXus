@@ -12,10 +12,10 @@ const dev = (id: string, hostname: string, extra: Partial<DeviceSummary> = {}): 
 } as unknown as DeviceSummary);
 
 const devices = [
-  dev("mds", "FW-MDS-01", { role: "management_server" }),
+  dev("mds", "MGR-BRAVO-01", { role: "management_server" }),
   dev("m1", "FW-ROMEO-01-M1", { cluster_member_ref: "CLS-ROMEO-01" }),
   dev("m2", "FW-ROMEO-01-M2", { cluster_member_ref: "CLS-ROMEO-01" }),
-  dev("g9", "FW-SOLO-09"),
+  dev("g9", "FW-TANGO-09"),
 ];
 const node = (device_id: string | null, children: unknown[] = []) => ({ kind: "X", category: "device", device_id, imported: device_id !== null,
   ha_role: null, enrollment_state: null, last_collection_state: null, last_collection_at: null, model: null, candidate_id: null,
@@ -28,7 +28,7 @@ it("nests a manager's clusters under it by domain and keeps unmanaged devices at
   render(<DeviceList groupByManager devices={devices} selectedDeviceId={null} selectedClusterRef={null}
     onSelectDevice={vi.fn()} onSelectCluster={vi.fn()} />);
   await waitFor(() => expect(screen.getByText("2 managed")).toBeTruthy()); // the whole cluster moves with its member
-  expect(screen.getByText("FW-SOLO-09")).toBeTruthy();
+  expect(screen.getByText("FW-TANGO-09")).toBeTruthy();
   expect(screen.queryByText("CLS-ROMEO-01")).toBeNull();
   fireEvent.click(screen.getByLabelText("Expand managed devices"));
   expect(screen.getByText("CLS-ROMEO-01")).toBeTruthy(); // a single domain with devices opens directly
@@ -42,7 +42,7 @@ it("retries a failed manager tree fetch and displays grouping after recovery", a
   vi.stubGlobal("fetch", fetcher);
   render(<DeviceList groupByManager devices={devices} selectedDeviceId={null} selectedClusterRef={null}
     onSelectDevice={vi.fn()} onSelectCluster={vi.fn()} />);
-  expect(screen.getByText("FW-SOLO-09")).toBeTruthy();
+  expect(screen.getByText("FW-TANGO-09")).toBeTruthy();
   await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
   expect(screen.getByText("2 managed")).toBeTruthy();
   expect(fetcher).toHaveBeenCalledTimes(2);
@@ -55,35 +55,35 @@ it("stays flat without grouping", () => {
 
 it("collapses Infoblox grid members and selects a member through its manager", () => {
   const onSelectDevice = vi.fn();
-  const grid = dev("grid", "GRID-ROMEO-01", { vendor_hint: "infoblox", role: "appliance", virtual_systems: "MEMBER-A, MEMBER-B, MEMBER-C" });
+  const grid = dev("grid", "FW-NOVEMBER-02", { vendor_hint: "infoblox", role: "appliance", virtual_systems: "FW-ROMEO-01-M1, FW-ROMEO-01-M2, FW-ROMEO-01-M3" });
   render(<DeviceList devices={[grid]} selectedDeviceId={null} selectedClusterRef={null} onSelectDevice={onSelectDevice} onSelectCluster={vi.fn()} />);
   expect(screen.getByText("3 members")).toBeTruthy();
-  expect(screen.queryByText("MEMBER-A")).toBeNull();
+  expect(screen.queryByText("FW-ROMEO-01-M1")).toBeNull();
   fireEvent.click(screen.getByTitle("Expand virtual systems"));
-  fireEvent.click(screen.getByText("MEMBER-B"));
-  expect(onSelectDevice).toHaveBeenCalledWith(grid, "MEMBER-B");
+  fireEvent.click(screen.getByText("FW-ROMEO-01-M2"));
+  expect(onSelectDevice).toHaveBeenCalledWith(grid, "FW-ROMEO-01-M2");
 });
 
 it("places Infoblox manager rows with management servers above standalone gateways", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(tree))));
-  const grid = dev("grid", "GRID-ROMEO-01", { vendor_hint: "infoblox", role: "appliance", virtual_systems: "MEMBER-A" });
+  const grid = dev("grid", "FW-NOVEMBER-02", { vendor_hint: "infoblox", role: "appliance", virtual_systems: "FW-ROMEO-01-M1" });
   const { container } = render(<DeviceList groupByManager devices={[devices[0], grid, devices[3]]} selectedDeviceId={null} selectedClusterRef={null}
     onSelectDevice={vi.fn()} onSelectCluster={vi.fn()} />);
   await waitFor(() => expect(screen.getByText("1 members")).toBeTruthy());
   expect(screen.queryByText("1 managed")).toBeNull();
   const rows = [...container.querySelectorAll('[data-row="manager-head"]')];
-  expect(rows.map((row) => row.textContent)).toEqual(expect.arrayContaining([expect.stringContaining("FW-MDS-01"), expect.stringContaining("GRID-ROMEO-01")]));
-  expect(rows[0]?.textContent).toContain("FW-MDS-01");
-  expect(rows[1]?.textContent).toContain("GRID-ROMEO-01");
-  expect(container.querySelector('[data-row="device"]')?.textContent).toContain("FW-SOLO-09");
+  expect(rows.map((row) => row.textContent)).toEqual(expect.arrayContaining([expect.stringContaining("MGR-BRAVO-01"), expect.stringContaining("FW-NOVEMBER-02")]));
+  expect(rows[0]?.textContent).toContain("MGR-BRAVO-01");
+  expect(rows[1]?.textContent).toContain("FW-NOVEMBER-02");
+  expect(container.querySelector('[data-row="device"]')?.textContent).toContain("FW-TANGO-09");
 });
 
 it("starts a standalone VSX gateway collapsed with the virtual-system count", () => {
-  const gateway = dev("vsx", "FW-VSX-01", { virtual_systems: "VS-A, VS-B" });
+  const gateway = dev("vsx", "FW-TANGO-04", { virtual_systems: "VS-TANGO-04-01, VS-TANGO-04-02" });
   render(<DeviceList devices={[gateway]} selectedDeviceId={null} selectedClusterRef={null} onSelectDevice={vi.fn()} onSelectCluster={vi.fn()} />);
   expect(screen.getByText("2 VS")).toBeTruthy();
-  expect(screen.queryByText("VS-A")).toBeNull();
+  expect(screen.queryByText("VS-TANGO-04-01")).toBeNull();
   fireEvent.click(screen.getByTitle("Expand virtual systems"));
-  expect(screen.getByText("VS-A")).toBeTruthy();
-  expect(screen.getByText("VS-B")).toBeTruthy();
+  expect(screen.getByText("VS-TANGO-04-01")).toBeTruthy();
+  expect(screen.getByText("VS-TANGO-04-02")).toBeTruthy();
 });

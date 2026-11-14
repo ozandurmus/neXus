@@ -19,7 +19,7 @@ const vsys1 = ctx("vsys1", [iface("ethernet2/1", "192.0.2.1/24"), iface("etherne
 const vsys2 = ctx("vsys2", [iface("ethernet3/1", "198.51.100.1/24")]);
 const mount = (contexts: unknown[], vsys: string[] = ["vsys1", "vsys2"]) => render(
   <ThemeProvider theme={m3Theme}>
-    <InterfacesPanel contexts={contexts as never} virtualSystems={vsys} member={{ device_id: "pa-1", hostname: "FW-SYNTH-PA" }} isPaloAlto />
+    <InterfacesPanel contexts={contexts as never} virtualSystems={vsys} member={{ device_id: "pa-1", hostname: "FW-TANGO-04" }} isPaloAlto />
   </ThemeProvider>);
 const group = (label: string) => document.querySelector(`[data-vsys-group="${label}"]`) as HTMLElement;
 void render;
@@ -83,7 +83,7 @@ describe("FortiGate VDOMs grouped the same way (post-release review 2026-10-18, 
     render(
       <ThemeProvider theme={m3Theme}>
         <InterfacesPanel contexts={[vdom("root", [iface("port1", "192.0.2.1/24"), iface("port2")]), vdom("dmz", [iface("port3", "198.51.100.1/24")])] as never}
-          virtualSystems={["root", "dmz"]} member={{ device_id: "fg-1", hostname: "FW-SYNTH-FG" }} groupByContext />
+          virtualSystems={["root", "dmz"]} member={{ device_id: "fg-1", hostname: "FW-BRAVO-02" }} groupByContext />
       </ThemeProvider>);
     expect(group("VDOM: root")).toHaveTextContent("2 interfaces · 1 with an address");
     expect(group("VDOM: dmz")).toHaveTextContent("1 interface · 1 with an address");

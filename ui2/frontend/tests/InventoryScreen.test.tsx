@@ -55,7 +55,7 @@ describe("InventoryScreen device list", () => {
                 device_id: "dev-1",
                 vendor_hint: "check_point",
                 enrollment_state: "DRAFT",
-                hostname: "fw-edge-1",
+                hostname: "FW-TANGO-04",
                 model: null,
                 software_version: null,
                 ha_role: null,
@@ -68,7 +68,7 @@ describe("InventoryScreen device list", () => {
     );
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("FW-TANGO-04")).toBeInTheDocument());
     expect(screen.getByText("Registered, not confirmed")).toBeInTheDocument();
     // a DRAFT device is registered, not enrolled (it read "1 device enrolled" until 2026-10-17)
     expect(screen.getByText("1 registered · 0 enrolled")).toBeInTheDocument();
@@ -87,46 +87,46 @@ describe("InventoryScreen device list", () => {
   it("sorts the device list by name and by vendor via the sort control", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, {
       devices: [
-        { device_id: "z-pan", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "zeta-pan", model: null, software_version: null, ha_role: null, cluster_member_ref: null },
-        { device_id: "a-cp", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "alpha-cp", model: null, software_version: null, ha_role: null, cluster_member_ref: null },
-        { device_id: "m-cp", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "mid-cp", model: null, software_version: null, ha_role: null, cluster_member_ref: null },
+        { device_id: "z-pan", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "FW-ZULU-03", model: null, software_version: null, ha_role: null, cluster_member_ref: null },
+        { device_id: "a-cp", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "FW-ALPHA-01", model: null, software_version: null, ha_role: null, cluster_member_ref: null },
+        { device_id: "m-cp", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "FW-MIKE-02", model: null, software_version: null, ha_role: null, cluster_member_ref: null },
       ],
     })));
     render(withTheme(<InventoryScreen />));
-    await waitFor(() => expect(screen.getByText("zeta-pan")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("FW-ZULU-03")).toBeInTheDocument());
 
-    const namesInOrder = () => screen.getAllByText(/^(zeta-pan|alpha-cp|mid-cp)$/).map((el) => el.textContent);
+    const namesInOrder = () => screen.getAllByText(/^(FW-ZULU-03|FW-ALPHA-01|FW-MIKE-02)$/).map((el) => el.textContent);
 
     // Default: Name (A->Z).
-    expect(namesInOrder()).toEqual(["alpha-cp", "mid-cp", "zeta-pan"]);
+    expect(namesInOrder()).toEqual(["FW-ALPHA-01", "FW-MIKE-02", "FW-ZULU-03"]);
 
     // Sort lives in the list's view-and-sort menu.
     fireEvent.click(screen.getByRole("button", { name: "List view and sort" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Name (Z→A)" }));
-    expect(namesInOrder()).toEqual(["zeta-pan", "mid-cp", "alpha-cp"]);
+    expect(namesInOrder()).toEqual(["FW-ZULU-03", "FW-MIKE-02", "FW-ALPHA-01"]);
 
     fireEvent.click(screen.getByRole("button", { name: "List view and sort" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Vendor (A→Z)" }));
     // Check Point sorts before Palo Alto alphabetically; within Check Point, name breaks the tie.
-    expect(namesInOrder()).toEqual(["alpha-cp", "mid-cp", "zeta-pan"]);
+    expect(namesInOrder()).toEqual(["FW-ALPHA-01", "FW-MIKE-02", "FW-ZULU-03"]);
   });
 
   it("distinguishes completed, failed, and never-collected devices and filters only failures", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, {
       devices: [
-        { device_id: "done", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "done-device", model: null, software_version: null, ha_role: null, cluster_member_ref: null, latest_job_state: "COMPLETED" },
-        { device_id: "failed", vendor_hint: "check_point", enrollment_state: "DRAFT", hostname: "failed-device", model: null, software_version: null, ha_role: null, cluster_member_ref: null, latest_job_state: "FAILED", latest_job_terminal_reason: "connect_failed: transport detail" },
-        { device_id: "unknown-failure", vendor_hint: "check_point", enrollment_state: "DRAFT", hostname: "unknown-failure-device", model: null, software_version: null, ha_role: null, cluster_member_ref: null, latest_job_state: "FAILED", latest_job_terminal_reason: "unknown_class: transport detail" },
-        { device_id: "new", vendor_hint: "check_point", enrollment_state: "DRAFT", hostname: "new-device", model: null, software_version: null, ha_role: null, cluster_member_ref: null },
+        { device_id: "done", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "FW-ALPHA-01", model: null, software_version: null, ha_role: null, cluster_member_ref: null, latest_job_state: "COMPLETED" },
+        { device_id: "failed", vendor_hint: "check_point", enrollment_state: "DRAFT", hostname: "FW-BRAVO-02", model: null, software_version: null, ha_role: null, cluster_member_ref: null, latest_job_state: "FAILED", latest_job_terminal_reason: "connect_failed: transport detail" },
+        { device_id: "unknown-failure", vendor_hint: "check_point", enrollment_state: "DRAFT", hostname: "FW-CHARLIE-03", model: null, software_version: null, ha_role: null, cluster_member_ref: null, latest_job_state: "FAILED", latest_job_terminal_reason: "unknown_class: transport detail" },
+        { device_id: "new", vendor_hint: "check_point", enrollment_state: "DRAFT", hostname: "FW-DELTA-04", model: null, software_version: null, ha_role: null, cluster_member_ref: null },
       ],
     })));
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("failed-device")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("FW-BRAVO-02")).toBeInTheDocument());
     const rowText = (name: string) => [...document.querySelectorAll('[data-row="device"]')]
       .find((row) => row.textContent?.includes(name))?.textContent ?? "";
-    expect(rowText("failed-device")).toContain("Collection failed · Connection failed");
-    expect(rowText("unknown-failure-device")).toContain("Collection failed");
+    expect(rowText("FW-BRAVO-02")).toContain("Collection failed · Connection failed");
+    expect(rowText("FW-CHARLIE-03")).toContain("Collection failed");
     expect(screen.queryByText("Collection completed")).toBeNull();
     expect(screen.queryByText("Not yet collected")).toBeNull();
 
@@ -136,35 +136,35 @@ describe("InventoryScreen device list", () => {
 
     fireEvent.change(stateRow, { target: { value: "failed" } });
     expect(stateRow.value).toBe("failed");
-    expect(screen.getByText("failed-device")).toBeInTheDocument();
-    expect(screen.getByText("unknown-failure-device")).toBeInTheDocument();
-    expect(screen.queryByText("done-device")).toBeNull();
-    expect(screen.queryByText("new-device")).toBeNull();
+    expect(screen.getByText("FW-BRAVO-02")).toBeInTheDocument();
+    expect(screen.getByText("FW-CHARLIE-03")).toBeInTheDocument();
+    expect(screen.queryByText("FW-ALPHA-01")).toBeNull();
+    expect(screen.queryByText("FW-DELTA-04")).toBeNull();
 
     fireEvent.change(stateRow, { target: { value: "all" } });
-    expect(screen.getByText("done-device")).toBeInTheDocument();
-    expect(screen.getByText("new-device")).toBeInTheDocument();
+    expect(screen.getByText("FW-ALPHA-01")).toBeInTheDocument();
+    expect(screen.getByText("FW-DELTA-04")).toBeInTheDocument();
 
     fireEvent.change(stateRow, { target: { value: "draft" } });
-    expect(screen.getByText("failed-device")).toBeInTheDocument();
-    expect(screen.getByText("unknown-failure-device")).toBeInTheDocument();
-    expect(screen.getByText("new-device")).toBeInTheDocument();
-    expect(screen.queryByText("done-device")).toBeNull();
+    expect(screen.getByText("FW-BRAVO-02")).toBeInTheDocument();
+    expect(screen.getByText("FW-CHARLIE-03")).toBeInTheDocument();
+    expect(screen.getByText("FW-DELTA-04")).toBeInTheDocument();
+    expect(screen.queryByText("FW-ALPHA-01")).toBeNull();
   });
 
   it("shows only available device facts in the sidebar subtitle", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, {
       devices: [
-        { device_id: "full", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "full-device", role: "gateway", model: "Quantum 6600", software_version: "R81.20", ha_role: null, management_ip: "192.0.2.10", latest_job_state: "COMPLETED" },
-        { device_id: "sparse", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "sparse-device", model: "PA-440", software_version: null, ha_role: null },
+        { device_id: "full", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "FW-TANGO-04", role: "gateway", model: "Quantum 6600", software_version: "R81.20", ha_role: null, management_ip: "192.0.2.10", latest_job_state: "COMPLETED" },
+        { device_id: "sparse", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "FW-JULIET-06", model: "PA-440", software_version: null, ha_role: null },
       ],
     })));
     render(withTheme(<InventoryScreen />));
-    await waitFor(() => expect(screen.getByText("full-device")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("FW-TANGO-04")).toBeInTheDocument());
     const rowText = (name: string) => [...document.querySelectorAll('[data-row="device"]')]
       .find((row) => row.textContent?.includes(name))?.textContent ?? "";
-    expect(rowText("full-device")).toContain("Check Point · Quantum 6600 · R81.20");
-    expect(rowText("sparse-device")).toContain("Palo Alto · PA-440");
+    expect(rowText("FW-TANGO-04")).toContain("Check Point · Quantum 6600 · R81.20");
+    expect(rowText("FW-JULIET-06")).toContain("Palo Alto · PA-440");
     expect(screen.queryByText(/Collection completed|No HA role|Unknown model|192\.0\.2\.10/)).toBeNull();
   });
 
@@ -179,27 +179,27 @@ describe("InventoryScreen device list", () => {
                 device_id: "dev-a",
                 vendor_hint: "check_point",
                 enrollment_state: "ENROLLED",
-                hostname: "member-a",
+                hostname: "FW-ROMEO-01-M1",
                 model: "Quantum",
                 software_version: "R81.20",
                 ha_role: "active",
-                cluster_member_ref: "cluster-1",
+                cluster_member_ref: "CLS-ROMEO-01",
               },
               {
                 device_id: "dev-b",
                 vendor_hint: "check_point",
                 enrollment_state: "ENROLLED",
-                hostname: "member-b",
+                hostname: "FW-ROMEO-01-M2",
                 model: "Quantum",
                 software_version: "R81.20",
                 ha_role: "standby",
-                cluster_member_ref: "cluster-1",
+                cluster_member_ref: "CLS-ROMEO-01",
               },
               {
                 device_id: "dev-c",
                 vendor_hint: "palo_alto",
                 enrollment_state: "ENROLLED",
-                hostname: "standalone-c",
+                hostname: "FW-TANGO-04",
                 model: "PA-440",
                 software_version: "11.0",
                 ha_role: null,
@@ -212,16 +212,16 @@ describe("InventoryScreen device list", () => {
     );
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("cluster-1")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("CLS-ROMEO-01")).toBeInTheDocument());
     expect(screen.getByText("CLS")).toBeInTheDocument();
     // Design language §2 (refined by Product Owner direction): the sidebar row keeps only the
     // cluster's own name, a "CLS" tag and a health chip -- members are named in the detail
     // header once selected, never rendered as their own sibling row or caption line here.
-    expect(screen.queryByText((_, node) => node?.textContent === "ClusterXL · member-a · member-b")).toBeNull();
-    expect(screen.queryByRole("button", { name: /^member-a$/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^member-b$/ })).toBeNull();
+    expect(screen.queryByText((_, node) => node?.textContent === "ClusterXL · FW-ROMEO-01-M1 · FW-ROMEO-01-M2")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^FW-ROMEO-01-M1$/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^FW-ROMEO-01-M2$/ })).toBeNull();
     // The standalone device (null cluster_member_ref) renders as a normal row, not nested.
-    expect(screen.getByText("standalone-c")).toBeInTheDocument();
+    expect(screen.getByText("FW-TANGO-04")).toBeInTheDocument();
   });
 
   it("renders virtual systems under their parent cluster and selects a virtual system context", async () => {
@@ -237,46 +237,46 @@ describe("InventoryScreen device list", () => {
                   device_id: "dev-dmz-1",
                   vendor_hint: "check_point",
                   enrollment_state: "ENROLLED",
-                  hostname: "FW-CKP-EXAMPLEBANKDMZAPP-AA.1",
+                  hostname: "FW-ROMEO-01-M1",
                   model: "Quantum",
                   software_version: "R81.20",
                   ha_role: "active",
-                  cluster_member_ref: "FW-CKP-EXAMPLEBANKDMZAPP-CLS-AA",
-                  virtual_systems: "ExamplebankBetaAA, ExamplebankPosAppAA",
+                  cluster_member_ref: "CLS-ROMEO-01",
+                  virtual_systems: "VS-ROMEO-01-01, VS-ROMEO-01-02",
                 },
                 {
                   device_id: "dev-dmz-2",
                   vendor_hint: "check_point",
                   enrollment_state: "ENROLLED",
-                  hostname: "FW-CKP-EXAMPLEBANKDMZAPP-AA.2",
+                  hostname: "FW-ROMEO-01-M2",
                   model: "Quantum",
                   software_version: "R81.20",
                   ha_role: "standby",
-                  cluster_member_ref: "FW-CKP-EXAMPLEBANKDMZAPP-CLS-AA",
-                  virtual_systems: "ExamplebankBetaAA, ExamplebankPosAppAA",
+                  cluster_member_ref: "CLS-ROMEO-01",
+                  virtual_systems: "VS-ROMEO-01-01, VS-ROMEO-01-02",
                 },
               ],
             }),
           );
         }
-        if (url.includes("/clusters/FW-CKP-EXAMPLEBANKDMZAPP-CLS-AA/inventory")) {
+        if (url.includes("/clusters/CLS-ROMEO-01/inventory")) {
           return Promise.resolve(
             jsonResponse(200, {
-              cluster_member_ref: "FW-CKP-EXAMPLEBANKDMZAPP-CLS-AA",
+              cluster_member_ref: "CLS-ROMEO-01",
               members: [
-                { device_id: "dev-dmz-1", hostname: "FW-CKP-EXAMPLEBANKDMZAPP-AA.1", ha_role: "active", model: "Quantum", software_version: "R81.20", enrollment_state: "ENROLLED", virtual_systems: "ExamplebankBetaAA, ExamplebankPosAppAA" },
-                { device_id: "dev-dmz-2", hostname: "FW-CKP-EXAMPLEBANKDMZAPP-AA.2", ha_role: "standby", model: "Quantum", software_version: "R81.20", enrollment_state: "ENROLLED", virtual_systems: "ExamplebankBetaAA, ExamplebankPosAppAA" },
+                { device_id: "dev-dmz-1", hostname: "FW-ROMEO-01-M1", ha_role: "active", model: "Quantum", software_version: "R81.20", enrollment_state: "ENROLLED", virtual_systems: "VS-ROMEO-01-01, VS-ROMEO-01-02" },
+                { device_id: "dev-dmz-2", hostname: "FW-ROMEO-01-M2", ha_role: "standby", model: "Quantum", software_version: "R81.20", enrollment_state: "ENROLLED", virtual_systems: "VS-ROMEO-01-01, VS-ROMEO-01-02" },
               ],
               contexts: [
                 {
                   context: "physical",
                   interfaces: [
-                    { name: "Mgmt", kind: "physical", addresses: [{ address: "240.1.2.91/24", family: "ipv4", role: "cluster_virtual" }], presence: "all", differences: [] },
+                    { name: "Mgmt", kind: "physical", addresses: [{ address: "192.0.2.91/24", family: "ipv4", role: "cluster_virtual" }], presence: "all", differences: [] },
                   ],
                   routes: [],
                 },
               ],
-              virtual_systems: ["ExamplebankBetaAA", "ExamplebankPosAppAA"],
+              virtual_systems: ["VS-ROMEO-01-01", "VS-ROMEO-01-02"],
             }),
           );
         }
@@ -285,19 +285,19 @@ describe("InventoryScreen device list", () => {
     );
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("FW-CKP-EXAMPLEBANKDMZAPP-CLS-AA")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("CLS-ROMEO-01")).toBeInTheDocument());
     // UI review 2026-11-05, C5: children start collapsed, with their count on the cluster row
-    expect(screen.queryByText("ExamplebankBetaAA")).toBeNull();
+    expect(screen.queryByText("VS-ROMEO-01-01")).toBeNull();
     expect(screen.getByTestId("tree-child-count")).toHaveTextContent("2 VS");
     fireEvent.click(screen.getByTitle("Expand virtual systems"));
-    expect(screen.getByText("ExamplebankBetaAA")).toBeInTheDocument();
-    expect(screen.getByText("ExamplebankPosAppAA")).toBeInTheDocument();
+    expect(screen.getByText("VS-ROMEO-01-01")).toBeInTheDocument();
+    expect(screen.getByText("VS-ROMEO-01-02")).toBeInTheDocument();
 
     // Clicking the Virtual System selects the cluster and displays the VS details
-    fireEvent.click(screen.getByText("ExamplebankBetaAA"));
+    fireEvent.click(screen.getByText("VS-ROMEO-01-01"));
     // The pane header names the parent and the selected virtual system (UI review 2026-10-18, P0-3B)
-    expect(await screen.findByRole("heading", { name: "FW-CKP-EXAMPLEBANKDMZAPP-CLS-AA › ExamplebankBetaAA" })).toBeInTheDocument();
-    expect(screen.getAllByText("ExamplebankBetaAA").length).toBeGreaterThanOrEqual(2);
+    expect(await screen.findByRole("heading", { name: "CLS-ROMEO-01 › VS-ROMEO-01-01" })).toBeInTheDocument();
+    expect(screen.getAllByText("VS-ROMEO-01-01").length).toBeGreaterThanOrEqual(2);
   });
 
   it("shows a Check Point cluster's own physical context by default, filters to a VS on sidebar selection, and resets on re-selecting the cluster", async () => {
@@ -313,54 +313,54 @@ describe("InventoryScreen device list", () => {
                   device_id: "dev-vsx-1",
                   vendor_hint: "check_point",
                   enrollment_state: "ENROLLED",
-                  hostname: "FW-CKP-VSX-1",
+                  hostname: "FW-ROMEO-01-M1",
                   model: "Quantum",
                   software_version: "R81.20",
                   ha_role: "active",
-                  cluster_member_ref: "FW-CKP-VSX-CLS",
-                  virtual_systems: "ExamplebankBetaAA",
+                  cluster_member_ref: "CLS-ROMEO-01",
+                  virtual_systems: "VS-ROMEO-01-01",
                 },
                 {
                   device_id: "dev-vsx-2",
                   vendor_hint: "check_point",
                   enrollment_state: "ENROLLED",
-                  hostname: "FW-CKP-VSX-2",
+                  hostname: "FW-ROMEO-01-M2",
                   model: "Quantum",
                   software_version: "R81.20",
                   ha_role: "standby",
-                  cluster_member_ref: "FW-CKP-VSX-CLS",
-                  virtual_systems: "ExamplebankBetaAA",
+                  cluster_member_ref: "CLS-ROMEO-01",
+                  virtual_systems: "VS-ROMEO-01-01",
                 },
               ],
             }),
           );
         }
-        if (url.includes("/clusters/FW-CKP-VSX-CLS/inventory")) {
+        if (url.includes("/clusters/CLS-ROMEO-01/inventory")) {
           return Promise.resolve(
             jsonResponse(200, {
-              cluster_member_ref: "FW-CKP-VSX-CLS",
+              cluster_member_ref: "CLS-ROMEO-01",
               members: [
-                { device_id: "dev-vsx-1", hostname: "FW-CKP-VSX-1" },
-                { device_id: "dev-vsx-2", hostname: "FW-CKP-VSX-2" },
+                { device_id: "dev-vsx-1", hostname: "FW-ROMEO-01-M1" },
+                { device_id: "dev-vsx-2", hostname: "FW-ROMEO-01-M2" },
               ],
               contexts: [
                 {
                   context: "physical",
                   interfaces: [
-                    { name: "Mgmt", kind: "physical", addresses: [{ address: "240.1.1.1/24", family: "ipv4", role: "cluster_virtual" }], presence: "all", differences: [] },
+                    { name: "Mgmt", kind: "physical", addresses: [{ address: "192.0.2.10/24", family: "ipv4", role: "cluster_virtual" }], presence: "all", differences: [] },
                   ],
                   routes: [],
                 },
                 {
                   context: "1",
-                  vs_name: "ExamplebankBetaAA",
+                  vs_name: "VS-ROMEO-01-01",
                   interfaces: [
                     { name: "eth0.100", kind: "vlan", addresses: [{ address: "192.0.2.1/24", family: "ipv4", role: "cluster_virtual" }], presence: "all", differences: [] },
                   ],
                   routes: [],
                 },
               ],
-              virtual_systems: ["ExamplebankBetaAA"],
+              virtual_systems: ["VS-ROMEO-01-01"],
             }),
           );
         }
@@ -369,8 +369,8 @@ describe("InventoryScreen device list", () => {
     );
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("FW-CKP-VSX-CLS")).toBeInTheDocument());
-    fireEvent.click(screen.getAllByText("FW-CKP-VSX-CLS")[0]);
+    await waitFor(() => expect(screen.getByText("CLS-ROMEO-01")).toBeInTheDocument());
+    fireEvent.click(screen.getAllByText("CLS-ROMEO-01")[0]);
 
     // Default (no VS selected) is the cluster's own physical context only -- a virtual system is
     // its own sidebar node with its own view (Product Owner, 2026-09-22, reversing the earlier
@@ -379,13 +379,13 @@ describe("InventoryScreen device list", () => {
     expect(screen.queryByText("eth0.100")).toBeNull();
 
     // Selecting the VS from the sidebar filters to that VS's own interface only.
-    fireEvent.click(screen.getByText("ExamplebankBetaAA"));
+    fireEvent.click(screen.getByText("VS-ROMEO-01-01"));
     await waitFor(() => expect(screen.queryByText("Mgmt")).toBeNull());
     expect(screen.getByText("eth0.100")).toBeInTheDocument();
 
     // Re-clicking the cluster's own row resets back to the physical view -- this must not stay
     // stuck showing the previously selected VS (the bug the Product Owner reported live).
-    fireEvent.click(screen.getAllByText("FW-CKP-VSX-CLS")[0]);
+    fireEvent.click(screen.getAllByText("CLS-ROMEO-01")[0]);
     await waitFor(() => expect(screen.getByText("Mgmt")).toBeInTheDocument());
     expect(screen.queryByText("eth0.100")).toBeNull();
   });
@@ -403,12 +403,12 @@ describe("InventoryScreen device list", () => {
                   device_id: "standalone-vsx-1",
                   vendor_hint: "check_point",
                   enrollment_state: "ENROLLED",
-                  hostname: "FW-CKP-STANDALONE-VSX",
+                  hostname: "FW-TANGO-04",
                   model: "Quantum",
                   software_version: "R81.20",
                   ha_role: null,
                   cluster_member_ref: null,
-                  virtual_systems: "ExamplebankBetaAA",
+                  virtual_systems: "VS-ROMEO-01-01",
                 },
               ],
             }),
@@ -422,17 +422,17 @@ describe("InventoryScreen device list", () => {
               contexts: [
                 {
                   context: "physical",
-                  interfaces: [{ name: "Mgmt", kind: "physical", addresses: [{ address: "240.1.1.1/24", family: "ipv4", role: "member" }] }],
+                  interfaces: [{ name: "Mgmt", kind: "physical", addresses: [{ address: "192.0.2.10/24", family: "ipv4", role: "member" }] }],
                   routes: [],
                 },
                 {
                   context: "1",
-                  vs_name: "ExamplebankBetaAA",
+                  vs_name: "VS-ROMEO-01-01",
                   interfaces: [{ name: "eth0.100", kind: "vlan", addresses: [{ address: "192.0.2.1/24", family: "ipv4", role: "member" }] }],
                   routes: [],
                 },
               ],
-              virtual_systems: ["ExamplebankBetaAA"],
+              virtual_systems: ["VS-ROMEO-01-01"],
             }),
           );
         }
@@ -441,24 +441,24 @@ describe("InventoryScreen device list", () => {
     );
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("FW-CKP-STANDALONE-VSX")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("FW-CKP-STANDALONE-VSX"));
+    await waitFor(() => expect(screen.getByText("FW-TANGO-04")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("FW-TANGO-04"));
 
     // Physical shows only the chassis's own interface -- never merged with the VS's, and no
     // second tab-strip selector (beyond the outer Interfaces/Routing/... tabs) duplicates the
     // sidebar's own VS sub-navigation.
     await waitFor(() => expect(screen.getByText("Mgmt")).toBeInTheDocument());
     expect(screen.queryByText("eth0.100")).toBeNull();
-    expect(screen.queryByRole("tab", { name: /ExamplebankBetaAA/i })).toBeNull();
+    expect(screen.queryByRole("tab", { name: /VS-ROMEO-01-01/i })).toBeNull();
     expect(screen.queryByRole("tab", { name: /Physical/i })).toBeNull();
 
     // Selecting the VS from the sidebar switches straight to that VS's own interface.
-    expect(screen.queryByText("ExamplebankBetaAA")).toBeNull();
+    expect(screen.queryByText("VS-ROMEO-01-01")).toBeNull();
     fireEvent.click(screen.getByTitle("Expand virtual systems"));
-    fireEvent.click(screen.getByText("ExamplebankBetaAA"));
+    fireEvent.click(screen.getByText("VS-ROMEO-01-01"));
     await waitFor(() => expect(screen.getByText("eth0.100")).toBeInTheDocument());
     expect(screen.queryByText("Mgmt")).toBeNull();
-    expect(screen.queryByRole("tab", { name: /ExamplebankBetaAA/i })).toBeNull();
+    expect(screen.queryByRole("tab", { name: /VS-ROMEO-01-01/i })).toBeNull();
   });
 
   it("reads two members agreeing on a non-up/down state as that state, not Degraded, and hides loopback", async () => {
@@ -470,17 +470,17 @@ describe("InventoryScreen device list", () => {
           return Promise.resolve(
             jsonResponse(200, {
               devices: [
-                { device_id: "m-a", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "PA-A", model: "PA-440", software_version: "11.0", ha_role: "active", cluster_member_ref: "PA-PAIR" },
-                { device_id: "m-b", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "PA-B", model: "PA-440", software_version: "11.0", ha_role: "passive", cluster_member_ref: "PA-PAIR" },
+                { device_id: "m-a", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "FW-ECHO-01-M1", model: "PA-440", software_version: "11.0", ha_role: "active", cluster_member_ref: "CLS-ECHO-01" },
+                { device_id: "m-b", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "FW-ECHO-01-M2", model: "PA-440", software_version: "11.0", ha_role: "passive", cluster_member_ref: "CLS-ECHO-01" },
               ],
             }),
           );
         }
-        if (url.includes("/clusters/PA-PAIR/inventory")) {
+        if (url.includes("/clusters/CLS-ECHO-01/inventory")) {
           return Promise.resolve(
             jsonResponse(200, {
-              cluster_member_ref: "PA-PAIR",
-              members: [{ device_id: "m-a", hostname: "PA-A" }, { device_id: "m-b", hostname: "PA-B" }],
+              cluster_member_ref: "CLS-ECHO-01",
+              members: [{ device_id: "m-a", hostname: "FW-ECHO-01-M1" }, { device_id: "m-b", hostname: "FW-ECHO-01-M2" }],
               contexts: [
                 {
                   context: "physical",
@@ -506,8 +506,8 @@ describe("InventoryScreen device list", () => {
     );
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("PA-PAIR")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("PA-PAIR"));
+    await waitFor(() => expect(screen.getByText("CLS-ECHO-01")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("CLS-ECHO-01"));
 
     // Both members agreeing on "unknown" is agreement, not a difference -- reads as Unknown, not Degraded.
     await waitFor(() => expect(screen.getByText("ethernet1/1")).toBeInTheDocument());
@@ -531,39 +531,39 @@ describe("InventoryScreen device list", () => {
                   device_id: "pa-1",
                   vendor_hint: "palo_alto",
                   enrollment_state: "ENROLLED",
-                  hostname: "PA-FW-01",
+                  hostname: "FW-JULIET-01-M1",
                   model: "PA-3220",
                   software_version: "10.2.4",
                   ha_role: "active",
-                  cluster_member_ref: "PA-HA-PAIR",
-                  virtual_systems: "default (vsys1), VR-DMZ (vsys2)",
+                  cluster_member_ref: "CLS-JULIET-01",
+                  virtual_systems: "default (vsys1), VS-JULIET-01-02 (vsys2)",
                 },
                 {
                   device_id: "pa-2",
                   vendor_hint: "palo_alto",
                   enrollment_state: "ENROLLED",
-                  hostname: "PA-FW-02",
+                  hostname: "FW-JULIET-01-M2",
                   model: "PA-3220",
                   software_version: "10.2.4",
                   ha_role: "passive",
-                  cluster_member_ref: "PA-HA-PAIR",
-                  virtual_systems: "default (vsys1), VR-DMZ (vsys2)",
+                  cluster_member_ref: "CLS-JULIET-01",
+                  virtual_systems: "default (vsys1), VS-JULIET-01-02 (vsys2)",
                 },
               ],
             }),
           );
         }
-        if (url === "/clusters/PA-HA-PAIR/inventory") {
+        if (url === "/clusters/CLS-JULIET-01/inventory") {
           return Promise.resolve(
             jsonResponse(200, {
-              cluster_ref: "PA-HA-PAIR",
+              cluster_ref: "CLS-JULIET-01",
               collected_at: "2026-09-19T12:00:00Z",
               members: [
-                { device_id: "pa-1", hostname: "PA-FW-01", ha_role: "active", model: "PA-3220", software_version: "10.2.4", enrollment_state: "ENROLLED", virtual_systems: "default (vsys1), VR-DMZ (vsys2)" },
-                { device_id: "pa-2", hostname: "PA-FW-02", ha_role: "passive", model: "PA-3220", software_version: "10.2.4", enrollment_state: "ENROLLED", virtual_systems: "default (vsys1), VR-DMZ (vsys2)" },
+                { device_id: "pa-1", hostname: "FW-JULIET-01-M1", ha_role: "active", model: "PA-3220", software_version: "10.2.4", enrollment_state: "ENROLLED", virtual_systems: "default (vsys1), VS-JULIET-01-02 (vsys2)" },
+                { device_id: "pa-2", hostname: "FW-JULIET-01-M2", ha_role: "passive", model: "PA-3220", software_version: "10.2.4", enrollment_state: "ENROLLED", virtual_systems: "default (vsys1), VS-JULIET-01-02 (vsys2)" },
               ],
               contexts: [],
-              virtual_systems: ["default (vsys1)", "VR-DMZ (vsys2)"],
+              virtual_systems: ["default (vsys1)", "VS-JULIET-01-02 (vsys2)"],
             }),
           );
         }
@@ -572,11 +572,11 @@ describe("InventoryScreen device list", () => {
     );
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("PA-HA-PAIR")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("CLS-JULIET-01")).toBeInTheDocument());
     expect(screen.getByTestId("tree-child-count")).toHaveTextContent("2 VSYS");
     fireEvent.click(screen.getByTitle("Expand virtual systems"));
     expect(screen.getByText("default (vsys1)")).toBeInTheDocument();
-    expect(screen.getByText("VR-DMZ (vsys2)")).toBeInTheDocument();
+    expect(screen.getByText("VS-JULIET-01-02 (vsys2)")).toBeInTheDocument();
   });
 
   it("renders one shared Address column for a Palo Alto HA pair instead of a column per member", async () => {
@@ -588,19 +588,19 @@ describe("InventoryScreen device list", () => {
           return Promise.resolve(
             jsonResponse(200, {
               devices: [
-                { device_id: "pa-1", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "PA-FW-01", model: "PA-3220", software_version: "10.2.4", ha_role: "active", cluster_member_ref: "PA-HA-PAIR" },
-                { device_id: "pa-2", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "PA-FW-02", model: "PA-3220", software_version: "10.2.4", ha_role: "passive", cluster_member_ref: "PA-HA-PAIR" },
+                { device_id: "pa-1", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "FW-JULIET-01-M1", model: "PA-3220", software_version: "10.2.4", ha_role: "active", cluster_member_ref: "CLS-JULIET-01" },
+                { device_id: "pa-2", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "FW-JULIET-01-M2", model: "PA-3220", software_version: "10.2.4", ha_role: "passive", cluster_member_ref: "CLS-JULIET-01" },
               ],
             }),
           );
         }
-        if (url === "/clusters/PA-HA-PAIR/inventory") {
+        if (url === "/clusters/CLS-JULIET-01/inventory") {
           return Promise.resolve(
             jsonResponse(200, {
-              cluster_ref: "PA-HA-PAIR",
+              cluster_ref: "CLS-JULIET-01",
               members: [
-                { device_id: "pa-1", hostname: "PA-FW-01" },
-                { device_id: "pa-2", hostname: "PA-FW-02" },
+                { device_id: "pa-1", hostname: "FW-JULIET-01-M1" },
+                { device_id: "pa-2", hostname: "FW-JULIET-01-M2" },
               ],
               contexts: [
                 {
@@ -613,8 +613,8 @@ describe("InventoryScreen device list", () => {
                       presence: "all",
                       differences: [],
                       member_addresses: {
-                        "pa-1": [{ address: "192.168.250.5/28", family: "ipv4" }],
-                        "pa-2": [{ address: "192.168.250.5/28", family: "ipv4" }],
+                        "pa-1": [{ address: "192.0.2.5/28", family: "ipv4" }],
+                        "pa-2": [{ address: "192.0.2.5/28", family: "ipv4" }],
                       },
                     },
                   ],
@@ -630,15 +630,15 @@ describe("InventoryScreen device list", () => {
     );
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("PA-HA-PAIR")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("PA-HA-PAIR"));
+    await waitFor(() => expect(screen.getByText("CLS-JULIET-01")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("CLS-JULIET-01"));
 
     await waitFor(() => expect(screen.getByText("ethernet1/5")).toBeInTheDocument());
     // One shared Address column, not one column per member -- the header above
     // still names each member (PO: that part stays as is), so the table itself
     // is what this asserts, not the whole screen.
     expect(screen.getByText("Address")).toBeInTheDocument();
-    expect(screen.getAllByText("192.168.250.5/28")).toHaveLength(1);
+    expect(screen.getAllByText("192.0.2.5/28")).toHaveLength(1);
     expect(screen.queryByText("Cluster VIP")).toBeNull();
   });
 
@@ -655,12 +655,12 @@ describe("InventoryScreen device list", () => {
                   device_id: "standalone-pa-1",
                   vendor_hint: "palo_alto",
                   enrollment_state: "ENROLLED",
-                  hostname: "PA-STANDALONE",
+                  hostname: "FW-TANGO-04",
                   model: "PA-440",
                   software_version: "11.0.1",
                   ha_role: null,
                   cluster_member_ref: null,
-                  virtual_systems: "default (vsys1), CorpNet (vsys2)",
+                  virtual_systems: "default (vsys1), VS-TANGO-04-02 (vsys2)",
                 },
               ],
             }),
@@ -673,9 +673,9 @@ describe("InventoryScreen device list", () => {
               collected_at: "2026-09-19T12:00:00Z",
               contexts: [
                 { context: "vsys1", vs_name: "default (vsys1)", interfaces: [], routes: [] },
-                { context: "vsys2", vs_name: "CorpNet (vsys2)", interfaces: [], routes: [] },
+                { context: "vsys2", vs_name: "VS-TANGO-04-02 (vsys2)", interfaces: [], routes: [] },
               ],
-              virtual_systems: ["default (vsys1)", "CorpNet (vsys2)"],
+              virtual_systems: ["default (vsys1)", "VS-TANGO-04-02 (vsys2)"],
             }),
           );
         }
@@ -684,19 +684,19 @@ describe("InventoryScreen device list", () => {
     );
     render(withTheme(<InventoryScreen />));
 
-    await waitFor(() => expect(screen.getByText("PA-STANDALONE")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("FW-TANGO-04")).toBeInTheDocument());
     expect(screen.getByText("2 VSYS")).toBeInTheDocument();
     expect(screen.queryByText("default (vsys1)")).toBeNull();
     fireEvent.click(screen.getByTitle("Expand virtual systems"));
     expect(screen.getByText("default (vsys1)")).toBeInTheDocument();
-    expect(screen.getByText("CorpNet (vsys2)")).toBeInTheDocument();
+    expect(screen.getByText("VS-TANGO-04-02 (vsys2)")).toBeInTheDocument();
 
-    // Clicking CorpNet selects the standalone device and filters to that one VS's own context --
+    // Clicking VS-TANGO-04-02 selects the standalone device and filters to that one VS's own context --
     // no second, redundant place names it now that the old per-VS tab strip is gone.
-    fireEvent.click(screen.getByText("CorpNet (vsys2)"));
+    fireEvent.click(screen.getByText("VS-TANGO-04-02 (vsys2)"));
     await waitFor(() => expect(screen.getByText("No interface evidence")).toBeInTheDocument());
     // The old per-VS tab strip stays gone; the pane header now names the device and the virtual system (P0-3B).
-    expect(screen.getByRole("heading", { name: "PA-STANDALONE › CorpNet (vsys2)" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "FW-TANGO-04 › VS-TANGO-04-02 (vsys2)" })).toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Inventory context" })).toBeNull();
   });
 
@@ -712,35 +712,35 @@ describe("InventoryScreen device list", () => {
 describe("deriveClusterTitle", () => {
   it("preserves explicit cluster references that do not contain pipe delimiters", () => {
     const members = [
-      { device_id: "1", hostname: "cp-gw-1", vendor_hint: "check_point" },
-      { device_id: "2", hostname: "cp-gw-2", vendor_hint: "check_point" },
+      { device_id: "1", hostname: "FW-TANGO-01", vendor_hint: "check_point" },
+      { device_id: "2", hostname: "FW-TANGO-02", vendor_hint: "check_point" },
     ] as any;
-    expect(deriveClusterTitle("MyClusterName", members)).toBe("MyClusterName");
-    expect(deriveClusterTitle("PA-HA-PAIR", members)).toBe("PA-HA-PAIR");
+    expect(deriveClusterTitle("CLS-ROMEO-01", members)).toBe("CLS-ROMEO-01");
+    expect(deriveClusterTitle("CLS-JULIET-01", members)).toBe("CLS-JULIET-01");
   });
 
   it("derives clean cluster name from Palo Alto reciprocal serial pair references", () => {
     const members = [
-      { device_id: "1", hostname: "FW-PALT-EXTEST.AA.1", vendor_hint: "palo_alto" },
-      { device_id: "2", hostname: "FW-PALT-EXTEST.AA.2", vendor_hint: "palo_alto" },
+      { device_id: "1", hostname: "FW-TANGO-01.1", vendor_hint: "palo_alto" },
+      { device_id: "2", hostname: "FW-TANGO-01.2", vendor_hint: "palo_alto" },
     ] as any;
-    expect(deriveClusterTitle("026109000729|026109000751", members)).toBe("FW-PALT-EXTEST.AA-CLS");
+    expect(deriveClusterTitle("SN-00000001|SN-00000002", members)).toBe("FW-TANGO-01-CLS");
   });
 
   it("handles numeric and hyphenated member suffixes like -01 / -02", () => {
     const members = [
-      { device_id: "1", hostname: "FW-PALT-PENDIKCAMPUS-01", vendor_hint: "palo_alto" },
-      { device_id: "2", hostname: "FW-PALT-PENDIKCAMPUS-02", vendor_hint: "palo_alto" },
+      { device_id: "1", hostname: "FW-BRAVO-01", vendor_hint: "palo_alto" },
+      { device_id: "2", hostname: "FW-BRAVO-02", vendor_hint: "palo_alto" },
     ] as any;
-    expect(deriveClusterTitle("025501001167|025509000707", members)).toBe("FW-PALT-PENDIKCAMPUS-CLS");
+    expect(deriveClusterTitle("SN-00000003|SN-00000004", members)).toBe("FW-BRAVO-CLS");
   });
 
   it("does not duplicate -CLS if the common base already ends in -CLS", () => {
     const members = [
-      { device_id: "1", hostname: "FW-EDGE-CLS-1", vendor_hint: "palo_alto" },
-      { device_id: "2", hostname: "FW-EDGE-CLS-2", vendor_hint: "palo_alto" },
+      { device_id: "1", hostname: "FW-ROMEO-01-CLS-1", vendor_hint: "palo_alto" },
+      { device_id: "2", hostname: "FW-ROMEO-01-CLS-2", vendor_hint: "palo_alto" },
     ] as any;
-    expect(deriveClusterTitle("serial1|serial2", members)).toBe("FW-EDGE-CLS");
+    expect(deriveClusterTitle("serial1|serial2", members)).toBe("FW-ROMEO-01-CLS");
   });
 
   it("falls back to clusterRef if no member hostnames are present", () => {
@@ -748,7 +748,7 @@ describe("deriveClusterTitle", () => {
       { device_id: "1", vendor_hint: "palo_alto" },
       { device_id: "2", vendor_hint: "palo_alto" },
     ] as any;
-    expect(deriveClusterTitle("024409002545|024409002564", members)).toBe("024409002545|024409002564");
+    expect(deriveClusterTitle("SN-00000005|SN-00000006", members)).toBe("SN-00000005|SN-00000006");
   });
 });
 
@@ -761,19 +761,19 @@ describe("One search box (PO, 2026-09-24)", () => {
   it("narrows the device list from the top bar's search, by address as well as name, and clears with the ✕", async () => {
     vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, {
       devices: [
-        { device_id: "a", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "alpha-cp", model: null, software_version: null, ha_role: null, cluster_member_ref: null, management_ip: "192.0.2.10" },
-        { device_id: "b", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "bravo-pan", model: null, software_version: null, ha_role: null, cluster_member_ref: null, management_ip: "198.51.100.7" },
+        { device_id: "a", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "FW-ALPHA-01", model: null, software_version: null, ha_role: null, cluster_member_ref: null, management_ip: "192.0.2.10" },
+        { device_id: "b", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "FW-BRAVO-02", model: null, software_version: null, ha_role: null, cluster_member_ref: null, management_ip: "198.51.100.7" },
       ],
     }))));
     render(withTheme(<><GlobalSearch /><InventoryScreen /></>));
-    await waitFor(() => expect(screen.getByText("bravo-pan")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("FW-BRAVO-02")).toBeInTheDocument());
     const input = screen.getByRole("textbox", { name: "Search devices, settings and evidence" });
     expect(input).toHaveAttribute("placeholder", "Filter this list, or search everything…");
     fireEvent.change(input, { target: { value: "192.0.2" } });
-    expect(screen.queryByText("bravo-pan")).toBeNull();
-    expect(screen.getAllByText("alpha-cp").length).toBeGreaterThan(0);
+    expect(screen.queryByText("FW-BRAVO-02")).toBeNull();
+    expect(screen.getAllByText("FW-ALPHA-01").length).toBeGreaterThan(0);
     expect(screen.getByText("filtering list")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
-    expect(screen.getByText("bravo-pan")).toBeInTheDocument();
+    expect(screen.getByText("FW-BRAVO-02")).toBeInTheDocument();
   });
 });

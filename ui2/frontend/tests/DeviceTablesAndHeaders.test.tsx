@@ -32,14 +32,14 @@ const as = (permissions: readonly string[] | null, node: React.ReactElement, win
 const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
 afterEach(() => vi.unstubAllGlobals());
 
-const route = (i: number) => ({ destination: `10.${i % 250}.${(i * 7) % 250}.0/24`, next_hop: `10.1.${i % 200}.1`, interface: `ethernet1/${i % 20}`, protocol: "static" });
+const route = (i: number) => ({ destination: `198.51.100.${i % 250}/32`, next_hop: `192.0.2.${(i % 200) + 1}`, interface: `ethernet1/${i % 20}`, protocol: "static" });
 const iface = (name: string, kind = "physical") => ({ name, kind, state: "up", vlan_id: null, addresses: [{ address: "192.0.2.1/24", family: "ipv4" as const, role: "member" as const }] });
 
 describe("F-15: the routing tab pages at 50", () => {
   const contexts = [{ context: "physical", vs_name: null, ha: null, interfaces: [], routes: Array.from({ length: 371 }, (_, i) => route(i)) }] as unknown as InventoryContext[];
 
   it("lists 50 of 371 routes with a page counter and reaches every route", () => {
-    render(as(null, <RoutesPanel contexts={contexts} member={{ device_id: "d1", hostname: "FW-SYNTH-01" }} />));
+    render(as(null, <RoutesPanel contexts={contexts} member={{ device_id: "d1", hostname: "FW-TANGO-01" }} />));
     expect(ROUTES_PAGE_SIZE).toBe(50);
     expect(screen.getByText("Routing table · 371 routes")).toBeInTheDocument();
     expect(screen.getByText("1–50 of 371")).toBeInTheDocument();
@@ -51,11 +51,11 @@ describe("F-15: the routing tab pages at 50", () => {
   });
 
   it("filters across every route, not just the page, and starts again at page 1", () => {
-    render(as(null, <RoutesPanel contexts={contexts} member={{ device_id: "d1", hostname: "FW-SYNTH-01" }} />));
+    render(as(null, <RoutesPanel contexts={contexts} member={{ device_id: "d1", hostname: "FW-TANGO-01" }} />));
     fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
     expect(screen.getByText("51–100 of 371")).toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText("Filter routes..."), { target: { value: "10.249." } });
-    const expected = contexts[0].routes.filter((r) => r.destination.includes("10.249.") || (r.next_hop ?? "").includes("10.249.")).length;
+    fireEvent.change(screen.getByPlaceholderText("Filter routes..."), { target: { value: "198.51.100.249" } });
+    const expected = contexts[0].routes.filter((r) => r.destination.includes("198.51.100.249") || (r.next_hop ?? "").includes("198.51.100.249")).length;
     expect(expected).toBeGreaterThan(0);
     expect(screen.getByText(`Routing table · 371 routes · ${expected} match`)).toBeInTheDocument();
     expect(screen.getByText(new RegExp(`^1–${Math.min(expected, 50)} of ${expected}$`))).toBeInTheDocument();
@@ -63,7 +63,7 @@ describe("F-15: the routing tab pages at 50", () => {
 
   it("shows no pager for a table that fits one page's worth of routes only as a single page", () => {
     const small = [{ ...contexts[0], routes: contexts[0].routes.slice(0, 7) }] as unknown as InventoryContext[];
-    render(as(null, <RoutesPanel contexts={small} member={{ device_id: "d1", hostname: "FW-SYNTH-01" }} />));
+    render(as(null, <RoutesPanel contexts={small} member={{ device_id: "d1", hostname: "FW-TANGO-01" }} />));
     expect(screen.getByText("1–7 of 7")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Go to next page" })).toBeDisabled();
   });
@@ -71,8 +71,8 @@ describe("F-15: the routing tab pages at 50", () => {
 
 describe("F-5: columns that must not clip", () => {
   const pa = (over: Partial<DeviceSummary> = {}): DeviceSummary => ({
-    device_id: "pa-1", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "FW-SYNTH-PA", model: "PA-5445", software_version: "11.1.10-h7",
-    ha_role: "ACTIVE", cluster_member_ref: null, management_ip: "198.51.100.25", serial_number: "SYNTH-SERIAL-1", uptime_text: "81 days, 3:23",
+    device_id: "pa-1", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "FW-TANGO-04", model: "PA-5445", software_version: "11.1.10-h7",
+    ha_role: "ACTIVE", cluster_member_ref: null, management_ip: "198.51.100.25", serial_number: "SN-00000001", uptime_text: "81 days, 3:23",
     content_versions: { threat: "9001-8888", av: "5000-5555", wildfire: "0", url: "0000.00.00.000" }, ...over,
   });
 
@@ -92,8 +92,8 @@ describe("F-5: columns that must not clip", () => {
   });
 
   it("keeps NETWORK straight after the addresses with a floor, the MAC column last and the scope tag short", () => {
-    const ctx = (name: string) => ({ context: name, vs_name: name, ha: null, routes: [], interfaces: [{ ...iface("ethernet1/1"), mac_address: "94:56:41:aa:bb:01", zone: "ZONE-SYNTH" }] }) as unknown as InventoryContext;
-    render(as(null, <InterfacesPanel contexts={[ctx("vsys1"), ctx("vsys2")]} virtualSystems={["vsys1", "vsys2"]} member={{ device_id: "pa-1", hostname: "FW-SYNTH-PA" }} isPaloAlto />));
+    const ctx = (name: string) => ({ context: name, vs_name: name, ha: null, routes: [], interfaces: [{ ...iface("ethernet1/1"), mac_address: "94:56:41:aa:bb:01", zone: "ZONE-ALPHA-01" }] }) as unknown as InventoryContext;
+    render(as(null, <InterfacesPanel contexts={[ctx("vsys1"), ctx("vsys2")]} virtualSystems={["vsys1", "vsys2"]} member={{ device_id: "pa-1", hostname: "FW-TANGO-04" }} isPaloAlto />));
     const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
     // F-19: the merged view is grouped by VSYS, so the group header carries the name and the column is gone
     expect(headers).toEqual(["Interface", "Kind", "VLAN", "Zone", "Address", "Network", "State", "MAC"]);
@@ -108,7 +108,7 @@ describe("F-5: columns that must not clip", () => {
   it("keeps the routes table's scope cell short, cut by an ellipsis with the full name on hover", () => {
     const route = { destination: "0.0.0.0/0", next_hop: "192.0.2.1", interface: "ethernet1/1", protocol: "static", table: null };
     const ctx = (name: string) => ({ context: name, vs_name: name, ha: null, interfaces: [], routes: [route] }) as unknown as InventoryContext;
-    render(as(null, <RoutesPanel contexts={[ctx("vsys1"), ctx("vsys2")]} virtualSystems={["vsys1", "vsys2"]} member={{ device_id: "pa-1", hostname: "FW-SYNTH-PA" }} isPaloAlto />));
+    render(as(null, <RoutesPanel contexts={[ctx("vsys1"), ctx("vsys2")]} virtualSystems={["vsys1", "vsys2"]} member={{ device_id: "pa-1", hostname: "FW-TANGO-04" }} isPaloAlto />));
     const tag = screen.getAllByText("vsys1")[0];
     expect(tag).toHaveAttribute("data-scope-tag", "cell");
     expect(getComputedStyle(tag).textOverflow).toBe("ellipsis");
@@ -120,7 +120,7 @@ describe("P0-5B: one denominator, one HA statement, plural counts", () => {
   const ctx = (name: string, interfaces: string[], routes: number) => ({ context: name, interfaces: interfaces.map((n) => ({ kind: n.startsWith("lo") ? "loopback" : "physical" })), routes: Array.from({ length: routes }) });
 
   it("states both the headline and the interfaces that live in other contexts, never a folded total", () => {
-    const contexts = [ctx("root", Array.from({ length: 36 }, (_, i) => `port${i}`), 24), ctx("VS-SEC-62", Array.from({ length: 14 }, (_, i) => `v${i}`), 3), ctx("VS-SEC-38", Array.from({ length: 10 }, (_, i) => `w${i}`), 1)];
+    const contexts = [ctx("root", Array.from({ length: 36 }, (_, i) => `port${i}`), 24), ctx("VS-BRAVO-02-62", Array.from({ length: 14 }, (_, i) => `v${i}`), 3), ctx("VS-BRAVO-02-38", Array.from({ length: 10 }, (_, i) => `w${i}`), 1)];
     // Fortinet's tab groups every VDOM in one table (post-release review 2026-10-18, 1.8), so its denominator is the sum too,
     // with the number of VDOMs said beside it; a single-VDOM device names no scopes.
     expect(interfaceRouteLabel(interfaceRouteCounts(contexts, "fortinet"), "fortinet")).toBe("60 interfaces · in 3 VDOMs · 28 routes");
@@ -155,12 +155,12 @@ describe("P0-5B: one denominator, one HA statement, plural counts", () => {
   });
 
   it("shows the HA statement once in the header of a FortiGate and counts in one denominator", async () => {
-    const fg: DeviceSummary = { device_id: "fg-1", vendor_hint: "fortinet", role: "gateway", enrollment_state: "ENROLLED", hostname: "FW-SYNTH-FG", model: "FortiGate",
+    const fg: DeviceSummary = { device_id: "fg-1", vendor_hint: "fortinet", role: "gateway", enrollment_state: "ENROLLED", hostname: "FW-BRAVO-02", model: "FortiGate",
       software_version: "7.4", ha_role: "PRIMARY", ha_peer_unconfirmed: true, cluster_member_ref: null };
     vi.stubGlobal("fetch", vi.fn((url: string) => url === "/devices/fg-1/inventory"
       ? json({ device_id: "fg-1", collected_at: "2026-10-18T03:00:00Z", job: null, contexts: [
         { context: "root", vs_name: null, ha: { role: "PRIMARY", cluster_mode: null }, interfaces: Array.from({ length: 4 }, (_, i) => iface(`port${i}`)), routes: [route(1)] },
-        { context: "VS-SEC-62", vs_name: "VS-SEC-62", ha: null, interfaces: [iface("vdom-a"), iface("vdom-b")], routes: [] }] })
+        { context: "VS-BRAVO-02-62", vs_name: "VS-BRAVO-02-62", ha: null, interfaces: [iface("vdom-a"), iface("vdom-b")], routes: [] }] })
       : json({})));
     render(as(adminPlanes, <DeviceInventoryPanels device={fg} />));
     expect(await screen.findByText("6 interfaces · in 2 VDOMs · 1 route")).toBeInTheDocument();
@@ -174,7 +174,7 @@ describe("P0-5B: one denominator, one HA statement, plural counts", () => {
     expect(screen.getByText("Fortinet")).toBeInTheDocument();
     // 1.8: the Interfaces tab groups the VDOMs, one header row each, and the header's count is their sum
     expect(document.querySelector('[data-vsys-group="VDOM: root"]')).toHaveTextContent("4 interfaces");
-    expect(document.querySelector('[data-vsys-group="VDOM: VS-SEC-62"]')).toHaveTextContent("2 interfaces");
+    expect(document.querySelector('[data-vsys-group="VDOM: VS-BRAVO-02-62"]')).toHaveTextContent("2 interfaces");
     expect(screen.getByText("Interfaces · 6 of 6 shown · Active only")).toBeInTheDocument();
   });
 
@@ -183,13 +183,13 @@ describe("P0-5B: one denominator, one HA statement, plural counts", () => {
     expect(haStatement({ ha_role: "STANDALONE", cluster_member_ref: null })).toBeNull();
     expect(haStatement({ ha_role: "UNKNOWN", cluster_member_ref: null, ha_peer_unconfirmed: true })).toEqual({ kind: "statement", text: "HA: peer named, not confirmed" });
     // a cluster member whose role was not read keeps the word: UNKNOWN is the honest state of a member
-    expect(haStatement({ ha_role: "UNKNOWN", cluster_member_ref: "CLS-SYNTH-01" })).toEqual({ kind: "role", role: "UNKNOWN" });
+    expect(haStatement({ ha_role: "UNKNOWN", cluster_member_ref: "CLS-ROMEO-01" })).toEqual({ kind: "role", role: "UNKNOWN" });
   });
 });
 
 describe("F-7: one suffix rule and one Collect now per device", () => {
   const closed = { open: false, label: "Next window: 12:00" };
-  const cp: DeviceSummary = { device_id: "gw-1", vendor_hint: "check_point", role: "gateway", enrollment_state: "ENROLLED", hostname: "FW-SYNTH-01", model: "Quantum", software_version: "R81.20", ha_role: null, cluster_member_ref: null };
+  const cp: DeviceSummary = { device_id: "gw-1", vendor_hint: "check_point", role: "gateway", enrollment_state: "ENROLLED", hostname: "FW-TANGO-01", model: "Quantum", software_version: "R81.20", ha_role: null, cluster_member_ref: null };
   const stubGateway = () => vi.stubGlobal("fetch", vi.fn((url: string) => url === "/devices/gw-1/inventory"
     ? json({ device_id: "gw-1", collected_at: "2026-10-18T03:00:00Z", job: null, contexts: [{ context: "physical", vs_name: null, ha: null, interfaces: [iface("eth0")], routes: [] }] })
     : json({})));
@@ -219,12 +219,12 @@ describe("F-7: one suffix rule and one Collect now per device", () => {
   });
 
   it("keeps one Collect per cluster page: in the header with M1 / M2 pills, the last read age in the Members & Identity tab", async () => {
-    const members: DeviceSummary[] = ["m1", "m2"].map((id, i) => ({ ...cp, device_id: id, hostname: `FW-SYNTH-0${i + 1}`, ha_role: i ? "STANDBY" : "ACTIVE", cluster_member_ref: "CLS-SYNTH-01",
+    const members: DeviceSummary[] = ["m1", "m2"].map((id, i) => ({ ...cp, device_id: id, hostname: `FW-TANGO-0${i + 1}`, ha_role: i ? "STANDBY" : "ACTIVE", cluster_member_ref: "CLS-ROMEO-01",
       inventory_collected_at: "2026-10-18T03:00:00Z" }));
-    vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("/clusters/CLS-SYNTH-01/inventory")
-      ? json({ cluster_member_ref: "CLS-SYNTH-01", members, contexts: [{ context: "physical", interfaces: [], routes: [] }], virtual_systems: [] })
+    vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("/clusters/CLS-ROMEO-01/inventory")
+      ? json({ cluster_member_ref: "CLS-ROMEO-01", members, contexts: [{ context: "physical", interfaces: [], routes: [] }], virtual_systems: [] })
       : json({})));
-    render(as(adminPlanes, <ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={members} />));
+    render(as(adminPlanes, <ClusterDetailPanels clusterRef="CLS-ROMEO-01" members={members} />));
     await screen.findByRole("tablist", { name: "Cluster detail" });
     expect(screen.getAllByRole("button", { name: "Collect" })).toHaveLength(1);
     const pills = within(screen.getByTestId("entity-header")).getByRole("group", { name: "Collect from member" });
@@ -244,14 +244,14 @@ describe("F-7: one suffix rule and one Collect now per device", () => {
 describe("Members & Identity (UI review 2026-11-05, B5)", () => {
   afterEach(() => vi.unstubAllGlobals());
   const members: DeviceSummary[] = ["m1", "m2"].map((id, i) => ({ device_id: id, vendor_hint: "check_point", role: "gateway", enrollment_state: "ENROLLED",
-    hostname: `FW-SYNTH-0${i + 1}`, model: "Quantum", software_version: "R81.20", ha_role: i ? "STANDBY" : "ACTIVE", cluster_member_ref: "CLS-SYNTH-01" }));
-  const stub = () => vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("/clusters/CLS-SYNTH-01/inventory")
-    ? json({ cluster_member_ref: "CLS-SYNTH-01", members, contexts: [{ context: "physical", interfaces: [], routes: [] }], virtual_systems: [] })
+    hostname: `FW-TANGO-0${i + 1}`, model: "Quantum", software_version: "R81.20", ha_role: i ? "STANDBY" : "ACTIVE", cluster_member_ref: "CLS-ROMEO-01" }));
+  const stub = () => vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("/clusters/CLS-ROMEO-01/inventory")
+    ? json({ cluster_member_ref: "CLS-ROMEO-01", members, contexts: [{ context: "physical", interfaces: [], routes: [] }], virtual_systems: [] })
     : json({})));
 
   it.each(["identity", "Cluster members", "members & identity"])("opens the merged tab for a link that names %s", async (initialTab) => {
     stub();
-    render(as(adminPlanes, <ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={members} initialTab={initialTab} />));
+    render(as(adminPlanes, <ClusterDetailPanels clusterRef="CLS-ROMEO-01" members={members} initialTab={initialTab} />));
     expect(await screen.findByRole("tab", { name: "Members & Identity", selected: true })).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Cluster members" })).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Member identity" })).toBeInTheDocument();
@@ -259,20 +259,20 @@ describe("Members & Identity (UI review 2026-11-05, B5)", () => {
 });
 
 describe("P0-3B: a selected virtual system scopes the pane", () => {
-  const vs = ["VS-SYNTH-12", "VS-SYNTH-13"];
-  const members: DeviceSummary[] = ["m1", "m2"].map((id, i) => ({ device_id: id, vendor_hint: "check_point", role: "gateway", enrollment_state: "ENROLLED", hostname: `FW-SYNTH-0${i + 1}`,
-    model: "Quantum", software_version: "R81.20", ha_role: i ? "STANDBY" : "ACTIVE", cluster_member_ref: "CLS-SYNTH-01", virtual_systems: vs.join(", ") }));
+  const vs = ["VS-ROMEO-01-12", "VS-ROMEO-01-13"];
+  const members: DeviceSummary[] = ["m1", "m2"].map((id, i) => ({ device_id: id, vendor_hint: "check_point", role: "gateway", enrollment_state: "ENROLLED", hostname: `FW-TANGO-0${i + 1}`,
+    model: "Quantum", software_version: "R81.20", ha_role: i ? "STANDBY" : "ACTIVE", cluster_member_ref: "CLS-ROMEO-01", virtual_systems: vs.join(", ") }));
   const cctx = (context: string, vsName: string | null, names: string[]) => ({ context, vs_name: vsName, routes: [],
     interfaces: names.map((name) => ({ name, kind: "physical", addresses: [], presence: "all", differences: [], member_addresses: { m1: [{ address: "192.0.2.1/24", family: "ipv4", role: "member" }], m2: [{ address: "192.0.2.1/24", family: "ipv4", role: "member" }] }, member_states: { m1: "up", m2: "up" } })) });
-  const stubCluster = () => vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("/clusters/CLS-SYNTH-01/inventory")
-    ? json({ cluster_member_ref: "CLS-SYNTH-01", members, virtual_systems: vs, contexts: [cctx("physical", null, ["Mgmt", "Sync"]), cctx("12", "VS-SYNTH-12", ["eth1-12"]), cctx("13", "VS-SYNTH-13", ["eth1-13a", "eth1-13b", "eth1-13c"])] })
+  const stubCluster = () => vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("/clusters/CLS-ROMEO-01/inventory")
+    ? json({ cluster_member_ref: "CLS-ROMEO-01", members, virtual_systems: vs, contexts: [cctx("physical", null, ["Mgmt", "Sync"]), cctx("12", "VS-ROMEO-01-12", ["eth1-12"]), cctx("13", "VS-ROMEO-01-13", ["eth1-13a", "eth1-13b", "eth1-13c"])] })
     : json({})));
 
   it("heads the pane `parent › VS`, with a switcher, only that VS's tabs and its own counts", async () => {
     stubCluster();
     const onSelectVs = vi.fn();
-    render(as(adminPlanes, <ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={members} initialVs="VS-SYNTH-13" onSelectVs={onSelectVs} />));
-    expect(await screen.findByRole("heading", { name: "CLS-SYNTH-01 › VS-SYNTH-13" })).toBeInTheDocument();
+    render(as(adminPlanes, <ClusterDetailPanels clusterRef="CLS-ROMEO-01" members={members} initialVs="VS-ROMEO-01-13" onSelectVs={onSelectVs} />));
+    expect(await screen.findByRole("heading", { name: "CLS-ROMEO-01 › VS-ROMEO-01-13" })).toBeInTheDocument();
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Interfaces", "Routing"]);
     expect(await screen.findByText("3 interfaces · 0 routes")).toBeInTheDocument();
     expect(screen.getByText("eth1-13a")).toBeInTheDocument();
@@ -280,31 +280,31 @@ describe("P0-3B: a selected virtual system scopes the pane", () => {
     expect(screen.getByRole("combobox", { name: "Switch virtual system" })).toBeInTheDocument();
     // moving to a sibling updates the caller's selection and the pane
     fireEvent.mouseDown(screen.getByRole("combobox", { name: "Switch virtual system" }));
-    fireEvent.click(await screen.findByRole("option", { name: "VS-SYNTH-12" }));
-    expect(onSelectVs).toHaveBeenCalledWith("VS-SYNTH-12");
-    expect(await screen.findByRole("heading", { name: "CLS-SYNTH-01 › VS-SYNTH-12" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("option", { name: "VS-ROMEO-01-12" }));
+    expect(onSelectVs).toHaveBeenCalledWith("VS-ROMEO-01-12");
+    expect(await screen.findByRole("heading", { name: "CLS-ROMEO-01 › VS-ROMEO-01-12" })).toBeInTheDocument();
     expect(screen.getByText("eth1-12")).toBeInTheDocument();
   });
 
   it("brings the cluster's own tabs back through the parent link", async () => {
     stubCluster();
     const onSelectVs = vi.fn();
-    render(as(adminPlanes, <ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={members} initialVs="VS-SYNTH-13" onSelectVs={onSelectVs} />));
-    fireEvent.click(await screen.findByRole("button", { name: "CLS-SYNTH-01" }));
+    render(as(adminPlanes, <ClusterDetailPanels clusterRef="CLS-ROMEO-01" members={members} initialVs="VS-ROMEO-01-13" onSelectVs={onSelectVs} />));
+    fireEvent.click(await screen.findByRole("button", { name: "CLS-ROMEO-01" }));
     expect(onSelectVs).toHaveBeenCalledWith(null);
     // F-21: the title is the cluster's name, without the `CLS >` prefix; the badge and tree keep the kind.
-    expect(await screen.findByRole("heading", { name: "CLS-SYNTH-01" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "CLS-ROMEO-01" })).toBeInTheDocument();
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Interfaces", "Routing", "Members & Identity", "Configuration", "Logs", "Failover"].filter((name) => name !== "Configuration"));
     expect(screen.queryByRole("combobox", { name: "Switch virtual system" })).toBeNull();
   });
 
   it("bolds the selected vsys in a Palo Alto member card", async () => {
-    const pan: DeviceSummary[] = ["p1", "p2"].map((id, i) => ({ ...members[i], device_id: id, vendor_hint: "palo_alto", cluster_member_ref: "CLS-SYNTH-PA", virtual_systems: "vsys1, vsys2" }));
-    vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("/clusters/CLS-SYNTH-PA/inventory")
-      ? json({ cluster_member_ref: "CLS-SYNTH-PA", members: pan, virtual_systems: ["vsys1", "vsys2"], contexts: [cctx("vsys1", "vsys1", ["ethernet1/1"]), cctx("vsys2", "vsys2", ["ethernet1/2"])] })
+    const pan: DeviceSummary[] = ["p1", "p2"].map((id, i) => ({ ...members[i], device_id: id, vendor_hint: "palo_alto", cluster_member_ref: "CLS-JULIET-01", virtual_systems: "vsys1, vsys2" }));
+    vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("/clusters/CLS-JULIET-01/inventory")
+      ? json({ cluster_member_ref: "CLS-JULIET-01", members: pan, virtual_systems: ["vsys1", "vsys2"], contexts: [cctx("vsys1", "vsys1", ["ethernet1/1"]), cctx("vsys2", "vsys2", ["ethernet1/2"])] })
       : json({})));
-    render(as(adminPlanes, <ClusterDetailPanels clusterRef="CLS-SYNTH-PA" members={pan} initialVs="vsys2" />));
-    await screen.findByRole("heading", { name: "CLS-SYNTH-PA › vsys2" });
+    render(as(adminPlanes, <ClusterDetailPanels clusterRef="CLS-JULIET-01" members={pan} initialVs="vsys2" />));
+    await screen.findByRole("heading", { name: "CLS-JULIET-01 › vsys2" });
     const card = document.querySelector('[data-member-card="p1"]') as HTMLElement;
     // The card names the count and the selected virtual system; the whole list stays on hover (post-release review 2026-10-20, N1).
     expect(within(card).getByText("vsys2")).toHaveStyle({ fontWeight: "700" });
@@ -314,7 +314,7 @@ describe("P0-3B: a selected virtual system scopes the pane", () => {
   });
 
   it("heads a standalone device's virtual system `device › VSYS` and scopes its tabs too", async () => {
-    const standalone: DeviceSummary = { device_id: "pa-1", vendor_hint: "palo_alto", role: "gateway", enrollment_state: "ENROLLED", hostname: "FW-SYNTH-PA", model: "PA-440",
+    const standalone: DeviceSummary = { device_id: "pa-1", vendor_hint: "palo_alto", role: "gateway", enrollment_state: "ENROLLED", hostname: "FW-TANGO-04", model: "PA-440",
       software_version: "11.0", ha_role: null, cluster_member_ref: null, virtual_systems: "vsys1, vsys2" };
     vi.stubGlobal("fetch", vi.fn((url: string) => url === "/devices/pa-1/inventory"
       ? json({ device_id: "pa-1", collected_at: "2026-10-18T03:00:00Z", job: null, virtual_systems: ["vsys1", "vsys2"], contexts: [
@@ -322,7 +322,7 @@ describe("P0-3B: a selected virtual system scopes the pane", () => {
         { context: "vsys2", vs_name: "vsys2", ha: null, interfaces: [iface("ethernet1/2"), iface("ethernet1/3")], routes: [route(1)] }] })
       : json({})));
     render(as(adminPlanes, <DeviceInventoryPanels device={standalone} initialVs="vsys2" />));
-    expect(await screen.findByRole("heading", { name: "FW-SYNTH-PA › vsys2" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "FW-TANGO-04 › vsys2" })).toBeInTheDocument();
     expect(await screen.findByText("2 interfaces · 1 route")).toBeInTheDocument();
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Interfaces", "Routing"]);
     await waitFor(() => expect(screen.getByText("ethernet1/3")).toBeInTheDocument());
@@ -334,31 +334,31 @@ describe("routing table headers order every filtered route, not the page (Produc
   // every sixth route has no next hop.
   const scrambled = Array.from({ length: 120 }, (_, k) => {
     const i = ((k * 7) % 120) + 1;
-    return { destination: `10.${i}.0.0/16`, next_hop: i % 6 === 0 ? null : `192.0.2.${i}`, interface: `ethernet1/${i % 20}`, protocol: i % 2 ? "static" : "connected" };
+    return { destination: `198.51.100.${i}/32`, next_hop: i % 6 === 0 ? null : `192.0.2.${i}`, interface: `ethernet1/${i % 20}`, protocol: i % 2 ? "static" : "connected" };
   });
   const contexts = [{ context: "physical", vs_name: null, ha: null, interfaces: [], routes: scrambled }] as unknown as InventoryContext[];
   const rows = () => screen.getAllByRole("row").slice(1);
   const column = (index: number) => rows().map((row) => within(row).getAllByRole("cell")[index].textContent);
   const header = (name: string) => screen.getByRole("button", { name });
   const next = () => fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
-  const mount = () => render(as(null, <RoutesPanel contexts={contexts} member={{ device_id: "d1", hostname: "FW-SYNTH-01" }} />));
+  const mount = () => render(as(null, <RoutesPanel contexts={contexts} member={{ device_id: "d1", hostname: "FW-TANGO-01" }} />));
 
   it("sorts Destination over all 120 routes with numeric collation, continues on page 2, flips, and the third click restores collection order", () => {
     mount();
-    expect(column(0).slice(0, 3)).toEqual(["10.1.0.0/16", "10.8.0.0/16", "10.15.0.0/16"]);
+    expect(column(0).slice(0, 3)).toEqual(["198.51.100.1/32", "198.51.100.8/32", "198.51.100.15/32"]);
     fireEvent.click(header("Destination"));
     expect(header("Destination").closest("th")).toHaveAttribute("aria-sort", "ascending");
-    expect(column(0)).toEqual(Array.from({ length: 50 }, (_, i) => `10.${i + 1}.0.0/16`));
+    expect(column(0)).toEqual(Array.from({ length: 50 }, (_, i) => `198.51.100.${i + 1}/32`));
     next();
     expect(screen.getByText("51–100 of 120")).toBeInTheDocument();
-    expect(column(0)).toEqual(Array.from({ length: 50 }, (_, i) => `10.${i + 51}.0.0/16`));
+    expect(column(0)).toEqual(Array.from({ length: 50 }, (_, i) => `198.51.100.${i + 51}/32`));
     fireEvent.click(header("Destination"));
     expect(header("Destination").closest("th")).toHaveAttribute("aria-sort", "descending");
     expect(screen.getByText("1–50 of 120")).toBeInTheDocument();
-    expect(column(0).slice(0, 3)).toEqual(["10.120.0.0/16", "10.119.0.0/16", "10.118.0.0/16"]);
+    expect(column(0).slice(0, 3)).toEqual(["198.51.100.120/32", "198.51.100.119/32", "198.51.100.118/32"]);
     fireEvent.click(header("Destination"));
     expect(header("Destination").closest("th")).not.toHaveAttribute("aria-sort");
-    expect(column(0).slice(0, 3)).toEqual(["10.1.0.0/16", "10.8.0.0/16", "10.15.0.0/16"]);
+    expect(column(0).slice(0, 3)).toEqual(["198.51.100.1/32", "198.51.100.8/32", "198.51.100.15/32"]);
   });
 
   it("puts routes without a next hop last in both directions, resets to page 1, and sorts the filtered list", () => {
@@ -375,10 +375,10 @@ describe("routing table headers order every filtered route, not the page (Produc
     expect(column(1).slice(0, 2)).toEqual(["192.0.2.119", "192.0.2.118"]);
     next(); next();
     expect(column(1)).toEqual(Array(20).fill("—"));
-    fireEvent.change(screen.getByPlaceholderText("Filter routes..."), { target: { value: "10.11" } });
-    // 10.11, 10.110 .. 10.119: eleven routes, still newest-first by next hop, the one without a next hop (10.114) last
+    fireEvent.change(screen.getByPlaceholderText("Filter routes..."), { target: { value: "198.51.100.11" } });
+    // 198.51.100.11/32, 198.51.100.110/32 .. 198.51.100.119/32: eleven routes, still newest-first by next hop, the one without a next hop (198.51.100.114/32) last
     expect(screen.getByText("1–11 of 11")).toBeInTheDocument();
-    expect(column(0)[0]).toBe("10.119.0.0/16");
-    expect(column(0)[10]).toBe("10.114.0.0/16");
+    expect(column(0)[0]).toBe("198.51.100.119/32");
+    expect(column(0)[10]).toBe("198.51.100.114/32");
   });
 });

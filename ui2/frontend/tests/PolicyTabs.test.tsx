@@ -8,7 +8,7 @@ import type { PolicyMetadata } from "../src/auth/adminApi";
 
 const metadata: PolicyMetadata = { id: "policy-1", sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "CP",
   containerId: "domain-1", containerName: "DOM-TANGO-01", name: "POL-TANGO-01", collectedAt: "2026-10-05T00:00:00Z", artefactRef: "artifact-1", targets: [] };
-const objects = [{ id: "object-1", uid: "uid-1", name: "ADDR-TANGO-01", type: "host", status: "RESOLVED", values: ["ipv4-address: 240.12.0.8"],
+const objects = [{ id: "object-1", uid: "uid-1", name: "ADDR-TANGO-01", type: "host", status: "RESOLVED", values: ["ipv4-address: 192.0.2.8"],
   members: [], unused: true, emptyGroup: false, singleMember: false, duplicateId: "duplicate-1", ruleCount: 1, groupCount: 1 }];
 const types = [{ type: "hosts", status: "RESOLVED", collectedAt: metadata.collectedAt, objects: 1 }];
 const objectPage = { objects, types, total: 201, page: 0, pageSize: 200 };
@@ -53,7 +53,7 @@ it("opens the tabs and the Installation section, retains Rules and sends hit fil
   fireEvent.mouseDown(screen.getByLabelText("Usage filter")); fireEvent.click(await screen.findByRole("option", { name: "Hit in last 30 d" }));
   await waitFor(() => expect(request.mock.calls.some(([url]) => url.includes("q=(action%3D'Accept')%20AND%20lasthit.days%3C30") && !url.includes("hitFilter="))).toBe(true));
   fireEvent.click(screen.getByRole("tab", { name: "Objects" }));
-  expect(await screen.findByRole("table", { name: "Policy objects" })).toHaveTextContent("240.12.0.8");
+  expect(await screen.findByRole("table", { name: "Policy objects" })).toHaveTextContent("192.0.2.8");
   fireEvent.click(screen.getByRole("tab", { name: "Rules & Containers" }));
   fireEvent.click(within(screen.getByRole("region", { name: "Installation" })).getByRole("button", { name: /Installation: where/ }));
   expect(await screen.findByRole("table", { name: "Policy installation" })).toHaveTextContent("FW-TANGO-04");

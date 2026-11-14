@@ -418,7 +418,7 @@ describe("masked values only (no raw IPs in the rendered output)", () => {
   it("renders values exactly as the API returns them (server projection is the masking authority)", () => {
     const rawViewResult: PathResult = {
       ...PATH_ALLOWED,
-      query: { ...PATH_ALLOWED.query, src: "10.10.1.5", dst: "192.168.20.99" },
+      query: { ...PATH_ALLOWED.query, src: "198.51.100.5", dst: "203.0.113.99" },
     };
 
     const { container } = render(
@@ -426,8 +426,8 @@ describe("masked values only (no raw IPs in the rendered output)", () => {
         <PathDiagram result={rawViewResult} />
       </ThemeProvider>,
     );
-    expect(container.textContent).toContain("10.10.1.5");
-    expect(container.textContent).toContain("192.168.20.99");
+    expect(container.textContent).toContain("198.51.100.5");
+    expect(container.textContent).toContain("203.0.113.99");
     expect(container.textContent).not.toContain("[masked]");
   });
 });

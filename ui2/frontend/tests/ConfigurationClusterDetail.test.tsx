@@ -32,8 +32,8 @@ const member = (id: string, extra: Partial<DeviceSummary>): DeviceSummary => ({
 });
 // M2 first on purpose.
 const MEMBERS = [
-  member("m2", { hostname: "FW-TANGO-02", ha_role: "ACTIVE", virtual_systems: "vs-a, vs-b" }),
-  member("m1", { hostname: "FW-TANGO-01", ha_role: "PASSIVE", virtual_systems: "vs-a, vs-b" }),
+  member("m2", { hostname: "FW-TANGO-02", ha_role: "ACTIVE", virtual_systems: "VS-ROMEO-01-01, VS-ROMEO-01-02" }),
+  member("m1", { hostname: "FW-TANGO-01", ha_role: "PASSIVE", virtual_systems: "VS-ROMEO-01-01, VS-ROMEO-01-02" }),
 ];
 
 function stubConfigs(affordance: { text_readable?: boolean } = { text_readable: true }) {
@@ -152,11 +152,11 @@ describe("Configuration cluster detail after the Fable review", () => {
     const rows = within(table).getAllByRole("row").slice(1);
     expect(within(rows[0]).getByText("FW-TANGO-01")).toBeInTheDocument();
     const vs = within(rows[0]).getByRole("button", { name: /2 · same as cluster/ });
-    expect(within(rows[0]).queryByText("vs-a, vs-b")).toBeNull();
+    expect(within(rows[0]).queryByText("VS-ROMEO-01-01, VS-ROMEO-01-02")).toBeNull();
     fireEvent.click(vs);
-    expect(within(rows[0]).getByText("vs-a, vs-b")).toBeInTheDocument();
+    expect(within(rows[0]).getByText("VS-ROMEO-01-01, VS-ROMEO-01-02")).toBeInTheDocument();
     // The full list stays in the platform identity line.
-    expect(screen.getByTestId("platform-identity-line")).toHaveTextContent("2 virtual system(s) (VSX): vs-a, vs-b");
+    expect(screen.getByTestId("platform-identity-line")).toHaveTextContent("2 virtual system(s) (VSX): VS-ROMEO-01-01, VS-ROMEO-01-02");
   });
 
   it("exports the cluster's configuration evidence as CSV from the data on screen, with the ORIGIN column", async () => {
@@ -215,7 +215,7 @@ describe("Configuration device detail", () => {
     }))));
     render(withTheme(<DeviceConfigurationDetail device={{
       device_id: "asa-1", vendor_hint: "cisco_asa", enrollment_state: "ENROLLED", hostname: "FW-TANGO-04", model: "ASA 5516",
-      software_version: "9.18", serial_number: "SYNTHETIC-ASA-1", ha_role: "ACTIVE", cluster_member_ref: null,
+      software_version: "9.18", serial_number: "SN-00000001", ha_role: "ACTIVE", cluster_member_ref: null,
     }} />));
     expect((await screen.findAllByText("Cisco ASA")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("ACTIVE").some((element) => element.getAttribute("data-role") === "ACTIVE")).toBe(true);

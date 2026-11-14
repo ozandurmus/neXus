@@ -163,14 +163,14 @@ describe("tables do not clip at 1440 px", () => {
   const contexts = [{
     context: "physical", vs_name: null, ha: null, routes: [],
     interfaces: [{ name: "ethernet1/13.2603", parent: null, kind: "subinterface", state: "up", vlan_id: 2603, mac_address: "94:56:41:**:**:**",
-      zone: "ZONE-BEACON-5793", addresses: [{ address: "248.15.28.1/29", family: "ipv4" as const, role: "member" as const }] }],
+      zone: "ZONE-BEACON-5793", addresses: [{ address: "192.0.2.1/29", family: "ipv4" as const, role: "member" as const }] }],
   }];
 
   it("keeps the interfaces table in a horizontally scrollable container and each value on one line", () => {
     render(as(null, <InterfacesPanel contexts={contexts as never} member={{ device_id: "d1", hostname: "FW-TANGO-04" }} isPaloAlto />));
     const table = screen.getByRole("table");
     expect(getComputedStyle(table.parentElement!).overflowX).toBe("auto");
-    for (const text of ["ZONE-BEACON-5793", "248.15.28.0/29", "ethernet1/13.2603"]) {
+    for (const text of ["ZONE-BEACON-5793", "192.0.2.0/29", "ethernet1/13.2603"]) {
       expect(getComputedStyle(screen.getByText(text).closest("td")!).whiteSpace, text).toBe("nowrap");
     }
     // No fixed pixel width on the table or any of its cells.
