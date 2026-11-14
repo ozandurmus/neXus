@@ -371,7 +371,7 @@ Therefore, `AdminPrincipalPseudonymizer` applies the following **Canonical Princ
 | `smtp_tls` | `boolean` | Real value | TLS boolean. |
 | `smtp_from` | `string` | `MAIL-<10-hex>` (or `""` if blank) | Masks sender address without using `@` domain syntax. |
 | `smtp_to` | `string` | Comma-separated `MAIL-<10-hex>` per recipient (or `""` if blank) | Masks recipient addresses while preserving recipient count. |
-| `routes[].category` | `string` | Real enum (`CRITICAL_ALERTS`, `COMPLIANCE_DRIFT`, `BACKUP_FAILURES`, `SYSTEM_HEALTH`) | Closed category enum (`NotificationSettings.CATEGORIES`). |
+| `routes[].type` | `string` | Real value (`admin_event`, `login_security`, `backup_failure`, `job_failure`, `config_change`, `compliance_regression`, `device_health`) | Closed set (CHECK constraint on `notification_routes.type`, `V100__notification_routes.sql`). |
 | `routes[].email_enabled` / `syslog_enabled` / `webui_enabled` | `boolean` | Real values | Routing matrix booleans. |
 | `routes[].recipients` | `string` | Comma-separated `MAIL-<10-hex>` per recipient (or `""` if blank) | Masks per-route recipient overrides while preserving count and cross-route recipient equality. |
 | `routes[].last_sent_at` | `string \| null` | Real value | Delivery timestamp. |
@@ -420,26 +420,26 @@ The following endpoints and data classes MUST remain **100% forbidden (`403 Forb
 
 1. **Identity & RBAC Mutations:**
    - `POST /local-identities` (`LOCAL_IDENTITY_CREATE`)
-   - `POST /local-identities/{id}/enable` & `/disable` (`LOCAL_IDENTITY_ENABLE`, `LOCAL_IDENTITY_DISABLE`)
-   - `POST /local-identities/{id}/password` (`LOCAL_IDENTITY_SET_PASSWORD`)
+   - `POST /local-identities/enable` & `POST /local-identities/disable` (`LOCAL_IDENTITY_ENABLE`, `LOCAL_IDENTITY_DISABLE`)
+   - `POST /local-identities/set-password` (`LOCAL_IDENTITY_SET_PASSWORD`)
    - `POST /sessions/revoke` (`SESSION_REVOKE`)
    - `POST /role-bindings` (`ROLE_BINDING_CREATE`)
-   - `POST /role-bindings/{id}/delete` (`ROLE_BINDING_DELETE`)
+   - `POST /role-bindings/revoke` (`ROLE_BINDING_REVOKE`), `POST /role-bindings/selections` (`ROLE_BINDING_CREATE`)
    - `POST /roles`, `PUT /roles/{id}`, `DELETE /roles/{id}` (`RBAC_ROLE_WRITE`)
 2. **Directory / LDAP Mutations & Active Network Probes:**
    - `PUT /api/v2/config/ldap` (`LDAP_CONFIG_WRITE`)
-   - `POST /api/v2/config/ldap/test` (`LDAP_CONFIG_TEST` — **must stay forbidden** even as a test action because its request body accepts an arbitrary `servers` list and `bindDn`/`bindPassword`, which could otherwise be abused as an SSRF / credential-oracle probe from `aiview`).
+   - `POST /api/v2/config/ldap/test` (guarded by `LDAP_CONFIG_WRITE`; there is no separate test action — **must stay forbidden** even as a test action because its request body accepts an arbitrary `servers` list and `bindDn`/`bindPassword`, which could otherwise be abused as an SSRF / credential-oracle probe from `aiview`).
 3. **Credential Vault Mutations & Secret Material:**
    - `POST /credentials` (`CREDENTIAL_CREATE`)
-   - `POST /credentials/{id}/secret` (`CREDENTIAL_REPLACE_SECRET`)
-   - `POST /credentials/{id}/delete` (`CREDENTIAL_DELETE`)
+   - `POST /credentials/replace-secret` (`CREDENTIAL_REPLACE_SECRET`)
+   - `POST /credentials/delete` (`CREDENTIAL_DELETE`)
    - Any raw secret, password verifier, salt, private key, API token, SNMP community string, SNMP auth/priv secret, or LDAP bind password.
 4. **Platform Settings, Trust & Schedule Mutations:**
-   - `PUT /api/v2/config/notifications` & `POST /api/v2/config/notifications/test` (`NOTIFICATION_CONFIG_WRITE`, `NOTIFICATION_TEST_SEND` — test-send triggers external network traffic to SMTP/Syslog and must stay forbidden to `aiview`).
+   - `PUT /api/v2/config/notifications`, `POST /api/v2/config/notifications/test-syslog` & `POST /api/v2/config/notifications/test-mail` (all three guarded by `NOTIFICATION_CONFIG_WRITE` — test-send triggers external network traffic to SMTP/Syslog and must stay forbidden to `aiview`).
    - `PUT /api/v2/config/system-logs` (`SYSTEM_LOG_SETTINGS_WRITE`)
-   - `PUT /api/v2/config/scheduled-jobs/{family}` (`SCHEDULED_JOBS_WRITE`)
-   - `PUT /api/v2/ssh-trust/mode`, `POST /api/v2/ssh-trust/{id}/accept`, `POST /api/v2/ssh-trust/{id}/reject` (`SSH_TRUST_MANAGE`)
-   - `POST /api/v2/tls-certificate/import` & `GET /api/v2/tls-certificate` (raw PEM material)
+   - `PUT /api/v2/config/scheduled-jobs/{family}` (`SCHEDULED_JOBS_SET`)
+   - `PUT /api/v2/ssh-trust/mode`, `POST /api/v2/ssh-trust/observations/{id}/accept`, `POST /api/v2/ssh-trust/observations/{id}/reject` (`SSH_TRUST_MANAGE`)
+   - `POST /devices/{deviceId}/https-certificate/accept` & `PUT /devices/{deviceId}/https-certificate/strict` (device HTTPS certificate trust)
 5. **Forensic / Raw Unmasked Exports & Audit Snapshots:**
    - `audit_log.before_json` and `audit_log.after_json` (never queried or exposed).
    - `PACKET_ANALYSIS_RAW_VIEW` (remains `role:security_admin` only).
@@ -457,7 +457,7 @@ The following endpoints and data classes MUST remain **100% forbidden (`403 Forb
 | **A2** | **Probe-oracle attack via filter parameters (`?actor=jdoe`)** | An `aiview` caller passes a guessed raw username `?actor=jdoe` to `GET /audit-logs` and observes whether rows are returned, using the filter as an existence oracle. | In `aiview` mode, filter parameters on principal fields (`actor`, `search`) are evaluated **only against the post-masked `USR-` / `GRP-` / `LID-` token** (or rejected if not matching the token regex `^(USR\|GRP\|LID\|SESS\|system\|bootstrap)-[A-Z0-9:_-]+$`). Passing a raw username never matches raw DB columns for `aiview`. |
 | **A3** | **Lexicographical ordering leak** | `GET /local-identities` or `GET /credentials` sorts rows `ORDER BY local_identity_name ASC` in SQL; an observer infers that row 1 starts with `a` and row 20 starts with `z`. | For `aiview` projections, the controller re-sorts collections by `(created_at ASC, masked_token ASC)` before returning. |
 | **A4** | **Cross-screen quasi-identifier / cardinality join** | Correlating `local_identity` creation timestamps, role counts, and active session counts across screens to infer which pseudonym is the bootstrap `nexusadmin` vs `aiview` vs a human operator. | Well-known bootstrap accounts (`nexusadmin`, `aiview`, `aiview-e2e`) are structural platform fixtures seeded by code; human accounts have their names, DNs, and groups pseudonymized, and free-text fields (`description`, `reason`, `last_error`, `trustPem`) are withheld. |
-| **A5** | **Timing / side-channel oracle on LDAP or Notification test endpoints** | Triggering `POST /api/v2/config/ldap/test` or `POST /api/v2/config/notifications/test` to measure response latency or observe error strings containing internal hostnames. | Both test endpoints remain strictly `role:security_admin` (`403` for `aiview`), and stored `routes[].last_error` in `GET /api/v2/config/notifications` is replaced with constant `"DELIVERY_ERROR_WITHHELD_IN_AIVIEW"`. |
+| **A5** | **Timing / side-channel oracle on LDAP or Notification test endpoints** | Triggering `POST /api/v2/config/ldap/test` or `POST /api/v2/config/notifications/test-syslog` / `test-mail` to measure response latency or observe error strings containing internal hostnames. | Both test endpoints remain strictly `role:security_admin` (`403` for `aiview`), and stored `routes[].last_error` in `GET /api/v2/config/notifications` is replaced with constant `"DELIVERY_ERROR_WITHHELD_IN_AIVIEW"`. |
 | **A6** | **Human screenshots or DOM inspection in `aiview` mode** | A human or browser agent inspects React state, network responses, or HTML `title` / `data-*` attributes, or shares a screenshot from an `aiview` session. | Masking occurs **exclusively on the server** before JSON serialization (`AdminMaskedResponse` + `X-Nexus-Masked: true`). Raw strings never reach the browser network tab, React props, DOM attributes, or screenshots. |
 | **A7** | **`PrivacyMaskingResponseBodyAdvice` double-masking or missed-field fallthrough** | A controller returns an un-enveloped DTO; `PrivacyMaskingResponseBodyAdvice` either misses a principal key or re-masks an already-masked token. | Every Administration controller method returning principal data constructs a dedicated masked record wrapped in `AdminMaskedResponse<T>`. `PrivacyMaskingResponseBodyAdvice.beforeBodyWrite` unwraps `AdminMaskedResponse` directly (after setting `X-Nexus-Masked: true`), bypassing generic heuristic map walking. |
 | **A8** | **Privilege escalation via `MachineSessionController`** | Someone binds `role:security_admin` to `aiview` or `aiview-e2e` in the database to make Admin screens work. | **Prohibited.** `AiViewIdentitySeedingRunner` resets `aiview` and `aiview-e2e` bindings on boot to `[role:viewer, role:replay_viewer]`, and `MachineSessionController` rejects `aiview-e2e` with `403 MACHINE_IDENTITY_MISCONFIGURED` if its role set deviates from exact `Set.of(VIEWER, REPLAY_VIEWER)`. |
@@ -514,7 +514,7 @@ The test seeds the in-memory / test database stores with high-entropy, unmistaka
    - Assert that all `can_write` / `can_revoke` / `can_write_administration` flags are `false` for `aiview` and `true` for `security_admin`.
 4. **Exhaustive Write-Endpoint Refusal Assertion:**
    - Issue every Administration `POST`, `PUT`, and `DELETE` route listed in §2.5 under both `aiview` (human replay viewer) and `aiview-e2e` (machine replay viewer).
-   - Assert `403 Forbidden` on every call (`MACHINE_SESSION_READ_ONLY` for `aiview-e2e`; `INSUFFICIENT_ROLE` / `REPLAY_VIEWER_READ_ONLY` for `aiview`).
+   - Assert `403 Forbidden` on every call (`MACHINE_SESSION_READ_ONLY` for `aiview-e2e`; the gate chain's role refusal for `aiview`).
 
 ---
 
@@ -546,7 +546,7 @@ To obey the `AGENTS.md` incremental engineering law, implementation should be sp
 | Risk | Severity | Mitigation |
 | :--- | :--- | :--- |
 | **R1: `nexusadmin` holds `RoleToken.REPLAY_VIEWER`** (`FirstBootIdentitySeedingRunner` binds `nexusadmin` to all `RoleToken.values()`). | High | `GateChainInterceptor.isReplayViewer` already checks `!RbacEvaluator.ROOT_AUTHORITY.equals(decision.authority().orElse(null))`. Every controller helper that checks `isReplayViewer(request)` MUST read the `GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE` request attribute (never raw `roles.contains(REPLAY_VIEWER)`), ensuring `nexusadmin` always sees unmasked data and `can_write: true`. |
-| **R2: `AiviewDiagnosticReadOnlyTest` / architecture test pins exact `REPLAY_VIEWER` action count.** | Medium | Update the pinned allowlist test in the same slice as the `ActionRegistry` change, explicitly asserting both the permitted read actions and that every sibling write/test action (`SESSION_REVOKE`, `ROLE_BINDING_CREATE`, `LDAP_CONFIG_WRITE`, `LDAP_CONFIG_TEST`, `NOTIFICATION_TEST_SEND`, etc.) refuses `REPLAY_VIEWER`. |
+| **R2: `AiviewDiagnosticReadOnlyTest` / architecture test pins exact `REPLAY_VIEWER` action count.** | Medium | Update the pinned allowlist test in the same slice as the `ActionRegistry` change, explicitly asserting both the permitted read actions and that every sibling write/test action (`SESSION_REVOKE`, `ROLE_BINDING_CREATE`, `ROLE_BINDING_REVOKE`, `LDAP_CONFIG_WRITE`, `NOTIFICATION_CONFIG_WRITE`, etc.) refuses `REPLAY_VIEWER`. |
 | **R3: Local identity cache staleness when canonicalizing `local:<uuid>` to username.** | Low | Resolve `local:<uuid>` via `LocalIdentityStore` at projection time (or canonicalize both `GET /local-identities` `local_identity_name` and `local:<uuid>` through `local_identity_id` when the account exists in `local_identity`), so a username rename or lookup never desynchronizes tokens across screens. |
 | **R4: Frontend panels assuming `can_read_administration == true` implies write permission.** | Medium | Several panels (`SshHostKeyPanel.tsx`, `AdministrationScreen.tsx`) currently pass `canReadAdministration` to enable write controls. Introducing `can_write_administration` in `/session/status` and `can_write` on each endpoint response cleanly separates read visibility from write authority. |
 
