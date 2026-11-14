@@ -42,6 +42,8 @@ public final class PolicyHygiene {
      */
     public static final String INLINE_LAYER_COVER = "An earlier Apply Layer rule sends all of this match into its inline layer; this rule is never reached.";
     /** Every fixed finding evidence string; "Shadowing: <reason>." is derived from {@link #REASONS}. */
+    /** An ASA ACL with no access-group binding and no other use found by the parser (ASA mapper use "none", A0-ASA-2). */
+    public static final String ASA_ACL_NOT_REFERENCED = "ACL has no access-group binding and no other use was found; it is not enforced as an access rule.";
     public static final Set<String> EVIDENCE = Set.of(
         "Rule is disabled.", "Enabled state is unknown.", "Stored schedule has expired.", "Stored schedule expires within 14 days.",
         "Schedule evidence is incomplete.", "Permissiveness cannot be established from resolved selectors.",
@@ -51,7 +53,7 @@ public final class PolicyHygiene {
         "Hit counts were not collected or are invalid.", "Hit counts are missing for a target.", "Last-hit timestamp is invalid.",
         "Zero-hit counter window is shorter than the threshold.", "Zero hits contradict a recorded last hit.",
         "Zero collected hits; counter reset/window is unknown.", "Last-hit time was not collected.",
-        "Last hit predates the threshold at counter collection time.");
+        "Last hit predates the threshold at counter collection time.", ASA_ACL_NOT_REFERENCED);
     public record Finding(String findingClass, String severity, String evidence) {}
     public record Assessment(String shadowStatus, String shadowReason, String coveringRuleId,
             List<Finding> findings, Map<String, Object> permissiveness, String timeStatus, boolean expiring,
@@ -135,7 +137,9 @@ public final class PolicyHygiene {
                 // ordering (lookup and offline analysis skip them the same way). Before 2026-11-03 a CP NAT section broke
                 // the access-layer scope, so 5,494 NAT and 7,156 later access rules read "earlier sections not analysed".
                 for (Rule rule : section.rules()) {
-                    List<Finding> findings = Boolean.FALSE.equals(rule.enabled()) ? List.of(finding("disabled", "LOW", "Rule is disabled.")) : List.of();
+                    List<Finding> findings = Boolean.FALSE.equals(rule.enabled()) ? List.of(finding("disabled", "LOW", "Rule is disabled."))
+                        : "ASA".equals(snapshot.metadata().vendor()) && List.of("none").equals(rule.extras().get("asa-acl-use"))
+                            ? List.of(finding("unused", "LOW", ASA_ACL_NOT_REFERENCED)) : List.of();
                     results.put(rule.id(), new Assessment("UNKNOWN", "unsupported rulebase", null, findings,
                         PolicyRuleMetrics.permissiveness("Unknown", List.of(), 0), "unknown", false,
                         "Counter window unknown.", "UNKNOWN", null, null, null));
@@ -697,7 +701,7 @@ public final class PolicyHygiene {
     }
     private static Finding finding(String cls, String severity, String evidence) { return new Finding(cls, severity, evidence); }
     private static Finding unknown(String evidence) { return finding("unknown", "LOW", evidence); }
-    private static boolean accepting(String action) { return Set.of("Accept", "allow").contains(action); }
+    private static boolean accepting(String action) { return PolicyNormalization.ALLOWING_ACTIONS.contains(action); }
     /**
      * Same action for REDUNDANT versus CONFLICT. Two Check Point "Apply Layer" rules act alike only when they apply the
      * same inline layer (same opaque reference); other rules carry no inline-layer reference, so this is action equality.

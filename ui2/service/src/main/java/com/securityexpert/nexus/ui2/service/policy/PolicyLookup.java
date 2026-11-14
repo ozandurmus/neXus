@@ -12,7 +12,16 @@ public final class PolicyLookup {
     private static final String CP_CLEANUP = "implicit cleanup action not collected";
     private static final String PAN_INTRAZONE = "no rule matched; intrazone-default applies (allow by default, override not collected)";
     private static final String PAN_INTERZONE = "no rule matched; interzone-default applies (deny by default, override not collected)";
-    public static final Set<String> REASONS = Set.of(CP_CLEANUP, PAN_INTRAZONE, PAN_INTERZONE,
+    // Cisco ASA (A0-ASA-1..5, PO_DECISION_RECORD_2026_11_14_ASA_FORTIGATE_POLICY_MODEL.md item 4)
+    static final String ASA_IMPLICIT_DENY = "no rule matched; implicit deny of the access list";
+    static final String ASA_LEVEL_ALLOW = "no access list applies; higher to lower security level is allowed by default";
+    static final String ASA_LEVEL_UNPROVEN = "no access list applies; security-level default unproven";
+    static final String ASA_SAME_INTER = "same security level; same-security-traffic inter-interface is not permitted";
+    static final String ASA_SAME_INTRA = "same interface; same-security-traffic intra-interface is not permitted";
+    static final String ASA_INTERFACE_UNKNOWN = "interface or security level not in the policy";
+    static final String ASA_RESULTS = "access list results";
+    public static final Set<String> REASONS = Set.of(ASA_IMPLICIT_DENY, ASA_LEVEL_ALLOW, ASA_LEVEL_UNPROVEN, ASA_SAME_INTER, ASA_SAME_INTRA,
+        ASA_INTERFACE_UNKNOWN, ASA_RESULTS, CP_CLEANUP, PAN_INTRAZONE, PAN_INTERZONE,
         "multiple ordered layers not evaluated", "ordered layer results", "all ordered layers allowed", "first matching rule", "earlier rule could match",
         "partial query coverage", "analysis budget", "snapshot collection incomplete", "unsupported evaluation scope",
         "inline layer evaluation unsupported", "zone or target required", "target context unproven", "application constraint",
@@ -31,7 +40,15 @@ public final class PolicyLookup {
         }
     }
     private record Entry(Section section, Rule rule, Match match, int layer) {}
-    private record Evaluation(List<Entry> entries, List<Integer> layers) {}
+    private record Evaluation(List<Entry> entries, List<Integer> layers, Asa asa) {
+        Evaluation(List<Entry> entries, List<Integer> layers) { this(entries, layers, null); }
+    }
+    /**
+     * An ASA snapshot's access lists by binding ("in:IF", "out:IF", "global", each a layer number) and its interface
+     * table (nameif to security level; null level = unknown) with the same-security-traffic flags, all as the mapper stored
+     * them (section identity verified by its opaque id, never by display name).
+     */
+    private record Asa(Map<String, Integer> lists, Map<String, Integer> levels, Set<String> interfaces, boolean inter, boolean intra, boolean known) {}
     private record Decision(String verdict, String reason, Map<String, Object> rule, List<Map<String, Object>> undecidable,
             List<Map<String, Object>> layers) {
         Decision(String verdict, String reason, Map<String, Object> rule, List<Map<String, Object>> undecidable) {
@@ -115,6 +132,7 @@ public final class PolicyLookup {
         Set<String> ruleIds = new HashSet<>(); var cpLayers = new CpLayers();
         Set<Integer> layers = new LinkedHashSet<>();
         Set<String> inlineParents = new HashSet<>();
+        Map<String, Integer> asaLists = new LinkedHashMap<>();
         for (Section section : snapshot.sections()) {
             budget.spend();
             if (PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) continue;
@@ -127,6 +145,10 @@ public final class PolicyLookup {
                 if (section.parentRuleId() != null && !inlineParents.contains(section.parentRuleId())) throw new Unknown("unsupported evaluation scope");
                 layer = cpLayers.advance(section, budget);
                 if (section.parentRuleId() == null) layers.add(layer);
+            } else if (snapshot.metadata().vendor().equals("ASA") && section.source().equals("ASA access-group")) {
+                String binding = asaBinding(snapshot, section);
+                if (binding == null || asaLists.containsKey(binding)) throw new Unknown("unsupported evaluation scope");
+                layer = asaLists.size(); asaLists.put(binding, layer);
             } else throw new Unknown("unsupported evaluation scope");
             for (Rule rule : section.rules()) {
                 budget.spend();
@@ -136,6 +158,7 @@ public final class PolicyLookup {
                 entries.add(new Entry(section, rule, normalize(snapshot, section, rule, resolver, true), layer));
             }
         }
+        if (snapshot.metadata().vendor().equals("ASA")) return new Evaluation(entries, List.of(), asaInterfaces(snapshot, asaLists));
         if (sectionIds.isEmpty()) throw new Unknown("unsupported evaluation scope");
         return new Evaluation(entries, List.copyOf(layers));
     }
@@ -155,6 +178,7 @@ public final class PolicyLookup {
         return parts;
     }
     private static Decision decide(PolicySnapshot snapshot, Evaluation evaluation, Query query, Range source, Range destination, Budget budget) {
+        if (snapshot.metadata().vendor().equals("ASA")) return asa(snapshot, evaluation, query, source, destination, budget);
         if (!snapshot.metadata().vendor().equals("CP"))
             return decide(snapshot, evaluation.entries(), query, source, destination, budget, null, -1, 0);
         if (evaluation.layers().isEmpty()) throw new Unknown("multiple ordered layers not evaluated");
@@ -177,11 +201,15 @@ public final class PolicyLookup {
             null, List.copyOf(undecidable), List.copyOf(results));
     }
     private static Decision decide(PolicySnapshot snapshot, List<Entry> entries, Query query, Range source, Range destination, Budget budget, String parent, int layer, int depth) {
+        return decide(snapshot, entries, query, source, destination, budget, parent, l -> l == layer, depth);
+    }
+    private static Decision decide(PolicySnapshot snapshot, List<Entry> entries, Query query, Range source, Range destination, Budget budget, String parent,
+            java.util.function.IntPredicate layers, int depth) {
         if (depth > 32) throw new Unknown("analysis budget");
         List<Map<String, Object>> unknown = new ArrayList<>();
         for (Entry entry : entries) {
             budget.spend();
-            if (!Objects.equals(entry.section().parentRuleId(), parent) || parent == null && entry.layer() != layer) continue;
+            if (!Objects.equals(entry.section().parentRuleId(), parent) || parent == null && !layers.test(entry.layer())) continue;
             String problem = entry.match().problem();
             if (problem == null) {
                 var selectors = entry.match().selectors();
@@ -225,13 +253,101 @@ public final class PolicyLookup {
                 if (unknown.size() >= 128) throw new Unknown("analysis budget");
                 var row = new LinkedHashMap<>(rule(entry)); row.put("lookupReason", problem); unknown.add(row); continue;
             }
-            return new Decision(unknown.isEmpty() ? (Set.of("Accept", "allow").contains(entry.rule().action()) ? "ALLOWED" : "DENIED") : "UNKNOWN",
+            return new Decision(unknown.isEmpty() ? (ALLOWING_ACTIONS.contains(entry.rule().action()) ? "ALLOWED" : "DENIED") : "UNKNOWN",
                 unknown.isEmpty() ? "first matching rule" : "earlier rule could match", rule(entry), List.copyOf(unknown));
         }
         String reason = snapshot.metadata().vendor().equals("CP") ? CP_CLEANUP
             : query.sourceZone().isEmpty() || query.destinationZone().isEmpty() ? "zone or target required"
             : query.sourceZone().equals(query.destinationZone()) ? PAN_INTRAZONE : PAN_INTERZONE;
         return new Decision("UNKNOWN", unknown.isEmpty() ? reason : "earlier rule could match", null, List.copyOf(unknown));
+    }
+    /** The binding an ASA access-group section stands for, proven by the mapper's opaque section id, or null. */
+    private static String asaBinding(PolicySnapshot snapshot, Section section) {
+        String id = snapshot.metadata().id(), name = section.name();
+        if (id == null || id.isBlank() || name == null || section.parentRuleId() != null) return null;
+        if (name.equals("global") && ref(id, "global").equals(section.id())) return "global";
+        for (String direction : List.of("in", "out")) {
+            String suffix = " " + direction;
+            if (name.endsWith(suffix)) {
+                String nameif = name.substring(0, name.length() - suffix.length());
+                if (!nameif.isEmpty() && ref(id, direction, nameif).equals(section.id())) return direction + ":" + nameif;
+            }
+        }
+        return null;
+    }
+    /** The mapper's interface table object ("asa-interfaces": nameif / security-level pairs and the same-security flags). */
+    private static Asa asaInterfaces(PolicySnapshot snapshot, Map<String, Integer> lists) {
+        Map<String, Integer> levels = new HashMap<>(); Set<String> interfaces = new HashSet<>();
+        boolean inter = false, intra = false, known = false; int found = 0;
+        for (var object : snapshot.objects().values()) {
+            if (!"asa-interfaces".equals(object.type())) continue;
+            found++; known = "RESOLVED".equals(object.status());
+            String nameif = null;
+            for (String value : object.values()) {
+                int split = value.indexOf(": "); if (split < 0) { known = false; continue; }
+                String key = value.substring(0, split), v = value.substring(split + 2);
+                switch (key) {
+                    case "nameif" -> { nameif = v; interfaces.add(v); }
+                    case "security-level" -> {
+                        if (nameif == null) { known = false; break; }
+                        try { levels.put(nameif, Integer.parseInt(v)); } catch (NumberFormatException unknown) { levels.put(nameif, null); }
+                        nameif = null;
+                    }
+                    case "same-security-inter" -> inter = v.equals("true");
+                    case "same-security-intra" -> intra = v.equals("true");
+                    default -> known = false;
+                }
+            }
+        }
+        return new Asa(Map.copyOf(lists), Collections.unmodifiableMap(levels), Set.copyOf(interfaces), inter, intra, known && found == 1);
+    }
+    /**
+     * Cisco ASA, one packet from ingress interface {@code sourceZone} to egress interface {@code destinationZone} (nameif):
+     * <ol>
+     * <li>Same security level: denied before any access rule unless same-security-traffic permits it (A0-ASA-5).</li>
+     * <li>Inbound: the ingress interface's "in" list, then the global list, then the implicit deny (A0-ASA-1, A0-ASA-3).
+     * With neither list, higher to lower security level is allowed (A0-ASA-4a); anything else is UNKNOWN (A0-ASA-4b/4c
+     * stay UNKNOWN by the PO decision record 2026-11-14 item 4).</li>
+     * <li>Outbound: the egress interface's "out" list, then its implicit deny (A0-ASA-1, A0-ASA-2).</li>
+     * </ol>
+     * Both directions must allow: a DENIED step decides, otherwise any UNKNOWN step makes the answer UNKNOWN. Addresses are
+     * the real (untranslated) ones (A0-ASA-6); NAT and routing are not evaluated.
+     */
+    private static Decision asa(PolicySnapshot snapshot, Evaluation evaluation, Query query, Range source, Range destination, Budget budget) {
+        String in = query.sourceZone(), out = query.destinationZone(); Asa asa = evaluation.asa();
+        if (in.isEmpty() || out.isEmpty()) return new Decision("UNKNOWN", "zone or target required", null, List.of());
+        if (asa == null || !asa.known() || !asa.interfaces().contains(in) || !asa.interfaces().contains(out)
+                || asa.levels().get(in) == null || asa.levels().get(out) == null)
+            return new Decision("UNKNOWN", ASA_INTERFACE_UNKNOWN, null, List.of());
+        int levelIn = asa.levels().get(in), levelOut = asa.levels().get(out);
+        if (in.equals(out) && !asa.intra()) return new Decision("DENIED", ASA_SAME_INTRA, null, List.of());
+        if (!in.equals(out) && levelIn == levelOut && !asa.inter()) return new Decision("DENIED", ASA_SAME_INTER, null, List.of());
+        List<Map<String, Object>> steps = new ArrayList<>(); List<Map<String, Object>> undecidable = new ArrayList<>();
+        Integer inbound = asa.lists().get("in:" + in), global = asa.lists().get("global"), outbound = asa.lists().get("out:" + out);
+        Decision first;
+        if (inbound == null && global == null)
+            first = levelIn > levelOut ? new Decision("ALLOWED", ASA_LEVEL_ALLOW, null, List.of()) : new Decision("UNKNOWN", ASA_LEVEL_UNPROVEN, null, List.of());
+        else first = list(snapshot, evaluation, query, source, destination, budget, l -> Objects.equals(l, inbound) || Objects.equals(l, global));
+        Decision second = outbound == null ? null : list(snapshot, evaluation, query, source, destination, budget, l -> l == outbound);
+        for (Decision step : second == null ? List.of(first) : List.of(first, second)) {
+            var row = new LinkedHashMap<String, Object>();
+            row.put("number", steps.size() + 1); row.put("verdict", step.verdict()); row.put("lookupReason", step.reason());
+            row.put("decidingRule", step.rule()); row.put("undecidableRules", step.undecidable()); steps.add(row);
+            undecidable.addAll(step.undecidable());
+            if (undecidable.size() > 128) throw new Unknown("analysis budget");
+        }
+        if (second == null) return new Decision(first.verdict(), first.reason(), first.rule(), first.undecidable(), List.copyOf(steps));
+        for (Decision step : List.of(first, second))
+            if (step.verdict().equals("DENIED")) return new Decision("DENIED", step.reason(), step.rule(), step.undecidable(), List.copyOf(steps));
+        boolean unknown = first.verdict().equals("UNKNOWN") || second.verdict().equals("UNKNOWN");
+        return new Decision(unknown ? "UNKNOWN" : "ALLOWED", ASA_RESULTS, null, List.copyOf(undecidable), List.copyOf(steps));
+    }
+    /** First match over the given access lists in stored order; no match and nothing undecidable is the implicit deny. */
+    private static Decision list(PolicySnapshot snapshot, Evaluation evaluation, Query query, Range source, Range destination, Budget budget,
+            java.util.function.IntPredicate layers) {
+        Decision decision = decide(snapshot, evaluation.entries(), query, source, destination, budget, null, layers, 0);
+        if (decision.rule() == null && decision.undecidable().isEmpty()) return new Decision("DENIED", ASA_IMPLICIT_DENY, null, List.of());
+        return decision;
     }
     private static boolean covers(Selector selector, String family, Range range, Budget budget) {
         return contains(selector, new Selector(false, Map.of(family, List.of(range))), budget);
