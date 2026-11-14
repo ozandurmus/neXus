@@ -99,6 +99,10 @@ class AuditCoverageCompletenessTest {
             Map.entry("zone_matrix_version", "V216: every draft change and publish appends a zone_matrix_revision row in the "
                     + "same transaction, captured by tr_audit_zone_matrix_revision (ZONE_MATRIX_CONTRACT 3.5); the "
                     + "version row itself holds the full content, which the audit log must never carry"),
+            Map.entry("cutover_assessment_flow", "V217: evaluated flow tuples of one assessment, written only inside the audited "
+                    + "cutover_assessment insert (trg_audit_cutover_assessment, ACI_SEGMENTATION_SUPPORT_DESIGN section 4) and removed "
+                    + "by its cascade; fn_guard_cutover_assessment_flow refuses updates and any write outside the audited action; "
+                    + "flow addresses are content the audit log must never carry"),
             Map.entry("ha_pair_identity", "V209: a failover pair's unit serials recorded and compared by the inventory job from its own reads; the jobs row is audited"),
             Map.entry("cluster_member_diff", "V52: server-side recomputed summary of collected texts"),
             Map.entry("pseudonym_registry", "V53: derived AIView pseudonym claims, keyed by HMAC"),

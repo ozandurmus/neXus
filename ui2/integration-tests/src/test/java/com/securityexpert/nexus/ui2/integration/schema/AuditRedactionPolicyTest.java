@@ -60,6 +60,15 @@ class AuditRedactionPolicyTest {
             "artefact_retention_ledger.artefact_id", "artefact_retention_ledger.event",
             "artefact_retention_ledger.ledger_id", "artefact_retention_ledger.occurred_at",
             "artefact_retention_ledger.retention_tier",
+            // cutover_segment, cutover_assessment (V217): name, blocks, peer_blocks and summary are redacted in the policy
+            "cutover_segment.created_at", "cutover_segment.created_by", "cutover_segment.revision",
+            "cutover_segment.segment_id", "cutover_segment.updated_at", "cutover_segment.updated_by",
+            "cutover_assessment.actor", "cutover_assessment.assessment_id", "cutover_assessment.created_at",
+            "cutover_assessment.engine_version", "cutover_assessment.old_collected_at", "cutover_assessment.old_policy_id",
+            "cutover_assessment.readiness", "cutover_assessment.segment_id", "cutover_assessment.segment_revision",
+            "cutover_assessment.status", "cutover_assessment.target_collected_at", "cutover_assessment.target_device_id",
+            "cutover_assessment.target_policy_id", "cutover_assessment.target_source",
+            "cutover_assessment.topology_snapshot_id",
             // report_run (V190 Reports R1): template, format, projection, parameters (date range, framework), per-plane
             // evidence times and coverage counts, artefact id, actor fingerprint -- no identity value
             "report_run.artefact_id", "report_run.data_as_of_json", "report_run.error_code", "report_run.expires_at",
@@ -675,6 +684,8 @@ class AuditRedactionPolicyTest {
             2, "configuration_notification.summary", 2, "configuration_run_deviation_entry.context",
             2, "credential_references.backend_pointer", 2, "credentials.display_name", 2,
             "credentials.encrypted_passphrase", 1, "credentials.encrypted_secret", 1,
+            "cutover_assessment.summary", 2, "cutover_segment.blocks", 2, "cutover_segment.name", 2,
+            "cutover_segment.peer_blocks", 2,
             "credentials.username", 2, "device_configuration_index.context", 2,
             "device_configuration_override.context", 2,
             "device_configuration_override.element_path", 2,
