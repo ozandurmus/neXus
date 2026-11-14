@@ -33,8 +33,12 @@ import java.util.function.Function;
  * override of a local (unmanaged) firewall decides; without it, or for a Panorama snapshot (the firewall level, which
  * takes precedence, is not collected, A0 §4c), the hop is UNKNOWN. A vendor default is never assumed.</li>
  * </ul>
- * NAT evaluation is {@link HopNatEvaluator}; the per-hop order of NAT and access is {@link #checkPoint} and
- * {@link #paloAlto}.
+ * NAT evaluation is {@link HopNatEvaluator}; the per-hop order of NAT and access is {@link #checkPoint},
+ * {@link #paloAlto} and {@link Prepared#asa}.
+ *
+ * <p>Cisco ASA (ASA policy step 8): the snapshot is the device's own configuration, so there is no device view (no
+ * install-on or target); the zones are the ingress and egress interface {@code nameif}s and {@link PolicyLookup} runs
+ * the ASA interface chain (same-security check, inbound list, global list, implicit deny, outbound list).</p>
  */
 public final class HopPolicyEvaluator {
     private HopPolicyEvaluator() {}
@@ -62,6 +66,14 @@ public final class HopPolicyEvaluator {
     public static final String NAT_UNKNOWN = "NAT_UNKNOWN";
     public static final String CP_ACCESS_NAT_ORDER_UNKNOWN = "CP_ACCESS_NAT_ORDER_UNKNOWN";
     public static final String POST_NAT_EGRESS_ZONE_UNKNOWN = "POST_NAT_EGRESS_ZONE_UNKNOWN";
+    // Cisco ASA (detail carries the PolicyLookup reason).
+    public static final String ASA_IMPLICIT_DENY = "ASA_IMPLICIT_DENY";
+    public static final String ASA_SECURITY_LEVEL_DEFAULT = "ASA_SECURITY_LEVEL_DEFAULT";
+    public static final String ASA_SECURITY_LEVEL_UNPROVEN = "ASA_SECURITY_LEVEL_UNPROVEN";
+    public static final String ASA_SAME_SECURITY_INTER_DENIED = "ASA_SAME_SECURITY_INTER_DENIED";
+    public static final String ASA_SAME_SECURITY_INTRA_DENIED = "ASA_SAME_SECURITY_INTRA_DENIED";
+    public static final String ASA_INTERFACE_UNKNOWN = "ASA_INTERFACE_UNKNOWN";
+    public static final String ASA_ACCESS_LIST_RESULTS = "ASA_ACCESS_LIST_RESULTS";
     // Per-rule reasons the device view adds to undecidable rules.
     public static final String INSTALL_ON_UNPROVEN = "INSTALL_ON_UNPROVEN";
     public static final String PAN_TARGET_UNPROVEN = "PAN_TARGET_UNPROVEN";
@@ -200,7 +212,9 @@ public final class HopPolicyEvaluator {
         private Prepared(PolicySnapshot snapshot, Device device, Binding binding, int workLimit) {
             this.snapshot = snapshot; this.device = device; this.binding = binding; this.workLimit = workLimit;
             this.vendor = snapshot.metadata().vendor();
-            this.view = Set.of("CP", "PAN").contains(vendor) ? view(snapshot, device, binding) : null;
+            this.view = Set.of("CP", "PAN").contains(vendor) ? view(snapshot, device, binding)
+                // The ASA snapshot is the device's own configuration: nothing to select per device.
+                : vendor.equals("ASA") ? new View(snapshot, Map.of(), Set.of(), true) : null;
             this.lookup = view == null ? null : PolicyLookup.prepare(view.snapshot(), workLimit);
         }
         public PolicySnapshot snapshot() { return snapshot; }
@@ -284,6 +298,24 @@ public final class HopPolicyEvaluator {
             return new Hop(security.verdict(), security.reason(), nat, security, null, egress, caveats, notes);
         }
 
+        /**
+         * Cisco ASA hop (§5 order for ASA, design 5.4 item 3): access rules match the real addresses (A0-ASA-6) with the
+         * ingress and egress interface nameifs as zones. NAT translation itself is not evaluated (A0-ASA-18): when a NAT
+         * rule may touch the tuple the hop is UNKNOWN ({@link #NAT_UNKNOWN}) -- an un-translated destination would change
+         * what the access rules see and where the packet is routed -- and the access evaluation on the arriving tuple is
+         * kept as context only.
+         */
+        public Hop asa(Tuple tuple, String ingressZone, String egressZone) {
+            if (!vendor.equals("ASA")) return new Hop(UNKNOWN, UNSUPPORTED_VENDOR, null, null, null, null, List.of(), List.of());
+            var nat = nat(tuple, ingressZone, egressZone, null);
+            Verdict security = security(tuple, ingressZone, egressZone);
+            List<String> notes = new ArrayList<>(nat.notes()), caveats = new ArrayList<>(nat.caveats());
+            caveats.addAll(security.caveats()); notes.addAll(security.notes());
+            if (nat.status().equals(HopNatEvaluator.UNKNOWN))
+                return new Hop(UNKNOWN, NAT_UNKNOWN, nat, security, null, egressZone, caveats, notes);
+            return new Hop(security.verdict(), security.reason(), nat, security, null, egressZone, caveats, notes);
+        }
+
         /** UNKNOWN reason when the snapshot is not proven to be this device's policy, else {@code null}. */
         private String targetGate(List<String> caveats) {
             var targets = snapshot.metadata().targets().stream()
@@ -334,6 +366,13 @@ public final class HopPolicyEvaluator {
             case "target context unproven" -> TARGET_CONTEXT_UNPROVEN;
             case "snapshot collection incomplete" -> SNAPSHOT_INCOMPLETE;
             case "analysis budget" -> ANALYSIS_BUDGET;
+            case PolicyLookup.ASA_IMPLICIT_DENY -> ASA_IMPLICIT_DENY;
+            case PolicyLookup.ASA_LEVEL_ALLOW -> ASA_SECURITY_LEVEL_DEFAULT;
+            case PolicyLookup.ASA_LEVEL_UNPROVEN -> ASA_SECURITY_LEVEL_UNPROVEN;
+            case PolicyLookup.ASA_SAME_INTER -> ASA_SAME_SECURITY_INTER_DENIED;
+            case PolicyLookup.ASA_SAME_INTRA -> ASA_SAME_SECURITY_INTRA_DENIED;
+            case PolicyLookup.ASA_INTERFACE_UNKNOWN -> ASA_INTERFACE_UNKNOWN;
+            case PolicyLookup.ASA_RESULTS -> ASA_ACCESS_LIST_RESULTS;
             default -> LOOKUP_UNKNOWN;
         };
     }

@@ -62,7 +62,7 @@ public final class LocalFirewallPolicyService {
      * device whose artefact cannot be read or parsed is left out of the list (logged as a count, never with a name), so
      * one unreadable configuration never hides every other policy.
      */
-    List<PolicySnapshot> asaSnapshots() {
+    public List<PolicySnapshot> asaSnapshots() {
         var rows = tx.inTransaction(db -> db.fetch("select distinct on (d.device_id) d.device_id, r.collected_at, "
             + "r.artefact_ref, a.wrapped_data_key, c.compression from devices d "
             + "join device_configuration_run r on r.device_id = d.device_id and r.read_kind = 'show_configuration' "

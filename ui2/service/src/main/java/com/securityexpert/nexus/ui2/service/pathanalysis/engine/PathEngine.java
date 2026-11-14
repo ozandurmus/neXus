@@ -56,7 +56,9 @@ import com.securityexpert.nexus.ui2.service.policy.HopPolicyEvaluator.Tuple;
  * the hop is UNKNOWN ({@code CP_ROUTE_AFTER_NAT_UNKNOWN}: routing relative to NAT is not collected). Palo Alto: ingress
  * zone of the ingress interface; route lookup on the original destination gives the provisional egress zone; NAT first
  * match; after a destination translation a second route lookup (the A2 callback) gives the post-NAT zone and forwards;
- * security on the pre-NAT addresses with the post-NAT zone. The translated tuple is handed to the next unit.</p>
+ * security on the pre-NAT addresses with the post-NAT zone. Cisco ASA: route lookup on the destination gives the egress
+ * interface; access on the real addresses with the ingress and egress nameifs (A0-ASA-6); a NAT rule that may touch the
+ * tuple makes the hop UNKNOWN (translation not evaluated, A0-ASA-18). The translated tuple is handed to the next unit.</p>
  *
  * <p><b>Verdict lattice (§5).</b> An UNKNOWN hop taints its branch; tracing continues and downstream hops are
  * {@code CONDITIONAL}. A branch is DENIED only when the blocking hop and every hop before it are decided; DELIVERED with
@@ -369,10 +371,11 @@ public final class PathEngine {
             }
             boolean checkPoint = TopologyInput.VENDOR_CHECK_POINT.equals(node.vendor());
             boolean paloAlto = TopologyInput.VENDOR_PALO_ALTO.equals(node.vendor());
+            boolean asa = TopologyInput.VENDOR_CISCO_ASA.equals(node.vendor());
             HopPolicySource.HopPolicy policy = policy(node);
             Optional<HopPolicySource.Bound> bound = policy instanceof HopPolicySource.Bound b ? Optional.of(b) : Optional.empty();
             String unboundReason = policy instanceof HopPolicySource.Unbound u ? u.reason() : null;
-            if (!checkPoint && !paloAlto) {
+            if (!checkPoint && !paloAlto && !asa) {
                 unboundReason = UNSUPPORTED_NODE_VENDOR;
                 bound = Optional.empty();
             }
@@ -381,6 +384,9 @@ public final class PathEngine {
 
             if (bound.isPresent() && paloAlto) {
                 return paloAlto(ctx, ingressZone.orElse(null));
+            }
+            if (bound.isPresent() && asa) {
+                return asa(ctx, ingressZone.orElse(null));
             }
             HopPolicyEvaluator.Hop hop = null;
             String failure = unboundReason;
@@ -439,6 +445,40 @@ public final class PathEngine {
                     ecmp = second.ecmp();
                 }
                 out.addAll(choices(ctx, hop, failure, translated, forward, taints, zone, ecmp));
+            }
+            return out;
+        }
+
+        /**
+         * Cisco ASA (ASA policy step 8): one evaluation per distinct egress (nameif zone, interface) of the route lookup on
+         * the destination; the ingress and egress nameifs are the lookup's zones. The NAT evaluator only proves that no
+         * NAT rule touches the tuple (else the hop is UNKNOWN), so the tuple is never translated here.
+         */
+        private List<Choice> asa(Context ctx, String ingressZone) {
+            Node node = ctx.node();
+            Tuple tuple = ctx.tuple();
+            RouteLookup.Result first = RouteLookup.lookup(node, host(tuple.destination()));
+            Map<List<String>, List<InventoryRoute>> groups = new LinkedHashMap<>();
+            for (InventoryRoute route : first.routes()) {
+                String zone = egressZone(node, route, host(tuple.destination())).orElse(null);
+                groups.computeIfAbsent(java.util.Arrays.asList(zone, route.interfaceName().orElse(null)), k -> new ArrayList<>())
+                        .add(route);
+            }
+            if (groups.isEmpty()) {
+                groups.put(java.util.Arrays.asList(null, null), List.of());
+            }
+            List<Choice> out = new ArrayList<>();
+            for (var group : groups.entrySet()) {
+                String zone = group.getKey().get(0);
+                HopPolicyEvaluator.Hop hop = null;
+                String failure = null;
+                try {
+                    hop = ctx.bound().orElseThrow().prepared().asa(tuple, ingressZone, zone);
+                } catch (RuntimeException e) {
+                    failure = POLICY_EVALUATION_FAILED;
+                }
+                out.addAll(choices(ctx, hop, failure, tuple, group.getValue(), new ArrayList<>(first.taints()), zone,
+                        first.ecmp()));
             }
             return out;
         }

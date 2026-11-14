@@ -125,8 +125,8 @@ public final class TopologyBuilder {
 
         TopologyGraph build() {
             List<TopologyInput.DeviceFacts> devices = input.devices().stream()
-                    .filter(d -> TopologyInput.VENDOR_CHECK_POINT.equals(d.vendor())
-                            || TopologyInput.VENDOR_PALO_ALTO.equals(d.vendor()))
+                    .filter(d -> TopologyInput.supportedVendor(d.vendor()))
+                    .map(this::withNameifs)
                     .sorted(Comparator.comparing(TopologyInput.DeviceFacts::deviceId)).toList();
             int withoutInventory = (int) devices.stream().filter(d -> d.latestRun().isEmpty()).count();
 
@@ -162,6 +162,38 @@ public final class TopologyBuilder {
                     attachments.size(), conflicts.size(), applied, overrideResults.size() - applied);
             return new TopologyGraph(input.snapshotId(), input.builtAt(), nodes, segments, attachments, conflicts,
                     overrideResults, edges, counts, fingerprints(devices));
+        }
+
+        /**
+         * Cisco ASA: the inventory names interfaces by their configured name ({@code show ip address}), while routes,
+         * access groups and the policy name them by {@code nameif}. An interface the device's stored configuration
+         * table maps is renamed to its nameif, and the nameif is its zone (the ASA policy lookup's interface key). An
+         * interface the table does not name, or a device without a table, keeps its inventory name and no zone: its
+         * routes then name no interface of the node and the hop stays UNKNOWN, never a guessed match.
+         */
+        private TopologyInput.DeviceFacts withNameifs(TopologyInput.DeviceFacts device) {
+            Map<String, String> nameifs = input.interfaceNames().get(device.deviceId());
+            if (!TopologyInput.VENDOR_CISCO_ASA.equals(device.vendor()) || nameifs == null || nameifs.isEmpty()
+                    || device.latestRun().isEmpty()) {
+                return device;
+            }
+            InventoryRun run = device.latestRun().get();
+            List<InventoryContext> contexts = new ArrayList<>();
+            for (InventoryContext context : run.contexts()) {
+                List<InventoryInterface> interfaces = new ArrayList<>();
+                for (InventoryInterface i : context.interfaces()) {
+                    String nameif = nameifs.get(i.name());
+                    interfaces.add(nameif == null ? i : new InventoryInterface(i.interfaceId(), nameif, i.parent(), i.kind(),
+                            i.state(), i.addresses(), i.vlanId(), i.macAddress(), Optional.of(nameif), i.routingContext(),
+                            i.evidenceGrade()));
+                }
+                contexts.add(new InventoryContext(context.context(), interfaces, context.routes()));
+            }
+            InventoryRun renamed = new InventoryRun(run.runId(), run.deviceId(), run.jobId(), run.collectedAt(),
+                    run.contextCount(), contexts, run.haFacts(), run.virtualSystems(), run.gridMembers(), run.gridSummary(),
+                    run.notCollected());
+            return new TopologyInput.DeviceFacts(device.deviceId(), device.vendor(), device.hostname(),
+                    device.clusterMemberRef(), Optional.of(renamed));
         }
 
         // ---- step 1/2: units, nodes, candidate attachments -------------------------------------------------------

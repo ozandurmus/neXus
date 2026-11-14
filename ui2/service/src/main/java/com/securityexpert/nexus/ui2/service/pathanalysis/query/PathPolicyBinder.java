@@ -29,7 +29,8 @@ import com.securityexpert.nexus.ui2.service.policy.HopPolicyEvaluator;
  * a Palo Alto vsys id is the same vsys name the policy target carries (exact string equality, nothing else); a Check
  * Point VSID has no proven relation to the virtual-system reference a VS policy target carries, so such a unit is
  * {@code POLICY_CONTEXT_UNPROVEN} (AGENTS.md identity law: no invented equivalence). A Panorama target listed without
- * a vsys ({@code ''}) is not equated with {@code vsys1} either: that relation is unmeasured.</p>
+ * a vsys ({@code ''}) is not equated with {@code vsys1} either: that relation is unmeasured. A Cisco ASA is single
+ * context (the collector refuses multiple-context units, A0-ASA-19), so only {@code physical} maps, to {@code ''}.</p>
  *
  * <p>Staleness (§5): a snapshot collected more than {@link #MAX_POLICY_AGE} before the query, with an unreadable
  * collection time, or whose matching target is {@code OUT_OF_SYNC}, is bound {@code stale}: the hop is
@@ -91,7 +92,8 @@ public final class PathPolicyBinder {
             return new HopPolicySource.Unbound(PathReasons.POLICY_BINDING_UNPROVEN);
         }
         String policyVendor = TopologyInput.VENDOR_CHECK_POINT.equals(node.vendor()) ? "CP"
-                : TopologyInput.VENDOR_PALO_ALTO.equals(node.vendor()) ? "PAN" : null;
+                : TopologyInput.VENDOR_PALO_ALTO.equals(node.vendor()) ? "PAN"
+                : TopologyInput.VENDOR_CISCO_ASA.equals(node.vendor()) ? "ASA" : null;
         if (policyVendor == null) {
             return new HopPolicySource.Unbound(PathReasons.UNSUPPORTED_NODE_VENDOR);
         }
