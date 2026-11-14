@@ -1,50 +1,60 @@
 # neXus — Current State
 
-Hot checkpoint reconciled on 2026-11-10 against `origin/main` at `0d13c450`.
+Hot checkpoint reconciled on 2026-11-14 against `origin/main` at `e70dbdf1`.
 `project/QUEUE.md` and its tool-managed data own delivery state; repository
 source proves implementation, not the current deployment or device health.
 
 ## Product today
 
-UI2 is the maintained Java/React product; repository schema is **V197**.
+UI2 is the maintained Java/React product; repository schema on main is **V211**.
 Inventory, configuration, compliance, encrypted backups, Operations, Policy,
-Packet Analysis and device system logs use masked `aiview` projections. Restore
-from the UI remains disabled. Check Point policy collection is chunked by
-domain with incremental reuse, bounded history and rule hits; scheduled runs
-are changed-only on every domain (V115–V126, V130/V132, V163). Management
-policy is configured intent, never proof of gateway enforcement. NSPM wave 1
-hygiene and the lifecycle catalog (V144) landed; unresolved objects/hits stay
-UNKNOWN and missing catalog matches do not invent dates. The device header's
-"Identity verified" badge follows the real pinned key or certificate comparison
-(V165). Authority: [NSPM decision](docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md).
+lifecycle and security checks, Packet Analysis and device system logs use
+masked `aiview` projections. Restore from the UI remains disabled. Sign-in uses
+Active Directory through a service bind (V204/V205). Check Point policy
+collection is chunked by domain and changed-only on schedule; a partial
+collection never replaces a complete snapshot. Management policy is configured
+intent, never proof of gateway enforcement. License, contract and Live Patch
+reads run fleet-wide, and advisories are matched from a fixed-source intake
+through the proxy. Scheduled jobs run again since 2026-11-10, each family with
+an audited switch (V203). Cisco ASA and FortiGate have identity and HA facts
+only (V209/V210). Authority: [NSPM decision](docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md).
 
 ## Active build
 
-`NXS-LOCAL-0383` — **IN_PROGRESS** (started 2026-11-10): enterprise stack
-alignment phase 0 (Spring Security sign-in via ADFS SAML with LDAP and a
-break-glass account, JSON logs, monitoring endpoints, file-based secrets, SAST
-in CI); nothing implemented yet. Phase 1 waits for the PO's access-request
-flows. Authority: [decision](docs/design/PO_DECISION_RECORD_2026_11_10_ENTERPRISE_STACK_ALIGNMENT.md).
-Proposed NEXT (PO to confirm): finish the failover pilot.
+`NXS-LOCAL-0391` — **IN_PROGRESS** (started 2026-11-13): delivering the
+release queue below, one PR per lane after a live migration dry run.
+`NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory
+sign-in landed; SAML, JSON logs and monitoring endpoints are not built.
+**Contradiction, not reconciled here:** `project/java_product_plan.json` names
+`recovery_offhost_key_custody` as next (2026-11-14), `project/roadmap.json`
+still names Overview acceptance.
 
-Recorded since 2026-10-20 (detail in `project/build_history.json`):
+In the release queue (not live; migration numbers follow queue order, Flyway
+runs without outOfOrder):
 
-- `NXS-LOCAL-0382` REAL_ENV_VALIDATED — UBI9 bases (Java 21.0.13), CVE baseline, ship/CI speed; HOST-A k3s v1.36.6, kernel -43 with its own AppArmor profile, rwsafe removed, registry pruned; e2e 80/80.
-- `NXS-LOCAL-0381` AUTOMATED_VALIDATED — CP management facts: identity panel, hotfix levels (V195), MDS HA ACTIVE (V194/V196), per-Domain placement (V197, no live check yet), VSX VIP prefixes (54 -> 30).
-- `NXS-LOCAL-0380` AUTOMATED_VALIDATED — policy credibility and hygiene (V191/V192; earlier-rule UNKNOWN 60,217 -> 56,085).
-- `NXS-LOCAL-0379` AUTOMATED_VALIDATED — UI review integration, executive home, Reports R1 (REAL_ENV_VALIDATED), security fixes, masked notifications (V193).
-- `NXS-LOCAL-0378` REAL_ENV_VALIDATED — path analysis phase A (V184–V188; 20/20 masked queries, first A6 `MATCH`).
-- `NXS-LOCAL-0377` AUTOMATED_VALIDATED — backup deviations and size alerts (V176/V180/V189), local-log diagnostics (V181–V183).
-- `NXS-LOCAL-0376` AUTOMATED_VALIDATED — failover pilot P0 closure; first CP pilot run 2026-10-21 stopped before the up step.
-- `NXS-LOCAL-0375` AUTOMATED_VALIDATED — Change feed, System health, device Logs, Device events, `logmask-v4`.
-- `NXS-LOCAL-0374` AUTOMATED_VALIDATED — system logs phase B; scheduled collection live (97 devices); spike cap open.
+- Batch 1: ASA readiness (V212), V208 NULL-hole fix and integration CI gate (V213), Check Point advisories (V214), zone matrix step 1 (V216).
+- Batch 2: ACI step 1 (V217), API latency (V218), discovery empty body answers 400, ASA output shaping.
+- Batch 3: disk alert, recertification revision 2, probe/e2e session isolation, release e2e fail-fast with worker manifest sync; npm TLS.
+- Batch 4: zone matrix step 2 (V220) and its screen, Backups batched jobs read, ASA wiring. Lifecycle catalog (V219) pending.
 
-Failover execution plan PRs 1–10 landed (V133–V143): persisted mutation
-switch, request-bound approvals, durable dispatch intents, fenced
-reconciliation. **AUTOMATED_VALIDATED, not REAL_ENV_VALIDATED; no completed
-real failover is recorded.** The first Check Point pilot run (2026-10-21)
-stopped before the up step and was fixed (`NXS-LOCAL-0376`). The mutation switch in the live
-manifest authorizes nothing by itself: typed request, approval, fresh
+Open PO decisions: product name; narrowing the ASA identity ACEs; the DB
+NetworkPolicy contract conflict; the off-host recovery target; support-bundle
+design (in progress).
+
+Recorded since 2026-11-10 (detail in `project/build_history.json`):
+
+- `NXS-LOCAL-0390` COMPLETE — zone matrix contract FROZEN; ACI design and recertification contract DRAFT; topology sources and ASA/FortiGate policy designs; backlog truth pass (141 items); GOV.ORCH.9 amendment.
+- `NXS-LOCAL-0389` AUTOMATED_VALIDATED — ASA/FortiGate failover phase 0 (V209), ASA readiness reads measured once (V210).
+- `NXS-LOCAL-0388` AUTOMATED_VALIDATED — rule object usage (FROZEN), shadowing under the A0 amendment, legacy hygiene mode (not wired), PAN change actor (V206–V208), ASA policy parser.
+- `NXS-LOCAL-0387` AUTOMATED_VALIDATED — navigation and Administration redesign, Overview attention list, health light, error boundaries, nightly e2e guard.
+- `NXS-LOCAL-0386` AUTOMATED_VALIDATED — /opt/nexus deploy tree (live), job switches (V203), credential canary (V207), frontend fast path, logmask-v6.
+- `NXS-LOCAL-0385` AUTOMATED_VALIDATED — directory sign-in with TLS, display-name and role-refresh fixes; sign-in in live use.
+- `NXS-LOCAL-0384` REAL_ENV_VALIDATED — fleet-wide lifecycle reads (V200), advisory intake and matching live (V204/V205).
+- Earlier: `NXS-LOCAL-0374`–`0382`.
+
+Failover execution plan PRs 1–10 landed (V133–V143). The Check Point and Palo
+Alto pilot runs finished DONE/SUCCEEDED on 2026-10-22 (`failover_run`). The
+mutation switch authorizes nothing by itself: typed request, approval, fresh
 readiness, one fleet mutation and uncertain-outcome fencing still apply.
 Authority: [2026-10-06 decision](docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md),
 [execution plan](docs/design/FAILOVER_EXECUTION_PLAN.md).
@@ -60,9 +70,8 @@ preview e2e checks the candidate with masked evidence and fails on page/API 4xx.
 Release also applies the committed manifests of the policy, service,
 configuration and compliance modules (the worker is still patched at run time),
 and a ship retries when the image build failed only on a base-image layer
-download. **Development mode** (PO 2026-11-03): every scheduled ui2-service
-task is off (`UI2_SCHEDULING_ENABLED=false`) except the system-log collection,
-which has its own switch. Device polling/admission windows begin at **00:00 / 06:00 / 12:00 / 18:00
+download. Development mode ended on 2026-11-10: the manifest carries
+`UI2_SCHEDULING_ENABLED=true` and each job family has its own audited switch. Device polling/admission windows begin at **00:00 / 06:00 / 12:00 / 18:00
 Europe/Istanbul** (default 60-minute windows). Superseded in part (PO
 2026-10-20, [record](docs/design/PO_DECISION_RECORD_2026_10_20_ADMIN_MANUAL_JOBS_AND_BUSINESS_HOURS.md)):
 manual jobs of `security_admin`/`operation_admin` are never held to the windows
@@ -108,6 +117,6 @@ Authority: [contract](docs/design/DATA_SANITIZER_CONTRACT.md).
 - CVE exceptions remain time-boxed in `security/baseline.yaml`; the remaining
   UBI base entries review **2026-11-14**, the rest **2026-12-31**. glibc waits
   for a Red Hat fix (`ubi_base_glibc_fix_pending`). Acceptance is not remediation.
-- First attended failover trial, full pod migration, retention-policy
-  verification and capacity monitoring remain engineering-owner follow-ups.
+- Full pod migration, retention-policy verification and capacity monitoring
+  remain engineering-owner follow-ups.
   This reconciliation performed no deployment or live validation.

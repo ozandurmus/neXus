@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0383 · Track: PCP.x · Generated: 2026-11-14T08:47:47Z
+Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-14T15:22:09Z
 
 ## Now
-- NXS-LOCAL-0383 — Enterprise stack alignment, phase 0: Spring Security sign-in, JSON logs, monitoring, secrets, scans (in_progress)
+- NXS-LOCAL-0391 — Release queue: ASA readiness, integration gate, CP advisories, zone matrix, ACI step 1, API latency, Backups batch (in_progress)
 ## Next
 - overview_acceptance_and_member_specific_tuning — Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -150,8 +150,8 @@ Build: NXS-LOCAL-0383 · Track: PCP.x · Generated: 2026-11-14T08:47:47Z
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 - po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the direct
 ## Recent builds
-- NXS-LOCAL-0383 (in_progress)
-- NXS-LOCAL-0382 (real_env_validated)
-- NXS-LOCAL-0381 (automated_validated)
-- NXS-LOCAL-0380 (automated_validated)
-- NXS-LOCAL-0379 (automated_validated)
+- NXS-LOCAL-0391 (in_progress)
+- NXS-LOCAL-0390 (complete)
+- NXS-LOCAL-0389 (automated_validated)
+- NXS-LOCAL-0388 (automated_validated)
+- NXS-LOCAL-0387 (automated_validated)
