@@ -107,3 +107,30 @@ reserve, and every budget other than the two named in §3.
   §2.4, §2.5 — the row this amends, the archive pattern it copies, the budgets
   it changes, and the render-equivalence rule it inherits.
 - `AGENTS.md` — project-state update rule, authority hierarchy.
+
+## Amendment A-2026-11-14 — cold shards of the reserve
+
+**Status: AGENT-RECORDED under the PO's 2026-11-03 "decide routine, record the
+amendment" standing instruction; for PO-session ratification with the
+backlog-truth branch `docs/backlog-truth-1114`.**
+
+Finding: on 2026-11-14 the reserve held 179 rows at 61,395 of 61,440 bytes.
+The backlog-truth pass closes dozens of stale open items; even with every
+reserve title shortened, the closed rows cannot fit. §3 forbids raising the
+ceiling (B-4), so this amendment applies the GOV.ORCH.8 §2.2 archive pattern
+one level down, exactly as B-3 applied it to the backlog:
+
+- **C-1.** Older reserve rows move, row schema and content unchanged, to frozen
+  cold shards `project/archive/backlog_terminal_<label>.json` (read before the hot reserve, so the combined row order is unchanged; first shard:
+  `backlog_terminal_2026.json`), through the single write path
+  `tools/delivery/project_queue.py rotate-backlog-terminal --into <label>
+  --keep <N>`, which keeps the newest N rows in the hot reserve.
+- **C-2.** Every reader folds the shards back in: `project_queue.py` (load and
+  write; a shard row keeps its shard, new terminal rows go to the hot reserve,
+  a reopened shard row moves to the active set), `tools/delivery/
+  project_plan.py`, and the Java `ProjectPlanReader` (rows counted, shard
+  digests in the revision). The image copies `backlog_terminal*.json`. No
+  count changes (B-6).
+- **C-3.** Each shard has the reserve's 60 KiB budget, enforced in
+  `tools/tests/test_project_files_budget.py`. The hot reserve keeps its
+  60 KiB budget unchanged.

@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.service.projectplan;
 
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -155,6 +156,15 @@ public final class ProjectPlanReader {
                 backlogItems.add(new LinkedHashMap<>(asMap(row)));
             }
         }
+        // Cold shards hold the reserve's older rows, so they come before it.
+        List<FileLoad> coldTerminalLoads = loadColdBacklogTerminal();
+        for (FileLoad shard : coldTerminalLoads) {
+            for (Object row : asList(shard.value().get("items"))) {
+                if (row instanceof Map<?, ?>) {
+                    backlogItems.add(new LinkedHashMap<>(asMap(row)));
+                }
+            }
+        }
         for (Object row : asList(backlogTerminal.get("items"))) {
             if (row instanceof Map<?, ?>) {
                 backlogItems.add(new LinkedHashMap<>(asMap(row)));
@@ -223,7 +233,9 @@ public final class ProjectPlanReader {
         int archivedBuildCount = loadArchivedBuilds().size();
         Map<String, Object> sourceMetadata = new LinkedHashMap<>();
         sourceMetadata.put("revision", sha256(Stream.of(roadmapLoad, registryLoad, backlogLoad,
-                backlogTerminalLoad, historyLoad, productLoad).map(FileLoad::digest).collect(Collectors.joining(":")) + ":" + archivedBuildCount));
+                backlogTerminalLoad, historyLoad, productLoad).map(FileLoad::digest).collect(Collectors.joining(":"))
+                + coldTerminalLoads.stream().map(load -> ":" + load.digest()).collect(Collectors.joining())
+                + ":" + archivedBuildCount));
         sourceMetadata.put("reviewed_at", product.get("reviewed_at"));
         sourceMetadata.put("reviewed_current_build", product.get("reviewed_current_build"));
         sourceMetadata.put("freshness", freshness);
@@ -282,6 +294,29 @@ public final class ProjectPlanReader {
         } catch (IOException | RuntimeException e) {
             return new FileLoad(Map.of(), false, "UNAVAILABLE");
         }
+    }
+
+    /**
+     * GOV.ORCH.9 amendment 2026-11-14: frozen cold shards of the terminal
+     * reserve, {@code project/archive/backlog_terminal_*.json}, in name order.
+     * Their rows count exactly like reserve rows. An absent archive directory
+     * or no shard is not a warning; an unreadable shard is skipped.
+     */
+    private List<FileLoad> loadColdBacklogTerminal() {
+        Path archive = projectDirectory.resolve("archive");
+        List<Path> shards = new ArrayList<>();
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(archive, "backlog_terminal_*.json")) {
+            for (Path path : stream) shards.add(path);
+        } catch (IOException | RuntimeException e) {
+            return List.of();
+        }
+        shards.sort(Comparator.comparing(path -> path.getFileName().toString()));
+        List<FileLoad> loads = new ArrayList<>();
+        for (Path path : shards) {
+            FileLoad load = loadObject("archive/" + path.getFileName());
+            if (load.present()) loads.add(load);
+        }
+        return loads;
     }
 
     private static String sha256(String value) {
