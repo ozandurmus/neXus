@@ -37,7 +37,7 @@ Inspection of `deploy/ui2/` and `ui2/service/src/main/resources/db/migration/V1_
 
 ### 1.2 Runtime Modules and Deployment Mapping
 
-Per `docs/design/MODULE_POD_RUNTIME_CONTRACT.md` (`FROZEN`), `V128__module_endpoint_runtime.sql`, `V154__packet_analysis_cases_captures_runs.sql`, and `V207__job_module_Routing_and_worker_claim_filter.sql` (`ui2_job_module(capability)`), the runtime architecture is partitioned into the following modules:
+Per `docs/design/MODULE_POD_RUNTIME_CONTRACT.md` (`FROZEN`), `V128__module_endpoint_runtime.sql`, and `V154__packet_analysis_shell.sql` (both define `ui2_job_module(capability)`), the runtime architecture is partitioned into the following modules:
 
 | Runtime Module ID | K8s Workload (`deploy/ui2/`) | Main Entrypoint / Package Root | Primary Responsibilities |
 | :--- | :--- | :--- | :--- |
@@ -662,19 +662,21 @@ Every step is additive or switches **one deployment at a time** while `ui2_app` 
 
 ```mermaid
 flowchart LR
-    S0["Step 0: Trigger SECURITY DEFINER + Views (V212)"] --> S1["Step 1: Create Module Roles + Grant Matrix (V213)"]
+    S0["Step 0: Trigger SECURITY DEFINER + Views (M1)"] --> S1["Step 1: Create Module Roles + Grant Matrix (M2)"]
     S1 --> S2["Step 2: Switch ui2-packet-analysis"]
     S2 --> S3["Step 3: Switch ui2-policy"]
     S3 --> S4["Step 4: Switch ui2-service + Drop Migrate Mount"]
-    S4 --> S5["Step 5: Switch Worker Pods + Enable RLS (V214)"]
-    S5 --> S6["Step 6: Revoke & NOLOGIN Shared ui2_app (V215)"]
+    S4 --> S5["Step 5: Switch Worker Pods + Enable RLS (M3)"]
+    S5 --> S6["Step 6: Revoke & NOLOGIN Shared ui2_app (M4)"]
 ```
 
 ### 4.2 Step-by-Step Rollout with Dry-Run and Rollback
 
-#### Step 0 — Refactor Cross-Domain Triggers to `SECURITY DEFINER` & Create Read Views (`V212`)
+> Migration numbers: the four new migrations are written M1..M4 here. Their Flyway version numbers are assigned when they are built; V212..V215 are already used by other work (2026-11-14 review).
+
+#### Step 0 — Refactor Cross-Domain Triggers to `SECURITY DEFINER` & Create Read Views (`M1`)
 - **Action**:
-  1. Ship Flyway migration `V212__security_definer_triggers_and_read_views.sql` converting the 9 cross-domain `SECURITY INVOKER` triggers (§2.2) to `SECURITY DEFINER SET search_path = pg_catalog, public` owned by `ui2_migrate`.
+  1. Ship Flyway migration `M1__security_definer_triggers_and_read_views.sql` converting the 9 cross-domain `SECURITY INVOKER` triggers (§2.2) to `SECURITY DEFINER SET search_path = pg_catalog, public` owned by `ui2_migrate`.
   2. Create `ui2_current_role_module()`, `ui2_schema_version_check(text)`, and read projection views (`v_latest_effective_running_config`, `v_compliance_device_evidence`).
   3. Split `JooqDeviceRepository` interfaces so worker classes depend only on `DeviceReadRepository` / `DeviceInventoryWriteRepository`.
 - **Dry-Run**:
@@ -682,10 +684,10 @@ flowchart LR
 - **Rollback**:
   - `ALTER FUNCTION <fn> SECURITY INVOKER;` (zero impact on `ui2_app` since `ui2_app` still holds existing table grants).
 
-#### Step 1 — Create Module Roles and Apply Full `GRANT` Matrix Alongside `ui2_app` (`V213` + `10-configmap.yaml`)
+#### Step 1 — Create Module Roles and Apply Full `GRANT` Matrix Alongside `ui2_app` (`M2` + `10-configmap.yaml`)
 - **Action**:
   1. Update `create-app-role.sh` in `deploy/ui2/10-configmap.yaml` to idempotently create login roles `ui2_service`, `ui2_policy`, `ui2_packet_analysis`, `ui2_backup`, `ui2_inventory`, `ui2_diagnostics`, `ui2_failover`, `ui2_configuration`, `ui2_compliance`, `ui2_scheduler`, and `ui2_worker_general` (all `NOLOGIN` until their respective Kubernetes Secret is provisioned, or `LOGIN` with per-role passwords from `ui2-db-bootstrap`).
-  2. Ship Flyway migration `V213__module_role_grants.sql` applying the exact `GRANT` matrix from §2.3 to each role **without revoking `ui2_app` yet**.
+  2. Ship Flyway migration `M2__module_role_grants.sql` applying the exact `GRANT` matrix from §2.3 to each role **without revoking `ui2_app` yet**.
   3. Create Kubernetes Secrets `ui2-db-service`, `ui2-db-policy`, `ui2-db-packet-analysis`, `ui2-db-worker-general`, etc.
 - **Dry-Run**:
   - Connect to PostgreSQL as `ui2_migrate` and run `SET LOCAL ROLE ui2_packet_analysis; SELECT count(*) FROM packet_analysis_run;` (succeeds) and `SET LOCAL ROLE ui2_packet_analysis; SELECT count(*) FROM credentials;` (fails with `ERROR: permission denied for table credentials`).
@@ -725,19 +727,19 @@ flowchart LR
 - **Rollback**:
   - Revert `50-service-deployment.yaml` and `52-worker-deployment.yaml` volume mounts to `ui2-db`.
 
-#### Step 5 — Switch Split Worker Deployments (`backup`, `inventory`, `diagnostics`, `failover`, `configuration`, `compliance`, `scheduler`) & Enable RLS (`V214`)
+#### Step 5 — Switch Split Worker Deployments (`backup`, `inventory`, `diagnostics`, `failover`, `configuration`, `compliance`, `scheduler`) & Enable RLS (`M3`)
 - **Action**:
   1. As each worker module deployment (`ui2-backup`, `ui2-inventory`, `ui2-diagnostics`, `ui2-failover`, `ui2-configuration`, `ui2-compliance`, `ui2-scheduler`) is rolled out per `MODULE_PER_POD_PLAN.md` Steps 2–8, mount its dedicated `ui2-db-<module>` Secret.
-  2. Ship `V214__enable_shared_table_rls.sql` enabling Row-Level Security on `jobs`, `job_steps`, `job_step_attempt`, `module_runtime_control`, and `runtime_task_lease` (§2.4).
+  2. Ship `M3__enable_shared_table_rls.sql` enabling Row-Level Security on `jobs`, `job_steps`, `job_step_attempt`, `module_runtime_control`, and `runtime_task_lease` (§2.4).
 - **Dry-Run & Verification**:
   - Before enabling `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`, run a dry-run query comparing `SELECT count(*) FROM jobs WHERE ui2_job_module(capability_id) = 'none'` (must be `0`, proving every capability maps to a known module).
 - **Rollback**:
   - `ALTER TABLE jobs DISABLE ROW LEVEL SECURITY;` (and on `job_steps`, `job_step_attempt`, `module_runtime_control`, `runtime_task_lease`) takes effect instantaneously without restarting pods.
 
-#### Step 6 — Revoke Grants and Disable Shared `ui2_app` Role (`V215`)
+#### Step 6 — Revoke Grants and Disable Shared `ui2_app` Role (`M4`)
 - **Action**:
   1. Verify for 7 continuous days that `SELECT count(*) FROM pg_stat_activity WHERE usename = 'ui2_app'` is `0`.
-  2. Ship `V215__revoke_legacy_ui2_app.sql`:
+  2. Ship `M4__revoke_legacy_ui2_app.sql`:
      ```sql
      REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM ui2_app;
      REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM ui2_app;
@@ -748,7 +750,7 @@ flowchart LR
 - **Dry-Run**:
   - Check `pg_stat_statements` / connection logs to confirm zero login attempts by `ui2_app`.
 - **Rollback**:
-  - Re-run `V213` grants to `ui2_app` and `ALTER ROLE ui2_app LOGIN`.
+  - Re-run `M2` grants to `ui2_app` and `ALTER ROLE ui2_app LOGIN`.
 
 ### 4.3 Automated Architecture & Integration Tests
 
@@ -772,7 +774,7 @@ Extend `com.securityexpert.nexus.ui2.arch.Ui2ArchitectureTest` (or add `ModuleDa
 #### 4.3.2 Live PostgreSQL Grant & RLS Integration Test (`ui2/integration-tests`: `DatabaseRoleGrantMatrixIntegrationTest`)
 
 Add `DatabaseRoleGrantMatrixIntegrationTest` in `ui2/integration-tests`:
-1. Boots a PostgreSQL Testcontainer, runs all Flyway migrations (`V1`..`V215`), and creates the 11 module login roles.
+1. Boots a PostgreSQL Testcontainer, runs all Flyway migrations (`V1` up to the last of the four new migrations), and creates the 11 module login roles.
 2. **Catalog Completeness Check**:
    - Queries `information_schema.tables WHERE table_schema = 'public'` and asserts that **every table in the schema** is explicitly declared in the test's expected ownership/grant matrix (if a developer adds a new table in `V216` without assigning module grants and updating the matrix, the test fails immediately).
 3. **Catalog Privilege Verification (`information_schema.role_table_grants`)**:
@@ -791,7 +793,7 @@ Add `DatabaseRoleGrantMatrixIntegrationTest` in `ui2/integration-tests`:
 
 | Risk ID | Risk Description | Likelihood | Impact | Mitigation |
 | :--- | :--- | :---: | :---: | :--- |
-| **R-1** | **Unconverted `SECURITY INVOKER` trigger fails with `42501` when a worker updates a shared table** (e.g. `jobs.state` firing `ui2_failover_job_failure` when `ui2_policy` completes a job). | High (if missed) | High (job completion fails) | We identified all 9 cross-domain `SECURITY INVOKER` triggers in §2.2. Step 0 (`V212`) converts all 9 to `SECURITY DEFINER SET search_path = pg_catalog, public` before any grants are restricted, and `DatabaseRoleGrantMatrixIntegrationTest` tests `UPDATE jobs SET state = ...` under every worker role. |
+| **R-1** | **Unconverted `SECURITY INVOKER` trigger fails with `42501` when a worker updates a shared table** (e.g. `jobs.state` firing `ui2_failover_job_failure` when `ui2_policy` completes a job). | High (if missed) | High (job completion fails) | We identified all 9 cross-domain `SECURITY INVOKER` triggers in §2.2. Step 0 (`M1`) converts all 9 to `SECURITY DEFINER SET search_path = pg_catalog, public` before any grants are restricted, and `DatabaseRoleGrantMatrixIntegrationTest` tests `UPDATE jobs SET state = ...` under every worker role. |
 | **R-2** | **`JooqDeviceRepository.deleteDevice(UUID)` called from a non-service role** or shared helper method. | Low | Medium | Split `JooqDeviceRepository` into `DeviceReadRepository` (workers) and `DeviceAdminRepository` (`service` only) in Step 0, enforced by `ModuleDatabaseOwnershipArchTest`. |
 | **R-3** | **Connection count (`max_connections`) growth on PostgreSQL (`ui2-db`)** as 10 module pods each open their own HikariCP pool under their own role. | Medium | Medium | Bound per-role connection limits via `ALTER ROLE ui2_<module> CONNECTION LIMIT <N>` matching `MODULE_PER_POD_PLAN.md` pool budgets (`service`: 16, `policy`: 6, `packet_analysis`: 4, `backup`: 6, `inventory`: 8, `diagnostics`: 6, `failover`: 6, `configuration`: 6, `compliance`: 4, `scheduler`: 4, `migrate`: 2 -> total 68, well below PostgreSQL `max_connections = 200`). |
 | **R-4** | **`ui2-worker` (`general`) transitional pod still requires multi-module grants until Steps 2–8 of `MODULE_PER_POD_PLAN.md` finish.** | Certain | Low | `ui2_worker_general` immediately drops `service`-only tables (`sessions`, `local_credentials`, `rbac_*`, `sanitize_*`, `topology_*`, `report_run`) and already-split modules (`packet_analysis_*`, `policy_*`). As each remaining module splits into its own Deployment, its tables are revoked from `ui2_worker_general`. |
@@ -802,9 +804,9 @@ Add `DatabaseRoleGrantMatrixIntegrationTest` in `ui2/integration-tests`:
 | Phase / Work Package | Scope | Estimated Effort |
 | :--- | :--- | :--- |
 | **WP-1: Interface Split & ArchUnit Gate** | Split `JooqDeviceRepository` read/admin interfaces; implement `ModuleDatabaseOwnershipArchTest` in `ui2/architecture-tests`. | 1.0 engineering day |
-| **WP-2: Flyway Migrations (`V212`–`V214`) & Integration Test** | `SECURITY DEFINER` trigger fixes (`V212`), role creation + 135-table grant matrix (`V213`), RLS policies (`V214`), and `DatabaseRoleGrantMatrixIntegrationTest` in `ui2/integration-tests`. | 2.0 engineering days |
+| **WP-2: Flyway Migrations (`M1`–`M3`) & Integration Test** | `SECURITY DEFINER` trigger fixes (`M1`), role creation + 135-table grant matrix (`M2`), RLS policies (`M3`), and `DatabaseRoleGrantMatrixIntegrationTest` in `ui2/integration-tests`. | 2.0 engineering days |
 | **WP-3: Kubernetes Secrets & Manifest Cutover (Steps 2–4)** | Update `10-configmap.yaml`, `20-secret.yaml`, `58-packet-analysis-deployment.yaml`, `57-policy-deployment.yaml`, `50-service-deployment.yaml`, `52-worker-deployment.yaml`; remove `migrate-password` from service/worker. | 1.0 engineering day |
-| **WP-4: Remaining Worker Role Cutover & `ui2_app` Revocation (`V215`)** | Wire `ui2_backup`, `ui2_inventory`, `ui2_diagnostics`, `ui2_failover`, `ui2_configuration`, `ui2_compliance`, `ui2_scheduler` alongside `MODULE_PER_POD_PLAN.md`; revoke `ui2_app`. | 1.0 engineering day |
+| **WP-4: Remaining Worker Role Cutover & `ui2_app` Revocation (`M4`)** | Wire `ui2_backup`, `ui2_inventory`, `ui2_diagnostics`, `ui2_failover`, `ui2_configuration`, `ui2_compliance`, `ui2_scheduler` alongside `MODULE_PER_POD_PLAN.md`; revoke `ui2_app`. | 1.0 engineering day |
 | **Total** | End-to-end implementation + automated & real-environment validation | **5.0 engineering days** |
 
 ### 5.3 Product Owner Questions for Contract Freeze
