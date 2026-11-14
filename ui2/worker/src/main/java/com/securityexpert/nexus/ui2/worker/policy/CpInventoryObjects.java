@@ -35,7 +35,7 @@ final class CpInventoryObjects {
 
     /** One retained object; members and values in their stored order. */
     private record Entry(String uid, String name, String type, List<String> members, List<String> values,
-            PolicySchedule schedule, Instant collectedAt) {}
+            PolicySchedule schedule, Instant collectedAt, CpObjectInventory.GatewayAddresses gateway) {}
     private record Domain(Map<String, Entry> objects, Set<String> ambiguous) {
         int size() { return objects.size(); }
     }
@@ -103,6 +103,11 @@ final class CpInventoryObjects {
         for (String value : entry.values()) {
             int colon = value.indexOf(": ");
             node.put(value.substring(0, colon), value.substring(colon + 2));
+        }
+        // D-1 (A0 amendment G1): a gateway-class object's management addresses, under node fields no reply carries.
+        if (entry.gateway() != null) {
+            entry.gateway().ipv4().forEach(node.putArray(CheckPointPolicyMapper.GATEWAY_IPV4_FIELD)::add);
+            node.put(CheckPointPolicyMapper.GATEWAY_COMPLETE_FIELD, entry.gateway().complete());
         }
         return new CheckPointPolicyMapper.InventoryObject(entry.uid(), node, entry.schedule(), entry.collectedAt());
     }
@@ -211,6 +216,7 @@ final class CpInventoryObjects {
         }
         return new Entry(item.uid(), item.name() == null ? "" : item.name(), item.type(),
             item.members() == null ? List.of() : List.copyOf(item.members()), List.copyOf(values),
-            "time".equals(item.type()) ? item.schedule() : null, collectedAt);
+            "time".equals(item.type()) ? item.schedule() : null, collectedAt,
+            com.securityexpert.nexus.ui2.policy.CpObjectTypes.GATEWAY_TYPES.contains(item.type()) ? item.gateway() : null);
     }
 }
