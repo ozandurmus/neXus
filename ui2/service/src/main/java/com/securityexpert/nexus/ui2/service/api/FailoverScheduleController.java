@@ -79,6 +79,11 @@ public class FailoverScheduleController {
         @PathVariable String scheduleId,
         @RequestBody CancelSchedulePayload payload
     ) {
+        if (payload == null || payload.operatorId() == null || payload.operatorId().isBlank()
+                || payload.reason() == null || payload.reason().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "INVALID_REQUEST",
+                    "message", "operatorId and reason are required"));
+        }
         try {
             FailoverScheduleRecord record = scheduleService.cancelSchedule(scheduleId, payload.operatorId(), payload.reason());
             return ResponseEntity.ok(record);

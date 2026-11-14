@@ -44,6 +44,9 @@ public final class PasswordChangeService {
     }
 
     public Result changePassword(String localIdentityName, char[] currentPassword, char[] newPassword) {
+        if (currentPassword == null) {
+            return new Result.InvalidCredentials();
+        }
         Optional<LocalCredentialRecord> row = repository.findByName(localIdentityName);
         boolean currentMatches = LocalCredentialVerification.matches(row, currentPassword);
         if (row.isEmpty() || !currentMatches) {
@@ -51,7 +54,7 @@ public final class PasswordChangeService {
         }
         LocalCredentialRecord record = row.get();
 
-        Optional<String> violation = LocalPasswordPolicy.violation(newPassword, record.localIdentityName());
+        Optional<String> violation = LocalPasswordPolicy.violation(newPassword == null ? new char[0] : newPassword, record.localIdentityName());
         if (violation.isPresent()) {
             return new Result.PolicyViolation(violation.get());
         }

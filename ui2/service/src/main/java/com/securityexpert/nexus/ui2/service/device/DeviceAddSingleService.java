@@ -73,7 +73,7 @@ public final class DeviceAddSingleService {
         if ("fortinet".equals(vendor) && "management_server".equals(role)) {
             return FORTIMANAGER;
         }
-        return VENDOR_MAPPINGS.get(vendor);
+        return vendor == null ? null : VENDOR_MAPPINGS.get(vendor);
     }
 
     /** Unwinds {@link #runInTransaction} to roll back the whole outer transaction on a validation refusal. */
