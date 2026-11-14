@@ -9,6 +9,7 @@ import com.securityexpert.nexus.ui2.policy.PolicySnapshot.Section;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -442,27 +443,21 @@ class AsaPolicyParserAndMapperTest {
                         "same-security-intra: true"),
                 ifObj.values());
 
-        // Not evaluated section: ACL-CP, ACL-CRYPTO, ACL-VPN
-        assertEquals(3, notEvaluated.rules().size());
+        // Not evaluated section: ACL-CP, ACL-CRYPTO, ACL-VPN, and the two ACLs without binding or use
+        Map<String, Rule> byName = new java.util.HashMap<>();
+        notEvaluated.rules().forEach(r -> byName.put(r.name(), r));
+        assertEquals(java.util.Set.of("ACL-CP", "ACL-CRYPTO", "ACL-VPN", "ACL-ORPHAN-1", "ACL-ORPHAN-2"), byName.keySet());
         Rule cpRule = notEvaluated.rules().get(0);
         assertEquals("ACL-CP", cpRule.name());
         assertNull(cpRule.enabled());
         assertEquals("UNKNOWN", cpRule.action());
         assertEquals(List.of("control-plane"), cpRule.extras().get("asa-acl-use"));
-
-        Rule cryptoRule = notEvaluated.rules().get(1);
-        assertEquals("ACL-CRYPTO", cryptoRule.name());
-        assertEquals(List.of("crypto_map"), cryptoRule.extras().get("asa-acl-use"));
-
-        Rule vpnRule = notEvaluated.rules().get(2);
-        assertEquals("ACL-VPN", vpnRule.name());
-        assertEquals(List.of("vpn_filter", "split_tunnel"), vpnRule.extras().get("asa-acl-use"));
-
-        // Unreferenced ACL count (ACL-ORPHAN-1 and ACL-ORPHAN-2)
-        assertEquals(1, snapshot.failures().size());
-        CollectionFailure unrefFailure = snapshot.failures().get(0);
-        assertEquals("ASA_ACL_NOT_REFERENCED", unrefFailure.reason());
-        assertEquals("2", unrefFailure.layerName());
+        assertEquals(List.of("crypto_map"), byName.get("ACL-CRYPTO").extras().get("asa-acl-use"));
+        assertEquals(List.of("vpn_filter", "split_tunnel"), byName.get("ACL-VPN").extras().get("asa-acl-use"));
+        assertEquals(List.of("none"), byName.get("ACL-ORPHAN-1").extras().get("asa-acl-use"));
+        assertEquals(List.of("none"), byName.get("ACL-ORPHAN-2").extras().get("asa-acl-use"));
+        // Listing unreferenced ACLs is no collection failure: lookup and hygiene keep the policy complete
+        assertTrue(snapshot.failures().isEmpty());
     }
 
     @Test

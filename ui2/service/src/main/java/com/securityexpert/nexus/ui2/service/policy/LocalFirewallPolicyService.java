@@ -7,7 +7,11 @@ import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactRef;
 import com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess;
 import com.securityexpert.nexus.ui2.policy.*;
 
-/** Offline fallback only when the existing management tree contains no Panorama node. */
+/**
+ * Policies derived on read from stored device configurations: Palo Alto local firewalls (offline fallback only when the
+ * existing management tree contains no Panorama node) and Cisco ASA firewalls (always: they have no management server;
+ * ASA_FORTIGATE_POLICY_DESIGN_2026_11_14.md, PO_DECISION_RECORD_2026_11_14_ASA_FORTIGATE_POLICY_MODEL.md item 1).
+ */
 @Service
 public final class LocalFirewallPolicyService {
     private static final long DEFAULT_MAX_WEIGHT = 100_000;
@@ -17,6 +21,12 @@ public final class LocalFirewallPolicyService {
     /** Decrypting and XML-parsing a stored configuration dominated every catalog call, so the parse is reused (see {@link #snapshots}). */
     private final VersionedWeightedCache<List<PolicySnapshot>> parsed;
     private final java.util.concurrent.atomic.AtomicLong parses = new java.util.concurrent.atomic.AtomicLong();
+    /**
+     * Cisco ASA policies are large (about 108,000 access rules and 60,000 objects over the 12 measured units,
+     * ASA_POLICY_MAPPER_VALIDATION_2026_11_14.md), so they get a cache of their own and never evict the Palo Alto entries.
+     */
+    private static final long DEFAULT_ASA_MAX_WEIGHT = 400_000;
+    private final VersionedWeightedCache<List<PolicySnapshot>> asaParsed;
     @org.springframework.beans.factory.annotation.Autowired
     public LocalFirewallPolicyService(TransactionBoundary tx, ArtefactStoreAccess store) {
         this(tx, store, DEFAULT_MAX_WEIGHT, DEFAULT_TTL_NANOS, System::nanoTime);
@@ -24,9 +34,13 @@ public final class LocalFirewallPolicyService {
     LocalFirewallPolicyService(TransactionBoundary tx, ArtefactStoreAccess store, long maxWeight, long ttlNanos,
             java.util.function.LongSupplier nanoClock) {
         this.tx = tx; this.store = store; this.parsed = new VersionedWeightedCache<>(maxWeight, ttlNanos, nanoClock);
+        this.asaParsed = new VersionedWeightedCache<>(Math.max(maxWeight, DEFAULT_ASA_MAX_WEIGHT), ttlNanos, nanoClock);
     }
     /** Number of decrypt-and-parse runs, for tests and diagnostics. */
     long parseCount() { return parses.get(); }
+    private final java.util.concurrent.atomic.AtomicLong asaParses = new java.util.concurrent.atomic.AtomicLong();
+    /** Number of ASA decrypt-and-parse runs, for tests and diagnostics. */
+    long asaParseCount() { return asaParses.get(); }
 
     /**
      * The listing query is cheap and runs on every call; the decrypt and XML parse run only when a device's effective-running
@@ -35,6 +49,65 @@ public final class LocalFirewallPolicyService {
      * Parsed snapshots are immutable records and are shared between callers.
      */
     public List<PolicySnapshot> snapshots() {
+        List<PolicySnapshot> result = new ArrayList<>(panSnapshots());
+        result.addAll(asaSnapshots());
+        return result;
+    }
+
+    private static final System.Logger LOG = System.getLogger(LocalFirewallPolicyService.class.getName());
+
+    /**
+     * Cisco ASA: the latest stored {@code more system:running-config} (configuration read kind
+     * {@code show_configuration}) of each enrolled ASA gateway, parsed and mapped in memory; the text is discarded. A
+     * device whose artefact cannot be read or parsed is left out of the list (logged as a count, never with a name), so
+     * one unreadable configuration never hides every other policy.
+     */
+    List<PolicySnapshot> asaSnapshots() {
+        var rows = tx.inTransaction(db -> db.fetch("select distinct on (d.device_id) d.device_id, r.collected_at, "
+            + "r.artefact_ref, a.wrapped_data_key, c.compression from devices d "
+            + "join device_configuration_run r on r.device_id = d.device_id and r.read_kind = 'show_configuration' "
+            + "join configuration_artefact c on c.artefact_ref = r.artefact_ref "
+            + "join backup_artefact a on a.recovery_volume_path = r.artefact_ref and a.device_id = d.device_id "
+            + "where d.vendor_hint = 'cisco_asa' and d.role in ('gateway', 'firewall') and not d.disabled "
+            + "and d.enrollment_state in ('ENROLLED', 'DEGRADED') "
+            + "and not exists (select 1 from artefact_retention_ledger l where l.artefact_id = a.artefact_id and l.event = 'removed') "
+            + "order by d.device_id, r.collected_at desc"));
+        if (!rows.isEmpty() && store.storeOrNull() == null) throw new IllegalStateException("LOCAL_POLICY_CONFIGURATION_UNAVAILABLE");
+        List<PolicySnapshot> result = new ArrayList<>();
+        Set<String> listed = new HashSet<>();
+        int unreadable = 0;
+        for (var row : rows) {
+            String deviceId = row.get("device_id", String.class);
+            String collectedAt = row.get("collected_at", java.sql.Timestamp.class).toInstant().toString();
+            String version = row.get("artefact_ref", String.class) + "|" + collectedAt;
+            listed.add(deviceId);
+            var cached = asaParsed.get(deviceId, version);
+            if (cached != null) { result.addAll(cached); continue; }
+            List<PolicySnapshot> fresh;
+            try (var input = store.storeOrNull().retrieve(new ArtefactRef(row.get("artefact_ref", String.class)),
+                    row.get("wrapped_data_key", byte[].class), "gzip".equals(row.get("compression", String.class)))) {
+                asaParses.incrementAndGet();
+                var config = com.securityexpert.nexus.ui2.policy.asa.AsaConfigPolicyParser.parse(
+                        new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+                // The collector stores only text with an "ASA Version" line; anything else is not an ASA configuration.
+                if (config.version().isBlank()) throw new IllegalStateException("not an ASA configuration");
+                fresh = List.of(com.securityexpert.nexus.ui2.policy.asa.AsaPolicyMapper.map(deviceId, "Cisco ASA " + deviceId,
+                        collectedAt, PolicySnapshot.ref("configuration-artefact", row.get("artefact_ref", String.class)), config));
+            } catch (Exception unavailable) {
+                unreadable++;
+                continue;
+            }
+            long weight = 0;
+            for (var snapshot : fresh) weight += snapshot.sections().stream().mapToLong(section -> section.rules().size()).sum() + snapshot.objects().size();
+            asaParsed.put(deviceId, version, fresh, weight);
+            result.addAll(fresh);
+        }
+        asaParsed.retainOnly(listed);
+        if (unreadable > 0) LOG.log(System.Logger.Level.WARNING, "[POLICY] ASA configurations not readable: {0}", unreadable);
+        return result;
+    }
+
+    private List<PolicySnapshot> panSnapshots() {
         var rows = tx.inTransaction(db -> db.fetch("select distinct on (d.device_id) d.device_id, r.collected_at, "
             + "r.artefact_ref, a.wrapped_data_key, c.compression from devices d "
             + "join device_configuration_run r on r.device_id = d.device_id and r.read_kind = 'effective_running' "
