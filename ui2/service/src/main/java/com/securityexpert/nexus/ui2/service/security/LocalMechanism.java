@@ -96,6 +96,6 @@ public final class LocalMechanism implements Mechanism {
     }
 
     public static String probeActorFingerprintFor(String localIdentityId) {
-        return LocalPrincipalFingerprint.forLocalIdentity(localIdentityId + ":probe");
+        return LocalPrincipalFingerprint.forLocalIdentityProbe(localIdentityId);
     }
 }

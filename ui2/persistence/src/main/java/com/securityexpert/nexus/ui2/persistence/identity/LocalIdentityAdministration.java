@@ -95,10 +95,13 @@ public final class LocalIdentityAdministration implements LocalIdentityAdministr
         localCredentialsRepository.setEnabled(localIdentityId, false, actingAdminActorFingerprint);
         // 13G LIA-3.6: the identity's active session, if any, ends now --
         // never left to idle/absolute expiry.
-        String disabledIdentityActorFingerprint = LocalPrincipalFingerprint.forLocalIdentity(localIdentityId);
-        sessionRepository.findActiveByActor(disabledIdentityActorFingerprint)
-                .ifPresent(session -> sessionRepository.revoke(session.sessionId(), actingAdminActorFingerprint,
-                        ACTION_DISABLE_ENDS_SESSION));
+        // A diagnostic-probe machine session of the same identity is its own actor; it ends too.
+        for (String disabledIdentityActorFingerprint : List.of(LocalPrincipalFingerprint.forLocalIdentity(localIdentityId),
+                LocalPrincipalFingerprint.forLocalIdentityProbe(localIdentityId))) {
+            sessionRepository.findActiveByActor(disabledIdentityActorFingerprint)
+                    .ifPresent(session -> sessionRepository.revoke(session.sessionId(), actingAdminActorFingerprint,
+                            ACTION_DISABLE_ENDS_SESSION));
+        }
         return new MutationResult.Ok(toView(localCredentialsRepository.findById(localIdentityId).orElseThrow()));
     }
 

@@ -329,6 +329,27 @@ class LocalIdentityAdministrationTest {
     }
 
     @Test
+    void disableAlsoEndsTheIdentitysProbeMachineSession() {
+        Fixture fx = fixture();
+        LocalIdentityAdministrationPort.LocalIdentityView machine =
+                fx.administration.create("system:bootstrap", "machine-viewer", "p1".toCharArray());
+        LocalIdentityAdministrationPort.LocalIdentityView admin =
+                fx.administration.create("system:bootstrap", "remaining-admin", "p2".toCharArray());
+        fx.bindings.create("binding-admin", RoleToken.SECURITY_ADMIN, fx.cipher.encrypt(admin.localIdentityId()),
+                "key-1", "system:bootstrap", "role_binding_create");
+        fx.sessions.putActive("session-e2e", LocalPrincipalFingerprint.forLocalIdentity(machine.localIdentityId()));
+        fx.sessions.putActive("session-probe", LocalPrincipalFingerprint.forLocalIdentityProbe(machine.localIdentityId()));
+
+        LocalIdentityAdministrationPort.MutationResult result = fx.administration.disable("admin1",
+                machine.localIdentityId());
+
+        assertTrue(result instanceof LocalIdentityAdministrationPort.MutationResult.Ok, "expected Ok, got " + result);
+        assertEquals(SessionState.REVOKED, fx.sessions.findBySessionId("session-e2e").orElseThrow().state());
+        assertEquals(SessionState.REVOKED, fx.sessions.findBySessionId("session-probe").orElseThrow().state(),
+                "a probe machine session of a disabled identity must end too");
+    }
+
+    @Test
     void enableDoesNotResetTheCredential() {
         Fixture fx = fixture();
         LocalIdentityAdministrationPort.LocalIdentityView created =

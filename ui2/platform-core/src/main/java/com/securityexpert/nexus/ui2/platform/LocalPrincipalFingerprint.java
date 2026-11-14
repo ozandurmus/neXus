@@ -18,4 +18,13 @@ public final class LocalPrincipalFingerprint {
     public static String forLocalIdentity(String localIdentityId) {
         return PrincipalFingerprint.of(LOCAL_PRINCIPAL_PREFIX + localIdentityId);
     }
+
+    /**
+     * The separate actor of a diagnostic-probe machine session for the same local identity (2026-11-14): its own
+     * session row, so a probe login never takes over an e2e session. Every place that ends an identity's session
+     * (13G LIA-3.6 disable) ends this one too.
+     */
+    public static String forLocalIdentityProbe(String localIdentityId) {
+        return forLocalIdentity(localIdentityId + ":probe");
+    }
 }
