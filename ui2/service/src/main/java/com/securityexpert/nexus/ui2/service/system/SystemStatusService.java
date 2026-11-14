@@ -154,7 +154,7 @@ public class SystemStatusService {
         });
     }
 
-    private static Map<String, Object> podRow(JsonNode pod, JsonNode usage) {
+    static Map<String, Object> podRow(JsonNode pod, JsonNode usage) {
         Map<String, Object> row = new LinkedHashMap<>();
         JsonNode meta = pod.path("metadata");
         JsonNode status = pod.path("status");
@@ -162,6 +162,18 @@ public class SystemStatusService {
         row.put("name", name);
         row.put("component", meta.path("labels").path("app.kubernetes.io/component").asText(componentOf(name)));
         row.put("phase", status.path("phase").asText());
+        // What runs the pod (2026-11-14): the controlling owner's kind and name (ReplicaSet, StatefulSet, DaemonSet, Job;
+        // null for a bare pod) and when the pod was created. The top-bar health light uses them to tell a service pod
+        // from a scheduled CronJob run and from a one-off Job, whose finished pods stay listed after they end.
+        JsonNode controller = null;
+        for (JsonNode ref : meta.path("ownerReferences")) {
+            if (controller == null || ref.path("controller").asBoolean()) {
+                controller = ref;
+            }
+        }
+        row.put("owner_kind", controller == null ? null : controller.path("kind").asText(null));
+        row.put("owner_name", controller == null ? null : controller.path("name").asText(null));
+        row.put("created_at", meta.path("creationTimestamp").asText(null));
         int ready = 0;
         int total = 0;
         int restarts = 0;

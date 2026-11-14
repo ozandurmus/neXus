@@ -13,7 +13,10 @@ export interface TabCoverageRow {
 export const TAB_COVERAGE: readonly TabCoverageRow[] = [
   // Reports R1 (REPORTS_R1_CONTRACT.md "UI"): three tabs.
   { screen: "reports", tabList: "Reports sections", labels: ["Catalogue", "Run & preview", "History"] },
-  { screen: "inventory", tabList: "Lifecycle view", labels: ["Fleet", "Catalog", "Vulnerabilities"] },
+  // Lifecycle and security is a view of the Devices screen with its own address and heading (navigation entry of the same
+  // name under Compliance and security, PO 2026-11-13); the full e2e visits it there.
+  { screen: "inventory", tabList: "Lifecycle view", labels: ["Fleet", "Catalog", "Vulnerabilities"],
+    query: "screen=inventory&view=lifecycle", heading: "Lifecycle and security" },
   // Navigation redesign 2026-11-12: "HA and readiness" (was "HA & readiness"), "Packet analysis", "Data sanitizer".
   // Diagnostics moved to Tools and the Change feed to the Changes screen (UI review 2026-11-05, C3/C4).
   { screen: "operations", tabList: "Operations sections", labels: ["HA and readiness", "Jobs", "Device health"] },

@@ -5,7 +5,7 @@ import { m3Theme } from "../src/theme/m3Theme";
 import { SessionContext, type SessionInfo } from "../src/auth/SessionContext";
 import { TopAppBar } from "../src/shell/TopAppBar";
 import {
-  PLATFORM_STATUS_HREF, PlatformHealthBadge, canOpenPlatformStatus, platformHealth, type PlatformHealth,
+  PLATFORM_STATUS_HREF, PlatformHealthBadge, canOpenPlatformStatus, cronRunOf, platformHealth, podRoles, type PlatformHealth,
 } from "../src/shell/PlatformHealthIndicator";
 import type { PodsView, PodStatusView } from "../src/auth/adminApi";
 
@@ -52,6 +52,64 @@ describe("the one state", () => {
     expect(platformHealth({ error: new TypeError("Failed to fetch") })).toEqual({ state: "down", reason: "neXus did not answer its status read." });
     expect(platformHealth({ error: { status: 401, body: {} } })).toBeNull();
     expect(platformHealth({ error: { status: 403, body: {} } })).toBeNull();
+  });
+});
+
+// Health light semantics (2026-11-14): what runs a pod decides whether it can turn the light. Synthetic names; the minute
+// numbers are real schedule times (29910180 min = 2026-11-13T23:00Z, 29908740 = 2026-11-12T23:00Z, 29910330 = 2026-11-14T01:30Z).
+const service = (name: string, over: Partial<PodStatusView> = {}) =>
+  pod(name, { owner_kind: "ReplicaSet", owner_name: `${name}-rs`, created_at: "2026-11-13T18:00:00Z", ...over });
+const jobPod = (job: string, createdAt: string, phase: "Succeeded" | "Failed" | "Running") =>
+  pod(`${job}-pod`, { owner_kind: "Job", owner_name: job, created_at: createdAt, phase, state: phase, ready: phase === "Running" ? "1/1" : "0/1" });
+const SERVICES = [service("svc-a"), service("svc-b"), pod("db-0", { owner_kind: "StatefulSet", owner_name: "db", created_at: "2026-11-09T22:00:00Z" })];
+
+describe("what counts against the light", () => {
+  it("ignores an old failed scheduled run when the latest run of that CronJob succeeded", () => {
+    const pods = [...SERVICES, jobPod("nightly-check-29908740", "2026-11-12T23:00:00Z", "Failed"), jobPod("nightly-check-29910180", "2026-11-13T23:00:00Z", "Succeeded")];
+    expect(platformHealth({ pods: view(pods) })).toEqual({ state: "ok", reason: "All 3 service pods running and ready." });
+  });
+
+  it("is degraded when the latest scheduled run of a CronJob failed, naming the CronJob and the run", () => {
+    const pods = [...SERVICES, jobPod("nightly-check-29908740", "2026-11-12T23:00:00Z", "Succeeded"), jobPod("nightly-check-29910180", "2026-11-13T23:00:01Z", "Failed"),
+      jobPod("feed-fetch-29910330", "2026-11-14T01:30:00Z", "Succeeded")];
+    expect(platformHealth({ pods: view(pods) })).toEqual({ state: "degraded", reason: "The latest scheduled run of nightly-check failed (nightly-check-29910180)." });
+  });
+
+  it("is not degraded while the latest scheduled run is still running", () => {
+    const pods = [...SERVICES, jobPod("nightly-check-29908740", "2026-11-12T23:00:00Z", "Failed"), jobPod("nightly-check-29910180", "2026-11-13T23:00:00Z", "Running")];
+    expect(platformHealth({ pods: view(pods) })?.state).toBe("ok");
+  });
+
+  it("never degrades for a one-off Job, failed or not, even one started by hand from a CronJob", () => {
+    const pods = [...SERVICES, jobPod("nightly-check-clean-1110", "2026-11-09T23:01:51Z", "Failed"), jobPod("feed-first3-0825", "2026-11-13T08:25:08Z", "Failed"),
+      jobPod("deploy-check", "2026-11-13T18:14:48Z", "Failed"), pod("probe", { owner_kind: null, owner_name: null, phase: "Failed", state: "Error", ready: "0/1" })];
+    expect(platformHealth({ pods: view(pods) })).toEqual({ state: "ok", reason: "All 3 service pods running and ready." });
+    const roles = podRoles(pods);
+    expect(pods.slice(3).map((p) => roles.get(p.name)?.kind)).toEqual(["one-off", "one-off", "one-off", "one-off"]);
+  });
+
+  it("is degraded when a Deployment's or StatefulSet's pod is not ready or is waiting to restart", () => {
+    expect(platformHealth({ pods: view([service("svc-a"), service("svc-b", { state: "CrashLoopBackOff", ready: "0/1", restarts: 7 })]) }))
+      .toEqual({ state: "degraded", reason: "1 service pod not ready: svc-b (CrashLoopBackOff)." });
+    expect(platformHealth({ pods: view([service("svc-a"), pod("db-0", { owner_kind: "StatefulSet", owner_name: "db", ready: "0/1" })]) }))
+      .toEqual({ state: "degraded", reason: "1 service pod not ready: db-0 (Running)." });
+    // A service's not-ready pod outranks a failed scheduled run in the one line.
+    expect(platformHealth({ pods: view([service("svc-a", { state: "Pending", ready: "0/1" }), jobPod("nightly-check-29910180", "2026-11-13T23:00:00Z", "Failed")]) })?.reason)
+      .toBe("1 service pod not ready: svc-a (Pending).");
+  });
+
+  it("does not count an evicted pod its ReplicaSet already replaced", () => {
+    const pods = [...SERVICES, service("svc-a-old", { phase: "Failed", state: "Failed", ready: "0/1" })];
+    expect(platformHealth({ pods: view(pods) })?.state).toBe("ok");
+  });
+
+  it("takes a Job for a scheduled run only when its name's minute matches when the pod was created", () => {
+    expect(cronRunOf("nightly-check-29910180", "2026-11-13T23:00:04Z")).toEqual({ cronJob: "nightly-check", job: "nightly-check-29910180", scheduledAt: 29910180 * 60_000 });
+    expect(cronRunOf("nightly-check-29910180", "2026-11-12T10:00:00Z")).toBeNull(); // created before its schedule
+    expect(cronRunOf("nightly-check-29910180", "2026-11-15T23:00:01Z")).toBeNull(); // more than a day after
+    expect(cronRunOf("report-12345678", "2026-11-13T23:00:00Z")).toBeNull(); // digits that are not this pod's schedule
+    expect(cronRunOf("nightly-check-clean-1110", "2026-11-09T23:01:51Z")).toBeNull();
+    expect(cronRunOf("nightly-check-29910180", null)).toBeNull();
   });
 });
 

@@ -17,7 +17,8 @@ import { Stamp } from "../shell/PresentedText";
 import { artefactClassLabel, vendorLabel } from "../shell/presenters";
 import { formatStamp } from "../shell/time";
 import { m3 } from "../theme/m3Theme";
-import { getSystemPods, getSystemStorage, type PodsView, type StorageView } from "../auth/adminApi";
+import { getSystemPods, getSystemStorage, type PodStatusView, type PodsView, type StorageView } from "../auth/adminApi";
+import { failedLatestRuns, platformHealth, podRoles, type PodRole } from "../shell/PlatformHealthIndicator";
 
 export function formatBytes(value: number | null | undefined): string {
   if (value === null || value === undefined) return "—";
@@ -53,6 +54,21 @@ function Usage({ used, limit, format }: { readonly used: number | null; readonly
 }
 
 /** Administration › Platform status: the product's own pods (a read-only top) and how much space its evidence takes. */
+/** What the pod is, in the words of the health rule (2026-11-14): only a service pod or a CronJob's latest run can turn the light. */
+function roleLabel(role: PodRole | undefined): string {
+  if (!role || role.kind === "service") return "Service";
+  if (role.kind === "one-off") return "One-off job";
+  return `${role.run.cronJob}, ${role.latest ? "latest run" : "older run"}`;
+}
+
+/** The state chip: red only where the pod counts against the top-bar light; a finished pod that does not count is grey. */
+function stateTone(p: PodStatusView, role: PodRole | undefined, failedLatest: ReadonlySet<string>): "ok" | "neutral" | "bad" {
+  if (p.state === "Running") return "ok";
+  if (role?.kind === "cron-run") return failedLatest.has(role.run.job) ? "bad" : "neutral";
+  if (role?.kind === "one-off" || p.phase === "Succeeded" || p.phase === "Failed") return "neutral";
+  return "bad";
+}
+
 export function SystemStatusPanel() {
   const [observedAt, setObservedAt] = useState<string | null>(null);
   const [pods, setPods] = useState<PodsView | null>(null);
@@ -76,6 +92,10 @@ export function SystemStatusPanel() {
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!pods || !storage) return <Typography sx={{ p: 3 }}>Reading the system status…</Typography>;
 
+  const roles = podRoles(pods.pods);
+  const failedLatest = new Set(failedLatestRuns(pods.pods, roles).map((run) => run.job));
+  const health = platformHealth({ pods });
+  const oneOff = pods.pods.filter((p) => roles.get(p.name)?.kind === "one-off").length;
   const backupStored = storage.backups.reduce((s, r) => s + r.stored_bytes, 0);
   const backupCount = storage.backups.reduce((s, r) => s + r.artefacts, 0);
   const vol = storage.artefact_volume;
@@ -147,6 +167,16 @@ export function SystemStatusPanel() {
               {podsOpen ? "Hide service pods" : `Show service pods (${pods.pods.length})`}</M3Button>}
           </Box>
         </Box>
+        {/* The top bar's light, with its reason, so the page explains it (the same rule, PlatformHealthIndicator.tsx). */}
+        {pods.available && health && (
+          <Box data-testid="platform-health-summary" sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap", mb: 1 }}>
+            <StatusChip tone={health.state === "ok" ? "ok" : "bad"} label={`neXus ${health.state === "ok" ? "OK" : health.state}`} dense />
+            <Typography variant="body2">{health.reason}</Typography>
+            {oneOff > 0 && <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+              {oneOff} one-off job {oneOff === 1 ? "pod is" : "pods are"} listed below; one-off jobs and older scheduled runs do not change the status.
+            </Typography>}
+          </Box>
+        )}
         {!pods.available && <Alert severity="warning">{pods.reason}</Alert>}
         {(pods.quarantined_by_role ?? pods.modules ?? []).filter((row, index, rows) => row.quarantined_permits > 0
           && rows.findIndex((other) => other.owner === row.owner) === index).map((row) => (
@@ -160,14 +190,15 @@ export function SystemStatusPanel() {
           <Table size="small">
             <TableHead>
               <TableRow>
-                {["POD", "STATE", "READY", "RESTARTS", "AGE", "CPU", "MEMORY", "IMAGE"].map((h) => <TableCell key={h} sx={{ fontSize: 11, letterSpacing: "0.06em" }}>{h}</TableCell>)}
+                {["POD", "WHAT", "STATE", "READY", "RESTARTS", "AGE", "CPU", "MEMORY", "IMAGE"].map((h) => <TableCell key={h} sx={{ fontSize: 11, letterSpacing: "0.06em" }}>{h}</TableCell>)}
               </TableRow>
             </TableHead>
             <TableBody>
               {pods.pods.map((p) => (
                 <TableRow key={p.name} hover>
                   <TableCell sx={{ fontWeight: 600, fontSize: 12.5 }}>{p.name}</TableCell>
-                  <TableCell><StatusChip tone={p.state === "Running" ? "ok" : p.state === "Succeeded" ? "neutral" : "bad"} label={p.state} dense /></TableCell>
+                  <TableCell sx={{ fontSize: 12.5 }}>{roleLabel(roles.get(p.name))}</TableCell>
+                  <TableCell><StatusChip tone={stateTone(p, roles.get(p.name), failedLatest)} label={p.state} dense /></TableCell>
                   <TableCell>{p.ready}</TableCell>
                   <TableCell>{p.restarts > 0 ? <StatusChip tone="warn" label={String(p.restarts)} dense /> : "0"}</TableCell>
                   <TableCell>{age(p.started_at)}</TableCell>
