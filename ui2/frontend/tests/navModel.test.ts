@@ -18,7 +18,7 @@ describe("the navigation model (NAVIGATION_REDESIGN_2026_11_12.md section 2)", (
     expect(NAV_ENTRIES.map((e) => [e.label, e.kind === "group" ? e.children.map((c) => c.label) : null])).toEqual([
       ["Overview", null],
       ["Devices", null],
-      ["Policy and changes", ["Policy", "Trace", "Changes", "Rule object usage", "Zone matrix"]],
+      ["Policy and changes", ["Policy", "Trace", "Changes", "Rule object usage", "Zone matrix", "Cutover impact"]],
       ["Compliance and security", ["Compliance", "Lifecycle and security"]],
       ["Backups", null],
       ["Operations", ["HA and readiness", "Jobs", "Device health"]],
@@ -42,7 +42,7 @@ describe("the navigation model (NAVIGATION_REDESIGN_2026_11_12.md section 2)", (
       expect(leaf.label.slice(1)).not.toMatch(/ [A-Z][a-z]/);
     }
     const heading = (id: string) => SCREEN_HEADINGS[NAV_LEAVES.find((l) => l.id === id)!.screen];
-    for (const id of ["overview", "reports", "devices", "compliance", "policy", "trace", "changes", "backups", "packet-analysis", "sanitizer", "diagnostics", "rule-usage", "zone-matrix"]) {
+    for (const id of ["overview", "reports", "devices", "compliance", "policy", "trace", "changes", "backups", "packet-analysis", "sanitizer", "diagnostics", "rule-usage", "zone-matrix", "cutover"]) {
       expect(NAV_LEAVES.find((l) => l.id === id)!.label).toBe(heading(id));
     }
     expect(group("operations").children.map((c) => c.label)).toEqual(TAB_COVERAGE.find((r) => r.tabList === "Operations sections")!.labels);
@@ -52,7 +52,7 @@ describe("the navigation model (NAVIGATION_REDESIGN_2026_11_12.md section 2)", (
   it("keeps the plane gates as they were and gives Administration's pages none", () => {
     expect(Object.fromEntries(NAV_LEAVES.filter((l) => l.requiredPlane).map((l) => [l.id, l.requiredPlane]))).toEqual({
       devices: "Devices", compliance: "Compliance", lifecycle: "Devices", policy: "Policy",
-      "packet-analysis": "PacketAnalysis", sanitizer: "Sanitizer", "rule-usage": "Policy", "zone-matrix": "Policy",
+      "packet-analysis": "PacketAnalysis", sanitizer: "Sanitizer", "rule-usage": "Policy", "zone-matrix": "Policy", cutover: "Policy",
     });
     expect(group("administration").children.map((c) => [c.href, c.lock ?? null])).toEqual([
       ["?screen=administration&tab=registry", null],
@@ -169,7 +169,7 @@ describe("what a session is shown (plane checks only)", () => {
   it("hides an entry whose plane the session lacks, and a group once none of its children is left", () => {
     expect(labelsOf(visibleEntries(["Policy", "PacketAnalysis"], "operations-ha"))).toEqual([
       ["Overview", null],
-      ["Policy and changes", ["Policy", "Trace", "Changes", "Rule object usage", "Zone matrix"]],
+      ["Policy and changes", ["Policy", "Trace", "Changes", "Rule object usage", "Zone matrix", "Cutover impact"]],
       ["Backups", null],
       ["Operations", ["HA and readiness", "Jobs", "Device health"]],
       ["Reports", null],
@@ -182,7 +182,7 @@ describe("what a session is shown (plane checks only)", () => {
     const tools = visibleEntries(["Devices", "Compliance", "Policy"], "overview").find((e) => e.id === "tools")!;
     expect(leavesOf(tools).map((l) => l.label)).toEqual(["Diagnostics"]);
     const policy = visibleEntries(["Devices", "Compliance", "Policy"], "overview").find((e) => e.id === "policy-changes")!;
-    expect(leavesOf(policy).map((l) => l.label)).toEqual(["Policy", "Trace", "Changes", "Rule object usage", "Zone matrix"]);
+    expect(leavesOf(policy).map((l) => l.label)).toEqual(["Policy", "Trace", "Changes", "Rule object usage", "Zone matrix", "Cutover impact"]);
     // Without the Policy plane the entry is not listed, unless it is the open page.
     expect(visibleEntries(["Devices"], "overview").flatMap(leavesOf).map((l) => l.id)).not.toContain("rule-usage");
     expect(visibleEntries(["Devices"], "rule-usage").flatMap(leavesOf).map((l) => l.id)).toContain("rule-usage");
