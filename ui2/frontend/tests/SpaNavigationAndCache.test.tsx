@@ -133,6 +133,7 @@ describe("client-side pushState navigation", () => {
     expect(window.location.search).toBe("?screen=inventory");
     expect(await screen.findByText("No device to show")).toBeInTheDocument();
 
+    if (!within(rail).queryByRole("link", { name: "HA and readiness" })) fireEvent.click(within(rail).getByRole("button", { name: "Operations" }));
     fireEvent.click(within(rail).getByRole("link", { name: "HA and readiness" }));
     expect(window.location.search).toBe("?screen=operations");
     expect(await screen.findByText("No HA pair or cluster enrolled")).toBeInTheDocument();
@@ -237,6 +238,7 @@ describe("client-side pushState navigation", () => {
     render(<App />);
     const rail = screen.getByRole("navigation", { name: "Primary" });
 
+    if (!within(rail).queryByRole("link", { name: "Compliance" })) fireEvent.click(within(rail).getByRole("button", { name: "Compliance and security" }));
     fireEvent.click(within(rail).getByRole("link", { name: "Compliance" }));
     // Frame header is rendered synchronously on the same tick before any fetch resolves
     expect(screen.getByRole("heading", { name: "Compliance" })).toBeInTheDocument();
@@ -309,6 +311,7 @@ describe("shared shell-level cache deduplication, staleness and invalidation", (
 
     // Navigate to Operations (which also calls listDevices() on mount) within 30 s
     now += 5_000;
+    if (!within(rail).queryByRole("link", { name: "HA and readiness" })) fireEvent.click(within(rail).getByRole("button", { name: "Operations" }));
     fireEvent.click(within(rail).getByRole("link", { name: "HA and readiness" }));
     expect(await screen.findByText("CLS-ROMEO-01")).toBeInTheDocument();
 

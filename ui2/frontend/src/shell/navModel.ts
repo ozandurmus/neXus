@@ -39,8 +39,6 @@ export interface NavGroup {
   readonly label: string;
   readonly icon: IconName;
   readonly children: readonly NavLeaf[];
-  /** Closed on a viewer's first visit (Administration); every other group starts open. */
-  readonly startsClosed?: boolean;
 }
 
 export type NavEntry = NavLink | NavGroup;
@@ -83,7 +81,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     { id: "diagnostics", label: "Diagnostics", screen: "diagnostics", href: "?screen=diagnostics" },
   ] },
   // Listed for every session in every layout; a page the session may not use is locked, never hidden (amendment 6).
-  { kind: "group", id: "administration", label: "Administration", icon: "admin", startsClosed: true, children: [
+  { kind: "group", id: "administration", label: "Administration", icon: "admin", children: [
     adminPage("registry", "Device registry"),
     adminPage("access", "Access and identity", "adminRead"),
     // Which scheduled job families run (PO 2026-11-13 amendment): job configuration, beside the product's other settings.
@@ -191,22 +189,10 @@ export function leafLocked(leaf: NavLeaf, session: NavSessionGrants | null | und
   return !session.canReadAdministration;
 }
 
-/** Which groups are open: the viewer's stored choice, else the group's default; the active leaf's group is always open. */
-export function groupOpen(group: NavGroup, stored: Readonly<Record<string, boolean>>, activeId: string): boolean {
-  if (group.children.some((c) => c.id === activeId)) return true;
-  return stored[group.id] ?? !group.startsClosed;
-}
-
-/** The stored open/closed choices (`id:1,id:0`), tolerant of anything else in the store. */
-export function parseGroupChoices(raw: string | null): Readonly<Record<string, boolean>> {
-  const out: Record<string, boolean> = {};
-  for (const part of (raw ?? "").split(",")) {
-    const [id, flag] = part.split(":");
-    if (id && (flag === "1" || flag === "0") && NAV_ENTRIES.some((e) => e.kind === "group" && e.id === id)) out[id] = flag === "1";
-  }
-  return out;
-}
-
-export function formatGroupChoices(choices: Readonly<Record<string, boolean>>): string {
-  return Object.entries(choices).map(([id, open]) => `${id}:${open ? "1" : "0"}`).join(",");
+/**
+ * The sidebar is an accordion (PO 2026-11-14): one group open at a time. On arrival, and after every navigation, the
+ * open group is the one that holds the open page, or none for a top-level page. Nothing is remembered across visits.
+ */
+export function defaultOpenGroup(activeId: string): string | null {
+  return groupOfLeaf(activeId)?.id ?? null;
 }

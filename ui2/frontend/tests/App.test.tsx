@@ -78,8 +78,12 @@ describe("the UI 2.0 shell navigation", () => {
     // PO 2026-11-13 amendment: Reports moved below Operations; Policy and changes before Compliance and security.
     expect(NAV_ENTRIES.map((e) => e.label)).toEqual(["Overview", "Devices", "Policy and changes", "Compliance and security", "Backups", "Operations", "Reports", "Tools", "Administration"]);
     for (const entry of NAV_ENTRIES) expect(within(rail).getByText(entry.label)).toBeInTheDocument();
-    // The three tools and Rule object usage are listed in place (no popup); Administration's pages open with its group. The wide sidebar has no drawer.
-    for (const label of ["Packet analysis", "Data sanitizer", "Diagnostics", "Rule object usage"]) expect(within(rail).getByRole("link", { name: label })).toBeInTheDocument();
+    // The groups are an accordion (PO 2026-11-14): a group's pages are listed in place once its header opens it. The wide sidebar has no drawer.
+    fireEvent.click(within(rail).getByRole("button", { name: "Tools" }));
+    for (const label of ["Packet analysis", "Data sanitizer", "Diagnostics"]) expect(within(rail).getByRole("link", { name: label })).toBeInTheDocument();
+    fireEvent.click(within(rail).getByRole("button", { name: "Policy and changes" }));
+    expect(within(rail).getByRole("link", { name: "Rule object usage" })).toBeInTheDocument();
+    expect(within(rail).queryByRole("link", { name: "Diagnostics" })).toBeNull();
     expect(within(rail).queryByText("Device registry")).toBeNull();
     expect(screen.queryByRole("button", { name: "Open navigation" })).toBeNull();
   });
@@ -92,8 +96,15 @@ describe("the UI 2.0 shell navigation", () => {
     fireEvent.click(within(rail).getByRole("button", { name: "Open navigation" }));
 
     const drawer = screen.getByRole("navigation", { name: "Primary navigation drawer" });
-    fireEvent.click(within(drawer).getByRole("button", { name: "Administration" }));
-    expect(within(drawer).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")])).toEqual(NAV_LEAVES.map((l) => [l.label, l.href]));
+    // One group open at a time: open each in turn and collect the links the drawer shows.
+    const seen = new Map<string, string | null>();
+    const collect = () => within(drawer).getAllByRole("link").forEach((a) => seen.set(a.textContent ?? "", a.getAttribute("href")));
+    collect();
+    for (const entry of NAV_ENTRIES.filter((e) => e.kind === "group")) {
+      fireEvent.click(within(drawer).getByRole("button", { name: entry.label }));
+      collect();
+    }
+    expect(NAV_LEAVES.map((l) => [l.label, seen.get(l.label)])).toEqual(NAV_LEAVES.map((l) => [l.label, l.href]));
     fireEvent.click(within(drawer).getByRole("button", { name: "Close navigation" }));
     expect(screen.getByRole("navigation", { name: "Primary" })).toBeInTheDocument();
   });
