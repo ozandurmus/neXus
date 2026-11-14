@@ -1,17 +1,78 @@
 # neXus
 
-neXus is a multi-vendor firewall evidence and operations platform. The maintained
-product is **UI2: Java 21 and Spring Boot with a React/TypeScript and MUI frontend**,
-deployed as container workloads on Kubernetes/k3s.
+neXus is a firewall governance platform for an enterprise estate of firewalls and
+their management servers. It collects evidence read-only from the devices, keeps
+encrypted backups, shows configuration, compliance, policy and HA state, and runs a
+small set of controlled, approved operations (backup recovery, cluster failover).
+The maintained product is **UI2: Java 21 and Spring Boot with a React/TypeScript
+and MUI frontend**, deployed as container workloads on a single k3s host.
 
 **SEE → VERIFY → TRACE → RECOVER → OPERATE**
 
-It brings inventory, configuration, compliance, encrypted backup and controlled
-recovery with execution transcripts, HA/failover readiness, policy viewing for
-Check Point MDS and Palo Alto Panorama, and gated diagnostics into one workspace.
 Inventory describes observed runtime facts; configuration describes configured
 state; alignment compares intent with actual evidence. Missing evidence remains
-`UNKNOWN` rather than becoming a guessed answer.
+`UNKNOWN` rather than becoming a guessed answer. Management policy is configured
+intent, never proof of what a gateway enforces.
+
+## Supported vendors
+
+| Vendor | Depth |
+| --- | --- |
+| Check Point (gateways, ClusterXL, VSX, Quantum Spark, MDS and its Domains) | Inventory, configuration, compliance, backups (gateway, Gaia snapshot, MDS export), policy by Domain, HA readiness and failover, Live Patch and advisories |
+| Palo Alto (firewalls, Panorama) | Inventory, effective-running configuration, compliance, device-state backups, policy by device group, change actor from the Panorama config log, HA readiness and failover, licenses and advisories |
+| Cisco ASA | Inventory, configuration, compliance, backups, unit and pair identity; policy parser built, readiness measured |
+| FortiGate | Inventory, configuration, compliance, backups, unit and pair identity |
+| Others (management appliances, proxies, load balancers, DNS/IPAM) | Backup, inventory or version and license reads where a gated read exists |
+
+## What it does today (on `main`)
+
+- **Inventory and configuration**: identity-verified collection, per-member HA
+  facts, cluster member differences, configuration sections and change state.
+- **Compliance**: CIS and NIST controls per vendor, plus a financial-sector
+  baseline that cites neXus identifiers; evidence coverage shown beside the score.
+- **Backups**: encrypted artefacts with retention, size and deviation alerts,
+  credential canary, and transcripts of every attempt. Restore from the UI stays off.
+- **Operations**: jobs, scheduled job families with audited switches, device
+  health, platform status and a health light in the top bar.
+- **HA readiness and failover** for Check Point and Palo Alto: readiness checks,
+  request-bound approvals, one fleet mutation at a time and uncertain-outcome
+  fencing. Readiness never authorizes execution.
+- **Policy**: rule view per Check Point Domain and Panorama device group, hygiene
+  (safe mode; legacy mode built, not yet on screen), rule object usage, and
+  Trace (path analysis across collected policy and routes).
+- **Change feed**: policy changes, configuration log events and installs with the
+  acting administrator where the vendor records one.
+- **Device system logs**: scheduled collection, masked log views and device events.
+- **Packet Analysis and Data Sanitizer**: uploaded captures analysed in a
+  dedicated worker; keyed, reversible sanitizing of captures, text and tables.
+- **Lifecycle and security**: end-of-life catalog, licenses, support contracts,
+  Live Patch, and vendor advisories matched to the fleet's versions.
+- **Sign-in**: Active Directory through a service bind, group-to-role bindings.
+- **aiview**: a masked, read-only persona whose every view uses deterministic
+  pseudonyms; all shared evidence and reviews use it.
+
+## In the release queue (built and tested, not on `main` yet)
+
+Cisco ASA readiness, the integration test suite as a CI gate, Check Point
+advisories from Jumbo pages, zone matrix steps 1-2 with its screen, ACI
+segmentation step 1 (pre-cutover impact analysis), API latency fixes, a batched
+Backups read, the lifecycle vendor catalog and several operations fixes. The
+order and migration numbers are in [CURRENT_STATE.md](CURRENT_STATE.md).
+
+## Designed, not built
+
+Zone matrix steps 3 and later, the ACI cutover itself, topology sources (ACI,
+Citrix ADC and F5 path drawing), rule recertification and cleanup campaigns,
+FortiGate policy wiring and support bundles. A design or DRAFT contract here is
+not an implementation claim.
+
+## Where the authority is
+
+[AGENTS.md](AGENTS.md) is the engineering and security constitution;
+[CURRENT_STATE.md](CURRENT_STATE.md) and [project/QUEUE.md](project/QUEUE.md) hold
+current delivery state; FROZEN contracts and PO decision records in
+[docs/design/](docs/design/) hold scope law; [docs/README.md](docs/README.md) is the
+documentation index.
 
 ## Architecture
 
@@ -39,13 +100,16 @@ execution use separate gated workflows; readiness does not authorize execution.
 The browser submits typed intent, never device commands or transport parameters.
 Device access and command authorization stay server-side.
 
-Deployment uses k3s on a single host, kaniko image builds, a Trivy/Semgrep/gitleaks
+Deployment uses k3s on a single host: the Spring service, a general worker and
+dedicated policy, configuration, compliance and packet-analysis pods share one
+PostgreSQL 16 database; an advisory fetch CronJob reaches public sources through
+the proxy. The pipeline uses kaniko image builds, a Trivy/Semgrep/gitleaks
 security gate, and in-cluster Playwright e2e verification. The frontend is served
 by Java; no long-running Node service is required.
 
 ## Modules
 
-The eleven Java modules are declared in [settings.gradle.kts](ui2/settings.gradle.kts).
+The thirteen Java modules are declared in [settings.gradle.kts](ui2/settings.gradle.kts).
 The frontend is a build-time npm workspace, not a Gradle module.
 
 | Path | Responsibility |
@@ -59,6 +123,8 @@ The frontend is a build-time npm workspace, not a Gradle module.
 | [ui2/capability-registry](ui2/capability-registry/) | Capability definitions and command-gate resolution |
 | [ui2/ldap-adapter](ui2/ldap-adapter/) | Directory integration |
 | [ui2/cli](ui2/cli/) | Administrative CLI |
+| [ui2/sanitizer](ui2/sanitizer/) | Data Sanitizer engine and reversible vault |
+| [ui2/packet-analysis](ui2/packet-analysis/) | Packet Analysis engine and its dedicated worker |
 | [ui2/architecture-tests](ui2/architecture-tests/) | Architecture boundary checks |
 | [ui2/integration-tests](ui2/integration-tests/) | Database integration gates |
 | [ui2/frontend](ui2/frontend/) | React application, Vitest tests and Playwright e2e |
@@ -174,6 +240,5 @@ records moved documentation. Active contracts and referenced evidence remain in
 ## Roadmap
 
 Follow [project/QUEUE.md](project/QUEUE.md) and [CURRENT_STATE.md](CURRENT_STATE.md)
-for current scope, sequencing and validation status across vendor coverage,
-evidence quality, recovery and controlled operations. Planned features and
+for current scope, sequencing and validation status. Planned features and
 automated tests are not claims of live validation.

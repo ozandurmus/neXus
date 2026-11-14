@@ -25,9 +25,8 @@ only (V209/V210). Authority: [NSPM decision](docs/design/PO_DECISION_RECORD_2026
 release queue below, one PR per lane after a live migration dry run.
 `NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory
 sign-in landed; SAML, JSON logs and monitoring endpoints are not built.
-**Contradiction, not reconciled here:** `project/java_product_plan.json` names
-`recovery_offhost_key_custody` as next (2026-11-14), `project/roadmap.json`
-still names Overview acceptance.
+Next: `recovery_offhost_key_custody` (ratified 2026-11-14, roadmap and Java
+plan agree); Overview acceptance heads the upcoming list.
 
 In the release queue (not live; migration numbers follow queue order, Flyway
 runs without outOfOrder):

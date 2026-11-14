@@ -157,12 +157,18 @@
       "contract_doc": "docs/design/ZONE_MATRIX_CONTRACT.md"
     },
     "next": {
-      "build": "overview_acceptance_and_member_specific_tuning",
-      "title": "Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today)",
+      "build": "recovery_offhost_key_custody",
+      "title": "Off-host copy of the platform backups and recorded custody of the decryption key",
       "status": "planned",
-      "detail": "docs/design/OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md"
+      "detail": "docs/history/backlog/recovery_offhost_key_custody.md"
     },
     "upcoming": [
+      {
+        "build": "overview_acceptance_and_member_specific_tuning",
+        "title": "Overview acceptance under aiview (per-member drift tuning done 2026-11-14)",
+        "status": "planned",
+        "detail": "docs/design/OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md"
+      },
       {
         "build": "path_analysis_phase_b",
         "title": "Path analysis phase B: UDP matchers (command literals await PO approval), chained NAT, return path",

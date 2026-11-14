@@ -7,3 +7,5 @@ UI2_0_B1_01C fixes ClusterIP-only Services, so the database has no address outsi
 2026-11-14 backlog truth: still open (P1, size S). Today: Any pod in the cluster can open the database port. Evidence: Contract frozen PR 395; deploy/ui2 has policies only for service/policy/packet-analysis/advisory pods, none selecting the database pod
 
 2026-11-14 verified live: the ui2 namespace has five NetworkPolicies (advisory-fetch x2, packet-analysis, policy, service machine port); none selects the database pod.
+
+2026-11-14: contract conflict open; PO decision needed before build.

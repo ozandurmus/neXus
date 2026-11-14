@@ -8,11 +8,12 @@ NOW is NXS-LOCAL-0391: four ship batches (V212-V220) are built and tested but no
 ## What changed this session
 - State reconciled from 0d13c450 to e70dbdf1: builds NXS-LOCAL-0384..0391 recorded through the project tool.
 - CURRENT_STATE: product today, release queue (not live), open PO decisions; stale development-mode and failover-trial lines corrected.
+- README rewritten as today's product overview; backlog notes for queued work, seven new items; roadmap Next aligned.
 
 ## Exact next action
 Ship batches 1-4 in order, each after its live migration dry run; then refresh this state.
 PO decides: product name, ASA identity ACE narrowing, DB NetworkPolicy conflict, off-host recovery target.
-Reconcile Next: java_product_plan.json says off-host key custody, roadmap.json says Overview acceptance.
+Next after the queue: off-host backup copy and key custody (roadmap and Java plan agree).
 
 ## Test delta
 None in product code; tools tests and the Java ProjectPlanReaderTest run for the plan data.
