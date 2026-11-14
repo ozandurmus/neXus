@@ -58,6 +58,9 @@ public final class LocalIdentityAdministrationController {
             HttpServletRequest servletRequest) {
         String actorFingerprint = actingAdmin(servletRequest);
         char[] password = request.initialPassword();
+        if (request.localIdentityName() == null || request.localIdentityName().isBlank() || password == null) {
+            return validationFailed("LOCAL_IDENTITY_FIELDS_REQUIRED");
+        }
         try {
             LocalIdentityAdministrationPort.LocalIdentityView view =
                     localIdentityAdministration.create(actorFingerprint, request.localIdentityName(), password);
@@ -81,6 +84,9 @@ public final class LocalIdentityAdministrationController {
             HttpServletRequest servletRequest) {
         String actorFingerprint = actingAdmin(servletRequest);
         char[] password = request.newPassword();
+        if (request.localIdentityId() == null || password == null) {
+            return validationFailed("LOCAL_IDENTITY_FIELDS_REQUIRED");
+        }
         try {
             LocalIdentityAdministrationPort.MutationResult result =
                     localIdentityAdministration.setPassword(actorFingerprint, request.localIdentityId(), password);
@@ -100,6 +106,13 @@ public final class LocalIdentityAdministrationController {
     public ResponseEntity<Map<String, Object>> enable(@RequestBody IdentityRequest request,
             HttpServletRequest servletRequest) {
         return respond(localIdentityAdministration.enable(actingAdmin(servletRequest), request.localIdentityId()));
+    }
+
+    private static ResponseEntity<Map<String, Object>> validationFailed(String reasonCode) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("error", "VALIDATION_FAILED");
+        body.put("reason_code", reasonCode);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
     }
 
     private static void zero(char[] value) {

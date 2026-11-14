@@ -176,7 +176,7 @@ public final class LoginFlow {
     }
 
     public ResolveResult resolve(String conflictToken, String action, Instant now) {
-        PendingConflict pending = pendingConflicts.remove(conflictToken);
+        PendingConflict pending = conflictToken == null ? null : pendingConflicts.remove(conflictToken);
         if (pending == null || !now.isBefore(pending.expiresAt())) {
             // Expired or unrecognized token: refuse-by-inaction is the
             // default (C3 §3.4) -- the prior session is left untouched
