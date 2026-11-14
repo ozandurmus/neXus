@@ -1,31 +1,28 @@
 import { useState } from "react";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
+import { DataTable, type DataColumn } from "../../shell/DataTable";
 import { M3Button, StatusChip } from "../../shell/M3Widgets";
 import { StatePanel, Ts } from "../../shell/States";
+import { actorLabel } from "../../shell/presenters";
 import type { Tone } from "../../shell/tone";
-import { MONO, m3 } from "../../theme/m3Theme";
-import { TYPE } from "../../theme/tokens";
-import type { ZoneMatrixData, ZoneNotice } from "./ZoneMatrixScreen";
+import { m3 } from "../../theme/m3Theme";
+import type { ZoneNotice, ZoneTabProps } from "./ZoneMatrixScreen";
+import { Hash, Hint, SectionTitle, mono, panelSx } from "./zoneMatrixUi";
 import {
-  addressCount, discardZoneDraft, publishCheckText, publishZoneDraft, shortHash, zoneErrorLines, zoneRoleLabel,
-  type FamilySizes, type PublishCheck, type ZoneDiff, type ZoneDiffRow, type ZoneMove, type ZoneVersionDetail, type ZoneVersionState,
+  PUBLISH_FINAL_TEXT, addressCount, discardZoneDraft, publishCheckText, publishZoneDraft, zoneErrorLines, zoneRoleLabel,
+  type FamilySizes, type PublishCheck, type ZoneDiff, type ZoneDiffRow, type ZoneMove, type ZoneRevision, type ZoneVersionDetail,
+  type ZoneVersionState, type ZoneVersionSummary,
 } from "./zoneMatrixApi";
 
-const mono = { fontFamily: MONO, fontSize: TYPE.mono.fontSize, lineHeight: TYPE.mono.lineHeight } as const;
-const panel = { border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", p: 2, display: "flex", flexDirection: "column", gap: 1.25 } as const;
+export const RATIONALE_LIMIT = 2000;
 
 const STATE_WORD: Record<ZoneVersionState, { readonly word: string; readonly tone: Tone }> = {
   DRAFT: { word: "Draft", tone: "attn" },
-  ACTIVE: { word: "Active", tone: "ok" },
+  ACTIVE: { word: "Active", tone: "brand" },
   RETIRED: { word: "Retired", tone: "neutral" },
   DISCARDED: { word: "Discarded", tone: "neutral" },
 };
@@ -35,146 +32,155 @@ const CHANGE_KIND: Record<string, string> = {
   DRAFT_DISCARD: "Draft discarded", PUBLISH: "Published",
 };
 
-const Hash = ({ value }: { readonly value: string | null | undefined }) =>
-  <Box component="span" title={value ?? undefined} sx={mono}>{shortHash(value)}</Box>;
-
 const familyWord = (family: string) => (family === "IPV6" ? "IPv6" : "IPv4");
+
+/** The built-in pseudo-zone is a state, worded as one. */
+const placeName = (name: string) => (name === "UNASSIGNED" ? "unassigned" : name);
 
 /** "256 IPv4 addresses move from Z-APP to Z-DB" (contract 3.2). */
 export function moveText(move: ZoneMove): string {
-  return `${addressCount(move.addresses)} ${familyWord(move.family)} ${move.addresses === "1" ? "address moves" : "addresses move"} from ${move.from} to ${move.to}`;
+  return `${addressCount(move.addresses)} ${familyWord(move.family)} ${move.addresses === "1" ? "address moves" : "addresses move"} from ${placeName(move.from)} to ${placeName(move.to)}`;
 }
 
-/** One changed zone as a headline and its detail lines. */
+/** One changed zone as a headline and its detail lines (the sizes have their own columns). */
 export function zoneChangeLines(row: ZoneDiffRow): { readonly headline: string; readonly details: readonly string[] } {
   const headline = row.change === "ADDED" ? `Zone ${row.name_after ?? row.zone_id} added`
     : row.change === "REMOVED" ? `Zone ${row.name_before ?? row.zone_id} removed`
     : `Zone ${row.name_after ?? row.zone_id} changed${row.name_before && row.name_before !== row.name_after ? ` (was ${row.name_before})` : ""}`;
   const details: string[] = [];
   if (row.change === "CHANGED" && row.role_before !== row.role_after) details.push(`Zone role: ${zoneRoleLabel(row.role_before)} to ${zoneRoleLabel(row.role_after)}`);
+  if (row.change === "ADDED" && row.role_after) details.push(`Zone role: ${zoneRoleLabel(row.role_after)}`);
   const blocks = (label: string, value: readonly string[] | number) => {
     if (typeof value === "number") { if (value > 0) details.push(`${label}: ${value}`); }
     else if (value.length > 0) details.push(`${label}: ${value.join(", ")}`);
   };
   blocks("Blocks added", row.blocks_added);
   blocks("Blocks removed", row.blocks_removed);
-  const sizes = (family: "IPV4" | "IPV6") => {
-    const before = row.effective_before?.[family], after = row.effective_after?.[family];
-    if (before !== after) details.push(`${familyWord(family)} addresses: ${addressCount(before)} to ${addressCount(after)}`);
-  };
-  sizes("IPV4"); sizes("IPV6");
   return { headline, details };
 }
 
-interface TabProps {
-  readonly data: ZoneMatrixData;
-  readonly refresh: () => void;
-  readonly notify: (notice: ZoneNotice | null) => void;
-}
+const sizeChange = (before: string | undefined, after: string | undefined) =>
+  before === after ? addressCount(after) : `${addressCount(before)} to ${addressCount(after)}`;
 
-/** The Versions tab: the version history, the draft's change list, the publish panel and the draft's revisions. */
-export function VersionsTab({ data, refresh, notify }: TabProps) {
-  const { can, draft, diff, publish_check: publishCheck } = data.draft;
+const sizesText = (sizes: FamilySizes | undefined) => `IPv4 ${addressCount(sizes?.IPV4)}, IPv6 ${addressCount(sizes?.IPV6)}`;
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * The Versions tab: first the draft for review (its changes, the publish panel, discard, its revisions) for the people
+ * the server shows it to, then the history of published versions.
+ */
+export function VersionsTab({ data, refresh, notify }: ZoneTabProps) {
+  const { can, draft, diff, publish_check: publishCheck, draft_exists: exists } = data.draft;
   return (
-    <Stack gap={2.5}>
-      <Stack gap={1}>
-        <Typography component="h3" sx={{ ...TYPE.section, m: 0 }}>Version history</Typography>
-        {data.versions.length === 0 ? <StatePanel variant="empty" title="No version yet" body="A version appears here once a draft is started or published." /> : (
-          <Table size="small" aria-label="Version history">
-            <TableHead>
-              <TableRow>
-                <TableCell>Version</TableCell><TableCell>State</TableCell><TableCell>Content hash</TableCell>
-                <TableCell>Published by</TableCell><TableCell>Published at</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {data.versions.map((v) => (
-                <TableRow key={v.version_id}>
-                  <TableCell>{v.number ?? (v.state === "DRAFT" ? `Draft r${v.revision}` : "Not published")}</TableCell>
-                  <TableCell><StatusChip dense tone={STATE_WORD[v.state]?.tone ?? "neutral"} label={STATE_WORD[v.state]?.word ?? v.state} /></TableCell>
-                  <TableCell><Hash value={v.content_sha256} /></TableCell>
-                  <TableCell>{v.published_by ?? "Not published"}</TableCell>
-                  <TableCell>{v.published_at ? <Ts at={v.published_at} /> : "Not published"}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </Stack>
-
-      {draft === null ? (data.draft.draft_exists ? (
-        <StatePanel variant="empty" title="A draft is being prepared" announce="none"
-          body="Editors are changing the zones. The changes apply only after a second person publishes them." />
+    <Stack gap={3}>
+      {draft === null ? (
+        // A reader the server withholds the draft from is told so above the tabs; nothing else to say here.
+        exists ? null : (
+          <StatePanel variant="empty" title="There is no draft" announce="none"
+            body={can.edit ? "A draft starts when a zone is added or changed on the Zones tab." : "Nothing is waiting to be published."} />
+        )
       ) : (
-        <StatePanel variant="empty" title="There is no draft" announce="none"
-          body={can.edit ? "A draft starts when a zone is added or changed on the Zones tab." : "Nothing is waiting to be published."} />
-      )) : <>
-        <Stack gap={1}>
-          <Typography component="h3" sx={{ ...TYPE.section, m: 0 }}>
-            Draft r{draft.revision}, not published <Box component="span" sx={{ ml: 1, color: m3.onSurfaceVar, fontWeight: 400 }}><Hash value={draft.content_sha256} /></Box>
-          </Typography>
+        <Stack gap={2}>
+          <SectionTitle note={<>Draft r{draft.revision} against the active version. Content hash <Hash value={draft.content_sha256} />.</>}>Draft review</SectionTitle>
           {diff ? <DraftChanges diff={diff} /> : null}
+          {can.publish ? (
+            <PublishPanel key={`${draft.revision}:${draft.content_sha256}`} draft={draft} check={publishCheck}
+              rationaleRequired={Boolean(diff?.rationale_required)} refresh={refresh} notify={notify} />
+          ) : null}
+          {can.edit ? <DiscardDraft key={draft.revision} draft={draft} refresh={refresh} notify={notify} /> : null}
+          <Revisions revisions={draft.revisions} />
         </Stack>
-        {can.publish ? <PublishPanel key={`${draft.revision}:${draft.content_sha256}`} draft={draft} check={publishCheck} rationaleRequired={Boolean(diff?.rationale_required)} refresh={refresh} notify={notify} /> : null}
-        {can.edit ? <DiscardDraft key={draft.revision} draft={draft} refresh={refresh} notify={notify} /> : null}
-        <Stack gap={1}>
-          <Typography component="h3" sx={{ ...TYPE.section, m: 0 }}>Draft revisions</Typography>
-          <Table size="small" aria-label="Draft revisions">
-            <TableHead>
-              <TableRow><TableCell>Revision</TableCell><TableCell>Actor</TableCell><TableCell>Time</TableCell><TableCell>Change</TableCell><TableCell>Content hash</TableCell></TableRow>
-            </TableHead>
-            <TableBody>
-              {draft.revisions.map((r) => (
-                <TableRow key={r.revision}>
-                  <TableCell>r{r.revision}</TableCell><TableCell>{r.actor}</TableCell>
-                  <TableCell><Ts at={r.occurred_at} seconds /></TableCell>
-                  <TableCell>{CHANGE_KIND[r.change_kind] ?? r.change_kind}</TableCell>
-                  <TableCell><Hash value={r.content_sha256} /></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Stack>
-      </>}
+      )}
+      <History versions={data.versions} />
     </Stack>
   );
 }
 
-const sizesText = (sizes: FamilySizes | undefined) => `IPv4 ${addressCount(sizes?.IPV4)}, IPv6 ${addressCount(sizes?.IPV6)}`;
+function History({ versions }: { readonly versions: readonly ZoneVersionSummary[] }) {
+  const columns: DataColumn<ZoneVersionSummary>[] = [
+    { key: "number", header: "Version", width: 110, render: (v) => (v.number !== null ? String(v.number) : `Draft r${v.revision}`) },
+    { key: "state", header: "State", width: 130, render: (v) => <StatusChip dense tone={STATE_WORD[v.state]?.tone ?? "neutral"} label={STATE_WORD[v.state]?.word ?? v.state} /> },
+    { key: "hash", header: "Content hash", width: 170, title: (v) => v.content_sha256, render: (v) => <Hash value={v.content_sha256} /> },
+    { key: "by", header: "Published by", width: 220, title: (v) => (v.published_by ? actorLabel(v.published_by).raw ?? v.published_by : undefined),
+      render: (v) => (v.published_by ? actorLabel(v.published_by).label : "Not published") },
+    { key: "at", header: "Published at", title: () => undefined, render: (v) => (v.published_at ? <Ts at={v.published_at} /> : "Not published") },
+  ];
+  return (
+    <Stack gap={1}>
+      <SectionTitle note="Every published version is immutable and carries the hash of its content.">Version history</SectionTitle>
+      <DataTable ariaLabel="Version history" columns={columns} rows={versions} rowKey={(v) => v.version_id}
+        emptyText="No version has been published." />
+    </Stack>
+  );
+}
 
-/** What publishing the draft would change against the active version: zones, then the addresses that move. */
+function Revisions({ revisions }: { readonly revisions: readonly ZoneRevision[] }) {
+  const columns: DataColumn<ZoneRevision>[] = [
+    { key: "revision", header: "Revision", width: 110, render: (r) => `r${r.revision}` },
+    { key: "actor", header: "Actor", width: 220, title: (r) => actorLabel(r.actor).raw ?? r.actor, render: (r) => actorLabel(r.actor).label },
+    { key: "time", header: "Time", width: 190, title: () => undefined, render: (r) => <Ts at={r.occurred_at} seconds /> },
+    { key: "kind", header: "Change", width: 190, render: (r) => CHANGE_KIND[r.change_kind] ?? r.change_kind },
+    { key: "hash", header: "Content hash", title: (r) => r.content_sha256, render: (r) => <Hash value={r.content_sha256} /> },
+  ];
+  return (
+    <Stack gap={1}>
+      <SectionTitle>Draft revisions</SectionTitle>
+      <DataTable ariaLabel="Draft revisions" columns={columns} rows={revisions} rowKey={(r) => String(r.revision)} emptyText="No revisions." />
+    </Stack>
+  );
+}
+
+/** What publishing the draft would change against the active version: a summary, the address moves, then the zones. */
 function DraftChanges({ diff }: { readonly diff: ZoneDiff }) {
   if (diff.zones.length === 0 && diff.moves.length === 0) {
     return <Typography variant="body2">The draft is the same as the active version. There is nothing to publish.</Typography>;
   }
+  const loosening = diff.moves.filter((m) => m.leaves_a_zone);
+  const ordered = [...loosening, ...diff.moves.filter((m) => !m.leaves_a_zone)];
+  const added = diff.zones.filter((z) => z.change === "ADDED").length;
+  const removed = diff.zones.filter((z) => z.change === "REMOVED").length;
+  const changed = diff.zones.length - added - removed;
+  const columns: DataColumn<ZoneDiffRow>[] = [
+    { key: "zone", header: "Zone", wrap: true, title: () => undefined, render: (row) => {
+      const { headline, details } = zoneChangeLines(row);
+      return (
+        <Box>
+          <Typography component="span" variant="body2" sx={{ fontWeight: 600, display: "block" }}>{headline}</Typography>
+          {details.map((line) => <Typography key={line} component="span" variant="body2" sx={{ color: m3.onSurfaceVar, display: "block", overflowWrap: "anywhere" }}>{line}</Typography>)}
+        </Box>
+      );
+    } },
+    { key: "v4", header: "IPv4 addresses", width: 190, align: "right", title: () => undefined, render: (row) => sizeChange(row.effective_before?.IPV4, row.effective_after?.IPV4) },
+    { key: "v6", header: "IPv6 addresses", width: 230, align: "right", title: () => undefined, render: (row) => sizeChange(row.effective_before?.IPV6, row.effective_after?.IPV6) },
+  ];
   return (
     <Stack gap={1.5} data-testid="draft-changes">
-      <Box component="ul" aria-label="Changed zones" sx={{ m: 0, pl: 2.5 }}>
-        {diff.zones.map((row) => {
-          const { headline, details } = zoneChangeLines(row);
-          return (
-            <li key={row.zone_id}>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>{headline}</Typography>
-              {details.map((line) => <Typography key={line} variant="body2" sx={{ color: m3.onSurfaceVar }}>{line}</Typography>)}
-            </li>
-          );
-        })}
-      </Box>
+      <Typography variant="body2" data-testid="draft-summary" sx={{ fontWeight: 600 }}>
+        {[
+          plural(added, "zone added", "zones added"), plural(removed, "zone removed", "zones removed"), plural(changed, "zone changed", "zones changed"),
+          plural(diff.moves.length, "address move", "address moves"),
+        ].join(", ")}
+        {loosening.length > 0 ? `; ${plural(loosening.length, "loosening change", "loosening changes")}` : ""}.
+      </Typography>
+
       {diff.moves.length > 0 ? (
-        <Box component="ul" aria-label="Address moves" sx={{ m: 0, pl: 2.5 }}>
-          {diff.moves.map((move, index) => (
+        <Box component="ul" aria-label="Address moves" sx={{ ...panelSx, m: 0, listStyle: "none", gap: 1 }}>
+          {ordered.map((move, index) => (
             <li key={index} data-loosening={move.leaves_a_zone ? "true" : undefined}>
               <Typography variant="body2" sx={{ fontWeight: move.leaves_a_zone ? 600 : 400 }}>
                 {moveText(move)}
                 {move.leaves_a_zone ? <Box component="span" sx={{ ml: 1 }}><StatusChip dense tone="warn" label="Loosening change" /></Box> : null}
               </Typography>
               {move.leaves_a_zone ? (
-                <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>These addresses leave zone {move.from}. Publishing needs a rationale.</Typography>
+                <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>These addresses leave zone {placeName(move.from)}. Publishing needs a rationale.</Typography>
               ) : null}
             </li>
           ))}
         </Box>
       ) : null}
+
+      {diff.zones.length > 0 ? <DataTable ariaLabel="Changed zones" columns={columns} rows={diff.zones} rowKey={(row) => row.zone_id} /> : null}
       <Typography variant="body2">
         Unassigned address space: {sizesText(diff.unassigned_before)} before; {sizesText(diff.unassigned_after)} after.
       </Typography>
@@ -184,18 +190,21 @@ function DraftChanges({ diff }: { readonly diff: ZoneDiff }) {
 
 /**
  * Four-eyes publish (contract 3.4). The server decides who may publish (`publish_check`); the request carries the
- * revision and hash of the draft on screen, so a draft that changed since is refused and reloaded.
+ * revision and hash of the draft on screen, so a draft that changed since is refused and reloaded. Publishing asks for
+ * a confirmation that says it is final.
  */
 function PublishPanel({ draft, check, rationaleRequired, refresh, notify }: {
   readonly draft: ZoneVersionDetail;
   readonly check: PublishCheck | null;
   readonly rationaleRequired: boolean;
-  readonly refresh: () => void;
+  readonly refresh: (hideBlocks?: boolean) => void;
   readonly notify: (notice: ZoneNotice | null) => void;
 }) {
   const [rationale, setRationale] = useState("");
+  const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const eligible = Boolean(check?.eligible);
+  const ready = eligible && (!rationaleRequired || rationale.trim() !== "");
   const publish = async () => {
     setBusy(true); notify(null);
     try {
@@ -205,12 +214,13 @@ function PublishPanel({ draft, check, rationaleRequired, refresh, notify }: {
       notify({ kind: "refused", lines: zoneErrorLines(err) });
     } finally {
       setBusy(false);
-      refresh();
+      setConfirming(false);
+      refresh(true);
     }
   };
   return (
-    <Box component="section" aria-label="Publish draft" sx={panel}>
-      <Typography component="h3" sx={{ ...TYPE.section, m: 0 }}>Publish</Typography>
+    <Box component="section" aria-label="Publish draft" sx={panelSx}>
+      <SectionTitle>Publish</SectionTitle>
       <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
         Publishing makes draft r{draft.revision} the active version and retires the current one. Two different people are needed: the publisher must not have changed this draft.
       </Typography>
@@ -219,18 +229,33 @@ function PublishPanel({ draft, check, rationaleRequired, refresh, notify }: {
       </Typography>
       {rationaleRequired ? (
         <TextField label="Rationale" required multiline minRows={2} value={rationale} onChange={(e) => setRationale(e.target.value)}
-          inputProps={{ maxLength: 2000 }} helperText="Required: addresses leave a zone in this draft. Say why." />
+          inputProps={{ maxLength: RATIONALE_LIMIT }}
+          helperText={`Required: addresses leave a zone in this draft. Say why. ${rationale.length} / ${RATIONALE_LIMIT}`} />
       ) : null}
-      <Box>
-        <M3Button emphasis="filled" disabled={!eligible || busy || (rationaleRequired && rationale.trim() === "")} onClick={() => { void publish(); }}>Publish draft</M3Button>
-      </Box>
+      {confirming && ready ? (
+        <Box role="group" aria-label="Confirm publish" sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            Publish draft r{draft.revision} (<Box component="span" sx={mono}>{draft.content_sha256.slice(0, 12)}</Box>) as the next version?
+          </Typography>
+          <Typography variant="body2">{PUBLISH_FINAL_TEXT}</Typography>
+          <Stack direction="row" gap={1}>
+            <M3Button emphasis="filled" disabled={busy} onClick={() => { void publish(); }}>Confirm publish</M3Button>
+            <M3Button emphasis="text" disabled={busy} onClick={() => setConfirming(false)}>Cancel</M3Button>
+          </Stack>
+        </Box>
+      ) : (
+        <>
+          <Box><M3Button emphasis="filled" disabled={!ready || busy} onClick={() => setConfirming(true)}>Publish draft</M3Button></Box>
+          {eligible ? <Hint>You will be asked to confirm. {PUBLISH_FINAL_TEXT}</Hint> : null}
+        </>
+      )}
     </Box>
   );
 }
 
 function DiscardDraft({ draft, refresh, notify }: {
   readonly draft: ZoneVersionDetail;
-  readonly refresh: () => void;
+  readonly refresh: (hideBlocks?: boolean) => void;
   readonly notify: (notice: ZoneNotice | null) => void;
 }) {
   const [confirming, setConfirming] = useState(false);
@@ -244,7 +269,7 @@ function DiscardDraft({ draft, refresh, notify }: {
       notify({ kind: "refused", lines: zoneErrorLines(err) });
     } finally {
       setBusy(false);
-      refresh();
+      refresh(true);
     }
   };
   return confirming ? (
