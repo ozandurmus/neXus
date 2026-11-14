@@ -13,18 +13,30 @@ import java.util.Optional;
 public final class AdvisorySources {
 
     /**
-     * One source: its key, its main host, the path prefixes documents may have there, its fixed start document, and any
-     * further hosts with their own path prefixes (Check Point: the CVE records the resolved-issues pages name).
+     * One source: its key, its main host, the path prefixes documents may have there, its fixed start document, any
+     * further hosts with their own path prefixes (Check Point advisories: the CVE records the resolved-issues pages name),
+     * and the exact paths it may also request on its main host (a page whose address ends in a slash, which a prefix
+     * entry would treat as a directory: the lifecycle pages).
      */
-    public record Source(String key, String host, List<String> pathPrefixes, String startPath, Map<String, List<String>> moreHosts) {
+    public record Source(String key, String host, List<String> pathPrefixes, String startPath, Map<String, List<String>> moreHosts,
+            List<String> exactPaths) {
 
         public Source(String key, String host, List<String> pathPrefixes, String startPath) {
-            this(key, host, pathPrefixes, startPath, Map.of());
+            this(key, host, pathPrefixes, startPath, Map.of(), List.of());
+        }
+
+        public Source(String key, String host, List<String> pathPrefixes, String startPath, Map<String, List<String>> moreHosts) {
+            this(key, host, pathPrefixes, startPath, moreHosts, List.of());
+        }
+
+        public Source(String key, String host, List<String> pathPrefixes, String startPath, List<String> exactPaths) {
+            this(key, host, pathPrefixes, startPath, Map.of(), exactPaths);
         }
 
         public Source {
             pathPrefixes = List.copyOf(pathPrefixes);
             moreHosts = Map.copyOf(moreHosts);
+            exactPaths = List.copyOf(exactPaths);
         }
 
         public URI startUri() {
@@ -68,8 +80,6 @@ public final class AdvisorySources {
     public static final Source CHECKPOINT = new Source("checkpoint", "sc1.checkpoint.com", CHECKPOINT_JUMBO_PAGES,
             CHECKPOINT_JUMBO_PAGES.getFirst(), Map.of(CVELIST_HOST, List.of(CVELIST_PREFIX)));
 
-    
-
     /**
      * The Cisco End-of-Sale and End-of-Life bulletins for the lifecycle catalog (LIFECYCLE_CATALOG_SOURCES_CONTRACT.md
      * section 3.1): the two product listing pages, then the English bulletin pages they link under the security collateral
@@ -81,11 +91,26 @@ public final class AdvisorySources {
     public static final Source CISCO_EOL = new Source("cisco_eol", "www.cisco.com",
             List.of(CISCO_EOL_ASA_LISTING, CISCO_EOL_FIREPOWER_LISTING, CISCO_EOL_BULLETINS), CISCO_EOL_ASA_LISTING);
 
-    public static final List<Source> ALL = List.of(PALOALTO, FORTINET, CISCO, CISA_KEV, CHECKPOINT, CISCO_EOL);
+    /**
+     * The Check Point Support Life Cycle Policy page and the two Palo Alto end-of-life pages (LIFECYCLE_CATALOG_SOURCES_CONTRACT.md
+     * section 3.1, PO decisions D-L1 and D-L2 of 2026-11-14): exactly these paths on these hosts, nothing else on them.
+     */
+    public static final String CHECKPOINT_LIFECYCLE_PAGE = "/support-services/support-life-cycle-policy/";
+    public static final Source CHECKPOINT_LIFECYCLE = new Source("checkpoint_lifecycle", "www.checkpoint.com", List.of(),
+            CHECKPOINT_LIFECYCLE_PAGE, List.of(CHECKPOINT_LIFECYCLE_PAGE));
+    public static final String PALOALTO_EOL_SOFTWARE = "/services/support/end-of-life-announcements/end-of-life-summary";
+    public static final String PALOALTO_EOL_HARDWARE = "/services/support/end-of-life-announcements/hardware-end-of-life-dates";
+    public static final Source PALOALTO_EOL = new Source("paloalto_eol", "www.paloaltonetworks.com", List.of(),
+            PALOALTO_EOL_SOFTWARE, List.of(PALOALTO_EOL_SOFTWARE, PALOALTO_EOL_HARDWARE));
+
+    public static final List<Source> ALL = List.of(PALOALTO, FORTINET, CISCO, CISA_KEV, CHECKPOINT, CISCO_EOL, CHECKPOINT_LIFECYCLE, PALOALTO_EOL);
+
+    /** The lifecycle catalog's sources; their documents go to the lifecycle ingest endpoint, not the advisory one. */
+    private static final java.util.Set<String> LIFECYCLE_KEYS = java.util.Set.of(CISCO_EOL.key(), CHECKPOINT_LIFECYCLE.key(), PALOALTO_EOL.key());
 
     /** The service's internal ingest path for a source: lifecycle sources and advisory sources have their own endpoints. */
     public static String ingestPath(String sourceKey) {
-        return (CISCO_EOL.key().equals(sourceKey) ? "/internal/lifecycle-sources/" : "/internal/advisories/") + sourceKey;
+        return (LIFECYCLE_KEYS.contains(sourceKey) ? "/internal/lifecycle-sources/" : "/internal/advisories/") + sourceKey;
     }
 
     private static final int MAX_ADDRESS_LENGTH = 300;
@@ -108,7 +133,8 @@ public final class AdvisorySources {
         }
         String text = uri.toString();
         List<String> prefixes = source.prefixesFor(uri.getHost());
-        if (text.length() > MAX_ADDRESS_LENGTH || !"https".equals(uri.getScheme()) || prefixes.isEmpty()
+        boolean knownHost = uri.getHost() != null && (source.host().equals(uri.getHost()) || source.moreHosts().containsKey(uri.getHost()));
+        if (text.length() > MAX_ADDRESS_LENGTH || !"https".equals(uri.getScheme()) || !knownHost
                 || uri.getPort() != -1 || uri.getRawUserInfo() != null || uri.getRawQuery() != null || uri.getRawFragment() != null) {
             return false;
         }
@@ -116,6 +142,9 @@ public final class AdvisorySources {
         if (path == null || path.contains("%") || path.contains("..") || path.contains("//") || path.contains("\\")
                 || !path.matches("[A-Za-z0-9/._~-]+")) {
             return false;
+        }
+        if (source.host().equals(uri.getHost()) && source.exactPaths().contains(path)) {
+            return true;
         }
         for (String prefix : prefixes) {
             if (prefix.endsWith("/") ? path.startsWith(prefix) && path.length() > prefix.length() : path.equals(prefix)) {

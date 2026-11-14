@@ -51,7 +51,7 @@ class LifecycleSourceIngestControllerTest {
     @Test
     void onlyTheKnownSourceABulletinAddressAndAValidRunAreAccepted() throws Exception {
         var c = new LifecycleSourceIngestController(digest(token), service);
-        assertEquals(404, c.document("paloalto_eol", token, URL, RUN, post(BULLETIN)).getStatusCode().value());
+        assertEquals(404, c.document("fortinet_eol", token, URL, RUN, post(BULLETIN)).getStatusCode().value());
         assertEquals("LIFECYCLE_URL_REFUSED", c.document("cisco_eol", token, "https://www.example.org/x.html", RUN, post(BULLETIN)).getBody().get("error"));
         assertEquals("LIFECYCLE_RUN_INVALID", c.document("cisco_eol", token, URL, "x", post(BULLETIN)).getBody().get("error"));
         assertEquals("LIFECYCLE_BODY_EMPTY", c.document("cisco_eol", token, URL, RUN, post(new byte[0])).getBody().get("error"));

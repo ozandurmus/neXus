@@ -44,8 +44,9 @@ export function LifecycleSourcesPanel({ canManage, onChanged }: { canManage: boo
       dates in the catalog below (row or CSV, for example FortiGate-600E or FortiOS 7.4).</Typography>
     {canManage && <Stack spacing={1}>
       <Typography variant="subtitle2">Upload a saved vendor page</Typography>
-      <Typography variant="caption">Open the vendor page in a browser, save it as HTML, and upload the file here. neXus reads only the lifecycle tables;
-        the file itself is not kept (its hash is). An upload replaces the entries of the previous upload of the same page.</Typography>
+      <Typography variant="caption">The fallback when the online run cannot reach a vendor page: open the page in a browser, save it as HTML, and upload
+        the file here. neXus reads only the lifecycle tables; the file itself is not kept (its hash is). An upload replaces the entries of the previous
+        upload of the same page; when an online entry and an uploaded one agree, the online one is shown.</Typography>
       {error && <Alert severity="error">{error}</Alert>}{message && <Alert severity="success">{message}</Alert>}
       <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", gap: 1 }}>
         <TextField select label="Vendor page" size="small" value={form} sx={{ minWidth: 320 }} disabled={busy} onChange={e => setForm(e.target.value)}>

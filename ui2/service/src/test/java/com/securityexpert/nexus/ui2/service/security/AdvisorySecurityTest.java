@@ -33,7 +33,9 @@ class AdvisorySecurityTest {
     @Test void theLifecycleSourceIngestRoutesAreExplicitlyUngatedForTheKnownSourceOnly() {
         assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/lifecycle-sources/cisco_eol"));
         assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/lifecycle-sources/cisco_eol/complete"));
-        assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/lifecycle-sources/paloalto_eol"));
+        assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/lifecycle-sources/checkpoint_lifecycle"));
+        assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/lifecycle-sources/paloalto_eol/complete"));
+        assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/lifecycle-sources/fortinet_eol"));
         assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /api/v2/lifecycle/catalog/vendor-page"));
         assertEquals(ActionRegistry.LIFECYCLE_CATALOG_WRITE, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/lifecycle/catalog/vendor-page"));
         assertEquals(ActionRegistry.DEVICE_READ, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("GET /api/v2/lifecycle/catalog-sources"));
@@ -47,7 +49,7 @@ class AdvisorySecurityTest {
         assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/advisories/infoblox"));
         assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("GET /internal/advisories/paloalto"));
         assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/machine-session"));
-        assertEquals(11 + 10 + 2, SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.size(), "the two lifecycle-source ingest routes");
+        assertEquals(11 + 10 + 6, SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.size(), "two lifecycle-source ingest routes per online source");
     }
 
     @Test void anIngestRouteReachesItsOwnTokenCheckAndAnUnknownSourceIsRefused() throws Exception {

@@ -10,9 +10,12 @@
 # Without the ConfigMap the program prints "not started" and exits; without the proxy policy it reaches no proxy.
 # The CronJob is committed suspended; resume it (kubectl patch) or start one run by hand
 # (kubectl create job --from=cronjob/ui2-advisory-fetch <name>). The first Cisco load needs UI2_ADVISORY_CISCO_DAYS=1100 once.
-# The same run also reads the Cisco End-of-Sale and End-of-Life bulletins for the lifecycle catalog (source cisco_eol,
-# docs/design/LIFECYCLE_CATALOG_SOURCES_CONTRACT.md section 3.1): same host, about 85 pages, handed to the service's
-# /internal/lifecycle-sources/cisco_eol endpoint on the same port with the same token. UI2_ADVISORY_SOURCES limits a run.
+# The same run also reads the vendor lifecycle publications for the lifecycle catalog
+# (docs/design/LIFECYCLE_CATALOG_SOURCES_CONTRACT.md section 3.1): cisco_eol (www.cisco.com, about 85 bulletin pages),
+# checkpoint_lifecycle (www.checkpoint.com, one page) and paloalto_eol (www.paloaltonetworks.com, two pages), handed to
+# the service's /internal/lifecycle-sources/<source> endpoint on the same port with the same token. The two new hosts
+# (PO decisions D-L1, D-L2, 2026-11-14) must also be allowed by the proxy; the fetcher allows only the exact page paths.
+# UI2_ADVISORY_SOURCES limits a run.
 apiVersion: v1
 kind: ServiceAccount
 metadata:

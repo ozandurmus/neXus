@@ -79,6 +79,7 @@ public final class AdvisoryFetchRun {
                 case "fortinet" -> followUps(source, runId, FollowUps.fortinet(start.body()), false, counter);
                 case "cisco" -> followUps(source, runId, FollowUps.cisco(start.body(), ciscoSince), true, counter);
                 case "cisco_eol" -> ciscoEol(source, runId, start.body(), counter);
+                case "paloalto_eol" -> paloAltoEol(source, runId, start.body(), counter);
                 default -> handOver(source, runId, source.startUri(), start.body(), counter);
             };
         }
@@ -109,6 +110,13 @@ public final class AdvisoryFetchRun {
         List<URI> bulletins = FollowUps.ciscoEol(java.util.Arrays.asList(asaListing, firepower.body()));
         if (bulletins.isEmpty()) return "NO_DOCUMENTS_NAMED";
         return followUps(source, runId, bulletins, false, counter);
+    }
+
+    /** The Palo Alto software page, then the hardware page; each is handed on as fetched (contract section 3.1). */
+    private String paloAltoEol(AdvisorySources.Source source, String runId, byte[] softwarePage, Counter counter) {
+        String refused = handOver(source, runId, source.startUri(), softwarePage, counter);
+        if (refused != null) return refused;
+        return followUps(source, runId, List.of(URI.create("https://" + source.host() + AdvisorySources.PALOALTO_EOL_HARDWARE)), false, counter);
     }
 
     /** Fetches each named document and hands it on; returns the reason that stopped the source, or null. */

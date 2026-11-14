@@ -2,11 +2,12 @@
 
 ## Status
 
-**FROZEN - 2026-11-13.** Frozen by the engineering session for implementation, under the Product Owner's approval to
-build the lifecycle catalog, relayed by the PO session on 2026-11-13. It fills the empty end-of-support catalog of the
-Lifecycle and security view (V144 `lifecycle_catalog`, shown as `No catalog match / NO_LIFECYCLE_DATA` for every device)
-from the vendors' own lifecycle publications. The decisions listed in section 8 are open; none of them changes anything
-written here until it is taken, and each one only adds a source.
+**FROZEN - PO DECISION (2026-11-14).** Frozen by the Product Owner's decision of 2026-11-14 on D-L1 to D-L4 (section 8),
+relayed by the PO session: "İkisini ekle, FROZEN". The engineering session wrote this contract on 2026-11-13 under the
+Product Owner's approval to build the lifecycle catalog and had marked it frozen itself; that marking was not valid
+(engineering sessions do not freeze contracts) and is replaced by this status. It fills the empty end-of-support
+catalog of the Lifecycle and security view (V144 `lifecycle_catalog`, shown as `No catalog match / NO_LIFECYCLE_DATA`
+for every device) from the vendors' own lifecycle publications.
 
 Terms: a **publication** is one vendor document that states lifecycle dates (a Cisco End-of-Sale and End-of-Life
 bulletin, the Palo Alto end-of-life pages, the Check Point Support Life Cycle Policy page). A **vendor entry** is one
@@ -46,9 +47,24 @@ exactly the publications the document stands for, so a product the vendor remove
 
 ## 3. Sources
 
-### 3.1 Online: Cisco End-of-Sale and End-of-Life bulletins (`cisco_eol`)
+### 3.1 Online sources
 
-Host `www.cisco.com`, approved for the proxy on 2026-11-10 (`PO_DECISION_RECORD_2026_11_10_ADVISORY_INTAKE_PROXY_SOURCES_AND_FIX_RULES.md`
+All three ride the daily `ui2-advisory-fetch` CronJob, go to `POST /internal/lifecycle-sources/<source>` and close the
+run with `.../complete`, on the internal port, with the fetcher's own token (the token also authorises the advisory
+ingest endpoints, which equally only take public documents in; nothing else).
+
+| Source | Host | Exact documents | Decision |
+| --- | --- | --- | --- |
+| `cisco_eol` | `www.cisco.com` | the two listing pages, then the bulletins they link (below) | host approved 2026-11-10 |
+| `checkpoint_lifecycle` | `www.checkpoint.com` | `/support-services/support-life-cycle-policy/` only | D-L1, 2026-11-14 |
+| `paloalto_eol` | `www.paloaltonetworks.com` | `/services/support/end-of-life-announcements/end-of-life-summary` and `/services/support/end-of-life-announcements/hardware-end-of-life-dates` only | D-L2, 2026-11-14 |
+
+The path allowlist is enforced by the fetcher (exact paths, checked immediately before each request) and again by the
+ingest endpoint; the proxy egress policy stays address-based. A Check Point or Palo Alto page that no longer has the
+tables of section 4 is a rejected document: the run is `PARTIAL` with a reason, nothing is replaced, and the entries
+already stored age by the rule of section 6.
+
+**Cisco.** Host `www.cisco.com`, approved for the proxy on 2026-11-10 (`PO_DECISION_RECORD_2026_11_10_ADVISORY_INTAKE_PROXY_SOURCES_AND_FIX_RULES.md`
 section 5). The run reads two fixed listing pages,
 `/c/en/us/products/security/asa-firepower-services/eos-eol-notice-listing.html` and
 `/c/en/us/products/security/firepower-ngfw/eos-eol-notice-listing.html`, then every English bulletin they link under
@@ -56,21 +72,23 @@ section 5). The run reads two fixed listing pages,
 second). Bulletins go to `POST /internal/lifecycle-sources/cisco_eol` and the run closes with `.../complete`, on the
 internal port, with the fetcher's own token (the token also authorises the advisory ingest endpoints, which equally only
 take public documents in; nothing else). A listing that names no bulletin is a run failure reason (`NO_DOCUMENTS_NAMED`),
-so a moved page never looks like a fresh source. The source rides the daily `ui2-advisory-fetch` CronJob.
+so a moved page never looks like a fresh source.
 
 ### 3.2 Operator upload of a saved vendor page
 
-For the vendors whose publication host is not approved, a `security_admin` saves the vendor page from a browser and
-uploads it (`POST /api/v2/lifecycle/catalog/vendor-page`, action `lifecycle_catalog_write`, at most 8 MiB). The page goes
+The fallback when an online run cannot reach a vendor page (a proxy refusal, a network without internet access): a
+`security_admin` saves the vendor page from a browser and uploads it (`POST /api/v2/lifecycle/catalog/vendor-page`, action `lifecycle_catalog_write`, at most 8 MiB). The page goes
 through the same parser the online path would use; an upload whose page is not the chosen form stores nothing and says
 so. Accepted page forms: `checkpoint_lifecycle`, `paloalto_software_eol`, `paloalto_hardware_eol`, and
-`cisco_eol_bulletin` (one bulletin, for a bank without the online run). The aiview persona cannot upload.
+`cisco_eol_bulletin` (one bulletin). The aiview persona cannot upload. When an online entry and an uploaded entry of the
+same product agree, the online one is shown; when they disagree, the product is `NEEDS_REVIEW`.
 
 ### 3.3 Operator rows
 
 The V144 catalog stays: a row typed in the view or a CSV import. Since this contract, a row of a vendor with key rules
 must give a key (an import names the expected form and stores nothing when one row is wrong), and a second spelling of
-a stored product is refused as a conflict. Fortinet dates come only this way (section 8, D-L3).
+a stored product is refused as a conflict. Fortinet dates come only this way (section 8, D-L3): the Fortinet product life
+cycle is published only inside the FortiCloud support portal.
 
 ## 4. Parsers
 
@@ -150,27 +168,29 @@ dates), except that a device whose risk would be UNKNOWN and that has a part not
 - `GET /api/v2/lifecycle` and `GET /devices/{id}/lifecycle`: unchanged shape; a part's `status` may now be
   `NOT_EVALUATED` or `NEEDS_REVIEW`, its `catalog` may be a vendor entry with `origin`, `age_days`, `month_only`,
   `source_url`; milestones carry `precision`; the summary adds `lifecycle_not_evaluated` and `lifecycle_needs_review`.
-- `GET /api/v2/lifecycle/catalog-sources` (Devices read): the online source with last run, last good load, age colour
+- `GET /api/v2/lifecycle/catalog-sources` (Devices read): each online source with last run, last good load, age colour
   (amber after 7 days, red after 30 or never), entry counts; the uploadable page forms with the page address; the last
   uploads (uploader masked for the aiview persona); the entries that need review.
 - The Catalog tab shows the sources, the upload control (security_admin), the review list and the operator catalog; the
   fleet table shows `NOT_EVALUATED` / `NEEDS_REVIEW` in the support columns and dates given as a month as the month.
 
-## 8. Decisions for the Product Owner
+## 8. Product Owner decisions (2026-11-14)
 
-| # | Decision | Effect if approved |
+Asked by the PO session on 2026-11-14; answer (verbatim): "İkisini ekle, FROZEN".
+
+| # | Question | Decision |
 | --- | --- | --- |
-| D-L1 | Add `www.checkpoint.com` (path `/support-services/support-life-cycle-policy/` only) to the proxy and fetcher host list | the Check Point page is read daily like the Cisco bulletins instead of uploaded by hand; same parser |
-| D-L2 | Add `www.paloaltonetworks.com` (paths `/services/support/end-of-life-announcements/end-of-life-summary` and `.../hardware-end-of-life-dates` only) | the same for Palo Alto |
-| D-L3 | Fortinet: the product life cycle is published only inside the FortiCloud support portal (`support.fortinet.com`, sign-in required). Options: keep operator rows (no change), or a portal account for neXus (a credential and a new host, decided with D8 of the lifecycle design) | today Fortinet dates come from operator rows only |
-| D-L4 | The age limits: 30 days for an online source, 180 days for an upload or operator row | other values change only the two constants |
+| D-L1 | Add `www.checkpoint.com` for the life cycle policy page | **Approved**: exactly `/support-services/support-life-cycle-policy/`; the fetcher enforces the path, the proxy egress policy stays address-based. Uploads stay as the fallback |
+| D-L2 | Add `www.paloaltonetworks.com` for the two end-of-life pages | **Approved**: exactly the two paths of section 3.1, enforced the same way |
+| D-L3 | Fortinet: portal account or operator rows | **Operator rows** (no portal account, no new host) |
+| D-L4 | Age limits | **30 days** for an online source, **180 days** for an upload or an operator row |
 
-A new internet host is not added by this contract. Until D-L1 and D-L2 are decided, Check Point and Palo Alto dates come
-from uploaded pages.
+The two hosts must also be allowed by the corporate proxy; a refusal there shows as a failed run of that source
+(`HTTP_403` or a connection failure), never as fresh data.
 
 ## 9. Acceptance
 
-- Parser tests on synthetic pages shaped like the vendors' pages of 2026-11-13; on that day the parsers were also run
+- Parser and fetcher tests on synthetic pages shaped like the vendors' pages of 2026-11-13; on that day the parsers were also run
   locally against the public pages (not stored in the repository): Cisco 9.18 bulletin 1 entry, Firepower 4100 bulletin
   4 entries; Palo Alto software 24 trains, hardware 38 models; Check Point 150 entries, 6 needing review (the Spark
   table's two-digit years and three legacy versions listed twice), 0 guessed dates.

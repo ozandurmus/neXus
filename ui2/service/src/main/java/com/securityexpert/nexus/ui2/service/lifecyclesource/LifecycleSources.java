@@ -13,13 +13,24 @@ import java.util.Map;
  */
 public final class LifecycleSources {
 
-    /** The online sources; each needs its host approved for the proxy (contract section 3). */
-    public static final List<String> FEED_KEYS = List.of("cisco_eol");
+    /** The online sources; each needs its host approved for the proxy (contract section 3; D-L1 and D-L2, 2026-11-14). */
+    public static final List<String> FEED_KEYS = List.of("cisco_eol", "checkpoint_lifecycle", "paloalto_eol");
 
     /** The Cisco bulletins: plain English pages under the security collateral path of the approved host. */
     static final String CISCO_HOST = "www.cisco.com";
     static final String CISCO_BULLETIN_PREFIX = "/c/en/us/products/collateral/security/";
     static final String CISCO_LISTING = "https://www.cisco.com/c/en/us/products/security/asa-firepower-services/eos-eol-notice-listing.html";
+
+    /** The page form of a fetched document of an online source, or null. */
+    public static String feedPageForm(String source, String url) {
+        if ("cisco_eol".equals(source)) return CiscoEolBulletinParser.PAGE_FORM;
+        if ("checkpoint_lifecycle".equals(source)) return CheckPointLifecycleParser.PAGE_FORM;
+        if ("paloalto_eol".equals(source)) {
+            return url != null && url.equals(PAGE_FORMS.get(PaloAltoEolParser.HARDWARE_FORM).canonicalUrl())
+                    ? PaloAltoEolParser.HARDWARE_FORM : PaloAltoEolParser.SOFTWARE_FORM;
+        }
+        return null;
+    }
 
     /** An uploadable page form: the vendor, the source key its entries are stored under, and the page it is a copy of. */
     public record PageForm(String key, String vendor, String source, String canonicalUrl, String label) { }
@@ -48,9 +59,18 @@ public final class LifecycleSources {
         return source != null && FEED_KEYS.contains(source);
     }
 
-    /** True when {@code url} is a Cisco bulletin address the fetcher may have read: https, approved host, bulletin path. */
+    /**
+     * True when {@code url} is a document the fetcher may have read for {@code source}: a Cisco bulletin (https, approved host,
+     * bulletin path), or exactly the Check Point or Palo Alto page of the source.
+     */
     public static boolean feedDocumentAllowed(String source, String url) {
-        if (!"cisco_eol".equals(source) || url == null || url.length() > 300 || !url.startsWith("https://")) return false;
+        if (url == null) return false;
+        if ("checkpoint_lifecycle".equals(source)) return url.equals(PAGE_FORMS.get(CheckPointLifecycleParser.PAGE_FORM).canonicalUrl());
+        if ("paloalto_eol".equals(source)) {
+            return url.equals(PAGE_FORMS.get(PaloAltoEolParser.SOFTWARE_FORM).canonicalUrl())
+                    || url.equals(PAGE_FORMS.get(PaloAltoEolParser.HARDWARE_FORM).canonicalUrl());
+        }
+        if (!"cisco_eol".equals(source) || url.length() > 300 || !url.startsWith("https://")) return false;
         try {
             URI uri = new URI(url);
             String path = uri.getRawPath();

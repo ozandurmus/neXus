@@ -68,7 +68,7 @@ CREATE INDEX IF NOT EXISTS lifecycle_vendor_entry_document ON lifecycle_vendor_e
 
 CREATE TABLE IF NOT EXISTS lifecycle_feed_run (
     run_id                 TEXT        NOT NULL CHECK (run_id ~ '^[A-Za-z0-9_-]{8,64}$'),
-    source                 TEXT        NOT NULL CHECK (source IN ('cisco_eol')),
+    source                 TEXT        NOT NULL CHECK (source IN ('cisco_eol', 'checkpoint_lifecycle', 'paloalto_eol')),
     started_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
     ended_at               TIMESTAMPTZ,
     outcome                TEXT        CHECK (outcome IS NULL OR outcome IN ('OK', 'PARTIAL', 'FAILED')),

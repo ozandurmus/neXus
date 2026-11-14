@@ -174,6 +174,36 @@ class LifecycleSourceServiceTest {
         assertFalse(view.toString().contains("synthetic-actor"));
     }
 
+    private static final String CP_PAGE = "https://www.checkpoint.com/support-services/support-life-cycle-policy/";
+    private static final String PA_HW = "https://www.paloaltonetworks.com/services/support/end-of-life-announcements/hardware-end-of-life-dates";
+
+    @Test
+    void theCheckPointAndPaloAltoPagesAreReadOnlineWithTheUploadParsersAndAChangedPageIsReported() {
+        var memory = new Memory();
+        var service = new LifecycleSourceService(memory);
+        String cp = "<html><body><table><tr><th>Appliance Product/Model</th><th>End of Sale</th><th>End of Engineering Support</th>"
+                + "<th>End of Support</th></tr><tr><td>6600 Appliance</td><td>Oct-2026</td><td>Oct-2029</td><td>Oct-2031</td></tr></table></body></html>";
+        assertEquals(LifecycleSourceService.Outcome.STORED, service.ingest("checkpoint_lifecycle", "run-00000003", CP_PAGE, cp.getBytes(StandardCharsets.UTF_8)));
+        var e = memory.entries.getFirst();
+        assertEquals("FEED:checkpoint_lifecycle:checkpoint-appliance-lifecycle:HARDWARE:6600", e.entryId());
+        assertEquals(CP_PAGE, e.sourceUrl());
+        String pa = "<html><body><table><tr><th>End-of-Sale Product</th><th>End-of-Sale Date</th><th>End-of-Life Date</th></tr>"
+                + "<tr><td>PA-3200 Series (PA-3220, PA-3250)</td><td>August 31, 2023</td><td>August 31, 2028</td></tr></table></body></html>";
+        assertEquals(LifecycleSourceService.Outcome.STORED, service.ingest("paloalto_eol", "run-00000004", PA_HW, pa.getBytes(StandardCharsets.UTF_8)));
+        assertTrue(memory.entries.stream().anyMatch(x -> x.entryId().equals("FEED:paloalto_eol:paloalto-hardware-eol:HARDWARE:PA-3220")));
+
+        assertEquals(LifecycleSourceService.Outcome.STORED, service.ingest("checkpoint_lifecycle", "run-00000005", CP_PAGE,
+                "<html><body>redesigned page</body></html>".getBytes(StandardCharsets.UTF_8)));
+        var run = memory.runs.get("run-00000005");
+        assertEquals(1, run.rejected(), "a page that no longer has the tables is rejected, not ignored");
+        assertEquals(0, run.documentsIgnored());
+        service.complete("checkpoint_lifecycle", "run-00000005", "{\"documents_fetched\":1,\"documents_failed\":0,\"reason\":null}"
+                .getBytes(StandardCharsets.UTF_8));
+        assertEquals("PARTIAL", memory.runs.get("run-00000005").outcome());
+        assertEquals("SOME_ENTRIES_REJECTED", memory.runs.get("run-00000005").reason());
+        assertEquals(1, memory.entries.stream().filter(x -> x.source().equals("checkpoint_lifecycle")).count(), "the earlier entries stay and age");
+    }
+
     @Test
     void onlyCiscoBulletinAddressesAreAcceptedFromTheFetcher() {
         assertTrue(LifecycleSources.feedDocumentAllowed("cisco_eol", URL));
@@ -187,6 +217,15 @@ class LifecycleSourceServiceTest {
             assertFalse(LifecycleSources.feedDocumentAllowed("cisco_eol", refused), refused);
         }
         assertFalse(LifecycleSources.feedDocumentAllowed("paloalto_eol", URL));
+        assertTrue(LifecycleSources.feedDocumentAllowed("checkpoint_lifecycle", CP_PAGE));
+        assertTrue(LifecycleSources.feedDocumentAllowed("paloalto_eol", PA_HW));
+        assertTrue(LifecycleSources.feedDocumentAllowed("paloalto_eol",
+                "https://www.paloaltonetworks.com/services/support/end-of-life-announcements/end-of-life-summary"));
+        for (String refused : List.of("https://www.checkpoint.com/support-services/", CP_PAGE + "x", "https://www.checkpoint.com/support-services/support-life-cycle-policy",
+                "https://www.paloaltonetworks.com/services/support/end-of-life-announcements/end-of-life-policy")) {
+            assertFalse(LifecycleSources.feedDocumentAllowed("checkpoint_lifecycle", refused) || LifecycleSources.feedDocumentAllowed("paloalto_eol", refused), refused);
+        }
+        assertFalse(LifecycleSources.feedDocumentAllowed("checkpoint_lifecycle", PA_HW), "each page belongs to its own source");
         assertEquals("firepower-4100-series-eol", LifecycleSources.pathRef(URL));
     }
 }
