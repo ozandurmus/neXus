@@ -35,7 +35,7 @@ public final class PolicyHygiene {
         "unsupported port expression", "invalid port range", "missing service values", EARLIER_UNSUPPORTED, DEFAULT_PORTS_UNKNOWN,
         APPLICATION_OVERLAP_UNKNOWN,
         "zone or install-on coverage is unproven", "zone evidence not collected", "install-on evidence not collected", "snapshot collection incomplete",
-        "earlier sections not analysed", "multiple ordered layers not evaluated");
+        "earlier sections not analysed", "multiple ordered layers not evaluated", "zone membership not evaluated");
     /**
      * Evidence for a rule fully covered by an earlier Check Point "Apply Layer" rule: the rule is never reached, but the
      * inline layer's own verdict is not analysed, so the actions are not comparable and this is never a CONFLICT.
@@ -179,7 +179,7 @@ public final class PolicyHygiene {
                 else if (!broad.get("level").equals("Low")) {
                     var reasons = (List<?>) broad.get("reasons");
                     boolean anyAccept = accepting(rule.action()) && reasons.containsAll(List.of("Any source", "Any destination", "Any service"))
-                        && (reasons.contains("Any application") || snapshot.metadata().vendor().equals("CP") && rule.application().refs().isEmpty());
+                        && (reasons.contains("Any application") || PolicyNormalization.EMPTY_APPLICATION_ANY.contains(snapshot.metadata().vendor()) && rule.application().refs().isEmpty());
                     findings.add(finding("broad", anyAccept ? "HIGH" : "MEDIUM", anyAccept
                         ? "Accept rule matches any source, destination, service and application."
                         : "Broad selectors are present; see permissiveness reasons."));
