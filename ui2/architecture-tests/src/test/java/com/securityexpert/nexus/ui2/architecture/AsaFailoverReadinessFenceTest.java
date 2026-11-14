@@ -58,6 +58,26 @@ class AsaFailoverReadinessFenceTest {
         assertFalse(sql.toLowerCase(java.util.Locale.ROOT).contains("failover active"));
     }
 
+    @Test void v215SignsOffExactlyTheFourReadinessReadsAndNothingElse() throws IOException {
+        String sql;
+        try (var in = getClass().getClassLoader().getResourceAsStream("db/migration/V215__asa_failover_readiness_signoff.sql")) {
+            assertNotNull(in);
+            sql = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        String body = sql.lines().filter(l -> !l.strip().startsWith("--")).collect(java.util.stream.Collectors.joining("\n"));
+        String lower = body.toLowerCase(java.util.Locale.ROOT);
+        // One UPDATE of gate_registry, from DRAFTED only, for the four read rows only; no insert, no other table.
+        assertEquals(1, lower.split("update gate_registry", -1).length - 1);
+        assertFalse(lower.contains("insert") || lower.contains("delete") || lower.contains("alter") || lower.contains("create"));
+        assertTrue(body.contains("AND vendor = 'cisco_asa' AND action_class = 'read' AND sign_off_state = 'DRAFTED'"));
+        var ids = java.util.regex.Pattern.compile("'(asa_[a-z_]+)'").matcher(body).results().map(m -> m.group(1))
+            .collect(java.util.stream.Collectors.toSet());
+        assertEquals(Set.of("asa_failover_show_failover", "asa_failover_show_failover_state",
+            "asa_failover_show_failover_history", "asa_failover_show_conn_count"), ids);
+        assertFalse(lower.contains("failover active") || lower.contains("asa_measure_"));
+        assertTrue(body.contains("PO approval 2026-11-14"));
+    }
+
     @Test void theWorkerExecutorHasNoWritePathAndTheSwitchNeverEnablesExecution() {
         var classes = new ClassFileImporter().importClasses(AsaFailoverJobExecutor.class, CpFailoverService.class);
         for (var type : classes) {

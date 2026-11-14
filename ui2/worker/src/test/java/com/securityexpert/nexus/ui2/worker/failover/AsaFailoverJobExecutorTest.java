@@ -122,16 +122,20 @@ class AsaFailoverJobExecutorTest {
         return GateRegistryFixtureLoader.loadFromStream(AsaFailoverJobExecutorTest.class
             .getResourceAsStream("/capabilities/gate_registry_fixture.yaml"));
     }
-    /** The fixture exactly as committed: the four readiness rows are DRAFTED. */
+    /** The four readiness rows forced back to DRAFTED (as V212 inserted them, before the V215 sign-off). */
     private static GateRegistryPort draftedGates() {
+        return gatesWith(SignOffState.DRAFTED);
+    }
+    /** The fixture as committed: the four readiness rows SIGNED_OFF by V215 (PO approval 2026-11-14). */
+    private static GateRegistryPort signedOffGates() {
         var rows = fixtureRows();
+        assertTrue(rows.stream().filter(r -> FAILOVER_GATES.contains(r.gateId())).allMatch(r -> r.signOffState() == SignOffState.SIGNED_OFF));
         return key -> rows.stream().filter(row -> row.key().equals(key)).toList();
     }
-    /** A test registry with the four readiness rows SIGNED_OFF (the committed rows stay DRAFTED). */
-    private static GateRegistryPort signedOffGates() {
+    private static GateRegistryPort gatesWith(SignOffState state) {
         var rows = fixtureRows().stream().map(r -> FAILOVER_GATES.contains(r.gateId())
             ? new GateRow(r.gateId(), r.vendor(), r.platformRoleScope(), r.shellContext(), r.transportKind(), r.canonicalCommandKey(),
-                r.actionClass(), SignOffState.SIGNED_OFF, r.timeoutS(), r.retryRule(), r.maxFrequency(), r.sessionReuseRule(),
+                r.actionClass(), state, r.timeoutS(), r.retryRule(), r.maxFrequency(), r.sessionReuseRule(),
                 r.unsupportedBehaviorRef(), r.secretOutputRisk(), r.safeTelemetryFields(), r.sourceDocumentPointer()) : r).toList();
         return key -> rows.stream().filter(row -> row.key().equals(key)).toList();
     }
