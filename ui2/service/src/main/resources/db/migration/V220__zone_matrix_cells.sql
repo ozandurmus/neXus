@@ -1,4 +1,4 @@
--- V2xx-PLACEHOLDER -- Zone matrix, delivery step 2: matrix edits in the revision history, reference confirmation
+-- V220 -- Zone matrix, delivery step 2: matrix edits in the revision history, reference confirmation
 -- (docs/design/ZONE_MATRIX_CONTRACT.md sections 3.4, 3.5, 4, 6.1 and 8.1, FROZEN 2026-11-13).
 --
 -- PLACEHOLDER: this file sits outside db/migration until the ship order assigns its version number; it is then moved
