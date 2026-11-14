@@ -127,6 +127,8 @@ public final class AsaPolicyMapper {
         boolean allLevelsKnown = true;
         for (Interface iface : c.interfaces()) {
             ifValues.add("nameif: " + iface.nameif());
+            // The configured interface name (Trace maps the inventory's interface names to nameif with it).
+            if (iface.physical() != null) ifValues.add("physical: " + iface.physical());
             if (iface.securityLevel() == null) {
                 allLevelsKnown = false;
                 ifValues.add("security-level: UNKNOWN");

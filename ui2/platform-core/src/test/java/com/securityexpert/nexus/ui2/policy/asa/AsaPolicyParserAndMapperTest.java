@@ -436,9 +436,9 @@ class AsaPolicyParserAndMapperTest {
                 .orElseThrow();
         assertEquals(
                 List.of(
-                        "nameif: outside", "security-level: 0",
-                        "nameif: inside", "security-level: 100",
-                        "nameif: dmz", "security-level: 50",
+                        "nameif: outside", "physical: GigabitEthernet0/0", "security-level: 0",
+                        "nameif: inside", "physical: GigabitEthernet0/1", "security-level: 100",
+                        "nameif: dmz", "physical: GigabitEthernet0/2", "security-level: 50",
                         "same-security-inter: true",
                         "same-security-intra: true"),
                 ifObj.values());

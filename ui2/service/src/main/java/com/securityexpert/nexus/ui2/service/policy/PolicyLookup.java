@@ -342,6 +342,7 @@ public final class PolicyLookup {
                 String key = value.substring(0, split), v = value.substring(split + 2);
                 switch (key) {
                     case "nameif" -> { nameif = v; interfaces.add(v); }
+                    case "physical" -> { if (nameif == null) known = false; }
                     case "security-level" -> {
                         if (nameif == null) { known = false; break; }
                         try { levels.put(nameif, Integer.parseInt(v)); } catch (NumberFormatException unknown) { levels.put(nameif, null); }
