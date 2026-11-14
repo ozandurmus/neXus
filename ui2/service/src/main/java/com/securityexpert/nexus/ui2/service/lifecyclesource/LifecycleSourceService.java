@@ -85,14 +85,18 @@ public final class LifecycleSourceService {
             if (existing.isPresent() && existing.get().endedAt() != null) return Outcome.RUN_CLOSED;
             LifecyclePage.Result parsed;
             try {
-                parsed = CiscoEolBulletinParser.parse(document, LifecycleSources.pathRef(url));
+                parsed = parse(LifecycleSources.feedPageForm(source, url), document, LifecycleSources.pathRef(url));
             } catch (RuntimeException e) {
                 LOG.warn("lifecycle ingest source={} run={} code=PARSER_THREW", source, runId);
                 repository.addToRun(runId, source, 1, 0, 1, 0, 0);
                 return Outcome.STORED;
             }
             if (!parsed.recognised()) {
-                repository.addToRun(runId, source, 1, 1, 0, 0, 0);
+                // Many Cisco bulletins name no covered product (subscriptions, FTD): ignored. A Check Point or Palo Alto page
+                // that is not recognised means the vendor changed the page: a rejected document, so the run is PARTIAL and says so.
+                boolean mustRecognise = !"cisco_eol".equals(source);
+                if (mustRecognise) LOG.warn("lifecycle ingest source={} run={} code=PAGE_NOT_RECOGNISED", source, runId);
+                repository.addToRun(runId, source, 1, mustRecognise ? 0 : 1, mustRecognise ? 1 : 0, 0, 0);
                 return Outcome.STORED;
             }
             String sha = sha256(document);
@@ -173,13 +177,7 @@ public final class LifecycleSourceService {
         byte[] bytes = page.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         LifecyclePage.Result parsed;
         try {
-            parsed = switch (form.key()) {
-                case CiscoEolBulletinParser.PAGE_FORM -> CiscoEolBulletinParser.parse(bytes, "uploaded-bulletin");
-                case PaloAltoEolParser.SOFTWARE_FORM -> PaloAltoEolParser.software(bytes);
-                case PaloAltoEolParser.HARDWARE_FORM -> PaloAltoEolParser.hardware(bytes);
-                case CheckPointLifecycleParser.PAGE_FORM -> CheckPointLifecycleParser.parse(bytes);
-                default -> LifecyclePage.Result.notRecognised(form.key());
-            };
+            parsed = parse(form.key(), bytes, "uploaded-bulletin");
         } catch (RuntimeException e) {
             LOG.warn("lifecycle upload form={} code=PARSER_THREW", form.key());
             return UploadResult.refused("PAGE_NOT_RECOGNISED", "The file is not a copy of the chosen vendor page");
@@ -203,6 +201,18 @@ public final class LifecycleSourceService {
         LOG.info("lifecycle upload form={} stored={} needs_review={} skipped={}", form.key(), stored.size(), review,
                 parsed.rowsSkipped() + rejected);
         return new UploadResult(null, null, uploadId, stored.size() - review, review, parsed.rowsSkipped() + rejected);
+    }
+
+    /** The parser of a page form; the online path and the upload path use the same one. */
+    static LifecyclePage.Result parse(String pageForm, byte[] page, String pathRef) {
+        if (pageForm == null) return LifecyclePage.Result.notRecognised("unknown");
+        return switch (pageForm) {
+            case CiscoEolBulletinParser.PAGE_FORM -> CiscoEolBulletinParser.parse(page, pathRef);
+            case PaloAltoEolParser.SOFTWARE_FORM -> PaloAltoEolParser.software(page);
+            case PaloAltoEolParser.HARDWARE_FORM -> PaloAltoEolParser.hardware(page);
+            case CheckPointLifecycleParser.PAGE_FORM -> CheckPointLifecycleParser.parse(page);
+            default -> LifecyclePage.Result.notRecognised(pageForm);
+        };
     }
 
     /** {@code GET /api/v2/lifecycle/catalog-sources}: the online source, the upload forms, the last uploads and the entries. */
@@ -237,7 +247,7 @@ public final class LifecycleSourceService {
             row.put("vendor", form.vendor());
             row.put("label", form.label());
             row.put("page_url", form.canonicalUrl());
-            row.put("online", "cisco_eol".equals(form.source()));
+            row.put("online", LifecycleSources.FEED_KEYS.contains(form.source()));
             forms.add(row);
         }
         var uploads = repository.latestUploads(20).stream().map(u -> {

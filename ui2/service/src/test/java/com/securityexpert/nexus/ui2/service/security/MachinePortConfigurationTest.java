@@ -36,11 +36,12 @@ class MachinePortConfigurationTest {
         String[] allowed = {"/internal/machine-session", "/internal/advisories/paloalto", "/internal/advisories/fortinet",
                 "/internal/advisories/cisco", "/internal/advisories/cisa_kev", "/internal/advisories/paloalto/complete",
                 "/internal/advisories/cisa_kev/complete", "/internal/advisories/checkpoint", "/internal/lifecycle-sources/cisco_eol",
-                "/internal/lifecycle-sources/cisco_eol/complete"};
+                "/internal/lifecycle-sources/cisco_eol/complete", "/internal/lifecycle-sources/checkpoint_lifecycle",
+                "/internal/lifecycle-sources/paloalto_eol/complete"};
         String[] refused = {"/internal", "/internal/", "/internal/advisories", "/internal/advisories/", "/internal/advisories/infoblox",
                 "/internal/advisories/paloalto/complete/x", "/internal/advisories/paloalto/other", "/internal/advisories/paloalto/",
                 "/internal/advisories/../machine-session", "/internal/other", "/login", "/api/v2/lifecycle/advisories",
-                "/internal/lifecycle-sources/", "/internal/lifecycle-sources/paloalto_eol", "/internal/lifecycle-sources/cisco_eol/x",
+                "/internal/lifecycle-sources/", "/internal/lifecycle-sources/fortinet_eol", "/internal/lifecycle-sources/cisco_eol/x",
                 "/internal/advisories/cisco_eol"};
         for (String path : allowed) {
             assertEquals(200, run(filter, 8086, "POST", path), path);

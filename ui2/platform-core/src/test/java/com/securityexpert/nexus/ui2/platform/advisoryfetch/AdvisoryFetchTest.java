@@ -183,6 +183,33 @@ class AdvisoryFetchTest {
     }
 
     @Test
+    void theCheckPointAndPaloAltoLifecyclePagesAreExactAddressesHandedToTheLifecycleEndpoint() {
+        String cp = "https://www.checkpoint.com" + AdvisorySources.CHECKPOINT_LIFECYCLE_PAGE;
+        String paSoftware = "https://www.paloaltonetworks.com" + AdvisorySources.PALOALTO_EOL_SOFTWARE;
+        String paHardware = "https://www.paloaltonetworks.com" + AdvisorySources.PALOALTO_EOL_HARDWARE;
+        Ports ports = new Ports();
+        ports.bodies.put(cp, bytes("<html>cp</html>"));
+        ports.bodies.put(paSoftware, bytes("<html>sw</html>"));
+        ports.bodies.put(paHardware, bytes("<html>hw</html>"));
+        assertTrue(run(ports, new ArrayList<>()).run(AdvisorySources.CHECKPOINT_LIFECYCLE, "run-00000001").ok());
+        assertTrue(run(ports, new ArrayList<>()).run(AdvisorySources.PALOALTO_EOL, "run-00000001").ok());
+        assertEquals(List.of(cp, paSoftware, paHardware), ports.requested);
+        assertEquals(List.of("checkpoint_lifecycle " + cp, "paloalto_eol " + paSoftware, "paloalto_eol " + paHardware), ports.handedOver);
+        assertEquals("/internal/lifecycle-sources/checkpoint_lifecycle", AdvisorySources.ingestPath("checkpoint_lifecycle"));
+        assertEquals("/internal/lifecycle-sources/paloalto_eol", AdvisorySources.ingestPath("paloalto_eol"));
+        for (String refused : List.of("https://www.checkpoint.com/support-services/", "https://www.checkpoint.com/support-services/support-life-cycle-policy",
+                "https://www.checkpoint.com/support-services/support-life-cycle-policy/x", "https://www.checkpoint.com/")) {
+            assertFalse(AdvisorySources.allowed(AdvisorySources.CHECKPOINT_LIFECYCLE, URI.create(refused)), refused);
+        }
+        for (String refused : List.of("https://www.paloaltonetworks.com/services/support/end-of-life-announcements/end-of-life-policy",
+                "https://www.paloaltonetworks.com/services/support/end-of-life-announcements/", "https://www.paloaltonetworks.com" + AdvisorySources.PALOALTO_EOL_SOFTWARE + "?x=1",
+                "https://security.paloaltonetworks.com" + AdvisorySources.PALOALTO_EOL_SOFTWARE)) {
+            assertFalse(AdvisorySources.allowed(AdvisorySources.PALOALTO_EOL, URI.create(refused)), refused);
+        }
+        assertFalse(AdvisorySources.allowed(AdvisorySources.PALOALTO, URI.create(paSoftware)), "the advisory source keeps its own host only");
+    }
+
+    @Test
     void ciscoLifecycleListingsThatNameNoBulletinAreAReasonNotAFreshSource() {
         Ports ports = new Ports();
         ports.bodies.put("https://www.cisco.com" + AdvisorySources.CISCO_EOL_ASA_LISTING, bytes("<html>moved</html>"));
