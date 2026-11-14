@@ -20,6 +20,7 @@ import { StatusPill } from "../shell/StatusPill";
 import { Timestamp } from "../shell/Timestamp";
 import { vendorLabel } from "../shell/presenters";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
+import { navigateTo } from "../shell/urlParams";
 import { m3 } from "../theme/m3Theme";
 import { TYPE, type StateRole } from "../theme/tokens";
 import { describeSystemLogCollectError, explainSystemLogRefusalCode, type SystemLogCollectMessage } from "./DeviceLogsPanel";
@@ -410,7 +411,7 @@ export function SystemHealthPanel({ now = new Date() }: { readonly now?: Date })
       </Typography>
       <DataTable ariaLabel="Device health table" columns={columns} rows={data.devices} rowKey={(d) => d.device_id} maxHeight="calc(100vh - 420px)"
         emptyText={computing ? "No row until the first computation finishes." : notComputedYet ? `Not computed yet (${apiReason ?? "scheduled computation is off"}).` : "No Check Point or Palo Alto gateway is enrolled for system-log collection."}
-        onRowClick={(d) => window.location.assign(logsHref(d))} testId="system-health-table" />
+        onRowClick={(d) => navigateTo(logsHref(d))} testId="system-health-table" />
     </Box>
   );
 }

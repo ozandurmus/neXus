@@ -1067,6 +1067,8 @@ export function InventoryScreen() {
   // Cross-screen links (global search, cluster context strip): preselect a cluster or a device once the list is in.
   const [pendingClusterRef, setPendingClusterRef] = useState<string | null>(() => urlParam("cluster_ref"));
   const [pendingDeviceId, setPendingDeviceId] = useState<string | null>(() => urlParam("device_id"));
+  useUrlParamSync("cluster_ref", useCallback((value: string | null) => { if (value) setPendingClusterRef(value); }, []));
+  useUrlParamSync("device_id", useCallback((value: string | null) => { if (value) setPendingDeviceId(value); }, []));
   // Overview links (OVERVIEW_EXCEPTION_SCREEN_CONTRACT §4.2): inventory evidence age bucket and hotfix level.
   const [ageFilter, setAgeFilter] = useState<string | null>(() => urlParam("inventory_age"));
   const [hotfixFilter, setHotfixFilter] = useState<string | null>(() => urlParam("hotfix_level"));

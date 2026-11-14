@@ -15,7 +15,7 @@ import { StatePanel } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
 import { JobLogsPanel, type JobPill } from "./JobLogsPanel";
 import { SystemHealthPanel } from "./SystemHealthPanel";
-import { urlParam, writeUrlParams } from "../shell/urlParams";
+import { urlParam, useUrlParamSync, writeUrlParams } from "../shell/urlParams";
 import { useJobWindow } from "../shell/JobWindow";
 import { getJobStats, getCpFailoverRun, listDevices, listCpFailoverSummary, newBusinessHoursAckScope, runCpFailoverReadiness, type BusinessHoursAckScope, type CpFailoverSummary, type DeviceSummary } from "../auth/adminApi";
 import { deriveClusterTitle } from "./InventoryPanels";
@@ -136,6 +136,13 @@ export function OperationsScreen() {
   const [tab, setTabState] = useState(initialRoute.tab);
   // A pill the screen asks of the Jobs table: the retired Queue / History routes on load, the Failed card's link later.
   const [pillRequest, setPillRequest] = useState<{ pill: JobPill; seq: number } | null>(initialRoute.pill ? { pill: initialRoute.pill, seq: 0 } : null);
+  useUrlParamSync("tab", (nextTab) => {
+    const nextRoute = tabFromUrl(nextTab, urlParam("job"));
+    setTabState(nextRoute.tab);
+    if (nextRoute.pill) {
+      setPillRequest((current) => ({ pill: nextRoute.pill!, seq: (current?.seq ?? 0) + 1 }));
+    }
+  });
   // The tab is part of the address (a job link needs `tab=jobs` beside `job=<id>`); replaced, never pushed.
   const setTab = (next: number) => { setTabState(next); writeUrlParams({ tab: next === 0 ? null : TAB_SLUGS[next] }); };
   const openJobs = (pill: JobPill) => { setTab(1); setPillRequest((current) => ({ pill, seq: (current?.seq ?? 0) + 1 })); };

@@ -4,7 +4,7 @@ import { listPolicies, type PolicyMetadata, type PolicyTarget } from "../auth/ad
 import { M3Tabs } from "../shell/M3Widgets";
 import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 import { RestrictedPanel, StatePanel, isRestricted } from "../shell/States";
-import { urlParam, writeUrlParams } from "../shell/urlParams";
+import { navigateTo, urlParam, useUrlParamSync, writeUrlParams } from "../shell/urlParams";
 import type { ChangesView } from "../shell/legacyRoutes";
 import { ChangeFeedPanel } from "./ChangeFeedPanel";
 import { PolicyChangesTab } from "./PolicyChangesTab";
@@ -26,6 +26,7 @@ export function changesViewFromUrl(value: string | null): ChangesView {
 
 export function ChangesScreen() {
   const [view, setView] = useState<ChangesView>(() => changesViewFromUrl(urlParam("view")));
+  useUrlParamSync("view", (v) => setView(changesViewFromUrl(v)));
   const select = (index: number) => {
     const next = CHANGES_VIEWS[index] ?? "feed";
     setView(next);
@@ -63,6 +64,6 @@ function PolicyRevisions() {
   if (!catalog) return <StatePanel variant="empty" title="Reading the stored policies…" announce="status" />;
   return (
     <PolicyChangesTab policies={catalog.policies} devices={catalog.devices}
-      openRule={(policy, rule) => window.location.assign(`?screen=policy&policy_id=${encodeURIComponent(policy)}&rule=${encodeURIComponent(rule)}`)} />
+      openRule={(policy, rule) => navigateTo(`?screen=policy&policy_id=${encodeURIComponent(policy)}&rule=${encodeURIComponent(rule)}`)} />
   );
 }

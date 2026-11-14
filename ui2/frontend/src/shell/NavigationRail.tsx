@@ -13,7 +13,7 @@ import { NexusMark } from "../brand/NexusMark";
 import { NexusWordmark } from "../brand/NexusWordmark";
 import { useSession } from "../auth/SessionContext";
 import { readPreference, writePreference } from "./preference";
-import { useLocationSearch } from "./urlParams";
+import { handleInAppLinkClick, useLocationSearch } from "./urlParams";
 import {
   activeLeafId, formatGroupChoices, groupOpen, leafLocked, parseGroupChoices, visibleEntries,
   type NavEntry, type NavGroup, type NavLeaf, type NavSessionGrants,
@@ -202,6 +202,7 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
       {iconsOnly ? (
         // The sidebar stays in view on a long page (sticky, one viewport tall); a window shorter than the list scrolls it.
         <Box component="nav" aria-label="Primary" data-nav-layout={wide ? "folded" : "narrow"}
+          onClick={(e) => { handleInAppLinkClick(e); }}
           sx={{ ...frame, width: FOLDED_PX, pb: 2, alignItems: "center", gap: 0.75 }}>
           {/* The logo where there is no room for the word: the X alone, on the top bar's centre line. */}
           <Box data-brand-slot sx={{ height: BRAND_BAND_PX, flex: "none", display: "grid", placeItems: "center", mb: -0.75 }}><NexusMark size={28} /></Box>
@@ -224,7 +225,9 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
           {iconItems}
         </Box>
       ) : (
-        <Box component="nav" aria-label="Primary" data-nav-layout="expanded" sx={{ ...frame, width: SIDEBAR_PX, px: 1, pb: 2 }}>
+        <Box component="nav" aria-label="Primary" data-nav-layout="expanded"
+          onClick={(e) => { handleInAppLinkClick(e); }}
+          sx={{ ...frame, width: SIDEBAR_PX, px: 1, pb: 2 }}>
           {/* The one logo of the shell: the wordmark, its left edge on the entries' icons, on the top bar's centre line. */}
           <Box data-brand-slot sx={{ display: "flex", alignItems: "center", flex: "none", height: BRAND_BAND_PX, pl: 1.5, pr: 0.5 }}>
             <NexusWordmark height={22} />
@@ -246,6 +249,7 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
           const on = leaf.id === activeId;
           return (
             <MenuItem key={leaf.id} component="a" href={leaf.href} selected={on} aria-current={on ? "page" : undefined}
+              onClick={(e: MouseEvent<HTMLElement>) => { if (handleInAppLinkClick(e)) setMenu(null); }}
               data-locked={leafLocked(leaf, session) ? "true" : undefined} sx={{ gap: 1.5, fontSize: 14 }}>
               {leaf.label}
               {leafLocked(leaf, session) && <LockMark />}
@@ -256,7 +260,9 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
 
       {!wide && (
         <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} PaperProps={{ sx: { width: 300, bgcolor: m3.scLow, p: 1.5 } }}>
-          <Box component="nav" aria-label="Primary navigation drawer" sx={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
+          <Box component="nav" aria-label="Primary navigation drawer"
+            onClick={(e) => { if (handleInAppLinkClick(e)) setDrawerOpen(false); }}
+            sx={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
             <Box data-brand-slot sx={{ display: "flex", alignItems: "center", flex: "none", height: 52, pl: 1.5, pr: 0.5, mb: 0.5 }}>
               <NexusWordmark height={22} />
               <IconButton aria-label="Close navigation" onClick={() => setDrawerOpen(false)} sx={{ ml: "auto" }}>

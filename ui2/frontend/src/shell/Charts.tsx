@@ -5,6 +5,7 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 
 import { m3 } from "../theme/m3Theme";
+import { navigateTo } from "./urlParams";
 
 /**
  * Small, dependency-free SVG charts for the executive summary (dataviz method: fixed categorical order,
@@ -97,7 +98,7 @@ export function Donut({ title, slices, size = 132, centerLabel, stacked = false 
               <path key={i} d={path} fill="none" stroke={s.display === "UNKNOWN" ? "url(#nx-unknown-hatch)" : s.color} strokeWidth={hover === i ? stroke + 4 : stroke}
                 style={{ cursor: s.href ? "pointer" : "default", transition: "stroke-width 120ms" }}
                 onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}
-                onClick={() => { if (s.href) window.location.href = s.href; }} />
+                onClick={() => { if (s.href) navigateTo(s.href); }} />
             );
           })}
         </svg>

@@ -10,6 +10,7 @@ import { MONO, m3 } from "../theme/m3Theme";
 import { Icon } from "./Icon";
 import { StatePanel, isRestricted, VendorBadge } from "./States";
 import { setListSearchTerm, useListSearchState } from "./listSearch";
+import { handleInAppLinkClick, navigateTo } from "./urlParams";
 import { globalSearch, listDevices, type DeviceSummary, type GlobalSearchResponse, type IpSearchGroup } from "../auth/adminApi";
 
 /** The device and screen shortcuts stay immediate; stored settings and evidence arrive after the typing pause. */
@@ -155,7 +156,11 @@ export function GlobalSearch() {
               e.preventDefault();
               setSelected(i => (i + (e.key === "ArrowDown" ? 1 : -1) + entries.length) % (entries.length || 1));
             }
-            if (e.key === "Enter" && entries[selected]) window.location.href = entries[selected].href;
+            if (e.key === "Enter" && entries[selected]) {
+              e.preventDefault();
+              navigateTo(entries[selected].href);
+              setOpen(false);
+            }
             if (e.key === "Escape") setOpen(false);
           }}
           sx={{ flex: 1, fontSize: 13, color: m3.onSurface }} />
@@ -174,7 +179,8 @@ export function GlobalSearch() {
       </Box>
 
       {open && term.trim() && (
-        <Paper role="listbox" sx={{ position: "absolute", top: 40, left: 0, width: { xs: "calc(100vw - 32px)", md: 560 }, zIndex: 1300, border: `1px solid ${m3.outlineVar}`,
+        <Paper role="listbox" onClick={(e) => { if (handleInAppLinkClick(e)) setOpen(false); }}
+          sx={{ position: "absolute", top: 40, left: 0, width: { xs: "calc(100vw - 32px)", md: 560 }, zIndex: 1300, border: `1px solid ${m3.outlineVar}`,
                                     boxShadow: m3.e2, borderRadius: "10px", py: 0.5, maxHeight: 520, overflow: "auto", bgcolor: m3.scLowest }}>
           {filtersList && (
             <Typography sx={{ px: 1.5, pt: 0.75, pb: 0.25, fontSize: 12, color: m3.primary }}>

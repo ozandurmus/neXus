@@ -35,7 +35,7 @@ import { PolicyContainerPrompt } from "./PolicyContainerPrompt";
 import { PolicyHygieneFleet } from "./PolicyHygieneFleet";
 import { PolicyObjectSearch } from "./PolicyObjectSearch";
 import { changesHref, lookupInPolicyHref } from "../shell/legacyRoutes";
-import { writeUrlParams } from "../shell/urlParams";
+import { useUrlParamSync, writeUrlParams } from "../shell/urlParams";
 import { statusWord } from "../shell/presenters";
 
 // The policy page API returns a fixed 200 rules per page (PolicyQueryService.page); the client does not choose it.
@@ -353,6 +353,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [selected, setSelected] = useState(() => new URLSearchParams(window.location.search).get("policy_id") ?? "");
   const [device, setDevice] = useState(() => new URLSearchParams(window.location.search).get("device_id") ?? "");
   const [tab, setTabState] = useState<PolicyTab>(() => policyTabFromSlug(new URLSearchParams(window.location.search).get("tab")));
+  useUrlParamSync("tab", useCallback((next: string | null) => setTabState(policyTabFromSlug(next)), []));
   // The tab is part of the address (a shared link opens on it); replaced, never pushed.
   const setTab = useCallback((next: PolicyTab) => { setTabState(next); writeUrlParams({ tab: next === "Rules & Containers" ? null : POLICY_TAB_SLUG[next] }); }, []);
   const [installationOpen, setInstallationOpen] = useState(false);
