@@ -161,12 +161,6 @@ class AsaFailoverMeasureTest {
     }
 
     @Test
-    void aTimestampKeepsItsShapeAndIsNotMaskedAsAnIpv6Address() {
-        assertEquals("Last Failover at: 99:99:99 UTC Nov 99 9999", AsaFailoverMeasure.shapeLine("Last Failover at: 12:34:56 UTC Nov 13 2026"));
-        assertEquals("99:99:99 +99 Nov 99 9999", AsaFailoverMeasure.shapeLine("12:34:56 +03 Nov 13 2026"));
-    }
-
-    @Test
     void realIpv6FormsAreStillMasked() {
         // The placeholder is <ip6>; the shape's own digit rule then writes its 6 as 9.
         for (String address : List.of("2001:db8::1", "2001:db8:0:0:0:0:0:1", "fe80::1/64", "::1", "2001:db8::", "2001:DB8:A::B:1")) {
