@@ -74,7 +74,7 @@ public interface AdvisoryRepository {
     List<SourceSummary> sourceSummaries();
 
     /**
-     * One statement of a Check Point Jumbo resolved-issues page (V212, amendment A-2026-11-13): the take of a train that
+     * One statement of a Check Point Jumbo resolved-issues page (V213, amendment A-2026-11-13): the take of a train that
      * names a CVE, with the kind ({@code FIX} or {@code MENTION}), the page's product cell, the sk article the line refers
      * to and the line itself (public text).
      */

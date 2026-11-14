@@ -219,7 +219,7 @@ public final class AdvisoryIngestService {
     private static final Pattern JUMBO_TRAIN = Pattern.compile("^R[0-9]{2}(\\.[0-9]{1,2})?$");
     private static final Pattern SK_REF = Pattern.compile("^sk[0-9]{1,10}$");
 
-    /** A Jumbo statement in the form the V212 constraints accept, or empty when it cannot be stored as it is. */
+    /** A Jumbo statement in the form the V213 constraints accept, or empty when it cannot be stored as it is. */
     static Optional<StoredJumboStatement> toStored(String train, String url, String sha, AdvisoryModel.JumboStatement j) {
         if (j == null || train == null || !JUMBO_TRAIN.matcher(train).matches() || !train.equals(j.train()) || j.take() < 1
                 || j.take() > 100_000 || j.cveId() == null || !CVE.matcher(j.cveId()).matches()

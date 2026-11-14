@@ -1,4 +1,4 @@
--- V212 -- Advisory store: the Check Point source (docs/design/ADVISORY_MATCHING_CONTRACT.md, amendment A-2026-11-13).
+-- V213 -- Advisory store: the Check Point source (docs/design/ADVISORY_MATCHING_CONTRACT.md, amendment A-2026-11-13).
 --
 -- 1. The source key 'checkpoint' joins the closed source lists of advisory and advisory_feed_run.
 -- 2. checkpoint_jumbo_statement: one row per train, Jumbo take and CVE id that a Check Point Jumbo Hotfix Accumulator

@@ -67,6 +67,12 @@ const BASIS_SENTENCES = new Map([
   ["FIX_STATEMENT_UNCLEAR", "Pending confirmation: the resolved-issues list mentions this CVE without saying it was resolved."],
   ["NO_FIX_TAKE_PUBLISHED", "The vendor names this version as affected and no Jumbo take is listed as resolving it."],
   ["PRODUCT_SUBSET_UNKNOWN", "The advisory names only some gateways (for example Maestro or scalable platforms); neXus cannot tell whether this one is among them."]]);
+/**
+ * What the Check Point source can see (ADVISORY_MATCHING_CONTRACT.md amendment A-2026-11-13, A.5; PO 2026-11-14 keeps the
+ * limit and wants it on screen): shown wherever the Check Point comparison basis is shown.
+ */
+export const CHECKPOINT_COVERAGE = "Check Point coverage: the CVEs named in the Jumbo Hotfix resolved-issues lists of R81.20, R82, R82.10 and R82.20. "
+  + "A Check Point CVE that no Jumbo take of these versions resolves yet is not seen.";
 /** Bases of a verdict that waits for a fix rule confirmation (PO decision 2026-11-10): shown as pending, not as "could not be judged". */
 export const PENDING_BASES = new Set(["FIX_RULE_UNCONFIRMED", "MULTIPLE_FIX_TAKES", "FIX_STATEMENT_UNCLEAR"]);
 /** The rule that decided, as a sentence; a code word this build does not know is shown as it came. */
@@ -160,6 +166,7 @@ export function VulnerabilityDetail({ v }: { v: LifecycleVulnerabilities }) {
     {b && <Typography variant="caption" display="block">{`Compared against ${advisorySourceName(b.source)}: ${plural(b.advisories ?? 0, "advisory", "advisories")}`
       + `${b.oldest && b.newest ? ` from ${b.oldest} to ${b.newest}` : ""}, ${loadedAge(b)}${b.loaded_at ? ` (${formatStamp(b.loaded_at)})` : ""}`}</Typography>}
     {evaluated && !b && <Typography variant="caption" display="block">Comparison basis not reported.</Typography>}
+    {b?.source === "checkpoint" && <Typography variant="caption" display="block">{CHECKPOINT_COVERAGE}</Typography>}
     {v.product_key && <Typography variant="caption" display="block" sx={muted}>{`Product: ${v.product_key}`}</Typography>}
     {evaluated && count(v.affected) > 0 && <Typography variant="caption" display="block">{`${AFFECTED_BY_VERSION} The advisories are listed on the Vulnerabilities tab.`}</Typography>}
   </Box>;
@@ -236,7 +243,7 @@ function SourcesTable({ sources }: { sources: LifecycleAdvisorySource[] }) {
         <TableCell>{sourceOutcome(s)}</TableCell>
         <TableCell>{s.advisories ?? 0}</TableCell>
         <TableCell>{count(s.needs_review) ? <Typography variant="body2" component="span" sx={{ color: m3.warningInk }}>{s.needs_review}</Typography> : 0}</TableCell>
-        <TableCell>{s.oldest && s.newest ? `from ${s.oldest} to ${s.newest}` : "—"}</TableCell>
+        <TableCell>{s.oldest && s.newest ? `from ${s.oldest} to ${s.newest}` : "—"}{s.source === "checkpoint" && caption(CHECKPOINT_COVERAGE)}</TableCell>
         <TableCell>{sourceAge(s)}</TableCell>
       </TableRow>)}</TableBody>
     </Table></TableContainer>
