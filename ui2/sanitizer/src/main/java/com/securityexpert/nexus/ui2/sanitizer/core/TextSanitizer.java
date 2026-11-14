@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 
 /**
@@ -36,7 +37,7 @@ public final class TextSanitizer {
     public static final String SERIAL = SerialRule.SERIAL;
 
     private enum Type {
-        URL(90), EMAIL(80), DOMAIN_USER(78), DN(77), USER_AT_HOST(75), MAC(70), IPV6(65), IPV4(60), KNOWN(55), FQDN(50),
+        URL(90), EMAIL(80), DOMAIN_USER(78), HOME_USER(76), DN(77), USER_AT_HOST(75), MAC(70), IPV6(65), IPV4(60), KNOWN(55), FQDN(50),
         LEARNED(45), CONTEXT_HOST(40), SYSLOG_HOST(40), BARE_HOST(10);
 
         final int priority;
@@ -190,6 +191,17 @@ public final class TextSanitizer {
                         new String[] {m.group(1), m.group(2), m.group(3)}));
             }
         }
+        if (text.indexOf('/') >= 0 || text.indexOf('\\') >= 0) {
+            m = Patterns.HOME_PATH.matcher(text);
+            while (m.find()) {
+                String name = m.group(1);
+                if (Set.of("shared", "public", "default", "all", "root", "lost+found", "guest", "user", "users", "home", "ftp",
+                        "nobody").contains(name.toLowerCase(Locale.ROOT)) || IdentityTokens.isToken(name)) {
+                    continue;
+                }
+                out.add(new Candidate(m.start(1), m.end(1), Type.HOME_USER, new String[] {name}));
+            }
+        }
         if (text.indexOf('=') >= 0) {
             m = Patterns.CN_DN.matcher(text);
             while (m.find()) out.add(new Candidate(m.start(), m.end(), Type.DN, new String[] {m.group()}));
@@ -303,6 +315,7 @@ public final class TextSanitizer {
                 yield user + "@" + (host == null ? p[1] : host);
             }
             case DOMAIN_USER -> domainUser(p[0], p[1], p[2]);
+            case HOME_USER -> label(p[0], null);
             case DN -> distinguishedName(p[0]);
             case CONTEXT_HOST, SYSLOG_HOST, LEARNED -> host(p[0], HOSTNAME);
             case BARE_HOST -> {
