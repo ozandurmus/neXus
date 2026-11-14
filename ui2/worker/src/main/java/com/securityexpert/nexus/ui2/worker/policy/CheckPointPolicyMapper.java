@@ -21,6 +21,14 @@ public final class CheckPointPolicyMapper {
         "port", "icmp-type", "icmp-code", "ipv4-address-first", "ipv4-address-last", "ipv6-address-first", "ipv6-address-last",
         "ip-address-first", "ip-address-last");
 
+    /**
+     * PO decision D-1 (2026-11-14, A0 amendment section G1): the management addresses of a gateway-class object, read
+     * from the stored {@code show-gateways-and-servers} inventory (CpObjectInventoryParser#gatewayAddresses) and carried
+     * on the inventory node under these fields, which no management reply uses. In the snapshot they become one
+     * {@code gateway-ipv4: <address>} value per address and {@code gateway-addresses: complete} when the set is complete.
+     * Shadowing reads them only as an upper bound to pass a rule over, never to cover.
+     */
+    static final String GATEWAY_IPV4_FIELD = "nexus-gateway-ipv4", GATEWAY_COMPLETE_FIELD = "nexus-gateway-addresses-complete";
     /** Exact-uid object lookup in the policy's own domain inventory (then the MDS Global domain's); null when absent. */
     public interface InventoryLookup { InventoryObject find(String uid); }
     /**
@@ -266,6 +274,7 @@ public final class CheckPointPolicyMapper {
         for (String field : VALUE_FIELDS)
             if (node.has(field)) values.add(field + ": " + node.path(field).asText());
         if (nativeType.equals("access-role")) values.addAll(accessRoleNetworks(meta, node.path("networks"), dict, objects, depth));
+        if (type.equals("gateway")) values.addAll(gatewayAddresses(uid, nativeType, inventory != null ? inventory : dict.inventory(uid), dict));
         String status = com.securityexpert.nexus.ui2.policy.CpObjectTypes.status(nativeType);
         // Keep the vendor class of an unmodelled object so the remaining gap can be counted by type (no names, no values).
         if (status.equals("UNSUPPORTED") && type.equals("unresolved"))
@@ -297,6 +306,19 @@ public final class CheckPointPolicyMapper {
             else if (uid.isEmpty()) return List.of();
             else out.add("networks: " + object(meta, uid, dict, objects, depth + 1));
         }
+        return out;
+    }
+    /**
+     * D-1: the inventory's addresses of this gateway object (same uid, same native type, within the inventory age bound),
+     * as {@code gateway-ipv4} values plus the completeness marker; nothing when the inventory has none (fail closed).
+     */
+    private static List<String> gatewayAddresses(String uid, String nativeType, InventoryObject found, Sources dict) {
+        if (found == null || !nativeType.equals(found.node().path("type").asText(null))) return List.of();
+        JsonNode addresses = found.node().path(GATEWAY_IPV4_FIELD);
+        if (!addresses.isArray() || addresses.isEmpty()) return List.of();
+        List<String> out = new ArrayList<>();
+        for (JsonNode address : addresses) if (address.isTextual()) out.add("gateway-ipv4: " + address.textValue());
+        if (found.node().path(GATEWAY_COMPLETE_FIELD).asBoolean(false) && out.size() == addresses.size()) out.add("gateway-addresses: complete");
         return out;
     }
     static final Set<String> DYNAMIC_TYPES = com.securityexpert.nexus.ui2.policy.CpObjectTypes.DYNAMIC_TYPES;

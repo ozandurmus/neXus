@@ -366,6 +366,9 @@ final class PolicyNormalization {
      * the role's networks ({@link Resolver#accessRoleBound}). The identity the role also requires only narrows the match
      * further, so the bound may prove disjointness and nothing else; a partial prior never covers, so an access-role rule
      * still covers nothing.</li>
+     * <li>A Check Point source or destination naming a gateway-class object is resolved, where it can be, to that
+     * object's management addresses (PO decision D-1, {@link Resolver#gatewayBound}): an upper bound that may prove
+     * disjointness and nothing else, exactly like the access-role bound.</li>
      * <li>A Palo Alto zone rule type other than universal changes how the from/to zones apply, so those zones are not
      * used; missing zone or install-on evidence is an unknown placement. A Check Point rule whose time column was not
      * collected is an incompletely collected rule record and is not used. Rules outside the security rulebase are not
@@ -400,9 +403,11 @@ final class PolicyNormalization {
             } catch (Unknown unresolved) {
                 if (unresolved.getMessage().equals("analysis budget")) throw unresolved;
                 // A Check Point source naming an access role: the role's networks bound it (Resolver#accessRoleBound).
-                if (i == 0 && cp) try {
-                    var bound = resolver.accessRoleBound(cell);
-                    if (!bound.any()) { selectors[0] = bound; resolved = true; }
+                // A Check Point source or destination naming a gateway-class object: its management addresses bound it
+                // (D-1, Resolver#staticBound). Either bound may prove disjointness and nothing else.
+                if ((i == 0 || i == 1) && cp) try {
+                    var bound = resolver.staticBound(cell, i == 0);
+                    if (!bound.any()) { selectors[i] = bound; resolved = true; }
                 } catch (Unknown none) {
                     if (none.getMessage().equals("analysis budget")) throw none;
                 }
@@ -820,6 +825,63 @@ final class PolicyNormalization {
             }
             if (!role) throw new Unknown("dynamic or unsupported object type");
             return union(parts);
+        }
+        /**
+         * The upper bound of a Check Point source ({@code roles} true) or destination cell that names access roles (source
+         * only, {@link #accessRoleBound}) or gateway-class objects, directly or inside address groups: the union of each
+         * access role's networks, each gateway object's management addresses ({@link #gatewayBound}) and the other
+         * address objects, each resolved as {@link #object} does. Without an access role or a gateway object it is no
+         * bound (the cell either resolves exactly or stays unresolved). Read only by {@link PolicyNormalization#partial}.
+         */
+        Selector staticBound(Cell cell, boolean roles) {
+            if (cell.negated()) throw new Unknown("negated selector");
+            if (cell.refs().isEmpty()) throw new Unknown("missing selector");
+            List<Selector> parts = new ArrayList<>(); boolean[] limited = {false};
+            for (String id : cell.refs()) {
+                budget.spend(); var o = objects.get(id);
+                if (roles && o != null && o.type().equals("access-role") && o.status().equals("DYNAMIC")) { limited[0] = true; parts.add(accessRole(id, o)); }
+                else parts.add(boundObject(id, new HashSet<>(), limited));
+            }
+            if (!limited[0]) throw new Unknown("dynamic or unsupported object type");
+            return union(parts);
+        }
+        private Selector boundObject(String id, Set<String> path, boolean[] limited) {
+            budget.spend();
+            var o = objects.get(id);
+            if (o != null && o.type().equals("gateway") && o.status().equals("RESOLVED")) { limited[0] = true; return gatewayBound(id, o); }
+            if (o == null || !o.status().equals("RESOLVED") || !Set.of("group", "address-group").contains(o.type())) return object(id, "address", new HashSet<>());
+            if (o.members().isEmpty() || !o.values().isEmpty()) throw new Unknown("empty or dynamic group");
+            if (!path.add(id) || path.size() > 32) throw new Unknown("group cycle or depth limit");
+            List<Selector> children = new ArrayList<>();
+            for (String member : o.members()) children.add(boundObject(member, path, limited));
+            path.remove(id);
+            return union(children);
+        }
+        /**
+         * PO decision D-1 (2026-11-14, PATH_ANALYSIS_VENDOR_SEMANTICS_AMENDMENT_2026_11_13.md section G1): a Check Point
+         * gateway or cluster object matches at most its own addresses -- main, interface, cluster virtual and member
+         * addresses as the management object lists them (the mapper's {@code gateway-ipv4} values) -- and, since the engine
+         * resolves no IPv6 object, any IPv6 address. Used only to pass an earlier rule over, never to cover: it is read only
+         * by {@link PolicyNormalization#partial}, and a partial prior never covers. Fail-closed: without the mapper's
+         * completeness marker, with an unparseable address, or with members, it is no bound.
+         */
+        Selector gatewayBound(String id, PolicyObject o) {
+            budget.spend(); String key = "gateway-addresses:" + id;
+            if (memo.containsKey(key)) return memo.get(key);
+            if (!o.members().isEmpty() || !o.values().contains("gateway-addresses: complete")) throw new Unknown("dynamic or unsupported object type");
+            List<Range> ranges = new ArrayList<>();
+            for (String value : o.values()) {
+                budget.spend();
+                if (!value.startsWith("gateway-ipv4: ") && !value.startsWith("ipv4-address: ")) continue;
+                try {
+                    var r = PolicyRuleQuery.interval(value.substring(value.indexOf(": ") + 2));
+                    if (r[0] != r[1]) throw new IllegalArgumentException("not one address");
+                    ranges.add(new Range(r[0], r[1]));
+                } catch (IllegalArgumentException invalid) { throw new Unknown("unsupported address representation"); }
+            }
+            if (ranges.isEmpty()) throw new Unknown("missing address values");
+            var result = union(List.of(new Selector(false, Map.of("ipv4", ranges, "ipv6", List.of(new Range(0, Long.MAX_VALUE))))));
+            memo.put(key, result); return result;
         }
         private Selector accessRole(String id, PolicyObject o) {
             budget.spend(); String key = "access-role-networks:" + id;

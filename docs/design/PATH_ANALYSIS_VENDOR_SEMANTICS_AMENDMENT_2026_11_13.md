@@ -32,3 +32,22 @@ user) shows an earlier zone-superset rule covering a rule whose reported coverin
 Verification: `PolicyHygieneExtendedResolutionTest` (brute force over the full packet space, 300 seeded policies:
 exact status and earliest covering rule); the 10 largest stored policies compared with the independent reference
 analyser (contradictions 0, counts in the branch's commit messages).
+
+## Section G1 (2026-11-14) — Check Point gateway and cluster objects (PO decision D-1)
+
+Status: FROZEN — 2026-11-14, PO decision relayed by the PO session, verbatim: "Kabul" ("Accepted"), recorded in
+`PO_DECISION_RECORD_2026_11_14_GATEWAY_BOUND_AND_APPID_PORTS.md`: "a gateway/cluster object matches at most its own
+addresses (main, interface, cluster virtual and member addresses)" as an upper bound, used only to pass an earlier rule
+over, never to cover. This is a PO risk decision, not a vendor citation: no official page read states what a gateway
+object matches in Source or Destination (the 2026-11-05 gateway-object review found none).
+
+| Id | Claim | Basis | Grade | Used as |
+|---|---|---|---|---|
+| A0-G1 | A gateway-class object (`CpObjectTypes.GATEWAY_TYPES`) in Source or Destination matches at most its management addresses: the main `ipv4-address`, every `interfaces[].ipv4-address`, and for a classic cluster every `cluster-members[]` address and member interface address, as `show-gateways-and-servers details-level full` lists them; any IPv6 address | PO decision D-1 (2026-11-14) | PO DECISION (no vendor statement) | an upper bound in `PolicyNormalization.partial` only: proves that an earlier rule cannot cover a later one; never a full match, never a cover, never the rule's own verdict |
+
+Fail-closed: the bound exists only when the stored inventory of the same domain (or MDS Global), at most 48 h older than
+the snapshot, carries the object under the same uid and native type with a complete address set (non-empty interface
+list; every address valid; every interface with an address; a classic cluster with its member list).
+Data: a parse-scope extension of the read already issued (gate `cp_policy_collect`, object type
+`gateways-and-servers`); no new command.
+

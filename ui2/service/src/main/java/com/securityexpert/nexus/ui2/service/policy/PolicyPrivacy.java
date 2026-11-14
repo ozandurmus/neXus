@@ -174,8 +174,8 @@ public final class PolicyPrivacy {
         if (key.equals("log")) return ENUMS.contains(text) || text.matches("start=(yes|no|UNKNOWN), end=(yes|no|UNKNOWN)") ? text : "UNKNOWN";
         if (key.equals("values") && (text.matches("(?:port|source-port|icmp-type|icmp-code|protocol/(?:tcp|udp)/(?:port|source-port)): [0-9,<>*:/ -]+")
                 || text.matches("protocol: (tcp|udp|icmp|icmp6|sctp|other|dce-rpc|rpc|[0-9]{1,3})")
-                || text.matches("native-type: [A-Za-z][A-Za-z0-9_-]{0,63}") || text.matches("mask-length[46]: [0-9]{1,3}") || text.matches("color: color[0-9]+"))) return text;
-        if (key.equals("values") && text.matches("(?:(?:ipv4-address|ipv4-address-first|ipv4-address-last|subnet4|subnet-mask|ip-netmask|ip-range|ip-address-first|ip-address-last): )?[0-9./ -]+"))
+                || text.matches("native-type: [A-Za-z][A-Za-z0-9_-]{0,63}") || text.equals("gateway-addresses: complete") || text.matches("mask-length[46]: [0-9]{1,3}") || text.matches("color: color[0-9]+"))) return text;
+        if (key.equals("values") && text.matches("(?:(?:ipv4-address|gateway-ipv4|ipv4-address-first|ipv4-address-last|subnet4|subnet-mask|ip-netmask|ip-range|ip-address-first|ip-address-last): )?[0-9./ -]+"))
             return ips.maskText(text);
         return names.maskPolicyName(key, text);
     }
