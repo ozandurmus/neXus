@@ -4,7 +4,7 @@ import { listPolicies, type PolicyMetadata } from "../auth/adminApi";
 import { M3Tabs } from "../shell/M3Widgets";
 import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 import { RestrictedPanel, StatePanel, isRestricted } from "../shell/States";
-import { urlParam, writeUrlParams } from "../shell/urlParams";
+import { navigateTo, urlParam, useUrlParamSync, writeUrlParams } from "../shell/urlParams";
 import { PathAnalysisPanel } from "./PathAnalysisScreen";
 import { PolicyLookupTab } from "./PolicyLookupTab";
 import { policyFailureText } from "./PolicyRuleViewer";
@@ -26,6 +26,7 @@ export function traceModeFromUrl(value: string | null): TraceMode {
 
 export function TraceScreen() {
   const [mode, setMode] = useState<TraceMode>(() => traceModeFromUrl(urlParam("mode")));
+  useUrlParamSync("mode", (v) => setMode(traceModeFromUrl(v)));
   const select = (index: number) => {
     const next = TRACE_MODES[index] ?? "path";
     setMode(next);
@@ -49,6 +50,7 @@ function PolicyLookupMode() {
   const [catalog, setCatalog] = useState<PolicyMetadata[] | null>(null);
   const [failure, setFailure] = useState<unknown>(null);
   const [policy, setPolicy] = useState(() => urlParam("policy_id") ?? "");
+  useUrlParamSync("policy_id", (v) => setPolicy(v ?? ""));
   useEffect(() => {
     let active = true;
     listPolicies()
@@ -69,6 +71,6 @@ function PolicyLookupMode() {
   return (
     <PolicyLookupTab policies={catalog} policy={policy}
       selectPolicy={(id) => { setPolicy(id); writeUrlParams({ policy_id: id }); }}
-      openRule={(policyId, ruleId) => window.location.assign(`?screen=policy&policy_id=${encodeURIComponent(policyId)}&rule=${encodeURIComponent(ruleId)}`)} />
+      openRule={(policyId, ruleId) => navigateTo(`?screen=policy&policy_id=${encodeURIComponent(policyId)}&rule=${encodeURIComponent(ruleId)}`)} />
   );
 }

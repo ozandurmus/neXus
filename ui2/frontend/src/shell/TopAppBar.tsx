@@ -17,6 +17,7 @@ import { useFetchOnMount } from "./useFetchOnMount";
 import { listNotifications, getProjectPlan, responsesAreMasked } from "../auth/adminApi";
 import { primaryRoleLabel, roleTokenLabel } from "./roleLabel";
 import { PlatformHealthIndicator } from "./PlatformHealthIndicator";
+import { useLocationSearch } from "./urlParams";
 
 /**
  * The minimal notification badge NXS-LOCAL-0165 adds (WORKER.md
@@ -158,9 +159,9 @@ function AsOfClock() {
 /** Colour mode and wall display -- per-viewer preferences only (density is per screen type, not a toggle). */
 function DisplayControls() {
   const { mode, setMode } = useDisplayMode();
+  const search = useLocationSearch();
   const wallHref = (() => {
-    if (typeof window === "undefined") return "?screen=overview&wall=1";
-    const p = new URLSearchParams(window.location.search);
+    const p = new URLSearchParams(search);
     p.set("screen", "overview");
     p.set("wall", "1");
     return `?${p.toString()}`;
@@ -185,11 +186,11 @@ function DisplayControls() {
 export function TopAppBar() {
   const session = useSession();
   const { wall } = useDisplayMode();
+  const search = useLocationSearch();
 
   if (wall) {
     const exit = (() => {
-      if (typeof window === "undefined") return "?screen=overview";
-      const p = new URLSearchParams(window.location.search);
+      const p = new URLSearchParams(search);
       p.delete("wall");
       return `?${p.toString()}`;
     })();

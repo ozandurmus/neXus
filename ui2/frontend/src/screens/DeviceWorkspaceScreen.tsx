@@ -8,6 +8,7 @@ import { ScreenHeader, EmptyPanel, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
+import { navigateTo } from "../shell/urlParams";
 import { deleteDevice, getDeviceWorkspace, type DeviceWorkspaceView, type ActionAffordance, type TransportSummary, type ApiError } from "../auth/adminApi";
 import { enrollmentStateLabel } from "../shell/deviceCopy";
 import { HttpsCertificatePanel } from "./HttpsCertificatePanel";
@@ -76,7 +77,7 @@ export function DeviceWorkspaceScreen({ deviceId }: { readonly deviceId: string 
     if (!window.confirm("Delete this device and all of its collected records? This cannot be undone.")) return;
     try {
       await deleteDevice(deviceId);
-      window.location.assign("?screen=inventory");
+      navigateTo("?screen=inventory");
     } catch (err) {
       setDeleteError(describeApiError(err));
     }

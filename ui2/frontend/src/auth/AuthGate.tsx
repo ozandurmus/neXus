@@ -8,6 +8,7 @@ import { m3Theme } from "../theme/m3Theme";
 import { LoginScreen } from "./LoginScreen";
 import { PasswordChangeScreen } from "./PasswordChangeScreen";
 import { SessionContext } from "./SessionContext";
+import { getSessionStatus, invalidateSessionStatusCache } from "./adminApi";
 
 type AuthState = "checking" | "authenticated" | "must-change-password" | "unauthenticated";
 
@@ -29,11 +30,10 @@ const UNAUTHENTICATED_STATUS: SessionStatus = {
   mustChangePassword: false,
 };
 
-async function checkSession(): Promise<SessionStatus> {
+async function checkSession(force = false): Promise<SessionStatus> {
   try {
-    const response = await fetch("/session/status", { credentials: "include" });
-    if (!response.ok) return UNAUTHENTICATED_STATUS;
-    const body = await response.json();
+    const body = await getSessionStatus({ force });
+    if (!body) return UNAUTHENTICATED_STATUS;
     return {
       authenticated: true,
       displayName: typeof body.display_name === "string" ? body.display_name : null,
@@ -48,6 +48,7 @@ async function checkSession(): Promise<SessionStatus> {
 }
 
 async function signOut(): Promise<void> {
+  invalidateSessionStatusCache();
   try {
     await fetch("/session/logout", { method: "POST", credentials: "include" });
   } catch {
@@ -116,11 +117,11 @@ export function AuthGate({ children }: { readonly children: ReactNode }) {
     <ThemeProvider theme={m3Theme}>
       <CssBaseline />
       {state === "unauthenticated" ? (
-        <LoginScreen onAuthenticated={() => checkSession().then(applyStatus)} />
+        <LoginScreen onAuthenticated={() => checkSession(true).then(applyStatus)} />
       ) : state === "must-change-password" ? (
         <PasswordChangeScreen
           username={session.displayName ?? ""}
-          onChanged={() => checkSession().then(applyStatus)}
+          onChanged={() => checkSession(true).then(applyStatus)}
           onSignOut={handleSignOut}
         />
       ) : (

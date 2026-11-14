@@ -8,7 +8,7 @@ import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import { listPolicies, type PolicyMetadata } from "../auth/adminApi";
 import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 import { RestrictedPanel, StatePanel, isRestricted } from "../shell/States";
-import { urlParam, writeUrlParams } from "../shell/urlParams";
+import { navigateTo, urlParam, useUrlParamSync, writeUrlParams } from "../shell/urlParams";
 import { PolicyOfflineTab, type RuleUsageMode } from "./PolicyOfflineTab";
 import { policyFailureText } from "./PolicyRuleViewer";
 
@@ -27,6 +27,8 @@ export function RuleUsageScreen() {
   const [failure, setFailure] = useState<unknown>(null);
   const [policy, setPolicy] = useState(() => urlParam("policy_id") ?? "");
   const [mode, setMode] = useState<RuleUsageMode>(() => ruleUsageModeFromUrl(urlParam("mode")));
+  useUrlParamSync("policy_id", (v) => setPolicy(v ?? ""));
+  useUrlParamSync("mode", (v) => setMode(ruleUsageModeFromUrl(v)));
   useEffect(() => {
     let active = true;
     listPolicies()
@@ -58,7 +60,7 @@ export function RuleUsageScreen() {
             </TextField>
           </Stack>
           <PolicyOfflineTab key={policy} policy={policy} mode={mode}
-            openRule={(ruleId) => window.location.assign(`?screen=policy&policy_id=${encodeURIComponent(policy)}&rule=${encodeURIComponent(ruleId)}`)} />
+            openRule={(ruleId) => navigateTo(`?screen=policy&policy_id=${encodeURIComponent(policy)}&rule=${encodeURIComponent(ruleId)}`)} />
         </>}
     </ScreenRoot>
   );

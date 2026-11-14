@@ -84,6 +84,94 @@ export function globalSearch(q: string, limit = 20, group?: IpSearchGroup, offse
   return call(`/api/v2/search?q=${encodeURIComponent(q)}&limit=${limit}${group ? `&group=${group}&offset=${offset}` : ""}`, "GET");
 }
 
+interface SharedCacheEntry<T> {
+  value?: T;
+  hasValue: boolean;
+  expiresAt: number;
+  inFlight?: Promise<T>;
+  fetchRef: typeof fetch | undefined;
+}
+
+const sharedCache = new Map<string, SharedCacheEntry<unknown>>();
+
+function readSharedCache<T>(
+  key: string,
+  staleMs: number,
+  loader: () => Promise<T>,
+  shouldStayFresh?: (value: T) => boolean,
+): Promise<T> {
+  const currentFetch = typeof fetch === "function" ? fetch : undefined;
+  let entry = sharedCache.get(key) as SharedCacheEntry<T> | undefined;
+  if (!entry || entry.fetchRef !== currentFetch) {
+    entry = { hasValue: false, expiresAt: 0, fetchRef: currentFetch };
+    sharedCache.set(key, entry);
+  }
+  const now = Date.now();
+  if (entry.hasValue && now < entry.expiresAt) {
+    return Promise.resolve(entry.value as T);
+  }
+  if (entry.inFlight) {
+    return entry.inFlight;
+  }
+  const activeEntry = entry;
+  const request = loader()
+    .then((result) => {
+      if (sharedCache.get(key) === activeEntry) {
+        const keepCached = shouldStayFresh ? shouldStayFresh(result) : true;
+        activeEntry.value = result;
+        activeEntry.hasValue = keepCached;
+        activeEntry.expiresAt = keepCached ? Date.now() + staleMs : 0;
+      }
+      return result;
+    })
+    .finally(() => {
+      if (activeEntry.inFlight === request) {
+        activeEntry.inFlight = undefined;
+      }
+    });
+  activeEntry.inFlight = request;
+  return request;
+}
+
+export const DEVICES_STALE_MS = 30_000;
+export const SESSION_STATUS_STALE_MS = 30_000;
+export const NOTIFICATIONS_STALE_MS = 30_000;
+export const JOB_WINDOW_STALE_MS = 25_000;
+export const SYSTEM_PODS_STALE_MS = 10_000;
+
+export function invalidateDevicesCache(): void {
+  sharedCache.delete("devices");
+}
+
+export function invalidateSessionStatusCache(): void {
+  sharedCache.delete("session-status");
+}
+
+export function resetSharedApiCache(): void {
+  sharedCache.clear();
+}
+
+function invalidateDevicesAfter<T>(work: Promise<T>): Promise<T> {
+  invalidateDevicesCache();
+  return work.finally(() => {
+    invalidateDevicesCache();
+  });
+}
+
+export function getSessionStatus(options?: { readonly force?: boolean }): Promise<Record<string, unknown> | null> {
+  if (options?.force) invalidateSessionStatusCache();
+  return readSharedCache(
+    "session-status",
+    SESSION_STATUS_STALE_MS,
+    async () => {
+      const response = await fetch("/session/status", { credentials: "include" });
+      if (!response.ok) return null;
+      return (await response.json()) as Record<string, unknown>;
+    },
+    (result) => result !== null,
+  );
+}
+
 async function csrfToken(): Promise<string | undefined> {
   try {
     const response = await fetchWithTimeout("/session/status", { credentials: "include" }, 20_000);
@@ -570,7 +658,7 @@ export function acceptBackupSize(deviceId: string, reason: string): Promise<{ de
 
 /** BK-12 manual backup (14K BW-4): posts to the collect route with a required reason. */
 export function collectDeviceBackup(deviceId: string, reason: string, type: "backup" | "snapshot" | "mds_export" = "backup"): Promise<{ job_id: string }> {
-  return call(`/devices/${encodeURIComponent(deviceId)}/backup/collect`, "POST", { reason, type });
+  return invalidateDevicesAfter(call(`/devices/${encodeURIComponent(deviceId)}/backup/collect`, "POST", { reason, type }));
 }
 
 /** V41: one archive member -- name, type, size, digest prefix; never content. */
@@ -809,7 +897,7 @@ export type Vendor = "check_point" | "palo_alto" | "infoblox" | "radware" | "blu
 
 /** V64: bind a credential-store reference as a device's second secret (Radware's export passphrase); never a value. */
 export function setDeviceSecret(deviceId: string, purpose: "export_passphrase" | "backup_receiver", credentialReferenceId: string): Promise<{ ok: boolean }> {
-  return call(`/devices/${encodeURIComponent(deviceId)}/secrets/${purpose}`, "POST", { credential_reference_id: credentialReferenceId });
+  return invalidateDevicesAfter(call(`/devices/${encodeURIComponent(deviceId)}/secrets/${purpose}`, "POST", { credential_reference_id: credentialReferenceId }));
 }
 
 export type JobState =
@@ -859,7 +947,7 @@ export interface OnboardingView {
 }
 
 export function retryOnboarding(deviceId: string): Promise<{ admitted: boolean; step: string; job_id: string }> {
-  return call(`/devices/${encodeURIComponent(deviceId)}/onboarding/retry`, "POST", {});
+  return invalidateDevicesAfter(call(`/devices/${encodeURIComponent(deviceId)}/onboarding/retry`, "POST", {}));
 }
 
 export interface DeviceDetail {
@@ -949,18 +1037,18 @@ export function addDeviceSingle(
   exportPassphraseCredentialReferenceId?: string,
 ): Promise<AddDeviceSingleResult> {
   // One call, one transaction: the device, its export passphrase (Radware) and its confirm job, or none of them.
-  return call("/devices/add-single", "POST", {
+  return invalidateDevicesAfter(call("/devices/add-single", "POST", {
     address,
     role,
     vendor,
     credential_reference_id: credentialReferenceId,
     ...(exportPassphraseCredentialReferenceId ? { export_passphrase_credential_reference_id: exportPassphraseCredentialReferenceId } : {}),
-  });
+  }));
 }
 
 /** Replace a device's login credential (a reference, never a value); the next job uses it. */
 export function setDeviceCredential(deviceId: string, credentialReferenceId: string): Promise<{ ok: boolean; changed: boolean }> {
-  return call(`/devices/${encodeURIComponent(deviceId)}/credential`, "PUT", { credential_reference_id: credentialReferenceId });
+  return invalidateDevicesAfter(call(`/devices/${encodeURIComponent(deviceId)}/credential`, "PUT", { credential_reference_id: credentialReferenceId }));
 }
 
 export function getDevice(deviceId: string): Promise<DeviceDetail> {
@@ -968,30 +1056,36 @@ export function getDevice(deviceId: string): Promise<DeviceDetail> {
 }
 
 export function setBackupTarget(deviceId: string, enabled: boolean): Promise<{ device_id: string; backup_target: boolean; changed: boolean }> {
-  return call(`/devices/${encodeURIComponent(deviceId)}/backup-target`, "PUT", { enabled });
+  return invalidateDevicesAfter(call(`/devices/${encodeURIComponent(deviceId)}/backup-target`, "PUT", { enabled }));
 }
 
 export function requestFleetBackup(reason: string): Promise<{ targets: number; admitted: number; refused: number }> {
-  return call("/backups/collect-all", "POST", { reason });
+  return invalidateDevicesAfter(call("/backups/collect-all", "POST", { reason }));
 }
 
-let devicesInFlight: Promise<{ devices: DeviceSummary[] }> | null = null;
-
-/** Concurrent callers on one screen share one request (the Backups screen fetched it twice); settled results are not reused. */
+/**
+ * Shell-level device list cache (`DEVICES_STALE_MS` = 30 s): shared across screens so navigating between Devices,
+ * Backups, Operations, Administration and GlobalSearch does not re-fetch `/devices` within the staleness window.
+ * Invalidated after device mutations and bypassed while a device job is actively executing/claimed/requested.
+ */
 export function listDevices(): Promise<{ devices: DeviceSummary[] }> {
-  if (!devicesInFlight) {
-    devicesInFlight = call<{ devices: DeviceSummary[] }>("/devices", "GET").finally(() => {
-      devicesInFlight = null;
-    });
-  }
-  return devicesInFlight;
+  return readSharedCache(
+    "devices",
+    DEVICES_STALE_MS,
+    () => call<{ devices: DeviceSummary[] }>("/devices", "GET"),
+    (result) =>
+      !(result.devices ?? []).some((d) => {
+        const state = d.latest_job_state?.toUpperCase();
+        return state === "EXECUTING" || state === "CLAIMED" || state === "REQUESTED";
+      }),
+  );
 }
 
 export type BackupDisposition = "KEEP" | "REMOVE";
 
 export function deleteDevice(deviceId: string, backupDisposition?: BackupDisposition): Promise<{ deleted: boolean; device_id: string; backup_artefact_count: number }> {
-  return call(`/devices/${encodeURIComponent(deviceId)}/delete`, "POST",
-    backupDisposition ? { backup_disposition: backupDisposition } : undefined);
+  return invalidateDevicesAfter(call(`/devices/${encodeURIComponent(deviceId)}/delete`, "POST",
+    backupDisposition ? { backup_disposition: backupDisposition } : undefined));
 }
 
 export interface TransportEntry {
@@ -1314,7 +1408,7 @@ export interface ManagementTree {
 }
 
 export function acknowledgeManagedItem(deviceId: string, token: string, acknowledge: boolean, reason?: string): Promise<{ ok: boolean }> {
-  return call(`/devices/${encodeURIComponent(deviceId)}/management-tree/acknowledge`, "POST", { token, acknowledge, reason });
+  return invalidateDevicesAfter(call(`/devices/${encodeURIComponent(deviceId)}/management-tree/acknowledge`, "POST", { token, acknowledge, reason }));
 }
 
 export function getManagementTree(deviceId: string): Promise<ManagementTree> {
@@ -1326,19 +1420,19 @@ export function getClusterInventory(clusterMemberRef: string): Promise<ClusterIn
 }
 
 export function requestInventoryCollect(deviceId: string, nonce?: string): Promise<{ job_id: string }> {
-  return call(`/devices/${encodeURIComponent(deviceId)}/inventory/collect`, "POST", nonce ? { nonce } : {});
+  return invalidateDevicesAfter(call(`/devices/${encodeURIComponent(deviceId)}/inventory/collect`, "POST", nonce ? { nonce } : {}));
 }
 
 export function retryDeviceConfirm(deviceId: string): Promise<{ admitted: boolean; job_id: string }> {
-  return call(`/devices/${encodeURIComponent(deviceId)}/confirm`, "POST", {});
+  return invalidateDevicesAfter(call(`/devices/${encodeURIComponent(deviceId)}/confirm`, "POST", {}));
 }
 
 export function requestBulkInventoryCollect(): Promise<{ enrolled_devices: number; admitted: number; refused: number }> {
-  return call(`/devices/inventory/collect-all`, "POST", {});
+  return invalidateDevicesAfter(call(`/devices/inventory/collect-all`, "POST", {}));
 }
 
 export function requestBulkConfigurationCollect(): Promise<{ enrolled_devices: number; admitted: number; refused: number }> {
-  return call(`/devices/configuration/collect-all`, "POST", {});
+  return invalidateDevicesAfter(call(`/devices/configuration/collect-all`, "POST", {}));
 }
 
 /**
@@ -1416,12 +1510,12 @@ export function importDiscoveryCandidates(
   credentialReferenceId?: string,
   exportPassphraseCredentialReferenceId?: string,
 ): Promise<{ results: DiscoveryImportResult[] }> {
-  return call(`/discovery/runs/${encodeURIComponent(runId)}/import`, "POST", {
+  return invalidateDevicesAfter(call(`/discovery/runs/${encodeURIComponent(runId)}/import`, "POST", {
     candidate_ids: candidateIds,
     credential_reference_id: credentialReferenceId,
     // Radware discovery (2026-09-24): Radware DefensePro imports carry the export passphrase credential (one for the selection)
     ...(exportPassphraseCredentialReferenceId ? { export_passphrase_credential_reference_id: exportPassphraseCredentialReferenceId } : {}),
-  });
+  }));
 }
 
 /**
@@ -1505,7 +1599,7 @@ export function getDeviceConfigurationText(deviceId: string): Promise<string> {
 }
 
 export function requestConfigurationCollect(deviceId: string, nonce?: string): Promise<{ job_id: string }> {
-  return call(`/devices/${encodeURIComponent(deviceId)}/configuration/collect`, "POST", nonce ? { nonce } : {});
+  return invalidateDevicesAfter(call(`/devices/${encodeURIComponent(deviceId)}/configuration/collect`, "POST", nonce ? { nonce } : {}));
 }
 
 export function listConfigurations(): Promise<{ devices: ConfigurationDeviceListEntry[] }> {
@@ -1524,7 +1618,7 @@ export interface ConfigurationNotificationView {
 }
 
 export function listNotifications(): Promise<{ notifications: ConfigurationNotificationView[] }> {
-  return call("/notifications", "GET");
+  return readSharedCache("notifications", NOTIFICATIONS_STALE_MS, () => call("/notifications", "GET"));
 }
 
 /**
@@ -1991,7 +2085,7 @@ export interface PodsView {
 }
 
 export function getSystemPods(): Promise<PodsView> {
-  return call("/api/v2/system/pods", "GET");
+  return readSharedCache("system-pods", SYSTEM_PODS_STALE_MS, () => call("/api/v2/system/pods", "GET"));
 }
 
 export interface StorageView {
@@ -2189,10 +2283,10 @@ export function getHttpsCertificate(deviceId: string): Promise<HttpsCertificateV
   return call(`/devices/${encodeURIComponent(deviceId)}/https-certificate`, "GET");
 }
 export function acceptHttpsCertificate(deviceId: string, trustEntryId: string): Promise<unknown> {
-  return call(`/devices/${encodeURIComponent(deviceId)}/https-certificate/accept`, "POST", { trustEntryId });
+  return invalidateDevicesAfter(call(`/devices/${encodeURIComponent(deviceId)}/https-certificate/accept`, "POST", { trustEntryId }));
 }
 export function setHttpsCertificateStrict(deviceId: string, strict: boolean): Promise<unknown> {
-  return call(`/devices/${encodeURIComponent(deviceId)}/https-certificate/strict`, "PUT", { strict });
+  return invalidateDevicesAfter(call(`/devices/${encodeURIComponent(deviceId)}/https-certificate/strict`, "PUT", { strict }));
 }
 
 /** Secondary field: the recorded serial of an enrolled Palo Alto firewall shown by its hostname. */
@@ -2322,7 +2416,7 @@ export const getPolicyCollectionStatus = (id: string) => call<PolicyCollectionSt
 
 /** Server-owned device job policy; no local timezone or duration guess. */
 export function getJobWindow(): Promise<import("../shell/JobWindow").JobWindowStatus> {
-  return call("/api/v2/job-window", "GET");
+  return readSharedCache("job-window", JOB_WINDOW_STALE_MS, () => call("/api/v2/job-window", "GET"));
 }
 
 export interface SshHostKeyObservation {
@@ -2339,10 +2433,10 @@ export async function getSshHostKeyView(deviceId?: string): Promise<SshHostKeyVi
   return view;
 }
 export const setSshTrustMode = (mode: "WARN" | "STRICT") => call("/api/v2/ssh-trust/mode", "PUT", { mode });
-export const acceptSshHostKey = (id: string, confirmation: string) => call(
-  `/api/v2/ssh-trust/observations/${encodeURIComponent(id)}/accept`, "POST", { confirmation });
-export const rejectSshHostKey = (id: string) => call(
-  `/api/v2/ssh-trust/observations/${encodeURIComponent(id)}/reject`, "POST");
+export const acceptSshHostKey = (id: string, confirmation: string) => invalidateDevicesAfter(call(
+  `/api/v2/ssh-trust/observations/${encodeURIComponent(id)}/accept`, "POST", { confirmation }));
+export const rejectSshHostKey = (id: string) => invalidateDevicesAfter(call(
+  `/api/v2/ssh-trust/observations/${encodeURIComponent(id)}/reject`, "POST"));
 
 export interface PolicyLookupQuery {
   source: string; destination: string; service: string; sourceZone?: string; destinationZone?: string; target?: string; context?: string;
