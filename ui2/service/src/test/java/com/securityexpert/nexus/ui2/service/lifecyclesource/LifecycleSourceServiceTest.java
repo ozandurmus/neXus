@@ -15,7 +15,7 @@ import com.securityexpert.nexus.ui2.persistence.lifecycle.LifecycleVendorReposit
 
 class LifecycleSourceServiceTest {
 
-    /** An in-memory repository with the V214 replace semantics. */
+    /** An in-memory repository with the V219 replace semantics. */
     static final class Memory implements LifecycleVendorRepository {
         final List<VendorEntry> entries = new ArrayList<>();
         final List<Upload> uploads = new ArrayList<>();

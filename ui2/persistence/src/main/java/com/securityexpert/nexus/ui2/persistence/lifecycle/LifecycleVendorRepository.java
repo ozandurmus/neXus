@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * The vendor side of the lifecycle catalog (V214, docs/design/LIFECYCLE_CATALOG_SOURCES_CONTRACT.md): entries read from a
+ * The vendor side of the lifecycle catalog (V219, docs/design/LIFECYCLE_CATALOG_SOURCES_CONTRACT.md): entries read from a
  * vendor publication, the operator page uploads that brought some of them, and the online fetch runs that brought the
  * rest. The operator catalog of V144 stays in {@link LifecycleCatalogRepository}.
  */
