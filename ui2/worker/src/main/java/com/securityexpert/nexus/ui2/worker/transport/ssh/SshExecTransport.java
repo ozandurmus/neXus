@@ -60,6 +60,54 @@ public final class SshExecTransport implements DeviceTransport {
 
     private static final System.Logger LOG = System.getLogger(SshExecTransport.class.getName());
 
+    /**
+     * Explicit SSH host-key signature algorithms (`server_host_key` / `HostKeyAlgorithms`).
+     *
+     * <p>Keeps RSA family first so existing dual-key appliances enrolled with {@code ssh-rsa} continue to present
+     * their RSA host key, while negotiating RFC 8332 {@code rsa-sha2-512}/{@code rsa-sha2-256} when supported and
+     * falling back to {@code ssh-rsa} for legacy appliances. Also allows {@code ecdsa-sha2-nistp*} and
+     * {@code ssh-ed25519}. Weak {@code ssh-dss} is never enabled.
+     */
+    static final String HOST_KEY_ALGORITHMS = String.join(",",
+            "rsa-sha2-512",
+            "rsa-sha2-256",
+            "ssh-rsa",
+            "ecdsa-sha2-nistp256",
+            "ecdsa-sha2-nistp384",
+            "ecdsa-sha2-nistp521",
+            "ssh-ed25519");
+
+    /**
+     * Explicit SSH key-exchange algorithms (`kex`).
+     *
+     * <p>Prefers modern {@code curve25519-sha256}, {@code ecdh-sha2-nistp*}, and SHA-2 DH groups while retaining
+     * {@code diffie-hellman-group14-sha1} (2048-bit MODP) as a fallback for existing devices. Weak 1024-bit
+     * {@code diffie-hellman-group1-sha1} and {@code diffie-hellman-group-exchange-sha1} are never enabled.
+     */
+    static final String KEX_ALGORITHMS = String.join(",",
+            "curve25519-sha256",
+            "curve25519-sha256@libssh.org",
+            "ecdh-sha2-nistp256",
+            "ecdh-sha2-nistp384",
+            "ecdh-sha2-nistp521",
+            "diffie-hellman-group-exchange-sha256",
+            "diffie-hellman-group16-sha512",
+            "diffie-hellman-group18-sha512",
+            "diffie-hellman-group14-sha256",
+            "diffie-hellman-group14-sha1");
+
+    /**
+     * Explicit SSH symmetric ciphers (`cipher.s2c` and `cipher.c2s`).
+     *
+     * <p>Allows AEAD GCM and CTR-mode AES ciphers; never enables weak CBC, 3DES, Blowfish, or Arcfour ciphers.
+     */
+    static final String CIPHER_ALGORITHMS = String.join(",",
+            "aes128-gcm@openssh.com",
+            "aes256-gcm@openssh.com",
+            "aes128-ctr",
+            "aes192-ctr",
+            "aes256-ctr");
+
     private final SshCredentialResolver credentialResolver;
     private final TrustRuleResolver trustRuleResolver;
     private final boolean derivedOnly;
@@ -165,7 +213,7 @@ public final class SshExecTransport implements DeviceTransport {
             }
             // The ratified WARN exception is checked and audited in the key hook before authentication.
             session.setHostKeyRepository(trustedOnlyRepository(spec.trustRuleRef(), target, trustFailure, trusted));
-            session.setConfig("StrictHostKeyChecking", "yes");
+            configureSessionAlgorithms(session, algorithms);
             long jschStart = System.currentTimeMillis();
             session.connect((int) timeout.toMillis());
             long totalConnectElapsed = System.currentTimeMillis() - connectStartMs;
@@ -214,6 +262,36 @@ public final class SshExecTransport implements DeviceTransport {
                 session.disconnect();
             }
         }
+    }
+
+    static void configureSessionAlgorithms(Session session, java.util.Optional<java.util.List<String>> authorizedHostKeyAlgorithms) {
+        session.setConfig("StrictHostKeyChecking", "yes");
+        session.setConfig("server_host_key", hostKeyAlgorithmsFor(authorizedHostKeyAlgorithms));
+        session.setConfig("kex", KEX_ALGORITHMS);
+        session.setConfig("cipher.s2c", CIPHER_ALGORITHMS);
+        session.setConfig("cipher.c2s", CIPHER_ALGORITHMS);
+    }
+
+    static String hostKeyAlgorithmsFor(java.util.Optional<java.util.List<String>> authorizedHostKeyAlgorithms) {
+        if (authorizedHostKeyAlgorithms == null || authorizedHostKeyAlgorithms.isEmpty()
+                || authorizedHostKeyAlgorithms.get().isEmpty()) {
+            return HOST_KEY_ALGORITHMS;
+        }
+        java.util.LinkedHashSet<String> ordered = new java.util.LinkedHashSet<>();
+        java.util.Set<String> allowed = java.util.Set.of(HOST_KEY_ALGORITHMS.split(","));
+        for (String keyAlgorithm : authorizedHostKeyAlgorithms.get()) {
+            if ("ssh-rsa".equals(keyAlgorithm)) {
+                ordered.add("rsa-sha2-512");
+                ordered.add("rsa-sha2-256");
+                ordered.add("ssh-rsa");
+            } else if (keyAlgorithm != null && allowed.contains(keyAlgorithm)) {
+                ordered.add(keyAlgorithm);
+            }
+        }
+        for (String fallback : HOST_KEY_ALGORITHMS.split(",")) {
+            ordered.add(fallback);
+        }
+        return String.join(",", ordered);
     }
 
     static ConnectResult discoveryFailure(JSchException failure, String trustFailure, boolean trusted) {
@@ -836,7 +914,7 @@ public final class SshExecTransport implements DeviceTransport {
 
     /**
      * Captures the size JSch reports for the path: {@code ChannelSftp.get(String, SftpProgressMonitor, long)} stats
-     * the path and calls {@link #init} with its size before it sends {@code SSH_FXP_OPEN}. JSch 0.1.55 exposes no
+     * the path and calls {@link #init} with its size before it sends {@code SSH_FXP_OPEN}. JSch exposes no
      * handle-level {@code fstat}, so this is the closest observation to the open the library offers.
      */
     private static final class SizeAtOpenMonitor implements com.jcraft.jsch.SftpProgressMonitor {
