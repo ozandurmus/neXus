@@ -73,9 +73,12 @@ public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<Stri
     public static boolean panNonSecurity(Metadata metadata, Section section) {
         return metadata != null && "PAN".equals(metadata.vendor()) && PAN_NON_SECURITY_SECTIONS.contains(section.name());
     }
-    /** True for a Check Point NAT rulebase section or a Palo Alto NAT/default section: not a security rulebase. */
+    /** True for a Check Point/ASA NAT rulebase section, an ASA implicit section, or a Palo Alto NAT/default section: not a security rulebase. */
     public static boolean outsideSecurityEvaluation(Metadata metadata, Section section) {
-        return "CP NAT rulebase".equals(section.source()) || panNonSecurity(metadata, section);
+        return "CP NAT rulebase".equals(section.source())
+                || "ASA NAT".equals(section.source())
+                || "ASA implicit".equals(section.source())
+                || panNonSecurity(metadata, section);
     }
     public PolicySnapshot {
         failures = failures == null ? List.of() : List.copyOf(failures);
