@@ -73,7 +73,7 @@ const BASIS_SENTENCES = new Map([
   ["VERSION_MISSING", "No software version is stored for the device."],
   ["JUMBO_TAKE_MISSING", "No Jumbo Hotfix take is stored for the device; it is never taken as take 0."],
   ["JUMBO_TRAIN_MISMATCH", "The stored Jumbo Hotfix take is for another version than the device's software version."],
-  ["PRODUCT_SUBSET_UNKNOWN", "The advisory names only some gateways (for example Maestro or scalable platforms); neXus cannot tell whether this one is among them."]]);
+  ["PRODUCT_SUBSET_UNKNOWN", `The advisory names only some gateways (for example Maestro or scalable platforms); ${PRODUCT_NAME} cannot tell whether this one is among them.`]]);
 /**
  * What the Check Point source can see (ADVISORY_MATCHING_CONTRACT.md amendment A-2026-11-13, A.5; PO 2026-11-14 keeps the
  * limit and wants it on screen): shown wherever the Check Point comparison basis is shown.
