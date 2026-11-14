@@ -44,6 +44,10 @@ public final class RoleBindingAdminService {
         record Revoked(String bindingId) implements Outcome {
         }
 
+        /** The binding was already revoked (another admin got there first); this call changed nothing. */
+        record AlreadyRevoked(String bindingId) implements Outcome {
+        }
+
         /** {@code 403 SELF_GRANT_REFUSED} (C3 §4.3). */
         record SelfGrantRefused() implements Outcome {
         }
@@ -203,8 +207,8 @@ public final class RoleBindingAdminService {
         var existing = roleBindingRepository.find(bindingId);
         if (existing.isEmpty() || existing.get().bindingKind() == DirectoryBindingKind.LEGACY) return revoke(actor, bindingId, now);
         if (!directoryPostureEnabled || directoryTargets == null) {
-            roleBindingRepository.revoke(bindingId, actor, ACTION_REVOKE);
-            return new Outcome.Revoked(bindingId);
+            return roleBindingRepository.revoke(bindingId, actor, ACTION_REVOKE)
+                    ? new Outcome.Revoked(bindingId) : new Outcome.AlreadyRevoked(bindingId);
         }
         long started = System.nanoTime();
         try {
@@ -232,8 +236,8 @@ public final class RoleBindingAdminService {
                     if (!at.isBefore(target.get().validUntil()) || !authorized(tx, actor, session, at)) return;
                     Outcome rechecked = nonSelf(tx, actor, target.get(), at);
                     if (rechecked != null) { result.set(rechecked); return; }
-                    tx.bindings().revoke(bindingId, actor, ACTION_REVOKE);
-                    result.set(new Outcome.Revoked(bindingId));
+                    result.set(tx.bindings().revoke(bindingId, actor, ACTION_REVOKE)
+                            ? new Outcome.Revoked(bindingId) : new Outcome.AlreadyRevoked(bindingId));
                 });
                 return result.get();
             });
@@ -328,8 +332,8 @@ public final class RoleBindingAdminService {
                 return new Outcome.SelfGrantRefused();
             }
         }
-        roleBindingRepository.revoke(bindingId, actingAdminActorFingerprint, ACTION_REVOKE);
-        return new Outcome.Revoked(bindingId);
+        return roleBindingRepository.revoke(bindingId, actingAdminActorFingerprint, ACTION_REVOKE)
+                ? new Outcome.Revoked(bindingId) : new Outcome.AlreadyRevoked(bindingId);
     }
 
     /** C3 §4.3: refuses when the acting admin's own resolved group set already contains the group in play. */

@@ -145,7 +145,7 @@ class GateChainTest {
         }
 
         @Override
-        public void revoke(String bindingId, String revokedByActorFingerprint, String actionId) {
+        public boolean revoke(String bindingId, String revokedByActorFingerprint, String actionId) {
             throw new UnsupportedOperationException("not used by GateChainTest");
         }
     }

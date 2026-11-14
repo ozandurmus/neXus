@@ -214,9 +214,20 @@ public final class LoginFlow {
         String rawCookie = randomCookieValue();
         String newSessionId = SessionHasher.hash(rawCookie);
         String csrfSecret = randomCookieValue();
-        SessionRecord session = sessionRepository.takeover(pending.priorSessionId(), newSessionId,
-                pending.actorFingerprint(), csrfSecret, now, idleFor(pending.actorFingerprint()), absoluteLifetime,
-                ACTION_SESSION_LOGIN_TAKEOVER);
+        SessionRecord session;
+        try {
+            session = sessionRepository.takeover(pending.priorSessionId(), newSessionId,
+                    pending.actorFingerprint(), csrfSecret, now, idleFor(pending.actorFingerprint()), absoluteLifetime,
+                    ACTION_SESSION_LOGIN_TAKEOVER);
+        } catch (RuntimeException e) {
+            // Two takeovers of the same session raced: the one-active-session index rejected the loser and rolled
+            // its transaction back. If the prior session is no longer the actor's active one, answer the loser
+            // with a clear refusal instead of a server error; anything else is a real failure.
+            boolean priorStillActive = sessionRepository.findBySessionId(pending.priorSessionId())
+                    .filter(prior -> prior.isActive(now)).isPresent();
+            if (priorStillActive) throw e;
+            return new ResolveResult.Refused("session_already_taken_over");
+        }
         return new ResolveResult.TakenOver(rawCookie, session);
     }
 

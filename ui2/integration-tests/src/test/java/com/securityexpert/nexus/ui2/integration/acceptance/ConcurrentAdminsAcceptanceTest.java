@@ -18,6 +18,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.time.Duration;
+import java.time.Instant;
 
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
@@ -28,7 +31,9 @@ import com.securityexpert.nexus.ui2.integration.support.JobWindowTestPolicy;
 import com.securityexpert.nexus.ui2.integration.support.Ui2PostgresFixture;
 import com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.identity.JooqRoleBindingRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.JooqSessionRepository;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao;
+import com.securityexpert.nexus.ui2.service.security.LoginFlow;
 
 /**
  * Acceptance scenario B1-10 (workflow section 5): three admins act on the same object at the same moment, against a
@@ -80,10 +85,9 @@ class ConcurrentAdminsAcceptanceTest {
             bindings.create("binding-shared", "role:security_admin", new byte[] {1, 2, 3}, "key-1",
                     "synthetic-creator", "accept.binding_create");
 
-            race(admin -> {
-                bindings.revoke("binding-shared", admin, "accept.binding_revoke");
-                return admin;
-            });
+            List<Boolean> changed = race(admin -> bindings.revoke("binding-shared", admin, "accept.binding_revoke"));
+            assertEquals(1, changed.stream().filter(c -> c).count(),
+                    "exactly one revoker changed the row; the two losers are told false (ALREADY_REVOKED upstream)");
 
             var after = bindings.find("binding-shared").orElseThrow();
             assertTrue(after.revokedAt().isPresent(), "binding must end revoked");
@@ -118,6 +122,90 @@ class ConcurrentAdminsAcceptanceTest {
                             "each admin has exactly one audit row, for the row that admin created");
                 }
             }
+        }
+    }
+
+    @Test
+    @Timeout(90)
+    void threeAdminsContendForOneIdentitySession_oneTakeoverWins_loserGetsRefused_noiseStaysOutOfTheCorrelation() throws Exception {
+        try (Ui2PostgresFixture fixture = Ui2PostgresFixture.createAndMigrate("accept_takeover")) {
+            var sessions = new JooqSessionRepository(
+                    new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES)));
+            var flow = new LoginFlow(sessions, Duration.ofMinutes(30), Duration.ofHours(8));
+            String shared = "synthetic-shared-identity";
+            String bystander = "synthetic-bystander-identity";
+            Instant now = Instant.now();
+
+            // Step 1: admin one logs in as the shared identity; the bystander admin holds an unrelated session.
+            var s1 = (LoginFlow.LoginResult.NewSession) flow.login(shared, now);
+            var noiseSession = (LoginFlow.LoginResult.NewSession) flow.login(bystander, now);
+
+            // Step 2: admins two and three both try to log in as the shared identity -> both get a conflict token.
+            List<LoginFlow.LoginResult> conflicts = race(admin -> admin.endsWith("one")
+                    ? flow.login(bystander, Instant.now())   // bystander noise overlaps the conflicts
+                    : flow.login(shared, Instant.now()));
+            var tokens = conflicts.stream().filter(r -> r instanceof LoginFlow.LoginResult.Conflict c
+                            && c.priorSession().sessionId().equals(s1.session().sessionId()))
+                    .map(r -> ((LoginFlow.LoginResult.Conflict) r).conflictToken()).toList();
+            assertEquals(2, tokens.size(), "both contenders see a 409-style conflict naming the prior session");
+
+            // Step 3/4: both resolve with takeover at the same moment, while the bystander keeps writing.
+            ExecutorService noise = Executors.newSingleThreadExecutor();
+            AtomicBoolean stop = new AtomicBoolean();
+            Future<?> noiseWork = noise.submit(() -> {
+                while (!stop.get()) sessions.heartbeat(noiseSession.session().sessionId(), Instant.now(), Duration.ofMinutes(30));
+            });
+            List<LoginFlow.ResolveResult> results = new ArrayList<>();
+            try {
+                CountDownLatch go = new CountDownLatch(1);
+                ExecutorService pool = Executors.newFixedThreadPool(2);
+                List<Future<LoginFlow.ResolveResult>> futures = new ArrayList<>();
+                for (String token : tokens) {
+                    futures.add(pool.submit(() -> { go.await(); return flow.resolve(token, "takeover", Instant.now()); }));
+                }
+                go.countDown();
+                for (var f : futures) results.add(f.get(30, TimeUnit.SECONDS));
+                pool.shutdownNow();
+            } finally {
+                stop.set(true);
+                noiseWork.get(10, TimeUnit.SECONDS);
+                noise.shutdownNow();
+            }
+            var won = results.stream().filter(r -> r instanceof LoginFlow.ResolveResult.TakenOver).toList();
+            var lost = results.stream().filter(r -> r instanceof LoginFlow.ResolveResult.Refused).toList();
+            assertEquals(1, won.size(), "exactly one takeover wins");
+            assertEquals(1, lost.size(), "the other gets a clear refusal, not an exception");
+            var s2 = ((LoginFlow.ResolveResult.TakenOver) won.get(0)).session();
+
+            try (Connection app = fixture.appConnection()) {
+                assertEquals(1L, count(app, "select count(*) from sessions where actor_fingerprint = '" + shared + "' and state = 'ACTIVE'"));
+                assertEquals("SUPERSEDED", one(app, "select state from sessions where session_id = '" + s1.session().sessionId() + "'"));
+                assertEquals(s2.sessionId(), one(app, "select superseded_by_session_id from sessions where session_id = '" + s1.session().sessionId() + "'"));
+                // Audit: every takeover row belongs to S1/S2 and to the shared identity; the bystander never appears in them.
+                List<String> rows = column(app, "select row_pk || '|' || actor_fingerprint from audit_log where action_id = '"
+                        + LoginFlow.ACTION_SESSION_LOGIN_TAKEOVER + "'");
+                assertTrue(!rows.isEmpty());
+                for (String row : rows) {
+                    assertTrue(row.equals(s1.session().sessionId() + "|" + shared) || row.equals(s2.sessionId() + "|" + shared), row);
+                }
+                assertEquals(0L, count(app, "select count(*) from audit_log where actor_fingerprint = '" + bystander
+                        + "' and action_id = '" + LoginFlow.ACTION_SESSION_LOGIN_TAKEOVER + "'"));
+                // One transaction -> a single correlation value across the takeover rows (null counts as one value).
+                assertEquals(1L, count(app, "select count(distinct coalesce(correlation_run_id, '')) from audit_log where action_id = '"
+                        + LoginFlow.ACTION_SESSION_LOGIN_TAKEOVER + "'"));
+            }
+
+            // Step 5: the superseded session is no longer usable.
+            assertTrue(!sessions.findBySessionId(s1.session().sessionId()).orElseThrow().isActive(Instant.now()));
+
+            // Step 6/7: admin one tries again, is shown the conflict, refuses; the winner's session is untouched.
+            var conflict = (LoginFlow.LoginResult.Conflict) flow.login(shared, Instant.now());
+            assertEquals(s2.sessionId(), conflict.priorSession().sessionId());
+            var refused = (LoginFlow.ResolveResult.Refused) flow.resolve(conflict.conflictToken(), "refuse", Instant.now());
+            assertEquals("login_refused_active_session", refused.reasonCode());
+            var after = sessions.findBySessionId(s2.sessionId()).orElseThrow();
+            assertTrue(after.isActive(Instant.now()));
+            assertEquals(s2.sessionId(), sessions.findActiveByActor(shared, Instant.now()).orElseThrow().sessionId());
         }
     }
 

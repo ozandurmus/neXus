@@ -827,7 +827,7 @@ export function createRoleBinding(
   });
 }
 
-export function revokeRoleBinding(bindingId: string): Promise<{ binding_id: string }> {
+export function revokeRoleBinding(bindingId: string): Promise<{ binding_id: string; outcome?: "REVOKED" | "ALREADY_REVOKED" }> {
   return call("/role-bindings/revoke", "POST", { bindingId });
 }
 

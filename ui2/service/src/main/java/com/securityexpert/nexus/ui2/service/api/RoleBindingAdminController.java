@@ -129,8 +129,16 @@ public final class RoleBindingAdminController {
             body.put("binding_id", created.bindingId());
             return ResponseEntity.ok(body);
         }
+        if (outcome instanceof RoleBindingAdminService.Outcome.AlreadyRevoked already) {
+            // Same 200 as a fresh revoke (the frontend treats both as success); the distinct outcome tells the
+            // losing admin that another admin revoked the binding first.
+            body.put("binding_id", already.bindingId());
+            body.put("outcome", "ALREADY_REVOKED");
+            return ResponseEntity.ok(body);
+        }
         RoleBindingAdminService.Outcome.Revoked revoked = (RoleBindingAdminService.Outcome.Revoked) outcome;
         body.put("binding_id", revoked.bindingId());
+        body.put("outcome", "REVOKED");
         return ResponseEntity.ok(body);
     }
 }
