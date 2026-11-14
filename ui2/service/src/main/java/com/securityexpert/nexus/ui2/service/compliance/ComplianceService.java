@@ -99,7 +99,7 @@ public final class ComplianceService {
     public ComplianceService(ConfigurationQueryService configurationQueryService, DeviceRepository deviceRepository,
             String complianceServiceUrl, ComplianceEvaluationStore store) {
         this(configurationQueryService, deviceRepository, complianceServiceUrl,
-                () -> {
+                sharedTargets(() -> {
                     // Firewall compliance: a management server (Panorama, MDS) is not a firewall and is never evaluated
                     // (2026-09-23: Panorama's 23.7 MB configuration timed out every evaluation, added 24 data gaps to the
                     // fleet figures and held every screen open 15 s while it was retried).
@@ -111,8 +111,23 @@ public final class ComplianceService {
                         .filter(d -> d.latestRun().isPresent() && !managers.contains(d.deviceId()))
                         .map(d -> new Target(d.deviceId(), d.hostname(), d.vendor(), d.latestRun().map(r -> r.canonicalHash())))
                         .toList();
-                },
+                }),
                 configurationQueryService::sanitizedText, Instant::now, PARALLELISM, MAX_AGE, store);
+    }
+
+    /**
+     * The target list is two full device reads (about 1 s on the live DB, 2026-11-14) and the Compliance screen asks
+     * for it twice at once (overview and controls). It is shared and rebuilt in the background every
+     * {@value #TARGETS_FRESH_SECONDS} s while the screen is read; a new configuration run reaches the evaluation at
+     * most that much later.
+     */
+    static final int TARGETS_FRESH_SECONDS = 10;
+
+    private static Supplier<List<Target>> sharedTargets(Supplier<List<Target>> read) {
+        com.securityexpert.nexus.ui2.service.system.BackgroundSnapshot<List<Target>> snapshot =
+                new com.securityexpert.nexus.ui2.service.system.BackgroundSnapshot<>("compliance-targets", read,
+                        Duration.ofSeconds(TARGETS_FRESH_SECONDS), Duration.ofMinutes(5));
+        return () -> snapshot.get().value();
     }
 
     /** Test seam: the device list, the configuration text, the clock, parallelism and backstop age are injected. */
@@ -785,7 +800,28 @@ public final class ComplianceService {
         return fallback;
     }
 
+    /** The catalog changes only with the rule set: kept until the rules fingerprint changes, re-read at most every 5 min. */
+    private final com.securityexpert.nexus.ui2.service.system.BackgroundSnapshot<List<Map<String, Object>>> catalogSnapshot =
+            new com.securityexpert.nexus.ui2.service.system.BackgroundSnapshot<>("compliance-catalog", this::readCatalog,
+                    Duration.ofMinutes(5), Duration.ofMinutes(10));
+    private volatile String catalogFingerprint = "";
+
     private List<Map<String, Object>> fetchCatalog() {
+        String fingerprint = rulesFingerprint;
+        if (!fingerprint.equals(catalogFingerprint)) {
+            catalogFingerprint = fingerprint;
+            catalogSnapshot.invalidate();
+        }
+        try {
+            return catalogSnapshot.get().value();
+        } catch (RuntimeException unreadable) {
+            // nothing read yet and the service is unreachable: an empty catalog, as before, and the next call retries
+            return List.of();
+        }
+    }
+
+    /** One catalog read; an unreadable answer throws, so a cached catalog is kept and an empty one is never cached. */
+    private List<Map<String, Object>> readCatalog() {
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(complianceServiceUrl + "/api/v1/compliance/catalog"))
@@ -797,13 +833,17 @@ public final class ComplianceService {
             if (response.statusCode() == 200) {
                 JsonNode root = mapper.readTree(response.body());
                 if (root.has("controls")) {
-                    return mapper.readValue(root.get("controls").toString(),
-                            new TypeReference<List<Map<String, Object>>>() {});
+                    return List.copyOf(mapper.convertValue(root.get("controls"),
+                            new TypeReference<List<Map<String, Object>>>() {}));
                 }
             }
-        } catch (Exception ignored) {
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("compliance catalog read interrupted", e);
+        } catch (Exception e) {
+            throw new IllegalStateException("compliance catalog unreadable", e);
         }
-        return List.of();
+        throw new IllegalStateException("compliance catalog unreadable");
     }
 
     /** The four framework cards; any other framework (or none) is on no card rather than folded into one. */

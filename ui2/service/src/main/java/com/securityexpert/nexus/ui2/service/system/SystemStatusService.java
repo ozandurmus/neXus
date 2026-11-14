@@ -59,7 +59,36 @@ public class SystemStatusService {
         this.deviceRepository = Objects.requireNonNull(deviceRepository, "deviceRepository");
     }
 
+    /**
+     * Pod and storage answers are read-mostly and expensive to build (the Kubernetes API, then a dozen counts); the
+     * top-bar health light reads pods on every screen. Both are served from a snapshot refreshed in the background
+     * every {@value #PODS_FRESH_SECONDS} / {@value #STORAGE_FRESH_SECONDS} s while somebody reads them; the body
+     * states its own age ({@code read_at}, {@code cache_age_seconds}, {@code refresh_every_seconds}).
+     */
+    static final int PODS_FRESH_SECONDS = 10;
+    static final int STORAGE_FRESH_SECONDS = 30;
+    private final BackgroundSnapshot<Map<String, Object>> podsSnapshot = new BackgroundSnapshot<>("system-pods",
+            this::readPods, Duration.ofSeconds(PODS_FRESH_SECONDS), Duration.ofMinutes(5));
+    private final BackgroundSnapshot<Map<String, Object>> storageSnapshot = new BackgroundSnapshot<>("system-storage",
+            this::readStorage, Duration.ofSeconds(STORAGE_FRESH_SECONDS), Duration.ofMinutes(5));
+
     public Map<String, Object> pods() {
+        return withAge(podsSnapshot.get(), PODS_FRESH_SECONDS);
+    }
+
+    public Map<String, Object> storage() {
+        return withAge(storageSnapshot.get(), STORAGE_FRESH_SECONDS);
+    }
+
+    private static Map<String, Object> withAge(BackgroundSnapshot.Value<Map<String, Object>> snapshot, int refreshEvery) {
+        Map<String, Object> body = new LinkedHashMap<>(snapshot.value());
+        body.put("cache_age_seconds", Math.max(0, Duration.between(snapshot.computedAt(), Instant.now()).toSeconds()));
+        body.put("refresh_every_seconds", refreshEvery);
+        return body;
+    }
+
+    /** Reads the pods now (the snapshot's compute; package-visible for tests). */
+    Map<String, Object> readPods() {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("read_at", Instant.now().toString());
         body.put("quarantined_by_role", transactionBoundary.inTransaction(db -> db.fetch(
@@ -122,6 +151,15 @@ public class SystemStatusService {
     private List<Map<String, Object>> moduleHealth(List<Map<String, Object>> pods) {
         return transactionBoundary.inTransaction(db -> {
             List<Map<String, Object>> modules = new ArrayList<>();
+            // One pass over the few jobs that were ever deferred (247 of 49.7 k on 2026-11-14), not a full jobs
+            // scan per module (10 x ~100 ms).
+            Map<String, Long> deferralsByModule = new HashMap<>();
+            for (Record r : db.fetch("select ui2_job_module(capability_id) as module, sum(admission_deferrals) as deferrals "
+                    + "from jobs where admission_deferrals > 0 group by 1")) {
+                if (r.get("module", String.class) != null) {
+                    deferralsByModule.put(r.get("module", String.class), r.get("deferrals", Long.class));
+                }
+            }
             for (Record control : db.fetch("select module,effective_owner,drain_requested,drain_generation,drain_ack_generation,pool_active,pool_idle,pool_pending,pool_timeouts,pool_wait_nanos,admission_wait_ms,admission_grants,"
                     + "(select owner_heartbeat_at>now()-interval '60 seconds' from module_runtime_control owner where owner.module=module_runtime_control.effective_owner) as live from module_runtime_control order by module")) {
                 String module = control.get("module", String.class);
@@ -139,7 +177,7 @@ public class SystemStatusService {
                 for (String field : List.of("pool_active", "pool_idle", "pool_pending", "pool_timeouts", "pool_wait_nanos", "admission_wait_ms", "admission_grants"))
                     row.put(field, control.get(field));
                 row.put("owner_live", Boolean.TRUE.equals(control.get("live", Boolean.class)));
-                row.put("admission_timeouts", db.fetchOne("select coalesce(sum(admission_deferrals),0) from jobs where ui2_job_module(capability_id)={0}", module).get(0, Long.class));
+                row.put("admission_timeouts", deferralsByModule.getOrDefault(module, 0L));
                 if (module.equals("policy") && depth > 0 && (ready == 0 || !Boolean.TRUE.equals(control.get("live", Boolean.class))) && !Boolean.TRUE.equals(control.get("drain_requested", Boolean.class))) {
                     row.put("alert", "POLICY_CONSUMER_MISSING");
                     System.getLogger(SystemStatusService.class.getName()).log(System.Logger.Level.WARNING,
@@ -289,7 +327,7 @@ public class SystemStatusService {
     }
 
     /** Stored artefacts only: a pruned artefact keeps its manifest row, so every backup_artefact read here is live-filtered. */
-    public Map<String, Object> storage() {
+    Map<String, Object> readStorage() {
         // Names as the device list serves them (observed hostname, else the discovery name) -- F21, 2026-09-23.
         Map<String, com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord> summaries = new HashMap<>();
         deviceRepository.listAll().forEach(d -> summaries.put(d.deviceId(), d));

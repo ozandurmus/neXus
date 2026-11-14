@@ -105,8 +105,10 @@ class PolicyQueryServiceTest {
         var tx = new com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary(org.jooq.impl.DSL.using(
             new org.jooq.tools.jdbc.MockConnection(context -> {
                 sql.add(context.sql());
-                return new org.jooq.tools.jdbc.MockResult[]{new org.jooq.tools.jdbc.MockResult(1,
-                    create.fetchFromStringData(new String[]{"metadata", "rule_count"}, new String[]{metadata, "5000"}))};
+                // the catalog read (id, row version, metadata), then the rule count of each row not yet counted at its version
+                return new org.jooq.tools.jdbc.MockResult[]{new org.jooq.tools.jdbc.MockResult(1, context.sql().contains("rule_count")
+                    ? create.fetchFromStringData(new String[]{"policy_id", "version", "rule_count"}, new String[]{"policy-1", "v1", "5000"})
+                    : create.fetchFromStringData(new String[]{"policy_id", "version", "metadata"}, new String[]{"policy-1", "v1", metadata}))};
             }), org.jooq.SQLDialect.POSTGRES));
         var catalog = new PolicyQueryService(tx, mapper, names).catalogViews();
         assertEquals("policy-1", catalog.get(0).get("id"));
@@ -115,8 +117,15 @@ class PolicyQueryServiceTest {
             new com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker(new byte[32])));
         assertEquals(5000, masked.path("policies").get(0).path("ruleCount").asInt());
         assertEquals("domain-1", masked.path("policies").get(0).path("containerId").asText());
-        assertTrue(sql.get(0).contains("jsonb_array_elements(snapshot->'sections')"));
-        assertTrue(sql.get(0).contains("jsonb_array_length(s->'rules')"));
+        assertFalse(sql.get(0).contains("jsonb_array_elements"), "the catalog read never opens a snapshot document");
+        assertTrue(sql.get(1).contains("jsonb_array_elements(snapshot->'sections')"));
+        assertTrue(sql.get(1).contains("jsonb_array_length(s->'rules')"));
+        // a second read at the same row version counts nothing again
+        sql.clear();
+        var service = new PolicyQueryService(tx, mapper, names);
+        service.catalogViews();
+        service.catalogViews();
+        assertEquals(1, sql.stream().filter(q -> q.contains("rule_count")).count());
     }
 
     /** UI review 2026-10-18 F-2: the tree (collection sources) and the container table (catalog) name a source alike. */
@@ -128,7 +137,9 @@ class PolicyQueryServiceTest {
         var tx = new com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary(org.jooq.impl.DSL.using(
             new org.jooq.tools.jdbc.MockConnection(context -> new org.jooq.tools.jdbc.MockResult[]{new org.jooq.tools.jdbc.MockResult(1,
                 context.sql().contains("rule_count")
-                    ? create.fetchFromStringData(new String[]{"metadata", "rule_count"}, new String[]{metadata, "3"})
+                    ? create.fetchFromStringData(new String[]{"policy_id", "version", "rule_count"}, new String[]{"policy-1", "v1", "3"})
+                    : context.sql().contains("pg_column_size")
+                    ? create.fetchFromStringData(new String[]{"policy_id", "version", "metadata"}, new String[]{"policy-1", "v1", metadata})
                     : create.fetchFromStringData(new String[]{"metadata"}, new String[]{metadata}))}),
             org.jooq.SQLDialect.POSTGRES));
         var devices = mock(com.securityexpert.nexus.ui2.persistence.device.DeviceRepository.class);
