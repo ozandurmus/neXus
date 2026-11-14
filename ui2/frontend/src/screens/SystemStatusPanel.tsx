@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { PRODUCT_NAME } from "../brand/product";
 import Collapse from "@mui/material/Collapse";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
@@ -178,7 +179,7 @@ export function SystemStatusPanel() {
         {/* The top bar's light, with its reason, so the page explains it (the same rule, PlatformHealthIndicator.tsx). */}
         {pods.available && health && (
           <Box data-testid="platform-health-summary" sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap", mb: 1 }}>
-            <StatusChip tone={health.state === "ok" ? "ok" : "bad"} label={`neXus ${health.state === "ok" ? "OK" : health.state}`} dense />
+            <StatusChip tone={health.state === "ok" ? "ok" : "bad"} label={`${PRODUCT_NAME} ${health.state === "ok" ? "OK" : health.state}`} dense />
             <Typography variant="body2">{health.reason}</Typography>
             {oneOff > 0 && <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
               {oneOff} one-off job {oneOff === 1 ? "pod is" : "pods are"} listed below; one-off jobs and older scheduled runs do not change the status.
