@@ -143,3 +143,21 @@ images reports the removed pcre2, expat and ca-certificates findings as unaccept
   package.
 - **Acceptances.** Those the new image no longer reports are removed after the gate's own scan of the shipped image.
   Decision 2 is applied in a follow-up, from that scan's counts.
+
+## Refresh of 2026-11-14 (31 acceptances due that day)
+
+- **Runtime base.** `ubi9/openjdk-21-runtime` moves to `sha256:9a074c2ff90be60b12521ffd5e531acafd25fe36f1c177180cbe1176dfb36c84`
+  (tag 1.24-3.1794341129, built 2026-11-10, RHEL 9.9 packages; the registry's `latest` on 2026-11-14). Against the
+  previous pin it changes 34 of 131 packages (glibc 284.el9_8.4, systemd-libs, openldap, libxml2 16.el9, util-linux
+  28.el9_9 and others). Build-stage bases are unchanged.
+- **Evidence.** Package lists from the Red Hat container catalog for both digests; fix states from the Red Hat
+  security data API; one trivy scan of both bases on HOST-A (the gate's own trivy image). The new base reports no
+  HIGH or CRITICAL finding that the baseline does not already cover; the python3 findings it shows are removed by the
+  image build.
+- **Dropped (4).** CVE-2026-53613 on libblkid, libmount, libsmartcols and libuuid: fixed in util-linux
+  2.37.4-28.el9_9 (RHSA-2026:97522), which the new base carries; trivy no longer reports it.
+- **Re-time-boxed to 2026-11-28 (27)** under this record's 14-day rule, each with its installed version, Red Hat
+  status and exposure in `security/baseline.yaml`: fixed by Red Hat but in no published base yet (krb5 x10,
+  RHSA-2026:99715; util-linux CVE-2026-53615 x5, RHSA-2026:98519; openssl CVE-2026-75804, RHSA-2026:98484); no
+  Red Hat fix (sqlite x4, json-glib, expat x2, gnutls x2, gnupg2); CVE-2026-91403 (CRITICAL, Will not fix for
+  java-21-openjdk; covered by the emSign blocklist step).
