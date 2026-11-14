@@ -518,6 +518,51 @@ def test_status_terminal_reopening_moves_item_back_to_active_set(queue_env):
     assert reopened["title"] == "A done item"  # row content otherwise unchanged
 
 
+# --- GOV.ORCH.9 amendment 2026-11-14: cold shards of the terminal reserve ---
+
+def _ids(path):
+    return [i["id"] for i in json.loads(path.read_text(encoding="utf-8"))["items"]]
+
+
+def test_rotate_moves_oldest_reserve_rows_into_a_cold_shard(queue_env):
+    hot_before = json.loads(queue_env["backlog_terminal"].read_text(encoding="utf-8"))["items"]
+    assert pq.main(["rotate-backlog-terminal", "--into", "2026", "--keep", "1"]) == 0
+
+    shard = queue_env["backlog_terminal"].parent / "backlog_terminal_2026.json"
+    assert json.loads(shard.read_text(encoding="utf-8"))["items"] == hot_before[:-1]
+    assert _ids(queue_env["backlog_terminal"]) == [hot_before[-1]["id"]]
+
+
+def test_rotate_rejects_a_bad_shard_label(queue_env):
+    with pytest.raises(pq.QueueToolError):
+        pq.cmd_rotate_backlog_terminal(pq.build_parser().parse_args(
+            ["rotate-backlog-terminal", "--into", "../x", "--keep", "0"]))
+
+
+def test_new_terminal_rows_go_to_the_hot_reserve_and_shard_rows_stay_put(queue_env):
+    assert pq.main(["rotate-backlog-terminal", "--into", "2026", "--keep", "0"]) == 0
+    shard = queue_env["backlog_terminal"].parent / "backlog_terminal_2026.json"
+    shard_ids = _ids(shard)
+
+    assert pq.main(["status", "--id", "item_open_p0", "--set", "done"]) == 0
+
+    assert _ids(shard) == shard_ids
+    assert _ids(queue_env["backlog_terminal"]) == ["item_open_p0"]
+    active, terminal = pq.load_backlog_both()
+    assert {i["id"] for i in terminal["items"]} == set(shard_ids) | {"item_open_p0"}
+
+
+def test_reopening_a_cold_shard_row_moves_it_back_to_the_active_set(queue_env):
+    assert pq.main(["rotate-backlog-terminal", "--into", "2026", "--keep", "0"]) == 0
+    shard = queue_env["backlog_terminal"].parent / "backlog_terminal_2026.json"
+
+    assert pq.main(["status", "--id", "item_done", "--set", "in_progress"]) == 0
+
+    assert "item_done" not in _ids(shard)
+    assert "item_done" not in _ids(queue_env["backlog_terminal"])
+    assert "item_done" in _ids(queue_env["backlog"])
+
+
 # --- GOV.ORCH.5 amendment (proposed, section 8): migrate-open-notes -------
 
 def test_migrate_open_notes_requires_include_open_flag(queue_env):

@@ -232,6 +232,41 @@ class ProjectPlanReaderTest {
         assertEquals(Integer.valueOf(1), counts.get("done"));
     }
 
+    /** GOV.ORCH.9 amendment 2026-11-14: cold shards of the terminal reserve count like the reserve. */
+    @Test
+    void coldTerminalShardsAreConcatenatedAfterTheReserve(@TempDir Path directory) throws Exception {
+        Files.createDirectories(directory.resolve("archive"));
+        Files.writeString(directory.resolve("backlog.json"), """
+                {"schema_version":"1.0","items":[{"id":"open_one","status":"planned"}]}
+                """);
+        Files.writeString(directory.resolve("archive/backlog_terminal.json"), """
+                {"schema_version":"1.0","items":[{"id":"hot_done","status":"done"}]}
+                """);
+        Files.writeString(directory.resolve("archive/backlog_terminal_2026.json"), """
+                {"schema_version":"1.0","items":[{"id":"cold_done","status":"done"},{"id":"cold_deferred","status":"deferred"}]}
+                """);
+        Files.writeString(directory.resolve("archive/backlog_terminal_zz.json"), "{ not valid json");
+
+        Map<String, Object> payload = new ProjectPlanReader(directory).read();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Integer> counts = (Map<String, Integer>) payload.get("backlog_counts");
+        assertEquals(Integer.valueOf(1), counts.get("planned"));
+        assertEquals(Integer.valueOf(2), counts.get("done"));
+        assertEquals(Integer.valueOf(1), counts.get("deferred"));
+        String before = String.valueOf(asMapForTest(payload.get("source_metadata")).get("revision"));
+        Files.writeString(directory.resolve("archive/backlog_terminal_2026.json"), """
+                {"schema_version":"1.0","items":[{"id":"cold_done","status":"done"}]}
+                """);
+        String after = String.valueOf(asMapForTest(new ProjectPlanReader(directory).read().get("source_metadata")).get("revision"));
+        assertTrue(!before.equals(after), "a shard change must refresh the revision");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> asMapForTest(Object value) {
+        return (Map<String, Object>) value;
+    }
+
     @Test
     void productProjectionExcludesLegacyAndOperationsAndRefreshesItsRevision(@TempDir Path directory) throws Exception {
         Files.writeString(directory.resolve("roadmap.json"), """

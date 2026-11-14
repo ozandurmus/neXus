@@ -55,6 +55,18 @@ def test_backlog_terminal_archive_within_budget():
     )
 
 
+def test_backlog_terminal_cold_shards_within_budget():
+    """GOV.ORCH.9 amendment 2026-11-14: each frozen cold shard of the
+    reserve (`archive/backlog_terminal_<label>.json`) has the reserve's own
+    60 KiB budget."""
+    for path in sorted((PROJECT / "archive").glob("backlog_terminal_*.json")):
+        size = len(path.read_bytes())
+        assert size <= BACKLOG_TERMINAL_LIMIT, (
+            f"{path.relative_to(ROOT)} is {size} bytes -- above the "
+            f"{BACKLOG_TERMINAL_LIMIT} byte cold-shard budget"
+        )
+
+
 def test_roadmap_json_within_budget():
     assert _size("roadmap.json") <= ROADMAP_LIMIT
 

@@ -40,14 +40,20 @@ def _load_backlog_terminal() -> list[dict[str, Any]]:
     counting only, the same way `_load_archived_builds` folds the build
     archive back in -- every count, percentage and id set in the payload
     must include both files."""
-    path = ARCHIVE_DIR / "backlog_terminal.json"
-    if not path.is_file():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return []
-    return [row for row in (data.get("items") or []) if isinstance(row, dict)]
+    # GOV.ORCH.9 amendment 2026-11-14: frozen cold shards of the reserve hold
+    # its older rows, so they come first and the combined order is unchanged.
+    paths = sorted(ARCHIVE_DIR.glob("backlog_terminal_*.json")) if ARCHIVE_DIR.is_dir() else []
+    paths.append(ARCHIVE_DIR / "backlog_terminal.json")
+    rows: list[dict[str, Any]] = []
+    for path in paths:
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        rows.extend(row for row in (data.get("items") or []) if isinstance(row, dict))
+    return rows
 
 
 def _load_archived_builds() -> list[dict[str, Any]]:

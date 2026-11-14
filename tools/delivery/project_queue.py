@@ -272,12 +272,42 @@ def _empty_backlog_doc(schema_version: str = "1.0") -> dict:
     return {"schema_version": schema_version, "items": []}
 
 
+#: GOV.ORCH.9 amendment 2026-11-14 (cold reserve): the reserve reached its
+#: 60 KiB budget, so older terminal rows move -- row schema unchanged -- to
+#: frozen cold shards `project/archive/backlog_terminal_<label>.json`, the
+#: GOV.ORCH.8 `build_history_2026.json` pattern. Loading folds every shard
+#: back into the reserve dict, so callers see one terminal set; writing puts
+#: each row back into the shard it came from (new terminal rows go to the hot
+#: reserve). `_COLD_ORIGIN` maps a shard row's id to its shard path for the
+#: most recent load.
+_COLD_ORIGIN: dict[str, Path] = {}
+
+
+def _cold_terminal_paths() -> list[Path]:
+    parent = ARCHIVE_BACKLOG_TERMINAL.parent
+    if not parent.is_dir():
+        return []
+    return sorted(parent.glob(f"{ARCHIVE_BACKLOG_TERMINAL.stem}_*.json"))
+
+
 def load_backlog_terminal() -> dict:
-    """The reserve, or an empty doc if it does not exist yet (pre-migration
-    or a fixture that only sets up the active file)."""
-    if not ARCHIVE_BACKLOG_TERMINAL.exists():
-        return _empty_backlog_doc()
-    return load_json(ARCHIVE_BACKLOG_TERMINAL)
+    """The reserve plus every cold shard, or an empty doc if none exists yet
+    (pre-migration or a fixture that only sets up the active file)."""
+    _COLD_ORIGIN.clear()
+    if ARCHIVE_BACKLOG_TERMINAL.exists():
+        doc = load_json(ARCHIVE_BACKLOG_TERMINAL)
+    else:
+        doc = _empty_backlog_doc()
+    cold: list[dict] = []
+    for path in _cold_terminal_paths():
+        shard = load_json(path)
+        for item in shard.get("items") or []:
+            _COLD_ORIGIN[item.get("id")] = path
+            cold.append(item)
+    # Shards hold the older rows: they come first, so the combined order is
+    # the order the single reserve had before a rotation.
+    doc["items"] = cold + list(doc.get("items") or [])
+    return doc
 
 
 def _file_for_status(status: str) -> str:
@@ -293,7 +323,15 @@ def load_backlog_both() -> tuple[dict, dict]:
 def write_backlog_both(active: dict, terminal: dict) -> None:
     write_json(BACKLOG, active)
     ARCHIVE_BACKLOG_TERMINAL.parent.mkdir(parents=True, exist_ok=True)
-    write_json(ARCHIVE_BACKLOG_TERMINAL, terminal)
+    shards: dict[Path, list[dict]] = {path: [] for path in set(_COLD_ORIGIN.values())}
+    hot: list[dict] = []
+    for item in terminal.get("items") or []:
+        path = _COLD_ORIGIN.get(item.get("id"))
+        (shards[path] if path is not None else hot).append(item)
+    schema = terminal.get("schema_version", "1.0")
+    write_json(ARCHIVE_BACKLOG_TERMINAL, {**terminal, "items": hot})
+    for path, items in sorted(shards.items()):
+        write_json(path, {"schema_version": schema, "items": items})
 
 
 def all_backlog_items(active: dict, terminal: dict) -> list[dict]:
@@ -578,6 +616,34 @@ def cmd_retitle(args: argparse.Namespace) -> int:
     roadmap = load_json(ROADMAP)
     QUEUE.write_text(render_queue_md(backlog, roadmap, backlog_terminal), encoding="utf-8")
     print(f"retitled {args.id!r}")
+    return 0
+
+
+_COLD_LABEL = re.compile(r"^[0-9a-z][0-9a-z_-]{0,31}$")
+
+
+def cmd_rotate_backlog_terminal(args: argparse.Namespace) -> int:
+    """GOV.ORCH.9 amendment 2026-11-14: move the oldest hot-reserve rows,
+    row schema and content unchanged, into the cold shard
+    `archive/backlog_terminal_<label>.json`, keeping the newest `--keep` rows
+    in the hot reserve. Nothing is deleted and the item set is unchanged."""
+    if not _COLD_LABEL.match(args.into):
+        raise QueueToolError(f"rotate-backlog-terminal: bad shard label {args.into!r}")
+    if args.keep < 0:
+        raise QueueToolError("rotate-backlog-terminal: --keep must be >= 0")
+    backlog, backlog_terminal = load_backlog_both()
+    before = json.dumps(all_backlog_items(backlog, backlog_terminal), sort_keys=True)
+    shard = ARCHIVE_BACKLOG_TERMINAL.parent / f"{ARCHIVE_BACKLOG_TERMINAL.stem}_{args.into}.json"
+    hot = [i for i in (backlog_terminal.get("items") or []) if i.get("id") not in _COLD_ORIGIN]
+    moving = hot[: max(0, len(hot) - args.keep)]
+    for item in moving:
+        _COLD_ORIGIN[item.get("id")] = shard
+    if json.dumps(all_backlog_items(backlog, backlog_terminal), sort_keys=True) != before:
+        raise QueueToolError("rotate-backlog-terminal: the item set changed; nothing written")
+    validate_backlog_split(backlog, backlog_terminal)
+    write_backlog_both(backlog, backlog_terminal)
+    print(f"rotated {len(moving)} terminal item(s) into {_display_path(shard)}; "
+          f"{len(hot) - len(moving)} stay in {_display_path(ARCHIVE_BACKLOG_TERMINAL)}")
     return 0
 
 
@@ -1108,6 +1174,16 @@ def build_parser() -> argparse.ArgumentParser:
              "and archive/backlog_terminal.json",
     )
     p_migrate_terminal.set_defaults(func=cmd_migrate_backlog_terminal)
+
+    p_rotate_terminal = sub.add_parser(
+        "rotate-backlog-terminal",
+        help="GOV.ORCH.9 amendment: move the oldest reserve rows into a cold shard "
+             "archive/backlog_terminal_<label>.json",
+    )
+    p_rotate_terminal.add_argument("--into", required=True, help="shard label, e.g. 2026")
+    p_rotate_terminal.add_argument("--keep", type=int, required=True,
+                                   help="newest reserve rows to keep in the hot reserve")
+    p_rotate_terminal.set_defaults(func=cmd_rotate_backlog_terminal)
 
     p_migrate = sub.add_parser(
         "migrate-open-notes",
