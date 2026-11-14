@@ -1090,7 +1090,7 @@
       "movement": "IMPLEMENTATION",
       "supersedes": null,
       "docs": {
-        "agreement": "utils/repository_privacy.py"
+        "agreement": "tools/privacy/repository_privacy.py"
       },
       "detail": "docs/history/builds/gov_po_3_ci_privacy_gate_baseline_scoping.md"
     },
