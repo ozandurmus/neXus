@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HashSet;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -249,5 +250,58 @@ class LogMaskingHeuristicTest {
         String name = session().maskFileName("hcp_report_" + host + "_17_10_26_03_00.tar.gz");
         assertFalse(name.contains(host), "the host in a file name (value withheld)");
         assertTrue(name.matches("hcp_report_h-[0-9a-f]{10}_17_10_26_03_00\\.tar\\.gz"), "only the host changes");
+    }
+
+    @Test
+    void masksPrincipalFormatsDomainUserUserAtRealmAndCnDistinguishedNames() {
+        String domUser1 = "CORP\\jdoevarol911";
+        String domUserJson = "CORP\\\\jdoevarol911";
+        String domUser2 = "EXAMPLE\\svc_backup802";
+        String realmUser1 = "jdoevarol911@CORP.LOCAL";
+        String realmUser2 = "jdoevarol911@CORP";
+        String spn = "HTTP/web01.corp.local@CORP.LOCAL";
+        String realmUser3 = "svc_backup802@corp.internal";
+        String dn1 = "CN=jdoevarol911,OU=NetOps,DC=corp,DC=example,DC=com";
+        String dn2 = "CN=svc_backup802,O=ExampleCorp,C=US";
+        String dnQuoted = "CN=\"Jane Doe 911\",OU=Admins,DC=corp,DC=local";
+        String dnSlash = "/CN=jdoevarol911/OU=NetOps/O=ExampleCorp/C=US";
+
+        LogMasking.Session s = session();
+        String outDom1 = s.maskLine("Account " + domUser1 + " failed pre-authentication");
+        String outDomJson = s.maskLine("{\"event\":\"login\",\"actor\":\"" + domUserJson + "\"}");
+        String outDom2 = s.maskLine("NTLM login from " + domUser2 + " rejected");
+        String outRealm1 = s.maskLine("Ticket granted for " + realmUser1 + " in 15ms");
+        String outRealm2 = s.maskLine("TGT request from " + realmUser2 + " during 1st retry");
+        String outSpn = s.maskLine("SPN " + spn + " bound in October");
+        String outRealm3 = s.maskLine("user=" + realmUser3 + " logged in");
+        String outDn1 = s.maskLine("LDAP entry " + dn1 + " matched");
+        String outDn2 = s.maskLine("Certificate subject " + dn2 + " verified");
+        String outDnQuoted = s.maskLine("Bind succeeded for " + dnQuoted + " on 2nd attempt");
+        String outDnSlash = s.maskLine("TLS peer subject " + dnSlash + " accepted");
+        String outDnKeyed = s.maskLine("user=" + dn1 + " authenticated");
+
+        String combined = String.join("\n",
+                outDom1, outDomJson, outDom2, outRealm1, outRealm2, outSpn, outRealm3,
+                outDn1, outDn2, outDnQuoted, outDnSlash, outDnKeyed);
+        for (String canary : List.of(
+                "jdoevarol911", "svc_backup802", "Jane Doe 911", "CORP.LOCAL", "NetOps", "ExampleCorp")) {
+            assertFalse(combined.contains(canary), "principal canary leaked: " + canary + " in " + combined);
+        }
+        assertTrue(outDom1.matches("Account USR-[0-9A-F]{10} failed pre-authentication"), outDom1);
+        String domToken = outDom1.substring("Account ".length(), "Account ".length() + 14);
+        assertTrue(outDomJson.contains(domToken), "JSON-escaped DOMAIN\\\\user produces the same USR token: " + outDomJson);
+        assertTrue(outRealm1.matches("Ticket granted for USR-[0-9A-F]{10} in 15ms"), outRealm1);
+        assertTrue(outRealm2.matches("TGT request from USR-[0-9A-F]{10} during 1st retry"), outRealm2);
+        assertTrue(outSpn.matches("SPN USR-[0-9A-F]{10} bound in October"), outSpn);
+        assertTrue(outRealm3.matches("user=USR-[0-9A-F]{10} logged in"), outRealm3);
+        assertTrue(outDn1.matches("LDAP entry USR-[0-9A-F]{10} matched"), outDn1);
+        assertTrue(outDn2.matches("Certificate subject USR-[0-9A-F]{10} verified"), outDn2);
+        assertTrue(outDnQuoted.matches("Bind succeeded for USR-[0-9A-F]{10} on 2nd attempt"), outDnQuoted);
+        assertTrue(outDnSlash.matches("TLS peer subject USR-[0-9A-F]{10} accepted"), outDnSlash);
+        assertTrue(outDnKeyed.matches("user=USR-[0-9A-F]{10} authenticated"), outDnKeyed);
+
+        // Ordinary vocabulary and non-principal paths/escapes remain readable
+        String vocab = "Sizes 64KB 100MB 4GB 15ms in Jan, Feb, October, December during 1st, 2nd, 3rd, first, second pass";
+        assertEquals(vocab, session().maskLine(vocab));
     }
 }

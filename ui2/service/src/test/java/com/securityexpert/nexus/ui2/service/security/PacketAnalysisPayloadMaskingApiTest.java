@@ -253,6 +253,28 @@ class PacketAnalysisPayloadMaskingApiTest {
         mvc.perform(get(diff).servletPath(diff).cookie(cookie("synthetic-operator"))).andExpect(status().isForbidden());
     }
 
+    @Test void identitiesOutsideKeyedFieldsInPacketCaptureSummariesAreMasked() throws Exception {
+        Instant now = Instant.now();
+        String summaryJson = JSON.writeValueAsString(Map.of(
+                "verdict", "No supported network loss during 1st and second pass in October (64KB window)",
+                "reason", "Reset observed from unseen-fw-01 and corefw01 toward auth.corp.internal while berlinfw is down",
+                "note", "Session by CORP\\jdoevarol911 and jdoevarol911@CORP.LOCAL with CN=jdoevarol911,OU=NetOps,DC=corp,DC=local"));
+        RunRow summaryRun = new RunRow(JOB, CASE, "COMPLETED", "synthetic-operator", now, now, now, "engine-1", summaryJson, null);
+        when(repository.findRun(JOB)).thenReturn(Optional.of(summaryRun));
+        when(repository.runs(CASE)).thenReturn(List.of(summaryRun));
+
+        String reportPath = BASE + "/runs/" + JOB + "/report";
+        String aiviewReport = mvc.perform(get(reportPath).servletPath(reportPath).cookie(cookie("synthetic-aiview")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.projection").value("masked"))
+                .andReturn().getResponse().getContentAsString();
+        for (String canary : List.of(
+                "unseen-fw-01", "corefw01", "auth.corp.internal", "berlinfw",
+                "CORP", "jdoevarol911", "CORP.LOCAL", "NetOps")) {
+            assertFalse(aiviewReport.contains(canary), "summary identity leaked to aiview: " + canary + " in " + aiviewReport);
+        }
+        assertTrue(aiviewReport.contains("1st and second pass in October (64KB window)"), aiviewReport);
+    }
+
     /**
      * The fail-closed gate. (1) Every string in every raw response sits under a classified key: a new engine field
      * fails here until it is added to {@link PayloadFields} (and the README inventory). (2) Every string the replay
