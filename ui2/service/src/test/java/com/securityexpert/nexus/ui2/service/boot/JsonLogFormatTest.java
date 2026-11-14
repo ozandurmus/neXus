@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.service.boot;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -49,7 +50,7 @@ class JsonLogFormatTest {
         MDC.put("job_id", "job-123");
         MDC.put("correlation_id", "corr-456");
         try {
-            log.warn("device h-4f2a9c01 unreachable", new IllegalStateException("boom"));
+            log.warn("device h-4f2a9c01 unreachable 192.0.2.7", new IllegalStateException("boom 2001:db8::1"));
         } finally {
             MDC.clear();
         }
@@ -64,11 +65,12 @@ class JsonLogFormatTest {
         assertTrue("WARN".equals(n.get("level").asText()));
         assertTrue("nexus.jsonlogtest".equals(n.get("logger_name").asText()));
         assertTrue(n.has("thread_name"));
-        // The message is carried as written: this format adds no masking pass and removes none.
-        assertTrue("device h-4f2a9c01 unreachable".equals(n.get("message").asText()));
+        // The log-time masker applies to the message and the stack trace in JSON mode too.
+        assertTrue("device h-4f2a9c01 unreachable <ip>".equals(n.get("message").asText()), line);
+        assertFalse(n.get("stack_trace").asText().contains("2001:db8"), line);
         assertTrue("job-123".equals(n.get("job_id").asText()));
         assertTrue("corr-456".equals(n.get("correlation_id").asText()));
-        assertTrue(n.get("stack_trace").asText().contains("IllegalStateException: boom"));
+        assertTrue(n.get("stack_trace").asText().contains("IllegalStateException: boom <ip>"));
     }
 
     @Test
@@ -76,6 +78,7 @@ class JsonLogFormatTest {
         String out = run(null, JsonLogFormatTest::emit);
         String line = out.lines().filter(l -> l.contains("nexus.jsonlogtest")).findFirst().orElseThrow();
         assertFalse(line.trim().startsWith("{"));
-        assertTrue(line.contains("device h-4f2a9c01 unreachable"));
+        assertTrue(line.contains("device h-4f2a9c01 unreachable <ip>"));
+        assertEquals(1, out.lines().filter(l -> l.contains("nexus.jsonlogtest")).count(), out);
     }
 }

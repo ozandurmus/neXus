@@ -46,18 +46,37 @@ public final class MaskingFormatter extends Formatter {
         return delegate.getTail(h);
     }
 
-    /** Wraps the formatter of each root-logger handler (idempotent). Call once at process start. */
+    /** True when {@code NEXUS_LOG_FORMAT=json} (environment variable or system property of the same name). */
+    public static boolean jsonRequested() {
+        String value = System.getenv("NEXUS_LOG_FORMAT");
+        if (value == null || value.isBlank()) value = System.getProperty("NEXUS_LOG_FORMAT");
+        return value != null && value.trim().equalsIgnoreCase("json");
+    }
+
+    /**
+     * Wraps the formatter of each root-logger handler (idempotent). Call once at process start. With
+     * {@code NEXUS_LOG_FORMAT=json} each handler gets the {@link JsonLogFormatter} (which masks on its own);
+     * otherwise the existing text format is kept and masked.
+     */
     public static void install() {
-        install(LogManager.getLogManager().getLogger(""));
+        install(LogManager.getLogManager().getLogger(""), jsonRequested());
     }
 
     static void install(Logger root) {
+        install(root, false);
+    }
+
+    static void install(Logger root, boolean json) {
         if (root.getHandlers().length == 0) {
             root.addHandler(new ConsoleHandler());
         }
         for (Handler handler : root.getHandlers()) {
             Formatter current = handler.getFormatter();
-            if (!(current instanceof MaskingFormatter)) {
+            if (json) {
+                if (!(current instanceof JsonLogFormatter)) {
+                    handler.setFormatter(new JsonLogFormatter());
+                }
+            } else if (!(current instanceof MaskingFormatter)) {
                 handler.setFormatter(new MaskingFormatter(current));
             }
         }
