@@ -394,6 +394,9 @@ def test_build_uses_pinned_kaniko_new_tag_emptydir_and_corporate_ca():
     assert "--destination=registry.example.invalid/service:preview-" + COMMIT[:12] in builder["args"]
     assert "--digest-file=/dev/termination-log" in builder["args"]
     assert "--context=dir:///workspace" in builder["args"]
+    assert "--cache=false" in builder["args"] and "--image-download-retry=5" in builder["args"]
+    assert builder["args"][builder["args"].index("--cache=false") + 1] == "--image-download-retry=5"
+    assert sum(a.startswith("--image-download-retry=") for a in builder["args"]) == 1
     assert obj["metadata"]["annotations"]["nexus/commit"] == COMMIT
     assert spec["initContainers"][0]["securityContext"]["runAsNonRoot"] is True
     assert spec["volumes"][-1] == dict(name="context", emptyDir={"sizeLimit": "8Gi"})

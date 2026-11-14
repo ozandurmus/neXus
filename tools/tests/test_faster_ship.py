@@ -120,6 +120,7 @@ def test_runner_build_inherits_proxy_ca_and_freezes_commit(monkeypatch):
     assert builder["volumeMounts"] == template["spec"]["template"]["spec"]["containers"][0]["volumeMounts"]
     assert builder["env"] == [dict(name="HTTPS_PROXY", value="http://192.0.2.10:3128"), dict(name="UI2_IMAGE_TAG", value=COMMIT[:12])]
     assert builder["args"][-1] == "--digest-file=/dev/termination-log"
+    assert "--image-download-retry=5" in builder["args"]
     assert "--digest-file=/workspace/old.txt" not in builder["args"]
 
 

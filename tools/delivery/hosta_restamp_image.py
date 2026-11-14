@@ -35,7 +35,7 @@ MAX_AGE_S = int(os.environ.get("NEXUS_REUSE_MAX_AGE_S", str(12 * 3600)))
 DEADLINE_S = 900
 # Owned by this tool; any template value for them is replaced, never merged.
 OWNED = ("--dockerfile=", "--destination=", "--digest-file=", "--cache=", "--cache-ttl=", "--target=",
-         "--build-arg=", "--insecure-registry=", "--skip-tls-verify-registry=")
+         "--build-arg=", "--insecure-registry=", "--skip-tls-verify-registry=", "--image-download-retry=")
 
 
 def git_tree(repo, commit):
@@ -72,6 +72,7 @@ def builder_args(template_args, commit, base):
         "--insecure-registry=" + REGISTRY,
         "--skip-tls-verify-registry=" + REGISTRY,
         "--cache=false",
+        "--image-download-retry=5",
         "--digest-file=/dev/termination-log",
     ]
 

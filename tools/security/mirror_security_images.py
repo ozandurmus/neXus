@@ -33,7 +33,7 @@ def mirror(tool, source, proxy):
            "containers": [{"name": "builder", "image": KANIKO,
                "securityContext": {"allowPrivilegeEscalation": False},
                "args": ["--context=dir:///context", "--dockerfile=/context/Containerfile", "--cache=false",
-                        "--destination=" + destination + ":" + source[-12:], "--insecure",
+                        "--image-download-retry=5", "--destination=" + destination + ":" + source[-12:], "--insecure",
                         "--digest-file=/dev/termination-log"],
                "env": [{"name": n, "value": proxy} for n in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy")]
                       + [{"name": "NO_PROXY", "value": REGISTRY}, {"name": "no_proxy", "value": REGISTRY}],
