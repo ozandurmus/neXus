@@ -237,11 +237,12 @@ final class PolicyNormalization {
                 throw new Unknown("unsupported rulebase");
             Selector source = resolver.cell(rule.source(), "address"), destination = resolver.cell(rule.destination(), "address"),
                 service = resolver.cell(rule.service(), "service");
-            List<Selector> cells = List.of(source, destination, service, Set.of("CP", "ASA").contains(snapshot.metadata().vendor()) && rule.application().refs().isEmpty()
+            List<Selector> cells = List.of(source, destination, service, EMPTY_APPLICATION_ANY.contains(snapshot.metadata().vendor()) && rule.application().refs().isEmpty()
                 && !rule.application().negated() ? new Selector(true, Map.of()) : service.applicationDefault()
                     ? resolver.applications(rule.application()) : resolver.cell(rule.application(), "application"));
-            if (Set.of("PAN", "ASA").contains(snapshot.metadata().vendor()) && (rule.extras().getOrDefault("from", List.of()).isEmpty()
+            if (PLACED_VENDORS.contains(snapshot.metadata().vendor()) && (rule.extras().getOrDefault("from", List.of()).isEmpty()
                     || rule.extras().getOrDefault("to", List.of()).isEmpty())) throw new Unknown("zone evidence not collected");
+            if (fgtZonePlacement(snapshot, rule)) throw new Unknown("zone membership not evaluated");
             if (snapshot.metadata().vendor().equals("CP") && rule.extras().getOrDefault("install-on", List.of()).isEmpty())
                 throw new Unknown("install-on evidence not collected");
             if (rule.enabled() == null) throw new Unknown("enabled state is unknown");
@@ -264,6 +265,8 @@ final class PolicyNormalization {
                 // ASA identity firewall and TrustSec criteria (A0-ASA-16): a full match never decides by identity, so the
                 // rule stays UNKNOWN here; the criterion only narrows (A0-ASA-16a), see #partial and the upper bound above.
                 else if (asaIdentity(snapshot, key)) throw new Unknown("user or category constraint");
+                // FortiGate users and groups (A0-FG-12): UNKNOWN as well.
+                else if (FGT_IDENTITY.contains(key) && snapshot.metadata().vendor().equals("FGT")) throw new Unknown("user or category constraint");
                 else if (key.equals("rule-type") && !values.equals(List.of("universal"))
                         && !(ruleTypes && (values.equals(List.of("intrazone")) || values.equals(List.of("interzone"))))) throw new Unknown("zone rule type constraint");
                 else if (key.equals("install-on")) {
@@ -277,7 +280,7 @@ final class PolicyNormalization {
                             throw new Unknown("unresolved install-on selector");
                     }
                 } else if (!Set.of("from", "to", "install-on", "source-user", "category", "rule-type", "tag", "layer-name", "last-modified", "last-modifier", "log-setting").contains(key)
-                        && !(snapshot.metadata().vendor().equals("ASA") && ASA_INERT.contains(key))
+                        && !(snapshot.metadata().vendor().equals("ASA") && ASA_INERT.contains(key)) && !fgtInert(snapshot, key)
                         && !key.startsWith("track-") && !key.startsWith("profile-setting/") && !untargeted(snapshot, rule, key)) throw new Unknown("unsupported rule constraint");
             }
             if (!upperBound && snapshot.metadata().vendor().equals("CP") && !rule.extras().containsKey("time")) throw new Unknown("time evidence not collected");
@@ -293,13 +296,53 @@ final class PolicyNormalization {
             return new Match(rule, List.of(), Map.of(), problem.getMessage());
         }
     }
-    /** Vendors whose security rulebases are evaluated. ASA: ASA_FORTIGATE_POLICY_DESIGN_2026_11_14.md, A0-ASA-1..20. */
-    static final Set<String> EVALUATED_VENDORS = Set.of("CP", "PAN", "ASA");
-    /** Actions that end matching; ASA ACEs permit or deny (A0-ASA-1). */
+    /**
+     * Vendors whose security rulebases are evaluated. ASA and FortiGate: ASA_FORTIGATE_POLICY_DESIGN_2026_11_14.md,
+     * A0-ASA-1..20, A0-FG-1..27.
+     */
+    static final Set<String> EVALUATED_VENDORS = Set.of("CP", "PAN", "ASA", "FGT");
+    /** Actions that end matching; ASA ACEs permit or deny (A0-ASA-1), FortiGate policies accept or deny (A0-FG-5/7). */
     static final Set<String> TERMINAL_ACTIONS = Set.of("Accept", "Drop", "Reject", "allow", "deny", "drop", "reset-client", "reset-server",
-            "reset-both", "permit");
+            "reset-both", "permit", "accept");
     /** Actions that let the matched traffic through. */
-    static final Set<String> ALLOWING_ACTIONS = Set.of("Accept", "allow", "permit");
+    static final Set<String> ALLOWING_ACTIONS = Set.of("Accept", "allow", "permit", "accept");
+    /** Vendors whose rules carry interface or zone placements ({@code from}/{@code to}) that must be present. */
+    static final Set<String> PLACED_VENDORS = Set.of("PAN", "ASA", "FGT");
+    /** Vendors whose stored application cell is empty when the rule has no application criterion (= any). */
+    static final Set<String> EMPTY_APPLICATION_ANY = Set.of("CP", "ASA", "FGT");
+    /**
+     * FortiGate keys that never change what a policy matches: policy-mode source NAT happens on the exit path after the
+     * policy lookup (A0-FG-17, A0-FG-22).
+     */
+    static final Set<String> FGT_INERT = Set.of("source-translation-type", "translated-source");
+    /** FortiGate VIP match options (A0-FG-20): inert only in a VDOM with no VIP at all (A0-FG-18/19 stay UNKNOWN). */
+    static final Set<String> FGT_VIP_OPTIONS = Set.of("fgt-match-vip", "fgt-match-vip-only");
+    /** FortiGate users, groups and FSSO groups (A0-FG-12): UNKNOWN. */
+    static final Set<String> FGT_IDENTITY = Set.of("user");
+
+    /**
+     * A FortiGate key that does not change the match in this snapshot. A rule placed on a zone or SD-WAN zone is left to
+     * {@link #fgtZonePlacement}: zone membership is not compared by name.
+     */
+    static boolean fgtInert(PolicySnapshot snapshot, String key) {
+        if (!"FGT".equals(snapshot.metadata().vendor())) return false;
+        if (FGT_INERT.contains(key)) return true;
+        return FGT_VIP_OPTIONS.contains(key) && snapshot.sections().stream().noneMatch(s -> "FGT NAT".equals(s.source()) && s.name().equals("FGT VIP"))
+            && snapshot.objects().values().stream().noneMatch(o -> o.type().startsWith("vip"));
+    }
+
+    /**
+     * A FortiGate rule whose {@code srcintf}/{@code dstintf} names a zone or SD-WAN zone: a zone matches its member
+     * interfaces (A0-FG-9), which a placement compared by name would miss, so such a rule is not evaluated here.
+     */
+    static boolean fgtZonePlacement(PolicySnapshot snapshot, Rule rule) {
+        if (!"FGT".equals(snapshot.metadata().vendor())) return false;
+        Set<String> zones = new HashSet<>();
+        for (var o : snapshot.objects().values()) if (Set.of("zone", "sdwan-zone").contains(o.type())) zones.add(o.name());
+        if (zones.isEmpty()) return false;
+        for (String key : List.of("from", "to")) for (String value : rule.extras().getOrDefault(key, List.of())) if (zones.contains(value)) return true;
+        return false;
+    }
     /** ASA mapper provenance keys: the binding direction and the ACL a rule came from; they never change what matches. */
     static final Set<String> ASA_INERT = Set.of("asa-direction", "asa-acl");
     /** ASA identity firewall users/groups and TrustSec security groups on an ACE. */
@@ -388,13 +431,13 @@ final class PolicyNormalization {
     static Partial partial(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver) {
         String vendor = snapshot.metadata().vendor();
         if (!EVALUATED_VENDORS.contains(vendor) || PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) return null;
-        boolean cp = vendor.equals("CP"), asa = vendor.equals("ASA"), zones = true;
+        boolean cp = vendor.equals("CP"), asa = vendor.equals("ASA"), zones = !fgtZonePlacement(snapshot, rule);
         if (cp && !rule.extras().containsKey("time")) return null;
         for (var entry : rule.extras().entrySet()) {
             String key = entry.getKey();
             resolver.budget.spend();
             if (NARROWING.contains(key) || INERT.contains(key) || asa && ASA_INERT.contains(key) || asaIdentity(snapshot, key)
-                    || Set.of("from", "to", "install-on").contains(key)
+                    || fgtInert(snapshot, key) || Set.of("from", "to", "install-on").contains(key)
                     || key.startsWith("track-") || key.startsWith("profile-setting/") || untargeted(snapshot, rule, key)
                     || targetNarrows(snapshot, rule, key)) continue;
             if (key.equals("rule-type")) { zones &= entry.getValue().equals(List.of("universal")); continue; }
@@ -408,7 +451,7 @@ final class PolicyNormalization {
         for (int i = 0; i < 4; i++) {
             var cell = cells.get(i);
             try {
-                selectors[i] = i == 3 && (cp || asa) && cell.refs().isEmpty() && !cell.negated() ? new Selector(true, Map.of())
+                selectors[i] = i == 3 && EMPTY_APPLICATION_ANY.contains(vendor) && cell.refs().isEmpty() && !cell.negated() ? new Selector(true, Map.of())
                     : i == 3 && selectors[2] != null && selectors[2].applicationDefault() ? resolver.applications(cell) : resolver.cell(cell, families.get(i));
                 resolved |= !selectors[i].any();
             } catch (Unknown unresolved) {

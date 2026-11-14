@@ -379,3 +379,29 @@ Sizing (engineer estimate, not measured): steps 1-3 about 6-8 engineer-days, 4 a
 | Q6 | Hit counts (R1) and device corroboration (R2/R3): leave for later, decide after the step-0 measurement? | Later |
 | Q7 | Order: ASA first (5 of the 6 HA pairs in this scope, and the larger configurations), then FortiGate? Or FortiGate first if the ACI phase-2 targets are FortiGates? | ASA first unless the ACI targets say otherwise |
 | Q8 | Which ASA/FortiGate units are ACI redirect targets in phases 2/3 (masked names)? This decides which units the real-environment validation samples come from. | PO / network team input |
+
+## 11. Implementation notes: FortiGate steps 2b, 5 and 6 (2026-11-14)
+
+Engineer decisions inside the FROZEN A0 amendment; nothing here widens a claim it grades UNKNOWN.
+
+- **Service wiring.** `LocalFirewallPolicyService.fgtSnapshots()` reads the latest stored `show_configuration`
+  artefact of each enrolled FortiGate gateway (`vendor_hint = 'fortinet'`, role gateway or firewall; FortiManager is
+  a management server and is not read), parses it in memory with the device's observed software version as the
+  version hint when the `#config-version=` header is absent, and maps one snapshot per VDOM. Text with neither the
+  header nor any policy is not a FortiGate configuration and is left out (a count is logged, never a name). Own
+  weighted cache, separate from Palo Alto and ASA.
+- **Normalization.** `FGT` is an evaluated vendor; `accept` is terminal and allowing; `from`/`to` (srcintf/dstintf)
+  are required; an empty application cell is any. Users, groups and FSSO groups (A0-FG-12), schedules other than
+  `always`, VPN tunnels, ISDB, application/UTM criteria, unparsed policies, missing defaults and VIP destinations stay
+  UNKNOWN. Policy-mode source NAT keys are inert (SNAT on the exit path, A0-FG-17/22); `match-vip` options are inert
+  only in a VDOM without any VIP (A0-FG-18..20 stay UNKNOWN otherwise).
+- **Interface `any`.** A policy with `srcintf "any"` / `dstintf "any"` matches every interface. Source: FortiOS 7.0.17
+  administration guide, "Firewall policies": "For this example, a simple policy that allows all traffic is
+  configured." with `set srcintf "any"`, `set dstintf "any"` (MEDIUM: an example, not a definition; 4,310 of 4,426
+  measured policies use it).
+- **Zones.** A policy placed on a zone or SD-WAN zone is not evaluated (`zone membership not evaluated`): A0-FG-9 says
+  a zone matches its member interfaces, which a placement compared by name would miss. Measured estate: 0 zones.
+- **Lookup.** One policy table per VDOM, first match in printed order (A0-FG-1/2); a packet no policy matches is
+  DENIED by the implicit deny (A0-FG-3, `no rule matched; implicit deny`) only when the mapper's implicit section holds
+  the implicit deny alone; a zone with `intrazone allow` makes that fall-through UNKNOWN. Trace for FortiGate (step 8)
+  is not wired yet.

@@ -20,8 +20,11 @@ public final class PolicyLookup {
     static final String ASA_SAME_INTRA = "same interface; same-security-traffic intra-interface is not permitted";
     static final String ASA_INTERFACE_UNKNOWN = "interface or security level not in the policy";
     static final String ASA_RESULTS = "access list results";
+    // FortiGate (A0-FG-3, A0-FG-10)
+    static final String FGT_IMPLICIT_DENY = "no rule matched; implicit deny";
+    static final String FGT_INTRAZONE_UNKNOWN = "no rule matched; zone intrazone setting not evaluated";
     public static final Set<String> REASONS = Set.of(ASA_IMPLICIT_DENY, ASA_LEVEL_ALLOW, ASA_LEVEL_UNPROVEN, ASA_SAME_INTER, ASA_SAME_INTRA,
-        ASA_INTERFACE_UNKNOWN, ASA_RESULTS, CP_CLEANUP, PAN_INTRAZONE, PAN_INTERZONE,
+        ASA_INTERFACE_UNKNOWN, ASA_RESULTS, FGT_IMPLICIT_DENY, FGT_INTRAZONE_UNKNOWN, CP_CLEANUP, PAN_INTRAZONE, PAN_INTERZONE,
         "multiple ordered layers not evaluated", "ordered layer results", "all ordered layers allowed", "first matching rule", "earlier rule could match",
         "partial query coverage", "analysis budget", "snapshot collection incomplete", "unsupported evaluation scope",
         "inline layer evaluation unsupported", "zone or target required", "target context unproven", "application constraint",
@@ -163,6 +166,9 @@ public final class PolicyLookup {
                 if (section.parentRuleId() != null && !inlineParents.contains(section.parentRuleId())) throw new Unknown("unsupported evaluation scope");
                 layer = cpLayers.advance(section, budget);
                 if (section.parentRuleId() == null) layers.add(layer);
+            } else if (snapshot.metadata().vendor().equals("FGT") && section.source().equals("FGT firewall policy")) {
+                // One policy table per VDOM snapshot, in printed (sequence) order (A0-FG-1/2).
+                if (sectionIds.size() > 1) throw new Unknown("unsupported evaluation scope");
             } else if (snapshot.metadata().vendor().equals("ASA") && section.source().equals("ASA access-group")) {
                 String binding = asaBinding(snapshot, section);
                 if (binding == null || asaLists.containsKey(binding)) throw new Unknown("unsupported evaluation scope");
@@ -282,10 +288,33 @@ public final class PolicyLookup {
             return new Decision(unknown.isEmpty() ? (ALLOWING_ACTIONS.contains(entry.rule().action()) ? "ALLOWED" : "DENIED") : "UNKNOWN",
                 unknown.isEmpty() ? "first matching rule" : "earlier rule could match", rule(entry), List.copyOf(unknown));
         }
+        if (snapshot.metadata().vendor().equals("FGT")) {
+            String fallThrough = fgtFallThrough(snapshot, budget);
+            if (fallThrough.equals(FGT_IMPLICIT_DENY) && unknown.isEmpty()) return new Decision("DENIED", FGT_IMPLICIT_DENY, null, List.of());
+            return new Decision("UNKNOWN", unknown.isEmpty() ? fallThrough : "earlier rule could match", null, List.copyOf(unknown));
+        }
         String reason = snapshot.metadata().vendor().equals("CP") ? CP_CLEANUP
             : query.sourceZone().isEmpty() || query.destinationZone().isEmpty() ? "zone or target required"
             : query.sourceZone().equals(query.destinationZone()) ? PAN_INTRAZONE : PAN_INTERZONE;
         return new Decision("UNKNOWN", unknown.isEmpty() ? reason : "earlier rule could match", null, List.copyOf(unknown));
+    }
+    /**
+     * FortiGate after the last policy (A0-FG-3, A0-FG-10): the mapper's implicit section holds a synthetic intrazone
+     * allow per zone with {@code intrazone allow}, then the implicit deny. With only the implicit deny, a packet no policy
+     * matched is denied; a zone's intrazone allow is not evaluated here (zone membership is not compared by name), so it
+     * makes the fall-through UNKNOWN. A missing or ambiguous implicit section is UNKNOWN as well.
+     */
+    private static String fgtFallThrough(PolicySnapshot snapshot, Budget budget) {
+        int sections = 0; boolean denyOnly = false;
+        for (Section section : snapshot.sections()) {
+            budget.spend();
+            if (!"FGT implicit".equals(section.source())) continue;
+            sections++;
+            denyOnly = section.rules().size() == 1 && "deny".equals(section.rules().get(0).action())
+                && Boolean.TRUE.equals(section.rules().get(0).enabled())
+                && List.of("any").equals(section.rules().get(0).extras().get("from")) && List.of("any").equals(section.rules().get(0).extras().get("to"));
+        }
+        return sections == 1 && denyOnly ? FGT_IMPLICIT_DENY : FGT_INTRAZONE_UNKNOWN;
     }
     /**
      * The evaluation a query needs on an ASA policy: the ingress "in" list, then the global list, then the egress "out"
