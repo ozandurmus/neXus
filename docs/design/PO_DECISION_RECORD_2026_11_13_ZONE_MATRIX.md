@@ -3,8 +3,8 @@
 ## Status
 
 RATIFIED -- PO answers given in chat on 2026-11-13 and relayed by the PO session. Recorded by the engineering session.
-This record fixes four scope answers for the zone matrix feature. It is not implementation authority for anything
-else: the contract `ZONE_MATRIX_CONTRACT.md` is DRAFT until it passes the decision council and the PO freezes it.
+This record fixes the scope answers, the council outcome and the freeze of the zone matrix feature. Implementation
+authority is the contract `ZONE_MATRIX_CONTRACT.md`, frozen by the PO on 2026-11-13 (decision 7).
 
 ## Context
 
@@ -102,6 +102,14 @@ compliance and security seats wanted them inside, made visible. The PO session r
 - The snapshot staleness threshold.
 - Which team holds compliance_admin, and whether that role is bound today; publishing is impossible without it.
 
+## Freeze
+
+7. **Contract frozen: "FROZEN, başlat"** (PO, 2026-11-13, relayed by the PO session). `ZONE_MATRIX_CONTRACT.md`
+   revision 2 is FROZEN as written and is the implementation authority for its delivery order (section 10.1), one step
+   at a time. The bank inputs stay open as named input fields (regulation reference fields per cell; regulation title
+   and date, retention, staleness threshold, the team holding compliance_admin); the product ships them empty or at
+   the contract's interim behaviour.
+
 ## Not decided by this record
 
-The freeze of the contract itself, and the items the contract lists as still open (section 11.2).
+The items the contract lists as still open (section 11.2) and the bank inputs above.

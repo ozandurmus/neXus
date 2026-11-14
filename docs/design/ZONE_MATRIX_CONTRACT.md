@@ -2,13 +2,17 @@
 
 ## Status
 
-DRAFT - 2026-11-13, revision 2. Revision 1 (commit 012fbbf7) was reviewed by the three-seat decision council on
-2026-11-13 (network/vendor semantics, compliance and change-control, security and adversarial; role-diverse review,
-same model family; seat outputs kept in the PO session's ops notes). The PO approved incorporating every council
-change ("Evet, hepsini işle") and decided four-eyes publishing ("Evet, şart"); both are recorded in
-`PO_DECISION_RECORD_2026_11_13_ZONE_MATRIX.md`. This document stays DRAFT, and is not implementation authority, until
-the PO freezes it. The BDDK reference fields of section 6 stay empty until the bank's compliance team fills and
-confirms them.
+FROZEN - 2026-11-13, revision 2. Frozen by the Product Owner in the PO session on 2026-11-13 ("FROZEN, başlat"),
+relayed by the PO session; implementation authority for the delivery order of section 10.1, one step at a time.
+Revision 1 (commit 012fbbf7) was reviewed by the three-seat decision council on 2026-11-13 (network/vendor semantics,
+compliance and change-control, security and adversarial; role-diverse review, same model family; seat outputs kept in
+the PO session's ops notes). The PO approved incorporating every council change ("Evet, hepsini işle") and decided
+four-eyes publishing ("Evet, şart"); the decisions are recorded in `PO_DECISION_RECORD_2026_11_13_ZONE_MATRIX.md`.
+
+Bank inputs stay open as named input fields, not as contract gaps: the regulation reference fields of section 6.1
+(`regulationReference`, `referenceStatus`, filled and confirmed by the bank's compliance team), and the inputs of
+section 6.2 (regulation title and date, retention, staleness threshold, the team holding compliance_admin). The
+product ships with these fields empty or at the stated interim behaviour, and never fills them itself.
 
 ## 1. Purpose and non-goals
 
