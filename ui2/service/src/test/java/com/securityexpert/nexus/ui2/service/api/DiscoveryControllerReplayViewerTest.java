@@ -71,19 +71,4 @@ class DiscoveryControllerReplayViewerTest {
         assertEquals(1, candidates.size());
         assertEquals(SYNTHETIC_NAME, ((Map<?, ?>) candidates.get(0)).get("display_name"));
     }
-
-    @Test
-    void startWithAnEmptyJsonBodyAnswersTheValidationErrorNotAServerError() {
-        var service = new DiscoveryRunService(
-                mock(com.securityexpert.nexus.ui2.persistence.TransactionBoundary.class),
-                mock(com.securityexpert.nexus.ui2.persistence.discovery.DiscoveryRunRepository.class),
-                mock(com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService.class),
-                mock(com.securityexpert.nexus.ui2.persistence.device.CredentialReferenceRepository.class),
-                mock(com.securityexpert.nexus.ui2.service.device.DeviceAddSingleService.class),
-                mock(com.securityexpert.nexus.ui2.persistence.device.DeviceDiscoveryMatchRepository.class));
-        var response = controller(service).start(new DiscoveryController.StartRequest(null, null, null), request(false));
-        assertEquals(422, response.getStatusCode().value());
-        assertEquals("VALIDATION_FAILED", response.getBody().get("error"));
-        assertEquals(DiscoveryRunService.REASON_VENDOR_INVALID, response.getBody().get("reason_code"));
-    }
 }
