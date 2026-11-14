@@ -335,8 +335,16 @@ class LogMaskingHeuristicTest {
         String ip = s.maskLine("ip-" + a + " ec2 host " + a + " and " + b + ".compute");
         assertFalse(ip.contains(a) || ip.contains(b), ip);
         assertTrue(ip.contains("<ip>"), ip);
-        String keep = "2026-11-15 and 1-2-3 and v1-2-3-4567 and 2026-11-15-10 size 64KB uuid "
+        String keep = "2026-11-15 and 1-2-3 and v1-2-3-4567 and 2026-11-15-10 size 64KB-128KB uuid "
                 + UUID.nameUUIDFromBytes(new byte[] {1, 2, 3}) + " and 300-1-2-3 and 1-2-3-4-5";
         assertEquals(keep, session().maskLine(keep));
+    }
+
+    @Test
+    void keepsSizeRangesReadableButStillMasksHostnamesWithDigits() {
+        String ranges = "Window 64KB-128KB, 1.5GB-2GB, 512M-1G, 10k-20k, 64-128KB and 64KB-128KB-256KB accepted";
+        assertEquals(ranges, session().maskLine(ranges));
+        String host = letters(6, 921) + "-" + letters(3, 922) + "7";
+        assertFalse(containsAny(session().maskLine("peer " + host + " down"), host), "hyphenated host still masked");
     }
 }

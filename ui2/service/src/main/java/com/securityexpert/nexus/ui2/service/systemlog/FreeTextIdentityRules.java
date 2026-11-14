@@ -192,10 +192,13 @@ final class FreeTextIdentityRules {
     /** The {@code DiagnosticText} interface shape ({@code eth1-01}, {@code bond0.100}). */
     private static final Pattern INTERFACE = Pattern.compile(
             "(?i)(?:eth|bond|wrp|ens|eno|enp|wlan|lo|port|vlan|vsys|tun|tap|br)[0-9]{1,4}(?:[-.][0-9]{1,4})?");
-    private static final Pattern SIZE_OR_UNIT = Pattern.compile(
-            "(?i)\\d+(?:\\.\\d+)?(?:[kmgtpe]i?b|[kmgtpe]?b(?:ps|ytes?|its?)?|[kmgt]?pps"
-                    + "|[num]?s|sec(?:s|onds?)?|min(?:s|utes?)?|hr?s?|hours?|d|days?|w|wks?|weeks?|mo|months?|yr?s?|years?"
-                    + "|[kmg]?hz|dbm?|pct|[kmgtpe]|v|mv|kv|a|ma|w|kw|mw|c|f)");
+    private static final String UNIT = "(?:[kmgtpe]i?b|[kmgtpe]?b(?:ps|ytes?|its?)?|[kmgt]?pps"
+            + "|[num]?s|sec(?:s|onds?)?|min(?:s|utes?)?|hr?s?|hours?|d|days?|w|wks?|weeks?|mo|months?|yr?s?|years?"
+            + "|[kmg]?hz|dbm?|pct|[kmgtpe]|v|mv|kv|a|ma|w|kw|mw|c|f)";
+    private static final Pattern SIZE_OR_UNIT = Pattern.compile("(?i)\\d+(?:\\.\\d+)?" + UNIT);
+    /** A range of sizes or measures ({@code 64KB-128KB}, {@code 1.5GB-2GB}, {@code 512M-1G}, {@code 10k-20k}). */
+    private static final Pattern SIZE_RANGE = Pattern.compile(
+            "(?i)(?=[0-9.]+" + UNIT + "?-)\\d+(?:\\.\\d+)?(?:" + UNIT + ")?(?:-\\d+(?:\\.\\d+)?(?:" + UNIT + ")?)+");
     private static final Pattern ORDINAL_TOKEN = Pattern.compile(
             "(?i)(?:\\d+(?:st|nd|rd|th)|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth)");
     private static final Pattern NUMBERED_COMMON_NOUN = Pattern.compile(
@@ -665,6 +668,7 @@ final class FreeTextIdentityRules {
         int[] t = trim(line, start, end, "._-");
         if (t[0] >= t[1]) return;
         String run = line.substring(t[0], t[1]);
+        if (sizeRange(run)) return;
         if (learnedName(run) && !isJsonKey(line, t[0], t[1]) && !inSpans(enumSpans, t[0])) {
             add(edits, new Edit(t[0], t[1], names.label(run), HOST_CONTEXT, t[0], t[1]));
             return;
@@ -816,6 +820,11 @@ final class FreeTextIdentityRules {
         return digits == 0 && letters >= 6 && SINGLE_WORD_AFFIX_HOST.matcher(p).matches();
     }
 
+    /** A range of sizes, with at least one unit (a plain {@code 1-2-3} is not a size). */
+    private static boolean sizeRange(String run) {
+        return run.indexOf('-') > 0 && SIZE_RANGE.matcher(run).matches() && hasLetter(run);
+    }
+
     private static boolean hostnameShaped(String p, int letters, int digits) {
         String[] parts = p.split("-", -1);
         for (String part : parts) if (part.isEmpty()) return false;
@@ -825,6 +834,7 @@ final class FreeTextIdentityRules {
 
     /** A hyphenated non-identity shape: a UUID, a MAC, an interface, a protocol or cipher name, a date. */
     private static boolean allowlisted(String p) {
+        if (sizeRange(p)) return true;
         if (UUID.matcher(p).matches() || MAC_HYPHEN.matcher(p).matches() || INTERFACE.matcher(p).matches()) return true;
         String[] parts = p.split("-", -1);
         for (String part : parts) if (part.isEmpty()) return false;
