@@ -8,7 +8,7 @@ import { m3Theme } from "../theme/m3Theme";
 import { LoginScreen } from "./LoginScreen";
 import { PasswordChangeScreen } from "./PasswordChangeScreen";
 import { SessionContext } from "./SessionContext";
-import { getSessionStatus, invalidateSessionStatusCache } from "./adminApi";
+import { getSessionStatus, resetSharedApiCache } from "./adminApi";
 
 type AuthState = "checking" | "authenticated" | "must-change-password" | "unauthenticated";
 
@@ -48,7 +48,9 @@ async function checkSession(force = false): Promise<SessionStatus> {
 }
 
 async function signOut(): Promise<void> {
-  invalidateSessionStatusCache();
+  // Every shared read cache belongs to this session: the next sign-in in this tab (possibly another user with
+  // another masking view) must never be served the previous user's devices, notifications or status.
+  resetSharedApiCache();
   try {
     await fetch("/session/logout", { method: "POST", credentials: "include" });
   } catch {
@@ -117,7 +119,7 @@ export function AuthGate({ children }: { readonly children: ReactNode }) {
     <ThemeProvider theme={m3Theme}>
       <CssBaseline />
       {state === "unauthenticated" ? (
-        <LoginScreen onAuthenticated={() => checkSession(true).then(applyStatus)} />
+        <LoginScreen onAuthenticated={() => { resetSharedApiCache(); return checkSession(true).then(applyStatus); }} />
       ) : state === "must-change-password" ? (
         <PasswordChangeScreen
           username={session.displayName ?? ""}

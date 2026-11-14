@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useSession } from "../src/auth/SessionContext";
 import { AuthGate } from "../src/auth/AuthGate";
+import { listDevices } from "../src/auth/adminApi";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status });
@@ -13,6 +14,30 @@ afterEach(() => {
 });
 
 describe("AuthGate", () => {
+  it("drops every shared read cache on sign-out, so the next user never sees the previous user's device list", async () => {
+    let devicesCalls = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/session/status") return jsonResponse(200, { authenticated: true });
+      if (url === "/devices") {
+        devicesCalls += 1;
+        return jsonResponse(200, { devices: [] });
+      }
+      return jsonResponse(200, {});
+    }));
+    function SignOutButton() {
+      const session = useSession();
+      return <button onClick={() => session?.onSignOut()}>sign out</button>;
+    }
+    render(<AuthGate><SignOutButton /></AuthGate>);
+    await listDevices();
+    await listDevices();
+    expect(devicesCalls).toBe(1);
+    fireEvent.click(await screen.findByText("sign out"));
+    await waitFor(() => expect(screen.queryByText("sign out")).toBeNull());
+    await listDevices();
+    expect(devicesCalls).toBe(2);
+  });
   it.each([true, false, undefined])("carries the server Administration read affordance %s", async permitted => {
     vi.stubGlobal("fetch",vi.fn().mockResolvedValue(jsonResponse(200,{
       authenticated: true, can_read_administration: permitted,
