@@ -411,3 +411,25 @@ it("keeps a Cisco ASA pair with readinessAvailable false in the listed-only bloc
   expect(within(item).getByText("Readiness not available yet")).toBeInTheDocument();
   expect(within(item).queryByRole("button")).toBeNull();
 });
+const pairRow = (ref: string, vendor: string, roles: [string | null, string | null], state: "HEALTHY" | "DEGRADED" | "UNKNOWN", reason: string | null): CpFailoverSummary => ({
+  ...summary(ref, "READY"), readiness: null, canRunReadiness: false, readinessAvailable: false,
+  members: [{ device_id: `${ref}-m1`, hostname: `FW-${ref}-M1`, ha_role: roles[0] }, { device_id: `${ref}-m2`, hostname: `FW-${ref}-M2`, ha_role: roles[1] }],
+  haView: { vendor, state, reason, sync: "UNKNOWN", syncReason: "NOT_COLLECTED",
+    members: [{ device_id: `${ref}-m1`, role: roles[0] ?? "unknown" }, { device_id: `${ref}-m2`, role: roles[1] ?? "unknown" }] },
+});
+it.each([
+  ["cisco_asa", ["active", "standby"], "HEALTHY", null, "Pair healthy", ["Active", "Standby"]],
+  ["cisco_asa", ["active", "failed"], "DEGRADED", "MEMBER_FAILED", "Pair degraded", ["Active", "Failed"]],
+  ["fortinet", ["primary", "secondary"], "HEALTHY", null, "Pair healthy", ["Primary", "Secondary"]],
+  ["fortinet", ["primary", null], "UNKNOWN", "ROLE_NOT_OBSERVED", "Pair state unknown", ["Primary", "Unknown"]],
+] as const)("shows %s pair members, roles, pair state and sync as unknown", (vendor, roles, state, reason, stateWord, words) => {
+  const ref = vendor === "cisco_asa" ? "CLS-DELTA-04" : "CLS-ECHO-05";
+  const members = cluster(ref, vendor).members;
+  setup({ clusters: [cluster("CLS-ALPHA-01"), { ref, title: ref, members }], rows: { ...rows, [ref]: [pairRow(ref, vendor, [roles[0], roles[1]], state, reason)] } });
+  const item = screen.getByText(ref).closest("li")!;
+  expect(within(item).getByText(stateWord)).toBeInTheDocument();
+  expect(within(item).getByText(`FW-${ref}-M1: ${words[0]}`)).toBeInTheDocument();
+  expect(within(item).getByText(`FW-${ref}-M2: ${words[1]}`)).toBeInTheDocument();
+  expect(within(item).getByText("Sync: Unknown (not collected)")).toBeInTheDocument();
+  expect(within(item).queryByRole("button")).toBeNull();
+});

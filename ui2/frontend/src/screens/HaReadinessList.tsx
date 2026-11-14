@@ -33,6 +33,7 @@ import { urlParam } from "../shell/urlParams";
 import { m3 } from "../theme/m3Theme";
 import { ReadinessChecksTable, readinessStopReason } from "./ReadinessChecksTable";
 import { PanConfigSyncAction } from "./PanConfigSyncAction";
+import { HaPairLine } from "./HaPairLine";
 
 type Cluster = { ref: string; title: string; members: DeviceSummary[] };
 type Status = "READY" | "NOT_READY" | "UNKNOWN" | "UNSUPPORTED";
@@ -383,8 +384,9 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
       <Typography variant="body2" sx={{ color: m3.onSurfaceVar, my: 1 }}>Readiness pre-checks are not supported for these vendors; enrolled clusters are shown for inventory context.</Typography>
       <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0 }}>{unsupported.map(({ cluster, vendor, units }) => {
         const listedOnly = vendor === "cisco_asa" || units.some(unit => unit.readinessAvailable === false);
-        return <Box component="li" key={cluster.ref} sx={{ display: "flex", gap: 1, alignItems: "center", py: 0.75 }}><Typography variant="body2">{cluster.title}</Typography><VendorBadge vendor={vendor} />{listedOnly && <Typography variant="body2">{vendorDisplayName(vendor)}</Typography>}{listedOnly
-          ? <Typography variant="caption" title="FAILOVER_VENDOR_NOT_AVAILABLE">Readiness not available yet</Typography>
+        const pair = units.find(unit => unit.haView);
+        return <Box component="li" key={cluster.ref} sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap", py: 0.75 }}><Typography variant="body2">{cluster.title}</Typography><VendorBadge vendor={vendor} />{listedOnly && <Typography variant="body2">{vendorDisplayName(vendor)}</Typography>}{listedOnly
+          ? <><Typography variant="caption" title="FAILOVER_VENDOR_NOT_AVAILABLE">Readiness not available yet</Typography>{pair && <HaPairLine row={pair} />}</>
           : <Typography variant="caption" title="UNSUPPORTED_MODE"><Presented label={readinessReasonLabel("UNSUPPORTED_MODE")} raw="UNSUPPORTED_MODE" /> · Readiness: not evaluated</Typography>}</Box>;
       })}</Box>
     </Box>}
