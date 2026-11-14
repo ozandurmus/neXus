@@ -103,6 +103,9 @@ class AuditCoverageCompletenessTest {
                     + "cutover_assessment insert (trg_audit_cutover_assessment, ACI_SEGMENTATION_SUPPORT_DESIGN section 4) and removed "
                     + "by its cascade; fn_guard_cutover_assessment_flow refuses updates and any write outside the audited action; "
                     + "flow addresses are content the audit log must never carry"),
+            Map.entry("zone_matrix_reference_confirmation", "V220: append-only confirmation record (UPDATE and DELETE refused by "
+                    + "trigger), written in the same transaction as its REFERENCE_CONFIRM zone_matrix_revision row, which "
+                    + "tr_audit_zone_matrix_revision captures (ZONE_MATRIX_CONTRACT 3.5, 8.1); the row is itself the evidence"),
             Map.entry("ha_pair_identity", "V209: a failover pair's unit serials recorded and compared by the inventory job from its own reads; the jobs row is audited"),
             Map.entry("cluster_member_diff", "V52: server-side recomputed summary of collected texts"),
             Map.entry("pseudonym_registry", "V53: derived AIView pseudonym claims, keyed by HMAC"),
