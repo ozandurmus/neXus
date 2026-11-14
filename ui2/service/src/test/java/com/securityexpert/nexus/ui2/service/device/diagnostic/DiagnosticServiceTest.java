@@ -328,4 +328,77 @@ class DiagnosticServiceTest {
         assertTrue(service.submitRead("device-1", "fgt_get_system_status", null, requestId, "actor", true)
                 instanceof com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult.Admitted);
     }
+
+    @Test
+    void localLogDiagnosticOutputKeepsSizesCalendarAndDictionaryWordsWhileMaskingSerialsIpsHostsAndUsers() throws Exception {
+        var devices = mock(DeviceRepository.class);
+        var jobs = mock(JobRecordDao.class);
+        var store = mock(com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore.class);
+        var identities = mock(com.securityexpert.nexus.ui2.service.security.LocalIdentityResolver.class);
+        byte[] key = "synthetic-test-key".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        var names = new TopologyNamePseudonymizer(key);
+        var ipMasker = new com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker(key);
+        var service = new DiagnosticService(devices, mock(DeviceInventoryRepository.class), mock(JobAdmissionService.class), jobs,
+                names, k -> List.of(),
+                new com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess(store),
+                identities, ipMasker);
+
+        var rng = new java.util.Random(987654321L);
+        String runtimeSerial = buildRuntimeToken(rng, "SNX", 8);
+        String numericSerial = String.valueOf(100000000L + rng.nextInt(800000000));
+        String unknownHost = "gw-" + buildRuntimeToken(rng, "edge", 5).toLowerCase(java.util.Locale.ROOT);
+        String runtimeUser = "acct_" + buildRuntimeToken(rng, "op", 4).toLowerCase(java.util.Locale.ROOT);
+        String runtimeIp = "192.0.2." + (20 + rng.nextInt(150));
+        String knownHost = "known-" + buildRuntimeToken(rng, "node", 4).toLowerCase(java.util.Locale.ROOT);
+
+        var summary = new DeviceSummaryRecord("device-1", "gateway", "check_point", DeviceEnrollmentState.ENROLLED,
+                Optional.of(knownHost), Optional.of("V0"), Optional.empty(), Optional.empty(), Optional.empty());
+        when(devices.listAll()).thenReturn(List.of(summary));
+
+        String rawOutput = "289G\t/var/log/opt/CPsuite-R81.20/fw1/log/\n"
+                + "total 289G\n"
+                + "-rw-rw---- 1 admin root 512M Oct 31 23:59 fw.log\n"
+                + "-rw-rw---- 1 admin root 4.0K Mon Jan 15 08:30 fw.logptr\n"
+                + "Overall Status Description: Security Gateway is reporting logs as defined\n"
+                + "Local Logging Mode Description: Logs are written locally\n"
+                + "Device: " + knownHost + " peer " + unknownHost + " ip " + runtimeIp + "\n"
+                + "Serial: " + runtimeSerial + "\n"
+                + "Audit: numeric " + numericSerial + " user=" + runtimeUser;
+
+        String id = "00000000-0000-0000-0000-000000000099";
+        var job = new JobRecordDao.DiagnosticJob(id, "device-1", null, "COMPLETED", null, false, 7, null, null,
+                "du -sh /var/log/opt/CPsuite-R81.20/fw1/log/", "actor", Instant.now(), 0);
+        when(jobs.findDiagnostic(id)).thenReturn(Optional.of(job));
+        when(jobs.diagnosticOutput(id, "actor")).thenReturn(Optional.of(new JobRecordDao.DiagnosticOutputRef("opaque-output", new byte[]{1})));
+        when(store.retrieve(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(false)))
+                .thenAnswer(call -> new java.io.ByteArrayInputStream(rawOutput.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+
+        String masked = (String) service.output(id, "actor", true).orElseThrow().get("output");
+
+        assertTrue(masked.contains("289G\t/var/log/opt/CPsuite-R81.20/fw1/log/"), "Sizes and log path must stay readable: " + masked);
+        assertTrue(masked.contains("-rw-rw---- 1 admin root 512M Oct 31 23:59 fw.log"), "ls -la line with size and month must stay readable: " + masked);
+        assertTrue(masked.contains("-rw-rw---- 1 admin root 4.0K Mon Jan 15 08:30 fw.logptr"), "Weekday and month abbreviations must stay readable: " + masked);
+        assertTrue(masked.contains("Security Gateway is reporting logs as defined"), "Dictionary words in cpstat output must stay readable: " + masked);
+        assertTrue(masked.contains(names.maskDeviceName(knownHost, null)), "Known hostname must map to its FW- pseudonym: " + masked);
+        assertTrue(masked.contains(names.maskSerial(runtimeSerial)), "Runtime serial must be masked with SN- token: " + masked);
+        assertTrue(masked.contains(names.maskSerial(numericSerial)), "Numeric serial must be masked with SN- token: " + masked);
+        assertTrue(masked.contains(names.maskSerial(unknownHost)), "Unknown hostname must be masked with SN- token: " + masked);
+        assertTrue(masked.contains("user=" + names.maskSerial(runtimeUser)), "Username must be masked with SN- token: " + masked);
+        assertTrue(masked.contains(ipMasker.maskText(runtimeIp)), "IPv4 must be masked with subnet-preserving IP masker: " + masked);
+        assertFalse(masked.contains(runtimeSerial));
+        assertFalse(masked.contains(numericSerial));
+        assertFalse(masked.contains(unknownHost));
+        assertFalse(masked.contains(runtimeUser));
+        assertFalse(masked.contains(runtimeIp));
+        assertFalse(masked.contains(knownHost));
+    }
+
+    private static String buildRuntimeToken(java.util.Random rng, String prefix, int length) {
+        String alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        StringBuilder sb = new StringBuilder(prefix);
+        for (int i = 0; i < length; i++) {
+            sb.append(alphabet.charAt(rng.nextInt(alphabet.length())));
+        }
+        return sb.toString();
+    }
 }
