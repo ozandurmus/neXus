@@ -13,9 +13,13 @@ Product Owner approves each exact literal (AGENTS.md "Network action taxonomy", 
 official source and a measured sample settle it. Examples use documentation addresses (`192.0.2.0/24`,
 `198.51.100.0/24`, `203.0.113.0/24`) and illustrative pseudonyms only.
 
+PO answers and PO-session decisions on the section 7 questions (2026-11-14) are recorded in
+`PO_DECISION_RECORD_2026_11_14_TOPOLOGY_SOURCES.md`, which also closes D-9. This document is updated to them and stays
+DRAFT until T1 freezes section 4 and amends `PATH_ANALYSIS_DESIGN.md`.
+
 ## 0. Decision, inputs and what this changes
 
-**PO decision 2026-11-14** (relayed by the PO session; no decision record exists yet, step T0 writes one): Cisco ACI
+**PO decision 2026-11-14** (relayed by the PO session; recorded in `PO_DECISION_RECORD_2026_11_14_TOPOLOGY_SOURCES.md`): Cisco ACI
 APIC, Citrix ADC (NetScaler) and F5 BIG-IP become **topology sources** for path drawing (Trace / path analysis).
 neXus does **not** manage them and keeps **no inventory** of them. It reads only routing, interface address and VIP
 (virtual server -> pool / backend) tables, plus the ACI policy-based redirect (PBR) and service-graph definitions, so
@@ -24,7 +28,7 @@ that a computed path crosses the fabric redirect and the load balancers correctl
 | Document | Status | Effect of this design |
 | --- | --- | --- |
 | `LOAD_BALANCER_ARCHITECTURE_2026_11_05.md` | DRAFT - DO NOT FREEZE | Narrowed. Its L1 (enrolment, identity, HA, inventory, UCS / `ns.conf` backup), L2 (configuration plane, compliance catalog) and the 23 + 19 request rows F1-F23 / N1-N19 are **not** pursued. Its §6 path rules are the starting point of section 5 here, re-checked against sources. |
-| `ACI_SEGMENTATION_SUPPORT_DESIGN_2026_11_13.md` | DRAFT | Its capability 3 use (b), the redirect overlay for Trace, is delivered through this class. R0-R13 are trimmed in 3.1. Its use (a), zone and segment suggestions, and its capabilities 1 and 2 are unchanged and may later read the same stored data. Its `aci_fabric` / `aci_*` tables and `aci_read*` rights (§6.4-6.5) are replaced by the generic ones in section 2 if the PO accepts this design (contradiction X-2). |
+| `ACI_SEGMENTATION_SUPPORT_DESIGN_2026_11_13.md` | DRAFT | Its capability 3 use (b), the redirect overlay for Trace, is delivered through this class. R0-R13 are trimmed in 3.1. Its use (a), zone and segment suggestions, and its capabilities 1 and 2 are unchanged and may later read the same stored data. Its `aci_fabric` / `aci_*` tables and `aci_read*` rights (§6.4-6.5) are replaced by the generic ones in section 2 (Q1 decided 2026-11-14). |
 | `PATH_ANALYSIS_PHASE_B_ARCHITECTURE_2026_11_05.md` | DRAFT | B5 (load-balancer hops) takes its data from the topology source reads instead of LB L1/L2. Its semantics bullets are re-used with their sources. |
 | `PATH_ANALYSIS_DESIGN.md` | FROZEN | Unchanged: graph in memory (D-1), verdict lattice, ECMP bounds, return-path rule. New node kinds and hop types (section 5) need an amendment to it before implementation. |
 | `PATH_ANALYSIS_VENDOR_SEMANTICS.md` (A0) | FROZEN | Unchanged. Section 4 here is the A0-style input for a separate freeze of load-balancer and ACI PBR semantics. |
@@ -33,8 +37,8 @@ Contradictions found (reported, not reconciled; AGENTS.md "Authority hierarchy")
 
 | # | Finding | Handling here |
 | --- | --- | --- |
-| X-1 | D-9 ("which load balancers") is still **open** in the ratified 2026-11-03 record and in `PATH_ANALYSIS_DESIGN.md` §8; the LB architecture draft took "both vendors" from a cloud brief only. The 2026-11-14 decision names both vendors. | T0 records the 2026-11-14 decision and closes D-9 in the same record. |
-| X-2 | The ACI design proposes its own tables, rights and run states for the APIC. A second, generic set here would duplicate them. | One generic class (section 2) for all three kinds; the ACI design's §6.4-6.5 are superseded only if the PO accepts Q1. |
+| X-1 | D-9 ("which load balancers") is still **open** in the ratified 2026-11-03 record and in `PATH_ANALYSIS_DESIGN.md` §8; the LB architecture draft took "both vendors" from a cloud brief only. The 2026-11-14 decision names both vendors. Closed: the 2026-11-14 record closes D-9. |
+| X-2 | The ACI design proposes its own tables, rights and run states for the APIC. A second, generic set here would duplicate them. | One generic class (section 2) for all three kinds; Q1 decided 2026-11-14: the ACI design's §6.4-6.5 tables and rights are replaced by section 2. |
 | X-3 | The LB architecture draft keys every LB table on `device_id` (an enrolled device). A topology source is not a device. | Section 2.5 keys on `topology_source_id`. Nothing is added to `devices`. |
 
 Vocabulary: the brief's "NOT_DECIDED" maps to the path engine's existing overall verdict **`UNKNOWN` with a named
@@ -98,23 +102,27 @@ Kinds: `ACI_APIC`, `CITRIX_ADC`, `F5_BIGIP`. A new kind needs its own design and
 | `site` | operator-chosen site label (for example "DC1") | groups sources for Q3; masked |
 | endpoints | 1..3 `address:port` rows, ordered | APIC cluster members, or the two units of an LB HA pair. The first endpoint that answers serves the whole run; the run records which one by ordinal only |
 | `credential_reference_id` | reference into `credential_references` (V11) | the secret never leaves the credential store; no new secret table |
-| TLS trust | the existing `https_endpoint_cert_trust` (V112) pin per `address:port` | see 2.3 |
+| TLS trust | certificate chain validated against the bank CA (Q4 decided) | see 2.3 |
 | `scope` | kind-specific selectors: APIC tenants/VRFs (all by default), F5 partitions (`Common` by default), Citrix partitions (default partition only, 3.2) | narrows what is read; an unread scope makes hops `UNKNOWN (TOPOLOGY_SOURCE_SCOPE_NOT_READ)` |
-| `read_mode` | `MANUAL` or `SCHEDULED` (Q5) | |
+| `read_mode` | `SCHEDULED` (daily, 06:00 admission window) plus manual runs (Q5 decided) | |
+| `feature_confirmations` | per feature of 5.4a: `UNCONFIRMED` (default), `CONFIRMED_ABSENT`, `CONFIRMED_PRESENT`, with who recorded it and when | set by security_admin from the network team's answer (Q12); audited |
 | `enabled` | boolean | a disabled source keeps its last data, marked stale (2.6) |
 
 An LB HA pair is **one** source with two endpoints. Configuration objects read from whichever unit answers are taken as
 the pair's configuration; per-unit (non-floating) addresses are kept only for the unit that answered. Whether the two
 units' configurations are in sync is not read (that would be an HA/inventory read); every hop through a pair carries
-the caveat `LB_PAIR_SYNC_NOT_READ`. This is a deliberate trade-off against the "no inventory" decision (Q6).
+the caveat `LB_PAIR_SYNC_NOT_READ`. This is a deliberate trade-off against the "no inventory" decision (Q6 decided).
 
 ### 2.3 Transport, TLS trust and session
 
 - HTTPS from the worker that already runs device jobs, through `HttpsDeviceClient` (no redirects, same-host paths
   only). No browser-to-source path (AGENTS.md architectural invariant).
-- TLS: the V112 trust-on-first-use pin with `security_admin` authorization of the first fingerprint, `REFUSE` on a
-  mismatch by default. The 2026-09-21 Palo Alto "TLS verification disabled" decision does **not** extend to topology
-  sources. Verification against the bank CA instead of a pin is Q4.
+- TLS (Q4 decided): the server certificate chain is validated against the bank CA, which security_admin installs as
+  the topology-source trust anchor (the network team provides it before T3), and the certificate must name the
+  endpoint address or host used. Any failure refuses the connection before a credential is sent. Trust on first use
+  (the V112 pin) is not used for topology sources; this needs a CA-validating trust manager next to
+  `CertificatePinningTrustManager` (T2). The 2026-09-21 Palo Alto "TLS verification disabled" decision does **not**
+  extend to topology sources.
 - Session: one login per run, token or cookie in memory only, logout in a `finally` path, logins serialized per
   `address:port` (the Radware `oneAtATime` precedent). No token refresh: a run that outlives its token fails and is
   retried by the operator or the next schedule.
@@ -148,10 +156,11 @@ UNKNOWN in every new column. Every address- and name-bearing column is registere
 | `ts_aci_subnet` | BD, EPG and external-EPG subnets | VRF key, owner key (EPG / external EPG), canonical network block, gateway form, scope flags | - |
 | `ts_aci_redirect` | redirect statements (5.1) | VRF key, consumer and provider selector keys, filter entries (protocol, ports), direction, redirect destination addresses, hashing setting, threshold and down action, rendered state | PBR destination MACs (compared, never stored) |
 
-Names: an object name (virtual server, pool, tenant, EPG) is stored as a keyed hash (the existing HMAC key) for joins
-and, in one name-bearing column per table, as the raw name for the raw view; Q7 offers the stricter token-only form.
+Names (Q7 decided): an object name (virtual server, pool, tenant, EPG, contract) is stored only as a keyed hash (the
+existing HMAC key) for joins and as a masked display label (its pseudonym). Raw names are not stored, so no view,
+raw or masked, can show one.
 
-Retention: only the last COMPLETE read per class is kept, plus run records for 90 days (Q8). Deleting a source deletes
+Retention: only the last COMPLETE read per class is kept, plus run records for 90 days (Q8 decided). Deleting a source deletes
 its rows; the migration states it.
 
 ### 2.6 Read run, failure behaviour, freshness
@@ -163,7 +172,7 @@ its rows; the migration states it.
 - A class whose total count changes between pages is `INCONSISTENT`; previous data kept.
 - An attribute value outside the known vocabulary makes that object `UNKNOWN`, never the nearest value.
 - **Freshness**: every path hop built from a source carries the source's last COMPLETE read time. When it is older than
-  the threshold (proposal: 24 hours after a scheduled read was due, Q5), the hop is `UNKNOWN (TOPOLOGY_SOURCE_STALE)`
+  the threshold (24 hours after a scheduled read was due, Q5 decided), the hop is `UNKNOWN (TOPOLOGY_SOURCE_STALE)`
   and the last-known translation or redirect is still drawn as context, exactly like `STALE_OR_OUT_OF_SYNC_POLICY`.
   A source never read COMPLETE gives `UNKNOWN (TOPOLOGY_SOURCE_NOT_READ)`.
 - Rebuild: the topology fingerprint gains the source run ids, so the existing debounced auto rebuild
@@ -175,7 +184,7 @@ its rows; the migration states it.
 
 - aiview and every masked role see source labels as pseudonyms (new prefixes in the estate dictionary: `TSRC-` for a
   source, `VS-` virtual server, `POOL-`, `TEN-`, `VRF-`, `BD-`, `EPG-`, `EXT-`, `L3O-`, `CTR-`, `SGR-`, `PBR-`) and addresses through
-  `SubnetPreservingIpMasker`. Raw names and addresses only with the raw-view right.
+  `SubnetPreservingIpMasker`. Raw names are never stored (Q7); raw addresses only with the raw-view right.
 - The masking advice works by JSON key (`PrivacyMaskingResponseBodyAdvice`), so every new key gets its rule **in the same
   change** that exposes it. Until then the masked projection withholds source object lists and shows counts only
   (fail-closed, the LB architecture draft §8.3 rule).
@@ -189,7 +198,7 @@ its rows; the migration states it.
 | --- | --- | --- |
 | `topology_source_read` | security_admin, onboarding_admin, operation_admin, viewer; replay_viewer masked | registration, run state, counts; object lists masked per 2.7 |
 | `topology_source_manage` | security_admin | register, edit endpoints and scope, set credential reference, authorize TLS pin, enable / disable, delete |
-| `topology_source_run` | security_admin, onboarding_admin; replay_viewer only if the PO extends the 2026-10-04 CLASS_0 allowance (Q9) | start a read run now |
+| `topology_source_run` | security_admin, onboarding_admin, replay_viewer (aiview; masked, Q9 decided) | start a read run now |
 | path results | unchanged `path_analysis_read` | hop detail follows today's masking |
 
 ### 2.9 Audit
@@ -250,13 +259,14 @@ was checked against the model's containment (`containedBy`) on the same date.
 | A12 | `GET /api/class/vnsLDevCtx.json?rsp-subtree=full&rsp-subtree-class=vnsLIfCtx,vnsRsLIfCtxToSvcRedirectPol,vnsRsLIfCtxToBD,vnsRsLDevCtxToLDev&order-by=vnsLDevCtx.dn\|asc&page=<N>&page-size=500` | device selection: per connector, which redirect policy and BD | `dn`, `ctrctNameOrLbl`, `graphNameOrLbl`, `nodeNameOrLbl`; `vnsLIfCtx` `connNameOrLbl`; relation `tDn`s | pseudonyms | HIGH (MIM) |
 | A13 | `GET /api/class/vnsSvcRedirectPol.json?rsp-subtree=children&rsp-subtree-class=vnsRedirectDest&order-by=vnsSvcRedirectPol.dn\|asc&page=<N>&page-size=500` | PBR policies and destinations | `dn`, `hashingAlgorithm`, `resilientHashEnabled`, `thresholdEnable`, `thresholdDownAction`, `destType`; destination `ip`, `ip2` (`mac` compared in memory, never stored) | `PBR-` pseudonym, addresses masked | HIGH (MIM) |
 | A14 | `GET /api/class/vnsGraphInst.json?rsp-subtree=children&rsp-subtree-class=vnsNodeInst&order-by=vnsGraphInst.dn\|asc&page=<N>&page-size=500` | rendered graph instances | `dn`, `configSt` (`applied`, `applying`, `failed-to-apply`, `none`); node `dn`, `funcType`, `routingMode` | - | HIGH (MIM) |
+| A15 | `GET /api/class/fvESg.json?rsp-subtree-include=count` | whether endpoint security groups exist (count only; added after the PO answer to Q12, approved with the other exact literals after T3) | the count | - | HIGH (class: MIM; `count` option: APIC-REST) |
 
 Dropped from the ACI design's list: R1 `fvTenant` (the tenant is part of every `dn`) and R12 `vnsLDevVip` (the
 firewall is bound by PBR destination address, never by device object). Added for path drawing: A4, A6, A7 (fabric
-routing toward the firewalls). Kept out deliberately: endpoints (`fvCEp`, `fvIp`), endpoint security groups
-(`fvESg`, Q12), faults, events, health, audit logs, subscriptions, and the leaf runtime routing tables (`uribv4Route`,
+routing toward the firewalls). Added after the PO answers: A15 (count of endpoint security groups, 5.4a). Kept out
+deliberately: endpoints (`fvCEp`, `fvIp`), the contents of endpoint security groups, faults, events, health, audit logs, subscriptions, and the leaf runtime routing tables (`uribv4Route`,
 `uribv4Nexthop`: they exist in the model as non-configurable runtime classes, are per leaf and large, and are a later
-option under Q10).
+option to revisit after T9 under Q10).
 
 ### 3.2 Citrix ADC (NetScaler) NITRO API
 
@@ -352,7 +362,7 @@ does not establish stays UNKNOWN and becomes a reason code in 5.4.
 | F5-S3 | A SNAT pool's members are SNAT translation objects, each with an `address` | F5-API (`ltm snatpool`, `ltm snat-translation`) | HIGH | source set = those addresses |
 | F5-S4 | A pool setting can stop source translation that the virtual server enables ("Allow SNAT") | F5-K13590401 (search excerpt, via Phase B draft) | MEDIUM | `allowSnat` read if T3 finds it; else caveat `LB_POOL_SNAT_SETTING_NOT_READ` |
 | F5-S5 | An iRule can override the virtual server's source translation (`snat` command) | F5-IRULE-SNAT (search excerpt, via Phase B draft) | MEDIUM | covered by `LB_PROGRAMMABLE_LOGIC` |
-| F5-T1 | `translate-address` enabled / disabled; disabled is used to load balance "connections to any address" (no destination change); the tmsh default is stated as disabled | F5-TMSH-VS | HIGH | read per virtual server; disabled -> destination stays (`LB_NO_DESTINATION_TRANSLATION`) |
+| F5-T1 | `translate-address` enabled / disabled; disabled is used to load balance "connections to any address" (no destination change); the tmsh default is stated as disabled | F5-TMSH-VS | HIGH | read per virtual server; disabled -> destination stays (`LB_NO_DESTINATION_TRANSLATION`) and the hop is `UNKNOWN (LB_DSR_POSSIBLE)` (5.4a) |
 | F5-V1 | `vlans-enabled` limits the virtual server to the listed VLANs; `vlans-disabled` (the default) excludes them | F5-TMSH-VS | HIGH (that an empty disabled list means "all VLANs" is MEDIUM) | ingress VLAN check in 5.3 step 1 |
 | F5-V2 | Virtual-server types `ip-forward`, `l2-forward`, `reject` exist | F5-TMSH-VS | HIGH for existence; JSON field names UNKNOWN | `FORWARDING` -> the LB routes the packet (`LB_ROUTED`); `reject` -> `UNKNOWN` until its packet behaviour is frozen |
 | F5-R1 | A stand-alone SNAT object can pass traffic not destined for a virtual server | F5-K7820 | HIGH | traffic crossing a BIG-IP without a virtual-server match is `LB_ROUTED_TRAFFIC_SEMANTICS_UNKNOWN` (stand-alone SNATs are not read) |
@@ -364,7 +374,7 @@ does not establish stays UNKNOWN and becomes a reason code in 5.4.
 | Id | Claim | Source | Grade | Used as |
 | --- | --- | --- | --- | --- |
 | C-T1 | ADC-owned address types (14.1): `SNIP` (used to talk to servers and for the ADC's own packets), `VIP` (virtual server address), `NSIP`, `HostIP`, `GSLBsiteIP`, `CLIP`; default `SNIP`. `MIP` is not a 14.1 type | NITRO-REF `nsip` | HIGH (14.1); older-version types UNKNOWN | `LB_SNIP` attachments; `NSIP` / `CLIP` / `HostIP` never attach |
-| C-M1 | Virtual server redirection mode `m`: `IP` changes the destination IP to the server's; `MAC` changes only the destination MAC | NITRO-REF `lbvserver` | HIGH | `IP` -> member address; `MAC` -> destination unchanged (`LB_NO_DESTINATION_TRANSLATION`) and the return is not expected through the ADC (`LB_DSR_LIKE_MODE` caveat) |
+| C-M1 | Virtual server redirection mode `m`: `IP` changes the destination IP to the server's; `MAC` changes only the destination MAC | NITRO-REF `lbvserver` | HIGH | `IP` -> member address; `MAC` -> destination unchanged (`LB_NO_DESTINATION_TRANSLATION`) and the hop is `UNKNOWN (LB_DSR_POSSIBLE)` (5.4a) |
 | C-M2 | `ippattern` / `ipmask` make a wildcard virtual server, mutually exclusive with `ipv46` | NITRO-REF `lbvserver` | HIGH | candidate match by pattern and mask |
 | C-M3 | Precedence when a specific and a wildcard virtual server both match | not found | UNKNOWN | `LB_VS_MATCH_AMBIGUOUS` |
 | C-B1 | `backupvserver` receives requests if the primary is DOWN or at its spillover threshold | NITRO-REF `lbvserver` | HIGH | presence -> `LB_PROGRAMMABLE_LOGIC` (the member set depends on runtime state) |
@@ -436,6 +446,26 @@ loaded) or "via" (as recorded by an earlier draft, not re-read).
 
 ## 5. How Trace uses topology sources
 
+### 5.0 Next-hop principle (PO, 2026-11-14)
+
+"ACI may send traffic anywhere; the next hop comes from IP, routes and contracts." Every fabric next hop and every
+redirect target is **derived** from what the sources and the enrolled firewalls say about addresses, routes, contracts
+and service-graph / PBR policies:
+
+1. the flow's source and destination are classified by address into EPG / external-EPG selectors (A2, A3, A5);
+2. the contracts between those selectors (A3, A5, A8, A10) and their filter entries (A9) decide whether a subject
+   with an attached service graph (A8) matches the flow's protocol and ports;
+3. the graph's `Redirect` node (A11), its device-selection connector (A12), that connector's PBR policy and its
+   destination addresses (A13), and the rendered instance (A14) give the redirect target **address**;
+4. that address is resolved in the topology like any next hop: an enrolled firewall interface, a load-balancer
+   topology-source address, or nothing known (cloud). Without a matching redirect, the fabric forwards by its BD
+   subnets, external-EPG subnets and L3Out routes (A2, A5, A6, A7).
+
+No redirect target, firewall or next hop is ever taken from a configured, typed or uploaded list. A list the network
+team supplies (ACI design §9) is only a corroboration, recorded as `MATCH` / `MISMATCH` next to the derived hop. A
+target that resolves to no enrolled unit is drawn as a cloud hop and the branch is `UNKNOWN
+(FABRIC_REDIRECT_BINDING: MISSING)`; it is never replaced by a guessed firewall.
+
 ### 5.1 Graph additions
 
 | Kind | Built from | Attaches through | Notes |
@@ -443,7 +473,7 @@ loaded) or "via" (as recorded by an earlier draft, not re-read).
 | `LB_UNIT` (one per source and routing context) | `ts_address`, `ts_route` | `LB_SELF`, `LB_FLOATING`, `LB_SNIP` addresses, the same segment inference as firewall interfaces | stateful unit for the return-path check; management addresses never attach |
 | VIP attachment on `LB_UNIT` | `ts_virtual_server` destination | `/32` (or the virtual server's mask) on the LB node | a VIP inside a self / SNIP subnet joins that segment; otherwise it is reachable only by an upstream route to the LB (`VIP_REACHABILITY_UNPROVEN` caveat when none) |
 | `FABRIC_VRF` (one per ACI VRF) | `ts_aci_subnet`, L3Out interface addresses and static routes | BD gateway subnets (`ACI_BD_GATEWAY`), L3Out interface addresses (`ACI_L3OUT_IF`) | a routing node, **not** stateful unless a contract-enforcement model is added later; an unenforced VRF is noted |
-| redirect statements | `ts_aci_redirect` | bound to an enrolled firewall unit by PBR destination address | `MATCH` only when exactly one enrolled unit holds the address (ACI design §6.7); `AMBIGUOUS` / `MISSING` otherwise |
+| redirect statements | `ts_aci_redirect` (derived per 5.0) | resolved by PBR destination address to an enrolled firewall unit or a load-balancer source address | `MATCH` only when exactly one unit holds the address (ACI design §6.7); `AMBIGUOUS` / `MISSING` otherwise; never bound by name or list |
 
 Duplicate private prefixes are never auto-joined (unchanged rule); a source address equal to an enrolled firewall
 address is a conflict (`TOPOLOGY_SOURCE_ADDRESS_CONFLICT`), not a join.
@@ -456,7 +486,7 @@ address is a conflict (`TOPOLOGY_SOURCE_ADDRESS_CONFLICT`), not a join.
 | `LB_VIRTUAL_SERVER` | destination and L4 match a virtual server on an `LB_UNIT` | `ALLOWED` with caveat `LB_NOT_A_POLICY_ENFORCER`, or `UNKNOWN` with a reason from 5.4; NAT shape `LB_TRANSLATED` |
 | `LB_ROUTED` | the packet crosses an `LB_UNIT` without matching a virtual server | `UNKNOWN (LB_ROUTED_TRAFFIC_SEMANTICS_UNKNOWN)` until the vendor's handling of non-VIP traffic is frozen (4.2 / 4.3) |
 | `FABRIC_ROUTED` | the packet crosses a `FABRIC_VRF` by its configured subnets and routes | `ALLOWED` with caveats `FABRIC_CONFIG_DERIVED_ROUTING` and `FABRIC_CONTRACTS_NOT_EVALUATED` (an ACI contract is a permit list; it is not evaluated in this design) |
-| `FABRIC_REDIRECT` | a redirect statement matches source selector, destination selector and service | marker hop; the next hop is the bound firewall's interface on the redirect connector; caveat `FABRIC_REDIRECT_FROM_APIC_INTENT` |
+| `FABRIC_REDIRECT` | a redirect statement matches source selector, destination selector and service | marker hop; the next hop is the unit that holds the derived PBR destination address (5.0); caveat `FABRIC_REDIRECT_FROM_APIC_INTENT` |
 
 ### 5.3 Hop evaluation
 
@@ -478,17 +508,31 @@ address is a conflict (`TOPOLOGY_SOURCE_ADDRESS_CONFLICT`), not a join.
    a SNAT pool, several SNIPs). A set is carried as a set on the branch, never one chosen address. Mode unknown ->
    `UNKNOWN (LB_SOURCE_TRANSLATION_UNKNOWN)`.
 6. Route lookup in the LB context on the member address (configured routes only: `ROUTE_ACTIVE_UNKNOWN` is a caveat
-   here, not a taint, because every LB route is `CONFIG_DERIVED`; Q10 decides whether that is acceptable or whether LB
-   hops stay `UNKNOWN` until a runtime-table read is approved).
+   here, not a taint, because every LB route is `CONFIG_DERIVED`; accepted by Q10, decided 2026-11-14, revisited after
+   T9).
 
 **Fabric hop**: longest-prefix match in the VRF over BD subnets (deliver to the BD segment), external-EPG subnets and
 L3Out static routes (forward to the L3Out next hop, which binds to an enrolled firewall interface by address when one
 holds it). A prefix learned dynamically on an L3Out (BGP / OSPF) is not read: a destination covered only by an
 external-EPG subnet with no static route ends `UNKNOWN (FABRIC_DYNAMIC_ROUTE_NOT_READ)`.
 
-**Redirect**: applied before the fabric routing step, as in the ACI design §6.7: the redirect replaces the fabric
-segment with consumer connector -> bound firewall hop (normal policy evaluation with that interface's zone) -> provider
-connector -> destination.
+**Redirect**: applied before the fabric routing step, derived as in 5.0 (ACI design §6.7): the redirect replaces the
+fabric segment with consumer connector -> the unit holding the PBR destination address (a firewall: normal policy
+evaluation with that interface's zone; a load balancer: the LB hop above) -> provider connector -> destination.
+
+### 5.4a Features not yet confirmed absent (PO answer to Q12)
+
+Until the network team answers, each feature below is treated as possibly in use (PO, 2026-11-14), so every path it
+could affect is `UNKNOWN (TOPOLOGY_SOURCE_FEATURE_UNCONFIRMED: <feature>)`. Where a read can show the feature, the read
+decides per object; where none can, only a recorded team confirmation (`feature_confirmations`, 2.2) lifts the reason.
+
+| Feature | Detected by a read | Paths that are `UNKNOWN` until it is settled |
+| --- | --- | --- |
+| Endpoint security groups | A15 (count of `fvESg`); count 0 in a COMPLETE read settles absence | every `FABRIC_ROUTED` and `FABRIC_REDIRECT` hop of that fabric while the count is above 0 or not read (an ESG can reclassify endpoints and carry its own contracts, which are not read) |
+| Preferred group | `prefGrMemb` on EPGs and external EPGs (A3, A5) and on `vzAny` (A10) | fabric hops whose source or destination selector is a preferred-group member (`include` / `enabled`) |
+| Multi-site | no read proposed | every fabric hop of that fabric until the team confirms absence |
+| DSR (direct server return) | Citrix `m = MAC` (N4); F5 `translateAddress` disabled (F4) | each such virtual server's hop (`LB_DSR_POSSIBLE`); other virtual servers are not affected |
+| Citrix cluster (CLIP) | an address of type `CLIP` in a COMPLETE N1 read | every hop of that Citrix source (`LB_CLUSTER_MODE_NOT_MODELLED`); none found settles absence |
 
 ### 5.4 When a path becomes UNKNOWN (closed reason list)
 
@@ -508,13 +552,16 @@ verdict is `UNKNOWN` unless every branch is decided (frozen lattice, unchanged).
 | `FABRIC_DYNAMIC_ROUTE_NOT_READ` | destination reachable in the fabric only by a dynamically learned route |
 | `FABRIC_POLICY_NOT_MODELLED` | preferred group, intra-EPG contract, `vzAny` redirect corner cases, copy service, multi-site, endpoint security groups, L1 / L2 PBR destinations, a graph instance not `applied` |
 | `LB_MEMBER_ADDRESS_DYNAMIC` | a Citrix member defined by DNS name instead of an address (4.3 C-D1) |
+| `TOPOLOGY_SOURCE_FEATURE_UNCONFIRMED` | a feature of 5.4a is not settled for the path (feature named) |
+| `LB_DSR_POSSIBLE` | Citrix `m = MAC` or F5 `translateAddress` disabled: the reply may bypass the LB (designed asymmetry) |
+| `LB_CLUSTER_MODE_NOT_MODELLED` | the Citrix source has a cluster (`CLIP`) address |
 | `FABRIC_REDIRECT_BINDING` + `AMBIGUOUS` / `MISSING` | PBR destination held by several or no enrolled firewall |
 | `PBR_HASH_SYMMETRY_UNVERIFIED` | several redirect destinations; symmetric return to the same one is not proven (4.4) |
 | `PBR_DOWN_ACTION_PERMIT` / `PBR_DOWN_ACTION_BYPASS` | threshold tracking with a down action that skips the firewall (the path depends on runtime tracking state, which is not read) |
 | `TOPOLOGY_SOURCE_ADDRESS_CONFLICT` | a source address equals an enrolled firewall address |
 
 Caveats (a verdict carrying one is never plain, but they do not taint): `LB_NOT_A_POLICY_ENFORCER`,
-`LB_MEMBER_HEALTH_NOT_READ`, `LB_PAIR_SYNC_NOT_READ`, `LB_NO_DESTINATION_TRANSLATION`, `LB_DSR_LIKE_MODE`,
+`LB_MEMBER_HEALTH_NOT_READ`, `LB_PAIR_SYNC_NOT_READ`, `LB_NO_DESTINATION_TRANSLATION`,
 `LB_POOL_SNAT_SETTING_NOT_READ`, `LB_RETURN_DEPENDS_ON_SERVER_GATEWAY`, `VIP_REACHABILITY_UNPROVEN`,
 `FABRIC_CONFIG_DERIVED_ROUTING`, `FABRIC_CONTRACTS_NOT_EVALUATED`, `FABRIC_REDIRECT_FROM_APIC_INTENT`,
 `FABRIC_VRF_UNENFORCED`, `PBR_SYMMETRY_HARDWARE_NOT_READ`.
@@ -563,9 +610,9 @@ Each step is its own PR with targeted tests; network-facing steps stay `AUTOMATE
 
 | Step | Content | New reads | Depends on | Size (engineer-days) |
 | --- | --- | --- | --- | --- |
-| T0 | PO decision record (2026-11-14 decision, D-9 closed); PO answers to section 7; approval of the literal tables 3.1-3.3 **in principle** | none | PO | - |
+| T0 | **Done 2026-11-14**: `PO_DECISION_RECORD_2026_11_14_TOPOLOGY_SOURCES.md` (decision, D-9 closed, Q1-Q13 answered, literal tables approved in principle) | none | PO | - |
 | T1 | Vendor-semantics freeze (A0 style) for section 4: F5, Citrix, ACI PBR; amendment to `PATH_ANALYSIS_DESIGN.md` for node kinds, hop kinds and reasons | none | T0 | 3 |
-| T2 | Topology source registry: migration (dry-run BEGIN/ROLLBACK on the live database), RBAC actions, TLS pin reuse, credential reference, masking rules, CLI, screen (Fable), architecture tests `TS-1`, `TS-2` (empty literal set) | none | T0 | 5 |
+| T2 | Topology source registry: migration (dry-run BEGIN/ROLLBACK on the live database), RBAC actions, bank-CA TLS validation (new trust manager), credential reference, feature confirmations (5.4a), masking rules, CLI, screen (Fable), architecture tests `TS-1`, `TS-2` (empty literal set) | none | T0 | 5 |
 | T3 | Measurement record per kind: one PO-approved run of each literal against one PO-chosen source, sanitized counts and field-name presence only, committed next to the gate document | the approved literals, once | T0 approval of exact literals; T2 | 1 + team time |
 | T4 | F5 reader: gate rows (migration + fixture), read job, parsing to 2.5 tables, failure behaviour, masking tests | F5 rows | T3 | 4 |
 | T5 | Citrix reader, same shape | Citrix rows | T3 | 4 |
@@ -580,23 +627,26 @@ first. Total about 36 engineer-days plus PO and team time.
 Smallest valuable first step after T0-T2: **T5 or T4 for one LB pair in front of a known application**, because the
 VIP-to-member translation is the change most visible in today's Trace results.
 
-## 7. Questions for the PO
+## 7. Questions for the PO - answered 2026-11-14
 
-| # | Question | Recommendation |
-| --- | --- | --- |
-| Q1 | Accept one generic "topology source" class for all three kinds, replacing the ACI design's APIC-specific tables and rights (X-2)? | Yes |
-| Q2 | Credentials: will the network team create one dedicated read-only account per APIC cluster and per LB pair (APIC `read-all` in domain `all`; F5 Auditor; Citrix `read-only` command policy), and confirm the role can GET every listed object and nothing else? Password login first, APIC certificate login as later hardening? | Yes; password first |
-| Q3 | Which sources first: which APIC cluster(s), which LB pairs (a short list of PO-chosen pairs in front of known applications), which F5 partitions, Citrix partitions, route domains and traffic domains? | One APIC (the phase-2 fabric), two LB pairs (one per vendor) |
-| Q4 | TLS: pin on first use with security_admin authorization (as other HTTPS appliances), or verification against the bank CA? | Pin first; CA verification when the team confirms the certificates are CA-issued |
-| Q5 | Read frequency: manual only, or scheduled once a day inside an admission window plus manual? Staleness threshold 24 h after a missed scheduled read? | Daily in the 06:00 window plus manual; 24 h |
-| Q6 | LB HA pairs: read one unit (whichever answers) and carry `LB_PAIR_SYNC_NOT_READ`, or add one sync-status read per pair (a small inventory-like read)? | One unit, caveat |
-| Q7 | Object names (virtual servers, pools, tenants, EPGs): store raw names in redacted columns for the raw view, or keyed hash only (labels come from pseudonyms; raw view shows no name)? | Raw names in redacted columns |
-| Q8 | Retention: last COMPLETE read per class, run records 90 days? | Yes |
-| Q9 | May aiview start a topology-source read run (CLASS_0, masked), as for other CLASS_0 reads? | Yes, masked |
-| Q10 | LB and fabric routes are configuration (`CONFIG_DERIVED`), not runtime tables. Accept them as caveats on LB / fabric hops, or keep those hops `UNKNOWN` until runtime-table reads are approved? | Accept as caveats; revisit after T9 |
-| Q11 | Version facts: will the team state the APIC, BIG-IP and ADC software versions (needed to check class and attribute names), instead of neXus reading them? | Yes, team states them |
-| Q12 | Are endpoint security groups, preferred groups, multi-site or vzAny redirects in use on the fabric? Do any LBs run dynamic routing, DSR, or Citrix cluster (CLIP) mode? | Ask the team; each "yes" is an explicit `UNKNOWN` until modelled |
-| Q13 | Approve in principle the literal tables 3.1-3.3, so T3 measurement can be planned (each exact literal still comes back for approval at gate time)? | Yes |
+All answered; the record is `PO_DECISION_RECORD_2026_11_14_TOPOLOGY_SOURCES.md`. "PO" = PO answer, "PO session" =
+decision taken by the PO session and recorded as such.
+
+| # | Question | Decision | By |
+| --- | --- | --- | --- |
+| Q1 | One generic topology-source class replacing the ACI design's APIC-specific tables and rights (X-2) | Yes | PO session |
+| Q2 | Credentials | A separate read-only account per APIC cluster and per LB pair: APIC `read-all`, F5 Auditor, Citrix `read-only`; password first | PO |
+| Q3 | First sources | One APIC and one LB pair per vendor | PO |
+| Q4 | TLS trust | Validated against the bank CA (2.3) | PO |
+| Q5 | Read frequency, staleness | Daily in the 06:00 window plus manual; stale 24 h after a missed scheduled read | PO session |
+| Q6 | LB HA pairs | One unit per pair, caveat `LB_PAIR_SYNC_NOT_READ` | PO session |
+| Q7 | Object names | Keyed hash plus masked display label; raw names not stored (2.5) | PO session |
+| Q8 | Retention | Last COMPLETE read per class; run records 90 days | PO session |
+| Q9 | aiview read runs | Allowed, masked | PO session |
+| Q10 | Configuration-only routes | Accepted with a caveat; revisit after T9 | PO session |
+| Q11 | Software versions | Reported by the network team, not read | PO session |
+| Q12 | ESG, preferred group, multi-site, DSR, CLIP | Unknown; the PO asks the team. Treated as possibly in use: affected paths `UNKNOWN` until settled (5.4a) | PO |
+| Q13 | Literal tables 3.1-3.3 | Approved in principle ("Prensipte onay"); exact literals come back after T3. A15 was added after this answer and comes back with them | PO |
 
 ## 8. Acceptance criteria (for the contract that follows)
 
@@ -617,7 +667,8 @@ VIP-to-member translation is the change most visible in today's Trace results.
 - `TS-8` A return that skips an LB or firewall the forward path crossed (or the reverse) is `ASYMMETRIC` and never a
   clean `ALLOWED`; a one-direction redirect likewise.
 - `TS-9` A PBR destination held by zero or several enrolled firewalls is `MISSING` / `AMBIGUOUS`; never bound by name.
-- `TS-10` TLS mismatch refuses before any credential is sent; the token never leaves memory; logout runs on every
+- `TS-10` A certificate chain that does not validate against the bank CA, or does not name the endpoint, refuses the
+  connection before any credential is sent; the token never leaves memory; logout runs on every
   path.
 - `TS-11` Every screen action has a CLI equivalent with the same RBAC and masking.
 
