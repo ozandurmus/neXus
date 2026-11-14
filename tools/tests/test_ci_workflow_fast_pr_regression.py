@@ -25,12 +25,19 @@ from pathlib import Path
 import yaml
 
 WORKFLOW_PATH = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "validation.yml"
+CODEQL_WORKFLOW_PATH = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "codeql.yml"
+ACTION_SHA_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}$")
 
 FULL_SUITE_LINE = "run: python -m pytest -q -n auto --dist worksteal"
 
 
 def _read_workflow() -> str:
     return WORKFLOW_PATH.read_text(encoding="utf-8")
+
+
+def _workflow_triggers(data: dict) -> dict:
+    # PyYAML 1.1 compatibility parses bare `on:` as boolean True unless quoted.
+    return data.get("on") or data.get(True) or {}
 
 
 def test_workflow_yaml_parses():
@@ -47,7 +54,17 @@ def test_workflow_yaml_parses():
     # gov/po-*-only job (PO write-scope enforcement) -- added, not a
     # replacement for either existing job.
     # 2026-11-13: `integration` (real PostgreSQL 16 suite) gates the merge; see its own test below.
-    assert set(data.get("jobs", {})) == {"validate", "full-regression", "po-scope-check", "regression-scope", "scope-blocked", "targeted-regression", "integration"}
+    # 2026-11-14: `dependency-scan` scans lockfiles against security/baseline.yaml.
+    assert set(data.get("jobs", {})) == {
+        "validate",
+        "full-regression",
+        "po-scope-check",
+        "regression-scope",
+        "scope-blocked",
+        "targeted-regression",
+        "integration",
+        "dependency-scan",
+    }
 
 
 def _job_block(text: str, job_id: str) -> str:
@@ -61,28 +78,26 @@ def test_workflow_file_exists():
     assert WORKFLOW_PATH.is_file()
 
 
-def test_triggers_are_pull_request_and_workflow_dispatch_only():
-    """DEV.TEST.1 final topology (2026-09-06, Product Owner directed): no
-    `push` trigger at all. With `full-regression` withheld from automatic
-    triggers and `validate` restricted to pull_request, a push-to-main
-    event would match no job's `if:` condition and produce an empty,
-    zero-job workflow run -- removed rather than shipped that way."""
+def test_triggers_include_pull_request_push_to_main_and_workflow_dispatch():
+    """Validation runs on pull_request, push to main (post-merge validation,
+    2026-11-14 review finding), and manual workflow_dispatch."""
     text = _read_workflow()
     on_block = re.search(r"^on:\n(.*?)^permissions:", text, re.S | re.M)
     assert on_block, "no `on:` block found"
     on_text = on_block.group(1)
     assert "pull_request:" in on_text
+    assert "push:" in on_text
     assert "workflow_dispatch:" in on_text
-    assert "push:" not in on_text, (
-        "the workflow must not carry a `push:` trigger -- full-regression "
-        "no longer runs automatically on push-to-main, and validate is "
-        "pull_request-only, so a push event would schedule zero jobs"
-    )
+    data = yaml.safe_load(text)
+    triggers = _workflow_triggers(data)
+    assert "pull_request" in triggers
+    assert "workflow_dispatch" in triggers
+    assert triggers.get("push", {}).get("branches") == ["main"]
 
 
 def test_pr_job_does_not_invoke_full_suite():
     validate_block = _job_block(_read_workflow(), "validate")
-    assert "if: github.event_name == 'pull_request'" in validate_block
+    assert "if: github.event_name == 'pull_request' || github.event_name == 'push'" in validate_block
     full_suite_lines = [line.strip() for line in validate_block.splitlines() if line.strip() == FULL_SUITE_LINE]
     assert not full_suite_lines, (
         "the PR-triggered `validate` job must not run the unrestricted full "
@@ -155,7 +170,11 @@ def test_component_selections_are_explicit_and_separate():
 def test_full_regression_runs_for_major_prs_and_manual_dispatch():
     full_block = _job_block(_read_workflow(), "full-regression")
     assert "needs: regression-scope" in full_block
-    assert "if: always() && (github.event_name == 'workflow_dispatch' || needs.regression-scope.outputs.classification == 'full')" in full_block
+    assert (
+        "if: always() && (github.event_name == 'workflow_dispatch' || "
+        "github.event_name == 'push' || "
+        "needs.regression-scope.outputs.classification == 'full')"
+    ) in full_block
     full_suite_lines = [line.strip() for line in full_block.splitlines() if line.strip() == FULL_SUITE_LINE]
     assert full_suite_lines, (
         "the `full-regression` job must still run "
@@ -180,17 +199,84 @@ def test_pull_request_schedules_validate_and_conditionally_full_regression():
     text = _read_workflow()
     validate_block = _job_block(text, "validate")
     full_block = _job_block(text, "full-regression")
-    assert "if: github.event_name == 'pull_request'" in validate_block
+    assert "if: github.event_name == 'pull_request' || github.event_name == 'push'" in validate_block
     assert "needs.regression-scope.outputs.classification == 'full'" in full_block
     assert "if: github.event_name == 'workflow_dispatch'" not in validate_block
 
 
-def test_push_to_main_is_not_an_automatic_full_regression_trigger():
-    """No `push:` trigger exists; full-regression runs only on dispatch or
-    a PR whose scope output says to run."""
-    full_block = _job_block(_read_workflow(), "full-regression")
-    assert "github.event_name == 'push'" not in full_block
+def test_push_to_main_runs_validation_and_full_regression():
+    """Post-merge push to main triggers validate, dependency-scan and full-regression."""
+    text = _read_workflow()
+    validate_block = _job_block(text, "validate")
+    dep_block = _job_block(text, "dependency-scan")
+    full_block = _job_block(text, "full-regression")
+    assert "github.event_name == 'push'" in validate_block
+    assert "github.event_name == 'push'" in dep_block
+    assert "github.event_name == 'push'" in full_block
     assert "github.event_name == 'workflow_dispatch'" in full_block
+
+
+def test_dependency_scan_job_gates_high_and_critical_against_baseline():
+    dep_job = yaml.safe_load(_job_block(_read_workflow(), "dependency-scan"))
+    assert dep_job["runs-on"] == "ubuntu-latest"
+    assert dep_job["timeout-minutes"] <= 15
+    assert "pull_request" in dep_job["if"] and "push" in dep_job["if"]
+    trivy_step = next(s for s in dep_job["steps"] if "aquasecurity/trivy-action@" in s.get("uses", ""))
+    assert trivy_step["with"]["scan-type"] == "fs"
+    assert trivy_step["with"]["scanners"] == "vuln"
+    assert trivy_step["with"]["severity"] == "HIGH,CRITICAL"
+    assert trivy_step["with"]["format"] == "json"
+    assert trivy_step["with"]["exit-code"] == "0"
+    gate_step = next(s for s in dep_job["steps"] if "security_summary.py" in s.get("run", ""))
+    assert "--baseline security/baseline.yaml" in gate_step["run"]
+    assert trivy_step["with"]["output"] in gate_step["run"] or "trivy-reports" in gate_step["run"]
+
+
+def test_codeql_workflow_shape():
+    assert CODEQL_WORKFLOW_PATH.is_file()
+    raw = CODEQL_WORKFLOW_PATH.read_text(encoding="utf-8")
+    data = yaml.safe_load(raw)
+    assert isinstance(data, dict)
+    triggers = _workflow_triggers(data)
+    assert "pull_request" in triggers
+    assert triggers.get("push", {}).get("branches") == ["main"]
+    assert data.get("permissions") == {
+        "actions": "read",
+        "contents": "read",
+        "security-events": "write",
+    }
+    analyze = data["jobs"]["analyze"]
+    assert analyze["runs-on"] == "ubuntu-latest"
+    assert analyze["timeout-minutes"] <= 30
+    matrix = analyze["strategy"]["matrix"]["include"]
+    by_lang = {entry["language"]: entry for entry in matrix}
+    assert set(by_lang) == {"java-kotlin", "javascript-typescript"}
+    assert by_lang["javascript-typescript"]["build-mode"] == "none"
+    assert by_lang["java-kotlin"]["build-mode"] == "manual"
+    uses = [s["uses"] for s in analyze["steps"] if "uses" in s]
+    assert any(u.startswith("github/codeql-action/init@") for u in uses)
+    assert any(u.startswith("github/codeql-action/analyze@") for u in uses)
+    compile_steps = [s for s in analyze["steps"] if "gradlew" in s.get("run", "")]
+    assert len(compile_steps) == 1
+    assert "matrix.language == 'java-kotlin'" in compile_steps[0]["if"]
+    assert "-PfrontendPrebuilt=true testClasses" in compile_steps[0]["run"]
+
+
+def test_all_workflows_pin_actions_by_sha_and_use_no_secrets():
+    workflows_dir = WORKFLOW_PATH.parent
+    workflow_files = sorted(workflows_dir.glob("*.yml"))
+    assert {p.name for p in workflow_files} >= {"validation.yml", "codeql.yml"}
+    for wf_path in workflow_files:
+        text = wf_path.read_text(encoding="utf-8")
+        assert "secrets." not in text, f"{wf_path.name} must not require secrets"
+        doc = yaml.safe_load(text)
+        for job_name, job in doc.get("jobs", {}).items():
+            assert job.get("timeout-minutes", 10) <= 30, f"{wf_path.name}:{job_name} timeout too high"
+            for step in job.get("steps", []):
+                if "uses" in step:
+                    assert ACTION_SHA_RE.match(step["uses"]), (
+                        f"{wf_path.name}:{job_name} unpinned action: {step['uses']!r}"
+                    )
 
 
 def test_ci_uses_only_tooling_python_dependencies_and_java_regression():
