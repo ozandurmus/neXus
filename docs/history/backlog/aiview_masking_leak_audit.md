@@ -15,3 +15,5 @@ Title (full): Masking leak audit: compare aiview responses against the raw table
 Target (full): PO 2026-09-22 proposal (separate masked table read by aiview)
 
 2026-10-20: a first leak was found and fixed by the in-cluster e2e canary, not by this audit: the masked system-log view returned the Palo Alto serial field unmasked (fixed 2026-10-18; the masked view now runs serial, estate-dictionary and heuristic passes, rule set logmask-v3, fail closed with 503 SYSTEM_LOG_MASKING_UNAVAILABLE). The systematic audit of every aiview response against raw tables is still open.
+
+2026-11-14 backlog truth: still open (P1, size M). Today: No proof that masked views leak nothing; leaks were found by chance. Evidence: Only incident fixes (V53 pseudonyms, logmask-v3/v4); no systematic raw-vs-masked audit in tools/ or tests

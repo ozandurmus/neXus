@@ -7,3 +7,5 @@ Reported by the Product Owner: the Cluster VIP column reads empty for every Chec
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): Check Point cluster VIP (role=cluster_virtual) has never been observed anywhere in the fleet
+
+2026-11-14 backlog truth: DONE. Evidence: commit 5303f9e0 (ClusterXL VIPs over interactive shell); live: 26973 cluster_virtual address rows. Cluster VIPs are now collected and shown

@@ -7,3 +7,5 @@ status: planned · target: deploy/ui2/35-artefact-store-pvc.yaml; storage class 
 Title (full): The artefact/recovery store has no enforced quota: local-path ignores the PVC size, evidence and recovery planes share one directory tree, and the host also carries another product's production workload
 
 Target (full): deploy/ui2/35-artefact-store-pvc.yaml; storage class local-path; PO decision needed on storage class or filesystem quota
+
+2026-11-14 backlog truth: still open (P2, size M). Today: Backups can still fill the disk; retention (newest N, 30 days) is the only guard. Evidence: 35-artefact-store-pvc.yaml 400Gi default class; no quota code (only usable_bytes display); 2026-10-10 disk incident in CURRENT_STATE

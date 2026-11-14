@@ -9,3 +9,5 @@ Contract drafted 2026-09-20 under NXS-LOCAL-0347: docs/design/UI2_BACKUP_PLANE_S
 Title (full): Deliver the backup plane as the independent service the reviewed architecture specifies (own port, own vault volume, ui2-service forwards to it), then re-run the security review against the built system
 
 Target (full): docs/design/ASTRA_BACKUP_ENGINE_ARCHITECTURE_REVIEW.md; PO decision 2026-09-20 relay NXS-LOCAL-0347 seq 5
+
+2026-11-14 backlog truth: still open (P2, size L). Today: Backup vault and device credentials still live in worker/service processes. Evidence: Contract still DRAFT (UI2_BACKUP_PLANE_SEPARATION_CONTRACT.md); no backup deployment in deploy/ui2

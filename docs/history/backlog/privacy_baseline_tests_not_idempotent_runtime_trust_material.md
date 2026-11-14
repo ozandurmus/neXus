@@ -28,3 +28,5 @@ Fix direction (NOT applied -- reporting only, per task scope): the baseline comp
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): Pre-existing: full suite is not idempotent -- a first run creates gitignored data/.support_hmac.key, then AC6/AC1 privacy-baseline tests fail on the second run
+
+2026-11-14 backlog truth: OBSOLETE/SUPERSEDED. Python suite retired (PR 507, 509); no data/ tree or support_hmac key created by tools/tests; privacy lock fixture b027e635. Failure source no longer runs

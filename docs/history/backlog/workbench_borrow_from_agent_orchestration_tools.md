@@ -7,3 +7,5 @@ status: planned · target: GOV.ORCH.4 workbench successor
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): Workbench: borrow the features that make a fleet of agents followable
+
+2026-11-14 backlog truth: OBSOLETE/SUPERSEDED. Dispatch-fleet loop retired 2026-10-15 (PR #588); work runs as direct sessions plus argon_task.py. Fleet-watching workbench ideas no longer apply

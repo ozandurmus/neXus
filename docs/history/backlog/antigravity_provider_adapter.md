@@ -9,3 +9,5 @@ Measurement record 2 (installed SDK) resolves every open shape: import path is g
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): Antigravity as a third engineer provider: probe, contract, adapter
+
+2026-11-14 backlog truth: OBSOLETE/SUPERSEDED. PR #588 (Argon as worker/reviewer, Codex retired 2026-10-15); scripts/argon_task.py, consult_argon.py. Third-provider adapter for the retired worker roster is no longer wanted

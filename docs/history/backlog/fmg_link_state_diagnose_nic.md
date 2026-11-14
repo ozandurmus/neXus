@@ -9,3 +9,5 @@ status: in_progress · target:
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): FortiManager physical link state: diagnose hardware info nic per port (gate + read)
+
+2026-11-14 backlog truth: still open (P3, size S). Today: FortiManager physical link not knowable; label as configured state or accept. Evidence: V87-V89 probes measured; no link field in FortiManager 7.4 output; link stays UNKNOWN, UI shows configured state

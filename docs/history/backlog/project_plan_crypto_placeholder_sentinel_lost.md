@@ -24,3 +24,5 @@ So the sentinel-as-data proof depends on gitignored runtime state rather than on
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): Pre-existing: projectPlanData no longer carries __CRYPTO_JSON_PLACEHOLDER__ verbatim, test_project_plan_keeps_the_sentinel_token_as_data fails
+
+2026-11-14 backlog truth: OBSOLETE/SUPERSEDED. Test lives in history/tests (Python product archived, PR 507, 509); pytest.ini runs tools/tests only. Legacy Python render test no longer run

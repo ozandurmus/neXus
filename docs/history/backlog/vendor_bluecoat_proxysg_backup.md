@@ -7,3 +7,5 @@ Product Owner, 2026-09-22: ProxySG backup as P1. The Backbox trail supplied (302
 2026-09-22: measurement record written from the Backbox trail -- docs/design/VENDOR_BACKUP_MEASUREMENTS_2026_09_22.md (transport, sequence, artefact, secret risk, neXus fit). Prerequisites before this vendor's contract: Add-device vendor value + endpoint kind, a confirm (identity) capability, the vendor CHECK constraints (V16/V17 allow only check_point/palo_alto), and for HTTPS vendors the generic HTTPS client. Proposed order in the record.
 
 2026-09-22 PO: the device is ProxySG (appliance or virtual), not SSL Visibility; contract written from the SGOS CLI reference (show configuration / expanded), MEASURE FIRST on one appliance.
+
+2026-11-14 backlog truth: DONE. Evidence: commit 49bf5f49 (V82) via Management Center, ProxySgOutputs; live: 5 ProxySG devices, 41 backups in 7 days. ProxySG configuration backed up daily

@@ -7,3 +7,5 @@ Product Owner request 2026-09-14: the configuration screen (or its own menu entr
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): Device administrator accounts and their privileges, collected and shown per device
+
+2026-11-14 backlog truth: still open (P3, size M). Today: Operators cannot see who holds admin rights on each firewall without raw config. Evidence: No screen or API lists device admin accounts; ConfigurationProjection only withholds Users/AAA sections

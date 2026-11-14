@@ -9,3 +9,5 @@ status: in_progress · target: docs/design/HOST_A_REBUILD_RUNBOOK.md section 5
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): HOST-A rebuilt 2026-09-25: PO browser acceptance under aiview -- pseudonyms unchanged, CP+PAN collect decrypts credentials, an old backup opens, Cyber Controller backup completes
+
+2026-11-14 backlog truth: OBSOLETE/SUPERSEDED. HOST_A_REBUILD_RUNBOOK; HOST-A rebuilt 2026-09-25 and in daily use since; rdw_cc_config_backup now COMPLETED. Acceptance overtaken by 7 weeks of production use

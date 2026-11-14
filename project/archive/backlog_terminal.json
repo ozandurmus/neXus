@@ -180,6 +180,807 @@
       "priority": "P1",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "cp_cphaprob_peer_observation_corroboration",
+      "category": "Identity / additional validation",
+      "title": "Extract peer-member rows from cphaprob stat for...",
+      "status": "deferred",
+      "priority": "P3",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": "see docs/history/backlog/cp_cphaprob_peer_observation_corroboration.md"
+    },
+    {
+      "id": "pan_ha_serial_identity_hardening",
+      "category": "Identity / architecture",
+      "title": "PAN HA pair operational identity should consider serial",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": "see docs/history/backlog/pan_ha_serial_identity_hardening.md"
+    },
+    {
+      "id": "credential_profiles",
+      "category": "Architecture",
+      "title": "Credential profile / enterprise vault abstraction",
+      "status": "deferred",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": "see docs/history/backlog/credential_profiles.md"
+    },
+    {
+      "id": "pan_serial_representation_identity_evidence_closure",
+      "category": "Identity / architecture",
+      "title": "PAN HA runtime peer-serial representation mismatch on...",
+      "status": "deferred",
+      "priority": "P0",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": "see docs/history/backlog/pan_serial_representation_identity_evidence_closure.md"
+    },
+    {
+      "id": "pytest_xdist_privacy_scan_scratch_file_race",
+      "category": "Test infrastructure / hygiene",
+      "title": "tests/test_gov_po_3_ci_privacy_gate_baseline.py's...",
+      "status": "done",
+      "priority": "P3",
+      "target": "Closed 2026-11-14: done",
+      "note": "see docs/history/backlog/pytest_xdist_privacy_scan_scratch_file_race.md"
+    },
+    {
+      "id": "private_replay_agent_operated_test_environment",
+      "category": "Architecture / Testing / Security",
+      "title": "Private Replay -- agent-operated privacy-filtered test...",
+      "status": "deferred",
+      "priority": "P0",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": "see docs/history/backlog/private_replay_agent_operated_test_environment.md"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_01_skeleton_ci_docker",
+      "title": "UI2 B1-1 -- Gradle multi-module skeleton under ui2/",
+      "priority": "P1 -- UI 2.0",
+      "status": "done",
+      "note": "see docs/history/backlog/ui2_b1_01_skeleton_ci_docker.md",
+      "target": "Closed 2026-11-14: done"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_03_identity_sessions",
+      "title": "UI2 B1-3 -- identity & sessions (UnboundID LDAP bind",
+      "priority": "P1 -- UI 2.0",
+      "status": "done",
+      "note": "see docs/history/backlog/ui2_b1_03_identity_sessions.md",
+      "target": "Closed 2026-11-14: done"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_04_collection_engine_core",
+      "title": "UI2 B1-4 -- collection engine core (capability registry",
+      "priority": "P1 -- UI 2.0",
+      "status": "done",
+      "note": "see docs/history/backlog/ui2_b1_04_collection_engine_core.md",
+      "target": "Closed 2026-11-14: done"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_07_jobs_screen_run_now_read",
+      "title": "UI2 B1-7 -- Jobs screen + Run Now (read class) + step log",
+      "priority": "P1 -- UI 2.0",
+      "status": "done",
+      "note": "",
+      "target": "Closed 2026-11-14: done"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_08_audit_logs_screen",
+      "title": "UI2 B1-8 -- audit & logs screen (every mutation since...",
+      "priority": "P1 -- UI 2.0",
+      "status": "done",
+      "note": "",
+      "target": "Closed 2026-11-14: done"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_09_device_workspace_first_read_screen",
+      "title": "UI2 B1-9 -- device workspace: first read screen",
+      "priority": "P1 -- UI 2.0",
+      "status": "done",
+      "note": "",
+      "target": "Closed 2026-11-14: done"
+    },
+    {
+      "id": "pan_active_active_not_excluded_as_failover_unit",
+      "category": "safety",
+      "title": "PAN active/active is not excluded as a failover unit",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "project_plan_crypto_placeholder_sentinel_lost",
+      "category": "Test correctness / CI coverage gap",
+      "title": "Pre-existing: projectPlanData no longer carries...",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "privacy_baseline_tests_not_idempotent_runtime_trust_material",
+      "category": "Reliability / Test Infrastructure",
+      "title": "Pre-existing: full suite is not idempotent",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "ldap_tls_trust_store_pin_and_format",
+      "category": "security",
+      "title": "LDAP TLS trust store cannot be given a PIN or format",
+      "status": "deferred",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "auth_radius_mechanism",
+      "category": "security",
+      "title": "RADIUS authentication mechanism",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "auth_tacacs_mechanism",
+      "category": "security",
+      "title": "TACACS authentication mechanism",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "cp_failover_command_gate_batch",
+      "category": "evidence",
+      "title": "Command gate: cphaprob stat, cphaprob -a if",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "failover_peer_reciprocal_agreement_check",
+      "category": "safety",
+      "title": "Eighth stop-condition: both members must agree...",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "failover_vsx_vsls_mentality_contract",
+      "category": "evidence",
+      "title": "VSX/VSLS semantics: CP per-VS state independent of chassis",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "failover_recheck_on_request",
+      "category": "safety",
+      "title": "A failover request must re-run every readiness check at...",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "failover_readiness_check_contract",
+      "category": "failover",
+      "title": "Failover readiness contract carrying the PO's four semantics",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "cp_cphaprob_command_gate",
+      "category": "failover",
+      "title": "Command gate: cphaprob stat, -a if, tablestat",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "ui2_m3_design_transfer_pass",
+      "category": "ui2",
+      "title": "Reconcile each menu against the M3 canvas frames",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "c7_c2_contract_shape_guard",
+      "category": "governance",
+      "title": "Contract-shape guard for C7 §5.3 and C2 §6 admission...",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "relay_id_reuse_when_record_uncommitted",
+      "category": "governance",
+      "title": "local_relay _next_id reissues an id whose JSON was never...",
+      "status": "deferred",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "ui2_pan_transport_no_credentials_in_url",
+      "category": "security",
+      "title": "UI2 Palo Alto transport: no credential ever appears in a...",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "ui2_ssh_strict_host_key_trust_in_production",
+      "category": "Security / Deployment",
+      "title": "UI2 SSH host-key trust: on mismatch connect",
+      "status": "done",
+      "priority": "P0 -- production-blocking before production deployment",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "ui2_device_session_one_per_device",
+      "category": "evidence",
+      "title": "UI2 transport rule: one SSH session per device per run",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "discovery_failure_summary_stores_certificate_subject",
+      "category": "privacy",
+      "title": "A failed Palo Alto discovery stores the presented...",
+      "status": "deferred",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "orchestrator_worktree_lacks_frontend_dependencies",
+      "category": "tooling",
+      "title": "Orchestrator worktrees carry no frontend node_modules",
+      "status": "done",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "cp_cluster_vip_never_observed_in_fleet",
+      "category": "discovery",
+      "title": "Check Point cluster VIP (role=cluster_virtual) has never...",
+      "status": "done",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "cp_vsx_interfaces_identical_to_physical",
+      "category": "discovery",
+      "title": "Check Point VSX per-VS interface/route reads return the...",
+      "status": "done",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "cp_spark_exec_channel_rejected",
+      "category": "confirm",
+      "title": "Check Point Gaia Embedded/Quantum Spark: exec channel...",
+      "status": "done",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "vendor_radware_defensepro_backup",
+      "category": "collection",
+      "title": "Radware DefensePro: configuration backup (HTTPS)",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "vendor_panorama_backup",
+      "category": "collection",
+      "title": "Palo Alto Panorama: device-bundle export + running config",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "vendor_fortinet_fortigate_backup",
+      "category": "collection",
+      "title": "Fortinet FortiGate: full configuration backup over SSH incl",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "vendor_cisco_asa_backup",
+      "category": "collection",
+      "title": "Cisco ASA: running/startup config + native backup tar...",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "vendor_bluecoat_proxysg_backup",
+      "category": "collection",
+      "title": "Blue Coat / Symantec ProxySG: configuration backup",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "cp_backup_sftp_fetch_failed_on_cluster_member",
+      "category": "ui2",
+      "title": "PARKED (PO 2026-09-22 'bu dursun kenarda')",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "platform_identity_facts_on_configuration",
+      "category": "ui2",
+      "title": "PO 2026-09-22 'kesinlikle': serial number, software...",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "cluster_diff_member_specific_tuning",
+      "category": "ui2",
+      "title": "Cluster DIFF: 38 of 39 clusters show member differences",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "cp_platform_facts_empty_on_nine_gateways",
+      "category": "inventory",
+      "title": "Check Point platform facts: 9 of 62 gateways have a...",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "cp_backup_free_space_parse_refusal",
+      "category": "backup",
+      "title": "Check Point backup refused on 7 gateways (2026-09-22)",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "m3_design_alignment_review",
+      "category": "ui2",
+      "title": "Compare the live UI with the PO's Material 3 design...",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "version_advisory_exposure",
+      "category": "ui2",
+      "title": "Security advisories and critical bugs for the versions...",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "hosta_rebuild_real_env_acceptance",
+      "category": "ui2",
+      "title": "HOST-A rebuilt 2026-09-25: PO browser acceptance under...",
+      "status": "deferred",
+      "priority": "P0",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "cp_backup_empty_status_poll_loop",
+      "category": "backup",
+      "title": "Check Point backup polls an empty 'show backup status'...",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "radware_defensepro_getcfg_measurement",
+      "category": "backup",
+      "title": "Measure DefensePro backup through the Cyber Controller",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "backup_remaining_vendors",
+      "category": "backup",
+      "title": "Backup for the remaining contracted vendors: FortiGate",
+      "status": "done",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "run_build_sets_configuration_image",
+      "category": "ui2",
+      "title": "run_build.sh does not set the ui2-configuration image",
+      "status": "done",
+      "priority": "P3",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "cyber_controller_known_hosts_after_hosta_rebuild",
+      "category": "operations",
+      "title": "Cyber Controller SFTP push to HOST-A fails after the...",
+      "status": "done",
+      "priority": "P0",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "infoblox_member_facts",
+      "category": "collection",
+      "title": "Infoblox: make the grid member list meaningful",
+      "status": "done",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "cp_management_server_collect_duration",
+      "category": "collection",
+      "title": "Check Point management server Collect took 243 s: vsx stat",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "ui_device_workspace_and_overview",
+      "category": "ui",
+      "title": "UI: one device screen, one count vocabulary",
+      "status": "done",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "asa_fortinet_configuration_plane",
+      "category": "vendor",
+      "title": "Configuration plane for Cisco ASA and FortiGate (sections",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "tufin_access_query_tab",
+      "category": "UI 2.0 (Java product line)",
+      "title": "Policy > Access query sub-tab backed by Tufin...",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "network_topology_path_analysis",
+      "category": "UI 2.0 (Java product line)",
+      "title": "Own L3 topology + path analysis (switches/routers",
+      "status": "deferred",
+      "priority": "P3",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "transcript_per_run_listing",
+      "category": "UI 2.0 (Java product line)",
+      "title": "Jobs/Backups/Policy: list every run separately with type",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "release_snapshot_preview_acceptance",
+      "category": "engineering",
+      "title": "Release snapshots and isolated pre-merge masked preview...",
+      "status": "done",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "cp_aiview_readiness_script_client_error",
+      "category": "diagnostics",
+      "title": "CP aiview readiness script client error",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "aiview_masking_manufactures_names_from_any_string",
+      "category": "privacy",
+      "title": "The AIView pseudonymizer turns any non-blank string into...",
+      "status": "done",
+      "priority": "P0",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "shipq2_docs_only_fix",
+      "category": "tooling",
+      "title": "shipq2: a docs-only fast-path ship counts as shipped",
+      "status": "done",
+      "priority": "P2",
+      "target": "Closed 2026-11-13: done",
+      "note": ""
+    },
+    {
+      "id": "ui2_auth_placement_second_authenticated_surface",
+      "category": "identity",
+      "title": "UI2 AUTH-PLACEMENT: where session and RBAC enforcement...",
+      "status": "deferred",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "ui2_reproducible_in_cluster_image_build",
+      "category": "Supply Chain / Validation",
+      "title": "UI2 reproducible in-cluster image build and release...",
+      "status": "deferred",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "pan_collection_contract_from_measurement",
+      "category": "collection",
+      "title": "Write PAN collection contract from the measurement run",
+      "status": "deferred",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "antigravity_provider_adapter",
+      "category": "governance",
+      "title": "Antigravity as a third engineer provider: probe, contract",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "gov_orch_budget_ceiling_not_persisted_or_enforced",
+      "category": "governance",
+      "title": "The dispatch budget ceiling is neither recorded nor...",
+      "status": "deferred",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "gov_orch_turn_counter_blind_to_codex_stream",
+      "category": "governance",
+      "title": "The turn counter reads one turn for a whole...",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "workbench_borrow_from_agent_orchestration_tools",
+      "category": "governance",
+      "title": "Workbench: borrow the features that make a fleet of...",
+      "status": "deferred",
+      "priority": "P3",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "ui2_service_cannot_bootstrap_an_empty_database",
+      "category": "UI 2.0 (Java product line)",
+      "title": "The service cannot start against an empty database",
+      "status": "done",
+      "priority": "P0",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "job_failure_reason_is_never_recorded",
+      "category": "evidence",
+      "title": "A FAILED job records no reason: outcome, terminal_reason...",
+      "status": "done",
+      "priority": "P0",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "ui2_role_display",
+      "category": "UX",
+      "title": "Connected user and role display",
+      "status": "done",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "ui2_select_all",
+      "category": "UX",
+      "title": "Select All checkbox in discovery candidate table",
+      "status": "done",
+      "priority": "P3",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "ui2_ldap_config",
+      "category": "Identity",
+      "title": "LDAP Configuration Screen",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "ui2_audit_logging",
+      "category": "Governance",
+      "title": "Audit logging for device and user management",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "ui2_microservices_deployment_split",
+      "category": "Architecture",
+      "title": "Split K3s deployment into true independent microservices",
+      "status": "done",
+      "priority": "P0",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "ui2_private_play_and_mockup_view",
+      "category": "UI",
+      "title": "Private Play & Mockup View integration",
+      "status": "deferred",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "failover_p0_closure_set",
+      "category": "failover",
+      "title": "Failover plan implementation landed; integration gate",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "failover_phase_d_has_no_build_record",
+      "category": "failover",
+      "title": "Failover Engine Phase D was implemented and externally...",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "failover_pilot_fence_is_compiled_in",
+      "category": "failover",
+      "title": "Failover pilot allowlist is hardcoded in a constructor",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "discovery_lateral_join_drops_cluster_members",
+      "category": "discovery",
+      "title": "Device display falls back to the management IP for every...",
+      "status": "done",
+      "priority": "P0",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "cluster_member_model_needs_second_query",
+      "category": "discovery",
+      "title": "Cluster members carry no hardware field in the gateway...",
+      "status": "deferred",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "ui2_inventory_and_configuration_design_language",
+      "category": "ui",
+      "title": "Apply the inventory and configuration design language",
+      "status": "deferred",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "inventory_row_does_not_say_why_a_device_is_unconfirmed",
+      "category": "ui",
+      "title": "The inventory row shows Registered, not confirmed...",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "top_app_bar_search_is_not_an_input",
+      "category": "ui",
+      "title": "The top app bar search is a styled box containing static...",
+      "status": "done",
+      "priority": "P1",
+      "target": "Closed 2026-11-14: done",
+      "note": ""
+    },
+    {
+      "id": "regression_mapping_backend_trees_unmapped",
+      "category": "ci",
+      "title": "The regression mapping still leaves the backend trees...",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
+    },
+    {
+      "id": "pan_tls_trust_rejects_corporate_ca",
+      "category": "discovery",
+      "title": "Palo Alto discovery cannot reach a Panorama fronted by a...",
+      "status": "deferred",
+      "priority": "P0",
+      "target": "Closed 2026-11-14: obsolete/superseded",
+      "note": ""
     }
   ]
 }

@@ -13,3 +13,5 @@ Overview done (estate map, Fable spec). Next: merge Devices and Config into one 
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): UI: one device screen, one count vocabulary, executive Overview (5 facts)
+
+2026-11-14 backlog truth: DONE. Evidence: 9bb87649 one device screen (Config tab), 1b5fe24b exec Overview, PR 623 one device count, PR 627, PR 850 attention list. Single device screen and five-fact Overview are live

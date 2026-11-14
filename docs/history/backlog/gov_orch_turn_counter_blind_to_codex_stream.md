@@ -11,3 +11,5 @@ The ledger's first two default-provider rows (NXS-LOCAL-0168, NXS-LOCAL-0180) ea
 Title (full): The turn counter reads one turn for a whole multi-million-token default-provider dispatch
 
 Target (full): GOV.ORCH.4 section 3.1; scripts/orchestrator_usage.py
+
+2026-11-14 backlog truth: OBSOLETE/SUPERSEDED. Codex retired (PR #588); orchestrator_usage.py keeps turns=None (unknown) when no usage stream. Defect was specific to the retired Codex stream

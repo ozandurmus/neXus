@@ -3,3 +3,5 @@
 status: planned · target: REPORTS_R2_CONTRACT.md
 
 2026-11-10 (plan refresh): Reports R1 is real-environment validated (2026-11-05). REPORTS_R2_CONTRACT.md (schedules, delivery, five new reports) is DRAFT and says do not implement until FROZEN; the engineer decisions D1-D4 of 2026-11-05 are in PO_SESSION_HANDOVER_2026_11_05.md section 6. Next: freeze, then build.
+
+2026-11-14 backlog truth: still open (P2, size L). Today: Schedules, delivery and five new reports not started. Evidence: REPORTS_R2_CONTRACT.md status DRAFT; R1 validated 11-05; no R2 PRs

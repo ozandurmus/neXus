@@ -9,3 +9,5 @@ Measured against two real management-plane exports supplied by the Product Owner
 Title (full): Check Point discovery never records the management plane's own connection state: the adapter passes an empty optional although the enumeration response carries it
 
 Target (full): MgmtCliEnumerationAdapter candidate construction; discovery_candidate.connection_state
+
+2026-11-14 backlog truth: still open (P3, size S). Today: Management-plane connection state is not shown for Check Point candidates. Evidence: MgmtCliEnumerationAdapter.java:285 passes Optional.empty(); live: 0 of ~5600 CP candidates have connection_state

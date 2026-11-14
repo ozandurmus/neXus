@@ -9,3 +9,5 @@ PO 2026-09-23: moved to the front as the control step after the UI refresh deplo
 Title (full): Cluster DIFF: 38 of 39 clusters show member differences (264 settings); find the settings that are per-member by nature (e.g. PAN HA device priority, CP per-NIC settings) and exempt them in both the browser and the Java projection
 
 Target (full): Overview contract; configurationProjection.ts + ConfigurationProjection.java parity
+
+2026-11-14 backlog truth: DONE. Evidence: commits abc7ba29, 3d091984; ConfigurationProjection CP_MEMBER_SPECIFIC/PAN_MEMBER_SPECIFIC. Per-member settings no longer count as cluster differences

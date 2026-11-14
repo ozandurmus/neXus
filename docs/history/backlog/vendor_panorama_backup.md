@@ -11,3 +11,5 @@ Product Owner, 2026-09-22: add as P1 with the Backbox trail as the measured refe
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): Palo Alto Panorama: device-bundle export + running config (HTTPS + SSH)
+
+2026-11-14 backlog truth: DONE. Evidence: commit 4990b7e9 (V83) PaloAltoBackupExecutor.executePanoramaBackup; live: 2 Panorama backed up in 7 days. Panorama backup and inventory run daily

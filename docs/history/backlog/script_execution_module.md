@@ -11,3 +11,5 @@ PO 2026-09-23 order: backup for the other vendors first, then Script Execution, 
 Title (full): Script Execution: operator scripts (.sh/.py/.jar or inline) on a cron schedule in an isolated runner; report on Jobs, notify via syslog/SMTP relay
 
 Target (full): PO decision record 2026-09-22 (automation editor and script execution); contract SCRIPT_EXECUTION_CONTRACT.md to write first
+
+2026-11-14 backlog truth: still open (P2, size L). Today: Operator scripts cannot be scheduled in product; PO order put other work first. Evidence: SCRIPT_EXECUTION_CONTRACT.md exists; no script runner pod/migration/code in ui2

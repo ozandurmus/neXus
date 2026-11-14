@@ -7,3 +7,5 @@ _next_id globs relay/*.json only. A movement whose relay JSON is never committed
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): local_relay _next_id reissues an id whose JSON was never committed
+
+2026-11-14 backlog truth: OBSOLETE/SUPERSEDED. relay/ unused since 2026-09-26; work ships via PRs (PR 450); Codex retired 2026-10-15. Relay ids no longer issued

@@ -9,3 +9,5 @@ Measured on the live deployment 2026-09-20 after a fresh discovery run. Every me
 Title (full): Cluster membership is known at discovery but does not reach enrolled devices: 48 member candidates carry a cluster reference while only 6 device rows do, and no ENROLLED device has one
 
 Target (full): enrollment/confirm path writing devices.cluster_member_ref
+
+2026-11-14 backlog truth: still open (P3, size S). Today: Display works via read-time join; CP stored ref missing so other readers may miss clusters. Evidence: Live: devices.cluster_member_ref set on 44 of 136 (PAN 34, ASA 10) but 0 of 59 Check Point gateways

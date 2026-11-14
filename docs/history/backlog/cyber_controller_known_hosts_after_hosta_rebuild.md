@@ -7,3 +7,5 @@ status: in_progress · target: docs/design/HOST_A_REBUILD_RUNBOOK.md
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): Cyber Controller SFTP push to HOST-A fails after the reinstall: stale known_hosts entry on the controller disables password auth; clear it (case with Radware) or switch the receiver address spelling; then delete leftover backup nexus-4ae0578d8cd2c6c4 and re-run Backup Now
+
+2026-11-14 backlog truth: DONE. Evidence: Receiver restored 0233b42e (09-28), cleanup 91e7275d; live: management-server radware device has backups to 11-13, 4 DefensePro too. Controller backup completes again

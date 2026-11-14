@@ -1,6 +1,6 @@
 # UI2 B1-4 -- collection engine core (capability registry, step executor with C2 crash-safe job record, parser framework, evidence writer; SSH exec transport only; PAN XML API / SFTP as interfaces)
 
-status: in_progress · target: workflow §5 B1-4
+status: done · target: workflow §5 B1-4
 
 2026-09-12: IN_PROGRESS, contract-written only. docs/design/UI2_0_B1_04_COLLECTION_ENGINE_CORE_CONTRACT.md is FROZEN (2026-09-12); no implementation exists. B1-1 draft citations repointed to B1-1a.
 
@@ -11,3 +11,5 @@ Sonnet 5 extended (high).
 ## 2026-10-17 -- project JSON compacted (size budget)
 
 Title (full): UI2 B1-4 -- collection engine core (capability registry, step executor with C2 crash-safe job record, parser framework, evidence writer; SSH exec transport only; PAN XML API / SFTP as interfaces)
+
+2026-11-14 backlog truth: DONE. Evidence: 7215379b collection engine core; ui2/job-engine, ui2/capability-registry (StepExecutor, JobReconciler). Engine runs all collection jobs

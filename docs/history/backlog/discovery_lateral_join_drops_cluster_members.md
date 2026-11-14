@@ -9,3 +9,5 @@ Measured on the live deployment 2026-09-20. The lateral join onto discovery_cand
 Title (full): Device display falls back to the management IP for every cluster member: the discovery lateral join excludes any candidate that has a parent, so name, model and cluster reference are all lost
 
 Target (full): JooqDeviceRepository DEVICE_SELECT lateral join; regression from 9f46cc0 (NXS-LOCAL-0346)
+
+2026-11-14 backlog truth: DONE. Evidence: PR #434 (62127c2a): JooqDeviceRepository lateral join orders by (parent_candidate_id is null) desc. Cluster members show names and model again

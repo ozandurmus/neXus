@@ -7,3 +7,5 @@ status: planned · target: PO rule 2026-09-12; CP discovery already obeys it (CP
 Title (full): UI2 transport rule: one SSH session per device per run, a channel per command; a probe never opens a second session
 
 Target (full): PO rule 2026-09-12; CP discovery already obeys it (CP_AND_VSX_DISCOVERY_CONTRACT.md T-1); collection transports must too
+
+2026-11-14 backlog truth: DONE. Evidence: PR 573 one active job per device, PR 670 CP one shell; Inventory/Backup executors one session; CpSystemLogCollectJobExecutorTest connects==1. One SSH session per device per run is enforced
