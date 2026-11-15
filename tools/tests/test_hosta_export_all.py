@@ -66,3 +66,47 @@ def test_only_the_named_build_secrets_are_exported_and_a_missing_one_only_warns(
     assert "build-reg" not in calls and "build-tok" not in calls
     assert "SECRETVALUE" not in r.stdout + r.stderr
     assert re.search(r"2 secrets \(\s*1 from ui2-build\)", r.stdout)
+
+
+# --- platform backup script, recovery design step S1 (section 7.1) ---
+PB_SCRIPT = Path(__file__).resolve().parents[2] / "deploy" / "hosta" / "nexus-platform-backup.sh"
+PB_TEXT = PB_SCRIPT.read_text(encoding="utf-8")
+PB_SECRETS = ["ui2-db", "ui2-credential-store-key", "ui2-role-binding-key", "ui2-artefact-store-key",
+              "ui2-hostname-fingerprint-key", "ui2-privacy-hmac-key"]
+
+
+def test_pb_script_is_valid_bash():
+    subprocess.run(["bash", "-n", str(PB_SCRIPT)], check=True)
+
+
+def test_pb_fail_closed_and_private_work_dir():
+    assert "set -euo pipefail" in PB_TEXT and "umask 077" in PB_TEXT
+    assert "trap 'rm -rf \"$W\"' EXIT" in PB_TEXT
+
+
+def test_pb_globals_dump_included():
+    assert "pg_dumpall" in PB_TEXT and "--globals-only" in PB_TEXT
+
+
+def test_pb_dump_verified_before_encryption():
+    assert PB_TEXT.index("pg_restore --list") < PB_TEXT.index("age -R")
+    assert "TABLE DATA" in PB_TEXT and "exit 1" in PB_TEXT
+
+
+def test_pb_all_six_secrets_exported_inside_the_archive():
+    for name in PB_SECRETS:
+        assert name in PB_TEXT
+    assert '"$W/secrets' in PB_TEXT
+
+
+def test_pb_ssh_host_keys_and_k3s_manifests_included():
+    assert "/etc/ssh/ssh_host_" in PB_TEXT
+    assert '"$K3S/manifests"' in PB_TEXT
+
+
+def test_pb_only_recipients_file_never_an_identity_and_no_secret_echo():
+    assert "/etc/nexus/backup/age-recipient.txt" in PB_TEXT
+    assert not re.search(r"age\s+(-d|--decrypt)|-i\s+\S*identity|age-identity", PB_TEXT)
+    for line in PB_TEXT.splitlines():
+        if line.lstrip().startswith("echo") and "backup aborted" not in line:
+            assert "secret" not in line.lower() or "$S" not in line

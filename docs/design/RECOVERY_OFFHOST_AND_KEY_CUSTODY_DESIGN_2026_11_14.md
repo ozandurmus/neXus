@@ -28,6 +28,15 @@ The Product Owner decided on 2026-11-14 (`PO_DECISION_RECORD_2026_11_14_EVENING_
   store, platform backup identity, failover and schedule keys) are held in CyberArk, neXus fetches a key when it needs
   it, and nothing is kept on HOST-A. Device credentials also move to CyberArk.
 
+**Step 1 built (2026-11-16, code only, not deployed):** the PO amendment leaves steps S1.1 to S1.4 and S1.7 of section
+7.1 untouched by the "no off-host" decision, since they make the on-host archive self-sufficient (G3, G5): globals dump,
+pre-encryption dump verification, explicit export of the six ui2 Secrets, SSH host keys and k3s `server/manifests`, with
+a static test (`tools/tests/test_hosta_export_all.py`). Not in step 1: S1.5 (signed manifest needs the S2.2
+signing key, part of the dropped off-host chain), S1.6 (`OnFailure=` alert and kubeconfig change are host-side), S7.2
+(K3 re-wrap entry point; the CyberArk custody design may replace it). The archive format only gains members; older
+archives stay readable and the age recipient file is unchanged. Rolling the script to HOST-A needs a PO-authorized
+host step.
+
 What remains useful here: the inventory of what exists (section 1), the key list and today's custody gaps (section 4),
 and restore testing (section 6), now against HOST-A only. Backlog: `cyberark_archive_key_custody` (P1) and
 `cyberark_device_credentials` (P2); `recovery_offhost_key_custody` is closed as superseded. The rest of this document
