@@ -49,6 +49,11 @@ class SupportBundleServiceTest {
         when(devices.find("dev-cp")).thenReturn(Optional.of(device("gateway", "check_point")));
         when(devices.find("dev-pan")).thenReturn(Optional.of(device("firewall", "palo_alto")));
         when(devices.find("dev-mds")).thenReturn(Optional.of(device("management_server", "check_point")));
+        when(devices.find("dev-pan-gw")).thenReturn(Optional.of(device("gateway", "palo_alto")));
+        when(devices.find("dev-panorama")).thenReturn(Optional.of(device("management_server", "palo_alto")));
+        when(devices.find("dev-other")).thenReturn(Optional.of(device("gateway", "infoblox")));
+        when(devices.find("dev-asa")).thenReturn(Optional.of(device("gateway", "cisco_asa")));
+        when(devices.find("dev-fgt")).thenReturn(Optional.of(device("gateway", "fortinet")));
         when(admission.submit(anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new AdmissionResult.Admitted("job-1"));
         service = new SupportBundleService(devices, admission, store, Clock.fixed(NIGHT, ZoneOffset.UTC),
@@ -98,13 +103,37 @@ class SupportBundleServiceTest {
         refused(ask("dev-cp", List.of("cp_gaia_extras"), Optional.empty(), "short"), 400, "REASON_REQUIRED");
         refused(service.request("dev-cp", List.of("cp_gaia_extras"), Optional.empty(), "bad ref!", "TAC case preparation", "A"), 400, "INVALID_CASE_REF");
         refused(ask("nope", List.of("cp_gaia_extras"), Optional.empty(), "TAC case preparation"), 404, "DEVICE_NOT_FOUND");
-        refused(ask("dev-pan", List.of("pan_tsf"), Optional.empty(), "TAC case preparation"), 409, "VENDOR_NOT_YET_ENABLED");
+        refused(ask("dev-pan", List.of("pan_tsf"), Optional.empty(), "TAC case preparation"), 409, "ROLE_UNRECOGNISED");
+        refused(ask("dev-other", List.of("pan_tsf"), Optional.empty(), "TAC case preparation"), 409, "VENDOR_NOT_YET_ENABLED");
+        refused(ask("dev-asa", List.of("asa_show_tech"), Optional.empty(), "TAC case preparation"), 409, "VENDOR_NOT_YET_ENABLED");
         refused(ask("dev-mds", List.of("cp_gaia_extras"), Optional.empty(), "TAC case preparation"), 409, "PLATFORM_NOT_YET_ENABLED");
         refused(ask("dev-cp", List.of("cp_cpinfo"), Optional.empty(), "TAC case preparation"), 409, "KIND_NOT_AVAILABLE");
         refused(ask("dev-cp", List.of("rm -rf"), Optional.empty(), "TAC case preparation"), 400, "INVALID_KIND");
         refused(ask("dev-cp", List.of(), Optional.empty(), "TAC case preparation"), 400, "NO_ITEMS");
         verify(store, never()).insert(any(), any());
         verify(admission, never()).submit(anyString(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void eachVendorIsAdmittedAsItsOwnJobWithItsOwnPlatformScope() {
+        record Case(String device, String capability, String scope, List<String> kinds) { }
+        List<Case> cases = new java.util.ArrayList<>();
+        cases.add(new Case("dev-pan-gw", "pan_support_bundle", "pan_firewall", List.of("pan_tsf")));
+        cases.add(new Case("dev-panorama", "pan_support_bundle", "panorama", List.of("pan_tsf")));
+        for (Case c : cases) {
+            org.mockito.Mockito.reset(store, admission);
+            when(admission.submit(anyString(), anyString(), anyString(), anyString(), anyString()))
+                    .thenReturn(new AdmissionResult.Admitted("job-" + c.device()));
+            var o = ask(c.device(), c.kinds(), Optional.empty(), "TAC case preparation");
+            assertTrue(o instanceof SupportBundleService.Outcome.Accepted, c.device() + " " + o);
+            var rows = ArgumentCaptor.forClass(RequestRow.class);
+            @SuppressWarnings("unchecked") var specs = ArgumentCaptor.forClass(List.class);
+            verify(store).insert(rows.capture(), specs.capture());
+            assertEquals(c.scope(), rows.getValue().platformRole(), c.device());
+            assertEquals(c.kinds().size(), specs.getValue().size());
+            assertTrue(specs.getValue().get(0).toString().contains(c.kinds().get(c.kinds().size() - 1)), "cheapest first: " + specs.getValue());
+            verify(admission).submit(eq(c.capability()), eq(c.device()), anyString(), eq("ACTOR-ALPHA"), eq(ActionRegistry.SUPPORT_BUNDLE_REQUEST));
+        }
     }
 
     @Test

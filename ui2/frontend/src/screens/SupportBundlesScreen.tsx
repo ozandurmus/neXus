@@ -39,7 +39,13 @@ const KIND_LABELS: Record<string, string> = {
   cp_hcp_latest: "Latest HCP health report",
   cp_hcp_run: "Run HCP now (medium load)",
   cp_cpinfo: "cpinfo (high load)",
+  pan_tsf: "Tech support file (management plane, can take up to 30 minutes)",
 };
+/** Vendors with at least one collectable item (design 5.2). */
+const BUNDLE_VENDORS = new Set(["check_point", "palo_alto"]);
+/** A management server is collected for Palo Alto only (Panorama); a Check Point MDS or a FortiManager is not. */
+export const bundleDevice = (d: { vendor_hint: string; role?: string }): boolean =>
+  BUNDLE_VENDORS.has(d.vendor_hint) && (d.role !== "management_server" || d.vendor_hint === "palo_alto");
 const LOAD_NOTE: Record<string, string> = { none: "no device load", low: "light", medium: "medium load", high: "high load", unknown: "load not measured" };
 /** Times neXus itself works on devices (design 5.7): a hint when the picked hour collides, never a refusal. */
 export function collisionHint(local: string): string | null {
@@ -111,9 +117,9 @@ function NewRequest({ kinds, devices, onDone }: {
     {failure && <Alert severity="error" data-fact="request-error">{failure}</Alert>}
     {message && <Alert severity="success" data-fact="request-ok">{message}</Alert>}
     <TextField select label="Device" value={deviceId} onChange={(e) => { setDeviceId(e.target.value); setTicked(null); }} disabled={busy}>
-      {devices.filter((d) => d.vendor_hint === "check_point").map((d) => <MenuItem key={d.device_id} value={d.device_id}>{d.hostname}</MenuItem>)}
+      {devices.filter(bundleDevice).map((d) => <MenuItem key={d.device_id} value={d.device_id}>{d.hostname}</MenuItem>)}
     </TextField>
-    {device && vendor !== "check_point" && <Alert severity="info">Support bundles for this vendor are not built yet.</Alert>}
+    {device && !BUNDLE_VENDORS.has(vendor) && <Alert severity="info">Support bundles for this vendor are not built yet.</Alert>}
     {forVendor.length > 0 && <Box role="group" aria-label="Items">
       {forVendor.map((k) => <Box key={k.kind}><FormControlLabel disabled={!k.enabled || busy}
         control={<Checkbox checked={selected.has(k.kind) && k.enabled} onChange={() => toggle(k.kind)} />}

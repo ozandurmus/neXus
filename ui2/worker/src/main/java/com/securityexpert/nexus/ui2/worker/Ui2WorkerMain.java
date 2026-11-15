@@ -436,6 +436,12 @@ public final class Ui2WorkerMain {
                 leaseRepository, attemptRepository, deviceRepository, strictFailoverSsh, gateRegistry,
                 new com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore(transactionBoundary),
                 artefactStore, hostnameFingerprint);
+        // Support bundle collection, steps S3-S5 (V232): the Palo Alto tech support file over the XML API (the existing keygen),
+        // the Cisco ASA and FortiGate session captures over the same trusted SSH session.
+        var supportBundleStore = new com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore(transactionBoundary);
+        var panSupportBundleExecutor = new com.securityexpert.nexus.ui2.worker.supportbundle.PanSupportBundleJobExecutor(
+                leaseRepository, attemptRepository, deviceRepository, panTransport, panCredentialResolver, gateRegistry,
+                supportBundleStore, artefactStore, hostnameFingerprint);
         // The one-off Spike Detective layout review (contract section 8.3; PO approval 2026-10-19): C4 and one C5 on the
         // same trusted SSH session; only a numeric, name-class summary is stored (system_log_measurement).
         var cpSpikeLayoutReviewExecutor = new com.securityexpert.nexus.ui2.worker.diagnostic.CpSpikeLayoutReviewJobExecutor(
@@ -500,6 +506,7 @@ public final class Ui2WorkerMain {
                     .withPanSystemLogCollect(panSystemLogCollectExecutor)
                     .withCpSystemLogCollect(cpSystemLogCollectExecutor)
                     .withCpSupportBundle(cpSupportBundleExecutor)
+                    .withPanSupportBundle(panSupportBundleExecutor)
                     .withCpSpikeLayoutReview(cpSpikeLayoutReviewExecutor)
                     .withCredentialCanary(credentialCanaryExecutor)
                     .withPathValidation(pathValidationExecutor)

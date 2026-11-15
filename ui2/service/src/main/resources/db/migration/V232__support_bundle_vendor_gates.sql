@@ -1,0 +1,75 @@
+-- V232 -- support bundle collection, vendor step S3 (Palo Alto)
+-- (docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md, FROZEN 2026-11-15;
+-- docs/design/PO_DECISION_RECORD_2026_11_15_SUPPORT_BUNDLE_COLLECTION.md section 2).
+--
+-- Gate rows only, for the literals the Product Owner approved exactly as written:
+--   * Palo Alto P1-P6 (tech support file over the XML API), one row per platform scope: pan_firewall and panorama.
+--     P3 and P6 are recovery-write (BW-2: the device writes and removes /tmp/techsupport.tgz); P3 and P5 are secret-bearing.
+-- The support bundle tables (V230) are unchanged; V230 is not edited. Idempotent (ON CONFLICT DO NOTHING). Dry-run in
+-- BEGIN/ROLLBACK on the live database before deploy is an engineer step.
+SELECT set_config('app.actor_fingerprint', 'migration:V232_support_bundle_vendor_gates', true);
+SELECT set_config('app.action_id', 'support_bundle_vendor_gates_by_migration', true);
+
+INSERT INTO gate_registry (gate_id, vendor, platform_role_scope, shell_context, transport_kind, canonical_command_key, action_class, sign_off_state, timeout_s, retry_rule, max_frequency, session_reuse_rule, unsupported_behavior_ref, secret_output_risk, safe_telemetry_fields, source_document_pointer)
+VALUES
+    ('pan_sb_system_resources', 'palo_alto', 'pan_firewall', 'not_applicable', 'PAN_XML_API',
+     'type=op&cmd=<show><system><resources></resources></system></show>',
+     'read', 'SIGNED_OFF', 30, 'none', 'once per run', 'one API key per run (the existing keygen); one request at a time',
+     'an XML error body or an unparsable answer: the management CPU is UNKNOWN and the tech support file is refused (REFUSED_PRECHECK)', 'none',
+     '["httpStatus", "cpuPercent"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (P1); PO approval 2026-11-15 (PO record section 2)'),
+    ('pan_sb_disk_space', 'palo_alto', 'pan_firewall', 'not_applicable', 'PAN_XML_API',
+     'type=op&cmd=<show><system><disk-space></disk-space></system></show>',
+     'read', 'SIGNED_OFF', 30, 'none', 'once per run', 'one API key per run (the existing keygen); one request at a time',
+     'an XML error body or an unparsable answer: disk use is UNKNOWN and the tech support file is refused (REFUSED_PRECHECK)', 'none',
+     '["httpStatus", "diskPercent"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (P2); PO approval 2026-11-15 (PO record section 2)'),
+    ('pan_sb_tsf_start', 'palo_alto', 'pan_firewall', 'not_applicable', 'PAN_XML_API',
+     'type=export&category=tech-support',
+     'recovery-write', 'SIGNED_OFF', 60, 'none', 'once per run, never retried', 'one API key per run (the existing keygen); one request at a time',
+     'an XML error body: the device refused, item UNSUPPORTED; an unreadable job number: item OUTCOME_UNKNOWN (BW-2: the device writes /tmp/techsupport.tgz)', 'secret-bearing (the file will hold configuration and logs)',
+     '["httpStatus", "jobId"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (P3); PO approval 2026-11-15 (PO record section 2)'),
+    ('pan_sb_tsf_status', 'palo_alto', 'pan_firewall', 'not_applicable', 'PAN_XML_API',
+     'type=export&category=tech-support&action=status&job-id=<n>',
+     'read', 'SIGNED_OFF', 30, 'none', 'every 15 s until FIN or the 30 minute deadline; <n> = the digits-only job number the start answered', 'one API key per run (the existing keygen); one request at a time',
+     'not FIN at the deadline: one finish is sent (P6), item TIMED_OUT; an XML error body or a failed job: item FAILED', 'none',
+     '["httpStatus", "jobStatus"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (P4); PO approval 2026-11-15 (PO record section 2)'),
+    ('pan_sb_tsf_get', 'palo_alto', 'pan_firewall', 'not_applicable', 'PAN_XML_API',
+     'type=export&category=tech-support&action=get&job-id=<n>',
+     'read', 'SIGNED_OFF', 1800, 'none', 'once per run; <n> = the digits-only job number the start answered; at most 2 GiB', 'one API key per run (the existing keygen); one request at a time',
+     'an XML error body instead of a gzip archive: refused, nothing stored; over 2 GiB: TOO_LARGE, nothing stored; a successful get removes the device job', 'secret-bearing (stored encrypted as received, never shown to aiview, omitted from a sanitized download)',
+     '["sizeBytes", "sha256"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (P5); PO approval 2026-11-15 (PO record section 2)'),
+    ('pan_sb_tsf_finish', 'palo_alto', 'pan_firewall', 'not_applicable', 'PAN_XML_API',
+     'type=export&category=tech-support&action=finish&job-id=<n>',
+     'recovery-write', 'SIGNED_OFF', 30, 'none', 'at most once per run, only on the deadline; <n> = the digits-only job number the start answered', 'one API key per run (the existing keygen); one request at a time',
+     'a refused finish is recorded and not repeated (BW-2 cleanup)', 'none',
+     '["httpStatus"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (P6); PO approval 2026-11-15 (PO record section 2)'),
+    ('panorama_sb_system_resources', 'palo_alto', 'panorama', 'not_applicable', 'PAN_XML_API',
+     'type=op&cmd=<show><system><resources></resources></system></show>',
+     'read', 'SIGNED_OFF', 30, 'none', 'once per run', 'one API key per run (the existing keygen); one request at a time',
+     'an XML error body or an unparsable answer: the management CPU is UNKNOWN and the tech support file is refused (REFUSED_PRECHECK)', 'none',
+     '["httpStatus", "cpuPercent"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (P1); PO approval 2026-11-15 (PO record section 2)'),
+    ('panorama_sb_disk_space', 'palo_alto', 'panorama', 'not_applicable', 'PAN_XML_API',
+     'type=op&cmd=<show><system><disk-space></disk-space></system></show>',
+     'read', 'SIGNED_OFF', 30, 'none', 'once per run', 'one API key per run (the existing keygen); one request at a time',
+     'an XML error body or an unparsable answer: disk use is UNKNOWN and the tech support file is refused (REFUSED_PRECHECK)', 'none',
+     '["httpStatus", "diskPercent"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (P2); PO approval 2026-11-15 (PO record section 2)'),
+    ('panorama_sb_tsf_start', 'palo_alto', 'panorama', 'not_applicable', 'PAN_XML_API',
+     'type=export&category=tech-support',
+     'recovery-write', 'SIGNED_OFF', 60, 'none', 'once per run, never retried', 'one API key per run (the existing keygen); one request at a time',
+     'an XML error body: the device refused, item UNSUPPORTED; an unreadable job number: item OUTCOME_UNKNOWN (BW-2: the device writes /tmp/techsupport.tgz)', 'secret-bearing (the file will hold configuration and logs)',
+     '["httpStatus", "jobId"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (P3); PO approval 2026-11-15 (PO record section 2)'),
+    ('panorama_sb_tsf_status', 'palo_alto', 'panorama', 'not_applicable', 'PAN_XML_API',
+     'type=export&category=tech-support&action=status&job-id=<n>',
+     'read', 'SIGNED_OFF', 30, 'none', 'every 15 s until FIN or the 30 minute deadline; <n> = the digits-only job number the start answered', 'one API key per run (the existing keygen); one request at a time',
+     'not FIN at the deadline: one finish is sent (P6), item TIMED_OUT; an XML error body or a failed job: item FAILED', 'none',
+     '["httpStatus", "jobStatus"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (P4); PO approval 2026-11-15 (PO record section 2)'),
+    ('panorama_sb_tsf_get', 'palo_alto', 'panorama', 'not_applicable', 'PAN_XML_API',
+     'type=export&category=tech-support&action=get&job-id=<n>',
+     'read', 'SIGNED_OFF', 1800, 'none', 'once per run; <n> = the digits-only job number the start answered; at most 2 GiB', 'one API key per run (the existing keygen); one request at a time',
+     'an XML error body instead of a gzip archive: refused, nothing stored; over 2 GiB: TOO_LARGE, nothing stored; a successful get removes the device job', 'secret-bearing (stored encrypted as received, never shown to aiview, omitted from a sanitized download)',
+     '["sizeBytes", "sha256"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (P5); PO approval 2026-11-15 (PO record section 2)'),
+    ('panorama_sb_tsf_finish', 'palo_alto', 'panorama', 'not_applicable', 'PAN_XML_API',
+     'type=export&category=tech-support&action=finish&job-id=<n>',
+     'recovery-write', 'SIGNED_OFF', 30, 'none', 'at most once per run, only on the deadline; <n> = the digits-only job number the start answered', 'one API key per run (the existing keygen); one request at a time',
+     'a refused finish is recorded and not repeated (BW-2 cleanup)', 'none',
+     '["httpStatus"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (P6); PO approval 2026-11-15 (PO record section 2)')
+ON CONFLICT (gate_id) DO NOTHING;
