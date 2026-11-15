@@ -280,4 +280,38 @@ class ModuleEndpointRuntimeTest {
         }
     }
 
+    @Test void nothingMovesClaimsToTheBackupPodWhileGeneralOwnsBackupAndAStuckDrainIsStamped() throws Exception {
+        try (var fixture = Ui2PostgresFixture.createAndMigrate("backup_general_claims")) {
+            var tx = new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES));
+            var runtime = new ModuleRuntimeRepository(tx);
+            assertTrue(runtime.heartbeat("general", "general-pod"));
+            assertTrue(runtime.heartbeat("backup", "backup-pod"));
+            String device;
+            try (var connection = fixture.appConnection()) {
+                var credential = Ui2Rows.insertCredentialReference(connection);
+                device = Ui2Rows.insertDevice(connection, credential, "ENROLLED");
+            }
+            var jobs = new JooqJobRecordDao(tx, JobWindowTestPolicy.PERMISSIVE);
+            jobs.insertRequestedIfAbsent("general-owned-job", "general-owned-key", "cp_gateway_backup", device, "read",
+                "cp_gateway_backup", "synthetic-actor", "fixture").orElseThrow();
+            var leases = new JooqJobLeaseDao(tx, JobWindowTestPolicy.PERMISSIVE);
+            // A live backup pod with the claim fence of a general-owned module never receives the job.
+            assertTrue(leases.claimNext("backup-pod", List.of("cp_gateway_backup"), Duration.ofMinutes(10)).isEmpty());
+            // A requested drain (cutover started, nothing handed over) stops every claim, and is stamped with its start.
+            releaseSql(fixture, "update module_runtime_control set drain_requested=true,drain_generation=drain_generation+1 where module='backup'");
+            assertTrue(leases.claimNext("general-pod", List.of("cp_gateway_backup"), Duration.ofMinutes(10)).isEmpty());
+            assertTrue(leases.claimNext("backup-pod", List.of("cp_gateway_backup"), Duration.ofMinutes(10)).isEmpty());
+            assertTrue(tx.<Boolean>inTransaction(db -> db.fetchOne(
+                "select drain_requested_at is not null and drain_requested_at>now()-interval '1 minute' from module_runtime_control where module='backup'")
+                .get(0, Boolean.class)));
+            // Cancelling the drain while general still owns backup returns claims to the general worker only.
+            releaseSql(fixture, "update module_runtime_control set drain_requested=false,drain_ack_at=null,drain_ack_generation=null where module='backup' and effective_owner='general'");
+            assertTrue(tx.<Boolean>inTransaction(db -> db.fetchOne(
+                "select drain_requested_at is null and effective_owner='general' and fallback_enabled from module_runtime_control where module='backup'")
+                .get(0, Boolean.class)));
+            assertTrue(leases.claimNext("backup-pod", List.of("cp_gateway_backup"), Duration.ofMinutes(10)).isEmpty());
+            assertTrue(leases.claimNext("general-pod", List.of("cp_gateway_backup"), Duration.ofMinutes(10)).isPresent());
+        }
+    }
+
 }

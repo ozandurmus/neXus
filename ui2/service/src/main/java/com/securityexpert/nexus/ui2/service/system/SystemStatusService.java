@@ -166,7 +166,7 @@ public class SystemStatusService {
                     deferralsByModule.put(r.get("module", String.class), r.get("deferrals", Long.class));
                 }
             }
-            for (Record control : db.fetch("select module,effective_owner,drain_requested,drain_generation,drain_ack_generation,pool_active,pool_idle,pool_pending,pool_timeouts,pool_wait_nanos,admission_wait_ms,admission_grants,"
+            for (Record control : db.fetch("select module,effective_owner,drain_requested,drain_generation,drain_ack_generation,extract(epoch from (now()-drain_requested_at)) as drain_age_seconds,pool_active,pool_idle,pool_pending,pool_timeouts,pool_wait_nanos,admission_wait_ms,admission_grants,"
                     + "(select owner_heartbeat_at>now()-interval '60 seconds' from module_runtime_control owner where owner.module=module_runtime_control.effective_owner) as live from module_runtime_control order by module")) {
                 String module = control.get("module", String.class);
                 String owner = control.get("effective_owner", String.class);
@@ -184,15 +184,13 @@ public class SystemStatusService {
                     row.put(field, control.get(field));
                 row.put("owner_live", Boolean.TRUE.equals(control.get("live", Boolean.class)));
                 row.put("admission_timeouts", deferralsByModule.getOrDefault(module, 0L));
-                if (module.equals("policy") && depth > 0 && (ready == 0 || !Boolean.TRUE.equals(control.get("live", Boolean.class))) && !Boolean.TRUE.equals(control.get("drain_requested", Boolean.class))) {
-                    row.put("alert", "POLICY_CONSUMER_MISSING");
+                boolean live = Boolean.TRUE.equals(control.get("live", Boolean.class));
+                String alert = consumerAlert(module, depth, ready, live,
+                    Boolean.TRUE.equals(control.get("drain_requested", Boolean.class)), control.get("drain_age_seconds", Double.class));
+                if (alert != null) {
+                    row.put("alert", alert);
                     System.getLogger(SystemStatusService.class.getName()).log(System.Logger.Level.WARNING,
-                        "POLICY_CONSUMER_MISSING queued={0}", depth);
-                }
-                if (module.equals("backup") && depth > 0 && (ready == 0 || !Boolean.TRUE.equals(control.get("live", Boolean.class))) && !Boolean.TRUE.equals(control.get("drain_requested", Boolean.class))) {
-                    row.put("alert", "BACKUP_CONSUMER_MISSING");
-                    System.getLogger(SystemStatusService.class.getName()).log(System.Logger.Level.WARNING,
-                        "BACKUP_CONSUMER_MISSING queued={0}", depth);
+                        "{0} queued={1}", alert, depth);
                 }
                 row.put("permits", db.fetchOne("select count(*) from endpoint_admission where owner_role={0} and state='LEASED'", owner).get(0, Long.class));
                 row.put("quarantined_permits", db.fetchOne("select (select count(*) from endpoint_admission where owner_role={0} and state='QUARANTINED') "
@@ -201,6 +199,23 @@ public class SystemStatusService {
             }
             return modules;
         });
+    }
+
+    /** A drain older than this is a stuck cutover, no longer a rollout in progress. */
+    static final long STUCK_DRAIN_SECONDS = 30 * 60;
+
+    /**
+     * The alert for one module row, or null. A drain suppresses the missing-consumer alert only while it is recent;
+     * after {@link #STUCK_DRAIN_SECONDS} the suppression ends and a STUCK_DRAIN alert names the state, so a failed
+     * cutover that left a drain fence can never hide itself (2026-10-05 class of incident).
+     */
+    static String consumerAlert(String module, long depth, long ready, boolean live, boolean draining, Double drainAgeSeconds) {
+        boolean stuck = draining && drainAgeSeconds != null && drainAgeSeconds > STUCK_DRAIN_SECONDS;
+        boolean consumerMissing = depth > 0 && (ready == 0 || !live);
+        if ((module.equals("policy") || module.equals("backup")) && consumerMissing && (!draining || stuck)) {
+            return module.toUpperCase(java.util.Locale.ROOT) + "_CONSUMER_MISSING";
+        }
+        return stuck ? "STUCK_DRAIN" : null;
     }
 
     static Map<String, Object> podRow(JsonNode pod, JsonNode usage) {

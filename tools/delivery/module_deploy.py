@@ -182,6 +182,16 @@ def wait_drain(target, generation, limit, sleep=time.sleep, clock=time.monotonic
         sleep(min(DRAIN_POLL_S, max(0, deadline - clock())))
 
 
+def cancel_general_drain(target, generation, snapshot):
+    """Undo a drain requested before any ownership change. Only while the module is still on the general worker:
+    nothing was handed over, so claims must resume at once (a stuck drain stops all backup claims, 2026-10-05 class).
+    Never touches generation, owner or fallback; a dedicated owner keeps its fence."""
+    role = ROLES[target]
+    query("begin;" + audit(snapshot) + "select pg_advisory_xact_lock(294611);"
+          "update module_runtime_control set drain_requested=false,drain_ack_at=null,drain_ack_generation=null"
+          " where module=" + literal(role) + " and effective_owner='general' and drain_generation=" + str(generation) + ";commit;")
+
+
 def clear_drain(target, generation, snapshot):
     role = ROLES[target]
     query("begin;" + audit(snapshot) + "select pg_advisory_xact_lock(294611);"
@@ -489,9 +499,15 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
     # A first release (ensure_packet_analysis created the deployment with the candidate image: old is None) has no
     # old owner to drain; draining it would wait for the new pod itself to stop (2026-10-16: drain retained).
     if target in ROLES and not (target == "packet-analysis" and old is None):
-        with phase(target, "drain"):
-            generation = request_drain(target, snapshot)
-            wait_drain(target, generation, limit)
+        try:
+            with phase(target, "drain"):
+                generation = request_drain(target, snapshot)
+                wait_drain(target, generation, limit)
+        except Blocked:
+            if target == "backup" and generation is not None:
+                # Drain timeout while the general worker still owns backup: give claims back at once.
+                cancel_general_drain(target, generation, snapshot)
+            raise
     old_pods = json.loads(run("kubectl", "-n", "ui2", "get", "pods", "-l", "app.kubernetes.io/component=" + TARGETS[target], "-o", "json"))
     old_uids = {pod["metadata"]["uid"] for pod in old_pods["items"]}
     try:
@@ -531,9 +547,20 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
         if target in ("policy", "backup"):
             # Fence before stopping, then recover fallback only after zero-work evidence.
             recovery = request_drain(target, snapshot)
+            handed_over = target == "backup" and query(
+                "select effective_owner from module_runtime_control where module='backup'") == "backup"
+            if handed_over:
+                # The backup pod already owns claims (the handover precedes the e2e). Let it finish what it holds
+                # behind the fence before it is stopped; if it cannot drain, keep it running and fenced (visible as
+                # a stuck drain) rather than killing a pod with uncertain device work.
+                wait_drain(target, recovery, 900)
             run("kubectl", "-n", "ui2", "scale", "deployment/ui2-" + target, "--replicas=0")
             run("kubectl", "-n", "ui2", "wait", "--for=delete", "pod", "-l", "app.kubernetes.io/component=" + target, "--timeout=900s")
-            reset_to_general(snapshot, target, recovery, authorization or "automatic-rollout-recovery")
+            if target == "backup" and not handed_over:
+                # Ownership never left the general worker: only lift the fence; running general work is legitimate.
+                cancel_general_drain(target, recovery, snapshot)
+            else:
+                reset_to_general(snapshot, target, recovery, authorization or "automatic-rollout-recovery")
         raise
     result = {"module": target, "e2e": "PASS", "old_digest": old.rsplit("@", 1)[1] if old else None,
               "new_digest": image.rsplit("@", 1)[1], "ready": True, "drain_generation": generation}
