@@ -195,3 +195,12 @@ migration credential path arrived unresolved.
 validation. Nothing in any packet that day required a real start, and that is
 the gap: **a movement that changes start-up ordering must be deployed before it
 is called done.**
+
+## Application log addresses (PO 2026-11-15)
+
+Application logs on HOST-A show IP addresses: every workload running the `nexus-ui2-service` image sets
+`NEXUS_LOG_RAW_ADDRESSES=1` in `deploy/ui2/*.yaml`, which switches off the logback/JUL last-line masking
+(`LogAddressMasker`). The code default stays masked (tests, previews, other environments). aiview, diagnostics, exports
+and support bundles do not use that layer and stay masked. Anything read from a pod log and carried off HOST-A (chat,
+commits, reports, deploy output) must be masked or summarised first; `tools/delivery/hosta_deploy.sh` masks the pod-log
+lines it prints.

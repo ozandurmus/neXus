@@ -104,7 +104,9 @@ authentication instead of failing loudly -- every SFTP push then dies at `authen
   the host through the proxy (the hash directory is base36(MD5(distributionUrl)); recompute on a version change).
 - **`corp-ca` ConfigMap in `ui2-build`** (mounted at `/kaniko/ssl/certs`, it replaces kaniko's own bundle): created
   from the host's `/etc/ssl/certs/ca-certificates.crt`. It lived only in the `ui2-build` namespace, which the export did
-  not cover — the export script should include it next time.
+  not cover; `scripts/hosta_export_all.sh` now exports `configmaps-build.yaml`. Of the `ui2-build` Secrets it exports only a
+  named list (`BUILD_SECRETS`, PO 2026-11-15). The list is empty: the rebuild consumes no persistent build-namespace Secret
+  (the build jobs mount none; the integration job's Secret exists for one run).
 - **No GitHub credential on the host.** The code is pushed to a bare repository on the host (`/opt/nexus.git`, HEAD →
   `main`; `~/nexus.git` until 2026-11); `/opt/nexus` is its clone; `tools/delivery/hosta_deploy.sh` pushes before building.
 - **The artefact store** was restored by extracting the archive straight into the local-path volume directory with

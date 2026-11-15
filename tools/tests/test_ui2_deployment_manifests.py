@@ -1121,6 +1121,7 @@ def test_the_advisory_fetch_workload_holds_nothing_and_reaches_only_dns_and_the_
         "UI2_ADVISORY_INGEST_URL",
         "UI2_ADVISORY_CISCO_DAYS",
         "JAVA_TOOL_OPTIONS",
+        "NEXUS_LOG_RAW_ADDRESSES",
     }
     assert env["UI2_ADVISORY_PROXY"]["valueFrom"]["configMapKeyRef"] == {
         "name": "ui2-advisory-fetch", "key": "proxy", "optional": True}
@@ -1188,3 +1189,37 @@ def test_metrics_port_is_a_named_container_port_only() -> None:
     for path in sorted(OPENSHIFT_DIR.glob("*.yaml")):
         text = path.read_text(encoding="utf-8")
         assert "9404" not in text and "metrics" not in text
+
+
+def test_live_workloads_show_addresses_in_application_logs_and_the_code_default_stays_masked(monkeypatch):
+    """PO 2026-11-15: application logs on HOST-A show IP addresses, so every container running the ui2-service image
+    sets NEXUS_LOG_RAW_ADDRESSES=1 in the manifest (a ship re-applies manifest env). The code default stays masked, and
+    the preview candidate keeps masking. Only the logback/JUL layer reads the switch: aiview, diagnostics and exports
+    use their own masking."""
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "tools" / "e2e"))
+    import hosta_preview_e2e as preview
+
+    app = [(path, owner, c) for path, owner, c in _containers() if "nexus-ui2-service@" in c.get("image", "")]
+    owners = {owner.split(":")[0] for _, owner, _ in app}
+    assert {"Deployment/ui2-service", "Deployment/ui2-worker", "Deployment/ui2-configuration",
+            "Deployment/ui2-policy", "Deployment/ui2-compliance", "Deployment/ui2-packet-analysis",
+            "CronJob/ui2-advisory-fetch"} <= owners
+    for _, owner, container in app:
+        entries = [e for e in container.get("env") or [] if e["name"] == "NEXUS_LOG_RAW_ADDRESSES"]
+        assert entries == [{"name": "NEXUS_LOG_RAW_ADDRESSES", "value": "1"}], owner
+
+    masker = (REPO_ROOT / "ui2/platform-core/src/main/java/com/securityexpert/nexus/ui2/platform/logging/"
+              "LogAddressMasker.java").read_text(encoding="utf-8")
+    assert 'RAW_ENV = "NEXUS_LOG_RAW_ADDRESSES"' in masker
+    assert 'return "1".equals(env.apply(RAW_ENV));' in masker, "unset means masked"
+
+    source = next(doc for doc in load_documents((MANIFEST_DIR / "50-service-deployment.yaml").read_text())
+                  if doc["kind"] == "Deployment")
+    candidate = preview.workload_manifest(source, "registry.example.invalid/candidate@sha256:" + "a" * 64,
+                                          "192.0.2.10", {
+                                              "ui2-compliance": "http://192.0.2.30:8085",
+                                              "ui2-configuration": "http://192.0.2.40:8084",
+                                          })
+    container = next(c for c in candidate["spec"]["template"]["spec"]["containers"] if c["name"] == "service")
+    assert [e for e in container["env"] if e["name"] == "NEXUS_LOG_RAW_ADDRESSES"] == [
+        {"name": "NEXUS_LOG_RAW_ADDRESSES", "value": "0"}]
