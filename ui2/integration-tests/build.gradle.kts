@@ -56,3 +56,14 @@ dependencies {
     testRuntimeOnly(libs.flyway.database.postgresql)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
+
+// CI shows a failure's full assertion message (the characterization golden prints the differing block) and stderr.
+tasks.withType<Test>().configureEach {
+    testLogging {
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showCauses = true
+        showStackTraces = true
+        events("failed", "standard_error")
+        showStandardStreams = false
+    }
+}

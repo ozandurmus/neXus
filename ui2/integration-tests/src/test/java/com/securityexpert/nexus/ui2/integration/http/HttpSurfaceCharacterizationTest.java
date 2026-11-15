@@ -108,6 +108,7 @@ class HttpSurfaceCharacterizationTest {
         Path groupKey = keyFile("group_ref.key");
         Path credentialKey = keyFile("credential.key");
         context = new SpringApplicationBuilder(Ui2Application.class)
+                .resourceLoader(new org.springframework.core.io.DefaultResourceLoader(consoleBundleLoader()))
                 .run(
                         "--server.port=0",
                         "--spring.main.banner-mode=off",
@@ -147,6 +148,32 @@ class HttpSurfaceCharacterizationTest {
                 paths.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
             }
         }
+    }
+
+    /**
+     * The transcript must not depend on how the console bundle was produced: a CI job may package an empty prebuilt
+     * dist directory ({@code -PfrontendPrebuilt=true}), a developer machine a real Vite build. The loader is parent-first,
+     * so a real {@code static/} bundle on the classpath wins; only when there is none does the tiny fixture bundle below
+     * stand in, serving the same routes with the same headers.
+     */
+    private static ClassLoader consoleBundleLoader() throws IOException {
+        ClassLoader app = HttpSurfaceCharacterizationTest.class.getClassLoader();
+        if (app.getResource("static/index.html") != null && hasJsAsset(app)) {
+            return app;
+        }
+        Path root = Files.createDirectories(work.resolve("console-bundle"));
+        Files.createDirectories(root.resolve("static/assets"));
+        if (app.getResource("static/index.html") == null) {
+            Files.writeString(root.resolve("static/index.html"),
+                    "<!doctype html><html><head><title>fixture</title></head><body><div id=\"root\"></div></body></html>\n");
+        }
+        Files.writeString(root.resolve("static/assets/index-fixture0.js"), "console.log('fixture bundle');\n");
+        return new java.net.URLClassLoader(new java.net.URL[] {root.toUri().toURL()}, app);
+    }
+
+    private static boolean hasJsAsset(ClassLoader loader) throws IOException {
+        return new org.springframework.core.io.support.PathMatchingResourcePatternResolver(loader)
+                .getResources("classpath*:static/assets/*.js").length > 0;
     }
 
     private static Path keyFile(String name) throws IOException {
@@ -555,9 +582,14 @@ class HttpSurfaceCharacterizationTest {
     }
 
     private static String firstAsset() throws IOException {
-        var resolver = new org.springframework.core.io.support.PathMatchingResourcePatternResolver();
+        var resolver = new org.springframework.core.io.support.PathMatchingResourcePatternResolver(context.getClassLoader());
+        // Sorted, so the chosen file does not depend on the order the classpath lists a multi-chunk bundle in.
+        var names = new java.util.TreeSet<String>();
         for (var resource : resolver.getResources("classpath*:static/assets/*.js")) {
-            return "/assets/" + resource.getFilename();
+            names.add(resource.getFilename());
+        }
+        if (!names.isEmpty()) {
+            return "/assets/" + names.first();
         }
         throw new IllegalStateException("the packaged console bundle has no /assets/*.js file");
     }
@@ -749,6 +781,12 @@ class HttpSurfaceCharacterizationTest {
         for (int i = 0; i < Math.max(expectedBlocks.length, actualBlocks.length); i++) {
             String expected = i < expectedBlocks.length ? expectedBlocks[i] : "<missing>";
             String got = i < actualBlocks.length ? actualBlocks[i] : "<missing>";
+            if (!expected.equals(got)) {
+                // A CI log that truncates the assertion message still shows the block.
+                System.err.println("HTTP SURFACE MISMATCH at block " + i + " (blocks: golden " + expectedBlocks.length
+                        + ", actual " + actualBlocks.length + ")\n----- expected -----\n" + expected
+                        + "\n----- actual -----\n" + got + "\n----- end -----");
+            }
             assertEquals(expected, got, "the HTTP surface changed at block " + i);
         }
         assertEquals(golden, actual);
