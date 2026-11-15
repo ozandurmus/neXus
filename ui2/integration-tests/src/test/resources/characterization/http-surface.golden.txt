@@ -49,7 +49,7 @@ status: 200
 header: accept-ranges: bytes
 header: cache-control: no-cache, must-revalidate
 header: connection: close
-header: content-language: en-TR
+header: content-language: en-US
 header: content-length: <n>
 header: content-type: text/html;charset=UTF-8
 header: date: <date>
@@ -72,7 +72,7 @@ status: 200
 header: accept-ranges: bytes
 header: cache-control: no-cache, must-revalidate
 header: connection: close
-header: content-language: en-TR
+header: content-language: en-US
 header: content-length: <n>
 header: content-type: text/html;charset=UTF-8
 header: date: <date>
@@ -497,7 +497,7 @@ status: 200
 header: accept-ranges: bytes
 header: cache-control: no-cache, must-revalidate
 header: connection: close
-header: content-language: en-TR
+header: content-language: en-US
 header: content-length: <n>
 header: content-type: text/html;charset=UTF-8
 header: date: <date>
@@ -895,6 +895,468 @@ header: date: <date>
 body: {"action_id":"device_register","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
 
 ### replay viewer POST /session/logout
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Expires=<date>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"ok":true}
+
+### async anon GET changes.csv
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+
+### async anon GET reports run download
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+
+### async anon GET backup download with ticket
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+
+### async anon POST backup download
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+
+### multipart anon POST sanitize
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+
+### multipart anon POST offline-analyses
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+
+### async admin login
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"ok":true}
+
+### async admin GET /session/status
+status: 200
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"authenticated":true,"can_read_administration":true,"csrf_token":"<token>","display_name":"nexusadmin","must_change_password":false,"permissions":["Devices","Config","Compliance","PacketAnalysis","Sanitizer","Operations","Policy","Admin"],"role_tokens":["role:viewer","role:operator","role:onboarding_admin","role:backup_admin","role:compliance_admin","role:security_admin","role:operation_admin","role:replay_viewer"]}
+
+### async admin GET changes.csv
+status: 200
+header: cache-control: no-store
+header: connection: close
+header: content-disposition: attachment; filename=policy-changes.csv
+header: content-type: text/csv;charset=UTF-8
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: <text/csv, non-empty>
+
+### async admin GET changes.csv filtered
+status: 200
+header: cache-control: no-store
+header: connection: close
+header: content-disposition: attachment; filename=policy-changes.csv
+header: content-type: text/csv;charset=UTF-8
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: <text/csv, non-empty>
+
+### async admin GET changes.csv bad filter
+status: 400
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"error":"INVALID_CHANGE_FILTERS"}
+
+### async admin GET changes.csv bad limit type
+status: 400
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"error":"INVALID_CHANGE_FILTERS"}
+
+### async admin HEAD changes.csv
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: <empty>
+
+### async admin GET reports run download
+status: 404
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"RUN_NOT_FOUND","reason":"No such report run"}
+
+### async admin GET reports run download bad id
+status: 400
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"INVALID_ID","reason":"Run ids are opaque UUIDs"}
+
+### async admin GET backup download with bad ticket
+status: 403
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"code":"TICKET_INVALID","error":"TICKET_INVALID","reason":"The download ticket is missing, used, expired, or not yours; start the download again"}
+
+### async admin POST backup download bad id
+status: 400
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"code":"MALFORMED_IDENTIFIER","error":"INVALID_ARTEFACT_ID","reason":"Artefact identifier must be an opaque id"}
+
+### async admin POST backup download no csrf
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
+
+### async admin POST backup download
+status: 503
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"code":"ARTEFACT_STORE_NOT_MOUNTED","error":"DOWNLOAD_UNAVAILABLE","reason":"the service has no artefact store mounted (UI2_ARTEFACT_STORE_KEY_FILE / UI2_ARTEFACT_STORE_ROOT)"}
+
+### async admin POST backup download malformed json
+status: 400
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"error":"Bad Request","path":"/backups/0123456789abcdef/download","status":"<n>","timestamp":"<ts>"}
+
+### multipart admin POST sanitize no csrf
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
+
+### multipart admin POST sanitize no origin
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
+
+### multipart admin POST sanitize no file part
+status: 403
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"error":"RUN_ROLE_REQUIRED","reason":"Sanitizing needs operator, operation_admin or security_admin"}
+
+### multipart admin POST sanitize empty body
+status: 403
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"error":"RUN_ROLE_REQUIRED","reason":"Sanitizing needs operator, operation_admin or security_admin"}
+
+### multipart admin POST sanitize broken body
+status: 403
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"error":"RUN_ROLE_REQUIRED","reason":"Sanitizing needs operator, operation_admin or security_admin"}
+
+### multipart admin POST sanitize no boundary
+status: 403
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"error":"RUN_ROLE_REQUIRED","reason":"Sanitizing needs operator, operation_admin or security_admin"}
+
+### multipart admin POST sanitize json content type
+status: 415
+header: accept: multipart/form-data
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Unsupported Media Type","path":"/api/v2/sanitize","status":"<n>","timestamp":"<ts>"}
+
+### multipart admin POST sanitize revert no file part
+status: 403
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"error":"REVERT_ROLE_REQUIRED","reason":"Reverting needs security_admin or the sanitize job's creator"}
+
+### multipart admin POST offline-analyses unknown policy
+status: 403
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"error":"ADMIN_REQUIRED"}
+
+### multipart admin POST offline-analyses file first
+status: 403
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"error":"ADMIN_REQUIRED"}
+
+### multipart admin POST offline-analyses json content type
+status: 415
+header: accept: multipart/form-data
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Unsupported Media Type","path":"/api/v2/policy/policies/no-such-policy/offline-analyses","status":"<n>","timestamp":"<ts>"}
+
+### multipart admin POST cutover assessments unknown segment
+status: 403
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"error":"ADMIN_REQUIRED"}
+
+### multipart admin POST cutover assessments broken body
+status: 403
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"error":"ADMIN_REQUIRED"}
+
+### async admin POST /session/logout
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Expires=<date>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"ok":true}
+
+### async viewer login
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"ok":true}
+
+### async viewer GET /session/status
+status: 200
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"authenticated":true,"can_read_administration":false,"csrf_token":"<token>","display_name":"claudeadmin","must_change_password":false,"permissions":["Devices","Config","Compliance"],"role_tokens":["role:viewer"]}
+
+### async viewer GET changes.csv
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"action_id":"policy_read","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
+
+### async viewer GET reports run download
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"action_id":"report_generate","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
+
+### async viewer POST backup download
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"action_id":"device_backup_retrieve","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
+
+### multipart viewer POST sanitize
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"action_id":"data_sanitize_run","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
+
+### multipart viewer POST offline-analyses
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"action_id":"policy_offline_write","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
+
+### async viewer POST /session/logout
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Expires=<date>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"ok":true}
+
+### async replay viewer login
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"ok":true}
+
+### async replay viewer GET /session/status
+status: 200
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"authenticated":true,"can_read_administration":false,"csrf_token":"<token>","display_name":"aiview","must_change_password":false,"permissions":["Devices","Config","Compliance","Policy","PacketAnalysis"],"role_tokens":["role:viewer","role:replay_viewer"]}
+
+### async replay viewer GET changes.csv
+status: 200
+header: cache-control: no-store
+header: connection: close
+header: content-disposition: attachment; filename=policy-changes.csv
+header: content-type: text/csv;charset=UTF-8
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: <text/csv, non-empty>
+
+### async replay viewer GET reports run download
+status: 404
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"RUN_NOT_FOUND","reason":"No such report run"}
+
+### multipart replay viewer POST sanitize
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"action_id":"data_sanitize_run","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
+
+### async replay viewer POST /session/logout
 status: 200
 header: connection: close
 header: content-type: application/json
@@ -1411,7 +1873,7 @@ body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 ### odd request Accept text/html on unmapped route
 status: 404
 header: connection: close
-header: content-language: en-TR
+header: content-language: en-US
 header: content-length: <n>
 header: content-type: text/html;charset=UTF-8
 header: date: <date>

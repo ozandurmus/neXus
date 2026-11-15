@@ -64,6 +64,8 @@ class HttpSurfaceCharacterizationTest {
     private static int port;
     private static Path work;
     private static final List<Entry> transcript = new ArrayList<>();
+    private static Locale previousLocale;
+    private static java.util.TimeZone previousTimeZone;
 
     record Entry(String label, Resp resp) {
     }
@@ -93,6 +95,12 @@ class HttpSurfaceCharacterizationTest {
 
     @BeforeAll
     static void bootAndRunScenario() throws Exception {
+        // The error page resolves its Content-Language from the JVM default when the request carries no Accept-Language,
+        // and dates in bodies follow the default zone: pin both so the transcript does not depend on the host.
+        previousLocale = Locale.getDefault();
+        previousTimeZone = java.util.TimeZone.getDefault();
+        Locale.setDefault(Locale.US);
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"));
         fixture = Ui2PostgresFixture.createAndMigrate("http_surface");
         work = Files.createTempDirectory("ui2-http-surface-");
         String e2eToken = randomToken();
@@ -130,6 +138,8 @@ class HttpSurfaceCharacterizationTest {
 
     @AfterAll
     static void shutDown() throws IOException {
+        if (previousLocale != null) Locale.setDefault(previousLocale);
+        if (previousTimeZone != null) java.util.TimeZone.setDefault(previousTimeZone);
         if (context != null) context.close();
         if (fixture != null) fixture.close();
         if (work != null) {
@@ -169,6 +179,7 @@ class HttpSurfaceCharacterizationTest {
         administratorSession();
         viewerSession();
         replayViewerSession();
+        asyncAndMultipartSurface();
         machineSessions(e2eToken, probeToken);
         oddRequestTargets();
     }
@@ -353,6 +364,126 @@ class HttpSurfaceCharacterizationTest {
         authed("machine DELETE unmapped (read-only session)", "DELETE", port, "/no-such-route", cookie, csrf, origin, null);
         authed("machine POST /role-bindings (read-only session)", "POST", port, "/role-bindings", cookie, csrf, origin, "{}");
         authed("machine POST /session/logout", "POST", port, "/session/logout", cookie, csrf, origin, null);
+    }
+
+    private static final String BOUNDARY = "----ui2characterization7d3c";
+    private static final String MULTIPART = "multipart/form-data; boundary=" + BOUNDARY;
+    private static final String ARTEFACT = "0123456789abcdef";
+    private static final String RUN_ID = "00000000-0000-4000-8000-000000000001";
+
+    /**
+     * Added after the Spring Security Step 1 review: the routes that leave the plain request/response shape. Streaming
+     * routes (StreamingResponseBody: the container dispatches again with DispatcherType.ASYNC after the controller
+     * returns), multipart upload routes (the body is read straight off the servlet input stream), and the error dispatch
+     * (DispatcherType.ERROR) that follows a sendError from inside such a route. Recorded on the code before the Spring
+     * Security dependency existed.
+     */
+    private static void asyncAndMultipartSurface() throws Exception {
+        String origin = "http://127.0.0.1:" + port;
+        String csv = "/api/v2/policy/changes.csv";
+        String download = "/api/v2/reports/runs/" + RUN_ID + "/download";
+        String ticketUrl = "/backups/" + ARTEFACT + "/download?ticket=bad";
+        String offline = "/api/v2/policy/policies/no-such-policy/offline-analyses";
+        String assess = "/api/v2/cutover/segments/no-such-segment/assessments";
+        String file = multipart(part("file", "sample.txt", "synthetic line\n"));
+        String csvFile = multipart(part("mapping", null, "{}"), part("file", "sample.csv", "a,b\n1,2\n"));
+        String spec = multipart(part("spec", null, "{}"));
+
+        // anonymous
+        get("async anon GET changes.csv", csv);
+        get("async anon GET reports run download", download);
+        step("async anon GET backup download with ticket", "GET", port, ticketUrl, Map.of(), null);
+        post("async anon POST backup download", port, "/backups/bad!/download", JSON_BODY, "{}");
+        step("multipart anon POST sanitize", "POST", port, "/api/v2/sanitize", Map.of("Content-Type", MULTIPART), file);
+        step("multipart anon POST offline-analyses", "POST", port, offline, Map.of("Content-Type", MULTIPART), csvFile);
+
+        // administrator
+        String cookie = sessionCookie(login("async admin login", "nexusadmin", "nexusadmin", null));
+        assertNotNull(cookie);
+        String csrf = authed("async admin GET /session/status", "GET", port, "/session/status", cookie, null, null, null)
+                .json().path("csrf_token").asText("");
+        authed("async admin GET changes.csv", "GET", port, csv, cookie, null, null, null);
+        authed("async admin GET changes.csv filtered", "GET", port,
+                csv + "?from=2026-01-01T00:00:00Z&limit=5&includeInitial=true", cookie, null, null, null);
+        authed("async admin GET changes.csv bad filter", "GET", port, csv + "?from=not-a-date", cookie, null, null, null);
+        authed("async admin GET changes.csv bad limit type", "GET", port, csv + "?limit=abc", cookie, null, null, null);
+        authed("async admin HEAD changes.csv", "HEAD", port, csv, cookie, null, null, null);
+        authed("async admin GET reports run download", "GET", port, download, cookie, null, null, null);
+        authed("async admin GET reports run download bad id", "GET", port, "/api/v2/reports/runs/not-a-uuid/download",
+                cookie, null, null, null);
+        authed("async admin GET backup download with bad ticket", "GET", port, ticketUrl, cookie, null, null, null);
+        authed("async admin POST backup download bad id", "POST", port, "/backups/bad!/download", cookie, csrf, origin, "{}");
+        authed("async admin POST backup download no csrf", "POST", port, "/backups/" + ARTEFACT + "/download", cookie, null,
+                origin, "{}");
+        authed("async admin POST backup download", "POST", port, "/backups/" + ARTEFACT + "/download", cookie, csrf, origin,
+                "{\"reason\":\"synthetic characterization run\"}");
+        authed("async admin POST backup download malformed json", "POST", port, "/backups/" + ARTEFACT + "/download", cookie,
+                csrf, origin, "{bad");
+
+        authedRaw("multipart admin POST sanitize no csrf", "POST", "/api/v2/sanitize", cookie, null, origin, MULTIPART, file);
+        authedRaw("multipart admin POST sanitize no origin", "POST", "/api/v2/sanitize", cookie, csrf, null, MULTIPART, file);
+        authedRaw("multipart admin POST sanitize no file part", "POST", "/api/v2/sanitize", cookie, csrf, origin, MULTIPART,
+                multipart(part("other", null, "x")));
+        authedRaw("multipart admin POST sanitize empty body", "POST", "/api/v2/sanitize", cookie, csrf, origin, MULTIPART, "");
+        authedRaw("multipart admin POST sanitize broken body", "POST", "/api/v2/sanitize", cookie, csrf, origin, MULTIPART,
+                "--" + BOUNDARY + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"x\"\r\n\r\nno terminator");
+        authedRaw("multipart admin POST sanitize no boundary", "POST", "/api/v2/sanitize", cookie, csrf, origin,
+                "multipart/form-data", file);
+        authedRaw("multipart admin POST sanitize json content type", "POST", "/api/v2/sanitize", cookie, csrf, origin,
+                "application/json", "{}");
+        authedRaw("multipart admin POST sanitize revert no file part", "POST", "/api/v2/sanitize/revert", cookie, csrf, origin,
+                MULTIPART, multipart(part("other", null, "x")));
+        authedRaw("multipart admin POST offline-analyses unknown policy", "POST", offline, cookie, csrf, origin, MULTIPART, csvFile);
+        authedRaw("multipart admin POST offline-analyses file first", "POST", offline, cookie, csrf, origin, MULTIPART,
+                multipart(part("file", "sample.csv", "a,b\n")));
+        authedRaw("multipart admin POST offline-analyses json content type", "POST", offline, cookie, csrf, origin,
+                "application/json", "{}");
+        authedRaw("multipart admin POST cutover assessments unknown segment", "POST", assess, cookie, csrf, origin, MULTIPART, spec);
+        authedRaw("multipart admin POST cutover assessments broken body", "POST", assess, cookie, csrf, origin, MULTIPART,
+                "garbage");
+        authed("async admin POST /session/logout", "POST", port, "/session/logout", cookie, csrf, origin, null);
+
+        // read-only operator and replay viewer
+        String viewerCookie = sessionCookie(login("async viewer login", "claudeadmin", "claudeadmin", null));
+        assertNotNull(viewerCookie);
+        String viewerCsrf = authed("async viewer GET /session/status", "GET", port, "/session/status", viewerCookie, null, null,
+                null).json().path("csrf_token").asText("");
+        authed("async viewer GET changes.csv", "GET", port, csv, viewerCookie, null, null, null);
+        authed("async viewer GET reports run download", "GET", port, download, viewerCookie, null, null, null);
+        authed("async viewer POST backup download", "POST", port, "/backups/" + ARTEFACT + "/download", viewerCookie, viewerCsrf,
+                origin, "{}");
+        authedRaw("multipart viewer POST sanitize", "POST", "/api/v2/sanitize", viewerCookie, viewerCsrf, origin, MULTIPART, file);
+        authedRaw("multipart viewer POST offline-analyses", "POST", offline, viewerCookie, viewerCsrf, origin, MULTIPART, csvFile);
+        authed("async viewer POST /session/logout", "POST", port, "/session/logout", viewerCookie, viewerCsrf, origin, null);
+
+        String replayCookie = sessionCookie(login("async replay viewer login", "aiview", "aiview", null));
+        assertNotNull(replayCookie);
+        String replayCsrf = authed("async replay viewer GET /session/status", "GET", port, "/session/status", replayCookie, null,
+                null, null).json().path("csrf_token").asText("");
+        authed("async replay viewer GET changes.csv", "GET", port, csv, replayCookie, null, null, null);
+        authed("async replay viewer GET reports run download", "GET", port, download, replayCookie, null, null, null);
+        authedRaw("multipart replay viewer POST sanitize", "POST", "/api/v2/sanitize", replayCookie, replayCsrf, origin, MULTIPART, file);
+        authed("async replay viewer POST /session/logout", "POST", port, "/session/logout", replayCookie, replayCsrf, origin, null);
+    }
+
+    private static String multipart(String... parts) {
+        return String.join("", parts) + "--" + BOUNDARY + "--\r\n";
+    }
+
+    private static String part(String field, String filename, String value) {
+        return "--" + BOUNDARY + "\r\nContent-Disposition: form-data; name=\"" + field + "\""
+                + (filename == null ? "" : "; filename=\"" + filename + "\"")
+                + (filename == null ? "" : "\r\nContent-Type: text/plain") + "\r\n\r\n" + value + "\r\n";
+    }
+
+    private static Resp authedRaw(String label, String method, String path, String cookie, String csrf, String origin,
+            String contentType, String body) throws Exception {
+        Map<String, String> headers = new LinkedHashMap<>();
+        headers.put("Cookie", "ui2_session=" + cookie);
+        if (csrf != null) headers.put("X-CSRF-Token", csrf);
+        if (origin != null) headers.put("Origin", origin);
+        headers.put("Content-Type", contentType);
+        return step(label, method, port, path, headers, body);
     }
 
     private static void oddRequestTargets() throws Exception {
