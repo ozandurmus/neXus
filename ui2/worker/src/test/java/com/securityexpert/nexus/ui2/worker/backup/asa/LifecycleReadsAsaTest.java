@@ -43,7 +43,6 @@ class LifecycleReadsAsaTest {
         boolean licenseTimesOut;
 
         Shell() {
-            answers.put("terminal pager 0", "");
             answers.put(CiscoAsaPlan.SHOW_CURPRIV, "Current privilege level : 15");
             answers.put(CiscoAsaPlan.SHOW_VERSION, "Adaptive Security Appliance Software Version 9.22(1)\nHardware:   FPR4112, 1 GB\n"
                     + "Serial Number: SYNTH0001\nfw-a up 3 days 2 hours\n");

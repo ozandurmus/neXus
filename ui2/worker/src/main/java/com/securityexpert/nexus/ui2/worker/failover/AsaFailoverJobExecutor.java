@@ -44,7 +44,7 @@ import com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndp
  * There is no write path, no write gate and no state-changing command in this class: a run of any other kind, or a
  * worker whose switch is off, ends UNKNOWN before any device contact.
  *
- * <p>Per member: one trusted SSH session with the inventory's own preamble (pager off, privilege 15, single context),
+ * <p>Per member: one trusted SSH session with the inventory's own preamble (privilege 15, single context; the pager is answered, not switched off),
  * then the four approved reads one at a time through their gate rows. A gate that does not resolve KNOWN (DRAFTED
  * until the Product Owner approves) sends nothing and leaves its checks UNKNOWN.
  */
@@ -273,9 +273,8 @@ public final class AsaFailoverJobExecutor {
         }
     }
 
-    /** The inventory session's own preamble: pager off, privilege 15, single context (all three already approved). */
+    /** The inventory session's own preamble: privilege 15, single context. No "terminal pager 0" (PO 2026-11-15): paging is answered in the shell. */
     private void preamble(TransportSession session) {
-        ssh.execInteractive(session, new ExecSpec(CiscoAsaPlan.TERMINAL_PAGER_0, true), PREAMBLE);
         var priv = ssh.execInteractive(session, new ExecSpec(CiscoAsaPlan.SHOW_CURPRIV, true), PREAMBLE);
         Optional<Integer> level = priv instanceof ExecResult.Completed c && !CiscoAsaPlan.isCliError(c.output())
             ? CiscoAsaPlan.parsePrivilege(CiscoAsaExecutor.stripEcho(c.output(), CiscoAsaPlan.SHOW_CURPRIV)) : Optional.empty();

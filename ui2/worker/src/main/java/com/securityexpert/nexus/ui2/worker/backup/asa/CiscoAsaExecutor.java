@@ -101,7 +101,7 @@ public final class CiscoAsaExecutor {
         return this;
     }
 
-    /** One open shell, already set to no paging, at privilege 15 -- or why not. */
+    /** One open shell, at privilege 15 (paging is answered by the shell, never switched off) -- or why not. */
     private record Shell(TransportSession session, Optional<String> refusal, boolean authFailure) {
     }
 
@@ -117,8 +117,7 @@ public final class CiscoAsaExecutor {
         return switch (r) {
             case ConnectResult.Authenticated a -> {
                 TransportSession s = a.session();
-                // A session setting: the pager is off for this login only.
-                ssh.execInteractive(s, new ExecSpec(CiscoAsaPlan.TERMINAL_PAGER_0, true), SHORT);
+                // No pager setting is sent (PO 2026-11-15): the shell answers "<--- More --->" with a space.
                 Optional<String> priv = read(s, CiscoAsaPlan.SHOW_CURPRIV, SHORT);
                 Optional<Integer> level = priv.flatMap(CiscoAsaPlan::parsePrivilege);
                 if (level.isPresent() && level.get() < 15) {
@@ -144,7 +143,7 @@ public final class CiscoAsaExecutor {
     }
 
     /**
-     * The four approved failover reads (gates asa_measure_*), in the inventory's own session (pager off, privilege 15),
+     * The four approved failover reads (gates asa_measure_*), in the inventory's own session (privilege 15),
      * one at a time, no retry. Each answer is reduced in memory to its shape and discarded; it is never returned, stored
      * or recorded in the job transcript. {@code show conn count} also logs its two counts.
      */
@@ -179,7 +178,7 @@ public final class CiscoAsaExecutor {
 
     /**
      * {@code show license all} (gate asa_lifecycle_show_license_all, 60 s, no retry): sent in the session and context
-     * {@code show version} was read in, the pager already off, after the inventory's other reads. Only a masked shape is
+     * {@code show version} was read in, after the inventory's other reads. Only a masked shape is
      * logged (with the already-read context mode word); the answer is neither returned, stored nor recorded.
      */
     private void lifecycleShowLicenseAll(TransportSession s, String deviceId, String modeWord) {
