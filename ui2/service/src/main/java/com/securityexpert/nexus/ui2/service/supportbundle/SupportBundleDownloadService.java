@@ -128,12 +128,48 @@ public final class SupportBundleDownloadService {
             return new Outcome.AuditRefused("MANIFEST_FAILED");
         }
         LogMasking.Session session = masking;
-        return new Outcome.Ready(fileName, out -> write(out, rootDir, manifest, stored, session));
+        long mtime = Instant.now().getEpochSecond();
+        return new Outcome.Ready(fileName, out -> write(out, rootDir, manifest, stored, session, mtime));
     }
 
-    private void write(OutputStream target, String rootDir, byte[] manifest, List<StoredItem> stored, LogMasking.Session masking)
-            throws IOException {
-        long mtime = Instant.now().getEpochSecond();
+    /**
+     * The archive of a vendor upload (raw mode, never sanitized: the vendor's tools need the bytes intact). No audit happens
+     * here; the upload row and its retrieval rows are written by the caller before the body is first read. The body is
+     * deterministic (fixed entry time, fixed manifest), so a first pass can measure its length and SHA-256 and a second pass
+     * produces the same bytes. Empty when the request holds nothing to send for the chosen item kinds.
+     */
+    public Optional<UploadPlan> uploadPlan(UUID requestId, java.util.Collection<String> itemKinds) {
+        if (artefactStore == null) return Optional.empty();
+        Optional<RequestRow> request = store.find(requestId);
+        if (request.isEmpty() || !List.of("COMPLETED", "PARTIAL").contains(request.get().state())) return Optional.empty();
+        List<StoredItem> stored = store.storedItems(requestId).stream()
+                .filter(i -> itemKinds == null || itemKinds.isEmpty() || itemKinds.contains(i.kind())).toList();
+        if (stored.isEmpty()) return Optional.empty();
+        RequestRow req = request.get();
+        java.util.Set<UUID> selected = new java.util.HashSet<>();
+        stored.forEach(i -> selected.add(i.itemId()));
+        String rootDir = "nexus-support-bundle-" + requestId.toString().substring(0, 8);
+        String stamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmm").withZone(java.time.ZoneOffset.UTC)
+                .format(req.finishedAt() == null ? req.requestedAt() : req.finishedAt());
+        String fileName = "nexus-support-bundle-" + req.vendor() + "-" + requestId.toString().substring(0, 8) + "-" + stamp + ".tgz";
+        byte[] manifest;
+        try {
+            Map<String, Object> m = manifest(req, store.items(requestId), false);
+            m.put("upload_selection", stored.stream().map(StoredItem::kind).distinct().toList());
+            manifest = json.writerWithDefaultPrettyPrinter().writeValueAsBytes(m);
+        } catch (IOException e) {
+            return Optional.empty();
+        }
+        long mtime = (req.finishedAt() == null ? req.requestedAt() : req.finishedAt()).getEpochSecond();
+        return Optional.of(new UploadPlan(fileName, stored, selected, out -> write(out, rootDir, manifest, stored, null, mtime)));
+    }
+
+    /** What an upload sends: the file name, the stored items it carries and the deterministic archive writer. */
+    public record UploadPlan(String fileName, List<StoredItem> items, java.util.Set<UUID> itemIds, Body body) {
+    }
+
+    private void write(OutputStream target, String rootDir, byte[] manifest, List<StoredItem> stored, LogMasking.Session masking,
+            long mtime) throws IOException {
         GZIPOutputStream gz = new GZIPOutputStream(target, 64 * 1024);
         TarStream.Writer tar = new TarStream.Writer(gz);
         tar.entry(rootDir + "/manifest.json", manifest, mtime);

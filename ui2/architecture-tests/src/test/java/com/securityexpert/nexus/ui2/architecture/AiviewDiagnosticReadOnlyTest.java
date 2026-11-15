@@ -85,7 +85,7 @@ class AiviewDiagnosticReadOnlyTest {
                 ActionRegistry.ZONE_MATRIX_EVALUATE,
                 ActionRegistry.CUTOVER_ASSESSMENT_WRITE,
                 ActionRegistry.SUPPORT_BUNDLE_REQUEST, ActionRegistry.SUPPORT_BUNDLE_CANCEL, ActionRegistry.SUPPORT_BUNDLE_RETRIEVE,
-                ActionRegistry.SUPPORT_BUNDLE_DELETE,
+                ActionRegistry.SUPPORT_BUNDLE_DELETE, ActionRegistry.SUPPORT_BUNDLE_CLEANUP_WORKDIR, ActionRegistry.SUPPORT_BUNDLE_UPLOAD,
                 ActionRegistry.ZONE_MATRIX_REFERENCE_CONFIRM}) {
             assertFalse(all.get(closed).requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER), closed);
         }

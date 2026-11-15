@@ -305,6 +305,10 @@ public final class ActionRegistry {
     public static final String SUPPORT_BUNDLE_CANCEL = "support_bundle_cancel";
     public static final String SUPPORT_BUNDLE_RETRIEVE = "support_bundle_retrieve";
     public static final String SUPPORT_BUNDLE_DELETE = "support_bundle_delete";
+    /** PO 2026-11-16: the admin-confirmed removal of a leftover work directory, by the approved C20 literal only. */
+    public static final String SUPPORT_BUNDLE_CLEANUP_WORKDIR = "support_bundle_cleanup_workdir";
+    /** PO 2026-11-15/16 (Q8, Q9): vendor upload, no four-eyes; the same security_admin may request, download and upload. */
+    public static final String SUPPORT_BUNDLE_UPLOAD = "support_bundle_upload";
 
     public static final String HTTPS_CERTIFICATE_ACCEPT = "https_certificate_accept";
     public static final String HTTPS_CERTIFICATE_STRICT = "https_certificate_strict";
@@ -497,6 +501,8 @@ public final class ActionRegistry {
         register(new ActionDescriptor(SUPPORT_BUNDLE_CANCEL, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SUPPORT_BUNDLE_RETRIEVE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SUPPORT_BUNDLE_DELETE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(SUPPORT_BUNDLE_CLEANUP_WORKDIR, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(SUPPORT_BUNDLE_UPLOAD, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without

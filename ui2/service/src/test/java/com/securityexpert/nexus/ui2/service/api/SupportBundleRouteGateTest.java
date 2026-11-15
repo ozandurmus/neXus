@@ -30,11 +30,13 @@ class SupportBundleRouteGateTest {
     private static final Pattern ROUTE = Pattern.compile("@(Get|Post)Mapping\\(\\s*\"([^\"]+)\"");
 
     private static List<String> routes() throws IOException {
-        Path controller = Path.of(System.getProperty("user.dir"))
-                .resolve("src/main/java/com/securityexpert/nexus/ui2/service/supportbundle/SupportBundleController.java");
-        Matcher m = ROUTE.matcher(Files.readString(controller));
         List<String> out = new ArrayList<>();
-        while (m.find()) out.add(m.group(1).toUpperCase() + " " + m.group(2).replaceAll("\\{[^}]+}", "*"));
+        for (String file : new String[] {"SupportBundleController.java", "SupportBundleUploadController.java"}) {
+            Path controller = Path.of(System.getProperty("user.dir"))
+                    .resolve("src/main/java/com/securityexpert/nexus/ui2/service/supportbundle/" + file);
+            Matcher m = ROUTE.matcher(Files.readString(controller));
+            while (m.find()) out.add(m.group(1).toUpperCase() + " " + m.group(2).replaceAll("\\{[^}]+}", "*"));
+        }
         return out;
     }
 
@@ -42,7 +44,7 @@ class SupportBundleRouteGateTest {
     void everyRouteHasAnActionAndTheRoleRulesHold() throws IOException {
         ActionRegistry registry = new ActionRegistry();
         List<String> routes = routes();
-        assertEquals(10, routes.size(), routes.toString());
+        assertEquals(14, routes.size(), routes.toString());
         for (String route : routes) {
             String actionId = SecurityWebMvcConfigTestAccess.actionIdFor(route);
             assertNotNull(actionId, "route " + route + " has no action mapping (would fail closed)");
@@ -57,7 +59,8 @@ class SupportBundleRouteGateTest {
             }
         }
         assertEquals(Set.of(ActionRegistry.SUPPORT_BUNDLE_READ, ActionRegistry.SUPPORT_BUNDLE_REQUEST,
-                ActionRegistry.SUPPORT_BUNDLE_CANCEL, ActionRegistry.SUPPORT_BUNDLE_RETRIEVE, ActionRegistry.SUPPORT_BUNDLE_DELETE),
+                ActionRegistry.SUPPORT_BUNDLE_CANCEL, ActionRegistry.SUPPORT_BUNDLE_RETRIEVE, ActionRegistry.SUPPORT_BUNDLE_DELETE,
+                ActionRegistry.SUPPORT_BUNDLE_CLEANUP_WORKDIR, ActionRegistry.SUPPORT_BUNDLE_UPLOAD),
                 routes.stream().map(SecurityWebMvcConfigTestAccess::actionIdFor).collect(java.util.stream.Collectors.toSet()));
     }
 }
