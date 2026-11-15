@@ -33,7 +33,9 @@ import org.springframework.context.ConfigurableApplicationContext;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.securityexpert.nexus.ui2.integration.support.KeepAliveHttp;
 import com.securityexpert.nexus.ui2.integration.support.Ui2PostgresFixture;
+import com.securityexpert.nexus.ui2.integration.support.Ui2Rows;
 import com.securityexpert.nexus.ui2.service.boot.Ui2Application;
 
 /**
@@ -220,6 +222,99 @@ class HttpSurfaceCharacterizationTest {
         } finally {
             current = transcript;
         }
+        keepAliveProbes();
+    }
+
+    // ------------------------------------------------------------------
+    // Keep-alive probes (not part of either golden transcript)
+    // ------------------------------------------------------------------
+
+    /** Label ("anonymous GET /jobs/{id}/transcript") to the status of the first response on the persistent connection. */
+    private static final Map<String, Integer> keepAliveStatus = new LinkedHashMap<>();
+    /** Label to what went wrong: the first response did not end, or the same connection could not serve a second request. */
+    private static final Map<String, String> keepAliveFailures = new LinkedHashMap<>();
+    private static final int KEEP_ALIVE_READ_TIMEOUT_MS = 5_000;
+    private static final String BUNDLE_ID = "00000000-0000-4000-8000-000000000002";
+
+    /**
+     * Added 2026-11-15 after the batch 12 preview e2e stalled on the aiview transcript denial. Every route that leaves the plain
+     * request/response shape (each StreamingResponseBody download, whose refusals and answers can run through an ASYNC or
+     * ERROR dispatch) and the transcript read, asked the way the console's browser asks: one persistent HTTP/1.1 connection,
+     * a Chromium fetch's headers, the response read by its own framing. Each answer must end inside the read timeout and the
+     * same connection must then answer {@code GET /healthz}. The golden suite above uses {@code Connection: close}, where a
+     * body that never ends would still look complete the moment the server closes; these probes cannot be fooled that way.
+     * Run last, so the transcripts above see the database exactly as they did before.
+     */
+    private static void keepAliveProbes() throws Exception {
+        String jobId = seedBackupJobWithTranscript();
+        String origin = "http://127.0.0.1:" + port;
+        List<String[]> routes = List.of(
+                new String[] {"GET", "/jobs/" + jobId + "/transcript", null},
+                new String[] {"GET", "/api/v2/policy/changes.csv", null},
+                new String[] {"GET", "/api/v2/reports/runs/" + RUN_ID + "/download", null},
+                new String[] {"GET", "/backups/" + ARTEFACT + "/download?ticket=bad", null},
+                new String[] {"POST", "/backups/" + ARTEFACT + "/download", "{\"reason\":\"synthetic keep-alive probe\"}"},
+                new String[] {"GET", "/api/v2/sanitize/jobs/no-such-job/download", null},
+                new String[] {"GET", "/api/v2/sanitize/reverts/no-such-revert/download", null},
+                new String[] {"GET", "/api/v2/packet-analysis/captures/no-such-capture/download", null},
+                new String[] {"GET", "/api/v2/support-bundles/" + BUNDLE_ID + "/download?ticket=bad", null},
+                new String[] {"POST", "/api/v2/support-bundles/" + BUNDLE_ID + "/download",
+                        "{\"reason\":\"synthetic keep-alive probe\"}"});
+        String[][] identities = {{"anonymous", null}, {"viewer", "claudeadmin"}, {"replay viewer", "aiview"}};
+        for (String[] identity : identities) {
+            String cookie = null;
+            String csrf = null;
+            if (identity[1] != null) {
+                try (KeepAliveHttp http = new KeepAliveHttp(port, KEEP_ALIVE_READ_TIMEOUT_MS)) {
+                    KeepAliveHttp.Response login = http.exchange("POST", "/login", JSON_BODY,
+                            JSON.writeValueAsBytes(Map.of("username", identity[1], "password", identity[1])));
+                    cookie = sessionCookie(new Resp(login.status(), login.headers(), login.body()));
+                    assertNotNull(cookie, identity[0] + " login");
+                    // No Accept-Encoding: the status body stays plain JSON.
+                    csrf = JSON.readTree(http.exchange("GET", "/session/status", Map.of("Cookie", "ui2_session=" + cookie), null)
+                            .body()).path("csrf_token").asText("");
+                }
+            }
+            for (String[] route : routes) {
+                String label = identity[0] + " " + route[0] + " " + route[1].replace(jobId, "{id}");
+                Map<String, String> headers = KeepAliveHttp.browserHeaders(cookie, origin);
+                if (route[2] != null) {
+                    headers.put("Origin", origin);
+                    headers.put("Content-Type", "application/json");
+                    if (csrf != null) headers.put("X-CSRF-Token", csrf);
+                }
+                try (KeepAliveHttp http = new KeepAliveHttp(port, KEEP_ALIVE_READ_TIMEOUT_MS)) {
+                    KeepAliveHttp.Response first = http.exchange(route[0], route[1], headers,
+                            route[2] == null ? null : route[2].getBytes(StandardCharsets.UTF_8));
+                    keepAliveStatus.put(label, first.status());
+                    KeepAliveHttp.Response second = http.exchange("GET", "/healthz", Map.of(), null);
+                    if (second.status() != 200) keepAliveFailures.put(label, "second request answered " + second.status());
+                } catch (IOException e) {
+                    keepAliveFailures.put(label, e.getMessage());
+                }
+            }
+        }
+    }
+
+    /** A backup job row carrying a transcript reference, as the backup worker leaves it (the artefact itself is absent). */
+    private static String seedBackupJobWithTranscript() throws Exception {
+        String jobId = Ui2Rows.opaqueId("job");
+        try (var c = fixture.migrateConnection()) {
+            String device = Ui2Rows.insertDevice(c, Ui2Rows.insertCredentialReference(c), "ENROLLED");
+            c.setAutoCommit(false);
+            Ui2Rows.setAuditContext(c, Ui2Rows.ACTOR, Ui2Rows.ACTION);
+            try (var st = c.prepareStatement("insert into jobs(job_id, job_type, target_kind, target_device_id, "
+                    + "submitted_by_actor_fingerprint, state, action_class, transcript_artefact_ref, transcript_artefact_key) "
+                    + "values (?, 'backup', 'device', ?, ?, 'COMPLETED', 'read', 'synthetic-transcript-ref', ?)")) {
+                st.setString(1, jobId);
+                st.setString(2, device);
+                st.setString(3, Ui2Rows.ACTOR);
+                st.setBytes(4, new byte[32]);
+                st.executeUpdate();
+            }
+            c.commit();
+        }
+        return jobId;
     }
 
     /**
@@ -1027,6 +1122,24 @@ class HttpSurfaceCharacterizationTest {
                 "the machine-port filter must run before the Spring Security filter");
         assertEquals(0, context.getBeanNamesForType(Class.forName("org.springframework.security.core.userdetails.UserDetailsService")).length);
         assertEquals(1, context.getBeansOfType(Class.forName("org.springframework.security.web.SecurityFilterChain")).size());
+    }
+
+    @Test
+    void everyAsyncRouteAndTheTranscriptEndPromptlyOnAKeepAliveConnectionAndLeaveItUsable() {
+        var probed = new java.util.HashSet<>(keepAliveStatus.keySet());
+        probed.addAll(keepAliveFailures.keySet());
+        assertEquals(30, probed.size(), "10 routes x 3 identities");
+        assertEquals(Map.of(), keepAliveFailures);
+        assertEquals(401, keepAliveStatus.get("anonymous GET /jobs/{id}/transcript"));
+        assertEquals(403, keepAliveStatus.get("viewer GET /jobs/{id}/transcript"));
+        assertEquals(403, keepAliveStatus.get("replay viewer GET /jobs/{id}/transcript"));
+        // the same refusals the Connection: close golden recorded
+        assertEquals(status("async anon GET changes.csv"), keepAliveStatus.get("anonymous GET /api/v2/policy/changes.csv"));
+        assertEquals(status("async viewer GET changes.csv"), keepAliveStatus.get("viewer GET /api/v2/policy/changes.csv"));
+        assertEquals(status("async replay viewer GET changes.csv"),
+                keepAliveStatus.get("replay viewer GET /api/v2/policy/changes.csv"));
+        assertEquals(status("async viewer POST backup download"),
+                keepAliveStatus.get("viewer POST /backups/" + ARTEFACT + "/download"));
     }
 
     private static int status(String label) {

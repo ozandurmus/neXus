@@ -141,13 +141,26 @@ export async function visit(page: Page, query: string, heading: string) {
   await expect(page.getByRole("heading", { name: heading, exact: true }).first()).toBeVisible();
 }
 
+/**
+ * A transcript body is never returned to the test, but it must not be left unconsumed either: Chromium reports a
+ * Cache-Control: no-store response whose body the page never reads as still loading (no "requestfinished", no
+ * "requestfailed") for as long as the Response object lives, although every byte has arrived and the connection is
+ * already serving the next request. Since the PO response-header decision of 2026-11-15 every gate refusal carries
+ * no-store, and the transcript denial probe failed every later checkpoint with "Screen reads did not finish"
+ * (batch 12 preview, measured locally against the booted service with system Chrome). The expected 403 is drained,
+ * so a refusal that really never ends still fails here; any other answer is cancelled unread.
+ */
 export async function browserGet<T>(page: Page, path: string): Promise<{ status: number; body: T }> {
   try {
     return await page.evaluate(async (path) => {
       const response = await fetch(path, { method: "GET", credentials: "include", redirect: "error" });
       // A denied transcript is never read; neither is an unexpected successful transcript.
-      const body = path.endsWith("/transcript") ? null : await response.json();
-      return { status: response.status, body };
+      if (path.endsWith("/transcript")) {
+        if (response.status === 403) await response.arrayBuffer();
+        else await response.body?.cancel();
+        return { status: response.status, body: null };
+      }
+      return { status: response.status, body: await response.json() };
     }, path);
   } catch { throw new Error("Guarded API read failed (URL/body withheld)"); }
 }
