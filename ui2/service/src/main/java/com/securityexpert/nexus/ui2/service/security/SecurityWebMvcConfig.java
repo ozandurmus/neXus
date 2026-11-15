@@ -442,10 +442,18 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
         return Set.copyOf(routes);
     }
 
+    /** The route decision both the interceptor and the Spring Security manager use, over this class's own route map. */
+    public static RouteActionGate routeGate(GateChain gateChain, LocalIdentityResolver localIdentityResolver,
+            LocalRoleTokenResolver localRoleTokenResolver) {
+        return new RouteActionGate(gateChain, ACTION_ID_BY_ROUTE, EXPLICITLY_UNGATED_ROUTES, localIdentityResolver,
+                localRoleTokenResolver);
+    }
+
     private final GateChain gateChain;
     private final LocalIdentityResolver localIdentityResolver;
     private final LocalRoleTokenResolver localRoleTokenResolver;
     private final AdminWindowBypass adminWindowBypass;
+    private final boolean registerGateInterceptor;
 
     public SecurityWebMvcConfig(GateChain gateChain) {
         this(gateChain, null, null);
@@ -459,6 +467,17 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
     /** @param adminWindowBypass PO 2026-10-20: when set, {@link ManualAdmissionInterceptor} runs after the gate chain */
     public SecurityWebMvcConfig(GateChain gateChain, LocalIdentityResolver localIdentityResolver,
             LocalRoleTokenResolver localRoleTokenResolver, AdminWindowBypass adminWindowBypass) {
+        this(gateChain, localIdentityResolver, localRoleTokenResolver, adminWindowBypass, true);
+    }
+
+    /**
+     * @param registerGateInterceptor {@code false} once {@link NexusRouteActionAuthorizationManager} decides the route in
+     *     the security filter chain (migration plan Step 5); {@code true} is the rollback path and the default
+     */
+    public SecurityWebMvcConfig(GateChain gateChain, LocalIdentityResolver localIdentityResolver,
+            LocalRoleTokenResolver localRoleTokenResolver, AdminWindowBypass adminWindowBypass,
+            boolean registerGateInterceptor) {
+        this.registerGateInterceptor = registerGateInterceptor;
         this.gateChain = gateChain;
         this.localIdentityResolver = localIdentityResolver;
         this.localRoleTokenResolver = localRoleTokenResolver;
@@ -467,8 +486,10 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new GateChainInterceptor(gateChain, ACTION_ID_BY_ROUTE, EXPLICITLY_UNGATED_ROUTES,
-                localIdentityResolver, localRoleTokenResolver));
+        if (registerGateInterceptor) {
+            registry.addInterceptor(new GateChainInterceptor(gateChain, ACTION_ID_BY_ROUTE, EXPLICITLY_UNGATED_ROUTES,
+                    localIdentityResolver, localRoleTokenResolver));
+        }
         // Registration order is execution order: the grant is only ever opened for a request the gate chain passed.
         if (adminWindowBypass != null) registry.addInterceptor(new ManualAdmissionInterceptor(adminWindowBypass));
     }

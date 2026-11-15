@@ -93,11 +93,29 @@ public class RbacConfiguration {
         return new com.securityexpert.nexus.ui2.service.security.AdminWindowBypass(rbacEvaluator);
     }
 
+    /**
+     * Migration plan Step 5. On by default: the route-to-action decision runs in the Spring Security filter chain and
+     * {@code GateChainInterceptor} is not registered. {@code ui2.security.spring-authz-manager.enabled=false} is the rollback:
+     * the interceptor decides again and the filter chain permits every request, as in Steps 1 to 4.
+     */
     @Bean
     public SecurityWebMvcConfig securityWebMvcConfig(GateChain gateChain,
             LocalIdentityResolver localIdentityResolver, LocalRoleTokenResolver localRoleTokenResolver,
-            com.securityexpert.nexus.ui2.service.security.AdminWindowBypass adminWindowBypass) {
-        return new SecurityWebMvcConfig(gateChain, localIdentityResolver, localRoleTokenResolver, adminWindowBypass);
+            com.securityexpert.nexus.ui2.service.security.AdminWindowBypass adminWindowBypass,
+            @Value("${ui2.security.spring-authz-manager.enabled:true}") boolean springAuthzManagerEnabled) {
+        return new SecurityWebMvcConfig(gateChain, localIdentityResolver, localRoleTokenResolver, adminWindowBypass,
+                !springAuthzManagerEnabled);
+    }
+
+    @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+            name = "ui2.security.spring-authz-manager.enabled", havingValue = "true", matchIfMissing = true)
+    public com.securityexpert.nexus.ui2.service.security.NexusRouteActionAuthorizationManager nexusRouteActionAuthorizationManager(
+            GateChain gateChain, LocalIdentityResolver localIdentityResolver, LocalRoleTokenResolver localRoleTokenResolver,
+            org.springframework.beans.factory.ObjectProvider<org.springframework.web.servlet.HandlerMapping> handlerMappings) {
+        return new com.securityexpert.nexus.ui2.service.security.NexusRouteActionAuthorizationManager(
+                SecurityWebMvcConfig.routeGate(gateChain, localIdentityResolver, localRoleTokenResolver),
+                new com.securityexpert.nexus.ui2.service.security.DispatcherHandlerKindResolver(handlerMappings));
     }
 
     /** 13G LIA-3.5: shared by {@link RoleBindingAdminService#revoke} and {@link LocalIdentityAdministration#disable}. */

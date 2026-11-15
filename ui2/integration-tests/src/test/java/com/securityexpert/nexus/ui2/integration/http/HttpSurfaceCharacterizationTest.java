@@ -1119,9 +1119,12 @@ class HttpSurfaceCharacterizationTest {
         assertTrue(Class.forName("org.springframework.security.web.FilterChainProxy")
                 .isInstance(context.getBean("springSecurityFilterChain")));
         var registration = context.getBean("securityFilterChainRegistration", org.springframework.boot.web.servlet.RegistrationBean.class);
-        var order = context.findAnnotationOnBean("machinePortFilter", org.springframework.core.annotation.Order.class);
-        assertNotNull(order);
-        assertTrue(order.value() < ((org.springframework.core.Ordered) registration).getOrder(),
+        // Step 5: the order is now the filter's own (Ordered); the @Order on the bean method it used to be read from was never
+        // applied to a filter bean, so the filter had run behind the security chain.
+        var machinePortFilter = context.getBean("machinePortFilter");
+        assertTrue(machinePortFilter instanceof org.springframework.core.Ordered);
+        assertTrue(((org.springframework.core.Ordered) machinePortFilter).getOrder()
+                < ((org.springframework.core.Ordered) registration).getOrder(),
                 "the machine-port filter must run before the Spring Security filter");
         assertEquals(0, context.getBeanNamesForType(Class.forName("org.springframework.security.core.userdetails.UserDetailsService")).length);
         assertEquals(1, context.getBeansOfType(Class.forName("org.springframework.security.web.SecurityFilterChain")).size());

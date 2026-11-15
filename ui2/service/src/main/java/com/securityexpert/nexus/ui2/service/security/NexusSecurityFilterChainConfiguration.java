@@ -40,7 +40,8 @@ import org.springframework.security.web.firewall.HttpFirewall;
  *       X-XSS-Protection) stay off.</li>
  *   <li>The request firewall: a pass-through. {@code StrictHttpFirewall} would answer 400 to request targets the
  *       service accepts today (for example {@code /healthz;x=1}); Tomcat's own checks stay the only ones.</li>
- *   <li>Authorization: every request is permitted; the only filter behind the chain is still the Spring MVC interceptor.</li>
+ *   <li>Authorization: Step 5 puts the route-to-action decision here ({@link NexusRouteActionAuthorizationManager}); with the
+ *       manager absent every request is permitted and the Spring MVC interceptor decides.</li>
  * </ul>
  *
  * <p>Step 2 adds exactly one filter, {@link Ui2SessionAuthenticationFilter}: it only reads the {@code ui2_session} cookie into the
@@ -55,7 +56,8 @@ public class NexusSecurityFilterChainConfiguration {
 
     @Bean
     SecurityFilterChain nexusPassthroughSecurityFilterChain(HttpSecurity http,
-            ObjectProvider<SessionRepository> sessions, ObjectProvider<Clock> clock) throws Exception {
+            ObjectProvider<SessionRepository> sessions, ObjectProvider<Clock> clock,
+            ObjectProvider<NexusRouteActionAuthorizationManager> routeAuthorization) throws Exception {
         // Step 2: the ui2_session cookie becomes a SecurityContext authentication (additive; GateChain stays the authority).
         // Created here and not as a bean so Spring Boot does not also register it as a plain servlet filter.
         SessionRepository sessionRepository = sessions.getIfAvailable();
@@ -78,7 +80,21 @@ public class NexusSecurityFilterChainConfiguration {
                 .anonymous(AbstractHttpConfigurer::disable)
                 .servletApi(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(requests -> requests.anyRequest().permitAll());
+                .authorizeHttpRequests(requests -> {
+                    // Step 5: the route-to-action decision. Absent (rollback switch off, or a test context without the gate)
+                    // every request is permitted and GateChainInterceptor decides, as in Steps 1 to 4.
+                    NexusRouteActionAuthorizationManager manager = routeAuthorization.getIfAvailable();
+                    if (manager == null) {
+                        requests.anyRequest().permitAll();
+                    } else {
+                        requests.anyRequest().access(manager);
+                    }
+                });
+        if (routeAuthorization.getIfAvailable() != null) {
+            http.exceptionHandling(handling -> handling
+                    .accessDeniedHandler(new NexusSecurityAccessDeniedHandler())
+                    .authenticationEntryPoint(new NexusSecurityAuthenticationEntryPoint()));
+        }
         return http.build();
     }
 
