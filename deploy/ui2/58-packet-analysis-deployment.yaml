@@ -67,7 +67,14 @@ spec:
         args:
         - worker
         - packet_analysis
+        ports:
+        # Metrics (docs/operations/METRICS.md): a named container port only; no Service, Ingress or NetworkPolicy entry.
+        - name: metrics
+          containerPort: 9404
+          protocol: TCP
         env:
+        - name: UI2_METRICS_PORT
+          value: "9404"
         # Development mode (PO 2026-11-03): the job window spans the whole 6-hour slot, so manual jobs are never
         # refused as OUTSIDE_JOB_WINDOW. Remove (default 60) when scheduled operation resumes.
         - name: UI2_JOB_WINDOW_MINUTES
