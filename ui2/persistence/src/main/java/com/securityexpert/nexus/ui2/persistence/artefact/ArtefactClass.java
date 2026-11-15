@@ -15,6 +15,12 @@ public final class ArtefactClass {
     public static final String REPORT_VENDOR = "nexus";
     public static final String REPORT_DEVICE_ID = "platform:reports";
 
+    /**
+     * Support bundle items (V230, SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md): vendor TAC files, always an
+     * {@code expires_at} (14 days); outside the backup storage budget, own fleet quota.
+     */
+    public static final String SUPPORT_BUNDLE = "support_bundle";
+
     private ArtefactClass() {
     }
 }

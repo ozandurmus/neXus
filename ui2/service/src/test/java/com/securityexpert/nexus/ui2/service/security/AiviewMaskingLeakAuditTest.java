@@ -208,6 +208,7 @@ class AiviewMaskingLeakAuditTest {
             Map.entry("changedBy", "security_admin screens only"),
             Map.entry("changed_by", "ScheduledJobSwitches passes the principal function (masked for aiview)"),
             Map.entry("created_by", "PacketAnalysisController and TopologyView omit it when masked"),
+            Map.entry("deleted_by", "SupportBundleController omits it (with requested_by, reason, case_ref) for the replay viewer"),
             Map.entry("device_name", "PacketDeviceEventsService, ChangeEvent self-mask; JobEvent has its own branch"),
             Map.entry("display_name", "capture and telemetry names go through maskPolicyName; credential admin is security_admin"),
             Map.entry("ended_by_actor_fingerprint", "session administration, security_admin"),

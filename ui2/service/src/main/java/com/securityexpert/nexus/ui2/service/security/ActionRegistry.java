@@ -290,6 +290,18 @@ public final class ActionRegistry {
             RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER);
     public static final java.util.Set<String> REPORT_RAW_ROLES = java.util.Set.of(RoleToken.SECURITY_ADMIN);
 
+    /**
+     * Support bundle collection (docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md, FROZEN 2026-11-15; PO Q6:
+     * request and download are security_admin only). The read returns metadata (opaque ids, pseudonym, kinds, states,
+     * sizes, digest prefix, expiry) and is open to the viewer roles and the replay viewer, whose responses omit the
+     * actor, reason and case reference. No write, retrieve or delete action ever includes the replay viewer.
+     */
+    public static final String SUPPORT_BUNDLE_READ = "support_bundle_read";
+    public static final String SUPPORT_BUNDLE_REQUEST = "support_bundle_request";
+    public static final String SUPPORT_BUNDLE_CANCEL = "support_bundle_cancel";
+    public static final String SUPPORT_BUNDLE_RETRIEVE = "support_bundle_retrieve";
+    public static final String SUPPORT_BUNDLE_DELETE = "support_bundle_delete";
+
     public static final String HTTPS_CERTIFICATE_ACCEPT = "https_certificate_accept";
     public static final String HTTPS_CERTIFICATE_STRICT = "https_certificate_strict";
 
@@ -472,6 +484,13 @@ public final class ActionRegistry {
         register(new ActionDescriptor(REPORT_READ, true, Optional.of(RoleToken.OPERATOR), REPORT_USER_ROLES));
         register(new ActionDescriptor(REPORT_GENERATE, true, Optional.of(RoleToken.OPERATOR), REPORT_USER_ROLES));
         register(new ActionDescriptor(REPORT_RAW_VIEW, false, Optional.of(RoleToken.SECURITY_ADMIN)));
+        // Support bundles: read for every role (aiview masked); request, cancel, retrieve, delete security_admin only.
+        register(new ActionDescriptor(SUPPORT_BUNDLE_READ, true, Optional.of(RoleToken.OPERATOR),
+                java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN, RoleToken.VIEWER, RoleToken.REPLAY_VIEWER)));
+        register(new ActionDescriptor(SUPPORT_BUNDLE_REQUEST, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(SUPPORT_BUNDLE_CANCEL, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(SUPPORT_BUNDLE_RETRIEVE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(SUPPORT_BUNDLE_DELETE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without

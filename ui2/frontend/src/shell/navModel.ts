@@ -85,6 +85,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     { id: "packet-analysis", label: "Packet analysis", screen: "packet_analysis", href: "?screen=packet_analysis", requiredPlane: "PacketAnalysis" },
     { id: "sanitizer", label: "Data sanitizer", screen: "sanitizer", href: "?screen=sanitizer", requiredPlane: "Sanitizer" },
     { id: "diagnostics", label: "Diagnostics", screen: "diagnostics", href: "?screen=diagnostics" },
+    { id: "support-bundles", label: "Support bundles", screen: "support_bundles", href: "?screen=support_bundles" },
   ] },
   // Listed for every session in every layout; a page the session may not use is locked, never hidden (amendment 6).
   { kind: "group", id: "administration", label: "Administration", icon: "admin", children: [
@@ -148,6 +149,7 @@ export function activeLeafId(screen: ScreenId, search: string): string {
     case "packet_analysis": return "packet-analysis";
     case "rule_usage": return "rule-usage";
     case "zone_matrix": return "zone-matrix";
+    case "support_bundles": return "support-bundles";
     default: return screen;
   }
 }

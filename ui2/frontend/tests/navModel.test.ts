@@ -23,10 +23,10 @@ describe("the navigation model (NAVIGATION_REDESIGN_2026_11_12.md section 2)", (
       ["Backups", null],
       ["Operations", ["HA and readiness", "Jobs", "Device health"]],
       ["Reports", null],
-      ["Tools", ["Packet analysis", "Data sanitizer", "Diagnostics"]],
+      ["Tools", ["Packet analysis", "Data sanitizer", "Diagnostics", "Support bundles"]],
       ["Administration", ["Device registry", "Access and identity", "Scheduled jobs", "Notifications and logging", "Platform status", "Audit log", "Delivery plan"]],
     ]);
-    expect(NAV_LEAVES).toHaveLength(25);
+    expect(NAV_LEAVES).toHaveLength(26);
   });
 
   it("gives every destination one entry: ids and addresses are unique, and every screen has a home", () => {
@@ -173,14 +173,14 @@ describe("what a session is shown (plane checks only)", () => {
       ["Backups", null],
       ["Operations", ["HA and readiness", "Jobs", "Device health"]],
       ["Reports", null],
-      ["Tools", ["Packet analysis", "Diagnostics"]],
+      ["Tools", ["Packet analysis", "Diagnostics", "Support bundles"]],
       ["Administration", ["Device registry", "Access and identity", "Scheduled jobs", "Notifications and logging", "Platform status", "Audit log", "Delivery plan"]],
     ]);
   });
 
-  it("a session with Devices, Compliance and Policy sees Tools with Diagnostics only, and Rule object usage under Policy and changes", () => {
+  it("a session with Devices, Compliance and Policy sees Tools with Diagnostics and Support bundles only, and Rule object usage under Policy and changes", () => {
     const tools = visibleEntries(["Devices", "Compliance", "Policy"], "overview").find((e) => e.id === "tools")!;
-    expect(leavesOf(tools).map((l) => l.label)).toEqual(["Diagnostics"]);
+    expect(leavesOf(tools).map((l) => l.label)).toEqual(["Diagnostics", "Support bundles"]);
     const policy = visibleEntries(["Devices", "Compliance", "Policy"], "overview").find((e) => e.id === "policy-changes")!;
     expect(leavesOf(policy).map((l) => l.label)).toEqual(["Policy", "Trace", "Changes", "Rule object usage", "Zone matrix", "Cutover impact"]);
     // Without the Policy plane the entry is not listed, unless it is the open page.

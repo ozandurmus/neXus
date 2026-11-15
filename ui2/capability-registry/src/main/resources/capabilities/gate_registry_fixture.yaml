@@ -5416,3 +5416,176 @@ gates:
     secret_output_risk: 'output names interfaces, addresses and serials; reduced in memory to derived values, never stored or recorded in the transcript'
     safe_telemetry_fields: []
     source_document_pointer: 'Cisco ASA command reference (show conn count); PO approval 2026-11-14 (''Onaylıyorum'': readiness checks only, both members, read-only, masked output); PO_DECISION_RECORD_2026_11_14_ASA_FAILOVER_READINESS_READS.md'
+
+  # Support bundle collection, step S2 (V230; PO approval 2026-11-15, SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6, C0-C7,
+  # plus the two cpdata_collector literals approved later the same day: gate rows only, no executor uses them yet).
+
+  - gate_id: "cp_sb_cpdata_collector_present"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; command -v cpdata_collector"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "once per run"
+    session_reuse_rule: "one session per run"
+    unsupported_behavior_ref: "not found or an error: the item records ABSENT, nothing else changes"
+    secret_output_risk: "none; the path of an installed tool only"
+    safe_telemetry_fields: ["exitStatus", "present"]
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_11_15_SUPPORT_BUNDLE_COLLECTION.md (Q3, C0)"
+
+  - gate_id: "cp_sb_cpu_multi"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; cpstat os -f multi_cpu"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "once per run"
+    session_reuse_rule: "one session per run"
+    unsupported_behavior_ref: "an error or an unexpected shape: the CPU value is UNKNOWN and no heavy item may rely on it"
+    secret_output_risk: "none"
+    safe_telemetry_fields: ["exitStatus", "bytes"]
+    source_document_pointer: "docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (C1); PO approval 2026-11-15"
+
+  - gate_id: "cp_sb_df_var_log"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; df -P /var/log"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "once per run"
+    session_reuse_rule: "one session per run"
+    unsupported_behavior_ref: "an unparseable answer: free space is UNKNOWN and no heavy item may rely on it"
+    secret_output_risk: "none"
+    safe_telemetry_fields: ["exitStatus", "bytes"]
+    source_document_pointer: "docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (C2); PO approval 2026-11-15"
+
+  - gate_id: "cp_sb_show_asset_all"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; clish -c 'show asset all'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per run"
+    session_reuse_rule: "one session per run"
+    unsupported_behavior_ref: "an error: the item records the command as UNSUPPORTED, the other reads still run"
+    secret_output_risk: "identity (serial numbers)"
+    safe_telemetry_fields: ["exitStatus", "bytes"]
+    source_document_pointer: "docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (C3); PO approval 2026-11-15"
+
+  - gate_id: "cp_sb_show_version_all"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; clish -c 'show version all'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "once per run"
+    session_reuse_rule: "one session per run"
+    unsupported_behavior_ref: "an error: the item records the command as UNSUPPORTED, the other reads still run"
+    secret_output_risk: "none"
+    safe_telemetry_fields: ["exitStatus", "bytes"]
+    source_document_pointer: "docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (C4); PO approval 2026-11-15"
+
+  - gate_id: "cp_sb_cphaprob_stat"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; cphaprob stat"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "once per run"
+    session_reuse_rule: "one session per run"
+    unsupported_behavior_ref: "an error (a standalone gateway has no cluster): the item records the command as UNSUPPORTED"
+    secret_output_risk: "identity (cluster member names)"
+    safe_telemetry_fields: ["exitStatus", "bytes"]
+    source_document_pointer: "docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (C5); PO approval 2026-11-15"
+
+  - gate_id: "cp_sb_ls_hcp_last"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; ls -lgo --time-style=+%s /var/log/hcp/last/"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "once per run"
+    session_reuse_rule: "one session per run"
+    unsupported_behavior_ref: "a missing directory: the item records ABSENT"
+    secret_output_risk: "file names carry host names; masked on ingest"
+    safe_telemetry_fields: ["exitStatus", "fileCount"]
+    source_document_pointer: "docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (C6); PO approval 2026-11-15"
+
+  - gate_id: "cp_sb_sftp_get_hcp"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "not_applicable"
+    transport_kind: "SFTP_GET"
+    canonical_command_key: "sftp get of /var/log/hcp/last/<listed name>; name pattern [A-Za-z0-9_.-]+\\.tar\\.gz"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 300
+    retry_rule: "none"
+    max_frequency: "once per run"
+    session_reuse_rule: "same session (SFTP channel)"
+    unsupported_behavior_ref: "a missing file or a path not printed by C6 in the same run: nothing is fetched; over 16 MiB: TOO_LARGE, nothing stored"
+    secret_output_risk: "report content: stored encrypted as received, never shown to aiview"
+    safe_telemetry_fields: ["sizeBytes", "sha256"]
+    source_document_pointer: "docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (C7); PO approval 2026-11-15"
+
+  - gate_id: "cp_sb_cpdata_collector_list"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; cpdata_collector --list"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per run"
+    session_reuse_rule: "one session per run"
+    unsupported_behavior_ref: "an error or an unexpected shape: UNSUPPORTED; APPROVED here, built in a later lane (no executor uses it yet)"
+    secret_output_risk: "none"
+    safe_telemetry_fields: ["exitStatus", "bytes"]
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_11_15_SUPPORT_BUNDLE_COLLECTION.md (cpdata_collector --list, PO approval relayed 2026-11-15)"
+
+  - gate_id: "cp_sb_cpdata_collector_run"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; cd %1$s && setsid nohup bash --noprofile --norc -c \"timeout 1800 cpdata_collector --run -p %1$s/cpsdc.tgz -t 3 -m 100 > %1$s/cpsdc.log 2>&1; echo \\$? > %1$s/cpsdc.rc\" </dev/null >/dev/null 2>&1 &"
+    action_class: "recovery-write"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "once per run, never retried"
+    session_reuse_rule: "one session per run"
+    unsupported_behavior_ref: "rc file records the failure; APPROVED here (BW-2 transient artefact), built in a later lane (no executor uses it yet)"
+    secret_output_risk: "secret-bearing (collector archive)"
+    safe_telemetry_fields: ["exitStatus"]
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_11_15_SUPPORT_BUNDLE_COLLECTION.md (cpdata_collector --run, PO approval relayed 2026-11-15)"

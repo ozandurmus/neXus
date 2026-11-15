@@ -92,6 +92,7 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     ["packet_analysis", "?screen=packet_analysis", "Packet analysis", "Tools"],
     ["sanitizer", "?screen=sanitizer", "Data sanitizer", "Tools"],
     ["diagnostics", "?screen=diagnostics", "Diagnostics", "Tools"],
+    ["support_bundles", "?screen=support_bundles", "Support bundles", "Tools"],
     ["rule_usage", "?screen=rule_usage", "Rule object usage", "Policy and changes"],
     ["rule_usage", "?screen=rule_usage&mode=policy&policy_id=p1", "Rule object usage", "Policy and changes"],
     ["administration", "?screen=administration", "Device registry", "Administration"],
@@ -187,7 +188,7 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     expect(within(nav()).getByRole("link", { name: "Jobs" })).toBeInTheDocument();
     fireEvent.click(header("Tools"));
     const tools = document.getElementById("nav-group-tools")!;
-    expect(within(tools).getAllByRole("link").map((a) => a.textContent)).toEqual(["Packet analysis", "Diagnostics"]);
+    expect(within(tools).getAllByRole("link").map((a) => a.textContent)).toEqual(["Packet analysis", "Diagnostics", "Support bundles"]);
   });
 
   it("keeps only the lit entry for a session without the Devices plane that opens Devices", () => {
@@ -345,7 +346,7 @@ describe("the sidebar folds to icons (PO 2026-10-20)", () => {
     window.localStorage.setItem(FOLD_KEY, "1");
     rail("operations", viewer);
     fireEvent.click(header("Tools"));
-    expect(within(screen.getByRole("menu", { name: "Tools" })).getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Packet analysis", "Diagnostics"]);
+    expect(within(screen.getByRole("menu", { name: "Tools" })).getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Packet analysis", "Diagnostics", "Support bundles"]);
   });
 
   it("remembers the fold per viewer and reads it back on the next render", () => {
