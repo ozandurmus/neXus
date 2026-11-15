@@ -1,12 +1,12 @@
 # neXus — Current State
 
-Hot checkpoint reconciled on 2026-11-15 10:00 against `origin/main` at `2a229cb8` (batches 1-3 shipped); batches 4-9 are in the ship queue.
+Hot checkpoint reconciled on 2026-11-15 10:00 against `origin/main` at `31babb26` (batches 1-9 shipped); batch 10 is in the ship queue.
 `project/QUEUE.md` and its tool-managed data own delivery state; repository
 source proves implementation, not the current deployment or device health.
 
 ## Product today
 
-UI2 is the maintained Java/React product; repository schema on main is **V218**; the ship queue adds V219-V223.
+UI2 is the maintained Java/React product; repository schema on main is **V223**; the ship queue adds V225 and V227.
 Inventory, configuration, compliance, encrypted backups, Operations, Policy,
 lifecycle and security checks, Packet Analysis and device system logs use
 masked `aiview` projections. Restore from the UI remains disabled. Sign-in uses
@@ -24,13 +24,13 @@ only (V209/V210). Authority: [NSPM decision](docs/design/PO_DECISION_RECORD_2026
 `NXS-LOCAL-0391` — **IN_PROGRESS** (started 2026-11-13): delivering the
 release queue below, one PR per lane after a live migration dry run.
 `NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory
-sign-in landed; opt-in JSON logs are in the ship queue; SAML and monitoring endpoints are not built.
+sign-in landed; opt-in JSON logs shipped with batches 4-9; SAML and monitoring endpoints are not built.
 Next: `recovery_offhost_key_custody` (ratified 2026-11-14, roadmap and Java
 plan agree); Overview acceptance heads the upcoming list.
 
-Shipped on main (batches 1-3; deployment to the host not asserted): ASA readiness (V212), V208 NULL-hole fix and integration CI gate (V213), Check Point advisories (V214), zone matrix step 1 (V216), ACI step 1 backend (V217), API latency (V218), discovery empty body answers 400, disk headroom alert, probe/e2e session isolation, release e2e fail-fast with worker manifest sync.
+Shipped on main (batches 1-9, batches 4-9 merged 2026-11-15 10:33; deployment to the host not asserted): ASA readiness (V212), V208 NULL-hole fix and integration CI gate (V213), Check Point advisories (V214), zone matrix step 1 (V216), ACI step 1 backend (V217), API latency (V218), batches 4-9 (V219-V223: lifecycle catalog, zone matrix step 2, App-ID gate, ASA sign-off, password policy; ASA/FortiGate policy, Cutover impact, JSON logs), discovery empty body answers 400, disk headroom alert, probe/e2e session isolation, release e2e fail-fast with worker manifest sync.
 
-In the ship queue as of 2026-11-15 10:00 (batches 4-9; each migration needs its live dry run): lifecycle catalog (V219), zone matrix step 2 (V220), Palo Alto App-ID gate (V221), ASA readiness sign-off (V222), local password policy (V223); ASA/FortiGate policy in lookup, hygiene and Trace and their cluster view; Cutover impact screen; artefact-store byte quota; logmask-v7/v8; JSON logs; B1-10/B1-11 tests.
+In the ship queue (batch 10; each migration needs its live dry run): per-store quota (V225), refusal audit (V227), FortiGate/ASA Trace wiring, Reconcile action, code splitting, metrics, jsch 0.2.26, CodeQL CI.
 
 Open PO decisions: product name; narrowing the ASA identity ACEs; the DB
 NetworkPolicy contract conflict; the off-host recovery target; support-bundle
