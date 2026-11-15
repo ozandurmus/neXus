@@ -1,0 +1,1419 @@
+### anon GET /healthz
+status: 200
+header: connection: close
+header: content-length: <n>
+header: content-type: text/plain;charset=UTF-8
+header: date: <date>
+body: text ok
+
+### anon HEAD /healthz
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: <empty>
+
+### anon POST /healthz
+status: 405
+header: allow: GET
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Method Not Allowed","path":"/healthz","status":"<n>","timestamp":"<ts>"}
+
+### anon PUT /healthz
+status: 405
+header: allow: GET
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Method Not Allowed","path":"/healthz","status":"<n>","timestamp":"<ts>"}
+
+### anon TRACE /healthz
+status: 405
+header: allow: DELETE, GET, HEAD, OPTIONS, POST, PUT
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Method Not Allowed","path":"/healthz","status":"<n>","timestamp":"<ts>"}
+
+### anon GET /
+status: 200
+header: accept-ranges: bytes
+header: cache-control: no-cache, must-revalidate
+header: connection: close
+header: content-language: en-TR
+header: content-length: <n>
+header: content-type: text/html;charset=UTF-8
+header: date: <date>
+header: last-modified: <date>
+body: <text/html, non-empty>
+
+### anon GET /index.html
+status: 200
+header: accept-ranges: bytes
+header: cache-control: no-cache, must-revalidate
+header: connection: close
+header: content-length: <n>
+header: content-type: text/html
+header: date: <date>
+header: last-modified: <date>
+body: <text/html, non-empty>
+
+### anon GET / gzip
+status: 200
+header: accept-ranges: bytes
+header: cache-control: no-cache, must-revalidate
+header: connection: close
+header: content-language: en-TR
+header: content-length: <n>
+header: content-type: text/html;charset=UTF-8
+header: date: <date>
+header: last-modified: <date>
+body: <text/html, non-empty>
+
+### anon GET hashed asset
+status: 200
+header: accept-ranges: bytes
+header: cache-control: max-age=31536000, public, immutable
+header: connection: close
+header: content-length: <n>
+header: content-type: text/javascript
+header: date: <date>
+header: last-modified: <date>
+body: <text/javascript, non-empty>
+
+### anon GET hashed asset conditional
+status: 304
+header: cache-control: max-age=31536000, public, immutable
+header: connection: close
+header: date: <date>
+header: last-modified: <date>
+body: <empty>
+
+### anon GET missing asset
+status: 404
+header: connection: close
+header: content-disposition: inline;filename=f.txt
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/assets/does-not-exist.js","status":"<n>","timestamp":"<ts>"}
+
+### anon GET missing static file
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/does-not-exist.txt","status":"<n>","timestamp":"<ts>"}
+
+### anon GET /session/status
+status: 401
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"authenticated":false}
+
+### anon GET /session/status garbage cookie
+status: 401
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"authenticated":false}
+
+### anon GET /devices (gated read)
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+
+### anon GET /api/v2/overview (gated read)
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+
+### anon GET /sessions (admin read)
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+
+### anon POST /devices/add-single (gated write)
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+
+### anon POST /role-bindings (admin write)
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+
+### anon GET unmapped route
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/no-such-route","status":"<n>","timestamp":"<ts>"}
+
+### anon GET unmapped /api route
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"ACTION_MAPPING_REQUIRED"}
+
+### anon POST unmapped route
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/no-such-route","status":"<n>","timestamp":"<ts>"}
+
+### anon DELETE unmapped route
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/no-such-route","status":"<n>","timestamp":"<ts>"}
+
+### anon POST /session/logout
+status: 401
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Expires=<date>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"SESSION_INVALID"}
+
+### anon POST /local-credentials/change-password
+status: 401
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"INVALID_CREDENTIALS"}
+
+### anon GET /error
+status: 500
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"None","status":"<n>","timestamp":"<ts>"}
+
+### anon POST /error
+status: 500
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"None","status":"<n>","timestamp":"<ts>"}
+
+### anon OPTIONS /devices
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"ACTION_MAPPING_REQUIRED"}
+
+### anon OPTIONS /devices cors preflight
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"ACTION_MAPPING_REQUIRED"}
+
+### anon OPTIONS /
+status: 403
+header: cache-control: no-cache, must-revalidate
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"ACTION_MAPPING_REQUIRED"}
+
+### anon GET /internal/machine-session (main port)
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/internal/machine-session","status":"<n>","timestamp":"<ts>"}
+
+### anon POST /internal/machine-session (main port)
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/internal/machine-session","status":"<n>","timestamp":"<ts>"}
+
+### anon GET /internal (main port)
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/internal","status":"<n>","timestamp":"<ts>"}
+
+### anon POST /internal/advisories/paloalto (main port)
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/internal/advisories/paloalto","status":"<n>","timestamp":"<ts>"}
+
+### anon GET /devices with Origin header
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+
+### login bad password
+status: 401
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"INVALID_CREDENTIALS"}
+
+### login unknown user
+status: 401
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"INVALID_CREDENTIALS"}
+
+### login unknown mechanism
+status: 400
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"UNKNOWN_MECHANISM"}
+
+### login ldap not configured
+status: 503
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"DIRECTORY_UNAVAILABLE"}
+
+### login empty object
+status: 401
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"INVALID_CREDENTIALS"}
+
+### login malformed json
+status: 400
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Bad Request","path":"/login","status":"<n>","timestamp":"<ts>"}
+
+### login empty body
+status: 400
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Bad Request","path":"/login","status":"<n>","timestamp":"<ts>"}
+
+### login text/plain body
+status: 415
+header: accept: application/json, application/*+json
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Unsupported Media Type","path":"/login","status":"<n>","timestamp":"<ts>"}
+
+### login GET
+status: 405
+header: allow: POST
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Method Not Allowed","path":"/login","status":"<n>","timestamp":"<ts>"}
+
+### login resolve bogus token
+status: 409
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"LOGIN_REFUSED_ACTIVE_SESSION","reason_code":"conflict_token_expired_or_unknown"}
+
+### login resolve empty
+status: 409
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"LOGIN_REFUSED_ACTIVE_SESSION","reason_code":"conflict_token_expired_or_unknown"}
+
+### admin login
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"ok":true}
+
+### admin login again (active session)
+status: 409
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"conflict_token":"<token>","error":"LOGIN_CONFLICT","prior_session":{"created_at":"<ts>","last_seen_at":"<ts>"}}
+
+### admin resolve with refusal
+status: 409
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"LOGIN_REFUSED_ACTIVE_SESSION","reason_code":"login_refused_active_session"}
+
+### admin login again after refusal
+status: 409
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"conflict_token":"<token>","error":"LOGIN_CONFLICT","prior_session":{"created_at":"<ts>","last_seen_at":"<ts>"}}
+
+### admin resolve takeover
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"ok":true}
+
+### admin old cookie after takeover
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_SUPERSEDED","reason":"session is not ACTIVE: SUPERSEDED"}
+
+### admin GET /session/status
+status: 200
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"authenticated":true,"can_read_administration":true,"csrf_token":"<token>","display_name":"nexusadmin","must_change_password":false,"permissions":["Devices","Config","Compliance","PacketAnalysis","Sanitizer","Operations","Policy","Admin"],"role_tokens":["role:viewer","role:operator","role:onboarding_admin","role:backup_admin","role:compliance_admin","role:security_admin","role:operation_admin","role:replay_viewer"]}
+
+### admin GET /healthz
+status: 200
+header: connection: close
+header: content-length: <n>
+header: content-type: text/plain;charset=UTF-8
+header: date: <date>
+body: text ok
+
+### admin GET /
+status: 200
+header: accept-ranges: bytes
+header: cache-control: no-cache, must-revalidate
+header: connection: close
+header: content-language: en-TR
+header: content-length: <n>
+header: content-type: text/html;charset=UTF-8
+header: date: <date>
+header: last-modified: <date>
+body: <text/html, non-empty>
+
+### admin GET hashed asset
+status: 200
+header: accept-ranges: bytes
+header: cache-control: max-age=31536000, public, immutable
+header: connection: close
+header: content-length: <n>
+header: content-type: text/javascript
+header: date: <date>
+header: last-modified: <date>
+body: <text/javascript, non-empty>
+
+### admin GET /devices
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"devices":[]}
+
+### admin GET /api/v2/overview
+status: 200
+header: cache-control: no-cache, private
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: etag: <etag>
+header: transfer-encoding: chunked
+header: vary: Cookie
+header: x-nexus-masked: true
+body: {"attention":{"backup_missing":{"count":"<n>","of":"<n>","previous":"<n>","state":"OK"},"cluster_diff":{"count":"<n>","of":"<n>","state":"UNKNOWN","unknown":"<n>"},"config_changed":{"count":"<n>","of":"<n>","state":"OK"},"failed_jobs_24h":{"count":"<n>","last_at":null,"other_terminal_24h":"<n>","previous":"<n>","state":"OK","terminal_24h":"<n>"},"managed_not_enrolled":{"count":"<n>","of":"<n>","state":"UNKNOWN"},"stale_inventory":{"count":"<n>","of":"<n>","previous":"<n>","state":"OK"}},"compliance":{"reason":"not_evaluated","state":"UNKNOWN"},"denominators":{"active_devices":"<n>","backup_targets":"<n>","clusters":"<n>","clusters_enrolled":"<n>","enrolled_devices":"<n>","gateways":"<n>"},"estate":{"compliance_state":"UNKNOWN","counts":{"ageing":"<n>","clear":"<n>","critical":"<n>","not_assessed":"<n>","partly_assessed":"<n>"},"devices":[],"facts":{"backups":{"a":"<n>","b":"<n>"},"critical":{"state":"UNKNOWN"},"evidence":{"d":"<n>","never":"<n>","r":"<n>"}},"no_archive":"<n>"},"evidence":{"backup":{"at":null,"state":"UNKNOWN"},"compliance":{"at":null,"state":"UNKNOWN"},"configuration":{"at":null,"state":"UNKNOWN"},"inventory":{"at":null,"state":"UNKNOWN"},"jobs":{"at":null,"state":"UNKNOWN"},"platform_facts":{"at":null,"state":"UNKNOWN"}},"exceptions":{"cluster_diff":{"all_refs":[],"rows":[],"total":"<n>","unknown":"<n>"},"config_changes":{"rows":[],"total":"<n>"},"failed_jobs":{"reasons":[],"rows":[],"total":"<n>"}},"generated_at":"<ts>","inventory_age":{"gt72h":"<n>","h24_72":"<n>","lt24h":"<n>","never":"<n>","of":"<n>"},"masked":true,"nexus":{"completed_24h":"<n>","last_inventory":{"check_point":null,"palo_alto":null},"oldest_running_submitted_at":null,"running":"<n>"},"platform":{"check_point":"<n>","clusters":"<n>","devices":"<n>","evidence_at":null,"hotfix_levels":[{"count":"<n>","level":null}],"palo_alto":"<n>","versions":{"check_point":{"major":[],"minor":[],"model":[]},"palo_alto":{"major":[],"minor":[],"model":[]}}},"policy_install":{"days_2_7":"<n>","last_read_at":null,"newest_at":null,"of":"<n>","older":"<n>","oldest_at":null,"state":"UNKNOWN","today":"<n>","unknown":"<n>","yesterday":"<n>"}}
+
+### admin GET /sessions
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"absolute_lifetime_seconds":"<n>","identity_labels":{"<hex64>":"nexusadmin"},"idle_timeout_seconds":"<n>","sessions":[{"absolute_expires_at":"<ts>","actor_fingerprint":"<hex12>","created_at":"<ts>","end_reason":null,"ended_by_actor_fingerprint":null,"idle_deadline_at":"<ts>","last_seen_at":"<ts>","machine":false,"session_id":"<token>","state":"ACTIVE","superseded_by_session_id":null}]}
+
+### admin GET /role-bindings
+status: 200
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json
+header: date: <date>
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: [{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:replay_viewer"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:viewer"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:replay_viewer"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:viewer"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:viewer"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:replay_viewer"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:operation_admin"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:security_admin"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:compliance_admin"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:backup_admin"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:onboarding_admin"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:operator"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:viewer"}]
+
+### admin GET /api/v2/lifecycle
+status: 200
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json
+header: date: <date>
+header: x-nexus-masked: true
+body: {"as_of":"2026-11-15","devices":[],"summary":{"devices":"<n>","license_problems":"<n>","licenses_collected":"<n>","licenses_within_60_days":"<n>","lifecycle_needs_review":"<n>","lifecycle_not_evaluated":"<n>","live_patch_missing":"<n>","live_patch_not_active":"<n>","no_lifecycle_data":"<n>","past_end_of_support":"<n>","vuln_devices_affected":"<n>","vuln_devices_exploited":"<n>","vuln_devices_not_evaluated":"<n>","vuln_oldest_source_age_days":null,"within_180_days":"<n>","within_365_days":"<n>"}}
+
+### admin GET unmapped route
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/no-such-route","status":"<n>","timestamp":"<ts>"}
+
+### admin GET unmapped /api route
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"ACTION_MAPPING_REQUIRED"}
+
+### admin GET unmapped POST-only route
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"error":"NOT_FOUND"}
+
+### admin POST unmapped route
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/no-such-route","status":"<n>","timestamp":"<ts>"}
+
+### admin POST /devices/add-single no csrf
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
+
+### admin POST /devices/add-single wrong csrf
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
+
+### admin POST /devices/add-single no origin
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
+
+### admin POST /devices/add-single empty object
+status: 422
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"error":"VALIDATION_FAILED","reason_code":"vendor_hint_invalid"}
+
+### admin POST /devices/add-single malformed json
+status: 400
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"error":"Bad Request","path":"/devices/add-single","status":"<n>","timestamp":"<ts>"}
+
+### admin PUT /devices/add-single
+status: 405
+header: allow: GET, POST
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Method Not Allowed","path":"/devices/add-single","status":"<n>","timestamp":"<ts>"}
+
+### admin POST /role-bindings empty object
+status: 403
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"error":"AUTHZ_NOT_EVALUATED"}
+
+### admin POST /session/logout no csrf
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Expires=<date>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"ok":true}
+
+### admin login after logout
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"ok":true}
+
+### admin GET /session/status second session
+status: 200
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"authenticated":true,"can_read_administration":true,"csrf_token":"<token>","display_name":"nexusadmin","must_change_password":false,"permissions":["Devices","Config","Compliance","PacketAnalysis","Sanitizer","Operations","Policy","Admin"],"role_tokens":["role:viewer","role:operator","role:onboarding_admin","role:backup_admin","role:compliance_admin","role:security_admin","role:operation_admin","role:replay_viewer"]}
+
+### admin POST /session/logout wrong csrf
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Expires=<date>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"ok":true}
+
+### admin login after second logout
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"ok":true}
+
+### admin GET /session/status third session
+status: 200
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"authenticated":true,"can_read_administration":true,"csrf_token":"<token>","display_name":"nexusadmin","must_change_password":false,"permissions":["Devices","Config","Compliance","PacketAnalysis","Sanitizer","Operations","Policy","Admin"],"role_tokens":["role:viewer","role:operator","role:onboarding_admin","role:backup_admin","role:compliance_admin","role:security_admin","role:operation_admin","role:replay_viewer"]}
+
+### admin POST /session/logout
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Expires=<date>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"ok":true}
+
+### admin GET /session/status after logout
+status: 401
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"authenticated":false}
+
+### admin GET /devices after logout
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_REVOKED","reason":"session is not ACTIVE: REVOKED"}
+
+### viewer login
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"ok":true}
+
+### viewer GET /session/status
+status: 200
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"authenticated":true,"can_read_administration":false,"csrf_token":"<token>","display_name":"claudeadmin","must_change_password":false,"permissions":["Devices","Config","Compliance"],"role_tokens":["role:viewer"]}
+
+### viewer GET /devices
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"devices":[]}
+
+### viewer GET /api/v2/overview
+status: 200
+header: cache-control: no-cache, private
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: etag: <etag>
+header: transfer-encoding: chunked
+header: vary: Cookie
+body: {"attention":{"backup_missing":{"count":"<n>","of":"<n>","previous":"<n>","state":"OK"},"cluster_diff":{"count":"<n>","of":"<n>","state":"UNKNOWN","unknown":"<n>"},"config_changed":{"count":"<n>","of":"<n>","state":"OK"},"failed_jobs_24h":{"count":"<n>","last_at":null,"other_terminal_24h":"<n>","previous":"<n>","state":"OK","terminal_24h":"<n>"},"managed_not_enrolled":{"count":"<n>","of":"<n>","state":"UNKNOWN"},"stale_inventory":{"count":"<n>","of":"<n>","previous":"<n>","state":"OK"}},"compliance":{"reason":"not_evaluated","state":"UNKNOWN"},"denominators":{"active_devices":"<n>","backup_targets":"<n>","clusters":"<n>","clusters_enrolled":"<n>","enrolled_devices":"<n>","gateways":"<n>"},"estate":{"compliance_state":"UNKNOWN","counts":{"ageing":"<n>","clear":"<n>","critical":"<n>","not_assessed":"<n>","partly_assessed":"<n>"},"devices":[],"facts":{"backups":{"a":"<n>","b":"<n>"},"critical":{"state":"UNKNOWN"},"evidence":{"d":"<n>","never":"<n>","r":"<n>"}},"no_archive":"<n>"},"evidence":{"backup":{"at":null,"state":"UNKNOWN"},"compliance":{"at":null,"state":"UNKNOWN"},"configuration":{"at":null,"state":"UNKNOWN"},"inventory":{"at":null,"state":"UNKNOWN"},"jobs":{"at":null,"state":"UNKNOWN"},"platform_facts":{"at":null,"state":"UNKNOWN"}},"exceptions":{"cluster_diff":{"all_refs":[],"rows":[],"total":"<n>","unknown":"<n>"},"config_changes":{"rows":[],"total":"<n>"},"failed_jobs":{"reasons":[],"rows":[],"total":"<n>"}},"generated_at":"<ts>","inventory_age":{"gt72h":"<n>","h24_72":"<n>","lt24h":"<n>","never":"<n>","of":"<n>"},"masked":false,"nexus":{"completed_24h":"<n>","last_inventory":{"check_point":null,"palo_alto":null},"oldest_running_submitted_at":null,"running":"<n>"},"platform":{"check_point":"<n>","clusters":"<n>","devices":"<n>","evidence_at":null,"hotfix_levels":[{"count":"<n>","level":null}],"palo_alto":"<n>","versions":{"check_point":{"major":[],"minor":[],"model":[]},"palo_alto":{"major":[],"minor":[],"model":[]}}},"policy_install":{"days_2_7":"<n>","last_read_at":null,"newest_at":null,"of":"<n>","older":"<n>","oldest_at":null,"state":"UNKNOWN","today":"<n>","unknown":"<n>","yesterday":"<n>"}}
+
+### viewer GET /sessions (refused)
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"action_id":"session_revoke_by_admin","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
+
+### viewer GET /role-bindings (refused)
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"action_id":"role_binding_create","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
+
+### viewer POST /devices/add-single (refused)
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"action_id":"device_register","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
+
+### viewer POST /role-bindings (refused)
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"action_id":"role_binding_create","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
+
+### viewer POST /session/logout
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Expires=<date>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"ok":true}
+
+### replay viewer login
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"ok":true}
+
+### replay viewer GET /session/status
+status: 200
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"authenticated":true,"can_read_administration":false,"csrf_token":"<token>","display_name":"aiview","must_change_password":false,"permissions":["Devices","Config","Compliance","Policy","PacketAnalysis"],"role_tokens":["role:viewer","role:replay_viewer"]}
+
+### replay viewer GET /devices
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"devices":[]}
+
+### replay viewer GET /api/v2/overview
+status: 200
+header: cache-control: no-cache, private
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: etag: <etag>
+header: transfer-encoding: chunked
+header: vary: Cookie
+header: x-nexus-masked: true
+body: {"attention":{"backup_missing":{"count":"<n>","of":"<n>","previous":"<n>","state":"OK"},"cluster_diff":{"count":"<n>","of":"<n>","state":"UNKNOWN","unknown":"<n>"},"config_changed":{"count":"<n>","of":"<n>","state":"OK"},"failed_jobs_24h":{"count":"<n>","last_at":null,"other_terminal_24h":"<n>","previous":"<n>","state":"OK","terminal_24h":"<n>"},"managed_not_enrolled":{"count":"<n>","of":"<n>","state":"UNKNOWN"},"stale_inventory":{"count":"<n>","of":"<n>","previous":"<n>","state":"OK"}},"compliance":{"reason":"not_evaluated","state":"UNKNOWN"},"denominators":{"active_devices":"<n>","backup_targets":"<n>","clusters":"<n>","clusters_enrolled":"<n>","enrolled_devices":"<n>","gateways":"<n>"},"estate":{"compliance_state":"UNKNOWN","counts":{"ageing":"<n>","clear":"<n>","critical":"<n>","not_assessed":"<n>","partly_assessed":"<n>"},"devices":[],"facts":{"backups":{"a":"<n>","b":"<n>"},"critical":{"state":"UNKNOWN"},"evidence":{"d":"<n>","never":"<n>","r":"<n>"}},"no_archive":"<n>"},"evidence":{"backup":{"at":null,"state":"UNKNOWN"},"compliance":{"at":null,"state":"UNKNOWN"},"configuration":{"at":null,"state":"UNKNOWN"},"inventory":{"at":null,"state":"UNKNOWN"},"jobs":{"at":null,"state":"UNKNOWN"},"platform_facts":{"at":null,"state":"UNKNOWN"}},"exceptions":{"cluster_diff":{"all_refs":[],"rows":[],"total":"<n>","unknown":"<n>"},"config_changes":{"rows":[],"total":"<n>"},"failed_jobs":{"reasons":[],"rows":[],"total":"<n>"}},"generated_at":"<ts>","inventory_age":{"gt72h":"<n>","h24_72":"<n>","lt24h":"<n>","never":"<n>","of":"<n>"},"masked":true,"nexus":{"completed_24h":"<n>","last_inventory":{"check_point":null,"palo_alto":null},"oldest_running_submitted_at":null,"running":"<n>"},"platform":{"check_point":"<n>","clusters":"<n>","devices":"<n>","evidence_at":null,"hotfix_levels":[{"count":"<n>","level":null}],"palo_alto":"<n>","versions":{"check_point":{"major":[],"minor":[],"model":[]},"palo_alto":{"major":[],"minor":[],"model":[]}}},"policy_install":{"days_2_7":"<n>","last_read_at":null,"newest_at":null,"of":"<n>","older":"<n>","oldest_at":null,"state":"UNKNOWN","today":"<n>","unknown":"<n>","yesterday":"<n>"}}
+
+### replay viewer GET /sessions (refused)
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"action_id":"session_revoke_by_admin","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
+
+### replay viewer POST /devices/add-single (refused)
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"action_id":"device_register","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
+
+### replay viewer POST /session/logout
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Expires=<date>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"ok":true}
+
+### machine 8086 no token [8086]
+status: 403
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+body: {"error":"MACHINE_SESSION_REFUSED"}
+
+### machine 8086 wrong token [8086]
+status: 403
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+body: {"error":"MACHINE_SESSION_REFUSED"}
+
+### machine 8086 e2e token wrong purpose [8086]
+status: 403
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+body: {"error":"MACHINE_SESSION_REFUSED"}
+
+### machine 8086 probe token [8086]
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+body: {"csrf_token":"<token>"}
+
+### machine 8086 e2e token [8086]
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: set-cookie: ui2_session=<v>; Path=/; Secure; HttpOnly; SameSite=Strict
+header: transfer-encoding: chunked
+body: {"csrf_token":"<token>"}
+
+### machine 8086 GET machine-session [8086]
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+body: {"error":"Not Found","path":"/internal/machine-session","status":"<n>","timestamp":"<ts>"}
+
+### machine 8086 GET /healthz [8086]
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+body: {"error":"Not Found","path":"/healthz","status":"<n>","timestamp":"<ts>"}
+
+### machine 8086 POST /login [8086]
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+body: {"error":"Not Found","path":"/login","status":"<n>","timestamp":"<ts>"}
+
+### machine 8086 GET /devices with machine cookie [8086]
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+body: {"error":"Not Found","path":"/devices","status":"<n>","timestamp":"<ts>"}
+
+### machine 8086 POST /internal/advisories/paloalto no token [8086]
+status: 404
+header: connection: close
+header: content-length: <n>
+header: date: <date>
+body: <empty>
+
+### machine 8086 POST /internal/advisories/unknown [8086]
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+body: {"error":"Not Found","path":"/internal/advisories/unknown","status":"<n>","timestamp":"<ts>"}
+
+### machine 8086 POST /internal/lifecycle-sources/cisco_eol no token [8086]
+status: 404
+header: connection: close
+header: content-length: <n>
+header: date: <date>
+body: <empty>
+
+### machine GET /session/status
+status: 200
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"authenticated":true,"can_read_administration":false,"csrf_token":"<token>","display_name":"aiview-e2e","must_change_password":false,"permissions":["Devices","Config","Compliance","Policy","PacketAnalysis"],"role_tokens":["role:viewer","role:replay_viewer"]}
+
+### machine GET /devices
+status: 200
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+header: x-nexus-masked: true
+body: {"devices":[]}
+
+### machine GET /api/v2/overview
+status: 200
+header: cache-control: no-cache, private
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: etag: <etag>
+header: transfer-encoding: chunked
+header: vary: Cookie
+header: x-nexus-masked: true
+body: {"attention":{"backup_missing":{"count":"<n>","of":"<n>","previous":"<n>","state":"OK"},"cluster_diff":{"count":"<n>","of":"<n>","state":"UNKNOWN","unknown":"<n>"},"config_changed":{"count":"<n>","of":"<n>","state":"OK"},"failed_jobs_24h":{"count":"<n>","last_at":null,"other_terminal_24h":"<n>","previous":"<n>","state":"OK","terminal_24h":"<n>"},"managed_not_enrolled":{"count":"<n>","of":"<n>","state":"UNKNOWN"},"stale_inventory":{"count":"<n>","of":"<n>","previous":"<n>","state":"OK"}},"compliance":{"reason":"not_evaluated","state":"UNKNOWN"},"denominators":{"active_devices":"<n>","backup_targets":"<n>","clusters":"<n>","clusters_enrolled":"<n>","enrolled_devices":"<n>","gateways":"<n>"},"estate":{"compliance_state":"UNKNOWN","counts":{"ageing":"<n>","clear":"<n>","critical":"<n>","not_assessed":"<n>","partly_assessed":"<n>"},"devices":[],"facts":{"backups":{"a":"<n>","b":"<n>"},"critical":{"state":"UNKNOWN"},"evidence":{"d":"<n>","never":"<n>","r":"<n>"}},"no_archive":"<n>"},"evidence":{"backup":{"at":null,"state":"UNKNOWN"},"compliance":{"at":null,"state":"UNKNOWN"},"configuration":{"at":null,"state":"UNKNOWN"},"inventory":{"at":null,"state":"UNKNOWN"},"jobs":{"at":null,"state":"UNKNOWN"},"platform_facts":{"at":null,"state":"UNKNOWN"}},"exceptions":{"cluster_diff":{"all_refs":[],"rows":[],"total":"<n>","unknown":"<n>"},"config_changes":{"rows":[],"total":"<n>"},"failed_jobs":{"reasons":[],"rows":[],"total":"<n>"}},"generated_at":"<ts>","inventory_age":{"gt72h":"<n>","h24_72":"<n>","lt24h":"<n>","never":"<n>","of":"<n>"},"masked":true,"nexus":{"completed_24h":"<n>","last_inventory":{"check_point":null,"palo_alto":null},"oldest_running_submitted_at":null,"running":"<n>"},"platform":{"check_point":"<n>","clusters":"<n>","devices":"<n>","evidence_at":null,"hotfix_levels":[{"count":"<n>","level":null}],"palo_alto":"<n>","versions":{"check_point":{"major":[],"minor":[],"model":[]},"palo_alto":{"major":[],"minor":[],"model":[]}}},"policy_install":{"days_2_7":"<n>","last_read_at":null,"newest_at":null,"of":"<n>","older":"<n>","oldest_at":null,"state":"UNKNOWN","today":"<n>","unknown":"<n>","yesterday":"<n>"}}
+
+### machine GET /sessions (refused)
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"action_id":"session_revoke_by_admin","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
+
+### machine GET unmapped route
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/no-such-route","status":"<n>","timestamp":"<ts>"}
+
+### machine POST /devices/add-single (read-only session)
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"}
+
+### machine PUT /devices/add-single (read-only session)
+status: 405
+header: allow: GET, POST
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Method Not Allowed","path":"/devices/add-single","status":"<n>","timestamp":"<ts>"}
+
+### machine DELETE unmapped (read-only session)
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"}
+
+### machine POST /role-bindings (read-only session)
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"}
+
+### machine POST /session/logout
+status: 403
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"}
+
+### odd target GET //healthz
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"//healthz","status":"<n>","timestamp":"<ts>"}
+
+### odd target GET /healthz/
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/healthz/","status":"<n>","timestamp":"<ts>"}
+
+### odd target GET /healthz;x=1
+status: 200
+header: connection: close
+header: content-length: <n>
+header: content-type: text/plain;charset=UTF-8
+header: date: <date>
+body: text ok
+
+### odd target GET /healthz;jsessionid=abc
+status: 200
+header: connection: close
+header: content-length: <n>
+header: content-type: text/plain;charset=UTF-8
+header: date: <date>
+body: text ok
+
+### odd target GET /./healthz
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/./healthz","status":"<n>","timestamp":"<ts>"}
+
+### odd target GET /healthz/.
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/healthz/.","status":"<n>","timestamp":"<ts>"}
+
+### odd target GET /a/../healthz
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/a/../healthz","status":"<n>","timestamp":"<ts>"}
+
+### odd target GET /healthz%2f
+status: 400
+header: connection: close
+header: content-language: en
+header: content-length: <n>
+header: content-type: text/html;charset=utf-8
+header: date: <date>
+body: <text/html, non-empty>
+
+### odd target GET /%2e/healthz
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/%2e/healthz","status":"<n>","timestamp":"<ts>"}
+
+### odd target GET /%2e%2e/healthz
+status: 400
+header: connection: close
+header: content-language: en
+header: content-length: <n>
+header: content-type: text/html;charset=utf-8
+header: date: <date>
+body: <text/html, non-empty>
+
+### odd target GET /healthz%00
+status: 400
+header: connection: close
+header: content-language: en
+header: content-length: <n>
+header: content-type: text/html;charset=utf-8
+header: date: <date>
+body: <text/html, non-empty>
+
+### odd target GET /healthz%25
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/healthz%25","status":"<n>","timestamp":"<ts>"}
+
+### odd target GET /%C3%A9
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/%C3%A9","status":"<n>","timestamp":"<ts>"}
+
+### odd target GET /a%5Cb
+status: 400
+header: connection: close
+header: content-language: en
+header: content-length: <n>
+header: content-type: text/html;charset=utf-8
+header: date: <date>
+body: <text/html, non-empty>
+
+### odd target GET /a%5cb
+status: 400
+header: connection: close
+header: content-language: en
+header: content-length: <n>
+header: content-type: text/html;charset=utf-8
+header: date: <date>
+body: <text/html, non-empty>
+
+### odd target GET /%zz
+status: 400
+header: connection: close
+header: content-language: en
+header: content-length: <n>
+header: content-type: text/html;charset=utf-8
+header: date: <date>
+body: <text/html, non-empty>
+
+### odd target GET /healthz?x=%zz
+status: 200
+header: connection: close
+header: content-length: <n>
+header: content-type: text/plain;charset=UTF-8
+header: date: <date>
+body: text ok
+
+### odd target GET /healthz?x=1&x=2
+status: 200
+header: connection: close
+header: content-length: <n>
+header: content-type: text/plain;charset=UTF-8
+header: date: <date>
+body: text ok
+
+### odd target GET /devices;x=1
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+
+### odd target GET /devices/
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/devices/","status":"<n>","timestamp":"<ts>"}
+
+### odd target GET //devices
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"//devices","status":"<n>","timestamp":"<ts>"}
+
+### odd target GET /devices%2f
+status: 400
+header: connection: close
+header: content-language: en
+header: content-length: <n>
+header: content-type: text/html;charset=utf-8
+header: date: <date>
+body: <text/html, non-empty>
+
+### odd target GET /devices/%2e%2e/healthz
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/devices/%2e%2e/healthz","status":"<n>","timestamp":"<ts>"}
+
+### odd target GET /session/status;x=1
+status: 401
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"authenticated":false}
+
+### odd target GET /session/status/
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/session/status/","status":"<n>","timestamp":"<ts>"}
+
+### odd target GET /login;x=1
+status: 405
+header: allow: POST
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Method Not Allowed","path":"/login;x=1","status":"<n>","timestamp":"<ts>"}
+
+### odd target GET /login/
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"/login/","status":"<n>","timestamp":"<ts>"}
+
+### odd target GET very long target (9001 chars)
+status: 400
+header: connection: close
+header: content-language: en
+header: content-length: <n>
+header: content-type: text/html;charset=utf-8
+header: date: <date>
+body: <text/html, non-empty>
+
+### odd target POST //login
+status: 404
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"Not Found","path":"//login","status":"<n>","timestamp":"<ts>"}
+
+### odd target POST /login;x=1
+status: 401
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"error":"INVALID_CREDENTIALS"}
+
+### odd target absolute-form
+status: 200
+header: connection: close
+header: content-length: <n>
+header: content-type: text/plain;charset=UTF-8
+header: date: <date>
+body: text ok
+
+### odd request duplicate cookie
+status: 401
+header: cache-control: no-store
+header: connection: close
+header: content-type: application/json
+header: date: <date>
+header: transfer-encoding: chunked
+header: vary: accept-encoding
+body: {"authenticated":false}
+
+### odd request long cookie
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"no matching session row"}
+
+### odd request Authorization basic header
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+
+### odd request X-Forwarded headers
+status: 200
+header: connection: close
+header: content-length: <n>
+header: content-type: text/plain;charset=UTF-8
+header: date: <date>
+body: text ok
+
+### odd request Accept text/html on gated route
+status: 401
+header: connection: close
+header: content-length: <n>
+header: content-type: application/json;charset=ISO-8859-1
+header: date: <date>
+body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+
+### odd request Accept text/html on unmapped route
+status: 404
+header: connection: close
+header: content-language: en-TR
+header: content-length: <n>
+header: content-type: text/html;charset=UTF-8
+header: date: <date>
+body: <text/html, non-empty>
+

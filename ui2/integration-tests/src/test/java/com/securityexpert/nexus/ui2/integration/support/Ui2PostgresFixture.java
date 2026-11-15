@@ -434,6 +434,31 @@ public final class Ui2PostgresFixture implements AutoCloseable {
     }
 
     // -----------------------------------------------------------------
+    // Secret files and URL for a booted application (the HTTP characterization test)
+    // -----------------------------------------------------------------
+
+    /** The JDBC URL of this fixture's own database (no credentials; they live in the secret files below). */
+    public String databaseJdbcUrl() {
+        return jdbcUrl(databaseName);
+    }
+
+    public Path migrateUserSecretFile() {
+        return userFile();
+    }
+
+    public Path migratePasswordSecretFile() {
+        return passwordFile();
+    }
+
+    public Path appUserSecretFile() {
+        return secretFile("app_user", APP_ROLE);
+    }
+
+    public Path appPasswordSecretFile() {
+        return secretFile("app_password", appPassword);
+    }
+
+    // -----------------------------------------------------------------
     // Secret files for FlywayMigrationRunner
     // -----------------------------------------------------------------
 
