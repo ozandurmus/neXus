@@ -8,7 +8,7 @@ import { m3Theme } from "../theme/m3Theme";
 import { LoginScreen } from "./LoginScreen";
 import { PasswordChangeScreen } from "./PasswordChangeScreen";
 import { SessionContext } from "./SessionContext";
-import { getSessionStatus, resetSharedApiCache } from "./adminApi";
+import { getSessionStatus, logoutSession, resetSharedApiCache } from "./adminApi";
 
 type AuthState = "checking" | "authenticated" | "must-change-password" | "unauthenticated";
 
@@ -52,7 +52,7 @@ async function signOut(): Promise<void> {
   // another masking view) must never be served the previous user's devices, notifications or status.
   resetSharedApiCache();
   try {
-    await fetch("/session/logout", { method: "POST", credentials: "include" });
+    await logoutSession();
   } catch {
     // The cookie is cleared client-visibly regardless (best-effort network call);
     // the caller always returns to the login screen either way.

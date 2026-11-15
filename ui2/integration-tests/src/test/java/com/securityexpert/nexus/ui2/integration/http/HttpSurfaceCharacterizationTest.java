@@ -281,16 +281,14 @@ class HttpSurfaceCharacterizationTest {
         authed("admin POST /devices/add-single malformed json", "POST", port, "/devices/add-single", newCookie, csrf, origin, "{bad");
         authed("admin PUT /devices/add-single", "PUT", port, "/devices/add-single", newCookie, csrf, origin, "{}");
         authed("admin POST /role-bindings empty object", "POST", port, "/role-bindings", newCookie, csrf, origin, "{}");
+        // PO 2026-11-15: sign-out requires the CSRF token. A refused sign-out leaves the session live, so both refusals
+        // run against it and a valid one ends it before the next sign-in.
         authed("admin POST /session/logout no csrf", "POST", port, "/session/logout", newCookie, null, origin, null);
-        // Each logout below ends its session whatever the CSRF header said (observed behaviour), so each variant signs in anew.
-        String secondCookie = sessionCookie(login("admin login after logout", "nexusadmin", "nexusadmin", null));
-        assertNotNull(secondCookie);
-        String secondCsrf = authed("admin GET /session/status second session", "GET", port, "/session/status", secondCookie,
-                null, null, null).json().path("csrf_token").asText("");
-        authed("admin POST /session/logout wrong csrf", "POST", port, "/session/logout", secondCookie, "wrong", origin, null);
-        String thirdCookie = sessionCookie(login("admin login after second logout", "nexusadmin", "nexusadmin", null));
+        authed("admin POST /session/logout wrong csrf", "POST", port, "/session/logout", newCookie, "wrong", origin, null);
+        authed("admin POST /session/logout first session", "POST", port, "/session/logout", newCookie, csrf, origin, null);
+        String thirdCookie = sessionCookie(login("admin login after logout", "nexusadmin", "nexusadmin", null));
         assertNotNull(thirdCookie);
-        String thirdCsrf = authed("admin GET /session/status third session", "GET", port, "/session/status", thirdCookie,
+        String thirdCsrf = authed("admin GET /session/status second session", "GET", port, "/session/status", thirdCookie,
                 null, null, null).json().path("csrf_token").asText("");
         authed("admin POST /session/logout", "POST", port, "/session/logout", thirdCookie, thirdCsrf, origin, null);
         authed("admin GET /session/status after logout", "GET", port, "/session/status", thirdCookie, null, null, null);
@@ -793,6 +791,9 @@ class HttpSurfaceCharacterizationTest {
         assertEquals(200, status("admin resolve takeover"));
         assertEquals(200, status("viewer login"));
         assertEquals(200, status("replay viewer login"));
+        assertEquals(401, status("admin POST /session/logout no csrf"));
+        assertEquals(401, status("admin POST /session/logout wrong csrf"));
+        assertEquals(200, status("admin POST /session/logout first session"));
         assertEquals(200, status("admin POST /session/logout"));
     }
 
@@ -811,10 +812,41 @@ class HttpSurfaceCharacterizationTest {
     }
 
     @Test
+    void everyResponseCarriesTheSecurityHeadersAndStaticAssetsKeepTheirCaching() {
+        // PO 2026-11-15: nosniff, X-Frame-Options DENY and a no-store default on every response; a response that chose its
+        // own cache policy (the immutable /assets/*, the revalidated index page) keeps it.
+        for (Entry entry : transcript) {
+            Resp resp = entry.resp();
+            if (answeredByTomcatBeforeTheFilterChain(entry)) continue;
+            assertEquals("nosniff", resp.header("x-content-type-options"), entry.label() + " lacks nosniff");
+            assertEquals("DENY", resp.header("x-frame-options"), entry.label() + " lacks X-Frame-Options");
+            assertNotNull(resp.header("cache-control"), entry.label() + " lacks Cache-Control");
+        }
+        assertEquals("no-store", transcript.stream().filter(e -> e.label().equals("anon GET /healthz")).findFirst()
+                .orElseThrow().resp().header("cache-control"));
+        assertEquals("no-store", transcript.stream().filter(e -> e.label().equals("admin GET /session/status")).findFirst()
+                .orElseThrow().resp().header("cache-control"));
+        assertEquals("max-age=31536000, public, immutable", transcript.stream()
+                .filter(e -> e.label().equals("anon GET hashed asset")).findFirst().orElseThrow().resp().header("cache-control"));
+        assertEquals("no-cache, must-revalidate", transcript.stream().filter(e -> e.label().equals("anon GET /")).findFirst()
+                .orElseThrow().resp().header("cache-control"));
+    }
+
+    /** Tomcat itself refuses a malformed request target (400) before any servlet filter runs; that answer cannot carry headers a filter writes. */
+    private static boolean answeredByTomcatBeforeTheFilterChain(Entry entry) {
+        return entry.label().startsWith("odd target") && entry.resp().status() == 400;
+    }
+
+    @Test
+    void headAnswersLikeGetOnHealthz() {
+        assertEquals(200, status("anon HEAD /healthz"));
+    }
+
+    @Test
     void noResponseCarriesAFrameworkDefaultTheServiceNeverSent() {
         for (Entry entry : transcript) {
             Map<String, List<String>> headers = entry.resp().headers();
-            for (String forbidden : List.of("www-authenticate", "x-frame-options", "x-xss-protection", "pragma", "expires",
+            for (String forbidden : List.of("www-authenticate", "x-xss-protection", "pragma", "expires",
                     "strict-transport-security", "referrer-policy", "permissions-policy", "cross-origin-opener-policy",
                     "access-control-allow-origin")) {
                 assertFalse(headers.containsKey(forbidden), entry.label() + " carries " + forbidden);

@@ -400,7 +400,9 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
                 "GET /error",
                 "POST /error",
                 "POST /local-credentials/change-password",
-                "GET /healthz"));
+                "GET /healthz",
+                // PO 2026-11-15: HEAD answers like GET (Spring MVC serves HEAD from the GET handler).
+                "HEAD /healthz"));
         // Advisory ingest (ADVISORY_MATCHING_CONTRACT.md section 4): internal port only, authenticated by the fetcher's own
         // token. The lookup is exact, so each source key is listed; an unknown source stays unmapped and is refused.
         for (String source : com.securityexpert.nexus.ui2.service.advisorystore.AdvisorySources.KEYS) {

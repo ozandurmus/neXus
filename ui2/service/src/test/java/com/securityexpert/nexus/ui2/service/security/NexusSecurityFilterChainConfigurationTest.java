@@ -140,7 +140,7 @@ class NexusSecurityFilterChainConfigurationTest {
         chains.get(0).getFilters().forEach(f -> filters.add(f.getClass().getSimpleName()));
         // A filter listed here that does not belong to a passthrough chain is a behaviour change: review it, do not just add it.
         assertEquals(List.of("DisableEncodeUrlFilter", "WebAsyncManagerIntegrationFilter", "SecurityContextHolderFilter",
-                "SessionManagementFilter", "ExceptionTranslationFilter", "AuthorizationFilter"), filters);
+                "NexusSecurityHeadersFilter", "SessionManagementFilter", "ExceptionTranslationFilter", "AuthorizationFilter"), filters);
         for (String forbidden : List.of("CsrfFilter", "LogoutFilter", "HeaderWriterFilter", "CorsFilter",
                 "UsernamePasswordAuthenticationFilter", "BasicAuthenticationFilter", "DefaultLoginPageGeneratingFilter",
                 "DefaultLogoutPageGeneratingFilter", "RequestCacheAwareFilter", "AnonymousAuthenticationFilter",
@@ -194,6 +194,20 @@ class NexusSecurityFilterChainConfigurationTest {
         return all;
     }
 
+    /**
+     * PO 2026-11-15 added three response headers on purpose (nosniff, X-Frame-Options DENY, a no-store default). Everything
+     * else about an answer must still be identical, so the comparison removes exactly those additions and nothing more.
+     */
+    private static Answer withoutTheDecidedSecurityHeaders(Answer actual, Answer expected) {
+        Map<String, List<String>> headers = new TreeMap<>(actual.headers());
+        headers.remove("x-content-type-options");
+        headers.remove("x-frame-options");
+        if (!expected.headers().containsKey("cache-control") && List.of("no-store").equals(headers.get("cache-control"))) {
+            headers.remove("cache-control");
+        }
+        return new Answer(actual.status(), headers, actual.body(), actual.sessionCreated(), actual.forwarded());
+    }
+
     @Test
     void everyAnswerIsIdenticalWithAndWithoutTheChain() throws Exception {
         int compared = 0;
@@ -202,7 +216,7 @@ class NexusSecurityFilterChainConfigurationTest {
             String label = probe.getMethod() + " " + probe.getRequestURI();
             Answer expected = drive(withoutChain, builder);
             Answer actual = drive(withChain, builder);
-            assertEquals(expected, actual, label);
+            assertEquals(expected, withoutTheDecidedSecurityHeaders(actual, expected), label);
             assertFalse(actual.headers().containsKey("set-cookie") && actual.headers().get("set-cookie").stream()
                     .anyMatch(c -> c.contains("JSESSIONID") && !label.contains("/force-session")), label + " opened a session");
             compared++;
@@ -211,11 +225,13 @@ class NexusSecurityFilterChainConfigurationTest {
     }
 
     @Test
-    void theChainAddsNoSecurityHeaderAndKeepsTheControllersOwn() throws Exception {
+    void theChainAddsTheDecidedSecurityHeadersAndKeepsTheControllersOwnCachePolicy() throws Exception {
         Answer cached = drive(withChain, MockMvcRequestBuilders.get("/cached"));
         assertEquals(List.of("max-age=31536000, public, immutable"), cached.headers().get("cache-control"));
         Answer ok = drive(withChain, MockMvcRequestBuilders.get("/ok"));
-        assertEquals(Map.of("content-length", List.of("2"), "content-type", List.of("text/plain;charset=ISO-8859-1")), ok.headers());
+        assertEquals(Map.of("content-length", List.of("2"), "content-type", List.of("text/plain;charset=ISO-8859-1"),
+                "x-content-type-options", List.of("nosniff"), "x-frame-options", List.of("DENY"),
+                "cache-control", List.of("no-store")), ok.headers());
         assertNull(withChain.perform(MockMvcRequestBuilders.get("/ok")).andReturn().getRequest().getSession(false));
     }
 
