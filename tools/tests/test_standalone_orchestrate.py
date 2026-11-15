@@ -372,3 +372,81 @@ def test_merge_does_not_squash_on_other_failures(monkeypatch):
     monkeypatch.setattr(sa.subprocess, "run", fake_run)
     assert sa._merge_pull_request("https://example/pr/1").returncode == 1
     assert len(calls) == 1
+
+
+# ---- merge resilience (2026-11-15: 502 Bad Gateway x2 and "Merge already in progress" stopped a ship) -------------
+
+def _gh_stub(monkeypatch, merge_answers, view_states):
+    """A stubbed gh: `pr merge` pops `merge_answers` (returncode, stderr); `pr view` pops `view_states` (a state, or
+    None for a failing read). Returns (calls, sleeps)."""
+    calls, sleeps = [], []
+    merges, views = list(merge_answers), list(view_states)
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        if cmd[:3] == ["gh", "pr", "merge"]:
+            code, err = merges.pop(0)
+            return subprocess.CompletedProcess(cmd, code, "", err)
+        if cmd[:3] == ["gh", "pr", "view"]:
+            assert cmd[-2:] == ["--json", "state,mergedAt"]
+            state = views.pop(0)
+            if state is None:
+                return subprocess.CompletedProcess(cmd, 1, "", "HTTP 502: Bad Gateway")
+            return subprocess.CompletedProcess(cmd, 0, json.dumps({"state": state, "mergedAt": None}), "")
+        raise AssertionError(cmd)
+    monkeypatch.setattr(sa.subprocess, "run", fake_run)
+    monkeypatch.setattr(sa.time, "sleep", sleeps.append)
+    return calls, sleeps
+
+
+BAD_GATEWAY = "HTTP 502: 502 Bad Gateway (https://api.github.com/graphql)"
+IN_PROGRESS = "GraphQL: Merge already in progress (mergePullRequest)"
+
+
+@pytest.mark.parametrize("answer", [BAD_GATEWAY, IN_PROGRESS, "HTTP 503: Service Unavailable", "HTTP 500: Internal Server Error"])
+def test_transient_merge_answer_with_pr_already_merged_continues_without_retry(monkeypatch, answer):
+    calls, sleeps = _gh_stub(monkeypatch, [(1, answer)], ["MERGED"])
+    assert sa._merge_pull_request("https://example/pr/1").returncode == 0
+    assert [c[2] for c in calls] == ["merge", "view"] and sleeps == []
+
+
+def test_transient_merge_answer_retries_with_20_40_80_waits_until_it_lands(monkeypatch):
+    calls, sleeps = _gh_stub(monkeypatch, [(1, BAD_GATEWAY), (1, IN_PROGRESS), (1, BAD_GATEWAY), (0, "")],
+                             ["OPEN", "OPEN", "OPEN"])
+    assert sa._merge_pull_request("https://example/pr/1").returncode == 0
+    assert sleeps == [20, 40, 80]
+    assert [c[2] for c in calls] == ["merge", "view", "merge", "view", "merge", "view", "merge"]
+
+
+def test_transient_merge_answer_gives_up_after_three_retries(monkeypatch):
+    calls, sleeps = _gh_stub(monkeypatch, [(1, BAD_GATEWAY)] * 4, ["OPEN"] * 4)
+    merge = sa._merge_pull_request("https://example/pr/1")
+    assert merge.returncode == 1 and BAD_GATEWAY in merge.stderr
+    assert sleeps == [20, 40, 80]
+    assert [c[2] for c in calls].count("merge") == 4
+
+
+def test_transient_merge_answer_with_unreadable_state_is_not_taken_as_merged(monkeypatch):
+    calls, sleeps = _gh_stub(monkeypatch, [(1, BAD_GATEWAY), (0, "")], [None])
+    assert sa._merge_pull_request("https://example/pr/1").returncode == 0
+    assert sleeps == [20]
+
+
+def test_transient_merge_answer_lands_on_a_later_state_read(monkeypatch):
+    calls, sleeps = _gh_stub(monkeypatch, [(1, IN_PROGRESS), (1, IN_PROGRESS)], ["OPEN", "MERGED"])
+    assert sa._merge_pull_request("https://example/pr/1").returncode == 0
+    assert sleeps == [20]
+
+
+@pytest.mark.parametrize("answer", ["checks failing", "GraphQL: Pull request is not mergeable", "HTTP 403: Forbidden",
+                                    "GraphQL: Pull request #502 has conflicts (mergePullRequest)"])
+def test_other_merge_errors_are_never_retried(monkeypatch, answer):
+    calls, sleeps = _gh_stub(monkeypatch, [(1, answer)], [])
+    assert sa._merge_pull_request("https://example/pr/502").returncode == 1
+    assert [c[2] for c in calls] == ["merge"] and sleeps == []
+
+
+def test_squash_fallback_still_applies_inside_a_retry(monkeypatch):
+    calls, sleeps = _gh_stub(monkeypatch, [(1, BAD_GATEWAY), (1, "GraphQL: This branch can't be rebased"), (0, "")], ["OPEN"])
+    assert sa._merge_pull_request("https://example/pr/1").returncode == 0
+    assert [c[-1] for c in calls if c[2] == "merge"] == ["--rebase", "--rebase", "--squash"]

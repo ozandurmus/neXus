@@ -118,7 +118,15 @@ def _git(*args: str, cwd: Path = REPO_ROOT, check: bool = True) -> str:
     return r.stdout.strip()
 
 
-def _merge_pull_request(url: str) -> "subprocess.CompletedProcess[str]":
+# GitHub answers that say "try again", not "refused" (2026-11-15: two "502 Bad Gateway" and one "Merge already in
+# progress" stopped a ship although the checks had passed). Anything else is a real refusal and is never retried.
+_TRANSIENT_MERGE_ANSWER = re.compile(
+    r"HTTP\s*5\d\d|\b5\d\d\s+(?:Bad Gateway|Service Unavailable|Gateway Time-?out|Internal Server Error)"
+    r"|Bad Gateway|Service Unavailable|Gateway Time-?out|Merge already in progress", re.IGNORECASE)
+MERGE_RETRY_WAITS_S = (20, 40, 80)
+
+
+def _merge_once(url: str) -> "subprocess.CompletedProcess[str]":
     """`gh pr merge --rebase`; when GitHub refuses with "can't be rebased", retry once with `--squash` and say so.
 
     2026-11-15: GitHub refused a rebase merge of a clean 84-commit branch with no cause found; the squash lands the
@@ -127,6 +135,41 @@ def _merge_pull_request(url: str) -> "subprocess.CompletedProcess[str]":
     if merge.returncode != 0 and ("can't be rebased" in merge.stderr or "cannot be rebased" in merge.stderr):
         print("rebase merge refused by GitHub (can't be rebased); retrying once with --squash", flush=True)
         merge = subprocess.run(["gh", "pr", "merge", url, "--squash"], cwd=str(REPO_ROOT), capture_output=True, text=True)
+    return merge
+
+
+def _pull_request_merged(url: str) -> bool:
+    """True only when `gh pr view --json state,mergedAt` positively says MERGED; an unreadable answer is not merged."""
+    view = subprocess.run(["gh", "pr", "view", url, "--json", "state,mergedAt"], cwd=str(REPO_ROOT),
+                          capture_output=True, text=True)
+    if view.returncode != 0:
+        return False
+    try:
+        return json.loads(view.stdout or "{}").get("state") == "MERGED"
+    except (ValueError, AttributeError):
+        return False
+
+
+def _merge_pull_request(url: str) -> "subprocess.CompletedProcess[str]":
+    """Merge the pull request, surviving a GitHub hiccup.
+
+    On a 5xx / "Bad Gateway" / "Merge already in progress" answer the merge may nevertheless have happened or still be
+    running: re-read the state first; MERGED means carry on, otherwise retry after 20 s, 40 s and 80 s (three retries at
+    most). Any other error returns at once, never retried."""
+    merge = _merge_once(url)
+    retries = 0
+    while merge.returncode != 0 and _TRANSIENT_MERGE_ANSWER.search((merge.stderr or "") + (merge.stdout or "")):
+        if _pull_request_merged(url):
+            print("merge answered with a transient error but the pull request is MERGED; continuing", flush=True)
+            return subprocess.CompletedProcess(merge.args, 0, merge.stdout, "")
+        if retries >= len(MERGE_RETRY_WAITS_S):
+            break
+        wait = MERGE_RETRY_WAITS_S[retries]
+        retries += 1
+        print(f"merge answered with a transient GitHub error; pull request not merged yet, retry {retries}/"
+              f"{len(MERGE_RETRY_WAITS_S)} in {wait} s", flush=True)
+        time.sleep(wait)
+        merge = _merge_once(url)
     return merge
 
 

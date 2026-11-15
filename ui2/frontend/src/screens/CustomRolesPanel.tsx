@@ -58,12 +58,17 @@ export function CustomRolesPanel() {
 
   const refreshRoles = () =>
     fetch("/roles")
-      .then((response) => {
+      .then(async (response) => {
         if (response.status === 403) {
+          await response.text().catch(() => {}); // consume the error body so the request does not stay pending
           setRestricted(true);
           return Promise.reject("restricted");
         }
-        return response.ok ? response.json() : Promise.reject("failed");
+        if (!response.ok) {
+          await response.text().catch(() => {});
+          return Promise.reject("failed");
+        }
+        return response.json();
       })
       .then((res) => {
         setRestricted(false);
@@ -307,12 +312,16 @@ function CreateRoleDialog({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, token_string: token, description, permissions }),
     })
-      .then((response) => {
+      .then(async (response) => {
         if (response.status === 403) {
+          await response.text().catch(() => {}); // consume the error body so the request does not stay pending
           onRefused("Needs a role that can create roles.");
           return;
         }
-        if (!response.ok) return Promise.reject();
+        if (!response.ok) {
+          await response.text().catch(() => {});
+          return Promise.reject();
+        }
         onCreated();
       })
       .catch(() => setError("Unable to create role."));
