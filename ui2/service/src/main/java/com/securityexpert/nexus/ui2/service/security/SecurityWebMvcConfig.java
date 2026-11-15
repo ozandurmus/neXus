@@ -41,6 +41,9 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /api/v2/zone-matrix/draft/service-sets/delete", ActionRegistry.ZONE_MATRIX_EDIT),
             Map.entry("POST /api/v2/zone-matrix/draft/template-import", ActionRegistry.ZONE_MATRIX_EDIT),
             Map.entry("POST /api/v2/zone-matrix/draft/cells/confirm-reference", ActionRegistry.ZONE_MATRIX_REFERENCE_CONFIRM),
+            // Zone matrix, delivery step 3 (sections 3.4, 5 and 10.1): stored-policy catalogue and on-demand evaluation.
+            Map.entry("GET /api/v2/zone-matrix/policies", ActionRegistry.ZONE_MATRIX_READ),
+            Map.entry("POST /api/v2/zone-matrix/evaluate", ActionRegistry.ZONE_MATRIX_EVALUATE),
             Map.entry("GET /devices/*/lifecycle", ActionRegistry.DEVICE_READ),
             Map.entry("GET /api/v2/lifecycle/catalog", ActionRegistry.DEVICE_READ),
             // Advisory matching part 1 (ADVISORY_MATCHING_CONTRACT.md section 8): read access follows the Lifecycle view.
