@@ -229,7 +229,8 @@ class AiviewMaskingLeakAuditTest {
             Map.entry("user", "device configuration category label"),
             Map.entry("username", "credential administration, security_admin only"),
             Map.entry("vs_name", "InventoryController: one of the body's own virtual_systems, masked earlier in the body"),
-            Map.entry("zone_name", "zone-matrix lookup, never aiview"));
+            Map.entry("zone_name", "zone-matrix lookup, never aiview"),
+            Map.entry("confirmed_by", "zone-matrix cell confirmation, tokenised by actors.token, never aiview"));
 
     @Test
     void identityNamedKeysThatPassThroughAreReviewed() throws Exception {

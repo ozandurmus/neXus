@@ -27,7 +27,7 @@ const as = (permissions: readonly string[], node: React.ReactElement, windowView
 const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
 
 const device = (i: number, over: Record<string, unknown> = {}) => ({
-  device_id: `d${i}`, role: "gateway", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: `FW-SYNTH-${String(i).padStart(3, "0")}`,
+  device_id: `d${i}`, role: "gateway", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: `FW-TANGO-${String(i).padStart(3, "0")}`,
   model: "Check Point 6900", software_version: "R81.20", cluster_member_ref: null, backup_target: true, ...over,
 });
 const artefact = (i: number, over: Record<string, unknown> = {}) => ({
@@ -69,13 +69,13 @@ describe("one line per row, every action in the row menu", () => {
   it("has a LATEST ATTEMPT column and no action button in the row but the menu trigger", async () => {
     stub([device(1)], [artefact(1)]);
     render(as(adminPlanes, <BackupScreen />));
-    const row = (await screen.findByText("FW-SYNTH-001")).closest("tr")!;
+    const row = (await screen.findByText("FW-TANGO-001")).closest("tr")!;
     const table = row.closest("table")!;
     expect(within(table).getByRole("columnheader", { name: "Latest attempt" })).toBeInTheDocument();
     // the newest attempt sits in its own cell, one compact line, with one status word
     expect(await within(row).findByText("Completed")).toBeInTheDocument();
     expect(within(row).queryByText("COMPLETED: COMPLETED")).toBeNull();
-    expect(within(row).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Actions for FW-SYNTH-001"]);
+    expect(within(row).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Actions for FW-TANGO-001"]);
     // every cell is held to one line
     for (const cell of Array.from(row.querySelectorAll("td"))) expect(getComputedStyle(cell).whiteSpace).toBe("nowrap");
   });
@@ -83,20 +83,20 @@ describe("one line per row, every action in the row menu", () => {
   it("keeps all six actions in the menu and runs the one chosen", async () => {
     stub([device(1)], [artefact(1)]);
     render(as(adminPlanes, <BackupScreen />));
-    const row = (await screen.findByText("FW-SYNTH-001")).closest("tr")!;
-    fireEvent.click(within(row).getByRole("button", { name: "Actions for FW-SYNTH-001" }));
-    const menu = await screen.findByRole("menu", { name: "Actions for FW-SYNTH-001" });
+    const row = (await screen.findByText("FW-TANGO-001")).closest("tr")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Actions for FW-TANGO-001" }));
+    const menu = await screen.findByRole("menu", { name: "Actions for FW-TANGO-001" });
     expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Backup Now", "Snapshot", "History", "Contents", "Compare", "Download"]);
     for (const item of within(menu).getAllByRole("menuitem")) expect(item).not.toHaveAttribute("aria-disabled", "true");
     fireEvent.click(within(menu).getByRole("menuitem", { name: "History" }));
-    expect(await screen.findByRole("dialog", { name: /Backup history: FW-SYNTH-001/ })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: /Backup history: FW-TANGO-001/ })).toBeInTheDocument();
   });
 
   it("offers Contents, Compare and Download only as disabled entries that say why when the device has no archive", async () => {
     stub([device(1)], []);
     render(as(adminPlanes, <BackupScreen />));
-    const row = (await screen.findByText("FW-SYNTH-001")).closest("tr")!;
-    fireEvent.click(within(row).getByRole("button", { name: "Actions for FW-SYNTH-001" }));
+    const row = (await screen.findByText("FW-TANGO-001")).closest("tr")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Actions for FW-TANGO-001" }));
     for (const name of ["Contents", "Compare", "Download"]) {
       expect(await screen.findByRole("menuitem", { name: `${name} · No archive` })).toHaveAttribute("aria-disabled", "true");
     }
@@ -110,8 +110,8 @@ describe("one line per row, every action in the row menu", () => {
   ])("suffixes the device-job entries for %s with one rule", async (_name, planes, windowView, suffix) => {
     stub([device(1)], [artefact(1)]);
     render(as(planes, <BackupScreen />, windowView));
-    const row = (await screen.findByText("FW-SYNTH-001")).closest("tr")!;
-    fireEvent.click(within(row).getByRole("button", { name: "Actions for FW-SYNTH-001" }));
+    const row = (await screen.findByText("FW-TANGO-001")).closest("tr")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Actions for FW-TANGO-001" }));
     for (const action of ["Backup Now", "Snapshot"]) {
       expect(await screen.findByRole("menuitem", { name: `${action} · ${suffix}` })).toHaveAttribute("aria-disabled", "true");
     }
@@ -121,11 +121,11 @@ describe("one line per row, every action in the row menu", () => {
   });
 
   it("keeps Delete and MDS export in the menu where they apply", async () => {
-    const mds = device(2, { role: "management_server", hostname: "FW-SYNTH-MDS" });
+    const mds = device(2, { role: "management_server", hostname: "MGR-BRAVO-01" });
     stub([device(1), mds], [artefact(1), artefact(2), artefact(9, { device_id: "removed-device" })]);
     render(as(adminPlanes, <BackupScreen />));
-    const mdsRow = (await screen.findByText("FW-SYNTH-MDS")).closest("tr")!;
-    fireEvent.click(within(mdsRow).getByRole("button", { name: "Actions for FW-SYNTH-MDS" }));
+    const mdsRow = (await screen.findByText("MGR-BRAVO-01")).closest("tr")!;
+    fireEvent.click(within(mdsRow).getByRole("button", { name: "Actions for MGR-BRAVO-01" }));
     expect(await screen.findByRole("menuitem", { name: "MDS export" })).toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
     const orphanButton = (await screen.findAllByRole("button", { name: /^Actions for / })).find((b) => /removed|^Actions for removed/i.test(b.getAttribute("aria-label") ?? ""));
@@ -141,28 +141,28 @@ describe("pagination at 50", { timeout: 30_000 }, () => {
   it("shows 1–50 of 131 and moves page by page without losing a row", async () => {
     stub(many, []);
     render(as(adminPlanes, <BackupScreen />));
-    await screen.findByText("FW-SYNTH-001");
+    await screen.findByText("FW-TANGO-001");
     expect(BACKUP_PAGE_SIZE).toBe(50);
     expect(screen.getByText("1–50 of 131")).toBeInTheDocument();
     const rows = () => bodyRows();
     expect(rows()).toHaveLength(50);
-    expect(screen.queryByText("FW-SYNTH-051")).toBeNull();
+    expect(screen.queryByText("FW-TANGO-051")).toBeNull();
     nextPage();
     expect(screen.getByText("51–100 of 131")).toBeInTheDocument();
-    expect(screen.getByText("FW-SYNTH-051")).toBeInTheDocument();
+    expect(screen.getByText("FW-TANGO-051")).toBeInTheDocument();
     nextPage();
     expect(screen.getByText("101–131 of 131")).toBeInTheDocument();
     expect(rows()).toHaveLength(31);
-    expect(screen.getByText("FW-SYNTH-131")).toBeInTheDocument();
+    expect(screen.getByText("FW-TANGO-131")).toBeInTheDocument();
   });
 
   it("returns to the first page when the filter changes", async () => {
     stub(many, []);
     render(as(adminPlanes, <BackupScreen />));
-    await screen.findByText("FW-SYNTH-001");
+    await screen.findByText("FW-TANGO-001");
     nextPage();
     expect(screen.getByText("51–100 of 131")).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("textbox", { name: "Filter the backup fleet" }), { target: { value: "SYNTH-12" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter the backup fleet" }), { target: { value: "TANGO-12" } });
     expect(screen.getByText("1–10 of 10")).toBeInTheDocument();
   });
 });
@@ -174,16 +174,16 @@ describe("Size column sort and the large-backup marker (Product Owner, 2026-11-0
   const archives = Array.from({ length: 120 }, (_, i) => artefact(i + 1, { size_bytes: (160 + (i % 7)) * MB }));
   archives[76] = artefact(77, { size_bytes: 28_537 * MB });
   // the Device cell's hostname (the vendor badge's letters sit beside it in the same cell)
-  const names = () => bodyRows().map((r) => within(r).getByText(/^FW-SYNTH-\d{3}$/).textContent);
+  const names = () => bodyRows().map((r) => within(r).getByText(/^FW-TANGO-\d{3}$/).textContent);
   const sizeHeader = () => headerButton("Size");
 
   it("sorts the whole filtered set by size, largest first, then smallest first with no-archive rows last, then back to hostname order", async () => {
     stub(estate, archives);
     render(as(adminPlanes, <BackupScreen />));
-    await screen.findByText("FW-SYNTH-001");
-    expect(screen.queryByText("FW-SYNTH-077")).toBeNull();
+    await screen.findByText("FW-TANGO-001");
+    expect(screen.queryByText("FW-TANGO-077")).toBeNull();
     fireEvent.click(sizeHeader());
-    expect(names()[0]).toBe("FW-SYNTH-077");
+    expect(names()[0]).toBe("FW-TANGO-077");
     expect(within(bodyRows()[0]).getByText("28537.0 MB")).toBeInTheDocument();
     expect(screen.getByText("1–50 of 131")).toBeInTheDocument();
     expect(sizeHeader().closest("th")).toHaveAttribute("aria-sort", "descending");
@@ -196,18 +196,18 @@ describe("Size column sort and the large-backup marker (Product Owner, 2026-11-0
     nextPage();
     expect(screen.getByText("101–131 of 131")).toBeInTheDocument();
     const last = names();
-    expect(last.slice(-11)).toEqual(Array.from({ length: 11 }, (_, i) => `FW-SYNTH-${121 + i}`));
-    expect(last[last.length - 12]).toBe("FW-SYNTH-077");
+    expect(last.slice(-11)).toEqual(Array.from({ length: 11 }, (_, i) => `FW-TANGO-${121 + i}`));
+    expect(last[last.length - 12]).toBe("FW-TANGO-077");
     fireEvent.click(sizeHeader());
     expect(sizeHeader().closest("th")).not.toHaveAttribute("aria-sort");
     expect(screen.getByText("1–50 of 131")).toBeInTheDocument();
-    expect(names()[0]).toBe("FW-SYNTH-001");
+    expect(names()[0]).toBe("FW-TANGO-001");
   });
 
   it("returns to the first page when the sort changes", async () => {
     stub(estate, archives);
     render(as(adminPlanes, <BackupScreen />));
-    await screen.findByText("FW-SYNTH-001");
+    await screen.findByText("FW-TANGO-001");
     nextPage();
     expect(screen.getByText("51–100 of 131")).toBeInTheDocument();
     fireEvent.click(sizeHeader());
@@ -217,12 +217,12 @@ describe("Size column sort and the large-backup marker (Product Owner, 2026-11-0
   it("marks the archive that is 10x its vendor's median and at least 1 GiB, says why on hover, and counts it on the Large backups chip", async () => {
     stub(estate, archives);
     render(as(adminPlanes, <BackupScreen />));
-    await screen.findByText("FW-SYNTH-001");
+    await screen.findByText("FW-TANGO-001");
     expect(screen.getByText("Large backups · 1")).toBeInTheDocument();
     expect(screen.queryByText("Large")).toBeNull();
     fireEvent.click(screen.getByText("Large backups · 1"));
     expect(screen.getByText("1–1 of 1")).toBeInTheDocument();
-    const row = screen.getByText("FW-SYNTH-077").closest("tr")!;
+    const row = screen.getByText("FW-TANGO-077").closest("tr")!;
     const marker = within(row).getByText("Large").closest("[data-pill]") as HTMLElement;
     expect(marker).toHaveStyle({ backgroundColor: TONE_COLORS.warn.bg });
     expect(marker.closest("td")).toHaveAttribute("title", "29,923,213,312 bytes");
@@ -235,7 +235,7 @@ describe("Size column sort and the large-backup marker (Product Owner, 2026-11-0
   it("shows the Large backups chip at 0 and flags nothing when every archive is ordinary", async () => {
     stub([device(1), device(2), device(3)], [artefact(1), artefact(2), artefact(3)]);
     render(as(adminPlanes, <BackupScreen />));
-    await screen.findByText("FW-SYNTH-001");
+    await screen.findByText("FW-TANGO-001");
     expect(screen.getByText("Large backups · 0")).toBeInTheDocument();
     expect(screen.queryByText("Large")).toBeNull();
     fireEvent.click(screen.getByText("Large backups · 0"));
@@ -250,10 +250,10 @@ describe("the target toggle, the deviation pill and the KPI cards", () => {
     expect((await screen.findAllByRole("checkbox", { name: /^Backup target / }))).toHaveLength(2);
     unmount();
     render(as(viewerPlanes, <BackupScreen />));
-    await screen.findByText("FW-SYNTH-001");
+    await screen.findByText("FW-TANGO-001");
     expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
-    expect(screen.getByRole("img", { name: "Backup target FW-SYNTH-001: on, locked for your role" })).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Backup target FW-SYNTH-002: off, locked for your role" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Backup target FW-TANGO-001: on, locked for your role" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Backup target FW-TANGO-002: off, locked for your role" })).toBeInTheDocument();
     expect(screen.getByText("Target · locked")).toBeInTheDocument();
     expect(screen.getByText("Not a target · locked")).toBeInTheDocument();
   });
@@ -286,7 +286,7 @@ describe("fixed column widths (post-release review 2026-10-18, R3 / R11)", () =>
   it("lays the fleet table out with fixed columns so LATEST ATTEMPT keeps its room, ages with the exact stamp on hover, neutral locked pill", async () => {
     stub([device(1)], [artefact(1)]);
     render(as(viewerPlanes, <BackupScreen />));
-    const row = (await screen.findByText("FW-SYNTH-001")).closest("tr")!;
+    const row = (await screen.findByText("FW-TANGO-001")).closest("tr")!;
     const table = row.closest("table")!;
     expect(table).toHaveStyle({ tableLayout: "fixed" });
     expect(Array.from(table.querySelectorAll("colgroup col")).map((col) => (col as HTMLElement).style.width)).toEqual(FLEET_COLUMNS.map(([, width]) => width));
