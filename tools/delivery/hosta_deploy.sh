@@ -113,7 +113,8 @@ while true; do
   if echo "$new" | grep -qE 'CrashLoopBackOff|Error'; then
     p=$(echo "$new" | grep -E 'CrashLoopBackOff|Error' | head -1 | awk '{print $1}')
     echo "STOP: new pod $p is crashing"
-    kubectl -n ui2 logs "$p" --tail=400 2>/dev/null | grep -E '^Message|ERROR|Exception' | cut -c1-220 | head -5
+    # PO 2026-11-15: pod logs carry raw addresses on HOST-A; what this script prints leaves HOST-A, so mask here.
+    kubectl -n ui2 logs "$p" --tail=400 2>/dev/null | grep -E '^Message|ERROR|Exception' | sed -E 's/[0-9]{1,3}(\.[0-9]{1,3}){3}/<ip>/g' | cut -c1-220 | head -5
     exit 2
   fi
   if grep -q '^Done\.' /tmp/nexus_build.log; then echo "UP after ${t}s"; break; fi

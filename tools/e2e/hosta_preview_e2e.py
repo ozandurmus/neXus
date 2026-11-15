@@ -447,7 +447,9 @@ def workload_manifest(template, image, db_ip, endpoints):
                         "UI2_SCHEDULING_ENABLED": "false", "UI2_SESSION_COOKIE_SECURE": "false",
                         "UI2_JOB_WINDOW_MINUTES": "360",
                         "NEXUS_FAILOVER_MUTATION_ENABLED": "false",
-                        "LOGGING_LEVEL_ROOT": "ERROR"}
+                        "LOGGING_LEVEL_ROOT": "ERROR",
+                        # PO 2026-11-15: live logs show addresses; the preview keeps the masked default.
+                        "NEXUS_LOG_RAW_ADDRESSES": "0"}
         env = []
         for entry in container.get("env", []):
             name = entry["name"]

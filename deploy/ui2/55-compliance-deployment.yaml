@@ -37,6 +37,10 @@ spec:
           env:
             - name: UI2_METRICS_PORT
               value: "9404"
+            # PO 2026-11-15: application logs on HOST-A show IP addresses (the code default stays masked).
+            # Logs never leave HOST-A raw; aiview, diagnostics and bundles mask separately.
+            - name: NEXUS_LOG_RAW_ADDRESSES
+              value: "1"
             # Development mode (PO 2026-11-03): the job window spans the whole 6-hour slot, so manual jobs are never
             # refused as OUTSIDE_JOB_WINDOW. Remove (default 60) when scheduled operation resumes.
             - name: UI2_JOB_WINDOW_MINUTES
