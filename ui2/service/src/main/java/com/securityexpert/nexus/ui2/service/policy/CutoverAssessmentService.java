@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.policy.CutoverRepository;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import java.util.*;
 
@@ -21,6 +22,7 @@ public class CutoverAssessmentService {
     private final PolicyQueryService policies;
     private final ObjectMapper json;
 
+    @Autowired
     public CutoverAssessmentService(TransactionBoundary transactions, PolicyQueryService policies, ObjectMapper json) {
         this(new CutoverRepository(transactions), policies, json);
     }
