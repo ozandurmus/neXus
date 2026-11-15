@@ -245,6 +245,9 @@ public final class HopPolicyEvaluator {
                 undecidable.add(copy);
             }
             String reason = reason(detail);
+            if (vendor.equals("ASA") && ZONE_REQUIRED.equals(reason)) {
+                reason = ASA_INTERFACE_UNKNOWN;
+            }
             if (!cp && verdict.equals(UNKNOWN) && undecidable.isEmpty() && deciding == null
                     && (PAN_DEFAULT_DETAILS.contains(detail))) {
                 return panDefault(ingressZone, egressZone, detail, caveats, notes);

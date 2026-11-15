@@ -133,10 +133,14 @@ public final class AsaConfigPolicyParser {
                         String kw = w.get(0);
                         if ("nameif".equals(kw) && w.size() >= 2) {
                             ifNameif = w.get(1);
+                        } else if ("no".equals(kw) && w.size() >= 2 && "nameif".equals(w.get(1))) {
+                            ifNameif = null;
                         } else if ("security-level".equals(kw) && w.size() >= 2 && AsaLiterals.isUnsignedDigits(w.get(1))) {
                             if (w.get(1).length() <= 3) {
                                 ifSecurityLevel = Integer.parseInt(w.get(1));
                             }
+                        } else if ("no".equals(kw) && w.size() >= 2 && "security-level".equals(w.get(1))) {
+                            ifSecurityLevel = null;
                         } else if ("shutdown".equals(kw) && w.size() == 1) {
                             ifShutdown = true;
                         } else if ("no".equals(kw) && w.size() >= 2 && "shutdown".equals(w.get(1))) {

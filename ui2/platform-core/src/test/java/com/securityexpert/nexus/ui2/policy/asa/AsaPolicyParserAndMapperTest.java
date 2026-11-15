@@ -632,6 +632,8 @@ class AsaPolicyParserAndMapperTest {
         String config = """
                 ASA Version 9.22(1)
                 interface GigabitEthernet0/0
+                 nameif transient-if
+                 no nameif
                  shutdown
                 interface GigabitEthernet0/1
                  nameif inside
@@ -639,6 +641,8 @@ class AsaPolicyParserAndMapperTest {
                  shutdown
                 interface GigabitEthernet0/2
                  nameif outside
+                 security-level 50
+                 no security-level
                  security-level 0
                  no shutdown
                 !

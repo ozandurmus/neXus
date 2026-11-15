@@ -96,6 +96,7 @@ public final class TopologyBuilder {
         private final Mac mac;
         private final Map<String, Node> nodesByKey = new TreeMap<>();
         private final Map<String, Set<String>> interfacesByNode = new LinkedHashMap<>();
+        private final Map<String, Map<String, Optional<String>>> interfaceZonesByNode = new LinkedHashMap<>();
         private final List<Candidate> candidates = new ArrayList<>();
         private final List<Conflict> conflicts = new ArrayList<>();
         private final Set<String> conflictIds = new LinkedHashSet<>();
@@ -187,7 +188,8 @@ public final class TopologyBuilder {
                 List<InventoryInterface> interfaces = new ArrayList<>();
                 for (InventoryInterface i : context.interfaces()) {
                     String nameif = nameifs.get(i.name());
-                    interfaces.add(nameif == null ? i : new InventoryInterface(i.interfaceId(), nameif, i.parent(), i.kind(),
+                    Optional<String> parent = i.parent().map(p -> nameifs.getOrDefault(p, p));
+                    interfaces.add(nameif == null ? i : new InventoryInterface(i.interfaceId(), nameif, parent, i.kind(),
                             i.state(), i.addresses(), i.vlanId(), i.macAddress(), Optional.of(nameif), i.routingContext(),
                             i.evidenceGrade()));
                 }
@@ -291,6 +293,7 @@ public final class TopologyBuilder {
             }
 
             Set<String> interfaceNames = new TreeSet<>();
+            Map<String, Optional<String>> interfaceZones = new LinkedHashMap<>();
             Map<String, Candidate> nodeCandidates = new TreeMap<>();
             Map<String, Integer> managementMasks = checkPoint ? managementMasks(collected, context) : Map.of();
             for (TopologyInput.DeviceFacts d : collected) {
@@ -308,6 +311,7 @@ public final class TopologyBuilder {
                         continue;
                     }
                     interfaceNames.add(iface.name());
+                    interfaceZones.merge(iface.name(), iface.zone(), (a, b) -> a.equals(b) ? a : Optional.empty());
                     if (iface.evidenceGrade().filter(InventoryInterface.GRADE_CONFIG_DERIVED::equals).isPresent()) {
                         flags.add(NodeFlag.CONFIG_DERIVED_INTERFACES);
                     }
@@ -356,6 +360,7 @@ public final class TopologyBuilder {
             }
             candidates.addAll(nodeCandidates.values());
             interfacesByNode.put(nodeId, interfaceNames);
+            interfaceZonesByNode.put(nodeId, interfaceZones);
             Node node = new Node(nodeId, cluster ? NodeKind.CLUSTER_UNIT : NodeKind.ROUTING_CONTEXT, vendor, clusterRef,
                     context, table, members, routingMember.map(TopologyInput.DeviceFacts::deviceId), flags, routes);
             nodesByKey.put(nodeKey, node);
@@ -579,8 +584,10 @@ public final class TopologyBuilder {
                     noMatch(results, o, NoMatchReason.DEVICE_REMOVED);
                     continue;
                 }
-                List<String> aNodes = endpointNodes(o.aDeviceId().orElseThrow(), o.aContext(), o.aInterfaceName());
-                List<String> bNodes = endpointNodes(o.bDeviceId().orElseThrow(), o.bContext(), o.bInterfaceName());
+                String aInterface = overrideInterfaceName(o.aDeviceId().orElseThrow(), o.aInterfaceName());
+                String bInterface = overrideInterfaceName(o.bDeviceId().orElseThrow(), o.bInterfaceName());
+                List<String> aNodes = endpointNodes(o.aDeviceId().orElseThrow(), o.aContext(), aInterface);
+                List<String> bNodes = endpointNodes(o.bDeviceId().orElseThrow(), o.bContext(), bInterface);
                 if (aNodes.isEmpty() || bNodes.isEmpty()) {
                     noMatch(results, o, NoMatchReason.ENDPOINT_NOT_FOUND);
                 } else if (aNodes.size() > 1 || bNodes.size() > 1) {
@@ -588,8 +595,8 @@ public final class TopologyBuilder {
                 } else if (aNodes.get(0).equals(bNodes.get(0))) {
                     noMatch(results, o, NoMatchReason.SAME_NODE);
                 } else {
-                    planned.add(new PlannedOverride(o, new Endpoint(aNodes.get(0), o.aInterfaceName()),
-                            new Endpoint(bNodes.get(0), o.bInterfaceName())));
+                    planned.add(new PlannedOverride(o, new Endpoint(aNodes.get(0), aInterface),
+                            new Endpoint(bNodes.get(0), bInterface)));
                 }
             }
 
@@ -708,7 +715,8 @@ public final class TopologyBuilder {
                 segments.add(new Segment(segmentId, assumed, SegmentKind.MANUAL, Optional.of(id)));
                 for (Endpoint e : List.of(p.a(), p.b())) {
                     attachments.add(new Attachment(id("ta-", "manual|" + id + "|" + e.nodeId()), e.nodeId(), segmentId,
-                            Optional.of(e.interfaceName()), Optional.empty(), Optional.empty(), Optional.empty(), false,
+                            Optional.of(e.interfaceName()), Optional.empty(), Optional.empty(),
+                            manualZone(e.nodeId(), e.interfaceName()), false,
                             Attachment.Source.OVERRIDE, Optional.empty()));
                 }
                 statuses.put(id, OverrideStatus.APPLIED);
@@ -757,6 +765,22 @@ public final class TopologyBuilder {
             return new Attachment(id("ta-", "attachment|" + c.key()), c.nodeId(), segmentId, Optional.of(c.interfaceName()),
                     Optional.of(c.host().hostText() + "/" + c.prefix().length()), Optional.of(c.role()), c.zone(),
                     c.corroborated(), Attachment.Source.INVENTORY, c.grade());
+        }
+
+        private String overrideInterfaceName(String deviceId, String interfaceName) {
+            Map<String, String> nameifs = input.interfaceNames().get(deviceId);
+            if (nameifs == null || nameifs.isEmpty()) {
+                return interfaceName;
+            }
+            return nameifs.getOrDefault(interfaceName, interfaceName);
+        }
+
+        private Optional<String> manualZone(String nodeId, String interfaceName) {
+            Node n = nodesById.get(nodeId);
+            if (n == null || !TopologyInput.VENDOR_CISCO_ASA.equals(n.vendor())) {
+                return Optional.empty();
+            }
+            return interfaceZonesByNode.getOrDefault(nodeId, Map.of()).getOrDefault(interfaceName, Optional.empty());
         }
 
         private List<String> endpointNodes(String deviceId, String context, String interfaceName) {
