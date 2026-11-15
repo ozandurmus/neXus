@@ -18,6 +18,8 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -103,6 +105,13 @@ public final class FileArtefactStore implements ArtefactStore {
     private long measuredUsedBytes;
     private long measuredAtNanos;
     private boolean measured;
+    /** Per-store quotas (backlog backup_screen_backbox_model): store name to bytes; empty = none, the default. */
+    private volatile Supplier<Map<String, Long>> storeQuotaSource = Map::of;
+    private final Object storeQuotaLock = new Object();
+    private Map<String, Long> storeQuotas = Map.of();
+    private long storeQuotasAtNanos;
+    private boolean storeQuotasLoaded;
+    private final Map<String, long[]> storeUsage = new ConcurrentHashMap<>();
 
     public FileArtefactStore(Path root, ArtefactStoreCipher cipher) {
         this(root, cipher, LEGACY_MAX_BYTES, resolveQuotaBytes(root, System.getenv()));
@@ -130,6 +139,61 @@ public final class FileArtefactStore implements ArtefactStore {
     /** Creates a {@link FileArtefactStore} with an explicit enforced byte quota. */
     public static FileArtefactStore withQuota(Path root, ArtefactStoreCipher cipher, long quotaBytes) {
         return new FileArtefactStore(root, cipher, LEGACY_MAX_BYTES, quotaBytes);
+    }
+
+    /**
+     * Adds optional per-store quotas (a store is the vendor segment, the first directory level). The source is read at
+     * most once per {@link #USAGE_MEASURE_INTERVAL_NANOS}; a store absent from the map has no per-store quota, and the
+     * global quota applies to every store regardless. A source that fails keeps the last known quotas.
+     */
+    public FileArtefactStore withStoreQuotas(Supplier<Map<String, Long>> source) {
+        this.storeQuotaSource = Objects.requireNonNull(source, "source");
+        synchronized (storeQuotaLock) {
+            storeQuotasLoaded = false;
+        }
+        return this;
+    }
+
+    /** The per-store quota of {@code store} in bytes, if one is configured. */
+    public Optional<Long> storeQuotaBytes(String store) {
+        synchronized (storeQuotaLock) {
+            if (!storeQuotasLoaded || System.nanoTime() - storeQuotasAtNanos >= USAGE_MEASURE_INTERVAL_NANOS) {
+                try {
+                    storeQuotas = Map.copyOf(storeQuotaSource.get());
+                } catch (RuntimeException e) {
+                    // keep the last known quotas; a database blip must neither block nor unblock writes
+                }
+                storeQuotasAtNanos = System.nanoTime();
+                storeQuotasLoaded = true;
+            }
+            return Optional.ofNullable(storeQuotas.get(store));
+        }
+    }
+
+    /** Bytes under one store (a fresh walk of {@code root/<store>}), excluding {@code ownTempFile}. */
+    private long currentStoreUsedBytes(String store, Path ownTempFile) {
+        long[] cached = storeUsage.get(store);
+        if (cached != null && System.nanoTime() - cached[1] < USAGE_MEASURE_INTERVAL_NANOS) {
+            return cached[0];
+        }
+        long used = usedBytesExcluding(root.resolve(store), ownTempFile);
+        storeUsage.put(store, new long[] {used, System.nanoTime()});
+        return used;
+    }
+
+    private void recordStoreCommitted(String store, long bytes) {
+        storeUsage.computeIfPresent(store, (k, v) -> new long[] {v[0] + bytes, v[1]});
+    }
+
+    /** Refuses with the per-store reason when {@code store} has reached its own quota. */
+    private void checkStoreQuota(String store, Path ownTempFile) throws QuotaExceededException {
+        Optional<Long> limit = storeQuotaBytes(store);
+        if (limit.isPresent()) {
+            long used = currentStoreUsedBytes(store, ownTempFile);
+            if (used >= limit.get()) {
+                throw new QuotaExceededException(store, used, limit.get(), 0L);
+            }
+        }
     }
 
     /** Returns the enforced maximum bytes this artefact store allows on disk. */
@@ -279,16 +343,27 @@ public final class FileArtefactStore implements ArtefactStore {
     }
 
     @Override
+    public void checkQuota(String store) throws QuotaExceededException {
+        checkQuota();
+        checkStoreQuota(safeSegment(store), null);
+    }
+
+    @Override
     public ArtefactHandle open(String deviceId, String jobId, String vendor, boolean gzip) throws IOException {
         long usedBeforeOpen = currentUsedBytes(null);
         if (usedBeforeOpen >= quotaBytes) {
             throw new QuotaExceededException(usedBeforeOpen, quotaBytes, 0L);
         }
-        Path vendorDir = root.resolve(safeSegment(vendor)).resolve(safeSegment(deviceId));
+        String store = safeSegment(vendor);
+        checkStoreQuota(store, null);
+        Optional<Long> storeLimit = storeQuotaBytes(store);
+        long storeUsedBeforeOpen = storeLimit.isPresent() ? currentStoreUsedBytes(store, null) : 0L;
+        Path vendorDir = root.resolve(store).resolve(safeSegment(deviceId));
         Files.createDirectories(vendorDir);
         Path tempFile = Files.createTempFile(vendorDir, "artefact-", ".tmp");
         try {
-            return new FileArtefactHandle(tempFile, vendorDir, gzip, usedBeforeOpen);
+            return new FileArtefactHandle(tempFile, vendorDir, gzip, usedBeforeOpen, store, storeLimit.orElse(Long.MAX_VALUE),
+                    storeUsedBeforeOpen);
         } catch (Throwable t) {
             try {
                 Files.deleteIfExists(tempFile);
@@ -342,7 +417,13 @@ public final class FileArtefactStore implements ArtefactStore {
         private boolean finished;
         private boolean committed;
 
-        FileArtefactHandle(Path tempFile, Path vendorDeviceDir, boolean gzip, long usedBeforeOpen) throws IOException {
+        private final String store;
+        private final long storeQuota;
+
+        FileArtefactHandle(Path tempFile, Path vendorDeviceDir, boolean gzip, long usedBeforeOpen, String store,
+                long storeQuota, long storeUsedBeforeOpen) throws IOException {
+            this.store = store;
+            this.storeQuota = storeQuota;
             this.tempFile = tempFile;
             this.vendorDeviceDir = vendorDeviceDir;
             this.gzip = gzip;
@@ -350,7 +431,8 @@ public final class FileArtefactStore implements ArtefactStore {
             // never encrypts artefact bytes directly.
             this.dataKey = cipher.generateDataKey();
             this.fileOut = Files.newOutputStream(tempFile);
-            this.ciphertextCounter = new CountingDigestOutputStream(fileOut, usedBeforeOpen, quotaBytes, tempFile);
+            this.ciphertextCounter = new CountingDigestOutputStream(fileOut, usedBeforeOpen, quotaBytes, tempFile,
+                    store, storeUsedBeforeOpen, storeQuota);
             OutputStream cipherOut = cipher.encryptingStream(ciphertextCounter, dataKey);
             OutputStream compressOut = gzip ? new GZIPOutputStream(cipherOut) : cipherOut;
             this.plaintextCounter = new CountingDigestOutputStream(compressOut);
@@ -376,11 +458,18 @@ public final class FileArtefactStore implements ArtefactStore {
                 if (otherBytes + ciphertextBytes > quotaBytes) {
                     throw new QuotaExceededException(otherBytes, quotaBytes, ciphertextBytes);
                 }
+                if (storeQuota != Long.MAX_VALUE) {
+                    long otherStoreBytes = currentStoreUsedBytes(store, tempFile);
+                    if (otherStoreBytes + ciphertextBytes > storeQuota) {
+                        throw new QuotaExceededException(store, otherStoreBytes, storeQuota, ciphertextBytes);
+                    }
+                }
                 String ciphertextSha256 = ciphertextCounter.digestHex();
                 Path finalPath = vendorDeviceDir.resolve(ciphertextSha256 + ".enc");
                 Files.move(tempFile, finalPath, StandardCopyOption.REPLACE_EXISTING);
                 committed = true;
                 recordCommitted(ciphertextBytes);
+                recordStoreCommitted(store, ciphertextBytes);
                 ArtefactRef ref = new ArtefactRef(root.relativize(finalPath).toString());
                 return new ArtefactMetadata(ref, plaintextCounter.digestHex(), plaintextCounter.count(), ciphertextSha256,
                         ciphertextBytes, gzip ? "gzip" : "none", cipher.keyId(), cipher.wrapKey(dataKey));
@@ -424,6 +513,9 @@ public final class FileArtefactStore implements ArtefactStore {
         private final boolean enforceQuota;
         private final long usedBeforeOpen;
         private final long quotaBytes;
+        private final String store;
+        private final long storeUsedBeforeOpen;
+        private final long storeQuotaBytes;
         private final Path tempFile;
         private final OutputStream rawOut;
         private long count;
@@ -431,21 +523,25 @@ public final class FileArtefactStore implements ArtefactStore {
         private QuotaExceededException abortCause;
 
         CountingDigestOutputStream(OutputStream out) {
-            this(out, false, 0L, Long.MAX_VALUE, null);
+            this(out, false, 0L, Long.MAX_VALUE, null, null, 0L, Long.MAX_VALUE);
         }
 
-        CountingDigestOutputStream(OutputStream out, long usedBeforeOpen, long quotaBytes, Path tempFile) {
-            this(out, true, usedBeforeOpen, quotaBytes, tempFile);
+        CountingDigestOutputStream(OutputStream out, long usedBeforeOpen, long quotaBytes, Path tempFile,
+                String store, long storeUsedBeforeOpen, long storeQuotaBytes) {
+            this(out, true, usedBeforeOpen, quotaBytes, tempFile, store, storeUsedBeforeOpen, storeQuotaBytes);
         }
 
         private CountingDigestOutputStream(OutputStream out, boolean enforceQuota, long usedBeforeOpen,
-                long quotaBytes, Path tempFile) {
+                long quotaBytes, Path tempFile, String store, long storeUsedBeforeOpen, long storeQuotaBytes) {
             super(wrapWithDigest(out, newSha256()));
             this.rawOut = out;
             this.digest = ((DigestOutputStream) this.out).getMessageDigest();
             this.enforceQuota = enforceQuota;
             this.usedBeforeOpen = usedBeforeOpen;
             this.quotaBytes = quotaBytes;
+            this.store = store;
+            this.storeUsedBeforeOpen = storeUsedBeforeOpen;
+            this.storeQuotaBytes = storeQuotaBytes;
             this.tempFile = tempFile;
         }
 
@@ -486,9 +582,13 @@ public final class FileArtefactStore implements ArtefactStore {
                 throw abortCause;
             }
             long projectedTotal = usedBeforeOpen + count + additionalBytes;
-            if (projectedTotal > quotaBytes) {
+            long projectedStore = storeUsedBeforeOpen + count + additionalBytes;
+            boolean overGlobal = projectedTotal > quotaBytes;
+            if (overGlobal || projectedStore > storeQuotaBytes) {
                 aborted = true;
-                abortCause = new QuotaExceededException(usedBeforeOpen, quotaBytes, count + additionalBytes);
+                abortCause = overGlobal
+                        ? new QuotaExceededException(usedBeforeOpen, quotaBytes, count + additionalBytes)
+                        : new QuotaExceededException(store, storeUsedBeforeOpen, storeQuotaBytes, count + additionalBytes);
                 try {
                     rawOut.close();
                 } catch (IOException ignored) {

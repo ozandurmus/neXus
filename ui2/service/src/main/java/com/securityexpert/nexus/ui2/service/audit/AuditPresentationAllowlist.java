@@ -54,6 +54,8 @@ public final class AuditPresentationAllowlist {
                     "previous_artefact_id", "resolved_at", "resolved_by", "summary")),
             Map.entry("backup_endpoint_ineligibility", Set.of(
                     "device_id", "marked_at")),
+            // V225: the per-store quota is a store name and a byte count; updated_by is the administrator's actor name.
+            Map.entry("artefact_store_quota", Set.of("quota_bytes", "store_name", "updated_at", "updated_by")),
             Map.entry("backup_policy", Set.of(
                     "backup_retention_days", "configuration_retention_days", "created_at", "daily_backup_cron",
                     "last_scheduled_run_at", "major_alert_enabled", "policy_id", "schedule_enabled",

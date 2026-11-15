@@ -634,6 +634,33 @@ export function getBackupPolicy(): Promise<BackupPolicy> {
   return call("/api/v2/backups/policies", "GET");
 }
 
+/** V225: one artefact store (the first directory level, the vendor) with its optional byte quota; null quota = unlimited. */
+export interface BackupStoreQuotaRow {
+  readonly store: string;
+  readonly used_bytes: number | null;
+  readonly quota_bytes: number | null;
+  readonly remaining_bytes: number | null;
+  readonly percent: number | null;
+  readonly near_limit: boolean;
+  readonly quota_exceeded: boolean;
+  readonly warning?: string;
+}
+
+export interface BackupStoreQuotas {
+  readonly store_mounted: boolean;
+  readonly note?: string;
+  readonly stores: ReadonlyArray<BackupStoreQuotaRow>;
+}
+
+export function getBackupStoreQuotas(): Promise<BackupStoreQuotas> {
+  return call("/api/v2/backups/store-quotas", "GET");
+}
+
+/** Sets a store's byte quota, or removes it (back to unlimited) with null; audited, backup_admin. */
+export function setBackupStoreQuota(store: string, quotaBytes: number | null): Promise<BackupStoreQuotas> {
+  return call(`/api/v2/backups/store-quotas/${encodeURIComponent(store)}`, "PUT", { quota_bytes: quotaBytes });
+}
+
 /** One (device, major category) row of GET /api/v2/backups/deviations (docs/design/BACKUP_MAJOR_DEVIATIONS_2026_10_23.md). */
 export interface BackupMajorDeviation {
   readonly device_id: string;

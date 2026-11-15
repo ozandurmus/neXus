@@ -272,6 +272,8 @@ class GateChainInterceptorSecurityTest {
                         ActionRegistry.BACKUP_SIZE_ANOMALY_ACCEPT),
                 java.util.Map.entry("GET /api/v2/backups/policies", ActionRegistry.DEVICE_BACKUP_READ),
                 java.util.Map.entry("PUT /api/v2/backups/policies", ActionRegistry.DEVICE_BACKUP_POLICY_SET),
+                java.util.Map.entry("GET /api/v2/backups/store-quotas", ActionRegistry.DEVICE_BACKUP_READ),
+                java.util.Map.entry("PUT /api/v2/backups/store-quotas/check_point", ActionRegistry.BACKUP_STORE_QUOTA_SET),
                 java.util.Map.entry("GET /api/v2/jobs", ActionRegistry.JOB_LOG_READ),
                 java.util.Map.entry("GET /api/v2/jobs/facets", ActionRegistry.JOB_LOG_READ),
                 java.util.Map.entry("GET /api/v2/jobs/stats", ActionRegistry.JOB_LOG_READ),
@@ -287,6 +289,15 @@ class GateChainInterceptorSecurityTest {
             String[] parts = entry.getKey().split(" ", 2);
             assertEquals(entry.getValue(), method.invoke(interceptor, parts[0], parts[1]), entry.getKey());
         }
+    }
+
+    @Test
+    void storeQuotaWriteNeedsBackupAdminAndReadIsTheBackupRead() {
+        String write = SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("PUT /api/v2/backups/store-quotas/*");
+        assertEquals(ActionRegistry.BACKUP_STORE_QUOTA_SET, write);
+        assertEquals(java.util.Optional.of(com.securityexpert.nexus.ui2.platform.RoleToken.BACKUP_ADMIN),
+                new ActionRegistry().find(write).orElseThrow().requiredRoleToken());
+        assertEquals(ActionRegistry.DEVICE_BACKUP_READ, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("GET /api/v2/backups/store-quotas"));
     }
 
     @Test

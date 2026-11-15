@@ -304,6 +304,10 @@ class AuditRedactionPolicyTest {
             "lifecycle_catalog.end_of_sale", "lifecycle_catalog.end_of_support",
             "lifecycle_catalog.imported_at", "lifecycle_catalog.kind", "lifecycle_catalog.product",
             "lifecycle_catalog.source", "lifecycle_catalog.vendor",
+            // artefact_store_quota (V225): a store name and a byte count; updated_by is the administrator's actor name,
+            // audited in full like the other settings tables
+            "artefact_store_quota.quota_bytes", "artefact_store_quota.store_name",
+            "artefact_store_quota.updated_at", "artefact_store_quota.updated_by",
             // local_password_policy_settings (V223): the single policy row; rule switches and numbers, updated_by is the
             // administrator's actor name, audited in full like the other settings tables
             "local_password_policy_settings.enabled", "local_password_policy_settings.history_count",

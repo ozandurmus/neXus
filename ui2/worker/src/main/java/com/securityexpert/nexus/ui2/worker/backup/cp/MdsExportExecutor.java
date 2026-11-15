@@ -79,7 +79,7 @@ public final class MdsExportExecutor {
             return new BackupResult.CredentialUnresolvable("no backup credential configured for check_point (BK-11) -- refused before any device contact");
         }
         try {
-            artefactStore.checkQuota();
+            artefactStore.checkQuota("check_point");
         } catch (ArtefactStore.QuotaExceededException e) {
             return new BackupResult.ArtefactStoreFailed(e.getMessage());
         } catch (IOException e) {

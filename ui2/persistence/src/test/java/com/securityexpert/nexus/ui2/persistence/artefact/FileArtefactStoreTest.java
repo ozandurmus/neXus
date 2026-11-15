@@ -292,4 +292,70 @@ class FileArtefactStoreTest {
         }
         org.junit.jupiter.api.Assertions.assertTrue(store.isNearLimit(), ">= 80% usage must trigger near-limit warning");
     }
+
+    private static long writeOne(FileArtefactStore store, String vendor, String job, byte[] payload) throws IOException {
+        try (ArtefactStore.ArtefactHandle h = store.open("device-1", job, vendor, false)) {
+            h.sink().write(payload);
+            return h.finish().ciphertextBytes();
+        }
+    }
+
+    /** Backlog backup_screen_backbox_model: a per-store quota refuses only that store, with the shared reason naming it. */
+    @Test
+    void aPerStoreQuotaRefusesOnlyThatStoreWithTheSharedReasonAndLeavesNoPartialFile(@TempDir Path root) throws IOException {
+        ArtefactStoreCipher cipher = ArtefactStoreCipher.fromBase64Key(randomKeyBase64());
+        byte[] payload = new byte[256];
+        new SecureRandom().nextBytes(payload);
+        long one = writeOne(new FileArtefactStore(root.resolve("probe"), cipher), "check_point", "probe", payload);
+
+        java.util.Map<String, Long> quotas = new java.util.concurrent.ConcurrentHashMap<>();
+        FileArtefactStore store = new FileArtefactStore(root.resolve("store"), cipher).withStoreQuotas(() -> quotas);
+        // No per-store quota: unlimited, exactly as before.
+        writeOne(store, "check_point", "job-0", payload);
+        writeOne(store, "check_point", "job-00", payload);
+        assertEquals(java.util.Optional.empty(), store.storeQuotaBytes("check_point"));
+
+        // A quota the store has not yet used up refuses the stream that would cross it.
+        FileArtefactStore limited = new FileArtefactStore(root.resolve("limited"), cipher)
+                .withStoreQuotas(() -> java.util.Map.of("check_point", one + 32L));
+        writeOne(limited, "check_point", "job-1", payload);
+        limited.checkQuota("check_point"); // 32 bytes of headroom left: the pre-check passes, the stream is refused
+        ArtefactStore.QuotaExceededException streamed = assertThrows(ArtefactStore.QuotaExceededException.class, () -> {
+            try (ArtefactStore.ArtefactHandle h = limited.open("device-1", "job-2", "check_point", false)) {
+                h.sink().write(new byte[4096]);
+                h.finish();
+            }
+        });
+        assertEquals("check_point", streamed.store());
+        assertTrue(streamed.getMessage().startsWith(ArtefactStore.QUOTA_EXCEEDED_REASON + ": store=check_point"), streamed.getMessage());
+        assertTrue(ArtefactStore.QuotaExceededException.reasonIn(streamed.getMessage()).isPresent());
+        try (var walk = Files.walk(root.resolve("limited"))) {
+            assertEquals(1, walk.filter(Files::isRegularFile).count(), "no partial file, existing backup kept");
+        }
+        // Another store is untouched by check_point's quota.
+        writeOne(limited, "palo_alto", "job-3", payload);
+        limited.checkQuota("palo_alto");
+
+        // A quota already reached refuses at open() and at checkQuota(store) before any device work.
+        FileArtefactStore full = new FileArtefactStore(root.resolve("full"), cipher)
+                .withStoreQuotas(() -> java.util.Map.of("check_point", one));
+        writeOne(full, "check_point", "job-4", payload);
+        ArtefactStore.QuotaExceededException atOpen = assertThrows(ArtefactStore.QuotaExceededException.class,
+                () -> full.open("device-1", "job-5", "check_point", false));
+        assertEquals("check_point", atOpen.store());
+        assertThrows(ArtefactStore.QuotaExceededException.class, () -> full.checkQuota("check_point"));
+        full.checkQuota("palo_alto");
+        // The global quota's refusal carries no store.
+        assertEquals(null, new ArtefactStore.QuotaExceededException(1L, 1L, 0L).store());
+    }
+
+    @Test
+    void aFailingQuotaSourceKeepsTheLastKnownQuotasAndNeverBlocksWrites(@TempDir Path root) throws IOException {
+        ArtefactStoreCipher cipher = ArtefactStoreCipher.fromBase64Key(randomKeyBase64());
+        FileArtefactStore store = new FileArtefactStore(root, cipher).withStoreQuotas(() -> {
+            throw new IllegalStateException("database unavailable");
+        });
+        writeOne(store, "check_point", "job-1", new byte[64]);
+        assertEquals(java.util.Optional.empty(), store.storeQuotaBytes("check_point"));
+    }
 }
