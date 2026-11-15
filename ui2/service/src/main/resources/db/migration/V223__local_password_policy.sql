@@ -1,7 +1,7 @@
 -- Configurable local-account password policy (backlog ui2_password_policy_configurable, PO 2026-09-14).
 -- OFF by default: with enabled = false the password rules are exactly the pre-existing ones (minimum 12 characters,
 -- not equal to the account name). LDAP and SAML users hold no local_credentials row and are never touched.
--- Rename this file to the next free V number when it is queued for a ship.
+-- Numbered V223 for the batch 9 ship order.
 
 CREATE TABLE IF NOT EXISTS local_password_policy_settings (
     settings_id TEXT PRIMARY KEY CHECK (settings_id = 'default'),
