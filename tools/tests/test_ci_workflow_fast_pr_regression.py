@@ -216,7 +216,7 @@ def test_push_to_main_runs_validation_and_full_regression():
     assert "github.event_name == 'workflow_dispatch'" in full_block
 
 
-def test_dependency_scan_job_gates_high_and_critical_against_baseline():
+def test_dependency_scan_job_gates_findings_against_baseline():
     dep_job = yaml.safe_load(_job_block(_read_workflow(), "dependency-scan"))
     assert dep_job["runs-on"] == "ubuntu-latest"
     assert dep_job["timeout-minutes"] <= 15
@@ -224,7 +224,7 @@ def test_dependency_scan_job_gates_high_and_critical_against_baseline():
     trivy_step = next(s for s in dep_job["steps"] if "aquasecurity/trivy-action@" in s.get("uses", ""))
     assert trivy_step["with"]["scan-type"] == "fs"
     assert trivy_step["with"]["scanners"] == "vuln"
-    assert trivy_step["with"]["severity"] == "HIGH,CRITICAL"
+    assert "severity" not in trivy_step["with"]  # security_summary.py owns the HIGH/CRITICAL/UNKNOWN gate
     assert trivy_step["with"]["format"] == "json"
     assert trivy_step["with"]["exit-code"] == "0"
     gate_step = next(s for s in dep_job["steps"] if "security_summary.py" in s.get("run", ""))
@@ -315,3 +315,30 @@ def test_integration_job_gates_the_merge_against_a_real_postgres_16():
     # Fail closed: a pull request whose changed paths cannot be listed runs the suite.
     assert scope["run"].count('echo "run=true"') >= 3
     assert "^ui2/frontend/" in scope["run"] and "docs/operations/sql/" in scope["run"]
+
+
+def test_codeql_manual_build_cannot_be_served_from_the_gradle_cache():
+    text = CODEQL_WORKFLOW_PATH.read_text()
+    assert "--no-build-cache" in text and "--rerun-tasks" in text
+    assert "mkdir -p ui2/frontend/dist" in text
+
+
+def test_dependency_scan_leaves_the_severity_gate_to_security_summary():
+    block = _job_block(WORKFLOW_PATH.read_text(), "dependency-scan")
+    assert "severity:" not in block  # no HIGH,CRITICAL pre-filter: UNKNOWN must reach security_summary.py
+    assert "security_summary.py" in block
+    assert "printf '0" not in block  # the recorded exit code is Trivy's real outcome
+    assert "steps.trivy.outcome" in block and "trivy_retry" in block  # bounded DB-download retry
+
+
+def test_push_privacy_baseline_is_the_pre_push_commit():
+    text = WORKFLOW_PATH.read_text()
+    assert "repository_privacy_check.py --privacy-baseline-ref origin/main" not in text
+    assert text.count('--privacy-baseline-ref "${{ steps.privacy_baseline.outputs.ref }}"') == 2
+    assert text.count("PUSH_BEFORE: ${{ github.event.before }}") == 2 and text.count("ref=HEAD~1") == 2
+
+
+def test_slow_security_scans_do_not_gate_the_merge():
+    from tools.delivery import standalone_orchestrate as orchestrate
+
+    assert {"dependency-scan", "Analyze (java-kotlin)", "Analyze (javascript-typescript)"} <= orchestrate.POST_MERGE_CHECKS
