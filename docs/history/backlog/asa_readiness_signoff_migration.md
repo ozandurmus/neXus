@@ -5,3 +5,5 @@ status: in_progress · target: PR 857 open; PO approved 11-14
 2026-11-14: PR 857 builds ASA Phase 1 readiness, switched off, reads DRAFTED (V212). PO approved 11-14 the four reads for permanent readiness use; a migration must move the gate rows from DRAFTED to approved with the decision reference before the switch is turned on.
 
 2026-11-14: in ship batch 1 (V212).
+
+2026-11-15 10:00 backlog refresh: In the ship queue (batches b4..b9, not yet on main). Built: 'Sign off the four Cisco ASA readiness reads (PO approval 2026-11-14)', migration now V222__asa_failover_readiness_signoff.sql ('Renumber the migration V215 -> V222 for the ship order'). Not closed: ship pending, V222 live dry run pending; UI2_ASA_FAILOVER_READINESS stays off by default (open Q3).

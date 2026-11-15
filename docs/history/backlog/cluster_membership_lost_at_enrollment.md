@@ -11,3 +11,5 @@ Title (full): Cluster membership is known at discovery but does not reach enroll
 Target (full): enrollment/confirm path writing devices.cluster_member_ref
 
 2026-11-14 backlog truth: still open (P3, size S). Today: Display works via read-time join; CP stored ref missing so other readers may miss clusters. Evidence: Live: devices.cluster_member_ref set on 44 of 136 (PAN 34, ASA 10) but 0 of 59 Check Point gateways
+
+2026-11-15 10:00 backlog refresh: In the ship queue (batches b4..b9, not yet on main). Commits 'Keep the discovered cluster and virtual-system reference when a confirm job observes none' and 'Keep ha_peer_unconfirmed true until peer-follow corroborates a discovered cluster reference' (JooqDeviceRepositoryTest, ConfirmKeepsDiscoveredClusterRefTest).

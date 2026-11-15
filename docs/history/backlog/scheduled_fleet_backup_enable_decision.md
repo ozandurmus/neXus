@@ -17,3 +17,5 @@ Target (full): docs/design/INCIDENT_2026_10_10_BACKUP_FREQUENCY_DISK_FULL.md
 2026-11-14: disk headroom alert in ship batch 3.
 
 Disk headroom alert implemented 2026-11-14 (AUTOMATED_VALIDATED): warning 80/critical 90 percent, status payload, health light, syslog DISK_HEADROOM. See docs/operations/DISK_HEADROOM_ALERT.md. Live crossing not yet observed.
+
+2026-11-15 10:00 backlog refresh: Shipped on main (batch 2/3). Disk headroom alert: commits 'feat(system): add disk headroom thresholds, status state, and syslog alert' and 'Disk headroom service: mark the Spring constructor; guard all Spring stereotypes with an architecture rule'. Warning 80 / critical 90 percent, status payload, health light, syslog DISK_HEADROOM. Live threshold crossing not observed; real-env validation pending.

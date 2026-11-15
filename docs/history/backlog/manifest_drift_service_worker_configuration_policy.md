@@ -9,3 +9,5 @@ status: in_progress · target: tools/delivery/module_deploy.py (SYNCED_MANIFESTS
 2026-11-14 backlog truth: still open (P2, size S). Today: Worker manifest can drift from the live object. Evidence: module_deploy.py SYNCED_MANIFESTS has service, configuration, compliance, policy; worker absent (patched at run time)
 
 2026-11-14: worker manifest sync in ship batch 3.
+
+2026-11-15 10:00 backlog refresh: 2026-11-15: worker is now in SYNCED_MANIFESTS (tools/delivery/module_deploy.py; commit 'Fail fast on failed module e2e jobs and sync worker manifest on deploy', on main). Left open: real-env validation of the synced modules on a release.

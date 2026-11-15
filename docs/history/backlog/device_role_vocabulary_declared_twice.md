@@ -9,3 +9,5 @@ NXS-LOCAL-0187 added the device role with its two values written as string liter
 Title (full): The device-role vocabulary is a string literal in Java and again in the CHECK constraint
 
 2026-11-14 backlog truth: still open (P3, size S). Today: Next device role can again be refused by DB or accepted unvalidated. Evidence: 'management_server' literal in 10+ Java files plus CHECK chk_devices_role (V65 had to widen it after enrolment was refused)
+
+2026-11-15 10:00 backlog refresh: In the ship queue (batches b4..b9, not yet on main). Commit 'One Java declaration of the device-role vocabulary, with a drift test against the role check migration and the frontend type' (DeviceRoleVocabularyTest).

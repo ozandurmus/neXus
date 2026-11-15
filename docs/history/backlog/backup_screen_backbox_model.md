@@ -11,3 +11,5 @@ Title (full): Backup screen on the Backbox model: per-device history, schedule, 
 Target (full): PO directive 2026-09-22 (Backbox standard); download/contents/compare shipped 2026-09-22, history/schedule/baseline remain
 
 2026-11-14 backlog truth: still open (P2, size S). Today: Only the per-store storage quota is missing; screen otherwise complete. Evidence: History/schedule/baseline/compare/retention shipped (129abc10, 53afe43a); no storage quota code in ui2
+
+2026-11-15 10:00 backlog refresh: In the ship queue (batches b4..b9, not yet on main). A global artefact-store byte quota is built (see vault_has_no_enforced_quota_on_a_shared_host). The per-store quota this item asks for is not; left open.

@@ -981,6 +981,195 @@
       "priority": "P0",
       "target": "Closed 2026-11-14: obsolete/superseded",
       "note": ""
+    },
+    {
+      "id": "scheduled_fleet_backup_enable_decision",
+      "category": "backup",
+      "title": "Backup store: disk headroom alert (daily backups run)",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "INCIDENT_2026_10_10_BACKUP_FREQUENCY_DISK_FULL.md",
+      "note": ""
+    },
+    {
+      "id": "machine_session_probe_isolation",
+      "category": "Testing / Authentication",
+      "title": "Probes displace the e2e runner's machine session",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "module_e2e_fail_fast",
+      "category": "Delivery",
+      "title": "module_e2e: wait for Complete or Failed and fail fast",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "tools/delivery/module_deploy.py",
+      "note": ""
+    },
+    {
+      "id": "integration_ci_gate_and_v208_check",
+      "category": "ci",
+      "title": "Integration suite as CI gate; close the V208 NULL hole",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "Harness fixed on branch",
+      "note": ""
+    },
+    {
+      "id": "discovery-run-start-empty-body-500",
+      "category": "ui2",
+      "title": "POST /discovery/runs with an empty JSON body answers 500 instead of a 400 validation error",
+      "status": "automated_validated",
+      "priority": "P3",
+      "target": "",
+      "note": ""
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_10_acceptance_scenario_concurrent_admins",
+      "title": "UI2 B1-10 -- acceptance scenario A: three admins on one...",
+      "priority": "P3",
+      "status": "automated_validated",
+      "note": "",
+      "target": "workflow §5 B1-10"
+    },
+    {
+      "category": "UI 2.0 (Java product line)",
+      "id": "ui2_b1_11_acceptance_scenario_worker_loss",
+      "title": "UI2 B1-11 -- acceptance scenario B: worker killed...",
+      "priority": "P3",
+      "status": "automated_validated",
+      "note": "see docs/history/backlog/ui2_b1_11_acceptance_scenario_worker_loss.md",
+      "target": "workflow §5 B1-11"
+    },
+    {
+      "id": "device_role_vocabulary_declared_twice",
+      "category": "governance",
+      "title": "The device-role vocabulary is a string literal in Java",
+      "status": "done",
+      "priority": "P3",
+      "target": "14I MS-1 successor",
+      "note": ""
+    },
+    {
+      "id": "vault_has_no_enforced_quota_on_a_shared_host",
+      "category": "backup",
+      "title": "The artefact/recovery store has no enforced quota",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "deploy/ui2/35-artefact-store-pvc.yaml...",
+      "note": ""
+    },
+    {
+      "id": "cluster_membership_lost_at_enrollment",
+      "category": "discovery",
+      "title": "Cluster membership is known at discovery but does not...",
+      "status": "automated_validated",
+      "priority": "P3",
+      "target": "enrollment/confirm path writing...",
+      "note": ""
+    },
+    {
+      "id": "discovery_connection_state_never_populated",
+      "category": "discovery",
+      "title": "Check Point discovery never records the management...",
+      "status": "automated_validated",
+      "priority": "P3",
+      "target": "MgmtCliEnumerationAdapter candidate construction",
+      "note": ""
+    },
+    {
+      "id": "pan_keygen_no_usable_key_under_load",
+      "category": "inventory",
+      "title": "Palo Alto keygen returned no usable key after ~8 s on 3...",
+      "status": "automated_validated",
+      "priority": "P3",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "test_fixture_realistic_names_cleanup",
+      "category": "ui2",
+      "title": "Frontend test fixtures still carry device-like hostnames...",
+      "status": "done",
+      "priority": "P3",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "hosta_export_include_build_namespace",
+      "category": "ui2",
+      "title": "hosta_export_all.sh does not export the ui2-build...",
+      "status": "done",
+      "priority": "P3",
+      "target": "scripts/hosta_export_all.sh",
+      "note": ""
+    },
+    {
+      "id": "spike_data_cap_not_enforced_by_pruner",
+      "category": "reliability",
+      "title": "512 MiB spike data cap not enforced by the pruner",
+      "status": "automated_validated",
+      "priority": "P3",
+      "target": "DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md",
+      "note": ""
+    },
+    {
+      "id": "diagnostic_mask_overreach",
+      "category": "diagnostics",
+      "title": "Diagnostic output mask hides sizes (289G), month abbreviations and ordinary words as SN- tokens; masked CP local-log output was unreadable (2026-10-31, 2026-11-02)",
+      "status": "automated_validated",
+      "priority": "P3",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "masking_residual_gaps_system_log_and_sanitizer",
+      "category": "privacy",
+      "title": "Masking residual gaps after logmask-v3 (see note)",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md",
+      "note": ""
+    },
+    {
+      "id": "ui2_password_policy_configurable",
+      "category": "identity",
+      "title": "UI2 local password policy, configurable and off by default",
+      "status": "automated_validated",
+      "priority": "P3",
+      "target": "PasswordChangeService and...",
+      "note": ""
+    },
+    {
+      "id": "kaniko_download_retry_templates",
+      "category": "ci",
+      "title": "Kaniko build templates: retry base-layer downloads",
+      "status": "done",
+      "priority": "P2",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "asa_identity_ace_narrowing_decision",
+      "category": "failover",
+      "title": "Decision: narrow the ASA identity ACEs (PO)",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "PO decision open 2026-11-14",
+      "note": ""
+    },
+    {
+      "id": "asa_trace_wiring_nameif_map",
+      "category": "policy",
+      "title": "ASA Trace wiring: physical interface to nameif map",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "After ASA wiring (batch 4)",
+      "note": ""
     }
   ]
 }

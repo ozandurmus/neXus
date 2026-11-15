@@ -1,12 +1,12 @@
 # neXus — Current State
 
-Hot checkpoint reconciled on 2026-11-14 against `origin/main` at `e70dbdf1`.
+Hot checkpoint reconciled on 2026-11-15 10:00 against `origin/main` at `2a229cb8` (batches 1-3 shipped); batches 4-9 are in the ship queue.
 `project/QUEUE.md` and its tool-managed data own delivery state; repository
 source proves implementation, not the current deployment or device health.
 
 ## Product today
 
-UI2 is the maintained Java/React product; repository schema on main is **V211**.
+UI2 is the maintained Java/React product; repository schema on main is **V218**; the ship queue adds V219-V223.
 Inventory, configuration, compliance, encrypted backups, Operations, Policy,
 lifecycle and security checks, Packet Analysis and device system logs use
 masked `aiview` projections. Restore from the UI remains disabled. Sign-in uses
@@ -24,17 +24,13 @@ only (V209/V210). Authority: [NSPM decision](docs/design/PO_DECISION_RECORD_2026
 `NXS-LOCAL-0391` — **IN_PROGRESS** (started 2026-11-13): delivering the
 release queue below, one PR per lane after a live migration dry run.
 `NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory
-sign-in landed; SAML, JSON logs and monitoring endpoints are not built.
+sign-in landed; opt-in JSON logs are in the ship queue; SAML and monitoring endpoints are not built.
 Next: `recovery_offhost_key_custody` (ratified 2026-11-14, roadmap and Java
 plan agree); Overview acceptance heads the upcoming list.
 
-In the release queue (not live; migration numbers follow queue order, Flyway
-runs without outOfOrder):
+Shipped on main (batches 1-3; deployment to the host not asserted): ASA readiness (V212), V208 NULL-hole fix and integration CI gate (V213), Check Point advisories (V214), zone matrix step 1 (V216), ACI step 1 backend (V217), API latency (V218), discovery empty body answers 400, disk headroom alert, probe/e2e session isolation, release e2e fail-fast with worker manifest sync.
 
-- Batch 1: ASA readiness (V212), V208 NULL-hole fix and integration CI gate (V213), Check Point advisories (V214), zone matrix step 1 (V216).
-- Batch 2: ACI step 1 (V217), API latency (V218), discovery empty body answers 400, ASA output shaping.
-- Batch 3: disk alert, recertification revision 2, probe/e2e session isolation, release e2e fail-fast with worker manifest sync; npm TLS.
-- Batch 4: zone matrix step 2 (V220) and its screen, Backups batched jobs read, ASA wiring. Lifecycle catalog (V219) pending.
+In the ship queue as of 2026-11-15 10:00 (batches 4-9; each migration needs its live dry run): lifecycle catalog (V219), zone matrix step 2 (V220), Palo Alto App-ID gate (V221), ASA readiness sign-off (V222), local password policy (V223); ASA/FortiGate policy in lookup, hygiene and Trace and their cluster view; Cutover impact screen; artefact-store byte quota; logmask-v7/v8; JSON logs; B1-10/B1-11 tests.
 
 Open PO decisions: product name; narrowing the ASA identity ACEs; the DB
 NetworkPolicy contract conflict; the off-host recovery target; support-bundle
@@ -67,7 +63,7 @@ still in progress under the [runtime contract](docs/design/MODULE_POD_RUNTIME_CO
 Pre-deploy release snapshots support guarded rollback; isolated pre-merge
 preview e2e checks the candidate with masked evidence and fails on page/API 4xx.
 Release also applies the committed manifests of the policy, service,
-configuration and compliance modules (the worker is still patched at run time),
+configuration, compliance and worker modules (the worker joined in batch 3),
 and a ship retries when the image build failed only on a base-image layer
 download. Development mode ended on 2026-11-10: the manifest carries
 `UI2_SCHEDULING_ENABLED=true` and each job family has its own audited switch. Device polling/admission windows begin at **00:00 / 06:00 / 12:00 / 18:00
@@ -106,10 +102,11 @@ Authority: [contract](docs/design/DATA_SANITIZER_CONTRACT.md).
   has already landed independently.
 - Per-device job serialization is written but not merged; endpoint transport
   admission is a separate existing safety boundary.
-- Masking residual gaps (single-word hosts without a keyword, unmeasured
-  principal formats, pcap) are open: `masking_residual_gaps_system_log_and_sanitizer`.
-- Worker manifest drift (`manifest_drift_service_worker_configuration_policy`)
-  and the Check Point aiview readiness script client error
+- Masking residual gaps are closed in rules by logmask-v7/v8 (queued), not yet
+  measured against a real masked sample (`masking_residual_gaps_system_log_and_sanitizer`);
+  the raw-versus-masked aiview comparison is open (`aiview_masking_leak_audit`).
+- Real-env validation of the worker manifest sync
+  (`manifest_drift_service_worker_configuration_policy`) and the Check Point aiview readiness script client error
   (`cp_aiview_readiness_script_client_error`) are open follow-ups.
 - No full Java integration result is claimed here; this checkpoint ran no
   Gradle suite.
