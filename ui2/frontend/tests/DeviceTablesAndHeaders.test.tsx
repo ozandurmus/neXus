@@ -294,7 +294,7 @@ describe("P0-3B: a selected virtual system scopes the pane", () => {
     expect(onSelectVs).toHaveBeenCalledWith(null);
     // F-21: the title is the cluster's name, without the `CLS >` prefix; the badge and tree keep the kind.
     expect(await screen.findByRole("heading", { name: "CLS-ROMEO-01" })).toBeInTheDocument();
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Interfaces", "Routing", "Members & Identity", "Configuration", "Logs", "Failover"].filter((name) => name !== "Configuration"));
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Interfaces", "Routing", "Members & Identity", "Configuration", "Member differences", "Logs", "Failover"].filter((name) => name !== "Configuration"));
     expect(screen.queryByRole("combobox", { name: "Switch virtual system" })).toBeNull();
   });
 
