@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { EChartsOption } from "echarts";
+import type { EChartsOption } from "./echartsSetup";
+import { flowOptions } from "./chartOptions";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import Stack from "@mui/material/Stack";
@@ -745,76 +746,7 @@ function FlowStreamChartsPanel({
     [result?.aligned, onRangeChange],
   );
 
-  const options = useMemo<EChartsOption[]>(() => {
-    const base: EChartsOption = {
-      useUTC: true,
-      animation: false,
-      grid: { left: 90, right: 35, top: 55, bottom: 75 },
-      xAxis: { type: "time", name: "UTC" },
-      yAxis: { type: "value" },
-      tooltip: { trigger: "item", renderMode: "richText" },
-      legend: { top: 0 },
-    };
-    const packets = result?.packets ?? [];
-    const spans = packets
-      .filter((p) => p.kind === "data" && p.sequence !== null)
-      .flatMap((p) => [
-        { value: [p.time * 1000, p.sequence], frames: [p.frame] },
-        { value: [p.time * 1000, p.sequence! + p.length], frames: [p.frame] },
-        { value: [p.time * 1000, null], frames: [] },
-      ]);
-    const ack = packets
-      .filter((p) => p.kind === "ack" && p.sequence !== null)
-      .map((p) => ({ value: [p.time * 1000, p.sequence], frames: [p.frame] }));
-    const window = packets
-      .filter((p) => p.kind === "ack" && p.window_edge !== null)
-      .map((p) => ({ value: [p.time * 1000, p.window_edge], frames: [p.frame] }));
-    const retrans = packets
-      .filter((p) => p.kind === "data" && p.retransmission && p.sequence !== null)
-      .map((p) => ({ value: [p.time * 1000, p.sequence], frames: [p.frame] }));
-    const bucketSeries = (
-      metric: "rtt_ms" | "throughput_bps",
-      frame: "rtt_frame" | "data_frame",
-    ) =>
-      (result?.buckets ?? []).map((b) => ({
-        value: [b.time * 1000, b[metric]],
-        frames: b[frame] ? [b[frame]!] : [],
-      }));
-    return [
-      {
-        ...base,
-        yAxis: { type: "value", name: "Sequence bytes" },
-        series: [
-          { type: "line", name: "Data byte spans", data: spans, connectNulls: false },
-          { type: "line", name: "ACK", step: "end", data: ack },
-          { type: "line", name: "Receive-window edge", step: "end", data: window },
-          { type: "scatter", name: "Retransmission", symbol: "diamond", data: retrans },
-        ],
-      },
-      {
-        ...base,
-        yAxis: { type: "value", name: "RTT (ms)" },
-        series: [
-          {
-            name: "ACK RTT (includes receiver ACK delay)",
-            type: "line",
-            data: bucketSeries("rtt_ms", "rtt_frame"),
-          },
-        ],
-      },
-      {
-        ...base,
-        yAxis: { type: "value", name: "Payload bit/s" },
-        series: [
-          {
-            name: "Observed payload throughput (includes retries)",
-            type: "line",
-            data: bucketSeries("throughput_bps", "data_frame"),
-          },
-        ],
-      },
-    ];
-  }, [result]);
+  const options = useMemo<EChartsOption[]>(() => flowOptions(result), [result]);
 
   return (
     <Card sx={{ p: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}` }} aria-label="Flow stream charts">
