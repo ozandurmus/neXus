@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-15T19:40:17Z
+Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-15T22:06:30Z
 
 ## Now
 - NXS-LOCAL-0391 — Release queue: ASA readiness, integration gate, CP advisories, zone matrix, ACI step 1, API latency, Backups batch (in_progress)
@@ -23,6 +23,7 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-15T19:40:17Z
 - P2/in_progress lifecycle_vendor_catalog
 - P2/in_progress manifest_drift_service_worker_configuration_policy
 - P2/in_progress topology_sources_apic_citrix_f5
+- P2/in_progress ui2_database_roles_and_data_ownership
 - P2/planned aiview_masked_readonly_admin
 - P2/planned analysis_container
 - P2/planned asa_fortinet_cluster_view
@@ -42,7 +43,6 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-15T19:40:17Z
 - P2/planned support_bundles
 - P2/planned task_executor_automation_module
 - P2/planned ubi_base_glibc_fix_pending
-- P2/planned ui2_database_roles_and_data_ownership
 - P2/planned zone_matrix_steps_3_plus
 - P3/planned CP-SHELL-M2-LAB-READ
 - P3/planned corporate_inspection_ca_verify_with_it

@@ -32,7 +32,7 @@
       "id": "ui2_database_roles_and_data_ownership",
       "category": "Data Plane / Security",
       "title": "UI2 database roles: least-privilege runtime roles per...",
-      "status": "planned",
+      "status": "in_progress",
       "priority": "P2",
       "target": "PO_DECISION_RECORD_2026_09_13D section 3...",
       "note": ""

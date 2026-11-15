@@ -32,6 +32,8 @@ Shipped on main (batches 1-9, batches 4-9 merged 2026-11-15 10:33; deployment to
 
 In the ship queue (batch 10; each migration needs its live dry run): per-store quota (V225), refusal audit (V227), FortiGate/ASA Trace wiring, Reconcile action, code splitting, metrics, jsch 0.2.26, CodeQL CI.
 
+`ui2_database_roles_and_data_ownership` — **IN_PROGRESS**: step 1 (V238: NOLOGIN per-module roles and the least-privilege grants, no workload switched) is automated-validated 2026-11-16, real-environment dry run pending; the trigger step and the per-module cutovers follow ([design](docs/design/DATABASE_ROLES_AND_DATA_OWNERSHIP_DESIGN_2026_11_14.md)).
+
 Open PO decisions: product name; narrowing the ASA identity ACEs; the DB
 NetworkPolicy contract conflict; the off-host recovery target; support-bundle
 design (in progress).
