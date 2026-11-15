@@ -42,6 +42,11 @@ public final class MechanismRegistry {
         return Optional.ofNullable(mechanisms.get(mechanismId));
     }
 
+    /** Every registered mechanism ({@code local} is always among them). */
+    public List<Mechanism> all() {
+        return List.copyOf(mechanisms.values());
+    }
+
     public boolean isRegistered(String mechanismId) {
         if (mechanismId == null) {
             return false;

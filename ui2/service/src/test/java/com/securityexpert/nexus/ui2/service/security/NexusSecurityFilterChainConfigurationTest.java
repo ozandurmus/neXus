@@ -102,6 +102,12 @@ class NexusSecurityFilterChainConfigurationTest {
         Probe probe() {
             return new Probe();
         }
+
+        /** Migration Step 2: present only in the secured context's wiring; a session lookup that never finds anything. */
+        @org.springframework.context.annotation.Bean
+        com.securityexpert.nexus.ui2.persistence.identity.SessionRepository sessionRepository() {
+            return org.mockito.Mockito.mock(com.securityexpert.nexus.ui2.persistence.identity.SessionRepository.class);
+        }
     }
 
     private static AnnotationConfigWebApplicationContext secured;
@@ -140,7 +146,7 @@ class NexusSecurityFilterChainConfigurationTest {
         chains.get(0).getFilters().forEach(f -> filters.add(f.getClass().getSimpleName()));
         // A filter listed here that does not belong to a passthrough chain is a behaviour change: review it, do not just add it.
         assertEquals(List.of("DisableEncodeUrlFilter", "WebAsyncManagerIntegrationFilter", "SecurityContextHolderFilter",
-                "NexusSecurityHeadersFilter", "SessionManagementFilter", "ExceptionTranslationFilter", "AuthorizationFilter"), filters);
+                "NexusSecurityHeadersFilter", "Ui2SessionAuthenticationFilter", "SessionManagementFilter", "ExceptionTranslationFilter", "AuthorizationFilter"), filters);
         for (String forbidden : List.of("CsrfFilter", "LogoutFilter", "HeaderWriterFilter", "CorsFilter",
                 "UsernamePasswordAuthenticationFilter", "BasicAuthenticationFilter", "DefaultLoginPageGeneratingFilter",
                 "DefaultLogoutPageGeneratingFilter", "RequestCacheAwareFilter", "AnonymousAuthenticationFilter",
