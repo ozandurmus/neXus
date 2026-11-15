@@ -56,4 +56,13 @@ public interface SupportBundleRunStore {
     default List<Integer> virtualSystemIds(String deviceId) {
         return List.of();
     }
+
+    /** The leftover work directory a cleanup job (V236, PO approved 2026-11-16) must remove; empty when this job is not a cleanup. */
+    default Optional<JooqSupportBundleStore.CleanupWork> findCleanupByJob(String jobId) {
+        return Optional.empty();
+    }
+
+    /** Ends a cleanup: DONE when the approved removal ran clean (the directory is then recorded as cleaned), else FAILED with a closed outcome. */
+    default void finishCleanup(UUID requestId, boolean removed, String outcome) {
+    }
 }
