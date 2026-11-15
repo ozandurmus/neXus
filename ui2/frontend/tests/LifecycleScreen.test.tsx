@@ -328,7 +328,7 @@ describe("lifecycle vendor sources", () => {
 
   it("shows NOT_EVALUATED parts and a month-only vendor date as the month", async () => {
     const vendorEntry = { ...entry, end_of_support: "2032-02-01", month_only: ["end_of_support"], origin: "OPERATOR_PAGE" as const, source: "checkpoint_lifecycle" };
-    vi.mocked(api.getLifecycle).mockResolvedValue({ as_of: "2026-11-13", summary: { devices: 1, lifecycle_not_evaluated: 1 }, devices: [{ ...row("member-a"),
+    vi.mocked(api.getLifecycle).mockResolvedValue({ as_of: "2026-11-13", summary: { devices: 1, lifecycle_not_evaluated: 1 }, devices: [{ ...row("fw-lc-1"),
       status: "NOT_EVALUATED", risk: "NOT_EVALUATED",
       hardware: { status: "MATCHED", reason: null, basis: "model key · Check Point life cycle page (uploaded page)", catalog: vendorEntry },
       software: { status: "NOT_EVALUATED", reason: "Vendor source checkpoint_lifecycle last confirmed this entry 200 days ago (limit 180)", basis: null, catalog: null } }] });

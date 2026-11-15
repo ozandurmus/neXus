@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Alert, Box, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
 import { getLifecycleCatalogSources, uploadLifecycleVendorPage } from "../auth/adminApi";
+import { PRODUCT_NAME } from "../brand/product";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { M3Button } from "../shell/M3Widgets";
 import { lifecycleError } from "./LifecycleCatalogPanel";
@@ -28,7 +29,7 @@ export function LifecycleSourcesPanel({ canManage, onChanged }: { canManage: boo
     <Typography variant="subtitle1">Vendor sources</Typography>
     <Typography variant="body2">Vendor end-of-sale and end-of-support dates are read from the vendors' own publications. An online source must have
       loaded within {data.feeds[0]?.fresh_days ?? 30} days and an uploaded page within {data.hand_loaded_fresh_days} days; after that its devices show
-      NOT_EVALUATED until it is loaded again. A date the vendor gives only as a month is shown as that month. A row neXus could not read safely is
+      NOT_EVALUATED until it is loaded again. A date the vendor gives only as a month is shown as that month. A row {PRODUCT_NAME} could not read safely is
       NEEDS_REVIEW and gives no date.</Typography>
     <TableContainer><Table size="small" aria-label="Online lifecycle sources">
       <TableHead><TableRow>{["Source", "Last good load", "Age", "Last run", "Entries", "Need review"].map(h => <TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead>
@@ -45,7 +46,7 @@ export function LifecycleSourcesPanel({ canManage, onChanged }: { canManage: boo
     {canManage && <Stack spacing={1}>
       <Typography variant="subtitle2">Upload a saved vendor page</Typography>
       <Typography variant="caption">The fallback when the online run cannot reach a vendor page: open the page in a browser, save it as HTML, and upload
-        the file here. neXus reads only the lifecycle tables; the file itself is not kept (its hash is). An upload replaces the entries of the previous
+        the file here. {PRODUCT_NAME} reads only the lifecycle tables; the file itself is not kept (its hash is). An upload replaces the entries of the previous
         upload of the same page; when an online entry and an uploaded one agree, the online one is shown.</Typography>
       {error && <Alert severity="error">{error}</Alert>}{message && <Alert severity="success">{message}</Alert>}
       <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", gap: 1 }}>
@@ -76,7 +77,7 @@ export function LifecycleSourcesPanel({ canManage, onChanged }: { canManage: boo
     </Table></TableContainer>}
     {data.needs_review.length > 0 && <>
       <Typography variant="subtitle2">Entries that need review ({data.needs_review.length})</Typography>
-      <Typography variant="caption">The vendor page gave a date neXus will not guess (for example a two-digit year) or two different dates for one product.
+      <Typography variant="caption">The vendor page gave a date {PRODUCT_NAME} will not guess (for example a two-digit year) or two different dates for one product.
         Check the vendor page and enter the date as a catalog row; an operator row is used before a vendor entry.</Typography>
       <TableContainer><Table size="small" aria-label="Lifecycle entries that need review">
         <TableHead><TableRow>{["Vendor", "Kind", "Product", "Reason", "Source"].map(h => <TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead>

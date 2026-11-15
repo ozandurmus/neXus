@@ -26,7 +26,7 @@ describe("the navigation model (NAVIGATION_REDESIGN_2026_11_12.md section 2)", (
       ["Tools", ["Packet analysis", "Data sanitizer", "Diagnostics"]],
       ["Administration", ["Device registry", "Access and identity", "Scheduled jobs", "Notifications and logging", "Platform status", "Audit log", "Delivery plan"]],
     ]);
-    expect(NAV_LEAVES).toHaveLength(24);
+    expect(NAV_LEAVES).toHaveLength(25);
   });
 
   it("gives every destination one entry: ids and addresses are unique, and every screen has a home", () => {

@@ -58,9 +58,9 @@ class AsaFailoverReadinessFenceTest {
         assertFalse(sql.toLowerCase(java.util.Locale.ROOT).contains("failover active"));
     }
 
-    @Test void v215SignsOffExactlyTheFourReadinessReadsAndNothingElse() throws IOException {
+    @Test void v222SignsOffExactlyTheFourReadinessReadsAndNothingElse() throws IOException {
         String sql;
-        try (var in = getClass().getClassLoader().getResourceAsStream("db/migration/V215__asa_failover_readiness_signoff.sql")) {
+        try (var in = getClass().getClassLoader().getResourceAsStream("db/migration/V222__asa_failover_readiness_signoff.sql")) {
             assertNotNull(in);
             sql = new String(in.readAllBytes(), StandardCharsets.UTF_8);
         }
