@@ -52,6 +52,8 @@ public class NotificationForwarder {
 
     static final String CREDENTIAL_ALERT_WATERMARK_KEY = "credential_alert_syslog_watermark";
     static final String CREDENTIAL_ALERT_TAG = "CREDENTIAL_FAILED";
+    static final String BREAK_GLASS_WATERMARK_KEY = "break_glass_alert_syslog_watermark";
+    static final String BREAK_GLASS_TAG = "BREAK_GLASS_LOGIN";
 
     /** {@code names} / {@code ips} may be null (unavailable): masked mode then sends fixed labels only. */
     public NotificationForwarder(NotificationSettingsStore store, TransactionBoundary transactionBoundary,
@@ -76,6 +78,7 @@ public class NotificationForwarder {
             NotificationIdentity identity = NotificationIdentity.of(settings, names, ips);
             if (settings.notifyJobFailure() && settings.syslogEnabled()) forwardJobFailures(settings, identity);
             if (settings.syslogEnabled()) forwardCredentialAlerts(settings);
+            if (settings.syslogEnabled()) forwardBreakGlassAlerts(settings);
             NotificationMailRouter.tick(dsl, settings, identity);
             return null;
         });
@@ -141,6 +144,39 @@ public class NotificationForwarder {
             transactionBoundary.inTransaction(dsl -> dsl.execute("insert into notification_state(key, value) values ({0}, {1}) "
                     + "on conflict (key) do update set value = excluded.value, updated_at = now()",
                     CREDENTIAL_ALERT_WATERMARK_KEY, value));
+        }
+    }
+
+    /**
+     * Migration plan Step 3: a successful local break-glass sign-in (the root identity while the local-account scope is
+     * BREAK_GLASS_ONLY) is an ERROR line of its own, not only an INFORMATIONAL audit row. The line carries the opaque actor
+     * fingerprint and the time, never an account name. The watermark is the event id and advances only past lines that were sent;
+     * the {@code login_security} mail digest carries the same audit action.
+     */
+    void forwardBreakGlassAlerts(NotificationSettings settings) {
+        List<Record> rows = transactionBoundary.inTransaction(dsl -> {
+            Record state = dsl.fetchOne("select value from notification_state where key = {0}", BREAK_GLASS_WATERMARK_KEY);
+            long from = state == null ? 0L : Long.parseLong(state.get("value", String.class));
+            return dsl.fetch("select event_id, actor_fingerprint, occurred_at from local_break_glass_event "
+                    + "where alert and outcome = 'LOGIN_SUCCEEDED' and event_id > {0} order by event_id limit 100", from);
+        });
+        long sentUpTo = -1;
+        for (Record r : rows) {
+            String message = "local break-glass sign-in actor=" + r.get("actor_fingerprint", String.class)
+                    + " at=" + r.get("occurred_at", Timestamp.class).toInstant();
+            try {
+                syslog.send(settings, SyslogSender.Severity.ERROR, BREAK_GLASS_TAG, message);
+            } catch (java.io.IOException e) {
+                LOG.log(System.Logger.Level.WARNING, "[NOTIFY_SYSLOG_FAILED] break-glass alert: {0}", e.getMessage());
+                break;
+            }
+            sentUpTo = r.get("event_id", Long.class);
+        }
+        if (sentUpTo >= 0) {
+            String value = Long.toString(sentUpTo);
+            transactionBoundary.inTransaction(dsl -> dsl.execute("insert into notification_state(key, value) values ({0}, {1}) "
+                    + "on conflict (key) do update set value = excluded.value, updated_at = now()",
+                    BREAK_GLASS_WATERMARK_KEY, value));
         }
     }
 

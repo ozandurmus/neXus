@@ -64,6 +64,10 @@ class HttpSurfaceCharacterizationTest {
     private static int port;
     private static Path work;
     private static final List<Entry> transcript = new ArrayList<>();
+    /** Migration plan Step 3: the second golden, taken after the default-mode scenario with the local-account scope switched. */
+    private static final List<Entry> breakGlassTranscript = new ArrayList<>();
+    private static List<Entry> current = transcript;
+    private static final String BREAK_GLASS_GOLDEN = "/characterization/http-surface-break-glass.golden.txt";
     private static Locale previousLocale;
     private static java.util.TimeZone previousTimeZone;
 
@@ -132,7 +136,8 @@ class HttpSurfaceCharacterizationTest {
         } finally {
             String record = System.getenv("UI2_CHARACTERIZATION_RECORD");
             if (record != null && !record.isBlank()) {
-                Files.writeString(Path.of(record), render());
+                Files.writeString(Path.of(record), render(transcript));
+                Files.writeString(Path.of(record + ".break-glass"), render(breakGlassTranscript));
             }
         }
     }
@@ -209,6 +214,66 @@ class HttpSurfaceCharacterizationTest {
         asyncAndMultipartSurface();
         machineSessions(e2eToken, probeToken);
         oddRequestTargets();
+        current = breakGlassTranscript;
+        try {
+            breakGlassOnlyMode();
+        } finally {
+            current = transcript;
+        }
+    }
+
+    /**
+     * Migration plan Step 3 / PO decision D4. Runs after everything above, into its own transcript, so the default-mode golden
+     * is untouched. Switching on, local logins under the mode, switching back off (by the administrator who switched it on).
+     */
+    private static void breakGlassOnlyMode() throws Exception {
+        String origin = "http://127.0.0.1:" + port;
+        String mode = "/api/v2/config/local-auth-mode";
+        // A local administrator that is not the root identity cannot switch the mode on: it would cut off their own next sign-in.
+        String viewerCookie = sessionCookie(login("bg viewer login (default mode)", "claudeadmin", "claudeadmin", null));
+        String viewerCsrf = authed("bg viewer GET /session/status", "GET", port, "/session/status", viewerCookie, null, null, null)
+                .json().path("csrf_token").asText("");
+        authed("bg viewer GET mode (refused)", "GET", port, mode, viewerCookie, null, null, null);
+        authed("bg viewer PUT mode (refused)", "PUT", port, mode, viewerCookie, viewerCsrf, origin, "{\"mode\":\"BREAK_GLASS_ONLY\"}");
+        authed("bg viewer POST /session/logout", "POST", port, "/session/logout", viewerCookie, viewerCsrf, origin, null);
+
+        String cookie = sessionCookie(login("bg admin login (default mode)", "nexusadmin", "nexusadmin", null));
+        assertNotNull(cookie);
+        String csrf = authed("bg admin GET /session/status", "GET", port, "/session/status", cookie, null, null, null)
+                .json().path("csrf_token").asText("");
+        authed("bg admin GET mode", "GET", port, mode, cookie, null, null, null);
+        authed("bg admin PUT mode no csrf", "PUT", port, mode, cookie, null, origin, "{\"mode\":\"BREAK_GLASS_ONLY\"}");
+        authed("bg admin PUT mode empty body", "PUT", port, mode, cookie, csrf, origin, "{}");
+        authed("bg admin PUT mode unknown value", "PUT", port, mode, cookie, csrf, origin, "{\"mode\":\"NOBODY\"}");
+        authed("bg admin PUT mode extra field", "PUT", port, mode, cookie, csrf, origin, "{\"mode\":\"ALL_LOCAL\",\"x\":1}");
+        authed("bg admin PUT mode BREAK_GLASS_ONLY", "PUT", port, mode, cookie, csrf, origin, "{\"mode\":\"BREAK_GLASS_ONLY\"}");
+        authed("bg admin GET mode after", "GET", port, mode, cookie, null, null, null);
+        authed("bg admin POST /session/logout", "POST", port, "/session/logout", cookie, csrf, origin, null);
+
+        // Under BREAK_GLASS_ONLY: the refusals are indistinguishable from a wrong password.
+        login("bg claudeadmin right password (refused)", "claudeadmin", "claudeadmin", null);
+        login("bg claudeadmin wrong password", "claudeadmin", "not-the-password", null);
+        login("bg unknown user", "nobody-here", "nobody-here", null);
+        login("bg aiview-e2e interactive (machine only)", "aiview-e2e", "aiview-e2e", null);
+        String replay = sessionCookie(login("bg aiview login", "aiview", "aiview", null));
+        assertNotNull(replay);
+        String replayCsrf = authed("bg aiview GET /session/status", "GET", port, "/session/status", replay, null, null, null)
+                .json().path("csrf_token").asText("");
+        authed("bg aiview GET mode (refused)", "GET", port, mode, replay, null, null, null);
+        authed("bg aiview POST /session/logout", "POST", port, "/session/logout", replay, replayCsrf, origin, null);
+        String root = sessionCookie(login("bg nexusadmin login (break-glass)", "nexusadmin", "nexusadmin", null));
+        assertNotNull(root);
+        String rootCsrf = authed("bg nexusadmin GET /session/status", "GET", port, "/session/status", root, null, null, null)
+                .json().path("csrf_token").asText("");
+        authed("bg nexusadmin PUT mode ALL_LOCAL", "PUT", port, mode, root, rootCsrf, origin, "{\"mode\":\"ALL_LOCAL\"}");
+        authed("bg nexusadmin POST /session/logout", "POST", port, "/session/logout", root, rootCsrf, origin, null);
+
+        // Back to the default: every local account signs in again.
+        String again = sessionCookie(login("bg claudeadmin login (default mode again)", "claudeadmin", "claudeadmin", null));
+        assertNotNull(again);
+        String againCsrf = authed("bg claudeadmin GET /session/status", "GET", port, "/session/status", again, null, null, null)
+                .json().path("csrf_token").asText("");
+        authed("bg claudeadmin POST /session/logout", "POST", port, "/session/logout", again, againCsrf, origin, null);
     }
 
     private static void anonymousSurface() throws Exception {
@@ -597,7 +662,7 @@ class HttpSurfaceCharacterizationTest {
     private static Resp step(String label, String method, int onPort, String target, Map<String, String> headers, String body)
             throws Exception {
         Resp resp = send(method, onPort, target, headers, body == null ? null : body.getBytes(StandardCharsets.UTF_8));
-        transcript.add(new Entry(label + (onPort == INTERNAL_PORT ? " [8086]" : ""), resp));
+        current.add(new Entry(label + (onPort == INTERNAL_PORT ? " [8086]" : ""), resp));
         return resp;
     }
 
@@ -691,9 +756,9 @@ class HttpSurfaceCharacterizationTest {
     private static final Pattern HEX64 = Pattern.compile("[0-9a-f]{64}");
     private static final Pattern UUID = Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
 
-    static String render() {
+    static String render(List<Entry> entries) {
         StringBuilder out = new StringBuilder();
-        for (Entry entry : transcript) {
+        for (Entry entry : entries) {
             out.append("### ").append(entry.label()).append('\n');
             out.append("status: ").append(entry.resp().status()).append('\n');
             for (var header : entry.resp().headers().entrySet()) {
@@ -766,15 +831,62 @@ class HttpSurfaceCharacterizationTest {
 
     @Test
     void theTranscriptMatchesTheRecordedGolden() throws IOException {
-        if (System.getenv("UI2_CHARACTERIZATION_RECORD") != null && !System.getenv("UI2_CHARACTERIZATION_RECORD").isBlank()) {
-            return; // recording run: the transcript was written in @BeforeAll
+        if (recording()) return; // recording run: the transcripts were written in @BeforeAll
+        compareToGolden(GOLDEN, render(transcript));
+    }
+
+    @Test
+    void theBreakGlassOnlyTranscriptMatchesItsGolden() throws IOException {
+        if (recording()) return;
+        compareToGolden(BREAK_GLASS_GOLDEN, render(breakGlassTranscript));
+    }
+
+    @Test
+    void underBreakGlassOnlyARefusedRightPasswordLooksLikeAWrongOneAndLeavesTheAuditAndAlertRows() throws Exception {
+        Resp right = breakGlassEntry("bg claudeadmin right password (refused)").resp();
+        Resp wrong = breakGlassEntry("bg claudeadmin wrong password").resp();
+        assertEquals(401, right.status());
+        assertEquals(wrong.status(), right.status());
+        assertEquals(wrong.json(), right.json());
+        assertEquals(wrong.headers().keySet(), right.headers().keySet());
+        assertEquals(200, breakGlassEntry("bg aiview login").resp().status());
+        assertEquals(401, breakGlassEntry("bg aiview-e2e interactive (machine only)").resp().status());
+        // the mode was switched, used and switched back, each step audited (the refusal row is written off the request thread)
+        long deadline = System.currentTimeMillis() + 10_000;
+        while (auditCount("local_non_break_glass_refused") < 1 && System.currentTimeMillis() < deadline) Thread.sleep(100);
+        assertEquals(1, auditCount("local_non_break_glass_refused"), "only claudeadmin, whose password was right; wrong passwords are no event");
+        assertEquals(2, auditCount("local_break_glass_login_succeeded"), "nexusadmin (alert) and aiview");
+        assertEquals(2, auditCount("local_auth_mode_write"));
+        try (var c = fixture.migrateConnection(); var st = c.createStatement();
+                var rs = st.executeQuery("select count(*) from local_break_glass_event where alert and outcome = 'LOGIN_SUCCEEDED'")) {
+            rs.next();
+            assertEquals(1, rs.getInt(1), "only the root identity raises the alert");
         }
+    }
+
+    private static int auditCount(String action) throws Exception {
+        try (var c = fixture.migrateConnection(); var st = c.createStatement();
+                var rs = st.executeQuery("select count(*) from audit_log where action_id = '" + action + "'")) {
+            rs.next();
+            return rs.getInt(1);
+        }
+    }
+
+    private static Entry breakGlassEntry(String label) {
+        return breakGlassTranscript.stream().filter(e -> e.label().equals(label)).findFirst()
+                .orElseThrow(() -> new AssertionError("no probe named: " + label));
+    }
+
+    private static boolean recording() {
+        return System.getenv("UI2_CHARACTERIZATION_RECORD") != null && !System.getenv("UI2_CHARACTERIZATION_RECORD").isBlank();
+    }
+
+    private static void compareToGolden(String resource, String actual) throws IOException {
         String golden;
-        try (InputStream in = HttpSurfaceCharacterizationTest.class.getResourceAsStream(GOLDEN)) {
-            assertNotNull(in, "golden file " + GOLDEN + " is missing");
+        try (InputStream in = HttpSurfaceCharacterizationTest.class.getResourceAsStream(resource)) {
+            assertNotNull(in, "golden file " + resource + " is missing");
             golden = new String(in.readAllBytes(), StandardCharsets.UTF_8);
         }
-        String actual = render();
         if (golden.equals(actual)) return;
         String[] expectedBlocks = golden.split("\n\n");
         String[] actualBlocks = actual.split("\n\n");
@@ -783,11 +895,11 @@ class HttpSurfaceCharacterizationTest {
             String got = i < actualBlocks.length ? actualBlocks[i] : "<missing>";
             if (!expected.equals(got)) {
                 // A CI log that truncates the assertion message still shows the block.
-                System.err.println("HTTP SURFACE MISMATCH at block " + i + " (blocks: golden " + expectedBlocks.length
+                System.err.println("HTTP SURFACE MISMATCH in " + resource + " at block " + i + " (blocks: golden " + expectedBlocks.length
                         + ", actual " + actualBlocks.length + ")\n----- expected -----\n" + expected
                         + "\n----- actual -----\n" + got + "\n----- end -----");
             }
-            assertEquals(expected, got, "the HTTP surface changed at block " + i);
+            assertEquals(expected, got, "the HTTP surface changed at block " + i + " of " + resource);
         }
         assertEquals(golden, actual);
     }
