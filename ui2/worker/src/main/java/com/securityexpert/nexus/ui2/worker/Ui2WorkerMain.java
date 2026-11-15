@@ -261,7 +261,10 @@ public final class Ui2WorkerMain {
                 deviceEnrollmentReadPort, deviceRepository, deviceInventoryRepository, inventoryCapabilityExecutor,
                 platformFactsRepository)
                 .withPolicyInstallRepository(
-                        new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePolicyInstallRepository(transactionBoundary));
+                        new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePolicyInstallRepository(transactionBoundary))
+                // V229: the zone names of each virtual system, parsed from the configuration the interfaces come from.
+                .withPanZoneRepository(
+                        new com.securityexpert.nexus.ui2.persistence.device.JooqPanVsysZoneRepository(transactionBoundary));
 
         DeviceConfigurationRepository deviceConfigurationRepository =
                 new JooqDeviceConfigurationRepository(transactionBoundary);

@@ -52,6 +52,7 @@ public final class InventoryJobExecutor {
     private static final String ACTION_CLAIM_TO_EXECUTING = "inventory_claim_to_executing";
     private static final String ACTION_FAILED = "inventory_failed";
     private static final String ACTION_COMPLETED = "inventory_completed";
+    private static final String ACTION_ZONE_SETS = "inventory_pan_zone_sets";
 
     private final JobLeaseRepository leaseRepository;
     private final JobStepAttemptRepository attemptRepository;
@@ -62,6 +63,15 @@ public final class InventoryJobExecutor {
     private final DevicePlatformFactsRepository platformFactsRepository;
     private com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstallRepository policyInstallRepository =
             com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstallRepository.NONE;
+
+    private com.securityexpert.nexus.ui2.persistence.device.PanVsysZoneRepository panZoneRepository =
+            com.securityexpert.nexus.ui2.persistence.device.PanVsysZoneRepository.NONE;
+
+    /** Where a Palo Alto firewall's zone names go (V229); unset, they are dropped. */
+    public InventoryJobExecutor withPanZoneRepository(com.securityexpert.nexus.ui2.persistence.device.PanVsysZoneRepository repository) {
+        this.panZoneRepository = Objects.requireNonNull(repository, "repository");
+        return this;
+    }
 
     /** Where the installed-policy read goes (V60); unset, it is dropped. */
     public InventoryJobExecutor withPolicyInstallRepository(
@@ -210,6 +220,21 @@ public final class InventoryJobExecutor {
             } catch (RuntimeException policyFailed) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(policyFailed);
                 LOG.log(System.Logger.Level.WARNING, "[POLICY_INSTALL_WRITE_FAILED] Inventory job {0}: {1}", jobId, policyFailed.getMessage());
+            }
+        });
+
+        // V229: the zone names the run read from the stored configuration; a write that fails is logged, never fails the job.
+        completed.panZones().ifPresent(read -> {
+            try {
+                List<com.securityexpert.nexus.ui2.persistence.device.PanVsysZoneSet> sets = new java.util.ArrayList<>();
+                read.zoneNamesByVsys().forEach((vsys, names) -> sets.add(new com.securityexpert.nexus.ui2.persistence.device.PanVsysZoneSet(
+                        targetDeviceId, vsys, new java.util.HashSet<>(names), read.readAt())));
+                int changed = panZoneRepository.replace(targetDeviceId, read.readAt(), sets, ACTOR, ACTION_ZONE_SETS);
+                // safe telemetry: counts only, never a name
+                LOG.log(System.Logger.Level.INFO, "[PAN_ZONE_SETS_WRITTEN] job {0}: vsys={1} rows_changed={2}", jobId, sets.size(), changed);
+            } catch (RuntimeException zonesFailed) {
+                com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(zonesFailed);
+                LOG.log(System.Logger.Level.WARNING, "[PAN_ZONE_SETS_WRITE_FAILED] Inventory job {0}: {1}", jobId, zonesFailed.getClass().getSimpleName());
             }
         });
 

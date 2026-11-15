@@ -33,17 +33,28 @@ public sealed interface InventoryResult {
 
     /** {@code haFacts} (migration V17): every {@link InventoryHaFact} the contact produced, across every context. */
     /** {@code notCollected}: read-kind tokens deliberately not sent (a Palo Alto firewall read switched off, PO 2026-10-21). */
+    /**
+     * {@code panZones}: the zone names of each virtual system read from the stored effective-running configuration this run
+     * derived its interfaces from (V229); empty when this run did not read it.
+     */
     record Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems,
-            Optional<PlatformFactsRead> platformFacts, ObservedIdentity observedIdentity, List<String> notCollected)
+            Optional<PlatformFactsRead> platformFacts, ObservedIdentity observedIdentity, List<String> notCollected,
+            Optional<PanZoneRead> panZones)
             implements InventoryResult {
 
         public Completed {
+            panZones = panZones == null ? Optional.empty() : panZones;
             notCollected = notCollected == null ? List.of() : List.copyOf(notCollected);
             contexts = contexts == null ? List.of() : List.copyOf(contexts);
             haFacts = haFacts == null ? List.of() : List.copyOf(haFacts);
             virtualSystems = virtualSystems == null ? Optional.empty() : virtualSystems;
             platformFacts = platformFacts == null ? Optional.empty() : platformFacts;
             observedIdentity = observedIdentity == null ? ObservedIdentity.NONE : observedIdentity;
+        }
+
+        public Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems,
+                Optional<PlatformFactsRead> platformFacts, ObservedIdentity observedIdentity, List<String> notCollected) {
+            this(contexts, haFacts, virtualSystems, platformFacts, observedIdentity, notCollected, Optional.empty());
         }
 
         public Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems,

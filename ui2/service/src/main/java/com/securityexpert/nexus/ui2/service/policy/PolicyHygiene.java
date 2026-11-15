@@ -88,6 +88,14 @@ public final class PolicyHygiene {
     public static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit, Map<String, PolicyObject> breadthObjects) {
         return analyze(snapshot, days, now, workLimit, RULE_WORK, breadthObjects);
     }
+    /**
+     * {@code zones} are the zones of the Palo Alto firewalls the snapshot's rules are pushed to ({@link ZoneUniverse}):
+     * with them a rule whose zone is a lone any is decided against an earlier list of zone names. {@link ZoneUniverse#UNKNOWN}
+     * (every other caller) leaves that comparison undecided, as it always was.
+     */
+    static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit, Map<String, PolicyObject> breadthObjects, ZoneUniverse zones) {
+        return analyze(snapshot, days, now, workLimit, RULE_WORK, breadthObjects, true, false, zones);
+    }
     /** {@code workLimit} caps the whole snapshot's shadowing work, {@code ruleLimit} each rule's own. */
     static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit, int ruleLimit, Map<String, PolicyObject> breadthObjects) {
         return analyze(snapshot, days, now, workLimit, ruleLimit, breadthObjects, true);
@@ -111,6 +119,9 @@ public final class PolicyHygiene {
         return analyze(legacyView, days, now, workLimit, RULE_WORK, legacyView.objects(), true, true);
     }
     static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit, int ruleLimit, Map<String, PolicyObject> breadthObjects, boolean nonContainment, boolean upperBound) {
+        return analyze(snapshot, days, now, workLimit, ruleLimit, breadthObjects, nonContainment, upperBound, ZoneUniverse.UNKNOWN);
+    }
+    static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit, int ruleLimit, Map<String, PolicyObject> breadthObjects, boolean nonContainment, boolean upperBound, ZoneUniverse zones) {
         // Legacy only: Palo Alto application-default pairs are decided on the applications' standard ports where known
         // (PolicyNormalization#defaultPortsHold); the sound analysis keeps them undecided.
         boolean ports = upperBound && snapshot.metadata().vendor().equals("PAN") && workLimit >= 0;
@@ -118,10 +129,10 @@ public final class PolicyHygiene {
             var portsResolver = Resolver.shadowing(snapshot, new Budget(workLimit));
             PolicyNormalization.DEFAULT_PORTS.set(portsResolver::defaultPorts);
         }
-        try { return analyzeScoped(snapshot, days, now, workLimit, ruleLimit, breadthObjects, nonContainment, upperBound); }
+        try { return analyzeScoped(snapshot, days, now, workLimit, ruleLimit, breadthObjects, nonContainment, upperBound, zones); }
         finally { if (ports) PolicyNormalization.DEFAULT_PORTS.remove(); }
     }
-    private static Result analyzeScoped(PolicySnapshot snapshot, int days, Instant now, int workLimit, int ruleLimit, Map<String, PolicyObject> breadthObjects, boolean nonContainment, boolean upperBound) {
+    private static Result analyzeScoped(PolicySnapshot snapshot, int days, Instant now, int workLimit, int ruleLimit, Map<String, PolicyObject> breadthObjects, boolean nonContainment, boolean upperBound, ZoneUniverse zones) {
         if (days < 1 || days > 36500 || workLimit < 0 || ruleLimit < 0) throw new IllegalArgumentException("Invalid hygiene limits");
         Budget budget = new Budget(workLimit), side = budget.side();
         // Covering Palo Alto intrazone/interzone rules is work of its own pool (same total, same per-rule window): it only
@@ -139,7 +150,7 @@ public final class PolicyHygiene {
         boolean pan = snapshot.metadata().vendor().equals("PAN");
         Map<String, Assessment> results = new LinkedHashMap<>();
         // One Earlier per evaluation scope; a Check Point parent layer's Earlier resumes after its inline layers.
-        var scope = new EvaluationScope<Earlier>(snapshot.metadata(), () -> new Earlier(snapshot.objects(), pan, nonContainment));
+        var scope = new EvaluationScope<Earlier>(snapshot.metadata(), () -> new Earlier(snapshot.objects(), pan, nonContainment, pan ? zones : ZoneUniverse.UNKNOWN));
         boolean budgetReached = false;
         for (Section section : snapshot.sections()) {
             if (PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) {
@@ -343,8 +354,10 @@ public final class PolicyHygiene {
                 else for (String zone : zones) byZone.computeIfAbsent(zone, k -> new ArrayList<>()).add(bucket);
             }
             /** Lists holding every bucket whose zones on this side may hold {@code inner} (PolicyNormalization.zoneSuperset), and others. */
-            List<List<Bucket>> holders(Set<String> inner) {
-                if (inner.equals(ANY)) return List.of(any);
+            List<List<Bucket>> holders(Set<String> inner, ZoneUniverse zones) {
+                // A lone any is held by a lone any, and, when the zones of the targets are known, by a list naming all of them.
+                if (inner.equals(ANY) && !zones.known()) return List.of(any);
+                if (inner.equals(ANY)) inner = zones.zones();
                 if (inner.isEmpty() || inner.contains("any")) return List.of(any, bySet.computeIfAbsent(inner, k -> new ArrayList<>()));
                 List<Bucket> fewest = null;
                 for (String zone : inner) {
@@ -391,8 +404,10 @@ public final class PolicyHygiene {
         private final Map<List<Object>, int[]> partialState = new HashMap<>();
         /** X1: a partial prior whose resolved dimension does not contain the rule's is passed over ({@link PolicyNormalization#cannotCover}). */
         private final boolean nonContainment;
-        Earlier(Map<String, PolicyObject> objects, boolean zoneSupersets, boolean nonContainment) {
-            this.objects = objects; this.zoneSupersets = zoneSupersets; this.nonContainment = nonContainment;
+        /** The zones of the firewalls the scope's rules reach; a lone any is decided against them ({@link ZoneUniverse}). */
+        private final ZoneUniverse zones;
+        Earlier(Map<String, PolicyObject> objects, boolean zoneSupersets, boolean nonContainment, ZoneUniverse zones) {
+            this.objects = objects; this.zoneSupersets = zoneSupersets; this.nonContainment = nonContainment; this.zones = zones;
         }
         private static Key key(Match m) { return new Key(m.placements().get("from"), m.placements().get("to"), m.placements().get("install-on")); }
         void add(Match match) {
@@ -456,7 +471,7 @@ public final class PolicyHygiene {
             var targets = byInstallOn.get(key.installOn());
             if (targets == null) return List.of();
             var state = supersets.computeIfAbsent(new Lookup(key, intrazone), k -> {
-                var from = targets.from.holders(key.from()); var to = targets.to.holders(intrazone ? key.from() : key.to());
+                var from = targets.from.holders(key.from(), zones); var to = targets.to.holders(intrazone ? key.from() : key.to(), zones);
                 return new Supersets(size(from) <= size(to) ? from : to);
             });
             for (int i = 0; i < state.lists.size(); i++) {
@@ -464,7 +479,7 @@ public final class PolicyHygiene {
                 while (state.next[i] < list.size()) {
                     budget.spend();
                     var bucket = list.get(state.next[i]);
-                    if (PolicyNormalization.zonesCover(bucket.key.from(), bucket.key.to(), key.from(), key.to(), intrazone)) state.buckets.add(bucket);
+                    if (PolicyNormalization.zonesCover(bucket.key.from(), bucket.key.to(), key.from(), key.to(), intrazone, zones)) state.buckets.add(bucket);
                     state.next[i]++;
                 }
             }
@@ -481,7 +496,7 @@ public final class PolicyHygiene {
             if (!zoneSupersets || !prior.placements().get("install-on").equals(match.placements().get("install-on"))) return false;
             var from = prior.placements().get("from"); var to = prior.placements().get("to");
             var laterFrom = match.placements().get("from"); var laterTo = match.placements().get("to");
-            return PolicyNormalization.zonesCover(from, to, laterFrom, laterTo, false) || PolicyNormalization.zonesCannotCover(from, to, laterFrom, laterTo);
+            return PolicyNormalization.zonesCover(from, to, laterFrom, laterTo, false, zones) || PolicyNormalization.zonesCannotCover(from, to, laterFrom, laterTo, zones);
         }
         void add(Partial partial) {
             if (!partialSeen.add(Arrays.asList(partial.selectors(), partial.placements()))) return;
