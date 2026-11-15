@@ -48,7 +48,10 @@ import org.springframework.core.env.Environment;
         exclude = DataSourceAutoConfiguration.class,
         excludeName = {
             "org.springframework.boot.jooq.autoconfigure.JooqAutoConfiguration",
-            "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration"
+            "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration",
+            // Spring Security Step 1 (passthrough chain): no generated default user and no "Using generated security
+            // password" log line; authentication stays in LoginController / GateChain until a later step moves it.
+            "org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration"
         })
 // The `…service.api` controllers were all written before their collaborators
 // were beans; step 1 excluded the whole package deliberately, one movement at
