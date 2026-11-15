@@ -60,6 +60,13 @@ async function openDialogAndFillAddress(address: string) {
   await waitFor(() => expect(screen.getByRole("button", { name: "Enrol" })).not.toBeDisabled());
 }
 
+/** Fake timers must be on before the click that starts a poll loop; this lets its interval fire and settles React (no real 1.75 s waits). */
+async function runPolls(ms = 12_000) {
+  await act(async () => { await Promise.resolve(); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  vi.useRealTimers();
+}
+
 describe("AddDeviceDialog", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -158,9 +165,10 @@ describe("AddDeviceDialog", () => {
     render(withTheme(<AddDeviceDialogTrigger />));
     await openDialogAndFillAddress("192.0.2.10");
 
+    vi.useFakeTimers();
     fireEvent.click(screen.getByRole("button", { name: "Enrol" }));
-
-    await waitFor(() => expect(screen.getByText("Enrolled")).toBeInTheDocument(), { timeout: 9000 });
+    await runPolls();
+    expect(screen.getByText("Enrolled")).toBeInTheDocument();
     expect(screen.getByText(/FW-TANGO-04/)).toBeInTheDocument();
     expect(screen.getByText(/Quantum/)).toBeInTheDocument();
     expect(screen.getByText("Corroborated with peer")).toBeInTheDocument();
@@ -178,7 +186,7 @@ describe("AddDeviceDialog", () => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
       return url.split("?")[0] === "/devices/dev-1/inventory/collect";
     })).toBe(false);
-  }, 15000);
+  });
 
   it("keeps polling after a timed-out device read and reaches the terminal phase", async () => {
     let deviceReads = 0;
@@ -505,12 +513,13 @@ describe("AddDeviceDialog discovery mode", () => {
 
     render(withTheme(<AddDeviceDialogTrigger />));
     await openDialogAndSwitchToDiscovery("192.0.2.100");
+    vi.useFakeTimers();
     fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
-
-    await waitFor(() => expect(screen.getByText("CLS-ROMEO-01")).toBeInTheDocument(), { timeout: 8000 });
+    await runPolls();
+    expect(screen.getByText("CLS-ROMEO-01")).toBeInTheDocument();
     expect(screen.getByText("FW-TANGO-01")).toBeInTheDocument();
     expect(screen.getByText("FW-TANGO-02")).toBeInTheDocument();
-  }, 10000);
+  });
 
   it("selecting the cluster selects its members, and import shows per-candidate outcomes", async () => {
     const fetchMock = routedFetch({
@@ -540,8 +549,10 @@ describe("AddDeviceDialog discovery mode", () => {
 
     render(withTheme(<AddDeviceDialogTrigger />));
     await openDialogAndSwitchToDiscovery("192.0.2.100");
+    vi.useFakeTimers();
     fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
-    await waitFor(() => expect(screen.getByText("CLS-ROMEO-01")).toBeInTheDocument(), { timeout: 8000 });
+    await runPolls();
+    expect(screen.getByText("CLS-ROMEO-01")).toBeInTheDocument();
 
     const checkboxes = screen.getAllByRole("checkbox");
     expect(checkboxes).toHaveLength(4);
@@ -562,7 +573,7 @@ describe("AddDeviceDialog discovery mode", () => {
     expect(importCall).toBeDefined();
     const body = JSON.parse(importCall![1].body as string);
     expect(new Set(body.candidate_ids)).toEqual(new Set(["c-m1", "c-m2"]));
-  }, 10000);
+  });
 
   it("master checkbox and select all button select all candidates, clear selection deselects all", async () => {
     const fetchMock = routedFetch({
@@ -584,8 +595,10 @@ describe("AddDeviceDialog discovery mode", () => {
 
     render(withTheme(<AddDeviceDialogTrigger />));
     await openDialogAndSwitchToDiscovery("192.0.2.100");
+    vi.useFakeTimers();
     fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
-    await waitFor(() => expect(screen.getByText("CLS-ROMEO-01")).toBeInTheDocument(), { timeout: 8000 });
+    await runPolls();
+    expect(screen.getByText("CLS-ROMEO-01")).toBeInTheDocument();
 
     const selectAllBtn = screen.getByRole("button", { name: "Select all (2)" });
     const clearBtn = screen.getByRole("button", { name: "Clear selection" });
@@ -615,7 +628,7 @@ describe("AddDeviceDialog discovery mode", () => {
     // Toggle master checkbox off
     fireEvent.click(masterCheckbox);
     expect(masterCheckbox).not.toBeChecked();
-  }, 10000);
+  });
 
   it("marks an already-imported candidate disabled and non-selectable, and reports the counts (AC-2/AC-3)", async () => {
     vi.stubGlobal(
@@ -639,8 +652,10 @@ describe("AddDeviceDialog discovery mode", () => {
 
     render(withTheme(<AddDeviceDialogTrigger />));
     await openDialogAndSwitchToDiscovery("192.0.2.100");
+    vi.useFakeTimers();
     fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
-    await waitFor(() => expect(screen.getByText("FW-DELTA-03")).toBeInTheDocument(), { timeout: 8000 });
+    await runPolls();
+    expect(screen.getByText("FW-DELTA-03")).toBeInTheDocument();
 
     // Header reports "N candidates found, M already added".
     expect(screen.getByText("2 candidates found, 1 already added")).toBeInTheDocument();
@@ -656,7 +671,7 @@ describe("AddDeviceDialog discovery mode", () => {
     fireEvent.click(checkboxes[1]);
     expect(checkboxes[1]).toBeChecked();
     expect(checkboxes[0]).toBeChecked();
-  }, 10000);
+  });
 
   it("offers inline credential creation on discovery path and selects the created credential", async () => {
     vi.stubGlobal(
