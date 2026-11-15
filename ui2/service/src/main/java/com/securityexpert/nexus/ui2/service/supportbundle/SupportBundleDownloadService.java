@@ -153,6 +153,33 @@ public final class SupportBundleDownloadService {
                 } else {
                     String entryName = item.archiveEntryName() == null ? "items/" + item.kind() + "/" + item.kind() + ".bin"
                             : item.archiveEntryName();
+                    if (masking != null) {
+                        // Sanitized mode: a session capture is masked line by line into a temporary file (never held whole in
+                        // memory), because the tar entry needs its masked size first.
+                        java.nio.file.Path spool = java.nio.file.Files.createTempFile("nexus-sb-masked-", ".txt");
+                        try {
+                            long maskedBytes;
+                            try (var reader = new java.io.BufferedReader(new java.io.InputStreamReader(in, StandardCharsets.UTF_8));
+                                    var writer = java.nio.file.Files.newBufferedWriter(spool, StandardCharsets.UTF_8)) {
+                                String line;
+                                while ((line = reader.readLine()) != null) {
+                                    writer.write(masking.maskLine(line));
+                                    writer.write('\n');
+                                }
+                            }
+                            maskedBytes = java.nio.file.Files.size(spool);
+                            tar.beginEntry(rootDir + "/" + entryName, maskedBytes, mtime);
+                            try (InputStream masked = java.nio.file.Files.newInputStream(spool)) {
+                                byte[] buffer = new byte[64 * 1024];
+                                int n;
+                                while ((n = masked.read(buffer)) > 0) tar.write(buffer, 0, n);
+                            }
+                            tar.endEntry();
+                        } finally {
+                            java.nio.file.Files.deleteIfExists(spool);
+                        }
+                        continue;
+                    }
                     tar.beginEntry(rootDir + "/" + entryName, item.plaintextBytes(), mtime);
                     byte[] buffer = new byte[64 * 1024];
                     long copied = 0;

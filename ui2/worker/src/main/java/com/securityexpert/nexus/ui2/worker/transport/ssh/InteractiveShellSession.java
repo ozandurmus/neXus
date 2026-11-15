@@ -371,6 +371,167 @@ final class InteractiveShellSession implements AutoCloseable {
         com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("ssh", "command", "[credential]");
     }
 
+    /** A pager prompt answered, then the device repaints the line: backspaces, carriage returns and spaces to drop. */
+    private static final Pattern ERASE_RUN = Pattern.compile("^[\\x08\\r ]*[\\x08\\r][\\x08\\r ]*");
+    private static final int STREAM_CLI_ERROR_WINDOW = 2048;
+
+    /**
+     * Runs one command whose answer is too large to hold: output is cut into lines as it arrives and handed to
+     * {@code sink} (never accumulated), a pager prompt ending with {@code pagerMarker} is answered with a space and
+     * removed, the command echo is dropped, and the command ends when the learned prompt is the last thing on screen.
+     * The whole command is bounded by {@code timeoutMs}. When the sink throws, Ctrl-C is sent and the caller must
+     * close the shell. Nothing of the answer is logged or recorded in the transcript.
+     */
+    com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult runStreaming(String command, int timeoutMs,
+            String pagerMarker, com.securityexpert.nexus.ui2.jobs.transport.LineSink sink) {
+        String normalized = command == null ? "" : command.strip();
+        if (normalized.isEmpty() || normalized.contains("\n") || normalized.contains("\r")) {
+            return streamed(com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult.Kind.NOT_SENT, 0, 0, 0);
+        }
+        drainReady();
+        try {
+            out.write((normalized + "\n").getBytes(StandardCharsets.UTF_8));
+            out.flush();
+            com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("ssh", "command",
+                    com.securityexpert.nexus.ui2.worker.transcript.JobTranscript.safeSshCommand(normalized));
+        } catch (IOException e) {
+            return streamed(com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult.Kind.NOT_SENT, 0, 0, 0);
+        }
+        long started = System.currentTimeMillis();
+        long deadline = started + Math.max(1000, timeoutMs);
+        StringBuilder pending = new StringBuilder();
+        StringBuilder head = new StringBuilder();
+        byte[] buf = new byte[8192];
+        byte[] carry = new byte[0];
+        long lines = 0, bytes = 0;
+        int pages = 0;
+        boolean echoDone = false, afterPager = false;
+        long lastData = started;
+        while (true) {
+            long now = System.currentTimeMillis();
+            if (now >= deadline) {
+                interruptQuietly();
+                return streamed(com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult.Kind.TIMED_OUT, lines, bytes, pages);
+            }
+            if (Thread.currentThread().isInterrupted()) {
+                interruptQuietly();
+                return streamed(com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult.Kind.SESSION_LOST, lines, bytes, pages);
+            }
+            boolean got = false;
+            try {
+                int available = in.available();
+                if (available > 0) {
+                    int n = in.read(buf, 0, Math.min(buf.length, available));
+                    if (n < 0) {
+                        return streamed(com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult.Kind.SESSION_LOST, lines, bytes, pages);
+                    }
+                    if (n > 0) {
+                        byte[] joined = new byte[carry.length + n];
+                        System.arraycopy(carry, 0, joined, 0, carry.length);
+                        System.arraycopy(buf, 0, joined, carry.length, n);
+                        int keep = incompleteUtf8Tail(joined);
+                        pending.append(new String(joined, 0, joined.length - keep, StandardCharsets.UTF_8));
+                        carry = java.util.Arrays.copyOfRange(joined, joined.length - keep, joined.length);
+                        got = true;
+                        lastData = System.currentTimeMillis();
+                    }
+                } else if (channel != null && !channel.isConnected()) {
+                    return streamed(com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult.Kind.SESSION_LOST, lines, bytes, pages);
+                }
+            } catch (IOException e) {
+                return streamed(com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult.Kind.SESSION_LOST, lines, bytes, pages);
+            }
+            if (!got) {
+                sleepQuietly(System.currentTimeMillis() - lastData < 1000 ? 2 : 40);
+                if (pending.length() == 0) continue;
+            }
+            if (afterPager) {
+                var erase = ERASE_RUN.matcher(pending);
+                if (erase.find()) pending.delete(0, erase.end());
+                if (pending.length() > 0) afterPager = false;
+            }
+            // Complete lines first.
+            int nl;
+            while ((nl = pending.indexOf("\n")) >= 0) {
+                String raw = pending.substring(0, nl);
+                pending.delete(0, nl + 1);
+                String line = ANSI_ESCAPE.matcher(raw).replaceAll("");
+                if (line.endsWith("\r")) line = line.substring(0, line.length() - 1);
+                int cr = line.lastIndexOf('\r');
+                if (cr >= 0 && cr < line.length() - 1) line = line.substring(cr + 1);
+                if (!echoDone) {
+                    echoDone = true;
+                    if (isEcho(line.strip(), normalized)) continue;
+                }
+                try {
+                    sink.line(line);
+                } catch (IOException | RuntimeException refused) {
+                    interruptQuietly();
+                    return streamed(com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult.Kind.SINK_ABORTED, lines, bytes, pages);
+                }
+                lines++;
+                bytes += line.getBytes(StandardCharsets.UTF_8).length + 1L;
+                if (head.length() < STREAM_CLI_ERROR_WINDOW) head.append(line).append('\n');
+            }
+            // Then what is left of the unfinished line: a pager prompt, or the prompt that ends the command.
+            if (pending.length() > 0) {
+                String tail = ANSI_ESCAPE.matcher(pending).replaceAll("");
+                if (pagerMarker != null && !pagerMarker.isEmpty()) {
+                    int at = tail.lastIndexOf(pagerMarker);
+                    if (at >= 0 && tail.substring(at + pagerMarker.length()).isBlank()) {
+                        pending.setLength(0);
+                        String before = tail.substring(0, at);
+                        pending.append(before.isBlank() ? "" : before);
+                        try {
+                            out.write(' ');
+                            out.flush();
+                        } catch (IOException e) {
+                            return streamed(com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult.Kind.SESSION_LOST, lines, bytes, pages);
+                        }
+                        pages++;
+                        afterPager = true;
+                        continue;
+                    }
+                }
+                String last = tail.strip();
+                if (prompt != null && (last.equals(prompt) || isPromptVariant(last))
+                        && (echoDone || System.currentTimeMillis() - started >= ECHO_GRACE_MS)) {
+                    String all = head.toString();
+                    boolean refusal = lines <= 24 && bytes <= STREAM_CLI_ERROR_WINDOW && looksLikeStreamRefusal(all);
+                    return streamed(refusal ? com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult.Kind.CLI_ERROR
+                            : com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult.Kind.COMPLETED, lines, bytes, pages);
+                }
+            }
+        }
+    }
+
+    private static com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult streamed(
+            com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult.Kind kind, long lines, long bytes, int pages) {
+        return new com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult(kind, lines, bytes, pages);
+    }
+
+    /** Ctrl-C: the terminal's interrupt character, not a device command. */
+    private void interruptQuietly() {
+        try {
+            out.write(3);
+            out.flush();
+        } catch (IOException ignored) {
+            // the channel is closed by the caller anyway
+        }
+    }
+
+    /** How many trailing bytes are the unfinished start of a multi-byte UTF-8 character. */
+    static int incompleteUtf8Tail(byte[] data) {
+        int n = data.length;
+        for (int back = 1; back <= Math.min(3, n); back++) {
+            int b = data[n - back] & 0xff;
+            if ((b & 0xC0) == 0x80) continue;
+            int need = b >= 0xF0 ? 4 : b >= 0xE0 ? 3 : b >= 0xC0 ? 2 : 1;
+            return need > back ? back : 0;
+        }
+        return 0;
+    }
+
     /** The command's output, or {@code null} for any non-output ending (the "try the next form" contract). */
     String run(String command, int timeoutMs) {
         Result r = runForResult(command, timeoutMs);
@@ -614,6 +775,13 @@ final class InteractiveShellSession implements AutoCloseable {
             return false;
         }
         return line.matches(java.util.regex.Pattern.quote(stem) + "(\\s*\\([^)]*\\))?\\s*[#>$]");
+    }
+
+    /** A short whole answer that is a refusal: the shared CLI errors and the Cisco ASA ones ({@code % Invalid input}). */
+    private static boolean looksLikeStreamRefusal(String stdout) {
+        String lower = stdout.toLowerCase(Locale.ROOT);
+        return looksLikeCliError(stdout) || lower.contains("% invalid input") || lower.contains("% incomplete command")
+                || lower.contains("% ambiguous command") || lower.contains("command authorization failed");
     }
 
     private static boolean looksLikeCliError(String stdout) {

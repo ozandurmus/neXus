@@ -51,8 +51,8 @@ class SupportBundleServiceTest {
         when(devices.find("dev-mds")).thenReturn(Optional.of(device("management_server", "check_point")));
         when(devices.find("dev-pan-gw")).thenReturn(Optional.of(device("gateway", "palo_alto")));
         when(devices.find("dev-panorama")).thenReturn(Optional.of(device("management_server", "palo_alto")));
-        when(devices.find("dev-other")).thenReturn(Optional.of(device("gateway", "infoblox")));
         when(devices.find("dev-asa")).thenReturn(Optional.of(device("gateway", "cisco_asa")));
+        when(devices.find("dev-other")).thenReturn(Optional.of(device("gateway", "infoblox")));
         when(devices.find("dev-fgt")).thenReturn(Optional.of(device("gateway", "fortinet")));
         when(admission.submit(anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new AdmissionResult.Admitted("job-1"));
@@ -105,7 +105,8 @@ class SupportBundleServiceTest {
         refused(ask("nope", List.of("cp_gaia_extras"), Optional.empty(), "TAC case preparation"), 404, "DEVICE_NOT_FOUND");
         refused(ask("dev-pan", List.of("pan_tsf"), Optional.empty(), "TAC case preparation"), 409, "ROLE_UNRECOGNISED");
         refused(ask("dev-other", List.of("pan_tsf"), Optional.empty(), "TAC case preparation"), 409, "VENDOR_NOT_YET_ENABLED");
-        refused(ask("dev-asa", List.of("asa_show_tech"), Optional.empty(), "TAC case preparation"), 409, "VENDOR_NOT_YET_ENABLED");
+        refused(ask("dev-asa", List.of("pan_tsf"), Optional.empty(), "TAC case preparation"), 400, "INVALID_KIND");
+        refused(ask("dev-fgt", List.of("fgt_crashlog"), Optional.empty(), "TAC case preparation"), 409, "VENDOR_NOT_YET_ENABLED");
         refused(ask("dev-mds", List.of("cp_gaia_extras"), Optional.empty(), "TAC case preparation"), 409, "PLATFORM_NOT_YET_ENABLED");
         refused(ask("dev-cp", List.of("cp_cpinfo"), Optional.empty(), "TAC case preparation"), 409, "KIND_NOT_AVAILABLE");
         refused(ask("dev-cp", List.of("rm -rf"), Optional.empty(), "TAC case preparation"), 400, "INVALID_KIND");
@@ -120,6 +121,7 @@ class SupportBundleServiceTest {
         List<Case> cases = new java.util.ArrayList<>();
         cases.add(new Case("dev-pan-gw", "pan_support_bundle", "pan_firewall", List.of("pan_tsf")));
         cases.add(new Case("dev-panorama", "pan_support_bundle", "panorama", List.of("pan_tsf")));
+        cases.add(new Case("dev-asa", "asa_support_bundle", "cisco_asa_firewall", List.of("asa_show_tech", "asa_crashinfo")));
         for (Case c : cases) {
             org.mockito.Mockito.reset(store, admission);
             when(admission.submit(anyString(), anyString(), anyString(), anyString(), anyString()))
