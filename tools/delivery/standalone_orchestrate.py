@@ -118,6 +118,18 @@ def _git(*args: str, cwd: Path = REPO_ROOT, check: bool = True) -> str:
     return r.stdout.strip()
 
 
+def _merge_pull_request(url: str) -> "subprocess.CompletedProcess[str]":
+    """`gh pr merge --rebase`; when GitHub refuses with "can't be rebased", retry once with `--squash` and say so.
+
+    2026-11-15: GitHub refused a rebase merge of a clean 84-commit branch with no cause found; the squash lands the
+    same net change as one commit."""
+    merge = subprocess.run(["gh", "pr", "merge", url, "--rebase"], cwd=str(REPO_ROOT), capture_output=True, text=True)
+    if merge.returncode != 0 and ("can't be rebased" in merge.stderr or "cannot be rebased" in merge.stderr):
+        print("rebase merge refused by GitHub (can't be rebased); retrying once with --squash", flush=True)
+        merge = subprocess.run(["gh", "pr", "merge", url, "--squash"], cwd=str(REPO_ROOT), capture_output=True, text=True)
+    return merge
+
+
 def _rebase_dropping_empty_commits(cwd: Path, branch: str | None = None, base: str = "origin/main") -> tuple[bool, int]:
     """Rebase onto `base`, dropping commits with an empty diff; returns (rebased cleanly, dropped count).
 
@@ -1059,8 +1071,7 @@ def _ship(args: argparse.Namespace) -> int:
     if skip_checks is None:
         _wait_for_checks(url)
     # No --delete-branch: gh would delete the local branch a lane worktree still has checked out.
-    merge = subprocess.run(["gh", "pr", "merge", url, "--rebase"],
-                           cwd=str(REPO_ROOT), capture_output=True, text=True)
+    merge = _merge_pull_request(url)
     if merge.returncode != 0:
         raise SystemExit("pull request not merged (" + url + "): " + _explain_merge_failure(merge.stderr))
     subprocess.run(["git", "push", "-q", "origin", "--delete", branch], cwd=str(REPO_ROOT), capture_output=True)

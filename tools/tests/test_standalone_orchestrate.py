@@ -347,3 +347,28 @@ def test_merge_failure_diagnostic_names_causes():
     msg = sa._explain_merge_failure("GraphQL: This branch can't be rebased (mergePullRequest)")
     assert "empty commit" in msg and "merge commit" in msg
     assert sa._explain_merge_failure("other error") == "other error"
+
+
+def test_merge_falls_back_to_squash_when_rebase_is_refused(monkeypatch, capsys):
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        if "--rebase" in cmd:
+            return subprocess.CompletedProcess(cmd, 1, "", "GraphQL: This branch can't be rebased (mergePullRequest)")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+    monkeypatch.setattr(sa.subprocess, "run", fake_run)
+    assert sa._merge_pull_request("https://example/pr/1").returncode == 0
+    assert [c[-1] for c in calls] == ["--rebase", "--squash"]
+    assert "--squash" in capsys.readouterr().out
+
+
+def test_merge_does_not_squash_on_other_failures(monkeypatch):
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 1, "", "checks failing")
+    monkeypatch.setattr(sa.subprocess, "run", fake_run)
+    assert sa._merge_pull_request("https://example/pr/1").returncode == 1
+    assert len(calls) == 1
