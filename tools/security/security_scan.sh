@@ -27,12 +27,17 @@ trivy_class() {
     elif grep -qiE 'db|database|bundle' "$2" 2>/dev/null; then echo db
     else echo unknown; fi
 }
+# Several Jobs (a gate and the nightly scan) can share the persistent cache; its layer cache is a single-writer
+# database and a DB update must not race a scan, so every trivy run takes an exclusive lock when flock exists.
+with_lock() {
+    if [ -d /cache/trivy ] && command -v flock >/dev/null 2>&1; then flock -w 1200 /cache/trivy/.lock "$@"; else "$@"; fi
+}
 # trivy_try <report> <exit-file> <command...>
 trivy_try() {
     report="$1"; exitfile="$2"; shift 2
     attempt=1
     while :; do
-        "$@" >"$report" 2>"$report.err"
+        with_lock "$@" >"$report" 2>"$report.err"
         rc=$?
         [ "$rc" -ne 0 ] || break
         printf 'TRIVY_FAILED %s attempt=%s/%s rc=%s class=%s\n' "${report##*/}" "$attempt" "$TRIVY_ATTEMPTS" "$rc" "$(trivy_class "$rc" "$report.err")"
@@ -63,6 +68,15 @@ case "$1" in
     export TRIVY_CACHE_DIR=/cache/trivy
     # Image layers are extracted under TMPDIR: keep them on the disk-backed cache, not the 1 GiB memory /tmp.
     mkdir -p /cache/tmp && export TMPDIR=/cache/tmp
+    # Persistent cache (when /cache/trivy is a mounted claim): reuse a vulnerability DB younger than
+    # TRIVY_DB_MAX_AGE_HOURS (default 6, Trivy's own publish cadence), otherwise Trivy updates it as before. A missing
+    # or older DB is never skipped. Layers already analysed are skipped by Trivy's layer cache, never the scan itself.
+    maxmin=$(( ${TRIVY_DB_MAX_AGE_HOURS:-6} * 60 ))
+    fresh() { [ -n "$(find "$1" -mmin "-$maxmin" 2>/dev/null)" ]; }
+    ! fresh /cache/trivy/db/trivy.db || export TRIVY_SKIP_DB_UPDATE=true
+    ! fresh /cache/trivy/java-db/trivy-java.db || export TRIVY_SKIP_JAVA_DB_UPDATE=true
+    # Bound the layer cache (kB): over the limit it is dropped and rebuilt, never trusted past the volume size.
+    with_lock sh -c 'kb=$(du -sk /cache/trivy/fanal 2>/dev/null | cut -f1); [ "${kb:-0}" -le "${TRIVY_FANAL_MAX_KB:-6000000}" ] || rm -rf /cache/trivy/fanal'
     if [ "$1" != trivy-image ]; then
       trivy_try /work/trivy-fs.json /work/trivy-fs.json.exit trivy fs --scanners vuln --format json --no-progress .
       trivy_try /work/trivy-config.json /work/trivy-config.json.exit trivy config --format json deploy/

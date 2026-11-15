@@ -75,7 +75,7 @@ def await_image(timeout=3000, sleep=time.sleep, monotonic=time.monotonic, image_
             (WORK / "manifest.json").write_text(json.dumps(manifest))
             (WORK / "images").write_text("\n".join(images) + "\n")
             return
-        sleep(2)
+        sleep(1)
     raise ValueError("image build timed out")
 
 

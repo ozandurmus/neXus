@@ -26,6 +26,11 @@ def settings(config):
         raise ValueError("invalid proxy port")
     if not config["node_name"] or "REPLACE" in config["node_name"]:
         raise ValueError("node name required for local reports")
+    # Optional, opt-in: a persistent Trivy cache claim. It must be applied (deploy/security/trivy-cache-pvc.yaml)
+    # BEFORE this key is set, otherwise every Job that mounts it would be stuck Pending.
+    claim = config.get("trivy_cache_claim")
+    if claim is not None and not (isinstance(claim, str) and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}", claim)):
+        raise ValueError("invalid trivy cache claim")
     return config
 
 
@@ -44,6 +49,7 @@ def container(config, name, tool, command, mode):
                               dict(name="source", mountPath="/rules", subPath="rules", readOnly=True),
                               dict(name="work", mountPath="/work"), dict(name="tmp", mountPath="/tmp"),
                               dict(name="cache", mountPath="/cache"),
+                              *([dict(name="trivy-cache", mountPath="/cache/trivy")] if config.get("trivy_cache_claim") else []),
                               dict(name="reports", mountPath="/var/lib/nexus-security")])
 
 
@@ -104,6 +110,9 @@ def job(config, mode="daily", image=None, commit=None, gate_name=None):
                         # Measured 2026-09-30: in the 4 GiB memory-backed /work they exhausted the pod's memory.
                         dict(name="cache", emptyDir={"sizeLimit": "20Gi"}),
                         dict(name="reports", persistentVolumeClaim={"claimName": "security-reports"})])
+    if config.get("trivy_cache_claim"):
+        # Vulnerability DBs and analysed-layer cache (no findings, no source): survives between Jobs.
+        pod["volumes"].append(dict(name="trivy-cache", persistentVolumeClaim={"claimName": config["trivy_cache_claim"]}))
     if gate_name:
         # Use the deployed source snapshot's scripts, not a possibly older installed ConfigMap.
         pod["volumes"][0] = dict(name="scripts", persistentVolumeClaim={"claimName": "security-source", "readOnly": True})

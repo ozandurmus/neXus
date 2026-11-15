@@ -125,7 +125,7 @@ def wait_gate(get_job, get_summary, timeout=3600, sleep=time.sleep, monotonic=ti
             if "Complete" not in conditions or not clean["passed"] or clean["scan_errors"] or clean["blocking"]:
                 raise RuntimeError("security gate refused rollout")
             return
-        sleep(5)
+        sleep(2)
     raise RuntimeError("security gate timed out; rollout refused")
 
 

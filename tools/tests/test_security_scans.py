@@ -579,3 +579,22 @@ def test_every_trivy_invocation_goes_through_the_retry_helper():
     body = text.split("# END trivy-retry")[1]
     calls = [l.strip() for l in body.splitlines() if " trivy " in " " + l.strip() + " " and not l.strip().startswith("#")]
     assert len(calls) == 4 and all(l.startswith("trivy_try ") for l in calls)
+
+
+def test_trivy_cache_claim_is_opt_in_and_mounted_everywhere():
+    plain = manifests.job(config(), "gate", commit="b" * 40, gate_name="security-gate-" + "a" * 12)["spec"]["template"]["spec"]
+    assert all(v["name"] != "trivy-cache" for v in plain["volumes"])
+    cfg = dict(config(), trivy_cache_claim="security-trivy-cache")
+    pod = manifests.job(cfg, "gate", commit="b" * 40, gate_name="security-gate-" + "a" * 12)["spec"]["template"]["spec"]
+    assert {"name": "trivy-cache", "persistentVolumeClaim": {"claimName": "security-trivy-cache"}} in pod["volumes"]
+    for c in pod["initContainers"] + pod["containers"]:
+        assert {"name": "trivy-cache", "mountPath": "/cache/trivy"} in c["volumeMounts"]
+    for bad in ("Bad_Name", "", 5):
+        with pytest.raises(ValueError):
+            manifests.settings(dict(config(), trivy_cache_claim=bad))
+
+
+def test_trivy_scan_script_skips_db_update_only_for_a_fresh_cached_db():
+    text = (manifests.ROOT / "tools" / "security" / "security_scan.sh").read_text()
+    assert "TRIVY_SKIP_DB_UPDATE=true" in text and "-mmin" in text and "TRIVY_DB_MAX_AGE_HOURS" in text
+    assert "--skip-db-update" not in text  # never unconditional
