@@ -274,6 +274,8 @@ public class DeviceCompositionConfiguration {
                         "pan_firewall", TransportKind.PAN_XML_API),
                 confirmCapability(com.securityexpert.nexus.ui2.jobs.supportbundle.AsaSupportBundle.CAPABILITY, "cisco_asa",
                         "cisco_asa_firewall", TransportKind.SSH_EXEC),
+                confirmCapability(com.securityexpert.nexus.ui2.jobs.supportbundle.FgtSupportBundle.CAPABILITY, "fortinet",
+                        "fortigate", TransportKind.SSH_EXEC),
                 com.securityexpert.nexus.ui2.jobs.systemlog.CpSpikeLayoutReview.capability(gateRegistryPort),
                 checkPointInventoryCapability(gateRegistryPort),
                 paloAltoInventoryCapability(gateRegistryPort),

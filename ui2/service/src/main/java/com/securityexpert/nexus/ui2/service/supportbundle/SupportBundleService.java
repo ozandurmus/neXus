@@ -15,6 +15,7 @@ import com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.jobs.supportbundle.AsaSupportBundle;
 import com.securityexpert.nexus.ui2.jobs.supportbundle.CpSupportBundle;
+import com.securityexpert.nexus.ui2.jobs.supportbundle.FgtSupportBundle;
 import com.securityexpert.nexus.ui2.jobs.supportbundle.PanSupportBundle;
 import com.securityexpert.nexus.ui2.jobs.supportbundle.SupportBundleKind;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
@@ -86,6 +87,8 @@ public final class SupportBundleService {
                     : Optional.empty();
             case "cisco_asa" -> gateway ? Optional.of(new VendorPlan(AsaSupportBundle.CAPABILITY, AsaSupportBundle.PLATFORM_ROLE_SCOPE))
                     : Optional.empty();
+            case "fortinet" -> gateway ? Optional.of(new VendorPlan(FgtSupportBundle.CAPABILITY, FgtSupportBundle.PLATFORM_ROLE_SCOPE))
+                    : Optional.empty();
             default -> Optional.empty();
         };
     }
@@ -108,7 +111,7 @@ public final class SupportBundleService {
         String vendor = device.get().vendorHint();
         Optional<VendorPlan> plan = planFor(vendor, device.get().role());
         if (plan.isEmpty()) {
-            boolean knownVendor = java.util.Set.of("check_point", "palo_alto", "cisco_asa").contains(vendor);
+            boolean knownVendor = java.util.Set.of("check_point", "palo_alto", "cisco_asa", "fortinet").contains(vendor);
             boolean role = "gateway".equals(device.get().role()) || "management_server".equals(device.get().role());
             if (!knownVendor) return new Outcome.Refused(409, "VENDOR_NOT_YET_ENABLED", "Support bundles for this vendor are not built yet");
             if (!role) return new Outcome.Refused(409, "ROLE_UNRECOGNISED", "Only gateways and management servers can be collected");

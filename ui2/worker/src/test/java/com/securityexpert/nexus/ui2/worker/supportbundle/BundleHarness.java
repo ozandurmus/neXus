@@ -39,6 +39,7 @@ import com.securityexpert.nexus.ui2.persistence.device.EndpointRecord;
 import com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore.HcpCopySource;
 import com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore.ItemRow;
 import com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore.RequestRow;
+import com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore.StoredConfiguration;
 import com.securityexpert.nexus.ui2.persistence.supportbundle.SupportBundleRunStore;
 import com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher;
 import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
@@ -58,6 +59,8 @@ final class BundleHarness {
         String requestState, precheck;
         Instant expires;
         boolean queued = true;
+        StoredConfiguration configuration;
+        int configurationReads;
 
         Store(String vendor, String scope, String... kinds) {
             request = new RequestRow(REQUEST, "device-1", vendor, scope, "NOW", NOW, null, "TAC case preparation", "ACTOR-ALPHA", NOW,
@@ -87,6 +90,10 @@ final class BundleHarness {
             requestState = state; precheck = precheckJson; expires = expiresAt;
         }
         @Override public Optional<HcpCopySource> newestStoredHcpReport(String deviceId, Instant notBefore) { return Optional.empty(); }
+        @Override public Optional<StoredConfiguration> latestFortiGateConfiguration(String deviceId) {
+            configurationReads++;
+            return Optional.ofNullable(configuration);
+        }
     }
 
     final JobLeaseRepository leases = mock(JobLeaseRepository.class);

@@ -1,4 +1,4 @@
--- V232 -- support bundle collection, vendor steps S3 (Palo Alto) and S4 (Cisco ASA)
+-- V232 -- support bundle collection, vendor steps S3 (Palo Alto), S4 (Cisco ASA) and S5 (FortiGate)
 -- (docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md, FROZEN 2026-11-15;
 -- docs/design/PO_DECISION_RECORD_2026_11_15_SUPPORT_BUNDLE_COLLECTION.md section 2).
 --
@@ -6,6 +6,7 @@
 --   * Palo Alto P1-P6 (tech support file over the XML API), one row per platform scope: pan_firewall and panorama.
 --     P3 and P6 are recovery-write (BW-2: the device writes and removes /tmp/techsupport.tgz); P3 and P5 are secret-bearing.
 --   * Cisco ASA A1-A4. A5-A7 (the disk0: fallback) are NOT approved and have no row. No terminal pager 0 (Q12).
+--   * FortiGate F1-F5; F3 is the two context literals (config global, end).
 -- The support bundle tables (V230) are unchanged; V230 is not edited. Idempotent (ON CONFLICT DO NOTHING). Dry-run in
 -- BEGIN/ROLLBACK on the live database before deploy is an engineer step.
 SELECT set_config('app.actor_fingerprint', 'migration:V232_support_bundle_vendor_gates', true);
@@ -92,5 +93,35 @@ VALUES
      'show tech-support',
      'read', 'SIGNED_OFF', 1200, 'none', 'once per run', 'one session per run (privileged EXEC, no terminal pager 0; the More prompt is answered in session)',
      '% Invalid input: item UNSUPPORTED; a capture that ends early keeps what arrived (PARTIAL, at least 4 KiB)', 'secret-bearing (running configuration; stored redacted, line by line)',
-     '["lines", "bytes", "pages"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (A4); PO approval 2026-11-15 (PO record section 2; A5-A7 NOT approved)')
+     '["lines", "bytes", "pages"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (A4); PO approval 2026-11-15 (PO record section 2; A5-A7 NOT approved)'),
+    ('fgt_sb_get_system_status', 'fortinet', 'fortigate', 'top_or_global', 'SSH_INTERACTIVE',
+     'get system status',
+     'read', 'SIGNED_OFF', 30, 'none', 'once per run', 'one session per run (--More-- is answered in session; no console setting is changed)',
+     'an error: the version and the VDOM mode are UNKNOWN; the stored data decide the defect guard', 'identity (host name, serial)',
+     '["exitStatus"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (F1); PO approval 2026-11-15 (PO record section 2)'),
+    ('fgt_sb_performance_status', 'fortinet', 'fortigate', 'top_or_global', 'SSH_INTERACTIVE',
+     'get system performance status',
+     'read', 'SIGNED_OFF', 30, 'none', 'once per run', 'one session per run (--More-- is answered in session; no console setting is changed)',
+     'an error or an unparsable answer: the CPU is UNKNOWN and the TAC report is refused (REFUSED_PRECHECK)', 'none',
+     '["exitStatus", "cpuPercent"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (F2); PO approval 2026-11-15 (PO record section 2)'),
+    ('fgt_sb_config_global', 'fortinet', 'fortigate', 'context', 'SSH_INTERACTIVE',
+     'config global',
+     'read', 'SIGNED_OFF', 10, 'none', 'once per run, multi-VDOM only', 'one session per run (--More-- is answered in session; no console setting is changed)',
+     'a refusal: the reads that follow go on at the top level and record what they answer', 'none',
+     '["exitStatus"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (F3); PO approval 2026-11-15 (PO record section 2)'),
+    ('fgt_sb_end', 'fortinet', 'fortigate', 'context', 'SSH_INTERACTIVE',
+     'end',
+     'read', 'SIGNED_OFF', 10, 'none', 'once per run, multi-VDOM only', 'one session per run (--More-- is answered in session; no console setting is changed)',
+     'a refusal: the session is closed at the end of the run anyway', 'none',
+     '["exitStatus"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (F3); PO approval 2026-11-15 (PO record section 2)'),
+    ('fgt_sb_crashlog_read', 'fortinet', 'fortigate', 'top_or_global', 'SSH_INTERACTIVE',
+     'diagnose debug crashlog read',
+     'read', 'SIGNED_OFF', 120, 'none', 'once per run', 'one session per run (--More-- is answered in session; no console setting is changed)',
+     'Unknown action: item UNSUPPORTED; nothing stored', 'low (stored redacted, line by line)',
+     '["lines", "bytes"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (F4); PO approval 2026-11-15 (PO record section 2)'),
+    ('fgt_sb_tac_report', 'fortinet', 'fortigate', 'top_or_global', 'SSH_INTERACTIVE',
+     'execute tac report',
+     'read', 'SIGNED_OFF', 1200, 'none', 'once per run', 'one session per run (--More-- is answered in session; no console setting is changed)',
+     'Unknown action: item UNSUPPORTED; a capture that ends early keeps what arrived (PARTIAL, at least 4 KiB); refused beforehand on a version with the DoS-policy defect', 'secret-bearing (global configuration; stored redacted, line by line)',
+     '["lines", "bytes", "pages"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (F5); PO approval 2026-11-15 (PO record section 2)')
 ON CONFLICT (gate_id) DO NOTHING;
