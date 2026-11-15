@@ -44,13 +44,24 @@ public final class LocalMechanism implements Mechanism {
     private static final String REASON_WRONG_PASSWORD = "wrong_password";
     /** 13G {@code LIA-3.6}: a disabled identity cannot authenticate. */
     private static final String REASON_DISABLED = "disabled";
+    /** Step 3 / D4: BREAK_GLASS_ONLY refuses every local account but the root identity and aiview. */
+    static final String REASON_NON_BREAK_GLASS = "local_non_break_glass_refused";
 
     private final LocalCredentialsRepository repository;
     private final Clock clock;
+    /** Migration plan Step 3; null keeps every local login as it was (tests and tools that build the mechanism directly). */
+    private final LocalAuthPolicy policy;
+
+    public LocalMechanism(LocalCredentialsRepository repository, Clock clock, LocalAuthPolicy policy) {
+        this.repository = Objects.requireNonNull(repository, "repository");
+        this.clock = Objects.requireNonNull(clock, "clock");
+        this.policy = policy;
+    }
 
     public LocalMechanism(LocalCredentialsRepository repository, Clock clock) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.policy = null;
     }
 
     @Override
@@ -87,7 +98,14 @@ public final class LocalMechanism implements Mechanism {
             return AttemptOutcome.refused(REASON_WRONG_PASSWORD);
         }
         String actorFingerprint = actorFingerprintFor(record.localIdentityId());
+        if (policy != null && policy.refuses(record, actorFingerprint, now)) {
+            // Step 3 / D4: the password was right but the mode admits only break-glass identities. Same refusal as any other.
+            return AttemptOutcome.refused(REASON_NON_BREAK_GLASS);
+        }
         repository.recordSuccessfulLogin(record.localIdentityId(), now, actorFingerprint);
+        if (policy != null) {
+            policy.loggedIn(record, actorFingerprint, now);
+        }
         return AttemptOutcome.success(actorFingerprint);
     }
 

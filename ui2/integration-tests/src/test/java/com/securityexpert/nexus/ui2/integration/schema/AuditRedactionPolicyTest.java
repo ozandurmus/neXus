@@ -321,6 +321,13 @@ class AuditRedactionPolicyTest {
             "local_password_policy_settings.require_symbol", "local_password_policy_settings.require_upper",
             "local_password_policy_settings.settings_id", "local_password_policy_settings.updated_at",
             "local_password_policy_settings.updated_by",
+            // local_auth_mode_settings / local_break_glass_event (V231): a closed mode vocabulary, opaque actor
+            // fingerprints, event kinds and timestamps; no account names
+            "local_auth_mode_settings.mode", "local_auth_mode_settings.settings_id",
+            "local_auth_mode_settings.updated_at", "local_auth_mode_settings.updated_by",
+            "local_break_glass_event.actor_fingerprint", "local_break_glass_event.alert",
+            "local_break_glass_event.event_id", "local_break_glass_event.kind",
+            "local_break_glass_event.occurred_at", "local_break_glass_event.outcome",
             // lifecycle_catalog_upload (V219): page form, vendor, page hash and counts of one operator page upload;
             // uploaded_by is redacted (tier 2)
             "lifecycle_catalog_upload.content_sha256", "lifecycle_catalog_upload.entries_needing_review",

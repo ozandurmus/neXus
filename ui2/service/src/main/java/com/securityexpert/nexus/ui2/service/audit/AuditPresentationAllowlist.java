@@ -321,6 +321,11 @@ public final class AuditPresentationAllowlist {
             Map.entry("local_password_policy_settings", Set.of(
                     "enabled", "history_count", "max_age_days", "min_length", "require_digit", "require_lower",
                     "require_symbol", "require_upper", "settings_id", "updated_at", "updated_by")),
+            // V231: the local-account scope switch and the break-glass event log hold only closed vocabularies, opaque
+            // actor fingerprints and timestamps.
+            Map.entry("local_auth_mode_settings", Set.of("mode", "settings_id", "updated_at", "updated_by")),
+            Map.entry("local_break_glass_event", Set.of(
+                    "actor_fingerprint", "alert", "event_id", "kind", "occurred_at", "outcome")),
             Map.entry("system_log_settings", Set.of(
                     "device_cap_bytes", "hcp_retention_days", "include_management_servers", "ledger_retention_days",
                     "raw_retention_days", "settings_id", "spike_data_cap_bytes", "spike_data_enabled",

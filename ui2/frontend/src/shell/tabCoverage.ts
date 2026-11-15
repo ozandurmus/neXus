@@ -25,7 +25,7 @@ export const TAB_COVERAGE: readonly TabCoverageRow[] = [
   // status, Audit log and Delivery plan have a single section and no strip.
   { screen: "administration", tabList: "Device registry sections", labels: ["Device management", "Inventory exclusions", "Credentials", "SSH trust"],
     query: "screen=administration&tab=registry", heading: "Device registry" },
-  { screen: "administration", tabList: "Access and identity sections", labels: ["Local identities", "Sessions", "Roles and permissions", "LDAP settings"],
+  { screen: "administration", tabList: "Access and identity sections", labels: ["Local identities", "Sessions", "Roles and permissions", "LDAP settings", "Local sign-in"],
     query: "screen=administration&tab=access", heading: "Access and identity" },
   { screen: "administration", tabList: "Notifications and logging sections", labels: ["Notifications", "Log collection"],
     query: "screen=administration&tab=platform", heading: "Notifications and logging" },

@@ -25,9 +25,10 @@ final class NotificationMailRouter {
             + "'local_credential_enable', 'local_credential_disable', 'role_binding_create', 'role_binding_revoke', "
             + "'credential_create', 'credential_replace_secret', 'device_credential_set', 'device_secret_set', "
             + "'device_register', 'device_delete', 'device_backup_target_set', "
-            + "'notification_settings_update', 'notification_route_update'";
+            + "'notification_settings_update', 'notification_route_update', 'local_auth_mode_write'";
     private static final String LOGIN_ACTIONS = "'local_login_failure', 'machine_session_token_refused', "
-            + "'machine_session_roles_refused', 'machine_session_read_only', 'session_login_takeover'";
+            + "'machine_session_roles_refused', 'machine_session_read_only', 'session_login_takeover', "
+            + "'local_break_glass_login_succeeded', 'local_non_break_glass_refused'";
 
     private NotificationMailRouter() {}
 

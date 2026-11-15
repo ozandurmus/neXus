@@ -79,6 +79,7 @@ final class NexusSessionCli {
         System.out.println("  ldap-set <settings.json> [--password-file <f>] save LDAP settings; the bind password is prompted");
         System.out.println("                                                 (blank keeps the stored one for the same servers)");
         System.out.println("  ldap-test <testUser> [settings.json] [--password-file <f>]");
+        System.out.println("  local-auth-mode [ALL_LOCAL|BREAK_GLASS_ONLY]   show or switch which local accounts may sign in");
         System.out.println("                                                 service bind + user search + group check; no user bind");
         System.out.println("  backups [deviceId]                             fleet or one device's history (with baseline)");
         System.out.println("  backup-run <deviceId> <reason> [backup|snapshot]");
@@ -166,6 +167,9 @@ final class NexusSessionCli {
                 case "ldap" -> print(call("GET", LDAP_SETTINGS, null));
                 case "ldap-set" -> ldapSet(args);
                 case "ldap-test" -> ldapTest(args);
+                case "local-auth-mode" -> args.length > 1
+                        ? print(call("PUT", LOCAL_AUTH_MODE, json(Map.of("mode", args[1]))))
+                        : print(call("GET", LOCAL_AUTH_MODE, null));
                 case "notifications-test" -> {
                     require(args, 2, "notifications-test <syslog|mail>");
                     yield print(call("POST", "/api/v2/config/notifications/test-" + ("mail".equals(args[1]) ? "mail" : "syslog"), "{}"));
@@ -475,6 +479,8 @@ final class NexusSessionCli {
     }
 
     static final String LDAP_SETTINGS = "/api/v2/config/ldap";
+    /** Migration plan Step 3: the local-account scope (CLI parity with Administration > Directory). */
+    static final String LOCAL_AUTH_MODE = "/api/v2/config/local-auth-mode";
 
     /** {@code ldap-set <settings.json> [--password-file <f>]}: the settings file never holds the password. */
     private int ldapSet(String[] args) throws IOException, InterruptedException {

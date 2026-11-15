@@ -131,8 +131,38 @@ public class LocalAuthenticationConfiguration {
     }
 
     @Bean
-    public LocalMechanism localMechanism(LocalCredentialsRepository localCredentialsRepository, Clock clock) {
-        return new LocalMechanism(localCredentialsRepository, clock);
+    public LocalMechanism localMechanism(LocalCredentialsRepository localCredentialsRepository, Clock clock,
+            com.securityexpert.nexus.ui2.service.security.LocalAuthPolicy localAuthPolicy) {
+        return new LocalMechanism(localCredentialsRepository, clock, localAuthPolicy);
+    }
+
+    /** Migration plan Step 3 / PO decision D4: the local account scope; ALL_LOCAL (today's behaviour) until an administrator switches it. */
+    @Bean
+    public com.securityexpert.nexus.ui2.persistence.identity.LocalAuthModeRepository localAuthModeRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.identity.JooqLocalAuthModeRepository(transactionBoundary);
+    }
+
+    @Bean
+    public com.securityexpert.nexus.ui2.persistence.identity.LocalBreakGlassEventRepository localBreakGlassEventRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.identity.JooqLocalBreakGlassEventRepository(transactionBoundary);
+    }
+
+    @Bean
+    public com.securityexpert.nexus.ui2.service.security.LocalAuthPolicy localAuthPolicy(
+            com.securityexpert.nexus.ui2.persistence.identity.LocalAuthModeRepository modes, RootIdentityRepository rootIdentityRepository,
+            com.securityexpert.nexus.ui2.persistence.identity.LocalBreakGlassEventRepository events) {
+        return new com.securityexpert.nexus.ui2.service.security.LocalAuthPolicy(modes, rootIdentityRepository, events);
+    }
+
+    @Bean
+    public com.securityexpert.nexus.ui2.service.security.LocalAuthModeService localAuthModeService(
+            com.securityexpert.nexus.ui2.persistence.identity.LocalAuthModeRepository modes,
+            com.securityexpert.nexus.ui2.service.security.LocalAuthPolicy localAuthPolicy, RootIdentityRepository rootIdentityRepository,
+            LocalCredentialsRepository localCredentialsRepository, LocalIdentityResolver localIdentityResolver) {
+        return new com.securityexpert.nexus.ui2.service.security.LocalAuthModeService(modes, localAuthPolicy,
+                rootIdentityRepository, localCredentialsRepository, localIdentityResolver);
     }
 
     /** Existing explicit mechanism registry; absent LDAP profile leaves local behavior unchanged. */

@@ -25,6 +25,7 @@ import { SystemStatusPanel } from "./SystemStatusPanel";
 import { CustomRolesPanel } from "./CustomRolesPanel";
 import { AuditLogsPanel } from "./AuditLogsPanel";
 import { DirectorySettingsPanel } from "../components/settings/DirectorySettingsPanel";
+import { LocalSignInScopePanel } from "../components/settings/LocalSignInScopePanel";
 import { NotificationSettingsPanel } from "../components/settings/NotificationSettingsPanel";
 import { SystemLogSettingsPanel } from "../components/settings/SystemLogSettingsPanel";
 
@@ -87,6 +88,7 @@ const PAGES: readonly AdminPageDef[] = [
       { slug: "sessions", administratorOnly: true, label: "Sessions", panel: <SessionsPanel /> },
       { slug: "roles-permissions", administratorOnly: true, label: "Roles and permissions", panel: <CustomRolesPanel /> },
       { slug: "ldap-settings", administratorOnly: true, label: "LDAP settings", panel: <DirectorySettingsPanel /> },
+      { slug: "local-sign-in", administratorOnly: true, label: "Local sign-in", panel: <LocalSignInScopePanel /> },
     ],
   },
   {

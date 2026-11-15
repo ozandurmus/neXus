@@ -259,6 +259,9 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             // Local-account password policy (off by default); security_admin only.
             Map.entry("GET /api/v2/config/local-password-policy", ActionRegistry.LOCAL_PASSWORD_POLICY_READ),
             Map.entry("PUT /api/v2/config/local-password-policy", ActionRegistry.LOCAL_PASSWORD_POLICY_WRITE),
+            // Local-account scope (ALL_LOCAL default, BREAK_GLASS_ONLY optional); security_admin only.
+            Map.entry("GET /api/v2/config/local-auth-mode", ActionRegistry.LOCAL_AUTH_MODE_READ),
+            Map.entry("PUT /api/v2/config/local-auth-mode", ActionRegistry.LOCAL_AUTH_MODE_WRITE),
             // V203: the per-family scheduled-job switches (Administration > Platform > Scheduled jobs).
             Map.entry("GET /api/v2/config/scheduled-jobs", ActionRegistry.SCHEDULED_JOBS_READ),
             Map.entry("PUT /api/v2/config/scheduled-jobs/*", ActionRegistry.SCHEDULED_JOBS_SET),
