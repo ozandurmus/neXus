@@ -412,7 +412,7 @@ class CpSupportBundleHeavyExecutorTest {
         assertEquals(1, dev2.count("timeout 1800 cpdata_collector --run -p " + store2.workDirs.get(0) + "/cpsdc.tgz -t 3 -m 100"));
         assertEquals(1, dev2.commands.stream().filter(c -> c.startsWith(CpSupportBundle.CP_ENV + "cat ") && c.endsWith("/cpsdc.rc")).count(),
                 "the rc file is read, and since it answers at once, once");
-        assertEquals(0, dev2.count("cpsdc.log"), "the log tail literal is not approved");
+        assertEquals(0, dev2.commands.stream().filter(c -> c.contains("cpsdc.log") && !c.contains("setsid nohup")).count(), "the log tail literal is not approved");
         for (String c : dev2.commands) assertTrue(isApproved(c), c);
         assertEquals("items/cpdata_collector_run/bundle.tgz", store2.entryNames.get(store2.items.get(1).id()));
         assertEquals(CpSupportBundleHeavy.CPDATA_MAX_BYTES + 1, dev2.fetchedCap);
