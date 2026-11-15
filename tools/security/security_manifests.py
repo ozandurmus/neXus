@@ -40,6 +40,9 @@ def container(config, name, tool, command, mode):
            "HTTP_PROXY": proxy, "HTTPS_PROXY": proxy, "http_proxy": proxy, "https_proxy": proxy,
            "NO_PROXY": f"localhost,127.0.0.1,{REGISTRY},{SERVICE}",
            "no_proxy": f"localhost,127.0.0.1,{REGISTRY},{SERVICE}"}
+    if config.get("trivy_cache_claim"):
+        # Only a shared (claimed) cache needs the lock; the per-Job emptyDir cache never does (2026-11-15).
+        env["TRIVY_SHARED_CACHE"] = "1"
     return dict(name=name, image=config["images"][tool], command=command,
                 securityContext=copy.deepcopy(HARDENING), env=[dict(name=k, value=v) for k, v in env.items()],
                 resources={"requests": {"cpu": "100m", "memory": "256Mi"},
