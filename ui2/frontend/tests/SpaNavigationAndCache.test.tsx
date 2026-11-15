@@ -93,7 +93,7 @@ describe("client-side pushState navigation", () => {
     const backupsLink = within(rail).getByRole("link", { name: "Backups" });
     fireEvent.click(backupsLink);
     expect(window.location.search).toBe("?screen=backups");
-    expect(screen.getByRole("heading", { name: "Backups" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Backups" })).toBeInTheDocument();
   });
 
   it("handles Back and Forward (popstate) across screens and sub-tabs", async () => {
@@ -208,20 +208,20 @@ describe("client-side pushState navigation", () => {
     }
   });
 
-  it("applies legacy-route and ?screen=configuration redirects during client-side navigation", () => {
+  it("applies legacy-route and ?screen=configuration redirects during client-side navigation", async () => {
     render(<App />);
 
     act(() => {
       navigateTo("?screen=path_analysis");
     });
     expect(window.location.search).toBe("?screen=trace&mode=path");
-    expect(screen.getByRole("heading", { name: "Trace" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Trace" })).toBeInTheDocument();
 
     act(() => {
       navigateTo("?screen=operations&tab=changes");
     });
     expect(window.location.search).toBe("?screen=changes&view=feed");
-    expect(screen.getByRole("heading", { name: "Changes" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Changes" })).toBeInTheDocument();
 
     act(() => {
       navigateTo("?screen=configuration&device_id=dev-synthetic-1");
@@ -229,7 +229,7 @@ describe("client-side pushState navigation", () => {
     expect(window.location.search).toBe("?screen=inventory&device_id=dev-synthetic-1&tab=configuration");
   });
 
-  it("renders a screen's frame immediately on navigation while its own data is still loading", () => {
+  it("renders a screen's frame immediately on navigation while its own data is still loading", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() => new Promise<Response>(() => {})),
@@ -240,11 +240,11 @@ describe("client-side pushState navigation", () => {
 
     if (!within(rail).queryByRole("link", { name: "Compliance" })) fireEvent.click(within(rail).getByRole("button", { name: "Compliance and security" }));
     fireEvent.click(within(rail).getByRole("link", { name: "Compliance" }));
-    // Frame header is rendered synchronously on the same tick before any fetch resolves
-    expect(screen.getByRole("heading", { name: "Compliance" })).toBeInTheDocument();
+    // Screens are lazy chunks: the frame header appears once the chunk loads, before any fetch resolves
+    expect(await screen.findByRole("heading", { name: "Compliance" })).toBeInTheDocument();
 
     fireEvent.click(within(rail).getByRole("link", { name: "Backups" }));
-    expect(screen.getByRole("heading", { name: "Backups" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Backups" })).toBeInTheDocument();
   });
 });
 

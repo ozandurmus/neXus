@@ -7,3 +7,8 @@ if (typeof globalThis.ResizeObserver === "undefined") {
     disconnect() {}
   };
 }
+
+// Screens are lazy chunks (route-level code splitting): under vitest the first import of a screen transforms its whole
+// module graph, which can exceed the 1 s default of findBy*/waitFor on a busy machine.
+import { configure } from "@testing-library/react";
+configure({ asyncUtilTimeout: 5000 });

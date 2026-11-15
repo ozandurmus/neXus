@@ -1,44 +1,63 @@
-import { useEffect, useRef, type ComponentType } from "react";
+import { Suspense, lazy, useEffect, useRef, type ComponentType } from "react";
 import Box from "@mui/material/Box";
+import CircularProgress from "@mui/material/CircularProgress";
 
 import { NavigationRail } from "./shell/NavigationRail";
 import { TopAppBar } from "./shell/TopAppBar";
 import { PreviewBanner } from "./preview/PreviewBanner";
 import { PanelErrorBoundary } from "./shell/PanelErrorBoundary";
-import { OverviewScreen } from "./screens/OverviewScreen";
-import { InventoryScreen } from "./screens/InventoryScreen";
-import { PolicyScreen, PolicyPreview } from "./screens/PolicyScreen";
-import { TraceScreen } from "./screens/TraceScreen";
-import { ChangesScreen } from "./screens/ChangesScreen";
-import { DiagnosticsScreen } from "./screens/DiagnosticsScreen";
-import { RuleUsageScreen } from "./screens/RuleUsageScreen";
-import { ZoneMatrixScreen } from "./screens/zonematrix/ZoneMatrixScreen";
-import { CutoverScreen } from "./screens/CutoverScreen";
-import { ConfigurationScreen } from "./screens/ConfigurationScreen";
-import { ComplianceScreen } from "./screens/ComplianceScreen";
-import { BackupScreen } from "./screens/BackupScreen";
-import { OperationsScreen } from "./screens/OperationsScreen";
-import { PacketAnalysisScreen } from "./screens/PacketAnalysisScreen";
-import { PacketAnalysisPreview } from "./preview/PacketAnalysisPreview";
-import { SanitizerScreen } from "./screens/SanitizerScreen";
-import { SanitizerPreview } from "./preview/SanitizerPreview";
-import { ReportsScreen } from "./screens/ReportsScreen";
-import { AdministrationScreen } from "./screens/AdministrationScreen";
-import { DeviceWorkspaceScreen } from "./screens/DeviceWorkspaceScreen";
+const OverviewScreen = lazyNamed(() => import("./screens/OverviewScreen"), "OverviewScreen");
+const InventoryScreen = lazyNamed(() => import("./screens/InventoryScreen"), "InventoryScreen");
+const PolicyScreen = lazyNamed(() => import("./screens/PolicyScreen"), "PolicyScreen");
+const PolicyPreview = lazyNamed(() => import("./screens/PolicyScreen"), "PolicyPreview");
+const TraceScreen = lazyNamed(() => import("./screens/TraceScreen"), "TraceScreen");
+const ChangesScreen = lazyNamed(() => import("./screens/ChangesScreen"), "ChangesScreen");
+const DiagnosticsScreen = lazyNamed(() => import("./screens/DiagnosticsScreen"), "DiagnosticsScreen");
+const RuleUsageScreen = lazyNamed(() => import("./screens/RuleUsageScreen"), "RuleUsageScreen");
+const ZoneMatrixScreen = lazyNamed(() => import("./screens/zonematrix/ZoneMatrixScreen"), "ZoneMatrixScreen");
+const CutoverScreen = lazyNamed(() => import("./screens/CutoverScreen"), "CutoverScreen");
+const ConfigurationScreen = lazyNamed(() => import("./screens/ConfigurationScreen"), "ConfigurationScreen");
+const ComplianceScreen = lazyNamed(() => import("./screens/ComplianceScreen"), "ComplianceScreen");
+const BackupScreen = lazyNamed(() => import("./screens/BackupScreen"), "BackupScreen");
+const OperationsScreen = lazyNamed(() => import("./screens/OperationsScreen"), "OperationsScreen");
+const PacketAnalysisScreen = lazyNamed(() => import("./screens/PacketAnalysisScreen"), "PacketAnalysisScreen");
+const PacketAnalysisPreview = lazyNamed(() => import("./preview/PacketAnalysisPreview"), "PacketAnalysisPreview");
+const SanitizerScreen = lazyNamed(() => import("./screens/SanitizerScreen"), "SanitizerScreen");
+const SanitizerPreview = lazyNamed(() => import("./preview/SanitizerPreview"), "SanitizerPreview");
+const ReportsScreen = lazyNamed(() => import("./screens/ReportsScreen"), "ReportsScreen");
+const AdministrationScreen = lazyNamed(() => import("./screens/AdministrationScreen"), "AdministrationScreen");
+const DeviceWorkspaceScreen = lazyNamed(() => import("./screens/DeviceWorkspaceScreen"), "DeviceWorkspaceScreen");
 import { PRODUCT_NAME } from "./brand/product";
-import { OverviewPreview } from "./preview/OverviewPreview";
-import { ReportsPreview } from "./preview/ReportsPreview";
-import { InventoryPreview } from "./preview/InventoryPreview";
-import { ConfigurationPreview } from "./preview/ConfigurationPreview";
-import { CompliancePreview } from "./preview/CompliancePreview";
-import { BackupPreview } from "./preview/BackupPreview";
-import { OperationsPreview } from "./preview/OperationsPreview";
-import { AdministrationPreview } from "./preview/AdministrationPreview";
-import { PathAnalysisPreview } from "./preview/PathAnalysisPreview";
+const OverviewPreview = lazyNamed(() => import("./preview/OverviewPreview"), "OverviewPreview");
+const ReportsPreview = lazyNamed(() => import("./preview/ReportsPreview"), "ReportsPreview");
+const InventoryPreview = lazyNamed(() => import("./preview/InventoryPreview"), "InventoryPreview");
+const ConfigurationPreview = lazyNamed(() => import("./preview/ConfigurationPreview"), "ConfigurationPreview");
+const CompliancePreview = lazyNamed(() => import("./preview/CompliancePreview"), "CompliancePreview");
+const BackupPreview = lazyNamed(() => import("./preview/BackupPreview"), "BackupPreview");
+const OperationsPreview = lazyNamed(() => import("./preview/OperationsPreview"), "OperationsPreview");
+const AdministrationPreview = lazyNamed(() => import("./preview/AdministrationPreview"), "AdministrationPreview");
+const PathAnalysisPreview = lazyNamed(() => import("./preview/PathAnalysisPreview"), "PathAnalysisPreview");
 import { DisplayModeProvider, isWall } from "./shell/displayMode";
 import { isScreenId, type ScreenId } from "./shell/types";
 import { rewriteLegacyRoute } from "./shell/legacyRoutes";
 import { URL_CHANGE_EVENT, handleInAppLinkClick, useLocationPathname, useLocationSearch } from "./shell/urlParams";
+
+/**
+ * Route-level code splitting: each screen and preview is its own chunk, fetched when first routed to. The modules use
+ * named exports, so the loader maps the named export to the default `React.lazy` expects.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function lazyNamed<M extends Record<string, any>, K extends keyof M>(load: () => Promise<M>, name: K) {
+  return lazy(async () => ({ default: (await load())[name] as ComponentType<any> }));
+}
+
+function ScreenFallback() {
+  return (
+    <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", p: 4 }}>
+      <CircularProgress aria-label="Loading screen" />
+    </Box>
+  );
+}
 
 /**
  * UI 2.0 shell. React + MUI on the Material 3 scheme from the Product Owner's
@@ -197,11 +216,13 @@ export function App({
           <Box component="main" sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
             {isDeviceWorkspace ? (
               <PanelErrorBoundary label="device workspace" resetKey={deviceId}>
-                <DeviceWorkspaceScreen deviceId={deviceId} />
+                <Suspense fallback={<ScreenFallback />}>
+                  <DeviceWorkspaceScreen deviceId={deviceId} />
+                </Suspense>
               </PanelErrorBoundary>
             ) : (
               <PanelErrorBoundary label={`screen ${screen}`} resetKey={`${screen}:${preview ? "preview" : "product"}`}>
-                {preview ? <Preview /> : <Product />}
+                <Suspense fallback={<ScreenFallback />}>{preview ? <Preview /> : <Product />}</Suspense>
               </PanelErrorBoundary>
             )}
           </Box>
