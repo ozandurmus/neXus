@@ -77,7 +77,7 @@ export { jobTypeLabel } from "../jobs/jobTypeLabel";
 /**
  * The state pills above the job table (UI review 2026-10-18, roadmap 2.4): the old Queue and History tabs as presets
  * of the one table. Each pill is a comma-separated state set the server already accepts; `all` is no state filter.
- * "Other outcome" keeps the sum honest: a job that neither completed nor failed (outcome unknown, rejected, cancelled)
+ * "Other outcome" keeps the sum honest: a job that neither completed nor failed (outcome unknown or reconciled, rejected, cancelled)
  * is in All and in this pill, never hidden.
  */
 export type JobPill = "all" | "active" | "finished" | "failed" | "other";
@@ -86,7 +86,7 @@ export const JOB_PILLS: ReadonlyArray<{ readonly id: JobPill; readonly label: st
   { id: "active", label: "Queued / Running", states: "REQUESTED,CLAIMED,EXECUTING" },
   { id: "finished", label: "Finished", states: "COMPLETED" },
   { id: "failed", label: "Failed", states: "FAILED" },
-  { id: "other", label: "Other outcome", states: "OUTCOME_UNKNOWN,REJECTED,CANCELLED" },
+  { id: "other", label: "Other outcome", states: "OUTCOME_UNKNOWN,RECONCILED,REJECTED,CANCELLED" },
 ];
 
 /** The pill whose state set is exactly the current filter, if any (the State dropdown can also name a single state). */
