@@ -2802,7 +2802,10 @@ export const getPolicyActorCandidates = (revision: string) =>
   call<{ revision: string; candidates: string[] }>(`/api/v2/policy/changes/actor-candidates?revision=${encodeURIComponent(revision)}`, "GET");
 export async function downloadPolicyChanges(filters: PolicyChangeFilters) {
   const response = await fetch(`/api/v2/policy/changes.csv?${changeParams(filters)}`, { credentials: "include" });
-  if (!response.ok) throw new Error("Change export failed");
+  if (!response.ok) {
+    await response.text().catch(() => {}); // consume the error body: an unread no-store body leaves the request pending in Chrome
+    throw new Error("Change export failed");
+  }
   return response.blob();
 }
 
