@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -36,6 +37,7 @@ public class DiskHeadroomService {
     private final Map<String, Path> volumes;
     private final SpaceReader reader;
 
+    @Autowired
     public DiskHeadroomService(DiskHeadroomPolicy policy) {
         this(policy, defaultVolumes(), DiskHeadroomService::readFileStore);
     }
