@@ -141,6 +141,17 @@ public class LocalAuthenticationConfiguration {
         return new MechanismRegistry(localMechanism, ldap.orderedStream().map(m -> (com.securityexpert.nexus.ui2.platform.Mechanism) m).toList());
     }
 
+    /**
+     * Migration plan Step 2: the {@code ProviderManager} that {@code LoginController} dispatches through. Rollback switch:
+     * {@code ui2.security.provider-manager-enabled=false} removes it and {@code POST /login} dispatches straight to the registry.
+     */
+    @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "ui2.security.provider-manager-enabled",
+            havingValue = "true", matchIfMissing = true)
+    public com.securityexpert.nexus.ui2.service.security.MechanismAuthenticator mechanismAuthenticator(MechanismRegistry registry) {
+        return new com.securityexpert.nexus.ui2.service.security.MechanismAuthenticator(registry);
+    }
+
     @Bean
     public LoginFlow loginFlow(SessionRepository sessionRepository, RoleBindingRepository bindings, GroupReferenceCipher cipher,
             LocalCredentialsRepository localCredentialsRepository) {
