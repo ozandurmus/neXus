@@ -101,7 +101,7 @@ class SessionSelfLogoutServiceTest {
         repository.bySessionId.put(sessionId, activeSession(sessionId, "actor-1"));
         SessionSelfLogoutService service = new SessionSelfLogoutService(repository);
 
-        SessionSelfLogoutService.Result result = service.logout(sessionId);
+        SessionSelfLogoutService.Result result = service.logout(sessionId, Optional.of("csrf-secret"));
 
         assertTrue(result instanceof SessionSelfLogoutService.Result.Ok);
         SessionRecord afterLogout = repository.findBySessionId(sessionId).orElseThrow();
@@ -117,8 +117,22 @@ class SessionSelfLogoutServiceTest {
         FakeSessionRepository repository = new FakeSessionRepository();
         SessionSelfLogoutService service = new SessionSelfLogoutService(repository);
 
-        SessionSelfLogoutService.Result result = service.logout("no-such-session");
+        SessionSelfLogoutService.Result result = service.logout("no-such-session", Optional.of("csrf-secret"));
 
         assertTrue(result instanceof SessionSelfLogoutService.Result.NoActiveSession);
+    }
+
+    @Test
+    void signOutWithoutTheCsrfTokenOrWithAWrongOneChangesNothing() {
+        FakeSessionRepository repository = new FakeSessionRepository();
+        String sessionId = "session-1";
+        repository.bySessionId.put(sessionId, activeSession(sessionId, "actor-1"));
+        SessionSelfLogoutService service = new SessionSelfLogoutService(repository);
+
+        assertTrue(service.logout(sessionId, Optional.empty()) instanceof SessionSelfLogoutService.Result.CsrfRejected);
+        assertTrue(service.logout(sessionId, Optional.of("wrong")) instanceof SessionSelfLogoutService.Result.CsrfRejected);
+
+        assertTrue(repository.findBySessionId(sessionId).orElseThrow().isActive(NOW), "the session must stay active");
+        assertEquals(null, repository.lastRevokedBy);
     }
 }

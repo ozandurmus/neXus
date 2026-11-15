@@ -3,6 +3,7 @@ package com.securityexpert.nexus.ui2.service.security;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -27,10 +28,13 @@ import org.springframework.security.web.firewall.HttpFirewall;
  *   <li>Sessions: {@code STATELESS}, so Spring Security never creates a servlet {@code JSESSIONID}; the request cache is
  *       off so it never saves or replays a request.</li>
  *   <li>Anonymous authentication and the servlet-API request wrapper: off, so a request and its principal look as before.</li>
- *   <li>CORS: off. Response headers: off. The service has never sent X-Frame-Options, X-Content-Type-Options (outside two
- *       controllers that set it themselves), Pragma, Expires or a blanket Cache-Control, and the plan's "keep security
- *       response headers" would ADD them to every response, including the immutable {@code /assets/*}; that is a
- *       behaviour change and is left for a decision of its own (see the report of this step).</li>
+ *   <li>CORS: off.</li>
+ *   <li>Response headers (PO decision 2026-11-15, {@code PO_DECISION_RECORD_2026_11_15_SPRING_SECURITY_DECISIONS.md}):
+ *       {@link NexusSecurityHeadersFilter} writes {@code X-Content-Type-Options: nosniff}, {@code X-Frame-Options: DENY} and
+ *       {@code Cache-Control: no-store} on every response. The {@code Cache-Control} is only the default: a response that
+ *       already chose its own cache policy (the immutable {@code /assets/*}, the revalidated {@code index.html}, the download
+ *       endpoints) keeps it, so static asset caching is as before. Spring's own header writers (and so Pragma/Expires, HSTS,
+ *       X-XSS-Protection) stay off.</li>
  *   <li>The request firewall: a pass-through. {@code StrictHttpFirewall} would answer 400 to request targets the
  *       service accepts today (for example {@code /healthz;x=1}); Tomcat's own checks stay the only ones.</li>
  *   <li>Authorization: every request is permitted; the only filter behind the chain is still the Spring MVC interceptor.</li>
@@ -45,9 +49,12 @@ public class NexusSecurityFilterChainConfiguration {
 
     @Bean
     SecurityFilterChain nexusPassthroughSecurityFilterChain(HttpSecurity http) throws Exception {
+        http.addFilterAfter(new NexusSecurityHeadersFilter(), SecurityContextHolderFilter.class);
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(AbstractHttpConfigurer::disable)
+                // PO 2026-11-15 response headers are written by NexusSecurityHeadersFilter (added above), not by Spring's
+                // HeaderWriterFilter, which races on asynchronous responses.
                 .headers(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)

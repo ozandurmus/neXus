@@ -40,12 +40,19 @@ public final class SessionLogoutController {
     @PostMapping("/session/logout")
     public ResponseEntity<Map<String, Object>> logout(HttpServletRequest request, HttpServletResponse response) {
         Optional<String> rawCookie = findSessionCookie(request);
-        cookieWriter.clear(response);
         if (rawCookie.isEmpty()) {
+            cookieWriter.clear(response);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorBody());
         }
         String sessionId = SessionHasher.hash(rawCookie.get());
-        SessionSelfLogoutService.Result result = logoutService.logout(sessionId);
+        SessionSelfLogoutService.Result result = logoutService.logout(sessionId,
+                Optional.ofNullable(request.getHeader("X-CSRF-Token")));
+        if (result instanceof SessionSelfLogoutService.Result.CsrfRejected) {
+            // PO 2026-11-15: sign-out requires the CSRF token like every other state change. The session and the cookie
+            // are left untouched, so a forged request cannot end a user's session.
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorBody());
+        }
+        cookieWriter.clear(response);
         if (result instanceof SessionSelfLogoutService.Result.NoActiveSession) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorBody());
         }

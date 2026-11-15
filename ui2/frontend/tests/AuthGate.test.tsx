@@ -14,6 +14,26 @@ afterEach(() => {
 });
 
 describe("AuthGate", () => {
+  it("sends the session's CSRF token with the sign-out request", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (url === "/session/status") return jsonResponse(200, { authenticated: true, csrf_token: "synthetic-csrf" });
+      return jsonResponse(200, { ok: true });
+    }));
+    function SignOutButton() {
+      const session = useSession();
+      return <button onClick={() => session?.onSignOut()}>sign out</button>;
+    }
+    render(<AuthGate><SignOutButton /></AuthGate>);
+    fireEvent.click(await screen.findByText("sign out"));
+    await waitFor(() => expect(calls.some((c) => c.url === "/session/logout")).toBe(true));
+    const logout = calls.find((c) => c.url === "/session/logout");
+    expect(logout?.init?.method).toBe("POST");
+    expect((logout?.init?.headers as Record<string, string>)["X-CSRF-Token"]).toBe("synthetic-csrf");
+  });
+
   it("drops every shared read cache on sign-out, so the next user never sees the previous user's device list", async () => {
     let devicesCalls = 0;
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
