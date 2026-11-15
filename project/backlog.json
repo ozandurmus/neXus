@@ -468,6 +468,15 @@
       "priority": "P2",
       "target": "Design in progress 2026-11-14",
       "note": ""
+    },
+    {
+      "id": "support_bundle_collection_s3_s8",
+      "category": "collection",
+      "title": "Support bundle collection: S3 Palo Alto TSF, S4 ASA, S5 FortiGate, S6 Check Point heavy items, S7 pilot, S8 vendor upload (S1 core and S2 CP light reads built; design FROZEN 2026-11-15; cpdata_collector --list/--run approved as gate rows, executor later)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "support-bundle",
+      "note": ""
     }
   ]
 }

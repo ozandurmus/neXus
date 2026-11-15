@@ -17,7 +17,7 @@ or pilot measurement settles it.
 - Q2: a bundle is deleted (after a confirm dialog) once downloaded; a bundle never downloaded is deleted after 14 days,
   with a warning first. This replaces the "extend once up to 60 days" mechanics of section 5.6 for the build.
 - Q3: gate `cp_sb_cpdata_collector_present` (`command -v cpdata_collector`, read, 30 s, once per run) is approved;
-  the run literal is a pending gate placeholder that refuses (`cp_sb_cpdata_collector_run`). Catalogue item
+  the `--list` and `--run` literals were approved later the same day as gate rows only (`cp_sb_cpdata_collector_list`, `cp_sb_cpdata_collector_run`). Catalogue item
   `cpdata_collector_present` records the result.
 - Q5: MDS cpinfo and HCP-run are included, with a clear UI warning, no block.
 - Q6: request and download are `security_admin` only.
@@ -836,7 +836,8 @@ unset BASH_ENV ENV; `):
 | C19 | `cp_sb_sftp_get_bundle` | SFTP streaming get of `%s.tgz` | read | 7200 s | once per run | **secret-bearing** | S6 |
 | C20 | `cp_sb_remove_workdir` | `rm -rf %1$s %1$s.tgz` | recovery-write (BW-2) | 120 s | once per run, retried once | none | S6 |
 | C0 | `cp_sb_cpdata_collector_present` | `command -v cpdata_collector` (PO 2026-11-15, Q3) | read | 30 s | once per run | none | S2 |
-| C21 | `cp_sb_cpdata_collector_run` | PENDING: the run literal is NOT approved; registered as a pending gate that refuses | - | - | - | - | none |
+| C21 | `cp_sb_cpdata_collector_list` | `cpdata_collector --list` (approved later 2026-11-15; gate row only, executor later) | read | 60 s | once per run | none | later |
+| C22 | `cp_sb_cpdata_collector_run` | `cd %1$s && setsid nohup bash --noprofile --norc -c "timeout 1800 cpdata_collector --run -p %1$s/cpsdc.tgz -t 3 -m 100 > %1$s/cpsdc.log 2>&1; echo \$? > %1$s/cpsdc.rc" </dev/null >/dev/null 2>&1 &` (approved later 2026-11-15; gate row only, executor later) | recovery-write (BW-2) | 60 s | once per run, never retried | secret-bearing | later |
 
 C12 to C14 need a lab check of `-i` (non-interactive). sk92739 says `-i` goes with `-n` or `-R`, and with `-D` there
 may be no SR prompt at all. The run also feeds stdin from `/dev/null`, so a prompt makes cpinfo exit and the rc file
@@ -873,7 +874,7 @@ records the failure. No retry follows.
 | A4 | `asa_sb_show_tech_support` | `show tech-support` | read | 1200 s | once per run | **secret-bearing** (running configuration) | S4 |
 | A5–A7 | fallback only | `show tech-support file disk0:/nexus-sb-<hex>.txt`, SCP pull of that name, `delete /noconfirm disk0:/nexus-sb-<hex>.txt` | recovery-write (BW-2) | 1200/1800/60 s | once per run | **secret-bearing** | only if S4 shows session capture unreliable |
 
-**PO 2026-11-15:** C0-C7, P1-P6, A1-A4, F1-F5 and C8-C20 are APPROVED exactly as written; A5-A7 and C21 are NOT approved.
+**PO 2026-11-15:** C0-C7, P1-P6, A1-A4, F1-F5 and C8-C20 are APPROVED exactly as written; A5-A7 are NOT approved; C21 and C22 (cpdata_collector --list / --run) are approved as gate rows, built later.
 
 Count: 20 Check Point, 6 Palo Alto, 6 FortiGate (F3 is two literals), 4 ASA, plus 3 ASA fallback rows: 39 rows.
 

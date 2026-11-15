@@ -56,11 +56,16 @@ public final class RetentionPruningService {
             int configurationsPruned,
             long bytesReclaimed,
             List<String> prunedArtefactIds,
-            int reportsPruned
+            int reportsPruned,
+            int supportBundlesPruned
     ) {
         public PruningSummary(int backupsPruned, int snapshotsPruned, int configurationsPruned, long bytesReclaimed,
+                List<String> prunedArtefactIds, int reportsPruned) {
+            this(backupsPruned, snapshotsPruned, configurationsPruned, bytesReclaimed, prunedArtefactIds, reportsPruned, 0);
+        }
+        public PruningSummary(int backupsPruned, int snapshotsPruned, int configurationsPruned, long bytesReclaimed,
                 List<String> prunedArtefactIds) {
-            this(backupsPruned, snapshotsPruned, configurationsPruned, bytesReclaimed, prunedArtefactIds, 0);
+            this(backupsPruned, snapshotsPruned, configurationsPruned, bytesReclaimed, prunedArtefactIds, 0, 0);
         }
     }
 
@@ -85,6 +90,20 @@ public final class RetentionPruningService {
         default List<ArtefactRecord> findExpiredReports() {
             return List.of();
         }
+        /** V230: support bundle artefacts past expiry whose request carries a 24-hour-old warning. */
+        default List<ArtefactRecord> findExpiredSupportBundles() {
+            return List.of();
+        }
+
+        /** V230: warns the requests expiring within 48 hours (the UI shows it); the default does nothing. */
+        default int warnExpiringSupportBundles() {
+            return 0;
+        }
+
+        /** V230: closes the requests whose bundle artefacts are all removed. */
+        default void closeExpiredSupportBundleRequests() {
+        }
+
         void recordTombstone(String ledgerId, String artefactId, String retentionTier);
 
         /** Store-owned deletion abstraction ensuring filesystem paths are never manipulated directly by callers. */
@@ -223,7 +242,20 @@ public final class RetentionPruningService {
             }
         }
 
+        // 5. Support bundles (V230, PO 2026-11-15): warn first, delete once expired and warned; no keep-last rule.
+        storePort.warnExpiringSupportBundles();
+        int supportBundlesPruned = 0;
+        for (ArtefactRecord rec : storePort.findExpiredSupportBundles()) {
+            if (storePort.deleteArtefact(rec)) {
+                bytesReclaimed += rec.ciphertextBytes();
+                storePort.recordTombstone(UUID.randomUUID().toString(), rec.artefactId(), rec.retentionTier());
+                supportBundlesPruned++;
+                prunedIds.add(rec.artefactId());
+            }
+        }
+        storePort.closeExpiredSupportBundleRequests();
+
         return new PruningSummary(backupsPruned, snapshotsPruned, configurationsPruned, bytesReclaimed, prunedIds,
-                reportsPruned);
+                reportsPruned, supportBundlesPruned);
     }
 }

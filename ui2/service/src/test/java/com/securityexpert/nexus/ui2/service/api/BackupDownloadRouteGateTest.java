@@ -38,7 +38,8 @@ class BackupDownloadRouteGateTest {
         List<String> routes = new ArrayList<>();
         List<String> methodRoutes = new ArrayList<>();
         try (Stream<Path> files = Files.walk(serviceMain)) {
-            for (Path path : files.filter(p -> p.toString().endsWith(".java")).toList()) {
+            // The support bundle routes are their own gated set (SupportBundleRouteGateTest), security_admin not backup_admin.
+            for (Path path : files.filter(p -> p.toString().endsWith(".java") && !p.toString().contains("/supportbundle/")).toList()) {
                 Matcher matcher = SUSPECT_ROUTE.matcher(Files.readString(path));
                 while (matcher.find()) {
                     routes.add(matcher.group(2));

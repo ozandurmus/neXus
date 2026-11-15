@@ -16,7 +16,8 @@ export type ScreenId =
   | "zone_matrix"
   | "cutover"
   | "packet_analysis"
-  | "sanitizer";
+  | "sanitizer"
+  | "support_bundles";
 
 export const SCREEN_IDS: readonly ScreenId[] = [
   "overview",
@@ -36,6 +37,7 @@ export const SCREEN_IDS: readonly ScreenId[] = [
   "cutover",
   "packet_analysis",
   "sanitizer",
+  "support_bundles",
 ];
 
 export function isScreenId(value: string | null): value is ScreenId {

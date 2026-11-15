@@ -249,6 +249,12 @@ public final class AuditPresentationAllowlist {
                     "artefact_id", "data_as_of_json", "error_code", "expires_at", "finished_at", "format",
                     "parameters_json", "plaintext_bytes", "projection_mode", "requested_at", "requested_by", "run_id",
                     "state", "template_id")),
+            // V230 support bundles: ids, enums, counts, timestamps and references audited in full; reason, case_ref,
+            // deleted_reason, work_dir_path and outcome_detail are redacted.
+            Map.entry("support_bundle_request", Set.of(
+                    "deleted_at", "deleted_by", "device_id", "download_count", "downloaded_at", "downloaded_by", "expires_at", "expiry_warned_at", "finished_at", "id", "job_id", "outcome", "platform_role", "precheck_json", "requested_at", "requested_by", "run_at", "run_mode", "started_at", "state", "vendor", "work_dir_cleaned")),
+            Map.entry("support_bundle_item", Set.of(
+                    "archive_entry_name", "artefact_id", "domain_ref", "finished_at", "gate_ids_used", "id", "kind", "ordinal", "outcome_code", "redaction_ruleset", "request_id", "sha256", "size_bytes", "started_at", "state", "vs_id")),
             // V217 cutover assessment: identities, revisions, enums, timestamps and references audited in full;
             // segment name, blocks, peer_blocks and the assessment summary are redacted.
             Map.entry("cutover_segment", Set.of(

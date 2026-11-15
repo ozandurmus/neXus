@@ -374,6 +374,17 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /api/v2/backups/deviations/size-anomalies/*/accept", ActionRegistry.BACKUP_SIZE_ANOMALY_ACCEPT),
             // WORKER.md (movement NXS-LOCAL-0174): body-only, no path variable,
             // same shape as /notifications' own route.
+            // Support bundle collection (SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md 5.10.1).
+            Map.entry("GET /api/v2/support-bundles", ActionRegistry.SUPPORT_BUNDLE_READ),
+            Map.entry("GET /api/v2/support-bundles/catalogue", ActionRegistry.SUPPORT_BUNDLE_READ),
+            Map.entry("GET /api/v2/support-bundles/*", ActionRegistry.SUPPORT_BUNDLE_READ),
+            Map.entry("GET /api/v2/devices/*/support-bundles", ActionRegistry.SUPPORT_BUNDLE_READ),
+            Map.entry("POST /api/v2/devices/*/support-bundles", ActionRegistry.SUPPORT_BUNDLE_REQUEST),
+            Map.entry("POST /api/v2/support-bundles/*/cancel", ActionRegistry.SUPPORT_BUNDLE_CANCEL),
+            Map.entry("POST /api/v2/support-bundles/*/download-ticket", ActionRegistry.SUPPORT_BUNDLE_RETRIEVE),
+            Map.entry("GET /api/v2/support-bundles/*/download", ActionRegistry.SUPPORT_BUNDLE_RETRIEVE),
+            Map.entry("POST /api/v2/support-bundles/*/download", ActionRegistry.SUPPORT_BUNDLE_RETRIEVE),
+            Map.entry("POST /api/v2/support-bundles/*/delete", ActionRegistry.SUPPORT_BUNDLE_DELETE),
             // Reports R1 (REPORTS_R1_CONTRACT.md): catalogue, preview and history read; generate and download.
             Map.entry("GET /api/v2/reports/catalogue", ActionRegistry.REPORT_READ),
             Map.entry("POST /api/v2/reports/preview", ActionRegistry.REPORT_READ),

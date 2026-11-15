@@ -74,7 +74,9 @@ class AiviewDiagnosticReadOnlyTest {
                 ActionRegistry.ZONE_MATRIX_READ,
                 // pre-cutover impact analysis read, masked (PO_DECISION_RECORD_2026_11_14_ACI_SEGMENTATION_SUPPORT.md,
                 // step 1 under ACI-6); never cutover_assessment_write
-                ActionRegistry.CUTOVER_ASSESSMENT_READ)), held);
+                ActionRegistry.CUTOVER_ASSESSMENT_READ,
+                // support bundle list and status, masked (SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md 5.10.1); never a write
+                ActionRegistry.SUPPORT_BUNDLE_READ)), held);
         // the sibling writes stay closed to the replay viewer
         for (String closed : new String[]{ActionRegistry.DISCOVERY_RUN_IMPORT, ActionRegistry.DISCOVERY_ACKNOWLEDGE,
                 ActionRegistry.DEVICE_CONFIGURATION_TEXT_READ, ActionRegistry.DEVICE_REGISTER, ActionRegistry.DEVICE_DELETE,
@@ -82,6 +84,8 @@ class AiviewDiagnosticReadOnlyTest {
                 ActionRegistry.ZONE_MATRIX_ZONES_READ, ActionRegistry.ZONE_MATRIX_EDIT, ActionRegistry.ZONE_MATRIX_PUBLISH,
                 ActionRegistry.ZONE_MATRIX_EVALUATE,
                 ActionRegistry.CUTOVER_ASSESSMENT_WRITE,
+                ActionRegistry.SUPPORT_BUNDLE_REQUEST, ActionRegistry.SUPPORT_BUNDLE_CANCEL, ActionRegistry.SUPPORT_BUNDLE_RETRIEVE,
+                ActionRegistry.SUPPORT_BUNDLE_DELETE,
                 ActionRegistry.ZONE_MATRIX_REFERENCE_CONFIRM}) {
             assertFalse(all.get(closed).requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER), closed);
         }

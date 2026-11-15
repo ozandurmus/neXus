@@ -119,6 +119,35 @@ public final class JooqRetentionQueries {
                 .map(JooqRetentionQueries::toCandidate));
     }
 
+    /**
+     * Support bundle artefacts (V230) of a DELETED request, or past their {@code expires_at}, only once the owning request carries an expiry
+     * warning at least 24 hours old (PO 2026-11-15, Q2: warn first, then delete). No "keep the last one" rule.
+     */
+    public List<Candidate> expiredSupportBundles() {
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(COLUMNS
+                + "from backup_artefact a where a.artefact_class = 'support_bundle' and a.expires_at is not null "
+                + "and exists (select 1 from support_bundle_item i join support_bundle_request r "
+                + "on r.id = i.request_id where i.artefact_id = a.artefact_id and (r.state = 'DELETED' or (a.expires_at < now() "
+                + "and r.expiry_warned_at is not null and r.expiry_warned_at <= now() - interval '24 hours')))" + NOT_REMOVED
+                + " order by a.expires_at, a.artefact_id").map(JooqRetentionQueries::toCandidate));
+    }
+
+    /** Marks the warning on requests whose bundles expire within 48 hours; returns how many were warned. */
+    public int warnExpiringSupportBundles() {
+        return audited.inTransaction("system:worker", "support_bundle_expiry_warning", dsl -> dsl.execute(
+                "update support_bundle_request set expiry_warned_at = now() where state in ('COMPLETED', 'PARTIAL') "
+                        + "and expiry_warned_at is null and expires_at <= now() + interval '48 hours'"));
+    }
+
+    /** Closes requests whose every stored item artefact has been removed (expired). */
+    public int closeExpiredSupportBundleRequests() {
+        return audited.inTransaction("system:worker", "support_bundle_expired", dsl -> dsl.execute(
+                "update support_bundle_request r set state = 'EXPIRED' where r.state in ('COMPLETED', 'PARTIAL') "
+                        + "and r.expires_at < now() and not exists (select 1 from support_bundle_item i "
+                        + "join backup_artefact a on a.artefact_id = i.artefact_id where i.request_id = r.id"
+                        + NOT_REMOVED + ")"));
+    }
+
     public List<Candidate> snapshotsBeyondDepth(int depth) {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(COLUMNS
                 + "from (select *, row_number() over (partition by device_id order by created_at desc) as rank "
@@ -153,7 +182,7 @@ public final class JooqRetentionQueries {
      */
     public long liveCiphertextBytes() {
         Long sum = transactionBoundary.inTransaction(dsl -> dsl.fetchOne(
-                "select coalesce(sum(a.ciphertext_bytes), 0) from backup_artefact a where a.artefact_class <> 'system_log'"
+                "select coalesce(sum(a.ciphertext_bytes), 0) from backup_artefact a where a.artefact_class not in ('system_log', 'support_bundle')"
                         + NOT_REMOVED).get(0, Long.class));
         return sum == null ? 0L : sum;
     }

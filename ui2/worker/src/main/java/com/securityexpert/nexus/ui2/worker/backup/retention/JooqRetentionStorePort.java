@@ -68,6 +68,21 @@ public final class JooqRetentionStorePort implements RetentionPruningService.Ret
     }
 
     @Override
+    public List<RetentionPruningService.ArtefactRecord> findExpiredSupportBundles() {
+        return queries.expiredSupportBundles().stream().map(JooqRetentionStorePort::toRecord).toList();
+    }
+
+    @Override
+    public int warnExpiringSupportBundles() {
+        return queries.warnExpiringSupportBundles();
+    }
+
+    @Override
+    public void closeExpiredSupportBundleRequests() {
+        queries.closeExpiredSupportBundleRequests();
+    }
+
+    @Override
     public boolean isLatestConfigurationArchive(String artefactId) {
         return queries.isLatestLiveConfigurationArchive(artefactId);
     }

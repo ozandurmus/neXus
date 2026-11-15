@@ -1,0 +1,36 @@
+package com.securityexpert.nexus.ui2.service.boot;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
+import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
+import com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore;
+import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
+import com.securityexpert.nexus.ui2.service.supportbundle.SupportBundleDownloadService;
+import com.securityexpert.nexus.ui2.service.supportbundle.SupportBundleService;
+import com.securityexpert.nexus.ui2.service.systemlog.LogMasking;
+
+/** Support bundle collection composition (V230): the store, the request service and the download service. */
+@Configuration
+public class SupportBundleConfiguration {
+
+    @Bean
+    public JooqSupportBundleStore supportBundleStore(TransactionBoundary transactionBoundary) {
+        return new JooqSupportBundleStore(transactionBoundary);
+    }
+
+    @Bean
+    public SupportBundleService supportBundleService(DeviceRepository devices, JobAdmissionService admission,
+            JooqSupportBundleStore store) {
+        return new SupportBundleService(devices, admission, store);
+    }
+
+    @Bean
+    public SupportBundleDownloadService supportBundleDownloadService(
+            DeviceCompositionConfiguration.ArtefactStoreAccess artefactStoreAccess, JooqSupportBundleStore store,
+            DeviceRepository devices, TopologyNamePseudonymizer names, LogMasking logMasking) {
+        return new SupportBundleDownloadService(artefactStoreAccess.storeOrNull(), store, devices, names, logMasking);
+    }
+}

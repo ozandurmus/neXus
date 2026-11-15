@@ -50,6 +50,7 @@ public final class WorkerClaimLoop {
             com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure.CAPABILITY,
             com.securityexpert.nexus.ui2.jobs.diagnostic.PanSystemLogCollect.CAPABILITY,
             com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect.CAPABILITY,
+            com.securityexpert.nexus.ui2.jobs.supportbundle.CpSupportBundle.CAPABILITY,
             com.securityexpert.nexus.ui2.jobs.systemlog.CpSpikeLayoutReview.CAPABILITY,
             com.securityexpert.nexus.ui2.jobs.pathvalidation.PathValidation.CAPABILITY,
             ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO,
@@ -173,6 +174,11 @@ public final class WorkerClaimLoop {
     /** System-log programme phase B: the Check Point incremental log, crash listing and daily file collection. */
     public WorkerClaimLoop withCpSystemLogCollect(com.securityexpert.nexus.ui2.worker.diagnostic.CpSystemLogCollectJobExecutor executor) {
         this.cpSystemLogCollectExecutor=executor; return this;
+    }
+    private com.securityexpert.nexus.ui2.worker.supportbundle.CpSupportBundleJobExecutor cpSupportBundleExecutor;
+    /** Support bundle collection, Check Point light items (V230, step S2). */
+    public WorkerClaimLoop withCpSupportBundle(com.securityexpert.nexus.ui2.worker.supportbundle.CpSupportBundleJobExecutor executor) {
+        this.cpSupportBundleExecutor=executor; return this;
     }
     private com.securityexpert.nexus.ui2.worker.diagnostic.CpSpikeLayoutReviewJobExecutor cpSpikeLayoutReviewExecutor;
     /** The one-off Spike Detective layout review (contract section 8.3; PO approval 2026-10-19). */
@@ -342,6 +348,7 @@ public final class WorkerClaimLoop {
             || capability.equals(com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure.CAPABILITY)
             || capability.equals(com.securityexpert.nexus.ui2.jobs.diagnostic.PanSystemLogCollect.CAPABILITY)
             || capability.equals(com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect.CAPABILITY)
+            || capability.equals(com.securityexpert.nexus.ui2.jobs.supportbundle.CpSupportBundle.CAPABILITY)
             || capability.equals(com.securityexpert.nexus.ui2.jobs.systemlog.CpSpikeLayoutReview.CAPABILITY)
             || capability.equals(com.securityexpert.nexus.ui2.jobs.pathvalidation.PathValidation.CAPABILITY) ? "DIAGNOSTIC" : "INVENTORY";
     }
@@ -585,6 +592,16 @@ public final class WorkerClaimLoop {
                         com.securityexpert.nexus.ui2.jobs.JobState.REJECTED,"system:worker","syslog_collect_claim_check","EXECUTOR_UNAVAILABLE");
                 } else {
                     cpSystemLogCollectExecutor.execute(claimed.jobId(),claimed.leaseEpoch(),job.targetDeviceId(),
+                        hostOf(endpoint.addressRef()),portOf(endpoint.addressRef()),device.credentialReferenceId());
+                }
+                return true;
+            }
+            if (com.securityexpert.nexus.ui2.jobs.supportbundle.CpSupportBundle.CAPABILITY.equals(job.capabilityId())) {
+                if (cpSupportBundleExecutor == null) {
+                    leaseRepository.transitionState(claimed.jobId(),claimed.leaseEpoch(),com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
+                        com.securityexpert.nexus.ui2.jobs.JobState.REJECTED,"system:worker","support_bundle_claim_check","EXECUTOR_UNAVAILABLE");
+                } else {
+                    cpSupportBundleExecutor.execute(claimed.jobId(),claimed.leaseEpoch(),job.targetDeviceId(),
                         hostOf(endpoint.addressRef()),portOf(endpoint.addressRef()),device.credentialReferenceId());
                 }
                 return true;
