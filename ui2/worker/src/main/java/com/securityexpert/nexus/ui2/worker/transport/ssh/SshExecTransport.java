@@ -488,6 +488,46 @@ public final class SshExecTransport implements DeviceTransport {
         return result;
     }
 
+    /**
+     * The streaming form of {@link #execInteractive} (support bundle collection): one command on the session's
+     * persistent shell whose answer goes to {@code sink} line by line and is never held whole; a pager prompt is answered
+     * in session. The job transcript gets the command and the counts, never the answer. A timeout, a sink failure or a
+     * lost channel closes the shell, so no later command reuses a shell in an unknown state.
+     */
+    @Override
+    public com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult execInteractiveStreaming(
+            TransportSession session, ExecSpec spec, Duration timeout, String pagerMarker,
+            com.securityexpert.nexus.ui2.jobs.transport.LineSink sink) {
+        checkAdmission(session);
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
+        if (!(session instanceof SshTransportSession sshSession)) {
+            return new com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult(
+                    com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult.Kind.NOT_SENT, 0, 0, 0);
+        }
+        long startMs = System.currentTimeMillis();
+        try {
+            var result = sshSession.interactiveShell().runStreaming(spec.command(), (int) timeout.toMillis(), pagerMarker, sink);
+            var kind = result.kind();
+            if (kind != com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult.Kind.COMPLETED
+                    && kind != com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult.Kind.CLI_ERROR) {
+                sshSession.closeInteractiveShell();
+            }
+            JobTranscriptScope.add("ssh", "answer", "streamed answer " + kind + ": lines=" + result.lines() + " bytes="
+                    + result.bytes() + " pages=" + result.pagesAnswered());
+            LOG.log(System.Logger.Level.INFO, "[SSH_EXEC_INTERACTIVE_STREAM] cmd=\"{0}\" {1} in {2}ms (lines={3} bytes={4} pages={5})",
+                    com.securityexpert.nexus.ui2.worker.transcript.JobTranscript.safeSshCommand(spec.command()), kind,
+                    System.currentTimeMillis() - startMs, result.lines(), result.bytes(), result.pagesAnswered());
+            return result;
+        } catch (JSchException | IOException e) {
+            sshSession.closeInteractiveShell();
+            LOG.log(System.Logger.Level.WARNING, "[SSH_EXEC_INTERACTIVE_STREAM] cmd=\"{0}\" failed after {1}ms: {2}",
+                    com.securityexpert.nexus.ui2.worker.transcript.JobTranscript.safeSshCommand(spec.command()),
+                    System.currentTimeMillis() - startMs, e.getClass().getSimpleName());
+            return new com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult(
+                    com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult.Kind.NOT_SENT, 0, 0, 0);
+        }
+    }
+
     private ExecResult execInteractiveRaw(TransportSession session, ExecSpec spec, Duration timeout) {
         if (!(session instanceof SshTransportSession sshSession)) {
             return new ExecResult.ChannelFailed("not an ssh_exec session");

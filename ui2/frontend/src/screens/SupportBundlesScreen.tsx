@@ -40,9 +40,11 @@ const KIND_LABELS: Record<string, string> = {
   cp_hcp_run: "Run HCP now (medium load)",
   cp_cpinfo: "cpinfo (high load)",
   pan_tsf: "Tech support file (management plane, can take up to 30 minutes)",
+  asa_crashinfo: "Crash information (show crashinfo)",
+  asa_show_tech: "Technical support report (show tech-support, long)",
 };
 /** Vendors with at least one collectable item (design 5.2). */
-const BUNDLE_VENDORS = new Set(["check_point", "palo_alto"]);
+const BUNDLE_VENDORS = new Set(["check_point", "palo_alto", "cisco_asa"]);
 /** A management server is collected for Palo Alto only (Panorama); a Check Point MDS or a FortiManager is not. */
 export const bundleDevice = (d: { vendor_hint: string; role?: string }): boolean =>
   BUNDLE_VENDORS.has(d.vendor_hint) && (d.role !== "management_server" || d.vendor_hint === "palo_alto");

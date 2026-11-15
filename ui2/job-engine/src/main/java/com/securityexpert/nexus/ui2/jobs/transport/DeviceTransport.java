@@ -39,6 +39,18 @@ public interface DeviceTransport {
     }
 
     /**
+     * {@link #execInteractive} for a command with a very large answer (Cisco ASA {@code show tech-support}, FortiGate
+     * {@code execute tac report}): the answer is never held whole. Each finished line goes to {@code sink}; a pager
+     * prompt ending with {@code pagerMarker} (for example {@code --More--} or {@code <--- More --->}) is answered with
+     * a space in session, so no console setting of the device is changed. {@code timeout} bounds the whole command.
+     * Nothing of the answer is written to the job transcript. Default: not implemented.
+     */
+    default StreamedInteractiveResult execInteractiveStreaming(TransportSession session, ExecSpec spec, Duration timeout,
+            String pagerMarker, LineSink sink) {
+        throw new TransportNotImplementedException("exec_interactive_streaming");
+    }
+
+    /**
      * {@link #execInteractive} for a command that asks questions before its prompt returns (Radware Cyber Controller
      * {@code export}: "Password:"; {@code delete}: "(Y/N)?"). Default: not implemented, as for {@link #execInteractive}.
      */

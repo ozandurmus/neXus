@@ -1,10 +1,11 @@
--- V232 -- support bundle collection, vendor step S3 (Palo Alto)
+-- V232 -- support bundle collection, vendor steps S3 (Palo Alto) and S4 (Cisco ASA)
 -- (docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md, FROZEN 2026-11-15;
 -- docs/design/PO_DECISION_RECORD_2026_11_15_SUPPORT_BUNDLE_COLLECTION.md section 2).
 --
 -- Gate rows only, for the literals the Product Owner approved exactly as written:
 --   * Palo Alto P1-P6 (tech support file over the XML API), one row per platform scope: pan_firewall and panorama.
 --     P3 and P6 are recovery-write (BW-2: the device writes and removes /tmp/techsupport.tgz); P3 and P5 are secret-bearing.
+--   * Cisco ASA A1-A4. A5-A7 (the disk0: fallback) are NOT approved and have no row. No terminal pager 0 (Q12).
 -- The support bundle tables (V230) are unchanged; V230 is not edited. Idempotent (ON CONFLICT DO NOTHING). Dry-run in
 -- BEGIN/ROLLBACK on the live database before deploy is an engineer step.
 SELECT set_config('app.actor_fingerprint', 'migration:V232_support_bundle_vendor_gates', true);
@@ -71,5 +72,25 @@ VALUES
      'type=export&category=tech-support&action=finish&job-id=<n>',
      'recovery-write', 'SIGNED_OFF', 30, 'none', 'at most once per run, only on the deadline; <n> = the digits-only job number the start answered', 'one API key per run (the existing keygen); one request at a time',
      'a refused finish is recorded and not repeated (BW-2 cleanup)', 'none',
-     '["httpStatus"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (P6); PO approval 2026-11-15 (PO record section 2)')
+     '["httpStatus"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (P6); PO approval 2026-11-15 (PO record section 2)'),
+    ('asa_sb_show_cpu_usage', 'cisco_asa', 'cisco_asa_firewall', 'privileged_exec', 'SSH_INTERACTIVE',
+     'show cpu usage',
+     'read', 'SIGNED_OFF', 30, 'none', 'once per run', 'one session per run (privileged EXEC, no terminal pager 0; the More prompt is answered in session)',
+     'an error or an unparsable answer: the CPU is UNKNOWN and show tech-support is refused (REFUSED_PRECHECK)', 'none',
+     '["exitStatus", "cpuPercent"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (A1); PO approval 2026-11-15 (PO record section 2; A5-A7 NOT approved)'),
+    ('asa_sb_changeto_system', 'cisco_asa', 'cisco_asa_firewall', 'context', 'SSH_INTERACTIVE',
+     'changeto system',
+     'read', 'SIGNED_OFF', 10, 'none', 'once per run, multi-context devices only', 'one session per run (privileged EXEC, no terminal pager 0; the More prompt is answered in session)',
+     'a refusal: the run goes on in the current context and records it', 'none',
+     '["exitStatus"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (A2); PO approval 2026-11-15 (PO record section 2; A5-A7 NOT approved)'),
+    ('asa_sb_show_crashinfo', 'cisco_asa', 'cisco_asa_firewall', 'privileged_exec', 'SSH_INTERACTIVE',
+     'show crashinfo',
+     'read', 'SIGNED_OFF', 120, 'none', 'once per run', 'one session per run (privileged EXEC, no terminal pager 0; the More prompt is answered in session)',
+     '% Invalid input: item UNSUPPORTED; nothing stored', 'memory and stack data (stored redacted, line by line)',
+     '["lines", "bytes"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (A3); PO approval 2026-11-15 (PO record section 2; A5-A7 NOT approved)'),
+    ('asa_sb_show_tech_support', 'cisco_asa', 'cisco_asa_firewall', 'privileged_exec', 'SSH_INTERACTIVE',
+     'show tech-support',
+     'read', 'SIGNED_OFF', 1200, 'none', 'once per run', 'one session per run (privileged EXEC, no terminal pager 0; the More prompt is answered in session)',
+     '% Invalid input: item UNSUPPORTED; a capture that ends early keeps what arrived (PARTIAL, at least 4 KiB)', 'secret-bearing (running configuration; stored redacted, line by line)',
+     '["lines", "bytes", "pages"]'::jsonb, 'docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (A4); PO approval 2026-11-15 (PO record section 2; A5-A7 NOT approved)')
 ON CONFLICT (gate_id) DO NOTHING;

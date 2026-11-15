@@ -46,4 +46,31 @@ public final class SupportBundleTextRedactor {
         }
     }
 
+    /**
+     * The line-by-line form for a capture that is never held whole (design 5.9: ASA and FortiGate session captures). One
+     * instance per item: it remembers a private key block across lines. Each line passes the same two stages as
+     * {@link #redact}; an overlong line is replaced whole, and any exception is {@link RedactionFailed}.
+     */
+    public LineRedactor lines() {
+        return new LineRedactor();
+    }
+
+    public final class LineRedactor {
+        private boolean privateBlock;
+
+        /** The redacted line (no terminator). */
+        public String line(String line) {
+            try {
+                if (line.getBytes(StandardCharsets.UTF_8).length > MAX_LINE_BYTES) return OVERLONG;
+                if (line.contains("-----BEGIN ") && line.contains("PRIVATE KEY")) privateBlock = true;
+                boolean inBlock = privateBlock;
+                if (line.contains("-----END ") && line.contains("PRIVATE KEY")) privateBlock = false;
+                if (inBlock) return "[SECRET REDACTED]";
+                byte[] first = redactor.redact(SourceFamily.CP_MESSAGES, line.getBytes(StandardCharsets.UTF_8)).bytes();
+                return DiagnosticText.scrubSecrets(new String(first, StandardCharsets.UTF_8));
+            } catch (RuntimeException e) {
+                throw new RedactionFailed(e);
+            }
+        }
+    }
 }

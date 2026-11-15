@@ -16,8 +16,8 @@ public enum SupportBundleKind {
     CP_HCP_RUN("cp_hcp_run", "check_point", 3, "medium", false, false, true),
     CP_CPINFO("cp_cpinfo", "check_point", 4, "high", false, false, true),
     PAN_TSF("pan_tsf", "palo_alto", 1, "unknown", true, true, false),
-    ASA_CRASHINFO("asa_crashinfo", "cisco_asa", 1, "low", true, false, false),
-    ASA_SHOW_TECH("asa_show_tech", "cisco_asa", 2, "unknown", true, false, false),
+    ASA_CRASHINFO("asa_crashinfo", "cisco_asa", 1, "low", true, true, false),
+    ASA_SHOW_TECH("asa_show_tech", "cisco_asa", 2, "unknown", true, true, false),
     FGT_CRASHLOG("fgt_crashlog", "fortinet", 1, "low", true, false, false),
     FGT_TAC_REPORT("fgt_tac_report", "fortinet", 2, "unknown", true, false, false);
 

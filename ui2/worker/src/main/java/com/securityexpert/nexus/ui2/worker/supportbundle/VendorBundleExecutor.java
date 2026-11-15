@@ -251,4 +251,38 @@ abstract class VendorBundleExecutor {
         leases.transitionState(jobId, epoch, JobState.EXECUTING, state, ACTOR, "support_bundle_finished", reason);
     }
 
+    /**
+     * The receiving end of a text capture: each line is redacted ({@link SupportBundleTextRedactor.LineRedactor}) and
+     * written to the artefact sink; the item stays under its byte bound. Nothing unredacted is ever written.
+     */
+    static final class TextCapture implements com.securityexpert.nexus.ui2.jobs.transport.LineSink {
+        private final OutputStream out;
+        private final SupportBundleTextRedactor.LineRedactor redactor;
+        private final long maxBytes;
+        private long written;
+        boolean tooLarge, redactionFailed;
+
+        TextCapture(OutputStream out, SupportBundleTextRedactor.LineRedactor redactor, long maxBytes) {
+            this.out = out; this.redactor = redactor; this.maxBytes = maxBytes;
+        }
+
+        @Override
+        public void line(String line) throws IOException {
+            byte[] bytes;
+            try {
+                bytes = (redactor.line(line) + "\n").getBytes(StandardCharsets.UTF_8);
+            } catch (SupportBundleTextRedactor.RedactionFailed failed) {
+                redactionFailed = true;
+                throw new IOException("REDACTION_FAILED");
+            }
+            if (written + bytes.length > maxBytes) {
+                tooLarge = true;
+                throw new IOException("TOO_LARGE");
+            }
+            out.write(bytes);
+            written += bytes.length;
+        }
+
+        long written() { return written; }
+    }
 }

@@ -148,6 +148,45 @@ class SupportBundleDownloadServiceTest {
         verify(store).recordDownload(ID, "ACTOR-ALPHA", "Attach to the vendor case", "sanitized");
     }
 
+    /** An ASA or FortiGate capture is a plain text file entry (S4, S5); a Palo Alto tech support file is a binary one (S3). */
+    private SupportBundleDownloadService vendorService() throws Exception {
+        Instant t = Instant.parse("2026-11-15T01:02:00Z");
+        when(store.find(ID)).thenReturn(Optional.of(new RequestRow(ID, "dev-1", "cisco_asa", "cisco_asa_firewall", "NOW", t, null,
+                "reason", "ACTOR-ALPHA", t, t, t, t.plusSeconds(86400), null, null, 0, null, null, "job-1", "{}", "COMPLETED", "COMPLETED")));
+        byte[] text = "hostname FW-TANGO-04\nip address 192.0.2.10\n".getBytes(StandardCharsets.UTF_8);
+        byte[] binary = gz("synthetic tsf");
+        when(store.items(ID)).thenReturn(List.of());
+        when(store.storedItems(ID)).thenReturn(List.of(
+                new StoredItem(UUID.randomUUID(), "asa_show_tech", "items/asa_show_tech/show-tech-support.txt", "a3", "a3.enc", new byte[] {3},
+                        text.length, "a".repeat(64), "COMPLETED", "COMPLETED"),
+                new StoredItem(UUID.randomUUID(), "pan_tsf", "items/pan_tsf/techsupport.tgz", "a4", "a4.enc", new byte[] {4},
+                        binary.length, "b".repeat(64), "COMPLETED", "COMPLETED")));
+        when(artefacts.retrieve(any(), any(), anyBoolean())).thenAnswer(call -> {
+            Object ref = call.getArgument(0);
+            if (ref == null) return null;
+            return new ByteArrayInputStream("a3.enc".equals(((com.securityexpert.nexus.ui2.persistence.artefact.ArtefactRef) ref).value()) ? text : binary);
+        });
+        var summary = mock(DeviceSummaryRecord.class);
+        when(summary.observedHostname()).thenReturn(Optional.of("fwtango04.example.test"));
+        when(devices.findSummary("dev-1")).thenReturn(Optional.of(summary));
+        when(names.maskDeviceName(anyString(), any(), anyString())).thenReturn("FW-TANGO-04");
+        when(masking.session()).thenReturn(session);
+        when(session.maskLine(anyString())).thenAnswer(c -> ((String) c.getArgument(0)).replace("FW-TANGO-04", "DEV-MASKED").replace("192.0.2.10", "10.0.0.1"));
+        return new SupportBundleDownloadService(artefacts, store, devices, names, masking);
+    }
+
+    @Test
+    void aSessionCaptureIsMaskedLineByLineInSanitizedModeAndTheTechSupportFileIsOmitted() throws Exception {
+        var raw = unpack(vendorService().prepare("ACTOR-ALPHA", ID, "Attach to the vendor case", false));
+        assertEquals(3, raw.size());
+        assertEquals("hostname FW-TANGO-04\nip address 192.0.2.10\n", new String(raw.get(1).bytes(), StandardCharsets.UTF_8));
+        assertTrue(raw.get(2).name().endsWith("items/pan_tsf/techsupport.tgz"));
+        var sanitized = unpack(vendorService().prepare("ACTOR-ALPHA", ID, "Attach to the vendor case", true));
+        assertEquals(2, sanitized.size(), "the manifest and the one text capture; the binary file is omitted");
+        assertTrue(sanitized.get(1).name().endsWith("items/asa_show_tech/show-tech-support.txt"));
+        assertEquals("hostname DEV-MASKED\nip address 10.0.0.1\n", new String(sanitized.get(1).bytes(), StandardCharsets.UTF_8));
+    }
+
     @Test
     void aColdMaskingDictionaryRefusesTheSanitizedModeBeforeTheAudit() throws Exception {
         var svc = service(true);

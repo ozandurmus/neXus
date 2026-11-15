@@ -29,6 +29,8 @@ const kinds = [
   { kind: "cp_hcp_run", vendor: "check_point", load: "medium", default_ticked: false, enabled: false, heavy: true },
   { kind: "cp_cpinfo", vendor: "check_point", load: "high", default_ticked: false, enabled: false, heavy: true },
   { kind: "pan_tsf", vendor: "palo_alto", load: "unknown", default_ticked: true, enabled: true, heavy: false },
+  { kind: "asa_crashinfo", vendor: "cisco_asa", load: "low", default_ticked: true, enabled: true, heavy: false },
+  { kind: "asa_show_tech", vendor: "cisco_asa", load: "unknown", default_ticked: true, enabled: true, heavy: false },
 ];
 
 beforeEach(() => {
@@ -91,15 +93,16 @@ describe("support bundles screen", () => {
     expect(bundleDevice({ vendor_hint: "check_point", role: "gateway" })).toBe(true);
     expect(bundleDevice({ vendor_hint: "palo_alto", role: "gateway" })).toBe(true);
     expect(bundleDevice({ vendor_hint: "palo_alto", role: "management_server" })).toBe(true);
+    expect(bundleDevice({ vendor_hint: "cisco_asa", role: "gateway" })).toBe(true);
     expect(bundleDevice({ vendor_hint: "check_point", role: "management_server" })).toBe(false);
     expect(bundleDevice({ vendor_hint: "fortinet", role: "management_server" })).toBe(false);
-    expect(bundleDevice({ vendor_hint: "cisco_asa", role: "gateway" })).toBe(false);
     expect(bundleDevice({ vendor_hint: "fortinet", role: "gateway" })).toBe(false);
     expect(bundleDevice({ vendor_hint: "infoblox", role: "appliance" })).toBe(false);
   });
 
   it.each([
     ["palo_alto", "d-pan", ["pan_tsf"]],
+    ["cisco_asa", "d-asa", ["asa_crashinfo", "asa_show_tech"]],
   ])("ticks the %s items by default and sends them", async (vendor, id, expected) => {
     vi.mocked(listDevices).mockResolvedValue({ devices: [{ device_id: id, hostname: "FW-TANGO-05", vendor_hint: vendor, role: "gateway" }] } as never);
     vi.mocked(requestSupportBundle).mockResolvedValue({ id: ID, job_id: "j", status: "ACCEPTED" });

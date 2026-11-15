@@ -272,6 +272,8 @@ public class DeviceCompositionConfiguration {
                 // worker resolves every P/A/F gate row against the live registry before it sends anything.
                 confirmCapability(com.securityexpert.nexus.ui2.jobs.supportbundle.PanSupportBundle.CAPABILITY, "palo_alto",
                         "pan_firewall", TransportKind.PAN_XML_API),
+                confirmCapability(com.securityexpert.nexus.ui2.jobs.supportbundle.AsaSupportBundle.CAPABILITY, "cisco_asa",
+                        "cisco_asa_firewall", TransportKind.SSH_EXEC),
                 com.securityexpert.nexus.ui2.jobs.systemlog.CpSpikeLayoutReview.capability(gateRegistryPort),
                 checkPointInventoryCapability(gateRegistryPort),
                 paloAltoInventoryCapability(gateRegistryPort),

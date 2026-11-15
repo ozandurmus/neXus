@@ -64,6 +64,15 @@ public final class CompositeDeviceTransport implements DeviceTransport {
     }
 
     @Override
+    public com.securityexpert.nexus.ui2.jobs.transport.StreamedInteractiveResult execInteractiveStreaming(TransportSession session,
+            ExecSpec spec, Duration timeout, String pagerMarker, com.securityexpert.nexus.ui2.jobs.transport.LineSink sink) {
+        return registry.find(TransportKind.SSH_EXEC)
+                .map(transport -> transport.execInteractiveStreaming(session, spec, timeout, pagerMarker, sink))
+                .orElseThrow(() -> new com.securityexpert.nexus.ui2.jobs.transport.TransportNotImplementedException(
+                        noAdapter(TransportKind.SSH_EXEC)));
+    }
+
+    @Override
     public com.securityexpert.nexus.ui2.jobs.transport.ShellChannel openShell(TransportSession session, Duration timeout) {
         return registry.find(TransportKind.SSH_EXEC)
                 .map(transport -> transport.openShell(session, timeout))
