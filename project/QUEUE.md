@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-15T06:57:46Z
+Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-15T07:55:44Z
 
 ## Now
 - NXS-LOCAL-0391 — Release queue: ASA readiness, integration gate, CP advisories, zone matrix, ACI step 1, API latency, Backups batch (in_progress)
@@ -19,6 +19,7 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-15T06:57:46Z
 - P1/planned recovery_offhost_key_custody
 - P1/planned spring_boot_4_spring_security_migration
 - P1/planned ui2_networkpolicy_in_cluster_db_reach
+- P2/in_progress backup_screen_backbox_model
 - P2/in_progress lifecycle_vendor_catalog
 - P2/in_progress manifest_drift_service_worker_configuration_policy
 - P2/in_progress topology_sources_apic_citrix_f5
@@ -26,7 +27,6 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-15T06:57:46Z
 - P2/planned analysis_container
 - P2/planned asa_fortinet_cluster_view
 - P2/planned backup_plane_separate_service
-- P2/planned backup_screen_backbox_model
 - P2/planned change_ticket_matching
 - P2/planned cp_spark_backup_settings_sftp
 - P2/planned deploy1_evidence_egress_policy
