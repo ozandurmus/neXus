@@ -33,7 +33,7 @@ class CpSupportBundleGateTest {
 
     /** The gateway rows step S6 added in V234 (C8-C20); V230 stays as it was. */
     private static final List<String> V234_STEMS = List.of("mkdir", "hcp_start", "hcp_start_vs", "copy_hcp", "cpinfo_start",
-            "cpinfo_start_sms", "cpinfo_start_vs", "poll_rc", "list_workdir", "bundle", "sha256", "sftp_get_bundle", "remove_workdir");
+            "cpinfo_start_sms", "cpinfo_start_vs", "poll_rc", "list_workdir", "bundle", "sha256", "sftp_get_bundle", "remove_workdir", "poll_cpsdc" /* V235 */);
 
     private static List<GateRow> fixture() {
         return GateRegistryFixtureLoader.loadFromStream(CpSupportBundleGateTest.class.getClassLoader()
