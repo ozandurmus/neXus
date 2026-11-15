@@ -2,6 +2,7 @@
 reusable preview images and the module rollout timings/concurrency. Local doubles only; no cluster, no GitHub."""
 import argparse
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -653,11 +654,43 @@ def test_run_build_reuses_only_through_the_restamp_tool_and_falls_back_to_the_fu
     source = (ROOT / "deploy/ui2-image-build/run_build.sh").read_text()
     reuse = source.index('hosta_restamp_image.py" build --commit "$COMMIT_SHA"')
     assert source.index("hosta_e2e_image.py\" start") < reuse < source.index("kubectl apply -f ~/build-job-proxy.yaml")
-    assert '|| REUSED_IMAGE=""' in source and 'NEXUS_REUSE_PREVIEW_IMAGE:-1' in source
-    fallback = source[source.index('if [ -n "$REUSED_IMAGE" ]'):source.index('echo "Digest is $IMAGE_DIGEST"', source.index('else\n  kubectl apply'))]
+    assert '|| REUSE_RC=$?' in source and 'NEXUS_REUSE_PREVIEW_IMAGE:-1' in source
+    fallback = source[source.index('if [ -n "$REUSED_IMAGE" ]'):source.index('echo "Digest is $IMAGE_DIGEST"', source.index('else\n  echo "IMAGE PATH: full build'))]
     assert "kubectl apply -f ~/build-job-proxy.yaml" in fallback and "image-digest.txt" in fallback
     # The digest that is scanned and rolled out is IMAGE_DIGEST in both paths.
     assert source.index("IMAGE_DIGEST=") < source.index("security_host.py\" gate")
+
+
+def reuse_decision(tmp_path, tool_body, flag="1"):
+    """Run the real reuse-decision block of run_build.sh with a stubbed re-stamp tool; returns (digest var, why var)."""
+    source = (ROOT / "deploy/ui2-image-build/run_build.sh").read_text()
+    start = source.index('REUSED_IMAGE=""\nif [ "${NEXUS_REUSE_PREVIEW_IMAGE')
+    block = source[start:source.index('if [ -n "$REUSED_IMAGE" ]; then')]
+    stub = tmp_path / "python3"
+    stub.write_text("#!/bin/bash\n" + tool_body + "\n")
+    stub.chmod(0o755)
+    script = 'set -eu\nCOMMIT_SHA=x\nREPO=/r\n' + block + 'echo "$REUSED_IMAGE|${REUSE_WHY:-}"\n'
+    env = dict(os.environ, PATH=str(tmp_path) + os.pathsep + os.environ["PATH"], NEXUS_REUSE_PREVIEW_IMAGE=flag)
+    out = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, check=True).stdout.strip()
+    return out.split("|", 1)
+
+
+def test_run_build_reuse_path_is_taken_only_for_a_valid_pinned_digest(tmp_path):
+    digest = restamp.REPOSITORY + "@sha256:" + "9" * 64
+    assert reuse_decision(tmp_path, "echo " + digest)[0] == digest
+
+
+def test_run_build_full_build_path_states_why_reuse_did_not_happen(tmp_path):
+    image, why = reuse_decision(tmp_path, "exit 3")                       # no record / stale / tree differs
+    assert image == "" and "no fresh preview record" in why
+    image, why = reuse_decision(tmp_path, "exit 2")
+    assert image == "" and "exit 2" in why
+    image, why = reuse_decision(tmp_path, "echo registry/other@sha256:" + "9" * 64)   # unpinned or foreign: refused
+    assert image == "" and "no digest" in why
+    image, why = reuse_decision(tmp_path, "echo must-not-run; exit 9", flag="0")
+    assert image == "" and why == "NEXUS_REUSE_PREVIEW_IMAGE=0"
+    source = (ROOT / "deploy/ui2-image-build/run_build.sh").read_text()
+    assert 'echo "IMAGE PATH: reuse' in source and 'echo "IMAGE PATH: full build' in source
 
 
 # --------------------------------------------------------------------------------------- module rollout speed
