@@ -745,6 +745,7 @@ public final class InventoryCapabilityExecutor {
         List<String> notCollected = new ArrayList<>();
         String interfaceOutput = null;
         PaloAltoInterfaceParseResult configured = null;
+        PanZoneRead panZones = null;
         var interfaceDecision = com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.decide(
                 panSwitches.showInterfaceAll(), version.swVersion().orElse(null));
         if (interfaceDecision.send()) {
@@ -758,6 +759,7 @@ public final class InventoryCapabilityExecutor {
                 ConfiguredInterfaces derived = configuredInterfaces(deviceId, haStateOutput);
                 notCollected.add(derived.token());
                 configured = derived.interfaces();
+                panZones = derived.zones();
             }
         }
         String routeOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE, headers);
@@ -866,7 +868,8 @@ public final class InventoryCapabilityExecutor {
         lifecyclePaloAltoFirewallReads(target, headers, deviceId, version.swVersion().orElse(null));
         return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString),
                 Optional.of(platformFacts.withPolicyInstall(policyInstall)),
-                new InventoryResult.ObservedIdentity(Optional.empty(), version.model(), version.swVersion()), notCollected);
+                new InventoryResult.ObservedIdentity(Optional.empty(), version.model(), version.swVersion()), notCollected,
+                Optional.ofNullable(panZones));
     }
 
     /**
@@ -929,7 +932,10 @@ public final class InventoryCapabilityExecutor {
     }
 
     /** The configured interfaces (null when none could be derived) and the run token naming the outcome. */
-    private record ConfiguredInterfaces(PaloAltoInterfaceParseResult interfaces, String token) {
+    private record ConfiguredInterfaces(PaloAltoInterfaceParseResult interfaces, String token, PanZoneRead zones) {
+        ConfiguredInterfaces(PaloAltoInterfaceParseResult interfaces, String token) {
+            this(interfaces, token, null);
+        }
     }
 
     /**
@@ -938,9 +944,9 @@ public final class InventoryCapabilityExecutor {
      * cannot be read, leaves the interfaces UNKNOWN with the reason (never "no interfaces").
      */
     private ConfiguredInterfaces configuredInterfaces(String deviceId, String haStateOutput) {
-        Optional<java.io.InputStream> stream;
+        Optional<PanConfiguredInterfaceSource.Opened> stream;
         try {
-            stream = deviceId == null ? Optional.empty() : configuredInterfaces.openLatestEffectiveRunning(deviceId);
+            stream = deviceId == null ? Optional.empty() : configuredInterfaces.openLatest(deviceId);
         } catch (java.io.IOException | RuntimeException unreadable) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unreadable);
             LOG.log(System.Logger.Level.WARNING, "[PAN_CONFIGURED_INTERFACES] stored configuration unreadable: {0}",
@@ -952,7 +958,7 @@ public final class InventoryCapabilityExecutor {
             return new ConfiguredInterfaces(null, TOKEN_INTERFACES_CONFIGURATION_MISSING);
         }
         Optional<com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoConfiguredInterfaceParser.Configured> parsed;
-        try (java.io.InputStream in = stream.get()) {
+        try (java.io.InputStream in = stream.get().stream()) {
             parsed = com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoConfiguredInterfaceParser.parse(in);
         } catch (java.io.IOException | RuntimeException unreadable) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unreadable);
@@ -970,7 +976,12 @@ public final class InventoryCapabilityExecutor {
                 "[PAN_CONFIGURED_INTERFACES] ports={0} logical={1} ha_ports={2} addresses_not_literal={3} ambiguous={4}",
                 withHa.physicalPorts().size(), withHa.interfacesByVsys().values().stream().mapToInt(List::size).sum(),
                 result.haPortByLink().size(), result.addressesNotLiteral(), result.ambiguousAttributions());
-        return new ConfiguredInterfaces(withHa, TOKEN_INTERFACES_FROM_CONFIGURATION);
+        // V229: the zone names of each virtual system, from the same document, read once. Counts only in the log.
+        PanZoneRead zones = new PanZoneRead(stream.get().collectedAt() == null ? java.time.Instant.now() : stream.get().collectedAt(),
+                result.zoneNamesByVsys());
+        LOG.log(System.Logger.Level.INFO, "[PAN_CONFIGURED_ZONES] vsys={0} zones={1}", zones.zoneNamesByVsys().size(),
+                zones.zoneNamesByVsys().values().stream().mapToInt(List::size).sum());
+        return new ConfiguredInterfaces(withHa, TOKEN_INTERFACES_FROM_CONFIGURATION, zones);
     }
 
     /** Sets the state of each configured HA port from the HA link's connection status; every other state stays unknown. */

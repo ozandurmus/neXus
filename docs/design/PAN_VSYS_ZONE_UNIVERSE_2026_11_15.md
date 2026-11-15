@@ -2,11 +2,12 @@
 
 ## Status
 
-DRAFT - 2026-11-15. Evidence and a proposal, not a contract; nothing here is implementation authority. Written by the
-`policy_collection_gaps` lane under "close it from stored data, or stop and write what is needed". No code was changed,
-no device was contacted, and no stored customer data was read: this record rests on source reading and on the counts
-already published in the 2026-11-13 measurement (`scripts/measurement/policy_collection_gaps/README.md` on branch
-`feat/policy-collection-gaps-1113`, commit b8cfcf88).
+DECIDED - 2026-11-15. The Product Owner approved Option A in chat on 2026-11-15 (about 12:15): "build it as
+recommended". This note was drafted by the `policy_collection_gaps` lane (source reading, and the counts already
+published in the 2026-11-13 measurement, `scripts/measurement/policy_collection_gaps/README.md` on branch
+`feat/policy-collection-gaps-1113`, commit b8cfcf88); no stored customer data was read. Sections 1-5 below are that
+draft, kept as written; section 6 is the decision and what was built. The decision is recorded in
+`project/backlog.json` history (`docs/history/backlog/policy_collection_gaps.md`).
 
 ## 1. What the 481 are
 
@@ -72,3 +73,42 @@ and not older than a stated bound. For a Panorama rule the universe is the inter
 Approve Option A as one lane: parse-scope extension + migration + service join + `zoneHolds` universe argument, with
 tests on synthetic multi-vsys configs (two vsys with different universes, a template-pushed zone, an empty zone, a
 target without a read). Until then the 481 stay UNKNOWN, which is correct.
+
+## 6. Decision (PO, 2026-11-15) and what was built
+
+Approved: Option A, as section 5 recommends, with these answers to the open points of section 4:
+
+1. A zone with no interface member counts as a zone. The stored set holds every `vsys/entry/zone/entry` name.
+2. The stored zone read may be at most 24 hours old, measured from the analysis time to the time the effective-running
+   configuration was collected (not the inventory run that parsed it). An older read is UNKNOWN, the same as a missing one.
+3. Firewalls Panorama manages but neXus does not inventory have no stored set, so the rule stays UNKNOWN.
+4. The gain is stated after the ship by a counts-only measurement (see the PR description / lane report).
+
+The truth table of `PolicyNormalization.zoneHolds(outer list of names, inner lone any)`, over the targets of the policy
+snapshot (each a firewall and a vsys):
+
+| every target has a fresh, non-empty stored set | some target has a zone the list lacks | result |
+|---|---|---|
+| yes | no (the list holds every zone of every target) | TRUE |
+| yes | yes | FALSE |
+| no: a target has no set, a set older than 24 hours, a Panorama target without a vsys context, an unmatched or non-inventoried firewall, or the snapshot has no target | - | UNKNOWN (as before) |
+
+An unknown target wins over a FALSE the other targets would give. Everything else in `zoneHolds` is unchanged: an earlier
+lone any holds everything, equal sets hold, names against names are decided, a set mixing any with names is never
+interpreted. A stored set with no zone at all is not a universe a rule can be judged against, and counts as unknown.
+
+Built:
+
+- `V229__pan_vsys_zone_set.sql`: table `pan_vsys_zone_set` (device, vsys entry name, sorted zone names, `read_at`), cascade
+  with the device, audit trigger, `vsys` and `zone_names` tier-2 redacted.
+- `PaloAltoConfiguredInterfaceParser` keeps the zone names per vsys from the document it already parses. The inventory run
+  stores them (`PanVsysZoneRepository.replace`, by difference) next to the interfaces. No new device command and no new API
+  call: the document is the stored effective-running configuration the run already opens.
+- `ZoneUniverse` joins the stored sets to the snapshot's targets (`PolicyQueryService`) and the hygiene engine reads it
+  (`PolicyNormalization.zoneHolds/zonesCover/zonesCannotCover`, `PolicyHygiene` zone index).
+
+Limits, stated so the gain is not over-read: the inventory run opens the stored effective-running document only for a
+PAN-OS 12 firewall whose interfaces are replaced from it (PO 2026-10-24, `replace_12`); a firewall on an earlier version
+gets no zone set from this change and stays UNKNOWN, and so does any firewall whose configuration was collected more than
+24 hours before the analysis. Reading the stored document for every firewall would widen what the inventory run does and
+is not part of this decision. A Panorama target that names no vsys is UNKNOWN (no guess from "the firewall has one vsys").

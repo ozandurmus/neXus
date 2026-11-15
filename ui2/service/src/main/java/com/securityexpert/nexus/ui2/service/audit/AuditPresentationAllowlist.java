@@ -223,6 +223,9 @@ public final class AuditPresentationAllowlist {
             Map.entry("packet_analysis_run", Set.of(
                     "case_id", "engine_version", "failure_reason", "finished_at", "job_id",
                     "masked_summary", "requested_at", "requested_by", "started_at", "state")),
+            // V229: opaque identifiers and the read time only; vsys and zone_names are redacted.
+            Map.entry("pan_vsys_zone_set", Set.of(
+                    "device_id", "read_at", "set_id")),
             Map.entry("panorama_assignment", Set.of(
                     "assignment_id", "computed_at")),
             Map.entry("policy_offline_analysis", Set.of(

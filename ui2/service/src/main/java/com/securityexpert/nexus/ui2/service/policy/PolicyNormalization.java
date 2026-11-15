@@ -617,7 +617,11 @@ final class PolicyNormalization {
      * {@link #zoneSuperset} decides "within".
      */
     static boolean zonesCover(Set<String> from, Set<String> to, Set<String> laterFrom, Set<String> laterTo, boolean intrazone) {
-        return zoneSuperset(from, laterFrom) && zoneSuperset(to, intrazone ? laterFrom : laterTo);
+        return zonesCover(from, to, laterFrom, laterTo, intrazone, ZoneUniverse.UNKNOWN);
+    }
+    /** {@link #zonesCover(Set, Set, Set, Set, boolean)} where a lone any is decided against the known zones of the rule's targets. */
+    static boolean zonesCover(Set<String> from, Set<String> to, Set<String> laterFrom, Set<String> laterTo, boolean intrazone, ZoneUniverse zones) {
+        return zoneSuperset(from, laterFrom, zones) && zoneSuperset(to, intrazone ? laterFrom : laterTo, zones);
     }
     /**
      * Every zone of {@code inner} is a zone of {@code outer}, comparing opaque zone names exactly. {@code any} alone is
@@ -626,6 +630,7 @@ final class PolicyNormalization {
      * within each other.
      */
     static boolean zoneSuperset(Set<String> outer, Set<String> inner) { return Boolean.TRUE.equals(zoneHolds(outer, inner)); }
+    static boolean zoneSuperset(Set<String> outer, Set<String> inner, ZoneUniverse zones) { return Boolean.TRUE.equals(zoneHolds(outer, inner, zones)); }
     /**
      * Whether {@code outer} holds every zone of {@code inner}: TRUE, FALSE, or {@code null} when that cannot be decided.
      * FALSE only between two sets of zone names where {@code inner} names a zone {@code outer} does not: a rule names
@@ -633,9 +638,17 @@ final class PolicyNormalization {
      * mixing any with names (or empty), and a lone any against names -- the zones of the virtual system are not
      * collected, so a list of names may well be every zone.
      */
-    static Boolean zoneHolds(Set<String> outer, Set<String> inner) {
+    static Boolean zoneHolds(Set<String> outer, Set<String> inner) { return zoneHolds(outer, inner, ZoneUniverse.UNKNOWN); }
+    /**
+     * {@link #zoneHolds(Set, Set)} with the zones the rule's targets have (PAN_VSYS_ZONE_UNIVERSE_2026_11_15.md, DECIDED):
+     * a lone any inner is then every zone of every target, so a list of names holds it (TRUE) only when it names every
+     * one of them, and does not (FALSE) when some target has a zone it lacks. Without a known universe, or against a set
+     * that mixes any with names, the answer stays null as before.
+     */
+    static Boolean zoneHolds(Set<String> outer, Set<String> inner, ZoneUniverse zones) {
         if (outer.equals(ANY_ZONE) || outer.equals(inner)) return true;
-        if (outer.isEmpty() || inner.isEmpty() || outer.contains("any") || inner.contains("any")) return null;
+        if (outer.isEmpty() || inner.isEmpty() || outer.contains("any")) return null;
+        if (inner.contains("any")) return inner.equals(ANY_ZONE) ? zones.holdsEvery(outer) : null;
         return outer.containsAll(inner);
     }
     /**
@@ -645,7 +658,10 @@ final class PolicyNormalization {
      * candidate, like a partially overlapping address or service.
      */
     static boolean zonesCannotCover(Set<String> from, Set<String> to, Set<String> laterFrom, Set<String> laterTo) {
-        return Boolean.FALSE.equals(zoneHolds(from, laterFrom)) || Boolean.FALSE.equals(zoneHolds(to, laterTo));
+        return zonesCannotCover(from, to, laterFrom, laterTo, ZoneUniverse.UNKNOWN);
+    }
+    static boolean zonesCannotCover(Set<String> from, Set<String> to, Set<String> laterFrom, Set<String> laterTo, ZoneUniverse zones) {
+        return Boolean.FALSE.equals(zoneHolds(from, laterFrom, zones)) || Boolean.FALSE.equals(zoneHolds(to, laterTo, zones));
     }
     private static final Set<String> ANY_ZONE = Set.of("any");
     /** The Palo Alto rule type of a stored rule; an absent rule-type is the vendor default, universal. */

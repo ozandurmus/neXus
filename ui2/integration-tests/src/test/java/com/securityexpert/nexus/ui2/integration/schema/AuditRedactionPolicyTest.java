@@ -392,6 +392,8 @@ class AuditRedactionPolicyTest {
             // policy_offline_analysis
             "policy_offline_analysis.analysis_id", "policy_offline_analysis.created_at",
             "policy_offline_analysis.policy_id", "policy_offline_analysis.uploader",
+            // pan_vsys_zone_set (V229): opaque identifiers and the read time; vsys and zone_names are tier-2 redacted
+            "pan_vsys_zone_set.device_id", "pan_vsys_zone_set.read_at", "pan_vsys_zone_set.set_id",
             // policy_target_binding (V185, 402ee7a3): opaque identifiers; context is tier-2 redacted
             "policy_target_binding.binding_id", "policy_target_binding.device_id",
             "policy_target_binding.install_on_ref", "policy_target_binding.policy_id",
@@ -780,6 +782,8 @@ class AuditRedactionPolicyTest {
             "topology_conflict.context", 2, "topology_conflict.network", 2,
             // V185 (402ee7a3): a device virtual-system reference.
             "policy_target_binding.context", 2,
+            // V229: a firewall's virtual-system reference and its zone names.
+            "pan_vsys_zone_set.vsys", 2, "pan_vsys_zone_set.zone_names", 2,
             // V188 (decea8d5): the transient matcher plan of an (unaudited) validation hop.
             "path_validation_hop.plan", 2,
             // V203 (4805eb19): operator free text, as failover_approval.reason.

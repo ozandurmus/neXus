@@ -186,6 +186,13 @@ public class DeviceCompositionConfiguration {
         return new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePolicyInstallRepository(transactionBoundary);
     }
 
+    /** V229: the zone names of each Palo Alto virtual system, joined into the policy analysis (PolicyQueryService). */
+    @Bean
+    public com.securityexpert.nexus.ui2.persistence.device.PanVsysZoneRepository panVsysZoneRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.device.JooqPanVsysZoneRepository(transactionBoundary);
+    }
+
     @Bean
     public com.securityexpert.nexus.ui2.persistence.device.DeviceIdentityCheckRepository deviceIdentityCheckRepository(
             TransactionBoundary transactionBoundary) {

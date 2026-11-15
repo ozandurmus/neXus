@@ -18,6 +18,8 @@ import com.securityexpert.nexus.ui2.jobs.JobState;
 import com.securityexpert.nexus.ui2.jobs.executor.JobOutcome;
 import com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches;
 import com.securityexpert.nexus.ui2.jobs.transport.ApiTarget;
+import com.securityexpert.nexus.ui2.persistence.device.PanVsysZoneRepository;
+import com.securityexpert.nexus.ui2.persistence.device.PanVsysZoneSet;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun;
@@ -182,6 +184,10 @@ class PanConfiguredInterfacesTest {
     }
 
     private static Run run(String switchValue, String swVersion, PanConfiguredInterfaceSource source) {
+        return run(switchValue, swVersion, source, PanVsysZoneRepository.NONE);
+    }
+
+    private static Run run(String switchValue, String swVersion, PanConfiguredInterfaceSource source, PanVsysZoneRepository zones) {
         ScriptedPaloAltoInventoryTransport transport = new ScriptedPaloAltoInventoryTransport(Map.of(
                 InventoryReadPlan.PAN_TYPE_VERSION, "<response status=\"success\"><result><sw-version>" + swVersion
                         + "</sw-version><model>PA-" + "TESTMODEL</model><serial>TESTSER" + "0002</serial></result></response>",
@@ -190,9 +196,18 @@ class PanConfiguredInterfacesTest {
                         + "<ip>192.0.2.1/24</ip><vsys>1</vsys><fwd>vr:default</fwd><state>up</state></entry></ifnet></result></response>",
                 InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE, ROUTES));
         List<String> opened = new java.util.ArrayList<>();
-        PanConfiguredInterfaceSource recording = deviceId -> {
-            opened.add(deviceId);
-            return source.openLatestEffectiveRunning(deviceId);
+        PanConfiguredInterfaceSource recording = new PanConfiguredInterfaceSource() {
+            @Override
+            public Optional<InputStream> openLatestEffectiveRunning(String deviceId) throws IOException {
+                opened.add(deviceId);
+                return source.openLatestEffectiveRunning(deviceId);
+            }
+
+            @Override
+            public Optional<Opened> openLatest(String deviceId) throws IOException {
+                opened.add(deviceId);
+                return source.openLatest(deviceId);
+            }
         };
         var inventoryRepository = new InventoryJobExecutorFakes.FakeDeviceInventoryRepository();
         InventoryCapabilityExecutor capabilityExecutor = new InventoryCapabilityExecutor(transport, ref ->
@@ -202,7 +217,8 @@ class PanConfiguredInterfacesTest {
         InventoryJobExecutor executor = new InventoryJobExecutor(
                 new InventoryJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED),
                 new InventoryJobExecutorFakes.FakeStepAttemptRepository(), new InventoryJobExecutorFakes.FakeDeviceEnrollmentReadPort(),
-                new InventoryJobExecutorFakes.FakeDeviceRepository(), inventoryRepository, capabilityExecutor);
+                new InventoryJobExecutorFakes.FakeDeviceRepository(), inventoryRepository, capabilityExecutor)
+                .withPanZoneRepository(zones);
         JobOutcome outcome = executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID,
                 InventoryRequest.paloAlto(new ApiTarget("ep-9", "https://fw.example"), "cred-9"), false);
         assertTrue(outcome instanceof JobOutcome.Completed, "expected Completed, got " + outcome);
@@ -282,5 +298,119 @@ class PanConfiguredInterfacesTest {
             throw new AssertionError("below_12 never derives interfaces");
         });
         assertEquals(List.of("pan_show_interface_all", "pan_os_12_or_later"), below.run().notCollected());
+    }
+
+    // ---- V229: the zone names of each virtual system ----
+
+    /** Two virtual systems with different zones: a template-pushed zone, a zone with no interface, a virtual system with no zone at all. */
+    static String multiVsysZones() {
+        return "<response status=\"success\"><result><config><devices><entry name=\"localhost.localdomain\"><vsys>"
+                + "<entry name=\"vsys1\"><zone>"
+                + "<entry name=\"Z-OUT\"><network><layer3><member>ethernet1/1</member></layer3></network></entry>"
+                + "<entry name=\"Z-TPL\" src=\"tpl\"><network><layer3><member>ethernet1/9</member></layer3></network></entry>"
+                + "<entry name=\"Z-EMPTY\"/></zone></entry>"
+                + "<entry name=\"vsys2\"><zone><entry name=\"Z-DMZ\"><network><layer2><member>ethernet1/2</member></layer2></network></entry>"
+                + "<entry name=\"Z-OUT\"/></zone></entry>"
+                + "<entry name=\"vsys3\"><rulebase><security/></rulebase></entry>"
+                + "</vsys></entry></devices></config></result></response>";
+    }
+
+    @Test
+    void zoneNamesAreKeptPerVirtualSystemIncludingEmptyAndTemplatePushedZones() {
+        var zones = parsed(multiVsysZones()).zoneNamesByVsys();
+        assertEquals(List.of("Z-EMPTY", "Z-OUT", "Z-TPL"), zones.get("vsys1"), "sorted; a zone with no interface and a pushed one are zones");
+        assertEquals(List.of("Z-DMZ", "Z-OUT"), zones.get("vsys2"), "the same name in two virtual systems is two zones");
+        assertEquals(List.of(), zones.get("vsys3"), "a virtual system read with no zone is an empty set, not a missing one");
+        assertEquals(3, zones.size());
+        assertEquals(Map.of("vsys1", List.of("Z-OUT"), "vsys2", List.of("Z-DMZ")),
+                parsed(config()).zoneNamesByVsys(), "the interface fixture has one zone per virtual system");
+    }
+
+    @Test
+    void aVirtualSystemThatCannotBeReadInFullHasNoZoneSet() {
+        String unnamed = "<response status=\"success\"><result><config><devices><entry name=\"x\"><vsys>"
+                + "<entry name=\"vsys1\"><zone><entry name=\"Z-A\"/><entry name=\" \"/></zone></entry>"
+                + "<entry name=\"vsys2\"><zone><entry name=\"Z-B\"/></zone></entry>"
+                + "<entry name=\"vsys2\"><zone><entry name=\"Z-C\"/></zone></entry>"
+                + "<entry name=\"vsys4\"><zone><entry name=\"Z-D\"/></zone></entry></vsys></entry></devices></config></result></response>";
+        assertEquals(Map.of("vsys4", List.of("Z-D")), parsed(unnamed).zoneNamesByVsys(),
+                "an unnamed zone and a virtual system named twice are UNKNOWN, never the part that could be read");
+        assertTrue(parsed("<response status=\"success\"><result><config><devices><entry name=\"x\"/></devices></config></result></response>")
+                .zoneNamesByVsys().isEmpty());
+    }
+
+    private static final java.time.Instant COLLECTED = java.time.Instant.parse("2026-11-15T03:00:00Z");
+
+    private static final class RecordingZones implements PanVsysZoneRepository {
+        final List<String> calls = new java.util.ArrayList<>();
+        List<PanVsysZoneSet> lastSets = List.of();
+        java.time.Instant lastReadAt;
+        RuntimeException failure;
+
+        @Override
+        public int replace(String deviceId, java.time.Instant readAt, List<PanVsysZoneSet> sets, String actor, String action) {
+            calls.add(deviceId + "/" + action);
+            if (failure != null) {
+                throw failure;
+            }
+            lastSets = sets;
+            lastReadAt = readAt;
+            return sets.size();
+        }
+
+        @Override
+        public Map<String, Map<String, PanVsysZoneSet>> findForDevices(java.util.Collection<String> deviceIds) {
+            return Map.of();
+        }
+    }
+
+    private static PanConfiguredInterfaceSource stamped(String document) {
+        return new PanConfiguredInterfaceSource() {
+            @Override
+            public Optional<InputStream> openLatestEffectiveRunning(String deviceId) {
+                throw new AssertionError("the run reads the document with its collection time");
+            }
+
+            @Override
+            public Optional<Opened> openLatest(String deviceId) {
+                return Optional.of(new Opened(stream(document), COLLECTED));
+            }
+        };
+    }
+
+    @Test
+    void theRunStoresTheZoneNamesOfEachVirtualSystemWithTheDocumentsCollectionTime() {
+        RecordingZones zones = new RecordingZones();
+        run("replace_12", "12.1.2", stamped(multiVsysZones()), zones);
+        assertEquals(List.of(DEVICE_ID + "/inventory_pan_zone_sets"), zones.calls);
+        assertEquals(COLLECTED, zones.lastReadAt, "the age of the configuration, not of the inventory run");
+        Map<String, java.util.Set<String>> stored = new java.util.TreeMap<>();
+        zones.lastSets.forEach(set -> stored.put(set.vsys(), set.zones()));
+        assertEquals(Map.of("vsys1", java.util.Set.of("Z-EMPTY", "Z-OUT", "Z-TPL"), "vsys2", java.util.Set.of("Z-DMZ", "Z-OUT"),
+                "vsys3", java.util.Set.of()), stored);
+        assertTrue(zones.lastSets.stream().allMatch(set -> set.deviceId().equals(DEVICE_ID) && set.readAt().equals(COLLECTED)));
+    }
+
+    @Test
+    void noZoneNamesAreStoredWhereTheConfigurationIsNotRead() {
+        RecordingZones zones = new RecordingZones();
+        run("replace_12", "12.1.2", PanConfiguredInterfaceSource.NONE, zones);
+        run("replace_12", "12.1.2", deviceId -> {
+            throw new IOException("synthetic artefact failure");
+        }, zones);
+        run("replace_12", "12.1.2", deviceId -> Optional.of(stream("<response status=\"error\"/>")), zones);
+        run("replace_12", "11.1.4", deviceId -> {
+            throw new AssertionError("below 12 the stored configuration is never consulted");
+        }, zones);
+        assertEquals(List.of(), zones.calls, "no read, no row: an older row simply ages out (UNKNOWN after 24 hours)");
+    }
+
+    @Test
+    void aFailedZoneWriteIsLoggedAndNeverFailsTheInventoryJob() {
+        RecordingZones zones = new RecordingZones();
+        zones.failure = new IllegalStateException("synthetic database failure");
+        Run r = run("replace_12", "12.1.2", stamped(multiVsysZones()), zones);
+        assertEquals(1, zones.calls.size());
+        assertFalse(r.run().contexts().isEmpty(), "the run itself was recorded");
     }
 }
