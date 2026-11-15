@@ -46,7 +46,9 @@ public class NexusSecurityFilterChainConfiguration {
     @Bean
     SecurityFilterChain nexusPassthroughSecurityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(AbstractHttpConfigurer::disable)
+                // Not unprotected: the application enforces its own X-CSRF-Token + Origin check on every state-changing
+                // request (GateChainInterceptor); Spring's CSRF filter would duplicate it and change responses.
+                .csrf(AbstractHttpConfigurer::disable) // lgtm[java/spring-disabled-csrf-protection]
                 .cors(AbstractHttpConfigurer::disable)
                 .headers(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)

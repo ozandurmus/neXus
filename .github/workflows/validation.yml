@@ -488,11 +488,20 @@ jobs:
             postgres:16 -c max_connections=200 -c fsync=off -c synchronous_commit=off -c full_page_writes=off
           for i in $(seq 1 60); do docker exec ui2-integration-pg pg_isready -U postgres -h 127.0.0.1 && exit 0; sleep 1; done
           exit 1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.scope.outputs.run == 'true'
+        with:
+          node-version: '22'
+      - name: Frontend bundle for the HTTP characterization suite
+        if: steps.scope.outputs.run == 'true'
+        # HttpSurfaceCharacterizationTest boots the real service and probes the packaged console bundle (2026-11-15).
+        working-directory: ui2/frontend
+        run: |
+          npm ci
+          npm run build
       - name: PostgreSQL 16 integration suite
         if: steps.scope.outputs.run == 'true'
         env:
           UI2_TEST_JDBC_URL: jdbc:postgresql://127.0.0.1:5432/postgres?user=postgres
-        # No npm here: the suite never serves the frontend, so an empty prebuilt dist directory stands in for it.
         run: |
-          mkdir -p ui2/frontend/dist
           ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :integration-tests:test
