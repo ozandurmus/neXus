@@ -38,13 +38,26 @@ public final class LoginController {
     private final MechanismRegistry mechanismRegistry;
     private final LoginFlow loginFlow;
     private final SessionCookieWriter cookieWriter;
+    /** Null when {@code ui2.security.provider-manager-enabled=false} (or a test built the controller without it): direct dispatch. */
+    private final com.securityexpert.nexus.ui2.service.security.MechanismAuthenticator authenticator;
     private final com.securityexpert.nexus.ui2.service.security.LoginAttemptThrottle directoryThrottle = new com.securityexpert.nexus.ui2.service.security.LoginAttemptThrottle();
 
     @org.springframework.beans.factory.annotation.Autowired
-    public LoginController(MechanismRegistry mechanismRegistry, LoginFlow loginFlow, SessionCookieWriter cookieWriter) {
+    public LoginController(MechanismRegistry mechanismRegistry, LoginFlow loginFlow, SessionCookieWriter cookieWriter,
+            org.springframework.beans.factory.ObjectProvider<com.securityexpert.nexus.ui2.service.security.MechanismAuthenticator> authenticator) {
+        this(mechanismRegistry, loginFlow, cookieWriter, authenticator.getIfAvailable());
+    }
+
+    public LoginController(MechanismRegistry mechanismRegistry, LoginFlow loginFlow, SessionCookieWriter cookieWriter,
+            com.securityexpert.nexus.ui2.service.security.MechanismAuthenticator authenticator) {
         this.mechanismRegistry = mechanismRegistry;
         this.loginFlow = loginFlow;
         this.cookieWriter = cookieWriter;
+        this.authenticator = authenticator;
+    }
+
+    public LoginController(MechanismRegistry mechanismRegistry, LoginFlow loginFlow, SessionCookieWriter cookieWriter) {
+        this(mechanismRegistry, loginFlow, cookieWriter, (com.securityexpert.nexus.ui2.service.security.MechanismAuthenticator) null);
     }
 
     /** Convenience for call sites that carry no cookie configuration; keeps the secure-by-default posture. */
@@ -71,7 +84,19 @@ public final class LoginController {
                     request.username(), Instant.now())) {
                 return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(errorBody("LOGIN_RATE_LIMITED"));
             }
-            AttemptOutcome outcome = mechanism.get().attempt(request.username(), request.password());
+            AttemptOutcome outcome;
+            if (authenticator == null) {
+                outcome = mechanism.get().attempt(request.username(), request.password());
+            } else {
+                // Migration plan Step 2: the same attempt, decided by the same mechanism, through the ProviderManager.
+                try {
+                    outcome = authenticator.authenticate(mechId, request.username(), request.password());
+                } catch (com.securityexpert.nexus.ui2.service.security.MechanismUnavailableAuthenticationException e) {
+                    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(errorBody("DIRECTORY_UNAVAILABLE"));
+                } catch (org.springframework.security.core.AuthenticationException e) {
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorBody("INVALID_CREDENTIALS"));
+                }
+            }
 
             if (outcome instanceof AttemptOutcome.MechanismUnavailable) {
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(errorBody("DIRECTORY_UNAVAILABLE"));

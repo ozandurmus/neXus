@@ -2,8 +2,11 @@ package com.securityexpert.nexus.ui2.service.security;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
+import com.securityexpert.nexus.ui2.persistence.identity.SessionRepository;
+import com.securityexpert.nexus.ui2.platform.Clock;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -40,6 +43,9 @@ import org.springframework.security.web.firewall.HttpFirewall;
  *   <li>Authorization: every request is permitted; the only filter behind the chain is still the Spring MVC interceptor.</li>
  * </ul>
  *
+ * <p>Step 2 adds exactly one filter, {@link Ui2SessionAuthenticationFilter}: it only reads the {@code ui2_session} cookie into the
+ * {@code SecurityContext} for the request and changes no answer.</p>
+ *
  * <p>{@code MachinePortConfiguration.machinePortFilter} is registered at {@code HIGHEST_PRECEDENCE}, ahead of the
  * Spring Security filter (default order -100), so port 8086 isolation still runs first.</p>
  */
@@ -48,8 +54,17 @@ import org.springframework.security.web.firewall.HttpFirewall;
 public class NexusSecurityFilterChainConfiguration {
 
     @Bean
-    SecurityFilterChain nexusPassthroughSecurityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain nexusPassthroughSecurityFilterChain(HttpSecurity http,
+            ObjectProvider<SessionRepository> sessions, ObjectProvider<Clock> clock) throws Exception {
+        // Step 2: the ui2_session cookie becomes a SecurityContext authentication (additive; GateChain stays the authority).
+        // Created here and not as a bean so Spring Boot does not also register it as a plain servlet filter.
+        SessionRepository sessionRepository = sessions.getIfAvailable();
         http.addFilterAfter(new NexusSecurityHeadersFilter(), SecurityContextHolderFilter.class);
+        if (sessionRepository != null) {
+            Clock now = clock.getIfAvailable(Clock::system);
+            http.addFilterAfter(new Ui2SessionAuthenticationFilter(sessionRepository, now::now),
+                    NexusSecurityHeadersFilter.class);
+        }
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(AbstractHttpConfigurer::disable)
