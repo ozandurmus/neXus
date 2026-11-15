@@ -54,7 +54,7 @@ function stub(devices: object[], backups: object[], deviations = { active_major_
  * structure and attribute, so every assertion still checks the same thing.
  */
 // The 50-row page renders slowly (about a second per page step on an idle machine, several times that under load);
-// the describe blocks that step through 120-131 rows carry a 30 s per-test limit instead of vitest's 5 s default.
+// vite.config.ts carries the one suite-wide timeout that covers it.
 const bodyRows = () => Array.from(document.querySelectorAll<HTMLElement>("table tbody tr"));
 const nextPage = () => fireEvent.click(getByAria(document.body, "Go to next page"));
 const headerButton = (name: string): HTMLElement => {
@@ -135,7 +135,7 @@ describe("one line per row, every action in the row menu", () => {
   });
 });
 
-describe("pagination at 50", { timeout: 30_000 }, () => {
+describe("pagination at 50", () => {
   const many = Array.from({ length: 131 }, (_, i) => device(i + 1));
 
   it("shows 1–50 of 131 and moves page by page without losing a row", async () => {
@@ -167,7 +167,7 @@ describe("pagination at 50", { timeout: 30_000 }, () => {
   });
 });
 
-describe("Size column sort and the large-backup marker (Product Owner, 2026-11-02)", { timeout: 30_000 }, () => {
+describe("Size column sort and the large-backup marker (Product Owner, 2026-11-02)", () => {
   const MB = 1024 * 1024;
   // 131 Check Point targets: 120 with a ~0.2 GB archive, 11 without one, device 77 with a 28 GB archive on page 2 in hostname order.
   const estate = Array.from({ length: 131 }, (_, i) => device(i + 1));
@@ -303,7 +303,7 @@ describe("fixed column widths (post-release review 2026-10-18, R3 / R11)", () =>
   });
 });
 
-describe("every header sorts the whole filtered set, not the page (Product Owner, 2026-11-04)", { timeout: 30_000 }, () => {
+describe("every header sorts the whole filtered set, not the page (Product Owner, 2026-11-04)", () => {
   // 120 targets named without zero padding, so plain text order (FW-TANGO-1, FW-TANGO-10, FW-TANGO-100 ...) differs
   // from numeric order; every third device standalone; an archive on all but every ninth; an attempt on all but every tenth.
   const estate = Array.from({ length: 120 }, (_, k) => {
@@ -395,7 +395,7 @@ describe("every header sorts the whole filtered set, not the page (Product Owner
     // oldest attempt first over the 108 devices that have one: rows 101-108 of the list are devices 112-119, then the 12 without
     await waitFor(() => {
       expect(names().slice(0, 8)).toEqual(["FW-TANGO-112", "FW-TANGO-113", "FW-TANGO-114", "FW-TANGO-115", "FW-TANGO-116", "FW-TANGO-117", "FW-TANGO-118", "FW-TANGO-119"]);
-    }, { timeout: 15000 });
+    });
     expect(rows().slice(-12).map((r) => within(r).queryByText("No attempt") !== null)).toEqual(Array(12).fill(true));
     fireEvent.click(header("Latest attempt"));
     expect(header("Latest attempt").closest("th")).toHaveAttribute("aria-sort", "descending");
@@ -405,7 +405,7 @@ describe("every header sorts the whole filtered set, not the page (Product Owner
     // 120 rows, three page steps and two sorts render slowly on a shared CI runner (the file took 37 s there)
     const jobCalls = vi.mocked(fetch).mock.calls.map(([u]) => String(u)).filter((u) => u.startsWith("/api/v2/jobs"));
     expect(jobCalls).toEqual(["/api/v2/jobs?job_type=backup&latest_per_device=true"]);
-  }, 60000);
+  });
 
   it("returns to page 1 when any header changes the order, and the Large backups chip still leads with the largest", async () => {
     stubWithAttempts();

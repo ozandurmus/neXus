@@ -38,6 +38,8 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./tests/setup.ts"],
-    testTimeout: 20000,
+    // One suite-wide limit, generous because several lanes and the ship pretest share the machine; no per-test overrides.
+    testTimeout: 30000,
+    hookTimeout: 30000,
   },
 });
