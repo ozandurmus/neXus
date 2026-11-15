@@ -76,6 +76,7 @@ public final class SupportBundleController {
             row.put("default_ticked", k.defaultTicked());
             row.put("enabled", k.enabled());
             row.put("heavy", k.heavy());
+            row.put("check_point_management", k.onCheckPointManagement());
             rows.add(row);
         }
         return ResponseEntity.ok(Map.of("kinds", rows));
@@ -140,6 +141,7 @@ public final class SupportBundleController {
                 map.put("job_id", accepted.jobId());
                 map.put("status", "ACCEPTED");
                 map.put("mds_warning", accepted.mdsWarning());
+                if (accepted.mdsWarning()) map.put("warning", SupportBundleService.MDS_WARNING);
                 yield ResponseEntity.status(HttpStatus.ACCEPTED).body(map);
             }
             case SupportBundleService.Outcome.Refused refused ->

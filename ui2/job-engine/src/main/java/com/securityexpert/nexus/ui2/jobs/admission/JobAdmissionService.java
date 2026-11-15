@@ -73,6 +73,17 @@ public final class JobAdmissionService {
 
     public AdmissionResult submit(String capabilityId, String targetDeviceId, String clientIdempotencyKey,
             String actorFingerprint, String actionId) {
+        return submit(capabilityId, targetDeviceId, clientIdempotencyKey, actorFingerprint, actionId, null);
+    }
+
+    /**
+     * As {@link #submit(String, String, String, String, String)}, with a per-request class floor: the job is admitted as the
+     * more severe of the capability's own class and {@code classFloor}. A support bundle request whose items include a
+     * recovery-write gate (BW-2 transient write: PAN tech support start, Check Point C8-C20) is class 1, as the MDS export is
+     * (V61); a request of reads only stays class 0.
+     */
+    public AdmissionResult submit(String capabilityId, String targetDeviceId, String clientIdempotencyKey,
+            String actorFingerprint, String actionId, com.securityexpert.nexus.ui2.platform.ActionClass classFloor) {
         // 1. Capability execution-eligibility (C4 §3.5).
         Optional<Capability> capability = capabilityRegistry.find(capabilityId);
         if (capability.isEmpty()) {
@@ -116,8 +127,8 @@ public final class JobAdmissionService {
         String jobId = UUID.randomUUID().toString();
 
         Optional<String> created = repository.createRequestedIfAbsent(jobId, idempotencyKey, capabilityId,
-                targetDeviceId, capability.get().resolvedActionClassOrDeclaredClass().id(), actorFingerprint,
-                actionId);
+                targetDeviceId, Capability.moreSevere(capability.get().resolvedActionClassOrDeclaredClass(), classFloor).id(),
+                actorFingerprint, actionId);
         if (created.isPresent()) {
             return new AdmissionResult.Admitted(created.get());
         }

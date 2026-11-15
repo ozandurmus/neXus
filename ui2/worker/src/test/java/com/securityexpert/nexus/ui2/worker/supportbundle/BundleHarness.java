@@ -50,7 +50,7 @@ final class BundleHarness {
     static final Instant NOW = Instant.parse("2026-11-16T01:00:00Z");
     static final UUID REQUEST = UUID.fromString("22222222-2222-4222-8222-222222222222");
 
-    static final class Store implements SupportBundleRunStore {
+    static class Store implements SupportBundleRunStore {
         final RequestRow request;
         final List<ItemRow> items = new ArrayList<>();
         final Map<UUID, String> states = new HashMap<>(), codes = new HashMap<>(), details = new HashMap<>(), entryNames = new HashMap<>();

@@ -37,8 +37,9 @@ const KIND_LABELS: Record<string, string> = {
   cpdata_collector_present: "cpdata_collector installed? (read only, never run)",
   cp_gaia_extras: "Gaia details (versions, assets, HA state, CPU, disk)",
   cp_hcp_latest: "Latest HCP health report",
-  cp_hcp_run: "Run HCP now (medium load)",
-  cp_cpinfo: "cpinfo (high load)",
+  cp_hcp_run: "Run HCP now (replaces the device's own latest HCP report)",
+  cp_cpinfo: "cpinfo (high load, can take up to two hours)",
+  cpdata_collector_run: "cpdata_collector run (optional, only if installed)",
   pan_tsf: "Tech support file (management plane, can take up to 30 minutes)",
   asa_crashinfo: "Crash information (show crashinfo)",
   asa_show_tech: "Technical support report (show tech-support, long)",
@@ -47,9 +48,12 @@ const KIND_LABELS: Record<string, string> = {
 };
 /** Vendors with at least one collectable item (design 5.2). */
 const BUNDLE_VENDORS = new Set(["check_point", "palo_alto", "cisco_asa", "fortinet"]);
-/** A management server is collected for Palo Alto only (Panorama); a Check Point MDS or a FortiManager is not. */
+/** A management server is collected for Palo Alto (Panorama) and Check Point (SMS and MDS, heavy items only); a FortiManager is not. */
 export const bundleDevice = (d: { vendor_hint: string; role?: string }): boolean =>
-  BUNDLE_VENDORS.has(d.vendor_hint) && (d.role !== "management_server" || d.vendor_hint === "palo_alto");
+  BUNDLE_VENDORS.has(d.vendor_hint) && (d.role !== "management_server" || d.vendor_hint === "palo_alto" || d.vendor_hint === "check_point");
+/** PO 2026-11-15 (Q5): HCP and cpinfo are included for an MDS, with a clear warning and no block. */
+export const MDS_WARNING = "This is a Check Point management server or Multi-Domain Server. HCP and cpinfo are heavy on it, and a "
+  + "Multi-Domain Server has crashed under a heavy backup before. They are not blocked. Run them outside business hours and watch the server.";
 const LOAD_NOTE: Record<string, string> = { none: "no device load", low: "light", medium: "medium load", high: "high load", unknown: "load not measured" };
 /** Times neXus itself works on devices (design 5.7): a hint when the picked hour collides, never a refusal. */
 export function collisionHint(local: string): string | null {
@@ -97,18 +101,20 @@ function NewRequest({ kinds, devices, onDone }: {
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [failure, setFailure] = useState("");
   const device = devices.find((d) => d.device_id === deviceId);
   const vendor = device?.vendor_hint ?? "";
-  const forVendor = kinds.filter((k) => k.vendor === vendor);
+  const cpManagement = vendor === "check_point" && device?.role === "management_server";
+  const forVendor = kinds.filter((k) => k.vendor === vendor && (!cpManagement || k.check_point_management));
   const selected = ticked ?? new Set(forVendor.filter((k) => k.enabled && k.default_ticked).map((k) => k.kind));
   const toggle = (kind: string) => { const next = new Set(selected); if (next.has(kind)) next.delete(kind); else next.add(kind); setTicked(next); };
   const hint = when ? collisionHint(when) : null;
   const submit = async () => {
     setBusy(true); setFailure(""); setMessage("");
     try {
-      await requestSupportBundle(deviceId, {
+      const accepted = await requestSupportBundle(deviceId, {
         kinds: [...selected], reason: reason.trim(),
         ...(when ? { run_at: new Date(when).toISOString() } : {}), ...(caseRef.trim() ? { case_ref: caseRef.trim() } : {}),
       });
-      setMessage(when ? "Scheduled. It starts at the chosen time." : "Started. It appears in the list below.");
+      setMessage((when ? "Scheduled. It starts at the chosen time." : "Started. It appears in the list below.")
+        + (accepted?.mds_warning ? ` ${accepted.warning ?? MDS_WARNING}` : ""));
       setReason(""); onDone();
     } catch (e) {
       const body = (e as { body?: { reason?: string; error?: string } }).body;
@@ -123,6 +129,7 @@ function NewRequest({ kinds, devices, onDone }: {
     <TextField select label="Device" value={deviceId} onChange={(e) => { setDeviceId(e.target.value); setTicked(null); }} disabled={busy}>
       {devices.filter(bundleDevice).map((d) => <MenuItem key={d.device_id} value={d.device_id}>{d.hostname}</MenuItem>)}
     </TextField>
+    {cpManagement && <Alert severity="warning" data-fact="mds-warning">{MDS_WARNING}</Alert>}
     {device && !BUNDLE_VENDORS.has(vendor) && <Alert severity="info">Support bundles for this vendor are not built yet.</Alert>}
     {forVendor.length > 0 && <Box role="group" aria-label="Items">
       {forVendor.map((k) => <Box key={k.kind}><FormControlLabel disabled={!k.enabled || busy}
@@ -152,7 +159,7 @@ function Requests({ rows, onChange }: { readonly rows: readonly SupportBundleReq
       <TableBody>{rows.map((r) => <TableRow key={r.id} data-bundle={r.id}>
         <TableCell>{r.device_pseudonym}</TableCell>
         <TableCell><StatusPill tone={r.state === "COMPLETED" ? "ok" : r.state === "FAILED" ? "bad" : "neutral"} word={r.state} /></TableCell>
-        <TableCell>{r.items.map((i) => <Box key={i.kind} component="div" data-item={i.kind}>
+        <TableCell>{r.items.map((i) => <Box key={`${i.kind}-${i.ordinal}`} component="div" data-item={i.kind}>
           {KIND_LABELS[i.kind] ?? i.kind}: {i.state}{i.outcome_code && i.outcome_code !== "COMPLETED" ? ` (${i.outcome_code})` : ""}
           {i.size_bytes !== null ? ` ${sizeText(i.size_bytes)}` : ""}{i.digest_prefix ? ` ${i.digest_prefix}` : ""}</Box>)}</TableCell>
         <TableCell>{formatStamp(r.requested_at)}</TableCell>

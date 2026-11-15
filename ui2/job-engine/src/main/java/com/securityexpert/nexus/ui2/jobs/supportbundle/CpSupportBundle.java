@@ -22,8 +22,9 @@ import com.securityexpert.nexus.ui2.platform.ActionClass;
 /**
  * Support bundle collection, Check Point light reads (step S2; PO approval 2026-11-15, rows C0-C7 of
  * SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6). Each exec read is resolved against its live V230 gate row
- * before it is sent. Every literal carries the {@code CP_ENV} prefix (no login shell). The cpdata_collector {@code --list} and
- * {@code --run} literals are approved gate rows only; nothing here executes them.
+ * before it is sent. Every literal carries the {@code CP_ENV} prefix (no login shell). The heavy items (C8-C22) are
+ * {@link CpSupportBundleHeavy}. A Check Point management server or Multi-Domain Server (step S6) is collected through the
+ * same literals under the {@code cp_multi_domain_server} platform scope (V234 rows, ids prefixed {@code cpm_sb_}).
  */
 public final class CpSupportBundle {
     private CpSupportBundle() {}
@@ -31,6 +32,8 @@ public final class CpSupportBundle {
     public static final String CAPABILITY = "cp_support_bundle";
     public static final String VENDOR = "check_point";
     public static final String PLATFORM_ROLE_SCOPE = "cp_gaia_gateway";
+    /** Step S6: a Check Point management server (SMS) or Multi-Domain Server; every neXus management server is this scope. */
+    public static final String MANAGEMENT_SCOPE = "cp_multi_domain_server";
     public static final String SHELL = "expert";
 
     /** CP_REMOTE_SHELL_NORMALIZATION_CONTRACT_2026_11_11.md 6.1 (same text as MdsExportPlan.CP_ENV). */
@@ -65,14 +68,28 @@ public final class CpSupportBundle {
         public String gateId() { return gateId; }
         public String command() { return command; }
 
-        public CanonicalCommandKey key() {
-            return new CanonicalCommandKey(VENDOR, PLATFORM_ROLE_SCOPE, SHELL, "SSH_EXEC", command);
+        /** The gate id under a platform scope: the gateway ids as designed, {@code cpm_sb_} for the management scope. */
+        public String gateId(String scope) { return MANAGEMENT_SCOPE.equals(scope) ? "cpm_" + gateId.substring("cp_".length()) : gateId; }
+
+        public CanonicalCommandKey key() { return key(PLATFORM_ROLE_SCOPE); }
+
+        public CanonicalCommandKey key(String scope) {
+            return new CanonicalCommandKey(VENDOR, scope, SHELL, "SSH_EXEC", command);
+        }
+
+        /** The reads a management server run uses: the presence read, the two prechecks and the HCP directory listing. */
+        public boolean onManagement() {
+            return this == CPDATA_PRESENT || this == CPU_MULTI || this == DF_VAR_LOG || this == LS_HCP_LAST;
         }
     }
 
     /** The signed-off read gate of one exec read; empty when missing, unsigned, not a read or ambiguous. */
     public static Optional<GateResolution.Known> gate(Exec exec, GateRegistryPort registry) {
-        return resolve(exec.key(), exec.gateId(), registry);
+        return gate(exec, registry, PLATFORM_ROLE_SCOPE);
+    }
+
+    public static Optional<GateResolution.Known> gate(Exec exec, GateRegistryPort registry, String scope) {
+        return resolve(exec.key(scope), exec.gateId(scope), registry);
     }
 
     /** C7. */
@@ -82,9 +99,9 @@ public final class CpSupportBundle {
     }
 
     /**
-     * The two cpdata_collector literals the PO approved after the S2 brief (2026-11-15): the gate rows exist (V230), but no
-     * executor, plan or capability step uses them in this step ({@code CpSupportBundleGateTest} keeps it so). The run is a
-     * recovery-write (BW-2), so it never resolves as a class 0 read here; a later lane builds its own resolution.
+     * The two cpdata_collector literals the PO approved after the S2 brief (2026-11-15): the gate rows exist (V230). Step S6
+     * wires them as an optional item ({@link CpSupportBundleHeavy}); the run is a recovery-write (BW-2), so it never resolves
+     * as a class 0 read here.
      */
     public static final String CPDATA_LIST_GATE = "cp_sb_cpdata_collector_list";
 

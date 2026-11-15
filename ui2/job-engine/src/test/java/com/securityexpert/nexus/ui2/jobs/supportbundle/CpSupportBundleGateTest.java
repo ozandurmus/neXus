@@ -22,7 +22,7 @@ import com.securityexpert.nexus.ui2.platform.ActionClass;
 
 /**
  * Support bundle step S2 (PO approval 2026-11-15): exactly the approved Check Point literals are gated, the fixture and
- * V230 agree, the two later-approved cpdata_collector rows exist as gate rows only, and nothing executes them.
+ * V230 agree, the two later-approved cpdata_collector rows exist; step S6 wires them as the optional heavy item (CpSupportBundleHeavyGateTest).
  */
 class CpSupportBundleGateTest {
 
@@ -30,6 +30,10 @@ class CpSupportBundleGateTest {
     private static final String LIST = P + "cpdata_collector --list";
     private static final String RUN = P + "cd %1$s && setsid nohup bash --noprofile --norc -c \"timeout 1800 cpdata_collector --run "
             + "-p %1$s/cpsdc.tgz -t 3 -m 100 > %1$s/cpsdc.log 2>&1; echo \\$? > %1$s/cpsdc.rc\" </dev/null >/dev/null 2>&1 &";
+
+    /** The gateway rows step S6 added in V234 (C8-C20); V230 stays as it was. */
+    private static final List<String> V234_STEMS = List.of("mkdir", "hcp_start", "hcp_start_vs", "copy_hcp", "cpinfo_start",
+            "cpinfo_start_sms", "cpinfo_start_vs", "poll_rc", "list_workdir", "bundle", "sha256", "sftp_get_bundle", "remove_workdir");
 
     private static List<GateRow> fixture() {
         return GateRegistryFixtureLoader.loadFromStream(CpSupportBundleGateTest.class.getClassLoader()
@@ -76,7 +80,7 @@ class CpSupportBundleGateTest {
     }
 
     @Test
-    void theCpdataCollectorRowsAreApprovedGateRowsOnly() {
+    void theCpdataCollectorRowsAreApprovedGateRows() {
         GateRow list = row(CpSupportBundle.CPDATA_LIST_GATE);
         assertEquals(LIST, list.canonicalCommandKey());
         assertEquals(ActionClass.CLASS_0_READ, list.actionClass());
@@ -94,25 +98,12 @@ class CpSupportBundleGateTest {
         String sql = Files.readString(Path.of("../service/src/main/resources/db/migration/V230__support_bundle_collection.sql"));
         assertTrue(sql.contains("set_config('app.actor_fingerprint'") && sql.contains("ON CONFLICT (gate_id) DO NOTHING"));
         for (GateRow r : fixture()) {
-            if (!r.gateId().startsWith("cp_sb_")) continue;
+            if (!r.gateId().startsWith("cp_sb_") || V234_STEMS.stream().anyMatch(stem -> r.gateId().equals("cp_sb_" + stem))) continue;
             assertTrue(sql.contains("('" + r.gateId() + "', '" + r.vendor() + "', '" + r.platformRoleScope() + "', '" + r.shellContext()
                     + "', '" + r.transportKind() + "',\n     '" + r.canonicalCommandKey().replace("'", "''") + "',"), r.gateId());
         }
-        assertEquals(10, fixture().stream().filter(r -> r.gateId().startsWith("cp_sb_")).count());
-    }
-
-    @Test
-    void noMainCodeExecutesTheCpdataCollectorRows() throws IOException {
-        for (String module : List.of("../worker/src/main", "../job-engine/src/main", "../service/src/main/java")) {
-            try (Stream<Path> files = Files.walk(Path.of(module))) {
-                for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
-                    if (file.getFileName().toString().equals("CpSupportBundle.java")) continue;
-                    String text = Files.readString(file);
-                    assertFalse(text.contains("cpdata_collector --run") || text.contains("CPDATA_RUN_GATE")
-                            || text.contains("cp_sb_cpdata_collector_run") || text.contains("CPDATA_LIST_GATE"), file.toString());
-                }
-            }
-        }
+        assertEquals(10, fixture().stream().filter(r -> r.gateId().startsWith("cp_sb_")
+                && V234_STEMS.stream().noneMatch(stem -> r.gateId().equals("cp_sb_" + stem))).count());
     }
 
     @Test

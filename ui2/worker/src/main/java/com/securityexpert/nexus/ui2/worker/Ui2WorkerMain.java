@@ -515,6 +515,7 @@ public final class Ui2WorkerMain {
                     .withPanSupportBundle(panSupportBundleExecutor)
                     .withAsaSupportBundle(asaSupportBundleExecutor)
                     .withFgtSupportBundle(fgtSupportBundleExecutor)
+                    .withSupportBundleAdmission(supportBundleStore)
                     .withCpSpikeLayoutReview(cpSpikeLayoutReviewExecutor)
                     .withCredentialCanary(credentialCanaryExecutor)
                     .withPathValidation(pathValidationExecutor)

@@ -291,6 +291,134 @@ public final class JooqSupportBundleStore implements SupportBundleRunStore {
                         "gzip".equals(r.get("compression", String.class)))));
     }
 
+    @Override
+    public void markWorkDir(UUID requestId, String workDirPath) {
+        audited.inTransaction(WORKER_ACTOR, ACTION_RUN, requestId.toString(), dsl -> dsl.execute(
+                "update support_bundle_request set work_dir_path = {1}, work_dir_cleaned = false where id = {0}::uuid",
+                requestId.toString(), workDirPath));
+    }
+
+    @Override
+    public void markWorkDirCleaned(UUID requestId) {
+        audited.inTransaction(WORKER_ACTOR, ACTION_RUN, requestId.toString(), dsl -> dsl.execute(
+                "update support_bundle_request set work_dir_cleaned = true where id = {0}::uuid", requestId.toString()));
+    }
+
+    @Override
+    public boolean multiDomainServer(String deviceId) {
+        return !tx.inTransaction(dsl -> dsl.fetch("select 1 from cp_domain_server_placement where source_id = {0} limit 1",
+                deviceId)).isEmpty();
+    }
+
+    @Override
+    public List<Integer> virtualSystemIds(String deviceId) {
+        return tx.inTransaction(dsl -> dsl.fetch("select distinct i.context from device_interface i where i.run_id = "
+                + "(select run_id from device_inventory_run where device_id = {0} order by collected_at desc limit 1) "
+                + "and i.context ~ '^[0-9]{1,4}$'", deviceId)).stream().map(r -> Integer.parseInt(r.get(0, String.class)))
+                .filter(v -> v >= 0 && v <= 4095).distinct().sorted().toList();
+    }
+
+    // ------------------------------------------------------------------ claim time admission (step S6)
+
+    public static final java.time.Duration HA_PEER_DEFER = java.time.Duration.ofMinutes(10);
+    public static final java.time.Duration FLEET_CAP_DEFER = java.time.Duration.ofMinutes(5);
+    public static final java.time.Duration GIVE_UP_AFTER = java.time.Duration.ofHours(3);
+    public static final int HEAVY_FLEET_CAP = 2;
+    private static final String BUNDLE_CAPABILITIES = "'cp_support_bundle', 'pan_support_bundle', 'asa_support_bundle', 'fgt_support_bundle'";
+
+    /** What the claim loop does with a support bundle job it has just claimed. */
+    public sealed interface ClaimDecision {
+        record Proceed() implements ClaimDecision {
+        }
+
+        /** Put the job back; claimable again from {@code until}. {@code reason} is one of HA_PEER_RUNNING, FLEET_CAP. */
+        record Defer(Instant until, String reason) implements ClaimDecision {
+        }
+
+        /** Not started within three hours of its run time: the request fails as NOT_STARTED_DEVICE_BUSY. */
+        record GiveUp() implements ClaimDecision {
+        }
+    }
+
+    /**
+     * Claim time admission of a support bundle job (design 5.8; PO 2026-11-15, step S6). The claim statement itself never hands a
+     * job out while another job of the same device is CLAIMED or EXECUTING (device busy). This adds, for the job just claimed:
+     * give up after three hours; defer by ten minutes while a support bundle job runs on another member of the same cluster
+     * (membership: the stored {@code cluster_member_ref}; none means single); defer by five minutes while two recovery-write
+     * (heavy) support bundle jobs already run fleet-wide. Two jobs claimed in the same instant are ordered by
+     * (submitted_at, job_id): a job counts the others that are EXECUTING and the CLAIMED ones that rank before it, so exactly
+     * one of two peers, and at most two heavy jobs, pass.
+     */
+    public ClaimDecision claimDecision(String jobId, Instant now, int fleetCap) {
+        return tx.inTransaction(dsl -> {
+            var req = dsl.fetchOne("select r.run_at, j.target_device_id, j.action_class from support_bundle_request r "
+                    + "join jobs j on j.job_id = r.job_id where r.job_id = {0} and r.state = 'QUEUED'", jobId);
+            if (req == null) return new ClaimDecision.Proceed();
+            Instant runAt = req.get("run_at", Timestamp.class).toInstant();
+            if (now.isAfter(runAt.plus(GIVE_UP_AFTER))) return new ClaimDecision.GiveUp();
+            String device = req.get("target_device_id", String.class);
+            String others = "from jobs o where o.job_id <> {0} and o.capability_id in (" + BUNDLE_CAPABILITIES + ") "
+                    + "and (o.state = 'EXECUTING' or (o.state = 'CLAIMED' and (o.submitted_at, o.job_id) < "
+                    + "(select m.submitted_at, m.job_id from jobs m where m.job_id = {0})))";
+            Integer peers = device == null ? 0 : dsl.fetchOne("select count(*) " + others
+                    + " and exists (select 1 from devices od join devices md on md.device_id = {1} "
+                    + "where od.device_id = o.target_device_id and od.device_id <> md.device_id "
+                    + "and md.cluster_member_ref is not null and od.cluster_member_ref = md.cluster_member_ref)",
+                    jobId, device).get(0, Integer.class);
+            if (peers != null && peers > 0) return new ClaimDecision.Defer(now.plus(HA_PEER_DEFER), "HA_PEER_RUNNING");
+            if ("recovery-write".equals(req.get("action_class", String.class))) {
+                Integer heavy = dsl.fetchOne("select count(*) " + others + " and o.action_class = 'recovery-write'", jobId)
+                        .get(0, Integer.class);
+                if (heavy != null && heavy >= fleetCap) return new ClaimDecision.Defer(now.plus(FLEET_CAP_DEFER), "FLEET_CAP");
+            }
+            return new ClaimDecision.Proceed();
+        });
+    }
+
+    /** Puts a claimed job back to REQUESTED, claimable from {@code until}; false when it is no longer this epoch's CLAIMED job. */
+    public boolean deferClaimed(String jobId, long epoch, Instant until) {
+        return audited.inTransaction(WORKER_ACTOR, ACTION_RUN, jobId, dsl -> dsl.execute(
+                "update jobs set state = 'REQUESTED', admission_not_before = {2}, admission_deferrals = admission_deferrals + 1, "
+                        + "lease_worker_id = null, lease_expires_at = null where job_id = {0} and lease_epoch = {1} and state = 'CLAIMED'",
+                jobId, epoch, Timestamp.from(until)) == 1);
+    }
+
+    /** Ends a claimed job that was not started within three hours: the job is cancelled, the request FAILED (NOT_STARTED_DEVICE_BUSY). */
+    public boolean giveUpClaimed(String jobId, long epoch) {
+        return audited.inTransaction(WORKER_ACTOR, ACTION_RUN, jobId, dsl -> {
+            int n = dsl.execute("update jobs set state = 'CANCELLED', outcome = 'CANCELLED', terminal_reason = 'NOT_STARTED_DEVICE_BUSY', "
+                    + "finished_at = now() where job_id = {0} and lease_epoch = {1} and state = 'CLAIMED'", jobId, epoch);
+            if (n == 1) closeNotStarted(dsl, jobId);
+            return n == 1;
+        });
+    }
+
+    /**
+     * Gives up the requests whose job was never claimed (a busy device never freed up) three hours after their run time.
+     * Returns how many requests it closed.
+     */
+    public int giveUpStale(Instant now) {
+        return audited.inTransaction(WORKER_ACTOR, ACTION_RUN, "support_bundle_give_up", dsl -> {
+            var stale = dsl.fetch("select j.job_id from jobs j join support_bundle_request r on r.job_id = j.job_id "
+                    + "where j.state = 'REQUESTED' and r.state = 'QUEUED' and r.run_at < {0}", Timestamp.from(now.minus(GIVE_UP_AFTER)));
+            int closed = 0;
+            for (var row : stale) {
+                String jobId = row.get(0, String.class);
+                int n = dsl.execute("update jobs set state = 'CANCELLED', outcome = 'CANCELLED', terminal_reason = 'NOT_STARTED_DEVICE_BUSY', "
+                        + "finished_at = now() where job_id = {0} and state = 'REQUESTED'", jobId);
+                if (n == 1) { closeNotStarted(dsl, jobId); closed++; }
+            }
+            return closed;
+        });
+    }
+
+    private static void closeNotStarted(org.jooq.DSLContext dsl, String jobId) {
+        dsl.execute("update support_bundle_item set state = 'CANCELLED', outcome_code = 'NOT_STARTED_DEVICE_BUSY', finished_at = now() "
+                + "where state = 'QUEUED' and request_id in (select id from support_bundle_request where job_id = {0} and state = 'QUEUED')", jobId);
+        dsl.execute("update support_bundle_request set state = 'FAILED', outcome = 'NOT_STARTED_DEVICE_BUSY', finished_at = now() "
+                + "where job_id = {0} and state = 'QUEUED'", jobId);
+    }
+
     // ------------------------------------------------------------------ mapping
 
     private static RequestRow toRequest(Record r) {
