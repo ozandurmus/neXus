@@ -31,6 +31,11 @@ def board(*rows, archive=()):
 @pytest.fixture(scope="module")
 def browser():
     with sync_playwright() as runtime:
+        # Skip when the Chromium binary is not installed (for example under a throwaway HOME), but fail
+        # when CI=true: the CI job installs the browser, so a missing one there is a real defect.
+        if not os.path.exists(runtime.chromium.executable_path) and os.environ.get("CI", "").lower() != "true":
+            pytest.skip("Playwright Chromium is not installed (run 'python -m playwright install chromium'); "
+                        "set CI=true to require it")
         browser = runtime.chromium.launch(headless=True)
         yield browser
         browser.close()
