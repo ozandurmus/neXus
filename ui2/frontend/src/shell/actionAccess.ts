@@ -34,3 +34,21 @@ export function useRoleAllows(plane: string | readonly string[] | undefined): bo
   const session = useSession();
   return !plane || planeGranted(session?.permissions, plane);
 }
+
+/**
+ * The planes that, held together, mark the roles the server lets reconcile an unknown-outcome job (the Security Admin and
+ * the Backup Admin): an operator holds Operations but not Admin, an onboarding or compliance admin holds Admin but not
+ * Operations. Presentation only, like every other control here; the server still decides, and its reason is shown.
+ */
+export const PLANES_RECONCILE: readonly string[] = [PLANE_ADMIN, PLANE_OPERATIONS];
+
+/** True when every one of `planes` is granted (an absent or empty plane list is unrestricted, as in {@link planeGranted}). */
+export function planesAllGranted(permissions: readonly string[] | undefined, planes: readonly string[]): boolean {
+  return planes.every((plane) => planeGranted(permissions, plane));
+}
+
+/** True when this session should be offered the Reconcile action (see {@link PLANES_RECONCILE}). */
+export function useCanReconcileJobs(): boolean {
+  const session = useSession();
+  return planesAllGranted(session?.permissions, PLANES_RECONCILE);
+}
