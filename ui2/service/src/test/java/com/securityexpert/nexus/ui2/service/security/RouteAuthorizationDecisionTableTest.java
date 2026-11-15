@@ -234,6 +234,8 @@ class RouteAuthorizationDecisionTableTest {
         var scanner = new ClassPathScanningCandidateComponentProvider(false);
         scanner.addIncludeFilter(new AnnotationTypeFilter(Controller.class));
         for (BeanDefinition definition : scanner.findCandidateComponents("com.securityexpert.nexus.ui2.service")) {
+            // Test fixtures (a probe controller declared inside a test class) are not application routes.
+            if (definition.getBeanClassName().contains("Test")) continue;
             Class<?> controller = Class.forName(definition.getBeanClassName());
             RequestMapping classMapping = AnnotatedElementUtils.findMergedAnnotation(controller, RequestMapping.class);
             List<String> prefixes = classMapping == null || classMapping.path().length == 0 ? List.of("")
@@ -379,6 +381,29 @@ class RouteAuthorizationDecisionTableTest {
         };
     }
 
+    /** The Spring Security path: the manager decides, a refusal is written by the access-denied handler. */
+    static Driver managerDriver(Fixture fixture) {
+        var manager = new NexusRouteActionAuthorizationManager(SecurityWebMvcConfig.routeGate(fixture.gateChain,
+                fixture.identityResolver, fixture.roleTokenResolver), request -> {
+                    // the table's own knowledge of what the dispatcher would select for each target
+                    boolean resource = request.getServletPath().startsWith("/api/v2/not-a-controller-route")
+                            || request.getServletPath().startsWith("/api/not-a-controller-route")
+                            || request.getServletPath().equals("/unknown-page") || request.getServletPath().equals("/index.html")
+                            || request.getServletPath().startsWith("/assets/") || request.getServletPath().equals("/favicon.ico");
+                    return resource ? NexusRouteActionAuthorizationManager.HandlerKind.RESOURCE
+                            : NexusRouteActionAuthorizationManager.HandlerKind.CONTROLLER;
+                });
+        var handler = new NexusSecurityAccessDeniedHandler();
+        return (request, route, response) -> {
+            var result = manager.authorize(() -> null, new org.springframework.security.web.access.intercept.RequestAuthorizationContext(request));
+            boolean permitted = result.isGranted();
+            if (!permitted) {
+                handler.handle(request, response, new org.springframework.security.authorization.AuthorizationDeniedException("denied", result));
+            }
+            return describe(permitted, request, response, kindOf(request, fixture));
+        };
+    }
+
     static Kind kindOf(MockHttpServletRequest request, Fixture fixture) {
         Cookie[] cookies = request.getCookies();
         String cookie = cookies == null ? null : cookies[0].getValue();
@@ -389,5 +414,11 @@ class RouteAuthorizationDecisionTableTest {
     void theInterceptorReproducesTheCommittedDecisionTable() throws Exception {
         var fixture = new Fixture();
         compareOrRecord(transcript(interceptorDriver(fixture), fixture));
+    }
+
+    @Test
+    void theSpringSecurityManagerReproducesTheCommittedDecisionTable() throws Exception {
+        var fixture = new Fixture();
+        compareOrRecord(transcript(managerDriver(fixture), fixture));
     }
 }

@@ -17,8 +17,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * the previous build's bundle after a deploy (2026-09-22: a blank console
  * until a hard refresh). It is revalidated on every load; the hashed
  * {@code /assets/*} files stay immutably cached.
+ *
+ * <p>Ordered just ahead of the Spring Security filter chain (default order -100) so the header is still set on a request the
+ * route authorization refuses there (migration plan Step 5: a refusal of {@code OPTIONS /} used to be written by the interceptor,
+ * after this filter had run).</p>
  */
 @Component
+@org.springframework.core.annotation.Order(-101)
 public class IndexHtmlNoCacheFilter extends OncePerRequestFilter {
 
     @Override

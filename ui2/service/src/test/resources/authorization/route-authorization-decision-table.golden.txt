@@ -1,4 +1,4 @@
-# route authorization decision table; kinds=18 routes=618 rows=11124
+# route authorization decision table; kinds=18 routes=568 rows=10224
 # columns: kind | METHOD path | PERMIT attributes | REFUSE status content-type body ; then authz rows and machine audits
 anonymous | DELETE /api/v2/cutover/assessments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | DELETE /api/v2/cutover/assessments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
@@ -36,24 +36,6 @@ machine-replay-viewer | DELETE /api/v2/cutover/segments/synthetic-ref | REFUSE 4
 viewer-no-csrf | DELETE /api/v2/cutover/segments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 viewer-no-origin | DELETE /api/v2/cutover/segments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
 must-change | DELETE /api/v2/cutover/segments/synthetic-ref | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
-anonymous | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | DELETE /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | DELETE /api/v2/packet-analysis/cases/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | DELETE /api/v2/packet-analysis/cases/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | DELETE /api/v2/packet-analysis/cases/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -90,24 +72,6 @@ machine-replay-viewer | DELETE /api/v2/packet-analysis/telemetry/synthetic-ref |
 viewer-no-csrf | DELETE /api/v2/packet-analysis/telemetry/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 viewer-no-origin | DELETE /api/v2/packet-analysis/telemetry/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
 must-change | DELETE /api/v2/packet-analysis/telemetry/synthetic-ref | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
-anonymous | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | DELETE /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | DELETE /api/v2/policy/offline-analyses/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | DELETE /api/v2/policy/offline-analyses/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | DELETE /api/v2/policy/offline-analyses/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -126,60 +90,6 @@ machine-replay-viewer | DELETE /api/v2/policy/offline-analyses/synthetic-ref | R
 viewer-no-csrf | DELETE /api/v2/policy/offline-analyses/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 viewer-no-origin | DELETE /api/v2/policy/offline-analyses/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
 must-change | DELETE /api/v2/policy/offline-analyses/synthetic-ref | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
-anonymous | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | DELETE /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | DELETE /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | DELETE /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | DELETE /roles/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | DELETE /roles/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | DELETE /roles/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -216,42 +126,6 @@ machine-replay-viewer | GET / | PERMIT actor=- session=- replay-viewer=-
 viewer-no-csrf | GET / | PERMIT actor=- session=- replay-viewer=-
 viewer-no-origin | GET / | PERMIT actor=- session=- replay-viewer=-
 must-change | GET / | PERMIT actor=- session=- replay-viewer=-
-anonymous | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | GET /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | GET /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | GET /api/v2/asa-failover/approvals | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | GET /api/v2/asa-failover/approvals | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | GET /api/v2/asa-failover/approvals | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
@@ -990,42 +864,6 @@ machine-replay-viewer | GET /api/v2/failover/schedules/synthetic-ref | REFUSE 40
 viewer-no-csrf | GET /api/v2/failover/schedules/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | GET /api/v2/failover/schedules/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | GET /api/v2/failover/schedules/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | GET /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | GET /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | GET /api/v2/failover/synthetic-ref/executions/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | GET /api/v2/failover/synthetic-ref/executions/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | GET /api/v2/failover/synthetic-ref/executions/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
@@ -2934,24 +2772,6 @@ machine-replay-viewer | GET /api/v2/zone-matrix/versions/synthetic-ref | PERMIT 
 viewer-no-csrf | GET /api/v2/zone-matrix/versions/synthetic-ref | PERMIT actor=match session=match replay-viewer=- | authz=[zone_matrix_read:PERMITTED]
 viewer-no-origin | GET /api/v2/zone-matrix/versions/synthetic-ref | PERMIT actor=match session=match replay-viewer=- | authz=[zone_matrix_read:PERMITTED]
 must-change | GET /api/v2/zone-matrix/versions/synthetic-ref | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
-anonymous | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | GET /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | GET /audit-logs | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | GET /audit-logs | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | GET /audit-logs | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -3042,24 +2862,6 @@ machine-replay-viewer | GET /backups/synthetic-ref/entries | PERMIT actor=match 
 viewer-no-csrf | GET /backups/synthetic-ref/entries | PERMIT actor=match session=match replay-viewer=- | authz=[device_backup_read:NO_APPLICABLE_AUTHORITY]
 viewer-no-origin | GET /backups/synthetic-ref/entries | PERMIT actor=match session=match replay-viewer=- | authz=[device_backup_read:NO_APPLICABLE_AUTHORITY]
 must-change | GET /backups/synthetic-ref/entries | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
-anonymous | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | GET /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | GET /clusters/synthetic-ref/inventory | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | GET /clusters/synthetic-ref/inventory | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | GET /clusters/synthetic-ref/inventory | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -3366,24 +3168,6 @@ machine-replay-viewer | GET /devices/synthetic-ref/management-tree | PERMIT acto
 viewer-no-csrf | GET /devices/synthetic-ref/management-tree | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
 viewer-no-origin | GET /devices/synthetic-ref/management-tree | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
 must-change | GET /devices/synthetic-ref/management-tree | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
-anonymous | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | GET /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | GET /discovery/runs/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | GET /discovery/runs/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | GET /discovery/runs/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -3420,24 +3204,6 @@ machine-replay-viewer | GET /error | PERMIT actor=- session=- replay-viewer=-
 viewer-no-csrf | GET /error | PERMIT actor=- session=- replay-viewer=-
 viewer-no-origin | GET /error | PERMIT actor=- session=- replay-viewer=-
 must-change | GET /error | PERMIT actor=- session=- replay-viewer=-
-anonymous | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | GET /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | GET /healthz | PERMIT actor=- session=- replay-viewer=-
 unknown-cookie | GET /healthz | PERMIT actor=- session=- replay-viewer=-
 expired | GET /healthz | PERMIT actor=- session=- replay-viewer=-
@@ -3456,24 +3222,6 @@ machine-replay-viewer | GET /healthz | PERMIT actor=- session=- replay-viewer=-
 viewer-no-csrf | GET /healthz | PERMIT actor=- session=- replay-viewer=-
 viewer-no-origin | GET /healthz | PERMIT actor=- session=- replay-viewer=-
 must-change | GET /healthz | PERMIT actor=- session=- replay-viewer=-
-anonymous | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | GET /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | GET /jobs/synthetic-ref/transcript | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | GET /jobs/synthetic-ref/transcript | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | GET /jobs/synthetic-ref/transcript | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -3492,24 +3240,6 @@ machine-replay-viewer | GET /jobs/synthetic-ref/transcript | REFUSE 403 applicat
 viewer-no-csrf | GET /jobs/synthetic-ref/transcript | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"job_transcript_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[job_transcript_read:DENIED]
 viewer-no-origin | GET /jobs/synthetic-ref/transcript | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"job_transcript_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[job_transcript_read:DENIED]
 must-change | GET /jobs/synthetic-ref/transcript | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
-anonymous | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | GET /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | GET /local-identities | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | GET /local-identities | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | GET /local-identities | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -3546,42 +3276,6 @@ machine-replay-viewer | GET /notifications | PERMIT actor=match session=match re
 viewer-no-csrf | GET /notifications | PERMIT actor=match session=match replay-viewer=- | authz=[notifications_read:NO_APPLICABLE_AUTHORITY]
 viewer-no-origin | GET /notifications | PERMIT actor=match session=match replay-viewer=- | authz=[notifications_read:NO_APPLICABLE_AUTHORITY]
 must-change | GET /notifications | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
-anonymous | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | GET /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | GET /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | GET /project-plan | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | GET /project-plan | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | GET /project-plan | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -3600,24 +3294,6 @@ machine-replay-viewer | GET /project-plan | PERMIT actor=match session=match rep
 viewer-no-csrf | GET /project-plan | PERMIT actor=match session=match replay-viewer=- | authz=[project_plan_read:NO_APPLICABLE_AUTHORITY]
 viewer-no-origin | GET /project-plan | PERMIT actor=match session=match replay-viewer=- | authz=[project_plan_read:NO_APPLICABLE_AUTHORITY]
 must-change | GET /project-plan | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
-anonymous | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | GET /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | GET /role-bindings | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | GET /role-bindings | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | GET /role-bindings | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -3726,60 +3402,6 @@ machine-replay-viewer | GET /sessions | REFUSE 403 application/json {"error":"AC
 viewer-no-csrf | GET /sessions | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"session_revoke_by_admin","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[session_revoke_by_admin:DENIED]
 viewer-no-origin | GET /sessions | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"session_revoke_by_admin","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[session_revoke_by_admin:DENIED]
 must-change | GET /sessions | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
-anonymous | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | GET /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | HEAD /actuator/health | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | HEAD /actuator/prometheus | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | HEAD /api/v2/asa-failover/approvals | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | HEAD /api/v2/asa-failover/approvals | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | HEAD /api/v2/asa-failover/approvals | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
@@ -4518,42 +4140,6 @@ machine-replay-viewer | HEAD /api/v2/failover/schedules/synthetic-ref | REFUSE 4
 viewer-no-csrf | HEAD /api/v2/failover/schedules/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | HEAD /api/v2/failover/schedules/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | HEAD /api/v2/failover/schedules/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | HEAD /api/v2/failover/schedules/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | HEAD /api/v2/failover/schedules/synthetic-ref/trigger | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | HEAD /api/v2/failover/synthetic-ref/executions/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | HEAD /api/v2/failover/synthetic-ref/executions/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | HEAD /api/v2/failover/synthetic-ref/executions/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
@@ -6462,24 +6048,6 @@ machine-replay-viewer | HEAD /api/v2/zone-matrix/versions/synthetic-ref | REFUSE
 viewer-no-csrf | HEAD /api/v2/zone-matrix/versions/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | HEAD /api/v2/zone-matrix/versions/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | HEAD /api/v2/zone-matrix/versions/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | HEAD /async | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | HEAD /audit-logs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | HEAD /audit-logs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | HEAD /audit-logs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
@@ -6570,24 +6138,6 @@ machine-replay-viewer | HEAD /backups/synthetic-ref/entries | REFUSE 403 applica
 viewer-no-csrf | HEAD /backups/synthetic-ref/entries | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | HEAD /backups/synthetic-ref/entries | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | HEAD /backups/synthetic-ref/entries | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | HEAD /cached | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | HEAD /clusters/synthetic-ref/inventory | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | HEAD /clusters/synthetic-ref/inventory | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | HEAD /clusters/synthetic-ref/inventory | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
@@ -6894,24 +6444,6 @@ machine-replay-viewer | HEAD /devices/synthetic-ref/management-tree | REFUSE 403
 viewer-no-csrf | HEAD /devices/synthetic-ref/management-tree | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | HEAD /devices/synthetic-ref/management-tree | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | HEAD /devices/synthetic-ref/management-tree | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | HEAD /direct | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | HEAD /discovery/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | HEAD /discovery/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | HEAD /discovery/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
@@ -6930,24 +6462,6 @@ machine-replay-viewer | HEAD /discovery/runs/synthetic-ref | REFUSE 403 applicat
 viewer-no-csrf | HEAD /discovery/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | HEAD /discovery/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | HEAD /discovery/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | HEAD /force-session | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | HEAD /healthz | PERMIT actor=- session=- replay-viewer=-
 unknown-cookie | HEAD /healthz | PERMIT actor=- session=- replay-viewer=-
 expired | HEAD /healthz | PERMIT actor=- session=- replay-viewer=-
@@ -6966,24 +6480,6 @@ machine-replay-viewer | HEAD /healthz | PERMIT actor=- session=- replay-viewer=-
 viewer-no-csrf | HEAD /healthz | PERMIT actor=- session=- replay-viewer=-
 viewer-no-origin | HEAD /healthz | PERMIT actor=- session=- replay-viewer=-
 must-change | HEAD /healthz | PERMIT actor=- session=- replay-viewer=-
-anonymous | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | HEAD /inspect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | HEAD /jobs/synthetic-ref/transcript | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | HEAD /jobs/synthetic-ref/transcript | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | HEAD /jobs/synthetic-ref/transcript | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
@@ -7002,24 +6498,6 @@ machine-replay-viewer | HEAD /jobs/synthetic-ref/transcript | REFUSE 403 applica
 viewer-no-csrf | HEAD /jobs/synthetic-ref/transcript | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | HEAD /jobs/synthetic-ref/transcript | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | HEAD /jobs/synthetic-ref/transcript | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | HEAD /jooq | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | HEAD /local-identities | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | HEAD /local-identities | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | HEAD /local-identities | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
@@ -7056,42 +6534,6 @@ machine-replay-viewer | HEAD /notifications | REFUSE 403 application/json {"erro
 viewer-no-csrf | HEAD /notifications | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | HEAD /notifications | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | HEAD /notifications | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | HEAD /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | HEAD /other | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | HEAD /project-plan | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | HEAD /project-plan | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | HEAD /project-plan | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
@@ -7110,24 +6552,6 @@ machine-replay-viewer | HEAD /project-plan | REFUSE 403 application/json {"error
 viewer-no-csrf | HEAD /project-plan | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | HEAD /project-plan | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | HEAD /project-plan | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | HEAD /redirect | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | HEAD /role-bindings | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | HEAD /role-bindings | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | HEAD /role-bindings | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
@@ -7236,114 +6660,6 @@ machine-replay-viewer | HEAD /sessions | REFUSE 403 application/json {"error":"A
 viewer-no-csrf | HEAD /sessions | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | HEAD /sessions | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | HEAD /sessions | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-csrf | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | HEAD /status | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | PATCH /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | PATCH /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | PATCH /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | PATCH /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | PATCH /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | POST /api/v2/asa-failover/approvals | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | POST /api/v2/asa-failover/approvals | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | POST /api/v2/asa-failover/approvals | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
@@ -8406,24 +7722,6 @@ machine-replay-viewer | POST /api/v2/path-analysis/validate | PERMIT actor=match
 viewer-no-csrf | POST /api/v2/path-analysis/validate | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 viewer-no-origin | POST /api/v2/path-analysis/validate | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
 must-change | POST /api/v2/path-analysis/validate | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
-anonymous | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | POST /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | POST /api/v2/policy/policies/synthetic-ref/lookup | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | POST /api/v2/policy/policies/synthetic-ref/lookup | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | POST /api/v2/policy/policies/synthetic-ref/lookup | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -8460,60 +7758,6 @@ machine-replay-viewer | POST /api/v2/policy/policies/synthetic-ref/offline-analy
 viewer-no-csrf | POST /api/v2/policy/policies/synthetic-ref/offline-analyses | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 viewer-no-origin | POST /api/v2/policy/policies/synthetic-ref/offline-analyses | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
 must-change | POST /api/v2/policy/policies/synthetic-ref/offline-analyses | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
-anonymous | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | POST /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | POST /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | POST /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | POST /api/v2/policy/sources/synthetic-ref/collect | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | POST /api/v2/policy/sources/synthetic-ref/collect | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | POST /api/v2/policy/sources/synthetic-ref/collect | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -10098,24 +9342,6 @@ machine-replay-viewer | POST /login/saml2/sso/adfs | REFUSE 403 application/json
 viewer-no-csrf | POST /login/saml2/sso/adfs | PERMIT actor=- session=- replay-viewer=-
 viewer-no-origin | POST /login/saml2/sso/adfs | PERMIT actor=- session=- replay-viewer=-
 must-change | POST /login/saml2/sso/adfs | PERMIT actor=- session=- replay-viewer=-
-anonymous | POST /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | POST /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | POST /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | POST /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | POST /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | POST /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | POST /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | POST /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | POST /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | POST /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | POST /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | POST /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | POST /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | POST /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | POST /ok | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | POST /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | POST /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | POST /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | POST /role-bindings | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | POST /role-bindings | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | POST /role-bindings | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -10224,24 +9450,6 @@ machine-replay-viewer | POST /sessions/revoke | REFUSE 403 application/json {"er
 viewer-no-csrf | POST /sessions/revoke | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 viewer-no-origin | POST /sessions/revoke | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
 must-change | POST /sessions/revoke | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
-anonymous | POST /synthetic-job | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | POST /synthetic-job | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | POST /synthetic-job | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | POST /synthetic-job | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | POST /synthetic-job | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | POST /synthetic-job | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | POST /synthetic-job | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | POST /synthetic-job | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | POST /synthetic-job | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | POST /synthetic-job | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | POST /synthetic-job | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | POST /synthetic-job | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | POST /synthetic-job | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | POST /synthetic-job | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | POST /synthetic-job | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | POST /synthetic-job | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | POST /synthetic-job | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | POST /synthetic-job | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | PUT /api/v2/backups/policies | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | PUT /api/v2/backups/policies | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | PUT /api/v2/backups/policies | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -10422,24 +9630,6 @@ machine-replay-viewer | PUT /api/v2/cutover/segments/synthetic-ref | REFUSE 403 
 viewer-no-csrf | PUT /api/v2/cutover/segments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 viewer-no-origin | PUT /api/v2/cutover/segments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
 must-change | PUT /api/v2/cutover/segments/synthetic-ref | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
-anonymous | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | PUT /api/v2/jobs/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | PUT /api/v2/lifecycle/catalog/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | PUT /api/v2/lifecycle/catalog/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | PUT /api/v2/lifecycle/catalog/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -10494,78 +9684,6 @@ machine-replay-viewer | PUT /api/v2/packet-analysis/telemetry/synthetic-ref | RE
 viewer-no-csrf | PUT /api/v2/packet-analysis/telemetry/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 viewer-no-origin | PUT /api/v2/packet-analysis/telemetry/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
 must-change | PUT /api/v2/packet-analysis/telemetry/synthetic-ref | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
-anonymous | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | PUT /api/v2/policy/collections/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | PUT /api/v2/policy/sources | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | PUT /api/v2/policy/sources/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-anonymous | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | PUT /api/v2/policy/sources/synthetic-ref/cancel | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | PUT /api/v2/ssh-trust/mode | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | PUT /api/v2/ssh-trust/mode | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | PUT /api/v2/ssh-trust/mode | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -10674,24 +9792,6 @@ machine-replay-viewer | PUT /devices/synthetic-ref/https-certificate/strict | RE
 viewer-no-csrf | PUT /devices/synthetic-ref/https-certificate/strict | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 viewer-no-origin | PUT /devices/synthetic-ref/https-certificate/strict | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
 must-change | PUT /devices/synthetic-ref/https-certificate/strict | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
-anonymous | PUT /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-unknown-cookie | PUT /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-expired | PUT /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-revoked | PUT /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-no-role | PUT /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-viewer | PUT /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operator | PUT /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-onboarding_admin | PUT /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-backup_admin | PUT /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-compliance_admin | PUT /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-security_admin | PUT /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-operation_admin | PUT /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-role-replay_viewer | PUT /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-root | PUT /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-machine-replay-viewer | PUT /ok | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
-viewer-no-csrf | PUT /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-viewer-no-origin | PUT /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
-must-change | PUT /ok | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | PUT /roles/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | PUT /roles/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | PUT /roles/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}

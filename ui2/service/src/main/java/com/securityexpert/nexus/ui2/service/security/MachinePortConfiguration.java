@@ -12,7 +12,6 @@ import org.springframework.boot.web.server.WebServerFactoryCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.securityexpert.nexus.ui2.service.advisorystore.AdvisorySources;
@@ -52,23 +51,35 @@ public class MachinePortConfiguration {
         };
     }
 
+    /**
+     * Ahead of the Spring Security filter chain (default order -100), behind the HTTP metrics filter (HIGHEST_PRECEDENCE + 10).
+     * The {@code @Order} that used to sit on the bean method is not read for a filter bean, so until migration plan Step 5 this
+     * filter ran last, behind the security chain; once the route-authorization decision runs inside that chain it must not
+     * decide a request on port 8086 that this filter answers 404.
+     */
     @Bean
-    @Order(Ordered.HIGHEST_PRECEDENCE)
     OncePerRequestFilter machinePortFilter() {
-        return new OncePerRequestFilter() {
-            @Override
-            protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
-                    FilterChain chain) throws ServletException, IOException {
-                boolean internal = request.getRequestURI().equals("/internal")
-                        || request.getRequestURI().startsWith("/internal/");
-                if (request.getLocalPort() == 8086
-                        ? !internalPortAllows(request.getMethod(), request.getRequestURI())
-                        : internal) {
-                    response.sendError(404);
-                    return;
-                }
-                chain.doFilter(request, response);
+        return new OrderedMachinePortFilter();
+    }
+
+    private static final class OrderedMachinePortFilter extends OncePerRequestFilter implements Ordered {
+        @Override
+        public int getOrder() {
+            return Ordered.HIGHEST_PRECEDENCE + 20;
+        }
+
+        @Override
+        protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+                FilterChain chain) throws ServletException, IOException {
+            boolean internal = request.getRequestURI().equals("/internal")
+                    || request.getRequestURI().startsWith("/internal/");
+            if (request.getLocalPort() == 8086
+                    ? !internalPortAllows(request.getMethod(), request.getRequestURI())
+                    : internal) {
+                response.sendError(404);
+                return;
             }
-        };
+            chain.doFilter(request, response);
+        }
     }
 }
