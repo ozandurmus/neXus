@@ -437,6 +437,11 @@ public final class Ui2PostgresFixture implements AutoCloseable {
     // Secret files for FlywayMigrationRunner
     // -----------------------------------------------------------------
 
+    /** JDBC URL of this fixture's own database (no credentials), for booting the real service against it. */
+    public String databaseJdbcUrl() {
+        return jdbcUrl(databaseName);
+    }
+
     /** Credential files in the shape the service reads them: one value per file, deleted in {@link #close()}. */
     public Path migrateUserCredentialFile() {
         return userFile();
