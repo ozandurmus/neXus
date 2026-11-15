@@ -2,10 +2,11 @@
 
 ## Status
 
-**DRAFT -- step 1 of the separation: measured inventory and proposal only (2026-11-14).** Awaiting Product
-Owner decision. Nothing is moved or deleted by this document. Backlog `legacy_python_separation` (P3).
-It replaces the 2026-09-23 draft of the same name, whose premises are out of date (section 1). Not
-implementation authority (`AGENTS.md`, authority hierarchy item 2).
+**Steps 1-4 APPROVED by the Product Owner on 2026-11-15 (about 12:00); steps 5-8 are not yet approved.** Step 2
+(the section 6 decisions) is recorded in `PO_DECISION_RECORD_2026_11_15_LEGACY_PYTHON_SEPARATION.md`; the
+per-step status is in section 9. Backlog `legacy_python_separation` (P3). It replaces the 2026-09-23 draft of the
+same name, whose premises are out of date (section 1). Not implementation authority beyond what the decision
+record approves (`AGENTS.md`, authority hierarchy item 2).
 
 ## 1. Headline
 
@@ -241,3 +242,51 @@ re-verified the references that would block the first move/delete steps, at `bat
 - **Nothing under `ui2/`, `.github/` or `deploy/` references `main.py`, `utils/__init__.py` or the dead root tests.**
 
 Left for later steps: all of steps 2-8.
+
+## 9. Step status and PO approval (2026-11-15)
+
+The Product Owner approved steps 2-4 on 2026-11-15 and took the section 6 recommendations as the step-2
+decisions (decisions 1, 2, 3, 4, 5 as recommended; decision 3 only prepares step 5, which is not yet approved).
+Record: `PO_DECISION_RECORD_2026_11_15_LEGACY_PYTHON_SEPARATION.md`.
+
+| Step | Status |
+|---|---|
+| 1. This document | Done (2026-11-14). |
+| 2. PO decisions | Done (2026-11-15): decisions 1, 2, 4, 5 as recommended; 3 recorded, executes with step 5. |
+| 3. Dead-code removal | Approved 2026-11-15; executed in lane legacypy2-1115 (see 9.2). |
+| 4. Archive the one-shot consult scripts | Approved 2026-11-15; executed in lane legacypy2-1115 (see 9.3). |
+| 5-8 | Not approved yet; unchanged. |
+
+### 9.1 Reference greps re-run on this exact tree (lane legacypy2-1115, base `origin/main` 31babb26)
+
+Command shape: `git grep -n <pattern> -- ui2 tools .github deploy scripts project` (plus `.githooks`, `.claude`,
+`config`, `bin`, `AGENTS.md`, `CLAUDE.md`, `AI_START_HERE.md`), excluding `history/`.
+
+- **`main.py`, `utils/__init__.py`, the two dead root tests: nothing under `ui2/`, `.github/workflows`, `deploy/`
+  manifests or `scripts/` executes or imports them.** `deploy/secrets/README.md` line 47 shows a stale
+  `docker compose exec worker python main.py ...` command (documentation of the retired product, not run by
+  any manifest). All other `main.py` hits are string tokens, not file uses: the PO tool gate denies the token
+  `main.py` (`nexus_po_tool_gate.py`, `.claude/nexus-po.settings.json`; denial stays correct after deletion),
+  test fixtures that write a temporary `main.py`, `ci_regression_scope`/`test_ship_speed` file lists, prose in
+  `scripts/ui2_extract_fixtures.py`, and `project/*.json` history records.
+- **Ship-tooling references that the removal must fix:** `tools/delivery/ci_regression_scope.py` lines 90-91 (the
+  two dead tests in `TOOLING_FILES`); `tools/tests/test_live_tooling_discovery.py` lines 13 and 31-32
+  (`tests/test_action_taxonomy_java_parity.py`, `utils/__init__.py`); `tools/README.md` line 47
+  (`utils/__init__.py remains in place`); `tools/tests/test_ship_speed.py` line 54 (a changed-file fixture
+  naming `main.py`); `docs/repo_inventory.csv` rows 102, 217, 260, 450; `AI_START_HERE.md` lines 71-90.
+- **Correction to section 3.3 and 8.** `tests/test_architecture_convergence.py` on this tree has 14 tests and all
+  14 pass (`pytest tests/test_architecture_convergence.py`); the legacy-import tests were already moved to
+  `history/tests/test_architecture_convergence_legacy.py`, so the file needs no split and
+  `orchestrator_verify.py` line 119 needs no change. Only its docstring names the retired parity test and is
+  updated.
+- **One-shot consult scripts.** `scripts/consult_*.py` is 30 files; minus `consult_argon` and
+  `consult_fable_design` (kept) and `consult_claude_log_trial_judge` (called by `tools/llm_trial/judge.py` and
+  its README; stays until step 5) leaves **27**. The grep over `ui2 tools .github deploy scripts project` finds
+  no caller for any of the 27 except `consult_fable_resume_on_astra_review`, named only inside
+  `consult_codex_ui_visual_review.py`, itself one of the 27 (both move together). Whole-repository path mentions
+  outside `history/` and `docs/history` are limited to `docs/repo_inventory.csv`, this plan,
+  `docs/design/UI_REVIEW_2026_10_18_FABLE_PART1.md` (`consult_fable_ui_review_2026_10_17`),
+  `docs/design/OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md` (`consult_fable_ui_visual_review`) and
+  `docs/design/FAILOVER_PILOT_COUNCIL_2026_10_06.md` (`consult_ui_effectiveness_council`). No workflow,
+  manifest, ship tool or `ui2/` file names any of the 27. `AGENTS.md` line 399 names the class
+  `scripts/consult_*.py`.
