@@ -68,6 +68,8 @@ public class DatabaseConfiguration {
         HikariDataSource pool = new HikariDataSource();
         pool.setDataSource(source);
         pool.setPoolName("service-database");
+        pool.setMetricsTrackerFactory(new com.zaxxer.hikari.metrics.micrometer.MicrometerMetricsTrackerFactory(
+                com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.init("service")));
         pool.setMaximumPoolSize(environment.getProperty("ui2.db.pool.maximum-pool-size", Integer.class, 20));
         pool.setMinimumIdle(environment.getProperty("ui2.db.pool.minimum-idle", Integer.class, 2));
         pool.setConnectionTimeout(environment.getProperty("ui2.db.pool.connection-timeout", Long.class, 10_000L));

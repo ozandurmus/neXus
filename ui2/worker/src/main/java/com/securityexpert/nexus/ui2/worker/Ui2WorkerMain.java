@@ -95,6 +95,8 @@ public final class Ui2WorkerMain {
         com.securityexpert.nexus.ui2.platform.logging.MaskingFormatter.install();
         com.securityexpert.nexus.ui2.platform.JobWindowPolicy.SYSTEM.logPolicy();
         String role = resolveRole(args, System.getenv("NEXUS_WORKLOAD_ROLE"));
+        // Metrics (docs/operations/METRICS.md): the scrape server starts only when UI2_METRICS_PORT is set.
+        com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.startFromEnvironment(role);
         boolean policyFallback = Boolean.parseBoolean(System.getProperty("ui2.worker.claim-policy-fallback", "false"));
         if ("configuration".equals(role)) {
             try {

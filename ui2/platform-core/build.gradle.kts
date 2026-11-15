@@ -6,6 +6,9 @@ dependencies {
     // module, not on an external library, exactly as GroupReferenceCipher
     // already uses javax.crypto for AES-GCM.
     implementation(libs.bouncycastle.provider)
+    // Metrics (enterprise phase 0.4): Micrometer core + the Prometheus text registry; exposed as api so the service and worker
+    // composition roots can register meters without a second declaration.
+    api(libs.micrometer.registry.prometheus)
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
