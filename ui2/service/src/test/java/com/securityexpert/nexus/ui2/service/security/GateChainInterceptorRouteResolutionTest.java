@@ -138,6 +138,14 @@ class GateChainInterceptorSecurityTest {
     }
 
     @Test
+    void theClusterMemberDiffRouteIsGatedLikeTheClusterInventory() throws Exception {
+        var interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE);
+        var method = GateChainInterceptor.class.getDeclaredMethod("actionIdFor", String.class, String.class);
+        method.setAccessible(true);
+        assertEquals("device_read", method.invoke(interceptor, "GET", "/clusters/cluster-1/member-diff"));
+    }
+
+    @Test
     void aRouteAbsentFromTheMapResolvesToNullRegardlessOfSegmentCount() throws Exception {
         assertNull(actionIdFor("GET", "/healthz"));
         assertNull(actionIdFor("GET", "/devices/device-1/unknown-suffix"));

@@ -37,7 +37,7 @@ export const TAB_COVERAGE: readonly TabCoverageRow[] = [
   // Cluster members is a cluster-page tab only (roadmap 2.2); a member page links to its cluster from the header. The
   // device's Identity tab is gone (PO 2026-11-06): the Platform identity grid is a collapsible panel in the device header.
   { screen: "inventory", tabList: "Device detail", labels: ["Interfaces", "Routing", "Grid members", "Managed estate", "Configuration", "Backup", "Logs"] },
-  { screen: "inventory", tabList: "Cluster detail", labels: ["Interfaces", "Routing", "Members & Identity", "Configuration", "Logs", "Failover"] },
+  { screen: "inventory", tabList: "Cluster detail", labels: ["Interfaces", "Routing", "Members & Identity", "Configuration", "Member differences", "Logs", "Failover"] },
   // The Logs tab's own two views (PO 2026-10-20): the line viewer with the room, and the collection health panels beside it.
   { screen: "inventory", tabList: "Logs view", labels: ["Lines", "Collection health"] },
   { screen: "inventory", tabList: "Configuration sections", labels: ["Sections", "Configuration", "Details"] },

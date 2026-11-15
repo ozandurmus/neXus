@@ -261,6 +261,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("PUT /api/v2/config/scheduled-jobs/*", ActionRegistry.SCHEDULED_JOBS_SET),
             Map.entry("POST /devices/inventory/collect-all", ActionRegistry.DEVICE_INVENTORY_COLLECT),
             Map.entry("GET /clusters/*/inventory", ActionRegistry.DEVICE_READ),
+            Map.entry("GET /clusters/*/member-diff", ActionRegistry.DEVICE_READ),
             // NXS-LOCAL-0165 "Routes": same wildcard shapes as the inventory
             // routes above; /devices/*/configuration/text is a four-segment
             // route (GateChainInterceptor tries a single-segment wildcard at

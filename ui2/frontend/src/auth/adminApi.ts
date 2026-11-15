@@ -1492,6 +1492,32 @@ export function getClusterInventory(clusterMemberRef: string): Promise<ClusterIn
   return call(`/clusters/${encodeURIComponent(clusterMemberRef)}/inventory`, "GET");
 }
 
+export type MemberDiffStatus = "SAME" | "DIFFERS" | "UNKNOWN";
+
+export interface ClusterMemberDiffField {
+  readonly key: string;
+  readonly label: string;
+  readonly note: string | null;
+  readonly status: MemberDiffStatus;
+  /** Each member's stored value; null when nothing is stored for that member (UNKNOWN, never a guess). */
+  readonly values: Readonly<Record<string, string | null>>;
+  /** Names that not every member has, for set-like fields (interfaces, routes, sections). */
+  readonly detail: readonly string[];
+}
+
+export interface ClusterMemberDiff {
+  readonly cluster_member_ref: string;
+  readonly members: readonly { readonly device_id: string }[];
+  readonly comparable: boolean;
+  readonly reason: string | null;
+  readonly summary: { readonly same: number; readonly differs: number; readonly unknown: number };
+  readonly fields: readonly ClusterMemberDiffField[];
+}
+
+export function getClusterMemberDiff(clusterMemberRef: string): Promise<ClusterMemberDiff> {
+  return call(`/clusters/${encodeURIComponent(clusterMemberRef)}/member-diff`, "GET");
+}
+
 export function requestInventoryCollect(deviceId: string, nonce?: string): Promise<{ job_id: string }> {
   return invalidateDevicesAfter(call(`/devices/${encodeURIComponent(deviceId)}/inventory/collect`, "POST", nonce ? { nonce } : {}));
 }

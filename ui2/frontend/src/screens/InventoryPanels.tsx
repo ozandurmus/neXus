@@ -34,6 +34,7 @@ import { deviceNameLabel, jobPhaseLabel, isTerminalJobState, enrollmentStateLabe
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip, Ts, VendorBadge, vendorDisplayName } from "../shell/States";
 import { Stamp } from "../shell/PresentedText";
+import { ClusterMemberDiffPanel } from "./ClusterMemberDiffPanel";
 import { PLATFORM_IDENTITY_GRID_ID, ReferenceCell, clusterContextLinks, DeviceIdentityTable, deviceLiveWithInventory, knownHaRole, liveBasis, orderMembers, vsListOf } from "./DeviceShared";
 import { JobStatusIndicator, latestJobSentence } from "../shell/JobStatusIndicator";
 import {
@@ -3276,6 +3277,12 @@ export function ClusterDetailPanels({
           {
             label: "Configuration",
             panel: configuration,
+          },
+          // Member differences from what is already stored per member (version, HA mode, interfaces, routes, policy, configuration).
+          {
+            label: "Member differences",
+            panel: <ClusterMemberDiffPanel clusterRef={clusterRef}
+              labels={Object.fromEntries(orderedMembers.map((m) => [m.device_id, memberLabel(m, orderedMembers)]))} />,
           },
           // Logs are stored per member; the cluster pane picks the member with the M1 / M2 pills (F-21).
           ...(firstMember && (firstMember.vendor_hint === "check_point" || firstMember.vendor_hint === "palo_alto") ? [{
