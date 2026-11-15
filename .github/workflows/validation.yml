@@ -157,7 +157,7 @@ jobs:
 
   # Lockfile dependency vulnerability scan: runs Trivy fs on repository
   # lockfiles and evaluates findings through tools/security/security_summary.py
-  # so only unaccepted HIGH/CRITICAL findings not in security/baseline.yaml
+  # so only unaccepted HIGH/CRITICAL/UNKNOWN findings not in security/baseline.yaml
   # fail CI.
   dependency-scan:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -172,19 +172,41 @@ jobs:
         run: |
           mkdir -p trivy-reports
           printf '[{"tool":"trivy","file":"trivy-fs.json"}]\n' > trivy-reports/manifest.json
+      # Trivy's vulnerability-DB download is rate limited on shared runners: one bounded retry after a pause.
       - name: Run Trivy filesystem vulnerability scan on lockfiles
+        id: trivy
+        continue-on-error: true
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
         with:
           scan-type: fs
           scan-ref: .
           scanners: vuln
-          severity: HIGH,CRITICAL
           format: json
           output: trivy-reports/trivy-fs.json
           exit-code: '0'
-      - name: Gate HIGH and CRITICAL findings against security/baseline.yaml
+      - name: Pause before the Trivy retry
+        if: steps.trivy.outcome == 'failure'
+        run: sleep 30
+      - name: Retry Trivy filesystem scan (DB download failure)
+        id: trivy_retry
+        if: steps.trivy.outcome == 'failure'
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          format: json
+          output: trivy-reports/trivy-fs.json
+          exit-code: '0'
+      - name: Gate findings against security/baseline.yaml
+        # No severity pre-filter above: security_summary.py owns the gate (HIGH, CRITICAL and UNKNOWN), and gets
+        # Trivy's real outcome, so a failed scan is a scan error and never a pass.
+        env:
+          TRIVY_OUTCOME: ${{ steps.trivy.outcome == 'success' && 'success' || steps.trivy_retry.outcome }}
         run: |
-          printf '0\n' > trivy-reports/trivy-fs.json.exit
+          if [ "$TRIVY_OUTCOME" = success ]; then rc=0; else rc=1; fi
+          printf '%s\n' "$rc" > trivy-reports/trivy-fs.json.exit
           python3 tools/security/security_summary.py --reports trivy-reports --baseline security/baseline.yaml --output trivy-summary
 
   # Keep the required validate status: privacy, live tooling and project checks.
@@ -216,6 +238,26 @@ jobs:
         # to resolve. Cheap: this is a single branch, not the whole repository.
         run: git fetch origin +main:refs/remotes/origin/main
 
+      - name: Resolve privacy-gate baseline ref
+        # Pull requests and manual dispatch compare against origin/main. On `push` to main HEAD *is* origin/main,
+        # so that comparison would call every finding pre-existing: use the commit before the push instead
+        # (github.event.before when non-zero and present, else HEAD~1).
+        id: privacy_baseline
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          ref=origin/main
+          if [ "$EVENT_NAME" = push ]; then
+            if [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != 0000000000000000000000000000000000000000 ] \
+               && git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
+              ref="$PUSH_BEFORE"
+            else
+              ref=HEAD~1
+            fi
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           # Matches the validated 3.12 baseline the Dockerfile and the dev
@@ -236,7 +278,7 @@ jobs:
         # pre-existing repository debt (tools/delivery/nexus_engineer_tool_gate.py's
         # pre-push hook already treats it that way) and must not fail CI on
         # every PR; a genuinely new finding still fails exactly as before.
-        run: python3 tools/privacy/repository_privacy_check.py --privacy-baseline-ref origin/main
+        run: python3 tools/privacy/repository_privacy_check.py --privacy-baseline-ref "${{ steps.privacy_baseline.outputs.ref }}"
 
       - name: Project-state consistency
         # The cross-authority rules in tools/delivery/project_plan. Fails when
@@ -307,6 +349,26 @@ jobs:
         # the actual live bug (AC-1), which is pull_request's `validate` job.
         run: git fetch origin +main:refs/remotes/origin/main
 
+      - name: Resolve privacy-gate baseline ref
+        # Pull requests and manual dispatch compare against origin/main. On `push` to main HEAD *is* origin/main,
+        # so that comparison would call every finding pre-existing: use the commit before the push instead
+        # (github.event.before when non-zero and present, else HEAD~1).
+        id: privacy_baseline
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          ref=origin/main
+          if [ "$EVENT_NAME" = push ]; then
+            if [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != 0000000000000000000000000000000000000000 ] \
+               && git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
+              ref="$PUSH_BEFORE"
+            else
+              ref=HEAD~1
+            fi
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           # Matches the validated 3.12 baseline the Dockerfile and the dev
@@ -328,7 +390,7 @@ jobs:
       - name: Repository privacy gate
         # Must run on the clean checkout, BEFORE the suite: a test run creates
         # gitignored data/ + logs/ that the gate would otherwise flag.
-        run: python3 tools/privacy/repository_privacy_check.py --privacy-baseline-ref origin/main
+        run: python3 tools/privacy/repository_privacy_check.py --privacy-baseline-ref "${{ steps.privacy_baseline.outputs.ref }}"
 
       - name: Project-state consistency
         # The cross-authority rules in tools/delivery/project_plan. Fails when

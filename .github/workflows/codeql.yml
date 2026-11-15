@@ -51,7 +51,10 @@ jobs:
 
       - name: Compile Java sources for CodeQL
         if: matrix.language == 'java-kotlin'
-        run: ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true testClasses
+        # CodeQL's manual build must really run javac: no build cache, no up-to-date shortcuts.
+        run: |
+          mkdir -p ui2/frontend/dist
+          ./ui2/gradlew --no-daemon --console=plain --no-build-cache --rerun-tasks -p ui2 -PfrontendPrebuilt=true testClasses
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@9418214df1f2c4b8128c770156c409013b07d6b9 # v3

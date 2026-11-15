@@ -497,7 +497,9 @@ FASTPATH_MAX_FILES = 400
 CHECKS_TIMEOUT_S = int(os.environ.get("NEXUS_CHECKS_TIMEOUT_S", str(45 * 60)))
 CHECKS_POLL_S = 15
 # Run after the merge instead of gating it (PO_DECISION_RECORD_2026_11_04_DEV_MODE_DELEGATIONS.md).
-POST_MERGE_CHECKS = frozenset({"full-regression", "targeted-regression"})
+# CodeQL (a full Java build) and the lockfile scan also run on push to main and must not slow docs-only ships.
+POST_MERGE_CHECKS = frozenset({"full-regression", "targeted-regression", "dependency-scan",
+                               "Analyze (java-kotlin)", "Analyze (javascript-typescript)"})
 CHECKS_EMPTY_GRACE_S = 120
 CHECKS_TRANSIENT_ERRORS = 4
 FAILING_CONCLUSIONS = {"FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE", "STALE"}
