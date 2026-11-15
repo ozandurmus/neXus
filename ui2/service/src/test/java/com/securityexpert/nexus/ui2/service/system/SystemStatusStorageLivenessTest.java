@@ -93,7 +93,7 @@ class SystemStatusStorageLivenessTest {
                     throw new UnsupportedOperationException(method.getName());
                 });
 
-        SystemStatusService service = new SystemStatusService(new JooqTransactionBoundary(dsl), devices);
+        SystemStatusService service = new SystemStatusService(new JooqTransactionBoundary(dsl), devices, new DiskHeadroomService(DiskHeadroomPolicy.DEFAULT));
         java.nio.file.Path archiveFile = tempDir.resolve("check_point").resolve("device-1").resolve("sample.enc");
         java.nio.file.Files.createDirectories(archiveFile.getParent());
 
