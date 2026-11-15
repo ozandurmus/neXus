@@ -28,8 +28,7 @@ public final class CiscoAsaPlan {
     private CiscoAsaPlan() {
     }
 
-    /** Session setting only (this login's pager), never saved to the configuration. */
-    public static final String TERMINAL_PAGER_0 = "terminal pager 0";
+    // "terminal pager 0" is no longer sent (PO 2026-11-15, Cisco CPU warning): the shell answers "<--- More --->" itself.
     public static final String SHOW_CURPRIV = "show curpriv";
     public static final String SHOW_VERSION = "show version";
     /** Lifecycle read, group A (PO 2026-11-10, gate asa_lifecycle_show_license_all): Smart Licensing state; measure-first. */

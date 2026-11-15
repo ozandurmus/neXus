@@ -124,6 +124,7 @@ final class InteractiveShellSession implements AutoCloseable {
         long firstData = -1;
         long bytes = 0;
         int pages = 0;
+        int eraseAt = -1;
         int idlePolls = 0;
         boolean sawData = false;
         boolean completed = false;
@@ -167,20 +168,34 @@ final class InteractiveShellSession implements AutoCloseable {
             if (got) {
                 lastData = System.currentTimeMillis();
                 String current = strippedTail(raw);
-                // FortiOS pages at the terminal height with " --More-- " and waits: answer with a space, drop the
-                // marker, keep reading (no console setting is changed on the device).
-                if (current.stripTrailing().endsWith(MORE)) {
+                // A paged answer left the buffer: drop the device's erase of its own prompt before anything else.
+                if (eraseAt >= 0) {
+                    eraseAt = resolveErase(raw, eraseAt);
+                    current = strippedTail(raw);
+                }
+                // FortiOS pages at the terminal height with " --More-- ", the Cisco ASA with "<--- More --->", and both
+                // wait: answer with a space, drop the marker (and the ASA's erase of it), keep reading. No console
+                // setting is changed on the device (ASA: no "terminal pager 0", PO 2026-11-15).
+                String marker = pagerMarkerAtEnd(current);
+                if (marker != null) {
                     int tailStart = Math.max(0, raw.length() - TAIL_CHARS);
                     String rawTail = raw.substring(tailStart);
-                    int at = rawTail.lastIndexOf(MORE);
-                    if (at >= 0 && stripTerminalControl(rawTail.substring(at)).stripTrailing().equals(MORE)) {
+                    int at = rawTail.lastIndexOf(marker);
+                    if (at >= 0 && stripTerminalControl(rawTail.substring(at)).stripTrailing().equals(marker)
+                            && (marker.equals(MORE) || atLineStart(raw, tailStart + at))) {
                         raw.delete(tailStart + at, raw.length());
                         pages++;
+                        if (pages > MAX_PAGES) {
+                            return new Result(Result.Kind.TIMED_OUT, null);
+                        }
                         try {
                             out.write(' ');
                             out.flush();
                         } catch (IOException e) {
                             return new Result(Result.Kind.NOT_SENT, null);
+                        }
+                        if (marker.equals(ASA_MORE)) {
+                            eraseAt = raw.length();
                         }
                         continue;
                     }
@@ -538,6 +553,42 @@ final class InteractiveShellSession implements AutoCloseable {
     }
 
     private static final String MORE = "--More--";
+    /** The Cisco ASA pager prompt; the device erases it (CR-spaces-CR, or backspaces) when the space arrives. */
+    static final String ASA_MORE = "<--- More --->";
+    /** A bound on one command's pages (an ASA page is 24 lines: about 2.4 million lines), so a loop cannot run for ever. */
+    static final int MAX_PAGES = 100_000;
+    private static final Pattern ASA_ERASE = Pattern.compile(
+            "\\r {1,40}\\r|\\x08{14} {14}\\x08{14}|(?:\\x08 \\x08){14}");
+
+    /** The pager marker the stripped tail ends with (ignoring trailing blanks), or null. */
+    private static String pagerMarkerAtEnd(String current) {
+        String t = current.stripTrailing();
+        if (t.endsWith(MORE)) {
+            return MORE;
+        }
+        return t.endsWith(ASA_MORE) ? ASA_MORE : null;
+    }
+
+    /** The ASA prompt is a whole line of its own: text before it on the line means it is data, not the pager. */
+    private static boolean atLineStart(StringBuilder raw, int index) {
+        return index == 0 || raw.charAt(index - 1) == '\n' || raw.charAt(index - 1) == '\r';
+    }
+
+    /**
+     * Removes the erase the ASA sends after the answered prompt, once it has arrived in full. Returns the position still
+     * to watch (the erase is incomplete), or -1 (removed, or what followed is not an erase and stays as data).
+     */
+    private static int resolveErase(StringBuilder raw, int at) {
+        if (at >= raw.length()) {
+            return at;
+        }
+        java.util.regex.Matcher m = ASA_ERASE.matcher(raw.substring(at, Math.min(raw.length(), at + 128)));
+        if (m.lookingAt()) {
+            raw.delete(at, at + m.end());
+            return -1;
+        }
+        return m.hitEnd() ? at : -1;
+    }
     static final long ECHO_GRACE_MS = 1500;
 
     private static String lastLine(String text) {
