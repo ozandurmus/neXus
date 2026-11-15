@@ -56,6 +56,9 @@ public final class AuditPresentationAllowlist {
                     "device_id", "marked_at")),
             // V225: the per-store quota is a store name and a byte count; updated_by is the administrator's actor name.
             Map.entry("artefact_store_quota", Set.of("quota_bytes", "store_name", "updated_at", "updated_by")),
+            // V227: one row per write refused by a byte quota: names and sizes only, never artefact content.
+            Map.entry("artefact_store_refusal", Set.of("attempted_bytes", "device_id", "job_id", "quota_bytes", "refusal_id",
+                    "refused_at", "scope", "store_name", "used_bytes", "writer")),
             Map.entry("backup_policy", Set.of(
                     "backup_retention_days", "configuration_retention_days", "created_at", "daily_backup_cron",
                     "last_scheduled_run_at", "major_alert_enabled", "policy_id", "schedule_enabled",

@@ -159,6 +159,10 @@ public final class ReportService {
             fail(row, "REPORT_TOO_LARGE", dataAsOf);
         } catch (ReportArtefactWriter.StoreUnavailable e) {
             fail(row, "STORE_UNAVAILABLE", dataAsOf);
+        } catch (com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore.QuotaExceededException e) {
+            // The store refused the write (and audited it): the run ends with the quota reason, nothing is stored.
+            LOG.log(Level.WARNING, "[REPORTS] storing run " + row.runId() + " refused: " + e.getMessage());
+            fail(row, "STORE_QUOTA_EXCEEDED", dataAsOf);
         } catch (IOException e) {
             LOG.log(Level.WARNING, "[REPORTS] storing run " + row.runId() + " failed: " + e.getMessage());
             fail(row, "STORE_FAILED", dataAsOf);

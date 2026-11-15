@@ -69,6 +69,47 @@ class PolicyCollectionJobExecutorTest {
         }
     }
 
+    /** The policy worker's store writer: a transcript refused by the per-store quota never fails the run, stores nothing and is audited. */
+    @Test void aPolicyTranscriptRefusedByThePerStoreQuotaStoresNothingAndIsRecordedForTheAudit(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws Exception {
+        var leases = mock(JobLeaseRepository.class);
+        var attempts = mock(JobStepAttemptRepository.class);
+        var runs = mock(DiscoveryRunRepository.class);
+        var repository = mock(PolicyCollectionRepository.class);
+        var cp = mock(CheckPointPolicyCollector.class);
+        var jobs = mock(com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao.class);
+        var run = new DiscoveryRun("synthetic-run", "check_point", "192.0.2.10", "synthetic-ref", "synthetic-actor",
+            DiscoveryRunState.FINISHED, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        when(runs.findRun("synthetic-run")).thenReturn(Optional.of(run));
+        when(repository.request("cp_policy_collect")).thenReturn(Optional.of(new PolicyCollectionRepository.Request("synthetic-manager", "", false)));
+        when(repository.eligible("synthetic-manager", "synthetic-run")).thenReturn(true);
+        when(leases.transitionState(anyString(), anyLong(), any(), any(), anyString(), anyString())).thenReturn(true);
+        when(attempts.insertPreContact(anyString(), anyLong(), anyInt(), anyString(), anyString(), anyInt())).thenReturn("synthetic-attempt");
+        when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), nullable(Long.class), isNull(), isNull())).thenReturn(true);
+        when(repository.publish(anyString(), anyLong(), anyList(), anyString())).thenReturn(true);
+        doAnswer(call -> {
+            com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("ssh", "request", "synthetic request");
+            return List.of();
+        }).when(cp).collect(any(), any(), any(), any(), any(), any());
+        var refusals = new java.util.concurrent.CopyOnWriteArrayList<
+            com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStoreRefusalRecorder.Refusal>();
+        var cipher = com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher.fromBase64Key(
+            Base64.getEncoder().encodeToString(new byte[32]));
+        var store = new com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore(root, cipher)
+            .withStoreQuotas(() -> java.util.Map.of("transcript", 1L)).withRefusalRecorder(refusals::add);
+        var executor = new PolicyCollectionJobExecutor(leases, attempts, runs, repository, cp, ignored -> List.of())
+            .withTranscript(store, jobs);
+        assertInstanceOf(JobOutcome.Completed.class, executor.execute("cp_policy_collect", 1, "synthetic-run"));
+        org.mockito.Mockito.verify(jobs, org.mockito.Mockito.never()).writeBackupTranscript(anyString(), anyLong(), anyString(), any());
+        try (var walk = java.nio.file.Files.walk(root)) {
+            assertEquals(0, walk.filter(java.nio.file.Files::isRegularFile).count(), "no partial transcript file");
+        }
+        assertEquals(1, refusals.size());
+        assertEquals("transcript", refusals.get(0).store());
+        assertEquals("store", refusals.get(0).scope());
+        assertEquals("cp_policy_collect", refusals.get(0).jobId());
+    }
+
     @Test void allDomainsThrottledCannotFinishAsPlainCompleted() {
         var leases = mock(JobLeaseRepository.class);
         var attempts = mock(JobStepAttemptRepository.class);
