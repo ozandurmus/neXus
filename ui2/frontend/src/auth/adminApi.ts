@@ -4699,3 +4699,33 @@ export function getCutoverFlows(id: string, kind: "FLOW" | "MISSING_RULE", decis
   return call(`${CUTOVER}/assessments/${encodeURIComponent(id)}/flows?${query}`, "GET");
 }
 export const deleteCutoverAssessment = (id: string) => offlineMutation<{ deleted: boolean }>(`${CUTOVER}/assessments/${encodeURIComponent(id)}`, "DELETE");
+
+// ---- Support bundles (docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md, FROZEN 2026-11-15) -------------------
+export interface SupportBundleItem {
+  readonly kind: string; readonly ordinal: number; readonly state: string; readonly outcome_code: string | null;
+  readonly size_bytes: number | null; readonly digest_prefix: string | null; readonly detail: string | null;
+}
+export interface SupportBundleRequest {
+  readonly id: string; readonly device_id: string; readonly device_pseudonym: string; readonly vendor: string;
+  readonly run_mode: string; readonly run_at: string; readonly requested_at: string; readonly finished_at: string | null;
+  readonly expires_at: string; readonly expiry_warning: boolean; readonly downloaded_at: string | null; readonly download_count: number;
+  readonly state: string; readonly outcome: string | null; readonly items: readonly SupportBundleItem[];
+  /** Absent for the replay viewer (aiview). */
+  readonly reason?: string; readonly case_ref?: string | null; readonly requested_by?: string;
+}
+export interface SupportBundleKindRow {
+  readonly kind: string; readonly vendor: string; readonly load: string; readonly default_ticked: boolean;
+  readonly enabled: boolean; readonly heavy: boolean;
+}
+const SUPPORT_BUNDLES = "/api/v2/support-bundles";
+export const getSupportBundleCatalogue = () => call<{ kinds: SupportBundleKindRow[] }>(`${SUPPORT_BUNDLES}/catalogue`, "GET");
+export const listSupportBundles = () => call<{ support_bundles: SupportBundleRequest[] }>(SUPPORT_BUNDLES, "GET");
+export const requestSupportBundle = (deviceId: string, input: { kinds: string[]; reason: string; run_at?: string; case_ref?: string }) =>
+  call<{ id: string; job_id: string; status: string }>(`/api/v2/devices/${encodeURIComponent(deviceId)}/support-bundles`, "POST", input);
+export const cancelSupportBundle = (id: string, reason: string) =>
+  call<{ id: string; state: string }>(`${SUPPORT_BUNDLES}/${encodeURIComponent(id)}/cancel`, "POST", { reason });
+export const deleteSupportBundle = (id: string, reason: string) =>
+  call<{ id: string; state: string }>(`${SUPPORT_BUNDLES}/${encodeURIComponent(id)}/delete`, "POST", { reason });
+export const requestSupportBundleDownloadTicket = (id: string, reason: string, sanitized: boolean) =>
+  call<{ ticket: string; href: string; expires_in_s: number }>(`${SUPPORT_BUNDLES}/${encodeURIComponent(id)}/download-ticket`, "POST",
+    sanitized ? { reason, mode: "sanitized" } : { reason });

@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-15T07:55:44Z
+Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-15T18:14:20Z
 
 ## Now
 - NXS-LOCAL-0391 — Release queue: ASA readiness, integration gate, CP advisories, zone matrix, ACI step 1, API latency, Backups batch (in_progress)
@@ -38,6 +38,7 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-15T07:55:44Z
 - P2/planned product_rename_identity
 - P2/planned reports_r2
 - P2/planned script_execution_module
+- P2/planned support_bundle_collection_s3_s8
 - P2/planned support_bundles
 - P2/planned task_executor_automation_module
 - P2/planned ubi_base_glibc_fix_pending

@@ -24,6 +24,8 @@ const PacketAnalysisScreen = lazyNamed(() => import("./screens/PacketAnalysisScr
 const PacketAnalysisPreview = lazyNamed(() => import("./preview/PacketAnalysisPreview"), "PacketAnalysisPreview");
 const SanitizerScreen = lazyNamed(() => import("./screens/SanitizerScreen"), "SanitizerScreen");
 const SanitizerPreview = lazyNamed(() => import("./preview/SanitizerPreview"), "SanitizerPreview");
+const SupportBundlesScreen = lazyNamed(() => import("./screens/SupportBundlesScreen"), "SupportBundlesScreen");
+const SupportBundlesPreview = lazyNamed(() => import("./preview/SupportBundlesPreview"), "SupportBundlesPreview");
 const ReportsScreen = lazyNamed(() => import("./screens/ReportsScreen"), "ReportsScreen");
 const AdministrationScreen = lazyNamed(() => import("./screens/AdministrationScreen"), "AdministrationScreen");
 const DeviceWorkspaceScreen = lazyNamed(() => import("./screens/DeviceWorkspaceScreen"), "DeviceWorkspaceScreen");
@@ -91,6 +93,7 @@ const PRODUCT_SCREENS: Record<ScreenId, ComponentType> = {
   cutover: CutoverScreen,
   packet_analysis: PacketAnalysisScreen,
   sanitizer: SanitizerScreen,
+  support_bundles: SupportBundlesScreen,
 };
 
 const PREVIEW_SCREENS: Record<ScreenId, ComponentType> = {
@@ -113,6 +116,7 @@ const PREVIEW_SCREENS: Record<ScreenId, ComponentType> = {
   cutover: PolicyPreview,
   packet_analysis: PacketAnalysisPreview,
   sanitizer: SanitizerPreview,
+  support_bundles: SupportBundlesPreview,
 };
 
 export function screenFromSearch(search: string): { readonly screen: ScreenId; readonly preview: boolean } {

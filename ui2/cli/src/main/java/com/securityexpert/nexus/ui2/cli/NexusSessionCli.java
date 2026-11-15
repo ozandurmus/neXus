@@ -147,6 +147,7 @@ final class NexusSessionCli {
         FailoverCli.printUsage();
         SanitizerCli.printUsage();
         CutoverCli.printUsage();
+        SupportBundleCli.printUsage();
     }
 
     /** @return exit code, or -1 when {@code args[0]} is not one of this class's commands */
@@ -385,7 +386,9 @@ final class NexusSessionCli {
                     int failover = new FailoverCli(this).run(args);
                     if (failover != -1) yield failover;
                     int cutover = new CutoverCli(this).run(args);
-                    yield cutover != -1 ? cutover : new SanitizerCli(this).run(args);
+                    if (cutover != -1) yield cutover;
+                    int bundles = new SupportBundleCli(this).run(args);
+                    yield bundles != -1 ? bundles : new SanitizerCli(this).run(args);
                 }
             };
         } catch (IllegalArgumentException e) {

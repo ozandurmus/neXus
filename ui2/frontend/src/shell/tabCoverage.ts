@@ -50,7 +50,7 @@ export const SCREEN_HEADINGS: Record<ScreenId, string> = {
   policy: "Policy", overview: "Overview", reports: "Reports", inventory: "Devices", configuration: "Devices", compliance: "Compliance",
   backups: "Backups", operations: "Operations", administration: "Device registry", packet_analysis: "Packet analysis",
   sanitizer: "Data sanitizer", trace: "Trace", changes: "Changes", diagnostics: "Diagnostics", rule_usage: "Rule object usage", cutover: "Cutover impact",
-  zone_matrix: "Zone matrix",
+  zone_matrix: "Zone matrix", support_bundles: "Support bundles",
 };
 /** Administration's seven pages: the address of each and the heading it shows (the same words as its navigation entry). */
 export const ADMIN_PAGES: readonly { readonly query: string; readonly heading: string }[] = [

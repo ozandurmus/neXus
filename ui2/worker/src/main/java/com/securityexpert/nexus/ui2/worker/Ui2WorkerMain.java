@@ -431,6 +431,11 @@ public final class Ui2WorkerMain {
                 artefactStore, systemLogVolume, hostnameFingerprint, platformFactsRepository,
                 com.securityexpert.nexus.ui2.worker.diagnostic.ChunkRedactor.of(
                         new com.securityexpert.nexus.ui2.worker.systemlog.redaction.LogRedactor()));
+        // Support bundle collection (V230, step S2): Check Point light items over the same trusted SSH session.
+        var cpSupportBundleExecutor = new com.securityexpert.nexus.ui2.worker.supportbundle.CpSupportBundleJobExecutor(
+                leaseRepository, attemptRepository, deviceRepository, strictFailoverSsh, gateRegistry,
+                new com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore(transactionBoundary),
+                artefactStore, hostnameFingerprint);
         // The one-off Spike Detective layout review (contract section 8.3; PO approval 2026-10-19): C4 and one C5 on the
         // same trusted SSH session; only a numeric, name-class summary is stored (system_log_measurement).
         var cpSpikeLayoutReviewExecutor = new com.securityexpert.nexus.ui2.worker.diagnostic.CpSpikeLayoutReviewJobExecutor(
@@ -494,6 +499,7 @@ public final class Ui2WorkerMain {
                     .withPanSyslogMeasure(panSyslogMeasureExecutor)
                     .withPanSystemLogCollect(panSystemLogCollectExecutor)
                     .withCpSystemLogCollect(cpSystemLogCollectExecutor)
+                    .withCpSupportBundle(cpSupportBundleExecutor)
                     .withCpSpikeLayoutReview(cpSpikeLayoutReviewExecutor)
                     .withCredentialCanary(credentialCanaryExecutor)
                     .withPathValidation(pathValidationExecutor)
@@ -606,11 +612,12 @@ public final class Ui2WorkerMain {
                                     policy.backupRetentionDays(), policy.snapshotRetentionDepth(),
                                     policy.configurationRetentionDays()));
                     if (summary.backupsPruned() > 0 || summary.snapshotsPruned() > 0 || summary.configurationsPruned() > 0
-                            || summary.reportsPruned() > 0) {
+                            || summary.reportsPruned() > 0 || summary.supportBundlesPruned() > 0) {
                         System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.INFO,
                                 "[RETENTION] pruned backups=" + summary.backupsPruned() + " snapshots=" + summary.snapshotsPruned()
                                         + " configurations=" + summary.configurationsPruned()
                                         + " reports=" + summary.reportsPruned()
+                                        + " support_bundles=" + summary.supportBundlesPruned()
                                         + " bytes=" + summary.bytesReclaimed() + " (retention " + policy.backupRetentionDays()
                                         + " d, depth " + policy.snapshotRetentionDepth() + ", configuration "
                                         + policy.configurationRetentionDays() + " d)");
