@@ -1,0 +1,39 @@
+# Layer 2 of database reach protection (PO decision 2026-11-16), in-cluster database.
+#
+# Kubernetes NetworkPolicy is allow-only: there is no "deny this destination" rule. Once a policy selects a pod for
+# Egress, everything not listed is cut, which is why this layer is expressed as INGRESS on the database pod instead of
+# egress on every other pod. Only the workloads below open a PostgreSQL connection (each has a jdbc:postgresql URL in
+# its manifest); every other pod keeps exactly the network reach it has today, because no other pod is selected.
+#
+# Applied by hand AFTER the deploy, as a separate file (the deploy tooling applies named manifests, never this one).
+# Rollback: kubectl -n ui2 delete networkpolicy ui2-db-ingress  (the database is reachable as before at once).
+# External database: this file does not apply (no database pod); see external-db/README.md.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ui2-db-ingress
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: database
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: nexus-ui2
+      app.kubernetes.io/component: database
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        # Same namespace only (no namespaceSelector). service, worker (scheduler runs inside them), backup, policy,
+        # packet-analysis and the Flyway bootstrap Job are the only workloads with a JDBC URL. kubectl exec / psql run
+        # inside the pod and the readiness probes are exec on 127.0.0.1, so neither crosses this policy.
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: nexus-ui2
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values: [service, worker, backup, policy, packet-analysis, migration]
+      ports:
+        - protocol: TCP
+          port: 5432

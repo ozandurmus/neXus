@@ -1227,3 +1227,75 @@ def test_live_workloads_show_addresses_in_application_logs_and_the_code_default_
     container = next(c for c in candidate["spec"]["template"]["spec"]["containers"] if c["name"] == "service")
     assert [e for e in container["env"] if e["name"] == "NEXUS_LOG_RAW_ADDRESSES"] == [
         {"name": "NEXUS_LOG_RAW_ADDRESSES", "value": "0"}]
+
+
+# ---------------------------------------------------------------------------
+# Database reach protection, layer 2 (PO decision 2026-11-16)
+# ---------------------------------------------------------------------------
+
+
+def _pod_templates_with_labels():
+    """(object name, pod labels, pod spec) for every pod template in deploy/ui2/*.yaml."""
+    out = []
+    for path in sorted(MANIFEST_DIR.glob("*.yaml")):
+        for doc in load_documents(path.read_text(encoding="utf-8")):
+            spec = doc.get("spec") or {}
+            if doc.get("kind") == "CronJob":
+                spec = spec["jobTemplate"]["spec"]
+            template = spec.get("template") or {}
+            if template.get("spec"):
+                out.append((doc["metadata"]["name"], (template.get("metadata") or {}).get("labels") or {}, template["spec"]))
+    return out
+
+
+def _selector_matches(selector: dict, labels: dict) -> bool:
+    for key, value in (selector.get("matchLabels") or {}).items():
+        if labels.get(key) != value:
+            return False
+    for expr in selector.get("matchExpressions") or []:
+        assert expr["operator"] == "In"
+        if labels.get(expr["key"]) not in expr["values"]:
+            return False
+    return True
+
+
+def test_database_ingress_policy_admits_exactly_the_workloads_with_a_jdbc_url():
+    docs = load_documents((MANIFEST_DIR / "46-database-networkpolicy.yaml").read_text(encoding="utf-8"))
+    (policy,) = docs
+    assert policy["kind"] == "NetworkPolicy" and policy["metadata"]["name"] == "ui2-db-ingress"
+    spec = policy["spec"]
+    assert spec["policyTypes"] == ["Ingress"], "ingress on the database pod only; no pod is selected for egress"
+    (rule,) = spec["ingress"]
+    assert [(p["protocol"], p["port"]) for p in rule["ports"]] == [("TCP", 5432)]
+    (source,) = rule["from"]
+    assert set(source) == {"podSelector"}, "same namespace only: no namespaceSelector, no ipBlock"
+
+    templates = _pod_templates_with_labels()
+    database = [labels for name, labels, _ in templates if name == "ui2-db"]
+    assert len(database) == 1 and _selector_matches(spec["podSelector"], database[0])
+
+    def has_jdbc(pod_spec):
+        return any("jdbc:postgresql" in str(env.get("value", ""))
+                   for c in pod_spec.get("containers", []) + pod_spec.get("initContainers", [])
+                   for env in c.get("env") or [])
+
+    wants = {name for name, _, pod_spec in templates if has_jdbc(pod_spec)}
+    admitted = {name for name, labels, _ in templates if _selector_matches(source["podSelector"], labels)}
+    assert wants == {"ui2-service", "ui2-worker", "ui2-backup", "ui2-policy", "ui2-packet-analysis",
+                     "ui2-flyway-bootstrap"}
+    assert admitted == wants, "every database-using workload is admitted and no other pod is"
+
+
+def test_the_new_network_policy_files_are_the_only_policy_change():
+    existing = {"ui2-policy", "ui2-packet-analysis", "ui2-backup", "ui2-service-machine-port", "ui2-advisory-fetch"}
+    names = {doc["metadata"]["name"] for doc in _all_docs() if doc.get("kind") == "NetworkPolicy"}
+    assert names == existing | {"ui2-db-ingress"}
+    # The optional external-database allow is a template: never globbed, never applied by the tooling, allow-only.
+    template = MANIFEST_DIR / "external-db" / "46-database-egress-allow.yaml.tmpl"
+    (external,) = load_documents(template.read_text(encoding="utf-8"))
+    assert external["spec"]["policyTypes"] == ["Egress"]
+    (rule,) = external["spec"]["egress"]
+    assert [(p["protocol"], p["port"]) for p in rule["ports"]] == [("TCP", 5432)]
+    assert rule["to"][0]["ipBlock"]["cidr"] == "EXTERNAL_DB_CIDR_SET_AT_DEPLOY", "address is never committed"
+    admitted = {name for name, labels, _ in _pod_templates_with_labels() if _selector_matches(external["spec"]["podSelector"], labels)}
+    assert admitted == {"ui2-service", "ui2-worker", "ui2-backup", "ui2-policy", "ui2-packet-analysis", "ui2-flyway-bootstrap"}
