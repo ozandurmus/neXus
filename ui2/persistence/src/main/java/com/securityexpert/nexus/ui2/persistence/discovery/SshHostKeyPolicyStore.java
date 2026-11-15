@@ -22,8 +22,22 @@ public final class SshHostKeyPolicyStore {
         this.audited = new AuditedTransactionBoundary(transactions);
     }
 
+    /**
+     * The support bundle capabilities (PO decision 2026-11-15, about 22:30). Their jobs are class 1 only because of the BW-2
+     * transient writes (a work directory removed by exact name), so a host key mismatch warns and continues for them, as it does
+     * for class 0 reads. Nothing else is added: the MDS export and every other class 1 job still refuse.
+     */
+    static final java.util.Set<String> SUPPORT_BUNDLE_CAPABILITIES = java.util.Set.of(
+            "cp_support_bundle", "pan_support_bundle", "asa_support_bundle", "fgt_support_bundle");
+
     public static boolean permits(String mode, String actionClass, boolean rejected, boolean failover) {
-        return "WARN".equals(mode) && "read".equals(actionClass) && !rejected && !failover;
+        return permits(mode, actionClass, null, rejected, failover);
+    }
+
+    public static boolean permits(String mode, String actionClass, String capabilityId, boolean rejected, boolean failover) {
+        if (!"WARN".equals(mode) || rejected || failover) return false;
+        if ("read".equals(actionClass)) return true;
+        return "recovery-write".equals(actionClass) && capabilityId != null && SUPPORT_BUNDLE_CAPABILITIES.contains(capabilityId);
     }
 
     private static String lock(DSLContext db) {
@@ -53,15 +67,15 @@ public final class SshHostKeyPolicyStore {
         String[] observedDevice = new String[1];
         boolean allowed = audited.inTransaction("system:worker", "ssh_host_key_mismatch", db -> {
             String mode = lock(db);
-            var job = db.fetchOne("SELECT target_device_id, action_class, job_type FROM jobs "
+            var job = db.fetchOne("SELECT target_device_id, action_class, job_type, capability_id FROM jobs "
                     + "WHERE job_id = ? AND lease_epoch = ? AND state IN ('CLAIMED', 'EXECUTING')", jobId, epoch);
             String deviceId = deviceOf(db, job, endpointId);
             observedDevice[0] = deviceId;
             boolean rejected = !db.fetch("SELECT 1 FROM ssh_host_key_observation "
                     + "WHERE strict_refusal AND (device_id = ? OR (management_address = ? AND management_port = ?))",
                     deviceId, host, port).isEmpty();
-            boolean allowedHere = permits(mode, job == null ? null : job.get("action_class", String.class), rejected,
-                    failover);
+            boolean allowedHere = permits(mode, job == null ? null : job.get("action_class", String.class),
+                    job == null ? null : job.get("capability_id", String.class), rejected, failover);
             db.execute("INSERT INTO ssh_host_key_observation(observation_id, device_id, endpoint_id, management_address, "
                     + "management_port, key_algorithm, presented_fingerprint, expected_fingerprint, last_job_id, connection_allowed) "
                     + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT "

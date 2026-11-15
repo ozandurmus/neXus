@@ -21,6 +21,35 @@ class SshHostKeyPolicyStoreTest {
         assertFalse(SshHostKeyPolicyStore.permits(null, "read", false, false));
     }
 
+    @Test void supportBundleCapabilitiesWarnAndContinueOnAMismatchAndNothingElseClass1Does() {
+        for (String capability : List.of("cp_support_bundle", "pan_support_bundle", "asa_support_bundle", "fgt_support_bundle")) {
+            assertTrue(SshHostKeyPolicyStore.permits("WARN", "recovery-write", capability, false, false), capability);
+            assertFalse(SshHostKeyPolicyStore.permits("STRICT", "recovery-write", capability, false, false), capability);
+            assertFalse(SshHostKeyPolicyStore.permits("WARN", "recovery-write", capability, true, false), capability);
+            assertFalse(SshHostKeyPolicyStore.permits("WARN", "recovery-write", capability, false, true), capability);
+            // only the write class the support bundle holds; a heavier class never rides on the capability name
+            for (String other : List.of("operational-state-change", "configuration-write", "policy-deployment", "controlled-restore-write", "unknown"))
+                assertFalse(SshHostKeyPolicyStore.permits("WARN", other, capability, false, false), other);
+        }
+        // the MDS export and every other class 1 job still refuse
+        for (String capability : Arrays.asList("cp_mds_export", "cp_snapshot_backup", "inventory", "", null))
+            assertFalse(SshHostKeyPolicyStore.permits("WARN", "recovery-write", capability, false, false), String.valueOf(capability));
+        assertFalse(SshHostKeyPolicyStore.permits("WARN", "recovery-write", false, false));
+    }
+
+    @Test void aSupportBundleJobIsAdmittedAndFlaggedOnAMismatchWhileAnotherClass1JobIsNot() {
+        var fixture = new Fixture();
+        fixture.jobActionClass = "recovery-write"; fixture.jobCapability = "cp_support_bundle";
+        assertTrue(fixture.store.observe("job-fixture", 1, false, "endpoint-fixture", "192.0.2.10", 22,
+                "ssh-ed25519", "1".repeat(64), "0".repeat(64)));
+        assertTrue(fixture.sql.stream().anyMatch(s -> s.contains("UPDATE jobs SET ssh_identity_unverified = true")));
+        var other = new Fixture();
+        other.jobActionClass = "recovery-write"; other.jobCapability = "cp_mds_export";
+        assertFalse(other.store.observe("job-fixture", 1, false, "endpoint-fixture", "192.0.2.10", 22,
+                "ssh-ed25519", "1".repeat(64), "0".repeat(64)));
+        assertFalse(other.sql.stream().anyMatch(s -> s.contains("UPDATE jobs")));
+    }
+
     @Test void observationAuditsAndFlagsBeforeAllowingAndRejectedDeviceRefuses() {
         var fixture = new Fixture();
         assertTrue(fixture.store.observe("job-fixture", 1, false, "endpoint-fixture", "192.0.2.10", 22,
@@ -79,14 +108,15 @@ class SshHostKeyPolicyStoreTest {
     static final class Fixture {
         final List<String> sql = new ArrayList<>();
         boolean rejected, failObservation, failIdentityRecording;
+        String jobActionClass = "read", jobCapability = "inventory_read";
         final List<List<String>> identityChecks = new ArrayList<>();
         final SshHostKeyPolicyStore store;
         Fixture() {
             DSLContext db = DSL.using(new MockConnection(ctx -> {
                 String query = ctx.sql(); sql.add(query);
                 if (query.startsWith("SELECT mode")) return row(new String[]{"mode"}, new Object[]{"WARN"});
-                if (query.startsWith("SELECT target_device_id")) return row(new String[]{"target_device_id", "action_class", "job_type"},
-                        new Object[]{"device-fixture", "read", "inventory"});
+                if (query.startsWith("SELECT target_device_id")) return row(new String[]{"target_device_id", "action_class", "job_type", "capability_id"},
+                        new Object[]{"device-fixture", jobActionClass, "inventory", jobCapability});
                 if (query.startsWith("SELECT 1")) return rejected ? row(new String[]{"exists"}, new Object[]{1})
                         : new MockResult[]{new MockResult(0, DSL.using(SQLDialect.POSTGRES).newResult(DSL.field("exists", Integer.class)))};
                 if (failObservation && query.startsWith("INSERT INTO ssh_host_key_observation")) throw new java.sql.SQLException("synthetic audit failure");

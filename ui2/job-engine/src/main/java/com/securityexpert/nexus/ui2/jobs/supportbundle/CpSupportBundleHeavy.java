@@ -39,7 +39,7 @@ public final class CpSupportBundleHeavy {
 
     public static final Duration HEAVY_DEADLINE = Duration.ofHours(2);
     public static final Duration POLL_INTERVAL = Duration.ofSeconds(30);
-    /** The approved cpdata_collector run is bounded on the device by {@code timeout 1800}; its rc file has no approved poll. */
+    /** The approved cpdata_collector run is bounded on the device by {@code timeout 1800}; its rc file is polled (PO 2026-11-15). */
     public static final Duration CPDATA_DEVICE_TIMEOUT = Duration.ofSeconds(1800);
 
     public static final long HCP_BUNDLE_MAX_BYTES = 16L * 1024 * 1024;
@@ -75,7 +75,9 @@ public final class CpSupportBundleHeavy {
         /** Approved 2026-11-15 after the S2 brief; the gate rows are V230 (gateway) and V234 (management). */
         CPDATA_LIST("cpdata_collector_list", CP_ENV + "cpdata_collector --list", ActionClass.CLASS_0_READ, 60, true),
         CPDATA_RUN("cpdata_collector_run", CP_ENV + "cd %1$s && setsid nohup bash --noprofile --norc -c \"timeout 1800 cpdata_collector --run -p %1$s/cpsdc.tgz -t 3 -m 100 "
-                + "> %1$s/cpsdc.log 2>&1; echo \\$? > %1$s/cpsdc.rc\" </dev/null >/dev/null 2>&1 &", ActionClass.CLASS_1_RECOVERY_WRITE, 60, true);
+                + "> %1$s/cpsdc.log 2>&1; echo \\$? > %1$s/cpsdc.rc\" </dev/null >/dev/null 2>&1 &", ActionClass.CLASS_1_RECOVERY_WRITE, 60, true),
+        /** Approved by the Product Owner 2026-11-15 (about 22:30): {@code cat <workdir>/cpsdc.rc}, a read, every 30 s until the deadline; gate rows are V235. */
+        POLL_CPSDC("poll_cpsdc", CP_ENV + "cat %s/cpsdc.rc", ActionClass.CLASS_0_READ, 30, true);
 
         private final String stem;
         private final String template;
@@ -178,6 +180,11 @@ public final class CpSupportBundleHeavy {
     public static String renderPoll(String workDir, String tool) {
         if (!"hcp".equals(tool) && !"cpinfo".equals(tool)) throw new IllegalArgumentException("tool");
         return render(Step.POLL_RC, workDir, null, null).replace("<hcp|cpinfo>", tool);
+    }
+
+    /** The approved cpdata_collector rc read: {@code cat <dir>/cpsdc.rc}. */
+    public static String renderPollCpsdc(String workDir) {
+        return render(Step.POLL_CPSDC, workDir, null, null);
     }
 
     public static String renderBundlePath(String workDir) {

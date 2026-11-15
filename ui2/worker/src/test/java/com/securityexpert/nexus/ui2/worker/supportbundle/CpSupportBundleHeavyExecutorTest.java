@@ -390,7 +390,7 @@ class CpSupportBundleHeavyExecutorTest {
     }
 
     @Test
-    void theCpdataCollectorItemRunsOnlyWhenPresentWaitsOutItsDeviceTimeoutAndNeverPollsAnUnapprovedLiteral(@TempDir Path dir) {
+    void theCpdataCollectorItemRunsOnlyWhenPresentPollsItsRcFileAndNeverTailsTheLog(@TempDir Path dir) {
         var h = harness(dir, "gateway");
         var dev = new Dev();
         var store = new HStore("cpdata_collector_run");
@@ -410,8 +410,9 @@ class CpSupportBundleHeavyExecutorTest {
         assertEquals(1, dev2.count("command -v cpdata_collector"), "the presence read runs once per run");
         assertEquals(1, dev2.count("cpdata_collector --list"));
         assertEquals(1, dev2.count("timeout 1800 cpdata_collector --run -p " + store2.workDirs.get(0) + "/cpsdc.tgz -t 3 -m 100"));
-        assertEquals(0, dev2.count("cpsdc.rc\n") + dev2.commands.stream().filter(c -> c.startsWith(CpSupportBundle.CP_ENV + "cat ")).count());
-        assertTrue(slept2.stream().reduce(Duration.ZERO, Duration::plus).compareTo(Duration.ofSeconds(1800)) >= 0);
+        assertEquals(1, dev2.commands.stream().filter(c -> c.startsWith(CpSupportBundle.CP_ENV + "cat ") && c.endsWith("/cpsdc.rc")).count(),
+                "the rc file is read, and since it answers at once, once");
+        assertEquals(0, dev2.count("cpsdc.log"), "the log tail literal is not approved");
         for (String c : dev2.commands) assertTrue(isApproved(c), c);
         assertEquals("items/cpdata_collector_run/bundle.tgz", store2.entryNames.get(store2.items.get(1).id()));
         assertEquals(CpSupportBundleHeavy.CPDATA_MAX_BYTES + 1, dev2.fetchedCap);
@@ -422,9 +423,30 @@ class CpSupportBundleHeavyExecutorTest {
         dev3.workdirListing = "-rw-r--r-- 1 admin root 10 Nov 15 03:00 cpsdc.log\n";
         var store3 = new HStore("cpdata_collector_run");
         run(h3, dev3, store3);
-        assertEquals("TIMED_OUT", store3.stateAt(0));
+        assertEquals("FAILED", store3.stateAt(0));
+        assertEquals("NO_CPDATA_ARCHIVE", store3.codeAt(0));
         assertEquals(1, dev3.count("rm -rf"));
         assertEquals(0, dev3.count("tar -czf"));
+
+        // a failed run is recorded by its exit code, and a run that never answers ends at the device bound plus a minute
+        var dev4 = new Dev();
+        dev4.cpdataPresent = true;
+        dev4.rc = "124";
+        var store4 = new HStore("cpdata_collector_run");
+        run(harness(dir.resolve("d"), "gateway"), dev4, store4);
+        assertEquals("FAILED", store4.stateAt(0));
+        assertEquals("TOOL_EXIT_124", store4.codeAt(0));
+        assertEquals(0, dev4.count("tar -czf"));
+
+        var dev5 = new Dev();
+        dev5.cpdataPresent = true;
+        dev5.deadlineNoRc = true;
+        var store5 = new HStore("cpdata_collector_run");
+        var slept5 = run(harness(dir.resolve("e"), "gateway"), dev5, store5);
+        assertEquals("TIMED_OUT", store5.stateAt(0));
+        assertEquals("NO_EXIT_CODE_BY_DEADLINE", store5.codeAt(0));
+        assertTrue(slept5.stream().reduce(Duration.ZERO, Duration::plus).compareTo(Duration.ofSeconds(1860)) >= 0);
+        assertEquals(1, dev5.count("rm -rf"));
     }
 
     @Test

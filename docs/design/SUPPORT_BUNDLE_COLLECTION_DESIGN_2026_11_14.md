@@ -837,7 +837,13 @@ unset BASH_ENV ENV; `):
 | C20 | `cp_sb_remove_workdir` | `rm -rf %1$s %1$s.tgz` | recovery-write (BW-2) | 120 s | once per run, retried once | none | S6 |
 | C0 | `cp_sb_cpdata_collector_present` | `command -v cpdata_collector` (PO 2026-11-15, Q3) | read | 30 s | once per run | none | S2 |
 | C21 | `cp_sb_cpdata_collector_list` | `cpdata_collector --list` (approved later 2026-11-15; gate row only, executor later) | read | 60 s | once per run | none | later |
+| C23 | `cp_sb_poll_cpsdc` | `cat %s/cpsdc.rc` (PO 2026-11-15 about 22:30, record section 4.1; gate rows V235) | read | 30 s | every 30 s until the deadline (1860 s) | none | later |
 | C22 | `cp_sb_cpdata_collector_run` | `cd %1$s && setsid nohup bash --noprofile --norc -c "timeout 1800 cpdata_collector --run -p %1$s/cpsdc.tgz -t 3 -m 100 > %1$s/cpsdc.log 2>&1; echo \$? > %1$s/cpsdc.rc" </dev/null >/dev/null 2>&1 &` (approved later 2026-11-15; gate row only, executor later) | recovery-write (BW-2) | 60 s | once per run, never retried | secret-bearing | later |
+
+**Amendments of 2026-11-15, about 22:30 (PO record section 4).** C23 (`cat <workdir>/cpsdc.rc`) is approved and replaces the
+blind wait of the `cpdata_collector_run` item; the log tail is not approved and a failure is `TOOL_EXIT_<rc>`. A host key
+mismatch on a support bundle job warns and continues, as for a class 0 read, although the job is class 1 (BW-2); it applies to
+the four support bundle capabilities only.
 
 C12 to C14 need a lab check of `-i` (non-interactive). sk92739 says `-i` goes with `-n` or `-R`, and with `-D` there
 may be no SR prompt at all. The run also feeds stdin from `/dev/null`, so a prompt makes cpinfo exit and the rc file

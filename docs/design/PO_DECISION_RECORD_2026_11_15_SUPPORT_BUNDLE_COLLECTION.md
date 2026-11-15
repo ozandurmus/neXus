@@ -46,3 +46,19 @@ validation stays a separate gate (design step S7, PO-attended pilot).
 Design steps S1 (core: data model, RBAC, request / list / download, delete-after-download, expiry with warning,
 audit, CLI parity, fail-closed masking, UI) and S2 (Check Point light items) are built first. Steps S3-S6 follow in
 separate lanes. S8 (upload) waits for its research.
+
+## 4. Amendment - 2026-11-15, about 22:30 local (Product Owner, relayed by the PO session)
+
+**4.1 cpdata_collector exit code read - APPROVED.** `cat <workdir>/cpsdc.rc` (gate `cp_sb_poll_cpsdc` for a gateway and
+`cpm_sb_poll_cpsdc` for a management server; Check Point, `CP_ENV` prefix like every Check Point exec literal; class 0 read;
+30 s; every 30 s until the deadline, which is the device bound `timeout 1800` plus one minute). Gate rows: migration V235 and
+`gate_registry_fixture.yaml`. The `cpdata_collector_run` item polls it and no longer waits blind; the exit code is recorded
+as `TOOL_EXIT_<rc>` (127 stays `UNSUPPORTED`). The log tail literal (`cpsdc.log`) was **NOT** approved: nothing reads it.
+
+**4.2 Host key mismatch warns and continues for support bundle jobs - DECIDED.** Support bundle jobs are class 1 only because
+of the BW-2 transient writes. A host key mismatch on a support bundle job (capabilities `cp_support_bundle`,
+`pan_support_bundle`, `asa_support_bundle`, `fgt_support_bundle`) behaves as for a class 0 read in WARN mode: the connection
+continues, the observation is audited, and the job and device are flagged `ssh_identity_unverified` before credentials are
+sent. STRICT mode, a rejected device and failover execution still refuse. This is narrow: the MDS export and every other class
+1 job still refuse a mismatch. This amends the "WARN is read only" rule of `SshHostKeyPolicyStore` for these four capabilities
+only.
