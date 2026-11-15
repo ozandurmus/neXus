@@ -396,9 +396,10 @@ the agent to consult an external model, second-opinion reviewer, or multi-model
 review council, the agent MUST NOT simulate, impersonate, or substitute the
 consultation using internal subagents, internal personas, or synthetic prompts
 within the host agent. The agent MUST ALWAYS execute the consultation through
-the authorized repository orchestrator scripts (`scripts/consult_*.py`) that
-directly invoke the installed external CLI tools configured on the host system.
-The full, unaltered review output MUST be written directly to the designated
+the authorized orchestrator scripts (`scripts/consult_argon.py`,
+`scripts/consult_fable_design.py`; PO 2026-11-15) that
+invoke the installed external CLI tools configured on the host system.
+The full, unaltered review output MUST be written to the designated
 repository artifact (e.g., in `docs/design/`). Deceiving the Product Owner,
 simulating external reviews, or substituting an internal subagent for an
 external CLI consultation is a constitutional violation.

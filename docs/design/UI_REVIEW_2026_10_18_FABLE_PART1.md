@@ -1,4 +1,4 @@
-<!-- Fable consultation 2026-10-18 via scripts/consult_fable_ui_review_2026_10_17.py; the CLI wrote the review as a Claude Docs document; exported unaltered as Markdown -->
+<!-- Fable consultation 2026-10-18 via history/scripts/consult_fable_ui_review_2026_10_17.py; the CLI wrote the review as a Claude Docs document; exported unaltered as Markdown -->
 
 # neXus UI Review 2026-10-18 (Fable)
 

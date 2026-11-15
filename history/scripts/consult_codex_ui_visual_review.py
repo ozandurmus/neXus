@@ -4,7 +4,7 @@
 Per AGENTS.md "External model and second-opinion consultation law" the review is written by the external reviewer
 through its own CLI (`codex exec`, model gpt-6-astra: the architect reviewer; standalone workers default to gpt-6.1-sol) and saved unaltered to docs/design/.
 Astra does NOT see Fable's review: the two answers must be independent; Fable compares them afterwards
-(scripts/consult_fable_resume_on_astra_review.py).
+(history/scripts/consult_fable_resume_on_astra_review.py).
 
 Inputs live outside the repository (screenshots of the live estate under the masked aiview persona, browser chrome
 cropped): --inputs <dir> holding *.png.
