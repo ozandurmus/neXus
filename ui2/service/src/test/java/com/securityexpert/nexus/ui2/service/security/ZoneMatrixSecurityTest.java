@@ -21,7 +21,9 @@ class ZoneMatrixSecurityTest {
                 Map.entry("POST /api/v2/zone-matrix/draft/service-sets", ActionRegistry.ZONE_MATRIX_EDIT),
                 Map.entry("POST /api/v2/zone-matrix/draft/service-sets/delete", ActionRegistry.ZONE_MATRIX_EDIT),
                 Map.entry("POST /api/v2/zone-matrix/draft/template-import", ActionRegistry.ZONE_MATRIX_EDIT),
-                Map.entry("POST /api/v2/zone-matrix/draft/cells/confirm-reference", ActionRegistry.ZONE_MATRIX_REFERENCE_CONFIRM));
+                Map.entry("POST /api/v2/zone-matrix/draft/cells/confirm-reference", ActionRegistry.ZONE_MATRIX_REFERENCE_CONFIRM),
+                Map.entry("GET /api/v2/zone-matrix/policies", ActionRegistry.ZONE_MATRIX_READ),
+                Map.entry("POST /api/v2/zone-matrix/evaluate", ActionRegistry.ZONE_MATRIX_EVALUATE));
         Map<String, String> stepOne = Map.of(
                 "GET /api/v2/zone-matrix/versions", ActionRegistry.ZONE_MATRIX_READ,
                 "GET /api/v2/zone-matrix/versions/00000000-0000-4000-8000-000000000001", ActionRegistry.ZONE_MATRIX_READ,
@@ -41,7 +43,8 @@ class ZoneMatrixSecurityTest {
         var registry = new ActionRegistry();
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.COMPLIANCE_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.VIEWER,
                 RoleToken.REPLAY_VIEWER), registry.find(ActionRegistry.ZONE_MATRIX_READ).orElseThrow().requiredRoleTokens());
-        for (String action : new String[]{ActionRegistry.ZONE_MATRIX_ZONES_READ, ActionRegistry.ZONE_MATRIX_EDIT, ActionRegistry.ZONE_MATRIX_PUBLISH}) {
+        for (String action : new String[]{ActionRegistry.ZONE_MATRIX_ZONES_READ, ActionRegistry.ZONE_MATRIX_EDIT,
+                ActionRegistry.ZONE_MATRIX_PUBLISH, ActionRegistry.ZONE_MATRIX_EVALUATE}) {
             var tokens = registry.find(action).orElseThrow().requiredRoleTokens();
             assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.COMPLIANCE_ADMIN), tokens, action);
             assertFalse(tokens.contains(RoleToken.REPLAY_VIEWER), action);

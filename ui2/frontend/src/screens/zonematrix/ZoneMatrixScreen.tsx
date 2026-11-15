@@ -12,6 +12,7 @@ import { RADIUS } from "../../theme/tokens";
 import { MatrixTab } from "./MatrixTab";
 import { ZonesTab } from "./ZonesTab";
 import { VersionsTab } from "./VersionsTab";
+import { EvaluateTab } from "./EvaluateTab";
 import {
   getZoneDraft, getZoneVersion, listZoneVersions, zoneErrorLines,
   type ZoneDraftResponse, type ZoneVersionDetail, type ZoneVersionSummary,
@@ -102,14 +103,15 @@ function DraftBanner({ data }: { readonly data: ZoneMatrixData }) {
 }
 
 /**
- * Zone matrix (ZONE_MATRIX_CONTRACT.md section 7.1), delivery steps 1 and 2: the Matrix, Zones and Versions tabs
- * (the zone matrix grid, explicit cells, version default, named service sets, template import, compliance reference
- * confirmation, zones, draft diff with loosening changes, four-eyes publish flow and audited address lookup). Nothing
- * is evaluated against firewall rules yet.
+ * Zone matrix (ZONE_MATRIX_CONTRACT.md section 7.1), delivery steps 1, 2 and 3: the Matrix, Zones, Versions and
+ * Evaluate tabs (the zone matrix grid, explicit cells, version default, named service sets, template import,
+ * compliance reference confirmation, zones, draft diff with loosening changes, four-eyes publish flow, audited address
+ * lookup, and on-demand deterministic evaluation of stored Check Point and Palo Alto policies against published
+ * versions).
  *
- * The raw blocks are read only when the user asks ("Show blocks"), because the server writes an audit row for every
- * such read. Every control is drawn from the response's `can` booleans and `publish_check`. The "names masked" badge is
- * the shell's own, shown once any response came back masked.
+ * The raw blocks and witness addresses are read only when the user asks, because the server writes an audit row for
+ * every such read. Every control is drawn from the response's `can` booleans and `publish_check`. The "names masked"
+ * badge is the shell's own, shown once any response came back masked.
  */
 export function ZoneMatrixScreen() {
   const [wantBlocks, setWantBlocks] = useState(false);
@@ -131,7 +133,7 @@ export function ZoneMatrixScreen() {
   return (
     <ScreenRoot screenType="tool">
       <ScreenHeader title="Zone matrix"
-        subtitle="Zones are sets of IP blocks the bank maintains. Statements are policy intent; nothing is evaluated against firewall rules yet." />
+        subtitle="Zones are sets of IP blocks the bank maintains. Statements and evaluations show policy intent as defined in management, not observed traffic." />
       {data === null || common === null
         ? (error === null ? <StatePanel variant="empty" title="Reading the zones…" announce="status" />
           : isRestricted(rawError) ? <RestrictedPanel area="Zone matrix" />
@@ -147,6 +149,7 @@ export function ZoneMatrixScreen() {
             { label: "Matrix", panel: <MatrixTab {...common} /> },
             { label: "Zones", panel: <ZonesTab {...common} onShowBlocks={showBlocks} /> },
             { label: "Versions", panel: <VersionsTab {...common} /> },
+            { label: "Evaluate", panel: <EvaluateTab {...common} /> },
           ]} />
         </>}
     </ScreenRoot>

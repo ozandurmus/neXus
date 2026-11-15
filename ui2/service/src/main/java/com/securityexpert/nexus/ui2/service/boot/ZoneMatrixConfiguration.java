@@ -2,18 +2,23 @@ package com.securityexpert.nexus.ui2.service.boot;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.JooqZoneMatrixRepository;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRepository;
 import com.securityexpert.nexus.ui2.platform.RoleToken;
+import com.securityexpert.nexus.ui2.service.policy.PolicyQueryService;
+import com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker;
+import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
 import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
 import com.securityexpert.nexus.ui2.service.zonematrix.ZoneMatrixService;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** Zone matrix delivery step 1 wiring (docs/design/ZONE_MATRIX_CONTRACT.md, FROZEN 2026-11-13). */
+/** Zone matrix delivery steps 1-3 wiring (docs/design/ZONE_MATRIX_CONTRACT.md, FROZEN 2026-11-13). */
 @Configuration
 public class ZoneMatrixConfiguration {
     @Bean
@@ -22,8 +27,22 @@ public class ZoneMatrixConfiguration {
     }
 
     @Bean
-    public ZoneMatrixService zoneMatrixService(ZoneMatrixRepository repository, RbacEvaluator rbac) {
-        return new ZoneMatrixService(repository, principals(rbac), new ObjectMapper(), Clock.systemUTC());
+    public ZoneMatrixService zoneMatrixService(
+            ZoneMatrixRepository repository,
+            RbacEvaluator rbac,
+            ObjectProvider<PolicyQueryService> policies,
+            ObjectProvider<DeviceRepository> devices,
+            ObjectProvider<TopologyNamePseudonymizer> nameMasker,
+            ObjectProvider<SubnetPreservingIpMasker> ipMasker) {
+        return new ZoneMatrixService(
+                repository,
+                principals(rbac),
+                new ObjectMapper(),
+                Clock.systemUTC(),
+                policies.getIfAvailable(),
+                devices.getIfAvailable(),
+                nameMasker.getIfAvailable(() -> new TopologyNamePseudonymizer(new byte[32])),
+                ipMasker.getIfAvailable(() -> new SubnetPreservingIpMasker(new byte[32])));
     }
 
     /** compliance_admin through a real binding (the root identity never counts as holding it); root by its authority. */

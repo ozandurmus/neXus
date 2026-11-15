@@ -1,23 +1,46 @@
 package com.securityexpert.nexus.ui2.service.zonematrix;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRepository;
 import com.securityexpert.nexus.ui2.persistence.zonematrix.ZoneMatrixRepository.Version;
+import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
+import com.securityexpert.nexus.ui2.service.policy.PolicyPrivacy;
+import com.securityexpert.nexus.ui2.service.policy.PolicyQueryService;
+import com.securityexpert.nexus.ui2.service.policy.ZoneMatrixPolicyBridge;
+import com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker;
+import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
 import java.math.BigInteger;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * Zone matrix delivery steps 1 and 2 (ZONE_MATRIX_CONTRACT.md section 10.1, FROZEN 2026-11-13). Step 1: the zone model,
+ * Zone matrix delivery steps 1, 2 and 3 (ZONE_MATRIX_CONTRACT.md section 10.1, FROZEN 2026-11-13). Step 1: the zone model,
  * the draft and its revisions, four-eyes publishing, the version views and the audited address lookup. Step 2: the
  * matrix (version default, explicit cells, service vocabulary and named service sets), the template import with empty
  * reference fields, reference confirmation by compliance_admin, and the loosening diff that needs a rationale before
- * publish. No evaluation exists yet (steps 3 and 4).
+ * publish. Step 3: pure deterministic evaluation of stored policies on demand, witness view gating and audit, and
+ * privacy projection.
  */
 public final class ZoneMatrixService {
+    private static final Logger LOG = LoggerFactory.getLogger(ZoneMatrixService.class);
+
+    private static final Set<String> FIXED_SECTION_NAMES = Set.of(
+            "Pre rules", "Post rules", "Local rules", "Inline layer unavailable",
+            "Pre NAT rules", "Post NAT rules", "Pre default rules", "Post default rules",
+            "Local NAT rules", "Local default rules", "global");
+
+    /** Stored-policy read port for step 3 (backed by {@link PolicyQueryService} in production, or an in-memory map in tests). */
+    public interface PolicyCatalog {
+        List<Map<String, Object>> catalogViews();
+        Optional<PolicySnapshot> find(String policyId);
+    }
     /** How much of a version the caller may see (section 3.4 and 8.2). */
     public enum View {
         /** replay_viewer: pseudonymised zone names, no descriptions, no blocks, actors as tokens. */
@@ -56,9 +79,55 @@ public final class ZoneMatrixService {
     private final Principals principals;
     private final ObjectMapper mapper;
     private final Clock clock;
+    private final PolicyCatalog policyCatalog;
+    private final DeviceRepository devices;
+    private final TopologyNamePseudonymizer nameMasker;
+    private final SubnetPreservingIpMasker ipMasker;
 
     public ZoneMatrixService(ZoneMatrixRepository repository, Principals principals, ObjectMapper mapper, Clock clock) {
-        this.repository = repository; this.principals = principals; this.mapper = mapper; this.clock = clock;
+        this(repository, principals, mapper, clock, (PolicyCatalog) null, null,
+                new TopologyNamePseudonymizer(new byte[32]), new SubnetPreservingIpMasker(new byte[32]));
+    }
+
+    public ZoneMatrixService(
+            ZoneMatrixRepository repository,
+            Principals principals,
+            ObjectMapper mapper,
+            Clock clock,
+            PolicyQueryService policies,
+            DeviceRepository devices,
+            TopologyNamePseudonymizer nameMasker,
+            SubnetPreservingIpMasker ipMasker) {
+        this(repository, principals, mapper, clock, wrapCatalog(policies), devices, nameMasker, ipMasker);
+    }
+
+    public ZoneMatrixService(
+            ZoneMatrixRepository repository,
+            Principals principals,
+            ObjectMapper mapper,
+            Clock clock,
+            PolicyCatalog policyCatalog,
+            DeviceRepository devices,
+            TopologyNamePseudonymizer nameMasker,
+            SubnetPreservingIpMasker ipMasker) {
+        this.repository = repository;
+        this.principals = principals;
+        this.mapper = mapper;
+        this.clock = clock;
+        this.policyCatalog = policyCatalog;
+        this.devices = devices;
+        this.nameMasker = nameMasker != null ? nameMasker : new TopologyNamePseudonymizer(new byte[32]);
+        this.ipMasker = ipMasker != null ? ipMasker : new SubnetPreservingIpMasker(new byte[32]);
+    }
+
+    private static PolicyCatalog wrapCatalog(PolicyQueryService policies) {
+        if (policies == null) return null;
+        return new PolicyCatalog() {
+            @Override public List<Map<String, Object>> catalogViews() { return policies.catalogViews(); }
+            @Override public Optional<PolicySnapshot> find(String policyId) {
+                return policies.find(policyId).map(s -> ZoneMatrixPolicyBridge.withDomainObjects(policies, s));
+            }
+        };
     }
 
     // ---------------------------------------------------------------- reads
@@ -806,6 +875,380 @@ public final class ZoneMatrixService {
     }
 
     /** Actor fingerprints as shown: as stored, or {@code USER-<n>} tokens in the masked view. */
+    // ---------------------------------------------------------------- step 3: stored-policy evaluation
+
+    /**
+     * Lists stored policies eligible for evaluation ({@code CP}, {@code PAN}) and explicitly lists non-evaluated
+     * {@code ASA} / {@code FGT} snapshots and enrolled devices (§5.8: {@code not evaluated: policy not collected}).
+     */
+    public Map<String, Object> policies(View view, boolean hasPolicyRead) {
+        boolean maskPolicy = view == View.MASKED || !hasPolicyRead;
+        List<Map<String, Object>> catalog = policyCatalog == null ? List.of() : policyCatalog.catalogViews();
+        List<Map<String, Object>> evaluable = new ArrayList<>();
+        List<Map<String, Object>> notEvaluated = new ArrayList<>();
+        Set<String> seenNonEvaluatedSources = new HashSet<>();
+
+        for (Map<String, Object> item : catalog) {
+            String id = str(item.get("id"));
+            String vendor = str(item.get("vendor"));
+            String sourceId = str(item.get("sourceId"));
+            String rawSourceName = str(item.get("sourceName"));
+            String rawContainerName = str(item.get("containerName"));
+            String rawPolicyName = str(item.get("name"));
+            String sourceName = maskPolicy ? maskSourceName(rawSourceName, sourceId) : rawSourceName;
+            String containerName = maskPolicy ? maskDomainName(rawContainerName) : rawContainerName;
+            String policyName = maskPolicy ? maskPolicyLabel("policy", rawPolicyName) : rawPolicyName;
+
+            if ("CP".equals(vendor) || "PAN".equals(vendor)) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", id);
+                row.put("name", policyName);
+                row.put("vendor", vendor);
+                row.put("source_id", sourceId);
+                row.put("source_name", sourceName);
+                row.put("container_id", str(item.get("containerId")));
+                row.put("container_name", containerName);
+                row.put("collected_at", str(item.get("collectedAt")));
+                row.put("rule_count", item.get("ruleCount") instanceof Number n ? n.intValue() : 0);
+                row.put("target_count", item.get("targets") instanceof List<?> t ? t.size() : 0);
+                evaluable.add(row);
+            } else {
+                if (sourceId != null && !sourceId.isBlank()) seenNonEvaluatedSources.add(sourceId);
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", id);
+                row.put("name", policyName);
+                row.put("vendor", vendor);
+                row.put("source_id", sourceId);
+                row.put("source_name", sourceName);
+                row.put("reason", "not evaluated: policy not collected");
+                notEvaluated.add(row);
+            }
+        }
+
+        if (devices != null) {
+            for (DeviceSummaryRecord device : devices.listAll()) {
+                if (device == null || device.deviceId() == null || seenNonEvaluatedSources.contains(device.deviceId())) {
+                    continue;
+                }
+                String hint = device.vendorHint() == null ? "" : device.vendorHint().toLowerCase(Locale.ROOT);
+                String vendor = hint.contains("asa") ? "ASA"
+                        : (hint.contains("forti") ? "FGT" : null);
+                if (vendor == null) continue;
+                seenNonEvaluatedSources.add(device.deviceId());
+                String rawHost = device.observedHostname().orElse(null);
+                String display = maskPolicy
+                        ? maskSourceName(rawHost, device.deviceId())
+                        : (rawHost != null && !rawHost.isBlank() ? rawHost : device.deviceId());
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", "device:" + device.deviceId());
+                row.put("name", display);
+                row.put("vendor", vendor);
+                row.put("source_id", device.deviceId());
+                row.put("source_name", display);
+                row.put("reason", "not evaluated: policy not collected");
+                notEvaluated.add(row);
+            }
+        }
+
+        evaluable.sort(Comparator
+                .comparing((Map<String, Object> m) -> strOrEmpty(m.get("vendor")))
+                .thenComparing(m -> strOrEmpty(m.get("source_name")), String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(m -> strOrEmpty(m.get("container_name")), String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(m -> strOrEmpty(m.get("name")), String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(m -> strOrEmpty(m.get("id"))));
+        notEvaluated.sort(Comparator
+                .comparing((Map<String, Object> m) -> strOrEmpty(m.get("vendor")))
+                .thenComparing(m -> strOrEmpty(m.get("name")), String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(m -> strOrEmpty(m.get("id"))));
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("policies", evaluable);
+        out.put("not_evaluated", notEvaluated);
+        return out;
+    }
+
+    /**
+     * Evaluates one stored policy snapshot on demand against the active (or selected published) zone-matrix version.
+     *
+     * <p>Enforces §3.4 RBAC and witness auditing ({@code WITNESS_VIEW} in {@code zone_matrix_access_log} and
+     * {@code audit_log}), §3.4 {@code PolicyPrivacy.mask} rule-name projection when {@code !hasPolicyRead}, and §8.1
+     * {@code ZM-10} safe logging (opaque ids, version number, sha256, duration and outcome counts only).</p>
+     */
+    public Map<String, Object> evaluate(
+            String actor,
+            View view,
+            boolean replayViewer,
+            boolean canViewBlocks,
+            boolean hasPolicyRead,
+            String policyId,
+            String versionId,
+            boolean includeWitnesses) {
+        if (replayViewer) {
+            throw new Refused(403, "READ_ONLY_PERSONA", "the masked persona cannot start an evaluation");
+        }
+        if (policyId == null || policyId.isBlank()) {
+            throw new Refused(400, "INVALID_POLICY", "policy_id is required");
+        }
+        Version version;
+        if (versionId == null || versionId.isBlank()) {
+            version = repository.active().orElseThrow(() -> new Refused(
+                    409, "NO_ACTIVE_VERSION", "publish a zone matrix version before evaluating policies"));
+        } else {
+            version = repository.find(versionId.strip())
+                    .orElseThrow(() -> new Refused(404, "NOT_FOUND", "no such version"));
+            if (!published(version)) {
+                throw new Refused(409, "DRAFT_NOT_EVALUATED", "drafts are not evaluated; select a published version");
+            }
+        }
+
+        if (includeWitnesses) {
+            if (!canViewBlocks) {
+                throw new Refused(403, "ZONE_BLOCKS_NOT_PERMITTED",
+                        "viewing witness addresses needs zone_matrix_zones_read");
+            }
+            record(actor, "WITNESS_VIEW", version.versionId());
+        }
+
+        PolicySnapshot snapshot = (policyCatalog == null ? Optional.<PolicySnapshot>empty() : policyCatalog.find(policyId.strip()))
+                .orElseThrow(() -> new Refused(404, "POLICY_NOT_FOUND", "no such stored policy"));
+
+        ZoneMatrixContent parsedContent = content(version);
+        ZoneMatrixEvaluator.CompiledVersion compiled = ZoneMatrixEvaluator.compile(
+                version.versionId(), version.number(), parsedContent);
+        ZoneMatrixEvaluator.EvaluationResult result = ZoneMatrixEvaluator.evaluate(
+                snapshot, compiled, clock.instant());
+
+        LOG.info("zone_matrix_evaluated policy_id={} vendor={} version_id={} version_number={} content_sha256={} coverage={} evaluated={} violation={} compliant={} not_evaluable={} unknown={} not_applicable={} gaps={} duration_ms={}",
+                result.policyId(),
+                result.vendor(),
+                version.versionId(),
+                version.number(),
+                compiled.citation().contentSha256(),
+                result.coverage(),
+                result.evaluated(),
+                result.outcomeCounts().getOrDefault(ZoneMatrixEvaluator.OUTCOME_VIOLATION, 0),
+                result.outcomeCounts().getOrDefault(ZoneMatrixEvaluator.OUTCOME_COMPLIANT, 0),
+                result.outcomeCounts().getOrDefault(ZoneMatrixEvaluator.OUTCOME_NOT_EVALUABLE, 0),
+                result.outcomeCounts().getOrDefault(ZoneMatrixEvaluator.OUTCOME_UNKNOWN, 0),
+                result.notApplicable().total(),
+                result.zoneDefinitionGaps().size(),
+                result.durationMillis());
+
+        boolean showWitnesses = includeWitnesses && canViewBlocks && view != View.MASKED;
+        return projectEvaluation(result, parsedContent, view, showWitnesses, hasPolicyRead);
+    }
+
+    /**
+     * Projects an {@link ZoneMatrixEvaluator.EvaluationResult} according to {@link View}, witness permission and
+     * {@code policy_read} (§3.4, §8.2, {@code ZM-10}, {@code ZM-33}).
+     */
+    public Map<String, Object> projectEvaluation(
+            ZoneMatrixEvaluator.EvaluationResult result,
+            ZoneMatrixContent content,
+            View view,
+            boolean showWitnesses,
+            boolean hasPolicyRead) {
+        Objects.requireNonNull(result, "result");
+        Objects.requireNonNull(content, "content");
+        Objects.requireNonNull(view, "view");
+
+        boolean maskPolicy = view == View.MASKED || !hasPolicyRead;
+        boolean allowAddresses = showWitnesses && view != View.MASKED;
+        var zoneNames = new ZoneNames(view, content.zones().stream().map(ZoneMatrixContent.Zone::id).toList());
+        UnaryOperator<String> endpoint = id -> ZoneMatrixContent.UNASSIGNED.equals(id)
+                ? ZoneMatrixContent.UNASSIGNED
+                : zoneNames.of(id, name(content, id));
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("engine_version", result.engineVersion());
+        out.put("version_id", result.version().versionId());
+        out.put("version_number", result.version().versionNumber());
+        out.put("content_sha256", result.version().contentSha256());
+        out.put("policy_id", result.policyId());
+        out.put("policy_name", maskPolicy ? maskPolicyLabel("policy", result.policyName()) : result.policyName());
+        out.put("source_id", result.sourceId());
+        out.put("source_name", maskPolicy ? maskSourceName(result.sourceName(), result.sourceId()) : result.sourceName());
+        out.put("container_id", result.containerId());
+        out.put("container_name", maskPolicy ? maskDomainName(result.containerName()) : result.containerName());
+        out.put("vendor", result.vendor());
+        out.put("collected_at", result.collectedAt());
+        out.put("witnesses_included", allowAddresses);
+
+        List<Map<String, Object>> targets = new ArrayList<>(result.targets().size());
+        for (PolicySnapshot.Target t : result.targets()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("device_id", t.deviceId());
+            row.put("name", maskPolicy ? maskSourceName(t.name(), t.deviceId()) : t.name());
+            row.put("context", maskPolicy && t.context() != null && !t.context().isBlank()
+                    ? nameMasker.maskVirtualSystem(t.context(), null)
+                    : t.context());
+            row.put("sync_status", t.syncStatus());
+            targets.add(row);
+        }
+        out.put("targets", targets);
+
+        out.put("evaluated", result.evaluated());
+        out.put("not_evaluated_reason", result.notEvaluatedReason());
+        out.put("coverage", result.coverage());
+        out.put("coverage_items", result.coverageItems().stream()
+                .map(c -> Map.<String, Object>of("code", c.code(), "description", c.description()))
+                .toList());
+        out.put("failure_count", result.failureCount());
+        out.put("outcome_counts", new LinkedHashMap<>(result.outcomeCounts()));
+
+        var na = result.notApplicable();
+        Map<String, Object> naMap = new LinkedHashMap<>();
+        naMap.put("disabled", na.disabled());
+        naMap.put("deny_type", na.denyType());
+        naMap.put("outside_security_rulebase", na.outsideSecurityRulebase());
+        naMap.put("apply_layer_decided_by_inline", na.applyLayerDecidedByInline());
+        naMap.put("schedule_ended", na.scheduleEnded());
+        naMap.put("total", na.total());
+        naMap.put("ended_schedules", na.endedSchedules().stream().map(es -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("rule_id", es.ruleId());
+            row.put("rule_number", es.ruleNumber());
+            row.put("rule_name", maskPolicy ? maskRuleName(es.ruleName(), es.ruleNumber()) : es.ruleName());
+            row.put("detail", es.detail());
+            return row;
+        }).toList());
+        out.put("not_applicable", naMap);
+
+        var h = result.headline();
+        Map<String, Object> headlineMap = new LinkedHashMap<>();
+        headlineMap.put("distinct_violating_rules", h.distinctViolatingRules());
+        headlineMap.put("violated_zone_pairs", h.violatedZonePairs());
+        headlineMap.put("critical_rules", h.criticalRules());
+        headlineMap.put("covered_by_earlier_rule", h.coveredByEarlierRule());
+        headlineMap.put("conditional_rules", h.conditionalRules());
+        headlineMap.put("outside_headline_ordered_layer", h.outsideHeadlineOrderedLayer());
+        headlineMap.put("not_evaluable_rules", h.notEvaluableRules());
+        headlineMap.put("unknown_rules", h.unknownRules());
+        headlineMap.put("incomplete_policies", h.incompletePolicies());
+        headlineMap.put("not_evaluated_policies", h.notEvaluatedPolicies());
+        headlineMap.put("exact", h.exact());
+        headlineMap.put("text", h.text());
+        headlineMap.put("outside_headline_text", h.outsideHeadlineText());
+        out.put("headline", headlineMap);
+
+        List<Map<String, Object>> rules = new ArrayList<>(result.rules().size());
+        for (ZoneMatrixEvaluator.RuleEvaluation r : result.rules()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            Map<String, Object> idMap = new LinkedHashMap<>();
+            idMap.put("policy_id", r.identity().policyId());
+            idMap.put("rule_uid", r.identity().ruleUid());
+            idMap.put("inline_parent_path", r.identity().inlineParentPath());
+            idMap.put("violated_pairs", r.identity().violatedPairs());
+            row.put("finding_identity", idMap);
+            row.put("rule_id", r.ruleId());
+            row.put("rule_uid", r.ruleUid());
+            row.put("rule_number", r.ruleNumber());
+            row.put("rule_name", maskPolicy ? maskRuleName(r.ruleName(), r.ruleNumber()) : r.ruleName());
+            row.put("section_id", r.sectionId());
+            row.put("section_name", maskPolicy ? maskSectionName(r.sectionName()) : r.sectionName());
+            row.put("inline_parent_path", r.inlineParentPath());
+            row.put("target_device_ids", r.targetDeviceIds());
+            row.put("outcome", r.outcome());
+            row.put("reason", r.reason());
+            row.put("highest_severity", r.highestSeverity());
+            row.put("flags", List.copyOf(r.flags()));
+            row.put("covering_rule_id", r.coveringRuleId());
+            row.put("touched_pairs", r.touchedPairs());
+            row.put("touched_pair_names", r.touchedPairs().stream().map(p -> formatPairName(p, endpoint)).toList());
+
+            List<Map<String, Object>> violatedCells = new ArrayList<>(r.violatedCells().size());
+            for (ZoneMatrixEvaluator.CellViolation cv : r.violatedCells()) {
+                Map<String, Object> cellRow = new LinkedHashMap<>();
+                cellRow.put("source", cv.sourceZone());
+                cellRow.put("destination", cv.destinationZone());
+                cellRow.put("source_name", endpoint.apply(cv.sourceZone()));
+                cellRow.put("destination_name", endpoint.apply(cv.destinationZone()));
+                cellRow.put("statement", cv.statement());
+                cellRow.put("severity", cv.severity());
+                cellRow.put("not_allowed_services", cv.notAllowedServices());
+                cellRow.put("nat_view", cv.natView());
+                if (allowAddresses && cv.witness() != null) {
+                    Map<String, Object> w = new LinkedHashMap<>();
+                    w.put("source_range", cv.witness().sourceRange());
+                    w.put("destination_range", cv.witness().destinationRange());
+                    w.put("service", cv.witness().service());
+                    cellRow.put("witness", w);
+                } else {
+                    cellRow.put("witness", null);
+                }
+                violatedCells.add(cellRow);
+            }
+            row.put("violated_cells", violatedCells);
+            row.put("undecided_parts", r.undecidedParts());
+            row.put("nat_view", r.natViewSummary());
+            rules.add(row);
+        }
+        out.put("rules", rules);
+
+        List<Map<String, Object>> gaps = new ArrayList<>(result.zoneDefinitionGaps().size());
+        for (ZoneMatrixEvaluator.ZoneDefinitionGap g : result.zoneDefinitionGaps()) {
+            Map<String, Object> gapRow = new LinkedHashMap<>();
+            gapRow.put("rule_id", g.ruleId());
+            gapRow.put("rule_number", g.ruleNumber());
+            gapRow.put("rule_name", maskPolicy ? maskRuleName(g.ruleName(), g.ruleNumber()) : g.ruleName());
+            gapRow.put("section_name", maskPolicy ? maskSectionName(g.sectionName()) : g.sectionName());
+            gapRow.put("range_count", g.unassignedPrivateRanges().size());
+            gapRow.put("unassigned_private_ranges", allowAddresses ? g.unassignedPrivateRanges() : null);
+            gaps.add(gapRow);
+        }
+        out.put("zone_definition_gaps", gaps);
+        out.put("hygiene_budget_reached", result.hygieneBudgetReached());
+        out.put("duration_ms", result.durationMillis());
+        out.put("hygiene_ms", result.hygieneMillis());
+        return out;
+    }
+
+    private String maskRuleName(String rawName, int ruleNumber) {
+        if (rawName == null || rawName.isEmpty()) return rawName;
+        if ("UNKNOWN".equals(rawName)) return "UNKNOWN";
+        @SuppressWarnings("unchecked")
+        Map<String, Object> masked = (Map<String, Object>) PolicyPrivacy.mask(
+                Map.of("name", rawName, "number", ruleNumber), "", nameMasker, ipMasker);
+        return String.valueOf(masked.get("name"));
+    }
+
+    private String maskSectionName(String rawSection) {
+        if (rawSection == null || rawSection.isEmpty() || FIXED_SECTION_NAMES.contains(rawSection)) {
+            return rawSection;
+        }
+        return nameMasker.maskPolicyName("section", rawSection);
+    }
+
+    private String maskPolicyLabel(String namespace, String raw) {
+        if (raw == null || raw.isEmpty()) return raw;
+        return nameMasker.maskPolicyName(namespace, raw);
+    }
+
+    private String maskDomainName(String raw) {
+        if (raw == null || raw.isBlank()) return raw;
+        return nameMasker.maskDomainName(raw);
+    }
+
+    private String maskSourceName(String rawSource, String sourceId) {
+        if (rawSource != null && !rawSource.isBlank()) {
+            String masked = nameMasker.maskDeviceName(rawSource, null, sourceId);
+            if (masked != null && !TopologyNamePseudonymizer.isGap(masked)) {
+                return masked;
+            }
+        }
+        return sourceId != null && !sourceId.isBlank() ? nameMasker.maskUnknownHost(sourceId) : TopologyNamePseudonymizer.GAP;
+    }
+
+    private static String formatPairName(String pair, UnaryOperator<String> endpoint) {
+        int arrow = pair.indexOf("->");
+        if (arrow < 0) return endpoint.apply(pair);
+        return endpoint.apply(pair.substring(0, arrow)) + " -> " + endpoint.apply(pair.substring(arrow + 2));
+    }
+
+    private static String str(Object o) { return o == null ? null : String.valueOf(o); }
+
+    private static String strOrEmpty(Object o) { return o == null ? "" : String.valueOf(o); }
+
     private static final class ActorTokens {
         private final View view;
         private final Map<String, String> tokens = new HashMap<>();
