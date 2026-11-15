@@ -383,13 +383,13 @@ class CpSupportBundleJobExecutorTest {
     }
 
     @Test
-    void aManagementServerIsRejectedInThisStep(@TempDir Path dir) {
+    void aManagementServerHasNoGateRowsForTheGatewayOnlyLightReads(@TempDir Path dir) {
         var h = new Harness(dir, "management_server");
         script(h.device);
         var store = new Store("cp_gaia_extras");
         h.run(store);
-        assertEquals("REJECTED", h.finalState);
-        assertTrue(h.device.commands.isEmpty());
+        // only the rows that exist under the management scope (C1, C2) can be sent; the clish and cphaprob reads have none
+        assertTrue(h.device.commands.stream().noneMatch(c -> c.contains("clish") || c.contains("cphaprob")), h.device.commands.toString());
     }
 
     @Test

@@ -183,6 +183,41 @@ public final class WorkerClaimLoop {
     public WorkerClaimLoop withCpSupportBundle(com.securityexpert.nexus.ui2.worker.supportbundle.CpSupportBundleJobExecutor executor) {
         this.cpSupportBundleExecutor=executor; return this;
     }
+    private com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore supportBundleAdmission;
+    private java.time.Instant lastSupportBundleSweep = java.time.Instant.EPOCH;
+    /** Step S6: claim time admission of support bundle jobs (HA peer, fleet cap of two heavy runs, three hour give up). */
+    public WorkerClaimLoop withSupportBundleAdmission(com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore store) {
+        this.supportBundleAdmission=store; return this;
+    }
+    private static boolean isSupportBundle(String capability) {
+        return com.securityexpert.nexus.ui2.jobs.supportbundle.CpSupportBundle.CAPABILITY.equals(capability)
+            || com.securityexpert.nexus.ui2.jobs.supportbundle.PanSupportBundle.CAPABILITY.equals(capability)
+            || com.securityexpert.nexus.ui2.jobs.supportbundle.AsaSupportBundle.CAPABILITY.equals(capability)
+            || com.securityexpert.nexus.ui2.jobs.supportbundle.FgtSupportBundle.CAPABILITY.equals(capability);
+    }
+    /** @return false when the job was put back or ended and must not run now. */
+    private boolean supportBundleAdmitted(ClaimedJob claimed) {
+        if (supportBundleAdmission == null) return true;
+        var job = jobRecordDao.find(claimed.jobId());
+        if (job.isEmpty() || !isSupportBundle(job.get().capabilityId())) return true;
+        var decision = supportBundleAdmission.claimDecision(claimed.jobId(), java.time.Instant.now(),
+            com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore.HEAVY_FLEET_CAP);
+        if (decision instanceof com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore.ClaimDecision.Defer defer) {
+            LOGGER.log(System.Logger.Level.INFO, "support bundle job deferred: " + defer.reason());
+            return !supportBundleAdmission.deferClaimed(claimed.jobId(), claimed.leaseEpoch(), defer.until());
+        }
+        if (decision instanceof com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore.ClaimDecision.GiveUp) {
+            return !supportBundleAdmission.giveUpClaimed(claimed.jobId(), claimed.leaseEpoch());
+        }
+        return true;
+    }
+    private void sweepSupportBundles() {
+        if (supportBundleAdmission == null) return;
+        var now = java.time.Instant.now();
+        if (now.isBefore(lastSupportBundleSweep.plusSeconds(60))) return;
+        lastSupportBundleSweep = now;
+        try { supportBundleAdmission.giveUpStale(now); } catch (RuntimeException ignored) { /* retried next minute */ }
+    }
     private com.securityexpert.nexus.ui2.worker.supportbundle.PanSupportBundleJobExecutor panSupportBundleExecutor;
     /** Support bundle collection, Palo Alto tech support file (V232, step S3). */
     public WorkerClaimLoop withPanSupportBundle(com.securityexpert.nexus.ui2.worker.supportbundle.PanSupportBundleJobExecutor executor) {
@@ -415,6 +450,7 @@ public final class WorkerClaimLoop {
 
     /** @return {@code true} if a job was claimed and run to some outcome; {@code false} if the queue was empty. */
     public boolean claimAndExecuteOnce() {
+        sweepSupportBundles();
         Optional<ClaimedJob> claim = leaseRepository.claimNext(workerId, eligibleCapabilityIds, leaseDuration);
         if (claim.isEmpty()) {
             return false;
@@ -441,6 +477,7 @@ public final class WorkerClaimLoop {
                     admission.preflight(com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.key(endpoint.addressRef(), port));
                 });
             }
+            if (!supportBundleAdmitted(claimed)) return true;
             return executeClaimed(claimed);
         } catch (com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.LeaseLost lost) {
             LOGGER.log(System.Logger.Level.WARNING, "ENDPOINT_LEASE_LOST; checkpoints retained for fenced recovery");

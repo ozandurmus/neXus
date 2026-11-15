@@ -180,9 +180,15 @@ class SupportBundleVendorGateTest {
             assertTrue(kind.defaultTicked(), kind.id());
             assertFalse(kind.heavy(), kind.id());
         }
-        assertFalse(SupportBundleKind.CP_CPINFO.enabled());
-        assertFalse(SupportBundleKind.CP_HCP_RUN.enabled());
-        assertFalse(SupportBundleKind.CP_CPINFO.defaultTicked());
+        // Step S6: the Check Point heavy items are enabled, never ticked by default (Q7), and are recovery-write kinds (BW-2).
+        for (SupportBundleKind kind : List.of(SupportBundleKind.CP_CPINFO, SupportBundleKind.CP_HCP_RUN, SupportBundleKind.CP_CPDATA_COLLECTOR)) {
+            assertTrue(kind.enabled(), kind.id());
+            assertFalse(kind.defaultTicked(), kind.id());
+            assertTrue(kind.heavy() && kind.recoveryWrite(), kind.id());
+        }
+        assertTrue(SupportBundleKind.PAN_TSF.recoveryWrite());
+        assertFalse(SupportBundleKind.CP_GAIA_EXTRAS.recoveryWrite());
+        assertFalse(SupportBundleKind.FGT_TAC_REPORT.recoveryWrite());
     }
 
     @Test

@@ -23,6 +23,7 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore;
 import com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore.ItemSpec;
 import com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore.RequestRow;
+import com.securityexpert.nexus.ui2.platform.ActionClass;
 import com.securityexpert.nexus.ui2.platform.BusinessHours;
 import com.securityexpert.nexus.ui2.platform.ManualAdmission;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
@@ -38,6 +39,7 @@ public final class SupportBundleService {
     public static final int MIN_REASON_LENGTH = 8;
     public static final int MAX_REASON_LENGTH = 500;
     public static final int PER_DEVICE_CAP = 3;
+    public static final int MAX_ITEMS = 32;
     public static final long FLEET_BYTES_CAP = 50L * 1024 * 1024 * 1024;
     public static final Duration MAX_SCHEDULE_AHEAD = Duration.ofDays(7);
     public static final Duration TTL = Duration.ofDays(14);
@@ -73,15 +75,18 @@ public final class SupportBundleService {
     }
 
     /**
-     * Platform enablement per vendor (design 5.2): Check Point gateways (S2), Palo Alto firewalls and Panoramas (S3), Cisco ASA
-     * (S4) and FortiGate (S5). A Check Point management server or MDS and a FortiManager are not enabled.
+     * Platform enablement per vendor (design 5.2): Check Point gateways (S2) and management servers and Multi-Domain Servers
+     * (S6, heavy items only; PO Q5), Palo Alto firewalls and Panoramas (S3), Cisco ASA (S4) and FortiGate (S5). A FortiManager
+     * is not enabled.
      */
     static Optional<VendorPlan> planFor(String vendor, String role) {
         boolean gateway = "gateway".equals(role);
         boolean management = "management_server".equals(role);
         if (vendor == null) return Optional.empty();
         return switch (vendor) {
-            case "check_point" -> gateway ? Optional.of(new VendorPlan(CpSupportBundle.CAPABILITY, "cp_gaia_gateway")) : Optional.empty();
+            case "check_point" -> gateway ? Optional.of(new VendorPlan(CpSupportBundle.CAPABILITY, CpSupportBundle.PLATFORM_ROLE_SCOPE))
+                    : management ? Optional.of(new VendorPlan(CpSupportBundle.CAPABILITY, CpSupportBundle.MANAGEMENT_SCOPE))
+                    : Optional.empty();
             case "palo_alto" -> gateway ? Optional.of(new VendorPlan(PanSupportBundle.CAPABILITY, PanSupportBundle.FIREWALL_SCOPE))
                     : management ? Optional.of(new VendorPlan(PanSupportBundle.CAPABILITY, PanSupportBundle.PANORAMA_SCOPE))
                     : Optional.empty();
@@ -130,8 +135,16 @@ public final class SupportBundleService {
             if (!kind.get().enabled()) {
                 return new Outcome.Refused(409, "KIND_NOT_AVAILABLE", "That item is not available yet");
             }
+            if ("management_server".equals(device.get().role()) && "check_point".equals(vendor) && !kind.get().onCheckPointManagement()) {
+                return new Outcome.Refused(409, "KIND_NOT_AVAILABLE", "That item is not available on a management server");
+            }
             kinds.add(kind.get());
         }
+        // The optional cpdata_collector run runs only when the presence read found the tool, so the presence read is always part of it.
+        if (kinds.contains(SupportBundleKind.CP_CPDATA_COLLECTOR)) kinds.add(SupportBundleKind.CPDATA_COLLECTOR_PRESENT);
+        boolean recoveryWrite = kinds.stream().anyMatch(SupportBundleKind::recoveryWrite);
+        boolean checkPointManagement = "check_point".equals(vendor) && "management_server".equals(device.get().role());
+        boolean heavyOnManagement = checkPointManagement && kinds.stream().anyMatch(SupportBundleKind::heavy);
         Instant now = clock.instant();
         Instant when = now;
         String mode = "NOW";
@@ -159,8 +172,17 @@ public final class SupportBundleService {
 
         UUID id = UUID.randomUUID();
         List<ItemSpec> specs = new ArrayList<>();
-        kinds.stream().sorted(java.util.Comparator.comparingInt(SupportBundleKind::order))
-                .forEach(k -> specs.add(new ItemSpec(k.id(), null)));
+        // A VSX gateway: HCP run and cpinfo run once per virtual system of the stored inventory (C10, C14); never a guessed id.
+        List<Integer> virtualSystems = !checkPointManagement && "check_point".equals(vendor)
+                && kinds.stream().anyMatch(SupportBundleKind::perVirtualSystem) ? store.virtualSystemIds(deviceId) : List.of();
+        for (SupportBundleKind k : kinds.stream().sorted(java.util.Comparator.comparingInt(SupportBundleKind::order)).toList()) {
+            if (k.perVirtualSystem() && !virtualSystems.isEmpty()) virtualSystems.forEach(vs -> specs.add(new ItemSpec(k.id(), vs)));
+            else specs.add(new ItemSpec(k.id(), null));
+        }
+        if (specs.size() > MAX_ITEMS) {
+            return new Outcome.Refused(409, "TOO_MANY_ITEMS", "This request would need " + specs.size() + " items; at most " + MAX_ITEMS
+                    + " are allowed (a VSX gateway runs each heavy item once per virtual system)");
+        }
         RequestRow row = new RequestRow(id, deviceId, vendor, plan.get().platformRole(), mode, when,
                 caseRef == null || caseRef.isBlank() ? null : caseRef, reason.strip(), actor, now, null, null,
                 when.plus(TTL), null, null, 0, null, null, null, "{}", "QUEUED", null);
@@ -176,15 +198,16 @@ public final class SupportBundleService {
         }
         AdmissionResult result;
         try {
+            // BW-2 (PO 14K): a request holding a recovery-write gate is class 1, as the MDS export is; reads only stay class 0.
             result = admission.submit(plan.get().capability(), deviceId, "support-bundle:" + id, actor,
-                    ActionRegistry.SUPPORT_BUNDLE_REQUEST);
+                    ActionRegistry.SUPPORT_BUNDLE_REQUEST, recoveryWrite ? ActionClass.CLASS_1_RECOVERY_WRITE : null);
         } catch (RuntimeException refused) {
             store.failQueued(id, actor, "ADMISSION_REFUSED");
             throw refused;
         }
         return switch (result) {
-            case AdmissionResult.Admitted admitted -> accepted(id, admitted.jobId(), mode, when, actor);
-            case AdmissionResult.Deduplicated deduplicated -> accepted(id, deduplicated.jobId(), mode, when, actor);
+            case AdmissionResult.Admitted admitted -> accepted(id, admitted.jobId(), mode, when, actor, heavyOnManagement);
+            case AdmissionResult.Deduplicated deduplicated -> accepted(id, deduplicated.jobId(), mode, when, actor, heavyOnManagement);
             case AdmissionResult.Refused refused -> {
                 store.failQueued(id, actor, refused.code());
                 yield new Outcome.Refused(409, refused.code(), refused.reason());
@@ -192,10 +215,15 @@ public final class SupportBundleService {
         };
     }
 
-    private Outcome accepted(UUID id, String jobId, String mode, Instant when, String actor) {
+    /** PO Q5: the heavy items are included for a management server or MDS; the response says so plainly (no block). */
+    public static final String MDS_WARNING = "This is a Check Point management server or Multi-Domain Server. HCP and cpinfo are heavy "
+            + "on it, and a Multi-Domain Server has crashed under a heavy backup before. The items were queued as requested; "
+            + "run them outside business hours and watch the server.";
+
+    private Outcome accepted(UUID id, String jobId, String mode, Instant when, String actor, boolean mdsWarning) {
         store.attachJob(id, jobId, actor);
         if ("AT".equals(mode)) store.deferJob(jobId, when, actor);
-        return new Outcome.Accepted(id, jobId, false);
+        return new Outcome.Accepted(id, jobId, mdsWarning);
     }
 
     /** Cancels a queued request (and its job). A running request is not stopped in this step. */

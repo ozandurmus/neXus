@@ -65,8 +65,13 @@ class SupportBundleSchemaAndStoreIntegrationTest {
         try (var fixture = Ui2PostgresFixture.create("support_bundle_schema")) {
             fixture.runFlyway();
             try (Connection db = fixture.migrateConnection()) {
-                assertEquals(10, count(db, "select count(*) from gate_registry where gate_id like 'cp_sb_%'"));
-                assertEquals(9, count(db, "select count(*) from gate_registry where gate_id like 'cp_sb_%' and sign_off_state = 'SIGNED_OFF' "
+                assertEquals(23, count(db, "select count(*) from gate_registry where gate_id like 'cp_sb_%'"));
+                // step S6 (V234): the management scope rows
+                assertEquals(17, count(db, "select count(*) from gate_registry where gate_id like 'cpm_sb_%' and platform_role_scope = 'cp_multi_domain_server' "
+                        + "and sign_off_state = 'SIGNED_OFF'"));
+                assertEquals(8, count(db, "select count(*) from gate_registry where gate_id like 'cpm_sb_%' and action_class = 'recovery-write'"));
+                assertEquals(10, count(db, "select count(*) from gate_registry where gate_id like 'cp_sb_%' and action_class = 'recovery-write'"));
+                assertEquals(12, count(db, "select count(*) from gate_registry where gate_id like 'cp_sb_%' and sign_off_state = 'SIGNED_OFF' "
                         + "and action_class = 'read' and platform_role_scope = 'cp_gaia_gateway' and canonical_command_key like 'unset BASH_ENV ENV;%' "
                         + "or gate_id = 'cp_sb_sftp_get_hcp'"));
                 assertEquals(1, count(db, "select count(*) from gate_registry where gate_id = 'cp_sb_cpdata_collector_run' "

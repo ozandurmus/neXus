@@ -23,11 +23,12 @@ const row = (over: Record<string, unknown> = {}) => ({
     digest_prefix: "e3b0c44298fc", detail: null }], ...over,
 });
 const kinds = [
-  { kind: "cpdata_collector_present", vendor: "check_point", load: "low", default_ticked: true, enabled: true, heavy: false },
+  { kind: "cpdata_collector_present", vendor: "check_point", load: "low", default_ticked: true, enabled: true, heavy: false, check_point_management: true },
   { kind: "cp_gaia_extras", vendor: "check_point", load: "low", default_ticked: true, enabled: true, heavy: false },
   { kind: "cp_hcp_latest", vendor: "check_point", load: "none", default_ticked: true, enabled: true, heavy: false },
-  { kind: "cp_hcp_run", vendor: "check_point", load: "medium", default_ticked: false, enabled: false, heavy: true },
-  { kind: "cp_cpinfo", vendor: "check_point", load: "high", default_ticked: false, enabled: false, heavy: true },
+  { kind: "cp_hcp_run", vendor: "check_point", load: "medium", default_ticked: false, enabled: true, heavy: true, check_point_management: true },
+  { kind: "cp_cpinfo", vendor: "check_point", load: "high", default_ticked: false, enabled: true, heavy: true, check_point_management: true },
+  { kind: "cpdata_collector_run", vendor: "check_point", load: "unknown", default_ticked: false, enabled: true, heavy: true, check_point_management: true },
   { kind: "pan_tsf", vendor: "palo_alto", load: "unknown", default_ticked: true, enabled: true, heavy: false },
   { kind: "asa_crashinfo", vendor: "cisco_asa", load: "low", default_ticked: true, enabled: true, heavy: false },
   { kind: "asa_show_tech", vendor: "cisco_asa", load: "unknown", default_ticked: true, enabled: true, heavy: false },
@@ -49,7 +50,7 @@ describe("support bundles screen", () => {
     expect(screen.getByText(/18 KiB e3b0c44298fc/)).toBeTruthy();
   });
 
-  it("ticks the light items by default and leaves heavy ones unavailable", async () => {
+  it("ticks the light items by default and leaves the heavy ones available but unticked", async () => {
     render(<SupportBundlesScreen />);
     fireEvent.mouseDown(await screen.findByLabelText("Device"));
     fireEvent.click(await screen.findByRole("option", { name: "FW-TANGO-04" }));
@@ -57,7 +58,29 @@ describe("support bundles screen", () => {
     expect((extras as HTMLInputElement).checked).toBe(true);
     const cpinfo = screen.getByLabelText(/cpinfo/) as HTMLInputElement;
     expect(cpinfo.checked).toBe(false);
-    expect(cpinfo.disabled).toBe(true);
+    expect(cpinfo.disabled).toBe(false);
+    expect((screen.getByLabelText(/Run HCP now/) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText(/cpdata_collector run/) as HTMLInputElement).checked).toBe(false);
+    expect(screen.queryByText(/Multi-Domain Server has crashed/)).toBeNull();
+  });
+
+  it("offers a Check Point management server the heavy items only, with a clear warning and no block", async () => {
+    vi.mocked(listDevices).mockResolvedValue({ devices: [{ device_id: "d-mds", hostname: "FW-TANGO-06", vendor_hint: "check_point", role: "management_server" }] } as never);
+    vi.mocked(requestSupportBundle).mockResolvedValue({ id: ID, job_id: "j", status: "ACCEPTED", mds_warning: true, warning: "Synthetic MDS warning from the server." });
+    render(<SupportBundlesScreen />);
+    fireEvent.mouseDown(await screen.findByLabelText("Device"));
+    fireEvent.click(await screen.findByRole("option", { name: "FW-TANGO-06" }));
+    expect(await screen.findByText(/Multi-Domain Server has crashed/)).toBeTruthy();
+    expect(screen.queryByLabelText(/Gaia details/)).toBeNull();
+    expect(screen.queryByLabelText(/Latest HCP health report/)).toBeNull();
+    const hcp = screen.getByLabelText(/Run HCP now/) as HTMLInputElement;
+    expect(hcp.disabled).toBe(false);
+    fireEvent.click(hcp);
+    fireEvent.change(screen.getByLabelText(/Reason/), { target: { value: "TAC case preparation" } });
+    fireEvent.click(screen.getByRole("button", { name: "Collect" }));
+    await waitFor(() => expect(requestSupportBundle).toHaveBeenCalled());
+    expect(vi.mocked(requestSupportBundle).mock.calls[0][1]).toMatchObject({ kinds: ["cpdata_collector_present", "cp_hcp_run"] });
+    expect(await screen.findByText(/Synthetic MDS warning from the server/)).toBeTruthy();
   });
 
   it("sends the ticked kinds with the reason", async () => {
@@ -91,13 +114,13 @@ describe("support bundles screen", () => {
     expect(await screen.findByText(/has not been downloaded/)).toBeTruthy();
   });
 
-  it("offers the four vendors' gateways and Panorama, not an MDS or a FortiManager", () => {
+  it("offers the four vendors' gateways, Panorama and a Check Point management server, not a FortiManager", () => {
     expect(bundleDevice({ vendor_hint: "check_point", role: "gateway" })).toBe(true);
     expect(bundleDevice({ vendor_hint: "palo_alto", role: "gateway" })).toBe(true);
     expect(bundleDevice({ vendor_hint: "palo_alto", role: "management_server" })).toBe(true);
     expect(bundleDevice({ vendor_hint: "cisco_asa", role: "gateway" })).toBe(true);
     expect(bundleDevice({ vendor_hint: "fortinet", role: "gateway" })).toBe(true);
-    expect(bundleDevice({ vendor_hint: "check_point", role: "management_server" })).toBe(false);
+    expect(bundleDevice({ vendor_hint: "check_point", role: "management_server" })).toBe(true);
     expect(bundleDevice({ vendor_hint: "fortinet", role: "management_server" })).toBe(false);
     expect(bundleDevice({ vendor_hint: "infoblox", role: "appliance" })).toBe(false);
   });

@@ -38,4 +38,22 @@ public interface SupportBundleRunStore {
     default Optional<JooqSupportBundleStore.StoredConfiguration> latestFortiGateConfiguration(String deviceId) {
         return Optional.empty();
     }
+
+    /** Step S6, the point of no return: the item's work directory name is recorded (not yet removed) before the device is touched. */
+    default void markWorkDir(UUID requestId, String workDirPath) {
+    }
+
+    /** The work directory recorded by {@link #markWorkDir} was removed by exact name (C20). */
+    default void markWorkDirCleaned(UUID requestId) {
+    }
+
+    /** True when the stored data say this Check Point management server is a Multi-Domain Server (it hosts domain servers); false for a Security Management Server or unknown. */
+    default boolean multiDomainServer(String deviceId) {
+        return false;
+    }
+
+    /** Virtual system ids (0..4095) the latest stored inventory run lists for the gateway; empty when none (not VSX, or no run). */
+    default List<Integer> virtualSystemIds(String deviceId) {
+        return List.of();
+    }
 }

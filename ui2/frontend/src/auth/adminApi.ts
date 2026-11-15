@@ -4750,12 +4750,14 @@ export interface SupportBundleRequest {
 export interface SupportBundleKindRow {
   readonly kind: string; readonly vendor: string; readonly load: string; readonly default_ticked: boolean;
   readonly enabled: boolean; readonly heavy: boolean;
+  /** Offered for a Check Point management server or Multi-Domain Server (heavy items and the presence read). */
+  readonly check_point_management?: boolean;
 }
 const SUPPORT_BUNDLES = "/api/v2/support-bundles";
 export const getSupportBundleCatalogue = () => call<{ kinds: SupportBundleKindRow[] }>(`${SUPPORT_BUNDLES}/catalogue`, "GET");
 export const listSupportBundles = () => call<{ support_bundles: SupportBundleRequest[] }>(SUPPORT_BUNDLES, "GET");
 export const requestSupportBundle = (deviceId: string, input: { kinds: string[]; reason: string; run_at?: string; case_ref?: string }) =>
-  call<{ id: string; job_id: string; status: string }>(`/api/v2/devices/${encodeURIComponent(deviceId)}/support-bundles`, "POST", input);
+  call<{ id: string; job_id: string; status: string; mds_warning?: boolean; warning?: string }>(`/api/v2/devices/${encodeURIComponent(deviceId)}/support-bundles`, "POST", input);
 export const cancelSupportBundle = (id: string, reason: string) =>
   call<{ id: string; state: string }>(`${SUPPORT_BUNDLES}/${encodeURIComponent(id)}/cancel`, "POST", { reason });
 export const deleteSupportBundle = (id: string, reason: string) =>

@@ -70,6 +70,13 @@ public record Capability(
                 .orElse(ActionClass.CLASS_0_READ);
     }
 
+    /** The more severe of two classes (the same ranking {@link #resolvedActionClassOrDeclaredClass} uses). */
+    public static ActionClass moreSevere(ActionClass a, ActionClass b) {
+        if (a == null) return b;
+        if (b == null) return a;
+        return severityRank(b) > severityRank(a) ? b : a;
+    }
+
     private static int severityRank(ActionClass actionClass) {
         return switch (actionClass) {
             case CLASS_0_READ -> 0;

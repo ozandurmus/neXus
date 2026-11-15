@@ -1,11 +1,13 @@
 package com.securityexpert.nexus.ui2.service.supportbundle;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -26,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult;
+import com.securityexpert.nexus.ui2.platform.ActionClass;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
@@ -55,7 +58,7 @@ class SupportBundleServiceTest {
         when(devices.find("dev-fgt")).thenReturn(Optional.of(device("gateway", "fortinet")));
         when(devices.find("dev-fmg")).thenReturn(Optional.of(device("management_server", "fortinet")));
         when(devices.find("dev-other")).thenReturn(Optional.of(device("gateway", "infoblox")));
-        when(admission.submit(anyString(), anyString(), anyString(), anyString(), anyString()))
+        when(admission.submit(anyString(), anyString(), anyString(), anyString(), anyString(), any()))
                 .thenReturn(new AdmissionResult.Admitted("job-1"));
         service = new SupportBundleService(devices, admission, store, Clock.fixed(NIGHT, ZoneOffset.UTC),
                 new BusinessHours(LocalTime.of(8, 0), LocalTime.of(20, 0)));
@@ -94,7 +97,7 @@ class SupportBundleServiceTest {
         assertEquals(NIGHT.plus(Duration.ofDays(14)), rows.getValue().expiresAt());
         assertEquals(3, specs.getValue().size());
         assertTrue(specs.getValue().get(0).toString().contains("cpdata_collector_present"), "cheapest first");
-        verify(admission).submit(eq("cp_support_bundle"), eq("dev-cp"), anyString(), eq("ACTOR-ALPHA"), eq(ActionRegistry.SUPPORT_BUNDLE_REQUEST));
+        verify(admission).submit(eq("cp_support_bundle"), eq("dev-cp"), anyString(), eq("ACTOR-ALPHA"), eq(ActionRegistry.SUPPORT_BUNDLE_REQUEST), isNull());
         verify(store).attachJob(any(), eq("job-1"), eq("ACTOR-ALPHA"));
         verify(store, never()).deferJob(anyString(), any(), anyString());
     }
@@ -109,25 +112,25 @@ class SupportBundleServiceTest {
         refused(ask("dev-fmg", List.of("fgt_crashlog"), Optional.empty(), "TAC case preparation"), 409, "PLATFORM_NOT_YET_ENABLED");
         refused(ask("dev-asa", List.of("pan_tsf"), Optional.empty(), "TAC case preparation"), 400, "INVALID_KIND");
         refused(ask("dev-fgt", List.of("asa_show_tech"), Optional.empty(), "TAC case preparation"), 400, "INVALID_KIND");
-        refused(ask("dev-mds", List.of("cp_gaia_extras"), Optional.empty(), "TAC case preparation"), 409, "PLATFORM_NOT_YET_ENABLED");
-        refused(ask("dev-cp", List.of("cp_cpinfo"), Optional.empty(), "TAC case preparation"), 409, "KIND_NOT_AVAILABLE");
+        refused(ask("dev-mds", List.of("cp_gaia_extras"), Optional.empty(), "TAC case preparation"), 409, "KIND_NOT_AVAILABLE");
+        refused(ask("dev-mds", List.of("cp_hcp_latest"), Optional.empty(), "TAC case preparation"), 409, "KIND_NOT_AVAILABLE");
         refused(ask("dev-cp", List.of("rm -rf"), Optional.empty(), "TAC case preparation"), 400, "INVALID_KIND");
         refused(ask("dev-cp", List.of(), Optional.empty(), "TAC case preparation"), 400, "NO_ITEMS");
         verify(store, never()).insert(any(), any());
-        verify(admission, never()).submit(anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(admission, never()).submit(anyString(), anyString(), anyString(), anyString(), anyString(), any());
     }
 
     @Test
     void eachVendorIsAdmittedAsItsOwnJobWithItsOwnPlatformScope() {
-        record Case(String device, String capability, String scope, List<String> kinds) { }
+        record Case(String device, String capability, String scope, List<String> kinds, ActionClass floor) { }
         List<Case> cases = new java.util.ArrayList<>();
-        cases.add(new Case("dev-pan-gw", "pan_support_bundle", "pan_firewall", List.of("pan_tsf")));
-        cases.add(new Case("dev-panorama", "pan_support_bundle", "panorama", List.of("pan_tsf")));
-        cases.add(new Case("dev-asa", "asa_support_bundle", "cisco_asa_firewall", List.of("asa_show_tech", "asa_crashinfo")));
-        cases.add(new Case("dev-fgt", "fgt_support_bundle", "fortigate", List.of("fgt_tac_report", "fgt_crashlog")));
+        cases.add(new Case("dev-pan-gw", "pan_support_bundle", "pan_firewall", List.of("pan_tsf"), ActionClass.CLASS_1_RECOVERY_WRITE));
+        cases.add(new Case("dev-panorama", "pan_support_bundle", "panorama", List.of("pan_tsf"), ActionClass.CLASS_1_RECOVERY_WRITE));
+        cases.add(new Case("dev-asa", "asa_support_bundle", "cisco_asa_firewall", List.of("asa_show_tech", "asa_crashinfo"), null));
+        cases.add(new Case("dev-fgt", "fgt_support_bundle", "fortigate", List.of("fgt_tac_report", "fgt_crashlog"), null));
         for (Case c : cases) {
             org.mockito.Mockito.reset(store, admission);
-            when(admission.submit(anyString(), anyString(), anyString(), anyString(), anyString()))
+            when(admission.submit(anyString(), anyString(), anyString(), anyString(), anyString(), any()))
                     .thenReturn(new AdmissionResult.Admitted("job-" + c.device()));
             var o = ask(c.device(), c.kinds(), Optional.empty(), "TAC case preparation");
             assertTrue(o instanceof SupportBundleService.Outcome.Accepted, c.device() + " " + o);
@@ -137,7 +140,7 @@ class SupportBundleServiceTest {
             assertEquals(c.scope(), rows.getValue().platformRole(), c.device());
             assertEquals(c.kinds().size(), specs.getValue().size());
             assertTrue(specs.getValue().get(0).toString().contains(c.kinds().get(c.kinds().size() - 1)), "cheapest first: " + specs.getValue());
-            verify(admission).submit(eq(c.capability()), eq(c.device()), anyString(), eq("ACTOR-ALPHA"), eq(ActionRegistry.SUPPORT_BUNDLE_REQUEST));
+            verify(admission).submit(eq(c.capability()), eq(c.device()), anyString(), eq("ACTOR-ALPHA"), eq(ActionRegistry.SUPPORT_BUNDLE_REQUEST), eq(c.floor()));
         }
     }
 
@@ -175,7 +178,7 @@ class SupportBundleServiceTest {
 
     @Test
     void aRefusedAdmissionClosesTheRequestSoItDoesNotHoldTheDevice() {
-        when(admission.submit(anyString(), anyString(), anyString(), anyString(), anyString()))
+        when(admission.submit(anyString(), anyString(), anyString(), anyString(), anyString(), any()))
                 .thenReturn(new AdmissionResult.Refused("CAPABILITY_NOT_EXECUTION_ELIGIBLE", "gate unknown"));
         refused(ask("dev-cp", List.of("cp_gaia_extras"), Optional.empty(), "TAC case preparation"), 409, "CAPABILITY_NOT_EXECUTION_ELIGIBLE");
         verify(store).failQueued(any(UUID.class), eq("ACTOR-ALPHA"), anyString());
@@ -186,6 +189,60 @@ class SupportBundleServiceTest {
         org.mockito.Mockito.doThrow(new RuntimeException("duplicate key value violates unique constraint uq_support_bundle_active_per_device"))
                 .when(store).insert(any(), any());
         refused(ask("dev-cp", List.of("cp_gaia_extras"), Optional.empty(), "TAC case preparation"), 409, "SUPPORT_BUNDLE_ALREADY_ACTIVE");
-        verify(admission, never()).submit(anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(admission, never()).submit(anyString(), anyString(), anyString(), anyString(), anyString(), any());
+    }
+
+    // ------------------------------------------------------------------ step S6
+
+    @Test
+    void aRequestHoldingARecoveryWriteGateIsAdmittedAsClassOneAndReadsOnlyStayClassZero() {
+        var o = ask("dev-cp", List.of("cp_gaia_extras", "cp_hcp_run"), Optional.empty(), "TAC case preparation");
+        assertTrue(o instanceof SupportBundleService.Outcome.Accepted, String.valueOf(o));
+        verify(admission).submit(eq("cp_support_bundle"), eq("dev-cp"), anyString(), eq("ACTOR-ALPHA"),
+                eq(ActionRegistry.SUPPORT_BUNDLE_REQUEST), eq(ActionClass.CLASS_1_RECOVERY_WRITE));
+        assertFalse(((SupportBundleService.Outcome.Accepted) o).mdsWarning(), "a gateway carries no MDS warning");
+        org.mockito.Mockito.clearInvocations(admission);
+        ask("dev-cp", List.of("cp_gaia_extras", "cp_hcp_latest"), Optional.empty(), "TAC case preparation");
+        verify(admission).submit(eq("cp_support_bundle"), eq("dev-cp"), anyString(), eq("ACTOR-ALPHA"),
+                eq(ActionRegistry.SUPPORT_BUNDLE_REQUEST), isNull());
+    }
+
+    @Test
+    void aManagementServerOrMdsIsEnabledForTheHeavyItemsWithAClearWarningAndNoBlock() {
+        var o = ask("dev-mds", List.of("cp_cpinfo", "cp_hcp_run"), Optional.empty(), "TAC case preparation");
+        assertTrue(o instanceof SupportBundleService.Outcome.Accepted, String.valueOf(o));
+        assertTrue(((SupportBundleService.Outcome.Accepted) o).mdsWarning());
+        assertTrue(SupportBundleService.MDS_WARNING.contains("Multi-Domain Server"));
+        var rows = ArgumentCaptor.forClass(RequestRow.class);
+        verify(store).insert(rows.capture(), any());
+        assertEquals("cp_multi_domain_server", rows.getValue().platformRole());
+        verify(admission).submit(eq("cp_support_bundle"), eq("dev-mds"), anyString(), eq("ACTOR-ALPHA"),
+                eq(ActionRegistry.SUPPORT_BUNDLE_REQUEST), eq(ActionClass.CLASS_1_RECOVERY_WRITE));
+    }
+
+    @Test
+    void theOptionalCpdataCollectorItemBringsItsPresenceReadAndIsClassOne() {
+        var o = ask("dev-cp", List.of("cpdata_collector_run"), Optional.empty(), "TAC case preparation");
+        assertTrue(o instanceof SupportBundleService.Outcome.Accepted, String.valueOf(o));
+        @SuppressWarnings("unchecked") var specs = ArgumentCaptor.forClass(List.class);
+        verify(store).insert(any(), specs.capture());
+        assertEquals(2, specs.getValue().size());
+        assertTrue(specs.getValue().get(0).toString().contains("cpdata_collector_present"));
+        verify(admission).submit(eq("cp_support_bundle"), eq("dev-cp"), anyString(), eq("ACTOR-ALPHA"),
+                eq(ActionRegistry.SUPPORT_BUNDLE_REQUEST), eq(ActionClass.CLASS_1_RECOVERY_WRITE));
+    }
+
+    @Test
+    void aVsxGatewayRunsHcpAndCpinfoOncePerStoredVirtualSystem() {
+        when(store.virtualSystemIds("dev-cp")).thenReturn(List.of(1, 2, 3));
+        var o = ask("dev-cp", List.of("cp_hcp_run", "cp_cpinfo"), Optional.empty(), "TAC case preparation");
+        assertTrue(o instanceof SupportBundleService.Outcome.Accepted, String.valueOf(o));
+        @SuppressWarnings("unchecked") var specs = ArgumentCaptor.forClass(List.class);
+        verify(store).insert(any(), specs.capture());
+        assertEquals(6, specs.getValue().size());
+        assertTrue(specs.getValue().get(0).toString().contains("cp_hcp_run") && specs.getValue().get(0).toString().contains("1"));
+        // too many virtual systems for the 32 item bound
+        when(store.virtualSystemIds("dev-cp")).thenReturn(java.util.stream.IntStream.range(1, 20).boxed().toList());
+        refused(ask("dev-cp", List.of("cp_hcp_run", "cp_cpinfo"), Optional.empty(), "TAC case preparation"), 409, "TOO_MANY_ITEMS");
     }
 }
