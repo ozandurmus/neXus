@@ -53,6 +53,8 @@ dependencies {
     // declares jOOQ as `implementation`, not `api`, so it is not otherwise
     // visible here.
     implementation(libs.jooq)
+    // Vendor support bundle upload (SFTP and SCP to a vendor case): the same maintained JSch fork the worker uses.
+    implementation(libs.jsch)
 
     // PO ASSISTANT DECISION 2026-09-14 on packaging / DIR-2: the worker
     // role's classes reach the boot jar's runtime classpath only -- no
@@ -70,6 +72,11 @@ dependencies {
     testImplementation(libs.spring.boot.webmvc.test)
     testImplementation(libs.spring.security.test)
     testRuntimeOnly(libs.junit.platform.launcher)
+    // Upload tests run real SFTP and SCP exchanges against an in-process Apache MINA sshd. The jars are the ones Gradle itself
+    // ships (the same sshd 2.12.1 the build tool uses), so no new module enters the dependency lock or verification metadata.
+    gradle.gradleHomeDir?.resolve("lib/plugins")?.let { plugins ->
+        testImplementation(fileTree(plugins) { include("sshd-core-*.jar", "sshd-common-*.jar", "sshd-sftp-*.jar") })
+    }
 }
 
 // PO ASSISTANT DECISION 2026-09-14 on packaging: the launcher, not

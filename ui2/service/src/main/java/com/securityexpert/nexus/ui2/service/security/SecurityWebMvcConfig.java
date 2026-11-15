@@ -385,6 +385,10 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/support-bundles/*/download", ActionRegistry.SUPPORT_BUNDLE_RETRIEVE),
             Map.entry("POST /api/v2/support-bundles/*/download", ActionRegistry.SUPPORT_BUNDLE_RETRIEVE),
             Map.entry("POST /api/v2/support-bundles/*/delete", ActionRegistry.SUPPORT_BUNDLE_DELETE),
+            Map.entry("POST /api/v2/support-bundles/*/cleanup-workdir", ActionRegistry.SUPPORT_BUNDLE_CLEANUP_WORKDIR),
+            Map.entry("POST /api/v2/support-bundles/*/uploads", ActionRegistry.SUPPORT_BUNDLE_UPLOAD),
+            Map.entry("GET /api/v2/support-bundles/*/uploads", ActionRegistry.SUPPORT_BUNDLE_READ),
+            Map.entry("GET /api/v2/support-bundles/upload-destinations", ActionRegistry.SUPPORT_BUNDLE_READ),
             // Reports R1 (REPORTS_R1_CONTRACT.md): catalogue, preview and history read; generate and download.
             Map.entry("GET /api/v2/reports/catalogue", ActionRegistry.REPORT_READ),
             Map.entry("POST /api/v2/reports/preview", ActionRegistry.REPORT_READ),

@@ -33,4 +33,26 @@ public class SupportBundleConfiguration {
             DeviceRepository devices, TopologyNamePseudonymizer names, LogMasking logMasking) {
         return new SupportBundleDownloadService(artefactStoreAccess.storeOrNull(), store, devices, names, logMasking);
     }
+
+    @Bean
+    public com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleUploadStore supportBundleUploadStore(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleUploadStore(transactionBoundary);
+    }
+
+    @Bean
+    public com.securityexpert.nexus.ui2.service.supportbundle.upload.SupportBundleUploadService supportBundleUploadService(
+            SupportBundleDownloadService downloads, JooqSupportBundleStore store,
+            com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleUploadStore uploads) {
+        var service = new com.securityexpert.nexus.ui2.service.supportbundle.upload.SupportBundleUploadService(downloads, store, uploads);
+        service.reapAtStartup();
+        return service;
+    }
+
+    @Bean
+    public com.securityexpert.nexus.ui2.service.supportbundle.SupportBundleCleanupService supportBundleCleanupService(
+            DeviceRepository devices, JobAdmissionService admission,
+            com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleUploadStore uploads) {
+        return new com.securityexpert.nexus.ui2.service.supportbundle.SupportBundleCleanupService(devices, admission, uploads);
+    }
 }

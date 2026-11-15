@@ -252,7 +252,11 @@ public final class AuditPresentationAllowlist {
             // V230 support bundles: ids, enums, counts, timestamps and references audited in full; reason, case_ref,
             // deleted_reason, work_dir_path and outcome_detail are redacted.
             Map.entry("support_bundle_request", Set.of(
-                    "deleted_at", "deleted_by", "device_id", "download_count", "downloaded_at", "downloaded_by", "expires_at", "expiry_warned_at", "finished_at", "id", "job_id", "outcome", "platform_role", "precheck_json", "requested_at", "requested_by", "run_at", "run_mode", "started_at", "state", "vendor", "work_dir_cleaned")),
+                    "deleted_at", "deleted_by", "device_id", "download_count", "downloaded_at", "downloaded_by", "expires_at", "expiry_warned_at", "finished_at", "id", "job_id", "outcome", "platform_role", "precheck_json", "requested_at", "requested_by", "run_at", "run_mode", "started_at", "state", "vendor", "work_dir_cleaned", "cleanup_job_id", "cleanup_outcome", "cleanup_requested_at", "cleanup_requested_by", "cleanup_state")),
+            // V236 vendor upload: ids, enums, counters, timestamps and the digest audited in full; reason, case_ref, remote_user,
+            // destination_host, remote_name, remote_status, error_detail and host_key_fingerprint are redacted. No credential column exists.
+            Map.entry("support_bundle_upload", Set.of(
+                    "attempts", "bytes_sent", "bytes_total", "destination_kind", "destination_port", "error_code", "finished_at", "heartbeat_at", "host_key_changed", "id", "item_ids", "owner", "request_id", "requested_at", "requested_by", "sha256", "started_at", "state")),
             Map.entry("support_bundle_item", Set.of(
                     "archive_entry_name", "artefact_id", "domain_ref", "finished_at", "gate_ids_used", "id", "kind", "ordinal", "outcome_code", "redaction_ruleset", "request_id", "sha256", "size_bytes", "started_at", "state", "vs_id")),
             // V217 cutover assessment: identities, revisions, enums, timestamps and references audited in full;
