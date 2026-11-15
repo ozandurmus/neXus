@@ -304,6 +304,27 @@ public final class JooqSupportBundleStore implements SupportBundleRunStore {
                 "update support_bundle_request set work_dir_cleaned = true where id = {0}::uuid", requestId.toString()));
     }
 
+    /** What a cleanup job removes: the directory recorded for the request, nothing an operator typed. */
+    public record CleanupWork(UUID requestId, String deviceId, String workDir) {
+    }
+
+    @Override
+    public Optional<CleanupWork> findCleanupByJob(String jobId) {
+        return tx.inTransaction(dsl -> dsl.fetchOptional("select id::text as id, device_id, work_dir_path from support_bundle_request "
+                + "where cleanup_job_id = {0} and cleanup_state = 'REQUESTED' and work_dir_path is not null "
+                + "and work_dir_cleaned = false", jobId)
+                .map(r -> new CleanupWork(UUID.fromString(r.get("id", String.class)), r.get("device_id", String.class),
+                        r.get("work_dir_path", String.class))));
+    }
+
+    @Override
+    public void finishCleanup(UUID requestId, boolean removed, String outcome) {
+        audited.inTransaction(WORKER_ACTOR, "support_bundle_cleanup_workdir", requestId.toString(), dsl -> dsl.execute(
+                "update support_bundle_request set cleanup_state = {1}, cleanup_outcome = {2}, "
+                        + "work_dir_cleaned = work_dir_cleaned or {3} where id = {0}::uuid and cleanup_state = 'REQUESTED'",
+                requestId.toString(), removed ? "DONE" : "FAILED", outcome, removed));
+    }
+
     @Override
     public boolean multiDomainServer(String deviceId) {
         return !tx.inTransaction(dsl -> dsl.fetch("select 1 from cp_domain_server_placement where source_id = {0} limit 1",

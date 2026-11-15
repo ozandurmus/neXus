@@ -154,6 +154,11 @@ public final class CpSupportBundleJobExecutor {
     }
 
     public void execute(String jobId, long epoch, String deviceId, String host, int port, String credentialRef) {
+        Optional<JooqSupportBundleStore.CleanupWork> cleanup = store == null ? Optional.empty() : store.findCleanupByJob(jobId);
+        if (cleanup.isPresent()) {
+            executeCleanup(cleanup.get(), jobId, epoch, deviceId, host, port, credentialRef);
+            return;
+        }
         Optional<RequestRow> request = store == null ? Optional.empty() : store.findByJob(jobId);
         Optional<DeviceRecord> device = devices.find(deviceId);
         var endpoint = devices.findEndpointByDeviceId(deviceId)
@@ -240,6 +245,58 @@ public final class CpSupportBundleJobExecutor {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(failure);
             store.finishRequest(req.id(), "FAILED", "FAILED", "{}", clock.instant().plus(TTL));
             finish(jobId, epoch, JobState.OUTCOME_UNKNOWN, "SUPPORT_BUNDLE_OUTCOME_UNCERTAIN");
+        } finally {
+            if (session != null) ssh.disconnect(session);
+        }
+    }
+
+    /**
+     * "Remove leftover work directory" (PO approved 2026-11-16, admin confirmed). One session, one command: the already approved
+     * C20 literal ({@code rm -rf <dir> <dir>.tgz}) for the directory name recorded on the request, which must match the
+     * work directory pattern. Nothing an operator typed reaches the command. Retried once by the shared removal, never otherwise.
+     */
+    private void executeCleanup(JooqSupportBundleStore.CleanupWork work, String jobId, long epoch, String deviceId, String host,
+            int port, String credentialRef) {
+        Optional<DeviceRecord> device = devices.find(deviceId);
+        var endpoint = devices.findEndpointByDeviceId(deviceId)
+                .filter(e -> deviceId.equals(e.deviceId()) && "ssh_exec".equals(e.transportKind()));
+        boolean management = device.isPresent() && "management_server".equals(device.get().role());
+        String scope = management ? CpSupportBundle.MANAGEMENT_SCOPE : CpSupportBundle.PLATFORM_ROLE_SCOPE;
+        if (device.isEmpty() || !device.get().permitsReadCollection() || !VENDOR.equals(device.get().vendorHint())
+                || !("gateway".equals(device.get().role()) || management) || !deviceId.equals(work.deviceId()) || endpoint.isEmpty()
+                || host == null || credentialRef == null || Step.REMOVE.gate(scope, gates).isEmpty()
+                || !CpSupportBundleHeavy.WORK_DIR.matcher(work.workDir()).matches()) {
+            leases.transitionState(jobId, epoch, JobState.CLAIMED, JobState.REJECTED, ACTOR, "support_bundle_cleanup_claim_check",
+                    "SUPPORT_BUNDLE_CLEANUP_UNAVAILABLE");
+            store.finishCleanup(work.requestId(), false, "UNAVAILABLE");
+            return;
+        }
+        if (!leases.transitionState(jobId, epoch, JobState.CLAIMED, JobState.EXECUTING, ACTOR, "support_bundle_cleanup_start")) return;
+        TransportSession session = null;
+        try {
+            if (!attempts.findByJobAndStep(jobId, 0).isEmpty()) throw new Abort(JobState.OUTCOME_UNKNOWN, "PRIOR_ATTEMPT_NOT_REPLAYED");
+            var connected = ssh.connect(new ConnectionTarget(UUID.randomUUID().toString(), host, port),
+                    new ConnectSpec(credentialRef, PersistedManagementEndpointTrustResolver.scopeRef(host, port), Optional.empty()),
+                    Duration.ofSeconds(30));
+            if (!(connected instanceof ConnectResult.Authenticated authenticated)) {
+                store.finishCleanup(work.requestId(), false, "CONNECTION_FAILED");
+                finish(jobId, epoch, JobState.FAILED, "SUPPORT_BUNDLE_CLEANUP_CONNECTION_FAILED");
+                return;
+            }
+            session = authenticated.session();
+            Run run = new Run(jobId, epoch, deviceId, session, "unknown", deviceId, clock.instant());
+            run.scope = scope;
+            boolean removed = removeWorkDir(run, work.workDir());
+            store.finishCleanup(work.requestId(), removed, removed ? "REMOVED" : "REMOVE_FAILED");
+            finish(jobId, epoch, removed ? JobState.COMPLETED : JobState.FAILED,
+                    removed ? "SUPPORT_BUNDLE_CLEANUP_REMOVED" : "SUPPORT_BUNDLE_CLEANUP_REMOVE_FAILED");
+        } catch (Abort abort) {
+            store.finishCleanup(work.requestId(), false, "ABORTED");
+            finish(jobId, epoch, abort.state, abort.code);
+        } catch (Exception failure) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(failure);
+            store.finishCleanup(work.requestId(), false, "OUTCOME_UNCERTAIN");
+            finish(jobId, epoch, JobState.OUTCOME_UNKNOWN, "SUPPORT_BUNDLE_CLEANUP_OUTCOME_UNCERTAIN");
         } finally {
             if (session != null) ssh.disconnect(session);
         }
