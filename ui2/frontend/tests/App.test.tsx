@@ -169,10 +169,10 @@ describe("the six product screens", () => {
 });
 
 describe("the design preview", () => {
-  it("renders the populated target screen only behind an explicit flag, for every screen", () => {
+  it("renders the populated target screen only behind an explicit flag, for every screen", async () => {
     for (const [id, marker] of Object.entries(PREVIEW_MARKERS)) {
       const { unmount } = render(<App search={`?preview=${id}`} />);
-      expect(screen.getByText(marker)).toBeInTheDocument();
+      expect(await screen.findByText(marker)).toBeInTheDocument();
       unmount();
     }
   });
