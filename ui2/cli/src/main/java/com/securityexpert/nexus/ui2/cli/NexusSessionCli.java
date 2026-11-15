@@ -80,6 +80,10 @@ final class NexusSessionCli {
         System.out.println("                                                 (blank keeps the stored one for the same servers)");
         System.out.println("  ldap-test <testUser> [settings.json] [--password-file <f>]");
         System.out.println("  local-auth-mode [ALL_LOCAL|BREAK_GLASS_ONLY]   show or switch which local accounts may sign in");
+        System.out.println("  saml                                           SAML (ADFS) settings; never the SP private key");
+        System.out.println("  saml-set <settings.json> [--metadata-file <idp.xml>] [--sp-key-file <key.pem>]");
+        System.out.println("                                                 save SAML settings; IdP metadata and the SP key come from files");
+        System.out.println("  saml-off                                       switch SAML sign-in off (settings are kept)");
         System.out.println("                                                 service bind + user search + group check; no user bind");
         System.out.println("  backups [deviceId]                             fleet or one device's history (with baseline)");
         System.out.println("  backup-run <deviceId> <reason> [backup|snapshot]");
@@ -171,6 +175,9 @@ final class NexusSessionCli {
                 case "local-auth-mode" -> args.length > 1
                         ? print(call("PUT", LOCAL_AUTH_MODE, json(Map.of("mode", args[1]))))
                         : print(call("GET", LOCAL_AUTH_MODE, null));
+                case "saml" -> print(call("GET", SAML_SETTINGS, null));
+                case "saml-set" -> samlSet(args);
+                case "saml-off" -> print(call("PUT", SAML_SETTINGS, "{\"enabled\":false}"));
                 case "notifications-test" -> {
                     require(args, 2, "notifications-test <syslog|mail>");
                     yield print(call("POST", "/api/v2/config/notifications/test-" + ("mail".equals(args[1]) ? "mail" : "syslog"), "{}"));
@@ -484,6 +491,40 @@ final class NexusSessionCli {
     static final String LDAP_SETTINGS = "/api/v2/config/ldap";
     /** Migration plan Step 3: the local-account scope (CLI parity with Administration > Directory). */
     static final String LOCAL_AUTH_MODE = "/api/v2/config/local-auth-mode";
+
+    /** Migration plan Step 4: the SAML (ADFS) settings and group mapping (CLI parity with Administration > SAML sign-in). */
+    static final String SAML_SETTINGS = "/api/v2/config/saml";
+
+    /**
+     * {@code saml-set <settings.json> [--metadata-file <idp.xml>] [--sp-key-file <key.pem>]}: the settings file never holds the
+     * SP private key; the IdP metadata XML is pasted from a file (nothing is fetched).
+     */
+    private int samlSet(String[] args) throws IOException, InterruptedException {
+        require(args, 2, "saml-set <settings.json> [--metadata-file <idp.xml>] [--sp-key-file <key.pem>]");
+        String settings = Files.readString(Path.of(args[1]), StandardCharsets.UTF_8);
+        String metadata = optionValue(args, "--metadata-file");
+        if (metadata != null) settings = withStringField(settings, "idpMetadataXml", Files.readString(Path.of(metadata), StandardCharsets.UTF_8));
+        String key = optionValue(args, "--sp-key-file");
+        if (key != null) settings = withStringField(settings, "spPrivateKeyPem", Files.readString(Path.of(key), StandardCharsets.UTF_8));
+        return print(call("PUT", SAML_SETTINGS, settings));
+    }
+
+    private static String optionValue(String[] args, String name) {
+        for (int i = 0; i + 1 < args.length; i++) if (name.equals(args[i])) return args[i + 1];
+        return null;
+    }
+
+    /** Puts {@code field} first in a JSON object as a string, overriding any value the object carried. */
+    static String withStringField(String objectJson, String field, String value) {
+        String trimmed = objectJson.strip();
+        if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) throw new IllegalArgumentException("settings must be a JSON object");
+        String inner = trimmed.substring(1, trimmed.length() - 1).strip()
+                .replaceAll("\"" + java.util.regex.Pattern.quote(field) + "\"\\s*:\\s*(\"(\\\\.|[^\"\\\\])*\"|null)\\s*,?", "");
+        inner = inner.strip();
+        if (inner.endsWith(",")) inner = inner.substring(0, inner.length() - 1);
+        String entry = "\"" + field + "\":\"" + escape(value) + "\"";
+        return "{" + entry + (inner.isEmpty() ? "" : "," + inner) + "}";
+    }
 
     /** {@code ldap-set <settings.json> [--password-file <f>]}: the settings file never holds the password. */
     private int ldapSet(String[] args) throws IOException, InterruptedException {

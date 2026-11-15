@@ -183,4 +183,15 @@ describe("AuthGate", () => {
     const secondError = await screen.findByRole("alert");
     expect(secondError).toHaveTextContent(firstError.textContent ?? "");
   });
+
+  it("offers single sign-on on the login screen only while the signed-out status answer says SAML is on", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(401, { authenticated: false, saml_enabled: true })));
+    render(<AuthGate><div>app</div></AuthGate>);
+    expect(await screen.findByRole("link", { name: "Sign in with SSO (ADFS)" })).toBeInTheDocument();
+    vi.unstubAllGlobals();
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(401, { authenticated: false })));
+    render(<AuthGate><div>app</div></AuthGate>);
+    await screen.findAllByRole("heading", { name: "Sign in" });
+    expect(screen.getAllByRole("link", { name: "Sign in with SSO (ADFS)" })).toHaveLength(1);
+  });
 });

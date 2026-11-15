@@ -32,11 +32,18 @@ dependencies {
     // Spring Security 7 filter chain (SPRING_SECURITY_MIGRATION_PLAN_2026_11_15.md, Step 1: a passthrough chain,
     // no behaviour change; see NexusSecurityFilterChainConfiguration).
     implementation(libs.spring.boot.starter.security)
+    // SAML 2.0 service provider for ADFS (migration plan Step 4): OpenSAML 5 response/assertion validation. Used as a
+    // library by SamlAuthenticationService; no Saml2 servlet filter is registered, the ACS is our own controller.
+    implementation(libs.spring.security.saml2.service.provider)
     // Security floor for the embedded server (see libs.versions.toml `tomcat`).
     constraints {
         implementation(libs.tomcat.embed.core)
         implementation(libs.tomcat.embed.el)
         implementation(libs.tomcat.embed.websocket)
+        // One Bouncy Castle line (see libs.versions.toml): OpenSAML's transitive bcpkix/bcutil 1.77 would sit beside bcprov 1.86.
+        implementation(libs.bouncycastle.provider)
+        implementation(libs.bouncycastle.pkix)
+        implementation(libs.bouncycastle.util)
     }
     // Failover Engine Stage 2 (durable schedules/ledger/quarantine): plain
     // JdbcTemplate over the same C1 section 6 DataSource bean, auto-configured

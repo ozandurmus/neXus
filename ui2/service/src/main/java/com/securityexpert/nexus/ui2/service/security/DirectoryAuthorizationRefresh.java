@@ -69,6 +69,8 @@ public final class DirectoryAuthorizationRefresh {
             if (!directory.directoryPostureEnabled()) return Outcome.NOT_APPLICABLE;
             Optional<ActorAuthzStateRecord> state = actors.find(actor).filter(ActorAuthzStateRecord::hasDirectoryProof);
             if (state.isEmpty()) return Outcome.NOT_APPLICABLE;
+            // A SAML assertion cannot be re-read: the signed-in set lives until its own proof expires, then the actor signs in again.
+            if (SamlSettingsService.PROFILE_ID.equals(state.get().directoryProfileId())) return Outcome.NOT_APPLICABLE;
             // Another request of this actor refreshed while this one waited.
             if (onlyIfStale && state.get().isFresh(now)) return Outcome.REFRESHED;
             var session = sessions.findActiveByActor(actor, now);

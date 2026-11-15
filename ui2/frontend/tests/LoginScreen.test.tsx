@@ -121,4 +121,29 @@ describe("ConstellationCanvas", () => {
     unmount();
     expect(globalThis.cancelAnimationFrame).toHaveBeenCalled();
   });
+
+  it("offers single sign-on only when the server says it is on", () => {
+    const { rerender } = render(<ThemeProvider theme={m3Theme}><LoginScreen onAuthenticated={() => {}} /></ThemeProvider>);
+    expect(screen.queryByRole("link", { name: "Sign in with SSO (ADFS)" })).toBeNull();
+    rerender(<ThemeProvider theme={m3Theme}><LoginScreen onAuthenticated={() => {}} samlEnabled /></ThemeProvider>);
+    expect(screen.getByRole("link", { name: "Sign in with SSO (ADFS)" })).toHaveAttribute("href", "/saml2/authenticate/adfs");
+    expect(screen.getByRole("radio", { name: "Local account" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "LDAP account" })).toBeInTheDocument();
+  });
+
+  it("turns a single sign-on conflict token in the address into the takeover prompt and removes it from the address", async () => {
+    window.history.replaceState(null, "", "/?saml_conflict_token=synthetic-token&x=1");
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const onAuthenticated = vi.fn();
+    render(<ThemeProvider theme={m3Theme}><LoginScreen onAuthenticated={onAuthenticated} samlEnabled /></ThemeProvider>);
+    expect(screen.getByRole("alert")).toHaveTextContent("Another session is already active for this account.");
+    expect(window.location.search).toBe("?x=1");
+    fireEvent.click(screen.getByRole("button", { name: "Terminate prior session & sign in" }));
+    await waitFor(() => expect(onAuthenticated).toHaveBeenCalled());
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/login/resolve");
+    expect(JSON.parse(init.body)).toEqual({ conflictToken: "synthetic-token", action: "takeover" });
+    window.history.replaceState(null, "", "/");
+  });
 });

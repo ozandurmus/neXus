@@ -68,6 +68,18 @@ subprojects {
 
         repositories {
             mavenCentral()
+            // OpenSAML 5 (pulled in by spring-security-saml2-service-provider, SPRING_SECURITY_MIGRATION_PLAN Step 4) and
+            // its Shibboleth support libraries are published only on the Shibboleth project's release repository, never on
+            // Maven Central. Restricted to those groups, release artifacts only; every artifact is pinned by the
+            // dependency lockfiles and by gradle/verification-metadata.xml like Maven Central ones.
+            maven {
+                url = uri("https://build.shibboleth.net/maven/releases/")
+                content {
+                    includeGroupAndSubgroups("org.opensaml")
+                    includeGroupAndSubgroups("net.shibboleth")
+                }
+                mavenContent { releasesOnly() }
+            }
         }
 
         // Contract §3.1: Gradle dependency locking is required.

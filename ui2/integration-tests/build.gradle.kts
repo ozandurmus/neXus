@@ -51,6 +51,9 @@ dependencies {
         exclude(group = "org.springframework.boot", module = "spring-boot-starter-jackson")
     }
     testImplementation(libs.spring.boot.jackson2)
+    // The in-process test ADFS (saml/TestAdfsSamlIdp) builds, signs and encrypts assertions with OpenSAML 5 and a runtime-generated
+    // key pair; the service itself declares the library as `implementation`, which a consumer's compile classpath does not see.
+    testImplementation(libs.spring.security.saml2.service.provider)
     // Already used by service; the schedule round-trip tests call JdbcTemplate directly.
     testImplementation(libs.spring.boot.starter.jdbc)
     testRuntimeOnly(libs.flyway.database.postgresql)

@@ -91,6 +91,14 @@ public final class SessionStatusController {
         this.passwordPolicyService = service;
     }
 
+    private com.securityexpert.nexus.ui2.service.security.SamlSettingsService samlSettings;
+
+    /** Optional: while SAML sign-in is on, the signed-out answer says so ({@code saml_enabled}) so the login screen offers it. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setSamlSettings(com.securityexpert.nexus.ui2.service.security.SamlSettingsService service) {
+        this.samlSettings = service;
+    }
+
     @GetMapping("/session/status")
     public ResponseEntity<Map<String, Object>> status(HttpServletRequest request) {
         Optional<String> rawCookie = findSessionCookie(request);
@@ -99,6 +107,7 @@ public final class SessionStatusController {
         Map<String, Object> body = new LinkedHashMap<>();
         if (session.isEmpty()) {
             body.put("authenticated", false);
+            if (samlSettings != null && samlSettings.isEnabled()) body.put("saml_enabled", true);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .cacheControl(org.springframework.http.CacheControl.noStore())
                     .body(body);
@@ -160,7 +169,7 @@ public final class SessionStatusController {
                 for (var binding : fresh ? roleBindingRepository.findAllActive()
                         : List.<com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRecord>of()) {
                     if (!state.directoryProfileId().equals(binding.directoryProfileId())) continue;
-                    if (binding.bindingKind() == com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP) {
+                    if (binding.bindingKind().isGroupKind()) {
                         try {
                             String group = groupReferenceCipher.decryptDirectory(binding.groupReferenceEncrypted(),
                                     binding.directoryProfileId(), binding.bindingKind(), binding.groupReferenceKeyId());

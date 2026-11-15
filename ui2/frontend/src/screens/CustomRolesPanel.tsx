@@ -95,7 +95,7 @@ export function CustomRolesPanel() {
   };
 
   const directoryBindings = (Array.isArray(bindings) ? bindings : []).filter(
-    (b) => b.binding_kind === "DIRECTORY_GROUP" || (!b.binding_kind && b.directory_profile_id)
+    (b) => b.binding_kind === "DIRECTORY_GROUP" || b.binding_kind === "SAML_GROUP" || (!b.binding_kind && b.directory_profile_id)
   );
 
   if (restricted) {
