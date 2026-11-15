@@ -100,17 +100,26 @@ python3 "$REPO/tools/e2e/hosta_e2e_image.py" start --commit "$COMMIT_SHA"
 # scans whichever digest results. NEXUS_REUSE_PREVIEW_IMAGE=0 disables the reuse.
 REUSED_IMAGE=""
 if [ "${NEXUS_REUSE_PREVIEW_IMAGE:-1}" = 1 ]; then
-  REUSED_IMAGE="$(python3 "$REPO/tools/delivery/hosta_restamp_image.py" build --commit "$COMMIT_SHA" 2>/dev/null)" || REUSED_IMAGE=""
+  REUSE_RC=0
+  REUSED_IMAGE="$(python3 "$REPO/tools/delivery/hosta_restamp_image.py" build --commit "$COMMIT_SHA" 2>/dev/null)" || REUSE_RC=$?
   if ! printf '%s' "$REUSED_IMAGE" | grep -Eq '^registry\.kube-system\.svc\.cluster\.local/nexus-ui2-service@sha256:[a-f0-9]{64}$'; then
     REUSED_IMAGE=""
   fi
+  case "$REUSE_RC" in
+    0) REUSE_WHY="tool returned no digest" ;;
+    3) REUSE_WHY="no fresh preview record for this tree, or the re-stamp job did not complete" ;;
+    *) REUSE_WHY="re-stamp tool error (exit $REUSE_RC)" ;;
+  esac
+else
+  REUSE_WHY="NEXUS_REUSE_PREVIEW_IMAGE=0"
 fi
 if [ -n "$REUSED_IMAGE" ]; then
   IMAGE_DIGEST="${REUSED_IMAGE##*@}"
-  echo "Reusing the preview-verified image of this tree (re-stamped with deploy_info.json)"
+  echo "IMAGE PATH: reuse (preview-verified image of this tree, re-stamped with deploy_info.json; the new digest is scanned below)"
   timing image_build "$image_start"
   echo "Digest is $IMAGE_DIGEST"
 else
+  echo "IMAGE PATH: full build (${REUSE_WHY:-reuse not attempted})"
   kubectl apply -f ~/build-job-proxy.yaml
 
   echo "Waiting for build pod to be scheduled..."
