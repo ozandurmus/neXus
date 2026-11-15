@@ -89,7 +89,7 @@
       "status": "in_progress",
       "priority": "P2",
       "target": "PO directive 2026-09-22 (Backbox standard)",
-      "note": "Built on lane/storequota-1115 (V225 artefact_store_quota, GET/PUT /api/v2/backups/store-quotas, CLI backup-store-quotas and backup-store-quota-set, Backup screen card): close this item when that lane ships."
+      "note": "see docs/history/backlog/backup_screen_backbox_model.md"
     },
     {
       "id": "script_execution_module",

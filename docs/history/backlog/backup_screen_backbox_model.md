@@ -13,3 +13,7 @@ Target (full): PO directive 2026-09-22 (Backbox standard); download/contents/com
 2026-11-14 backlog truth: still open (P2, size S). Today: Only the per-store storage quota is missing; screen otherwise complete. Evidence: History/schedule/baseline/compare/retention shipped (129abc10, 53afe43a); no storage quota code in ui2
 
 2026-11-15 10:00 backlog refresh: In the ship queue (batches b4..b9, not yet on main). A global artefact-store byte quota is built (see vault_has_no_enforced_quota_on_a_shared_host). The per-store quota this item asks for is not; left open.
+
+## 2026-11-15
+
+Built on lane/storequota-1115 (V225 artefact_store_quota, GET/PUT /api/v2/backups/store-quotas, CLI backup-store-quotas and backup-store-quota-set, Backup screen card): close this item when that lane ships.
