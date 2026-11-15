@@ -698,6 +698,24 @@ class HttpSurfaceCharacterizationTest {
         }
     }
 
+    /**
+     * Added with the Spring Security dependency (Step 1): the golden transcript above is unchanged, and this proves the
+     * transcript was taken with {@code FilterChainProxy} really in the servlet chain, behind the machine-port filter,
+     * with no generated default user.
+     */
+    @Test
+    void springSecurityFilterChainIsActiveBehindTheMachinePortFilter() throws Exception {
+        assertTrue(Class.forName("org.springframework.security.web.FilterChainProxy")
+                .isInstance(context.getBean("springSecurityFilterChain")));
+        var registration = context.getBean("securityFilterChainRegistration", org.springframework.boot.web.servlet.RegistrationBean.class);
+        var order = context.findAnnotationOnBean("machinePortFilter", org.springframework.core.annotation.Order.class);
+        assertNotNull(order);
+        assertTrue(order.value() < ((org.springframework.core.Ordered) registration).getOrder(),
+                "the machine-port filter must run before the Spring Security filter");
+        assertEquals(0, context.getBeanNamesForType(Class.forName("org.springframework.security.core.userdetails.UserDetailsService")).length);
+        assertEquals(1, context.getBeansOfType(Class.forName("org.springframework.security.web.SecurityFilterChain")).size());
+    }
+
     private static int status(String label) {
         return entry(label).resp().status();
     }
