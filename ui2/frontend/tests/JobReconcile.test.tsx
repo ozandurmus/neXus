@@ -4,7 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { JobLogsPanel } from "../src/screens/JobLogsPanel";
 import { JobReconcileDialog } from "../src/screens/JobReconcileDialog";
 import { SessionContext, type SessionInfo } from "../src/auth/SessionContext";
-import { EVIDENCE_MAX, FAILOVER_RELEASE_NOTE, RECONCILE_STATUS_WORD, isFailoverRunJob, isReconcilable, reconcileRefusalWords } from "../src/jobs/jobReconcile";
+import { JOB_TYPE_LABELS, jobStateWord } from "../src/shell/presenters";
+import { JOB_PILLS } from "../src/screens/JobLogsPanel";
+import { EVIDENCE_MAX, FAILOVER_EXECUTION_JOB_TYPES, FAILOVER_RELEASE_NOTE, RECONCILE_STATUS_WORD, isFailoverRunJob, isReconcilable, reconcileRefusalWords } from "../src/jobs/jobReconcile";
 import { planesAllGranted } from "../src/shell/actionAccess";
 
 afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState(null, "", "/"); });
@@ -206,15 +208,38 @@ describe("JobReconcileDialog", () => {
 
 describe("reconcile helpers", () => {
   it("recognises a failover run's job types and leaves readiness and HA sync reconcilable", () => {
-    for (const type of ["cp_cluster_failover", "pan_cluster_failover", "asa_cluster_failover", "cp_failover_start", "pan_failover_start", "cp_failover_resume"]) {
+    for (const type of ["cp_cluster_failover", "pan_cluster_failover", "CP_CLUSTER_FAILOVER"]) {
       expect(isFailoverRunJob(type)).toBe(true);
     }
-    for (const type of ["inventory", "cp_failover_readiness", "pan_failover_readiness", "pan_failover_config_sync", "cp_gateway_backup", "", null, undefined]) {
+    for (const type of ["inventory", "cp_failover_readiness", "pan_failover_readiness", "asa_cluster_failover", "pan_failover_config_sync", "cp_gateway_backup", "", null, undefined]) {
       expect(isFailoverRunJob(type)).toBe(false);
     }
+    expect(isReconcilable({ state: "OUTCOME_UNKNOWN", job_type: "asa_cluster_failover" })).toBe(true);
     expect(isReconcilable({ state: "OUTCOME_UNKNOWN", job_type: "inventory" })).toBe(true);
     expect(isReconcilable({ state: "OUTCOME_UNKNOWN", job_type: "cp_cluster_failover" })).toBe(false);
     expect(isReconcilable({ state: "RECONCILED", job_type: "inventory" })).toBe(false);
+  });
+
+  it("classifies every job type the presenters know, so a new type must be decided", () => {
+    // Labels that are audit action names, not job types: no job row carries them, so no Reconcile decision applies.
+    const notJobTypes = new Set(["cp_failover_start", "pan_failover_start"]);
+    const reconcilable = new Set([
+      "cp_failover_readiness", "pan_failover_readiness", "asa_cluster_failover", "pan_failover_config_sync",
+    ]);
+    for (const type of Object.keys(JOB_TYPE_LABELS)) {
+      if (notJobTypes.has(type)) continue;
+      const classified = FAILOVER_EXECUTION_JOB_TYPES.has(type) || reconcilable.has(type) || !/failover/.test(type);
+      expect(classified, `${type} must be classified as failover execution or reconcilable`).toBe(true);
+      expect(isFailoverRunJob(type)).toBe(FAILOVER_EXECUTION_JOB_TYPES.has(type));
+    }
+    for (const type of FAILOVER_EXECUTION_JOB_TYPES) expect(isFailoverRunJob(type)).toBe(true);
+  });
+
+  it("keeps RECONCILED jobs in the Other outcome pill and words the state", () => {
+    expect(JOB_PILLS.find((p) => p.id === "other")!.states.split(",")).toEqual(
+      ["OUTCOME_UNKNOWN", "RECONCILED", "REJECTED", "CANCELLED"]);
+    expect(jobStateWord("RECONCILED")).toBe("Reconciled");
+    expect(jobStateWord("OUTCOME_UNKNOWN")).toBe("Outcome UNKNOWN");
   });
 
   it("words a refusal, and keeps the code and status of one it does not know", () => {

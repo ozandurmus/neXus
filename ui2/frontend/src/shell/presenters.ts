@@ -67,7 +67,7 @@ const CONFIRM_VENDORS: Readonly<Record<string, string>> = {
 };
 
 /** Whole-id labels where the object phrase is not derivable from the suffix. */
-const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
+export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   cp_failover_readiness: "Check Point readiness check",
   pan_failover_readiness: "Palo Alto readiness check",
   asa_cluster_failover: "Cisco ASA readiness check",
@@ -317,7 +317,7 @@ export function clusterModeWord(raw: string | null | undefined): string {
 
 const STATE_WORDS: Readonly<Record<string, string>> = {
   COMPLETED: "Completed", SUCCEEDED: "Completed", FAILED: "Failed", CANCELLED: "Cancelled", REJECTED: "Rejected",
-  REQUESTED: "Queued", CLAIMED: "Claimed", EXECUTING: "Running", OUTCOME_UNKNOWN: "Outcome UNKNOWN", RECONCILED: "Outcome UNKNOWN",
+  REQUESTED: "Queued", CLAIMED: "Claimed", EXECUTING: "Running", OUTCOME_UNKNOWN: "Outcome UNKNOWN", RECONCILED: "Reconciled",
   SUBMITTED: "Submitted",
 };
 

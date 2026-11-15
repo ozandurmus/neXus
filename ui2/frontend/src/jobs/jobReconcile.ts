@@ -17,13 +17,17 @@ export const RECONCILE_OUTCOMES: ReadonlyArray<{ readonly value: JobReconcileOut
 ];
 
 /**
- * A job whose command is sent by a failover run (the run's own job, its return and its resume). The API refuses these
- * with JOB_BELONGS_TO_FAILOVER_RUN, so the page never offers the action for them. Readiness checks send nothing, and
- * the HA configuration sync is not a failover run; both stay reconcilable. The server is the final judge either way.
+ * The job types whose command a failover run sends (the run's own job; a resume run uses the same type). The server
+ * refuses these with JOB_BELONGS_TO_FAILOVER_RUN because each has a failover_dispatch_intent row. Mirrors the backend:
+ * JooqCpFailoverRepository creates `cp_cluster_failover`, and the Palo Alto run is `pan_cluster_failover`. Readiness
+ * checks (including `asa_cluster_failover`, the Cisco ASA readiness-only job) and the HA configuration sync send no
+ * failover command and stay reconcilable. An explicit set, never a substring guess: a new job type must be classified.
  */
+export const FAILOVER_EXECUTION_JOB_TYPES: ReadonlySet<string> = new Set(["cp_cluster_failover", "pan_cluster_failover"]);
+
+/** Whether the job is a failover run's own job, so the page offers no Reconcile for it. The server is the final judge. */
 export function isFailoverRunJob(jobType: string | null | undefined): boolean {
-  const type = (jobType ?? "").toLowerCase();
-  return type.includes("failover") && !type.includes("readiness") && !type.includes("config_sync");
+  return FAILOVER_EXECUTION_JOB_TYPES.has((jobType ?? "").trim().toLowerCase());
 }
 
 /** Whether the page offers Reconcile for this job: the state is OUTCOME_UNKNOWN and it is not a failover run's job. */
