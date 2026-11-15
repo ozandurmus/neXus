@@ -1,4 +1,4 @@
--- V225 -- Zone matrix, delivery step 3: audited witness view in zone_matrix_access_log
+-- V228 -- Zone matrix, delivery step 3: audited witness view in zone_matrix_access_log
 -- (docs/design/ZONE_MATRIX_CONTRACT.md sections 3.4, 5.9, 8.2 and 10.1, ZM-33, FROZEN 2026-11-13).
 --
 -- Step 3 evaluates stored firewall policies against a published zone-matrix version in memory without durable run/finding

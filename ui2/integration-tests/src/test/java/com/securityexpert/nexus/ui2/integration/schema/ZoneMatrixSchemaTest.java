@@ -62,7 +62,7 @@ class ZoneMatrixSchemaTest {
             try (var resource = getClass().getResourceAsStream("/db/migration/V216__zone_matrix_versions.sql")) {
                 assertNotNull(resource); sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
             }
-            try (var resource = getClass().getResourceAsStream("/db/migration/V225__zone_matrix_witness_access_log.sql")) {
+            try (var resource = getClass().getResourceAsStream("/db/migration/V228__zone_matrix_witness_access_log.sql")) {
                 assertNotNull(resource); stepThree = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
             }
             db.setAutoCommit(false);
