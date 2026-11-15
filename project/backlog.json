@@ -20,15 +20,6 @@
       "note": "see docs/history/backlog/recovery_offhost_key_custody.md"
     },
     {
-      "id": "ui2_networkpolicy_in_cluster_db_reach",
-      "category": "Deployment / Security",
-      "title": "NetworkPolicy restricting in-cluster reach to PostgreSQL",
-      "status": "done",
-      "priority": "P1",
-      "target": "UI2_0_B1_01C successor",
-      "note": "Reframed 2026-11-16 (PO, layer 2 of DB reach protection): only service, worker, backup, policy, packet-analysis and the Flyway bootstrap Job may reach 5432. In-cluster: ingress policy ui2-db-ingress on the database pod (deploy/ui2/46-database-networkpolicy.yaml, applied by hand after the deploy, rollback = delete it); no other pod is selected, so nothing else is cut. External database: Kubernetes has no deny rule, so no egress allowlist is shipped; DBA pg_hba node allowlist plus per-module roles, and an optional additive allow template in deploy/ui2/external-db. Real-cluster apply pending."
-    },
-    {
       "id": "ui2_database_roles_and_data_ownership",
       "category": "Data Plane / Security",
       "title": "UI2 database roles: least-privilege runtime roles per...",
