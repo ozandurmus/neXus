@@ -143,6 +143,8 @@ public final class ActionRegistry {
     public static final String DEVICE_BACKUP_RETRIEVE = "device_backup_retrieve";
     /** V44: {@code PUT /api/v2/backups/policies} -- schedule and retention, {@code role:backup_admin}, audited. */
     public static final String DEVICE_BACKUP_POLICY_SET = "device_backup_policy_set";
+    /** V225: {@code PUT /api/v2/backups/store-quotas/{store}} -- one store's byte quota, {@code role:backup_admin}, audited. */
+    public static final String BACKUP_STORE_QUOTA_SET = "backup_store_quota_set";
     /** V70: {@code POST /backups/{artefactId}/delete} -- a backup whose device no longer exists, {@code role:backup_admin}, a reason, audited. */
     public static final String DEVICE_BACKUP_ORPHAN_DELETE = "device_backup_orphan_delete";
     /** V44: {@code PUT /devices/{id}/backup-baseline} -- {@code role:backup_admin}, audited. */
@@ -410,6 +412,7 @@ public final class ActionRegistry {
         register(new ActionDescriptor(DEVICE_BACKUP_TARGET_SET, true, Optional.of(RoleToken.BACKUP_ADMIN)));
         register(new ActionDescriptor(DEVICE_BACKUP_RETRIEVE, true, Optional.of(RoleToken.BACKUP_ADMIN)));
         register(new ActionDescriptor(DEVICE_BACKUP_POLICY_SET, true, Optional.of(RoleToken.BACKUP_ADMIN)));
+        register(new ActionDescriptor(BACKUP_STORE_QUOTA_SET, true, Optional.of(RoleToken.BACKUP_ADMIN)));
         register(new ActionDescriptor(DEVICE_BACKUP_ORPHAN_DELETE, true, Optional.of(RoleToken.BACKUP_ADMIN)));
         register(new ActionDescriptor(DEVICE_BACKUP_BASELINE_SET, true, Optional.of(RoleToken.BACKUP_ADMIN)));
         register(new ActionDescriptor(BACKUP_SIZE_ANOMALY_ACCEPT, true, Optional.of(RoleToken.SECURITY_ADMIN)));

@@ -359,6 +359,9 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             // Backups screen read "Policy unavailable" -- the routes existed, their mapping did not.
             Map.entry("GET /api/v2/backups/policies", ActionRegistry.DEVICE_BACKUP_READ),
             Map.entry("PUT /api/v2/backups/policies", ActionRegistry.DEVICE_BACKUP_POLICY_SET),
+            // V225: per-store storage quota; read is the backup read, write is backup_admin.
+            Map.entry("GET /api/v2/backups/store-quotas", ActionRegistry.DEVICE_BACKUP_READ),
+            Map.entry("PUT /api/v2/backups/store-quotas/*", ActionRegistry.BACKUP_STORE_QUOTA_SET),
             Map.entry("PUT /devices/*/backup-baseline", ActionRegistry.DEVICE_BACKUP_BASELINE_SET),
             Map.entry("GET /api/v2/backups/deviations", ActionRegistry.DEVICE_BACKUP_READ),
             Map.entry("POST /api/v2/backups/deviations/size-anomalies/*/accept", ActionRegistry.BACKUP_SIZE_ANOMALY_ACCEPT),

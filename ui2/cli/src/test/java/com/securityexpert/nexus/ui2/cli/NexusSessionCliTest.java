@@ -86,6 +86,35 @@ class NexusSessionCliTest {
         }
     }
 
+    /** V225: the per-store quota has CLI parity -- the screen's routes; "clear" sends null (unlimited). */
+    @Test
+    void backupStoreQuotaCommandsCallTheScreenRoutes(@TempDir Path home) throws Exception {
+        AtomicReference<String> request = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            request.set(exchange.getRequestMethod() + " " + exchange.getRequestURI() + " "
+                    + new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            byte[] out = "{\"stores\":[]}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.start();
+        try {
+            NexusSessionCli cli = new NexusSessionCli(home);
+            cli.saveSession(new NexusSessionCli.Session("http://127.0.0.1:" + server.getAddress().getPort(), "opaque-cookie", "csrf-9"));
+
+            assertEquals(0, cli.run(new String[] {"backup-store-quotas"}));
+            assertTrue(request.get().startsWith("GET /api/v2/backups/store-quotas "), request.get());
+            assertEquals(0, cli.run(new String[] {"backup-store-quota-set", "check_point", "1073741824"}));
+            assertEquals("PUT /api/v2/backups/store-quotas/check_point {\"quota_bytes\":1073741824}", request.get());
+            assertEquals(0, cli.run(new String[] {"backup-store-quota-set", "check_point", "clear"}));
+            assertEquals("PUT /api/v2/backups/store-quotas/check_point {\"quota_bytes\":null}", request.get());
+        } finally {
+            server.stop(0);
+        }
+    }
+
     /** PO 2026-10-20: the CLI's acknowledgement is the same header the screen sends after its confirm dialog. */
     @Test
     void businessHoursAcknowledgementFlagSendsTheHeaderAndTheRefusalIsPrintedPlainly(@TempDir Path home) throws Exception {

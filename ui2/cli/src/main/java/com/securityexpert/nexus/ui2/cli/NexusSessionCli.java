@@ -91,6 +91,7 @@ final class NexusSessionCli {
         System.out.println("  backup-deviations                              major deviations and open backup size anomalies");
         System.out.println("  backup-size-accept <deviceId> <reason>         security_admin: accept a new backup size (releases the last-good pin)");
         System.out.println("  policy | policy-set <on|off> <cron> <retentionDays> <snapshotDepth>");
+        System.out.println("  backup-store-quotas | backup-store-quota-set <store> <bytes|clear>   per-store storage quota (no quota = unlimited)");
         System.out.println("  jobs [state=.. job_type=.. device_id=.. since=.. until=.. q=.. page=.. page_size=..]");
         System.out.println("  jobs-export <dest.csv> [same filters]");
         System.out.println("  changes [from=.. to=.. kinds=USER,NEXUS_JOB,DEVICE_EVENT vendor=.. device=.. cursor=.. limit=..]");
@@ -211,6 +212,16 @@ final class NexusSessionCli {
                             json(Map.of("reason", args[2]))));
                 }
                 case "policy" -> print(call("GET", "/api/v2/backups/policies", null));
+                case "backup-store-quotas" -> print(call("GET", "/api/v2/backups/store-quotas", null));
+                case "backup-store-quota-set" -> {
+                    // V225: the Backup screen's per-store quota editor; "clear" removes the quota (unlimited).
+                    require(args, 3, "backup-store-quota-set <store> <bytes|clear>");
+                    Object bytes = "clear".equals(args[2]) ? null : (Object) Long.parseLong(args[2]);
+                    java.util.Map<String, Object> body = new java.util.HashMap<>();
+                    body.put("quota_bytes", bytes);
+                    yield print(call("PUT", "/api/v2/backups/store-quotas/"
+                            + java.net.URLEncoder.encode(args[1], java.nio.charset.StandardCharsets.UTF_8), json(body)));
+                }
                 case "policy-set" -> {
                     require(args, 5, "policy-set <on|off> <cron> <retentionDays> <snapshotDepth>");
                     yield print(call("PUT", "/api/v2/backups/policies", json(Map.of(

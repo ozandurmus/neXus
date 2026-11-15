@@ -704,6 +704,12 @@ public class DeviceCompositionConfiguration {
      * answers 503 {@code ARTEFACT_STORE_NOT_MOUNTED} rather than failing at boot.
      */
     @Bean
+    public com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStoreQuotaRepository artefactStoreQuotaRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.artefact.JooqArtefactStoreQuotaRepository(transactionBoundary);
+    }
+
+    @Bean
     public com.securityexpert.nexus.ui2.persistence.artefact.BackupPolicyRepository backupPolicyRepository(
             TransactionBoundary transactionBoundary) {
         return new com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupPolicyRepository(transactionBoundary);

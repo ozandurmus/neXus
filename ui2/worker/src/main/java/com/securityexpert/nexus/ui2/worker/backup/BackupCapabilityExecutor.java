@@ -112,7 +112,7 @@ public final class BackupCapabilityExecutor {
         }
 
         try {
-            artefactStore.checkQuota();
+            artefactStore.checkQuota("check_point");
         } catch (ArtefactStore.QuotaExceededException e) {
             return new BackupResult.ArtefactStoreFailed(e.getMessage());
         } catch (IOException e) {

@@ -2,6 +2,7 @@ import { useGate } from "../shell/JobWindow";
 import { PRODUCT_NAME } from "../brand/product";
 import { BackupAttempts, LatestAttemptCell, latestAttemptTime, useLatestBackupAttempts } from "./BackupAttempts";
 import { DeviationChip, ValidationChip, deviationState } from "./backupWords";
+import { BackupStoreQuotaCard } from "./BackupStoreQuotaCard";
 import { BackupDeviationCard, MajorDeviationDrawer, majorDeviceIds } from "./BackupDeviationCard";
 import { bytesTitle, formatBytes } from "../shell/bytes";
 import { urlParam } from "../shell/urlParams";
@@ -34,6 +35,8 @@ import Switch from "@mui/material/Switch";
 import {
   getBackupDeviations,
   getBackupPolicy,
+  getBackupStoreQuotas,
+  type BackupStoreQuotas,
   updateBackupPolicy,
   setBackupBaseline,
   collectDeviceBackup,
@@ -215,6 +218,7 @@ export function BackupScreen() {
   const [listLoaded, setListLoaded] = useState(false);
 
   const [policy, setPolicy] = useState<BackupPolicy | null>(null);
+  const [storeQuotas, setStoreQuotas] = useState<BackupStoreQuotas | null>(null);
   const [deviations, setDeviations] = useState<BackupDeviations | null>(null);
   const fleetRows = useMemo(() => withMajorDeviations(devices, deviations), [devices, deviations]);
   const staleWords = scheduledBackupStaleWords(policy);
@@ -274,6 +278,12 @@ export function BackupScreen() {
       setSnapshotDepth(loaded.snapshot_retention_depth ?? 4);
     } catch {
       setPolicy(null);
+    }
+    try {
+      const quotas = await getBackupStoreQuotas();
+      setStoreQuotas(Array.isArray(quotas?.stores) ? quotas : null);
+    } catch {
+      setStoreQuotas(null);
     }
     try {
       setDeviations(await getBackupDeviations());
@@ -587,6 +597,7 @@ export function BackupScreen() {
           note={policy ? retentionNote(policy) : "Policy unavailable"} />
         {/* Zero deviations found and zero comparisons run look identical and mean opposite things: UNKNOWN until a device is compared. */}
         <BackupDeviationCard deviations={deviations} onOpen={() => setDeviationsOpen(true)} />
+        <BackupStoreQuotaCard quotas={storeQuotas} onChanged={() => { getBackupStoreQuotas().then(setStoreQuotas).catch(() => setStoreQuotas(null)); }} />
       </MetricGrid>
       {/* UI review 2026-11-05, B2: the list opens from the card in a drawer, so the table below stays above the fold. */}
       <MajorDeviationDrawer open={deviationsOpen} onClose={() => setDeviationsOpen(false)} deviations={deviations}

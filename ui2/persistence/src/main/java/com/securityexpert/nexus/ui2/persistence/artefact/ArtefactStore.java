@@ -43,6 +43,14 @@ public interface ArtefactStore {
     default void checkQuota() throws IOException {
     }
 
+    /**
+     * Like {@link #checkQuota()}, and also verifies the per-store quota (backlog backup_screen_backbox_model) of
+     * {@code store} -- the vendor segment the artefact will be written under. The default ignores the store.
+     */
+    default void checkQuota(String store) throws IOException {
+        checkQuota();
+    }
+
     ArtefactHandle open(String deviceId, String jobId, String vendor, boolean gzip) throws IOException;
 
     /**
@@ -75,14 +83,27 @@ public interface ArtefactStore {
         private final long usedBytes;
         private final long quotaBytes;
         private final long attemptedBytes;
+        private final String store;
 
         public QuotaExceededException(long usedBytes, long quotaBytes, long attemptedBytes) {
-            super(QUOTA_EXCEEDED_REASON + ": used=" + usedBytes + " bytes"
+            this(null, usedBytes, quotaBytes, attemptedBytes);
+        }
+
+        /** {@code store} names the per-store quota that refused the write; null for the global quota. */
+        public QuotaExceededException(String store, long usedBytes, long quotaBytes, long attemptedBytes) {
+            super(QUOTA_EXCEEDED_REASON + (store == null ? "" : ": store=" + store) + (store == null ? ": " : ", ")
+                    + "used=" + usedBytes + " bytes"
                     + (attemptedBytes > 0 ? ", attempted=" + attemptedBytes + " bytes" : "")
                     + ", quota=" + quotaBytes + " bytes; write refused, existing backups kept");
             this.usedBytes = usedBytes;
             this.quotaBytes = quotaBytes;
             this.attemptedBytes = attemptedBytes;
+            this.store = store;
+        }
+
+        /** The store whose per-store quota refused the write, or null when the global quota did. */
+        public String store() {
+            return store;
         }
 
         public long usedBytes() {
