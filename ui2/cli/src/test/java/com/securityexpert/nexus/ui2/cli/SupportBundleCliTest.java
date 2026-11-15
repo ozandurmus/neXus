@@ -75,6 +75,45 @@ class SupportBundleCliTest {
     }
 
     @Test
+    void uploadAndCleanupCommandsUseTheSameRoutesAndTheTokenComesFromAFileNeverAnArgument(@TempDir Path home) throws Exception {
+        List<Seen> seen = new ArrayList<>();
+        HttpServer server = serve(seen, 202, "{\"upload_id\":\"u\"}".getBytes(StandardCharsets.UTF_8));
+        try {
+            NexusSessionCli cli = new NexusSessionCli(home);
+            cli.saveSession(new NexusSessionCli.Session("http://127.0.0.1:" + server.getAddress().getPort(), "c", "csrf-9"));
+            Path token = home.resolve("token");
+            Files.writeString(token, "synthetic-token-1\n");
+            assertEquals(0, cli.run(new String[] {"support-bundle-upload-destinations"}));
+            assertEquals(0, cli.run(new String[] {"support-bundle-uploads", ID}));
+            assertEquals(0, cli.run(new String[] {"support-bundle-upload", ID, "cisco_cxd_https", "CASE-1", "Attach to the TAC case", "--yes",
+                    "--token-file", token.toString(), "--items", "asa_show_tech,asa_crashinfo", "--case", "CASE-1"}));
+            assertEquals(0, cli.run(new String[] {"support-bundle-upload", ID, "generic_sftp", "svc", "Send to the lab server", "--yes",
+                    "--token-file", token.toString(), "--host", "sftp.example.com", "--port", "2022"}));
+            assertEquals(0, cli.run(new String[] {"support-bundle-cleanup", ID, "Remove the leftover directory", "--yes"}));
+            assertEquals(List.of(
+                    "GET /api/v2/support-bundles/upload-destinations",
+                    "GET /api/v2/support-bundles/" + ID + "/uploads",
+                    "POST /api/v2/support-bundles/" + ID + "/uploads",
+                    "POST /api/v2/support-bundles/" + ID + "/uploads",
+                    "POST /api/v2/support-bundles/" + ID + "/cleanup-workdir"),
+                    seen.stream().map(s -> s.method() + " " + s.path()).toList());
+            assertEquals("{\"destination\":\"cisco_cxd_https\",\"user\":\"CASE-1\",\"password\":\"synthetic-token-1\","
+                    + "\"reason\":\"Attach to the TAC case\",\"confirm\":true,\"item_kinds\":[\"asa_show_tech\",\"asa_crashinfo\"],"
+                    + "\"case_ref\":\"CASE-1\"}", seen.get(2).body());
+            assertTrue(seen.get(3).body().contains("\"host\":\"sftp.example.com\"") && seen.get(3).body().contains("\"port\":2022"));
+            assertEquals("{\"reason\":\"Remove the leftover directory\",\"confirm\":true}", seen.get(4).body());
+            // no confirmation, an unknown flag, a missing token source: usage errors and nothing sent
+            int before = seen.size();
+            assertEquals(2, cli.run(new String[] {"support-bundle-upload", ID, "cisco_cxd_https", "CASE-1", "Attach to the TAC case", "--token-file", token.toString()}));
+            assertEquals(2, cli.run(new String[] {"support-bundle-upload", ID, "cisco_cxd_https", "CASE-1", "Attach to the TAC case", "--yes", "--password", "x"}));
+            assertEquals(2, cli.run(new String[] {"support-bundle-cleanup", ID, "Remove the leftover directory"}));
+            assertEquals(before, seen.size());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void usageErrorsExitTwoAndNothingIsSent(@TempDir Path home) throws Exception {
         List<Seen> seen = new ArrayList<>();
         HttpServer server = serve(seen, 200, "{}".getBytes(StandardCharsets.UTF_8));

@@ -41,6 +41,13 @@ final class SupportBundleCli {
         System.out.println("  support-bundle-download <requestId> <reason> <dest.tgz> [--sanitized]");
         System.out.println("                                                 security_admin: the bundle is deleted after a confirmed download");
         System.out.println("  support-bundle-delete <requestId> <reason>                     delete a bundle (after a download, or early)");
+        System.out.println("  support-bundle-cleanup <requestId> <reason> --yes              security_admin: remove the leftover work directory a run left on the device (recorded name only)");
+        System.out.println("  support-bundle-upload-destinations                             the approved upload destinations");
+        System.out.println("  support-bundle-uploads <requestId>                             upload history of a bundle (state, bytes, digest, remote answer)");
+        System.out.println("  support-bundle-upload <requestId> <destination> <user> <reason> --yes [--token-file <path>] [--items <kindsCsv>]");
+        System.out.println("                       [--case <ref>] [--host <host> --port <n>  (generic_sftp only)]");
+        System.out.println("                                                 security_admin: send the bundle to a vendor case or an SFTP server. The token or password");
+        System.out.println("                                                 is read from --token-file or typed at the prompt, never taken as an argument");
     }
 
     /** @return exit code, or -1 when {@code args[0]} is not a support bundle command */
@@ -69,6 +76,13 @@ final class SupportBundleCli {
                         NexusSessionCli.json(Map.of("reason", args[2]))));
             }
             case "support-bundle-download" -> download(args);
+            case "support-bundle-cleanup" -> cleanup(args);
+            case "support-bundle-upload-destinations" -> NexusSessionCli.print(cli.call("GET", BASE + "/upload-destinations", null));
+            case "support-bundle-uploads" -> {
+                need(args, 2, "support-bundle-uploads <requestId>");
+                yield NexusSessionCli.print(cli.call("GET", BASE + "/" + uuid(args[1]) + "/uploads", null));
+            }
+            case "support-bundle-upload" -> upload(args);
             default -> -1;
         };
     }
@@ -92,6 +106,71 @@ final class SupportBundleCli {
         if (caseRef != null) body.append(",\"case_ref\":").append(quote(caseRef));
         body.append('}');
         return NexusSessionCli.print(cli.call("POST", "/api/v2/devices/" + opaque(args[1]) + "/support-bundles", body.toString()));
+    }
+
+    private int cleanup(String[] args) throws IOException, InterruptedException {
+        String usage = "support-bundle-cleanup <requestId> <reason> --yes";
+        need(args, 4, usage);
+        if (!"--yes".equals(args[3]) || args.length != 4) throw new IllegalArgumentException("usage: " + usage);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("reason", args[2]);
+        body.put("confirm", true);
+        return NexusSessionCli.print(cli.call("POST", BASE + "/" + uuid(args[1]) + "/cleanup-workdir", NexusSessionCli.json(body)));
+    }
+
+    private int upload(String[] args) throws IOException, InterruptedException {
+        String usage = "support-bundle-upload <requestId> <destination> <user> <reason> --yes [--token-file <path>] [--items <kindsCsv>]"
+                + " [--case <ref>] [--host <host> --port <n>]";
+        need(args, 6, usage);
+        boolean yes = false;
+        String tokenFile = null, items = null, caseRef = null, host = null;
+        Integer port = null;
+        for (int i = 5; i < args.length; i++) {
+            switch (args[i]) {
+                case "--yes" -> yes = true;
+                case "--token-file" -> tokenFile = value(args, ++i, usage);
+                case "--items" -> items = value(args, ++i, usage);
+                case "--case" -> caseRef = value(args, ++i, usage);
+                case "--host" -> host = value(args, ++i, usage);
+                case "--port" -> {
+                    try {
+                        port = Integer.parseInt(value(args, ++i, usage));
+                    } catch (NumberFormatException e) {
+                        throw new IllegalArgumentException("usage: " + usage);
+                    }
+                }
+                default -> throw new IllegalArgumentException("usage: " + usage);
+            }
+        }
+        if (!yes) throw new IllegalArgumentException("usage: this sends bank data to an external destination; confirm with --yes. " + usage);
+        String secret;
+        if (tokenFile != null) {
+            secret = com.securityexpert.nexus.ui2.platform.SecretFile.readRequired(Path.of(tokenFile), "support bundle upload token");
+        } else {
+            java.io.Console console = System.console();
+            char[] typed = console == null ? null : console.readPassword("upload token or password: ");
+            if (typed == null || typed.length == 0) throw new IllegalArgumentException("usage: no token: use --token-file <path> or run in a terminal");
+            secret = new String(typed);
+            java.util.Arrays.fill(typed, '\0');
+        }
+        StringBuilder body = new StringBuilder("{\"destination\":").append(quote(args[2])).append(",\"user\":").append(quote(args[3]))
+                .append(",\"password\":").append(quote(secret)).append(",\"reason\":").append(quote(args[4])).append(",\"confirm\":true");
+        if (items != null) {
+            body.append(",\"item_kinds\":[");
+            String[] kinds = items.split(",");
+            for (int i = 0; i < kinds.length; i++) body.append(i == 0 ? "" : ",").append(quote(kinds[i].strip()));
+            body.append(']');
+        }
+        if (caseRef != null) body.append(",\"case_ref\":").append(quote(caseRef));
+        if (host != null) body.append(",\"host\":").append(quote(host));
+        if (port != null) body.append(",\"port\":").append(port);
+        body.append('}');
+        return NexusSessionCli.print(cli.call("POST", BASE + "/" + uuid(args[1]) + "/uploads", body.toString()));
+    }
+
+    private static String value(String[] args, int index, String usage) {
+        if (index >= args.length) throw new IllegalArgumentException("usage: " + usage);
+        return args[index];
     }
 
     private int download(String[] args) throws IOException, InterruptedException {

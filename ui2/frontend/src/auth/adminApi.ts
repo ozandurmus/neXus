@@ -4744,6 +4744,8 @@ export interface SupportBundleRequest {
   readonly run_mode: string; readonly run_at: string; readonly requested_at: string; readonly finished_at: string | null;
   readonly expires_at: string; readonly expiry_warning: boolean; readonly downloaded_at: string | null; readonly download_count: number;
   readonly state: string; readonly outcome: string | null; readonly items: readonly SupportBundleItem[];
+  /** A work directory the run left on the device and did not remove (V236); the admin may have it removed. */
+  readonly work_dir_pending?: boolean; readonly cleanup_state?: string | null; readonly cleanup_outcome?: string | null;
   /** Absent for the replay viewer (aiview). */
   readonly reason?: string; readonly case_ref?: string | null; readonly requested_by?: string;
 }
@@ -4765,3 +4767,31 @@ export const deleteSupportBundle = (id: string, reason: string) =>
 export const requestSupportBundleDownloadTicket = (id: string, reason: string, sanitized: boolean) =>
   call<{ ticket: string; href: string; expires_in_s: number }>(`${SUPPORT_BUNDLES}/${encodeURIComponent(id)}/download-ticket`, "POST",
     sanitized ? { reason, mode: "sanitized" } : { reason });
+
+export const cleanupSupportBundleWorkDir = (id: string, reason: string) =>
+  call<{ id: string; job_id: string; status: string }>(`${SUPPORT_BUNDLES}/${encodeURIComponent(id)}/cleanup-workdir`, "POST", { reason, confirm: true });
+
+/** Vendor upload (V236; PO 2026-11-15/16): no four-eyes, the credential is typed per upload and never stored or shown again. */
+export interface SupportBundleUploadDestination {
+  readonly id: string; readonly label: string; readonly method: string; readonly vendor: string | null;
+  readonly host: string | null; readonly port: number; readonly generic: boolean;
+}
+export interface SupportBundleUpload {
+  readonly id: string; readonly request_id: string; readonly destination: string; readonly destination_host: string;
+  readonly destination_port: number; readonly remote_name: string; readonly state: string; readonly started_at: string | null;
+  readonly finished_at: string | null; readonly attempts: number; readonly bytes_total: number | null; readonly bytes_sent: number;
+  readonly sha256: string | null; readonly remote_status: string | null; readonly error_code: string | null;
+  readonly error_detail: string | null; readonly host_key_changed: boolean; readonly item_count: number;
+  /** Absent for the replay viewer (aiview). */
+  readonly requested_by?: string; readonly remote_user?: string; readonly case_ref?: string | null; readonly reason?: string;
+}
+export const getSupportBundleUploadDestinations = () =>
+  call<{ destinations: SupportBundleUploadDestination[]; manual_only_vendors: string[] }>(`${SUPPORT_BUNDLES}/upload-destinations`, "GET");
+export const listSupportBundleUploads = (id: string) =>
+  call<{ uploads: SupportBundleUpload[] }>(`${SUPPORT_BUNDLES}/${encodeURIComponent(id)}/uploads`, "GET");
+export interface SupportBundleUploadInput {
+  readonly destination: string; readonly user: string; readonly password: string; readonly reason: string;
+  readonly item_kinds?: readonly string[]; readonly case_ref?: string; readonly host?: string; readonly port?: number;
+}
+export const startSupportBundleUpload = (id: string, input: SupportBundleUploadInput) =>
+  call<{ upload_id: string; status: string }>(`${SUPPORT_BUNDLES}/${encodeURIComponent(id)}/uploads`, "POST", { ...input, confirm: true });

@@ -56,11 +56,12 @@ public final class SupportBundleController {
     private final SupportBundleService service;
     private final SupportBundleDownloadService downloads;
     private final JooqSupportBundleStore store;
+    private final com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleUploadStore uploadStore;
     private final Map<String, Ticket> tickets = new ConcurrentHashMap<>();
 
     public SupportBundleController(SupportBundleService service, SupportBundleDownloadService downloads,
-            JooqSupportBundleStore store) {
-        this.service = service; this.downloads = downloads; this.store = store;
+            JooqSupportBundleStore store, com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleUploadStore uploadStore) {
+        this.service = service; this.downloads = downloads; this.store = store; this.uploadStore = uploadStore;
     }
 
     // ---------------------------------------------------------------- reads
@@ -98,8 +99,10 @@ public final class SupportBundleController {
 
     private ResponseEntity<Map<String, Object>> listBody(Optional<String> deviceId, String state, int limit, HttpServletRequest http) {
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (RequestRow r : store.list(deviceId, Optional.ofNullable(state).filter(s -> !s.isBlank()), limit)) {
-            rows.add(requestBody(r, store.items(r.id()), viewer(http)));
+        List<RequestRow> found = store.list(deviceId, Optional.ofNullable(state).filter(s -> !s.isBlank()), limit);
+        var cleanup = uploadStore.cleanupStatuses(found.stream().map(RequestRow::id).toList());
+        for (RequestRow r : found) {
+            rows.add(requestBody(r, store.items(r.id()), viewer(http), cleanup.get(r.id())));
         }
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("support_bundles", rows);
@@ -112,7 +115,8 @@ public final class SupportBundleController {
         if (uuid.isEmpty()) return error(HttpStatus.BAD_REQUEST, "INVALID_ID", "Identifier must be a UUID");
         Optional<RequestRow> row = store.find(uuid.get());
         if (row.isEmpty()) return error(HttpStatus.NOT_FOUND, "NOT_FOUND", "No support bundle with that id");
-        return ResponseEntity.ok(requestBody(row.get(), store.items(row.get().id()), viewer(http)));
+        return ResponseEntity.ok(requestBody(row.get(), store.items(row.get().id()), viewer(http),
+                uploadStore.cleanupStatuses(List.of(row.get().id())).get(row.get().id())));
     }
 
     // ---------------------------------------------------------------- writes
@@ -253,7 +257,8 @@ public final class SupportBundleController {
 
     // ---------------------------------------------------------------- helpers
 
-    private Map<String, Object> requestBody(RequestRow r, List<ItemRow> items, boolean viewer) {
+    private Map<String, Object> requestBody(RequestRow r, List<ItemRow> items, boolean viewer,
+            com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleUploadStore.CleanupStatus cleanup) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", r.id().toString());
         m.put("device_id", r.deviceId());
@@ -273,6 +278,10 @@ public final class SupportBundleController {
         m.put("outcome", r.outcome());
         m.put("job_id", r.jobId());
         m.put("prechecks", precheck(r.precheckJson()));
+        // a work directory the run left on the device and did not remove: the screen offers the admin-confirmed removal (state only)
+        m.put("work_dir_pending", cleanup != null && cleanup.pending());
+        m.put("cleanup_state", cleanup == null ? null : cleanup.state());
+        m.put("cleanup_outcome", cleanup == null ? null : cleanup.outcome());
         if (!viewer) {
             m.put("requested_by", r.requestedBy());
             m.put("reason", r.reason());

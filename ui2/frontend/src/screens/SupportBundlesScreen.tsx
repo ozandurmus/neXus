@@ -19,8 +19,10 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import {
-  cancelSupportBundle, deleteSupportBundle, getSupportBundleCatalogue, listDevices, listSupportBundles, requestSupportBundle,
-  requestSupportBundleDownloadTicket, type DeviceSummary, type SupportBundleKindRow, type SupportBundleRequest,
+  cancelSupportBundle, cleanupSupportBundleWorkDir, deleteSupportBundle, getSupportBundleCatalogue,
+  getSupportBundleUploadDestinations, listDevices, listSupportBundleUploads, listSupportBundles, requestSupportBundle,
+  requestSupportBundleDownloadTicket, startSupportBundleUpload, type DeviceSummary, type SupportBundleKindRow,
+  type SupportBundleRequest, type SupportBundleUpload, type SupportBundleUploadDestination,
 } from "../auth/adminApi";
 import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 import { StatePanel } from "../shell/States";
@@ -30,8 +32,9 @@ import { formatStamp } from "../shell/time";
 /**
  * Support bundles (docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md, FROZEN 2026-11-15), under Tools. An
  * administrator picks a device and the items a vendor's support team usually asks for, runs them now or at a chosen time,
- * and later downloads the result. The server decides every check; the screen only shows its answer. A bundle cannot be
- * masked (the vendor's tools need it intact); it is deleted after a confirmed download, or after 14 days with a warning first.
+ * and later downloads the result, or sends it to a vendor support case. The server decides every check; the screen only shows its
+ * answer. A bundle cannot be masked (the vendor's tools need it intact); it is deleted after a confirmed download, or after 14
+ * days with a warning first. An upload credential is typed per upload, held by the service for the transfer only, and never shown again.
  */
 const KIND_LABELS: Record<string, string> = {
   cpdata_collector_present: "cpdata_collector installed? (read only, never run)",
@@ -82,7 +85,7 @@ export function SupportBundlesScreen() {
   return (
     <ScreenRoot screenType="tool">
       <ScreenHeader title="Support bundles"
-        subtitle="Collect the files a vendor's support team usually asks for, and download them later. Nothing is sent to the vendor." />
+        subtitle="Collect the files a vendor's support team usually asks for, then download them or send them to a vendor case. Nothing leaves neXus unless you start an upload." />
       {error && <Alert severity="error" data-fact="bundle-error">{error}</Alert>}
       <NewRequest kinds={kinds} devices={devices} onDone={reload} />
       <Requests rows={rows} onChange={reload} />
@@ -151,6 +154,8 @@ function Requests({ rows, onChange }: { readonly rows: readonly SupportBundleReq
   const [downloading, setDownloading] = useState<SupportBundleRequest | null>(null);
   const [afterDownload, setAfterDownload] = useState<SupportBundleRequest | null>(null);
   const [deleting, setDeleting] = useState<SupportBundleRequest | null>(null);
+  const [uploading, setUploading] = useState<SupportBundleRequest | null>(null);
+  const [cleaning, setCleaning] = useState<SupportBundleRequest | null>(null);
   if (rows === null) return <StatePanel variant="empty" title="Reading the support bundles…" announce="status" />;
   if (rows.length === 0) return <StatePanel variant="empty" title="No support bundle yet" body="Collect one with the form above." />;
   return <Box sx={{ overflowX: "auto" }}>
@@ -162,11 +167,16 @@ function Requests({ rows, onChange }: { readonly rows: readonly SupportBundleReq
         <TableCell>{r.items.map((i) => <Box key={`${i.kind}-${i.ordinal}`} component="div" data-item={i.kind}>
           {KIND_LABELS[i.kind] ?? i.kind}: {i.state}{i.outcome_code && i.outcome_code !== "COMPLETED" ? ` (${i.outcome_code})` : ""}
           {i.size_bytes !== null ? ` ${sizeText(i.size_bytes)}` : ""}{i.digest_prefix ? ` ${i.digest_prefix}` : ""}</Box>)}</TableCell>
-        <TableCell>{formatStamp(r.requested_at)}</TableCell>
+        <TableCell>{formatStamp(r.requested_at)}
+          {r.work_dir_pending && <Typography variant="caption" component="div" color="warning.main" data-fact="work-dir-pending">
+            A work directory from this run is still on the device{r.cleanup_state === "REQUESTED" ? " (removal requested)" : r.cleanup_state === "FAILED" ? ` (last removal failed: ${r.cleanup_outcome ?? "unknown"})` : ""}.</Typography>}</TableCell>
         <TableCell>{formatStamp(r.expires_at)}{r.expiry_warning && <Typography variant="caption" color="warning.main" component="div" data-fact="expiry-warning">
           Will be deleted at this time{r.downloaded_at ? "" : " and has not been downloaded"}.</Typography>}</TableCell>
         <TableCell><Stack direction="row" gap={1}>
           {(r.state === "COMPLETED" || r.state === "PARTIAL") && <Button size="small" onClick={() => setDownloading(r)}>Download</Button>}
+          {(r.state === "COMPLETED" || r.state === "PARTIAL") && <Button size="small" onClick={() => setUploading(r)}>Upload</Button>}
+          {r.work_dir_pending && r.cleanup_state !== "REQUESTED" && !["QUEUED", "RUNNING"].includes(r.state)
+            && <Button size="small" color="warning" onClick={() => setCleaning(r)}>Remove leftover work directory</Button>}
           {r.state === "QUEUED" && <Button size="small" onClick={() => { void cancelSupportBundle(r.id, "Cancelled from the support bundles screen").then(onChange); }}>Cancel</Button>}
           {["COMPLETED", "PARTIAL", "FAILED", "CANCELLED", "EXPIRED"].includes(r.state) && <Button size="small" color="warning" onClick={() => setDeleting(r)}>Delete</Button>}
         </Stack></TableCell>
@@ -174,6 +184,8 @@ function Requests({ rows, onChange }: { readonly rows: readonly SupportBundleReq
     </Table>
     {downloading && <DownloadDialog request={downloading} onClose={() => setDownloading(null)}
       onStarted={() => { setAfterDownload(downloading); setDownloading(null); onChange(); }} />}
+    {uploading && <UploadDialog request={uploading} onClose={() => setUploading(null)} />}
+    {cleaning && <CleanupDialog request={cleaning} onClose={() => setCleaning(null)} onDone={() => { setCleaning(null); onChange(); }} />}
     {afterDownload && <DeleteDialog request={afterDownload} afterDownload onClose={() => setAfterDownload(null)} onDone={() => { setAfterDownload(null); onChange(); }} />}
     {deleting && <DeleteDialog request={deleting} onClose={() => setDeleting(null)} onDone={() => { setDeleting(null); onChange(); }} />}
   </Box>;
@@ -226,5 +238,136 @@ function DeleteDialog({ request, afterDownload, onClose, onDone }: {
     </DialogContent>
     <DialogActions><Button onClick={onClose} disabled={busy}>{afterDownload ? "Keep it" : "Cancel"}</Button>
       <Button color="warning" variant="contained" onClick={() => void go()} disabled={busy}>Delete</Button></DialogActions>
+  </Dialog>;
+}
+
+/** PO 2026-11-16: the admin-confirmed removal of a work directory a run left on the device (the one approved remove command, the recorded name only). */
+function CleanupDialog({ request, onClose, onDone }: {
+  readonly request: SupportBundleRequest; readonly onClose: () => void; readonly onDone: () => void;
+}) {
+  const [reason, setReason] = useState(""), [confirmed, setConfirmed] = useState(false), [failure, setFailure] = useState(""), [busy, setBusy] = useState(false);
+  const go = async () => {
+    setBusy(true); setFailure("");
+    try { await cleanupSupportBundleWorkDir(request.id, reason.trim()); onDone(); }
+    catch (e) { setFailure(((e as { body?: { reason?: string } }).body?.reason) ?? "The removal was not accepted."); setBusy(false); }
+  };
+  return <Dialog open onClose={onClose} aria-labelledby="sb-clean-title">
+    <DialogTitle id="sb-clean-title">Remove the leftover work directory</DialogTitle>
+    <DialogContent>
+      <Alert severity="warning" sx={{ mb: 2 }}>neXus connects to {request.device_pseudonym} and removes the one work directory (and its archive) that this run
+        created and recorded. It is the same removal the run itself performs; nothing else on the device is touched.</Alert>
+      {failure && <Alert severity="error" data-fact="cleanup-error" sx={{ mb: 2 }}>{failure}</Alert>}
+      <TextField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} fullWidth required disabled={busy} helperText="At least 8 characters. Audited." />
+      <FormControlLabel control={<Checkbox checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />}
+        label="I confirm that the leftover work directory of this run may be removed from the device" />
+    </DialogContent>
+    <DialogActions><Button onClick={onClose} disabled={busy}>Cancel</Button>
+      <Button color="warning" variant="contained" onClick={() => void go()} disabled={busy || !confirmed || reason.trim().length < 8}>Remove</Button></DialogActions>
+  </Dialog>;
+}
+
+/** What each destination asks for, in the vendor's own words (design S8 research; the credential differs per vendor). */
+const UPLOAD_FIELDS: Record<string, { readonly user: string; readonly secret: string; readonly help: string }> = {
+  cisco_cxd_https: { user: "Case (SR) number", secret: "Upload token", help: "Generate the token in Support Case Manager: open the case, Attachments, Generate Token." },
+  cisco_cxd_sftp: { user: "Case (SR) number", secret: "Upload token", help: "Generate the token in Support Case Manager: open the case, Attachments, Generate Token." },
+  cisco_cxd_scp: { user: "Case (SR) number", secret: "Upload token", help: "Generate the token in Support Case Manager: open the case, Attachments, Generate Token." },
+  fortinet_sftp: { user: "Ticket SFTP user (U_...)", secret: "Ticket SFTP password", help: "Shown in the ticket under SFTP Info. The Fortinet engineer must enable SFTP for the ticket; the password changes each time it is shown." },
+  paloalto_scp: { user: "Case number (with leading zeros)", secret: "Case contact email", help: "The email address the case was opened under is the SCP password." },
+  generic_sftp: { user: "User", secret: "Password", help: "Any SFTP server you are allowed to send this to. The host and port are audited." },
+};
+const EGRESS_NOTE = "The upload starts from the neXus host. If the connection fails, the bank firewall may need an opening for the destination.";
+const uploadSize = (u: SupportBundleUpload) => u.bytes_total ? `${sizeText(u.bytes_sent)} of ${sizeText(u.bytes_total)}` : sizeText(u.bytes_sent);
+
+function UploadDialog({ request, onClose }: { readonly request: SupportBundleRequest; readonly onClose: () => void }) {
+  const [destinations, setDestinations] = useState<readonly SupportBundleUploadDestination[]>([]);
+  const [manualOnly, setManualOnly] = useState<readonly string[]>([]);
+  const [uploads, setUploads] = useState<readonly SupportBundleUpload[]>([]);
+  const [destination, setDestination] = useState("");
+  const [user, setUser] = useState(""), [secret, setSecret] = useState(""), [host, setHost] = useState(""), [port, setPort] = useState("22");
+  const [caseRef, setCaseRef] = useState(request.case_ref ?? ""), [reason, setReason] = useState("");
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set(request.items.filter((i) => i.size_bytes !== null).map((i) => i.kind)));
+  const [confirmed, setConfirmed] = useState(false), [busy, setBusy] = useState(false), [failure, setFailure] = useState("");
+  const manual = manualOnly.includes(request.vendor);
+  const options = destinations.filter((d) => d.generic || (d.vendor === request.vendor));
+  const dest = destinations.find((d) => d.id === destination);
+  const fields = UPLOAD_FIELDS[destination];
+  const stored = request.items.filter((i) => i.size_bytes !== null);
+  const refresh = useCallback(() => listSupportBundleUploads(request.id).then((r) => setUploads(r.uploads)).catch(() => undefined), [request.id]);
+  useEffect(() => {
+    getSupportBundleUploadDestinations().then((r) => { setDestinations(r.destinations); setManualOnly(r.manual_only_vendors); }).catch(() => setFailure("The upload destinations could not be read."));
+    void refresh();
+  }, [refresh]);
+  const running = uploads.some((u) => u.state === "RUNNING");
+  useEffect(() => {
+    if (!running) return undefined;
+    const timer = window.setInterval(() => { void refresh(); }, 2000);
+    return () => window.clearInterval(timer);
+  }, [running, refresh]);
+  const go = async () => {
+    setBusy(true); setFailure("");
+    try {
+      await startSupportBundleUpload(request.id, {
+        destination, user: user.trim(), password: secret, reason: reason.trim(), item_kinds: [...picked],
+        ...(caseRef.trim() ? { case_ref: caseRef.trim() } : {}),
+        ...(dest?.generic ? { host: host.trim(), port: Number(port) } : {}),
+      });
+      setSecret(""); setConfirmed(false);   // the credential is gone from the screen as soon as it is sent
+      await refresh();
+    } catch (e) {
+      setFailure(((e as { body?: { reason?: string } }).body?.reason) ?? "The upload was not accepted.");
+    } finally { setSecret(""); setBusy(false); }
+  };
+  const target = dest ? (dest.generic ? host.trim() || "the server you typed" : `${dest.host}:${dest.port}`) : "the destination";
+  const ready = !!dest && user.trim() !== "" && secret !== "" && reason.trim().length >= 8 && picked.size > 0 && confirmed && !running
+    && (!dest.generic || (host.trim() !== "" && Number(port) >= 1 && Number(port) <= 65535));
+  return <Dialog open onClose={onClose} aria-labelledby="sb-up-title" fullWidth maxWidth="sm">
+    <DialogTitle id="sb-up-title">Send to a vendor case</DialogTitle>
+    <DialogContent>
+      <Alert severity="warning" sx={{ mb: 2 }}>The bundle carries configuration, names, addresses and may carry secrets, and it cannot be masked. Sending it
+        puts bank data on a server outside the bank. You may do this only where the bank's rules allow it.</Alert>
+      {manual && <Alert severity="info" sx={{ mb: 2 }} data-fact="manual-upload">Manual upload: Check Point has no scriptable upload route yet. Download the
+        bundle and attach it to the case on the vendor portal. You may still send it to a SFTP server of your own below.</Alert>}
+      {failure && <Alert severity="error" data-fact="upload-error" sx={{ mb: 2 }}>{failure}</Alert>}
+      <Stack gap={2}>
+        <TextField select label="Destination" value={destination} onChange={(e) => { setDestination(e.target.value); setUser(""); setSecret(""); }} disabled={busy || running}>
+          {options.map((d) => <MenuItem key={d.id} value={d.id}>{d.label}{d.host ? ` (${d.host}:${d.port})` : ""}</MenuItem>)}
+        </TextField>
+        {fields && <Typography variant="body2" color="text.secondary">{fields.help}</Typography>}
+        {dest?.generic && <Stack direction="row" gap={2}>
+          <TextField label="Host" value={host} onChange={(e) => setHost(e.target.value)} fullWidth disabled={busy || running} helperText="A host name or an IP address" />
+          <TextField label="Port" value={port} onChange={(e) => setPort(e.target.value)} disabled={busy || running} sx={{ width: 120 }} />
+        </Stack>}
+        {fields && <TextField label={fields.user} value={user} onChange={(e) => setUser(e.target.value)} disabled={busy || running} autoComplete="off" />}
+        {fields && <TextField label={fields.secret} type="password" value={secret} onChange={(e) => setSecret(e.target.value)} disabled={busy || running}
+          autoComplete="new-password" helperText="Used for this upload only. neXus does not store it, log it or show it again." />}
+        <Box role="group" aria-label="Items to send">
+          {stored.map((i) => <Box key={`${i.kind}-${i.ordinal}`}><FormControlLabel
+            control={<Checkbox checked={picked.has(i.kind)} disabled={busy || running} onChange={() => {
+              const next = new Set(picked); if (next.has(i.kind)) next.delete(i.kind); else next.add(i.kind); setPicked(next);
+            }} />} label={`${KIND_LABELS[i.kind] ?? i.kind} (${sizeText(i.size_bytes)})`} /></Box>)}
+        </Box>
+        <TextField label="Vendor case reference (optional)" value={caseRef} onChange={(e) => setCaseRef(e.target.value)} disabled={busy || running} inputProps={{ maxLength: 40 }} />
+        <TextField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} required disabled={busy || running} inputProps={{ maxLength: 500 }}
+          helperText="At least 8 characters. Audited." />
+        <Alert severity="info" data-fact="egress-note">{EGRESS_NOTE}</Alert>
+        <FormControlLabel control={<Checkbox checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} disabled={busy || running} />}
+          label={`I confirm that this bundle may be sent to ${target}`} />
+      </Stack>
+      {uploads.length > 0 && <Box sx={{ mt: 3 }}>
+        <Typography variant="subtitle2" component="h3">Uploads of this bundle</Typography>
+        {uploads.map((u) => <Box key={u.id} data-upload={u.id} sx={{ mt: 1 }}>
+          <Typography variant="body2">
+            <StatusPill tone={u.state === "COMPLETED" ? "ok" : u.state === "RUNNING" ? "neutral" : "bad"} word={u.state} /> {u.destination_host}:{u.destination_port}
+            {" "}{uploadSize(u)}{u.attempts > 1 ? `, ${u.attempts} attempts` : ""}
+          </Typography>
+          {u.state === "COMPLETED" && <Typography variant="caption" component="div">Remote answer: {u.remote_status}. SHA-256 {u.sha256?.slice(0, 16)}</Typography>}
+          {u.error_code && <Typography variant="caption" color="error" component="div" data-fact="upload-failed">{u.error_code}: {u.error_detail}</Typography>}
+          {u.host_key_changed && <Typography variant="caption" color="warning.main" component="div" data-fact="host-key-changed">
+            Warning: the destination's host key differs from one seen before. The upload was not blocked.</Typography>}
+        </Box>)}
+      </Box>}
+    </DialogContent>
+    <DialogActions><Button onClick={onClose}>Close</Button>
+      <Button variant="contained" onClick={() => void go()} disabled={!ready || busy}>Send</Button></DialogActions>
   </Dialog>;
 }
