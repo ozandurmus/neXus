@@ -612,6 +612,27 @@ export function testLdapSettings(settings: LdapSettingsBody, testUser: string): 
   return call<LdapTestResult>("/api/v2/config/ldap/test", "POST", { settings, testUser });
 }
 
+/** Which local accounts may sign in with a password (migration plan Step 3; security_admin). */
+export type LocalAuthMode = "ALL_LOCAL" | "BREAK_GLASS_ONLY";
+
+export interface LocalAuthModeView {
+  readonly mode: LocalAuthMode;
+  readonly modes: readonly LocalAuthMode[];
+  readonly break_glass_accounts: readonly string[];
+  readonly updated_at: string | null;
+  readonly updated_by: string | null;
+  readonly can_write: boolean;
+}
+
+export function getLocalAuthMode(): Promise<LocalAuthModeView> {
+  return call<LocalAuthModeView>("/api/v2/config/local-auth-mode", "GET");
+}
+
+/** Switch the scope. Refused with 409 and a message when it could lock the administrator out. */
+export function saveLocalAuthMode(mode: LocalAuthMode): Promise<LocalAuthModeView> {
+  return call<LocalAuthModeView>("/api/v2/config/local-auth-mode", "PUT", { mode });
+}
+
 export function listFleetBackups(): Promise<{ backups: BackupArtefact[]; baselines?: Record<string, string> }> {
   return call("/backups", "GET");
 }
