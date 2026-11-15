@@ -27,6 +27,9 @@ import { urlParam, useUrlParamSync, writeUrlParams } from "../shell/urlParams";
 import { MONO, m3 } from "../theme/m3Theme";
 import { jobTypeLabel } from "../jobs/jobTypeLabel";
 import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
+import { JobReconcileDialog } from "./JobReconcileDialog";
+import { FAILOVER_RELEASE_NOTE, RECONCILE_STATUS_WORD, isFailoverRunJob, isReconcilable } from "../jobs/jobReconcile";
+import { useCanReconcileJobs } from "../shell/actionAccess";
 import {
   cancelJob,
   downloadJobsCsv,
@@ -277,6 +280,9 @@ export function JobLogsPanel({
   const [expandedJobId, setExpandedJobId] = useState<string | null>(linkedJob);
   const [cancelling, setCancelling] = useState<string[]>([]);
   const [exportBusy, setExportBusy] = useState(false);
+  // The job the Reconcile dialog is open for. The action is offered by plane (presentation only); the server decides.
+  const canReconcile = useCanReconcileJobs();
+  const [reconcilingJobId, setReconcilingJobId] = useState<string | null>(null);
 
   const [state, setState] = useState(pillRequest ? JOB_PILLS.find((p) => p.id === pillRequest.pill)!.states : initialState);
   const [jobType, setJobType] = useState(initialJobType);
@@ -450,7 +456,9 @@ export function JobLogsPanel({
   const counts = byState === "failed" ? null : byState;
   // The column exists only while a row on this page can open a transcript (P1-4B): an empty column says nothing.
   const transcriptColumn = page.items.some((job) => /backup|snapshot|export/i.test(job.job_type) && job.has_transcript);
-  const columnCount = 6 + (transcriptColumn ? 1 : 0) + (page.canCancel ? 1 : 0);
+  // The Actions column exists while a row on this page can offer Cancel or Reconcile: an empty column says nothing.
+  const actionsColumn = page.canCancel || (canReconcile && page.items.some(isReconcilable));
+  const columnCount = 6 + (transcriptColumn ? 1 : 0) + (actionsColumn ? 1 : 0);
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -610,7 +618,7 @@ export function JobLogsPanel({
                   <SortHeaderCell label="Result" state={tableSort.header("result")} />
                   <SortHeaderCell label="Submitted At" state={tableSort.header("submitted_at")} words={{ asc: "oldest first", desc: "newest first" }} />
                   {transcriptColumn && <TableCell>Transcript</TableCell>}
-                  {page.canCancel && <TableCell>Actions</TableCell>}
+                  {actionsColumn && <TableCell>Actions</TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -634,7 +642,9 @@ export function JobLogsPanel({
                       </TableCell>
                       <TableCell><Presented label={jobTypeLabel(job.job_type, vendor)} raw={job.job_type} /></TableCell>
                       <TableCell>
-                        <StatusPill tone={stateTone(job.state)} word={jobStateWord(job.state)} title={job.state} />
+                        {isReconcilable(job)
+                          ? <StatusPill tone="unknown" word={RECONCILE_STATUS_WORD} title={job.state} fact="needs-reconciliation" />
+                          : <StatusPill tone={stateTone(job.state)} word={jobStateWord(job.state)} title={job.state} />}
                       </TableCell>
                       {/* Duration is neutral -- never red; red is reserved for the state word, shown in the
                           State column above (review §3 "Duration is red on every completed job"). */}
@@ -664,11 +674,15 @@ export function JobLogsPanel({
                         <Stamp at={job.submitted_at} />
                       </TableCell>
                       {transcriptColumn && <TableCell><JobTranscriptDrawer jobId={job.job_id} jobType={job.job_type} submittedAt={job.submitted_at} hasTranscript={isBackupJob && job.has_transcript} /></TableCell>}
-                      {page.canCancel && <TableCell>
-                        {["REQUESTED", "CLAIMED", "EXECUTING"].includes(job.state) && <Button size="small"
+                      {actionsColumn && <TableCell>
+                        {page.canCancel && ["REQUESTED", "CLAIMED", "EXECUTING"].includes(job.state) && <Button size="small"
                           disabled={cancelling.includes(job.job_id)} onClick={event => {
                             event.stopPropagation(); void handleCancel(job.job_id);
                           }}>{cancelling.includes(job.job_id) ? "Cancel requested" : "Cancel"}</Button>}
+                        {canReconcile && isReconcilable(job) && <Button size="small" sx={{ textTransform: "none" }}
+                          aria-label={`Reconcile job ${job.job_id}`} onClick={event => {
+                            event.stopPropagation(); setReconcilingJobId(job.job_id);
+                          }}>Reconcile</Button>}
                       </TableCell>}
                     </TableRow>
                     {isExpanded && <TableRow key={`${job.job_id}-details`} data-job-detail={job.job_id}>
@@ -679,6 +693,19 @@ export function JobLogsPanel({
                             <Presented label={jobTypeLabel(job.job_type, vendor)} raw={job.job_type} suffix />
                           </Box>
                         </Typography>
+                        {job.state === "OUTCOME_UNKNOWN" && (
+                          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 0.75 }} data-reconcile-detail={job.job_id}>
+                            {isFailoverRunJob(job.job_type)
+                              ? <Typography variant="body2" role="status">{FAILOVER_RELEASE_NOTE}</Typography>
+                              : <>
+                                  <Typography variant="body2" role="status" sx={{ fontWeight: 500 }}>{RECONCILE_STATUS_WORD}</Typography>
+                                  {canReconcile && <Button size="small" variant="outlined" sx={{ textTransform: "none" }}
+                                    aria-label={`Reconcile job ${job.job_id} (details)`} onClick={event => {
+                                      event.stopPropagation(); setReconcilingJobId(job.job_id);
+                                    }}>Reconcile</Button>}
+                                </>}
+                          </Stack>
+                        )}
                         <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap alignItems="center">
                           {([["Job ID", job.job_id], ...(targetId ? [["Device ID", targetId] as const] : [])] as const).map(([label, value]) => (
                             <Stack key={label} direction="row" spacing={0.5} alignItems="center">
@@ -712,6 +739,8 @@ export function JobLogsPanel({
           </Box>
         </>
       )}
+      {reconcilingJobId && <JobReconcileDialog jobId={reconcilingJobId} onClose={() => setReconcilingJobId(null)}
+        onReconciled={fetchJobs} onStale={fetchJobs} />}
     </Box>
   );
 }

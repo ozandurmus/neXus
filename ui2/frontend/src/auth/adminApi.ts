@@ -1858,6 +1858,17 @@ export interface JobQueryParams {
 
 export const cancelJob = (id: string) => call<{ jobId: string; state: string; cancelRequested: boolean }>(`/api/v2/jobs/${encodeURIComponent(id)}/cancel`, "POST");
 
+/** The three outcomes a person may record for a job whose outcome is unknown (C2 section 3.5). */
+export type JobReconcileOutcome = "RECONCILED_SUCCESS" | "RECONCILED_FAILURE" | "RECONCILED_STILL_UNKNOWN";
+
+/**
+ * Records the human decision that closes an OUTCOME_UNKNOWN job. A decision only: the server never contacts a device and
+ * never makes the job claimable again. Refusals: 400 JOB_RECONCILIATION_INVALID, 404 JOB_NOT_FOUND, 409
+ * JOB_NOT_OUTCOME_UNKNOWN or JOB_BELONGS_TO_FAILOVER_RUN.
+ */
+export const reconcileJob = (id: string, outcome: JobReconcileOutcome, evidence: string) =>
+  call<{ jobId: string; state: string; reconciledOutcome: string }>(`/api/v2/jobs/${encodeURIComponent(id)}/reconcile`, "POST", { outcome, evidence });
+
 export interface JobPageView {
   readonly can_cancel?: boolean;
   readonly items: readonly JobEventView[];
