@@ -182,6 +182,19 @@ async function csrfToken(): Promise<string | undefined> {
   }
 }
 
+/**
+ * End this browser's session: `POST /session/logout` carries the CSRF token like every other state change (PO 2026-11-15;
+ * the service refuses a sign-out without it). Best effort: the caller returns to the login screen either way.
+ */
+export async function logoutSession(): Promise<void> {
+  const token = await csrfToken();
+  await fetch("/session/logout", {
+    method: "POST",
+    credentials: "include",
+    headers: token ? { "X-CSRF-Token": token } : {},
+  });
+}
+
 function withTimeout<T>(work: Promise<T>, timeoutMs: number, onTimeout?: () => void): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {

@@ -43,6 +43,10 @@ public final class SessionSelfLogoutService {
         /** No session row, or not ACTIVE -- the cookie is stale either way. */
         record NoActiveSession() implements Result {
         }
+
+        /** PO 2026-11-15: the session is live but the request did not carry its CSRF token; nothing was changed. */
+        record CsrfRejected() implements Result {
+        }
     }
 
     private final SessionRepository sessionRepository;
@@ -51,10 +55,15 @@ public final class SessionSelfLogoutService {
         this.sessionRepository = Objects.requireNonNull(sessionRepository, "sessionRepository");
     }
 
-    public Result logout(String sessionId) {
+    public Result logout(String sessionId, Optional<String> csrfHeader) {
         Optional<SessionRecord> session = sessionRepository.findBySessionId(sessionId);
         if (session.isEmpty() || session.get().state() != SessionState.ACTIVE) {
             return new Result.NoActiveSession();
+        }
+        if (csrfHeader.isEmpty() || !java.security.MessageDigest.isEqual(
+                csrfHeader.get().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                session.get().csrfSecret().getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
+            return new Result.CsrfRejected();
         }
         sessionRepository.revoke(sessionId, session.get().actorFingerprint(), ACTION_SESSION_LOGOUT_SELF);
         return new Result.Ok();
