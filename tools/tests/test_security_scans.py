@@ -594,6 +594,18 @@ def test_trivy_cache_claim_is_opt_in_and_mounted_everywhere():
             manifests.settings(dict(config(), trivy_cache_claim=bad))
 
 
+def test_trivy_lock_only_with_a_shared_claim_and_without_busybox_unsupported_flags():
+    # 2026-11-15: `flock -w` is not supported by the BusyBox flock in the Trivy image; every trivy run failed rc=1.
+    text = (manifests.ROOT / "tools" / "security" / "security_scan.sh").read_text()
+    assert "flock -w" not in text
+    assert 'TRIVY_SHARED_CACHE:-0}" = 1' in text
+    def envs(cfg):
+        pod = manifests.job(cfg, "gate", commit="b" * 40, gate_name="security-gate-" + "a" * 12)["spec"]["template"]["spec"]
+        return [{e["name"]: e["value"] for e in c["env"]} for c in pod["initContainers"] + pod["containers"]]
+    assert all("TRIVY_SHARED_CACHE" not in e for e in envs(config()))
+    assert all(e.get("TRIVY_SHARED_CACHE") == "1" for e in envs(dict(config(), trivy_cache_claim="security-trivy-cache")))
+
+
 def test_trivy_scan_script_skips_db_update_only_for_a_fresh_cached_db():
     text = (manifests.ROOT / "tools" / "security" / "security_scan.sh").read_text()
     assert "TRIVY_SKIP_DB_UPDATE=true" in text and "-mmin" in text and "TRIVY_DB_MAX_AGE_HOURS" in text
