@@ -279,7 +279,7 @@ Tests: `tests/OverviewScreen.test.tsx` (donut links, cause grouping, coverage as
 ## 9. Amendment B-2026-09-23 — layout from the UI review (Product Owner approval)
 
 **Source.** `docs/design/UI_VISUAL_REVIEW_2026_09_23_FABLE.md` §2 and §6 (Fable, through
-`scripts/consult_fable_ui_visual_review.py`, output unaltered). The Product Owner, 2026-09-23: "Let us make all the
+`history/scripts/consult_fable_ui_visual_review.py`, output unaltered). The Product Owner, 2026-09-23: "Let us make all the
 changes" -- every P0, P1 and P2 item -- with the current state set aside first (`docs/operations/UI_BASELINE_2026_09_23.md`,
 tag `ui-baseline-2026-09-23`). Hard constraint carried from that direction: no loss of capability.
 

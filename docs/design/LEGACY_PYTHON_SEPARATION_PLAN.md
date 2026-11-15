@@ -302,3 +302,26 @@ same change: `tools/delivery/ci_regression_scope.py` (two `TOOLING_FILES` entrie
 row is kept), `deploy/secrets/README.md` (retired `main.py` command), `docs/repo_inventory.csv` (4 rows).
 No split of the convergence test was needed (section 9.1).
 
+### 9.3 Step 4 result (lane legacypy2-1115)
+
+Moved with `git mv` (history kept) to `history/scripts/`: **27** `scripts/consult_*.py` files (the plan's "29" was
+a miscount, section 9.1). Kept in `scripts/`: `consult_argon.py`, `consult_fable_design.py` and, until step 5,
+`consult_claude_log_trial_judge.py`. Path mentions rewritten to `history/scripts/...`:
+`docs/design/FAILOVER_PILOT_COUNCIL_2026_10_06.md`, `OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md`,
+`UI_REVIEW_2026_10_18_FABLE_PART1.md`, the cross-reference inside the moved
+`consult_codex_ui_visual_review.py`, and 23 `docs/repo_inventory.csv` rows (4 moved scripts post-date the
+inventory and have no row). `AGENTS.md` (External model and second-opinion consultation law) now names
+`consult_argon.py` and `consult_fable_design.py` and cites PO 2026-11-15; `CLAUDE.md` and
+`.github/copilot-instructions.md` example lists no longer point at moved or retired scripts. Dated records that
+cite the old paths as history (`history/PR2_NOTES.md`, handovers, other PO decision records) are not rewritten.
+The moved scripts compute paths from `scripts/` and are archived, not runnable from `history/`
+(`history/README.md`).
+
+Verification (2026-11-15): full `tools/tests` run, 5 failed, 2047 passed, 17 skipped, 10 errors. The 10 errors are
+`test_orchestrator_dashboard_browser.py` (Playwright Chromium is not installed on this Mac, same as before the
+change). Of the 5 failures, `test_cold_start_word_count_ceilings` was real (the amendment pushed `AGENTS.md` 3
+words over its 4,362 ceiling; the amendment was shortened to fit, no ceiling was raised) and the other four
+(`test_integration_cleanup_and_fail_closed_result[inconsistent]`, `test_installed_hook_allows_an_ordinary_fast_forward_push`,
+`test_run_preflight_passes_against_a_fully_valid_fixture_repo`, `test_verify_movement_fails_when_a_validation_plan_command_fails`)
+are git/subprocess timeouts under machine load; rerun alone they pass.
+
