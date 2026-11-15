@@ -60,14 +60,20 @@ CREATE TRIGGER trg_audit_support_bundle_upload
 
 -- 2. Host keys seen per destination (SHA-256 of the key blob, base64 as ssh-keygen prints it).
 CREATE TABLE IF NOT EXISTS support_bundle_upload_host_key (
+    id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     host                TEXT        NOT NULL,
     port                INT         NOT NULL,
     fingerprint_sha256  TEXT        NOT NULL,
     key_type            TEXT        NOT NULL,
     first_seen_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_seen_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (host, port, fingerprint_sha256)
+    CONSTRAINT uq_support_bundle_upload_host_key UNIQUE (host, port, fingerprint_sha256)
 );
+-- Audit: each first sighting of a key (a later sighting only moves last_seen_at and is not an event).
+DROP TRIGGER IF EXISTS trg_audit_support_bundle_upload_host_key ON support_bundle_upload_host_key;
+CREATE TRIGGER trg_audit_support_bundle_upload_host_key
+    AFTER INSERT ON support_bundle_upload_host_key
+    FOR EACH ROW EXECUTE FUNCTION fn_audit_capture('id');
 
 -- 3. Cleanup of a leftover work directory.
 ALTER TABLE support_bundle_request ADD COLUMN IF NOT EXISTS cleanup_job_id TEXT;
@@ -96,6 +102,8 @@ INSERT INTO audit_redaction_policy (table_name, column_name, tier, reason) VALUE
     ('support_bundle_upload', 'remote_status', 2, 'Remote server answer'),
     ('support_bundle_upload', 'error_detail', 1, 'Upload failure detail string'),
     ('support_bundle_upload', 'host_key_fingerprint', 2, 'Host key fingerprint of the destination'),
+    ('support_bundle_upload_host_key', 'host', 2, 'Upload destination host'),
+    ('support_bundle_upload_host_key', 'fingerprint_sha256', 2, 'Host key fingerprint of the destination'),
     ('support_bundle_request', 'cleanup_reason', 1, 'Operator work directory cleanup justification')
 ON CONFLICT (table_name, column_name) DO NOTHING;
 

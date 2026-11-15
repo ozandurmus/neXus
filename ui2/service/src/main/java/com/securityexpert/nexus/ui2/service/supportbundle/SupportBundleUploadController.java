@@ -126,7 +126,9 @@ public final class SupportBundleUploadController {
         m.put("id", r.id().toString());
         m.put("request_id", r.requestId().toString());
         m.put("destination", r.destinationKind());
-        m.put("destination_host", r.destinationHost());
+        // a vendor host is a fixed product constant; a host the administrator typed for a generic server is withheld from aiview
+        boolean fixedVendorHost = UploadDestination.fromId(r.destinationKind()).map(d -> !d.generic()).orElse(false);
+        m.put("destination_host", viewer && !fixedVendorHost ? null : r.destinationHost());
         m.put("destination_port", r.destinationPort());
         m.put("remote_name", r.remoteName());
         m.put("state", r.state());
@@ -139,7 +141,6 @@ public final class SupportBundleUploadController {
         m.put("remote_status", r.remoteStatus());
         m.put("error_code", r.errorCode());
         m.put("error_detail", r.errorDetail());
-        m.put("host_key_fingerprint", r.hostKeyFingerprint());
         m.put("host_key_changed", r.hostKeyChanged());
         m.put("item_count", r.itemIds().size());
         if (!viewer) {
@@ -147,6 +148,7 @@ public final class SupportBundleUploadController {
             m.put("remote_user", r.remoteUser());
             m.put("case_ref", r.caseRef());
             m.put("reason", r.reason());
+            m.put("host_key_fingerprint", r.hostKeyFingerprint());
         }
         return m;
     }

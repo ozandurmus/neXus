@@ -89,6 +89,8 @@ class AuditRedactionPolicyTest {
             "support_bundle_request.cleanup_job_id", "support_bundle_request.cleanup_outcome",
             "support_bundle_request.cleanup_requested_at", "support_bundle_request.cleanup_requested_by",
             "support_bundle_request.cleanup_state",
+            "support_bundle_upload_host_key.id", "support_bundle_upload_host_key.port", "support_bundle_upload_host_key.key_type",
+            "support_bundle_upload_host_key.first_seen_at", "support_bundle_upload_host_key.last_seen_at",
             // support_bundle_upload (V236): no credential column exists; free text and remote identifiers are redacted
             "support_bundle_upload.id", "support_bundle_upload.request_id", "support_bundle_upload.item_ids",
             "support_bundle_upload.destination_kind", "support_bundle_upload.destination_port",
@@ -744,6 +746,7 @@ class AuditRedactionPolicyTest {
             "support_bundle_request.work_dir_path", 2, "support_bundle_item.outcome_detail", 1,
             "support_bundle_request.cleanup_reason", 1, "support_bundle_upload.reason", 1, "support_bundle_upload.case_ref", 1,
             "support_bundle_upload.remote_user", 1, "support_bundle_upload.error_detail", 1,
+            "support_bundle_upload_host_key.host", 2, "support_bundle_upload_host_key.fingerprint_sha256", 2,
             "support_bundle_upload.destination_host", 2, "support_bundle_upload.remote_name", 2,
             "support_bundle_upload.remote_status", 2, "support_bundle_upload.host_key_fingerprint", 2,
             "backup_deviation_record.resolution_reason", 2,

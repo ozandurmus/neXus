@@ -131,11 +131,15 @@ class SupportBundleUploadStoreIntegrationTest {
             assertEquals(2, uploads.list(request).size());
 
             // host keys: first sight is not a change, a different key later is, never a refusal
-            assertFalse(uploads.recordHostKey("h.example", 22, "ssh-ed25519", "SHA256:one"));
-            assertFalse(uploads.recordHostKey("h.example", 22, "ssh-ed25519", "SHA256:one"));
-            assertTrue(uploads.recordHostKey("h.example", 22, "ssh-ed25519", "SHA256:two"));
-            assertFalse(uploads.recordHostKey("h.example", 22, "ssh-ed25519", "SHA256:two"));
-            assertFalse(uploads.recordHostKey("h.example", 2222, "ssh-ed25519", "SHA256:other-port"));
+            assertFalse(uploads.recordHostKey(ADMIN, "h.example", 22, "ssh-ed25519", "SHA256:one"));
+            assertFalse(uploads.recordHostKey(ADMIN, "h.example", 22, "ssh-ed25519", "SHA256:one"));
+            assertTrue(uploads.recordHostKey(ADMIN, "h.example", 22, "ssh-ed25519", "SHA256:two"));
+            assertFalse(uploads.recordHostKey(ADMIN, "h.example", 22, "ssh-ed25519", "SHA256:two"));
+            assertFalse(uploads.recordHostKey(ADMIN, "h.example", 2222, "ssh-ed25519", "SHA256:other-port"));
+            try (Connection db = fixture.migrateConnection()) {
+                assertEquals(3, count(db, "select count(*) from audit_log where table_name = 'support_bundle_upload_host_key'"),
+                        "each first sighting of a key is audited, a repeat is not");
+            }
 
             // cleanup: only a finished request with a recorded, uncleaned directory
             assertTrue(uploads.cleanupTarget(request).isEmpty(), "no recorded work directory");
