@@ -44,6 +44,7 @@ def container_image(deployment):
 @pytest.mark.parametrize("path", [
     "deploy/ui2/50-service-deployment.yaml",
     "deploy/ui2/52-worker-deployment.yaml",
+    "deploy/ui2/53-backup-deployment.yaml",
     "deploy/ui2/54-configuration-deployment.yaml",
     "deploy/ui2/55-compliance-deployment.yaml",
     "deploy/ui2/57-policy-deployment.yaml",
@@ -1030,7 +1031,7 @@ def test_generic_worker_discovery_and_rendering_uses_production_args_ports_and_l
     path.write_text(yaml.safe_dump(deployment))
     path.with_name("58-synthetic-service.yaml").write_text(yaml.safe_dump(service))
     workers = preview.worker_templates(ROOT) + preview.worker_templates(tmp_path)
-    assert len(workers) == 6  # general, configuration, compliance, policy, packet_analysis + synthetic
+    assert len(workers) == 7  # general, backup, configuration, compliance, policy, packet_analysis + synthetic
     before = copy.deepcopy(workers)
     for namespace in ("ui2-preview-first", "ui2-preview-second"):
         monkeypatch.setattr(preview, "NS", namespace)
@@ -1085,7 +1086,7 @@ def test_complete_preview_uses_unique_scopes_all_workers_and_cleanup(monkeypatch
         preview.run(ROOT, COMMIT)
     assert preview.NS == "ui2-preview"
     assert cleanup_scopes == [("ui2-preview-synthetic-owner", "synthetic-owner")]
-    assert len([o for o in objects if o["kind"] == "Deployment"]) == 6
+    assert len([o for o in objects if o["kind"] == "Deployment"]) == 7
     for obj in objects:
         if obj["kind"] != "Namespace":
             assert obj["metadata"]["namespace"] == "ui2-preview-synthetic-owner"
@@ -1481,6 +1482,7 @@ def test_preview_reset_runs_before_device_workers_and_claim_assertion(monkeypatc
 
 def test_preview_pods_cap_production_drain_grace():
     for path, expected in (('deploy/ui2/52-worker-deployment.yaml', preview.PREVIEW_GRACE_SECONDS),
+                           ('deploy/ui2/53-backup-deployment.yaml', preview.PREVIEW_GRACE_SECONDS),
                            ('deploy/ui2/57-policy-deployment.yaml', preview.PREVIEW_GRACE_SECONDS),
                            ('deploy/ui2/55-compliance-deployment.yaml', 15)):
         source = template(path, 'Deployment')

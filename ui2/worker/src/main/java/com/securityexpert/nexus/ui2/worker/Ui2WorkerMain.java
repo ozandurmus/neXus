@@ -98,6 +98,8 @@ public final class Ui2WorkerMain {
         // Metrics (docs/operations/METRICS.md): the scrape server starts only when UI2_METRICS_PORT is set.
         com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.startFromEnvironment(role);
         boolean policyFallback = Boolean.parseBoolean(System.getProperty("ui2.worker.claim-policy-fallback", "false"));
+        boolean backupFallback = Boolean.parseBoolean(
+                System.getProperty("ui2.worker.claim-backup-fallback", !"backup".equals(role) ? "true" : "false"));
         if ("configuration".equals(role)) {
             try {
                 com.securityexpert.nexus.ui2.worker.configuration.server.Ui2ConfigurationMain.main(args);
@@ -142,6 +144,12 @@ public final class Ui2WorkerMain {
                 System.getenv().getOrDefault("UI2_PAN_TRUST_RULE_REF", "utils.pan_xml_api_trust");
 
         if ("policy".equals(role)) System.setProperty("ui2.db.pool.maximum-pool-size", "6");
+        if ("backup".equals(role)) {
+            System.setProperty("ui2.db.pool.maximum-pool-size",
+                    System.getProperty("ui2.db.pool.maximum-pool-size", "4"));
+            System.setProperty("ui2.db.pool.minimum-idle",
+                    System.getProperty("ui2.db.pool.minimum-idle", "1"));
+        }
         var databasePool = WorkerDatabasePool.create(
                 TransactionBoundaryFactory.jdbcDataSource(jdbcUrl, dbUser, dbPassword), System.getProperties());
         TransactionBoundary transactionBoundary = TransactionBoundaryFactory.fromDataSource(databasePool);
@@ -185,6 +193,15 @@ public final class Ui2WorkerMain {
                 attemptRepository, deviceRepository, strictFailoverSsh, panTransport, panCredentialResolverFor(resolverComponents),
                 artefactStoreRoot, artefactStoreKeyBase64, HostnameFingerprint.fromBase64Key(hostnameFingerprintKeyBase64),
                 checkPointTrustRuleRef, paloAltoTrustRuleRef, policyFallback);
+            return;
+        }
+        if ("backup".equals(role)) {
+            if (!moduleRuntime.compatibleGeneralLive()) throw new IllegalStateException("COMPATIBLE_GENERAL_BOOTSTRAP_REQUIRED");
+            startBackup(transactionBoundary, databasePool, moduleRuntime, endpointAdmission, instance, leaseRepository,
+                attemptRepository, deviceRepository, deviceEnrollmentReadPort, sshTransport, panTransport,
+                panCredentialResolverFor(resolverComponents), artefactStoreRoot, artefactStoreKeyBase64,
+                HostnameFingerprint.fromBase64Key(hostnameFingerprintKeyBase64), checkPointTrustRuleRef,
+                paloAltoTrustRuleRef, backupFallback);
             return;
         }
 
@@ -478,7 +495,7 @@ public final class Ui2WorkerMain {
                     .withCredentialCanary(credentialCanaryExecutor)
                     .withPathValidation(pathValidationExecutor)
                     .withPolicyCollection(policyCollectionExecutor)
-                    .withRole(role, policyFallback)
+                    .withRole(role, policyFallback, backupFallback)
                     .withRuntimeAdmission(endpointAdmission, moduleRuntime);
             claimLoop.withPlatformFacts(platformFactsRepository);
             claimLoops.add(claimLoop);
@@ -626,7 +643,7 @@ public final class Ui2WorkerMain {
         if (args.length > 1 || (argument != null && env != null && !argument.equals(env)))
             throw new IllegalArgumentException("CONFLICTING_WORKER_ROLE");
         String role = argument != null ? argument : env != null ? env : "general";
-        if (!java.util.Set.of("general", "policy", "configuration", "compliance",
+        if (!java.util.Set.of("general", "policy", "backup", "configuration", "compliance",
                 com.securityexpert.nexus.ui2.platform.PacketAnalysisJob.MODULE).contains(role))
             throw new IllegalArgumentException("UNKNOWN_WORKER_ROLE");
         return role;
@@ -724,6 +741,156 @@ public final class Ui2WorkerMain {
                 finally { pool.close(); }
             }
         }, "policy-drain"));
+    }
+
+    private static void startBackup(TransactionBoundary boundary, com.zaxxer.hikari.HikariDataSource pool,
+            com.securityexpert.nexus.ui2.persistence.runtime.ModuleRuntimeRepository runtime,
+            com.securityexpert.nexus.ui2.persistence.runtime.EndpointAdmissionRepository admission, String instance,
+            JobLeaseRepository leases, JobStepAttemptRepository attempts, JooqDeviceRepository devices,
+            PersistenceDeviceEnrollmentReadPort enrollment, SshExecTransport ssh, PanXmlApiTransport pan,
+            StoreBackedPanCredentialResolver credentials, Path root, String key, HostnameFingerprint fingerprint,
+            String cpTrust, String panTrust, boolean fallback) {
+        var gates = new PersistenceGateRegistryPort(new JooqGateRegistryDao(boundary));
+        var transportRegistry = WorkerBootstrap.buildTransportRegistry(ssh, pan);
+        WorkerBootstrap.boot(CapabilityRegistry.of(BackupCapabilities.all(gates)), transportRegistry);
+        var transport = new CompositeDeviceTransport(transportRegistry);
+        var store = new FileArtefactStore(root, ArtefactStoreCipher.fromBase64Key(key));
+        var platformFacts = new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePlatformFactsRepository(boundary);
+        var backupCredentialRef = Optional.ofNullable(System.getenv("UI2_CP_BACKUP_CREDENTIAL_REF")).filter(v -> !v.isBlank());
+        long freeSpaceThreshold = Long.parseLong(System.getenv().getOrDefault("UI2_BACKUP_FREE_SPACE_THRESHOLD_BYTES", "104857600"));
+        var pollInterval = Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_BACKUP_POLL_INTERVAL_SECONDS", "10")));
+        var runDeadline = Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_BACKUP_RUN_DEADLINE_SECONDS", "1800")));
+        var capabilityExecutor = new BackupCapabilityExecutor(transport, store, freeSpaceThreshold, pollInterval, runDeadline,
+                new com.securityexpert.nexus.ui2.persistence.artefact.JooqDeviceArchiveLedger(boundary));
+        var snapshotExecutor = new com.securityexpert.nexus.ui2.worker.backup.cp.CheckPointSnapshotExecutor(
+                transport, store, freeSpaceThreshold, pollInterval, runDeadline);
+        var panBackupExecutor = new com.securityexpert.nexus.ui2.worker.backup.pan.PaloAltoBackupExecutor(transport, store, credentials);
+        var contentListing = new com.securityexpert.nexus.ui2.persistence.artefact.content.ArchiveContentListingService(
+                store, new com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupArtefactEntryRepository(boundary));
+        var backup = new BackupJobExecutor(leases, attempts, enrollment, devices, capabilityExecutor, snapshotExecutor,
+                panBackupExecutor, new com.securityexpert.nexus.ui2.worker.backup.diff.SemanticDeviationEngine(),
+                new JooqBackupArtefactManifestRepository(boundary),
+                new JooqBackupEndpointEligibilityRepository(boundary), fingerprint, root.toString(), contentListing);
+        backup.withPlatformFacts(platformFacts);
+        backup.withSizeAnomalyCheck(new com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupSizeAnomalyRepository(boundary));
+        var credentialAlerts = new com.securityexpert.nexus.ui2.persistence.artefact.JooqCredentialFailureAlertRepository(boundary);
+        backup.withCredentialAlerts(credentialAlerts);
+        var httpsTrust = new com.securityexpert.nexus.ui2.persistence.https.HttpsCertificateTrustRepository(boundary);
+        var httpsVendor = new com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor(
+                new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient(
+                        (target, cert) -> httpsTrust.observe(target.host(), target.port(), cert)),
+                store, ref -> {
+                    var m = credentials.resolve(ref);
+                    return new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Credentials(m.username(), m.password());
+                });
+        httpsVendor.withFortinet(new com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGateExecutor(ssh, store)
+                .withSecrets(ref -> {
+                    var m = credentials.resolve(ref);
+                    return new com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGateExecutor.LoginSecret(m.username(), m.password());
+                }), httpsVendor.newFortiManagerExecutor().withSsh(ssh));
+        httpsVendor.withCiscoAsa(new com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaExecutor(ssh, store, ssh::scpFetch));
+        backup.withHttpsVendorExecutor(httpsVendor,
+                new com.securityexpert.nexus.ui2.persistence.device.JooqDeviceSecretReferenceRepository(boundary));
+        String ccInbox = System.getenv("UI2_CC_INBOX_DIR");
+        Path inboxPath = ccInbox == null || ccInbox.isBlank() ? null : Path.of(ccInbox);
+        backup.withCyberControllerBackupExecutor(new com.securityexpert.nexus.ui2.worker.backup.radware.CyberControllerBackupExecutor(
+                transport, store, inboxPath, System.getenv("UI2_CC_RECEIVER_HOST"), ref -> credentials.resolve(ref).password()));
+        backup.withQuantumSparkBackupExecutor(new com.securityexpert.nexus.ui2.worker.backup.cp.QuantumSparkBackupExecutor(
+                transport, store, inboxPath, System.getenv("UI2_CC_RECEIVER_HOST"), ref -> credentials.resolve(ref).password()));
+        backup.withMdsExportExecutor(new com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportExecutor(transport, store,
+                Long.parseLong(System.getenv().getOrDefault("UI2_MDS_EXPORT_MIN_FREE_BYTES", String.valueOf(20L * 1024 * 1024 * 1024))),
+                Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_MDS_EXPORT_POLL_INTERVAL_SECONDS", "30"))),
+                Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_MDS_EXPORT_RUN_DEADLINE_SECONDS", "2700")))));
+        var jobs = new JooqJobRecordDao(boundary);
+        backup.withTranscript(store, jobs);
+        var canary = new com.securityexpert.nexus.ui2.worker.backup.CredentialCanaryJobExecutor(
+                leases, attempts, enrollment, transport,
+                new com.securityexpert.nexus.ui2.worker.backup.CredentialFailureReporter(credentialAlerts));
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var loops = new java.util.ArrayList<WorkerClaimLoop>();
+        for (int i = 0; i < 2; i++) {
+            var loop = WorkerClaimLoop.backup(leases, jobs, devices, backup, instance, Duration.ofMinutes(10),
+                    cpTrust, panTrust, backupCredentialRef, fallback)
+                .withCredentialCanary(canary)
+                .withPlatformFacts(platformFacts)
+                .withRuntimeAdmission(admission, runtime);
+            loops.add(loop);
+            executor.submit(() -> loop.runUntilInterrupted(Duration.ofSeconds(2)));
+        }
+        var maintenance = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "backup-maintenance");
+            t.setDaemon(true);
+            return t;
+        });
+        var orphanPurger = new com.securityexpert.nexus.ui2.worker.backup.retention.OrphanArtefactPurger(
+                new com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactDeletionRequests(boundary), root);
+        maintenance.scheduleWithFixedDelay(() -> {
+            try {
+                runtime.runTask("backup", instance, "OrphanArtefactPurger.runOnce", orphanPurger::runOnce);
+            } catch (Throwable t) {
+                System.getLogger(Ui2WorkerMain.class.getName())
+                        .log(System.Logger.Level.WARNING, "Orphan backup purge error: " + t.getMessage(), t);
+            }
+        }, 20, 60, java.util.concurrent.TimeUnit.SECONDS);
+        var backupPolicyRepository = new com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupPolicyRepository(boundary);
+        var pruningService = new com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService(
+                new com.securityexpert.nexus.ui2.worker.backup.retention.JooqRetentionStorePort(
+                        new com.securityexpert.nexus.ui2.persistence.artefact.JooqRetentionQueries(boundary),
+                        root, reportStoreRootOrNull()));
+        maintenance.scheduleWithFixedDelay(() -> {
+            try {
+                runtime.runTask("backup", instance, "RetentionPruningService.prune", () -> backupPolicyRepository.find().ifPresent(policy -> {
+                    var summary = pruningService.prune(
+                            new com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService.PruningPolicy(
+                                    policy.backupRetentionDays(), policy.snapshotRetentionDepth(),
+                                    policy.configurationRetentionDays()));
+                    if (summary.backupsPruned() > 0 || summary.snapshotsPruned() > 0 || summary.configurationsPruned() > 0
+                            || summary.reportsPruned() > 0) {
+                        System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.INFO,
+                                "[RETENTION] pruned backups=" + summary.backupsPruned() + " snapshots=" + summary.snapshotsPruned()
+                                        + " configurations=" + summary.configurationsPruned()
+                                        + " reports=" + summary.reportsPruned()
+                                        + " bytes=" + summary.bytesReclaimed() + " (retention " + policy.backupRetentionDays()
+                                        + " d, depth " + policy.snapshotRetentionDepth() + ", configuration "
+                                        + policy.configurationRetentionDays() + " d)");
+                    }
+                }));
+            } catch (Throwable t) {
+                System.getLogger(Ui2WorkerMain.class.getName())
+                        .log(System.Logger.Level.WARNING, "Retention pruning error: " + t.getMessage(), t);
+            }
+        }, 120, 3600, java.util.concurrent.TimeUnit.SECONDS);
+        var heartbeat = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        heartbeat.scheduleWithFixedDelay(() -> {
+            try {
+                if (pool.getHikariPoolMXBean() != null) {
+                    var stats = pool.getHikariPoolMXBean();
+                    runtime.poolStats("backup", instance, stats.getActiveConnections(), stats.getIdleConnections(),
+                        stats.getThreadsAwaitingConnection(), WorkerDatabasePool.TIMEOUTS.sum(), WorkerDatabasePool.WAIT_NANOS.sum());
+                }
+                if (!runtime.heartbeat("backup", instance)) {
+                    loops.forEach(WorkerClaimLoop::requestStop); executor.shutdown(); maintenance.shutdown(); heartbeat.shutdown();
+                }
+            } catch (RuntimeException unavailable) {
+                System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.WARNING, "MODULE_HEARTBEAT_UNAVAILABLE");
+            }
+        }, 10, 10, java.util.concurrent.TimeUnit.SECONDS);
+        long drainSeconds = Long.parseLong(System.getenv().getOrDefault("UI2_WORKER_DRAIN_SECONDS", "840"));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            loops.forEach(WorkerClaimLoop::requestStop);
+            executor.shutdown();
+            maintenance.shutdown();
+            try {
+                long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(drainSeconds);
+                executor.awaitTermination(drainSeconds, java.util.concurrent.TimeUnit.SECONDS);
+                maintenance.awaitTermination(Math.max(0, until - System.nanoTime()), java.util.concurrent.TimeUnit.NANOSECONDS);
+            } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+            finally {
+                heartbeat.shutdownNow();
+                try { runtime.releaseOwnership("backup", instance); }
+                finally { pool.close(); }
+            }
+        }, "backup-drain"));
     }
 
     /**

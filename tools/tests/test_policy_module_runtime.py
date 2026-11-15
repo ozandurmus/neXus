@@ -27,10 +27,14 @@ def test_selected_modules_are_independent_and_never_wait_on_policy_for_general(m
     assert "ui2_job_module(j.capability_id)='policy'" in queries[-1]
     assert "drain_ack_generation=drain_generation" in queries[-1]
     assert "QUARANTINED" in queries[-1]
+    assert deploy.barrier("backup", 9)
+    assert "ui2_job_module(j.capability_id)='backup'" in queries[-1]
+    assert "(owner_role='backup' or purpose_class='BACKUP')" in queries[-1]
     assert deploy.barrier("worker", 8)
     assert "effective_owner='general'" in queries[-1]
     assert "owner_instance is null" in queries[-1]  # One-time legacy bootstrap drains all jobs.
     assert "ui2_job_module(j.capability_id)='policy'" not in queries[-1]
+    assert "ui2_job_module(j.capability_id)='backup'" not in queries[-1]
 
 
 def test_bounded_wait_retains_old_digest_and_the_drain(monkeypatch):
@@ -134,6 +138,28 @@ def test_policy_manifest_has_only_its_required_dependencies_and_starts_disabled(
         return env, mount, volume
     assert key_wiring(spec, container) == key_wiring(worker_spec, worker_container)
     assert key_wiring(spec, container)[2]["secret"]["secretName"] == "ui2-hostname-fingerprint-key"
+    policy = next(d for d in documents if d["kind"] == "NetworkPolicy")
+    assert policy["spec"]["ingress"] == []
+    assert policy["spec"]["policyTypes"] == ["Ingress", "Egress"]
+
+
+def test_backup_manifest_has_only_its_required_dependencies_and_starts_disabled():
+    documents = list(yaml.safe_load_all((ROOT / "deploy/ui2/53-backup-deployment.yaml").read_text()))
+    deployment = next(d for d in documents if d["kind"] == "Deployment")
+    assert deployment["spec"]["replicas"] == 0
+    assert deployment["spec"]["strategy"]["type"] == "Recreate"
+    spec = deployment["spec"]["template"]["spec"]
+    assert spec["serviceAccountName"] == "ui2-backup" and spec["automountServiceAccountToken"] is False
+    assert spec["securityContext"]["supplementalGroups"] == [2600]
+    container = spec["containers"][0]
+    assert container["args"] == ["worker", "backup"]
+    assert container["resources"] == {"requests": {"cpu": "250m", "memory": "256Mi"}, "limits": {"memory": "2Gi"}}
+    jvm = next(e["value"] for e in container["env"] if e["name"] == "JAVA_TOOL_OPTIONS")
+    assert "-Dui2.db.pool.maximum-pool-size=4" in jvm and "-Dui2.db.pool.minimum-idle=1" in jvm
+    assert {v["name"] for v in spec["volumes"]} == {
+        "tmp", "home", "db-credentials", "credential-store-key", "artefact-store-key",
+        "hostname-fingerprint-key", "artefact-store", "report-store", "cc-inbox", "corp-ca",
+    }
     policy = next(d for d in documents if d["kind"] == "NetworkPolicy")
     assert policy["spec"]["ingress"] == []
     assert policy["spec"]["policyTypes"] == ["Ingress", "Egress"]
