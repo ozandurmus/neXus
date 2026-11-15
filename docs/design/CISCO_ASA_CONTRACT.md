@@ -26,7 +26,7 @@ and keeps reading, so the parsers get the same text as with an unpaged answer. A
 and at the end of the buffer (a `<--- More --->` inside a data line is data). Bounded: 100,000 pages per command
 (`InteractiveShellSession.MAX_PAGES`) and the command's own timeout (180 s for `more system:running-config`). Each page is
 one round trip (an ASA page is 24 lines), so a very large configuration over a slow link can reach the timeout; that shows
-as a timed-out read, never as a re-added `terminal pager 0`. The gate row `asa_terminal_pager_0` is BLOCKED (V224).
+as a timed-out read, never as a re-added `terminal pager 0`. The gate row `asa_terminal_pager_0` is BLOCKED (V233).
 Not yet measured on a real ASA: the exact erase bytes and the time of a large `more system:running-config`.
 
 ## What is stored
