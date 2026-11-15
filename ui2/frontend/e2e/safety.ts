@@ -8,11 +8,10 @@ export function isAiview(body: unknown): boolean {
     && Array.isArray(status.role_tokens) && status.role_tokens.includes("role:replay_viewer");
 }
 
-export function readAllowed(method: string, url: string, origin: string, resourceType = "fetch"): boolean {
+export function readAllowed(method: string, url: string, origin: string, _resourceType = "fetch"): boolean {
   // src/auth/ only reads /session/status. No session-maintenance POST exists.
-  // index.html also loads external icon styles/fonts; these are passive GETs, not API calls.
-  return (method === "GET" || method === "HEAD")
-    && (new URL(url).origin === origin || resourceType === "stylesheet" || resourceType === "font");
+  // Fonts and stylesheets are self-hosted; no cross-origin requests are allowed.
+  return (method === "GET" || method === "HEAD") && new URL(url).origin === origin;
 }
 
 export function hasCanaryToken(text: string, digests: ReadonlySet<string>): boolean {
