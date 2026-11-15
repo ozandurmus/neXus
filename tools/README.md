@@ -41,8 +41,8 @@ by replacing the process. Use the new paths for new callers.
 | `scripts/hosta_e2e.sh` | `tools/e2e/hosta_e2e.sh` |
 | `scripts/repository_privacy_check.py` | `tools/privacy/repository_privacy_check.py` |
 
-Other files retained under `scripts/` are UNSURE: consultation and one-off
-review/measurement helpers, staged review runners, the legacy fixture extractor,
+The 27 one-shot `consult_*` scripts moved to `history/scripts/` on 2026-11-15. Other files retained under `scripts/` are UNSURE: `consult_claude_log_trial_judge.py` (until `tools/llm_trial` moves), measurement
+helpers, staged review runners, the legacy fixture extractor,
 `hosta_export_all.sh` and `measurement/`. They are not default live tooling;
 retention does not authorize execution. The root `main.py`, `utils/__init__.py` and two uncollectable root tests were deleted on 2026-11-15
 (PO 2026-11-15, `docs/design/LEGACY_PYTHON_SEPARATION_PLAN.md` section 9).

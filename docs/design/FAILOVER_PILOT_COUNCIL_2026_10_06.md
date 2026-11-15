@@ -57,7 +57,7 @@ operational risk, testability and scope. That pass was not started.
 
 | Attempt through repository runner | Complete relevant outcome |
 | --- | --- |
-| `scripts/consult_ui_effectiveness_council.py::run`, external `claude -p --model claude-fable-5-1`, tools disabled, empty strict MCP configuration, hooks disabled, no session persistence | Exit 1. Initial text invocation returned no review; JSON diagnostic invocation returned `is_error: true`, `num_turns: 1`, result reproduced below. |
+| `history/scripts/consult_ui_effectiveness_council.py::run`, external `claude -p --model claude-fable-5-1`, tools disabled, empty strict MCP configuration, hooks disabled, no session persistence | Exit 1. Initial text invocation returned no review; JSON diagnostic invocation returned `is_error: true`, `num_turns: 1`, result reproduced below. |
 | Same runner, external `codex exec --ignore-user-config --ephemeral -m gpt-6-astra -c model_reasoning_effort="high" --sandbox read-only` | Exit 1 before model consultation; complete error text reproduced below. No answer artifact. |
 
 Claude result, unaltered:
