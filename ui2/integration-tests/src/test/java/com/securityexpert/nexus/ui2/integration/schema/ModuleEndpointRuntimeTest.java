@@ -254,6 +254,19 @@ class ModuleEndpointRuntimeTest {
             assertTrue(generalRan.get());
             assertFalse(backupRan.get());
 
+            // Finding 1.3 (review 2026-11-15): a drain on the backup module grants no new general lease, and a lease
+            // already held by general stays visible as owner_role='general' so the backup drain barrier can wait on it.
+            releaseSql(fixture, "update module_runtime_control set drain_requested=true,drain_generation=generation where module='backup'");
+            generalRan.set(false);
+            runtime.runTask("general", "general-pod", "RetentionPruningService.prune", () -> generalRan.set(true));
+            assertFalse(generalRan.get());
+            releaseSql(fixture, "update module_runtime_control set drain_requested=false,drain_generation=0 where module='backup'");
+            var heldDuringRun = new java.util.concurrent.atomic.AtomicReference<String>();
+            runtime.runTask("general", "general-pod", "RetentionPruningService.prune", () -> heldDuringRun.set(tx.<String>inTransaction(db ->
+                db.fetchOne("select owner_role from runtime_task_lease where task_key='RetentionPruningService.prune'").get(0, String.class))));
+            assertEquals("general", heldDuringRun.get());
+            generalRan.set(false);
+
             releaseSql(fixture, "update module_runtime_control set effective_owner='backup',fallback_enabled=false,generation=generation+1 where module='backup'");
             generalRan.set(false);
             runtime.runTask("general", "general-pod", "OrphanArtefactPurger.runOnce", () -> generalRan.set(true));

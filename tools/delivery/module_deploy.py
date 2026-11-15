@@ -23,6 +23,8 @@ POLICY_TYPES = ("cp_policy_collect", "pan_policy_collect")
 # V154: modules that own themselves with no general fallback. The general worker has no executor for their job
 # types, so no release path ever hands them to it; without their pod, their jobs wait in REQUESTED.
 NEVER_GENERAL = ("packet_analysis",)
+# Tasks ModuleRuntimeRepository.taskModule routes to the backup module (keep in step with it; a test compares).
+BACKUP_MODULE_TASKS = ("OrphanArtefactPurger.runOnce", "RetentionPruningService.prune")
 # Dedicated modules whose drain barrier covers exactly their own job types.
 DEDICATED = {"policy": "policy", "backup": "backup", "packet-analysis": "packet_analysis"}
 # Targets with NO drain barrier in this tool (not in ROLES): HTTP owners whose requests drain on SIGTERM within the pod
@@ -130,6 +132,10 @@ def barrier_conditions(target, generation):
     admission_scope = ("(owner_role='policy' or purpose_class='POLICY')" if target == "policy"
                        else "(owner_role='backup' or purpose_class='BACKUP')" if target == "backup"
                        else "owner_role=" + literal(role))
+    # Backup-module tasks run by the general worker while it is still effective owner hold their lease under
+    # owner_role='general' (ModuleRuntimeRepository.taskModule); the handover must wait for them too.
+    task_scope = ("(owner_role=" + literal(role) + " or task_key in (" + ",".join(literal(t) for t in BACKUP_MODULE_TASKS) + "))"
+                  if target == "backup" else "owner_role=" + literal(role))
     return (
         ("drain_ack", "(drain_requested and drain_generation=" + str(generation) +
          " and drain_ack_generation=drain_generation and drain_ack_at is not null)"),
@@ -140,9 +146,9 @@ def barrier_conditions(target, generation):
         ("admissions", "select count(*) from endpoint_admission where " + admission_scope +
          " and (state='LEASED' or (state='QUARANTINED' and not exists(select 1 from jobs t where t.job_id="
          "endpoint_admission.job_id and " + ENDED_WITHOUT_WRITE_SQL + ")))"),
-        ("task_leases", "select count(*) from runtime_task_lease where owner_role=" + literal(role) +
+        ("task_leases", "select count(*) from runtime_task_lease where " + task_scope +
          " and state='LEASED'"),
-        ("quarantined_task_leases", "select count(*) from runtime_task_lease where owner_role=" + literal(role) +
+        ("quarantined_task_leases", "select count(*) from runtime_task_lease where " + task_scope +
          " and state='QUARANTINED'"),
     )
 

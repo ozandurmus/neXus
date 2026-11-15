@@ -74,6 +74,8 @@ public final class WorkerClaimLoop {
             BackupCapabilityIds.CP_MDS_EXPORT, BackupCapabilityIds.HTTPS_VENDOR_BACKUP,
             BackupCapabilityIds.RDW_CC_CONFIG_BACKUP, BackupCapabilityIds.ASA_CONFIG_BACKUP,
             BackupCapabilityIds.FGT_CONFIG_BACKUP, BackupCapabilityIds.CREDENTIAL_CANARY);
+    /** Every capability the general worker can claim, for the purpose-classification guard test. */
+    public static List<String> allCapabilityIds() { return ALL_CAPABILITY_IDS; }
     private List<String> eligibleCapabilityIds = claimCapabilities("general", false);
     public static List<String> claimCapabilities(String role, boolean fallback) {
         if ("policy".equals(role)) return fallback ? List.of() : List.of("cp_policy_collect", "pan_policy_collect");
@@ -330,8 +332,7 @@ public final class WorkerClaimLoop {
         if (com.securityexpert.nexus.ui2.persistence.JooqPanConfigSyncRepository.JOB_TYPE.equals(capability)) return "CONFIGURATION_WRITE";
         if (ASA_FAILOVER_READINESS.equals(capability)) return "FAILOVER_READINESS";
         return capability.contains("policy") ? "POLICY"
-            : capability.contains("backup") || capability.equals("cp_gaia_snapshot")
-            || capability.equals(BackupCapabilityIds.CREDENTIAL_CANARY) ? "BACKUP"
+            : capability.contains("backup") || BACKUP_CAPABILITY_IDS.contains(capability) ? "BACKUP"
             : capability.contains("configuration") ? "CONFIGURATION"
             : capability.contains("discovery") ? "DISCOVERY"
             : capability.contains("confirm") ? "ENROLLMENT"
