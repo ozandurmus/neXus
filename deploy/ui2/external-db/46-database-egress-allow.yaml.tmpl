@@ -1,0 +1,31 @@
+# OPTIONAL, external PostgreSQL only. Not applied by the deploy tooling; not part of the in-cluster setup.
+#
+# Why it exists: backup, policy and packet-analysis already carry egress policies that allow the in-cluster database
+# pod on 5432 and nothing else on that port. Pointing ui2_db_host at an external server would be refused for those
+# three pods. This policy is purely additive (allow only): it adds the external address for the database-using
+# workloads and removes nothing, so applying it cannot cut any existing connection.
+#
+# Fill EXTERNAL_DB_CIDR_SET_AT_DEPLOY with the database server address as /32 (or the DBA's network). The address is
+# deployment configuration and is never committed. service and worker have no egress policy and need nothing.
+# Rollback: kubectl -n ui2 delete networkpolicy ui2-db-external-egress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ui2-db-external-egress
+  namespace: ui2
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: nexus-ui2
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values: [service, worker, backup, policy, packet-analysis, migration]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: EXTERNAL_DB_CIDR_SET_AT_DEPLOY
+      ports:
+        - protocol: TCP
+          port: 5432

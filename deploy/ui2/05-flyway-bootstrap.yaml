@@ -6,6 +6,11 @@ metadata:
 spec:
   backoffLimit: 0
   template:
+    metadata:
+      # The database ingress policy (46-database-networkpolicy.yaml) admits this pod by this label.
+      labels:
+        app.kubernetes.io/part-of: nexus-ui2
+        app.kubernetes.io/component: migration
     spec:
       restartPolicy: Never
       securityContext:
