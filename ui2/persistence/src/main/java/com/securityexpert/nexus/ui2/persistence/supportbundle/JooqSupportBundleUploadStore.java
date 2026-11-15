@@ -108,14 +108,14 @@ public final class JooqSupportBundleUploadStore {
      * Records the key a destination presented. Returns true when the destination had a different key on record (the upload
      * then warns); a first sight is not a change. Never refuses anything.
      */
-    public boolean recordHostKey(String host, int port, String keyType, String fingerprintSha256) {
-        return tx.inTransaction(dsl -> {
+    public boolean recordHostKey(String actor, String host, int port, String keyType, String fingerprintSha256) {
+        return audited.inTransaction(actor, ACTION_UPLOAD, host + ":" + port, dsl -> {
             boolean otherKnown = !dsl.fetch("select 1 from support_bundle_upload_host_key where host = {0} and port = {1} "
                     + "and fingerprint_sha256 <> {2} limit 1", host, port, fingerprintSha256).isEmpty();
             boolean thisKnown = !dsl.fetch("select 1 from support_bundle_upload_host_key where host = {0} and port = {1} "
                     + "and fingerprint_sha256 = {2}", host, port, fingerprintSha256).isEmpty();
             dsl.execute("insert into support_bundle_upload_host_key(host, port, fingerprint_sha256, key_type) values ({0}, {1}, {2}, {3}) "
-                    + "on conflict (host, port, fingerprint_sha256) do update set last_seen_at = now()", host, port,
+                    + "on conflict on constraint uq_support_bundle_upload_host_key do update set last_seen_at = now()", host, port,
                     fingerprintSha256, keyType);
             return otherKnown && !thisKnown;
         });

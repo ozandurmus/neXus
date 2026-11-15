@@ -217,7 +217,7 @@ public final class SupportBundleUploadService {
                 sent.set(0);
                 Body body = new Body(plan, total, sent, sha);
                 try {
-                    TransferResult result = transfer.send(target, password, body, uploads::recordHostKey);
+                    TransferResult result = transfer.send(target, password, body, (h, p, t, f) -> uploads.recordHostKey(actor, h, p, t, f));
                     if (body.count != total) {
                         end(id, actor, "FAILED", body.count, total, sha, result.remoteStatus(), "LENGTH_MISMATCH",
                                 "The archive length changed between the two vault passes", result.hostKeyFingerprint(), result.hostKeyChanged(), attempts);

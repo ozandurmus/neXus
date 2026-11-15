@@ -24,6 +24,7 @@ import {
   requestSupportBundleDownloadTicket, startSupportBundleUpload, type DeviceSummary, type SupportBundleKindRow,
   type SupportBundleRequest, type SupportBundleUpload, type SupportBundleUploadDestination,
 } from "../auth/adminApi";
+import { PRODUCT_NAME } from "../brand/product";
 import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 import { StatePanel } from "../shell/States";
 import { StatusPill } from "../shell/StatusPill";
@@ -85,7 +86,7 @@ export function SupportBundlesScreen() {
   return (
     <ScreenRoot screenType="tool">
       <ScreenHeader title="Support bundles"
-        subtitle="Collect the files a vendor's support team usually asks for, then download them or send them to a vendor case. Nothing leaves neXus unless you start an upload." />
+        subtitle={`Collect the files a vendor's support team usually asks for, then download them or send them to a vendor case. Nothing leaves ${PRODUCT_NAME} unless you start an upload.`} />
       {error && <Alert severity="error" data-fact="bundle-error">{error}</Alert>}
       <NewRequest kinds={kinds} devices={devices} onDone={reload} />
       <Requests rows={rows} onChange={reload} />
@@ -254,7 +255,7 @@ function CleanupDialog({ request, onClose, onDone }: {
   return <Dialog open onClose={onClose} aria-labelledby="sb-clean-title">
     <DialogTitle id="sb-clean-title">Remove the leftover work directory</DialogTitle>
     <DialogContent>
-      <Alert severity="warning" sx={{ mb: 2 }}>neXus connects to {request.device_pseudonym} and removes the one work directory (and its archive) that this run
+      <Alert severity="warning" sx={{ mb: 2 }}>{PRODUCT_NAME} connects to {request.device_pseudonym} and removes the one work directory (and its archive) that this run
         created and recorded. It is the same removal the run itself performs; nothing else on the device is touched.</Alert>
       {failure && <Alert severity="error" data-fact="cleanup-error" sx={{ mb: 2 }}>{failure}</Alert>}
       <TextField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} fullWidth required disabled={busy} helperText="At least 8 characters. Audited." />
@@ -275,7 +276,7 @@ const UPLOAD_FIELDS: Record<string, { readonly user: string; readonly secret: st
   paloalto_scp: { user: "Case number (with leading zeros)", secret: "Case contact email", help: "The email address the case was opened under is the SCP password." },
   generic_sftp: { user: "User", secret: "Password", help: "Any SFTP server you are allowed to send this to. The host and port are audited." },
 };
-const EGRESS_NOTE = "The upload starts from the neXus host. If the connection fails, the bank firewall may need an opening for the destination.";
+const EGRESS_NOTE = `The upload starts from the ${PRODUCT_NAME} host. If the connection fails, the bank firewall may need an opening for the destination.`;
 const uploadSize = (u: SupportBundleUpload) => u.bytes_total ? `${sizeText(u.bytes_sent)} of ${sizeText(u.bytes_total)}` : sizeText(u.bytes_sent);
 
 function UploadDialog({ request, onClose }: { readonly request: SupportBundleRequest; readonly onClose: () => void }) {
@@ -339,7 +340,7 @@ function UploadDialog({ request, onClose }: { readonly request: SupportBundleReq
         </Stack>}
         {fields && <TextField label={fields.user} value={user} onChange={(e) => setUser(e.target.value)} disabled={busy || running} autoComplete="off" />}
         {fields && <TextField label={fields.secret} type="password" value={secret} onChange={(e) => setSecret(e.target.value)} disabled={busy || running}
-          autoComplete="new-password" helperText="Used for this upload only. neXus does not store it, log it or show it again." />}
+          autoComplete="new-password" helperText={`Used for this upload only. ${PRODUCT_NAME} does not store it, log it or show it again.`} />}
         <Box role="group" aria-label="Items to send">
           {stored.map((i) => <Box key={`${i.kind}-${i.ordinal}`}><FormControlLabel
             control={<Checkbox checked={picked.has(i.kind)} disabled={busy || running} onChange={() => {
