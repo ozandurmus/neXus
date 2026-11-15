@@ -5585,7 +5585,7 @@ gates:
     retry_rule: "none"
     max_frequency: "once per run, never retried"
     session_reuse_rule: "one session per run"
-    unsupported_behavior_ref: "rc file records the failure; APPROVED here (BW-2 transient artefact), built in a later lane (no executor uses it yet)"
+    unsupported_behavior_ref: "rc file records the failure; BW-2 transient artefact"
     secret_output_risk: "secret-bearing (collector archive)"
     safe_telemetry_fields: ["exitStatus"]
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_11_15_SUPPORT_BUNDLE_COLLECTION.md (cpdata_collector --run, PO approval relayed 2026-11-15)"
@@ -6081,6 +6081,23 @@ gates:
     safe_telemetry_fields: ["exitStatus"]
     source_document_pointer: "docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (C15); PO approval 2026-11-15 (PO record section 2)"
 
+  - gate_id: "cp_sb_poll_cpsdc"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; cat %s/cpsdc.rc"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "every 30 s until the cpdata_collector deadline (the device bound of 1800 s plus 60 s)"
+    session_reuse_rule: "one session per run"
+    unsupported_behavior_ref: "a missing file (still running) answers non-zero and is polled again; no answer three times in a row is logged"
+    secret_output_risk: "none"
+    safe_telemetry_fields: ["exitStatus"]
+    source_document_pointer: "docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (cpdata_collector rc read); PO approval 2026-11-15 about 22:30 (PO record section 2)"
+
   - gate_id: "cp_sb_list_workdir"
     vendor: "check_point"
     platform_role_scope: "cp_gaia_gateway"
@@ -6267,6 +6284,23 @@ gates:
     secret_output_risk: "none"
     safe_telemetry_fields: ["exitStatus"]
     source_document_pointer: "docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (C15); PO approval 2026-11-15 (PO record section 2)"
+
+  - gate_id: "cpm_sb_poll_cpsdc"
+    vendor: "check_point"
+    platform_role_scope: "cp_multi_domain_server"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; cat %s/cpsdc.rc"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "every 30 s until the cpdata_collector deadline (the device bound of 1800 s plus 60 s)"
+    session_reuse_rule: "one session per run"
+    unsupported_behavior_ref: "a missing file (still running) answers non-zero and is polled again; no answer three times in a row is logged"
+    secret_output_risk: "none"
+    safe_telemetry_fields: ["exitStatus"]
+    source_document_pointer: "docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (cpdata_collector rc read); PO approval 2026-11-15 about 22:30 (PO record section 2)"
 
   - gate_id: "cpm_sb_list_workdir"
     vendor: "check_point"

@@ -556,29 +556,26 @@ public final class CpSupportBundleJobExecutor {
         if (started.completed() && started.exit() != 0) return HeavyEnd.failed("FAILED", "START_REFUSED", null);
 
         Integer rc = null;
-        if (kind == SupportBundleKind.CP_CPDATA_COLLECTOR) {
-            // The approved C15 reads hcp.rc and cpinfo.rc only: cpsdc.rc has no approved poll. The tool is bounded on the device
-            // by "timeout 1800", so the run waits that long and then lists the directory once (C16).
-            Duration waited = Duration.ZERO, total = CpSupportBundleHeavy.CPDATA_DEVICE_TIMEOUT.plusSeconds(60);
-            while (waited.compareTo(total) < 0) {
-                if (!pause(CpSupportBundleHeavy.POLL_INTERVAL)) return HeavyEnd.leftOnDevice("OUTCOME_UNKNOWN", "INTERRUPTED", null);
-                waited = waited.plus(CpSupportBundleHeavy.POLL_INTERVAL);
-            }
-        } else {
-            Duration elapsed = Duration.ZERO;
-            int unanswered = 0;
-            while (rc == null && elapsed.compareTo(CpSupportBundleHeavy.HEAVY_DEADLINE) < 0) {
-                if (!pause(CpSupportBundleHeavy.POLL_INTERVAL)) return HeavyEnd.leftOnDevice("OUTCOME_UNKNOWN", "INTERRUPTED", null);
-                elapsed = elapsed.plus(CpSupportBundleHeavy.POLL_INTERVAL);
-                Sent poll = sendStep(run, Step.POLL_RC, CpSupportBundleHeavy.renderPoll(dir, tool), 4096);
-                if (poll.completed() && poll.exit() == 0 && poll.output().strip().matches("[0-9]{1,3}")) rc = Integer.parseInt(poll.output().strip());
-                else unanswered = poll.completed() ? 0 : unanswered + 1;
-            }
-            run.precheck.put("poll_unanswered_streak_" + item.ordinal(), unanswered);
-            if (rc == null) return HeavyEnd.leftOnDevice("OUTCOME_UNKNOWN", "NO_EXIT_CODE_BY_DEADLINE", "work directory left on the device");
-            if (rc == 127) return HeavyEnd.failed("UNSUPPORTED", "TOOL_NOT_INSTALLED", null);
-            if (rc != 0) return HeavyEnd.failed("FAILED", "TOOL_EXIT_" + rc, null);
+        boolean cpdata = kind == SupportBundleKind.CP_CPDATA_COLLECTOR;
+        // cpdata_collector is bounded on the device by "timeout 1800", so its poll deadline is that plus one minute; HCP and cpinfo use the 2 hour deadline.
+        Duration deadline = cpdata ? CpSupportBundleHeavy.CPDATA_DEVICE_TIMEOUT.plusSeconds(60) : CpSupportBundleHeavy.HEAVY_DEADLINE;
+        Duration elapsed = Duration.ZERO;
+        int unanswered = 0;
+        while (rc == null && elapsed.compareTo(deadline) < 0) {
+            if (!pause(CpSupportBundleHeavy.POLL_INTERVAL)) return HeavyEnd.leftOnDevice("OUTCOME_UNKNOWN", "INTERRUPTED", null);
+            elapsed = elapsed.plus(CpSupportBundleHeavy.POLL_INTERVAL);
+            Sent poll = sendStep(run, cpdata ? Step.POLL_CPSDC : Step.POLL_RC,
+                    cpdata ? CpSupportBundleHeavy.renderPollCpsdc(dir) : CpSupportBundleHeavy.renderPoll(dir, tool), 4096);
+            if (poll.completed() && poll.exit() == 0 && poll.output().strip().matches("[0-9]{1,3}")) rc = Integer.parseInt(poll.output().strip());
+            else unanswered = poll.completed() ? 0 : unanswered + 1;
         }
+        run.precheck.put("poll_unanswered_streak_" + item.ordinal(), unanswered);
+        if (rc == null) {
+            if (cpdata) return HeavyEnd.failed("TIMED_OUT", "NO_EXIT_CODE_BY_DEADLINE", "cpsdc.rc not readable after the device timeout");
+            return HeavyEnd.leftOnDevice("OUTCOME_UNKNOWN", "NO_EXIT_CODE_BY_DEADLINE", "work directory left on the device");
+        }
+        if (rc == 127) return HeavyEnd.failed("UNSUPPORTED", "TOOL_NOT_INSTALLED", null);
+        if (rc != 0) return HeavyEnd.failed("FAILED", "TOOL_EXIT_" + rc, null);
 
         if (kind == SupportBundleKind.CP_HCP_RUN) {
             // The report HCP just wrote is the newest listed one; it is copied into the work directory by its listed name (C6, C11).
@@ -591,8 +588,8 @@ public final class CpSupportBundleJobExecutor {
         Sent listed = sendStep(run, Step.LIST_WORKDIR, CpSupportBundleHeavy.render(Step.LIST_WORKDIR, dir, null, null),
                 CpSupportBundle.COMMAND_MAX_BYTES);
         if (listed.failure() != null || listed.exit() != 0 || listed.output().isBlank()) return HeavyEnd.failed("FAILED", "WORKDIR_LIST_FAILED", null);
-        if (kind == SupportBundleKind.CP_CPDATA_COLLECTOR && !(listed.output().contains("cpsdc.rc") && listed.output().contains("cpsdc.tgz"))) {
-            return HeavyEnd.failed("TIMED_OUT", "NO_CPDATA_ARCHIVE", "cpsdc.rc and cpsdc.tgz not both listed after the device timeout");
+        if (kind == SupportBundleKind.CP_CPDATA_COLLECTOR && !listed.output().contains("cpsdc.tgz")) {
+            return HeavyEnd.failed("FAILED", "NO_CPDATA_ARCHIVE", "cpsdc.tgz not listed although cpsdc.rc reported success");
         }
         Sent bundle = sendStep(run, Step.BUNDLE, CpSupportBundleHeavy.render(Step.BUNDLE, dir, null, null), 4096);
         if (bundle.uncertain()) return HeavyEnd.leftOnDevice("OUTCOME_UNKNOWN", "BUNDLE_UNCERTAIN", null);

@@ -63,6 +63,7 @@ class CpSupportBundleHeavyGateTest {
         assertEquals(P + "cpdata_collector --list", Step.CPDATA_LIST.template());
         assertEquals(P + "cd %1$s && setsid nohup bash --noprofile --norc -c \"timeout 1800 cpdata_collector --run -p %1$s/cpsdc.tgz -t 3 -m 100 > %1$s/cpsdc.log 2>&1; echo \\$? > %1$s/cpsdc.rc\" </dev/null >/dev/null 2>&1 &",
                 Step.CPDATA_RUN.template());
+        assertEquals(P + "cat %s/cpsdc.rc", Step.POLL_CPSDC.template());
         assertEquals("sftp get of %s.tgz", CpSupportBundleHeavy.SFTP_KEY);
         for (Step step : Step.values()) {
             assertTrue(step.template().startsWith(P), step.name());
@@ -101,7 +102,7 @@ class CpSupportBundleHeavyGateTest {
         // the write rows are BW-2 recovery-write, the polls, listings and digests are reads
         for (Step step : List.of(Step.MKDIR, Step.HCP_START, Step.HCP_START_VS, Step.COPY_HCP, Step.CPINFO_START, Step.CPINFO_START_SMS,
                 Step.CPINFO_START_VS, Step.BUNDLE, Step.REMOVE, Step.CPDATA_RUN)) assertEquals(ActionClass.CLASS_1_RECOVERY_WRITE, step.actionClass(), step.name());
-        for (Step step : List.of(Step.POLL_RC, Step.LIST_WORKDIR, Step.SHA256, Step.CPDATA_LIST)) assertEquals(ActionClass.CLASS_0_READ, step.actionClass(), step.name());
+        for (Step step : List.of(Step.POLL_RC, Step.POLL_CPSDC, Step.LIST_WORKDIR, Step.SHA256, Step.CPDATA_LIST)) assertEquals(ActionClass.CLASS_0_READ, step.actionClass(), step.name());
         assertTrue(row("cp_sb_cpinfo_start").secretOutputRisk().contains("secret-bearing"));
         assertTrue(row("cp_sb_bundle").secretOutputRisk().contains("secret-bearing"));
         assertTrue(row("cp_sb_sftp_get_bundle").secretOutputRisk().contains("secret-bearing"));
@@ -148,7 +149,7 @@ class CpSupportBundleHeavyGateTest {
     void v234SeedsTheSameRowsAsTheFixtureAndEarlierMigrationsAreUntouched() throws IOException {
         String sql = Files.readString(Path.of("../service/src/main/resources/db/migration/V234__support_bundle_cp_heavy.sql"));
         assertTrue(sql.contains("set_config('app.actor_fingerprint'") && sql.contains("ON CONFLICT (gate_id) DO NOTHING"));
-        List<GateRow> s6 = fixture().stream().filter(r -> r.gateId().startsWith("cpm_sb_") || (r.gateId().startsWith("cp_sb_")
+        List<GateRow> s6 = fixture().stream().filter(r -> !r.gateId().endsWith("_poll_cpsdc")).filter(r -> r.gateId().startsWith("cpm_sb_") || (r.gateId().startsWith("cp_sb_")
                 && List.of("mkdir", "hcp_start", "hcp_start_vs", "copy_hcp", "cpinfo_start", "cpinfo_start_sms", "cpinfo_start_vs", "poll_rc",
                         "list_workdir", "bundle", "sha256", "sftp_get_bundle", "remove_workdir").contains(r.gateId().substring(6)))).toList();
         assertEquals(30, s6.size());
@@ -165,6 +166,23 @@ class CpSupportBundleHeavyGateTest {
             assertFalse(v232.contains("('" + r.gateId() + "'"), r.gateId());
         }
         assertTrue(sql.contains("'cpdata_collector_run'"));
+    }
+
+    @Test
+    void v235SeedsTheApprovedCpsdcPollForBothScopesAndNothingElse() throws IOException {
+        String sql = Files.readString(Path.of("../service/src/main/resources/db/migration/V235__support_bundle_cpsdc_poll.sql"));
+        assertTrue(sql.contains("set_config('app.actor_fingerprint'") && sql.contains("ON CONFLICT (gate_id) DO NOTHING"));
+        assertEquals(2, sql.split("'SIGNED_OFF'", -1).length - 1);
+        for (String id : List.of("cp_sb_poll_cpsdc", "cpm_sb_poll_cpsdc")) {
+            GateRow r = row(id);
+            assertEquals(P + "cat %s/cpsdc.rc", r.canonicalCommandKey());
+            assertEquals(ActionClass.CLASS_0_READ, r.actionClass());
+            assertEquals(30, r.timeoutS());
+            assertTrue(sql.contains("('" + id + "', 'check_point', '" + r.platformRoleScope() + "', 'expert', 'SSH_EXEC',\n     '"
+                    + r.canonicalCommandKey() + "',\n     'read', 'SIGNED_OFF', 30, 'none',"), id);
+        }
+        // the log tail literal was not approved
+        assertFalse(sql.contains("cpsdc.log"));
     }
 
     @Test
