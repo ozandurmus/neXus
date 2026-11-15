@@ -11,3 +11,5 @@ Title (full): Check Point discovery never records the management plane's own con
 Target (full): MgmtCliEnumerationAdapter candidate construction; discovery_candidate.connection_state
 
 2026-11-14 backlog truth: still open (P3, size S). Today: Management-plane connection state is not shown for Check Point candidates. Evidence: MgmtCliEnumerationAdapter.java:285 passes Optional.empty(); live: 0 of ~5600 CP candidates have connection_state
+
+2026-11-15 10:00 backlog refresh: In the ship queue (batches b4..b9, not yet on main). Commit 'Carry the Check Point management connection state into discovery candidates' (MgmtCliEnumerationAdapter, test added).
