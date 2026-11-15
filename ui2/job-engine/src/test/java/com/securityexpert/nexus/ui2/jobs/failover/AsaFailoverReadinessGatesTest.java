@@ -15,7 +15,7 @@ import com.securityexpert.nexus.ui2.platform.ActionClass;
 
 /**
  * PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS.md section 1: four exact literals, read-only, inserted DRAFTED
- * by V212 and signed off by V215 after the Product Owner's approval of 2026-11-14
+ * by V212 and signed off by V222 after the Product Owner's approval of 2026-11-14
  * (PO_DECISION_RECORD_2026_11_14_ASA_FAILOVER_READINESS_READS.md); the one-time measurement rows of V210 stay as they are.
  */
 class AsaFailoverReadinessGatesTest {

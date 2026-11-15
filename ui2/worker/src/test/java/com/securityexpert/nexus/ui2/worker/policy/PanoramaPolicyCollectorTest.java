@@ -115,7 +115,7 @@ class PanoramaPolicyCollectorTest {
     // "no hit metrics" path, and the signed cases above map it to SIGNED_OFF explicitly.
     private final GateRegistryPort gates = key -> GateRegistryFixtureLoader.loadFromStream(getClass()
             .getResourceAsStream("/capabilities/gate_registry_fixture.yaml")).stream().filter(row -> row.key().equals(key))
-            // The optional predefined App-ID read (V212) is left out here so these cases keep their exact call sequence;
+            // The optional predefined App-ID read (V221) is left out here so these cases keep their exact call sequence;
             // PanoramaPolicyCollectorTest#predefinedApplications* cover it.
             .filter(row -> !row.gateId().equals("pan_policy_predefined_applications"))
             .map(r -> r.gateId().equals("pan_policy_rule_hit_count")
@@ -445,7 +445,7 @@ class PanoramaPolicyCollectorTest {
         }).when(transport).xmlApiCallStreaming(any(), any(), any(), any());
         return new PanoramaPolicyCollector(transport, gates, ref -> new PanCredentialMaterial("synthetic-user", password), repository);
     }
-    /** The fixture's gate rows as they are, the predefined App-ID read signed off (V212). */
+    /** The fixture's gate rows as they are, the predefined App-ID read signed off (V221). */
     private final GateRegistryPort allGates = key -> GateRegistryFixtureLoader.loadFromStream(getClass()
             .getResourceAsStream("/capabilities/gate_registry_fixture.yaml")).stream().filter(row -> row.key().equals(key))
             .filter(row -> !row.gateId().equals("pan_policy_rule_hit_count")).toList();

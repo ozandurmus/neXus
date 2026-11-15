@@ -161,7 +161,7 @@ public class LocalAuthenticationConfiguration {
         return new PasswordChangeService(localCredentialsRepository, localPasswordPolicyRepository);
     }
 
-    /** The configurable local password policy's storage (off by default; V2xx). */
+    /** The configurable local password policy's storage (off by default; V223). */
     @Bean
     public com.securityexpert.nexus.ui2.persistence.identity.LocalPasswordPolicyRepository localPasswordPolicyRepository(
             TransactionBoundary transactionBoundary) {

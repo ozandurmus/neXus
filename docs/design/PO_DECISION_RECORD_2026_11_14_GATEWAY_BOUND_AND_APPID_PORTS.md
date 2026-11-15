@@ -16,7 +16,7 @@ largest stored policies to Check Point gateway/cluster objects and 4,928 to Palo
 1. **Gateway bound (D-1).** Parse the addresses from the existing `show-gateways-and-servers details-level full` read
    (gate `cp_policy_collect`, parse-scope extension, no new command) and use them only as an upper bound to pass an
    earlier rule over. Semantics: `PATH_ANALYSIS_VENDOR_SEMANTICS_AMENDMENT_2026_11_13.md` section G1.
-2. **App-ID default ports.** One new CLASS_0 Panorama read, gate `pan_policy_predefined_applications` (V212):
+2. **App-ID default ports.** One new CLASS_0 Panorama read, gate `pan_policy_predefined_applications` (V221):
    - literal `type=config&action=get&xpath=/config/predefined/application`;
    - one call per policy collection on the same Panorama session;
    - timeout 120 s, no retry, 64 MB cap;
