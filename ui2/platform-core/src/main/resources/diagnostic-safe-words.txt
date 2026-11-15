@@ -1,283 +1,752 @@
+--block-size
 --help
+--time-style
 --version
 -4
 -6
 -a
 -an
 -c
+-f
+-h
+-l
+-la
 -lc
+-lh
+-lt
 -n
+-p
+-r
+-s
+-sh
+-t
 -v
+1k-blocks
 a
+a an the this that these those there here it its it's he she they them their we our you your i me my
+abbreviation
+abbreviations
+about
+above
 absent
+accept
+accept accepted accepting reject rejected rejecting drop dropped dropping allow allowed allowing deny denied
+accepted
+across
 active
 addr
 address
 addresses
 admin
 administrative
+adtlog
 after
+again
+against
+ago
+ah
+alarm
+alarms
+alert
+alive
 all
+all any each every some none both either neither other another such same more most less least few many much several
+allow
 allowed
+almost
+along
 already
 also
+although
+always
+am
+am pm utc gmt
+among
 an
 and
 another
+anti-virus anti-bot antibot ips ids intrusion prevention detection inspection deep inspect inspected
 any
 anycast
+appear
+appeared
+appears
 appliance
+apr
+april
+archive
+archived
+archives
+archiving
 are
 argument
 arguments
+around
 arp
 as
+assign assigned assigning release released releasing lock locked locking unlock unlocked hold held
 at
+attach attached detach detached bind bound binding listen listening lookup resolve resolved resolving
+attention
+audit audited auditing compliance violation violations alert alarm alarms incident incidents
+auditor
+aug
+august
+auth authentication authorization identity identities sso mfa otp captive portal
 auto
+autoneg
+auxiliary
+avail
 availability
 available
 average
+avg
+b kb mb gb tb kib mib gib tib bps kbps mbps gbps pps ms us ns sec secs min mins hr hrs
 backup
+backup-log-server
+backup-log-servers
 backup-settings-log
 bad
+bak
 bash
 bcast
 be
+became
+because
+become
+becomes
 been
 before
+before after since until till via per as than so too very just only also again still yet already ever never always
+behind
 being
+below
+besides
 between
+beyond
+bfd
+bgp
+bgp ospf ospfv3 rip pim igmp mld vrrp hsrp lacp lldp cdp stp mstp bfd mpls nat snat dnat pat napt
+big
+bin
+binary
+bios
+blade
+blades
+block
+block blocked blocking pass passed passing match matched matching apply applied applying commit committed
+blocked
+blocks
+bond
 boot
 both
 brd
+bridge
 broadcast
+broadcast multicast unicast anycast loopback localhost lo any all none
+btrfs
 buffer
+buffered
 buffers
 build
+build release revision patch hotfix take jumbo update updates image images package packages
 but
 by
 byte
 bytes
+bz2
+ca
 cache
 cached
+call
+called
 can
 cancelled
 cannot
+cannot unable could not because due while during after before since without
 capacity
 carrier
 ccp
+cert
+certificate
+certificate ca crl ocsp pki x509 csr fingerprint trust trusted untrusted verify verification signature
+certificates
+certs
+cest
+cet
+cfg
+cgroup
+change
+changed
+changes
+changing
+chassis
 check
 checkpoint
+checkpoint check point cp cpd cpm cpwd fwd fwm fwk fw1 vpnd vpnk cpca cprid cprid_d cpstat cpview cpinfo
+cifs
+cipher
+ciphers
+cleanup stealth noise implied implicit explicit catch-all catchall default-deny intrazone interzone intrazone-default
+clear
+cleared
+client
+clients
 clish
+close
 closed
+closing
 cluster
+cluster clusters node nodes peer peers local remote internal external public private default custom
+clusters
 clusterxl
 collisions
 command
 commands
+commit commit-all push-scope candidate running-config saved-config
+committing push pushed pull pulled sync synced syncing synchronize synchronized synchronizing synchronization
 complete
 completed
+compress
+compressed
+compression
+conf
+config configuration configurations setting settings profile profiles template templates
 configuration
 configure
 configured
 configuring
+connect
 connected
+connecting
 connection
 connections
+contain
+contained
+contains
 context
 contexts
+contract
+contracts
+copy copied compress compressed decompress encrypt encrypted encrypting decrypt decrypted decrypting
 correct
 could
 count
+count counter counters total number numbers rate rates percent ratio threshold maximum minimum max min avg
 counter
 counters
+cpbackup
+cpbak
+cpd
+cpdir
 cphaprob
+cphaprob cphastop cphastart cphaconf clusterxl ccp sync pnote pnotes ha haproxy vsx vs vsid vsys mds mlm cma
+cpinfo
+cpstat
+cpsuite
+cpsuite-r80.20
+cpsuite-r80.30
+cpsuite-r80.40
+cpsuite-r81
+cpsuite-r81.10
+cpsuite-r81.20
 cpu
+cpu cpus irq irqs softirq interrupt interrupts nic nics napi ring rx tx rxq txq queue affinity
+cpview
+cpwd
+cpwd_admin
+crash crashed crashing core dump dumped dumping panic hang hung stuck respawn respawned spawn spawned
+create
+created
+creating
 critical
+crl
+csv
 current
+current previous next pending ongoing running stopped normal abnormal ok good bad wrong correct
 currently
+custom
+daemon
+daemons
+daily
 data
+database db query queries result results response responses request requests reply answer
+dataplane management-plane mp dp pa-220 pa-440 pa-820 pa-850 pa-3220 pa-3410 pa-5220
 date
 day
 days
+dead
 debug
+dec
+december
+decimal
+decrypt
+decrypted
 default
+defined
+degraded
 delay
+delete
+deleted
+deletion
 denied
+deny
+description
 destination
 detail
 details
+detect detected detecting monitor monitored monitoring poll polled polling probe probed probing
 detected
 dev
 device
+devices
+devtmpfs
 dhcp
+dhcpd named resolver nameserver resolv domain domains realm
 diagnose
+diagnostic
+diagnostics
+dictionary
 did
+different
+dir
+directories
+directory
+dirs
 disable
 disabled
+disconnect
 disconnected
+disconnecting reconnect reconnected reconnecting load loads loaded loading unload unloaded reload reloaded reloading
 disk
+disks
 display
+displayed
+displays
+dns
 do
 does
+doing
 done
 down
 drop
 dropped
 drops
+dscp
+dst
 duplex
 duration
+during
 dynamic
 each
+edition
+edt
 effective-running
+egress
+elg
+emergency
 empty
 enable
+enable enables enabled enabling disable disables disabled disabling initialize initialized initializing init
 enabled
+enabled disabled on off yes no auto manual automatic dynamic static fixed
 encap
 encapsulation
+encrypt
+encrypted
+endpoint
+endpoints
+enough
 enter
 entries
 entry
+err
 error
+error errors warning warnings warn info information notice debug trace critical crit alert alerts emergency emerg
 errors
+esp
+est
 established
+etc
 eth
 ether
 ethernet
+ever
 every
 example
+exclude
+excluded
+excludes
 execute
+executed
+executing
+execution
 exist
 exists
 exit
+exit exits exited exiting kill killed terminate terminated terminating timeout timed expire expired expiring
 expected
 expert
+expired
+ext2
+ext3
+ext4
+external
+fail
 failed
 failure
+failures
 false
+fan
+fans
+fast
 fatal
+fatal severity level levels high medium low informational message messages event events status state states
+feb
+february
+few
+fib
+file
+file files directory directories path paths folder name names value values key keys entry entries record records
+filename
+filenames
+filepath
+files
 filesystem
+filesystem fs ext3 ext4 xfs tmpfs lvm raid partition partitions inode inodes mount mountpoint
+filesystems
 filter
 filters
+final
+find
+finds
 finished
 firewall
+firewall firewalls fw security secure insecure threat threats attack attacks attacker malware virus antivirus
 firewalls
 firmware
 first
 flags
+flow
+flows
+flush
+flush flushed flushing clear cleared clearing purge purged rotate rotated rotating truncate truncated
+flushed
 fmnetwork
+folder
+folders
 for
 forever
 fortigate
 fortimanager
 fortinet
+forward
+forwarded
 found
 frame
+frames
 free
+freeze
+fri
+friday
 from
+ftp
 full
+further
+furthermore
 fw
+fw1
+fw1logs
+fwd
+fwdir
+fwk
+fwm
 gaia
 gateway
+gateways
+gave
 genmask
 get
+get gets got set sets setting reset resets update updates updated updating upgrade upgraded upgrading install
+gets
+getting
+gid
+gigabyte
+gigabytes
+give
+given
+gives
+giving
 global
+globalprotect gp-portal gp-gateway hip userid user-id app-id content-id wildfire
+gmt
 good
+got
+gre
 group
+gz
 ha
+ha1 ha2 ha3 ha-1 ha-2 path-monitoring link-monitoring heartbeat hello preemption
 had
 half
 hardware
 has
 have
+having
 health
 healthy
 help
+hence
 here
+hexadecimal
 high
+home
+hoplimit
 host
 hostname
+hosts
+hotfix
 hour
+hourly
 hours
 how
+however
+http
+https
 hwaddr
 hwaddress
 hwtype
 icmp
+icmp6
 icmpv6
 id
 identifier
+identity-awareness pdp pep cpsemd cpsead cpsead fwssd in.asessiond in.emaild rad_admin dlpu mpdaemon
 idle
 ids
 if
 iface
 ifconfig
+ifree
+igmp
+ignore
+ignore ignored ignoring continue continued continuing begin began begun ending end ended ends
+ignored
+ike
 in
+inbound
+include
+included
+includes
+including
 incomplete
 incorrect
+index
+indexed
+indexes
+indexing
+indices
 inet
 inet6
 info
 information
+informational
+ingress
+init
+initial
+inodes
 input
+inputs
+inside outside untrust untrusted dmz wan lan guest guests wireless wifi voice inet internet extranet intranet
+inspect
+inspected
+installs installed installing uninstall uninstalled create creates created creating delete deletes deleted deleting
+instead
 interface
+interface interfaces port ports link links address addresses network networks subnet subnets mask netmask
+interface-active interface-down problem notification
 interfaces
+internal
 internet
+interzone-default predefined builtin built-in
 into
 invalid
+invalid valid unknown unexpected unsupported unavailable available busy idle full empty partial
 ip
+ip ipv4 ipv6 tcp udp icmp icmpv6 arp rarp dns dhcp ntp snmp syslog smtp http https ftp ftps sftp ssh scp telnet
 iproute
+ipsec
 ipv4
 ipv6
 is
+is are was were be been being am has have had having do does did done doing can cannot could should would will
+ist
 it
 its
+iuse
+iused
+jan
+jan feb mar apr may jun jul aug sep oct nov dec january february march april june july august september
+january
+jitter
+journald sshd httpd nginx apache java jvm perl
+json
+jst
+jul
+july
+jumbo
+jun
+june
+just
+keep
+keeping
+keeps
+kept
 kernel
+key
+keys
+kilobyte
+kilobytes
+lacp
+lag
+large
 last
+latency
 lc
+ldap
+ldap ldaps radius tacacs kerberos ntlm saml oauth tls ssl dtls ike ikev1 ikev2 ipsec esp ah gre vxlan vlan vlans
+ldaps
+least
+less
+let
+lets
+lib
+lib64
+license
+license licenses contract contracts subscription feature features blade blades
+licenses
 limit
 limits
 link
 link-local
+link-local global unique site prefix prefixes cidr gateway nexthop next-hop hop hops metric metrics
 linkdown
 links
 linux
+linux unix kernel gaia expert clish bash sh shell cron crond systemd init sysctl udev rsyslog rsyslogd syslogd
 list
+listed
 listen
 listening
+lists
 lladdr
+lldp
 load
 local
+locally
+lock
 log
+log logs show shows shown display displayed print printed report reported reporting notify notified notification
+log-server
+log-servers
+log_connection
+logaccount_ptr
+logging
 logical
 login
+login logged logging logout logon logoff authenticate authenticated authenticating authorize authorized
+logptr
+logs
+long
 loopback
+lost
+low
 lower_up
 lowercase
+lv_current
+lv_log
+lv_root
 mac
+mac mtu mss ttl tos dscp qos ecn syn ack fin rst psh urg window seq sequence
+made
+main
+make
+makes
+making
 management
 manager
+many
+mapper
+mar
+march
 mask
+masked
+masking
 master
+match
+matched
+matches
+matching
+max
 maximum
 may
+mdsdir
+mdt
+meanwhile
+media
+medium
+megabyte
+megabytes
+mem
 member
 members
 memory
+memory cpu cpus core cores disk disks storage space usage load average utilization capacity size bytes
 message
 messages
 metric
+mgmtsrvr devsrvr useridd sslmgr authd logrcvr routed ikemgr keymgr satd dagger dha
+microsecond
+microseconds
+might
+millisecond
+milliseconds
+min
 minimum
 minute
 minutes
 missing
+mnt
 mode
 model
+modified
+modify
+module
+module modules component components function functions handler handlers kernel driver drivers library
+modules
+mon
+monday
+month
+monthly
+months
+more
+moreover
+most
+mount mounted unmount unmounted boot booted booting reboot rebooted rebooting shutdown halt halted
+mounted
+msk
+mss
+mst
 mtu
 multicast
 must
 n
 name
+nat
+ndp
+need
+needed
+needs
 neigh
 neighbor
 neighbors
@@ -286,42 +755,102 @@ neighbours
 netmask
 netstat
 network
+networks
+never
+nevertheless
 new
+new old older newer latest initial final main global general specific generic
 next
 next-hop
 nexthop
+nfs
 no
 no-carrier
+nobody
+node
+nodes
 none
+nonetheless
 normal
 not
 notice
+nov
+november
 now
+ntp
 null
 number
+numbers
+numeric
+ocsp
+oct
+octal
+october
+october november december mon tue wed thu fri sat sun monday tuesday wednesday thursday friday saturday sunday
 of
+of on in at to from by for with without within into onto upon over under above below between among through during
 off
+often
 ok
+okay
 old
 on
+once
+one two three four five six seven eight nine ten zero null nil none true false
 only
+onto
+oom oom-killer killer swap swapper kswapd paging page pages segfault segmentation fault traceback stack exception
 open
+open opens opened opening close closes closed closing connect connects connected connecting disconnect disconnected
+opened
+opening
 oper
 operational
+operator
+opt
 option
 options
 or
+ordinary
+orig
+os
+ospf
+ospfv2
+ospfv3
 other
+others
+otherwise
+out
+outbound
 output
+outputs
+over
+overall
 overruns
 packet
+packet packets frame frames segment segments datagram datagrams payload header headers checksum
 packets
 packets-per-second
+paloalto palo alto pan panos pan-os panorama vsys1 vsys2 shared device-group template-stack
 pan-os
 panos
 parameter
 parameters
+parameters argument arguments option options flag flags mode modes type types kind class version versions
+parse parsed parsing generate generated generating save saved saving store stored storing fetch fetched
+partition
+partitions
+pass
+passed
 passive
+password passwords credential credentials certificate certificates cert certs key keys token tokens secret
+patch
+path
+paths
+pattern
+patterns
+pdt
+peak
 peer
 peers
 pending
@@ -329,14 +858,27 @@ permanent
 permission
 permissions
 physical
+pid
+pim
 platform
 please
+plugin
+plugins
+pnote
 pnotes
 point
 pointopoint
 policies
 policy
+policy policies rule rules rulebase layer layers section sections object network-object zone zones
+policy-installation install-policy installation installed fetch fetchlocal fetchpolicy
+port
+ports
+power
+ppid
 preferred_lft
+prefix
+prefixes
 present
 previous
 primary
@@ -344,6 +886,7 @@ print
 probe
 problem
 problems
+proc
 process
 processes
 processing
@@ -351,74 +894,217 @@ promiscuous
 proto
 protocol
 protocols
+provide
+provided
+provides
+providing
+proxy forward reverse transparent tproxy redirect redirected redirection
+pst
+psu
+ptr
+pts
+purge
+purged
 qdisc
 qlen
 queue
 queued
 queues
+quite
+r80
+r80 r81 r82 r80.40 r81.10 r81.20 r82.10 jhf jumbo cpuse da cdt
+r80.20
+r80.30
+r80.40
+r81
+r81.10
+r81.20
+radius
+ram dimm ecc nvram flash ssd hdd raid controller
+ran
 range
+rate
+rates
+rather
 rcv
+reach
+reach reached reaching exceed exceeded exceeding limit limited limiting allocate allocated allocation free freed
 reachable
+reached
+reaching
+read
+read reads reading write writes writing wrote written send sends sent sending receive receives received receiving
+readable
+reading
 ready
 reason
+reason cause code codes signal signals errno exit status return returned value
 receive
 received
+receiving
+reconnect
+reconnected
+recover recovered recovering restore restored restoring backup backups collect collected collecting
 refcnt
+refresh
+refreshed
 refs
+register registered registering unregister unregistered fail fails failed failing failure failures succeed succeeded
+reject
 rejected
 release
+reload
+reloaded
+remain
+remained
+remains
 remote
+remove
+remove removes removed removing add adds added adding change changes changed changing modify modified modifying
+removed
+removing
+report
+reported
+reporting
+reports
+require
 required
+requires
+requiring
 reset
+respond responded responding reply replied request requested requesting require required requires
+restart
+restarted
 result
 results
+retention
+retried
 retries
 retry
+retry retries retrying retried wait waiting waited check checks checked checking verify verified verifying
 return
 returned
 revision
+revoked
+rib
+rip
 role
 roles
+root
+rootfs
+rotate
+rotated
+rotation
+rotations
 route
+route routes routing router table neighbor neighbors neighbour session sessions connection connections
+router
 routes
 routing
+rsa dsa ecdsa ed25519 dh ecdh pfs prf group14 group19 group20 phase phase1 phase2 sa sas spi
+rss
 rule
+rulebase
 rules
 run
 running
+runs
 rx
+same
+sandbox emulation extraction threatcloud reputation signature signatures protections protection
+sat
+saturday
+sbin
+scan scanned scanning trigger triggered triggering schedule scheduled scheduling queue queued queuing
+scheme
+schemes
 scope
+scp
+sctp
+search
+searched
 second
 secondary
 seconds
 security
+seem
+seemed
+seems
+segment
+segments
 selected
 send
+sending
+sensor
+sensors
 sent
+sep
+sept
+september
 serial
+serials
+server
+servers
 service
+service services daemon daemons process processes thread threads task tasks job jobs worker workers
 services
 session
 sessions
 set
+sets
 setting
 settings
+sftp
 sh
+shall
+shall may might must not no nor yes ok okay and or but if then else when while where which who whom whose what why how
 shell
+short
 should
 show
+showed
+showing
+shown
+shows
+sic sxl securexl corexl cores instance instances fwaccel sim affinity dynamic-dispatcher dispatcher
+sign signed signing negotiate negotiated negotiating establish established establishing initiate initiated
+since
 size
+size length offset limit index id ids uid gid pid ppid tid sid
+sizes
+skip
+skipped
 slave
+slow
+small
+smartconsole smartcenter smartevent smartlog smartview management mgmt sms log-server logserver
+snmp
+so
+sock
+socket sockets channel channels tunnel tunnels stream streams buffer buffers queue queues pool pools
 software
 some
+sometimes
 source
 sources
+space
 specified
 speed
+spike spike-detective cpu-spike fwk_dev kiss ld cpas
+spike_detective
+spoof spoofing spoofed scan scans flood floods ddos dos syn-flood brute force
 src
+src dst source destination sport dport inbound outbound ingress egress incoming outgoing direction
+srv
+ssh
+ssl
 stale
+standard
+standard corporate office branch datacenter dc mgmt-zone management-zone l3-trust l3-untrust
 standby
 start
+start end begin first last top bottom head tail
+start starts started starting stop stops stopped stopping restart restarts restarted restarting run runs running ran
 started
 starting
 stat
@@ -428,16 +1114,38 @@ static
 statistic
 statistics
 status
+still
 stop
 stopped
 stopping
+storage
+subnet
+subnets
+succeeded
 success
+success failure succeeded failed denied granted allowed blocked dropped accepted rejected
+success successful successfully complete completed completing finish finished finishing abort aborted aborting
 successful
 successfully
 such
+suffix
+suffixes
+sum
+sun
+sunday
+supply
+support
 supported
+supporting
+supports
+survive
+survived
+survives
+swap
 switch
+switch switched switching fall fallback failover failback takeover elect elected election
 switches
+swp
 sync
 synchronised
 synchronization
@@ -445,12 +1153,31 @@ synchronized
 synchronizing
 syncstat
 syntax
+sys
+sysfs
+syslog
 system
+system config general hw tunnel-mgmt routing satd port vpn
+system systems host hosts hostname server servers client clients device devices gateway gateways appliance
 table
+table tables list lists item items object objects element elements field fields attribute attributes parameter
 tables
+tacacs
+take
+take taken taking give given make made making need needed needs try tried trying keep kept skip skipped
+taken
+takes
+taking
+tar
 target
 targets
 tcp
+ted scrub urlf appi av ab te tex dlp ips_update
+temperature
+temperature fan fans psu power supply voltage sensor sensors hardware firmware bios bmc lom ipmi
+terabyte
+terabytes
+tgz
 than
 that
 the
@@ -458,56 +1185,137 @@ their
 them
 then
 there
+therefore
 these
 they
 this
 those
+though
+thread
+threads
+threshold
+thresholds
+through
+thu
+thur
+thurs
+thursday
+thus
 time
+time times date dates timestamp clock second seconds minute minutes hour hours day days week month year
+timed
 timeout
 timestamp
+tls
+tmp
+tmpfs
 to
+today
+token
+tokens
+tomorrow
+too
+took
+tos
 total
+total used free available shared cached buffers swap
+trace
 transmit
 transmitted
+tried
+trt
 true
+trusted
+try
+trying
+ttl
+tty
+tue
+tues
+tuesday
 tunnel
 tunnels
+twice
 tx
 txqueuelen
+txt
 type
 types
 udp
+uid
 unable
 unavailable
+under
+unhealthy
 unicast
+unit
+units
 unknown
+unless
+unmasked
+unreachable
+unreadable
 unset
 unsupported
 unsynchronized
+until
+untrusted
+unverified
 up
+up down active standby ready down detected inactive passive primary secondary master slave backup member members
+up down out off about around against across along behind beyond near next last first second third new old
+update
+updated
+updating
+upon
 uppercase
+upstream downstream uplink downlink bandwidth throughput latency jitter loss drop drops retransmit
 uptime
+url uri urls host-header cookie cookies agent useragent
 usage
 use
+use used using find found missing exist exists existed get getting go going gone become became move moved
 used
+user
+user users admin admins administrator account accounts group groups role roles permission permissions
+users
 uses
 using
+usr
+usually
+utc
 valid
 valid_lft
+validate validated validation process processed processing handle handled handling call called calling
 value
 values
+var
+var tmp opt etc usr bin sbin lib lib64 proc dev sys log run home root boot
 vd
 vdom
 vdoms
+verbose
+verified
 version
 versions
+very
+vg_splat
+vg_splat-lv_current
+vg_splat-lv_log
 via
+viewer
 virtual
 virtual-router
 virtual-system
 virtual-systems
 vlan
 vlanid
+vlans
+voltage
+volume
+volumes
+vpn
+vpn vpns encryption decryption cipher ciphers aes aes128 aes256 3des des sha sha1 sha256 sha384 sha512 md5 hmac
 vrrp
 vs
 vsenv
@@ -515,22 +1323,62 @@ vsid
 vsids
 vsx
 vsys
+vsz
 wait
+waited
 waiting
 warning
 warnings
 was
 we
+wed
+wednesday
+week
+weekday
+weekdays
+weekly
+weeks
 were
 what
 when
 where
+whereas
+whether
 which
 while
+who
+whom
+whose
+why
 will
+window
 with
+within
 without
+word
+words
+work
+worked
+worker
+workers
+working
+works
 would
+write
+writing
+written
+wrote
+xfs
+xlate
+xml
+xz
+yaml
+year
+years
 yes
+yesterday
+yet
+yml
 you
 your
+zip

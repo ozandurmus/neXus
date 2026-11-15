@@ -59,9 +59,12 @@ public final class HttpsCertificateController {
                 : ResponseEntity.status(409).body(Map.of("error", "PENDING_CERTIFICATE_CHANGED"));
     }
 
-    public record StrictRequest(boolean strict) {}
+    public record StrictRequest(Boolean strict) {}
     @PutMapping("/devices/{deviceId}/https-certificate/strict")
     public ResponseEntity<?> strict(@PathVariable String deviceId, @RequestBody StrictRequest body, HttpServletRequest request) {
+        if (body.strict() == null) {
+            return ResponseEntity.status(422).body(Map.of("error", "VALIDATION_FAILED", "reason_code", "STRICT_REQUIRED"));
+        }
         return trust.setStrict(deviceId, body.strict(), actor(request))
                 ? ResponseEntity.ok(Map.of("strict", body.strict())) : ResponseEntity.notFound().build();
     }

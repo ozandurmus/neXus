@@ -26,6 +26,23 @@ import java.io.OutputStream;
  */
 public interface ArtefactStore {
 
+    /**
+     * Stable, machine-readable reason a write refused by the store's byte quota carries: the message of every
+     * {@link QuotaExceededException} starts with it, and a job failed for that cause names it as its terminal reason.
+     */
+    String QUOTA_EXCEEDED_REASON = "artefact_store_quota_exceeded";
+
+    /**
+     * Verifies that the store is below its enforced byte quota before a new artefact write begins -- a backup
+     * executor calls it before it opens any device session, so a full store costs no device work. The default is
+     * a no-op for stores without a quota (test doubles).
+     *
+     * @throws QuotaExceededException when the store has reached its quota
+     * @throws IOException if the store usage cannot be measured
+     */
+    default void checkQuota() throws IOException {
+    }
+
     ArtefactHandle open(String deviceId, String jobId, String vendor, boolean gzip) throws IOException;
 
     /**
@@ -46,6 +63,58 @@ public interface ArtefactStore {
 
         /** Closes {@link #sink()} and returns the recorded metadata. Call exactly once, after every byte is written. */
         ArtefactMetadata finish() throws IOException;
+    }
+
+    /**
+     * A write refused by the enforced byte quota (backlog {@code vault_has_no_enforced_quota_on_a_shared_host}). The
+     * message always begins with {@link #QUOTA_EXCEEDED_REASON}; no partial file is left behind and no existing
+     * artefact is ever deleted to make room.
+     */
+    final class QuotaExceededException extends IOException {
+
+        private final long usedBytes;
+        private final long quotaBytes;
+        private final long attemptedBytes;
+
+        public QuotaExceededException(long usedBytes, long quotaBytes, long attemptedBytes) {
+            super(QUOTA_EXCEEDED_REASON + ": used=" + usedBytes + " bytes"
+                    + (attemptedBytes > 0 ? ", attempted=" + attemptedBytes + " bytes" : "")
+                    + ", quota=" + quotaBytes + " bytes; write refused, existing backups kept");
+            this.usedBytes = usedBytes;
+            this.quotaBytes = quotaBytes;
+            this.attemptedBytes = attemptedBytes;
+        }
+
+        public long usedBytes() {
+            return usedBytes;
+        }
+
+        public long quotaBytes() {
+            return quotaBytes;
+        }
+
+        public long attemptedBytes() {
+            return attemptedBytes;
+        }
+
+        /**
+         * The quota refusal carried somewhere in {@code failure}'s cause chain or message, if any: a transport
+         * that streams into an artefact sink may wrap the exception or flatten it into a reason string.
+         */
+        public static java.util.Optional<String> reasonIn(Throwable failure) {
+            for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+                if (cause instanceof QuotaExceededException q) {
+                    return java.util.Optional.of(q.getMessage());
+                }
+            }
+            return failure == null ? java.util.Optional.empty() : reasonIn(failure.getMessage());
+        }
+
+        /** The quota refusal embedded in a flattened failure reason, from {@link #QUOTA_EXCEEDED_REASON} on. */
+        public static java.util.Optional<String> reasonIn(String reason) {
+            int at = reason == null ? -1 : reason.indexOf(QUOTA_EXCEEDED_REASON);
+            return at < 0 ? java.util.Optional.empty() : java.util.Optional.of(reason.substring(at));
+        }
     }
 
     /** @param wrappedDataKey this artefact's fresh, random data key (BK-15), wrapped under the master key -- never the raw data key. */

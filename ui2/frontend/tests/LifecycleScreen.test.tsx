@@ -11,10 +11,17 @@ vi.mock("../src/auth/adminApi", async importOriginal => ({
   ...await importOriginal<typeof import("../src/auth/adminApi")>(),
   getLifecycle: vi.fn(), getDeviceLifecycle: vi.fn(), getLifecycleCatalog: vi.fn(),
   saveLifecycleCatalog: vi.fn(), importLifecycleCatalog: vi.fn(), deleteLifecycleCatalog: vi.fn(),
+  getLifecycleCatalogSources: vi.fn(), uploadLifecycleVendorPage: vi.fn(),
 }));
+const sourcesBody = (o: Partial<api.LifecycleCatalogSources> = {}): api.LifecycleCatalogSources => ({
+  feeds: [{ source: "cisco_eol", origin: "FEED", last_run_outcome: null, last_run_reason: null, last_run_at: null, last_good_at: null,
+    age_days: null, age_state: "RED", fresh_days: 30, entries: 0, entries_needing_review: 0 }],
+  page_forms: [{ page_form: "checkpoint_lifecycle", vendor: "CHECKPOINT", label: "Check Point Support Life Cycle Policy (appliances and versions)",
+    page_url: "https://www.checkpoint.com/support-services/support-life-cycle-policy/", online: false }],
+  uploads: [], needs_review: [], vendor_entries: 0, hand_loaded_fresh_days: 180, ...o });
 const noMatch = { status: "NO_LIFECYCLE_DATA" as const, reason: "No catalog match", basis: null, catalog: null };
 const row = (id: string, risk: LifecycleDevice["risk"] = "UNKNOWN"): LifecycleDevice => ({
-  device_id: id, hostname: id === "member-a" ? "FW-TANGO-04" : "FW-JULIET-06", cluster_member_ref: "CLS-ROMEO-01",
+  device_id: id, hostname: id === "dev-1" ? "FW-TANGO-04" : "FW-JULIET-06", cluster_member_ref: "CLS-ROMEO-01",
   vendor: "CHECKPOINT", model: "Example Appliance", software_version: "R81.20 Jumbo Hotfix Take 99",
   hardware: noMatch, software: noMatch, status: "NO_LIFECYCLE_DATA", risk, support_days: null, next_milestone: null,
   nearest_license: null, licenses: [], license_status: "NOT_COLLECTED", support_contract_status: "NOT_COLLECTED",
@@ -25,9 +32,10 @@ function themed(node: React.ReactNode) { return render(<ThemeProvider theme={m3T
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(api.getLifecycle).mockResolvedValue({ as_of: "2026-10-09", devices: [row("member-a"), row("member-b", "HIGH")],
+  vi.mocked(api.getLifecycle).mockResolvedValue({ as_of: "2026-10-09", devices: [row("dev-1"), row("dev-2", "HIGH")],
     summary: { devices: 2, no_lifecycle_data: 2, past_end_of_support: 0, within_180_days: 0, within_365_days: 0, licenses_within_60_days: 0, license_problems: 1, licenses_collected: 0, live_patch_not_active: 2 } });
   vi.mocked(api.getLifecycleCatalog).mockResolvedValue({ can_manage: false, entries: [] });
+  vi.mocked(api.getLifecycleCatalogSources).mockResolvedValue(sourcesBody());
 });
 
 describe("fleet lifecycle", () => {
@@ -56,13 +64,13 @@ describe("fleet lifecycle", () => {
     fireEvent.click(screen.getByRole("option", { name: "HIGH" }));
     expect(screen.queryByText("FW-TANGO-04")).not.toBeInTheDocument();
     expect(screen.getByText("FW-JULIET-06")).toBeInTheDocument();
-    const csv = lifecycleCsv([{ ...row("member-a"), hostname: "=synthetic_formula" }]);
+    const csv = lifecycleCsv([{ ...row("dev-1"), hostname: "=synthetic_formula" }]);
     expect(csv).toContain("'=synthetic_formula");
     expect(csv).toContain("CLS-ROMEO-01");
     expect(csv).toContain("UNKNOWN");
   });
   it("preserves unknown stored license labels and shows dated license evidence", async () => {
-    const device = { ...row("member-a"), vendor: "INFOBLOX", license_status: "COLLECTED", licenses: [
+    const device = { ...row("dev-1"), vendor: "INFOBLOX", license_status: "COLLECTED", licenses: [
       { name: "DNS", member: "FW-BRAVO-02", label: "Never", expiry: null, status: "UNKNOWN" },
       { name: "DHCP", member: "FW-BRAVO-02", label: "2026-10-20", expiry: "2026-10-20", status: "DATED" },
     ], nearest_license: { label: "2026-10-20", expiry: "2026-10-20", status: "DATED" } };
@@ -75,7 +83,7 @@ describe("fleet lifecycle", () => {
     expect(lifecycleCsv([device])).toContain("DNS · FW-BRAVO-02 · Never · UNKNOWN");
   });
   it("shows and exports sale and engineering milestones as separate dates", async () => {
-    const device = { ...row("member-a"), hardware: { status: "MATCHED" as const, reason: null, basis: "model exact",
+    const device = { ...row("dev-1"), hardware: { status: "MATCHED" as const, reason: null, basis: "model exact",
       catalog: { ...entry, end_of_sale: "2025-01-01", end_of_engineering: "2029-01-01" } } };
     vi.mocked(api.getLifecycle).mockResolvedValue({ as_of: "2026-10-09", summary: {}, devices: [device] });
     themed(<LifecycleScreen />);
@@ -84,7 +92,7 @@ describe("fleet lifecycle", () => {
     expect(lifecycleCsv([device])).toContain("2025-01-01,2029-01-01");
   });
   it("pages the fleet at 50 with '+N more' and keeps every row reachable (post-release review 2026-10-18, 1.7)", async () => {
-    const many = Array.from({ length: LIFECYCLE_PAGE + 12 }, (_, i) => ({ ...row(`member-${i}`), hostname: `FW-SYNTH-${String(i).padStart(3, "0")}` }));
+    const many = Array.from({ length: LIFECYCLE_PAGE + 12 }, (_, i) => ({ ...row(`member-${i}`), hostname: `FW-TANGO-${String(i + 1).padStart(3, "0")}` }));
     vi.mocked(api.getLifecycle).mockResolvedValue({ as_of: "2026-10-09", summary: {}, devices: many });
     themed(<LifecycleScreen />);
     const table = await screen.findByRole("table", { name: "Fleet lifecycle" });
@@ -95,7 +103,7 @@ describe("fleet lifecycle", () => {
     expect(document.querySelector("[data-lifecycle-page]")).toHaveTextContent(`1–${LIFECYCLE_PAGE + 12} of ${LIFECYCLE_PAGE + 12}`);
     expect(screen.queryByRole("button", { name: /^Show next/ })).toBeNull();
     // a new filter starts again at the first page
-    fireEvent.change(screen.getByLabelText("Search lifecycle"), { target: { value: "FW-SYNTH-0" } });
+    fireEvent.change(screen.getByLabelText("Search lifecycle"), { target: { value: "FW-TANGO-0" } });
     expect(within(table).getAllByRole("row")).toHaveLength(LIFECYCLE_PAGE + 1);
   });
   it("shows empty and failed reads without fabricating data", async () => {
@@ -105,10 +113,10 @@ describe("fleet lifecycle", () => {
     expect(screen.queryByRole("table", { name: "Fleet lifecycle" })).not.toBeInTheDocument();
   });
   it("shows a compact device lifecycle line", async () => {
-    vi.mocked(api.getDeviceLifecycle).mockResolvedValue({ ...row("member-a"), hardware: { status: "MATCHED", reason: null, basis: "model exact", catalog: entry } });
-    themed(<DeviceLifecycleLine deviceId="member-a" />);
+    vi.mocked(api.getDeviceLifecycle).mockResolvedValue({ ...row("dev-1"), hardware: { status: "MATCHED", reason: null, basis: "model exact", catalog: entry } });
+    themed(<DeviceLifecycleLine deviceId="dev-1" />);
     expect(await screen.findByText(/Hardware support: 2030-01-01/)).toBeInTheDocument();
-    expect(api.getDeviceLifecycle).toHaveBeenCalledWith("member-a");
+    expect(api.getDeviceLifecycle).toHaveBeenCalledWith("dev-1");
   });
 });
 
@@ -119,7 +127,7 @@ const patchBlock = (o: Partial<api.LifecycleLivePatch> = {}): api.LifecycleLiveP
     { patch: "PATCH-SYNTH-02", status: "ready", mode: "auto", running: 0, total: 2, installed_at: null, refs: ["CVE-2026-0001", "sk000001"] }], ...o });
 
 describe("license and Live Patch view", () => {
-  const problemDevice: LifecycleDevice = { ...row("member-a"), license_status: "COLLECTED", support_contract_status: "COLLECTED", license_problem: true,
+  const problemDevice: LifecycleDevice = { ...row("dev-1"), license_status: "COLLECTED", support_contract_status: "COLLECTED", license_problem: true,
     license_problems: [{ label: "CPSB-IPS", status: "EXPIRED" }], nearest_license: lic({ expiry: "2026-10-06", status: "EXPIRED" }),
     licenses: [lic({}), lic({ name: "CPSB-IPS", expiry: "2026-10-06", label: "2026-10-06", status: "EXPIRED", days_remaining: -3 }),
       lic({ name: "AV", category: "SUBSCRIPTION", kind: "SUBSCRIPTION", expiry: "2026-11-01", label: "2026-11-01", status: "DATED", days_remaining: 23 }),
@@ -127,7 +135,7 @@ describe("license and Live Patch view", () => {
       lic({ name: "Smart Licensing", category: "SMART_LICENSING", kind: "SMART_LICENSING", label: "UNREGISTERED", status: "UNREGISTERED" }),
       lic({ name: "Web Filter", member: "FW-BRAVO-02", evidence: "MANAGER_REPORTED", expiry: "2026-10-20", label: "2026-10-20", status: "DATED", days_remaining: 11 })],
     live_patch: patchBlock() };
-  const cleanDevice: LifecycleDevice = { ...row("member-b"), license_status: "COLLECTED", nearest_license: lic({ expiry: "2027-02-02", status: "DATED" }), live_patch: patchBlock({ ready: 0, items: [] }) };
+  const cleanDevice: LifecycleDevice = { ...row("dev-2"), license_status: "COLLECTED", nearest_license: lic({ expiry: "2027-02-02", status: "DATED" }), live_patch: patchBlock({ ready: 0, items: [] }) };
   const plainDevice: LifecycleDevice = { ...row("device-3"), hostname: "FW-PAPA-03", vendor: "PALOALTO", license_status: "COLLECTED", live_patch: null };
   const unknownDevice: LifecycleDevice = { ...row("device-4"), hostname: "FW-OSCAR-05", vendor: "FORTINET", license_status: "UNKNOWN", live_patch: null,
     license_reads: [{ kind: "fgt_update_info_contract", outcome: "FAILED", reason: "TIMEOUT", item_count: 0, observed_at: null }] };
@@ -277,5 +285,57 @@ describe("first fleet data (2026-11-10)", () => {
     expect(licenseLine({ name: "CPSB-FW", label: "Permanent", status: "PERMANENT", earlier_entries: 0 })).toBe("CPSB-FW · Permanent");
     expect(licenseLine({ name: "Logging Service", label: "2026-06-02", status: "EXPIRED", expiry: "2026-06-02", days_remaining: -129, earlier_entries: 1 }))
       .toBe("Logging Service · 2026-06-02 · EXPIRED · expired 129 days ago · 1 earlier entry");
+  });
+});
+
+describe("lifecycle vendor sources", () => {
+  it("shows a never-loaded online source as unknown age, and no upload control to a read-only session", async () => {
+    themed(<LifecycleCatalogPanel onChanged={vi.fn()} />);
+    const table = await screen.findByRole("table", { name: "Online lifecycle sources" });
+    expect(within(table).getByText("Cisco end-of-life bulletins (online)")).toBeInTheDocument();
+    expect(within(table).getByText("Never loaded")).toBeInTheDocument();
+    expect(within(table).getByText("UNKNOWN")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Upload vendor lifecycle page")).not.toBeInTheDocument();
+    expect(screen.getByText(/FortiCloud support portal/)).toBeInTheDocument();
+  });
+
+  it("uploads a saved page for the chosen form and reports the counts", async () => {
+    vi.mocked(api.getLifecycleCatalog).mockResolvedValue({ can_manage: true, entries: [] });
+    vi.mocked(api.uploadLifecycleVendorPage).mockResolvedValue({ upload_id: "up-1", parsed: 40, needs_review: 2, skipped: 5 });
+    const changed = vi.fn();
+    themed(<LifecycleCatalogPanel onChanged={changed} />);
+    const input = await screen.findByLabelText("Upload vendor lifecycle page");
+    expect(input).toBeDisabled();
+    fireEvent.mouseDown(screen.getByLabelText("Vendor page"));
+    fireEvent.click(await screen.findByRole("option", { name: /Check Point Support Life Cycle Policy/ }));
+    const file = new File(["<html><table></table></html>"], "page.html", { type: "text/html" });
+    Object.defineProperty(file, "text", { value: async () => "<html><table></table></html>" });
+    fireEvent.change(screen.getByLabelText("Upload vendor lifecycle page"), { target: { files: [file] } });
+    await waitFor(() => expect(api.uploadLifecycleVendorPage).toHaveBeenCalledWith("checkpoint_lifecycle", "<html><table></table></html>"));
+    expect(await screen.findByText("Read 40 entries, 2 need review, 5 rows not used")).toBeInTheDocument();
+    expect(changed).toHaveBeenCalled();
+  });
+
+  it("lists entries that need review with their reason and source", async () => {
+    vi.mocked(api.getLifecycleCatalogSources).mockResolvedValue(sourcesBody({ needs_review: [{ entry_id: "e1", vendor: "CHECKPOINT", kind: "SOFTWARE",
+      product: "Check Point R81.10.xx", key: "R81.10.XX", source: "checkpoint_lifecycle", origin: "OPERATOR_PAGE", parse_note: "DATE_UNREADABLE",
+      source_url: "https://www.checkpoint.com/support-services/support-life-cycle-policy/" }] }));
+    themed(<LifecycleCatalogPanel onChanged={vi.fn()} />);
+    const table = await screen.findByRole("table", { name: "Lifecycle entries that need review" });
+    expect(within(table).getByText("DATE_UNREADABLE")).toBeInTheDocument();
+    expect(within(table).getByText("Check Point life cycle page (uploaded page)")).toBeInTheDocument();
+  });
+
+  it("shows NOT_EVALUATED parts and a month-only vendor date as the month", async () => {
+    const vendorEntry = { ...entry, end_of_support: "2032-02-01", month_only: ["end_of_support"], origin: "OPERATOR_PAGE" as const, source: "checkpoint_lifecycle" };
+    vi.mocked(api.getLifecycle).mockResolvedValue({ as_of: "2026-11-13", summary: { devices: 1, lifecycle_not_evaluated: 1 }, devices: [{ ...row("fw-lc-1"),
+      status: "NOT_EVALUATED", risk: "NOT_EVALUATED",
+      hardware: { status: "MATCHED", reason: null, basis: "model key · Check Point life cycle page (uploaded page)", catalog: vendorEntry },
+      software: { status: "NOT_EVALUATED", reason: "Vendor source checkpoint_lifecycle last confirmed this entry 200 days ago (limit 180)", basis: null, catalog: null } }] });
+    themed(<LifecycleScreen />);
+    const table = await screen.findByRole("table", { name: "Fleet lifecycle" });
+    expect(within(table).getByText("2032-02")).toBeInTheDocument();
+    expect(within(table).getAllByText("NOT_EVALUATED").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("Lifecycle not evaluated")).toBeInTheDocument();
   });
 });

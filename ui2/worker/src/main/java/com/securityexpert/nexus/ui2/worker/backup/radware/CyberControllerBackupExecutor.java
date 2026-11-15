@@ -157,6 +157,10 @@ public final class CyberControllerBackupExecutor {
                 }
                 throw e;
             }
+        } catch (ArtefactStore.QuotaExceededException e) {
+            deleteQuietly(upload);
+            deleteOnController(session, name);
+            return new BackupResult.ArtefactStoreFailed(e.getMessage());
         } catch (IOException e) {
             deleteQuietly(upload);
             deleteOnController(session, name);

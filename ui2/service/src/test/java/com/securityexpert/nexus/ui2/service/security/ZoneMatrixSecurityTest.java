@@ -13,7 +13,16 @@ class ZoneMatrixSecurityTest {
         var interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE);
         Method resolve = GateChainInterceptor.class.getDeclaredMethod("actionIdFor", String.class, String.class);
         resolve.setAccessible(true);
-        Map<String, String> routes = Map.of(
+        Map<String, String> routes = Map.ofEntries(
+                Map.entry("GET /api/v2/zone-matrix/template", ActionRegistry.ZONE_MATRIX_READ),
+                Map.entry("POST /api/v2/zone-matrix/draft/cells", ActionRegistry.ZONE_MATRIX_EDIT),
+                Map.entry("POST /api/v2/zone-matrix/draft/cells/clear", ActionRegistry.ZONE_MATRIX_EDIT),
+                Map.entry("POST /api/v2/zone-matrix/draft/default", ActionRegistry.ZONE_MATRIX_EDIT),
+                Map.entry("POST /api/v2/zone-matrix/draft/service-sets", ActionRegistry.ZONE_MATRIX_EDIT),
+                Map.entry("POST /api/v2/zone-matrix/draft/service-sets/delete", ActionRegistry.ZONE_MATRIX_EDIT),
+                Map.entry("POST /api/v2/zone-matrix/draft/template-import", ActionRegistry.ZONE_MATRIX_EDIT),
+                Map.entry("POST /api/v2/zone-matrix/draft/cells/confirm-reference", ActionRegistry.ZONE_MATRIX_REFERENCE_CONFIRM));
+        Map<String, String> stepOne = Map.of(
                 "GET /api/v2/zone-matrix/versions", ActionRegistry.ZONE_MATRIX_READ,
                 "GET /api/v2/zone-matrix/versions/00000000-0000-4000-8000-000000000001", ActionRegistry.ZONE_MATRIX_READ,
                 "GET /api/v2/zone-matrix/draft", ActionRegistry.ZONE_MATRIX_READ,
@@ -23,6 +32,8 @@ class ZoneMatrixSecurityTest {
                 "POST /api/v2/zone-matrix/draft/zones/zone-1/delete", ActionRegistry.ZONE_MATRIX_EDIT,
                 "POST /api/v2/zone-matrix/draft/discard", ActionRegistry.ZONE_MATRIX_EDIT,
                 "POST /api/v2/zone-matrix/draft/publish", ActionRegistry.ZONE_MATRIX_PUBLISH);
+        routes = new java.util.HashMap<>(routes);
+        routes.putAll(stepOne);
         for (var route : routes.entrySet()) {
             var parts = route.getKey().split(" ", 2);
             assertEquals(route.getValue(), resolve.invoke(interceptor, parts[0], parts[1]), route.getKey());
@@ -35,5 +46,8 @@ class ZoneMatrixSecurityTest {
             assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.COMPLIANCE_ADMIN), tokens, action);
             assertFalse(tokens.contains(RoleToken.REPLAY_VIEWER), action);
         }
+        // section 3.4: only compliance_admin confirms a reference (ZM-23)
+        assertEquals(Set.of(RoleToken.COMPLIANCE_ADMIN),
+                registry.find(ActionRegistry.ZONE_MATRIX_REFERENCE_CONFIRM).orElseThrow().requiredRoleTokens());
     }
 }

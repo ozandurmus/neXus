@@ -291,17 +291,28 @@ export interface LifecycleCatalogEntry {
   end_of_sale: string | null;
   end_of_support: string | null;
   end_of_engineering: string | null;
-  source: "IMPORT" | "MANUAL";
+  /** IMPORT or MANUAL for an operator row; a vendor source key (cisco_eol, paloalto_eol, checkpoint_lifecycle) for a vendor entry. */
+  source: string;
   note: string | null;
   imported_by: string;
   imported_at: string;
+  /** Vendor entries only (LIFECYCLE_CATALOG_SOURCES_CONTRACT.md): how it got in, its age and where it was read. */
+  origin?: "OPERATOR_ENTRY" | "FEED" | "OPERATOR_PAGE";
+  age_days?: number | null;
+  month_only?: string[];
+  document_ref?: string;
+  source_url?: string;
+  end_of_security_support?: string | null;
+  end_of_extended_support?: string | null;
 }
 export type LifecycleCatalogInput = Pick<LifecycleCatalogEntry, "vendor" | "kind" | "product" | "end_of_sale" | "end_of_support" | "end_of_engineering" | "note">;
 export interface LifecycleMatch {
-  status: "MATCHED" | "NO_LIFECYCLE_DATA";
+  /** NOT_EVALUATED: nothing current to compare with (no source, or the source is too old). NEEDS_REVIEW: the vendor entry could not be read safely. */
+  status: "MATCHED" | "NO_LIFECYCLE_DATA" | "NOT_EVALUATED" | "NEEDS_REVIEW";
   reason: string | null;
   basis: string | null;
   catalog: LifecycleCatalogEntry | null;
+  key?: string | null;
 }
 export interface LifecycleLicense {
   name?: string;
@@ -344,9 +355,9 @@ export interface LifecycleDevice {
   hardware: LifecycleMatch;
   software: LifecycleMatch;
   status: string;
-  risk: "EXPIRED" | "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN";
+  risk: "EXPIRED" | "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN" | "NOT_EVALUATED";
   support_days: number | null;
-  next_milestone: { name: string; date: string; days_remaining: number } | null;
+  next_milestone: { name: string; date: string; days_remaining: number; precision?: "DAY" | "MONTH" } | null;
   nearest_license: LifecycleLicense | null;
   licenses: LifecycleLicense[];
   license_status: string;
@@ -420,6 +431,24 @@ export const saveLifecycleCatalog = (entry: LifecycleCatalogInput, id?: string) 
   call(id ? `/api/v2/lifecycle/catalog/${encodeURIComponent(id)}` : "/api/v2/lifecycle/catalog", id ? "PUT" : "POST", entry);
 export const importLifecycleCatalog = (csv: string) => call<{ imported: number }>("/api/v2/lifecycle/catalog/import", "POST", { csv });
 export const deleteLifecycleCatalog = (id: string) => call(`/api/v2/lifecycle/catalog/${encodeURIComponent(id)}/delete`, "POST");
+export interface LifecycleCatalogFeed {
+  source: string; origin: "FEED"; last_run_outcome: string | null; last_run_reason: string | null; last_run_at: string | null;
+  last_good_at: string | null; age_days: number | null; age_state: "GREEN" | "AMBER" | "RED"; fresh_days: number;
+  entries: number; entries_needing_review: number;
+}
+export interface LifecyclePageForm { page_form: string; vendor: string; label: string; page_url: string; online: boolean; }
+export interface LifecycleCatalogUpload {
+  upload_id: string; page_form: string; vendor: string; entries_parsed: number; entries_needing_review: number; rows_skipped: number;
+  uploaded_by: string; uploaded_at: string | null; age_days: number | null; age_state: "GREEN" | "AMBER" | "RED";
+}
+export interface LifecycleReviewEntry { entry_id: string; vendor: string; kind: string; product: string; key: string; source: string; origin: string; parse_note: string | null; source_url: string; }
+export interface LifecycleCatalogSources {
+  feeds: LifecycleCatalogFeed[]; page_forms: LifecyclePageForm[]; uploads: LifecycleCatalogUpload[]; needs_review: LifecycleReviewEntry[];
+  vendor_entries: number; hand_loaded_fresh_days: number;
+}
+export const getLifecycleCatalogSources = () => call<LifecycleCatalogSources>("/api/v2/lifecycle/catalog-sources", "GET");
+export const uploadLifecycleVendorPage = (page_form: string, page: string) =>
+  call<{ upload_id: string; parsed: number; needs_review: number; skipped: number }>("/api/v2/lifecycle/catalog/vendor-page", "POST", { page_form, page });
 
 /**
  * The server marks a masked (aiview) response with `X-Nexus-Masked: true`; the shell shows the mask chip on every
@@ -827,7 +856,7 @@ export function createRoleBinding(
   });
 }
 
-export function revokeRoleBinding(bindingId: string): Promise<{ binding_id: string }> {
+export function revokeRoleBinding(bindingId: string): Promise<{ binding_id: string; outcome?: "REVOKED" | "ALREADY_REVOKED" }> {
   return call("/role-bindings/revoke", "POST", { bindingId });
 }
 
@@ -1824,6 +1853,7 @@ export interface JobQueryParams {
   readonly page_size?: number;
   readonly sort?: string;
   readonly order?: "asc" | "desc";
+  readonly latest_per_device?: boolean;
 }
 
 export const cancelJob = (id: string) => call<{ jobId: string; state: string; cancelRequested: boolean }>(`/api/v2/jobs/${encodeURIComponent(id)}/cancel`, "POST");
@@ -1857,6 +1887,11 @@ function jobQueryString(params: JobQueryParams): string {
 /** Jobs screen (PO P0, 2026-09-22): the whole history, filtered and paged on the server. */
 export function listJobs(params: JobQueryParams = {}): Promise<JobPageView> {
   return call(`/api/v2/jobs${jobQueryString(params)}`, "GET");
+}
+
+/** Latest job per target device in one batched call (Backups fleet table). */
+export function listLatestJobsByDevice(params: Pick<JobQueryParams, "job_type" | "state"> = {}): Promise<JobPageView> {
+  return listJobs({ ...params, latest_per_device: true });
 }
 
 /** One window for every headline job count: terminal states FINISHED in the last 24 h (total_24h = the five below). */
@@ -2129,7 +2164,20 @@ export interface StorageView {
   readonly top_devices: ReadonlyArray<{ device_id: string; hostname: string | null; artefacts: number; stored_bytes: number }>;
   readonly configuration: { artefacts: number; stored_bytes: number; text_in_database_bytes: number };
   readonly database_bytes: number;
-  readonly artefact_volume: { total_bytes?: number; usable_bytes?: number; used_percent?: number | null; level?: DiskLevel; note?: string };
+  readonly artefact_volume: {
+    total_bytes?: number;
+    usable_bytes?: number;
+    used_percent?: number | null;
+    level?: DiskLevel;
+    quota_bytes?: number;
+    used_bytes?: number;
+    remaining_bytes?: number;
+    usage_percent?: number;
+    near_limit?: boolean;
+    quota_exceeded?: boolean;
+    warning?: string | null;
+    note?: string;
+  };
 }
 
 export function getSystemStorage(): Promise<StorageView> {
@@ -2227,10 +2275,14 @@ export interface PanConfigSyncRecord { syncId: string; state: PanConfigSyncState
 export interface PanConfigSyncFacts { offered: boolean; canRun: boolean; refusal: string | null; sourceRef: string | null; targetRef: string | null;
   readinessObservedAt: string | null; latest: PanConfigSyncRecord | null }
 export interface ReadinessCheck { device_id?: string; checkNo: number; title: string; member: string; result: CpFailoverCheckStatus; summary: string; blocking: boolean }
+export interface HaPairViewFacts { vendor: string; state: "HEALTHY" | "DEGRADED" | "UNKNOWN"; reason: string | null;
+  sync: "UNKNOWN"; syncReason: string; members: Array<{ device_id: string; role: string }> }
 export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system" | "members" | "masked" | "mode" | "refusalReason" | "readinessObservedAt" | "unitKind" | "failoverRefusal" | "configSync"> {
   activeWindow: boolean; lastRunState: string | null; lastRunOutcome: string | null; lastRunAt: string | null; canRunReadiness: boolean;
   /** False for a listed pair whose vendor has no readiness yet (Cisco ASA while its readiness switch is off): shown, never run. */
   readinessAvailable?: boolean;
+  /** Cisco ASA / FortiGate pairs only: the stored HA roles in cluster-view form; `sync` is UNKNOWN until a read collects it. */
+  haView?: HaPairViewFacts;
   readiness: { status: "READY" | "NOT_READY" | "UNKNOWN"; observedAt: string; failedCheck: string; stopCode?: string; checks: Array<ReadinessCheck & { status: CpFailoverCheckStatus; derived: Record<string, unknown> }> } | null;
 }
 export interface CpFailoverApproval { approvalId: string; windowFrom: string; windowUntil: string; reason: string; revokedAt: string | null; requestId?: string; revision?: number; policy?: "ADMIN_SINGLE" | "OPERATION_ADMIN_TWO_PERSON"; approved?: boolean; executionNonce?: string; canStart?: boolean; canApprove?: boolean }
@@ -4510,3 +4562,76 @@ export const listReportRuns = () => call<{ readonly runs: readonly ReportRunView
 export const getReportRun = (runId: string) => call<ReportRunView>(`/api/v2/reports/runs/${encodeURIComponent(runId)}`, "GET");
 /** A plain GET with the session cookie: the server audits the download before the first byte. */
 export const reportDownloadHref = (runId: string) => `/api/v2/reports/runs/${encodeURIComponent(runId)}/download`;
+
+/*
+ * Pre-cutover impact analysis (ACI_SEGMENTATION_SUPPORT_DESIGN_2026_11_13.md section 4, step 1;
+ * CUTOVER_IMPACT_UI_BRIEF_2026_11_14.md). Reads stored policies, the held topology and uploaded traffic-log CSV files;
+ * aiview answers arrive masked from the server. The browser computes no verdict.
+ */
+export type CutoverDecision = "WOULD_DROP" | "NOT_DECIDED" | "NOT_EVALUABLE" | "WOULD_ALLOW";
+export type CutoverReadiness = "BLOCKERS_FOUND" | "NOT_DECIDED" | "NO_BLOCKERS_IN_EVALUATED_FLOWS" | "NO_EVIDENCE";
+export type CutoverTargetSource = "PATH" | "OPERATOR_OVERRIDE";
+export interface CutoverSegment {
+  segmentId: string; name: string; revision: number; blocks: string[]; peerBlocks: string[];
+  createdBy?: string; createdAt?: string; updatedBy?: string; updatedAt?: string;
+}
+export interface CutoverCounts {
+  tuples?: number; flows?: number; blockingTuples?: number; openTuples?: number; alreadyDroppedTuples?: number; missingRuleGroups?: number;
+  WOULD_DROP?: number; NOT_DECIDED?: number; NOT_EVALUABLE?: number; WOULD_ALLOW?: number;
+}
+export interface CutoverAssessmentHead {
+  assessmentId: string; segmentId: string; segmentRevision: number; createdAt: string; actor?: string;
+  targetSource: CutoverTargetSource | string; targetDeviceId?: string | null; topologySnapshotId?: string | null;
+  targetPolicyId?: string | null; targetCollectedAt?: string | null; oldPolicyId?: string | null; oldCollectedAt?: string | null;
+  engineVersion?: string; status: "COMPLETE" | "INCOMPLETE" | string; readiness: CutoverReadiness | string; headline?: string; counts?: CutoverCounts;
+}
+export interface CutoverCoverageItem { code: string; count?: number; periodStart?: string; periodEnd?: string }
+export interface CutoverUpload { index: number; rowCount: number; invalidRows: number; inScopeFlows: number; periodStart?: string; periodEnd?: string;
+  parseStats?: { statReason: string; count: number }[] }
+export interface CutoverAssessmentView extends CutoverAssessmentHead {
+  coverage?: CutoverCoverageItem[]; uploads?: CutoverUpload[]; targetVendor?: string; segmentZone?: string; peerZone?: string;
+  oldDeviceId?: string; stale?: boolean; staleReasons?: string[];
+}
+export interface CutoverRule { ruleId?: string; number?: number | string | null; name?: string; sectionName?: string; action?: string }
+export interface CutoverPathFirewall { deviceId: string; vendor?: string; hopVerdict?: string; decidingRule?: CutoverRule | null }
+export interface CutoverFlowItem {
+  direction: string; flowSource: string; flowDestination: string; protocol: string; port: number; flowCount: number;
+  firstSeen?: string; lastSeen?: string; decision: CutoverDecision | string; decisionReason?: string; targetSource?: string;
+  pathFirewalls?: CutoverPathFirewall[]; decidingRule?: CutoverRule | null; flags?: string[];
+  conditionalRule?: CutoverRule | null; droppedConstraints?: string[]; oldPathDecision?: string; oldPathReason?: string; oldPathRule?: CutoverRule | null;
+}
+export interface CutoverMissingRuleItem {
+  direction: string; flowDestination: string; protocol: string; port: number; sourceCount: number; flowSources?: string[]; sourceRange?: string;
+  flowCount: number; firstSeen?: string; lastSeen?: string; decisionCounts?: { decision: string; count: number }[]; oldPathRule?: CutoverRule | null;
+}
+export interface CutoverFlowPage<T> { total: number; page: number; items: T[] }
+export interface CutoverTargetOverride { deviceId: string; policyId?: string; context?: string; segmentZone?: string; peerZone?: string }
+export interface CutoverSpec {
+  targetOverride?: CutoverTargetOverride; oldPolicyId?: string; oldDeviceId?: string; oldContext?: string;
+  mappings: Record<string, string>[];
+}
+export interface CutoverSegmentInput { name: string; blocks: string[]; peerBlocks: string[] }
+
+const CUTOVER = "/api/v2/cutover";
+export const listCutoverSegments = () => call<{ segments: CutoverSegment[]; canManage: boolean }>(`${CUTOVER}/segments`, "GET");
+export const getCutoverSegment = (id: string) =>
+  call<CutoverSegment & { assessments: CutoverAssessmentHead[]; canManage: boolean }>(`${CUTOVER}/segments/${encodeURIComponent(id)}`, "GET");
+export const createCutoverSegment = (input: CutoverSegmentInput) => call<{ segmentId: string }>(`${CUTOVER}/segments`, "POST", input);
+export const updateCutoverSegment = (id: string, revision: number, input: CutoverSegmentInput) =>
+  call<{ segmentId: string; revision: number }>(`${CUTOVER}/segments/${encodeURIComponent(id)}`, "PUT", { ...input, revision });
+export const deleteCutoverSegment = (id: string) => offlineMutation<{ deleted: boolean }>(`${CUTOVER}/segments/${encodeURIComponent(id)}`, "DELETE");
+/** Multipart in the server's order: the `spec` field first, then one `file` part per mapping, in the same order. */
+export function runCutoverAssessment(segmentId: string, spec: CutoverSpec, files: readonly File[]) {
+  const body = new FormData(); body.append("spec", JSON.stringify(spec));
+  for (const file of files) body.append("file", file);
+  return offlineMutation<{ assessmentId: string; readiness: string; status: string }>(`${CUTOVER}/segments/${encodeURIComponent(segmentId)}/assessments`, "POST", body);
+}
+export const getCutoverAssessment = (id: string) => call<CutoverAssessmentView>(`${CUTOVER}/assessments/${encodeURIComponent(id)}`, "GET");
+export function getCutoverFlows(id: string, kind: "FLOW", decision: CutoverDecision | null, page: number): Promise<CutoverFlowPage<CutoverFlowItem>>;
+export function getCutoverFlows(id: string, kind: "MISSING_RULE", decision: null, page: number): Promise<CutoverFlowPage<CutoverMissingRuleItem>>;
+export function getCutoverFlows(id: string, kind: "FLOW" | "MISSING_RULE", decision: CutoverDecision | null, page: number) {
+  const query = new URLSearchParams({ kind, page: String(page) });
+  if (decision) query.set("decision", decision);
+  return call(`${CUTOVER}/assessments/${encodeURIComponent(id)}/flows?${query}`, "GET");
+}
+export const deleteCutoverAssessment = (id: string) => offlineMutation<{ deleted: boolean }>(`${CUTOVER}/assessments/${encodeURIComponent(id)}`, "DELETE");

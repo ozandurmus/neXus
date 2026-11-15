@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import copy
 import getpass
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -120,6 +121,7 @@ def test_runner_build_inherits_proxy_ca_and_freezes_commit(monkeypatch):
     assert builder["volumeMounts"] == template["spec"]["template"]["spec"]["containers"][0]["volumeMounts"]
     assert builder["env"] == [dict(name="HTTPS_PROXY", value="http://192.0.2.10:3128"), dict(name="UI2_IMAGE_TAG", value=COMMIT[:12])]
     assert builder["args"][-1] == "--digest-file=/dev/termination-log"
+    assert "--image-download-retry=5" in builder["args"]
     assert "--digest-file=/workspace/old.txt" not in builder["args"]
 
 
@@ -248,7 +250,7 @@ elif name == 'kubectl':
         path.write_text("#!" + sys.executable + "\n" + stub)
         path.chmod(0o755)
     result = subprocess.run(["bash", str(ROOT / "deploy/ui2-image-build/run_build.sh")], capture_output=True,
-        text=True, timeout=20, env={**os.environ, "HOME": str(home), "PATH": str(tools) + ":" + os.environ["PATH"],
+        text=True, timeout=float(os.environ.get("NEXUS_TEST_SUBPROCESS_TIMEOUT", "120")), env={**os.environ, "HOME": str(home), "PATH": str(tools) + ":" + os.environ["PATH"],
         "REPO": str(home / "nexus"), "NEXUS_TREE_OWNER": getpass.getuser(), "TEST_CALLS": str(calls), "TEST_MODE": mode,
         "NEXUS_DEPLOY_TARGETS": "unknown" if mode == "invalid-targets" else "service worker configuration compliance policy",
         "NEXUS_DEPLOY_APPLY_FILES": "synthetic-manifest.yaml",

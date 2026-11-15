@@ -93,10 +93,18 @@ class ZonePartitionTest {
         var b = new ZoneMatrixContent(List.of(a.zones().get(1), a.zones().get(0)));
         assertEquals(a.canonicalJson(), b.canonicalJson());
         assertEquals(a.sha256(), b.sha256());
-        assertTrue(a.canonicalJson().startsWith("{\"schema\":1,\"zones\":[{\"id\":\"00000000-0000-4000-8000-000000000001\""));
+        assertTrue(a.canonicalJson().startsWith("{\"schema\":2,\"zones\":[{\"id\":\"00000000-0000-4000-8000-000000000001\""));
+        assertTrue(a.canonicalJson().endsWith(",\"matrix\":{\"default_statement\":\"DENY_ALL\",\"default_severity\":\"MEDIUM\","
+                + "\"template_origin\":null,\"service_sets\":[],\"cells\":[]}}"));
         var parsed = ZoneMatrixContent.parse(a.canonicalJson(), new com.fasterxml.jackson.databind.ObjectMapper());
         assertEquals(a, parsed);
         assertEquals(a.sha256(), parsed.sha256());
+        // step 1 stored schema 1 (zones only); it still reads, with the initial matrix
+        String schemaOne = "{\"schema\":1,\"zones\":[{\"id\":\"00000000-0000-4000-8000-000000000001\",\"name\":\"Z-APP\","
+                + "\"description\":\"\",\"role\":null,\"blocks\":[\"192.0.2.0/24\"]}]}";
+        var old = ZoneMatrixContent.parse(schemaOne, new com.fasterxml.jackson.databind.ObjectMapper());
+        assertEquals(ZoneMatrixContent.Matrix.initial(), old.matrix());
+        assertEquals("Z-APP", old.zones().get(0).name());
     }
 
     private static ZonePartition.Placed placed(String zone, String block) { return new ZonePartition.Placed(zone, ZoneBlock.parse(block)); }

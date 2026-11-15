@@ -243,6 +243,26 @@ class DeviceAddSingleServiceTest {
     }
 
     @Test
+    void emptyObjectBodyWithNullVendorIsRefusedNotAnException() {
+        FakeDeviceRepository devices = new FakeDeviceRepository();
+        DeviceRegistrationService registrationService =
+                new DeviceRegistrationService(devices, new FakeCredentialReferenceRepository());
+        DeviceEnrollmentReadPort neverCalled = deviceId -> {
+            throw new AssertionError("device enrollment must never be consulted for a missing vendor");
+        };
+        JobAdmissionService jobAdmissionService = new JobAdmissionService(confirmCapabilityRegistry(),
+                neverCalled, new InMemoryJobAdmissionRepository());
+        DeviceAddSingleService service =
+                new DeviceAddSingleService(new DirectTransactionBoundary(), registrationService, jobAdmissionService);
+
+        DeviceAddSingleService.Outcome outcome = service.addSingle(ACTOR, null, null, null, null, Optional.empty());
+
+        assertEquals(DeviceRegistrationService.REASON_VENDOR_HINT_INVALID,
+                ((DeviceAddSingleService.Outcome.ValidationFailed) outcome).reasonCode());
+        assertTrue(devices.registered.isEmpty());
+    }
+
+    @Test
     void unknownVendorIsRefusedBeforeAnyWrite() {
         FakeDeviceRepository devices = new FakeDeviceRepository();
         DeviceRegistrationService registrationService =

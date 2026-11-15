@@ -31,6 +31,13 @@ import java.util.*;
  * active/active device binding are UNKNOWN. A bi-directional static rule whose implicit reverse rule could match is UNKNOWN.
  * A Panorama snapshot carries no firewall-local NAT rules: a decision past the pre-rules (or no match) has the caveat
  * {@link HopPolicyEvaluator#PAN_LOCAL_RULES_NOT_COLLECTED}.
+ *
+ * <p><b>Cisco ASA</b> (section source {@code ASA NAT}): translation is not evaluated yet -- which interfaces and directions
+ * a rule applies to and the 9.x order of un-translation and route lookup are not established (A0-ASA-18 UNKNOWN). The
+ * evaluator only proves that no rule can touch the tuple: every enabled rule's real and mapped source, and for a rule with
+ * a destination clause its real and mapped destination, must resolve and contain neither tuple address. Anything else is
+ * UNKNOWN ({@link #ASA_NAT_NOT_EVALUATED}, or {@link #NAT_RULE_SELECTOR_UNRESOLVED} for a cell that does not resolve);
+ * no rule touching the tuple is {@code NO_TRANSLATION}.
  */
 public final class HopNatEvaluator {
     private HopNatEvaluator() {}
@@ -47,6 +54,7 @@ public final class HopNatEvaluator {
     public static final String CP_NAT_MANUAL_AUTOMATIC_COMBINATION_UNKNOWN = "CP_NAT_MANUAL_AUTOMATIC_COMBINATION_UNKNOWN";
     public static final String NAT_ANALYSIS_BUDGET = "NAT_ANALYSIS_BUDGET";
     public static final String NAT_UNSUPPORTED_VENDOR = "NAT_UNSUPPORTED_VENDOR";
+    public static final String ASA_NAT_NOT_EVALUATED = "ASA_NAT_NOT_EVALUATED";
     // Per-rule reasons of undecidable NAT rules.
     public static final String NAT_RULE_SELECTOR_UNRESOLVED = "NAT_RULE_SELECTOR_UNRESOLVED";
     public static final String NAT_RULE_ENABLED_UNKNOWN = "NAT_RULE_ENABLED_UNKNOWN";
@@ -81,6 +89,7 @@ public final class HopNatEvaluator {
         try {
             if (vendor.equals("CP")) return checkPoint(snapshot, device, binding, tuple, budget);
             if (vendor.equals("PAN")) return paloAlto(snapshot, device, tuple, ingressZone, provisionalEgressZone, egressInterface, budget);
+            if (vendor.equals("ASA")) return asa(snapshot, tuple, budget);
             return unknown(tuple, NAT_UNSUPPORTED_VENDOR, List.of());
         } catch (Unknown exhausted) {
             return unknown(tuple, NAT_ANALYSIS_BUDGET, List.of());
@@ -369,6 +378,54 @@ public final class HopNatEvaluator {
         String address = value.contains("/") ? value.substring(0, value.indexOf('/')) : value;
         try { PolicyRuleQuery.interval(address); return address; }
         catch (IllegalArgumentException invalid) { return null; }
+    }
+
+    // ---- Cisco ASA -----------------------------------------------------------------------------------------------------
+
+    /** Rows listed for an ASA tuple some NAT rule may touch; the count past it is not listed. */
+    static final int ASA_NAT_ROWS = 20;
+
+    private static Nat asa(PolicySnapshot snapshot, Tuple tuple, Budget budget) {
+        var resolver = new Resolver(snapshot.objects(), budget);
+        List<Map<String, Object>> touching = new ArrayList<>();
+        boolean touched = false;
+        for (Section section : snapshot.sections()) {
+            if (!"ASA NAT".equals(section.source())) continue;
+            for (Rule rule : section.rules()) {
+                budget.spend();
+                if (Boolean.FALSE.equals(rule.enabled())) continue;
+                String reason = asaTouches(rule, tuple, resolver);
+                if (reason == null) continue;
+                touched = true;
+                if (touching.size() < ASA_NAT_ROWS) touching.add(row(new Candidate(section, rule), reason));
+            }
+        }
+        if (touched) return unknown(tuple, ASA_NAT_NOT_EVALUATED, touching);
+        return new Nat(NO_TRANSLATION, NAT_NO_RULE_MATCHED, tuple, tuple, List.of(), List.of(), List.of(), List.of());
+    }
+
+    /** {@code null} when the rule provably cannot touch the tuple, else the row reason. */
+    private static String asaTouches(Rule rule, Tuple tuple, Resolver resolver) {
+        if (rule.extras().containsKey("asa-unparsed")) return NAT_RULE_SELECTOR_UNRESOLVED;
+        List<List<String>> cells = new ArrayList<>();
+        cells.add(rule.source().refs());
+        cells.add(rule.extras().get("translated-source"));
+        if (rule.extras().containsKey("translated-destination")) {
+            cells.add(rule.destination().refs());
+            cells.add(rule.extras().get("translated-destination"));
+        }
+        for (List<String> refs : cells) {
+            if (refs == null || refs.isEmpty()) return NAT_RULE_SELECTOR_UNRESOLVED;
+            try {
+                Selector selector = resolver.cell(new Cell(refs, false), "address");
+                if (point(selector, "ipv4", tuple.sourceValue(), resolver.budget)
+                        || point(selector, "ipv4", tuple.destinationValue(), resolver.budget)) return ASA_NAT_NOT_EVALUATED;
+            } catch (Unknown unresolved) {
+                if (unresolved.getMessage().equals("analysis budget")) throw unresolved;
+                return NAT_RULE_SELECTOR_UNRESOLVED;
+            }
+        }
+        return null;
     }
 
     private static Map<String, Object> rule(Candidate candidate) { return HopPolicyEvaluator.ruleView(candidate.section(), candidate.rule()); }

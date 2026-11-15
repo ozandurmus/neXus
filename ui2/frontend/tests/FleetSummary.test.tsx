@@ -41,8 +41,8 @@ function overview(partial: Partial<OverviewView> = {}): OverviewView {
 }
 const mount = (node: React.ReactElement) => render(<ThemeProvider theme={m3Theme}>{node}</ThemeProvider>);
 const rows = [
-  { device_id: "d1", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "FW-SYNTH-01", model: "Quantum", software_version: "R81.20", ha_role: null, cluster_member_ref: null, role: "gateway" },
-  { device_id: "d2", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "FW-SYNTH-02", model: "PA-440", software_version: "10.2.7", ha_role: null, cluster_member_ref: null, role: "gateway" },
+  { device_id: "d1", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "FW-TANGO-01", model: "Quantum", software_version: "R81.20", ha_role: null, cluster_member_ref: null, role: "gateway" },
+  { device_id: "d2", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "FW-TANGO-02", model: "PA-440", software_version: "10.2.7", ha_role: null, cluster_member_ref: null, role: "gateway" },
 ];
 
 describe("the other vendors' versions (post-release review 2026-10-18, 1.5)", () => {
@@ -50,10 +50,10 @@ describe("the other vendors' versions (post-release review 2026-10-18, 1.5)", ()
     vi.stubGlobal("fetch", vi.fn(() => json(overview())));
     const fleet = [
       ...rows,
-      { device_id: "d3", vendor_hint: "fortinet", enrollment_state: "ENROLLED", hostname: "FW-SYNTH-03", model: "FortiGate-100F", software_version: "v7.4.12 build2902", ha_role: null, cluster_member_ref: null, role: "gateway" },
-      { device_id: "d4", vendor_hint: "fortinet", enrollment_state: "ENROLLED", hostname: "FW-SYNTH-04", model: "FMG-VM64", software_version: "v7.4.11-build2804", ha_role: null, cluster_member_ref: null, role: "management_server" },
-      { device_id: "d5", vendor_hint: "cisco_asa", enrollment_state: "ENROLLED", hostname: "FW-SYNTH-05", model: "ASA 5516", software_version: null, ha_role: null, cluster_member_ref: null, role: "gateway" },
-      { device_id: "d6", vendor_hint: "radware", enrollment_state: "REGISTERED", hostname: "FW-SYNTH-06", model: "DefensePro", software_version: "8.32", ha_role: null, cluster_member_ref: null, role: "appliance" },
+      { device_id: "d3", vendor_hint: "fortinet", enrollment_state: "ENROLLED", hostname: "FW-TANGO-03", model: "FortiGate-100F", software_version: "v7.4.12 build2902", ha_role: null, cluster_member_ref: null, role: "gateway" },
+      { device_id: "d4", vendor_hint: "fortinet", enrollment_state: "ENROLLED", hostname: "FW-TANGO-04", model: "FMG-VM64", software_version: "v7.4.11-build2804", ha_role: null, cluster_member_ref: null, role: "management_server" },
+      { device_id: "d5", vendor_hint: "cisco_asa", enrollment_state: "ENROLLED", hostname: "FW-TANGO-05", model: "ASA 5516", software_version: null, ha_role: null, cluster_member_ref: null, role: "gateway" },
+      { device_id: "d6", vendor_hint: "radware", enrollment_state: "REGISTERED", hostname: "FW-TANGO-06", model: "DefensePro", software_version: "8.32", ha_role: null, cluster_member_ref: null, role: "appliance" },
     ] as unknown as DeviceSummary[];
     const { unmount } = mount(<FleetSummary countLabel="6 registered · 5 enrolled" fleet={fleet} />);
     const card = (await screen.findByText("Other vendors · version as reported")).closest("[data-reported-versions]") as HTMLElement;
@@ -145,7 +145,7 @@ describe("on the Devices screen", () => {
   it("offers a Fleet summary control while a device is open, and it returns to the summary", async () => {
     stubScreen();
     mount(<InventoryScreen />);
-    fireEvent.click(await screen.findByText("FW-SYNTH-01"));
+    fireEvent.click(await screen.findByText("FW-TANGO-01"));
     await screen.findByRole("tablist", { name: "Device detail" });
     expect(screen.queryByTestId("fleet-summary")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "← Fleet summary" }));
@@ -153,7 +153,7 @@ describe("on the Devices screen", () => {
     expect(screen.queryByRole("tablist", { name: "Device detail" })).toBeNull();
     expect(screen.queryByRole("button", { name: "← Fleet summary" })).toBeNull();
     // the list keeps working: the device can be opened again
-    fireEvent.click(screen.getByText("FW-SYNTH-01"));
+    fireEvent.click(screen.getByText("FW-TANGO-01"));
     expect(await screen.findByRole("tablist", { name: "Device detail" })).toBeInTheDocument();
   });
 

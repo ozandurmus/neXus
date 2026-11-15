@@ -61,4 +61,39 @@ class CpFailoverControllerTest {
             assertEquals(c[2],((Map<?,?>)body.get(0)).get("recoveryMode"),java.util.Arrays.toString(c));
         }
     }
+
+    private static com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord pairMember(String id,String vendor,String role) {
+        return new com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord(id,"gateway",vendor,
+            com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState.ENROLLED,java.util.Optional.empty(),
+            java.util.Optional.empty(),java.util.Optional.empty(),java.util.Optional.ofNullable(role),java.util.Optional.of("CLS-ROMEO-02"));
+    }
+    /** Cisco ASA and FortiGate pairs carry the stored-role cluster view; Check Point rows do not. */
+    @org.junit.jupiter.api.Test
+    void listedAsaAndFortiGatePairsCarryTheHaView() {
+        Object[][] cases={{"cisco_asa","active","standby","HEALTHY"},{"cisco_asa","active",null,"UNKNOWN"},
+            {"fortinet","primary","primary","DEGRADED"},{"fortinet","primary","secondary","HEALTHY"}};
+        for (Object[] c:cases) {
+            var service=mock(CpFailoverService.class);
+            var unit=new CpFailoverService.Unit("opaque-unit","opaque-unit","CLS-ROMEO-02",null,java.util.List.of(
+                pairMember("opaque-1",(String)c[0],(String)c[1]),pairMember("opaque-2",(String)c[0],(String)c[2])));
+            when(service.summary("synthetic-actor")).thenReturn(java.util.List.of(new CpFailoverService.Summary(
+                unit,(String)c[0],false,null,null,null,null,false,false)));
+            var request=new MockHttpServletRequest();
+            request.setServletPath("/api/v2/cp-failover/summary");
+            request.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE,"synthetic-actor");
+            var body=(java.util.List<?>)new CpFailoverController(service).summary(request).getBody();
+            var view=(Map<?,?>)((Map<?,?>)body.get(0)).get("haView");
+            assertEquals(c[3],view.get("state"));
+            assertEquals("UNKNOWN",view.get("sync"));
+        }
+        var service=mock(CpFailoverService.class);
+        var unit=new CpFailoverService.Unit("opaque-unit","opaque-unit","CLS-ROMEO-01",null,
+            java.util.List.of(member("opaque-1"),member("opaque-2")));
+        when(service.summary("synthetic-actor")).thenReturn(java.util.List.of(new CpFailoverService.Summary(
+            unit,"check_point",false,null,null,null,null,false)));
+        var request=new MockHttpServletRequest();
+        request.setServletPath("/api/v2/cp-failover/summary");
+        request.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE,"synthetic-actor");
+        assertFalse(((Map<?,?>)((java.util.List<?>)new CpFailoverController(service).summary(request).getBody()).get(0)).containsKey("haView"));
+    }
 }

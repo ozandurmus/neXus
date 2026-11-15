@@ -237,4 +237,10 @@ the Check Point comparison port forms stay UNKNOWN. Text, citations and the cove
 Access-rule order, security-level and same-security defaults, real-address matching, NAT sections, contexts and port
 literals for Cisco ASA; policy order, implicit deny, defaults, VIP/NAT order, zones and address/service objects for
 FortiGate. Text, citations and grades (sections 8-14): `PATH_ANALYSIS_VENDOR_SEMANTICS_AMENDMENT_2026_11_14_ASA_FORTIGATE.md`
-(FROZEN 2026-11-14 after the HIGH quotes were re-verified on the source pages, PO approval relayed by the PO session).
+(FROZEN 2026-11-14 after the HIGH quotes were re-verified on the source pages, PO approval relayed by the PO session). Section
+15 of the same file adds A0-ASA-16a (PO approved 2026-11-14 evening): an ASA identity criterion only narrows; the
+ACE's address and port cells may prove that it does not cover a flow, never an allow.
+
+Same document, sections G1 and D6 (FROZEN 2026-11-14, PO "Kabul" / "Onaylıyorum"): a Check Point gateway object as an
+upper bound of its management addresses (skip only, never cover), and application default ports from the Panorama's
+predefined App-ID catalogue in the legacy analysis.

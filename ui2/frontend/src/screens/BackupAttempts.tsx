@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { listJobs, type JobEventView, type JobPageView } from "../auth/adminApi";
+import { listJobs, listLatestJobsByDevice, type JobEventView, type JobPageView } from "../auth/adminApi";
 import { PaginationFooter } from "../shell/DataTable";
 import { Stamp } from "../shell/PresentedText";
 import { m3 } from "../theme/m3Theme";
@@ -49,60 +49,52 @@ export function latestAttemptTime(latest: LatestAttempt | undefined): string | n
   return latest && typeof latest === "object" ? latest.submitted_at : null;
 }
 
-/** How many latest-attempt reads run at once; the rest queue (131 devices are 131 one-row job reads). */
-const LATEST_ATTEMPT_CONCURRENCY = 6;
+type AttemptsBatch =
+  | { readonly version: number; readonly state: "loading" }
+  | { readonly version: number; readonly state: "error" }
+  | { readonly version: number; readonly state: "ok"; readonly byDevice: ReadonlyMap<string, JobEventView>; readonly complete: boolean };
 
 /**
- * The latest backup attempt of every device in the fleet table, read once per device for the whole list rather than
- * once per row on the page it sits on (Product Owner, 2026-11-04: a header click orders every row, so the table has
- * to know every row's attempt, not the fifty in view). A new `version` (a backup was requested) reads them again.
- * Results are flushed in small batches so a 131-device read does not re-render the table 131 times.
+ * The latest backup attempt of every device in the fleet table, read in a single batched server request rather than
+ * one /api/v2/jobs call per device (Product Owner, 2026-11-04: a header click orders every row, so the table has
+ * to know every row's attempt, not the fifty in view; 2026-11-14: one batched read for all devices). A new `version`
+ * (a backup was requested) reads them again.
  */
 export function useLatestBackupAttempts(deviceIds: readonly string[], version = 0): ReadonlyMap<string, LatestAttempt> {
-  const [known, setKnown] = useState<{ version: number; map: ReadonlyMap<string, LatestAttempt> }>({ version, map: new Map() });
-  // reads still running, keyed by version and device, so a changed id list neither drops nor repeats them
-  const inflight = useRef(new Set<string>());
-  const idsKey = deviceIds.join("\n");
+  const [batch, setBatch] = useState<AttemptsBatch>({ version, state: "loading" });
 
   useEffect(() => {
     let active = true;
-    const ids = idsKey ? idsKey.split("\n") : [];
-    const queue = ids.filter((id) => !inflight.current.has(`${version}:${id}`));
-    const buffer = new Map<string, LatestAttempt>();
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const flush = () => {
-      timer = null;
-      const batch = new Map(buffer);
-      buffer.clear();
-      setKnown((prev) => {
-        if (prev.version !== version || batch.size === 0) return prev;
-        const map = new Map(prev.map);
-        batch.forEach((value, id) => map.set(id, value));
-        return { version, map };
+    setBatch({ version, state: "loading" });
+    listLatestJobsByDevice({ job_type: "backup" })
+      .then((value) => {
+        if (!active) return;
+        const byDevice = new Map<string, JobEventView>();
+        for (const item of value.items ?? []) {
+          if (item.target_device_id && !byDevice.has(item.target_device_id)) {
+            byDevice.set(item.target_device_id, item);
+          }
+        }
+        // the server bounds the read; a full page may have left devices out, and an absent device is then unknown, not "none"
+        const complete = (value.items?.length ?? 0) < (value.page_size ?? Number.POSITIVE_INFINITY);
+        setBatch({ version, state: "ok", byDevice, complete });
+      })
+      .catch(() => {
+        if (active) setBatch({ version, state: "error" });
       });
-    };
-    const record = (id: string, value: LatestAttempt) => {
-      buffer.set(id, value);
-      if (timer === null) timer = setTimeout(flush, 40);
-    };
-    const next = (): void => {
-      const id = queue.shift();
-      if (id === undefined || !active) return;
-      const key = `${version}:${id}`;
-      inflight.current.add(key);
-      listJobs({ device_id: id, job_type: "backup", page: 1, page_size: 1 })
-        .then((value) => record(id, value.items?.[0] ?? "none"))
-        .catch(() => record(id, "error"))
-        .finally(() => { inflight.current.delete(key); next(); });
-    };
-    // a new version starts from nothing: every row reads "loading" again until its attempt is back
-    setKnown((prev) => (prev.version === version ? prev : { version, map: new Map() }));
-    for (let i = 0; i < LATEST_ATTEMPT_CONCURRENCY; i++) next();
-    // a read already running finishes and records on its own; only the queue stops here
     return () => { active = false; };
-  }, [idsKey, version]);
+  }, [version]);
 
-  return known.version === version ? known.map : new Map();
+  const idsKey = deviceIds.join("\n");
+  return useMemo(() => {
+    if (batch.version !== version || batch.state === "loading") return new Map();
+    const ids = idsKey ? idsKey.split("\n") : [];
+    const map = new Map<string, LatestAttempt>();
+    for (const id of ids) {
+      map.set(id, batch.state === "error" ? "error" : (batch.byDevice.get(id) ?? (batch.complete ? "none" : "error")));
+    }
+    return map;
+  }, [batch, version, idsKey]);
 }
 
 /**

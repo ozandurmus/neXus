@@ -32,6 +32,15 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /api/v2/zone-matrix/draft/zones/*/delete", ActionRegistry.ZONE_MATRIX_EDIT),
             Map.entry("POST /api/v2/zone-matrix/draft/discard", ActionRegistry.ZONE_MATRIX_EDIT),
             Map.entry("POST /api/v2/zone-matrix/draft/publish", ActionRegistry.ZONE_MATRIX_PUBLISH),
+            // Zone matrix, delivery step 2 (sections 3.4, 4 and 6.1): the matrix, the template and reference confirmation.
+            Map.entry("GET /api/v2/zone-matrix/template", ActionRegistry.ZONE_MATRIX_READ),
+            Map.entry("POST /api/v2/zone-matrix/draft/cells", ActionRegistry.ZONE_MATRIX_EDIT),
+            Map.entry("POST /api/v2/zone-matrix/draft/cells/clear", ActionRegistry.ZONE_MATRIX_EDIT),
+            Map.entry("POST /api/v2/zone-matrix/draft/default", ActionRegistry.ZONE_MATRIX_EDIT),
+            Map.entry("POST /api/v2/zone-matrix/draft/service-sets", ActionRegistry.ZONE_MATRIX_EDIT),
+            Map.entry("POST /api/v2/zone-matrix/draft/service-sets/delete", ActionRegistry.ZONE_MATRIX_EDIT),
+            Map.entry("POST /api/v2/zone-matrix/draft/template-import", ActionRegistry.ZONE_MATRIX_EDIT),
+            Map.entry("POST /api/v2/zone-matrix/draft/cells/confirm-reference", ActionRegistry.ZONE_MATRIX_REFERENCE_CONFIRM),
             Map.entry("GET /devices/*/lifecycle", ActionRegistry.DEVICE_READ),
             Map.entry("GET /api/v2/lifecycle/catalog", ActionRegistry.DEVICE_READ),
             // Advisory matching part 1 (ADVISORY_MATCHING_CONTRACT.md section 8): read access follows the Lifecycle view.
@@ -42,6 +51,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("PUT /api/v2/lifecycle/catalog/*", ActionRegistry.LIFECYCLE_CATALOG_WRITE),
             Map.entry("POST /api/v2/lifecycle/catalog/*/delete", ActionRegistry.LIFECYCLE_CATALOG_WRITE),
             Map.entry("POST /api/v2/lifecycle/catalog/import", ActionRegistry.LIFECYCLE_CATALOG_WRITE),
+            Map.entry("GET /api/v2/lifecycle/catalog-sources", ActionRegistry.DEVICE_READ),
+            Map.entry("POST /api/v2/lifecycle/catalog/vendor-page", ActionRegistry.LIFECYCLE_CATALOG_WRITE),
             Map.entry("GET /api/v2/job-window", ActionRegistry.DEVICE_READ),
             // PO record 2026-11-03 D-8 (path analysis A3): topology read, overrides, rebuild.
             Map.entry("GET /api/v2/topology", ActionRegistry.TOPOLOGY_READ),
@@ -242,6 +253,9 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             // Phase B settings (section 14): the one row of retention, caps and the two switches; security_admin only.
             Map.entry("GET /api/v2/config/system-logs", ActionRegistry.SYSTEM_LOG_SETTINGS_READ),
             Map.entry("PUT /api/v2/config/system-logs", ActionRegistry.SYSTEM_LOG_SETTINGS_WRITE),
+            // Local-account password policy (off by default); security_admin only.
+            Map.entry("GET /api/v2/config/local-password-policy", ActionRegistry.LOCAL_PASSWORD_POLICY_READ),
+            Map.entry("PUT /api/v2/config/local-password-policy", ActionRegistry.LOCAL_PASSWORD_POLICY_WRITE),
             // V203: the per-family scheduled-job switches (Administration > Platform > Scheduled jobs).
             Map.entry("GET /api/v2/config/scheduled-jobs", ActionRegistry.SCHEDULED_JOBS_READ),
             Map.entry("PUT /api/v2/config/scheduled-jobs/*", ActionRegistry.SCHEDULED_JOBS_SET),
@@ -288,6 +302,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/system/storage", ActionRegistry.SYSTEM_STATUS_READ),
             Map.entry("GET /audit-logs", ActionRegistry.AUDIT_LOG_READ),
             Map.entry("POST /api/v2/jobs/*/cancel", ActionRegistry.JOB_CANCEL),
+            Map.entry("POST /api/v2/jobs/*/reconcile", ActionRegistry.JOB_RECONCILE),
             Map.entry("GET /api/v2/jobs", ActionRegistry.JOB_LOG_READ),
             Map.entry("GET /api/v2/jobs/facets", ActionRegistry.JOB_LOG_READ),
             Map.entry("GET /api/v2/jobs/stats", ActionRegistry.JOB_LOG_READ),
@@ -384,6 +399,11 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
         for (String source : com.securityexpert.nexus.ui2.service.advisorystore.AdvisorySources.KEYS) {
             routes.add("POST /internal/advisories/" + source);
             routes.add("POST /internal/advisories/" + source + "/complete");
+        }
+        // Lifecycle-source ingest (LIFECYCLE_CATALOG_SOURCES_CONTRACT.md section 3.1): the same token and port.
+        for (String source : com.securityexpert.nexus.ui2.service.lifecyclesource.LifecycleSources.FEED_KEYS) {
+            routes.add("POST /internal/lifecycle-sources/" + source);
+            routes.add("POST /internal/lifecycle-sources/" + source + "/complete");
         }
         return Set.copyOf(routes);
     }

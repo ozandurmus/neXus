@@ -1,70 +1,83 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Dialog from "@mui/material/Dialog";
 import DialogContent from "@mui/material/DialogContent";
-import FormControlLabel from "@mui/material/FormControlLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
-import Switch from "@mui/material/Switch";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Typography from "@mui/material/Typography";
 
+import { DataTable, type DataColumn } from "../../shell/DataTable";
 import { M3Button, StatusChip } from "../../shell/M3Widgets";
 import { StatePanel } from "../../shell/States";
-import { MONO, m3 } from "../../theme/m3Theme";
+import { m3 } from "../../theme/m3Theme";
 import { TYPE } from "../../theme/tokens";
-import type { ZoneMatrixData, ZoneNotice } from "./ZoneMatrixScreen";
+import type { ZoneTabProps } from "./ZoneMatrixScreen";
+import { Hash, Hint, SectionTitle, mono, panelSx } from "./zoneMatrixUi";
 import {
-  ZONE_ROLES, addressCount, createZone, deleteZone, lookupZoneAddress, shortHash, updateZone, zoneErrorCode, zoneErrorLines,
-  zoneRoleLabel, type ZoneLookupResult, type ZoneVersionDetail, type ZoneView,
+  ZONE_ROLES, addressCount, createZone, deleteZone, getZoneVersion, lookupZoneAddress, updateZone, zoneErrorCode, zoneErrorLines,
+  zoneRoleLabel, type ZoneDiffRow, type ZoneLookupResult, type ZoneVersionDetail, type ZoneView,
 } from "./zoneMatrixApi";
 
 export const CANONICAL_BLOCK_NOTE =
   "One block per line, in canonical CIDR form: the network address and its prefix length, for example 192.0.2.0/24. "
   + "A single address is written as /32 (IPv4) or /128 (IPv6). A block with host bits set, such as 192.0.2.7/24, is refused.";
 
-const mono = { fontFamily: MONO, fontSize: TYPE.mono.fontSize, lineHeight: TYPE.mono.lineHeight } as const;
+/** The line next to the Show blocks action and the lookup: both are written to the audit log by the server. */
+export const AUDIT_LINE = "Viewing blocks is recorded in the audit log";
 
 /** The label of one version as the tab names it. */
 export function versionLabel(version: { readonly state: string; readonly number: number | null; readonly revision: number }): string {
-  return version.state === "DRAFT" ? `Draft r${version.revision}, not published` : `Version ${version.number ?? "?"}`;
+  return version.state === "DRAFT" ? `Draft r${version.revision}` : `Version ${version.number ?? "?"}`;
 }
 
-interface TabProps {
-  readonly data: ZoneMatrixData;
-  readonly refresh: () => void;
-  readonly notify: (notice: ZoneNotice | null) => void;
-}
+const CHANGE_WORD: Record<string, string> = { ADDED: "Added in draft", CHANGED: "Changed in draft" };
 
 /**
  * The Zones tab: the zones of the active version (or, for an editor, of the draft being worked on), their effective
  * sizes, the unassigned space, the blocks when asked for, the address lookup and the zone editor.
  */
-export function ZonesTab({ data, onShowBlocks, refresh, notify }: TabProps & { readonly onShowBlocks: (next: boolean) => void }) {
-  const { can, draft } = data.draft;
+export function ZonesTab({ data, onShowBlocks, refresh, notify, reading }: ZoneTabProps & { readonly onShowBlocks: (next: boolean) => void }) {
+  const { can, draft, diff } = data.draft;
   const active = data.active;
   // An edit always goes to the draft; with no draft yet, the first edit starts one from the active version.
-  const editBase = draft ?? active;
+  const base = draft ?? active;
   const [view, setView] = useState<"draft" | "active">("draft");
-  const viewed: ZoneVersionDetail | null = can.edit ? (view === "active" && active ? active : editBase) : active;
-  const editable = can.edit && viewed === editBase;
-  const revision = draft ? draft.revision : null;
   const [editing, setEditing] = useState<ZoneView | "new" | null>(null);
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<ZoneView | null>(null);
   const [busy, setBusy] = useState(false);
+  const [activeBlocks, setActiveBlocks] = useState<ZoneVersionDetail | null>(null);
+  const [activeFailure, setActiveFailure] = useState<string | null>(null);
+
+  const onActive = can.edit && draft !== null && view === "active";
+  // The draft read does not carry the active version's blocks (the screen did not ask for them): this one read does,
+  // only on request. A published version never changes, so what was read stays valid until the blocks are hidden.
+  const cached = activeBlocks && active && activeBlocks.version_id === active.version_id && data.blocks ? activeBlocks : null;
+  const viewed: ZoneVersionDetail | null = can.edit ? (onActive ? (cached ?? active) : base) : active;
+  const editable = can.edit && !onActive;
+  const revision = draft ? draft.revision : null;
+  useEffect(() => { if (!data.blocks) { setActiveBlocks(null); setActiveFailure(null); } }, [data.blocks]);
+
+  const needsActiveBlocks = can.view_blocks && data.blocks && onActive && viewed !== null && viewed.zones.some((z) => z.blocks === null);
+  const readActiveBlocks = async () => {
+    if (!active) return;
+    setBusy(true); setActiveFailure(null);
+    try { setActiveBlocks(await getZoneVersion(active.version_id, true)); }
+    catch (err) { setActiveFailure(zoneErrorLines(err).join(" ")); }
+    finally { setBusy(false); }
+  };
+
+  const changes = useMemo(() => new Map<string, ZoneDiffRow>((diff?.zones ?? []).map((row) => [row.zone_id, row])), [diff]);
+  const showChanges = editable && draft !== null && changes.size > 0;
+  const showBlockList = viewed !== null && viewed.zones.some((z) => z.blocks !== null);
 
   const remove = async (zone: ZoneView) => {
     setBusy(true);
     try {
       await deleteZone(revision, zone.zone_id);
-      notify({ kind: "done", lines: [`Zone ${zone.name} was removed from the draft.`] });
+      notify({ kind: "done", lines: [`Zone ${zone.name} was removed from the draft. The draft is not published.`] });
     } catch (err) {
       notify({ kind: "refused", lines: zoneErrorLines(err) });
     } finally {
@@ -74,10 +87,38 @@ export function ZonesTab({ data, onShowBlocks, refresh, notify }: TabProps & { r
     }
   };
 
+  const columns: DataColumn<ZoneView>[] = [
+    { key: "zone", header: "Zone", wrap: true, title: (z) => z.name, render: (z) => (
+      <Box>
+        <Typography component="span" variant="body2" sx={{ fontWeight: 600, display: "block" }}>{z.name}</Typography>
+        {z.description ? <Typography component="span" variant="body2" sx={{ color: m3.onSurfaceVar, display: "block" }}>{z.description}</Typography> : null}
+      </Box>
+    ) },
+    { key: "role", header: "Role", width: 150, render: (z) => zoneRoleLabel(z.role) },
+    { key: "count", header: "Blocks", width: 80, align: "right", render: (z) => z.block_count },
+    { key: "v4", header: "IPv4 addresses", width: 150, align: "right", title: (z) => z.effective_addresses.IPV4, render: (z) => addressCount(z.effective_addresses.IPV4) },
+    { key: "v6", header: "IPv6 addresses", width: 190, align: "right", title: (z) => z.effective_addresses.IPV6, render: (z) => addressCount(z.effective_addresses.IPV6) },
+    ...(showChanges ? [{ key: "change", header: "Against the active version", width: 170, title: () => undefined,
+      render: (z: ZoneView) => (changes.get(z.zone_id) ? <StatusChip dense tone="attn" label={CHANGE_WORD[changes.get(z.zone_id)!.change] ?? "Changed in draft"} /> : <span>Unchanged</span>) }] : []),
+    ...(showBlockList ? [{ key: "blocks", header: "Blocks", width: 230, wrap: true, mono: true, title: () => undefined,
+      render: (z: ZoneView) => (z.blocks === null ? null : (
+        <Box component="ul" aria-label={`Blocks of ${z.name}`} sx={{ m: 0, p: 0, listStyle: "none", ...mono }}>
+          {z.blocks.length === 0 ? <li>No blocks</li> : z.blocks.map((block) => <li key={block}>{block}</li>)}
+        </Box>
+      )) }] : []),
+    ...(editable ? [{ key: "actions", header: "Actions", width: 170, title: () => undefined,
+      render: (z: ZoneView) => (
+        <Stack direction="row" gap={0.5}>
+          {/* Saving a zone replaces its whole block list, so the editor needs the current blocks on screen. */}
+          <M3Button emphasis="text" disabled={z.blocks === null} onClick={() => { notify(null); setEditing(z); }}>Edit</M3Button>
+          <M3Button emphasis="text" onClick={() => { notify(null); setDeleting(z); }}>Delete</M3Button>
+        </Stack>
+      ) }] : []),
+  ];
+
   return (
     <Stack gap={2}>
-      <Stack direction="row" gap={2} alignItems="center" flexWrap="wrap">
-        {draft ? <StatusChip tone="attn" label={`Draft r${draft.revision}, not published`} /> : null}
+      <Stack direction="row" gap={1.5} alignItems="center" flexWrap="wrap">
         {can.edit && draft && active ? (
           <ToggleButtonGroup exclusive size="small" value={view} aria-label="Version shown"
             onChange={(_e, next: "draft" | "active" | null) => { if (next) setView(next); }}>
@@ -86,86 +127,44 @@ export function ZonesTab({ data, onShowBlocks, refresh, notify }: TabProps & { r
           </ToggleButtonGroup>
         ) : null}
         {can.view_blocks ? (
-          <FormControlLabel label="Show blocks"
-            control={<Switch checked={data.blocks} onChange={(e) => onShowBlocks(e.target.checked)} inputProps={{ "aria-label": "Show blocks" }} />} />
+          <>
+            <M3Button emphasis="tonal" disabled={reading} onClick={() => onShowBlocks(!data.blocks)}>{data.blocks ? "Hide blocks" : "Show blocks"}</M3Button>
+            <Hint>{AUDIT_LINE}{data.blocks ? "; so is every reload while blocks are shown" : ""}</Hint>
+          </>
         ) : null}
-        {can.view_blocks ? <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>Each view of the blocks is recorded in the audit log.</Typography> : null}
         <Box sx={{ flex: 1 }} />
         {editable ? <M3Button emphasis="filled" onClick={() => { notify(null); setEditing("new"); }}>Add zone</M3Button> : null}
       </Stack>
 
       {can.edit && !draft ? (
-        <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-          There is no draft. Adding or changing a zone starts a draft; nothing changes for the active version until another person publishes it.
-        </Typography>
+        <Hint>There is no draft. Adding or changing a zone starts a draft; nothing changes for the active version until another person publishes it.</Hint>
       ) : null}
-      {can.edit ? <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{CANONICAL_BLOCK_NOTE}</Typography> : null}
+      {editable && viewed !== null && viewed.zones.length > 0 && !data.blocks ? (
+        <Hint>{can.view_blocks ? "Show blocks to edit a zone: saving replaces the zone's whole block list." : "Editing a zone's blocks needs the right to view blocks."}</Hint>
+      ) : null}
 
       {viewed === null ? (
-        <StatePanel variant="empty" title="No zone version has been published yet"
-          body={can.edit ? "Add the first zone to start a draft." : "Zones appear here once a version is published."} />
+        <StatePanel variant="empty" title="No version has been published"
+          body={can.edit ? "Add the first zone to start a draft." : "Zones appear here once a version is published and another person approves it."} />
       ) : <>
-        <Typography component="h3" sx={{ ...TYPE.section, m: 0 }}>
-          {versionLabel(viewed)}
-          <Box component="span" title={viewed.content_sha256} sx={{ ...mono, color: m3.onSurfaceVar, ml: 1.5, fontWeight: 400 }}>{shortHash(viewed.content_sha256)}</Box>
-        </Typography>
-        {viewed.zones.length === 0 ? <StatePanel variant="empty" title="This version has no zones" body="Every address is unassigned." /> : (
-          <Table size="small" aria-label="Zones">
-            <TableHead>
-              <TableRow>
-                <TableCell>Zone</TableCell><TableCell>Role</TableCell><TableCell align="right">Blocks</TableCell>
-                <TableCell align="right">IPv4 addresses</TableCell><TableCell align="right">IPv6 addresses</TableCell>
-                {editable ? <TableCell>Actions</TableCell> : null}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {viewed.zones.map((zone) => (
-                <TableRow key={zone.zone_id} data-zone={zone.name}>
-                  <TableCell sx={{ verticalAlign: "top" }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{zone.name}</Typography>
-                    {zone.description ? <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{zone.description}</Typography> : null}
-                    {zone.blocks ? (
-                      <Box component="ul" aria-label={`Blocks of ${zone.name}`} sx={{ m: 0, mt: 0.5, p: 0, listStyle: "none", ...mono }}>
-                        {zone.blocks.length === 0 ? <li>No blocks</li> : zone.blocks.map((block) => <li key={block}>{block}</li>)}
-                      </Box>
-                    ) : null}
-                  </TableCell>
-                  <TableCell sx={{ verticalAlign: "top" }}>{zoneRoleLabel(zone.role)}</TableCell>
-                  <TableCell align="right" sx={{ verticalAlign: "top" }}>{zone.block_count}</TableCell>
-                  <TableCell align="right" sx={{ verticalAlign: "top" }} title={zone.effective_addresses.IPV4}>{addressCount(zone.effective_addresses.IPV4)}</TableCell>
-                  <TableCell align="right" sx={{ verticalAlign: "top" }} title={zone.effective_addresses.IPV6}>{addressCount(zone.effective_addresses.IPV6)}</TableCell>
-                  {editable ? (
-                    <TableCell sx={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
-                      {deleting === zone.zone_id ? (
-                        <Stack direction="row" gap={1} alignItems="center">
-                          <Typography variant="body2">Delete {zone.name}?</Typography>
-                          <M3Button emphasis="tonal" disabled={busy} onClick={() => { void remove(zone); }}>Confirm delete</M3Button>
-                          <M3Button emphasis="text" disabled={busy} onClick={() => setDeleting(null)}>Keep</M3Button>
-                        </Stack>
-                      ) : (
-                        <Stack direction="row" gap={1}>
-                          {/* Saving a zone replaces its whole block list, so the editor needs the current blocks on screen. */}
-                          <M3Button emphasis="text" disabled={zone.blocks === null} onClick={() => { notify(null); setEditing(zone); }}>Edit</M3Button>
-                          <M3Button emphasis="text" onClick={() => { notify(null); setDeleting(zone.zone_id); }}>Delete</M3Button>
-                        </Stack>
-                      )}
-                    </TableCell>
-                  ) : null}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-        {editable && !data.blocks && viewed.zones.length > 0 ? (
-          <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-            {can.view_blocks ? "Turn on Show blocks to edit a zone: saving replaces the zone's whole block list." : "Editing a zone's blocks needs the right to view blocks."}
-          </Typography>
+        <SectionTitle note={viewed.state === "DRAFT" ? "Zones as they stand in the draft." : "Zones of the version in force."}>
+          {versionLabel(viewed)}{viewed.state === "DRAFT" ? "" : <Box component="span" sx={{ ml: 1.5, color: m3.onSurfaceVar, fontWeight: 400 }}><Hash value={viewed.content_sha256} /></Box>}
+        </SectionTitle>
+        <DataTable ariaLabel="Zones" columns={columns} rows={viewed.zones} rowKey={(z) => z.zone_id}
+          emptyText="This version has no zones. Every address is unassigned." />
+        <Box data-testid="unassigned-space" sx={{ ...panelSx, py: 1.25, flexDirection: "row", flexWrap: "wrap", gap: 2, alignItems: "baseline" }}>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>Unassigned</Typography>
+          <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>Addresses that no zone holds. A state, not a zone and not "internet".</Typography>
+          <Typography variant="body2" title={viewed.unassigned_addresses.IPV4}>IPv4 {addressCount(viewed.unassigned_addresses.IPV4)}</Typography>
+          <Typography variant="body2" title={viewed.unassigned_addresses.IPV6}>IPv6 {addressCount(viewed.unassigned_addresses.IPV6)}</Typography>
+        </Box>
+        {needsActiveBlocks ? (
+          <Stack direction="row" gap={1.5} alignItems="center" flexWrap="wrap">
+            <M3Button emphasis="outlined" disabled={busy} onClick={() => { void readActiveBlocks(); }}>Show blocks of the active version</M3Button>
+            <Hint>The blocks shown were read for the draft. This is a separate read, also recorded in the audit log</Hint>
+          </Stack>
         ) : null}
-        <Typography variant="body2" data-testid="unassigned-space">
-          Unassigned address space (covered by no zone):{" "}
-          <span title={viewed.unassigned_addresses.IPV4}>IPv4 {addressCount(viewed.unassigned_addresses.IPV4)}</span>,{" "}
-          <span title={viewed.unassigned_addresses.IPV6}>IPv6 {addressCount(viewed.unassigned_addresses.IPV6)}</span> addresses.
-        </Typography>
+        {activeFailure ? <Typography variant="body2" role="alert" sx={{ color: m3.error }}>{activeFailure}</Typography> : null}
         <RedundantBlocks value={viewed.redundant_blocks} />
         {can.view_blocks ? <AddressLookup version={viewed} /> : null}
       </>}
@@ -174,6 +173,20 @@ export function ZonesTab({ data, onShowBlocks, refresh, notify }: TabProps & { r
         <ZoneDialog key={editing === "new" ? "new" : editing.zone_id} zone={editing === "new" ? null : editing} revision={revision}
           onClose={() => setEditing(null)} onChanged={refresh}
           onSaved={(name) => { setEditing(null); notify({ kind: "done", lines: [`Zone ${name} was saved to the draft. The draft is not published.`] }); refresh(); }} />
+      ) : null}
+      {deleting !== null ? (
+        <Dialog open onClose={busy ? undefined : () => setDeleting(null)} aria-label={`Delete zone ${deleting.name}`} PaperProps={{ sx: { borderRadius: "28px", width: 480, maxWidth: "95vw" } }}>
+          <DialogContent sx={{ p: 3, display: "flex", flexDirection: "column", gap: 2 }}>
+            <Typography component="h2" sx={{ ...TYPE.section, m: 0 }}>Delete zone {deleting.name}?</Typography>
+            <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+              The zone is removed from the draft only. Its addresses become unassigned unless another zone holds them. Nothing is published by deleting.
+            </Typography>
+            <Stack direction="row" gap={1} justifyContent="flex-end">
+              <M3Button emphasis="text" disabled={busy} onClick={() => setDeleting(null)}>Keep zone</M3Button>
+              <M3Button emphasis="tonal" disabled={busy} onClick={() => { void remove(deleting); }}>Confirm delete</M3Button>
+            </Stack>
+          </DialogContent>
+        </Dialog>
       ) : null}
     </Stack>
   );
@@ -217,29 +230,35 @@ function AddressLookup({ version }: { readonly version: ZoneVersionDetail }) {
       setBusy(false);
     }
   };
+  const under = version.state === "DRAFT" ? "the draft" : `version ${version.number ?? "?"}`;
   return (
-    <Box component="form" aria-label="Address lookup" onSubmit={(e) => { e.preventDefault(); void submit(); }}
-      sx={{ border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", p: 2, display: "flex", flexDirection: "column", gap: 1.25 }}>
-      <Typography component="h3" sx={{ ...TYPE.section, m: 0 }}>Address lookup</Typography>
-      <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-        Which zone holds one address under {version.state === "DRAFT" ? "the draft" : `version ${version.number ?? "?"}`}. Each lookup is recorded in the audit log.
-      </Typography>
+    <Box component="form" aria-label="Address lookup" onSubmit={(e) => { e.preventDefault(); void submit(); }} sx={panelSx}>
+      <SectionTitle note={`Which zone holds one address under ${under}.`}>Address lookup</SectionTitle>
       <Stack direction="row" gap={1.5} alignItems="center" flexWrap="wrap">
-        <TextField size="small" label="Address" placeholder="192.0.2.7" value={address} onChange={(e) => setAddress(e.target.value)} sx={{ minWidth: 280 }} />
+        <TextField size="small" label="Address" placeholder="192.0.2.7" value={address} onChange={(e) => setAddress(e.target.value)} sx={{ minWidth: 280 }}
+          inputProps={{ "aria-describedby": "zone-lookup-audit", style: mono }} />
         <M3Button emphasis="tonal" disabled={busy || address.trim() === ""} onClick={() => { void submit(); }}>Look up</M3Button>
+        <Hint id="zone-lookup-audit">A lookup is recorded in the audit log</Hint>
       </Stack>
       {result ? (
-        <Typography variant="body2" role="status" data-testid="lookup-result">
-          {result.found.zone_id === null || result.found.zone_name === "UNASSIGNED"
-            ? `${result.address} is in no zone (UNASSIGNED).`
-            : `${result.address} is in zone ${result.found.zone_name ?? result.found.zone_id}.`}
-          {" "}{result.found.family === "IPV6" ? "IPv6" : "IPv4"}, {result.found.state === "DRAFT" ? "draft" : `version ${result.found.number ?? "?"}`}.
-        </Typography>
+        <Box role="status" data-testid="lookup-result">
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            {result.found.zone_id === null
+              ? `${result.address} is not in any zone (unassigned).`
+              : `${result.address} is in ${result.found.zone_name ?? "a zone that has no name in this view"}.`}
+          </Typography>
+          <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+            {result.found.family === "IPV6" ? "IPv6" : "IPv4"}, {result.found.state === "DRAFT" ? "draft, not published" : `version ${result.found.number ?? "?"}`}
+          </Typography>
+        </Box>
       ) : null}
       {failure ? <Typography variant="body2" role="alert" sx={{ color: m3.error }}>{failure}</Typography> : null}
     </Box>
   );
 }
+
+/** The non-empty lines of the blocks box: what is sent, and what the screen counts. */
+const blockLines = (text: string) => text.split("\n").map((line) => line.trim()).filter((line) => line !== "");
 
 /** Add or edit one zone of the draft. The request carries the draft revision on screen (`null` with no draft yet). */
 function ZoneDialog({ zone, revision, onClose, onSaved, onChanged }: {
@@ -256,16 +275,16 @@ function ZoneDialog({ zone, revision, onClose, onSaved, onChanged }: {
   const [blocks, setBlocks] = useState((zone?.blocks ?? []).join("\n"));
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<readonly string[]>([]);
+  const lines = blockLines(blocks);
   const save = async () => {
-    const sent = blocks.split("\n").map((line) => line.trim()).filter((line) => line !== "");
-    const input = { name: name.trim(), description: description.trim() === "" ? null : description.trim(), role: role === "" ? null : role, blocks: sent };
+    const input = { name: name.trim(), description: description.trim() === "" ? null : description.trim(), role: role === "" ? null : role, blocks: lines };
     setBusy(true); setErrors([]);
     try {
       if (zone) await updateZone(revision, zone.zone_id, input);
       else await createZone(revision, input);
       onSaved(input.name);
     } catch (err) {
-      setErrors(zoneErrorLines(err, sent));
+      setErrors(zoneErrorLines(err, lines));
       if (zoneErrorCode(err) === "REQUEST_CHANGED") onChanged();
       setBusy(false);
     }
@@ -277,6 +296,7 @@ function ZoneDialog({ zone, revision, onClose, onSaved, onChanged }: {
         <Typography component="h2" sx={{ ...TYPE.section, m: 0 }}>{title}</Typography>
         <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
           {revision === null ? "Saving starts a draft." : `Saving changes draft r${revision}.`} Nothing is published by saving.
+          {zone ? " Saving replaces the zone's whole block list." : ""}
         </Typography>
         <TextField size="small" label="Name" required value={name} onChange={(e) => setName(e.target.value)} inputProps={{ maxLength: 64 }}
           helperText="Unique, 1 to 64 characters" />
@@ -286,7 +306,7 @@ function ZoneDialog({ zone, revision, onClose, onSaved, onChanged }: {
           {ZONE_ROLES.map((r) => <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>)}
         </TextField>
         <TextField label="Blocks" multiline minRows={6} maxRows={16} value={blocks} onChange={(e) => setBlocks(e.target.value)}
-          placeholder={"192.0.2.0/24\n2001:db8::/32"} helperText={CANONICAL_BLOCK_NOTE} InputProps={{ sx: mono }} />
+          placeholder={"192.0.2.0/24\n2001:db8::/32"} helperText={`${lines.length} ${lines.length === 1 ? "block" : "blocks"}. ${CANONICAL_BLOCK_NOTE}`} InputProps={{ sx: mono }} />
         {errors.length > 0 ? (
           <Box role="alert" sx={{ color: m3.error }}>
             {errors.map((line, index) => <Typography key={index} variant="body2" sx={{ fontWeight: index === 0 ? 600 : 400 }}>{line}</Typography>)}

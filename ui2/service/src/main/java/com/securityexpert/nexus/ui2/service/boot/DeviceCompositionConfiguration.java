@@ -90,6 +90,13 @@ public class DeviceCompositionConfiguration {
         return new com.securityexpert.nexus.ui2.persistence.lifecycle.JooqLifecycleCatalogRepository(transactionBoundary);
     }
 
+    /** The vendor side of the lifecycle catalog (V219, docs/design/LIFECYCLE_CATALOG_SOURCES_CONTRACT.md). */
+    @Bean
+    public com.securityexpert.nexus.ui2.persistence.lifecycle.LifecycleVendorRepository lifecycleVendorRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.lifecycle.JooqLifecycleVendorRepository(transactionBoundary);
+    }
+
     /** The advisory store (V205, docs/design/ADVISORY_MATCHING_CONTRACT.md section 5). */
     @Bean
     public com.securityexpert.nexus.ui2.persistence.advisory.AdvisoryRepository advisoryRepository(

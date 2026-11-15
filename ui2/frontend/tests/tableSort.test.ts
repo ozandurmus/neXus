@@ -12,8 +12,8 @@ describe("compareSortValues", () => {
     const names = ["FW-TANGO-10", "FW-TANGO-2", "FW-TANGO-1", "fw-tango-3"];
     expect([...names].sort((a, b) => compareSortValues(a, b, "text", "asc"))).toEqual(["FW-TANGO-1", "FW-TANGO-2", "fw-tango-3", "FW-TANGO-10"]);
     expect([...names].sort((a, b) => compareSortValues(a, b, "text", "desc"))).toEqual(["FW-TANGO-10", "fw-tango-3", "FW-TANGO-2", "FW-TANGO-1"]);
-    // addresses and prefixes: 10.0.2.0/24 before 10.0.10.0/24
-    expect(["10.0.10.0/24", "10.0.2.0/24", "192.0.2.0/24"].sort((a, b) => compareSortValues(a, b))).toEqual(["10.0.2.0/24", "10.0.10.0/24", "192.0.2.0/24"]);
+    // addresses and prefixes: 192.0.2.2/24 before 192.0.2.10/24
+    expect(["192.0.2.10/24", "192.0.2.2/24", "198.51.100.0/24"].sort((a, b) => compareSortValues(a, b))).toEqual(["192.0.2.2/24", "192.0.2.10/24", "198.51.100.0/24"]);
   });
 
   it("compares numbers as numbers, not as text", () => {

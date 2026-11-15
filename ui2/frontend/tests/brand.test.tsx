@@ -41,6 +41,14 @@ describe("NexusWordmark", () => {
     expect(new Set(ids).size).toBe(2);
     for (const id of ids) expect(container.querySelector(`[mask="url(#${id})"]`)).not.toBeNull();
   });
+
+  it("renders a renamed product name from the setting while keeping the three brand tokens", () => {
+    render(<NexusWordmark name="Sentinel" />);
+    const logo = screen.getByRole("img", { name: "Sentinel" });
+    expect(logo).toHaveAttribute("data-brand", "wordmark");
+    expect(logo.querySelector("text")?.textContent).toBe("Sentinel");
+    expect(new Set(paints(logo))).toEqual(new Set([m3.brandInk, m3.brandTeal, m3.brandBlue]));
+  });
 });
 
 describe("NexusMark", () => {

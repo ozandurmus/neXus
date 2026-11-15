@@ -12,7 +12,7 @@ class LifecycleCatalogImportTest {
     }
 
     @Test void validQuotedCsvAndBlankDatesCarryImportProvenance() {
-        var result = parse("CHECKPOINT,HARDWARE,Example Appliance,,2030-02-28,,\"Vendor note, with \"\"quotes\"\"\"\r\n");
+        var result = parse("CHECKPOINT,HARDWARE,6600 Appliance,,2030-02-28,,\"Vendor note, with \"\"quotes\"\"\"\r\n");
         assertTrue(result.errors().isEmpty());
         var entry = result.entries().getFirst();
         assertNull(entry.endOfSale());
@@ -33,9 +33,24 @@ class LifecycleCatalogImportTest {
     }
 
     @Test void duplicateKeyWithinFileIsAnErrorRatherThanLastRowWins() {
-        var result = parse("CHECKPOINT,HARDWARE,Example Appliance,,2030-01-01,,\nCHECKPOINT,HARDWARE,Example Appliance,,2031-01-01,,\n");
+        var result = parse("CHECKPOINT,HARDWARE,6600,,2030-01-01,,\nCHECKPOINT,HARDWARE,6600,,2031-01-01,,\n");
         assertEquals(1, result.errors().size());
         assertEquals(3, result.errors().getFirst().row());
+        // Two spellings of one model have one match key: the second row is the same product.
+        var spelled = parse("CHECKPOINT,HARDWARE,6600,,2030-01-01,,\nCHECKPOINT,HARDWARE,Check Point 6600,,2030-01-01,,\n");
+        assertEquals(1, spelled.errors().size());
+    }
+
+    @Test void aProductOfAVendorWithKeyRulesMustGiveAKeyAndOtherVendorsKeepFreeText() {
+        var refused = parse("CHECKPOINT,HARDWARE,Example Appliance,,2030-01-01,,\nFORTINET,SOFTWARE,7.4,,2030-01-01,,\n"
+                + "CISCO_ASA,SOFTWARE,ASA 9.18,,2027-11-30,,\nFORTINET,SOFTWARE,FortiOS 7.4,,2028-11-11,,\n"
+                + "RADWARE,SOFTWARE,ExampleOS 1.2,,2030-01-01,,\nPALOALTO,HARDWARE,PA-3220,2023-08-31,2028-08-31,,\n");
+        assertEquals(2, refused.errors().size());
+        assertEquals(2, refused.errors().get(0).row());
+        assertTrue(refused.errors().get(0).reason().contains("expected a model such as 6600"));
+        assertEquals(3, refused.errors().get(1).row());
+        assertTrue(refused.errors().get(1).reason().contains("FortiOS 7.4 or FortiManager 7.4"));
+        assertEquals(4, refused.entries().size());
     }
 
     @Test void malformedHeadersQuotesKindsVendorsAndLimitsFailClosed() {

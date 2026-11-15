@@ -39,7 +39,8 @@ public final class JooqDeviceRepository implements DeviceRepository {
             + "coalesce(d.observed_software_version, dc.software_version, c_parent.software_version) as observed_software_version, "
             + "coalesce(d.observed_ha_role, inv_ha.role) as observed_ha_role, "
             + "coalesce(c_parent.display_name, d.cluster_member_ref, dc.cluster_reference) as cluster_member_ref, "
-            + "(d.ha_pair_claim is not null and d.cluster_member_ref is null) as ha_peer_unconfirmed, "
+            + "(d.ha_pair_claim is not null and (d.cluster_member_ref is null "
+            + "or (d.cluster_member_ref <> d.ha_pair_claim and d.peer_follow_outcome <> 'CORROBORATED'))) as ha_peer_unconfirmed, "
             + "coalesce(vs_info.virtual_systems, inv_run.virtual_systems) as virtual_systems, "
             + "latest_job.state as latest_job_state, "
             + "latest_job.job_type as latest_job_type, "
@@ -368,7 +369,8 @@ public final class JooqDeviceRepository implements DeviceRepository {
                         + "identity_mismatch_state = {7}, identity_mismatch_presented_primary = {8}, "
                         + "identity_mismatch_presented_secondary = {9}, "
                         + "identity_mismatch_detected_at = case when {7} = 'OPEN' then {6} else null end, "
-                        + "cluster_member_ref = {10}, virtual_system_ref = {11}, "
+                        + "cluster_member_ref = coalesce({10}, cluster_member_ref), "
+                        + "virtual_system_ref = coalesce({11}, virtual_system_ref), "
                         + "peer_follow_outcome = {12}, peer_follow_reason = {13} "
                         + "where device_id = {14} and enrollment_state = 'DRAFT'",
                 facts.observedHostname().orElse(null), facts.observedModel().orElse(null),

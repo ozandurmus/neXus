@@ -135,6 +135,11 @@ final class PolicyNormalization {
             if (metadata.vendor().equals("CP") && "CP access layer".equals(section.source())) state = checkPoint(section);
             else {
                 boolean joined = false;
+                if (metadata.vendor().equals("ASA") && "ASA access-group".equals(section.source())) {
+                    // One ASA access-group binding = one ACL, an independent first-match list (A0-ASA-1/2). Which lists a
+                    // packet meets, and in what order (interface, then global), is the lookup's business, not shadowing's.
+                    open.clear(); previous = section; current = fresh.get(); return current;
+                }
                 if (metadata.vendor().equals("PAN")) {
                     int phase = panPhase(section);
                     boolean ordered = phase >= 0 && phase >= lastPhase && sectionIds.add(section.id());
@@ -228,15 +233,16 @@ final class PolicyNormalization {
     static final Set<String> UPPER_BOUND_DROPPED = Set.of("time", "schedule", "vpn", "content", "category", "source-user", "time-uncollected");
     private static Match normalize(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver, boolean lookup, boolean ruleTypes, boolean upperBound) {
         try {
-            if (!Set.of("CP", "PAN").contains(snapshot.metadata().vendor()) || PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section))
+            if (!EVALUATED_VENDORS.contains(snapshot.metadata().vendor()) || PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section))
                 throw new Unknown("unsupported rulebase");
             Selector source = resolver.cell(rule.source(), "address"), destination = resolver.cell(rule.destination(), "address"),
                 service = resolver.cell(rule.service(), "service");
-            List<Selector> cells = List.of(source, destination, service, snapshot.metadata().vendor().equals("CP") && rule.application().refs().isEmpty()
+            List<Selector> cells = List.of(source, destination, service, EMPTY_APPLICATION_ANY.contains(snapshot.metadata().vendor()) && rule.application().refs().isEmpty()
                 && !rule.application().negated() ? new Selector(true, Map.of()) : service.applicationDefault()
                     ? resolver.applications(rule.application()) : resolver.cell(rule.application(), "application"));
-            if (snapshot.metadata().vendor().equals("PAN") && (rule.extras().getOrDefault("from", List.of()).isEmpty()
+            if (PLACED_VENDORS.contains(snapshot.metadata().vendor()) && (rule.extras().getOrDefault("from", List.of()).isEmpty()
                     || rule.extras().getOrDefault("to", List.of()).isEmpty())) throw new Unknown("zone evidence not collected");
+            if (fgtZonePlacement(snapshot, rule)) throw new Unknown("zone membership not evaluated");
             if (snapshot.metadata().vendor().equals("CP") && rule.extras().getOrDefault("install-on", List.of()).isEmpty())
                 throw new Unknown("install-on evidence not collected");
             if (rule.enabled() == null) throw new Unknown("enabled state is unknown");
@@ -244,18 +250,23 @@ final class PolicyNormalization {
             // it is a terminal rule of the parent layer; it must name exactly one inline layer. The lookup descends into it.
             boolean applyLayer = snapshot.metadata().vendor().equals("CP") && rule.action().equals("Apply Layer")
                 && (lookup || rule.extras().getOrDefault("inline-layer", List.of()).size() == 1);
-            if (!applyLayer && !Set.of("Accept", "Drop", "Reject", "allow", "deny", "drop", "reset-client", "reset-server", "reset-both").contains(rule.action()))
+            if (!applyLayer && !TERMINAL_ACTIONS.contains(rule.action()))
                 throw new Unknown("non-terminal or unknown action");
             for (var entry : rule.extras().entrySet()) {
                 String key = entry.getKey(); var values = entry.getValue();
                 if (applyLayer && key.equals("inline-layer")) continue;
-                if (upperBound && UPPER_BOUND_DROPPED.contains(key)) continue;
+                if (upperBound && (UPPER_BOUND_DROPPED.contains(key) || asaIdentity(snapshot, key))) continue;
                 if (Set.of("time", "schedule", "vpn", "content").contains(key)) {
                     for (String id : values) {
                         resolver.budget.spend(); var object = snapshot.objects().get(id);
                         if (object == null || !object.status().equals("RESOLVED") || !object.type().equals("any")) throw new Unknown("time or content constraint");
                     }
                 } else if (Set.of("source-user", "category").contains(key) && !values.equals(List.of("any"))) throw new Unknown("user or category constraint");
+                // ASA identity firewall and TrustSec criteria (A0-ASA-16): a full match never decides by identity, so the
+                // rule stays UNKNOWN here; the criterion only narrows (A0-ASA-16a), see #partial and the upper bound above.
+                else if (asaIdentity(snapshot, key)) throw new Unknown("user or category constraint");
+                // FortiGate users and groups (A0-FG-12): UNKNOWN as well.
+                else if (FGT_IDENTITY.contains(key) && snapshot.metadata().vendor().equals("FGT")) throw new Unknown("user or category constraint");
                 else if (key.equals("rule-type") && !values.equals(List.of("universal"))
                         && !(ruleTypes && (values.equals(List.of("intrazone")) || values.equals(List.of("interzone"))))) throw new Unknown("zone rule type constraint");
                 else if (key.equals("install-on")) {
@@ -269,6 +280,7 @@ final class PolicyNormalization {
                             throw new Unknown("unresolved install-on selector");
                     }
                 } else if (!Set.of("from", "to", "install-on", "source-user", "category", "rule-type", "tag", "layer-name", "last-modified", "last-modifier", "log-setting").contains(key)
+                        && !(snapshot.metadata().vendor().equals("ASA") && ASA_INERT.contains(key)) && !fgtInert(snapshot, key)
                         && !key.startsWith("track-") && !key.startsWith("profile-setting/") && !untargeted(snapshot, rule, key)) throw new Unknown("unsupported rule constraint");
             }
             if (!upperBound && snapshot.metadata().vendor().equals("CP") && !rule.extras().containsKey("time")) throw new Unknown("time evidence not collected");
@@ -283,6 +295,64 @@ final class PolicyNormalization {
             if (problem.getMessage().equals("analysis budget")) throw problem;
             return new Match(rule, List.of(), Map.of(), problem.getMessage());
         }
+    }
+    /**
+     * Vendors whose security rulebases are evaluated. ASA and FortiGate: ASA_FORTIGATE_POLICY_DESIGN_2026_11_14.md,
+     * A0-ASA-1..20, A0-FG-1..27.
+     */
+    static final Set<String> EVALUATED_VENDORS = Set.of("CP", "PAN", "ASA", "FGT");
+    /** Actions that end matching; ASA ACEs permit or deny (A0-ASA-1), FortiGate policies accept or deny (A0-FG-5/7). */
+    static final Set<String> TERMINAL_ACTIONS = Set.of("Accept", "Drop", "Reject", "allow", "deny", "drop", "reset-client", "reset-server",
+            "reset-both", "permit", "accept");
+    /** Actions that let the matched traffic through. */
+    static final Set<String> ALLOWING_ACTIONS = Set.of("Accept", "allow", "permit", "accept");
+    /** Vendors whose rules carry interface or zone placements ({@code from}/{@code to}) that must be present. */
+    static final Set<String> PLACED_VENDORS = Set.of("PAN", "ASA", "FGT");
+    /** Vendors whose stored application cell is empty when the rule has no application criterion (= any). */
+    static final Set<String> EMPTY_APPLICATION_ANY = Set.of("CP", "ASA", "FGT");
+    /**
+     * FortiGate keys that never change what a policy matches: policy-mode source NAT happens on the exit path after the
+     * policy lookup (A0-FG-17, A0-FG-22).
+     */
+    static final Set<String> FGT_INERT = Set.of("source-translation-type", "translated-source");
+    /** FortiGate VIP match options (A0-FG-20): inert only in a VDOM with no VIP at all (A0-FG-18/19 stay UNKNOWN). */
+    static final Set<String> FGT_VIP_OPTIONS = Set.of("fgt-match-vip", "fgt-match-vip-only");
+    /** FortiGate users, groups and FSSO groups (A0-FG-12): UNKNOWN. */
+    static final Set<String> FGT_IDENTITY = Set.of("user");
+
+    /**
+     * A FortiGate key that does not change the match in this snapshot. A rule placed on a zone or SD-WAN zone is left to
+     * {@link #fgtZonePlacement}: zone membership is not compared by name.
+     */
+    static boolean fgtInert(PolicySnapshot snapshot, String key) {
+        if (!"FGT".equals(snapshot.metadata().vendor())) return false;
+        if (FGT_INERT.contains(key)) return true;
+        return FGT_VIP_OPTIONS.contains(key) && snapshot.sections().stream().noneMatch(s -> "FGT NAT".equals(s.source()) && s.name().equals("FGT VIP"))
+            && snapshot.objects().values().stream().noneMatch(o -> o.type().startsWith("vip"));
+    }
+
+    /**
+     * A FortiGate rule whose {@code srcintf}/{@code dstintf} names a zone or SD-WAN zone: a zone matches its member
+     * interfaces (A0-FG-9), which a placement compared by name would miss, so such a rule is not evaluated here.
+     */
+    static boolean fgtZonePlacement(PolicySnapshot snapshot, Rule rule) {
+        if (!"FGT".equals(snapshot.metadata().vendor())) return false;
+        Set<String> zones = new HashSet<>();
+        for (var o : snapshot.objects().values()) if (Set.of("zone", "sdwan-zone").contains(o.type())) zones.add(o.name());
+        if (zones.isEmpty()) return false;
+        for (String key : List.of("from", "to")) for (String value : rule.extras().getOrDefault(key, List.of())) if (zones.contains(value)) return true;
+        return false;
+    }
+    /** ASA mapper provenance keys: the binding direction and the ACL a rule came from; they never change what matches. */
+    static final Set<String> ASA_INERT = Set.of("asa-direction", "asa-acl");
+    /** ASA identity firewall users/groups and TrustSec security groups on an ACE. */
+    static final Set<String> ASA_IDENTITY = Set.of("user", "security-group");
+    /**
+     * An ASA identity criterion. A0-ASA-16a (PO approved 2026-11-14): it only narrows what the ACE matches, so the ACE's
+     * address and port cells bound its match; the bound proves only that the ACE does not cover a flow, never an allow.
+     */
+    static boolean asaIdentity(PolicySnapshot snapshot, String key) {
+        return ASA_IDENTITY.contains(key) && "ASA".equals(snapshot.metadata().vendor());
     }
     /** Install-on object statuses shadowing accepts as opaque placement tokens (see {@link #normalize}). */
     static final Set<String> OPAQUE_PLACEMENTS = Set.of("UNSUPPORTED", "UNRESOLVED");
@@ -346,6 +416,12 @@ final class PolicyNormalization {
      * the role's networks ({@link Resolver#accessRoleBound}). The identity the role also requires only narrows the match
      * further, so the bound may prove disjointness and nothing else; a partial prior never covers, so an access-role rule
      * still covers nothing.</li>
+     * <li>A Check Point source or destination naming a gateway-class object is resolved, where it can be, to that
+     * object's management addresses (PO decision D-1, {@link Resolver#gatewayBound}): an upper bound that may prove
+     * disjointness and nothing else, exactly like the access-role bound.</li>
+     * <li>An ASA identity firewall or TrustSec criterion (user, user-group, security-group) is the same kind of narrowing
+     * condition (A0-ASA-16a, PO approved 2026-11-14): the ACE matches within its address and port cells or not at all, so
+     * those cells may prove disjointness; the ACE itself is never a full match, so it never covers or decides.</li>
      * <li>A Palo Alto zone rule type other than universal changes how the from/to zones apply, so those zones are not
      * used; missing zone or install-on evidence is an unknown placement. A Check Point rule whose time column was not
      * collected is an incompletely collected rule record and is not used. Rules outside the security rulebase are not
@@ -354,13 +430,14 @@ final class PolicyNormalization {
      */
     static Partial partial(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver) {
         String vendor = snapshot.metadata().vendor();
-        if (!Set.of("CP", "PAN").contains(vendor) || PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) return null;
-        boolean cp = vendor.equals("CP"), zones = true;
+        if (!EVALUATED_VENDORS.contains(vendor) || PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) return null;
+        boolean cp = vendor.equals("CP"), asa = vendor.equals("ASA"), zones = !fgtZonePlacement(snapshot, rule);
         if (cp && !rule.extras().containsKey("time")) return null;
         for (var entry : rule.extras().entrySet()) {
             String key = entry.getKey();
             resolver.budget.spend();
-            if (NARROWING.contains(key) || INERT.contains(key) || Set.of("from", "to", "install-on").contains(key)
+            if (NARROWING.contains(key) || INERT.contains(key) || asa && ASA_INERT.contains(key) || asaIdentity(snapshot, key)
+                    || fgtInert(snapshot, key) || Set.of("from", "to", "install-on").contains(key)
                     || key.startsWith("track-") || key.startsWith("profile-setting/") || untargeted(snapshot, rule, key)
                     || targetNarrows(snapshot, rule, key)) continue;
             if (key.equals("rule-type")) { zones &= entry.getValue().equals(List.of("universal")); continue; }
@@ -374,15 +451,17 @@ final class PolicyNormalization {
         for (int i = 0; i < 4; i++) {
             var cell = cells.get(i);
             try {
-                selectors[i] = i == 3 && cp && cell.refs().isEmpty() && !cell.negated() ? new Selector(true, Map.of())
+                selectors[i] = i == 3 && EMPTY_APPLICATION_ANY.contains(vendor) && cell.refs().isEmpty() && !cell.negated() ? new Selector(true, Map.of())
                     : i == 3 && selectors[2] != null && selectors[2].applicationDefault() ? resolver.applications(cell) : resolver.cell(cell, families.get(i));
                 resolved |= !selectors[i].any();
             } catch (Unknown unresolved) {
                 if (unresolved.getMessage().equals("analysis budget")) throw unresolved;
                 // A Check Point source naming an access role: the role's networks bound it (Resolver#accessRoleBound).
-                if (i == 0 && cp) try {
-                    var bound = resolver.accessRoleBound(cell);
-                    if (!bound.any()) { selectors[0] = bound; resolved = true; }
+                // A Check Point source or destination naming a gateway-class object: its management addresses bound it
+                // (D-1, Resolver#staticBound). Either bound may prove disjointness and nothing else.
+                if ((i == 0 || i == 1) && cp) try {
+                    var bound = resolver.staticBound(cell, i == 0);
+                    if (!bound.any()) { selectors[i] = bound; resolved = true; }
                 } catch (Unknown none) {
                     if (none.getMessage().equals("analysis budget")) throw none;
                 }
@@ -608,7 +687,61 @@ final class PolicyNormalization {
         if (service.any()) return contains(application, laterApplication, budget) ? true : null;
         if (service.applicationDefault() && laterService.applicationDefault()
                 && (application.any() ? laterApplication.any() : !laterApplication.any() && contains(application, laterApplication, budget))) return true;
-        return null;
+        return defaultPortsHold(service, application, laterService, laterApplication, budget);
+    }
+    /**
+     * Legacy analysis only ({@link PolicyHygiene#analyzeLegacy}): the standard ports of the applications, where known
+     * ({@link Resolver#defaultPorts}), decide the application-default pairs {@link #holds} leaves undecided. Null outside
+     * the legacy analysis, and whenever one application's ports are unknown.
+     * <ul>
+     * <li>Earlier explicit ports S, later application-default with applications T (not any), the earlier applications
+     * holding T: the later rule matches each t of T only on its standard ports P(t). TRUE when every P(t) lies in S;
+     * otherwise FALSE -- application t on a standard port outside S is a packet of the later rule the earlier one does
+     * not match.</li>
+     * <li>Earlier application-default with applications holding the later explicit applications T (not any), later
+     * explicit ports Q (not any): TRUE when Q lies in every P(t); otherwise FALSE -- application t on a port of Q outside
+     * P(t) is matched by the later rule and not by the earlier one.</li>
+     * </ul>
+     * Every other pair keeps its former answer (undecided). Semantics: A0 section 6 (application-default allows an
+     * application only on its standard ports) with the catalogue the PO approved on 2026-11-14.
+     */
+    static final ThreadLocal<java.util.function.Function<String, Selector>> DEFAULT_PORTS = new ThreadLocal<>();
+    private static Boolean defaultPortsHold(Selector service, Selector application, Selector laterService, Selector laterApplication, Budget budget) {
+        var ports = DEFAULT_PORTS.get();
+        if (ports == null || service.applicationDefault() == laterService.applicationDefault()) return null;
+        if (laterApplication.any() || laterApplication.tokens().isEmpty() || !laterApplication.ranges().isEmpty()) return null;
+        if (!contains(application, laterApplication, budget)) return null;
+        if (laterService.applicationDefault()) {
+            if (service.any() || !service.tokens().isEmpty()) return null;
+            List<Selector> standard = new ArrayList<>();
+            for (String token : laterApplication.tokens()) {
+                budget.spend();
+                var p = ports.apply(token);
+                if (p == null) return null;
+                standard.add(p);
+            }
+            Map<String, List<Range>> merged = new TreeMap<>();
+            for (Selector p : standard) p.ranges().forEach((family, ranges) -> merged.computeIfAbsent(family, f -> new ArrayList<>()).addAll(ranges));
+            for (var entry : merged.entrySet()) {
+                entry.getValue().sort(Comparator.comparingLong(Range::start));
+                List<Range> out = new ArrayList<>();
+                for (Range r : entry.getValue()) {
+                    budget.spend();
+                    if (!out.isEmpty() && out.get(out.size() - 1).end() + 1 >= r.start()) { var last = out.remove(out.size() - 1); out.add(new Range(last.start(), Math.max(last.end(), r.end()))); }
+                    else out.add(r);
+                }
+                entry.setValue(out);
+            }
+            return contains(service, new Selector(false, merged), budget);
+        }
+        if (laterService.any() || !laterService.tokens().isEmpty()) return null;
+        for (String token : laterApplication.tokens()) {
+            budget.spend();
+            var p = ports.apply(token);
+            if (p == null) return null;
+            if (!contains(p, laterService, budget)) return false;
+        }
+        return true;
     }
     static boolean contains(Selector a, Selector b, Budget budget) {
         if (a.any()) return true;
@@ -800,6 +933,96 @@ final class PolicyNormalization {
             }
             if (!role) throw new Unknown("dynamic or unsupported object type");
             return union(parts);
+        }
+        /**
+         * The upper bound of a Check Point source ({@code roles} true) or destination cell that names access roles (source
+         * only, {@link #accessRoleBound}) or gateway-class objects, directly or inside address groups: the union of each
+         * access role's networks, each gateway object's management addresses ({@link #gatewayBound}) and the other
+         * address objects, each resolved as {@link #object} does. Without an access role or a gateway object it is no
+         * bound (the cell either resolves exactly or stays unresolved). Read only by {@link PolicyNormalization#partial}.
+         */
+        Selector staticBound(Cell cell, boolean roles) {
+            if (cell.negated()) throw new Unknown("negated selector");
+            if (cell.refs().isEmpty()) throw new Unknown("missing selector");
+            List<Selector> parts = new ArrayList<>(); boolean[] limited = {false};
+            for (String id : cell.refs()) {
+                budget.spend(); var o = objects.get(id);
+                if (roles && o != null && o.type().equals("access-role") && o.status().equals("DYNAMIC")) { limited[0] = true; parts.add(accessRole(id, o)); }
+                else parts.add(boundObject(id, new HashSet<>(), limited));
+            }
+            if (!limited[0]) throw new Unknown("dynamic or unsupported object type");
+            return union(parts);
+        }
+        private Selector boundObject(String id, Set<String> path, boolean[] limited) {
+            budget.spend();
+            var o = objects.get(id);
+            if (o != null && o.type().equals("gateway") && o.status().equals("RESOLVED")) { limited[0] = true; return gatewayBound(id, o); }
+            if (o == null || !o.status().equals("RESOLVED") || !Set.of("group", "address-group").contains(o.type())) return object(id, "address", new HashSet<>());
+            if (o.members().isEmpty() || !o.values().isEmpty()) throw new Unknown("empty or dynamic group");
+            if (!path.add(id) || path.size() > 32) throw new Unknown("group cycle or depth limit");
+            List<Selector> children = new ArrayList<>();
+            for (String member : o.members()) children.add(boundObject(member, path, limited));
+            path.remove(id);
+            return union(children);
+        }
+        /**
+         * PO decision D-1 (2026-11-14, PATH_ANALYSIS_VENDOR_SEMANTICS_AMENDMENT_2026_11_13.md section G1): a Check Point
+         * gateway or cluster object matches at most its own addresses -- main, interface, cluster virtual and member
+         * addresses as the management object lists them (the mapper's {@code gateway-ipv4} values) -- and, since the engine
+         * resolves no IPv6 object, any IPv6 address. Used only to pass an earlier rule over, never to cover: it is read only
+         * by {@link PolicyNormalization#partial}, and a partial prior never covers. Fail-closed: without the mapper's
+         * completeness marker, with an unparseable address, or with members, it is no bound.
+         */
+        Selector gatewayBound(String id, PolicyObject o) {
+            budget.spend(); String key = "gateway-addresses:" + id;
+            if (memo.containsKey(key)) return memo.get(key);
+            if (!o.members().isEmpty() || !o.values().contains("gateway-addresses: complete")) throw new Unknown("dynamic or unsupported object type");
+            List<Range> ranges = new ArrayList<>();
+            for (String value : o.values()) {
+                budget.spend();
+                if (!value.startsWith("gateway-ipv4: ") && !value.startsWith("ipv4-address: ")) continue;
+                try {
+                    var r = PolicyRuleQuery.interval(value.substring(value.indexOf(": ") + 2));
+                    if (r[0] != r[1]) throw new IllegalArgumentException("not one address");
+                    ranges.add(new Range(r[0], r[1]));
+                } catch (IllegalArgumentException invalid) { throw new Unknown("unsupported address representation"); }
+            }
+            if (ranges.isEmpty()) throw new Unknown("missing address values");
+            var result = union(List.of(new Selector(false, Map.of("ipv4", ranges, "ipv6", List.of(new Range(0, Long.MAX_VALUE))))));
+            memo.put(key, result); return result;
+        }
+        /**
+         * The standard ports of one application reference of an application-default rule, or null when they are not
+         * known: a predefined App-ID application (contentApplication) through the catalogue object the mapper added under
+         * {@code ref(snapshot, "predefined-application", name)} (PanoramaPolicyMapper#withPredefinedApplications), or a
+         * stored custom application (type application, RESOLVED) through its own {@code default/port} values. Only
+         * {@code default/port: tcp|udp/<ports>} values are read; an application identified by IP protocol or ICMP type,
+         * one without ports, or any value outside that shape has unknown ports (null). Read only by the legacy analysis.
+         */
+        Selector defaultPorts(String id) {
+            if (panSnapshot == null) return null;
+            budget.spend(); String key = "default-ports:" + id;
+            if (memo.containsKey(key)) return memo.get(key);
+            var o = objects.get(id);
+            PolicyObject source = o == null ? null
+                : contentApplication(id, o) ? objects.get(ref(panSnapshot, "predefined-application", o.name()))
+                : o.type().equals("application") && o.status().equals("RESOLVED") && o.members().isEmpty() ? o : null;
+            Selector result = null;
+            if (source != null && source.status().equals("RESOLVED") && (source == o || source.type().equals("application-defaults"))) {
+                Map<String, List<Range>> ranges = new TreeMap<>(); boolean known = true;
+                for (String value : source.values()) {
+                    budget.spend();
+                    if (value.startsWith("default/ident-by-")) { known = false; break; }
+                    if (!value.startsWith("default/port: ")) continue;
+                    String spec = value.substring("default/port: ".length()).trim(); int slash = spec.indexOf('/');
+                    String protocol = slash < 0 ? "" : spec.substring(0, slash);
+                    if (!Set.of("tcp", "udp").contains(protocol)) { known = false; break; }
+                    try { for (String port : spec.substring(slash + 1).split(",", -1)) ranges.computeIfAbsent(protocol, k -> new ArrayList<>()).add(port(port)); }
+                    catch (Unknown invalid) { known = false; break; }
+                }
+                if (known && !ranges.isEmpty()) result = union(List.of(new Selector(false, ranges)));
+            }
+            memo.put(key, result); return result;
         }
         private Selector accessRole(String id, PolicyObject o) {
             budget.spend(); String key = "access-role-networks:" + id;

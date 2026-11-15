@@ -148,8 +148,8 @@ class LocalIdentityAdministrationTest {
         }
 
         @Override
-        public void revoke(String bindingId, String revokedByActorFingerprint, String actionId) {
-            bindings.removeIf(b -> b.bindingId().equals(bindingId));
+        public boolean revoke(String bindingId, String revokedByActorFingerprint, String actionId) {
+            return bindings.removeIf(b -> b.bindingId().equals(bindingId));
         }
     }
 

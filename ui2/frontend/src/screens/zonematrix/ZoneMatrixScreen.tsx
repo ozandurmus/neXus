@@ -3,10 +3,13 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 
 import { ScreenHeader, ScreenRoot } from "../../shell/ScreenLayout";
-import { M3Button, M3Tabs } from "../../shell/M3Widgets";
-import { RestrictedPanel, StatePanel, isRestricted } from "../../shell/States";
+import { M3Button, M3Tabs, StatusChip } from "../../shell/M3Widgets";
+import { RestrictedPanel, StatePanel, Ts, isRestricted } from "../../shell/States";
+import { actorLabel } from "../../shell/presenters";
 import { useFetchOnMount } from "../../shell/useFetchOnMount";
 import { m3 } from "../../theme/m3Theme";
+import { RADIUS } from "../../theme/tokens";
+import { MatrixTab } from "./MatrixTab";
 import { ZonesTab } from "./ZonesTab";
 import { VersionsTab } from "./VersionsTab";
 import {
@@ -28,10 +31,25 @@ export interface ZoneNotice {
   readonly lines: readonly string[];
 }
 
+/** What every tab gets: the data, a reload, a way to say something, and whether a read is running. */
+export interface ZoneTabProps {
+  readonly data: ZoneMatrixData;
+  /** Reads the screen again; `hideBlocks` drops the raw blocks, so they are read again only when the user asks. */
+  readonly refresh: (hideBlocks?: boolean) => void;
+  readonly notify: (notice: ZoneNotice | null) => void;
+  readonly reading: boolean;
+}
+
+/**
+ * One load. The draft read comes first: it says whether a draft exists, and with `blocks=1` the server also reads the
+ * blocks of the active version for the comparison (one audit row each). So when an editor looks at a draft, the active
+ * version is read without blocks here; the Zones tab asks for its blocks only if the editor switches to it.
+ */
 async function load(blocks: boolean): Promise<ZoneMatrixData> {
   const draft = await getZoneDraft(blocks);
+  const activeBlocks = blocks && !(draft.can.edit && draft.draft !== null);
   const [active, versions] = await Promise.all([
-    draft.active ? getZoneVersion(draft.active.version_id, blocks) : Promise.resolve(null),
+    draft.active ? getZoneVersion(draft.active.version_id, activeBlocks) : Promise.resolve(null),
     listZoneVersions(),
   ]);
   return { draft, active, versions: versions.versions ?? [], blocks };
@@ -41,7 +59,7 @@ export function Notice({ notice }: { readonly notice: ZoneNotice }) {
   const refused = notice.kind === "refused";
   return (
     <Box role={refused ? "alert" : "status"} data-notice={notice.kind}
-      sx={{ border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", px: 2, py: 1.25,
+      sx={{ border: `1px solid ${m3.outlineVar}`, borderRadius: `${RADIUS.card}px`, px: 2, py: 1.25,
             bgcolor: refused ? m3.errorContainer : m3.scLow, color: refused ? m3.onErrorContainer : m3.onSurface }}>
       {notice.lines.map((line, index) => (
         <Typography key={index} variant="body2" sx={{ fontWeight: index === 0 ? 600 : 400 }}>{line}</Typography>
@@ -51,36 +69,84 @@ export function Notice({ notice }: { readonly notice: ZoneNotice }) {
 }
 
 /**
- * Zone matrix (ZONE_MATRIX_CONTRACT.md section 7.1), delivery step 1: the zones (named sets of IP blocks), the draft, the
- * published versions and the four-eyes publish flow, plus the audited address lookup. There is no matrix statement,
- * cell or evaluation yet, so the screen has only the Zones and Versions tabs.
+ * The draft, said once above both tabs. The caller who may see it gets its revision and last editor; a reader the server
+ * withholds it from is told only that a draft is being prepared.
+ */
+function DraftBanner({ data }: { readonly data: ZoneMatrixData }) {
+  const { draft, draft_exists: exists } = data.draft;
+  if (draft) {
+    const last = draft.revisions.length > 0 ? draft.revisions[draft.revisions.length - 1] : null;
+    return (
+      <Box data-testid="draft-banner" sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1.5, px: 2, py: 1,
+        border: `1px solid ${m3.outlineVar}`, borderRadius: `${RADIUS.card}px`, bgcolor: m3.scLow }}>
+        <StatusChip tone="attn" label={`Draft r${draft.revision}, not published`} />
+        <Typography variant="body2">Changes apply only after another person publishes the draft.</Typography>
+        {last ? (
+          <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+            Last changed by <span title={actorLabel(last.actor).raw ?? undefined}>{actorLabel(last.actor).label}</span> <Ts at={last.occurred_at} />
+          </Typography>
+        ) : null}
+      </Box>
+    );
+  }
+  if (exists) {
+    return (
+      <Box data-testid="draft-banner" sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1.5, px: 2, py: 1,
+        border: `1px solid ${m3.outlineVar}`, borderRadius: `${RADIUS.card}px`, bgcolor: m3.scLow }}>
+        <StatusChip tone="attn" label="A draft is being prepared" />
+        <Typography variant="body2">The zones below are the active version; the draft is shown to editors and publishers only.</Typography>
+      </Box>
+    );
+  }
+  return null;
+}
+
+/**
+ * Zone matrix (ZONE_MATRIX_CONTRACT.md section 7.1), delivery steps 1 and 2: the Matrix, Zones and Versions tabs
+ * (the zone matrix grid, explicit cells, version default, named service sets, template import, compliance reference
+ * confirmation, zones, draft diff with loosening changes, four-eyes publish flow and audited address lookup). Nothing
+ * is evaluated against firewall rules yet.
  *
  * The raw blocks are read only when the user asks ("Show blocks"), because the server writes an audit row for every
- * such read. Every control is drawn from the response's `can` booleans and `publish_check`.
+ * such read. Every control is drawn from the response's `can` booleans and `publish_check`. The "names masked" badge is
+ * the shell's own, shown once any response came back masked.
  */
 export function ZoneMatrixScreen() {
   const [wantBlocks, setWantBlocks] = useState(false);
+  const [reading, setReading] = useState(false);
   const [notice, setNotice] = useState<ZoneNotice | null>(null);
   const { data, error, rawError, refresh } = useFetchOnMount<ZoneMatrixData>(
-    () => load(wantBlocks),
+    () => {
+      setReading(true);
+      // A refused blocks read must not leave the screen asking for blocks again on the next reload.
+      return load(wantBlocks)
+        .catch((err: unknown) => { if (wantBlocks) setWantBlocks(false); throw err; })
+        .finally(() => setReading(false));
+    },
     (err) => zoneErrorLines(err).join(" "),
   );
-  const setBlocks = (next: boolean) => { setNotice(null); setWantBlocks(next); refresh(); };
+  const reload = (hideBlocks = false) => { if (hideBlocks) setWantBlocks(false); refresh(); };
+  const showBlocks = (next: boolean) => { setNotice(null); setWantBlocks(next); refresh(); };
+  const common = data === null ? null : { data, refresh: reload, notify: setNotice, reading };
   return (
     <ScreenRoot screenType="tool">
       <ScreenHeader title="Zone matrix"
-        subtitle="Zones are sets of IP blocks the bank maintains. The matrix statements arrive in the next delivery step." />
-      {data === null
+        subtitle="Zones are sets of IP blocks the bank maintains. Statements are policy intent; nothing is evaluated against firewall rules yet." />
+      {data === null || common === null
         ? (error === null ? <StatePanel variant="empty" title="Reading the zones…" announce="status" />
           : isRestricted(rawError) ? <RestrictedPanel area="Zone matrix" />
           : <StatePanel variant="error" title="The zones could not be read" body={error}
-              action={<M3Button emphasis="outlined" onClick={refresh}>Retry</M3Button>} />)
+              action={<M3Button emphasis="outlined" onClick={() => refresh()}>Retry</M3Button>} />)
         : <>
-          {error !== null ? <Notice notice={{ kind: "refused", lines: ["The latest read failed; the screen shows the previous data.", error] }} /> : null}
+          {error !== null ? (
+            <Notice notice={{ kind: "refused", lines: ["The latest read failed; the screen shows the previous data.", error] }} />
+          ) : null}
           {notice ? <Notice notice={notice} /> : null}
+          <DraftBanner data={data} />
           <M3Tabs ariaLabel="Zone matrix views" tabs={[
-            { label: "Zones", panel: <ZonesTab data={data} onShowBlocks={setBlocks} refresh={refresh} notify={setNotice} /> },
-            { label: "Versions", panel: <VersionsTab data={data} refresh={refresh} notify={setNotice} /> },
+            { label: "Matrix", panel: <MatrixTab {...common} /> },
+            { label: "Zones", panel: <ZonesTab {...common} onShowBlocks={showBlocks} /> },
+            { label: "Versions", panel: <VersionsTab {...common} /> },
           ]} />
         </>}
     </ScreenRoot>

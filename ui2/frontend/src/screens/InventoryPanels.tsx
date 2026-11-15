@@ -18,6 +18,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
+import { PRODUCT_NAME } from "../brand/product";
 import { ObjectHeader } from "../shell/ObjectHeader";
 import { PaginationFooter } from "../shell/DataTable";
 import { SortHeaderCell, useTableSort, type SortColumn } from "../shell/tableSort";
@@ -2389,7 +2390,7 @@ export function HeaderPillLink({ href, onClick, title, children }: {
  */
 export function configurationNotApplicable(device: { readonly role?: string; readonly vendor_hint: string }): string | undefined {
   if (device.role !== "management_server" || device.vendor_hint === "check_point") return undefined;
-  return `neXus has no gated configuration read for a ${vendorDisplayName(device.vendor_hint)} management server; its configuration plane is the devices it manages (14I MS-2).`;
+  return `${PRODUCT_NAME} has no gated configuration read for a ${vendorDisplayName(device.vendor_hint)} management server; its configuration plane is the devices it manages (14I MS-2).`;
 }
 
 /**
@@ -3431,7 +3432,7 @@ export function BackupPanel({ deviceId, vendorHint, backupTarget }: { readonly d
       <Stack spacing={2.5}>
         <RequestBackupControl deviceId={deviceId} onAdmitted={() => { fetcher.refresh(); setAttemptsVersion((v) => v + 1); }} />
         <EmptyPanel title="Not a backup target"
-          body="This device is not switched on as a backup target, so neXus keeps no archive for it and schedules no backup. The switch is on the Backups screen; a switched-on device is backed up at the next 02:00 GMT+3 run." />
+          body={`This device is not switched on as a backup target, so ${PRODUCT_NAME} keeps no archive for it and schedules no backup. The switch is on the Backups screen; a switched-on device is backed up at the next 02:00 GMT+3 run.`} />
         <BackupAttempts key={deviceId} deviceId={deviceId} version={attemptsVersion} collapseTo={BACKUP_ATTEMPTS_SHOWN} quietWhenEmpty />
       </Stack>
     );

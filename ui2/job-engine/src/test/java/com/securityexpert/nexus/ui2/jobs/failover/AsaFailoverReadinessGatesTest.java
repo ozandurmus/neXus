@@ -15,8 +15,8 @@ import com.securityexpert.nexus.ui2.platform.ActionClass;
 
 /**
  * PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS.md section 1: four exact literals, read-only, inserted DRAFTED
- * (a DRAFTED row never resolves KNOWN, so nothing is sent until the Product Owner approves and a later migration signs
- * them off); the one-time measurement rows of V210 stay as they are.
+ * by V212 and signed off by V222 after the Product Owner's approval of 2026-11-14
+ * (PO_DECISION_RECORD_2026_11_14_ASA_FAILOVER_READINESS_READS.md); the one-time measurement rows of V210 stay as they are.
  */
 class AsaFailoverReadinessGatesTest {
     private static final Map<String, String> LITERALS = Map.of(
@@ -34,10 +34,10 @@ class AsaFailoverReadinessGatesTest {
         return ROWS.stream().filter(r -> r.gateId().equals(id)).findFirst().orElseThrow(() -> new AssertionError(id));
     }
 
-    @Test void theFourRowsAreDraftedReadOnlyAndExactLiterals() {
+    @Test void theFourRowsAreSignedOffReadOnlyAndExactLiterals() {
         for (var entry : LITERALS.entrySet()) {
             GateRow r = row(entry.getKey());
-            assertEquals(SignOffState.DRAFTED, r.signOffState(), entry.getKey());
+            assertEquals(SignOffState.SIGNED_OFF, r.signOffState(), entry.getKey());
             assertEquals(ActionClass.CLASS_0_READ, r.actionClass(), entry.getKey());
             assertEquals("cisco_asa", r.vendor());
             assertEquals("cisco_asa_firewall", r.platformRoleScope());
@@ -47,7 +47,8 @@ class AsaFailoverReadinessGatesTest {
             assertEquals(entry.getValue(), r.canonicalCommandKey());
             assertEquals(TIMEOUTS.get(entry.getKey()), r.timeoutS());
             assertEquals("none", r.retryRule());
-            assertTrue(r.sourceDocumentPointer().contains("PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS"));
+            assertTrue(r.sourceDocumentPointer().contains("PO_DECISION_RECORD_2026_11_14_ASA_FAILOVER_READINESS_READS"));
+            assertTrue(r.sourceDocumentPointer().contains("PO approval 2026-11-14"));
             assertFalse(r.violatesWriteMarkerDenylist());
         }
         assertTrue(row("asa_failover_show_failover").maxFrequency().contains("twice"));

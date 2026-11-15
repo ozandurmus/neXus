@@ -13,6 +13,7 @@ import { Icon } from "./Icon";
 import { M3Button, StatusChip } from "./M3Widgets";
 import { useSession } from "../auth/SessionContext";
 import { NexusWordmark } from "../brand/NexusWordmark";
+import { PRODUCT_NAME } from "../brand/product";
 import { useFetchOnMount } from "./useFetchOnMount";
 import { listNotifications, getProjectPlan, responsesAreMasked } from "../auth/adminApi";
 import { primaryRoleLabel, roleTokenLabel } from "./roleLabel";
@@ -76,7 +77,7 @@ function BuildBadge() {
     : `Build ${data.fallback}`;
   const tooltip = data.commit
     ? `Deployed commit ${data.commit}${data.builtAt ? ` at ${data.builtAt}` : ""}`
-    : `neXus Active Build: ${data.fallback}`;
+    : `${PRODUCT_NAME} Active Build: ${data.fallback}`;
   return (
     <Tooltip title={tooltip}>
       <Box sx={{ display: "inline-flex" }}>

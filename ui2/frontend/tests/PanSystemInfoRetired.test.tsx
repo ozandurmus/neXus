@@ -21,11 +21,11 @@ const firewall = (over: Partial<DeviceSummary> = {}): DeviceSummary => ({
 
 describe("Palo Alto firewall platform facts after show system info was retired", () => {
   it("shows the type=version facts and says once that content versions and uptime are not collected", () => {
-    const device = firewall({ model: "PA-SYNTHETIC", software_version: "9.9.9-test", serial_number: "SYNTHETIC-SERIAL", platform_facts_source: "pan_type_version" });
+    const device = firewall({ model: "PA-5445", software_version: "9.9.9-test", serial_number: "SN-00000001", platform_facts_source: "pan_type_version" });
     const tiles = identityTiles(device, null);
-    expect(tiles.find((t) => t.label === "Model")!.value).toBe("PA-SYNTHETIC");
+    expect(tiles.find((t) => t.label === "Model")!.value).toBe("PA-5445");
     expect(tiles.find((t) => t.label === "Software version")!.value).toBe("9.9.9-test");
-    expect(tiles.find((t) => t.label === "Serial number")!.value).toBe("SYNTHETIC-SERIAL");
+    expect(tiles.find((t) => t.label === "Serial number")!.value).toBe("SN-00000001");
     expect(tiles.find((t) => t.label === "Evidence source")!.value).toBe("pan_type_version");
     for (const label of ["Content versions", "Uptime"]) {
       const tile = tiles.find((t) => t.label === label)!;
@@ -42,7 +42,7 @@ describe("Palo Alto firewall platform facts after show system info was retired",
   });
 
   it("says a field the type=version answer lacked is not reported, never a value", () => {
-    const tiles = identityTiles(firewall({ serial_number: "SYNTHETIC-SERIAL", platform_facts_source: "pan_type_version" }), null);
+    const tiles = identityTiles(firewall({ serial_number: "SN-00000001", platform_facts_source: "pan_type_version" }), null);
     for (const label of ["Model", "Software version"]) {
       const tile = tiles.find((t) => t.label === label)!;
       expect(tile.value, label).toBeNull();

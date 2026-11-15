@@ -264,34 +264,60 @@ public final class CiscoAsaPlan {
     }
 
     private static final Pattern ROUTE = Pattern.compile(
-            "^([A-Za-z*]+(?:\\s+(?:E1|E2|N1|N2|IA|L1|L2|ia|\\*))*)\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+)\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+)\\s+(.*)$");
-    private static final Pattern VIA = Pattern.compile("via (\\d+\\.\\d+\\.\\d+\\.\\d+),\\s*(\\S+)");
+            "^([A-Za-z*]+(?:\\s+(?:E1|E2|N1|N2|IA|L1|L2|ia|\\*))*)\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+)\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+)(?:\\s+(.*))?$");
+    private static final Pattern VIA = Pattern.compile("via (\\d+\\.\\d+\\.\\d+\\.\\d+),");
     private static final Pattern CONNECTED = Pattern.compile("is directly connected,\\s*(\\S+)");
+    /** An equal-cost path of the route above: "[distance/metric] via {next hop}, ..., {nameif}" with no code or destination. */
+    private static final Pattern CONTINUATION = Pattern.compile("^\\[\\d+/\\d+\\]\\s+via (\\d+\\.\\d+\\.\\d+\\.\\d+),.*$");
 
-    /** {@code show route}: code, destination, dotted mask, then "via {next hop}, {nameif}" or "is directly connected, {nameif}". */
+    /**
+     * {@code show route}: code, destination, dotted mask, then "via {next hop}, [age, ]{nameif}" or "is directly
+     * connected, {nameif}"; a following line with only "[distance/metric] via ..." is another equal-cost path of the same
+     * route (also when the destination line itself carries no path because the entry wrapped).
+     *
+     * <p>Every row in a recognised form is stored active: {@code show route} shows "the entries in the routing table" and
+     * a packet "is forwarded through the interface associated with that route" (Cisco ASA 9.22 general operations CLI
+     * guide, Routing Overview; PATH_ANALYSIS_DESIGN.md amendment 2026-11-14). Paths of one route are stored ECMP ("If
+     * there are multiple paths to the same destination with equal metrics, load balancing is done on these equal cost
+     * paths", same page). A row in any other form keeps active, ECMP and next-hop kind UNKNOWN.</p>
+     */
     public static List<InventoryRoute> parseRoutes(String out) {
         List<InventoryRoute> routes = new ArrayList<>();
         if (out == null) {
             return routes;
         }
+        String destination = null;
+        String protocol = null;
+        int groupStart = -1;
         for (String raw : out.split("\\R")) {
-            Matcher m = ROUTE.matcher(raw.strip());
+            String line = raw.strip();
+            Matcher m = ROUTE.matcher(line);
             if (!m.matches()) {
+                Matcher more = CONTINUATION.matcher(line);
+                if (more.matches() && destination != null && groupStart >= 0 && (routes.size() == groupStart
+                        || routes.get(routes.size() - 1).nextHopKind().filter(InventoryRoute.NEXT_HOP_IP::equals).isPresent())) {
+                    Optional<String> iface = lastField(line);
+                    if (iface.isEmpty()) {
+                        destination = null;
+                        groupStart = -1;
+                        continue;
+                    }
+                    routes.add(route(destination, Optional.of(more.group(1)), iface, protocol, false, InventoryRoute.NEXT_HOP_IP));
+                    for (int i = groupStart; i < routes.size() && routes.size() - groupStart > 1; i++) {
+                        InventoryRoute r = routes.get(i);
+                        routes.set(i, new InventoryRoute(r.routeId(), r.destination(), r.nextHop(), r.interfaceName(),
+                                r.protocol(), r.routeTable(), r.active(), Optional.of(true), r.metric(), r.nextHopKind()));
+                    }
+                } else if (!line.isEmpty()) {
+                    destination = null;
+                    groupStart = -1;
+                }
                 continue;
             }
             String code = m.group(1).replace("*", "").trim().split("\\s+")[0];
-            String rest = m.group(4);
-            Optional<String> nextHop = Optional.empty();
-            Optional<String> iface = Optional.empty();
-            Matcher via = VIA.matcher(rest);
-            Matcher conn = CONNECTED.matcher(rest);
-            if (via.find()) {
-                nextHop = Optional.of(via.group(1));
-                iface = Optional.of(via.group(2));
-            } else if (conn.find()) {
-                iface = Optional.of(conn.group(1));
-            }
-            String protocol = switch (code) {
+            String rest = m.group(4) == null ? "" : m.group(4);
+            destination = m.group(2) + "/" + prefixLength(m.group(3));
+            protocol = switch (code) {
                 case "C" -> InventoryRoute.PROTOCOL_CONNECTED;
                 case "L" -> InventoryRoute.PROTOCOL_HOST;
                 case "S" -> m.group(2).equals("0.0.0.0") && m.group(3).equals("0.0.0.0") ? InventoryRoute.PROTOCOL_DEFAULT
@@ -301,10 +327,41 @@ public final class CiscoAsaPlan {
                 case "R" -> InventoryRoute.PROTOCOL_RIP;
                 default -> InventoryRoute.PROTOCOL_UNKNOWN;
             };
-            routes.add(new InventoryRoute(UUID.randomUUID().toString(), m.group(2) + "/" + prefixLength(m.group(3)), nextHop,
-                    iface, protocol, Optional.empty()));
+            Matcher via = VIA.matcher(rest);
+            Matcher conn = CONNECTED.matcher(rest);
+            groupStart = routes.size();
+            if (rest.isEmpty()) {
+                // A long entry wraps: its paths follow on "[distance/metric] via ..." lines.
+                continue;
+            }
+            if (via.find() && lastField(rest).isPresent()) {
+                routes.add(route(destination, Optional.of(via.group(1)), lastField(rest), protocol, false, InventoryRoute.NEXT_HOP_IP));
+            } else if (conn.find()) {
+                routes.add(route(destination, Optional.empty(), Optional.of(conn.group(1)), protocol, false,
+                        InventoryRoute.NEXT_HOP_CONNECTED));
+            } else {
+                groupStart = -1;
+                routes.add(new InventoryRoute(UUID.randomUUID().toString(), destination, Optional.empty(), Optional.empty(),
+                        protocol, Optional.empty()));
+            }
         }
         return routes;
+    }
+
+    private static InventoryRoute route(String destination, Optional<String> nextHop, Optional<String> iface, String protocol,
+            boolean ecmp, String nextHopKind) {
+        return new InventoryRoute(UUID.randomUUID().toString(), destination, nextHop, iface, protocol, Optional.empty(),
+                Optional.of(true), ecmp ? Optional.of(true) : Optional.empty(), Optional.empty(), Optional.of(nextHopKind));
+    }
+
+    /** The nameif: the field after the last comma ("via 192.0.2.254, 1d02h, inside" names inside, not the age). */
+    private static Optional<String> lastField(String text) {
+        int comma = text.lastIndexOf(',');
+        if (comma < 0) {
+            return Optional.empty();
+        }
+        String field = text.substring(comma + 1).strip();
+        return field.matches("\\S+") ? Optional.of(field) : Optional.empty();
     }
 
     static int prefixLength(String dotted) {

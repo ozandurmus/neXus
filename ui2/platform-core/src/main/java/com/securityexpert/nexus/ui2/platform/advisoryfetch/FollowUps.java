@@ -118,6 +118,29 @@ public final class FollowUps {
                 + year + "-" + number + ".json");
     }
 
+    /** An English Cisco bulletin link of a listing page, relative or absolute; the French copies end in -fr or _fr. */
+    private static final Pattern CISCO_EOL_LINK = Pattern.compile(
+            "href=\"(?:https?://www\\.cisco\\.com)?(/c/en/us/products/collateral/security/[a-z0-9-]{1,80}/[A-Za-z0-9_.-]{1,160}\\.html)\"");
+
+    /** The bulletin pages the Cisco listing pages link, in page order, without repeats and without the French copies. */
+    public static List<URI> ciscoEol(List<byte[]> listings) {
+        Set<URI> out = new LinkedHashSet<>();
+        for (byte[] listing : listings == null ? List.<byte[]>of() : listings) {
+            if (listing == null) continue;
+            Matcher matcher = CISCO_EOL_LINK.matcher(new String(listing, StandardCharsets.UTF_8));
+            while (matcher.find() && out.size() < MAX_CISCO_EOL) {
+                String path = matcher.group(1);
+                if (path.endsWith("-fr.html") || path.endsWith("_fr.html")) continue;
+                URI uri = parse("https://" + AdvisorySources.CISCO_EOL.host() + path);
+                if (uri != null && AdvisorySources.allowed(AdvisorySources.CISCO_EOL, uri)) out.add(uri);
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    /** At most this many bulletins per run (the two listings name about 85 today). */
+    static final int MAX_CISCO_EOL = 400;
+
     /** True when a fetched Cisco file names the ASA software family; the others are dropped unread. */
     public static boolean namesCiscoAsa(byte[] document) {
         return document != null && new String(document, StandardCharsets.ISO_8859_1).contains(CISCO_ASA_FAMILY);

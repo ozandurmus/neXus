@@ -7,7 +7,7 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * Storage of zone-matrix versions (V215; docs/design/ZONE_MATRIX_CONTRACT.md sections 3.5 and 8.1, FROZEN 2026-11-13).
+ * Storage of zone-matrix versions (V216 and the step-2 migration; docs/design/ZONE_MATRIX_CONTRACT.md sections 3.5 and 8.1, FROZEN 2026-11-13).
  * Content is opaque canonical JSON here; the service owns its meaning and its hash.
  */
 public interface ZoneMatrixRepository {
@@ -63,6 +63,13 @@ public interface ZoneMatrixRepository {
         void activate(String versionId, int number, String actor, Instant now);
 
         void discard(String versionId);
+
+        /**
+         * Records one reference confirmation in the append-only confirmation table (contract section 8.1): the draft
+         * revision that carries it, the cell's pair and the hash of the cell the confirmer read.
+         */
+        void recordConfirmation(String versionId, long revision, String source, String destination, String cellSha256,
+                String actor, Instant now);
     }
 
     /** The draft changed between read and write; the caller reports {@code REQUEST_CHANGED}. */

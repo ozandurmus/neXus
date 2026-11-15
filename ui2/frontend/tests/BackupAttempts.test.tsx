@@ -106,4 +106,58 @@ describe("backup attempt transcript entry points", () => {
     render(<BackupAttempts deviceId="device-synthetic" />);
     expect(await screen.findByText("Backup attempts could not be loaded.")).toBeInTheDocument();
   });
+
+  it("fetches latest backup attempts for all fleet rows in one batched /api/v2/jobs call", async () => {
+    const devices = [
+      { device_id: "d1", hostname: "FW-TANGO-04", role: "gateway", enrollment_state: "ENROLLED", backup_target: true },
+      { device_id: "d2", hostname: "FW-ROMEO-01", role: "gateway", enrollment_state: "ENROLLED", backup_target: true },
+      { device_id: "d3", hostname: "FW-BRAVO-02", role: "gateway", enrollment_state: "ENROLLED", backup_target: true },
+    ];
+    const items: JobEventView[] = [
+      { job_id: "job-d1", job_type: "cp_gateway_backup", target_device_id: "d1", submitted_at: "2026-10-02T08:00:00Z", state: "COMPLETED", has_transcript: true },
+      { job_id: "job-d2", job_type: "pan_device_state_backup", target_device_id: "d2", submitted_at: "2026-10-02T08:05:00Z", state: "FAILED", terminal_reason: "Synthetic collection failure", has_transcript: false },
+    ];
+    const fetch = vi.fn((input: string) => {
+      const url = String(input);
+      const body = url.startsWith("/api/v2/jobs") ? { items, total: items.length, page: 1, page_size: 500 }
+        : url.endsWith("/backups") || url === "/backups" ? { backups: [], baselines: {} }
+        : url === "/devices" ? { devices }
+        : {};
+      return Promise.resolve(new Response(JSON.stringify(body)));
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    render(<BackupScreen />);
+    const row1 = (await screen.findByText("FW-TANGO-04")).closest("tr")!;
+    const row2 = screen.getByText("FW-ROMEO-01").closest("tr")!;
+    const row3 = screen.getByText("FW-BRAVO-02").closest("tr")!;
+    await within(row1).findByText("Completed");
+    await within(row2).findByText("Failed · Synthetic collection failure");
+    await within(row3).findByText("No attempt");
+
+    const jobCalls = fetch.mock.calls.map(([u]) => String(u)).filter((u) => u.startsWith("/api/v2/jobs"));
+    expect(jobCalls).toEqual(["/api/v2/jobs?job_type=backup&latest_per_device=true"]);
+  });
+  it("marks a device the bounded batch left out as unknown, never as having no attempt", async () => {
+    const devices = [
+      { device_id: "d1", hostname: "FW-TANGO-04", role: "gateway", enrollment_state: "ENROLLED", backup_target: true },
+      { device_id: "d2", hostname: "FW-ROMEO-01", role: "gateway", enrollment_state: "ENROLLED", backup_target: true },
+    ];
+    const items: JobEventView[] = [
+      { job_id: "job-d1", job_type: "cp_gateway_backup", target_device_id: "d1", submitted_at: "2026-10-02T08:00:00Z", state: "COMPLETED", has_transcript: true },
+    ];
+    // a full page (items == page_size): the server may have cut devices off
+    vi.stubGlobal("fetch", vi.fn((input: string) => {
+      const url = String(input);
+      const body = url.startsWith("/api/v2/jobs") ? { items, total: 1, page: 1, page_size: 1 }
+        : url.endsWith("/backups") || url === "/backups" ? { backups: [], baselines: {} }
+        : url === "/devices" ? { devices }
+        : {};
+      return Promise.resolve(new Response(JSON.stringify(body)));
+    }));
+    render(<BackupScreen />);
+    const row2 = (await screen.findByText("FW-ROMEO-01")).closest("tr")!;
+    await within(row2).findByText("Backup attempts could not be loaded.");
+    expect(within(row2).queryByText("No attempt")).toBeNull();
+  });
 });

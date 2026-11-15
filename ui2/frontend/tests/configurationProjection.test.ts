@@ -198,7 +198,7 @@ describe("Palo Alto projection", () => {
   const XML = `<response status="success"><result><config>
     <devices><entry name="localhost.localdomain">
       <deviceconfig><system>
-        <hostname>FW-PALT-01</hostname><timezone>Europe/Istanbul</timezone>
+        <hostname>FW-TANGO-01</hostname><timezone>Europe/Istanbul</timezone>
         <dns-setting><servers><primary>192.0.2.53</primary><secondary>192.0.2.54</secondary></servers></dns-setting>
         <ntp-servers><primary-ntp-server><ntp-server-address>192.0.2.10</ntp-server-address></primary-ntp-server></ntp-servers>
         <permitted-ip><entry name="192.0.2.0/24"/></permitted-ip>
@@ -221,7 +221,7 @@ describe("Palo Alto projection", () => {
     expect(byLabel["Network Configuration"]).toEqual([["VSYS", "1"], ["Virtual Routers", "1"], ["Zones", "2"], ["Interfaces", "2"]]);
     expect(byLabel["Users"]).toEqual([["Permissions · Role Based · Superuser · admin", "yes"]]);
     expect(p.withheldCount).toBe(1);
-    expect(p.snapshot.find((t) => t.label === "Hostname")?.value).toBe("FW-PALT-01");
+    expect(p.snapshot.find((t) => t.label === "Hostname")?.value).toBe("FW-TANGO-01");
     expect(p.snapshot.find((t) => t.label === "Group ID")?.value).toBe("20");
   });
 });

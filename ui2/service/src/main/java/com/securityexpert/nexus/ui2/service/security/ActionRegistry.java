@@ -52,6 +52,8 @@ public final class ActionRegistry {
     public static final String ZONE_MATRIX_EDIT = "zone_matrix_edit";
     /** Section 3.4: publish the draft under the four-eyes rule (PO 2026-11-13); security_admin and compliance_admin. */
     public static final String ZONE_MATRIX_PUBLISH = "zone_matrix_publish";
+    /** ZONE_MATRIX_CONTRACT.md sections 3.4 and 6.1: set a cell's reference to CONFIRMED; compliance_admin only. */
+    public static final String ZONE_MATRIX_REFERENCE_CONFIRM = "zone_matrix_reference_confirm";
     public static final String FMG_DIAGNOSTIC_READ = "fmg_diagnostic_read";
     public static final String FMG_DIAGNOSTIC_RUN = "fmg_diagnostic_run";
     /** System-log programme phase A (M3/M4): admits one Palo Alto log measurement job per enrolled firewall; administrators only. */
@@ -66,6 +68,10 @@ public final class ActionRegistry {
     public static final String SYSTEM_LOG_SETTINGS_READ = "system_log_settings_read";
     /** Phase B section 14: writes the settings row ({@code PUT /api/v2/config/system-logs}); security_admin, never aiview. */
     public static final String SYSTEM_LOG_SETTINGS_WRITE = "system_log_settings_write";
+    /** The configurable local-account password policy ({@code GET /api/v2/config/local-password-policy}); security_admin, never aiview. */
+    public static final String LOCAL_PASSWORD_POLICY_READ = "local_password_policy_read";
+    /** Writes the local password policy ({@code PUT /api/v2/config/local-password-policy}); security_admin, never aiview. */
+    public static final String LOCAL_PASSWORD_POLICY_WRITE = "local_password_policy_write";
     /**
      * V203 (PO 2026-11-10): the per-family scheduled-job switches, {@code GET /api/v2/config/scheduled-jobs}; every signed-in
      * role reads them (aiview masked: the actor becomes a user token, the reason is withheld).
@@ -168,6 +174,8 @@ public final class ActionRegistry {
     public static final String SYSTEM_STATUS_READ = "system_status_read";
     public static final String AUDIT_LOG_READ = "audit_log_read";
     public static final String JOB_CANCEL = "job_cancel";
+    /** C2 section 3.5: record the human reconciliation of an OUTCOME_UNKNOWN job; backup_admin or stronger (security_admin). */
+    public static final String JOB_RECONCILE = "job_reconcile_record";
     public static final String JOB_LOG_READ = "job_log_read";
     public static final String JOB_TRANSCRIPT_READ = "job_transcript_read";
     /** Search includes setting values, so it has the same gate as the configuration text read. */
@@ -299,6 +307,7 @@ public final class ActionRegistry {
                 java.util.Set.of(RoleToken.COMPLIANCE_ADMIN)));
         register(new ActionDescriptor(ZONE_MATRIX_PUBLISH, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.COMPLIANCE_ADMIN)));
+        register(new ActionDescriptor(ZONE_MATRIX_REFERENCE_CONFIRM, true, Optional.of(RoleToken.COMPLIANCE_ADMIN)));
         register(new ActionDescriptor(POLICY_COLLECT, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(POLICY_READ, true, Optional.of(RoleToken.SECURITY_ADMIN),
@@ -350,6 +359,8 @@ public final class ActionRegistry {
         // Settings read and write are security_admin only (contract section 14), like the notification settings.
         register(new ActionDescriptor(SYSTEM_LOG_SETTINGS_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SYSTEM_LOG_SETTINGS_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(LOCAL_PASSWORD_POLICY_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(LOCAL_PASSWORD_POLICY_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         // V203: reading the schedule switches is open to every signed-in session; changing one is for the two administrator
         // roles that already own the job windows' manual bypass (PO decision 2026-10-20). The controller refuses aiview.
         register(new ActionDescriptor(SCHEDULED_JOBS_READ, true, Optional.empty()));
@@ -415,6 +426,8 @@ public final class ActionRegistry {
         register(new ActionDescriptor(SYSTEM_STATUS_READ, true, Optional.empty()));
         register(new ActionDescriptor(AUDIT_LOG_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(JOB_CANCEL, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(JOB_RECONCILE, true, Optional.of(RoleToken.SECURITY_ADMIN),
+                java.util.Set.of(RoleToken.BACKUP_ADMIN)));
         register(new ActionDescriptor(JOB_LOG_READ, true, Optional.empty()));
         register(new ActionDescriptor(JOB_TRANSCRIPT_READ, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.BACKUP_ADMIN)));

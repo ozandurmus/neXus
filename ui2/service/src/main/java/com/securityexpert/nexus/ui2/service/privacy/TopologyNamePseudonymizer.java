@@ -254,6 +254,29 @@ public class TopologyNamePseudonymizer {
         this.disambiguationAt = null;
     }
 
+    private volatile org.springframework.beans.factory.ObjectProvider<FreeTextEstate> freeTextEstateProvider;
+    private volatile FreeTextEstate freeTextEstate;
+
+    /** Lazy: the estate dictionary needs this bean to build its device names, so it is looked up on first use. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setFreeTextEstate(org.springframework.beans.factory.ObjectProvider<FreeTextEstate> provider) {
+        this.freeTextEstateProvider = provider;
+    }
+
+    /** Fixed estate (tests, and wiring without the device tables). */
+    public void useFreeTextEstate(FreeTextEstate estate) {
+        this.freeTextEstate = estate;
+    }
+
+    private FreeTextEstate freeTextEstate() {
+        FreeTextEstate current = freeTextEstate;
+        if (current == null && freeTextEstateProvider != null) {
+            current = freeTextEstateProvider.getIfAvailable();
+            freeTextEstate = current;
+        }
+        return current;
+    }
+
     private record DeviceNameOverride(String hostname, String pseudonym) {
     }
 
@@ -283,6 +306,7 @@ public class TopologyNamePseudonymizer {
             }
             disambiguation = computeDisambiguation(entries);
             disambiguationAt = now;
+            directoryLoaded = true;
             return disambiguation;
         }
     }
@@ -460,6 +484,46 @@ public class TopologyNamePseudonymizer {
     public String maskText(String text) {
         if (text == null || text.isBlank()) {
             return text;
+        }
+        // Fail closed on a cold process: a device directory that was configured but never read, or an estate dictionary
+        // that never loaded, would leave hostnames, serials and user names in the text. After one successful load a
+        // failed refresh keeps the previous state. Only masked (aiview) paths call this method.
+        if (deviceDirectory != null) {
+            disambiguation();
+            if (!directoryLoaded) {
+                warnUnavailable("device directory");
+                return FreeTextEstate.UNAVAILABLE;
+            }
+        }
+        String named = maskKnownNames(text);
+        FreeTextEstate estate = freeTextEstate();
+        if (estate == null) return named;
+        return estate.mask(named);
+    }
+
+    private static final System.Logger LOG = System.getLogger(TopologyNamePseudonymizer.class.getName());
+    private volatile boolean directoryLoaded;
+    private final java.util.concurrent.atomic.AtomicLong lastUnavailableWarning = new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.concurrent.atomic.AtomicLong unavailableCount = new java.util.concurrent.atomic.AtomicLong();
+
+    /** Counts only, at most once per 10 s. */
+    private void warnUnavailable(String source) {
+        long n = unavailableCount.incrementAndGet();
+        long now = System.nanoTime();
+        long last = lastUnavailableWarning.get();
+        if ((last == 0 || now - last > 10_000_000_000L) && lastUnavailableWarning.compareAndSet(last, now == 0 ? 1 : now)) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "free text withheld, {0} never loaded since start; withheld so far={1}", source, n);
+        }
+    }
+
+    private String maskKnownNames(String text) {
+        // Masking audit 2026-11-15: a name enters the text dictionary only when a response first masks it as a name, so
+        // after a restart (or on the first row of a page) a hostname inside free text -- a job's terminal reason, an
+        // approval's reason -- went out raw. Every registered device's hostname is known before any text is masked; the
+        // directory read is cached for DIRECTORY_TTL and a failed read keeps the earlier state.
+        if (deviceDirectory != null) {
+            disambiguation();
         }
         java.util.regex.Pattern pattern = knownNamesPattern();
         if (pattern == null) {

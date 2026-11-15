@@ -143,13 +143,13 @@ describe("attention rules: failover, lifecycle and change sources", () => {
 
   it("ha-not-ready is Act now with the failed check; ha-unknown is Watch; an unsupported vendor is neither", () => {
     const failover = { state: "ok" as const, value: {
-      devices: [member("CLS-ROMEO-01", 1), member("CLS-TANGO-04", 1), member("CLS-ECHO-02", 1), member("CLS-ASA-01", 1, "cisco_asa")],
+      devices: [member("CLS-ROMEO-01", 1), member("CLS-TANGO-04", 1), member("CLS-ECHO-02", 1), member("CLS-BRAVO-01", 1, "cisco_asa")],
       rows: [unit("CLS-ROMEO-01", "NOT_READY", ago(2), "sync_interface"), unit("CLS-TANGO-04", "READY", ago(1)), unit("CLS-ECHO-02", "UNKNOWN", ago(5))],
     } };
     const rows = buildAttention(inputs(overview([dev(1)]), { failover }), undefined).rows;
     expect(find(rows, "ha-not-ready")).toMatchObject({ severity: "critical", names: ["CLS-ROMEO-01"], at: ago(2), detail: "failed check: sync_interface" });
     expect(find(rows, "ha-unknown")).toMatchObject({ severity: "warning", names: ["CLS-ECHO-02"] });
-    expect(rows.some((r) => r.names.includes("CLS-ASA-01"))).toBe(false);
+    expect(rows.some((r) => r.names.includes("CLS-BRAVO-01"))).toBe(false);
   });
 
   it("advisory-exploited is Act now; advisory-critical-high is Review; a device not evaluated is neither", () => {

@@ -62,6 +62,21 @@ public final class JooqSystemLogRetentionRepository implements SystemLogRetentio
     }
 
     @Override
+    public List<DeviceUsage> devicesOverSpikeCap(long capBytes) {
+        return transactions.inTransaction(dsl -> dsl.fetch("select device_id, sum(ciphertext_bytes) as bytes "
+                + "from system_log_file where pruned_at is null and kind = 'cp_spike_data' group by device_id "
+                + "having sum(ciphertext_bytes) > {0} order by device_id", capBytes)
+                .map(r -> new DeviceUsage(r.get("device_id", String.class), r.get("bytes", Long.class))));
+    }
+
+    @Override
+    public List<Candidate> oldestSpike(String deviceId, int limit) {
+        return transactions.inTransaction(dsl -> dsl.fetch(FILE_COLUMNS + "where f.pruned_at is null and f.device_id = {0} "
+                + "and f.kind = 'cp_spike_data' order by f.collected_at, f.file_id limit {1}", deviceId, limit)
+                .map(JooqSystemLogRetentionRepository::candidate));
+    }
+
+    @Override
     public boolean markPruned(Candidate candidate, String reason) {
         if (!"RETENTION".equals(reason) && !"RETENTION_SHORTENED_BY_CAP".equals(reason))
             throw new IllegalArgumentException("prune reason");

@@ -85,6 +85,12 @@ public final class RoleBindingAdminController {
     @PostMapping("/role-bindings/revoke")
     public ResponseEntity<Map<String, Object>> revoke(@RequestBody RevokeRequest request,
             HttpServletRequest servletRequest) {
+        if (request.bindingId() == null || request.bindingId().isBlank()) {
+            Map<String, Object> invalid = new LinkedHashMap<>();
+            invalid.put("error", "VALIDATION_FAILED");
+            invalid.put("reason_code", "BINDING_ID_REQUIRED");
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(invalid);
+        }
         String actorFingerprint = (String) servletRequest.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
         RoleBindingAdminService.Outcome outcome =
                 roleBindingAdminService.revoke(actorFingerprint,
@@ -123,8 +129,16 @@ public final class RoleBindingAdminController {
             body.put("binding_id", created.bindingId());
             return ResponseEntity.ok(body);
         }
+        if (outcome instanceof RoleBindingAdminService.Outcome.AlreadyRevoked already) {
+            // Same 200 as a fresh revoke (the frontend treats both as success); the distinct outcome tells the
+            // losing admin that another admin revoked the binding first.
+            body.put("binding_id", already.bindingId());
+            body.put("outcome", "ALREADY_REVOKED");
+            return ResponseEntity.ok(body);
+        }
         RoleBindingAdminService.Outcome.Revoked revoked = (RoleBindingAdminService.Outcome.Revoked) outcome;
         body.put("binding_id", revoked.bindingId());
+        body.put("outcome", "REVOKED");
         return ResponseEntity.ok(body);
     }
 }

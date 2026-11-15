@@ -27,6 +27,7 @@ import {
   type SanitizerState,
 } from "../auth/adminApi";
 import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
+import { PRODUCT_NAME } from "../brand/product";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import type { Tone } from "../shell/tone";
 import { m3, MONO } from "../theme/m3Theme";
@@ -63,7 +64,7 @@ export const SANITIZER_ROLE_REFUSAL = "Your role does not allow this action · s
 /** The tool's contract under the title (review §3 "Tool page"): sentence one what it does, sentence two what it never does. */
 export const SANITIZER_CONTRACT = "Replaces addresses, MAC addresses, host and domain names and e-mails in pcap/pcapng, log, CSV, XLSX and JSON files "
   + "with keyed tokens, and reverts a sanitized file that comes back. "
-  + "It never keeps a file: the upload is deleted when the job ends and the result after one download; only the encrypted token vault stays inside neXus.";
+  + `It never keeps a file: the upload is deleted when the job ends and the result after one download; only the encrypted token vault stays inside ${PRODUCT_NAME}.`;
 const ACCEPT = ".pcap,.pcapng,.cap,.log,.txt,.csv,.xlsx,.json,.ndjson";
 
 /** The server's refusal, in its own words (closed codes and reasons; never a file name or value). */
@@ -207,7 +208,7 @@ export function SanitizerScreen() {
           {limits && <Typography variant="caption" sx={{ display: "block", mt: 1.5, color: m3.onSurfaceVar }}>
             At most {sanitizerBytes(limits.max_file_bytes)} per file · the type is read from the content · uploads are deleted when
             the job ends, results after one download or {limits.output_ttl_minutes} minutes · the token-to-original vault is kept
-            inside neXus for {limits.vault_retention_days} days, encrypted
+            inside {PRODUCT_NAME} for {limits.vault_retention_days} days, encrypted
           </Typography>}
           {progress && <Box role="status" aria-label="Upload progress" sx={{ mt: 1 }}>
             <Typography variant="body2">Uploading {progress.name}: {sanitizerBytes(progress.sent)} of {sanitizerBytes(progress.total)}</Typography>
@@ -254,9 +255,9 @@ export function OutcomeView({ outcome, downloaded, onDownload }: {
       {outcome.state === "SUCCEEDED" && <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 2 }}>
         {ready
           ? <M3Button emphasis="filled" href={href} onClick={onDownload}>Download</M3Button>
-          : <Typography variant="body2">{downloaded || outcome.outputState === "DOWNLOADED" ? "Downloaded — neXus kept no copy of the file."
+          : <Typography variant="body2">{downloaded || outcome.outputState === "DOWNLOADED" ? `Downloaded — ${PRODUCT_NAME} kept no copy of the file.`
             : "The result has expired; run the job again."}</Typography>}
-        {ready && <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>One download: the file is deleted from neXus afterwards.</Typography>}
+        {ready && <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>One download: the file is deleted from {PRODUCT_NAME} afterwards.</Typography>}
       </Stack>}
     </Card>
   );

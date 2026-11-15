@@ -6,6 +6,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import { getChangeFeed, listDevices, type ChangeFeedCoverage, type ChangeFeedEvent, type ChangeFeedPage, type ChangeKind, type DeviceSummary } from "../auth/adminApi";
+import { PRODUCT_NAME } from "../brand/product";
 import { M3Button } from "../shell/M3Widgets";
 import { RestrictedPanel, StatePanel, isRestricted } from "../shell/States";
 import { PillRow, StatusPill } from "../shell/StatusPill";
@@ -29,7 +30,7 @@ import { RADIUS, ROLE_COLORS, TYPE, type StateRole } from "../theme/tokens";
 export type RangePreset = "24h" | "7d" | "custom";
 export const KINDS: readonly { readonly id: ChangeKind; readonly label: string }[] = [
   { id: "USER", label: "User" },
-  { id: "NEXUS_JOB", label: "neXus job" },
+  { id: "NEXUS_JOB", label: `${PRODUCT_NAME} job` },
   { id: "DEVICE_EVENT", label: "Device event" },
 ];
 const VENDORS = [["", "All vendors"], ["check_point", "Check Point"], ["palo_alto", "Palo Alto"]] as const;
@@ -43,7 +44,7 @@ const SOURCE_LABELS: Readonly<Record<string, string>> = {
   pan_config: "Palo Alto config log",
   device_policy_install: "Policy installs",
   policy_change_evidence: "Policy change evidence",
-  jobs: "neXus jobs",
+  jobs: `${PRODUCT_NAME} jobs`,
   cp_cpwd_elg: "Check Point cpwd",
   device_crash_alert: "Crash and dump alerts",
 };
@@ -159,8 +160,8 @@ export function ChangeFeedPanel({ initialDevice = "", initialVendor = "" }: { re
   return (
     <Box role="region" aria-label="Change feed" data-testid="change-feed" sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <Typography variant="body2" sx={{ color: m3.onSurfaceVar, maxWidth: 820 }}>
-        Who changed what, when: user changes with their stored diff, neXus's own jobs in grey, and device events, newest
-        first, from what neXus already stores. The feed orders and shows; it does not say what caused what.
+        Who changed what, when: user changes with their stored diff, {PRODUCT_NAME}'s own jobs in grey, and device events, newest
+        first, from what {PRODUCT_NAME} already stores. The feed orders and shows; it does not say what caused what.
       </Typography>
 
       <Box component="form" aria-label="Change feed filters" onSubmit={(event) => { event.preventDefault(); apply(); }}>

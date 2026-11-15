@@ -223,6 +223,10 @@ public final class CpFailoverController {
             m.put("lastRunAt", s.lastRunAt());
             m.put("canRunReadiness", s.canRunReadiness());
             m.put("readinessAvailable", s.readinessAvailable());
+            // Cisco ASA and FortiGate pairs: the stored HA roles in the common cluster-view shape (no readiness, no device read).
+            com.securityexpert.nexus.ui2.service.failover.FailoverVendor.of(s.vendor())
+                .filter(v -> !s.readinessAvailable() && com.securityexpert.nexus.ui2.service.failover.HaPairView.covers(v))
+                .ifPresent(v -> m.put("haView", com.securityexpert.nexus.ui2.service.failover.HaPairView.of(v, s.unit().members()).toMap()));
             eligibility(m,s.unit(),s.readiness(),incidents);
             putConfigSync(m,s.unit(),s.vendor(),s.readiness(),PrivacyMaskingResponseBodyAdvice.isReplayViewer(request),actor(request));
             if (s.readiness() != null) {

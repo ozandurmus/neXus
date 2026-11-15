@@ -7,6 +7,7 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 
 import { FINANCIAL_BASELINE_NOTICE } from "../shell/frameworkNotice";
+import { PRODUCT_NAME } from "../brand/product";
 import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 import { Icon, type IconName } from "../shell/Icon";
 import { StatusChip } from "../shell/M3Widgets";
@@ -484,7 +485,7 @@ export function EstateDetails({ data, onDevicesScreen = false, fleet }: { readon
           ].filter((s) => s.count > 0)} />
           <Box sx={{ mt: 2, pt: 1.5, borderTop: `1px solid ${m3.outlineVar}` }}>
             <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>
-              <Link href={q({ screen: "operations", tab: "jobs" })} underline="hover">neXus</Link>: completed 24 h <b>{n.completed_24h ?? "UNKNOWN"}</b> · running <b>{n.running ?? "UNKNOWN"}</b> ·
+              <Link href={q({ screen: "operations", tab: "jobs" })} underline="hover">{PRODUCT_NAME}</Link>: completed 24 h <b>{n.completed_24h ?? "UNKNOWN"}</b> · running <b>{n.running ?? "UNKNOWN"}</b> ·
               oldest running {n.oldest_running_submitted_at ? `${relativeAge(n.oldest_running_submitted_at)} (since submitted)` : "none"} ·
               last inventory: Check Point {relativeAge(n.last_inventory?.check_point)} · Palo Alto {relativeAge(n.last_inventory?.palo_alto)}
             </Typography>
@@ -606,7 +607,7 @@ export function OverviewScreen() {
   const review: string[] = [];
   if (!tileUnknown(a.cluster_diff)) review.push(`${a.cluster_diff.count} of ${a.cluster_diff.of} active clusters show member differences${a.cluster_diff.unknown ? ` (${a.cluster_diff.unknown} not comparable)` : ""}.`);
   if (a.managed_not_enrolled && !tileUnknown(a.managed_not_enrolled) && a.managed_not_enrolled.count > 0) {
-    review.push(`${a.managed_not_enrolled.count} gateway${a.managed_not_enrolled.count === 1 ? "" : "s"} managed by ${a.managed_not_enrolled.of === 1 ? "the management server" : `${a.managed_not_enrolled.of} management servers`} ${a.managed_not_enrolled.count === 1 ? "is" : "are"} not in neXus.`);
+    review.push(`${a.managed_not_enrolled.count} gateway${a.managed_not_enrolled.count === 1 ? "" : "s"} managed by ${a.managed_not_enrolled.of === 1 ? "the management server" : `${a.managed_not_enrolled.of} management servers`} ${a.managed_not_enrolled.count === 1 ? "is" : "are"} not in ${PRODUCT_NAME}.`);
   }
   if (!tileUnknown(a.config_changed)) review.push(`${a.config_changed.count} device${a.config_changed.count === 1 ? "" : "s"} changed configuration since the previous collection.`);
   const evidence: string[] = [];
@@ -665,7 +666,7 @@ export function OverviewScreen() {
         <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: (n.running ?? 0) > 0 ? "2fr 1fr" : "3fr 1fr" }, alignItems: "start" }}>
           {failedCard}
           <Card sx={CARD}>
-            <SectionTitle icon="operations" title="Queue" hint="neXus jobs" />
+            <SectionTitle icon="operations" title="Queue" hint={`${PRODUCT_NAME} jobs`} />
             <Typography sx={{ fontSize: 40, fontWeight: 700 }}>{n.running ?? "UNKNOWN"}<Typography component="span" sx={{ fontSize: 16, color: m3.onSurfaceVar }}> running</Typography></Typography>
             <Typography sx={{ color: m3.onSurfaceVar }}>completed in 24 h: <b>{n.completed_24h ?? "UNKNOWN"}</b></Typography>
             <Typography sx={{ color: m3.onSurfaceVar }}>oldest running: {n.oldest_running_submitted_at ? relativeAge(n.oldest_running_submitted_at) : "none"}</Typography>

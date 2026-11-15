@@ -8,9 +8,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HashSet;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
@@ -249,5 +251,100 @@ class LogMaskingHeuristicTest {
         String name = session().maskFileName("hcp_report_" + host + "_17_10_26_03_00.tar.gz");
         assertFalse(name.contains(host), "the host in a file name (value withheld)");
         assertTrue(name.matches("hcp_report_h-[0-9a-f]{10}_17_10_26_03_00\\.tar\\.gz"), "only the host changes");
+    }
+
+    @Test
+    void masksPrincipalFormatsDomainUserUserAtRealmAndCnDistinguishedNames() {
+        String domUser1 = "CORP\\jdoevarol911";
+        String domUserJson = "CORP\\\\jdoevarol911";
+        String domUser2 = "EXAMPLE\\svc_backup802";
+        String realmUser1 = "jdoevarol911@CORP.LOCAL";
+        String realmUser2 = "jdoevarol911@CORP";
+        String spn = "HTTP/web01.corp.local@CORP.LOCAL";
+        String realmUser3 = "svc_backup802@corp.internal";
+        String dn1 = "CN=jdoevarol911,OU=NetOps,DC=corp,DC=example,DC=com";
+        String dn2 = "CN=svc_backup802,O=ExampleCorp,C=US";
+        String dnQuoted = "CN=\"Jane Doe 911\",OU=Admins,DC=corp,DC=local";
+        String dnSlash = "/CN=jdoevarol911/OU=NetOps/O=ExampleCorp/C=US";
+
+        LogMasking.Session s = session();
+        String outDom1 = s.maskLine("Account " + domUser1 + " failed pre-authentication");
+        String outDomJson = s.maskLine("{\"event\":\"login\",\"actor\":\"" + domUserJson + "\"}");
+        String outDom2 = s.maskLine("NTLM login from " + domUser2 + " rejected");
+        String outRealm1 = s.maskLine("Ticket granted for " + realmUser1 + " in 15ms");
+        String outRealm2 = s.maskLine("TGT request from " + realmUser2 + " during 1st retry");
+        String outSpn = s.maskLine("SPN " + spn + " bound in October");
+        String outRealm3 = s.maskLine("user=" + realmUser3 + " logged in");
+        String outDn1 = s.maskLine("LDAP entry " + dn1 + " matched");
+        String outDn2 = s.maskLine("Certificate subject " + dn2 + " verified");
+        String outDnQuoted = s.maskLine("Bind succeeded for " + dnQuoted + " on 2nd attempt");
+        String outDnSlash = s.maskLine("TLS peer subject " + dnSlash + " accepted");
+        String outDnKeyed = s.maskLine("user=" + dn1 + " authenticated");
+
+        String combined = String.join("\n",
+                outDom1, outDomJson, outDom2, outRealm1, outRealm2, outSpn, outRealm3,
+                outDn1, outDn2, outDnQuoted, outDnSlash, outDnKeyed);
+        for (String canary : List.of(
+                "jdoevarol911", "svc_backup802", "Jane Doe 911", "CORP.LOCAL", "NetOps", "ExampleCorp")) {
+            assertFalse(combined.contains(canary), "principal canary leaked: " + canary + " in " + combined);
+        }
+        assertTrue(outDom1.matches("Account USR-[0-9A-F]{10} failed pre-authentication"), outDom1);
+        String domToken = outDom1.substring("Account ".length(), "Account ".length() + 14);
+        assertTrue(outDomJson.contains(domToken), "JSON-escaped DOMAIN\\\\user produces the same USR token: " + outDomJson);
+        assertTrue(outRealm1.matches("Ticket granted for USR-[0-9A-F]{10} in 15ms"), outRealm1);
+        assertTrue(outRealm2.matches("TGT request from USR-[0-9A-F]{10} during 1st retry"), outRealm2);
+        assertTrue(outSpn.matches("SPN USR-[0-9A-F]{10} bound in October"), outSpn);
+        assertTrue(outRealm3.matches("user=USR-[0-9A-F]{10} logged in"), outRealm3);
+        assertTrue(outDn1.matches("LDAP entry USR-[0-9A-F]{10} matched"), outDn1);
+        assertTrue(outDn2.matches("Certificate subject USR-[0-9A-F]{10} verified"), outDn2);
+        assertTrue(outDnQuoted.matches("Bind succeeded for USR-[0-9A-F]{10} on 2nd attempt"), outDnQuoted);
+        assertTrue(outDnSlash.matches("TLS peer subject USR-[0-9A-F]{10} accepted"), outDnSlash);
+        assertTrue(outDnKeyed.matches("user=USR-[0-9A-F]{10} authenticated"), outDnKeyed);
+
+        // Ordinary vocabulary and non-principal paths/escapes remain readable
+        String vocab = "Sizes 64KB 100MB 4GB 15ms in Jan, Feb, October, December during 1st, 2nd, 3rd, first, second pass";
+        assertEquals(vocab, session().maskLine(vocab));
+    }
+
+    @Test
+    void masksAccountsInHomePathsSudoSuAndOwnerKeysAndKeepsSharedDirectories() {
+        String u1 = letters(7, 901), u2 = letters(8, 902), u3 = letters(6, 903), u4 = letters(9, 904), u5 = letters(7, 905);
+        LogMasking.Session s = session();
+        String home = s.maskLine("opened /home/" + u1 + "/.ssh/id_rsa and C:\\Users\\" + u1 + "\\Desktop");
+        String sudo = s.maskLine("sudo:   " + u2 + " : TTY=pts/0 ; PWD=/home/" + u2 + " ; USER=root ; COMMAND=/bin/ls");
+        String su = s.maskLine("su: " + u3 + " to root on /dev/pts/0");
+        String owner = s.maskLine("file owner=" + u4 + " euid=" + u5 + " mode=0644");
+        String combined = String.join("\n", home, sudo, su, owner);
+        assertFalse(containsAny(combined, u1, u2, u3, u4, u5), "account leaked (value withheld)");
+        assertTrue(home.matches("opened /home/(?:USR-[0-9A-F]{10}|h-[0-9a-f]{10})/\\.ssh/id_rsa and C:\\\\Users\\\\(?:USR-[0-9A-F]{10}|h-[0-9a-f]{10})\\\\Desktop"), home);
+        String shared = "reading /home/shared/readme and /Users/Public/Documents plus /home/lost+found/x";
+        assertEquals(shared, session().maskLine(shared));
+        String vocab = "su: failed, sudo: 3 incorrect password attempts, file mode=0644 size 64KB in October";
+        assertEquals(vocab, session().maskLine(vocab));
+    }
+
+    @Test
+    void masksUserQueryValuesAndDashFormIpv4AndKeepsDatesVersionsSizesAndUuids() {
+        String u1 = letters(7, 911), u2 = letters(8, 912), u3 = letters(6, 913), u4 = letters(9, 914);
+        LogMasking.Session s = session();
+        String q = s.maskLine("GET /api/x?u=" + u1 + "&user=" + u2 + "&username=" + u3 + "&login=" + u4 + "&page=2 done");
+        assertFalse(containsAny(q, u1, u2, u3, u4), "query user leaked (value withheld)");
+        assertTrue(q.contains("&page=2 done"), q);
+        assertTrue(q.matches("GET /api/x\\?u=USR-[0-9A-F]{10}&user=USR-[0-9A-F]{10}&username=USR-[0-9A-F]{10}&login=USR-[0-9A-F]{10}&page=2 done"), q);
+        String a = (10 + 0) + "-" + 20 + "-" + 30 + "-" + 40, b = 192 + "-" + 168 + "-" + 1 + "-" + 7;
+        String ip = s.maskLine("ip-" + a + " ec2 host " + a + " and " + b + ".compute");
+        assertFalse(ip.contains(a) || ip.contains(b), ip);
+        assertTrue(ip.contains("<ip>"), ip);
+        String keep = "2026-11-15 and 1-2-3 and v1-2-3-4567 and 2026-11-15-10 size 64KB-128KB uuid "
+                + UUID.nameUUIDFromBytes(new byte[] {1, 2, 3}) + " and 300-1-2-3 and 1-2-3-4-5";
+        assertEquals(keep, session().maskLine(keep));
+    }
+
+    @Test
+    void keepsSizeRangesReadableButStillMasksHostnamesWithDigits() {
+        String ranges = "Window 64KB-128KB, 1.5GB-2GB, 512M-1G, 10k-20k, 64-128KB and 64KB-128KB-256KB accepted";
+        assertEquals(ranges, session().maskLine(ranges));
+        String host = letters(6, 921) + "-" + letters(3, 922) + "7";
+        assertFalse(containsAny(session().maskLine("peer " + host + " down"), host), "hyphenated host still masked");
     }
 }

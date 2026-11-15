@@ -227,6 +227,8 @@ public final class PaloAltoBackupExecutor {
         ArtefactStore.ArtefactHandle handle;
         try {
             handle = artefactStore.open(deviceId, jobId, "palo_alto", false);
+        } catch (ArtefactStore.QuotaExceededException e) {
+            return new PanBackupResult(false, null, null, deviationOutcome, e.getMessage());
         } catch (IOException e) {
             return new PanBackupResult(false, null, null, deviationOutcome, "Failed to open artefact store");
         }
@@ -245,6 +247,12 @@ public final class PaloAltoBackupExecutor {
             }
             ArtefactStore.ArtefactMetadata metadata = handle.finish();
             return new PanBackupResult(true, metadata.ref().value(), metadata, deviationOutcome, null, missing);
+        } catch (ArtefactStore.QuotaExceededException e) {
+            try {
+                handle.close();
+            } catch (IOException ignored) {
+            }
+            return new PanBackupResult(false, null, null, deviationOutcome, e.getMessage());
         } catch (Exception e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             try {

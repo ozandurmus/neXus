@@ -35,13 +35,15 @@ public final class PolicyHygiene {
         "unsupported port expression", "invalid port range", "missing service values", EARLIER_UNSUPPORTED, DEFAULT_PORTS_UNKNOWN,
         APPLICATION_OVERLAP_UNKNOWN,
         "zone or install-on coverage is unproven", "zone evidence not collected", "install-on evidence not collected", "snapshot collection incomplete",
-        "earlier sections not analysed", "multiple ordered layers not evaluated");
+        "earlier sections not analysed", "multiple ordered layers not evaluated", "zone membership not evaluated");
     /**
      * Evidence for a rule fully covered by an earlier Check Point "Apply Layer" rule: the rule is never reached, but the
      * inline layer's own verdict is not analysed, so the actions are not comparable and this is never a CONFLICT.
      */
     public static final String INLINE_LAYER_COVER = "An earlier Apply Layer rule sends all of this match into its inline layer; this rule is never reached.";
     /** Every fixed finding evidence string; "Shadowing: <reason>." is derived from {@link #REASONS}. */
+    /** An ASA ACL with no access-group binding and no other use found by the parser (ASA mapper use "none", A0-ASA-2). */
+    public static final String ASA_ACL_NOT_REFERENCED = "ACL has no access-group binding and no other use was found; it is not enforced as an access rule.";
     public static final Set<String> EVIDENCE = Set.of(
         "Rule is disabled.", "Enabled state is unknown.", "Stored schedule has expired.", "Stored schedule expires within 14 days.",
         "Schedule evidence is incomplete.", "Permissiveness cannot be established from resolved selectors.",
@@ -51,7 +53,7 @@ public final class PolicyHygiene {
         "Hit counts were not collected or are invalid.", "Hit counts are missing for a target.", "Last-hit timestamp is invalid.",
         "Zero-hit counter window is shorter than the threshold.", "Zero hits contradict a recorded last hit.",
         "Zero collected hits; counter reset/window is unknown.", "Last-hit time was not collected.",
-        "Last hit predates the threshold at counter collection time.");
+        "Last hit predates the threshold at counter collection time.", ASA_ACL_NOT_REFERENCED);
     public record Finding(String findingClass, String severity, String evidence) {}
     public record Assessment(String shadowStatus, String shadowReason, String coveringRuleId,
             List<Finding> findings, Map<String, Object> permissiveness, String timeStatus, boolean expiring,
@@ -109,6 +111,17 @@ public final class PolicyHygiene {
         return analyze(legacyView, days, now, workLimit, RULE_WORK, legacyView.objects(), true, true);
     }
     static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit, int ruleLimit, Map<String, PolicyObject> breadthObjects, boolean nonContainment, boolean upperBound) {
+        // Legacy only: Palo Alto application-default pairs are decided on the applications' standard ports where known
+        // (PolicyNormalization#defaultPortsHold); the sound analysis keeps them undecided.
+        boolean ports = upperBound && snapshot.metadata().vendor().equals("PAN") && workLimit >= 0;
+        if (ports) {
+            var portsResolver = Resolver.shadowing(snapshot, new Budget(workLimit));
+            PolicyNormalization.DEFAULT_PORTS.set(portsResolver::defaultPorts);
+        }
+        try { return analyzeScoped(snapshot, days, now, workLimit, ruleLimit, breadthObjects, nonContainment, upperBound); }
+        finally { if (ports) PolicyNormalization.DEFAULT_PORTS.remove(); }
+    }
+    private static Result analyzeScoped(PolicySnapshot snapshot, int days, Instant now, int workLimit, int ruleLimit, Map<String, PolicyObject> breadthObjects, boolean nonContainment, boolean upperBound) {
         if (days < 1 || days > 36500 || workLimit < 0 || ruleLimit < 0) throw new IllegalArgumentException("Invalid hygiene limits");
         Budget budget = new Budget(workLimit), side = budget.side();
         // Covering Palo Alto intrazone/interzone rules is work of its own pool (same total, same per-rule window): it only
@@ -135,7 +148,9 @@ public final class PolicyHygiene {
                 // ordering (lookup and offline analysis skip them the same way). Before 2026-11-03 a CP NAT section broke
                 // the access-layer scope, so 5,494 NAT and 7,156 later access rules read "earlier sections not analysed".
                 for (Rule rule : section.rules()) {
-                    List<Finding> findings = Boolean.FALSE.equals(rule.enabled()) ? List.of(finding("disabled", "LOW", "Rule is disabled.")) : List.of();
+                    List<Finding> findings = Boolean.FALSE.equals(rule.enabled()) ? List.of(finding("disabled", "LOW", "Rule is disabled."))
+                        : "ASA".equals(snapshot.metadata().vendor()) && List.of("none").equals(rule.extras().get("asa-acl-use"))
+                            ? List.of(finding("unused", "LOW", ASA_ACL_NOT_REFERENCED)) : List.of();
                     results.put(rule.id(), new Assessment("UNKNOWN", "unsupported rulebase", null, findings,
                         PolicyRuleMetrics.permissiveness("Unknown", List.of(), 0), "unknown", false,
                         "Counter window unknown.", "UNKNOWN", null, null, null));
@@ -164,7 +179,7 @@ public final class PolicyHygiene {
                 else if (!broad.get("level").equals("Low")) {
                     var reasons = (List<?>) broad.get("reasons");
                     boolean anyAccept = accepting(rule.action()) && reasons.containsAll(List.of("Any source", "Any destination", "Any service"))
-                        && (reasons.contains("Any application") || snapshot.metadata().vendor().equals("CP") && rule.application().refs().isEmpty());
+                        && (reasons.contains("Any application") || PolicyNormalization.EMPTY_APPLICATION_ANY.contains(snapshot.metadata().vendor()) && rule.application().refs().isEmpty());
                     findings.add(finding("broad", anyAccept ? "HIGH" : "MEDIUM", anyAccept
                         ? "Accept rule matches any source, destination, service and application."
                         : "Broad selectors are present; see permissiveness reasons."));
@@ -425,8 +440,10 @@ public final class PolicyHygiene {
             int[] orders = bucket.orders; long[] outer = bucket.bounds;
             for (int j = 0, n = bucket.matches.size(); j < n && orders[j] < bestOrder[0]; j++) {
                 budget.spend();
-                if (!bounded(outer, j * WIDTH, inner)) continue;
                 var prior = bucket.matches.get(j);
+                // With standard ports (legacy analysis only, PolicyNormalization#defaultPortsHold) an application-default
+                // prior can hold a rule, so only its address slots are a necessary condition.
+                if (!bounded(outer, j * WIDTH, inner, PolicyNormalization.DEFAULT_PORTS.get() != null && defaults(prior, match) ? ADDRESS_WIDTH : WIDTH)) continue;
                 if (Boolean.TRUE.equals(holds(prior.selectors(), match.selectors(), budget))) { best[0] = prior; bestOrder[0] = orders[j]; return; }
             }
         }
@@ -697,7 +714,7 @@ public final class PolicyHygiene {
     }
     private static Finding finding(String cls, String severity, String evidence) { return new Finding(cls, severity, evidence); }
     private static Finding unknown(String evidence) { return finding("unknown", "LOW", evidence); }
-    private static boolean accepting(String action) { return Set.of("Accept", "allow").contains(action); }
+    private static boolean accepting(String action) { return PolicyNormalization.ALLOWING_ACTIONS.contains(action); }
     /**
      * Same action for REDUNDANT versus CONFLICT. Two Check Point "Apply Layer" rules act alike only when they apply the
      * same inline layer (same opaque reference); other rules carry no inline-layer reference, so this is action equality.

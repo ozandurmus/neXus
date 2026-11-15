@@ -156,8 +156,22 @@ public class LocalAuthenticationConfiguration {
     }
 
     @Bean
-    public PasswordChangeService passwordChangeService(LocalCredentialsRepository localCredentialsRepository) {
-        return new PasswordChangeService(localCredentialsRepository);
+    public PasswordChangeService passwordChangeService(LocalCredentialsRepository localCredentialsRepository,
+            com.securityexpert.nexus.ui2.persistence.identity.LocalPasswordPolicyRepository localPasswordPolicyRepository) {
+        return new PasswordChangeService(localCredentialsRepository, localPasswordPolicyRepository);
+    }
+
+    /** The configurable local password policy's storage (off by default; V223). */
+    @Bean
+    public com.securityexpert.nexus.ui2.persistence.identity.LocalPasswordPolicyRepository localPasswordPolicyRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.identity.JooqLocalPasswordPolicyRepository(transactionBoundary);
+    }
+
+    @Bean
+    public com.securityexpert.nexus.ui2.service.security.LocalPasswordPolicyService localPasswordPolicyService(
+            com.securityexpert.nexus.ui2.persistence.identity.LocalPasswordPolicyRepository localPasswordPolicyRepository) {
+        return new com.securityexpert.nexus.ui2.service.security.LocalPasswordPolicyService(localPasswordPolicyRepository);
     }
 
     /** NXS-LOCAL-0152 AC-4: self sign-out, distinct from the admin-only {@code /sessions/revoke} path. */

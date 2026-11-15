@@ -117,6 +117,14 @@ ui2:
     # different checkout path explicitly.
     directory: ${UI2_PROJECT_PLAN_DIRECTORY:}
 
+# Opt-in machine-readable console logs for a SIEM. OFF by default: with NEXUS_LOG_FORMAT unset (or anything but json)
+# the console keeps Spring Boot's text format. NEXUS_LOG_FORMAT=json switches the service console to one JSON object per
+# line (Boot's logstash structured format: @timestamp, level, logger_name, thread_name, message, MDC keys, stack_trace).
+# Read at start. The appenders live in logback-spring.xml; this customizer applies the address masker to every string
+# value (message, stack trace, MDC) of the JSON line.
 logging:
   level:
     root: INFO
+  structured:
+    json:
+      customizer: com.securityexpert.nexus.ui2.service.logging.MaskingJsonMembersCustomizer

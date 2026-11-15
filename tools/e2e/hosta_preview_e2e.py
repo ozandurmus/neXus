@@ -510,9 +510,10 @@ def build_manifest(template, loader, name, commit, owner, dockerfile, destinatio
     spec.setdefault("securityContext", {}).setdefault("fsGroup", 0)
     builder = spec["containers"][0]
     builder["args"] = [a for a in builder["args"] if not a.startswith(
-        ("--context=", "--dockerfile=", "--destination=", "--digest-file="))] + [
+        ("--context=", "--dockerfile=", "--destination=", "--digest-file=", "--cache=", "--image-download-retry="))] + [
         "--context=dir:///workspace" + ("/ui2/frontend" if dockerfile.endswith("Dockerfile.e2e") else ""),
         "--dockerfile=/workspace/" + dockerfile, "--destination=" + destination,
+        "--cache=false", "--image-download-retry=5",
         "--digest-file=/dev/termination-log"]
     builder["terminationMessagePath"] = "/dev/termination-log"
     builder["terminationMessagePolicy"] = "File"

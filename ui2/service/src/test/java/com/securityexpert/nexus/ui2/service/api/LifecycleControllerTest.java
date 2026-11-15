@@ -35,10 +35,33 @@ class LifecycleControllerTest {
         assertEquals(400, invalid.getStatusCode().value());
         verifyNoInteractions(catalog);
         var valid = controller.importCsv(new LifecycleController.ImportRequest(header
-                + "CHECKPOINT,HARDWARE,Example Appliance,,2030-01-01,,\n"), request(false));
+                + "CHECKPOINT,HARDWARE,6600 Appliance,,2030-01-01,,\n"), request(false));
         assertEquals(200, valid.getStatusCode().value());
         verify(catalog).save(argThat(entries -> entries.size() == 1 && entries.getFirst().source().equals("IMPORT")),
                 isNull(), eq("synthetic-actor"));
+    }
+
+    @Test void anotherSpellingOfAStoredProductIsAConflictNotASecondRow() {
+        when(catalog.list()).thenReturn(List.of(new LifecycleCatalogEntry("row-1", "CHECKPOINT", "HARDWARE", "6600",
+                null, null, null, "MANUAL", "", "synthetic-actor", Instant.EPOCH)));
+        String header = "vendor,kind,product,end_of_sale,end_of_support,end_of_engineering,note\n";
+        assertEquals(400, controller.importCsv(new LifecycleController.ImportRequest(header
+                + "CHECKPOINT,HARDWARE,Check Point 6600,,2030-01-01,,\n"), request(false)).getStatusCode().value());
+        assertEquals(409, controller.add(new LifecycleController.EntryRequest("CHECKPOINT", "HARDWARE", "6600 Appliance", null, "2030-01-01",
+                null, ""), request(false)).getStatusCode().value());
+        assertEquals(200, controller.add(new LifecycleController.EntryRequest("CHECKPOINT", "HARDWARE", "6600", null, "2030-01-01",
+                null, ""), request(false)).getStatusCode().value(), "the same product text is an update");
+        assertEquals(200, controller.edit("row-1", new LifecycleController.EntryRequest("CHECKPOINT", "HARDWARE", "Check Point 6600", null,
+                "2030-01-01", null, ""), request(false)).getStatusCode().value(), "editing the row itself is not a conflict");
+        verify(catalog, never()).save(argThat(entries -> entries.getFirst().product().equals("6600 Appliance")), any(), any());
+    }
+
+    @Test void vendorPageUploadIsRefusedForTheReplayViewerAndWithoutTheSourceService() {
+        assertEquals(403, controller.vendorPage(new LifecycleController.VendorPageRequest("checkpoint_lifecycle", "<html></html>"), request(true))
+                .getStatusCode().value());
+        assertEquals(404, controller.vendorPage(new LifecycleController.VendorPageRequest("checkpoint_lifecycle", "<html></html>"), request(false))
+                .getStatusCode().value());
+        assertEquals(404, controller.catalogSources(request(false)).getStatusCode().value());
     }
 
     @Test void replayViewerCannotMutateEvenWhenAnotherRoleMightAuthorizeIt() {

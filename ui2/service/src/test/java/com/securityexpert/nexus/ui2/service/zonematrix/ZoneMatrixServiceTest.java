@@ -169,6 +169,7 @@ class ZoneMatrixServiceTest {
         final Map<String, Version> rows = new LinkedHashMap<>();
         final List<String[]> revisions = new ArrayList<>();
         final List<String> access = new ArrayList<>();
+        final List<String[]> confirmations = new ArrayList<>();
         boolean failAccess;
 
         String draftId() { return draft().orElseThrow().versionId(); }
@@ -194,7 +195,7 @@ class ZoneMatrixServiceTest {
 
         @Override public <T> T locked(Function<DraftTransaction, T> work) {
             var snapshot = new LinkedHashMap<>(rows);
-            int revisionCount = revisions.size();
+            int revisionCount = revisions.size(), confirmationCount = confirmations.size();
             try {
                 return work.apply(new DraftTransaction() {
                     @Override public Optional<Version> draft() { return Memory.this.draft(); }
@@ -219,6 +220,11 @@ class ZoneMatrixServiceTest {
                             String sha, String content, String rationale) {
                         revisions.add(new String[]{id, actor, kind, Long.toString(revision)});
                     }
+                    @Override public void recordConfirmation(String id, long revision, String source, String destination, String cellSha,
+                            String actor, Instant now) {
+                        if (revisions.stream().noneMatch(r -> r[0].equals(id) && r[3].equals(Long.toString(revision)))) throw new Conflict();
+                        confirmations.add(new String[]{id, Long.toString(revision), source, destination, cellSha, actor});
+                    }
                     @Override public void retire(String id) { change(id, "ACTIVE", "RETIRED", null, null); }
                     @Override public void activate(String id, int number, String actor, Instant now) { change(id, "DRAFT", "ACTIVE", number, actor); }
                     @Override public void discard(String id) { change(id, "DRAFT", "DISCARDED", null, null); }
@@ -233,6 +239,7 @@ class ZoneMatrixServiceTest {
             } catch (RuntimeException e) {
                 rows.clear(); rows.putAll(snapshot);
                 while (revisions.size() > revisionCount) revisions.remove(revisions.size() - 1);
+                while (confirmations.size() > confirmationCount) confirmations.remove(confirmations.size() - 1);
                 throw e;
             }
         }

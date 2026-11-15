@@ -1396,6 +1396,8 @@ public final class HttpsVendorExecutor {
         ArtefactStore.ArtefactHandle handle;
         try {
             handle = artefactStore.open(deviceId, jobId, vendor, false);
+        } catch (ArtefactStore.QuotaExceededException e) {
+            return new BackupResult.ArtefactStoreFailed(e.getMessage());
         } catch (IOException e) {
             return new BackupResult.ArtefactStoreFailed("artefact store open failed: " + e.getMessage());
         }
@@ -1403,6 +1405,11 @@ public final class HttpsVendorExecutor {
         DownloadResult r = client.download(target, method, path, form, creds, requestContentType, head, MAX_ARCHIVE, LONG);
         if (!(r instanceof DownloadResult.Downloaded d)) {
             closeQuietly(handle);
+            var quota = r instanceof DownloadResult.Failed failed
+                    ? ArtefactStore.QuotaExceededException.reasonIn(failed.reason()) : java.util.Optional.<String>empty();
+            if (quota.isPresent()) {
+                return new BackupResult.ArtefactStoreFailed(quota.get());
+            }
             return r instanceof DownloadResult.Refused refused && (refused.status() == 401 || refused.status() == 403)
                     ? new BackupResult.ConnectFailed("authentication_failed: HTTP " + refused.status())
                     : new BackupResult.SubmitRefused("download: " + (r instanceof DownloadResult.Refused x ? x.reason()
@@ -1416,6 +1423,9 @@ public final class HttpsVendorExecutor {
         ArtefactStore.ArtefactMetadata metadata;
         try {
             metadata = handle.finish();
+        } catch (ArtefactStore.QuotaExceededException e) {
+            closeQuietly(handle);
+            return new BackupResult.ArtefactStoreFailed(e.getMessage());
         } catch (IOException e) {
             closeQuietly(handle);
             return new BackupResult.ArtefactStoreFailed("artefact store finish failed: " + e.getMessage());

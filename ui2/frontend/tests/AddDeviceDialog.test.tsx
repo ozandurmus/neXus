@@ -112,7 +112,7 @@ describe("AddDeviceDialog", () => {
             vendor_hint: "check_point",
             enrollment_state: "ENROLLED",
             disabled: false,
-            facts: { hostname: "fw-edge-1", model: "Quantum", software_version: "R81.20", ha_role: "active" },
+            facts: { hostname: "FW-TANGO-04", model: "Quantum", software_version: "R81.20", ha_role: "active" },
             peer_follow_outcome: "CORROBORATED",
             peer_follow_reason: null,
             identity_mismatch_state: "NONE",
@@ -127,7 +127,7 @@ describe("AddDeviceDialog", () => {
             vendor_hint: "check_point",
             enrollment_state: "ENROLLED",
             disabled: false,
-            facts: { hostname: "fw-edge-1", model: "Quantum", software_version: "R81.20", ha_role: "active" },
+            facts: { hostname: "FW-TANGO-04", model: "Quantum", software_version: "R81.20", ha_role: "active" },
             peer_follow_outcome: "CORROBORATED",
             peer_follow_reason: null,
             identity_mismatch_state: "NONE",
@@ -142,7 +142,7 @@ describe("AddDeviceDialog", () => {
             vendor_hint: "check_point",
             enrollment_state: "ENROLLED",
             disabled: false,
-            facts: { hostname: "fw-edge-1", model: "Quantum", software_version: "R81.20", ha_role: "active" },
+            facts: { hostname: "FW-TANGO-04", model: "Quantum", software_version: "R81.20", ha_role: "active" },
             peer_follow_outcome: "CORROBORATED",
             peer_follow_reason: null,
             identity_mismatch_state: "NONE",
@@ -161,7 +161,7 @@ describe("AddDeviceDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Enrol" }));
 
     await waitFor(() => expect(screen.getByText("Enrolled")).toBeInTheDocument(), { timeout: 9000 });
-    expect(screen.getByText(/fw-edge-1/)).toBeInTheDocument();
+    expect(screen.getByText(/FW-TANGO-04/)).toBeInTheDocument();
     expect(screen.getByText(/Quantum/)).toBeInTheDocument();
     expect(screen.getByText("Corroborated with peer")).toBeInTheDocument();
 
@@ -320,7 +320,7 @@ describe("AddDeviceDialog", () => {
             vendor_hint: "check_point",
             enrollment_state: "ENROLLED",
             disabled: false,
-            facts: { hostname: "fw-2", model: null, software_version: null, ha_role: null },
+            facts: { hostname: "FW-BRAVO-02", model: null, software_version: null, ha_role: null },
             peer_follow_outcome: "NONE",
             peer_follow_reason: null,
             identity_mismatch_state: "OPEN",
@@ -385,9 +385,9 @@ const CLUSTER_CANDIDATE = {
   candidate_id: "c-cluster",
   kind: "VIRTUALIZATION_CLUSTER",
   importable: false,
-  display_name: "Cluster Alpha",
+  display_name: "CLS-ROMEO-01",
   own_address: null,
-  management_address: "10.1.1.100",
+  management_address: "192.0.2.100",
   cluster_reference: null,
   parent_candidate_id: null,
   model: null,
@@ -402,9 +402,9 @@ const MEMBER_ONE_CANDIDATE = {
   candidate_id: "c-m1",
   kind: "PHYSICAL_VIRTUALIZATION_CHASSIS_MEMBER",
   importable: true,
-  display_name: "Member One",
-  own_address: "10.1.1.1",
-  management_address: "10.1.1.1",
+  display_name: "FW-TANGO-01",
+  own_address: "192.0.2.1",
+  management_address: "192.0.2.1",
   cluster_reference: "cluster-ref-1",
   parent_candidate_id: "c-cluster",
   model: null,
@@ -419,9 +419,9 @@ const MEMBER_TWO_CANDIDATE = {
   candidate_id: "c-m2",
   kind: "PHYSICAL_VIRTUALIZATION_CHASSIS_MEMBER",
   importable: true,
-  display_name: "Member Two",
-  own_address: "10.1.1.2",
-  management_address: "10.1.1.2",
+  display_name: "FW-TANGO-02",
+  own_address: "192.0.2.2",
+  management_address: "192.0.2.2",
   cluster_reference: "cluster-ref-1",
   parent_candidate_id: "c-cluster",
   model: null,
@@ -436,9 +436,9 @@ const SELECTABLE_STANDALONE_CANDIDATE = {
   candidate_id: "c-standalone",
   kind: "STANDALONE_PRODUCT_GATEWAY",
   importable: true,
-  display_name: "New Gateway",
-  own_address: "10.1.1.5",
-  management_address: "10.1.1.5",
+  display_name: "FW-BRAVO-02",
+  own_address: "192.0.2.5",
+  management_address: "192.0.2.5",
   cluster_reference: null,
   parent_candidate_id: null,
   model: null,
@@ -453,9 +453,9 @@ const ALREADY_IMPORTED_CANDIDATE = {
   candidate_id: "c-existing",
   kind: "STANDALONE_PRODUCT_GATEWAY",
   importable: true,
-  display_name: "Edge Gateway",
-  own_address: "10.1.1.9",
-  management_address: "10.1.1.9",
+  display_name: "FW-DELTA-03",
+  own_address: "192.0.2.9",
+  management_address: "192.0.2.9",
   cluster_reference: null,
   parent_candidate_id: null,
   model: null,
@@ -504,12 +504,12 @@ describe("AddDeviceDialog discovery mode", () => {
     );
 
     render(withTheme(<AddDeviceDialogTrigger />));
-    await openDialogAndSwitchToDiscovery("mds.example");
+    await openDialogAndSwitchToDiscovery("192.0.2.100");
     fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
 
-    await waitFor(() => expect(screen.getByText("Cluster Alpha")).toBeInTheDocument(), { timeout: 8000 });
-    expect(screen.getByText("Member One")).toBeInTheDocument();
-    expect(screen.getByText("Member Two")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("CLS-ROMEO-01")).toBeInTheDocument(), { timeout: 8000 });
+    expect(screen.getByText("FW-TANGO-01")).toBeInTheDocument();
+    expect(screen.getByText("FW-TANGO-02")).toBeInTheDocument();
   }, 10000);
 
   it("selecting the cluster selects its members, and import shows per-candidate outcomes", async () => {
@@ -539,9 +539,9 @@ describe("AddDeviceDialog discovery mode", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(withTheme(<AddDeviceDialogTrigger />));
-    await openDialogAndSwitchToDiscovery("mds.example");
+    await openDialogAndSwitchToDiscovery("192.0.2.100");
     fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
-    await waitFor(() => expect(screen.getByText("Cluster Alpha")).toBeInTheDocument(), { timeout: 8000 });
+    await waitFor(() => expect(screen.getByText("CLS-ROMEO-01")).toBeInTheDocument(), { timeout: 8000 });
 
     const checkboxes = screen.getAllByRole("checkbox");
     expect(checkboxes).toHaveLength(4);
@@ -583,9 +583,9 @@ describe("AddDeviceDialog discovery mode", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(withTheme(<AddDeviceDialogTrigger />));
-    await openDialogAndSwitchToDiscovery("mds.example");
+    await openDialogAndSwitchToDiscovery("192.0.2.100");
     fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
-    await waitFor(() => expect(screen.getByText("Cluster Alpha")).toBeInTheDocument(), { timeout: 8000 });
+    await waitFor(() => expect(screen.getByText("CLS-ROMEO-01")).toBeInTheDocument(), { timeout: 8000 });
 
     const selectAllBtn = screen.getByRole("button", { name: "Select all (2)" });
     const clearBtn = screen.getByRole("button", { name: "Clear selection" });
@@ -638,9 +638,9 @@ describe("AddDeviceDialog discovery mode", () => {
     );
 
     render(withTheme(<AddDeviceDialogTrigger />));
-    await openDialogAndSwitchToDiscovery("mds.example");
+    await openDialogAndSwitchToDiscovery("192.0.2.100");
     fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
-    await waitFor(() => expect(screen.getByText("Edge Gateway")).toBeInTheDocument(), { timeout: 8000 });
+    await waitFor(() => expect(screen.getByText("FW-DELTA-03")).toBeInTheDocument(), { timeout: 8000 });
 
     // Header reports "N candidates found, M already added".
     expect(screen.getByText("2 candidates found, 1 already added")).toBeInTheDocument();
@@ -694,7 +694,7 @@ describe("AddDeviceDialog discovery mode", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Start discovery" })).toBeDisabled());
-    fireEvent.change(screen.getByLabelText("Management server address"), { target: { value: "mds.example" } });
+    fireEvent.change(screen.getByLabelText("Management server address"), { target: { value: "192.0.2.100" } });
     await waitFor(() => expect(screen.getByRole("button", { name: "Start discovery" })).not.toBeDisabled());
   });
 });
@@ -706,7 +706,7 @@ describe("C10 SSH trust enrollment", () => {
   it("makes SSH trust authorization available before direct Check Point enrollment", async () => {
     vi.stubGlobal("fetch", routedFetch({ "/credentials": CREDENTIALS_ROUTE }));
     render(withTheme(<AddDeviceDialogTrigger />));
-    await openDialogAndFillAddress("fixture-gateway");
+    await openDialogAndFillAddress("192.0.2.5");
     expect(screen.getByRole("button", { name: "SSH trust authorization" })).toBeInTheDocument();
   });
 
@@ -718,7 +718,7 @@ describe("C10 SSH trust enrollment", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     render(withTheme(<AddDeviceDialogTrigger />));
-    await openDialogAndSwitchToDiscovery("fixture-management");
+    await openDialogAndSwitchToDiscovery("192.0.2.100");
     fireEvent.click(screen.getByRole("button", { name: "SSH trust authorization" }));
     const button = screen.getByRole("button", { name: "Authorize SSH trust" });
     expect(button).toBeDisabled();
@@ -751,10 +751,10 @@ describe("C10 SSH trust enrollment", () => {
         outcome_summary: { [failure]: 1 }, candidates: [], error: "sensitive-response-marker" } },
     }));
     render(withTheme(<AddDeviceDialogTrigger />));
-    await openDialogAndSwitchToDiscovery("fixture-management");
+    await openDialogAndSwitchToDiscovery("192.0.2.100");
     fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
     await waitFor(() => expect(screen.getByText(new RegExp(copy))).toBeInTheDocument());
-    expect(screen.queryByText("fixture-management")).not.toBeInTheDocument();
+    expect(screen.queryByText("192.0.2.100")).not.toBeInTheDocument();
     expect(screen.queryByText("sensitive-response-marker")).not.toBeInTheDocument();
   });
 });

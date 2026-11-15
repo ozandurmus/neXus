@@ -412,7 +412,9 @@ public final class WorkerClaimLoop {
     }
 
     private boolean executeClaimed(ClaimedJob claimed) {
-        try (var warnings = com.securityexpert.nexus.ui2.persistence.https.HttpsCertificateWarnings.open()) {
+        // job_id on every JSON log line written by this thread while the job runs (NEXUS_LOG_FORMAT=json).
+        try (var jobLog = com.securityexpert.nexus.ui2.platform.logging.JobLogContext.open(String.valueOf(claimed.jobId()));
+             var warnings = com.securityexpert.nexus.ui2.persistence.https.HttpsCertificateWarnings.open()) {
             return executeWithCertificateWarnings(claimed);
         }
     }

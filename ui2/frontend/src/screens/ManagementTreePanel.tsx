@@ -15,6 +15,7 @@ import {
   type CredentialView, type DomainHa, type DomainHaEntry, type ManagementTree, type ManagementTreeNode,
 } from "../auth/adminApi";
 import { StatusChip } from "../shell/M3Widgets";
+import { PRODUCT_NAME } from "../brand/product";
 import { RoleChip, StatePanel, Ts, Unknown } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
 import { plural } from "../shell/plural";
@@ -183,7 +184,7 @@ function MemberState({ node, actions, inCluster = false }: { readonly node: Mana
       <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
         {node.acknowledged
           ? <StatusChip tone="neutral" label={`Not an issue · ${node.acknowledged_reason ?? ""}`} dense />
-          : <StatusChip tone="warn" label="Not in neXus" dense />}
+          : <StatusChip tone="warn" label={`Not in ${PRODUCT_NAME}`} dense />}
         <AckControl node={node} actions={actions} />
       </Box>
     );
@@ -344,14 +345,14 @@ export function ManagementTreePanel({ deviceId, onOpenDevice, onOpenCluster }: {
         <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mt: 0.5 }}>
           {t.vendor === "radware" ? `${plural(c.domains ?? 0, "site")} · ${plural(c.gateways ?? 0, "appliance")}`
             : <>{t.vendor === "palo_alto" ? "" : `${plural(c.domains ?? 0, "domain")} · `}{plural(c.clusters ?? 0, "cluster")} · {plural(c.gateways ?? 0, "gateway")} · {plural(c.virtual_systems ?? 0, "virtual system")}</>}
-          {c.management_appliances ? ` · ${plural(c.management_appliances, "management / log server")}` : ""} · {c.imported ?? 0} in neXus ·
+          {c.management_appliances ? ` · ${plural(c.management_appliances, "management / log server")}` : ""} · {c.imported ?? 0} in {PRODUCT_NAME} ·
           discovered <Ts at={t.discovered_at} relative />
         </Typography>
         {missing > 0 && (
           <Box sx={{ mt: 1, display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-            <StatusChip tone="warn" label={`${missing} not in neXus`} dense />
+            <StatusChip tone="warn" label={`${missing} not in ${PRODUCT_NAME}`} dense />
             <Typography variant="body2">
-              {missing} gateway{missing === 1 ? "" : "s"} this server manages {missing === 1 ? "is" : "are"} not enrolled in neXus.
+              {missing} gateway{missing === 1 ? "" : "s"} this server manages {missing === 1 ? "is" : "are"} not enrolled in {PRODUCT_NAME}.
               {canWrite ? " Select them below to import, or mark one Not an issue with a reason." : ""}
             </Typography>
           </Box>
@@ -412,7 +413,7 @@ export function ManagementTreePanel({ deviceId, onOpenDevice, onOpenCluster }: {
                 <Box component="span" sx={{ fontWeight: 600, fontSize: 13.5 }}>{d.domain ?? (t.vendor === "palo_alto" ? "Managed firewalls" : t.vendor === "radware" ? "Managed devices" : "No domain")}</Box>
                 {dha && <Box component="span" data-domain-ha-line sx={{ fontSize: 12, fontWeight: 400, color: m3.onSurfaceVar }}>{domainHaLine(dha)}</Box>}
               </Box>
-              {dc.missing > 0 && <StatusChip tone="warn" label={`${dc.missing} not in neXus`} dense />}
+              {dc.missing > 0 && <StatusChip tone="warn" label={`${dc.missing} not in ${PRODUCT_NAME}`} dense />}
               <Box component="span" sx={{ fontSize: 12, color: m3.onSurfaceVar, fontVariantNumeric: "tabular-nums" }}>
                 {/* A Radware controller manages appliances, not clusters of gateways (P2-1B): one count in the right word. */}
                 {t.vendor === "radware" ? plural(dc.gateways, "appliance")

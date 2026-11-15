@@ -179,6 +179,9 @@ public final class AuditPresentationAllowlist {
             Map.entry("lifecycle_catalog", Set.of(
                     "catalog_id", "end_of_engineering", "end_of_sale", "end_of_support",
                     "imported_at", "kind", "product", "source", "vendor")),
+            Map.entry("lifecycle_catalog_upload", Set.of(
+                    "content_sha256", "entries_needing_review", "entries_parsed", "page_form",
+                    "rows_skipped", "upload_id", "uploaded_at", "vendor")),
             Map.entry("local_credentials", Set.of(
                     "algorithm_id", "created_at", "created_by_actor_fingerprint", "enabled",
                     "failed_attempt_count", "local_identity_id", "locked_until", "memory_cost_kib",
@@ -309,6 +312,10 @@ public final class AuditPresentationAllowlist {
                     "reads_issued", "run_id", "source_key")),
             // V203: the per-family scheduled-job switches; the free-text reason is tier-2 redacted (audit_redaction_policy).
             Map.entry("scheduled_job_family", Set.of("changed_at", "changed_by", "enabled", "family_key")),
+            // The password-policy switches and bounds hold no secret; the retired-verifier table is not audited.
+            Map.entry("local_password_policy_settings", Set.of(
+                    "enabled", "history_count", "max_age_days", "min_length", "require_digit", "require_lower",
+                    "require_symbol", "require_upper", "settings_id", "updated_at", "updated_by")),
             Map.entry("system_log_settings", Set.of(
                     "device_cap_bytes", "hcp_retention_days", "include_management_servers", "ledger_retention_days",
                     "raw_retention_days", "settings_id", "spike_data_cap_bytes", "spike_data_enabled",

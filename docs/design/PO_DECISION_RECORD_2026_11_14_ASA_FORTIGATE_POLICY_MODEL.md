@@ -35,6 +35,13 @@ record is the authority for the items below only; the design stays DRAFT for eve
     `scripts/argon_task.py` from a worktree at `origin/main`; the engineering session runs step 0 (pod access), and
     does the reviews, tests and integration.
 
+11. **ASA identity criteria (2026-11-14 evening), PO:** "devam et" ("go ahead"), relayed by the PO session after a
+    plain-language explanation of the recommendation: a `user` / `user-group` / TrustSec `security-group` criterion on
+    an ASA ACE only narrows; the ACE's address and port cells bound what it can match; the bound is used only to prove
+    that a rule does not cover a flow (pass over it), never to decide an allow by identity. Same as the Check Point
+    access-role amendment of 2026-11-04. Recorded as A0-ASA-16a in
+    `PATH_ANALYSIS_VENDOR_SEMANTICS_AMENDMENT_2026_11_14_ASA_FORTIGATE.md` section 15.
+
 ## Not authorized by this record
 
 Any new device command or API call; any read listed in design section 6 (R1-R3); a multiple-context ASA read; any

@@ -78,6 +78,13 @@ public final class MdsExportExecutor {
         if (request.credentialRef().isEmpty() || request.credentialRef().get().isBlank()) {
             return new BackupResult.CredentialUnresolvable("no backup credential configured for check_point (BK-11) -- refused before any device contact");
         }
+        try {
+            artefactStore.checkQuota();
+        } catch (ArtefactStore.QuotaExceededException e) {
+            return new BackupResult.ArtefactStoreFailed(e.getMessage());
+        } catch (IOException e) {
+            return new BackupResult.ArtefactStoreFailed("artefact store quota check failed: " + e.getMessage());
+        }
         ConnectResult connect;
         try {
             connect = transport.connect(request.connectionTarget(),
@@ -195,6 +202,9 @@ public final class MdsExportExecutor {
         ArtefactStore.ArtefactHandle handle;
         try {
             handle = artefactStore.open(deviceId, jobId, "check_point", false);
+        } catch (ArtefactStore.QuotaExceededException e) {
+            remove(session, dir);
+            return new BackupResult.ArtefactStoreFailed(e.getMessage());
         } catch (IOException e) {
             remove(session, dir);
             return new BackupResult.ArtefactStoreFailed("artefact store open failed: " + e.getMessage());
@@ -206,17 +216,29 @@ public final class MdsExportExecutor {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             closeQuietly(handle);
             remove(session, dir);
+            var quota = ArtefactStore.QuotaExceededException.reasonIn(e);
+            if (quota.isPresent()) {
+                return new BackupResult.ArtefactStoreFailed(quota.get());
+            }
             return new BackupResult.ArtefactStoreFailed("sftp fetch failed: " + e.getClass().getSimpleName());
         }
         if (!(fetched instanceof FetchStreamResult.Fetched)) {
             closeQuietly(handle);
             remove(session, dir);
-            return new BackupResult.ArtefactStoreFailed("sftp fetch failed: "
-                    + (fetched instanceof FetchStreamResult.Failed f ? f.reason() : "unknown"));
+            String reason = fetched instanceof FetchStreamResult.Failed f ? f.reason() : "unknown";
+            if (reason != null && reason.startsWith(
+                    ArtefactStore.QUOTA_EXCEEDED_REASON)) {
+                return new BackupResult.ArtefactStoreFailed(reason);
+            }
+            return new BackupResult.ArtefactStoreFailed("sftp fetch failed: " + reason);
         }
         ArtefactStore.ArtefactMetadata metadata;
         try {
             metadata = handle.finish();
+        } catch (ArtefactStore.QuotaExceededException e) {
+            closeQuietly(handle);
+            remove(session, dir);
+            return new BackupResult.ArtefactStoreFailed(e.getMessage());
         } catch (IOException e) {
             closeQuietly(handle);
             remove(session, dir);

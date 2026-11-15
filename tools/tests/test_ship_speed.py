@@ -571,6 +571,8 @@ def test_builder_arguments_pin_the_recorded_digest_and_the_deploy_tag():
     assert "--dockerfile=/workspace/ui2/Containerfile" not in args and "--cache=true" not in args
     assert "--destination=" + restamp.REPOSITORY + ":" + COMMIT[:12] in args
     assert "--build-arg=SERVICE_IMAGE=" + base in args and "--insecure" in args
+    assert "--cache=false" in args and "--image-download-retry=5" in args
+    assert args[args.index("--cache=false") + 1] == "--image-download-retry=5"
     assert args[-1] == "--digest-file=/dev/termination-log"
 
 

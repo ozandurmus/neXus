@@ -59,6 +59,15 @@ class SystemLogRetentionPrunerTest {
         @Override public List<Candidate> oldestCapped(String device, int limit) {
             return where(c -> c.deviceId().equals(device) && (c.table().equals(Candidate.CHUNK) || c.sourceKey().equals("cp_sar_daily")), limit);
         }
+        @Override public List<DeviceUsage> devicesOverSpikeCap(long cap) {
+            Map<String, Long> sum = new LinkedHashMap<>();
+            for (Candidate c : live.values())
+                if (c.sourceKey().equals("cp_spike_data")) sum.merge(c.deviceId(), c.ciphertextBytes(), Long::sum);
+            return sum.entrySet().stream().filter(e -> e.getValue() > cap).map(e -> new DeviceUsage(e.getKey(), e.getValue())).toList();
+        }
+        @Override public List<Candidate> oldestSpike(String device, int limit) {
+            return where(c -> c.deviceId().equals(device) && c.sourceKey().equals("cp_spike_data"), limit);
+        }
         @Override public boolean markPruned(Candidate c, String reason) {
             if (live.remove(c.rowId()) == null) return false;
             pruned.put(c.rowId(), reason);
@@ -147,5 +156,90 @@ class SystemLogRetentionPrunerTest {
         var pruner = pruner(ledger, root, Settings.DEFAULTS);
         assertTrue(pruner.runIfDue());
         assertFalse(pruner.runIfDue());
+    }
+
+    private static final long MIB = 1024L * 1024;
+
+    private Ledger spikeLedger(Path root, long... sizesOldestFirst) throws IOException {
+        Ledger ledger = new Ledger();
+        for (int i = 0; i < sizesOldestFirst.length; i++) {
+            file(root, "s" + i + ".enc");
+            ledger.add(Candidate.FILE, "s" + i, "device-1", "cp_spike_data", "check_point/device-1/s" + i + ".enc",
+                    sizesOldestFirst[i], NOW.minus(Duration.ofDays(20 - i)));
+        }
+        return ledger;
+    }
+
+    private static Settings spikeCap(long cap) {
+        return new Settings(30, false, Settings.DEFAULT_DEVICE_CAP_BYTES, 7, 30, cap, 180, false);
+    }
+
+    @Test
+    void spikeDataOverItsCapLosesItsOldestFilesFirstWithinTheAgeRule(@TempDir Path root) throws Exception {
+        Ledger ledger = spikeLedger(root, 200 * MIB, 200 * MIB, 200 * MIB); // 600 MiB, cap 512 MiB
+        var summary = pruner(ledger, root, spikeCap(512 * MIB)).runOnce();
+        assertEquals(1, summary.cappedArtefacts());
+        assertEquals(Map.of("s0", "RETENTION_SHORTENED_BY_CAP"), ledger.pruned);
+        assertFalse(Files.exists(root.resolve("check_point/device-1/s0.enc")));
+        assertTrue(Files.exists(root.resolve("check_point/device-1/s1.enc")));
+        assertEquals(1, ledger.capGaps.size());
+        assertTrue(ledger.capGaps.get(0).startsWith("device-1/cp_spike_data/"));
+        assertEquals(200 * MIB, summary.bytesReclaimed());
+    }
+
+    @Test
+    void spikeDataExactlyAtTheCapIsUntouched(@TempDir Path root) throws Exception {
+        Ledger ledger = spikeLedger(root, 256 * MIB, 256 * MIB);
+        var summary = pruner(ledger, root, spikeCap(512 * MIB)).runOnce();
+        assertEquals(0, summary.cappedArtefacts());
+        assertTrue(ledger.pruned.isEmpty());
+        assertTrue(ledger.capGaps.isEmpty());
+    }
+
+    @Test
+    void oneByteOverTheSpikeCapRemovesOnlyTheOldestFile(@TempDir Path root) throws Exception {
+        Ledger ledger = spikeLedger(root, 1, 256 * MIB, 256 * MIB); // 512 MiB + 1
+        pruner(ledger, root, spikeCap(512 * MIB)).runOnce();
+        assertEquals(Map.of("s0", "RETENTION_SHORTENED_BY_CAP"), ledger.pruned);
+    }
+
+    @Test
+    void aSingleSpikeFileLargerThanTheCapIsRemovedNotRefused(@TempDir Path root) throws Exception {
+        Ledger ledger = spikeLedger(root, 600 * MIB);
+        var summary = pruner(ledger, root, spikeCap(512 * MIB)).runOnce();
+        assertEquals(1, summary.cappedArtefacts());
+        assertTrue(ledger.live.isEmpty());
+        assertFalse(Files.exists(root.resolve("check_point/device-1/s0.enc")));
+    }
+
+    @Test
+    void theAgeRuleStillAppliesAndRunsBeforeTheSpikeCap(@TempDir Path root) throws Exception {
+        Ledger ledger = new Ledger();
+        file(root, "old.enc");
+        file(root, "new.enc");
+        ledger.add(Candidate.FILE, "old", "device-1", "cp_spike_data", "check_point/device-1/old.enc", 300 * MIB, NOW.minus(Duration.ofDays(31)));
+        ledger.add(Candidate.FILE, "new", "device-1", "cp_spike_data", "check_point/device-1/new.enc", 300 * MIB, NOW.minus(Duration.ofDays(1)));
+        var summary = pruner(ledger, root, spikeCap(512 * MIB)).runOnce();
+        assertEquals(Map.of("old", "RETENTION"), ledger.pruned, "expired by age, so the cap is no longer exceeded");
+        assertEquals(1, summary.expiredFiles());
+        assertEquals(0, summary.cappedArtefacts());
+    }
+
+    @Test
+    void spikeCapIsPerDeviceAndTheEnvOverrideWinsOverTheSetting(@TempDir Path root) throws Exception {
+        Ledger ledger = spikeLedger(root, 100 * MIB, 100 * MIB);
+        file(root, "o.enc");
+        ledger.add(Candidate.FILE, "other", "device-2", "cp_spike_data", "check_point/device-1/o.enc", 150 * MIB, NOW.minus(Duration.ofDays(5)));
+        var pruner = new SystemLogRetentionPruner(ledger, () -> spikeCap(512 * MIB), root, Clock.fixed(NOW, ZoneOffset.UTC),
+                SystemLogRetentionPruner.parseSpikeCapOverride("157286400")); // 150 MiB
+        pruner.runOnce();
+        assertEquals(Map.of("s0", "RETENTION_SHORTENED_BY_CAP"), ledger.pruned, "device-1 200 MiB loses one; device-2 at the cap stays");
+    }
+
+    @Test
+    void theSpikeCapEnvValueIsParsedStrictly() {
+        assertEquals(java.util.OptionalLong.of(1024), SystemLogRetentionPruner.parseSpikeCapOverride(" 1024 "));
+        for (String bad : new String[] {null, "", "  ", "abc", "0", "-5", "1.5"})
+            assertTrue(SystemLogRetentionPruner.parseSpikeCapOverride(bad).isEmpty(), String.valueOf(bad));
     }
 }

@@ -29,6 +29,7 @@ describe("LoginScreen", () => {
         <LoginScreen onAuthenticated={() => {}} />
       </ThemeProvider>,
     );
+    expect(document.title).toBe("neXus");
     expect(screen.getByAltText("neXus").getAttribute("src")).toContain("wordmark-light-on-dark.svg");
     expect(screen.getByRole("group", { name: "Authentication" })).toBeInTheDocument();
     expect(screen.getByLabelText("Username")).toBeInTheDocument();
@@ -37,6 +38,17 @@ describe("LoginScreen", () => {
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(screen.queryByText(/Every firewall/)).toBeNull();
+  });
+
+  it("renders a renamed product name across the hero wordmark, footer, and document title", () => {
+    render(
+      <ThemeProvider theme={m3Theme}>
+        <LoginScreen onAuthenticated={() => {}} productName="Sentinel" />
+      </ThemeProvider>,
+    );
+    expect(document.title).toBe("Sentinel");
+    expect(screen.getByRole("img", { name: "Sentinel" })).toHaveTextContent("Sentinel");
+    expect(screen.getByText("Sentinel · on-premises")).toBeInTheDocument();
   });
 
   it("reveals the password only while the toggle is pressed", () => {

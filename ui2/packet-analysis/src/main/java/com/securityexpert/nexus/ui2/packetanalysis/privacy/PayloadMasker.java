@@ -1,8 +1,9 @@
 package com.securityexpert.nexus.ui2.packetanalysis.privacy;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -62,6 +63,83 @@ public final class PayloadMasker {
     private static final Pattern IPV4 = Pattern.compile("\\d{1,3}(?:\\.\\d{1,3}){3}");
     private static final int MIN_REPLACE = 4;
 
+    private static final Pattern EMBEDDED_URL = Pattern.compile("(?i)\\bhttps?://[^\\s\"'<>()\\[\\],;]+");
+    private static final Pattern KEYED_DN = Pattern.compile(
+            "(?i)\\b(user(?:name)?|admin|account|principal|login|subject|issuer|dn)\\s*([=:])\\s*"
+            + "(\"(?:CN|UID)=[^\"\\r\\n]+\"|(?:CN|UID)=[^\\s,;)\"']+(?:\\s*,\\s*[A-Za-z]{1,10}=[^\\s,;)\"']+)*"
+            + "|(?:/[A-Za-z]{1,10}=[^\\s/;)\"']+)+)");
+    private static final Pattern STANDALONE_DN = Pattern.compile(
+            "(?i)(?<![A-Za-z0-9_./=-])(?:\"((?:CN|UID)=[^\"\\r\\n]+)\""
+            + "|((?:CN|UID)=(?:[^,\\s;)\"']+|(?:\\s+(?=[A-Za-z0-9-]+,|[A-Za-z]{1,10}=)))+"
+            + "(?:\\s*,\\s*[A-Za-z]{1,10}=[^\\s,;)\"']+)*))");
+    private static final Pattern SLASH_DN = Pattern.compile(
+            "(?i)(?<![A-Za-z0-9_./-])((?:/[A-Za-z]{1,10}=[^\\s/;,\"')]+){2,})");
+    private static final Pattern DOMAIN_USER = Pattern.compile(
+            "(?<![A-Za-z0-9_./:-])([A-Za-z][A-Za-z0-9._-]{1,30})\\\\\\\\?([A-Za-z_][A-Za-z0-9._$-]{1,63})(?![A-Za-z0-9_./\\\\-])");
+    private static final Pattern USER_AT_REALM = Pattern.compile(
+            "(?<![A-Za-z0-9_./:-])((?:[A-Za-z][A-Za-z0-9_-]{1,15}/)?[A-Za-z0-9._%+$-]{2,64})"
+            + "@([A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)"
+            + "(?![A-Za-z0-9_.-])");
+    private static final Pattern KEYED_PRINCIPAL = Pattern.compile(
+            "(?i)\\b(user(?:name)?|admin|account|principal|login)\\s*([=:])\\s*\"?([A-Za-z0-9._\\\\@-]{2,64})\"?");
+    private static final Pattern KEYED_SERIAL = Pattern.compile(
+            "(?i)\\b(serial(?:_number)?|sn)\\s*([=:])\\s*\"?([A-Za-z0-9-]{6,32})\"?");
+    private static final Pattern FREE_TEXT_FQDN = Pattern.compile(
+            "(?<![A-Za-z0-9._/@:-])([A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+            + "(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+)(?![A-Za-z0-9_/-])");
+    private static final Pattern HOST_BEFORE_STATE = Pattern.compile(
+            "(?i)\\b([A-Za-z][A-Za-z0-9_-]{2,62})"
+            + "(\\s+(?:is\\s+(?:down|up|unreachable|reachable|active|standby|alive|dead|offline|online|degraded|healthy|stalled|reset)"
+            + "|went\\s+(?:down|up)|(?:entered|in)\\s+(?:active|standby|down|up|fault|init))\\b)");
+    private static final Pattern HOST_AFTER_CONTEXT = Pattern.compile(
+            "(?i)(\\b(?:host(?:name)?|peer|gateway|firewall|router|switch|proxy|node|member|appliance|from|toward|towards|via)\\s+)"
+            + "([A-Za-z][A-Za-z0-9_-]{2,62})\\b");
+    private static final Pattern STANDALONE_HOST_TOKEN = Pattern.compile(
+            "(?<![A-Za-z0-9._/@:-])([A-Za-z][A-Za-z0-9_-]{5,62})(?![A-Za-z0-9._/-])");
+    private static final Pattern SIZE_OR_UNIT = Pattern.compile(
+            "(?i)^\\d+(?:\\.\\d+)?(?:b|kb|mb|gb|tb|pb|kib|mib|gib|tib|bps|kbps|mbps|gbps|ms|us|ns|s|m|h|d|hz|khz|mhz|ghz|pct)?$");
+    private static final Pattern ORDINAL_TOKEN = Pattern.compile(
+            "(?i)^(?:\\d+(?:st|nd|rd|th)|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)$");
+    private static final Pattern DEVICE_AFFIX = Pattern.compile(
+            "(?i)^(?:(?:fw|gw|rtr|sw|vpn|vsx|mds|clm|cma|sxl|pxy|srv|firewall|gateway|router|switch|proxy)[a-z0-9]{2,}"
+            + "|[a-z0-9]{2,}(?:fw|gw|rtr|sw|vpn|vsx|mds|clm|cma|sxl|pxy|srv|firewall|gateway|router|switch|proxy)\\d*)$");
+
+    private static final Set<String> NON_PROSE_TEXT_KEYS = Set.of(
+            "content_filter", "display_filter", "flow_filter", "id",
+            "device", "file", "name", "project", "capture_name", "display_name", "point_label", "hostname", "zone",
+            "rule_name", "policy_name", "section_name", "interface_name", "vendor_interface",
+            "cluster_member_ref", "source_zone", "destination_zone", "ingress_zone", "egress_zone",
+            "ingress_interface_name", "egress_interface_name", "matched_source_objects",
+            "matched_destination_objects", "matched_service_objects", "virtual_system",
+            "virtual_systems", "member", "label", "display_label", "segment_label",
+            "forward_labels", "reverse_labels", "forward", "reverse", "evidence_rank", "observation_point",
+            "scope", "badge", "baseline_method", "evidence_time_source", "time_source", "per_hop_added");
+
+    private static final Set<String> FILE_EXTENSIONS = Set.of(
+            "pcap", "pcapng", "cap", "txt", "log", "json", "gz", "tgz", "tar", "zip", "csv", "elg", "xml", "html", "pdf", "xlsx");
+
+    private static final Set<String> FILTER_PREFIXES = Set.of(
+            "ip", "ipv6", "tcp", "udp", "icmp", "icmpv6", "eth", "vlan", "arp", "dns", "http", "tls", "ssl",
+            "sip", "sdp", "rtp", "rtcp", "frame", "f5ethtrailer", "fw1", "data");
+
+    private static final Set<String> VOCABULARY_STOPWORDS = Set.of(
+            "jan", "january", "feb", "february", "mar", "march", "apr", "april", "may", "jun", "june",
+            "jul", "july", "aug", "august", "sep", "sept", "september", "oct", "october", "nov", "november", "dec", "december",
+            "mon", "monday", "tue", "tues", "tuesday", "wed", "wednesday", "thu", "thur", "thurs", "thursday",
+            "fri", "friday", "sat", "saturday", "sun", "sunday",
+            "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth",
+            "client", "server", "source", "target", "destination", "upstream", "downstream", "forward", "reverse",
+            "packet", "packets", "frame", "frames", "segment", "segments", "stream", "streams", "window", "buffer",
+            "session", "sessions", "connection", "connections", "transaction", "transactions", "request", "requests",
+            "response", "responses", "capture", "captures", "interface", "interfaces", "traffic", "network", "networks",
+            "device", "devices", "point", "points", "cluster", "member", "policy", "section", "object", "objects",
+            "unknown", "normal", "healthy", "degraded", "stalled", "failed", "dropped", "blocked", "rejected", "reset",
+            "active", "standby", "online", "offline", "reachable", "unreachable", "selected", "observed", "expected",
+            "one-way", "tie-break", "in-flight", "pre-nat", "post-nat", "non-zero", "half-closed", "client-side",
+            "server-side", "same-capture", "request-bearing", "selected-window", "tshark-decoded",
+            "sha256", "sha384", "sha512", "base64", "utf-8", "sha-256", "tls12", "tls13", "http2", "http3",
+            "ipv4", "ipv6", "icmpv6", "dhcpv6", "ikev2", "ospfv2", "ospfv3", "snmpv3");
+
     private final Tokens tokens;
     private final boolean names;
     /**
@@ -71,6 +149,8 @@ public final class PayloadMasker {
     private final Map<String, String> seenFolded = new LinkedHashMap<>();
     /** Folded raw values by their first two characters, longest first: a linear scan instead of a huge regex. */
     private final Map<String, List<String>> byPrefix = new HashMap<>();
+    /** Device, point and capture names present in keyed fields of the same response. */
+    private final Set<String> responseDeviceNames = new HashSet<>();
 
     private PayloadMasker(Tokens tokens, boolean names) {
         this.tokens = Objects.requireNonNull(tokens, "tokens");
@@ -115,6 +195,9 @@ public final class PayloadMasker {
         } else if (node instanceof List<?> list) {
             for (Object item : list) collect(item, key, context, owner);
         } else if (node instanceof String s && !s.isEmpty()) {
+            if (isResponseDeviceKey(key)) {
+                responseDeviceNames.add(fold(s));
+            }
             PayloadFields.Field field = PayloadFields.field(key, context, owner);
             String masked = switch (field) {
                 case KEEP -> null;
@@ -146,9 +229,15 @@ public final class PayloadMasker {
             PayloadFields.Field field = PayloadFields.field(key, context, owner);
             return switch (field) {
                 case KEEP -> s;
-                case ADDRESS, TEXT -> {
+                case ADDRESS -> {
                     String line = requestLine(s);
                     yield line != null ? line : replaceSeen(s);
+                }
+                case TEXT -> {
+                    String line = requestLine(s);
+                    if (line != null) yield line;
+                    String seenReplaced = replaceSeen(s);
+                    yield isProseTextKey(key) ? maskFreeText(seenReplaced) : seenReplaced;
                 }
                 default -> maskValue(field, s);
             };
@@ -301,5 +390,285 @@ public final class PayloadMasker {
         String normalized = name.toLowerCase(Locale.ROOT);
         if (normalized.endsWith(".")) normalized = normalized.substring(0, normalized.length() - 1);
         return tokens.token("HOST", normalized) + port;
+    }
+
+    // ---- free-text summary / prose identity masking -------------------------------------------------------
+
+    private static boolean isResponseDeviceKey(String key) {
+        return "hostname".equals(key) || "device".equals(key) || "file".equals(key)
+                || "point_label".equals(key) || "capture_name".equals(key) || "display_name".equals(key)
+                || "name".equals(key);
+    }
+
+    private static boolean isProseTextKey(String key) {
+        return key == null || !NON_PROSE_TEXT_KEYS.contains(key);
+    }
+
+    private String maskFreeText(String text) {
+        if (text == null || text.length() < 4) return text;
+        String out = replaceEmbeddedUrls(text);
+        out = replaceDistinguishedNames(out);
+        out = replaceDomainUsers(out);
+        out = replaceUserAtRealm(out);
+        out = replaceKeyedPrincipalsAndSerials(out);
+        out = replaceFreeTextFqdns(out);
+        out = replaceFreeTextHostnames(out);
+        return out;
+    }
+
+    private String replaceEmbeddedUrls(String s) {
+        if (!s.contains("://")) return s;
+        Matcher m = EMBEDDED_URL.matcher(s);
+        StringBuilder out = null;
+        int last = 0;
+        while (m.find()) {
+            if (out == null) out = new StringBuilder(s.length() + 16);
+            out.append(s, last, m.start()).append(target(null, m.group()));
+            last = m.end();
+        }
+        return out == null ? s : out.append(s, last, s.length()).toString();
+    }
+
+    private String replaceDistinguishedNames(String s) {
+        String out = s;
+        if (containsIgnoreCase(out, "cn=") || containsIgnoreCase(out, "uid=")) {
+            Matcher keyed = KEYED_DN.matcher(out);
+            StringBuilder sb = null;
+            int last = 0;
+            while (keyed.find()) {
+                String dn = stripOuterQuotes(keyed.group(3));
+                if (sb == null) sb = new StringBuilder(out.length() + 16);
+                sb.append(out, last, keyed.start()).append(keyed.group(1)).append(keyed.group(2)).append(tokens.token("USER", dn));
+                last = keyed.end();
+            }
+            if (sb != null) out = sb.append(out, last, out.length()).toString();
+
+            Matcher standalone = STANDALONE_DN.matcher(out);
+            sb = null;
+            last = 0;
+            while (standalone.find()) {
+                String dn = standalone.group(1) != null ? standalone.group(1) : standalone.group(2);
+                if (dn == null || dn.isBlank()) continue;
+                if (sb == null) sb = new StringBuilder(out.length() + 16);
+                sb.append(out, last, standalone.start()).append(tokens.token("USER", dn.strip()));
+                last = standalone.end();
+            }
+            if (sb != null) out = sb.append(out, last, out.length()).toString();
+
+            Matcher slash = SLASH_DN.matcher(out);
+            sb = null;
+            last = 0;
+            while (slash.find()) {
+                String dn = slash.group(1);
+                String lower = dn.toLowerCase(Locale.ROOT);
+                if (!lower.contains("/cn=") && !lower.contains("/uid=")) continue;
+                if (sb == null) sb = new StringBuilder(out.length() + 16);
+                sb.append(out, last, slash.start()).append(tokens.token("USER", dn));
+                last = slash.end();
+            }
+            if (sb != null) out = sb.append(out, last, out.length()).toString();
+        }
+        return out;
+    }
+
+    private String replaceDomainUsers(String s) {
+        if (s.indexOf('\\') < 0) return s;
+        Matcher m = DOMAIN_USER.matcher(s);
+        StringBuilder out = null;
+        int last = 0;
+        while (m.find()) {
+            String domain = m.group(1);
+            String user = m.group(2);
+            if (!isValidDomainPart(domain) || isAlreadyToken(user)) continue;
+            if (out == null) out = new StringBuilder(s.length() + 16);
+            out.append(s, last, m.start()).append(tokens.token("USER", domain + "\\" + user));
+            last = m.end();
+        }
+        return out == null ? s : out.append(s, last, s.length()).toString();
+    }
+
+    private String replaceUserAtRealm(String s) {
+        if (s.indexOf('@') < 0) return s;
+        Matcher m = USER_AT_REALM.matcher(s);
+        StringBuilder out = null;
+        int last = 0;
+        while (m.find()) {
+            String user = m.group(1);
+            String realm = m.group(2);
+            if (isAlreadyToken(user) || isAlreadyToken(realm) || !hasAtLeastTwoLetters(realm)) continue;
+            if (out == null) out = new StringBuilder(s.length() + 16);
+            out.append(s, last, m.start()).append(tokens.token("USER", user + "@" + realm));
+            last = m.end();
+        }
+        return out == null ? s : out.append(s, last, s.length()).toString();
+    }
+
+    private String replaceKeyedPrincipalsAndSerials(String s) {
+        if (s.indexOf('=') < 0 && s.indexOf(':') < 0) return s;
+        String out = s;
+        Matcher pm = KEYED_PRINCIPAL.matcher(out);
+        StringBuilder sb = null;
+        int last = 0;
+        while (pm.find()) {
+            String val = pm.group(3);
+            if (isAlreadyToken(val)) continue;
+            if (sb == null) sb = new StringBuilder(out.length() + 16);
+            sb.append(out, last, pm.start()).append(pm.group(1)).append(pm.group(2)).append(tokens.token("USER", val));
+            last = pm.end();
+        }
+        if (sb != null) out = sb.append(out, last, out.length()).toString();
+
+        Matcher sm = KEYED_SERIAL.matcher(out);
+        sb = null;
+        last = 0;
+        while (sm.find()) {
+            String val = sm.group(3);
+            if (isAlreadyToken(val)) continue;
+            if (sb == null) sb = new StringBuilder(out.length() + 16);
+            sb.append(out, last, sm.start()).append(sm.group(1)).append(sm.group(2)).append(tokens.token("TXT", val));
+            last = sm.end();
+        }
+        if (sb != null) out = sb.append(out, last, out.length()).toString();
+        return out;
+    }
+
+    private String replaceFreeTextFqdns(String s) {
+        if (s.indexOf('.') < 0) return s;
+        Matcher m = FREE_TEXT_FQDN.matcher(s);
+        StringBuilder out = null;
+        int last = 0;
+        while (m.find()) {
+            String candidate = m.group(1);
+            if (!isFreeTextFqdn(candidate)) continue;
+            if (out == null) out = new StringBuilder(s.length() + 16);
+            out.append(s, last, m.start()).append(host(candidate));
+            last = m.end();
+        }
+        return out == null ? s : out.append(s, last, s.length()).toString();
+    }
+
+    private String replaceFreeTextHostnames(String s) {
+        String out = replaceHostBeforeState(s);
+        out = replaceHostAfterContext(out);
+        out = replaceStandaloneHostTokens(out);
+        return out;
+    }
+
+    private String replaceHostBeforeState(String s) {
+        Matcher m = HOST_BEFORE_STATE.matcher(s);
+        StringBuilder out = null;
+        int last = 0;
+        while (m.find()) {
+            String candidate = m.group(1);
+            if (!isContextualHostCandidate(candidate)) continue;
+            if (out == null) out = new StringBuilder(s.length() + 16);
+            out.append(s, last, m.start(1)).append(host(candidate)).append(m.group(2));
+            last = m.end();
+        }
+        return out == null ? s : out.append(s, last, s.length()).toString();
+    }
+
+    private String replaceHostAfterContext(String s) {
+        Matcher m = HOST_AFTER_CONTEXT.matcher(s);
+        StringBuilder out = null;
+        int last = 0;
+        while (m.find()) {
+            String candidate = m.group(2);
+            if (!isContextualHostCandidate(candidate)) continue;
+            if (out == null) out = new StringBuilder(s.length() + 16);
+            out.append(s, last, m.start()).append(m.group(1)).append(host(candidate));
+            last = m.end();
+        }
+        return out == null ? s : out.append(s, last, s.length()).toString();
+    }
+
+    private String replaceStandaloneHostTokens(String s) {
+        Matcher m = STANDALONE_HOST_TOKEN.matcher(s);
+        StringBuilder out = null;
+        int last = 0;
+        while (m.find()) {
+            String candidate = m.group(1);
+            if (!isStandaloneHostCandidate(candidate)) continue;
+            if (out == null) out = new StringBuilder(s.length() + 16);
+            out.append(s, last, m.start()).append(host(candidate));
+            last = m.end();
+        }
+        return out == null ? s : out.append(s, last, s.length()).toString();
+    }
+
+    private boolean isFreeTextFqdn(String candidate) {
+        if (IPV4.matcher(candidate).matches() || isAlreadyToken(candidate)) return false;
+        String folded = fold(candidate);
+        if (responseDeviceNames.contains(folded)) return false;
+        String[] labels = folded.split("\\.");
+        if (labels.length < 2) return false;
+        String first = labels[0];
+        String last = labels[labels.length - 1];
+        if (FILTER_PREFIXES.contains(first) || FILE_EXTENSIONS.contains(last)) return false;
+        if (last.length() < 2 || !last.chars().allMatch(Character::isLetter)) return false;
+        int letterLabels = 0;
+        for (String label : labels) {
+            if (label.isEmpty() || label.length() > 63) return false;
+            if (label.chars().anyMatch(Character::isLetter)) letterLabels++;
+        }
+        return letterLabels >= 2;
+    }
+
+    private boolean isContextualHostCandidate(String candidate) {
+        if (candidate == null || candidate.length() < 3 || isAlreadyToken(candidate)) return false;
+        String lower = candidate.toLowerCase(Locale.ROOT);
+        if (responseDeviceNames.contains(lower) || VOCABULARY_STOPWORDS.contains(lower)) return false;
+        if (SIZE_OR_UNIT.matcher(lower).matches() || ORDINAL_TOKEN.matcher(lower).matches()) return false;
+        return hasAtLeastTwoLetters(lower);
+    }
+
+    private boolean isStandaloneHostCandidate(String candidate) {
+        if (!isContextualHostCandidate(candidate)) return false;
+        String lower = candidate.toLowerCase(Locale.ROOT);
+        if (lower.indexOf('-') >= 0) {
+            boolean hasDigit = lower.chars().anyMatch(Character::isDigit);
+            for (String part : lower.split("-")) {
+                if (part.equals("fw") || part.equals("gw") || part.equals("rtr") || part.equals("sw")
+                        || part.equals("vpn") || part.equals("vsx") || part.equals("mds") || part.equals("pxy")
+                        || part.equals("srv") || part.equals("prd") || part.equals("stg") || part.equals("dmz")) {
+                    return true;
+                }
+            }
+            return hasDigit && countLetters(lower) >= 3;
+        }
+        if (lower.indexOf('_') >= 0 || lower.startsWith("0x")) return false;
+        if (DEVICE_AFFIX.matcher(lower).matches()) return true;
+        int letters = countLetters(lower);
+        int digits = (int) lower.chars().filter(Character::isDigit).count();
+        return lower.length() >= 6 && letters >= 4 && digits >= 1;
+    }
+
+    private static boolean isValidDomainPart(String domain) {
+        String lower = domain.toLowerCase(Locale.ROOT);
+        return !Set.of("http", "https", "tcp", "udp", "sip", "tls", "ip", "icmp", "and", "or").contains(lower);
+    }
+
+    private static boolean isAlreadyToken(String value) {
+        return TOKEN.matcher(value).find() || value.matches("(?i)(?:FW|CLS|DOM|VS|OBJ|ZONE|RULE|USR)-[A-Z0-9-]+");
+    }
+
+    private static boolean hasAtLeastTwoLetters(String s) {
+        return countLetters(s) >= 2;
+    }
+
+    private static int countLetters(String s) {
+        int count = 0;
+        for (int i = 0; i < s.length(); i++) {
+            if (Character.isLetter(s.charAt(i))) count++;
+        }
+        return count;
+    }
+
+    private static boolean containsIgnoreCase(String s, String needleLower) {
+        return s.toLowerCase(Locale.ROOT).contains(needleLower);
+    }
+
+    private static String stripOuterQuotes(String s) {
+        return s.length() >= 2 && s.startsWith("\"") && s.endsWith("\"") ? s.substring(1, s.length() - 1) : s;
     }
 }

@@ -296,6 +296,23 @@ line, hostname, or secret value at any point (AGENTS.md raw-evidence law) --
 only the job/run identifiers and outcome tokens the C2 discipline already
 logs for every other job kind.
 
+## 7b. Optional: JSON console logs for a SIEM (NEXUS_LOG_FORMAT)
+
+Environment variable `NEXUS_LOG_FORMAT`, read at service start. Unset (the default) keeps today's text console format.
+`NEXUS_LOG_FORMAT=json` writes one JSON object per line (Spring Boot's logstash structured format) with `@timestamp`,
+`level`, `logger_name`, `thread_name`, `message`, every MDC key, and `stack_trace` for an exception. It changes the
+format only, not what is logged: the log-time IP masker still runs over every string value (message, stack trace, MDC),
+and log call sites must carry pseudonyms or opaque ids, as before. No deploy manifest sets it; add it to the manifest first when a
+deployment wants it.
+
+The worker roles log through `java.util.logging` and honour the same variable. With `NEXUS_LOG_FORMAT=json`,
+`Ui2WorkerMain.main` installs a JDK-only formatter that writes one JSON object per line with `@timestamp`, `level`
+(`ERROR`, `WARN`, `INFO`, `DEBUG`, `TRACE`), `logger_name`, `thread_name`, `message`, `stack_trace` (only with an
+exception) and `job_id` (only while a claimed job runs on that thread). The log-time IP masker is applied to the message
+and the stack trace before escaping; non-ASCII text is written as `\uXXXX` escapes. Unset keeps the text format. Roles
+covered, all through the same `Ui2Launcher` `worker` entry: general (`worker`), `worker policy`, `worker configuration`,
+`worker compliance` and `worker packet_analysis`. Not covered: the `cli` and `advisory-fetch` launcher roles.
+
 ## 8. Reset the database to empty
 
 The reset is the destruction of the claim, performed entirely through the

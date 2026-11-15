@@ -23,7 +23,7 @@ class LifecycleProjectionTest {
     }
     static DeviceSummaryRecord device(String id, String vendor, String cluster) {
         return new DeviceSummaryRecord(id, "gateway", vendor, DeviceEnrollmentState.ENROLLED,
-                Optional.of("FW-TANGO-04"), Optional.of("Example Appliance"), Optional.of("R81.20 Jumbo Hotfix Take 99"),
+                Optional.of("FW-TANGO-04"), Optional.of("Check Point 6600"), Optional.of("R81.20 Jumbo Hotfix Take 99"),
                 Optional.empty(), Optional.ofNullable(cluster));
     }
 
@@ -45,11 +45,12 @@ class LifecycleProjectionTest {
     }
 
     @Test void emptyCatalogAndAmbiguousMatchesNeverGuess() {
+        // An empty catalog is "nothing to compare with": not evaluated, never a quiet UNKNOWN (contract rule 4).
         var result = project(device("device-1", "check_point", null), List.of(), null, TODAY);
-        assertEquals("NO_LIFECYCLE_DATA", result.get("status"));
-        assertEquals("UNKNOWN", result.get("risk"));
-        var duplicate = entry("HARDWARE", "Example Appliance", TODAY);
-        var ambiguous = LifecycleProjection.match("CHECKPOINT", "HARDWARE", "Example Appliance", List.of(duplicate, duplicate));
+        assertEquals("NOT_EVALUATED", result.get("status"));
+        assertEquals("NOT_EVALUATED", result.get("risk"));
+        var duplicate = entry("HARDWARE", "6600 Appliance", TODAY);
+        var ambiguous = LifecycleProjection.match("CHECKPOINT", "HARDWARE", "Check Point 6600", List.of(duplicate, duplicate));
         assertEquals("NO_LIFECYCLE_DATA", ambiguous.get("status"));
         assertEquals("Ambiguous catalog matches", ambiguous.get("reason"));
         var software = LifecycleProjection.match("PALOALTO", "SOFTWARE", "10.2.8-h3", List.of(
@@ -61,24 +62,24 @@ class LifecycleProjectionTest {
     }
 
     @Test void modelComparisonIsExactAndKnownDatesDoNotFabricateLowRisk() {
-        var catalog = List.of(entry("HARDWARE", "Example Appliance", TODAY.plusDays(400)), entry("SOFTWARE", "R81.20", null));
+        var catalog = List.of(entry("HARDWARE", "6600 Appliance", TODAY.plusDays(400)), entry("SOFTWARE", "R81.20", null));
         var result = project(device("device-1", "check_point", null), catalog, null, TODAY);
         assertEquals("MATCHED", result.get("status"));
         assertEquals("UNKNOWN", result.get("risk"));
-        assertEquals("NO_LIFECYCLE_DATA", LifecycleProjection.match("CHECKPOINT", "HARDWARE", "example appliance", catalog).get("status"));
+        assertEquals("NO_LIFECYCLE_DATA", LifecycleProjection.match("CHECKPOINT", "HARDWARE", "Check Point 6601", catalog).get("status"));
     }
 
     @Test void otherVendorsMatchOnlyTheExactStoredSoftwareLabel() {
-        var exact = new LifecycleCatalogEntry("row-1", "FORTINET", "SOFTWARE", "ExampleOS-1.2.3", null, TODAY,
+        var exact = new LifecycleCatalogEntry("row-1", "RADWARE", "SOFTWARE", "ExampleOS-1.2.3", null, TODAY,
                 null, "MANUAL", "", "synthetic-actor", Instant.EPOCH);
-        assertEquals("version exact", LifecycleProjection.match("FORTINET", "SOFTWARE", "ExampleOS-1.2.3", List.of(exact)).get("basis"));
-        assertEquals("NO_LIFECYCLE_DATA", LifecycleProjection.match("FORTINET", "SOFTWARE", "ExampleOS-1.2.4", List.of(exact)).get("status"));
+        assertEquals("version exact · operator entry", LifecycleProjection.match("RADWARE", "SOFTWARE", "ExampleOS-1.2.3", List.of(exact)).get("basis"));
+        assertEquals("NO_LIFECYCLE_DATA", LifecycleProjection.match("RADWARE", "SOFTWARE", "ExampleOS-1.2.4", List.of(exact)).get("status"));
     }
 
     @Test void riskBoundariesAndOverlappingSummaryWindowsAreExplicit() {
         for (int days : new int[]{-1, 0, 179, 180, 364, 365}) {
             var result = project(device("device-1", "check_point", null), List.of(
-                    entry("HARDWARE", "Example Appliance", TODAY.plusDays(days)), entry("SOFTWARE", "R81.20", TODAY.plusDays(500))), null, TODAY);
+                    entry("HARDWARE", "6600 Appliance", TODAY.plusDays(days)), entry("SOFTWARE", "R81.20", TODAY.plusDays(500))), null, TODAY);
             assertEquals(days < 0 ? "EXPIRED" : days < 180 ? "HIGH" : days < 365 ? "MEDIUM" : "LOW", result.get("risk"));
             var summary = LifecycleService.summary(List.of(result));
             assertEquals(days >= 0 && days <= 180 ? 1L : 0L, summary.get("within_180_days"));
@@ -127,7 +128,8 @@ class LifecycleProjectionTest {
         assertNotEquals(first.get("device_id"), second.get("device_id"));
         assertEquals(first.get("cluster_member_ref"), second.get("cluster_member_ref"));
         assertEquals(2, LifecycleService.summary(List.of(first, second)).get("devices"));
-        assertEquals(2L, LifecycleService.summary(List.of(first, second)).get("no_lifecycle_data"));
+        assertEquals(0L, LifecycleService.summary(List.of(first, second)).get("no_lifecycle_data"));
+        assertEquals(2L, LifecycleService.summary(List.of(first, second)).get("lifecycle_not_evaluated"), "an empty catalog is not evaluated");
     }
 
     private static final Instant SEEN = Instant.parse("2026-10-09T01:00:00Z");
@@ -138,7 +140,7 @@ class LifecycleProjectionTest {
     private static Map<String, Object> projectStored(String vendor, LicenseItem[] items, Read[] reads, LivePatchItem[] patches, DevicePlatformFacts facts) {
         return LifecycleProjection.device(device("device-1", vendor, null), List.of(),
                 new com.securityexpert.nexus.ui2.persistence.lifecycle.LifecycleCatalogRepository.StoredInventory(
-                        "Example Appliance", "R81.20 Jumbo Hotfix Take 99", null), TODAY,
+                        "Check Point 6600", "R81.20 Jumbo Hotfix Take 99", null), TODAY,
                 new LifecycleProjection.Stored(List.of(reads), List.of(items), List.of(patches), facts));
     }
     @SuppressWarnings("unchecked")

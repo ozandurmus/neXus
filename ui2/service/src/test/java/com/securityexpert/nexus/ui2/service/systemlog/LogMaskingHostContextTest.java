@@ -186,4 +186,50 @@ class LogMaskingHostContextTest {
         assertEquals(LogMasking.RULE_SET, s.ruleSet());
         assertEquals(LogMasking.RULE_SET, s.ruleSet());
     }
+
+    @Test
+    void masksSingleWordHostNamesWithoutKeywordsAndKeepsOrdinaryVocabularyReadable() {
+        String h1 = word(700), h2 = word(701), h3 = word(702), h4 = word(703);
+        String h5 = word(704), h6 = word(705), h7 = word(706), h8 = word(707);
+        String h9 = word(708), h10 = word(709), h11 = word(710), h12 = word(711);
+        String hNum = word(712) + "01";
+        String hSuffix = word(713) + "fw";
+        String hPrefix = "fw" + word(714);
+        Set<String> canaries = digestsOf(
+                h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, hNum, hSuffix, hPrefix);
+
+        LogMasking.Session s = session();
+        String[] lines = {
+                h1 + " is down",
+                h2 + " went down after 3 retries",
+                h3 + " became active",
+                h4 + " failed over",
+                h5 + " timed out",
+                "Dynamic Split potency: " + h6 + " Down",
+                "{\"opaque\":\"" + h7 + " standby\"}",
+                "sync lost with " + h8,
+                "traffic routed via " + h9,
+                "policy installed on " + h10,
+                "name (" + h11 + ") ip (192.0.2.10)",
+                "found (" + h12,
+                hNum + " reported flap",
+                hSuffix + " dropped packet",
+                hPrefix + " accepted session"};
+        StringBuilder out = new StringBuilder();
+        for (String line : lines) {
+            out.append(s.maskLine(line)).append('\n');
+        }
+        assertFalse(showsCanary(out.toString(), canaries), "a single-word host without a keyword is visible (value withheld)");
+
+        // Ordinary vocabulary (sizes, month names, ordinals, protocol/engine state words) stays readable
+        String[] ordinary = {
+                "Buffer size 64B, 100KB, 512MB, 4GB, 2GiB, 10Gbps, 15ms, 30s, 5min, 24h",
+                "Scheduled maintenance from Jan and Feb through October, November, and December",
+                "1st retry, 2nd attempt, 3rd check, 4th packet; first phase, second stage, third pass",
+                "link is down and tunnel is up while service is active and session timed out",
+                "negotiation with peer failed; connected via ssh2; running on port 443"};
+        for (String vocab : ordinary) {
+            assertEquals(vocab, session().maskLine(vocab), "ordinary vocabulary must stay readable");
+        }
+    }
 }

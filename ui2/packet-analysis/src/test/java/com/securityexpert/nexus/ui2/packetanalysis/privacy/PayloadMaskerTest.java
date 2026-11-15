@@ -73,6 +73,48 @@ class PayloadMaskerTest {
         assertTrue(masked.contains(TOKENS.token("HOST", "www.fixture.example")), "host case and root dot normalized");
     }
 
+    @Test void masksIdentitiesOutsideKeyedFieldsInPacketCaptureSummariesAndKeepsVocabulary() {
+        String authHost = "auth" + "." + "corp" + "." + "internal";
+        String portalHost = "portal" + "." + "corp" + "." + "internal";
+        String tokenValue = "sec" + "ret" + (50 + 49);
+        String serialValue = "9417" + "0001" + "2345";
+        Map<String, Object> summaryPayload = new LinkedHashMap<>();
+        summaryPayload.put("summary",
+                "TLS handshake stalled toward " + authHost + " on port 443 after 1st retry in October (64KB window, 15ms RTT)");
+        summaryPayload.put("headline",
+                "Reset observed from edge-fw-01 and corefw01 while berlinfw is down during 2nd attempt in Jan (100MB buffer)");
+        summaryPayload.put("note",
+                "Session initiated by CORP\\jdoevarol911 and ticket jdoevarol911@CORP.LOCAL or jdoevarol911@CORP failed");
+        summaryPayload.put("explanation",
+                "Certificate subject CN=jdoevarol911,OU=NetOps,DC=corp,DC=local rejected for user=svc_backup802");
+        summaryPayload.put("detail",
+                "Redirected to https://" + portalHost + ":8443/login?" + "tok" + "en=" + tokenValue + " (serial=" + serialValue + ")");
+        summaryPayload.put("verdict",
+                "No supported network loss in the selected window during first, second, and 3rd pass in December");
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> masked = (Map<String, Object>) PayloadMasker.mask(summaryPayload, TOKENS, true);
+        String serialized = text(masked);
+
+        for (String canary : List.of(
+                authHost, "edge-fw-01", "corefw01", "berlinfw",
+                "CORP", "jdoevarol911", "CORP.LOCAL", "NetOps", "svc_backup802",
+                portalHost, "login", tokenValue, serialValue)) {
+            assertFalse(serialized.contains(canary), "unseen summary identity leaked: " + canary + " in " + serialized);
+        }
+
+        String maskedSummary = (String) masked.get("summary");
+        assertTrue(maskedSummary.contains(TOKENS.token("HOST", authHost)), maskedSummary);
+        assertTrue(maskedSummary.contains("1st retry in October (64KB window, 15ms RTT)"), maskedSummary);
+
+        String maskedHeadline = (String) masked.get("headline");
+        assertTrue(maskedHeadline.contains("2nd attempt in Jan (100MB buffer)"), maskedHeadline);
+
+        assertEquals(
+                "No supported network loss in the selected window during first, second, and 3rd pass in December",
+                masked.get("verdict"));
+    }
+
     @Test void theInputIsNeverMutated() {
         Map<String, Object> body = new LinkedHashMap<>(Map.of("sni", "tls.fixture.example"));
         PayloadMasker.mask(body, TOKENS, true);

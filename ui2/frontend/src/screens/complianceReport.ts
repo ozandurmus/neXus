@@ -1,4 +1,5 @@
 import type { DeviceComplianceResult } from "../auth/adminApi";
+import { PRODUCT_NAME } from "../brand/product";
 import { GUIDANCE_WARNING, observedValue } from "./ComplianceGuidance";
 
 const csv = (value: unknown) => {
@@ -28,7 +29,7 @@ export function remediationReport(result: DeviceComplianceResult, format: "csv" 
   }
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
-<title>neXus remediation report</title><style>body{font:16px system-ui;max-width:960px;margin:2em auto;padding:0 1em}pre{white-space:pre-wrap;overflow-wrap:anywhere}section{border-top:1px solid #ccc;padding:1em 0}@media print{section{break-inside:avoid}body{margin:0}}</style></head><body>
+<title>${html(PRODUCT_NAME)} remediation report</title><style>body{font:16px system-ui;max-width:960px;margin:2em auto;padding:0 1em}pre{white-space:pre-wrap;overflow-wrap:anywhere}section{border-top:1px solid #ccc;padding:1em 0}@media print{section{break-inside:avoid}body{margin:0}}</style></head><body>
 <h1>Remediation report</h1><p>Device: ${html(result.hostname)} · ${html(scope)}</p>
 <p>${findings.length} failing findings. Use your browser's Print action to print or save as PDF.</p>
 ${findings.map(item => {

@@ -27,6 +27,8 @@ import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
  *       files first until it is under the cap. Each such early deletion is ledgered with reason
  *       {@code RETENTION_SHORTENED_BY_CAP} and recorded as one visible gap row per source and pass. New data is never
  *       refused for the cap (PO Q4);</li>
+ *   <li>the spike data cap ({@code spike_data_cap_bytes}, 512 MiB, or the {@value #SPIKE_CAP_ENV} override): per
+ *       device, {@code cp_spike_data} files beyond it are removed oldest first, ledgered the same way;</li>
  *   <li>gap, run and alert rows, and removed crash entries, older than {@code ledger_retention_days} (180).</li>
  * </ol>
  *
@@ -47,14 +49,36 @@ public final class SystemLogRetentionPruner {
     private final Supplier<SystemLogCollectionRepository.Settings> settings;
     private final Path storeRoot;
     private final Clock clock;
+    /** Env override of the spike data cap; empty means the stored setting (default 512 MiB) applies. */
+    private final java.util.OptionalLong spikeCapOverride;
+    /** Environment variable that overrides {@code spike_data_cap_bytes} (bytes, positive integer). */
+    public static final String SPIKE_CAP_ENV = "NEXUS_SYSTEM_LOG_SPIKE_DATA_CAP_BYTES";
     private LocalDate lastRunDay;
 
     public SystemLogRetentionPruner(SystemLogRetentionRepository retention,
             Supplier<SystemLogCollectionRepository.Settings> settings, Path storeRoot, Clock clock) {
+        this(retention, settings, storeRoot, clock, java.util.OptionalLong.empty());
+    }
+
+    public SystemLogRetentionPruner(SystemLogRetentionRepository retention,
+            Supplier<SystemLogCollectionRepository.Settings> settings, Path storeRoot, Clock clock,
+            java.util.OptionalLong spikeCapOverride) {
+        this.spikeCapOverride = Objects.requireNonNull(spikeCapOverride, "spikeCapOverride");
         this.retention = Objects.requireNonNull(retention, "retention");
         this.settings = Objects.requireNonNull(settings, "settings");
         this.storeRoot = Objects.requireNonNull(storeRoot, "storeRoot").toAbsolutePath().normalize();
         this.clock = Objects.requireNonNull(clock, "clock");
+    }
+
+    /** Parses the env override: a positive integer number of bytes; anything else is ignored (setting applies). */
+    public static java.util.OptionalLong parseSpikeCapOverride(String value) {
+        if (value == null || value.isBlank()) return java.util.OptionalLong.empty();
+        try {
+            long v = Long.parseLong(value.trim());
+            return v > 0 ? java.util.OptionalLong.of(v) : java.util.OptionalLong.empty();
+        } catch (NumberFormatException e) {
+            return java.util.OptionalLong.empty();
+        }
     }
 
     /** Runs {@link #runOnce} when it has not run yet on this Europe/Istanbul day (the scheduler ticks hourly). */
@@ -80,6 +104,9 @@ public final class SystemLogRetentionPruner {
         int capped = 0;
         String passId = "system-log-retention:" + clock.instant().atZone(JobWindowPolicy.ZONE_ID).toLocalDate();
         for (var usage : retention.devicesOverCap(s.deviceCapBytes())) capped += cap(usage, s.deviceCapBytes(), passId, bytes);
+        long spikeCap = spikeCapOverride.orElse(s.spikeDataCapBytes());
+        for (var usage : retention.devicesOverSpikeCap(spikeCap))
+            capped += capSpike(usage, spikeCap, passId, bytes);
         int ledger = retention.pruneLedgerRows(s.ledgerRetentionDays());
         return new Summary(chunks, files, capped, ledger, bytes[0]);
     }
@@ -128,6 +155,37 @@ public final class SystemLogRetentionPruner {
             retention.recordCapGap(passId, usage.deviceId(), e.getKey(), e.getValue()[1],
                     "{\"artefacts\":" + e.getValue()[0] + ",\"ciphertext_bytes\":" + e.getValue()[2]
                             + ",\"cap_bytes\":" + capBytes + "}");
+        }
+        return pruned;
+    }
+
+    /** Spike data over its own cap: oldest files first until under it; one visible gap row for the device and pass. */
+    private int capSpike(SystemLogRetentionRepository.DeviceUsage usage, long capBytes, String passId, long[] bytes) {
+        long live = usage.ciphertextBytes();
+        long removedCiphertext = 0, removedPlaintext = 0;
+        int pruned = 0;
+        outer:
+        for (int round = 0; round < MAX_BATCHES && live > capBytes; round++) {
+            List<Candidate> oldest = retention.oldestSpike(usage.deviceId(), BATCH);
+            if (oldest.isEmpty()) break;
+            int before = pruned;
+            for (Candidate c : oldest) {
+                if (live <= capBytes) break outer;
+                if (remove(c) && retention.markPruned(c, "RETENTION_SHORTENED_BY_CAP")) {
+                    pruned++;
+                    live -= c.ciphertextBytes();
+                    bytes[0] += c.ciphertextBytes();
+                    removedCiphertext += c.ciphertextBytes();
+                    removedPlaintext += c.plaintextBytes();
+                }
+            }
+            if (pruned == before) break;
+        }
+        if (pruned > 0) {
+            retention.recordCapGap(passId, usage.deviceId(), "cp_spike_data", removedPlaintext,
+                    "{\"artefacts\":" + pruned + ",\"ciphertext_bytes\":" + removedCiphertext + ",\"cap_bytes\":" + capBytes + "}");
+            LOG.log(System.Logger.Level.INFO,
+                    "[SYSTEM_LOG_RETENTION] spike data over cap: files={0} bytes={1} capBytes={2}", pruned, removedCiphertext, capBytes);
         }
         return pruned;
     }

@@ -13,6 +13,7 @@ import { ChangesScreen } from "./screens/ChangesScreen";
 import { DiagnosticsScreen } from "./screens/DiagnosticsScreen";
 import { RuleUsageScreen } from "./screens/RuleUsageScreen";
 import { ZoneMatrixScreen } from "./screens/zonematrix/ZoneMatrixScreen";
+import { CutoverScreen } from "./screens/CutoverScreen";
 import { ConfigurationScreen } from "./screens/ConfigurationScreen";
 import { ComplianceScreen } from "./screens/ComplianceScreen";
 import { BackupScreen } from "./screens/BackupScreen";
@@ -24,6 +25,7 @@ import { SanitizerPreview } from "./preview/SanitizerPreview";
 import { ReportsScreen } from "./screens/ReportsScreen";
 import { AdministrationScreen } from "./screens/AdministrationScreen";
 import { DeviceWorkspaceScreen } from "./screens/DeviceWorkspaceScreen";
+import { PRODUCT_NAME } from "./brand/product";
 import { OverviewPreview } from "./preview/OverviewPreview";
 import { ReportsPreview } from "./preview/ReportsPreview";
 import { InventoryPreview } from "./preview/InventoryPreview";
@@ -67,6 +69,7 @@ const PRODUCT_SCREENS: Record<ScreenId, ComponentType> = {
   diagnostics: DiagnosticsScreen,
   rule_usage: RuleUsageScreen,
   zone_matrix: ZoneMatrixScreen,
+  cutover: CutoverScreen,
   packet_analysis: PacketAnalysisScreen,
   sanitizer: SanitizerScreen,
 };
@@ -88,6 +91,7 @@ const PREVIEW_SCREENS: Record<ScreenId, ComponentType> = {
   diagnostics: OperationsPreview,
   rule_usage: PolicyPreview,
   zone_matrix: PolicyPreview,
+  cutover: PolicyPreview,
   packet_analysis: PacketAnalysisPreview,
   sanitizer: SanitizerPreview,
 };
@@ -123,6 +127,9 @@ export function App({
   readonly search?: string;
   readonly pathname?: string;
 }) {
+  if (typeof document !== "undefined" && document.title !== PRODUCT_NAME) {
+    document.title = PRODUCT_NAME;
+  }
   const liveSearch = useLocationSearch();
   const livePathname = useLocationPathname();
   const initialRef = useRef({

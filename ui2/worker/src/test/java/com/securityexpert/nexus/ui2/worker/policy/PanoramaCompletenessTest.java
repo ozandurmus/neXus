@@ -44,6 +44,9 @@ class PanoramaCompletenessTest {
     // The fixture signs the security hit-count read off (V155); pin it to DRAFTED so only P-1 can add a firewall read.
     private final GateRegistryPort gates = key -> GateRegistryFixtureLoader.loadFromStream(getClass()
             .getResourceAsStream("/capabilities/gate_registry_fixture.yaml")).stream().filter(row -> row.key().equals(key))
+            // The optional predefined App-ID read (V221) is left out here so these cases keep their exact call sequence;
+            // PanoramaPolicyCollectorTest#predefinedApplications* cover it.
+            .filter(row -> !row.gateId().equals("pan_policy_predefined_applications"))
             .map(r -> r.gateId().equals("pan_policy_rule_hit_count")
                 ? new GateRow(r.gateId(), r.vendor(), r.platformRoleScope(), r.shellContext(), r.transportKind(), r.canonicalCommandKey(),
                     r.actionClass(), SignOffState.DRAFTED, r.timeoutS(), r.retryRule(), r.maxFrequency(), r.sessionReuseRule(),

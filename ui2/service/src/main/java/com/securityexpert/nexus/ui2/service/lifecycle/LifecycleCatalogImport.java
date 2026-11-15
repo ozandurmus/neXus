@@ -34,7 +34,8 @@ public final class LifecycleCatalogImport {
             var row = rows.get(i);
             try {
                 var entry = entry(row, "IMPORT", actor, now);
-                if (!keys.add(List.of(entry.vendor(), entry.kind(), entry.product()))) {
+                String key = LifecycleMatcher.catalogKey(entry.vendor(), entry.kind(), entry.product());
+                if (!keys.add(List.of(entry.vendor(), entry.kind(), key == null ? entry.product() : key))) {
                     errors.add(new RowError(i + 1, "Duplicate vendor/kind/product in file"));
                 } else entries.add(entry);
             } catch (IllegalArgumentException e) { errors.add(new RowError(i + 1, e.getMessage())); }
@@ -53,6 +54,11 @@ public final class LifecycleCatalogImport {
             throw new IllegalArgumentException("product must be 1–200 characters without control characters");
         }
         if (fields.get(6).length() > 2000) throw new IllegalArgumentException("note exceeds 2000 characters");
+        // A product of a vendor with key rules must give a key, or it would never match a device (contract section 5).
+        if (LifecycleKeys.ruled(vendor) && LifecycleMatcher.catalogKey(vendor, kind, product) == null) {
+            throw new IllegalArgumentException("product is not a recognised " + kind.toLowerCase(java.util.Locale.ROOT) + " form for "
+                    + vendor + ": expected " + LifecycleKeys.expectedForm(vendor, kind));
+        }
         return new LifecycleCatalogEntry(UUID.randomUUID().toString(), vendor, kind, product,
                 date(fields.get(3), "end_of_sale"), date(fields.get(4), "end_of_support"),
                 date(fields.get(5), "end_of_engineering"), source, fields.get(6), actor, now);

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Spring Boot's default console logging (base.xml) with the last-line address masking: the message and the stack
+  trace pass through LogAddressMasker (IPv4/IPv6 literals become <ip>). Lab escape hatch NEXUS_LOG_RAW_ADDRESSES=1
+  is forbidden in production.
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <conversionRule conversionWord="m" class="com.securityexpert.nexus.ui2.service.logging.MaskingMessageConverter"/>
+    <conversionRule conversionWord="msg" class="com.securityexpert.nexus.ui2.service.logging.MaskingMessageConverter"/>
+    <conversionRule conversionWord="message" class="com.securityexpert.nexus.ui2.service.logging.MaskingMessageConverter"/>
+    <conversionRule conversionWord="wEx" class="com.securityexpert.nexus.ui2.service.logging.MaskingThrowableConverter"/>
+    <conversionRule conversionWord="ex" class="com.securityexpert.nexus.ui2.service.logging.MaskingThrowableConverter"/>
+    <conversionRule conversionWord="exception" class="com.securityexpert.nexus.ui2.service.logging.MaskingThrowableConverter"/>
+    <conversionRule conversionWord="throwable" class="com.securityexpert.nexus.ui2.service.logging.MaskingThrowableConverter"/>
+    <!-- Text console (the default); denied when NEXUS_LOG_FORMAT=json. -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="com.securityexpert.nexus.ui2.service.logging.LogFormatFilter"><json>false</json></filter>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>${CONSOLE_LOG_THRESHOLD}</level>
+        </filter>
+        <encoder>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+            <charset>${CONSOLE_LOG_CHARSET}</charset>
+        </encoder>
+    </appender>
+    <!-- JSON console (NEXUS_LOG_FORMAT=json): Boot's logstash format; application.yml's customizer masks the values. -->
+    <appender name="CONSOLE_JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="com.securityexpert.nexus.ui2.service.logging.LogFormatFilter"><json>true</json></filter>
+        <encoder class="org.springframework.boot.logging.logback.StructuredLogEncoder">
+            <format>logstash</format>
+            <charset>${CONSOLE_LOG_CHARSET}</charset>
+        </encoder>
+    </appender>
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="CONSOLE_JSON"/>
+    </root>
+</configuration>

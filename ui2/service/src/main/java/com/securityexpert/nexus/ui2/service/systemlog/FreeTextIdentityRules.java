@@ -95,6 +95,7 @@ final class FreeTextIdentityRules {
     static final String SERIAL = "heuristic_serial";
     static final String HOST_CONTEXT = "heuristic_host_context";
     static final String HEX_ADDRESS_COUNT = "heuristic_hex_address";
+    static final String DASH_IP_COUNT = "heuristic_dash_ip";
 
     /** File-name extensions (and systemd unit kinds) that make a dotted token a file name, not a host name. */
     static final Set<String> EXTENSIONS = Set.of("log", "elg", "txt", "csv", "json", "xml", "conf", "cfg", "ini", "gz",
@@ -113,7 +114,8 @@ final class FreeTextIdentityRules {
             + "permissions console interface name names profile profiles group groups id ids list table database "
             + "is was has had have does did from to with for of on in at via and or not no the a an this that "
             + "failed succeeded success failure attempt attempts request requests changed change changes commit "
-            + "committed configured config configuration ok unknown invalid illegal user users rule rules policy "
+            + "committed configured config configuration ok unknown invalid illegal user users admin admins "
+            + "administrator administrators rule rules policy "
             + "policies peer remote local localhost system kernel signal timeout default server client host "
             + "process daemon command cmd settings entered exited created deleted added removed locked unlocked "
             + "expired cache query lookup management manager running executing "
@@ -140,7 +142,7 @@ final class FreeTextIdentityRules {
             + "route create delete remove add update fetch find resolve bind listen connect disconnect reconnect "
             + "establish register unregister initialize initialise install uninstall upgrade downgrade apply push pull "
             + "sync synchronize synchronise retrieve verify validate check handle reach contact kill lock unlock enable "
-            + "disable modify configure set reset clear use perform complete obtain acquire release generate export "
+            + "disable modify configure set reset clear use perform complete completed obtain acquire release generate export "
             + "import upload download copy move rename respond reply notify report parse allocate free attach detach "
             + "mount unmount execute launch call invoke compare compute calculate convert encode decode encrypt decrypt "
             + "sign authenticate authorize authorise logon wait retry try fail succeed continue proceed exit quit abort "
@@ -164,22 +166,49 @@ final class FreeTextIdentityRules {
             + "first second third current standard normal max min maximum minimum total web gui cli api xml json rest "
             + "file-system disk-space cpu ram swap core kernel-space userspace slot slots blade blades chassis module "
             + "modules sensor sensors fan fans power supply temperature "
-            // identity-field and attribute words ("device serial=", "peer address:")
+            // identity-field and attribute words ("device serial=", "peer address:", "peer subject")
             + "serial sn number model id uuid ip vlan family platform hardware software firmware count info "
             + "information details summary statistics stats priority weight mtu speed duplex description label "
+            + "subject subjects issuer issuers dn "
             // Check Point and Palo Alto daemon and component names
-            + "fwk fwm fwd cpd cpm cpwd vpnd iked routed pdpd pepd rad sxl cphaprob cpha ted rtmd mpdaemon "
+            + "fwk fwm fwd fwkern cpd cpm cpwd vpnd iked routed pdpd pepd rad sxl cphaprob cpha ted rtmd mpdaemon "
             + "smartcenter smartconsole sms mds cma ikemgr keymgr varrcvr satd rasmgr logrcvr devsrvr mgmtsrvr "
             + "useridd sslmgr authd ntpd "
-            // Palo Alto subtype enum words ("ha peer general" must not teach "general")
-            + "general auth userid vpn lacp iot telemetry ").strip().split("\\s+")));
+            // Palo Alto subtype enum words and common non-host log vocabulary
+            + "general auth userid vpn lacp iot telemetry potency negotiation split dynamic opaque flap flapping "
+            + "channel channels path paths neighbor neighbors neighbour neighbours instance instances controller "
+            + "controllers agent agents worker workers engine engines listener listeners collector collectors "
+            + "probe probes check checks monitor monitors stage stages phase phases pass passes retry retries "
+            + "window windows frame frames stream streams flow flows hop hops chain chains capture captures "
+            + "clock clocks verdict verdicts reason reasons headline headlines note notes detail explanation "
+            + "explanations loss delay jitter reorder reordering retransmission retransmissions duplicate duplicates "
+            + "selected supported observed detected reported accepted rejected dropped mailbox sandbox inbox outbox "
+            + "toolbox checkbox virtualbox blackbox whitebox timebox ").strip().split("\\s+")));
 
     static final Pattern VERSION = Pattern.compile("(?i)(?:r|v|ver|version)?\\d+(?:\\.\\d+)+(?:[-._]?[a-z]{0,4}\\d*)*");
     static final Pattern PROTOCOL_PART = Pattern.compile(
             "(?i)(?:aes|sha|md|des|3des|rsa|dsa|ecdsa|ecdh|dh|hmac|gcm|cbc|ctr|ccm|group|modp|ecp|prf|tls|ssl|ike|ikev"
-                    + "|ipsec|esp|utf|iso|phase|x|ipv|snmpv|ntpv|http|https|rfc)\\d*");
+                    + "|ipsec|esp|utf|iso|phase|x|ipv|icmpv|snmpv|ntpv|http|https|ssh|rfc|base|pkcs|asn|crc)\\d*");
     /** The {@code DiagnosticText} interface shape ({@code eth1-01}, {@code bond0.100}). */
-    private static final Pattern INTERFACE = Pattern.compile("(?i)(?:eth|bond|wrp|ens|eno|enp|wlan|lo|port)[0-9]{1,4}(?:[-.][0-9]{1,4})?");
+    private static final Pattern INTERFACE = Pattern.compile(
+            "(?i)(?:eth|bond|wrp|ens|eno|enp|wlan|lo|port|vlan|vsys|tun|tap|br)[0-9]{1,4}(?:[-.][0-9]{1,4})?");
+    private static final String UNIT = "(?:[kmgtpe]i?b|[kmgtpe]?b(?:ps|ytes?|its?)?|[kmgt]?pps"
+            + "|[num]?s|sec(?:s|onds?)?|min(?:s|utes?)?|hr?s?|hours?|d|days?|w|wks?|weeks?|mo|months?|yr?s?|years?"
+            + "|[kmg]?hz|dbm?|pct|[kmgtpe]|v|mv|kv|a|ma|w|kw|mw|c|f)";
+    private static final Pattern SIZE_OR_UNIT = Pattern.compile("(?i)\\d+(?:\\.\\d+)?" + UNIT);
+    /** A range of sizes or measures ({@code 64KB-128KB}, {@code 1.5GB-2GB}, {@code 512M-1G}, {@code 10k-20k}). */
+    private static final Pattern SIZE_RANGE = Pattern.compile(
+            "(?i)(?=[0-9.]+" + UNIT + "?-)\\d+(?:\\.\\d+)?(?:" + UNIT + ")?(?:-\\d+(?:\\.\\d+)?(?:" + UNIT + ")?)+");
+    private static final Pattern ORDINAL_TOKEN = Pattern.compile(
+            "(?i)(?:\\d+(?:st|nd|rd|th)|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth)");
+    private static final Pattern NUMBERED_COMMON_NOUN = Pattern.compile(
+            "(?i)(?:sheet|chart|table|style|theme|page|line|item|step|part|type|mode|tier|stage|phase|group|class|code"
+                    + "|error|warn|test|case|flow|point|cycle|window|bucket|sample|metric|count|total|slot|core|blade"
+                    + "|rule|zone|port|vlan|vsys|cpu|fan|psu|disk|raid|loop|user|admin|vmldrawing|drawing)[0-9]+");
+    private static final Pattern SINGLE_WORD_ALNUM_HOST = Pattern.compile(
+            "(?i)(?:[a-z]{4,}[0-9]{1,4}|(?:fw|gw|sw|rtr|srv|db|lb|dc|ap|ns|mx)[0-9]{2,4})");
+    private static final Pattern SINGLE_WORD_AFFIX_HOST = Pattern.compile(
+            "(?i)(?:[a-z]{4,}(?:fw|gw|srv|rtr|box)|(?:fw|gw|srv|rtr)[a-z]{4,})");
     private static final Pattern UUID = Pattern.compile("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
     private static final Pattern MAC_HYPHEN = Pattern.compile("(?i)[0-9a-f]{2}(?:-[0-9a-f]{2}){5}");
     private static final Pattern MAC_DOTTED = Pattern.compile("(?i)[0-9a-f]{4}\\.[0-9a-f]{4}\\.[0-9a-f]{4}");
@@ -195,7 +224,8 @@ final class FreeTextIdentityRules {
     private static final Pattern ORDINAL = Pattern.compile("(?i)0?[1-9]|10|m[1-9]|m10|member[1-9]|member10|aa|bb");
     private static final Set<String> DATE_WORDS = Set.of("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep",
             "sept", "oct", "nov", "dec", "january", "february", "march", "april", "june", "july", "august", "september",
-            "october", "november", "december", "mon", "tue", "wed", "thu", "fri", "sat", "sun");
+            "october", "november", "december", "mon", "tue", "wed", "thu", "fri", "sat", "sun", "monday", "tuesday",
+            "wednesday", "thursday", "friday", "saturday", "sunday");
     /** A token an earlier pass wrote, inside a longer token ({@code hcp-SN-0A1B2C3D4E}). */
     private static final Pattern WRITTEN_TOKEN = Pattern.compile(
             "(?:SN|USR|ID)-[0-9A-F]{10}|h-[0-9a-f]{10}|H-[0-9A-F]{10}|(?:FW|CLS|VS|DOM)-[A-Z]+-\\d{2}(?:-(?:M\\d{1,2}|\\d{2}))?");
@@ -204,9 +234,26 @@ final class FreeTextIdentityRules {
     private static final String B = "(?<![\\p{L}\\p{N}_])";
     private static final String BH = "(?<![\\p{L}\\p{N}_-])";
     private static final String NAME = "([\\p{L}\\p{N}_][\\p{L}\\p{N}._@\\\\-]{0,63})";
+    private static final String DN_ATTR = "(?:cn|uid|ou|o|dc|l|st|c|mail|emailaddress|street|title|sn|givenname|serialnumber|domaincomponent)";
+    private static final String CN_DN_BODY = "(?:cn|uid)\\s*=\\s*(?:\"[^\"]+\"|[^,;\"'\\s)\\]]+(?:\\s+(?=[^,;\"')\\]]*[,;]\\s*"
+            + DN_ATTR + "\\s*=)[^,;\"'\\s)\\]]+)*)"
+            + "(?:\\s*[,;]\\s*" + DN_ATTR + "\\s*=\\s*(?:\"[^\"]+\"|[^,;\"'\\s)\\]]+(?:\\s+(?=[^,;\"')\\]]*[,;]\\s*"
+            + DN_ATTR + "\\s*=)[^,;\"'\\s)\\]]+)*))*";
+    private static final Pattern P_KEYED_CN_DN = Pattern.compile("(?i)" + B
+            + "(?:(?:user(?:[-_ ]?name)?|admin(?:istrator)?(?:[-_ ]?name)?|account|principal|login|uname|ruser|luser|acct|suser|duser|usr|dn|subject|issuer)\\s*[=:]\\s*[\"']?)("
+            + CN_DN_BODY + ")");
+    private static final Pattern P_CN_DN = Pattern.compile("(?i)(?<![\\p{L}\\p{N}_./-])(" + CN_DN_BODY + ")");
+    private static final Pattern P_SLASH_DN = Pattern.compile(
+            "(?i)(?<![\\p{L}\\p{N}_.-])((?:/" + DN_ATTR + "=(?:\"[^\"]+\"|[^/\"'\\s)\\]]+)){2,})");
+    private static final Pattern P_DOMAIN_USER = Pattern.compile(
+            "(?<![\\p{L}\\p{N}_./:\\\\-])([A-Za-z][A-Za-z0-9._-]{1,31})(\\\\{1,2})([A-Za-z0-9_][A-Za-z0-9._$-]{1,63})(?![\\p{L}\\p{N}_./\\\\-])");
+    private static final Pattern P_USER_AT_REALM = Pattern.compile(
+            "(?<![\\p{L}\\p{N}._%+/\\]-])((?:[\\p{L}\\p{N}_][\\p{L}\\p{N}._-]{0,63}/)?[\\p{L}\\p{N}_][\\p{L}\\p{N}._%+-]{0,63})@([A-Za-z0-9][A-Za-z0-9._-]{1,252})(?![A-Za-z0-9._-])");
+    private static final Set<String> PRIVATE_REALM_TLDS = Set.of(
+            "local", "internal", "lan", "corp", "intranet", "localdomain", "home", "priv", "test", "invalid");
     private static final Pattern P_FIELD = Pattern.compile("(?i)" + B
             + "(?:(?:user(?:[-_ ]?name)?|account|principal)\\s*[=:](?!//)|(?:admin(?:istrator)?(?:[-_ ]?name)?|login|uname|ruser"
-            + "|luser|acct|suser|duser|usr)\\s*=)\\s*[\"']?" + NAME);
+            + "|luser|acct|suser|duser|usr|owner|euid|ruid|suid|auid|fsuid)\\s*=)\\s*[\"']?" + NAME);
     private static final Pattern P_QUOTED = Pattern.compile("(?i)" + BH
             + "(?:user(?:name)?|admin(?:istrator)?|account|login)\\s+[\"'‘’`]([^\"'‘’`\\s][^\"'‘’`]{0,63})[\"'‘’`]");
     private static final Pattern P_SSHD = Pattern.compile("(?i)" + B
@@ -214,15 +261,46 @@ final class FreeTextIdentityRules {
             + NAME + "\\s+from(?![\\p{L}\\p{N}_])");
     private static final Pattern P_ROLE = Pattern.compile("(?i)" + B
             + "(?:by|for|from|of)\\s+(?:(?:invalid|illegal|unknown|local|remote)\\s+)?(?:user|admin|administrator|account)\\s+[\"']?" + NAME);
+    /** Account name inside a home directory path ({@code /home/x/}, {@code /Users/x/}, {@code C:\\Users\\x\\}). */
+    private static final Pattern P_HOME_PATH = Pattern.compile("(?i)(?<![\\p{L}\\p{N}_])(?:/home/|/Users/|[A-Z]:\\\\Users\\\\|/export/home/)"
+            + "([\\p{L}\\p{N}_][\\p{L}\\p{N}._-]{0,63})(?=[/\\\\\\s\"'),;:]|$)");
+    private static final Set<String> SHARED_HOME_NAMES = Set.of("shared", "public", "default", "all", "root", "lost+found",
+            "guest", "user", "users", "home", "ftp", "nobody");
+    /** {@code sudo: name : TTY=...} and {@code su: name to root}: the account is the first word after the command tag. */
+    private static final Pattern P_SUDO = Pattern.compile("(?i)" + B + "sudo(?:\\[\\d+\\])?:\\s+" + NAME + "\\s+:\\s");
+    private static final Pattern P_SU = Pattern.compile("(?i)" + B + "su(?:\\[\\d+\\])?:\\s+" + NAME + "\\s+to\\s+[\\p{L}\\p{N}_]");
+    private static final String OCTET = "(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)";
+    /** Dash-form IPv4 ({@code a-b-c-d}, each part 0-255); a dash-, dot-, letter- or digit-joined neighbour disqualifies it. */
+    private static final Pattern DASH_IP = Pattern.compile("(?<![A-Za-z0-9_.-])" + OCTET + "(?:-" + OCTET + "){3}(?![A-Za-z0-9_]|-[A-Za-z0-9]|\\.\\d)");
+    /** The value of a user-identifying URL query parameter. */
+    private static final Pattern QUERY_USER = Pattern.compile("(?i)(?<=[?&;])(?:u|user|username|user_name|login)=([^&\\s\"'#;,)<>]{1,64})");
     private static final Pattern P_BARE = Pattern.compile("(?i)" + BH + "(?:user|admin|administrator)\\s+" + NAME);
     private static final Pattern P_BY = Pattern.compile("(?i)" + BH + "by\\s+" + NAME);
     /** A single host word after a keyword: a letter first; not the start of a dotted name. */
     private static final String HOST_WORD = "([A-Za-z][A-Za-z0-9_-]{0,62})(?![A-Za-z0-9_-]|\\.[A-Za-z0-9])";
     private static final Pattern P_HOST_KEYWORD = Pattern.compile("(?i)" + BH
             + "(?:host(?:[-_ ]?name)?|device(?:[-_ ]?name)?|gateway(?:[-_ ]?name)?|peer(?:[-_ ]?name)?"
-            + "|node(?:[-_ ]?name)?|(?:cluster[-_ ])?member(?:[-_ ]?name)?)"
+            + "|node(?:[-_ ]?name)?|(?:cluster[-_ ])?member(?:[-_ ]?name)?"
+            + "|firewall(?:[-_ ]?name)?|router(?:[-_ ]?name)?|switch(?:[-_ ]?name)?"
+            + "|appliance(?:[-_ ]?name)?|neighbor(?:[-_ ]?name)?|neighbour(?:[-_ ]?name)?|nexthop)"
             + "(?:\\s*[=:]\\s*|\\s+)[\"'‘’`(\\[]?" + HOST_WORD);
     private static final Pattern P_FROM_TO = Pattern.compile("(?i)" + BH + "(?:from|to)\\s+[\"'‘’`(\\[]?" + HOST_WORD);
+    private static final Pattern P_PAREN_HOST = Pattern.compile(
+            "(?i)" + BH + "(?:name|found|peer|host|node|member|gateway|device)\\s+\\(\\s*" + HOST_WORD);
+    private static final Pattern P_HOST_BEFORE_STATE = Pattern.compile(
+            "(?i)" + BH + HOST_WORD
+                    + "(?=\\s+(?:(?:is|was|went|became|remained|stays)\\s+(?:now\\s+|still\\s+|currently\\s+)?(?:up|down|active|standby|online|offline|reachable|unreachable|alive|dead|ready|lost|connected|disconnected|primary|secondary|master|backup)\\b"
+                    + "|failed\\s+over\\b|timed\\s+out\\b|(?:is\\s+|was\\s+)?not\\s+responding\\b|stopped\\s+responding\\b|restarted\\b|rebooted\\b))");
+    private static final Pattern P_CLAUSE_HOST_STATE = Pattern.compile(
+            "(?i)(?:^|[:;,\"']\\s*)" + HOST_WORD
+                    + "(?=\\s+(?:up|down|active|standby|online|offline|reachable|unreachable)(?=[,;.)\\]\"']|\\s*$))");
+    private static final Pattern P_HOST_PREP_OR_VERB = Pattern.compile(
+            "(?i)" + BH + "(?:sync(?:ed|ing|hroniz(?:ed|ing))?(?:\\s+lost)?\\s+with"
+                    + "|(?:peering|session|connected|connection|handshake|communicating|established)\\s+with"
+                    + "|(?:routed|routing|reachable|connected|traffic|forwarded|forwarding|sent)\\s+via"
+                    + "|(?:installed|policy|running|listening|configured|active|standby|mounted|deployed)\\s+on"
+                    + "|(?:probing|probed|pinging|pinged|contacting|contacted|resolving|resolved|reaching|reached|polling|polled)\\s+)"
+                    + "\\s*[\"'‘’`(\\[]?" + HOST_WORD);
     private static final Pattern SAR_HOST = Pattern.compile("^Linux \\S+ \\(([A-Za-z0-9][A-Za-z0-9_-]{0,62})\\)");
     /** At most this many host names are remembered per session. */
     static final int MAX_LEARNED = 10_000;
@@ -253,6 +331,8 @@ final class FreeTextIdentityRules {
         if (line == null || line.length() < 2) return line;
         List<Edit> edits = new ArrayList<>();
         hexAddresses(line, edits);
+        queryUsers(line, edits);
+        dashIps(line, edits);
         principals(line, edits);
         elgHosts(line, edits);
         List<int[]> enumSpans = enumSpans(line);
@@ -272,6 +352,22 @@ final class FreeTextIdentityRules {
 
     // ---------------------------------------------------------------- hex-encoded addresses
 
+    private void queryUsers(String line, List<Edit> edits) {
+        if (line.indexOf('=') < 0 || line.indexOf('?') < 0 && line.indexOf('&') < 0 && line.indexOf(';') < 0) return;
+        Matcher m = QUERY_USER.matcher(line);
+        while (m.find()) {
+            String value = m.group(1);
+            if (written(value) || value.startsWith("<")) continue;
+            add(edits, new Edit(m.start(1), m.end(1), tokens.user(value), PRINCIPAL, m.start(), m.end(1)));
+        }
+    }
+
+    private void dashIps(String line, List<Edit> edits) {
+        if (line.length() < 7 || line.indexOf('-') < 0) return;
+        Matcher m = DASH_IP.matcher(line);
+        while (m.find()) add(edits, new Edit(m.start(), m.end(), "<ip>", DASH_IP_COUNT, m.start(), m.end()));
+    }
+
     private void hexAddresses(String line, List<Edit> edits) {
         if (line.length() < 10 || line.indexOf('x') < 0 && line.indexOf('X') < 0) return;
         Matcher m = HEX_ADDRESS.matcher(line);
@@ -282,9 +378,35 @@ final class FreeTextIdentityRules {
         }
     }
 
+    /**
+     * Self-identifying principal formats ({@code DOMAIN&#92;user}, {@code user@realm}, {@code CN=} DNs) masked before
+     * {@code TextSanitizer} runs so they become canonical {@code USR-} tokens instead of generic email/FQDN labels.
+     */
+    String preTextPrincipals(String line, Counts counts) {
+        if (line == null || line.length() < 3) return line;
+        List<Edit> edits = new ArrayList<>();
+        selfIdentifyingPrincipals(line, edits);
+        if (edits.isEmpty()) return line;
+        edits.sort(Comparator.comparingInt(Edit::start));
+        StringBuilder out = new StringBuilder(line.length() + 32);
+        int copied = 0;
+        for (Edit e : edits) {
+            out.append(line, copied, e.start()).append(e.text());
+            copied = e.end();
+            counts.add(e.category());
+        }
+        return out.append(line, copied, line.length()).toString();
+    }
+
     // ---------------------------------------------------------------- principals
 
     private void principals(String line, List<Edit> edits) {
+        selfIdentifyingPrincipals(line, edits);
+        homePaths(line, edits);
+        if (lineHas(line, "sudo") || lineHas(line, "su:") || lineHas(line, "su[")) {
+            principal(line, P_SUDO, true, edits);
+            principal(line, P_SU, true, edits);
+        }
         if (!mayHavePrincipal(line)) return;
         principal(line, P_FIELD, false, edits);
         principal(line, P_QUOTED, false, edits);
@@ -294,9 +416,115 @@ final class FreeTextIdentityRules {
         principal(line, P_BY, true, edits);
     }
 
+    private void selfIdentifyingPrincipals(String line, List<Edit> edits) {
+        if (line.indexOf('=') >= 0) {
+            Matcher keyedDn = P_KEYED_CN_DN.matcher(line);
+            while (keyedDn.find()) {
+                String dn = keyedDn.group(1).strip();
+                if (!dn.isEmpty() && !written(dn)) {
+                    add(edits, new Edit(keyedDn.start(1), keyedDn.end(1), tokens.user(dn), PRINCIPAL, keyedDn.start(), keyedDn.end()));
+                }
+            }
+            Matcher cnDn = P_CN_DN.matcher(line);
+            while (cnDn.find()) {
+                String dn = cnDn.group(1).strip();
+                if (!dn.isEmpty() && !written(dn)) {
+                    add(edits, new Edit(cnDn.start(1), cnDn.end(1), tokens.user(dn), PRINCIPAL, cnDn.start(1), cnDn.end(1)));
+                }
+            }
+            if (line.indexOf('/') >= 0) {
+                Matcher slashDn = P_SLASH_DN.matcher(line);
+                while (slashDn.find()) {
+                    String dn = slashDn.group(1).strip();
+                    String lower = dn.toLowerCase(Locale.ROOT);
+                    if (!dn.isEmpty() && !written(dn) && (lower.contains("/cn=") || lower.contains("/uid="))) {
+                        add(edits, new Edit(slashDn.start(1), slashDn.end(1), tokens.user(dn), PRINCIPAL,
+                                slashDn.start(1), slashDn.end(1)));
+                    }
+                }
+            }
+        }
+        if (line.indexOf('\\') >= 0) {
+            Matcher domUser = P_DOMAIN_USER.matcher(line);
+            while (domUser.find()) {
+                String domain = domUser.group(1);
+                String sep = domUser.group(2);
+                String user = domUser.group(3);
+                String domLower = domain.toLowerCase(Locale.ROOT);
+                String usrLower = user.toLowerCase(Locale.ROOT);
+                if (written(domain) || written(user) || STOPWORDS.contains(domLower) || HOST_CONTEXT_WORDS.contains(domLower)
+                        || DATE_WORDS.contains(domLower) || EXTENSIONS.contains(usrLower)
+                        || Set.of("windows", "system32", "users", "program", "temp", "tmp", "var", "etc", "opt", "usr", "bin", "lib")
+                                .contains(domLower)) {
+                    continue;
+                }
+                if ("\\".equals(sep) && user.matches("(?i)u[0-9a-f]{4}.*")) continue;
+                add(edits, new Edit(domUser.start(), domUser.end(), tokens.user(domain + "\\" + user), PRINCIPAL,
+                        domUser.start(), domUser.end()));
+            }
+        }
+        if (line.indexOf('@') >= 0) {
+            Matcher realmUser = P_USER_AT_REALM.matcher(line);
+            while (realmUser.find()) {
+                String user = realmUser.group(1);
+                int start = realmUser.start();
+                int end = realmUser.end();
+                while (end > realmUser.start(2) && ".-".indexOf(line.charAt(end - 1)) >= 0) end--;
+                String realm = line.substring(realmUser.start(2), end);
+                if (realm.isEmpty() || written(user) || written(realm)
+                        || EstateDictionary.ADDRESS_LITERAL.matcher(realm).matches()) {
+                    continue;
+                }
+                String before = line.substring(Math.max(0, start - 24), start).toLowerCase(Locale.ROOT);
+                if (before.endsWith("://") || before.contains("mail from") || before.contains("rcpt to")
+                        || before.endsWith("mailto:") || before.endsWith("email ") || before.endsWith("e-mail ")) {
+                    continue;
+                }
+                if (line.regionMatches(end, ":~$", 0, 3) || line.regionMatches(end, ":#", 0, 2)) continue;
+                if (isPrincipalRealm(line, user, realm)) {
+                    String full = user + "@" + realm;
+                    add(edits, new Edit(start, end, tokens.user(full), PRINCIPAL, start, end));
+                }
+            }
+        }
+    }
+
+    private boolean isPrincipalRealm(String line, String user, String realm) {
+        if (user.indexOf('/') >= 0 || realm.indexOf('.') < 0) return true;
+        for (int i = 0; i < realm.length(); i++) {
+            char c = realm.charAt(i);
+            if (c >= 'A' && c <= 'Z') return true;
+        }
+        String[] labels = realm.split("\\.", -1);
+        String tld = labels[labels.length - 1].toLowerCase(Locale.ROOT);
+        if (PRIVATE_REALM_TLDS.contains(tld) || suffixes.suffixLabels(labels) == 0) return true;
+        if (mayHavePrincipal(line)) return true;
+        String lower = line.toLowerCase(Locale.ROOT);
+        return lower.contains("kerberos") || lower.contains("krb") || lower.contains("ntlm") || lower.contains("ldap")
+                || lower.contains("upn") || lower.contains("spn") || lower.contains("tgt") || lower.contains("ticket")
+                || lower.contains("realm") || lower.contains("sso") || lower.contains("saml") || lower.contains("bind");
+    }
+
+    private static boolean lineHas(String line, String needle) {
+        return line.toLowerCase(Locale.ROOT).contains(needle);
+    }
+
+    private void homePaths(String line, List<Edit> edits) {
+        if (line.indexOf('/') < 0 && line.indexOf('\\') < 0) return;
+        Matcher m = P_HOME_PATH.matcher(line);
+        while (m.find()) {
+            String name = m.group(1);
+            if (written(name) || name.startsWith("<") || SHARED_HOME_NAMES.contains(name.toLowerCase(Locale.ROOT))
+                    || name.chars().allMatch(c -> c == '.')) {
+                continue;
+            }
+            add(edits, new Edit(m.start(1), m.end(1), tokens.user(name), PRINCIPAL, m.start(1), m.end(1)));
+        }
+    }
+
     private static boolean mayHavePrincipal(String line) {
         String lower = line.toLowerCase(Locale.ROOT);
-        return lower.contains("user") || lower.contains("admin") || lower.contains("by ") || lower.contains("login")
+        return lower.contains("owner") || lower.contains("uid") || lower.contains("user") || lower.contains("admin") || lower.contains("by ") || lower.contains("login")
                 || lower.contains("account") || lower.contains("principal") || lower.contains(" for ") || lower.contains("usr");
     }
 
@@ -340,10 +568,16 @@ final class FreeTextIdentityRules {
             if (m.find()) hostWord(line, m.start(1), m.end(1), true, edits);
         }
         if (lower.contains("host") || lower.contains("device") || lower.contains("gateway") || lower.contains("peer")
-                || lower.contains("node") || lower.contains("member")) {
+                || lower.contains("node") || lower.contains("member") || lower.contains("server") || lower.contains("firewall")
+                || lower.contains("router") || lower.contains("switch") || lower.contains("appliance")
+                || lower.contains("neighbor") || lower.contains("neighbour") || lower.contains("nexthop")) {
             hostKeyword(line, P_HOST_KEYWORD, true, edits, enumSpans);
         }
         if (lower.contains("from") || lower.contains("to")) hostKeyword(line, P_FROM_TO, false, edits, enumSpans);
+        if (line.indexOf('(') >= 0) hostKeyword(line, P_PAREN_HOST, true, edits, enumSpans);
+        hostKeyword(line, P_HOST_BEFORE_STATE, true, edits, enumSpans);
+        hostKeyword(line, P_CLAUSE_HOST_STATE, true, edits, enumSpans);
+        hostKeyword(line, P_HOST_PREP_OR_VERB, false, edits, enumSpans);
     }
 
     /** Each match; a kept word may itself be a keyword ({@code peer gateway X}), so the search resumes at the word. */
@@ -351,9 +585,12 @@ final class FreeTextIdentityRules {
         Matcher m = pattern.matcher(line);
         int from = 0;
         while (from < line.length() && m.find(from)) {
-            from = m.start(1);
-            if (inSpans(enumSpans, m.start(1))) continue;
-            if (hostWord(line, m.start(1), m.end(1), learn, edits)) from = m.end(1);
+            int nextWhenKept = m.start(1) > m.start() && m.start(1) > from ? m.start(1) : m.end(1);
+            if (inSpans(enumSpans, m.start(1))) {
+                from = nextWhenKept;
+                continue;
+            }
+            from = hostWord(line, m.start(1), m.end(1), learn, edits) ? m.end(1) : nextWhenKept;
         }
     }
 
@@ -365,9 +602,11 @@ final class FreeTextIdentityRules {
         String lower = word.toLowerCase(Locale.ROOT);
         if (lower.equals("localhost") || STOPWORDS.contains(lower) || HOST_CONTEXT_WORDS.contains(lower)
                 || DATE_WORDS.contains(lower) || written(word) || EXTENSIONS.contains(lower)) return false;
-        if (INTERFACE.matcher(word).matches() || PROTOCOL_PART.matcher(word).matches() || VERSION.matcher(word).matches()) {
+        if (INTERFACE.matcher(word).matches() || PROTOCOL_PART.matcher(word).matches() || VERSION.matcher(word).matches()
+                || SIZE_OR_UNIT.matcher(word).matches() || ORDINAL_TOKEN.matcher(word).matches()) {
             return false;
         }
+        if (isJsonKey(line, t[0], t[1])) return false;
         if (word.indexOf('-') >= 0 && allowlisted(word)) return false;
         if (serialShaped(word)) return false;
         if (keyed(line, t[1])) return false;
@@ -429,6 +668,7 @@ final class FreeTextIdentityRules {
         int[] t = trim(line, start, end, "._-");
         if (t[0] >= t[1]) return;
         String run = line.substring(t[0], t[1]);
+        if (sizeRange(run)) return;
         if (learnedName(run) && !isJsonKey(line, t[0], t[1]) && !inSpans(enumSpans, t[0])) {
             add(edits, new Edit(t[0], t[1], names.label(run), HOST_CONTEXT, t[0], t[1]));
             return;
@@ -551,7 +791,38 @@ final class FreeTextIdentityRules {
             }
             return;
         }
+        if (!enumValue && singleWordHostShaped(line, t[0], t[1], p, letters, digits)) {
+            add(edits, new Edit(t[0], t[1], names.label(p), HOST, t[0], t[1]));
+            return;
+        }
         serialLike(line, t[0], t[1], edits, enumValue);
+    }
+
+    private static boolean singleWordHostShaped(String line, int start, int end, String p, int letters, int digits) {
+        if (p.length() < 4 || p.length() > 63 || !Character.isLetter(p.charAt(0))) return false;
+        if (start > 0 && (line.charAt(start - 1) == '_' || line.charAt(start - 1) == '.' || line.charAt(start - 1) == '\\')) {
+            return false;
+        }
+        if (end < line.length() && (line.charAt(end) == '_' || line.charAt(end) == '.')) return false;
+        if (isJsonKey(line, start, end)) return false;
+        String lower = p.toLowerCase(Locale.ROOT);
+        if (lower.equals("localhost") || STOPWORDS.contains(lower) || HOST_CONTEXT_WORDS.contains(lower)
+                || DATE_WORDS.contains(lower) || EXTENSIONS.contains(lower)) {
+            return false;
+        }
+        if (INTERFACE.matcher(p).matches() || PROTOCOL_PART.matcher(p).matches() || VERSION.matcher(p).matches()
+                || SIZE_OR_UNIT.matcher(p).matches() || ORDINAL_TOKEN.matcher(p).matches()
+                || NUMBERED_COMMON_NOUN.matcher(p).matches() || HEX_LITERAL.matcher(p).matches()
+                || serialShaped(p)) {
+            return false;
+        }
+        if (digits >= 1 && digits <= 4 && SINGLE_WORD_ALNUM_HOST.matcher(p).matches()) return true;
+        return digits == 0 && letters >= 6 && SINGLE_WORD_AFFIX_HOST.matcher(p).matches();
+    }
+
+    /** A range of sizes, with at least one unit (a plain {@code 1-2-3} is not a size). */
+    private static boolean sizeRange(String run) {
+        return run.indexOf('-') > 0 && SIZE_RANGE.matcher(run).matches() && hasLetter(run);
     }
 
     private static boolean hostnameShaped(String p, int letters, int digits) {
@@ -563,6 +834,7 @@ final class FreeTextIdentityRules {
 
     /** A hyphenated non-identity shape: a UUID, a MAC, an interface, a protocol or cipher name, a date. */
     private static boolean allowlisted(String p) {
+        if (sizeRange(p)) return true;
         if (UUID.matcher(p).matches() || MAC_HYPHEN.matcher(p).matches() || INTERFACE.matcher(p).matches()) return true;
         String[] parts = p.split("-", -1);
         for (String part : parts) if (part.isEmpty()) return false;

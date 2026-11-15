@@ -1,5 +1,6 @@
 import type { ApiError, PathBranch, PathHop, PathResult, PathValidation, PathValidationHop, PathQueryRequest } from "../../auth/adminApi";
 import { PATH_VALIDATION_MAX_HOPS } from "../../auth/adminApi";
+import { PRODUCT_NAME } from "../../brand/product";
 import type { Tone } from "../../shell/tone";
 
 /**
@@ -11,7 +12,7 @@ import type { Tone } from "../../shell/tone";
 
 /** The one-line explanation beside the action. */
 export const VERIFY_EXPLANATION =
-  "Asks each firewall's own read-only matcher (route lookup, policy match) whether it agrees with the hop neXus computed; only match or mismatch per hop is stored, never the device's answer.";
+  `Asks each firewall's own read-only matcher (route lookup, policy match) whether it agrees with the hop ${PRODUCT_NAME} computed; only match or mismatch per hop is stored, never the device's answer.`;
 
 export const UDP_NOTICE =
   "UDP: the approved Palo Alto policy-match command is TCP only, so a Palo Alto hop's rule and NAT are NOT_EVALUABLE for this query; its route is still asked.";
@@ -67,8 +68,8 @@ const WORDS: Readonly<Record<string, string>> = {
   ROUTING_TABLE_NOT_MAIN: "Check Point: only the main routing table can be asked.",
   DESTINATION_INVALID: "The hop's destination is not a plain IPv4 host the matcher takes.",
   NO_ROUTE_NOT_COMPARABLE: "Palo Alto: the FIB answer for \"no route\" is not established, so a hop without a route is not compared.",
-  ENGINE_ROUTE_UNKNOWN: "neXus did not decide the route here, so there is nothing to compare.",
-  ENGINE_INTERFACE_UNKNOWN: "neXus did not decide the egress interface here, so there is nothing to compare.",
+  ENGINE_ROUTE_UNKNOWN: `${PRODUCT_NAME} did not decide the route here, so there is nothing to compare.`,
+  ENGINE_INTERFACE_UNKNOWN: `${PRODUCT_NAME} did not decide the egress interface here, so there is nothing to compare.`,
   ENGINE_ROUTE_KIND_NOT_COMPARABLE: "The computed route kind has no comparable device answer.",
   VSYS_TARGET_NOT_APPROVED: "Palo Alto: only a firewall's own vsys1 is an approved target; this vsys was not validated.",
   VIRTUAL_ROUTER_UNKNOWN: "Palo Alto: this hop's virtual router is not in the stored inventory; the route was not asked.",
@@ -76,8 +77,8 @@ const WORDS: Readonly<Record<string, string>> = {
   POLICY_STALE: "The stored policy is stale: a rule comparison would be against a policy the device may no longer run, so it was not asked.",
   TUPLE_INVALID: "The packet's addresses or port are not plain values the matcher takes.",
   ZONE_UNKNOWN: "The ingress or egress zone is not in the stored inventory; the policy match needs both.",
-  ENGINE_RULE_UNKNOWN: "neXus did not decide the rule here, so there is nothing to compare.",
-  ENGINE_NAT_UNKNOWN: "neXus did not decide NAT here, so there is nothing to compare.",
+  ENGINE_RULE_UNKNOWN: `${PRODUCT_NAME} did not decide the rule here, so there is nothing to compare.`,
+  ENGINE_NAT_UNKNOWN: `${PRODUCT_NAME} did not decide NAT here, so there is nothing to compare.`,
   NAT_ZONE_NOT_IN_RESULT: "The pre-NAT egress zone the NAT match needs is not in the computed result.",
   // ---- admission (no job reached the device)
   ADMISSION_REFUSED: "The device job was not admitted; nothing was sent.",
@@ -123,17 +124,17 @@ const WORDS: Readonly<Record<string, string>> = {
   NO_NAT_RULE_BOTH: "Neither matches a NAT rule.",
   SAME_NAT_RULE: "The device's NAT rule is the computed one.",
   // ---- disagreement
-  KERNEL_HAS_ROUTE: "neXus found no route; the device has one.",
-  KERNEL_NOT_DISCARD: "neXus computed a discard route; the device forwards.",
-  FIB_NOT_DISCARD: "neXus computed a discard route; the device forwards.",
-  DEVICE_DISCARDS: "neXus computed forwarding; the device discards.",
+  KERNEL_HAS_ROUTE: `${PRODUCT_NAME} found no route; the device has one.`,
+  KERNEL_NOT_DISCARD: `${PRODUCT_NAME} computed a discard route; the device forwards.`,
+  FIB_NOT_DISCARD: `${PRODUCT_NAME} computed a discard route; the device forwards.`,
+  DEVICE_DISCARDS: `${PRODUCT_NAME} computed forwarding; the device discards.`,
   EGRESS_INTERFACE_DIFFERS: "The device forwards on a different interface.",
-  DEVICE_ROUTES_VIA_GATEWAY: "neXus computed a connected route; the device forwards via a gateway.",
+  DEVICE_ROUTES_VIA_GATEWAY: `${PRODUCT_NAME} computed a connected route; the device forwards via a gateway.`,
   NEXT_HOP_DIFFERS: "Same interface, different next hop.",
-  DEVICE_MATCHED_NO_RULE: "The device matches no security rule where neXus matched one.",
+  DEVICE_MATCHED_NO_RULE: `The device matches no security rule where ${PRODUCT_NAME} matched one.`,
   FIRST_MATCH_RULE_DIFFERS: "The device's first-match security rule differs from the computed one.",
-  DEVICE_MATCHED_NAT_RULE: "The device matches a NAT rule where neXus computed none.",
-  DEVICE_MATCHED_NO_NAT_RULE: "The device matches no NAT rule where neXus computed one.",
+  DEVICE_MATCHED_NAT_RULE: `The device matches a NAT rule where ${PRODUCT_NAME} computed none.`,
+  DEVICE_MATCHED_NO_NAT_RULE: `The device matches no NAT rule where ${PRODUCT_NAME} computed one.`,
   NAT_RULE_DIFFERS: "The device's NAT rule differs from the computed one.",
 };
 

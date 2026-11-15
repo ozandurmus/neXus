@@ -117,6 +117,20 @@ zone 7.4.0 and zone admin 7.4.4), FG-VDOM (VDOM overview 7.4.0), FG-NGFW (NGFW p
 | A0-FG-26 | Custom services: `tcp-portrange` / `udp-portrange` / `sctp-portrange` (multiple ranges), `protocol` (TCP/UDP/SCTP default, ICMP, ICMP6, IP), `protocol-number`, `icmptype`, `icmpcode` | FG-SVC (7.4.0) | "Multiple TCP port ranges." / "IP protocol number." | MEDIUM | the `dst[-dst][:src[-src]]` range syntax is not on the page: parse only forms the measurement shows, cross-checked against A0-S1 semantics; others UNSUPPORTED |
 | A0-FG-27 | Predefined services (`ALL`, `HTTP`, ...) and service groups | not found | - | UNKNOWN | a referenced service with no stored definition -> unresolved; the measurement counts them |
 
+## 15. Amendment 2026-11-14 (evening): Cisco ASA identity criteria only narrow (PO approved)
+
+PO approval relayed by the PO session on 2026-11-14 (evening): after a plain-language explanation of the
+recommendation below the PO answered "devam et" ("go ahead"). Recorded in
+`PO_DECISION_RECORD_2026_11_14_ASA_FORTIGATE_POLICY_MODEL.md` item 11. This is a PO decision on how the model reads
+A0-ASA-16, not a vendor citation: A0-ASA-16 stays MEDIUM (existence only) and no Cisco text is claimed for it.
+
+| Id | Claim | Source | Grade | Used as |
+|---|---|---|---|---|
+| A0-ASA-16a | A `user`, `user-group` or TrustSec `security-group` criterion on an ACE is one more condition a packet must meet: it only narrows what the ACE matches, so the ACE's address and port cells bound its match | PO decision 2026-11-14 (evening), same reading as the Check Point access-role amendment of 2026-11-04 (`PATH_ANALYSIS_VENDOR_SEMANTICS.md`) | PO DECISION | the bound is used only to prove that the ACE does **not** cover a flow (lookup passes over it; shadowing proves a later rule NOT_SHADOWED when disjoint) and as an upper bound of what the ACE matches; never to decide an allow or a deny by identity, never to prove that the ACE covers another rule. The ACE itself stays UNKNOWN in lookup and hygiene |
+
+Revisit if `packet-tracer` corroboration (R2) or identity-firewall evidence shows an ACE matching a packet outside
+its address or port cells.
+
 ## Sources
 
 Cisco (all cisco.com, pages updated 2026-07 to 2026-10):

@@ -1,6 +1,7 @@
 # PO decision request -- 2026-11-13: Cisco ASA failover readiness (Phase 1) reads and checks
 
-**Status: DRAFT -- awaiting the Product Owner's exact-literal approval.** Built switched off: the four permanent gate rows
+**Status: Q1 APPROVED 2026-11-14** (`PO_DECISION_RECORD_2026_11_14_ASA_FAILOVER_READINESS_READS.md`, V222 signs the four
+rows off); Q2 and Q3 open. Built switched off: the four permanent gate rows
 are inserted `DRAFTED` (a `DRAFTED` row never resolves, so no command is sent), and the readiness switch
 `UI2_ASA_FAILOVER_READINESS` is off by default on both the service and the worker. Nothing here sends a state-changing
 command; the ASA switch (`no failover active`) is not built and waits for the decision council.

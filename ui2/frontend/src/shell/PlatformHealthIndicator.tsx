@@ -3,6 +3,7 @@ import Box from "@mui/material/Box";
 import Tooltip from "@mui/material/Tooltip";
 import { m3 } from "../theme/m3Theme";
 import { getSystemPods, type PodStatusView, type PodsView } from "../auth/adminApi";
+import { PRODUCT_NAME, PRODUCT_SHORT } from "../brand/product";
 import { NAV_LEAVES, leafLocked, leafShown, type NavSessionGrants } from "./navModel";
 
 /**
@@ -126,8 +127,8 @@ export function platformHealth(read: PlatformRead): PlatformHealth | null {
     const status = statusOf(read.error);
     if (status === 401 || status === 403) return null;
     return { state: "down", reason: status === null
-      ? "neXus did not answer its status read."
-      : `neXus could not read its own status (status ${status}).` };
+      ? `${PRODUCT_NAME} did not answer its status read.`
+      : `${PRODUCT_NAME} could not read its own status (status ${status}).` };
   }
   const view = read.pods;
   if (!view.available) {
@@ -187,7 +188,7 @@ export function PlatformHealthBadge({ health, linkable }: { readonly health: Pla
   const quiet = health.state === "ok";
   const dot = health.state === "ok" ? m3.success : health.state === "degraded" ? m3.warning : m3.error;
   const ink = quiet ? m3.onSurfaceVar : health.state === "degraded" ? m3.warningInk : m3.criticalInk;
-  const label = `neXus status: ${WORDS[health.state]}. ${health.reason}`;
+  const label = `${PRODUCT_NAME} status: ${WORDS[health.state]}. ${health.reason}`;
   const linkProps = linkable ? { component: "a" as const, href: PLATFORM_STATUS_HREF } : { component: "span" as const, tabIndex: 0 };
   return (
     <Tooltip title={linkable ? `${health.reason} Open Platform status.` : health.reason}>
@@ -200,7 +201,7 @@ export function PlatformHealthBadge({ health, linkable }: { readonly health: Pla
               "&:hover": linkable ? { bgcolor: quiet ? m3.sc : undefined, textDecoration: "none" } : undefined }}>
         <Box component="span" aria-hidden sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: dot, flex: "none",
           opacity: quiet ? 0.8 : 1 }} />
-        <span>{quiet ? "neXus" : `neXus ${WORDS[health.state]}`}</span>
+        <span>{quiet ? PRODUCT_SHORT : `${PRODUCT_SHORT} ${WORDS[health.state]}`}</span>
       </Box>
     </Tooltip>
   );

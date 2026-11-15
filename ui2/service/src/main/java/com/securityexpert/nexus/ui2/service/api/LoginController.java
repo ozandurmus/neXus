@@ -56,6 +56,10 @@ public final class LoginController {
     public ResponseEntity<Map<String, Object>> login(@RequestBody LoginRequest request,
             HttpServletResponse response, jakarta.servlet.http.HttpServletRequest servletRequest) {
         try {
+            if (request.username() == null || request.password() == null) {
+                // An empty or partial body is a refused attempt, answered like any other refusal (§5.3).
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorBody("INVALID_CREDENTIALS"));
+            }
             String mechId = request.mechanismId() != null && !request.mechanismId().isBlank() ? request.mechanismId() : "local";
             Optional<Mechanism> mechanism = mechanismRegistry.find(mechId);
             if (mechanism.isEmpty()) {

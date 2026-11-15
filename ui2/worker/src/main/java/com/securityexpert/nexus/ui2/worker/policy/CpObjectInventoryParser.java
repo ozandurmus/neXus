@@ -5,7 +5,7 @@ import com.securityexpert.nexus.ui2.policy.CpObjectInventory;
 import static com.securityexpert.nexus.ui2.policy.PolicySnapshot.ref;
 import java.util.*;
 
-/** Explicit field projection; credentials, topology and vendor blobs are never retained. */
+/** Explicit field projection; credentials, topology and vendor blobs are never retained (gateway addresses: D-1 only). */
 final class CpObjectInventoryParser {
     /** Stage 2 of the VSX VIP prefix decision (2026-11-06): only these management objects keep interface addresses. */
     static final Set<String> VS_TYPES = Set.of("CpmiVsClusterNetobj", "CpmiVsNetobj");
@@ -26,6 +26,55 @@ final class CpObjectInventoryParser {
             } else complete = false;
         }
         return new CpObjectInventory.VsAddresses(kept, complete);
+    }
+    /**
+     * PO decision D-1 (2026-11-14, A0 amendment section G1): the management-side IPv4 addresses of a gateway-class object,
+     * from the {@code show-gateways-and-servers details-level full} reply already read (parse-scope extension, no new
+     * command): the main {@code ipv4-address}, every {@code interfaces[].ipv4-address} and, when the object lists
+     * {@code cluster-members} (Cluster Management API reply shape), each member's {@code ip-address}/{@code ipv4-address}
+     * and its {@code interfaces[].ipv4-address}. Masks, names, topology and anything else are not kept.
+     * <p>Complete only when the object has a non-empty interface list, every address field present is a valid IPv4
+     * address, every interface carries an IPv4 or an IPv6 address, a classic cluster ({@link #CLUSTER_TYPES}) lists its
+     * members, and every listed member carries an address or interfaces read the same way. Anything else: not complete,
+     * so the object never bounds a rule (fail closed). IPv6 addresses are not kept: the engine bounds every gateway's IPv6
+     * side as all of IPv6.
+     */
+    static CpObjectInventory.GatewayAddresses gatewayAddresses(JsonNode node, String type) {
+        Set<String> kept = new LinkedHashSet<>();
+        boolean complete = address(node.path("ipv4-address"), kept) && interfaces(node.path("interfaces"), kept, true);
+        JsonNode members = node.path("cluster-members");
+        if (CLUSTER_TYPES.contains(type) && !(members.isArray() && members.size() > 0)) complete = false;
+        if (!members.isMissingNode() && !members.isNull()) {
+            if (!members.isArray()) complete = false;
+            else for (JsonNode member : members) {
+                if (!member.isObject()) { complete = false; continue; }
+                boolean ip = address(member.path("ip-address"), kept) & address(member.path("ipv4-address"), kept);
+                boolean any = member.path("ip-address").isTextual() || member.path("ipv4-address").isTextual();
+                boolean listed = member.path("interfaces").isArray() && member.path("interfaces").size() > 0;
+                if (!ip || !any && !listed || listed && !interfaces(member.path("interfaces"), kept, true)) complete = false;
+            }
+        }
+        if (kept.isEmpty()) complete = false;
+        return new CpObjectInventory.GatewayAddresses(new ArrayList<>(kept), complete);
+    }
+    /** Classic ClusterXL cluster objects, which must list their members for a complete address set. */
+    static final Set<String> CLUSTER_TYPES = Set.of("simple-cluster", "CpmiGatewayCluster");
+    /** A missing field is fine; a present one must be a valid IPv4 address text. */
+    private static boolean address(JsonNode value, Set<String> kept) {
+        if (value.isMissingNode() || value.isNull()) return true;
+        if (!value.isTextual() || !validIpv4(value.textValue())) return false;
+        kept.add(value.textValue());
+        return true;
+    }
+    private static boolean interfaces(JsonNode list, Set<String> kept, boolean required) {
+        if (!list.isArray() || list.size() == 0) return !required;
+        boolean complete = true;
+        for (JsonNode iface : list) {
+            if (!iface.isObject()) { complete = false; continue; }
+            boolean v4 = iface.path("ipv4-address").isTextual(), v6 = iface.path("ipv6-address").isTextual();
+            if (!address(iface.path("ipv4-address"), kept) || !v4 && !v6) complete = false;
+        }
+        return complete;
     }
     private static boolean validIpv4(String text) {
         String[] parts = text.split("\\.", -1);
@@ -74,7 +123,8 @@ final class CpObjectInventoryParser {
                 }
             return new CpObjectInventory.Item(ref(source, domain, "object", uid), uid, node.path("name").asText(""),
                 type, uids(node.path("members")), values, type.equals("time") ? CheckPointSchedule.parse(node) : null, installed,
-                VS_TYPES.contains(type) ? vsAddresses(node) : null);
+                VS_TYPES.contains(type) ? vsAddresses(node) : null,
+                com.securityexpert.nexus.ui2.policy.CpObjectTypes.GATEWAY_TYPES.contains(type) ? gatewayAddresses(node, type) : null);
         }).toList();
     }
     private static String uid(JsonNode node) {

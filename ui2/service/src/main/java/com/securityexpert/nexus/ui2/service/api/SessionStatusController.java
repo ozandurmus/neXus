@@ -83,6 +83,14 @@ public final class SessionStatusController {
         this.rbacEvaluator = evaluator;
     }
 
+    private com.securityexpert.nexus.ui2.service.security.LocalPasswordPolicyService passwordPolicyService;
+
+    /** Optional: with the configurable policy on and a maximum age set, an over-age password is reported as must-change. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setPasswordPolicyService(com.securityexpert.nexus.ui2.service.security.LocalPasswordPolicyService service) {
+        this.passwordPolicyService = service;
+    }
+
     @GetMapping("/session/status")
     public ResponseEntity<Map<String, Object>> status(HttpServletRequest request) {
         Optional<String> rawCookie = findSessionCookie(request);
@@ -122,7 +130,8 @@ public final class SessionStatusController {
             body.put("display_name", record.localIdentityName());
             // PO directive 2026-09-14: the flag is only surfaced (and the screen only forced) when the posture is on.
             body.put("must_change_password", !session.get().machine()
-                    && enforcePasswordChangeOnFirstLogin && record.mustChangePassword());
+                    && enforcePasswordChangeOnFirstLogin && (record.mustChangePassword()
+                            || (passwordPolicyService != null && passwordPolicyService.passwordExpired(record, Instant.now()))));
             List<String> roleTokens = localRoleTokenResolver.resolve(record.localIdentityId()).stream()
                     .toList();
             body.put("role_tokens", roleTokens);

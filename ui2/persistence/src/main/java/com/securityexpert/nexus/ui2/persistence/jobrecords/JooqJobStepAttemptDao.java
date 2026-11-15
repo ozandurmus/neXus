@@ -56,7 +56,8 @@ public final class JooqJobStepAttemptDao implements JobStepAttemptDao {
                 dsl -> dsl.execute(
                         "update job_step_attempt set outcome = {0}, error_class = {1}, matched_expectation = {2}, "
                                 + "output_bytes = {3}, output_lines = {4}, fingerprint_sha256 = {5} "
-                                + "where attempt_id = {6} and lease_epoch = {7} and ui2_job_owner_valid(job_id,lease_epoch)",
+                                + "where attempt_id = {6} and lease_epoch = {7} and ui2_job_owner_valid(job_id,lease_epoch) "
+                                + "and exists(select 1 from jobs where jobs.job_id=job_step_attempt.job_id and jobs.state='EXECUTING')",
                         outcome, errorClass, matchedExpectation, outputBytes, outputLines, fingerprintSha256,
                         attemptId, leaseEpoch));
         return updated == 1;
