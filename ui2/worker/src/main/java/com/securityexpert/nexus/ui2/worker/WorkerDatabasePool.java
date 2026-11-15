@@ -14,9 +14,24 @@ final class WorkerDatabasePool {
     static HikariDataSource create(DataSource source, Properties properties) {
         HikariDataSource pool = new HikariDataSource();
         pool.setDataSource(source);
-        pool.setMetricsTrackerFactory((name, stats) -> new com.zaxxer.hikari.metrics.IMetricsTracker() {
-            @Override public void recordConnectionAcquiredNanos(long elapsed) { WAIT_NANOS.add(elapsed); }
-            @Override public void recordConnectionTimeout() { TIMEOUTS.increment(); }
+        com.zaxxer.hikari.metrics.MetricsTrackerFactory micrometer =
+                new com.zaxxer.hikari.metrics.micrometer.MicrometerMetricsTrackerFactory(
+                        com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.registry());
+        pool.setMetricsTrackerFactory((name, stats) -> {
+            com.zaxxer.hikari.metrics.IMetricsTracker exported = micrometer.create(name, stats);
+            return new com.zaxxer.hikari.metrics.IMetricsTracker() {
+                @Override public void recordConnectionAcquiredNanos(long elapsed) {
+                    WAIT_NANOS.add(elapsed);
+                    exported.recordConnectionAcquiredNanos(elapsed);
+                }
+                @Override public void recordConnectionTimeout() {
+                    TIMEOUTS.increment();
+                    exported.recordConnectionTimeout();
+                }
+                @Override public void recordConnectionUsageMillis(long elapsed) { exported.recordConnectionUsageMillis(elapsed); }
+                @Override public void recordConnectionCreatedMillis(long elapsed) { exported.recordConnectionCreatedMillis(elapsed); }
+                @Override public void close() { exported.close(); }
+            };
         });
         pool.setPoolName("worker-database");
         pool.setMaximumPoolSize(Integer.parseInt(properties.getProperty("ui2.db.pool.maximum-pool-size", "10")));

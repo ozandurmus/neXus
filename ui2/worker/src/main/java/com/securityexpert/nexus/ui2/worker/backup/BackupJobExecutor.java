@@ -214,10 +214,19 @@ public final class BackupJobExecutor {
                     case JobOutcome.ZombieStopped stopped -> "STOPPED: lease ownership lost";
                 };
                 JobTranscriptScope.add("job", "verdict", verdict);
+                com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.backupAttempt(switch (outcome) {
+                    case JobOutcome.Completed ignoredOutcome -> "completed";
+                    case JobOutcome.Cancelled cancelled -> "cancelled";
+                    case JobOutcome.Failed failed -> "failed";
+                    case JobOutcome.Rejected rejected -> "rejected";
+                    case JobOutcome.OutcomeUnknown unknown -> "outcome_unknown";
+                    case JobOutcome.ZombieStopped stopped -> "stopped";
+                });
                 return outcome;
             } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
                 JobTranscriptScope.add("job", "verdict", "FAILED: unexpected " + e.getClass().getSimpleName());
+                com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.backupAttempt("exception");
                 throw e;
             }
         } finally {

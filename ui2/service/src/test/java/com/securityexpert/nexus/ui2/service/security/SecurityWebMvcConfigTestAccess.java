@@ -6,6 +6,10 @@ public final class SecurityWebMvcConfigTestAccess {
     private SecurityWebMvcConfigTestAccess() {
     }
 
+    public static java.util.Map<String, String> routes() {
+        return SecurityWebMvcConfig.ACTION_ID_BY_ROUTE;
+    }
+
     public static String actionIdFor(String routePattern) {
         return SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get(routePattern);
     }

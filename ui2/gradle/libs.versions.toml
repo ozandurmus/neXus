@@ -60,6 +60,9 @@ jsch = { module = "com.github.mwiede:jsch", version.ref = "jsch" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind" }
 poi-ooxml = { module = "org.apache.poi:poi-ooxml", version.ref = "poi" }
 duckdb-jdbc = { module = "org.duckdb:duckdb_jdbc", version.ref = "duckdb" }
+# Metrics (enterprise phase 0.4): the version Spring Boot 4.0.8 manages; no Actuator, the scrape endpoint is NexusMetrics's own
+# separate-port server (docs/operations/METRICS.md).
+micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus", version = "1.16.7" }
 openpdf = { module = "com.github.librepdf:openpdf", version.ref = "openpdf" }
 
 [plugins]

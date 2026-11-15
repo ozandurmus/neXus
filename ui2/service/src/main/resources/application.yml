@@ -49,6 +49,10 @@ ui2:
     scheduled-collection:
       enabled: ${UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_ENABLED:false}
       independent: ${UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_INDEPENDENT:false}
+  metrics:
+    # Prometheus scrape port (docs/operations/METRICS.md): a separate JDK server, never routed by the Service or Ingress.
+    # 0 (unset) keeps it off; the deployment manifests set 9404.
+    port: ${UI2_METRICS_PORT:0}
   db:
     url: ${UI2_DB_URL:jdbc:postgresql://localhost:5432/ui2}
     user-file: ${UI2_DB_APP_USER_FILE:/run/secrets/ui2_db_app_user}

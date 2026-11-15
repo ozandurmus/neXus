@@ -1141,3 +1141,45 @@ def json_dump(value) -> str:
     import json
     return json.dumps(value, sort_keys=True)
 
+
+
+# ---------------------------------------------------------------------------
+# Metrics port (enterprise phase 0.4, docs/operations/METRICS.md)
+# ---------------------------------------------------------------------------
+
+
+def _all_docs() -> list[dict]:
+    docs: list[dict] = []
+    for path in sorted(MANIFEST_DIR.glob("*.yaml")):
+        docs.extend(load_documents(path.read_text(encoding="utf-8")))
+    return docs
+
+
+def test_metrics_port_is_a_named_container_port_only() -> None:
+    """The scrape port is declared on the service and worker containers and nowhere that routes traffic."""
+    docs = _all_docs()
+    with_port = []
+    for doc in docs:
+        if doc.get("kind") != "Deployment":
+            continue
+        for container in doc["spec"]["template"]["spec"]["containers"]:
+            for port in container.get("ports", []):
+                if port.get("name") == "metrics":
+                    assert port["containerPort"] == 9404
+                    env = {e["name"]: e.get("value") for e in container.get("env", [])}
+                    assert env.get("UI2_METRICS_PORT") == "9404"
+                    with_port.append(doc["metadata"]["name"])
+    assert sorted(with_port) == ["ui2-service", "ui2-worker"]
+    for doc in docs:
+        if doc.get("kind") == "Service":
+            for port in doc["spec"].get("ports", []):
+                assert port.get("name") != "metrics"
+                assert port.get("targetPort") not in ("metrics", 9404)
+                assert port.get("port") != 9404
+        if doc.get("kind") == "Ingress":
+            assert "9404" not in yaml.safe_dump(doc) and "metrics" not in yaml.safe_dump(doc)
+        if doc.get("kind") == "NetworkPolicy":
+            assert "9404" not in yaml.safe_dump(doc), "this change does not touch NetworkPolicy"
+    for path in sorted(OPENSHIFT_DIR.glob("*.yaml")):
+        text = path.read_text(encoding="utf-8")
+        assert "9404" not in text and "metrics" not in text
