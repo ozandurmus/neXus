@@ -352,13 +352,13 @@ def test_preview_keeps_the_module_self_owned_and_exercises_its_claim(monkeypatch
                         ('CLAIM_PASS' if 'DO $$' in (kw.get('input') or '') else 't'))
     workers = preview.worker_templates(ROOT)
     preview.assert_module_claims(ROOT, workers)
-    assert "module IN ('general','packet_analysis','policy')" in statements[0]
+    assert "module IN ('backup','general','packet_analysis','policy')" in statements[0]
     claim = next(sql for sql in statements if "capability TEXT := 'packet_analysis_run'" in sql)
     assert "'packet_analysis_case'" in claim
     statements.clear()
     preview.assert_module_claims(ROOT, [w for w in workers if w['component'] != 'packet-analysis'])
     assert not any("capability TEXT := 'packet_analysis_run'" in sql for sql in statements)
-    assert "module IN ('general','policy')" in statements[0]
+    assert "module IN ('backup','general','policy')" in statements[0]
 
 
 def test_default_ship_targets_include_the_analysis_worker_last():

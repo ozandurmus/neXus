@@ -189,6 +189,11 @@ public class SystemStatusService {
                     System.getLogger(SystemStatusService.class.getName()).log(System.Logger.Level.WARNING,
                         "POLICY_CONSUMER_MISSING queued={0}", depth);
                 }
+                if (module.equals("backup") && depth > 0 && (ready == 0 || !Boolean.TRUE.equals(control.get("live", Boolean.class))) && !Boolean.TRUE.equals(control.get("drain_requested", Boolean.class))) {
+                    row.put("alert", "BACKUP_CONSUMER_MISSING");
+                    System.getLogger(SystemStatusService.class.getName()).log(System.Logger.Level.WARNING,
+                        "BACKUP_CONSUMER_MISSING queued={0}", depth);
+                }
                 row.put("permits", db.fetchOne("select count(*) from endpoint_admission where owner_role={0} and state='LEASED'", owner).get(0, Long.class));
                 row.put("quarantined_permits", db.fetchOne("select (select count(*) from endpoint_admission where owner_role={0} and state='QUARANTINED') "
                     + "+ (select count(*) from runtime_task_lease where owner_role={0} and state='QUARANTINED')", owner).get(0, Long.class));
