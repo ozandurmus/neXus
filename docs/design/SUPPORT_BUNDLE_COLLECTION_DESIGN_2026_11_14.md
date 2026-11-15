@@ -2,12 +2,28 @@
 
 ## Status
 
-**DRAFT — DO NOT FREEZE.** Written 2026-11-14 from the Product Owner's request of the same day; completed 2026-11-15
-with exact bundle contents, part-by-part fail-closed masking, size limits, retention mechanics, RBAC descriptors,
-audit ledger rules, CLI parity, codebase-resolved design questions, and a step-by-step shippable build plan with
-named tests. Status remains `DRAFT — DO NOT FREEZE` because §6's network-device command literals and §10.2's policy
-decisions require Product Owner ratification before freeze. Every `UNKNOWN` below stays `UNKNOWN` until a vendor page
-or a PO-attended lab or pilot measurement settles it.
+**FROZEN - 2026-11-15** for the scope and decisions of `PO_DECISION_RECORD_2026_11_15_SUPPORT_BUNDLE_COLLECTION.md`
+(the Product Owner's answers to Q1-Q12 and the approval of the section 6 command literals for S2-S6, except the ASA
+fallback A5-A7, which is not approved). Where this document and that record disagree, the record wins; the places it
+overrides are marked "PO 2026-11-15" below. Written 2026-11-14 from the Product Owner's request of the same day;
+completed 2026-11-15 with exact bundle contents, part-by-part fail-closed masking, size limits, retention mechanics,
+RBAC descriptors, audit ledger rules, CLI parity, and a step-by-step shippable build plan. The vendor upload (S8) is
+not frozen: it needs its own research. Every `UNKNOWN` below stays `UNKNOWN` until a vendor page or a PO-attended lab
+or pilot measurement settles it.
+
+**PO 2026-11-15 overrides, in one place.**
+
+- Q1: any time the admin picks (deferred admin manual job), business-hours confirm, collision hints.
+- Q2: a bundle is deleted (after a confirm dialog) once downloaded; a bundle never downloaded is deleted after 14 days,
+  with a warning first. This replaces the "extend once up to 60 days" mechanics of section 5.6 for the build.
+- Q3: gate `cp_sb_cpdata_collector_present` (`command -v cpdata_collector`, read, 30 s, once per run) is approved;
+  the run literal is a pending gate placeholder that refuses (`cp_sb_cpdata_collector_run`). Catalogue item
+  `cpdata_collector_present` records the result.
+- Q5: MDS cpinfo and HCP-run are included, with a clear UI warning, no block.
+- Q6: request and download are `security_admin` only.
+- Q9: no four-eyes on upload; the same administrator may request, download and upload.
+- Q10: each HA member over its own management address. Q11: no FXOS. Q12: no `terminal pager 0` in the ASA session,
+  plus a backlog item for the inventory session.
 
 Research notes with the full per-artefact tables (outside the repository, session notes of 2026-11-14):
 `support-bundle-research-{checkpoint,paloalto,fortigate,cisco-asa}-1114.md`. Vendor pages were read through a
@@ -819,6 +835,8 @@ unset BASH_ENV ENV; `):
 | C18 | `cp_sb_sha256` | `sha256sum %s.tgz` | read | 600 s | once per run | none | S6 |
 | C19 | `cp_sb_sftp_get_bundle` | SFTP streaming get of `%s.tgz` | read | 7200 s | once per run | **secret-bearing** | S6 |
 | C20 | `cp_sb_remove_workdir` | `rm -rf %1$s %1$s.tgz` | recovery-write (BW-2) | 120 s | once per run, retried once | none | S6 |
+| C0 | `cp_sb_cpdata_collector_present` | `command -v cpdata_collector` (PO 2026-11-15, Q3) | read | 30 s | once per run | none | S2 |
+| C21 | `cp_sb_cpdata_collector_run` | PENDING: the run literal is NOT approved; registered as a pending gate that refuses | - | - | - | - | none |
 
 C12 to C14 need a lab check of `-i` (non-interactive). sk92739 says `-i` goes with `-n` or `-R`, and with `-D` there
 may be no SR prompt at all. The run also feeds stdin from `/dev/null`, so a prompt makes cpinfo exit and the rc file
@@ -855,6 +873,8 @@ records the failure. No retry follows.
 | A4 | `asa_sb_show_tech_support` | `show tech-support` | read | 1200 s | once per run | **secret-bearing** (running configuration) | S4 |
 | A5–A7 | fallback only | `show tech-support file disk0:/nexus-sb-<hex>.txt`, SCP pull of that name, `delete /noconfirm disk0:/nexus-sb-<hex>.txt` | recovery-write (BW-2) | 1200/1800/60 s | once per run | **secret-bearing** | only if S4 shows session capture unreliable |
 
+**PO 2026-11-15:** C0-C7, P1-P6, A1-A4, F1-F5 and C8-C20 are APPROVED exactly as written; A5-A7 and C21 are NOT approved.
+
 Count: 20 Check Point, 6 Palo Alto, 6 FortiGate (F3 is two literals), 4 ASA, plus 3 ASA fallback rows: 39 rows.
 
 - **31 new literals.** CP C1–C3, C8–C18 and C20; P1–P6; F2, F4, F5; A1–A4; and the A5–A7 fallback.
@@ -866,7 +886,7 @@ Count: 20 Check Point, 6 Palo Alto, 6 FortiGate (F3 is two literals), 4 ASA, plu
   - C7 reuses the system-log SFTP read.
   - C19 reuses the backup SFTP stream.
 
-Approval goes per step: S2 asks for C1–C7, S3 for P1–P6, S4 for A1–A4, S5 for F1–F5, and S6 for C8–C20.
+Approval goes per step: S2 asks for C0–C7, S3 for P1–P6, S4 for A1–A4, S5 for F1–F5, and S6 for C8–C20.
 
 Every row also needs these gate fields at contract time:
 
@@ -962,25 +982,14 @@ and do not require a new Product Owner decision:
 | R-6 | How does FortiGate session capture avoid changing `config system console / set output standard`? | Reuse `FortiGateExecutor` / `FortiGatePlan`, which answers `--More--` prompts interactively in the SSH channel without modifying device console configuration. | `FortiGateExecutor.java`; `V80` gate rows |
 | R-7 | Are temporary work directories and tech-support dump files on a device classified as Class 1/2 configuration writes? | No. Per PO decision record 14K `BW-2` and `V61`/`V206` (`MdsExportPlan`), creating and deleting a transient archive in `/var/log/nexus-sb-<token>` or `/tmp/techsupport.tgz` is a `BW-2` transient operational artefact, not a device configuration or recovery mutation. | PO decision record 14K `BW-2`; `V61` / `V206` |
 
-### 10.2 Open policy and command-gate decisions for the Product Owner
+### 10.2 Product Owner decisions (2026-11-15)
 
-The following 12 policy questions and the §6 command-gate literals remain open for Product Owner decision before this
-document can transition from `DRAFT — DO NOT FREEZE` to `FROZEN`:
-
-| # | Question | Recommendation |
-|---|---|---|
-| Q1 | "Run at a time": any time an administrator picks (treated as a deferred admin manual job, business-hours confirm against the chosen time), or only the 00/06/12/18 windows? | Any time (option a), with collision hints; amend the 2026-10-20 record in one line |
-| Q2 | Retention and quota: 14 days default (extend once to 60 with a reason), 3 per device, 50 GiB fleet? | Yes |
-| Q3 | `cpdata_collector` (CPSDC): Check Point documents it for Maestro/Scalable Platforms. Should we check on one gateway whether it is installed (one `ls`, a new gate) before deciding, or leave it out? | Leave out until a TAC engineer actually asks for it |
-| Q4 | cpinfo options fixed at `-z -D -d -S` (+`-x` on SMS). Traffic logs (`-l`) and kernel tables (`-k`) excluded. Agree? | Yes |
-| Q5 | MDS: keep cpinfo and HCP runs off on Multi-Domain Servers for now (fork storm history)? | Yes, until the MDS fixes have run cleanly for 30 days |
-| Q6 | Request and download are `security_admin` only, as the brief says. Should `operation_admin` also be allowed to *request* (never download)? | No, `security_admin` only for now |
-| Q7 | Default ticks per vendor as in §5.2 (light items ticked, cpinfo and HCP run unticked)? | Yes |
-| Q8 | Upload to vendor cases: wanted at all, given that bundles cannot be masked and the data leaves the bank? If yes, which vendors first? | Ask the bank's information-security and compliance offices first; then Cisco CXD only, then Fortinet SFTP; Check Point and Palo Alto stay manual (device-originated only) |
-| Q9 | Four-eyes for upload: approver must be a different `security_admin`; approval valid 24 h for exactly the listed items? | Yes |
-| Q10 | HA members: collect each member over its own management address (no `execute ha manage` / peer hop)? | Yes |
-| Q11 | FXOS chassis bundles (Firepower 4100/9300 `show tech-support chassis`): needed? neXus has no FXOS endpoints today | Not now |
-| Q12 | ASA: avoid `terminal pager 0` in this session (Cisco CPU warning). Also open a follow-up to review the inventory session that uses it? | Yes to both |
+All twelve questions are decided in `PO_DECISION_RECORD_2026_11_15_SUPPORT_BUNDLE_COLLECTION.md` section 1; that table
+is the authority. Summary: Q1 any time, business-hours confirm, hints; Q2 delete after a confirmed download, 14 days
+for an undownloaded bundle with a warning first; Q3 presence read approved, run literal not; Q4 `-z -D -d -S` (+`-x` on
+SMS); Q5 MDS included with a warning; Q6 `security_admin` only; Q7 defaults as recommended; Q8 upload wanted for all
+four vendors, built later after research; Q9 no four-eyes; Q10 each member over its own address; Q11 no FXOS; Q12 no
+`terminal pager 0`, with a backlog item for the inventory session.
 
 ## 11. Sources
 
