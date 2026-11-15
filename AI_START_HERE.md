@@ -68,26 +68,22 @@ live devices ──(SSH / cprid_util / HTTPS XML API — class 0 read)──► 
 outside it — on Windows under `%LOCALAPPDATA%\SecurityExpert\runtime\`.
 `utils/runtime_paths.resolve_runtime_paths()` enforces the separation.
 
-### CLI modes (`main.py`)
+### Retired CLI (`main.py`) and the standalone privacy gate
+
+The Python `main.py` CLI (collection, console and render modes) was retired and deleted on 2026-11-15 (PO
+2026-11-15, `docs/design/PO_DECISION_RECORD_2026_11_15_LEGACY_PYTHON_SEPARATION.md`); its modes and code are
+archived under `history/`, see `history/README.md`. The live product is `ui2/`. The one Python gate that remains
+a local command is:
 
 | Command | Purpose |
 | --- | --- |
-| `py .\main.py` | Full integration checkpoint: CP + VSX + CP-config + Panorama + PAN-config + snapshot + merge + verify + HTML + support bundle, under one `RunContext`. Required before closing any build. |
-| `py .\main.py --only cp` / `--only vsx` / `--only pan-config` | Collect one plane fresh, reuse the rest; HTML is marked NOT A CHECKPOINT. |
-| `py .\main.py --render-only` | Rebuild HTML from the last `unified.json` + telemetry. No network, no credentials. |
-| `py .\main.py --cp-config-collect --cp-config-stage all` / `--cp-config-probe` | Check Point current-configuration collection / evidence probe only. |
 | `python3 tools/privacy/repository_privacy_check.py` | Standalone local/offline Corporate-Git privacy gate. No network, no credentials, matched values never printed. |
-| `py .\main.py --console [--console-port N]` | Operator console (`CON.1`+`CON.2`): authenticated loopback HTTP service serving the existing UI live from local artifacts, plus a job engine. Only class 0 job types are submittable. Requires `pip install -r requirements-console.txt`. |
-
-Vendor/config imports are lazy — maintenance modes return before touching them.
-Remaining modes (HA readiness, recovery plane, registry, storage, scheduler,
-trust/compliance preflight): **`docs/ARCHITECTURE.md` "CLI reference"**.
 
 ### Directory map
 
 | Path | Responsibility |
 | --- | --- |
-| `main.py`, `config.py` | CLI/mode matrix/orchestration; auth + endpoint + runtime-paths carrier |
+| `main.py`, `config.py` (retired) | CLI/mode matrix of the retired product; `main.py` deleted 2026-11-15, archived code in `history/` |
 | `checkpoint/`, `panorama/`, `configuration/` | vendor inventory + configuration collectors (CP/VSX SSH, PAN HTTPS XML API), expected-vs-actual classification |
 | `utils/collection_executor.py`, `run_context.py`, `runtime_paths.py` | admission/scheduler gate, run isolation + manifest, repository ↔ runtime path foundation |
 | `utils/merge.py`/`snapshot.py`/`verification.py`, `config_evidence.py`/`config_storage.py`/`config_history.py` | unified model / last-known-good / integrity; content-addressed store + dedup + read-only history |

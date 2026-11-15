@@ -10,7 +10,6 @@ def test_default_discovery_matches_live_inventory(pytestconfig):
     with (ROOT / "docs/repo_inventory.csv").open() as source:
         live = {r["path"] for r in csv.DictReader(source)
                 if r["classification"] == "LIVE_TOOLING" and r["path"].startswith("tests/")}
-    live.remove("tests/test_action_taxonomy_java_parity.py")
     live.update({"tests/test_gov_po_3_ci_privacy_gate_baseline.py",
                  "tests/test_live_project_governance.py", "tests/test_live_tooling_discovery.py"})
     live = {"tools/" + path for path in live}
@@ -28,8 +27,7 @@ def test_live_sources_do_not_import_legacy_product(pytestconfig):
         pending.extend(next((ROOT / "tools").glob("*/" + Path(row["path"]).name)) for row in csv.DictReader(source)
                        if row["classification"] == "LIVE_TOOLING"
                        and row["python_file"] == "true"
-                       and row["path"] not in {"utils/action_taxonomy.py", "utils/__init__.py",
-                                           "tests/test_action_taxonomy_java_parity.py"})
+                       and row["path"] != "utils/action_taxonomy.py")
     visited = set()
     legacy = {"application", "checkpoint", "panorama", "configuration", "console",
               "replay", "signal_intake", "main", "config", "history", "utils"}

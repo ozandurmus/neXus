@@ -38,16 +38,18 @@ That is **46 default test files**.
 
 - 156 files classified TEST_OF_LEGACY in the inventory, covering the retired
   Python product, collectors, console and renderer.
-- Three UNSURE files: `test_architecture_convergence.py`,
+- Three UNSURE files (at the original PR0 baseline): `test_architecture_convergence.py`,
   `test_gov_po_2_privacy_entrypoint.py`, and `test_ui2_b0_extraction_tooling.py`.
   The first now holds only the 14 live project-state/governance checks (still
   run by `orchestrator_verify.integrate`); its 9 Python taxonomy/console/failover
-  checks moved to `history/tests/test_architecture_convergence_legacy.py`. The second compares against the legacy CLI; equivalent
+  checks moved to `history/tests/test_architecture_convergence_legacy.py`. The second
+  (legacy CLI comparison) was deleted on 2026-11-15 together with `main.py`; equivalent
   live baseline behavior is covered by `test_gov_po_3_ci_privacy_gate_baseline.py`.
   The extraction helper still depends on the Python product.
 - `test_action_taxonomy_java_parity.py`: Java became authoritative by PO
   decision 2026-10-04; no live tool imports `utils/action_taxonomy.py`.
-  Its two comparison tests are replaced in place by a Java coverage note.
+  Its two comparison tests were replaced by a Java coverage note, and the note
+  file was deleted on 2026-11-15 (PO 2026-11-15).
 
 These are test-file counts, not parameter-expanded collected-case counts.
 The legacy CLI argument guard is retained in the opt-in privacy bridge.
