@@ -10,6 +10,8 @@ bouncycastle = "1.86"
 testcontainers = "1.20.1"
 # Spring Boot 4.0.8 manages Spring Framework 7.0.9 (CVE-2026-47884 / CVE-2026-47890 fixed in spring-webmvc 7.0.9).
 springboot = "4.0.8"
+# Spring Security line that Spring Boot 4.0.8 manages (spring-boot-starter-security resolves 7.0.7); used for the test artifact only.
+spring-security = "7.0.7"
 snakeyaml = "2.2"
 # Security floor above Spring Boot 4.0.8's managed Tomcat 11.0.24: newest 11.0.x patch release (2026-10-06).
 # Before Boot 4 the floor was 10.1.60 (Trivy 2026-09-27: critical CVEs fixed in 10.1.58).
@@ -55,6 +57,9 @@ spring-boot-starter-jdbc = { module = "org.springframework.boot:spring-boot-star
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test", version.ref = "springboot" }
 # @WebMvcTest / @AutoConfigureMockMvc moved to their own module in Spring Boot 4.
 spring-boot-webmvc-test = { module = "org.springframework.boot:spring-boot-webmvc-test", version.ref = "springboot" }
+# Spring Security 7 (version managed by the Spring Boot 4.0.8 BOM); Step 1 of docs/design/SPRING_SECURITY_MIGRATION_PLAN_2026_11_15.md.
+spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-starter-security", version.ref = "springboot" }
+spring-security-test = { module = "org.springframework.security:spring-security-test", version.ref = "spring-security" }
 snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
 jsch = { module = "com.github.mwiede:jsch", version.ref = "jsch" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind" }

@@ -29,6 +29,9 @@ dependencies {
         exclude(group = "org.springframework.boot", module = "spring-boot-starter-jackson")
     }
     implementation(libs.spring.boot.jackson2)
+    // Spring Security 7 filter chain (SPRING_SECURITY_MIGRATION_PLAN_2026_11_15.md, Step 1: a passthrough chain,
+    // no behaviour change; see NexusSecurityFilterChainConfiguration).
+    implementation(libs.spring.boot.starter.security)
     // Security floor for the embedded server (see libs.versions.toml `tomcat`).
     constraints {
         implementation(libs.tomcat.embed.core)
@@ -65,6 +68,7 @@ dependencies {
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.spring.boot.webmvc.test)
+    testImplementation(libs.spring.security.test)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
