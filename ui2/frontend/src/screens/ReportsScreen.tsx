@@ -32,6 +32,25 @@ export function reportError(err: unknown): string {
 
 
 
+/** What a failed run's closed error code means for the user (the code itself stays visible). */
+export function reportRunErrorText(code: string | null | undefined): { readonly label: string; readonly hint: string } | null {
+  switch (code) {
+    case "STORE_QUOTA_EXCEEDED":
+      return {
+        label: "Report store quota exceeded",
+        hint: "The report store quota for this store is full; an administrator can raise it on the Backup screen.",
+      };
+    default:
+      return null;
+  }
+}
+
+function RunErrorNote({ code }: { readonly code: string | null | undefined }) {
+  const text = reportRunErrorText(code);
+  if (!text) return null;
+  return <Typography variant="caption" display="block" data-report-error-hint={code ?? undefined}>{text.label}. {text.hint}</Typography>;
+}
+
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -175,6 +194,7 @@ function RunLine({ run }: { readonly run: ReportRunView }) {
     <Stack direction="row" spacing={1} alignItems="center" data-report-run={run.run_id}>
       <StatusChip tone={toneOf(run.state)} label={run.state} dense />
       <Typography variant="body2">{run.template_id} · {run.format} · {run.projection}{run.error_code ? ` · ${run.error_code}` : ""}</Typography>
+      <RunErrorNote code={run.error_code} />
       {run.downloadable && <a href={reportDownloadHref(run.run_id)}>Download</a>}
     </Stack>
   );
@@ -201,7 +221,7 @@ function HistoryPanel() {
             {Object.entries(r.parameters).map(([k, v]) => `${k} ${FRAMEWORK_LABELS[v] ?? v}`).join(" · ")}</Typography></TableCell>
           <TableCell>{r.format}</TableCell>
           <TableCell>{r.projection}</TableCell>
-          <TableCell><StatusChip tone={toneOf(r.state)} label={r.state} dense />{r.error_code && <Typography variant="caption" display="block">{r.error_code}</Typography>}</TableCell>
+          <TableCell><StatusChip tone={toneOf(r.state)} label={r.state} dense />{r.error_code && <Typography variant="caption" display="block">{r.error_code}</Typography>}<RunErrorNote code={r.error_code} /></TableCell>
           <TableCell>{(r.data_as_of.planes ?? []).length === 0 ? "UNKNOWN"
             : (r.data_as_of.planes ?? []).map(p => <Typography key={p.plane} variant="caption" display="block">{planeLine(p)}</Typography>)}</TableCell>
           <TableCell>{formatStamp(r.expires_at)}</TableCell>

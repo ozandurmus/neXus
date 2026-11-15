@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ReportsScreen } from "../src/screens/ReportsScreen";
+import { ReportsScreen, reportRunErrorText } from "../src/screens/ReportsScreen";
 import type { ReportCatalogue, ReportDocumentView, ReportRunView } from "../src/auth/adminApi";
 
 // Masked fixtures only (REPORTS_R1_CONTRACT.md "UI"): pseudonyms and 192.0.2.x.
@@ -120,5 +120,22 @@ describe("Reports screen (Reports R1)", () => {
     expect(within(table).getAllByText(/backup: 2 of 3 backup targets with evidence/).length).toBe(2);
     expect(within(table).getByText("UNKNOWN")).toBeInTheDocument();
     expect(screen.getByText(/Only masked reports are listed for this session/)).toBeInTheDocument();
+  });
+
+  it("labels a run that ended on the store quota with a human label and a hint, keeping the code visible", async () => {
+    server({ runs: [run({ run_id: "44444444-2222-4333-8444-555555555555", state: "FAILED", error_code: "STORE_QUOTA_EXCEEDED", downloadable: false, data_as_of: {} }),
+      run({ run_id: "33333333-2222-4333-8444-555555555555", state: "FAILED", error_code: "REPORT_TOO_LARGE", downloadable: false, data_as_of: {} })] });
+    render(<ReportsScreen />);
+    fireEvent.click(screen.getByRole("tab", { name: "History" }));
+    const table = await screen.findByRole("table", { name: "Report history" });
+    expect(within(table).getByText("STORE_QUOTA_EXCEEDED")).toBeInTheDocument();
+    expect(within(table).getByText(/Report store quota exceeded\. The report store quota for this store is full; an administrator can raise it on the Backup screen\./)).toBeInTheDocument();
+    expect(within(table).getAllByText(/administrator can raise it/)).toHaveLength(1);
+  });
+
+  it("knows no label for other codes", () => {
+    expect(reportRunErrorText("STORE_QUOTA_EXCEEDED")?.label).toBe("Report store quota exceeded");
+    expect(reportRunErrorText("REPORT_TOO_LARGE")).toBeNull();
+    expect(reportRunErrorText(null)).toBeNull();
   });
 });

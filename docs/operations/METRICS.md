@@ -11,8 +11,9 @@ Prometheus-compatible scraper or an OpenTelemetry collector with a Prometheus re
   Spring Boot Actuator. Actuator is not on the classpath. The main API on port 8080, its session cookie, CSRF and RBAC gate
   chain are unchanged, and the main port serves nothing under `/actuator/**` or `/metrics`: an anonymous request there is
   refused (`ManagementPortIsolationTest`).
-- The port is declared only as a named container port in `deploy/ui2/50-service-deployment.yaml` and
-  `deploy/ui2/52-worker-deployment.yaml`. No Service, Ingress, Route or NetworkPolicy lists it (checked by
+- The port is declared only as a named container port in `deploy/ui2/50-service-deployment.yaml`,
+  `deploy/ui2/52-worker-deployment.yaml` and the configuration, compliance, policy and packet-analysis worker manifests
+  (`54-`, `55-`, `57-`, `58-`). No Service, Ingress, Route or NetworkPolicy lists it (checked by
   `test_metrics_port_is_a_named_container_port_only`), so the ingress cannot route to it. The endpoint has no
   authentication of its own; it is reachable only by an in-cluster client that knows the pod address. Opening it to a
   specific scraper is a later NetworkPolicy decision and is not made here.
@@ -44,6 +45,5 @@ any value is address-like. Add a new label key to `MetricLabelGuard.ALLOWED_KEYS
 ## Not in scope here
 
 Trace propagation, the Instana agent, alert rules and dashboards, and a NetworkPolicy for the scraper are separate steps of
-enterprise phase 0.4. The configuration, compliance, policy and packet-analysis workloads reuse the worker entry point and
-start the server too once `UI2_METRICS_PORT` is added to their manifests; this change adds it to the service and worker
-manifests only.
+enterprise phase 0.4. The configuration, compliance, policy and packet-analysis workloads reuse the worker entry point; their
+manifests set `UI2_METRICS_PORT` and the named container port the same way as the service and worker.
