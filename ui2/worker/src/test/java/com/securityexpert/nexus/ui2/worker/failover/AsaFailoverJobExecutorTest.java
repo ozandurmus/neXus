@@ -122,11 +122,11 @@ class AsaFailoverJobExecutorTest {
         return GateRegistryFixtureLoader.loadFromStream(AsaFailoverJobExecutorTest.class
             .getResourceAsStream("/capabilities/gate_registry_fixture.yaml"));
     }
-    /** The four readiness rows forced back to DRAFTED (as V212 inserted them, before the V215 sign-off). */
+    /** The four readiness rows forced back to DRAFTED (as V212 inserted them, before the V222 sign-off). */
     private static GateRegistryPort draftedGates() {
         return gatesWith(SignOffState.DRAFTED);
     }
-    /** The fixture as committed: the four readiness rows SIGNED_OFF by V215 (PO approval 2026-11-14). */
+    /** The fixture as committed: the four readiness rows SIGNED_OFF by V222 (PO approval 2026-11-14). */
     private static GateRegistryPort signedOffGates() {
         var rows = fixtureRows();
         assertTrue(rows.stream().filter(r -> FAILOVER_GATES.contains(r.gateId())).allMatch(r -> r.signOffState() == SignOffState.SIGNED_OFF));

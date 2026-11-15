@@ -1,4 +1,4 @@
--- V215 -- sign off the four Cisco ASA failover readiness reads (PO approval 2026-11-14, relayed by the PO session:
+-- V222 -- sign off the four Cisco ASA failover readiness reads (PO approval 2026-11-14, relayed by the PO session:
 -- "Onaylıyorum" to show failover, show failover state, show failover history, show conn count; run only when a
 -- readiness check runs, on both members of an ASA pair, read-only, masked output). Record:
 -- docs/design/PO_DECISION_RECORD_2026_11_14_ASA_FAILOVER_READINESS_READS.md.
@@ -6,7 +6,7 @@
 -- literal is added: the ASA switch (no failover active) waits for the decision council. The one-time measurement rows
 -- (asa_measure_*, V210) are untouched. The readiness switch UI2_ASA_FAILOVER_READINESS is unchanged (off by default).
 -- Dry-run in BEGIN/ROLLBACK on the live database before rollout.
-SELECT set_config('app.actor_fingerprint', 'migration:V215_asa_failover_readiness_signoff', true);
+SELECT set_config('app.actor_fingerprint', 'migration:V222_asa_failover_readiness_signoff', true);
 SELECT set_config('app.action_id', 'gate_registry_signoff_by_migration', true);
 
 UPDATE gate_registry
