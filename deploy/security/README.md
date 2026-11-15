@@ -57,6 +57,12 @@ the schedules. Do not replace the digest checks with tag defaults.
    sees only read-only counts files; supplemental group 1000 reads those 0640 files, not raw reports. Keep the
    service on the same node as this local PV. Enable **Administration > Platform > Notifications > Security scans**
    and its recipients. Existing relay routing, per-type watermark and retry behavior are reused.
+8a. Optional persistent Trivy cache (faster gate: no DB re-download, analysed layers skipped). Order matters: first
+   `kubectl apply -f deploy/security/trivy-cache-pvc.yaml` alone and confirm `kubectl -n ui2-security get pvc
+   security-trivy-cache`; only then add `"trivy_cache_claim": "security-trivy-cache"` to the private config. Every gate
+   still scans every deployed digest; a DB younger than `TRIVY_DB_MAX_AGE_HOURS` (default 6) is reused, an older or
+   missing one is updated, and the layer cache is dropped above `TRIVY_FANAL_MAX_KB` (default 6000000). Trivy runs
+   take an exclusive lock on the shared cache. Removing the key returns the Jobs to the per-Job emptyDir.
 9. Synchronize the canonical `deploy/ui2-image-build/run_build.sh` to the host's existing `~/run_build.sh` before the
    next ship. That script prepares the source, builds, reads the new digest, runs a unique `security-gate-*` Job,
    waits for its terminal result, prints validated counts, and only then reaches the first rollout command.

@@ -1,0 +1,15 @@
+# Persistent Trivy cache (vulnerability DBs + analysed-layer cache; no findings, no source). Apply this file ALONE and
+# let the claim be created BEFORE `trivy_cache_claim: security-trivy-cache` is added to ~/.config/nexus/security.json:
+# a Job that mounts a claim which does not exist stays Pending and the gate times out (the 2026-11-05 outage pattern).
+# Order: 1) kubectl apply -f deploy/security/trivy-cache-pvc.yaml  2) kubectl -n ui2-security get pvc security-trivy-cache
+# 3) add the config key  4) next ship. Removing the key returns the Jobs to the per-Job emptyDir cache.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: security-trivy-cache
+  namespace: ui2-security
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 12Gi
