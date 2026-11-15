@@ -940,7 +940,7 @@ Notifications reuse the existing masked notification path: request finished or f
 | R4 | FortiGate session crash defect | version and DoS-policy guard from stored data; crash log still collected |
 | R5 | Leftover files on devices after lost contact | exit code file, exact-name cleanup, UI action, notification; never wildcard deletes |
 | R6 | Vault growth | 14-day expiry, per-device (3) and fleet (50 GiB) caps excluded from the 400 GiB backup budget, 10% volume free-space floor |
-| R7 | ASA `terminal pager 0` CPU warning applies to the existing inventory session too | this design avoids it. The follow-up review is done 2026-11-15: the inventory, readiness, policy and failover ASA sessions no longer send it either (V224; docs/design/CISCO_ASA_CONTRACT.md, Paging) |
+| R7 | ASA `terminal pager 0` CPU warning applies to the existing inventory session too | this design avoids it. The follow-up review is done 2026-11-15: the inventory, readiness, policy and failover ASA sessions no longer send it either (V233; docs/design/CISCO_ASA_CONTRACT.md, Paging) |
 | R8 | HCP run replaces the device's own "last" report | stated in the UI. `cp_hcp_latest` (no run) is the default |
 | R9 | Upload sends bank data abroad | S8 only after Q8 and the bank's compliance office; neXus-side egress only; per-case four-eyes; credentials never stored |
 | R10 | Vendor option wording was read through summaries | lab verification of every literal before freeze (S1 task) |
