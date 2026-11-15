@@ -118,6 +118,37 @@ def _git(*args: str, cwd: Path = REPO_ROOT, check: bool = True) -> str:
     return r.stdout.strip()
 
 
+def _rebase_dropping_empty_commits(cwd: Path, branch: str | None = None, base: str = "origin/main") -> tuple[bool, int]:
+    """Rebase onto `base`, dropping commits with an empty diff; returns (rebased cleanly, dropped count).
+
+    2026-11-15: GitHub refused `gh pr merge --rebase` ("This branch can't be rebased") for a combined branch that
+    carried an originally-empty commit, which a local rebase keeps. The branch's net change must stay identical."""
+    target = branch or "HEAD"
+    empties = 0
+    for commit in _git("rev-list", "--no-merges", base + ".." + target, cwd=cwd).split():
+        if subprocess.run(["git", "diff-tree", "--quiet", commit + "^", commit], cwd=str(cwd)).returncode == 0:
+            empties += 1
+    net_before = _git("diff", "--binary", base + "..." + target, cwd=cwd)
+    cmd = ["git", "rebase", "--no-keep-empty", *(["--force-rebase"] if empties else []), base] + ([branch] if branch else [])
+    rb = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True)
+    if rb.returncode != 0:
+        return False, 0
+    if _git("diff", "--binary", base, target, cwd=cwd) != net_before:
+        raise SystemExit("dropping empty commits changed the branch's net change; refusing to ship")
+    if empties:
+        print(json.dumps({"dropped_empty_commits": empties}), flush=True)
+    return True, empties
+
+
+def _explain_merge_failure(stderr: str) -> str:
+    text = stderr.strip()[-300:]
+    if "can't be rebased" in stderr or "cannot be rebased" in stderr:
+        return (text + " | GitHub could not rebase-merge this branch. Likely causes: an empty commit (no changes) or a "
+                "merge commit in origin/main..branch, or main moved after the last rebase. Check with "
+                "`git rev-list --merges origin/main..<branch>` and `git log --stat origin/main..<branch>`.")
+    return text
+
+
 def _state_path(task: str) -> Path:
     return STATE_DIR / f"{task}.json"
 
@@ -907,15 +938,15 @@ def _ship(args: argparse.Namespace) -> int:
         wt, branch = Path(r["worktree"]), r["branch"]
         if _git("status", "--porcelain", "--untracked-files=no", cwd=wt, check=False):
             raise SystemExit("lane has uncommitted changes; review and commit them first")
-        rb = subprocess.run(["git", "rebase", "origin/main"], cwd=str(wt), capture_output=True, text=True)
-        if rb.returncode != 0:
+        ok, _ = _rebase_dropping_empty_commits(wt)
+        if not ok:
             subprocess.run(["git", "rebase", "--abort"], cwd=str(wt), capture_output=True)
             raise SystemExit("lane does not rebase cleanly onto origin/main; resolve in the worktree first")
     elif args.branch:
         branch = args.branch
-        rb = subprocess.run(["git", "rebase", "origin/main", branch], cwd=str(REPO_ROOT), capture_output=True, text=True)
+        ok, _ = _rebase_dropping_empty_commits(REPO_ROOT, branch)
         _git("checkout", "-q", "main")
-        if rb.returncode != 0:
+        if not ok:
             subprocess.run(["git", "rebase", "--abort"], cwd=str(REPO_ROOT), capture_output=True)
             raise SystemExit("branch does not rebase cleanly onto origin/main")
     else:
@@ -1031,7 +1062,7 @@ def _ship(args: argparse.Namespace) -> int:
     merge = subprocess.run(["gh", "pr", "merge", url, "--rebase"],
                            cwd=str(REPO_ROOT), capture_output=True, text=True)
     if merge.returncode != 0:
-        raise SystemExit("pull request not merged (" + url + "): " + merge.stderr.strip()[-300:])
+        raise SystemExit("pull request not merged (" + url + "): " + _explain_merge_failure(merge.stderr))
     subprocess.run(["git", "push", "-q", "origin", "--delete", branch], cwd=str(REPO_ROOT), capture_output=True)
     _git("fetch", "-q", "origin")
     _git("merge", "-q", "--ff-only", "origin/main")

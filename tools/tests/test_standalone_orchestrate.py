@@ -275,3 +275,75 @@ def test_host_mirror_url_comes_from_local_configuration_only(tmp_path, monkeypat
     assert sa._host_mirror_url() == "ssh://synthetic-user@synthetic-file-host/opt/nexus.git"
     monkeypatch.setenv("NEXUS_HOST", "synthetic-env-host")
     assert sa._host_mirror_url() == "ssh://synthetic-env-host/opt/nexus.git"
+
+
+def _g(cwd, *a):
+    return subprocess.run(["git", *a], cwd=str(cwd), capture_output=True, text=True, check=True).stdout.strip()
+
+
+def _make_repo(tmp_path):
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+    work = tmp_path / "work"
+    subprocess.run(["git", "clone", "-q", str(origin), str(work)], check=True, capture_output=True)
+    for k, v in (("user.name", "t"), ("user.email", "t@example.invalid"), ("commit.gpgsign", "false")):
+        _g(work, "config", k, v)
+    (work / "a.txt").write_text("a\n")
+    _g(work, "add", "."); _g(work, "commit", "-q", "-m", "base"); _g(work, "push", "-q", "origin", "main")
+    return work
+
+
+def test_rebase_drops_empty_commits_and_keeps_net_change(tmp_path, capsys):
+    work = _make_repo(tmp_path)
+    _g(work, "switch", "-q", "-c", "lane")
+    (work / "b.txt").write_text("b\n")
+    _g(work, "add", "."); _g(work, "commit", "-q", "-m", "real")
+    _g(work, "commit", "-q", "--allow-empty", "-m", "empty one")
+    _g(work, "commit", "-q", "--allow-empty", "-m", "empty two")
+    ok, dropped = sa._rebase_dropping_empty_commits(work)
+    assert (ok, dropped) == (True, 2)
+    assert _g(work, "rev-list", "--count", "origin/main..HEAD") == "1"
+    assert (work / "b.txt").read_text() == "b\n"
+    assert '"dropped_empty_commits": 2' in capsys.readouterr().out
+
+
+def test_rebase_by_branch_name_onto_moved_main(tmp_path):
+    work = _make_repo(tmp_path)
+    _g(work, "switch", "-q", "-c", "lane")
+    (work / "b.txt").write_text("b\n")
+    _g(work, "add", "."); _g(work, "commit", "-q", "-m", "real")
+    _g(work, "commit", "-q", "--allow-empty", "-m", "empty")
+    _g(work, "switch", "-q", "main")
+    (work / "c.txt").write_text("c\n")
+    _g(work, "add", "."); _g(work, "commit", "-q", "-m", "main moved"); _g(work, "push", "-q", "origin", "main")
+    ok, dropped = sa._rebase_dropping_empty_commits(work, "lane")
+    assert (ok, dropped) == (True, 1)
+    assert _g(work, "rev-list", "--count", "origin/main..lane") == "1"
+    assert _g(work, "show", "lane:c.txt") == "c"
+
+
+def test_rebase_without_empty_commits_drops_nothing(tmp_path):
+    work = _make_repo(tmp_path)
+    _g(work, "switch", "-q", "-c", "lane")
+    (work / "b.txt").write_text("b\n")
+    _g(work, "add", "."); _g(work, "commit", "-q", "-m", "real")
+    assert sa._rebase_dropping_empty_commits(work) == (True, 0)
+
+
+def test_rebase_conflict_reports_failure(tmp_path):
+    work = _make_repo(tmp_path)
+    _g(work, "switch", "-q", "-c", "lane")
+    (work / "a.txt").write_text("lane\n")
+    _g(work, "commit", "-q", "-am", "lane edit")
+    _g(work, "switch", "-q", "main")
+    (work / "a.txt").write_text("main\n")
+    _g(work, "commit", "-q", "-am", "main edit"); _g(work, "push", "-q", "origin", "main")
+    _g(work, "switch", "-q", "lane")
+    assert sa._rebase_dropping_empty_commits(work) == (False, 0)
+    subprocess.run(["git", "rebase", "--abort"], cwd=str(work), capture_output=True)
+
+
+def test_merge_failure_diagnostic_names_causes():
+    msg = sa._explain_merge_failure("GraphQL: This branch can't be rebased (mergePullRequest)")
+    assert "empty commit" in msg and "merge commit" in msg
+    assert sa._explain_merge_failure("other error") == "other error"
