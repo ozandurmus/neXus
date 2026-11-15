@@ -1160,7 +1160,7 @@ def _all_docs() -> list[dict]:
 
 
 def test_metrics_port_is_a_named_container_port_only() -> None:
-    """The scrape port is declared on the service and worker containers and nowhere that routes traffic."""
+    """The scrape port is declared on the service and every worker-entry-point container and nowhere that routes traffic."""
     docs = _all_docs()
     with_port = []
     for doc in docs:
@@ -1173,7 +1173,8 @@ def test_metrics_port_is_a_named_container_port_only() -> None:
                     env = {e["name"]: e.get("value") for e in container.get("env", [])}
                     assert env.get("UI2_METRICS_PORT") == "9404"
                     with_port.append(doc["metadata"]["name"])
-    assert sorted(with_port) == ["ui2-service", "ui2-worker"]
+    assert sorted(with_port) == [
+        "ui2-compliance", "ui2-configuration", "ui2-packet-analysis", "ui2-policy", "ui2-service", "ui2-worker"]
     for doc in docs:
         if doc.get("kind") == "Service":
             for port in doc["spec"].get("ports", []):
