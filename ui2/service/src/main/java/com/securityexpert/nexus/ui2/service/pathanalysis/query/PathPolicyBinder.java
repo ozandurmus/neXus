@@ -81,6 +81,9 @@ public final class PathPolicyBinder {
         if (topologyContext == null || topologyContext.isBlank()) {
             return Optional.empty();
         }
+        if (TopologyInput.VENDOR_FORTINET.equals(vendor)) {
+            return Optional.of(CONTEXT_PHYSICAL.equals(topologyContext) ? "root" : topologyContext);
+        }
         if (CONTEXT_PHYSICAL.equals(topologyContext)) {
             return Optional.of("");
         }
@@ -93,7 +96,8 @@ public final class PathPolicyBinder {
         }
         String policyVendor = TopologyInput.VENDOR_CHECK_POINT.equals(node.vendor()) ? "CP"
                 : TopologyInput.VENDOR_PALO_ALTO.equals(node.vendor()) ? "PAN"
-                : TopologyInput.VENDOR_CISCO_ASA.equals(node.vendor()) ? "ASA" : null;
+                : TopologyInput.VENDOR_CISCO_ASA.equals(node.vendor()) ? "ASA"
+                : TopologyInput.VENDOR_FORTINET.equals(node.vendor()) ? "FGT" : null;
         if (policyVendor == null) {
             return new HopPolicySource.Unbound(PathReasons.UNSUPPORTED_NODE_VENDOR);
         }

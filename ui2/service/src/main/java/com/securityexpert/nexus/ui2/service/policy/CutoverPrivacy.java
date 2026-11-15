@@ -26,7 +26,7 @@ public final class CutoverPrivacy {
     private static final Set<String> PARSE_REASONS = Set.of("column count mismatch", "invalid count",
         "invalid time (use ISO-8601 UTC or epoch seconds/milliseconds)", "invalid IP address", "invalid destination port",
         "invalid protocol", "invalid zone");
-    private static final Set<String> VENDORS = Set.of("CP", "PAN", "");
+    private static final Set<String> VENDORS = Set.of("CP", "PAN", "ASA", "FGT", "");
     private static final List<Pattern> HEADLINES = List.of(
         Pattern.compile(Pattern.quote(CutoverAssessment.HEADLINE_BLOCKERS).replace("%d", "\\E[0-9]{1,9}\\Q")),
         Pattern.compile(Pattern.quote(CutoverAssessment.HEADLINE_NOT_DECIDED).replace("%d", "\\E[0-9]{1,9}\\Q")),

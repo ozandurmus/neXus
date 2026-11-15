@@ -82,9 +82,13 @@ public final class TopologyBuilder {
         return new Run(input).build();
     }
 
-    /** True for the HA roles that make a member the routing member ({@code ACTIVE}, any case). */
+    /** True for the HA roles that make a member the routing member ({@code ACTIVE} or {@code PRIMARY}, any case). */
     static boolean isActiveRole(String role) {
-        return role != null && "ACTIVE".equals(role.strip().toUpperCase(Locale.ROOT));
+        if (role == null) {
+            return false;
+        }
+        String upper = role.strip().toUpperCase(Locale.ROOT);
+        return "ACTIVE".equals(upper) || "PRIMARY".equals(upper);
     }
 
     private static final class Run {
@@ -337,8 +341,11 @@ public final class TopologyBuilder {
                                 && r.interfaceName().filter(iface.name()::equals).isPresent()
                                 && Ipv4Prefix.parse(r.destination()).filter(bound.get()::equals).isPresent());
                         boolean warp = checkPoint && iface.name().toLowerCase(Locale.ROOT).startsWith(WARP_PREFIX);
+                        Optional<String> zone = TopologyInput.VENDOR_FORTINET.equals(vendor)
+                                ? iface.zone().filter(z -> !z.isBlank()).or(() -> Optional.of(iface.name()))
+                                : iface.zone();
                         Candidate c = new Candidate(nodeId, iface.name(), withLength, prefix.get(), address.role(),
-                                iface.zone(), corroborated, warp,
+                                zone, corroborated, warp,
                                 managementDerived ? Optional.of(InventoryInterface.GRADE_MANAGEMENT_DERIVED) : iface.evidenceGrade());
                         if (managementDerived) {
                             flags.add(NodeFlag.MANAGEMENT_DERIVED_PREFIX);
@@ -444,23 +451,28 @@ public final class TopologyBuilder {
             return out;
         }
 
-        /** A standalone unit routes on its own tables; a cluster unit on its single provable ACTIVE member. */
+        /** A standalone unit routes on its own tables; a cluster unit on its single provable ACTIVE/PRIMARY member. */
         private static Optional<TopologyInput.DeviceFacts> routingMember(boolean cluster,
                 List<TopologyInput.DeviceFacts> collected, String context) {
             if (!cluster) {
                 return Optional.of(collected.get(0));
             }
             List<TopologyInput.DeviceFacts> active = collected.stream()
-                    .filter(d -> haRole(d.latestRun().get(), context).filter(TopologyBuilder::isActiveRole).isPresent())
+                    .filter(d -> haFact(d.latestRun().get(), context)
+                            .filter(f -> f.clusterMode().filter(m -> "a-a".equalsIgnoreCase(m.strip())).isEmpty())
+                            .map(InventoryHaFact::role).filter(TopologyBuilder::isActiveRole).isPresent())
                     .toList();
             return active.size() == 1 ? Optional.of(active.get(0)) : Optional.empty();
         }
 
         /** The context's own HA fact (VSX per-VS), else the physical one; empty = UNKNOWN. */
+        private static Optional<InventoryHaFact> haFact(InventoryRun run, String context) {
+            return run.haFacts().stream().filter(f -> f.context().equals(context)).findFirst()
+                    .or(() -> run.haFacts().stream().filter(f -> InventoryContext.PHYSICAL.equals(f.context())).findFirst());
+        }
+
         private static Optional<String> haRole(InventoryRun run, String context) {
-            return run.haFacts().stream().filter(f -> f.context().equals(context)).map(InventoryHaFact::role).findFirst()
-                    .or(() -> run.haFacts().stream().filter(f -> InventoryContext.PHYSICAL.equals(f.context()))
-                            .map(InventoryHaFact::role).findFirst());
+            return haFact(run, context).map(InventoryHaFact::role);
         }
 
         private static boolean attaches(boolean cluster, boolean checkPoint, InventoryAddress address) {

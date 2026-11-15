@@ -156,7 +156,7 @@ class TopologySecurityRouteTest {
 
         JsonNode rebuilt = json(admin, write("/api/v2/topology/rebuild", ""));
         assertEquals("BUILT", rebuilt.get("status").asText());
-        assertEquals(8, rebuilt.get("snapshot").get("counts").get("devices").asInt(), "the FortiGate is not part of it");
+        assertEquals(8, rebuilt.get("snapshot").get("counts").get("devices").asInt(), "the Radware device is not part of it");
         assertEquals(1, estate.repository.snapshots.size());
         assertEquals(5, estate.repository.conflicts.size());
 

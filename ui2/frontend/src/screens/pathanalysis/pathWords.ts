@@ -129,6 +129,9 @@ const WORDS: Readonly<Record<string, string>> = {
   ASA_INTERFACE_UNKNOWN: "Cisco ASA: an interface or its security level is not in the stored configuration.",
   ASA_ACCESS_LIST_RESULTS: "Cisco ASA: decided by the inbound and outbound access lists together.",
   ASA_NAT_NOT_EVALUATED: "Cisco ASA: a NAT rule may translate this packet; ASA translation is not evaluated yet.",
+  FGT_IMPLICIT_DENY: "FortiGate: no firewall policy matched; the VDOM's implicit deny applies.",
+  FGT_INTRAZONE_UNKNOWN: "FortiGate: no firewall policy matched and a zone intrazone policy is not evaluated.",
+  FGT_NAT_NOT_EVALUATED: "FortiGate: a VIP, central SNAT or policy SNAT rule may translate this packet; FortiGate translation is not evaluated yet.",
   // ---- topology caveats, notes and warnings
   CLUSTER_UNCORROBORATED: "The cluster relationship rests on one member's claim; the peer has not corroborated it.",
   CLUSTER_MEMBERS_DISAGREE: "The cluster members disagree about their relationship.",

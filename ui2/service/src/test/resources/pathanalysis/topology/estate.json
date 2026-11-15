@@ -1,5 +1,5 @@
 {
-  "_comment": "Synthetic estate for the stage A3 golden topology tests. Documentation addresses only (RFC 5737), pseudonym-style hostnames, no real identity. Check Point cluster CLS-ROMEO (FW-TANGO-04 active, FW-TANGO-05 standby, VIP without prefix, one route missing on the standby, a PBR table); Palo Alto HA pair CLS-SIERRA (member addresses, one virtual router); standalone FW-BRAVO-02 on a /31 to the PAN pair; FW-BRAVO-02 and FW-MIKE-09 reuse 192.0.2.64/27 with no route between them; VSX gateway FW-VICTOR-03 with a wrp link in VS 2 and a /26 inside FW-BRAVO-02's /25; FW-MIKE-09 with two virtual routers, an interface without one, and a next hop off every segment; FW-ECHO-11 has no inventory; a FortiGate is not part of the topology.",
+  "_comment": "Synthetic estate for the stage A3 golden topology tests. Documentation addresses only (RFC 5737), pseudonym-style hostnames, no real identity. Check Point cluster CLS-ROMEO (FW-TANGO-04 active, FW-TANGO-05 standby, VIP without prefix, one route missing on the standby, a PBR table); Palo Alto HA pair CLS-SIERRA (member addresses, one virtual router); standalone FW-BRAVO-02 on a /31 to the PAN pair; FW-BRAVO-02 and FW-MIKE-09 reuse 192.0.2.64/27 with no route between them; VSX gateway FW-VICTOR-03 with a wrp link in VS 2 and a /26 inside FW-BRAVO-02's /25; FW-MIKE-09 with two virtual routers, an interface without one, and a next hop off every segment; FW-ECHO-11 has no inventory; a Radware device is not part of the topology.",
   "devices": [
     {"device_id": "dev-t04", "vendor": "check_point", "hostname": "FW-TANGO-04", "cluster_member_ref": "cls-ref-romeo",
      "run": {"run_id": "run-t04", "collected_at": "2026-11-04T06:00:00Z",
@@ -91,7 +91,7 @@
            {"destination": "192.0.2.64/27", "interface": "ethernet1/1", "protocol": "connected", "table": "vr-a", "active": true, "kind": "CONNECTED"},
            {"destination": "0.0.0.0/0", "next_hop": "198.51.100.40", "protocol": "static", "table": "vr-b", "active": true, "kind": "IP"}]}]}},
     {"device_id": "dev-e11", "vendor": "check_point", "hostname": "FW-ECHO-11"},
-    {"device_id": "dev-f12", "vendor": "fortinet", "hostname": "FW-FOXTROT-12",
+    {"device_id": "dev-f12", "vendor": "radware", "hostname": "FW-FOXTROT-12",
      "run": {"run_id": "run-f12", "collected_at": "2026-11-04T06:07:00Z",
        "contexts": [{"context": "physical",
          "interfaces": [{"name": "port1", "addresses": [{"address": "192.0.2.11/26", "role": "member"}]}], "routes": []}]}}

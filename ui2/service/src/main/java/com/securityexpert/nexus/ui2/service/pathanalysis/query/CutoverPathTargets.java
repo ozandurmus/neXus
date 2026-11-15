@@ -94,7 +94,10 @@ public final class CutoverPathTargets {
             if (out.size() >= MAX_FIREWALLS || out.containsKey(hop.nodeId())) continue;
             Map<String, Object> row = new LinkedHashMap<>();
             hop.deviceId().ifPresent(id -> row.put("deviceId", id));
-            row.put("vendor", TopologyInput.VENDOR_CHECK_POINT.equals(hop.vendor()) ? "CP" : TopologyInput.VENDOR_PALO_ALTO.equals(hop.vendor()) ? "PAN" : "");
+            row.put("vendor", TopologyInput.VENDOR_CHECK_POINT.equals(hop.vendor()) ? "CP"
+                : TopologyInput.VENDOR_PALO_ALTO.equals(hop.vendor()) ? "PAN"
+                : TopologyInput.VENDOR_CISCO_ASA.equals(hop.vendor()) ? "ASA"
+                : TopologyInput.VENDOR_FORTINET.equals(hop.vendor()) ? "FGT" : "");
             row.put("hopVerdict", HOP_VERDICTS.contains(hop.ownVerdict()) ? hop.ownVerdict() : "UNKNOWN");
             hop.security().flatMap(PathResult.Security::decidingRule).map(CutoverPathTargets::ruleView).ifPresent(rule -> row.put("decidingRule", rule));
             out.put(hop.nodeId(), row);
