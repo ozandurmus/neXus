@@ -46,7 +46,7 @@ describe("E2E safety boundaries", () => {
     expect(report).toHaveBeenCalledWith("Session is no longer an active aiview session");
   });
 
-  it("allows read-only app requests and passive external fonts/styles, never external API calls or writes", () => {
+  it("allows same-origin read-only app requests, never cross-origin requests (including fonts/styles) or writes", () => {
     for (const path of ["/session/status", "/jobs/synthetic-job/transcript", "/devices"]) {
       for (const method of ["GET", "HEAD"]) expect(readAllowed(method, origin + path, origin)).toBe(true);
       for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) expect(readAllowed(method, origin + path, origin)).toBe(false);
@@ -56,7 +56,8 @@ describe("E2E safety boundaries", () => {
     }
     expect(readAllowed("GET", "https://elsewhere.invalid/session/status", origin)).toBe(false);
     for (const resource of ["font", "stylesheet"]) {
-      expect(readAllowed("GET", "https://elsewhere.invalid/synthetic-asset", origin, resource)).toBe(true);
+      expect(readAllowed("GET", origin + "/assets/synthetic-asset", origin, resource)).toBe(true);
+      expect(readAllowed("GET", "https://elsewhere.invalid/synthetic-asset", origin, resource)).toBe(false);
       expect(readAllowed("POST", "https://elsewhere.invalid/synthetic-asset", origin, resource)).toBe(false);
     }
   });

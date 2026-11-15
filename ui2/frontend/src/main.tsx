@@ -5,6 +5,7 @@ import { BusinessHoursConfirmProvider } from "./shell/BusinessHoursConfirm";
 import { App } from "./App";
 import { AuthGate } from "./auth/AuthGate";
 import { PRODUCT_NAME } from "./brand/product";
+import "./theme/fonts.css";
 import { installTokenStyles } from "./theme/m3Theme";
 
 // Build-time entry point; the compiled output is a static bundle that

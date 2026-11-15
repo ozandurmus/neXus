@@ -19,9 +19,9 @@ test("policy local: 54 containers, three tabs, rule table with inline details, r
   await page.route("**/*", async route => {
     const url = new URL(route.request().url());
     expect(route.request().method()).toBe("GET");
-    // External fonts/styles are not required for this offline check.
     if (url.origin !== new URL(test.info().project.use.baseURL as string).origin) {
-      await route.fulfill({ status: 200, body: "" }); return;
+      failures.push("unexpected cross-origin request");
+      await route.abort("blockedbyclient"); return;
     }
     const path = url.pathname;
     let body: unknown;
@@ -118,7 +118,10 @@ test("HA local: both masked members, wrapped messages and no horizontal overflow
   await page.route("**/*", async route => {
     const url = new URL(route.request().url());
     expect(route.request().method()).toBe("GET");
-    if (url.origin !== new URL(test.info().project.use.baseURL as string).origin) { await route.fulfill({ status: 200, body: "" }); return; }
+    if (url.origin !== new URL(test.info().project.use.baseURL as string).origin) {
+      failures.push("unexpected cross-origin request");
+      await route.abort("blockedbyclient"); return;
+    }
     let body: unknown;
     if (url.pathname === "/session/status") body = { authenticated: true, role_tokens: ["role:replay_viewer"], permissions: [] };
     else if (url.pathname === "/devices") body = { devices: members };
