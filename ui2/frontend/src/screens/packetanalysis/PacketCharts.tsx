@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import * as echarts from "echarts";
-import type { EChartsOption } from "echarts";
+import { echarts } from "./echartsSetup";
+import type { EChartsOption } from "./echartsSetup";
+import { coverageOption, heatmapOption, ladderOption } from "./chartOptions";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
@@ -125,67 +126,7 @@ export function CoverageChart({
       c.inventory?.end != null,
   );
   const hasClocks = !!report;
-  const data = values.map((c, i) => {
-    const m = report?.clocks?.[c.id];
-    const correct = (t: number) =>
-      m?.offset != null
-        ? m.epoch + (t - m.epoch - m.offset) / (1 + m.drift_ppm / 1e6)
-        : t;
-    return [
-      i,
-      correct(c.inventory.start!) * 1000,
-      correct(c.inventory.end!) * 1000,
-    ];
-  });
-  const overlap = report?.window;
-  const option: EChartsOption = {
-    useUTC: true,
-    animation: false,
-    grid: { left: 150, right: 25, top: 20, bottom: 55 },
-    tooltip: { renderMode: "richText" },
-    xAxis: { type: "time", axisLabel: { color: "#657780" } },
-    yAxis: {
-      type: "category",
-      data: values.map((c) => c.name),
-      axisLabel: { width: 130, overflow: "truncate" },
-      inverse: true,
-    },
-    dataZoom: [{ type: "slider", height: 18, bottom: 8 }],
-    series: [
-      {
-        type: "custom",
-        data,
-        renderItem: (_params, api) => {
-          const a = api.coord([api.value(1), api.value(0)]);
-          const b = api.coord([api.value(2), api.value(0)]);
-          return {
-            type: "rect",
-            shape: {
-              x: a[0],
-              y: a[1] - 9,
-              width: Math.max(b[0] - a[0], 2),
-              height: 18,
-            },
-            style: { fill: "#168a84", opacity: 0.8 },
-          };
-        },
-        encode: { x: [1, 2], y: 0 },
-        markArea:
-          overlap?.common_start != null && overlap.common_end != null
-            ? {
-                silent: true,
-                itemStyle: { color: "rgba(234,183,64,.18)" },
-                data: [
-                  [
-                    { xAxis: overlap.common_start * 1000 },
-                    { xAxis: overlap.common_end * 1000 },
-                  ],
-                ],
-              }
-            : undefined,
-      },
-    ],
-  };
+  const option = coverageOption(values, report);
 
   return (
     <Box>
@@ -227,64 +168,7 @@ export function LadderChart({
     );
   }
   const start = Math.min(...timed);
-  const series: echarts.SeriesOption[] = data.items.map((p) => ({
-    name: p.packet_key,
-    type: "line",
-    connectNulls: false,
-    showSymbol: true,
-    symbolSize: 5,
-    lineStyle: {
-      width: 1.2,
-      color: p.retrans ? "#d78325" : "#268b86",
-      opacity: 0.65,
-    },
-    itemStyle: { color: p.retrans ? "#d78325" : "#268b86" },
-    data: points.map((point, i) => {
-      const e = p.evidence.find((ev) => ev.point === point.id);
-      return [
-        i,
-        e?.corrected_time != null ? (e.corrected_time - start) * 1000 : null,
-      ];
-    }),
-    emphasis: { lineStyle: { width: 3 } },
-  }));
-  series.push({
-    type: "scatter",
-    name: "Missing appearance",
-    symbol: "path://M-5,-5 L5,5 M5,-5 L-5,5",
-    symbolSize: 12,
-    itemStyle: { color: "#c44842" },
-    data: data.events
-      .filter(
-        (e) =>
-          pointIndex.has(e.point_b) &&
-          data.items.some((p) => p.packet_key === e.packet_key),
-      )
-      .map((e) => [pointIndex.get(e.point_b)!, (e.ts - start) * 1000]),
-  });
-  const option: EChartsOption = {
-    useUTC: true,
-    animation: false,
-    grid: { left: 80, right: 30, top: 45, bottom: 70 },
-    tooltip: { renderMode: "richText", trigger: "item" },
-    xAxis: {
-      type: "category",
-      position: "top",
-      data: points.map((p) => p.label),
-      axisLabel: { interval: 0, rotate: 10 },
-    },
-    yAxis: {
-      type: "value",
-      inverse: true,
-      name: "Elapsed ms",
-      axisLabel: { formatter: "{value} ms" },
-    },
-    dataZoom: [
-      { type: "slider", yAxisIndex: 0, orient: "vertical", right: 0 },
-      { type: "inside", yAxisIndex: 0 },
-    ],
-    series,
-  };
+  const option = ladderOption(data, points, start);
   return (
     <PacketChart
       option={option}
@@ -351,90 +235,10 @@ export function HeatmapChart({
     [data.start, data.bucket_seconds, data.bucket_count, onSelect],
   );
 
-  const option = useMemo<EChartsOption>(() => {
-    const segments = report.segments;
-    const index = new Map(segments.map((s, i) => [s.id, i]));
-    const full: { value: number[]; row: PacketTimeseriesView["items"][number] }[] = [];
-    const empty: typeof full = [];
-    for (const row of data.items) {
-      const segIdx = index.get(row.segment);
-      if (segIdx === undefined) continue;
-      const v = row[metric];
-      const target = typeof v === "number" ? full : empty;
-      target.push({
-        value: [row.bucket, segIdx, typeof v === "number" ? v : -1],
-        row,
-      });
-    }
-    const max = full.reduce((m, x) => Math.max(m, x.value[2]), 1);
-    const markers =
-      report.onsets?.items
-        .filter((o) => o.metric === metric && index.has(o.segment))
-        .map((o) => ({
-          value: [o.bucket, index.get(o.segment)!, 0],
-          name: o.explanation,
-        })) ?? [];
-    return {
-      animation: false,
-      grid: { left: 220, right: 35, top: 55, bottom: 130 },
-      tooltip: { renderMode: "richText" },
-      toolbox: { feature: { brush: { type: ["lineX", "clear"] } } },
-      brush: {
-        xAxisIndex: 0,
-        brushMode: "single",
-        throttleType: "debounce",
-        throttleDelay: 150,
-      },
-      xAxis: {
-        type: "category",
-        name: "UTC",
-        data: Array.from({ length: data.bucket_count }, (_, i) =>
-          new Date((data.start + i * data.bucket_seconds) * 1000)
-            .toISOString()
-            .slice(11, data.bucket_seconds < 1 ? 23 : 19),
-        ),
-      },
-      yAxis: {
-        type: "category",
-        inverse: true,
-        data: segments.map((s) => `${s.label} · ${s.direction}`),
-        axisLabel: { width: 200, overflow: "truncate" },
-      },
-      visualMap: {
-        min: 0,
-        max,
-        calculable: true,
-        orient: "horizontal",
-        left: "center",
-        bottom: 0,
-        seriesIndex: 0,
-        inRange: { color: ["#d9efea", "#69bcb4", "#e9b44c", "#c44842"] },
-        text: [descriptor.unit, "0"],
-      },
-      dataZoom: [{ type: "slider", xAxisIndex: 0, bottom: 55, height: 15 }],
-      series: [
-        {
-          type: "heatmap",
-          name: descriptor.label,
-          data: full,
-        },
-        {
-          type: "heatmap",
-          name: "Unavailable",
-          data: empty,
-          itemStyle: { color: "#d9dfe3", borderColor: "#fff", borderWidth: 1 },
-        },
-        {
-          type: "scatter",
-          name: "Onset",
-          symbol: "diamond",
-          symbolSize: 14,
-          data: markers,
-          z: 10,
-        },
-      ],
-    };
-  }, [data, report, metric, descriptor]);
+  const option = useMemo<EChartsOption>(
+    () => heatmapOption(data, report, metric, descriptor),
+    [data, report, metric, descriptor],
+  );
 
   return (
     <Box>
