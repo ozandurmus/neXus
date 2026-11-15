@@ -445,6 +445,9 @@ public final class Ui2WorkerMain {
         var asaSupportBundleExecutor = new com.securityexpert.nexus.ui2.worker.supportbundle.AsaSupportBundleJobExecutor(
                 leaseRepository, attemptRepository, deviceRepository, strictFailoverSsh, gateRegistry, supportBundleStore,
                 artefactStore, hostnameFingerprint);
+        var fgtSupportBundleExecutor = new com.securityexpert.nexus.ui2.worker.supportbundle.FgtSupportBundleJobExecutor(
+                leaseRepository, attemptRepository, deviceRepository, strictFailoverSsh, gateRegistry, supportBundleStore,
+                artefactStore, hostnameFingerprint);
         // The one-off Spike Detective layout review (contract section 8.3; PO approval 2026-10-19): C4 and one C5 on the
         // same trusted SSH session; only a numeric, name-class summary is stored (system_log_measurement).
         var cpSpikeLayoutReviewExecutor = new com.securityexpert.nexus.ui2.worker.diagnostic.CpSpikeLayoutReviewJobExecutor(
@@ -511,6 +514,7 @@ public final class Ui2WorkerMain {
                     .withCpSupportBundle(cpSupportBundleExecutor)
                     .withPanSupportBundle(panSupportBundleExecutor)
                     .withAsaSupportBundle(asaSupportBundleExecutor)
+                    .withFgtSupportBundle(fgtSupportBundleExecutor)
                     .withCpSpikeLayoutReview(cpSpikeLayoutReviewExecutor)
                     .withCredentialCanary(credentialCanaryExecutor)
                     .withPathValidation(pathValidationExecutor)

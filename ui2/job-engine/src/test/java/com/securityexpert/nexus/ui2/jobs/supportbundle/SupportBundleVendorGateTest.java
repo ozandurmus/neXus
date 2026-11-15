@@ -40,9 +40,10 @@ class SupportBundleVendorGateTest {
 
     @Test
     void thereAreExactlyTheApprovedNewRows() {
-        assertEquals(16, vendorRows().size());
+        assertEquals(22, vendorRows().size());
         assertEquals(12, vendorRows().stream().filter(r -> r.vendor().equals("palo_alto")).count());
         assertEquals(4, vendorRows().stream().filter(r -> r.vendor().equals("cisco_asa")).count());
+        assertEquals(6, vendorRows().stream().filter(r -> r.vendor().equals("fortinet")).count());
     }
 
     @Test
@@ -134,6 +135,30 @@ class SupportBundleVendorGateTest {
     }
 
     @Test
+    void theFortiGateLiteralsAreF1ToF5() {
+        List<GateRow> rows = fixture();
+        GateRegistryPort registry = key -> rows.stream().filter(r -> r.key().equals(key)).toList();
+        assertEquals(List.of("get system status", "get system performance status", "config global", "end",
+                "diagnose debug crashlog read", "execute tac report"),
+                java.util.Arrays.stream(FgtSupportBundle.Cmd.values()).map(FgtSupportBundle.Cmd::command).toList());
+        assertTrue(FgtSupportBundle.allGatesKnown(registry));
+        int[] timeouts = {30, 30, 10, 10, 120, 1200};
+        int i = 0;
+        for (FgtSupportBundle.Cmd cmd : FgtSupportBundle.Cmd.values()) {
+            GateRow r = row(cmd.gateId());
+            assertEquals(cmd.command(), r.canonicalCommandKey());
+            assertEquals("fortinet", r.vendor());
+            assertEquals("fortigate", r.platformRoleScope());
+            assertEquals("SSH_INTERACTIVE", r.transportKind());
+            assertEquals(ActionClass.CLASS_0_READ, r.actionClass());
+            assertEquals(timeouts[i++], r.timeoutS());
+            assertEquals(SignOffState.SIGNED_OFF, r.signOffState());
+        }
+        assertTrue(row("fgt_sb_tac_report").secretOutputRisk().contains("secret-bearing"));
+        assertEquals("--More--", FgtSupportBundle.PAGER_MARKER);
+    }
+
+    @Test
     void v232SeedsTheSameRowsAsTheFixtureAndV230IsNotTheirHome() throws IOException {
         String sql = Files.readString(Path.of("../service/src/main/resources/db/migration/V232__support_bundle_vendor_gates.sql"));
         assertTrue(sql.contains("set_config('app.actor_fingerprint'") && sql.contains("ON CONFLICT (gate_id) DO NOTHING"));
@@ -142,19 +167,19 @@ class SupportBundleVendorGateTest {
                     + "', '" + r.transportKind() + "',\n     '" + r.canonicalCommandKey().replace("'", "''") + "',\n     '"
                     + r.actionClass().id() + "', 'SIGNED_OFF', " + r.timeoutS() + ", 'none',"), r.gateId());
         }
-        assertEquals(16, sql.split("'SIGNED_OFF'", -1).length - 1);
+        assertEquals(22, sql.split("'SIGNED_OFF'", -1).length - 1);
         String v230 = Files.readString(Path.of("../service/src/main/resources/db/migration/V230__support_bundle_collection.sql"));
         for (GateRow r : vendorRows()) assertFalse(v230.contains("'" + r.gateId() + "'"), r.gateId());
     }
 
     @Test
     void theVendorKindsAreEnabledAndTickedAsQ7Recommends() {
-        for (SupportBundleKind kind : List.of(SupportBundleKind.PAN_TSF, SupportBundleKind.ASA_CRASHINFO, SupportBundleKind.ASA_SHOW_TECH)) {
+        for (SupportBundleKind kind : List.of(SupportBundleKind.PAN_TSF, SupportBundleKind.ASA_CRASHINFO, SupportBundleKind.ASA_SHOW_TECH,
+                SupportBundleKind.FGT_CRASHLOG, SupportBundleKind.FGT_TAC_REPORT)) {
             assertTrue(kind.enabled(), kind.id());
             assertTrue(kind.defaultTicked(), kind.id());
             assertFalse(kind.heavy(), kind.id());
         }
-        assertFalse(SupportBundleKind.FGT_TAC_REPORT.enabled());
         assertFalse(SupportBundleKind.CP_CPINFO.enabled());
         assertFalse(SupportBundleKind.CP_HCP_RUN.enabled());
         assertFalse(SupportBundleKind.CP_CPINFO.defaultTicked());

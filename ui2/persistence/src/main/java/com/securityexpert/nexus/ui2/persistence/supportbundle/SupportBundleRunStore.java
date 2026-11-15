@@ -30,4 +30,12 @@ public interface SupportBundleRunStore {
     void finishRequest(UUID requestId, String state, String outcome, String precheckJson, Instant expiresAt);
 
     Optional<HcpCopySource> newestStoredHcpReport(String deviceId, Instant notBefore);
+
+    /**
+     * The newest stored FortiGate configuration read ({@code show}, read kind {@code show_configuration}) of the device, for
+     * the vendor defect guard of the TAC report; empty when none is stored. Never any device contact.
+     */
+    default Optional<JooqSupportBundleStore.StoredConfiguration> latestFortiGateConfiguration(String deviceId) {
+        return Optional.empty();
+    }
 }

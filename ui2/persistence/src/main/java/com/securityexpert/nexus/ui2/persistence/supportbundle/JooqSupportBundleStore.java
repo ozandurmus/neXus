@@ -274,6 +274,23 @@ public final class JooqSupportBundleStore implements SupportBundleRunStore {
     public record HcpCopySource(String artefactRef, byte[] wrappedDataKey, long size) {
     }
 
+    /** A stored configuration artefact: where its encrypted bytes are and how they were compressed. */
+    public record StoredConfiguration(String artefactRef, byte[] wrappedDataKey, boolean gzip) {
+    }
+
+    @Override
+    public Optional<StoredConfiguration> latestFortiGateConfiguration(String deviceId) {
+        return tx.inTransaction(dsl -> dsl.fetchOptional("select r.artefact_ref, a.wrapped_data_key, c.compression "
+                + "from device_configuration_run r "
+                + "join configuration_artefact c on c.artefact_ref = r.artefact_ref "
+                + "join backup_artefact a on a.recovery_volume_path = r.artefact_ref and a.device_id = r.device_id "
+                + "where r.device_id = {0} and r.read_kind = 'show_configuration' "
+                + "and not exists (select 1 from artefact_retention_ledger l where l.artefact_id = a.artefact_id and l.event = 'removed') "
+                + "order by r.collected_at desc limit 1", deviceId)
+                .map(r -> new StoredConfiguration(r.get("artefact_ref", String.class), r.get("wrapped_data_key", byte[].class),
+                        "gzip".equals(r.get("compression", String.class)))));
+    }
+
     // ------------------------------------------------------------------ mapping
 
     private static RequestRow toRequest(Record r) {

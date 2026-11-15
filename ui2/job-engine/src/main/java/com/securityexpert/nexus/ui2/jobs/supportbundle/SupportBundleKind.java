@@ -18,8 +18,8 @@ public enum SupportBundleKind {
     PAN_TSF("pan_tsf", "palo_alto", 1, "unknown", true, true, false),
     ASA_CRASHINFO("asa_crashinfo", "cisco_asa", 1, "low", true, true, false),
     ASA_SHOW_TECH("asa_show_tech", "cisco_asa", 2, "unknown", true, true, false),
-    FGT_CRASHLOG("fgt_crashlog", "fortinet", 1, "low", true, false, false),
-    FGT_TAC_REPORT("fgt_tac_report", "fortinet", 2, "unknown", true, false, false);
+    FGT_CRASHLOG("fgt_crashlog", "fortinet", 1, "low", true, true, false),
+    FGT_TAC_REPORT("fgt_tac_report", "fortinet", 2, "unknown", true, true, false);
 
     private final String id;
     private final String vendor;
