@@ -14,6 +14,7 @@ import java.util.regex.Pattern;
 import com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.jobs.supportbundle.CpSupportBundle;
+import com.securityexpert.nexus.ui2.jobs.supportbundle.PanSupportBundle;
 import com.securityexpert.nexus.ui2.jobs.supportbundle.SupportBundleKind;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
@@ -65,6 +66,27 @@ public final class SupportBundleService {
         this.businessHours = businessHours;
     }
 
+    /** The job capability and the platform scope of the gate rows a device is collected with (one session, one job per device). */
+    record VendorPlan(String capability, String platformRole) {
+    }
+
+    /**
+     * Platform enablement per vendor (design 5.2): Check Point gateways (S2), Palo Alto firewalls and Panoramas (S3), Cisco ASA
+     * (S4) and FortiGate (S5). A Check Point management server or MDS and a FortiManager are not enabled.
+     */
+    static Optional<VendorPlan> planFor(String vendor, String role) {
+        boolean gateway = "gateway".equals(role);
+        boolean management = "management_server".equals(role);
+        if (vendor == null) return Optional.empty();
+        return switch (vendor) {
+            case "check_point" -> gateway ? Optional.of(new VendorPlan(CpSupportBundle.CAPABILITY, "cp_gaia_gateway")) : Optional.empty();
+            case "palo_alto" -> gateway ? Optional.of(new VendorPlan(PanSupportBundle.CAPABILITY, PanSupportBundle.FIREWALL_SCOPE))
+                    : management ? Optional.of(new VendorPlan(PanSupportBundle.CAPABILITY, PanSupportBundle.PANORAMA_SCOPE))
+                    : Optional.empty();
+            default -> Optional.empty();
+        };
+    }
+
     /** The catalogue rows of a vendor, for the new-request form: id, load, default tick, whether it can be requested yet. */
     public static List<SupportBundleKind> catalogue(String vendor) {
         return SupportBundleKind.forVendor(vendor);
@@ -81,18 +103,16 @@ public final class SupportBundleService {
         Optional<DeviceRecord> device = devices.find(deviceId);
         if (device.isEmpty()) return new Outcome.Refused(404, "DEVICE_NOT_FOUND", "No device with that identifier");
         String vendor = device.get().vendorHint();
-        if (!"check_point".equals(vendor)) {
-            return new Outcome.Refused(409, "VENDOR_NOT_YET_ENABLED", "Support bundles for this vendor are not built yet");
-        }
-        boolean gateway = "gateway".equals(device.get().role());
-        boolean management = "management_server".equals(device.get().role());
-        if (!gateway && !management) {
-            return new Outcome.Refused(409, "ROLE_UNRECOGNISED", "Only gateways and management servers can be collected");
-        }
-        if (management) {
-            // The light items are gated for gateways in this step; management servers (and the MDS warning, PO Q5) come with their gate rows.
+        Optional<VendorPlan> plan = planFor(vendor, device.get().role());
+        if (plan.isEmpty()) {
+            boolean knownVendor = java.util.Set.of("check_point", "palo_alto").contains(vendor);
+            boolean role = "gateway".equals(device.get().role()) || "management_server".equals(device.get().role());
+            if (!knownVendor) return new Outcome.Refused(409, "VENDOR_NOT_YET_ENABLED", "Support bundles for this vendor are not built yet");
+            if (!role) return new Outcome.Refused(409, "ROLE_UNRECOGNISED", "Only gateways and management servers can be collected");
+            // The light Check Point items are gated for gateways in S2 (an MDS and a management server come with their gate
+            // rows); a FortiManager is not a FortiGate.
             return new Outcome.Refused(409, "PLATFORM_NOT_YET_ENABLED",
-                    "Support bundle items for a management server are not enabled in this step");
+                    "Support bundle items for this kind of management server are not enabled yet");
         }
         if (kindIds == null || kindIds.isEmpty()) return new Outcome.Refused(400, "NO_ITEMS", "Pick at least one item");
         Set<SupportBundleKind> kinds = new LinkedHashSet<>();
@@ -135,7 +155,7 @@ public final class SupportBundleService {
         List<ItemSpec> specs = new ArrayList<>();
         kinds.stream().sorted(java.util.Comparator.comparingInt(SupportBundleKind::order))
                 .forEach(k -> specs.add(new ItemSpec(k.id(), null)));
-        RequestRow row = new RequestRow(id, deviceId, vendor, "cp_gaia_gateway", mode, when,
+        RequestRow row = new RequestRow(id, deviceId, vendor, plan.get().platformRole(), mode, when,
                 caseRef == null || caseRef.isBlank() ? null : caseRef, reason.strip(), actor, now, null, null,
                 when.plus(TTL), null, null, 0, null, null, null, "{}", "QUEUED", null);
         try {
@@ -150,7 +170,7 @@ public final class SupportBundleService {
         }
         AdmissionResult result;
         try {
-            result = admission.submit(CpSupportBundle.CAPABILITY, deviceId, "support-bundle:" + id, actor,
+            result = admission.submit(plan.get().capability(), deviceId, "support-bundle:" + id, actor,
                     ActionRegistry.SUPPORT_BUNDLE_REQUEST);
         } catch (RuntimeException refused) {
             store.failQueued(id, actor, "ADMISSION_REFUSED");
