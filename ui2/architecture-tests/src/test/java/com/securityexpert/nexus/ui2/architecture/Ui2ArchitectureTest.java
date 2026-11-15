@@ -165,6 +165,18 @@ class Ui2ArchitectureTest {
     }
 
     @Test
+    void zm13_zone_matrix_never_reaches_device_transport_or_commands() {
+        assertPackageNonEmpty("..service.zonematrix..");
+        assertPackageNonEmpty("..persistence.zonematrix..");
+        ArchRule rule = noClasses().that().resideInAnyPackage("..service.zonematrix..", "..persistence.zonematrix..")
+                .or().haveSimpleNameStartingWith("ZoneMatrix")
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        WORKER, CAPABILITY, "..jobs.transport..", "..jobs.executor..", "..jobs.diagnostic..",
+                        "..jobs.pathvalidation..", "..jobs.policy..", "..jobs.failover..");
+        rule.check(classes);
+    }
+
+    @Test
     void dir10_no_line1_or_python_runtime_dependency() {
         Path ui2Root = ui2Root();
         // Tokens are assembled by concatenation (see dir8 above) so this

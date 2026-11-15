@@ -13,7 +13,7 @@ public final class ModuleRuntimeRepository {
             "select module from module_runtime_control where module='general' and owner_instance is not null "
             + "and owner_heartbeat_at>now()-interval '60 seconds' and not exists(select 1 from jobs "
             + "where state in ('CLAIMED','EXECUTING') and (lease_owner_generation is null "
-            + "or split_part(lease_worker_id,'-',1) not in ('general','policy','packet_analysis')))").isEmpty());
+            + "or split_part(lease_worker_id,'-',1) not in ('general','policy','backup','packet_analysis')))").isEmpty());
     }
     public synchronized boolean heartbeat(String role, String instance) {
         if (ownershipReleased) return false;
@@ -40,15 +40,25 @@ public final class ModuleRuntimeRepository {
             "update module_runtime_control set pool_active={2},pool_idle={3},pool_pending={4},pool_timeouts={5},pool_wait_nanos={6} "
             + "where module={0} and owner_instance={1}", role, instance, active, idle, pending, timeouts, waits));
     }
+    private static String taskModule(String role, String task) {
+        if ("OrphanArtefactPurger.runOnce".equals(task) || "RetentionPruningService.prune".equals(task)) {
+            return "backup";
+        }
+        return role;
+    }
+
     public void runTask(String role, String instance, String task, Runnable action) {
         String token = java.util.UUID.randomUUID().toString();
+        String module = taskModule(role, task);
         boolean granted = transactions.inTransaction("system:worker", "runtime_task_admission", db -> {
             db.fetch("select pg_advisory_xact_lock(294611)");
             db.fetch("select ui2_release_orphan_quarantines()");
             return db.execute("insert into runtime_task_lease(task_key,owner_role,owner_instance,owner_generation,token,epoch,state,expires_at) "
                 + "select {0},{1},{2},generation,{3},nextval('endpoint_permit_epoch'),'LEASED',now()+interval '60 seconds' "
                 + "from module_runtime_control where module={1} and owner_instance={2} and not drain_requested "
-                + "and owner_heartbeat_at>now()-interval '60 seconds' on conflict(task_key) do nothing", task, role, instance, token) == 1;
+                + "and owner_heartbeat_at>now()-interval '60 seconds' "
+                + "and exists(select 1 from module_runtime_control m where m.module={4} and m.effective_owner={1} and not m.drain_requested) "
+                + "on conflict(task_key) do nothing", task, role, instance, token, module) == 1;
         });
         if (!granted) return;
         try { action.run(); }

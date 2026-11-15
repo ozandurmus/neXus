@@ -110,6 +110,7 @@ def test_manifest_set_is_present_and_parsable():
 @pytest.mark.parametrize("filename,container_name", [
     ("50-service-deployment.yaml", "service"),
     ("52-worker-deployment.yaml", "worker"),
+    ("53-backup-deployment.yaml", "backup"),
     ("57-policy-deployment.yaml", "policy"),
 ])
 def test_failover_mutation_is_enabled_live_and_disabled_in_preview(monkeypatch, filename, container_name):
@@ -178,8 +179,9 @@ def test_the_failover_pilot_configmap_is_not_committed():
 def test_backup_polling_is_every_30_seconds_in_the_worker():
     """PO 2026-10-25: fewer Gaia audit log-ins per backup (code default 10). UI2_MDS_EXPORT_* is deliberately
     untouched (MDS backup stays disabled by PO decision)."""
-    env = _container_env("52-worker-deployment.yaml", "worker")
-    assert env["UI2_BACKUP_POLL_INTERVAL_SECONDS"] == {"name": "UI2_BACKUP_POLL_INTERVAL_SECONDS", "value": "30"}
+    for filename, container_name in (("52-worker-deployment.yaml", "worker"), ("53-backup-deployment.yaml", "backup")):
+        env = _container_env(filename, container_name)
+        assert env["UI2_BACKUP_POLL_INTERVAL_SECONDS"] == {"name": "UI2_BACKUP_POLL_INTERVAL_SECONDS", "value": "30"}
 
 
 def test_scheduled_system_log_collection_is_enabled_for_the_fleet_in_the_service_only(monkeypatch):
@@ -227,6 +229,7 @@ def test_the_rule_checks_below_have_something_to_check():
         "Job/ui2-flyway-bootstrap", "StatefulSet/ui2-db",
         "Deployment/ui2-service", "Deployment/ui2-worker",
         "Deployment/ui2-configuration", "Deployment/ui2-compliance", "Deployment/ui2-policy",
+        "Deployment/ui2-backup",
         "Deployment/ui2-packet-analysis",
         "Job/ui2-e2e", "CronJob/ui2-e2e",
         "CronJob/ui2-advisory-fetch",
@@ -303,12 +306,12 @@ def test_no_forbidden_construct_appears(path: Path):
 
 # OS-3a (amendment 2026-09-24): the only hostPath is a vendor push inbox.
 PUSH_INBOX_PATH = re.compile(r"^/var/lib/nexus-[a-z0-9-]+/in$")
-WORKER_OWNER = "Deployment/ui2-worker"
+WORKER_OWNERS = {"Deployment/ui2-worker", "Deployment/ui2-backup"}
 
 
 def _is_push_inbox(owner: str, volume: dict) -> bool:
     host = volume.get("hostPath")
-    return (isinstance(host, dict) and owner == WORKER_OWNER and bool(PUSH_INBOX_PATH.match(str(host.get("path", ""))))
+    return (isinstance(host, dict) and owner in WORKER_OWNERS and bool(PUSH_INBOX_PATH.match(str(host.get("path", ""))))
             and host.get("type") == "Directory")
 
 
@@ -324,7 +327,8 @@ def test_every_host_path_is_a_worker_push_inbox():
     for path in _manifest_files():
         text = path.read_text(encoding="utf-8")
         for m in re.finditer(r"hostPath", text):
-            assert path.name == "52-worker-deployment.yaml", f"{path.name}: hostPath outside the worker Deployment (OS-3a.3)"
+            assert path.name in {"52-worker-deployment.yaml", "53-backup-deployment.yaml"}, (
+                f"{path.name}: hostPath outside the worker Deployment (OS-3a.3)")
 
 
 def test_no_pod_spec_requests_a_fixed_identity():
@@ -397,7 +401,7 @@ def test_every_container_declares_requests_and_limits():
         for section in ("requests", "limits"):
             values = resources.get(section) or {}
             for resource in ("cpu", "memory"):
-                if owner == "Deployment/ui2-policy:policy" and section == "limits" and resource == "cpu":
+                if owner in {"Deployment/ui2-policy:policy", "Deployment/ui2-backup:backup"} and section == "limits" and resource == "cpu":
                     assert "cpu" not in values
                     continue
                 assert values.get(resource) is not None, (
@@ -497,7 +501,7 @@ def test_the_recovery_volume_is_separate_and_only_the_worker_can_write():
             for mount in container.get("volumeMounts") or []
             if mount["name"] in recovery_volume_names
         }
-        if owner.startswith("Deployment/ui2-worker") or owner == "Deployment/ui2-policy":
+        if owner.startswith("Deployment/ui2-worker") or owner in {"Deployment/ui2-policy", "Deployment/ui2-backup"}:
             assert mounted_recovery_names, "BK-17: the worker Deployment must mount the recovery volume"
         elif owner == "Deployment/ui2-service":
             for container in spec.get("containers") or []:
@@ -533,7 +537,7 @@ def test_report_files_have_their_own_claim_and_the_service_writes_nothing_else_o
         env = {e["name"]: e.get("value") for c in spec.get("containers") or [] for e in c.get("env") or []}
         assert env.get("UI2_REPORT_STORE_ROOT") == "/app/report-store", f"{owner}: UI2_REPORT_STORE_ROOT must name it"
         assert all(m.get("readOnly") is not True for m in mounts), f"{owner}: the report claim must be writable"
-    assert set(seen) == {"Deployment/ui2-service", "Deployment/ui2-worker"}, (
+    assert set(seen) == {"Deployment/ui2-service", "Deployment/ui2-worker", "Deployment/ui2-backup"}, (
         f"only the service and the worker mount the report claim, got {sorted(seen)}"
     )
     assert all(seen.values()), "both the service and the worker must mount the report claim"
@@ -1156,7 +1160,7 @@ def _all_docs() -> list[dict]:
 
 
 def test_metrics_port_is_a_named_container_port_only() -> None:
-    """The scrape port is declared on the service and worker containers and nowhere that routes traffic."""
+    """The scrape port is declared on the service and every worker-entry-point container and nowhere that routes traffic."""
     docs = _all_docs()
     with_port = []
     for doc in docs:
@@ -1169,7 +1173,8 @@ def test_metrics_port_is_a_named_container_port_only() -> None:
                     env = {e["name"]: e.get("value") for e in container.get("env", [])}
                     assert env.get("UI2_METRICS_PORT") == "9404"
                     with_port.append(doc["metadata"]["name"])
-    assert sorted(with_port) == ["ui2-service", "ui2-worker"]
+    assert sorted(with_port) == [
+        "ui2-compliance", "ui2-configuration", "ui2-packet-analysis", "ui2-policy", "ui2-service", "ui2-worker"]
     for doc in docs:
         if doc.get("kind") == "Service":
             for port in doc["spec"].get("ports", []):

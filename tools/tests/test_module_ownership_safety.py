@@ -113,9 +113,37 @@ def test_recovery_preserves_quarantine_and_unrelated_work(monkeypatch):
     assert "ui2_job_module(capability_id)='policy'" in calls[0]
     assert "owner_role='policy'" in calls[0]
     assert 'QUARANTINED' in calls[0] and 'DELETE' not in calls[0]
+    monkeypatch.setattr(deploy, 'query', lambda sql: calls.append(sql) or 'backup')
+    deploy.reset_to_general('synthetic-snapshot', 'backup', 8)
+    assert "ui2_job_module(capability_id)='backup'" in calls[-1]
+    assert "(owner_role='backup' or purpose_class='BACKUP')" in calls[-1]
     monkeypatch.setattr(deploy, 'query', lambda sql: '')
     with pytest.raises(deploy.Blocked, match='uncertain'):
         deploy.reset_to_general('synthetic-snapshot', 'policy', 7)
+
+
+def test_backup_creation_and_handover_require_live_heartbeat_and_generation(monkeypatch):
+    calls = []
+    monkeypatch.setattr(deploy, 'run', lambda *a, **kw: calls.append((a, kw)) or '')
+    monkeypatch.setattr(deploy, 'prepare_policy_public_trust', lambda: calls.append(('trust', {})))
+    assert deploy.ensure_backup(IMAGE) is None
+    import yaml
+    objects = list(yaml.safe_load_all(calls[-1][1]['input']))
+    assert {item['kind'] for item in objects} == {'ServiceAccount', 'Deployment', 'NetworkPolicy'}
+    obj = next(item for item in objects if item['kind'] == 'Deployment')
+    assert obj['spec']['replicas'] == 0
+    assert obj['spec']['template']['spec']['containers'][0]['image'] == IMAGE
+
+    queries = []
+    monkeypatch.setattr(deploy, 'query', lambda sql: queries.append(sql) or '2')
+    deploy.handover_backup(7, 'synthetic-snapshot', 'synthetic-approval')
+    sql = queries[0]
+    assert "effective_owner='backup'" in sql and "where module='backup'" in sql
+    assert "owner_heartbeat_at>now()-interval '60 seconds'" in sql
+    assert 'drain_generation=7' in sql and 'drain_ack_generation=drain_generation' in sql
+    monkeypatch.setattr(deploy, 'query', lambda sql: '')
+    with pytest.raises(deploy.Blocked, match='fence or heartbeat'):
+        deploy.handover_backup(7, 'synthetic-snapshot', 'synthetic-approval')
 
 
 def test_kubectl_failure_is_diagnosable_and_masked(monkeypatch):
@@ -221,3 +249,105 @@ def test_general_replacement_installs_fallback_with_image_and_preserves_jvm_opti
     assert obj['env'] == [{'name': 'JAVA_TOOL_OPTIONS', 'value': obj['env'][0]['value']}]
     assert worker == before
     assert 'patch' in calls[-1]
+
+
+def _backup_replace_harness(monkeypatch, owner, fail_at, drain_fails=False):
+    """Run replace('backup') with every external effect stubbed; returns the ordered effect log."""
+    events = []
+    def run(*args, **kwargs):
+        events.append(args)
+        if 'pods' in args:
+            return '{"items":[]}'
+        if any('jsonpath={.spec.replicas}' == a for a in args):
+            return '1'
+        return ''
+    def query(sql):
+        if 'select effective_owner' in sql:
+            return owner[0]
+        return 't'
+    monkeypatch.setattr(deploy, 'run', run)
+    monkeypatch.setattr(deploy, 'query', query)
+    monkeypatch.setattr(deploy, 'kubectl_diff', lambda manifest: False)
+    monkeypatch.setattr(deploy, 'ensure_backup', lambda image: IMAGE)
+    monkeypatch.setattr(deploy, 'request_drain', lambda *a: events.append(('request_drain',)) or 5)
+    def wait_drain(*a):
+        events.append(('wait_drain',))
+        if drain_fails and events.count(('wait_drain',)) == 1:
+            raise deploy.Blocked('synthetic drain timeout')
+    monkeypatch.setattr(deploy, 'wait_drain', wait_drain)
+    monkeypatch.setattr(deploy, 'cancel_general_drain', lambda *a: events.append(('cancel_general_drain',)))
+    monkeypatch.setattr(deploy, 'reset_to_general', lambda *a: events.append(('reset_to_general',)))
+    monkeypatch.setattr(deploy, 'wait_heartbeat', lambda *a: None)
+    def handover(*a):
+        events.append(('handover',))
+        owner[0] = 'backup'
+    monkeypatch.setattr(deploy, 'handover_backup', handover)
+    def e2e(*a):
+        events.append(('e2e',))
+        if fail_at == 'e2e':
+            raise deploy.Blocked('synthetic e2e failure')
+    monkeypatch.setattr(deploy, 'module_e2e', e2e)
+    return events
+
+
+def test_backup_drain_timeout_before_cutover_restores_general_claims(monkeypatch):
+    owner = ['general']
+    events = _backup_replace_harness(monkeypatch, owner, None, drain_fails=True)
+    with pytest.raises(deploy.Blocked, match='drain timeout'):
+        deploy.replace('backup', IMAGE, 'synthetic-snapshot', authorization='synthetic-approval')
+    assert ('cancel_general_drain',) in events
+    assert ('handover',) not in events and ('reset_to_general',) not in events
+    assert not any('--replicas=1' in e for e in events if isinstance(e[-1], str))
+    assert owner == ['general']
+
+
+def test_cancel_general_drain_only_touches_the_general_owned_row_and_keeps_generation(monkeypatch):
+    calls = []
+    monkeypatch.setattr(deploy, 'query', lambda sql: calls.append(sql) or '')
+    deploy.cancel_general_drain('backup', 5, 'synthetic-snapshot')
+    sql = calls[0]
+    assert 'drain_requested=false' in sql and "module='backup'" in sql
+    assert "effective_owner='general'" in sql and 'drain_generation=5' in sql
+    assert 'generation=generation' not in sql.replace('drain_generation=5', '') and 'fallback_enabled' not in sql
+
+
+def test_backup_e2e_failure_after_handover_drains_stops_then_returns_ownership(monkeypatch):
+    owner = ['general']
+    events = _backup_replace_harness(monkeypatch, owner, 'e2e')
+    with pytest.raises(deploy.Blocked, match='e2e failure'):
+        deploy.replace('backup', IMAGE, 'synthetic-snapshot', authorization='synthetic-approval')
+    assert owner == ['backup']  # the stub keeps it; the recovery below is what hands it back
+    handed = events.index(('handover',))
+    recovery_drain = events.index(('wait_drain',), events.index(('e2e',)))
+    stopped = next(i for i, e in enumerate(events) if '--replicas=0' in e)
+    deleted = next(i for i, e in enumerate(events) if '--for=delete' in e)
+    assert handed < events.index(('e2e',)) < recovery_drain < stopped < deleted < events.index(('reset_to_general',))
+    assert ('cancel_general_drain',) not in events
+
+
+def test_backup_e2e_failure_never_stops_a_pod_that_cannot_drain(monkeypatch):
+    owner = ['general']
+    events = _backup_replace_harness(monkeypatch, owner, 'e2e')
+    calls = {'n': 0}
+    def wait_drain(*a):
+        calls['n'] += 1
+        if calls['n'] == 2:  # the recovery drain, after the initial cutover drain
+            raise deploy.Blocked('synthetic recovery drain retained')
+    monkeypatch.setattr(deploy, 'wait_drain', wait_drain)
+    with pytest.raises(deploy.Blocked, match='recovery drain retained'):
+        deploy.replace('backup', IMAGE, 'synthetic-snapshot', authorization='synthetic-approval')
+    assert not any('--replicas=0' in e for e in events)
+    assert ('reset_to_general',) not in events
+
+
+def test_backup_failure_before_handover_never_resets_generation_or_ownership(monkeypatch):
+    owner = ['general']
+    events = _backup_replace_harness(monkeypatch, owner, None)
+    def handover(*a):
+        events.append(('handover',))
+        raise deploy.Blocked('synthetic handover fence changed')
+    monkeypatch.setattr(deploy, 'handover_backup', handover)
+    with pytest.raises(deploy.Blocked, match='handover fence'):
+        deploy.replace('backup', IMAGE, 'synthetic-snapshot', authorization='synthetic-approval')
+    assert ('cancel_general_drain',) in events and ('reset_to_general',) not in events
+    assert owner == ['general']

@@ -361,6 +361,8 @@ def split_rollback(manifest, snapshot, apply):
     import module_deploy
     policy = next((m for m in manifest["runtime"].get("modules", []) if m["module"] == "policy"), None)
     fallback = policy is not None and policy["effective_owner"] == "general"
+    backup = next((m for m in manifest["runtime"].get("modules", []) if m["module"] == "backup"), None)
+    backup_fallback = backup is not None and backup["effective_owner"] == "general"
     targets = [target for target in module_deploy.TARGETS if any(
         item["kind"] == "Deployment" and item["workload"] == "ui2-" + target
         for item in manifest["images"].get("ui2", []))]
@@ -370,9 +372,13 @@ def split_rollback(manifest, snapshot, apply):
                           "drain": target in module_deploy.ROLES, "policy_fallback_capability": target == "worker",
                           "ownership": "general/fallback=true; policy stopped" if target == "policy" and fallback else
                                        "ready heartbeat before policy handover" if target == "policy" else
+                                       "general/fallback=true; backup stopped" if target == "backup" and backup_fallback else
+                                       "ready heartbeat before backup handover" if target == "backup" else
                                        "self-owned; never general" if target == "packet-analysis" else "preserved"}))
     if fallback and "policy" not in targets:
         print("Policy: drain and stop added owner; return ownership to general/fallback=true.")
+    if backup_fallback and "backup" not in targets:
+        print("Backup: drain and stop added owner; return ownership to general/fallback=true.")
     if "packet-analysis" not in targets:
         print("Packet analysis: absent from snapshot; a live ui2-packet-analysis is left running with its own "
               "ownership (never general).")
@@ -381,12 +387,18 @@ def split_rollback(manifest, snapshot, apply):
         return
     # Restore the compatible general owner first, so fallback recovery has a live executor.
     for target, image in images.items():
-        if target != "policy" or not fallback:
+        if (target != "policy" or not fallback) and (target != "backup" or not backup_fallback):
             module_deploy.replace(target, image, snapshot, authorization="snapshot-rollback", rollback=True)
     if fallback:
         module_deploy.return_policy_to_general(snapshot, "snapshot-rollback")
         if "policy" in images:
             module_deploy.run("kubectl", "-n", "ui2", "set", "image", "deployment/ui2-policy", "policy=" + images["policy"])
+        if not backup_fallback:
+            module_deploy.module_e2e()
+    if backup_fallback:
+        module_deploy.return_backup_to_general(snapshot, "snapshot-rollback")
+        if "backup" in images:
+            module_deploy.run("kubectl", "-n", "ui2", "set", "image", "deployment/ui2-backup", "backup=" + images["backup"])
         module_deploy.module_e2e()
 
 

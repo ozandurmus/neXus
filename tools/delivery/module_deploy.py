@@ -15,16 +15,18 @@ from contextlib import contextmanager
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-TARGETS = {"service": "service", "worker": "worker", "policy": "policy",
+TARGETS = {"service": "service", "worker": "worker", "policy": "policy", "backup": "backup",
            "configuration": "configuration", "compliance": "compliance",
            "packet-analysis": "packet-analysis"}
-ROLES = {"worker": "general", "policy": "policy", "packet-analysis": "packet_analysis"}
+ROLES = {"worker": "general", "policy": "policy", "backup": "backup", "packet-analysis": "packet_analysis"}
 POLICY_TYPES = ("cp_policy_collect", "pan_policy_collect")
 # V154: modules that own themselves with no general fallback. The general worker has no executor for their job
 # types, so no release path ever hands them to it; without their pod, their jobs wait in REQUESTED.
 NEVER_GENERAL = ("packet_analysis",)
+# Tasks ModuleRuntimeRepository.taskModule routes to the backup module (keep in step with it; a test compares).
+BACKUP_MODULE_TASKS = ("OrphanArtefactPurger.runOnce", "RetentionPruningService.prune")
 # Dedicated modules whose drain barrier covers exactly their own job types.
-DEDICATED = {"policy": "policy", "packet-analysis": "packet_analysis"}
+DEDICATED = {"policy": "policy", "backup": "backup", "packet-analysis": "packet_analysis"}
 # Targets with NO drain barrier in this tool (not in ROLES): HTTP owners whose requests drain on SIGTERM within the pod
 # grace period. Consecutive ones are rolled out at the same time and share one module e2e afterwards
 # (MODULE_POD_RUNTIME_CONTRACT.md section 3: "Deploy waits ONLY for its module ... unrelated modules retain their digest
@@ -128,7 +130,12 @@ def barrier_conditions(target, generation):
     filter_sql = ("ui2_job_module(j.capability_id)=" + literal(DEDICATED[target]) if target in DEDICATED else
                   "(ui2_job_module(j.capability_id) in (select module from module_runtime_control where effective_owner='general') or module_runtime_control.owner_instance is null)")
     admission_scope = ("(owner_role='policy' or purpose_class='POLICY')" if target == "policy"
+                       else "(owner_role='backup' or purpose_class='BACKUP')" if target == "backup"
                        else "owner_role=" + literal(role))
+    # Backup-module tasks run by the general worker while it is still effective owner hold their lease under
+    # owner_role='general' (ModuleRuntimeRepository.taskModule); the handover must wait for them too.
+    task_scope = ("(owner_role=" + literal(role) + " or task_key in (" + ",".join(literal(t) for t in BACKUP_MODULE_TASKS) + "))"
+                  if target == "backup" else "owner_role=" + literal(role))
     return (
         ("drain_ack", "(drain_requested and drain_generation=" + str(generation) +
          " and drain_ack_generation=drain_generation and drain_ack_at is not null)"),
@@ -139,9 +146,9 @@ def barrier_conditions(target, generation):
         ("admissions", "select count(*) from endpoint_admission where " + admission_scope +
          " and (state='LEASED' or (state='QUARANTINED' and not exists(select 1 from jobs t where t.job_id="
          "endpoint_admission.job_id and " + ENDED_WITHOUT_WRITE_SQL + ")))"),
-        ("task_leases", "select count(*) from runtime_task_lease where owner_role=" + literal(role) +
+        ("task_leases", "select count(*) from runtime_task_lease where " + task_scope +
          " and state='LEASED'"),
-        ("quarantined_task_leases", "select count(*) from runtime_task_lease where owner_role=" + literal(role) +
+        ("quarantined_task_leases", "select count(*) from runtime_task_lease where " + task_scope +
          " and state='QUARANTINED'"),
     )
 
@@ -179,6 +186,16 @@ def wait_drain(target, generation, limit, sleep=time.sleep, clock=time.monotonic
         print("Module waiting: " + target + "; generation=" + str(generation) +
               ("; " + why[-1] if why else "; barrier state unavailable"), flush=True)
         sleep(min(DRAIN_POLL_S, max(0, deadline - clock())))
+
+
+def cancel_general_drain(target, generation, snapshot):
+    """Undo a drain requested before any ownership change. Only while the module is still on the general worker:
+    nothing was handed over, so claims must resume at once (a stuck drain stops all backup claims, 2026-10-05 class).
+    Never touches generation, owner or fallback; a dedicated owner keeps its fence."""
+    role = ROLES[target]
+    query("begin;" + audit(snapshot) + "select pg_advisory_xact_lock(294611);"
+          "update module_runtime_control set drain_requested=false,drain_ack_at=null,drain_ack_generation=null"
+          " where module=" + literal(role) + " and effective_owner='general' and drain_generation=" + str(generation) + ";commit;")
 
 
 def clear_drain(target, generation, snapshot):
@@ -249,6 +266,17 @@ def ensure_policy(image):
     return None
 
 
+def ensure_backup(image):
+    existing = run("kubectl", "-n", "ui2", "get", "deployment", "ui2-backup",
+                   "--ignore-not-found", "-o", "json")
+    if existing:
+        return json.loads(existing)["spec"]["template"]["spec"]["containers"][0]["image"]
+    # Apply the ServiceAccount and NetworkPolicy together with the disabled Deployment.
+    prepare_policy_public_trust()
+    run("kubectl", "-n", "ui2", "apply", "-f", "-", input=render_manifest("backup", image))
+    return None
+
+
 IMMUTABLE_IMAGE = r".+@sha256:[a-f0-9]{64}"
 PACKET_ANALYSIS_MANIFEST = "deploy/ui2/58-packet-analysis-deployment.yaml"
 
@@ -262,6 +290,7 @@ SYNCED_MANIFESTS = {"service": "deploy/ui2/50-service-deployment.yaml",
                     "configuration": "deploy/ui2/54-configuration-deployment.yaml",
                     "compliance": "deploy/ui2/55-compliance-deployment.yaml",
                     "policy": "deploy/ui2/57-policy-deployment.yaml",
+                    "backup": "deploy/ui2/53-backup-deployment.yaml",
                     "worker": "deploy/ui2/52-worker-deployment.yaml"}
 
 
@@ -391,6 +420,18 @@ def handover_policy(generation, snapshot, authorization):
         raise Blocked("policy handover fence or heartbeat changed")
 
 
+def handover_backup(generation, snapshot, authorization):
+    result = query("begin;" + audit(snapshot) + "select pg_advisory_xact_lock(294611);"
+          "update module_runtime_control set fallback_enabled=false,effective_owner='backup',generation=generation+1,"
+          "drain_requested=false,drain_ack_at=null,drain_ack_generation=null,"
+          "last_authorization_ref=" + literal(authorization) + ",last_reason='ready backup cutover',last_snapshot_id=" + literal(snapshot) +
+          " where module='backup' and drain_requested and drain_generation=" + str(generation) +
+          " and owner_instance is not null and owner_heartbeat_at>now()-interval '60 seconds' "
+          "and drain_ack_generation=drain_generation returning generation;commit;")
+    if not any(line.isdigit() for line in result.splitlines()):
+        raise Blocked("backup handover fence or heartbeat changed")
+
+
 def reset_to_general(snapshot, module, generation, authorization="automatic-rollout-recovery"):
     if module in NEVER_GENERAL:
         raise Blocked(module + " is never handed to the general worker; its jobs wait for its own pod")
@@ -398,6 +439,8 @@ def reset_to_general(snapshot, module, generation, authorization="automatic-roll
     permit_scope = "owner_role=" + literal(module)
     if module == "policy":
         permit_scope = "(" + permit_scope + " or purpose_class='POLICY')"
+    elif module == "backup":
+        permit_scope = "(" + permit_scope + " or purpose_class='BACKUP')"
     result = query("begin;" + audit(snapshot) + "select pg_advisory_xact_lock(294611);"
           "update module_runtime_control set effective_owner='general',fallback_enabled=true,generation=generation+1,"
           "drain_requested=false,drain_ack_at=null,drain_ack_generation=null,owner_instance=null,owner_heartbeat_at=null,"
@@ -445,12 +488,13 @@ def replace_image(target, image, sync_manifest=False):
 def replace(target, image, snapshot, limit=14400, commit=None, authorization=None, rollback=False, defer_e2e=False):
     """Replace one module. With `defer_e2e` the module e2e and the result line are left to the caller (a concurrent
     group runs one e2e after all of its members); the result dict is returned instead."""
-    if target == "policy" and query("select (owner_heartbeat_at>now()-interval '60 seconds') from module_runtime_control where module='general'") != "t":
-        raise Blocked("compatible general worker bootstrap required before policy cutover")
-    fallback = target == "policy" and query("select fallback_enabled from module_runtime_control where module='policy'") == "t"
+    if target in ("policy", "backup") and query("select (owner_heartbeat_at>now()-interval '60 seconds') from module_runtime_control where module='general'") != "t":
+        raise Blocked("compatible general worker bootstrap required before " + target + " cutover")
+    fallback = target in ("policy", "backup") and query("select fallback_enabled from module_runtime_control where module=" + literal(target)) == "t"
     if fallback and (not authorization or not re.fullmatch(r"[A-Za-z0-9_.:/-]{1,160}", authorization)):
-        raise Blocked("policy ownership transfer requires an opaque PO authorization reference")
-    old = (ensure_policy(image) if target == "policy" else ensure_packet_analysis(image, not rollback) if target == "packet-analysis"
+        raise Blocked(target + " ownership transfer requires an opaque PO authorization reference")
+    old = (ensure_policy(image) if target == "policy" else ensure_backup(image) if target == "backup"
+           else ensure_packet_analysis(image, not rollback) if target == "packet-analysis"
            else run("kubectl", "-n", "ui2", "get", "deployment/ui2-" + target,
                     "-o", "jsonpath={.spec.template.spec.containers[0].image}"))
     if old is not None and not re.fullmatch(IMMUTABLE_IMAGE, old):
@@ -461,9 +505,15 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
     # A first release (ensure_packet_analysis created the deployment with the candidate image: old is None) has no
     # old owner to drain; draining it would wait for the new pod itself to stop (2026-10-16: drain retained).
     if target in ROLES and not (target == "packet-analysis" and old is None):
-        with phase(target, "drain"):
-            generation = request_drain(target, snapshot)
-            wait_drain(target, generation, limit)
+        try:
+            with phase(target, "drain"):
+                generation = request_drain(target, snapshot)
+                wait_drain(target, generation, limit)
+        except Blocked:
+            if target == "backup" and generation is not None:
+                # Drain timeout while the general worker still owns backup: give claims back at once.
+                cancel_general_drain(target, generation, snapshot)
+            raise
     old_pods = json.loads(run("kubectl", "-n", "ui2", "get", "pods", "-l", "app.kubernetes.io/component=" + TARGETS[target], "-o", "json"))
     old_uids = {pod["metadata"]["uid"] for pod in old_pods["items"]}
     try:
@@ -480,30 +530,43 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
                     if time.monotonic() >= deadline:
                         raise Blocked("old owner did not stop; drain retained")
                     time.sleep(OLD_POD_POLL_S)
-                # Forget the old instance, retaining the policy fence until a new heartbeat.
-                if target == "policy":
+                # Forget the old instance, retaining the split-module fence until a new heartbeat.
+                if target in ("policy", "backup"):
                     query("begin;" + audit(snapshot) + "update module_runtime_control set owner_instance=null,owner_heartbeat_at=null "
-                          "where module='policy' and drain_generation=" + str(generation) + ";commit;")
+                          "where module=" + literal(target) + " and drain_generation=" + str(generation) + ";commit;")
                 else:
                     clear_drain(target, generation, snapshot)
         with phase(target, "rollout"):
-            if target == "policy":
-                run("kubectl", "-n", "ui2", "scale", "deployment/ui2-policy", "--replicas=1")
+            if target in ("policy", "backup"):
+                run("kubectl", "-n", "ui2", "scale", "deployment/ui2-" + target, "--replicas=1")
             run("kubectl", "-n", "ui2", "rollout", "status", "deployment/ui2-" + target, "--timeout=600s")
             if target in ROLES:
                 wait_heartbeat(target)
             if target == "policy":
                 handover_policy(generation, snapshot, authorization or "snapshot-rollback")
+            elif target == "backup":
+                handover_backup(generation, snapshot, authorization or "snapshot-rollback")
         if not defer_e2e:
             with phase(target, "e2e"):
                 module_e2e(commit)
     except Blocked:
-        if target == "policy":
+        if target in ("policy", "backup"):
             # Fence before stopping, then recover fallback only after zero-work evidence.
             recovery = request_drain(target, snapshot)
-            run("kubectl", "-n", "ui2", "scale", "deployment/ui2-policy", "--replicas=0")
-            run("kubectl", "-n", "ui2", "wait", "--for=delete", "pod", "-l", "app.kubernetes.io/component=policy", "--timeout=900s")
-            reset_to_general(snapshot, "policy", recovery, authorization or "automatic-rollout-recovery")
+            handed_over = target == "backup" and query(
+                "select effective_owner from module_runtime_control where module='backup'") == "backup"
+            if handed_over:
+                # The backup pod already owns claims (the handover precedes the e2e). Let it finish what it holds
+                # behind the fence before it is stopped; if it cannot drain, keep it running and fenced (visible as
+                # a stuck drain) rather than killing a pod with uncertain device work.
+                wait_drain(target, recovery, 900)
+            run("kubectl", "-n", "ui2", "scale", "deployment/ui2-" + target, "--replicas=0")
+            run("kubectl", "-n", "ui2", "wait", "--for=delete", "pod", "-l", "app.kubernetes.io/component=" + target, "--timeout=900s")
+            if target == "backup" and not handed_over:
+                # Ownership never left the general worker: only lift the fence; running general work is legitimate.
+                cancel_general_drain(target, recovery, snapshot)
+            else:
+                reset_to_general(snapshot, target, recovery, authorization or "automatic-rollout-recovery")
         raise
     result = {"module": target, "e2e": "PASS", "old_digest": old.rsplit("@", 1)[1] if old else None,
               "new_digest": image.rsplit("@", 1)[1], "ready": True, "drain_generation": generation}
@@ -592,6 +655,23 @@ def return_policy_to_general(snapshot, authorization):
     reset_to_general(snapshot, "policy", generation, authorization)
 
 
+def return_backup_to_general(snapshot, authorization):
+    if not authorization or not re.fullmatch(r"[A-Za-z0-9_.:/-]{1,160}", authorization):
+        raise Blocked("an opaque PO authorization reference is required")
+    worker = json.loads(run("kubectl", "-n", "ui2", "get", "deployment/ui2-worker", "-o", "json"))
+    disabled = any("-Dui2.worker.claim-backup-fallback=false" in entry.get("value", "")
+                   for container in worker["spec"]["template"]["spec"]["containers"] for entry in container.get("env", [])
+                   if entry["name"] == "JAVA_TOOL_OPTIONS")
+    if disabled or query("select owner_heartbeat_at>now()-interval '60 seconds' from module_runtime_control where module='general'") != "t":
+        raise Blocked("compatible general owner must already have backup fallback capability")
+    generation = request_drain("backup", snapshot)
+    existing = run("kubectl", "-n", "ui2", "get", "deployment", "ui2-backup", "--ignore-not-found", "-o", "name")
+    if existing:
+        run("kubectl", "-n", "ui2", "scale", "deployment/ui2-backup", "--replicas=0")
+    run("kubectl", "-n", "ui2", "wait", "--for=delete", "pod", "-l", "app.kubernetes.io/component=backup", "--timeout=900s")
+    reset_to_general(snapshot, "backup", generation, authorization)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     selection = parser.add_mutually_exclusive_group(required=True)
@@ -606,6 +686,7 @@ def main():
                         help="roll the barrier-free modules (configuration, compliance) one after another")
     parser.add_argument("--allow-newer-schema", action="store_true")
     parser.add_argument("--return-policy-to-general", action="store_true")
+    parser.add_argument("--return-backup-to-general", action="store_true")
     parser.add_argument("--authorization-ref")
     parser.add_argument("--snapshot")
     parser.add_argument("--wait-limit", type=int, default=14400)
@@ -617,11 +698,12 @@ def main():
             validate_targets(args.validate_targets)
             return
         targets = validate_targets(args.targets)
-        if not args.rollback and not args.return_policy_to_general and (args.image is None or not re.fullmatch(IMMUTABLE_IMAGE, args.image)):
+        returning = args.return_policy_to_general or args.return_backup_to_general
+        if not args.rollback and not returning and (args.image is None or not re.fullmatch(IMMUTABLE_IMAGE, args.image)):
             raise Blocked("candidate image must be immutable")
         if args.packet_analysis_image is not None and not re.fullmatch(IMMUTABLE_IMAGE, args.packet_analysis_image):
             raise Blocked("packet-analysis image must be immutable")
-        if not args.rollback and not args.return_policy_to_general and "packet-analysis" in targets:
+        if not args.rollback and not returning and "packet-analysis" in targets:
             # The engine needs tshark, which the main service image does not have: fail closed, never fall back.
             if args.packet_analysis_image is None:
                 raise Blocked("packet-analysis target requires --packet-analysis-image; the main image has no tshark")
@@ -635,13 +717,20 @@ def main():
             rollback(directory.parent, str(directory), True, args.allow_newer_schema)
             return
         if args.return_policy_to_general:
-            if targets != ["policy"] or args.image or args.rollback:
+            if targets != ["policy"] or args.image or args.rollback or args.return_backup_to_general:
                 raise Blocked("fallback return accepts only the policy target")
             if not manifest.get("runtime", {}).get("compatible_runtime"):
                 raise Blocked("compatible snapshot required for fallback")
             return_policy_to_general(directory.name, args.authorization_ref)
             return
-        if "policy" in targets:
+        if args.return_backup_to_general:
+            if targets != ["backup"] or args.image or args.rollback or args.return_policy_to_general:
+                raise Blocked("fallback return accepts only the backup target")
+            if not manifest.get("runtime", {}).get("compatible_runtime"):
+                raise Blocked("compatible snapshot required for fallback")
+            return_backup_to_general(directory.name, args.authorization_ref)
+            return
+        if "policy" in targets or "backup" in targets:
             prepare_policy_public_trust()
         failures = []
 

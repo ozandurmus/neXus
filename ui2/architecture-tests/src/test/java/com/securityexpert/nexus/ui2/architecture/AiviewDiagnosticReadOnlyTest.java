@@ -80,6 +80,7 @@ class AiviewDiagnosticReadOnlyTest {
                 ActionRegistry.DEVICE_CONFIGURATION_TEXT_READ, ActionRegistry.DEVICE_REGISTER, ActionRegistry.DEVICE_DELETE,
                 ActionRegistry.DISCOVERY_SSH_TRUST_ENROLL, ActionRegistry.DISCOVERY_PAN_TRUST_ENROLL,
                 ActionRegistry.ZONE_MATRIX_ZONES_READ, ActionRegistry.ZONE_MATRIX_EDIT, ActionRegistry.ZONE_MATRIX_PUBLISH,
+                ActionRegistry.ZONE_MATRIX_EVALUATE,
                 ActionRegistry.CUTOVER_ASSESSMENT_WRITE,
                 ActionRegistry.ZONE_MATRIX_REFERENCE_CONFIRM}) {
             assertFalse(all.get(closed).requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER), closed);

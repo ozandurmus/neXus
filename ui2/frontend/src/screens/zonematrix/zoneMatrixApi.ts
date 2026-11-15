@@ -22,6 +22,7 @@ export interface ZoneMatrixCan {
   readonly edit: boolean;
   readonly publish: boolean;
   readonly confirm_reference?: boolean;
+  readonly evaluate?: boolean;
 }
 
 export interface ZoneVersionSummary {
@@ -260,6 +261,164 @@ export interface ZoneEditResult {
   readonly zone_id: string | null;
 }
 
+export type EvaluationOutcome = "VIOLATION" | "COMPLIANT" | "NOT_EVALUABLE" | "UNKNOWN";
+
+export interface ZoneMatrixPolicyItem {
+  readonly id: string;
+  readonly name: string;
+  readonly vendor: string;
+  readonly source_id: string | null;
+  readonly source_name: string | null;
+  readonly container_id: string | null;
+  readonly container_name: string | null;
+  readonly collected_at: string | null;
+  readonly rule_count: number;
+  readonly target_count: number;
+}
+
+export interface ZoneMatrixNotEvaluatedItem {
+  readonly id: string;
+  readonly name: string;
+  readonly vendor: string;
+  readonly source_id: string | null;
+  readonly source_name: string | null;
+  readonly reason: string;
+}
+
+export interface ZoneMatrixPoliciesResponse {
+  readonly policies: readonly ZoneMatrixPolicyItem[];
+  readonly not_evaluated: readonly ZoneMatrixNotEvaluatedItem[];
+  readonly can: ZoneMatrixCan;
+}
+
+export interface EvaluationCoverageItem {
+  readonly code: string;
+  readonly description: string;
+}
+
+export interface EvaluationEndedSchedule {
+  readonly rule_id: string;
+  readonly rule_number: number;
+  readonly rule_name: string;
+  readonly detail: string;
+}
+
+export interface EvaluationNotApplicable {
+  readonly disabled: number;
+  readonly deny_type: number;
+  readonly outside_security_rulebase: number;
+  readonly apply_layer_decided_by_inline: number;
+  readonly schedule_ended: number;
+  readonly total: number;
+  readonly ended_schedules: readonly EvaluationEndedSchedule[];
+}
+
+export interface EvaluationHeadline {
+  readonly distinct_violating_rules: number;
+  readonly violated_zone_pairs: number;
+  readonly critical_rules: number;
+  readonly covered_by_earlier_rule: number;
+  readonly conditional_rules: number;
+  readonly outside_headline_ordered_layer: number;
+  readonly not_evaluable_rules: number;
+  readonly unknown_rules: number;
+  readonly incomplete_policies: number;
+  readonly not_evaluated_policies: number;
+  readonly exact: boolean;
+  readonly text: string;
+  readonly outside_headline_text: string | null;
+}
+
+export interface EvaluationWitness {
+  readonly source_range: string;
+  readonly destination_range: string;
+  readonly service: string;
+}
+
+export interface EvaluationCellViolation {
+  readonly source: string;
+  readonly destination: string;
+  readonly source_name: string;
+  readonly destination_name: string;
+  readonly statement: MatrixStatement;
+  readonly severity: MatrixSeverity;
+  readonly not_allowed_services: readonly string[];
+  readonly nat_view: string;
+  readonly witness: EvaluationWitness | null;
+}
+
+export interface EvaluationRuleRow {
+  readonly finding_identity: {
+    readonly policy_id: string;
+    readonly rule_uid: string;
+    readonly inline_parent_path: readonly string[];
+    readonly violated_pairs: readonly string[];
+  };
+  readonly rule_id: string;
+  readonly rule_uid: string;
+  readonly rule_number: number;
+  readonly rule_name: string;
+  readonly section_id: string;
+  readonly section_name: string;
+  readonly inline_parent_path: readonly string[];
+  readonly target_device_ids: readonly string[];
+  readonly outcome: EvaluationOutcome;
+  readonly reason: string | null;
+  readonly highest_severity: MatrixSeverity | null;
+  readonly flags: readonly string[];
+  readonly covering_rule_id: string | null;
+  readonly touched_pairs: readonly string[];
+  readonly touched_pair_names: readonly string[];
+  readonly violated_cells: readonly EvaluationCellViolation[];
+  readonly undecided_parts: readonly string[];
+  readonly nat_view: string | null;
+}
+
+export interface EvaluationZoneGap {
+  readonly rule_id: string;
+  readonly rule_number: number;
+  readonly rule_name: string;
+  readonly section_name: string;
+  readonly range_count: number;
+  readonly unassigned_private_ranges: readonly string[] | null;
+}
+
+export interface ZoneMatrixEvaluationResponse {
+  readonly engine_version: string;
+  readonly version_id: string;
+  readonly version_number: number;
+  readonly content_sha256: string;
+  readonly policy_id: string;
+  readonly policy_name: string;
+  readonly source_id: string | null;
+  readonly source_name: string | null;
+  readonly container_id: string | null;
+  readonly container_name: string | null;
+  readonly vendor: string;
+  readonly collected_at: string | null;
+  readonly witnesses_included: boolean;
+  readonly targets: readonly {
+    readonly device_id: string;
+    readonly name: string | null;
+    readonly context: string | null;
+    readonly sync_status: string | null;
+  }[];
+  readonly evaluated: boolean;
+  readonly not_evaluated_reason: string | null;
+  readonly coverage: "COMPLETE" | "INCOMPLETE" | string;
+  readonly coverage_items: readonly EvaluationCoverageItem[];
+  readonly failure_count: number;
+  readonly outcome_counts: Readonly<Record<string, number>>;
+  readonly not_applicable: EvaluationNotApplicable;
+  readonly headline: EvaluationHeadline;
+  readonly rules: readonly EvaluationRuleRow[];
+  readonly zone_definition_gaps: readonly EvaluationZoneGap[];
+  readonly hygiene_budget_reached: boolean;
+  readonly duration_ms: number;
+  readonly hygiene_ms: number;
+  readonly can: ZoneMatrixCan;
+}
+
 const EMPTY_MATRIX: ZoneMatrixView = {
   default_statement: "DENY_ALL",
   default_severity: "MEDIUM",
@@ -332,6 +491,17 @@ export const confirmCellReference = (revision: number | null, source: string, de
 export const publishZoneDraft = (revision: number, contentSha256: string, rationale: string | null) =>
   apiCall<{ version_id: string; number: number; content_sha256: string }>(`${BASE}/draft/publish`, "POST",
     { revision, content_sha256: contentSha256, rationale });
+
+export const listZoneMatrixPolicies = () =>
+  apiCall<ZoneMatrixPoliciesResponse>(`${BASE}/policies`, "GET");
+
+/** Evaluates one stored policy snapshot on demand against a published version; `includeWitnesses` is audited server side. */
+export const evaluateZoneMatrixPolicy = (policyId: string, versionId?: string | null, includeWitnesses = false) =>
+  apiCall<ZoneMatrixEvaluationResponse>(`${BASE}/evaluate`, "POST", {
+    policy_id: policyId,
+    ...(versionId ? { version_id: versionId } : {}),
+    include_witnesses: includeWitnesses,
+  });
 
 /** The zone roles of the template (contract section 6), with the words the screen shows. */
 export const ZONE_ROLES: readonly { readonly value: string; readonly label: string }[] = [

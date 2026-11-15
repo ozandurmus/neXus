@@ -30,7 +30,9 @@ trivy_class() {
 # Several Jobs (a gate and the nightly scan) can share the persistent cache; its layer cache is a single-writer
 # database and a DB update must not race a scan, so every trivy run takes an exclusive lock when flock exists.
 with_lock() {
-    if [ -d /cache/trivy ] && command -v flock >/dev/null 2>&1; then flock -w 1200 /cache/trivy/.lock "$@"; else "$@"; fi
+    # Only with a shared claim (TRIVY_SHARED_CACHE=1). No -w: the BusyBox flock in the Trivy image rejects it, which made
+    # every trivy run fail with rc=1 and stopped the 2026-11-15 13:00 deploy at the security gate.
+    if [ "${TRIVY_SHARED_CACHE:-0}" = 1 ] && command -v flock >/dev/null 2>&1; then flock /cache/trivy/.lock "$@"; else "$@"; fi
 }
 # trivy_try <report> <exit-file> <command...>
 trivy_try() {

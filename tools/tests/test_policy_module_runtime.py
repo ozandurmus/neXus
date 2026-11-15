@@ -27,10 +27,14 @@ def test_selected_modules_are_independent_and_never_wait_on_policy_for_general(m
     assert "ui2_job_module(j.capability_id)='policy'" in queries[-1]
     assert "drain_ack_generation=drain_generation" in queries[-1]
     assert "QUARANTINED" in queries[-1]
+    assert deploy.barrier("backup", 9)
+    assert "ui2_job_module(j.capability_id)='backup'" in queries[-1]
+    assert "(owner_role='backup' or purpose_class='BACKUP')" in queries[-1]
     assert deploy.barrier("worker", 8)
     assert "effective_owner='general'" in queries[-1]
     assert "owner_instance is null" in queries[-1]  # One-time legacy bootstrap drains all jobs.
     assert "ui2_job_module(j.capability_id)='policy'" not in queries[-1]
+    assert "ui2_job_module(j.capability_id)='backup'" not in queries[-1]
 
 
 def test_bounded_wait_retains_old_digest_and_the_drain(monkeypatch):
@@ -134,6 +138,28 @@ def test_policy_manifest_has_only_its_required_dependencies_and_starts_disabled(
         return env, mount, volume
     assert key_wiring(spec, container) == key_wiring(worker_spec, worker_container)
     assert key_wiring(spec, container)[2]["secret"]["secretName"] == "ui2-hostname-fingerprint-key"
+    policy = next(d for d in documents if d["kind"] == "NetworkPolicy")
+    assert policy["spec"]["ingress"] == []
+    assert policy["spec"]["policyTypes"] == ["Ingress", "Egress"]
+
+
+def test_backup_manifest_has_only_its_required_dependencies_and_starts_disabled():
+    documents = list(yaml.safe_load_all((ROOT / "deploy/ui2/53-backup-deployment.yaml").read_text()))
+    deployment = next(d for d in documents if d["kind"] == "Deployment")
+    assert deployment["spec"]["replicas"] == 0
+    assert deployment["spec"]["strategy"]["type"] == "Recreate"
+    spec = deployment["spec"]["template"]["spec"]
+    assert spec["serviceAccountName"] == "ui2-backup" and spec["automountServiceAccountToken"] is False
+    assert spec["securityContext"]["supplementalGroups"] == [2600]
+    container = spec["containers"][0]
+    assert container["args"] == ["worker", "backup"]
+    assert container["resources"] == {"requests": {"cpu": "250m", "memory": "256Mi"}, "limits": {"memory": "2Gi"}}
+    jvm = next(e["value"] for e in container["env"] if e["name"] == "JAVA_TOOL_OPTIONS")
+    assert "-Dui2.db.pool.maximum-pool-size=4" in jvm and "-Dui2.db.pool.minimum-idle=1" in jvm
+    assert {v["name"] for v in spec["volumes"]} == {
+        "tmp", "home", "db-credentials", "credential-store-key", "artefact-store-key",
+        "hostname-fingerprint-key", "artefact-store", "report-store", "cc-inbox", "corp-ca",
+    }
     policy = next(d for d in documents if d["kind"] == "NetworkPolicy")
     assert policy["spec"]["ingress"] == []
     assert policy["spec"]["policyTypes"] == ["Ingress", "Egress"]
@@ -436,3 +462,41 @@ def test_a_leased_or_job_less_quarantine_always_holds_and_other_owners_never_cou
     assert _admissions_count(psql, "worker") == 1
     psql("update endpoint_admission set state='WAITING'")
     assert _admissions_count(psql, "worker") == 0
+
+
+def test_backup_barrier_waits_for_general_held_backup_module_tasks(monkeypatch):
+    """Review 2026-11-15 finding 1.3: the purger and pruner lease as owner_role='general' while general owns backup."""
+    conditions = dict(deploy.barrier_conditions("backup", 9))
+    for name in ("task_leases", "quarantined_task_leases"):
+        sql = conditions[name]
+        assert "owner_role='backup'" in sql
+        for task in ("OrphanArtefactPurger.runOnce", "RetentionPruningService.prune"):
+            assert "'" + task + "'" in sql
+    # No other target widens: general, policy and packet-analysis keep their exact role match.
+    for target in ("worker", "policy", "packet-analysis"):
+        assert "task_key" not in dict(deploy.barrier_conditions(target, 9))["task_leases"]
+
+
+def test_backup_module_task_list_matches_the_java_task_router():
+    java = (ROOT / "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/runtime/ModuleRuntimeRepository.java").read_text()
+    router = java.split("private static String taskModule", 1)[1].split("return role;", 1)[0]
+    assert sorted(deploy.BACKUP_MODULE_TASKS) == sorted(
+        t for t in __import__("re").findall(r'"([A-Za-z]+\.[A-Za-z]+)"', router))
+
+
+def test_general_held_prune_and_purge_leases_hold_only_the_backup_drain(scratch_pg):
+    psql = scratch_pg
+    psql("drop table if exists runtime_task_lease;"
+         "create table runtime_task_lease (task_key text primary key, owner_role text not null, state text not null)")
+    def count(target, name):
+        return int(psql(dict(deploy.barrier_conditions(target, 7))[name]))
+    psql("insert into runtime_task_lease values ('RetentionPruningService.prune', 'general', 'LEASED')")
+    assert count("backup", "task_leases") == 1
+    assert count("worker", "task_leases") == 1  # the general owner holds it under its own role, as before
+    assert count("policy", "task_leases") == 0
+    psql("update runtime_task_lease set state='QUARANTINED'")
+    assert (count("backup", "task_leases"), count("backup", "quarantined_task_leases")) == (0, 1)
+    # A general task that is not a backup-module task never holds the backup drain.
+    psql("truncate runtime_task_lease; insert into runtime_task_lease values ('SomeOtherTask.run', 'general', 'LEASED')")
+    assert count("backup", "task_leases") == 0
+    psql("drop table runtime_task_lease")

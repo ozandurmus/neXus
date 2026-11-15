@@ -40,6 +40,7 @@ public final class ZoneMatrixController {
     public record ServiceSetRequest(Long revision, String name, java.util.List<String> entries) {}
     public record TemplateImportRequest(Long revision, Boolean replace) {}
     public record ConfirmRequest(Long revision, String source, String destination, String cell_sha256) {}
+    public record EvaluateRequest(String policy_id, String version_id, Boolean include_witnesses) {}
 
     @GetMapping("/api/v2/zone-matrix/versions")
     public ResponseEntity<?> versions(HttpServletRequest request) {
@@ -160,6 +161,27 @@ public final class ZoneMatrixController {
         return run(() -> service.publish(actor(request), masked(request), body));
     }
 
+    @GetMapping("/api/v2/zone-matrix/policies")
+    public ResponseEntity<?> policies(HttpServletRequest request) {
+        boolean masked = masked(request);
+        return run(() -> with(service.policies(masked ? View.MASKED : View.NAMES,
+                !masked && permitted(request, ActionRegistry.POLICY_READ)), request));
+    }
+
+    @PostMapping("/api/v2/zone-matrix/evaluate")
+    public ResponseEntity<?> evaluate(@RequestBody(required = false) EvaluateRequest body, HttpServletRequest request) {
+        boolean masked = masked(request);
+        return run(() -> with(service.evaluate(
+                actor(request),
+                masked ? View.MASKED : View.NAMES,
+                masked,
+                !masked && permitted(request, ActionRegistry.ZONE_MATRIX_ZONES_READ),
+                !masked && permitted(request, ActionRegistry.POLICY_READ),
+                body == null ? null : body.policy_id(),
+                body == null ? null : body.version_id(),
+                body != null && Boolean.TRUE.equals(body.include_witnesses())), request));
+    }
+
     private View view(HttpServletRequest request, String blocks) {
         if (masked(request)) return View.MASKED;
         if (!"1".equals(blocks)) return View.NAMES;
@@ -196,6 +218,7 @@ public final class ZoneMatrixController {
         out.put("edit", !masked && permitted(request, ActionRegistry.ZONE_MATRIX_EDIT));
         out.put("publish", !masked && permitted(request, ActionRegistry.ZONE_MATRIX_PUBLISH));
         out.put("confirm_reference", !masked && permitted(request, ActionRegistry.ZONE_MATRIX_REFERENCE_CONFIRM));
+        out.put("evaluate", !masked && permitted(request, ActionRegistry.ZONE_MATRIX_EVALUATE));
         return out;
     }
 

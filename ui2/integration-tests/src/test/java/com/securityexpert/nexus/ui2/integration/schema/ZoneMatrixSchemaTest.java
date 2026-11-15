@@ -58,9 +58,12 @@ class ZoneMatrixSchemaTest {
 
     @Test void migrationIsDryRunnableInsideATransaction() throws Exception {
         try (Connection db = fixture.migrateConnection(); var statement = db.createStatement()) {
-            String sql;
+            String sql, stepThree;
             try (var resource = getClass().getResourceAsStream("/db/migration/V216__zone_matrix_versions.sql")) {
                 assertNotNull(resource); sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            try (var resource = getClass().getResourceAsStream("/db/migration/V228__zone_matrix_witness_access_log.sql")) {
+                assertNotNull(resource); stepThree = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
             }
             db.setAutoCommit(false);
             statement.execute("DROP TABLE zone_matrix_reference_confirmation, zone_matrix_access_log, zone_matrix_revision, "
@@ -69,6 +72,7 @@ class ZoneMatrixSchemaTest {
                     + "fn_audit_capture_zone_matrix_revision, fn_audit_capture_zone_matrix_access");
             statement.execute(sql);
             statement.execute(stepTwoSql());
+            statement.execute(stepThree);
             db.rollback();
         }
     }
@@ -218,12 +222,15 @@ class ZoneMatrixSchemaTest {
                 String sha = (String) confirmed.get("content_sha256");
                 assertEquals("SELF_APPROVAL", assertThrows(Refused.class, () -> service.publish("synthetic-compliance", false,
                         new ZoneMatrixService.PublishRequest(revision, sha, null))).code);
-                assertEquals(1, service.publish("synthetic-security-2", false, new ZoneMatrixService.PublishRequest(revision, sha, null))
-                        .get("number"));
+                var published = service.publish("synthetic-security-2", false, new ZoneMatrixService.PublishRequest(revision, sha, null));
+                assertEquals(1, published.get("number"));
+                repository.recordAccess("synthetic-security", "WITNESS_VIEW", (String) published.get("version_id"));
                 try (var s = db.createStatement(); var rows = s.executeQuery("SELECT (SELECT count(*) FROM zone_matrix_reference_confirmation "
                         + "WHERE cell_sha256='" + cellSha + "'), (SELECT count(*) FROM audit_log WHERE action_id='zone_matrix_reference_confirm' "
-                        + "AND table_name='zone_matrix_revision' AND NOT (after_state ? 'content'))")) {
-                    assertTrue(rows.next()); assertEquals(1, rows.getInt(1)); assertEquals(1, rows.getInt(2));
+                        + "AND table_name='zone_matrix_revision' AND NOT (after_state ? 'content')), "
+                        + "(SELECT count(*) FROM audit_log WHERE action_id='zone_matrix_zones_read' "
+                        + "AND table_name='zone_matrix_access_log' AND after_state->>'kind'='WITNESS_VIEW')")) {
+                    assertTrue(rows.next()); assertEquals(1, rows.getInt(1)); assertEquals(1, rows.getInt(2)); assertEquals(1, rows.getInt(3));
                 }
             } finally {
                 cleanUp();

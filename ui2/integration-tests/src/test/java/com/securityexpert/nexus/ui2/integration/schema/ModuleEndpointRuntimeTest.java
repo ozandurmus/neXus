@@ -238,4 +238,93 @@ class ModuleEndpointRuntimeTest {
         }
     }
 
+    @Test void backupModuleMigrationRetainsGeneralFallbackAndAdmitsBackupOwnerRoleAndTaskLeasesFollowEffectiveOwner() throws Exception {
+        try (var fixture = Ui2PostgresFixture.createAndMigrate("backup_module_runtime")) {
+            var tx = new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES));
+            assertTrue(tx.<Boolean>inTransaction(db -> db.fetchOne(
+                "select effective_owner='general' and fallback_enabled from module_runtime_control where module='backup'")
+                .get(0, Boolean.class)));
+            var runtime = new ModuleRuntimeRepository(tx);
+            assertTrue(runtime.heartbeat("general", "general-pod"));
+            assertTrue(runtime.heartbeat("backup", "backup-pod"));
+            var generalRan = new java.util.concurrent.atomic.AtomicBoolean();
+            var backupRan = new java.util.concurrent.atomic.AtomicBoolean();
+            runtime.runTask("general", "general-pod", "OrphanArtefactPurger.runOnce", () -> generalRan.set(true));
+            runtime.runTask("backup", "backup-pod", "OrphanArtefactPurger.runOnce", () -> backupRan.set(true));
+            assertTrue(generalRan.get());
+            assertFalse(backupRan.get());
+
+            // Finding 1.3 (review 2026-11-15): a drain on the backup module grants no new general lease, and a lease
+            // already held by general stays visible as owner_role='general' so the backup drain barrier can wait on it.
+            releaseSql(fixture, "update module_runtime_control set drain_requested=true,drain_generation=generation where module='backup'");
+            generalRan.set(false);
+            runtime.runTask("general", "general-pod", "RetentionPruningService.prune", () -> generalRan.set(true));
+            assertFalse(generalRan.get());
+            releaseSql(fixture, "update module_runtime_control set drain_requested=false,drain_generation=0 where module='backup'");
+            var heldDuringRun = new java.util.concurrent.atomic.AtomicReference<String>();
+            runtime.runTask("general", "general-pod", "RetentionPruningService.prune", () -> heldDuringRun.set(tx.<String>inTransaction(db ->
+                db.fetchOne("select owner_role from runtime_task_lease where task_key='RetentionPruningService.prune'").get(0, String.class))));
+            assertEquals("general", heldDuringRun.get());
+            generalRan.set(false);
+
+            releaseSql(fixture, "update module_runtime_control set effective_owner='backup',fallback_enabled=false,generation=generation+1 where module='backup'");
+            generalRan.set(false);
+            runtime.runTask("general", "general-pod", "OrphanArtefactPurger.runOnce", () -> generalRan.set(true));
+            runtime.runTask("backup", "backup-pod", "OrphanArtefactPurger.runOnce", () -> backupRan.set(true));
+            assertFalse(generalRan.get());
+            assertTrue(backupRan.get());
+
+            String device;
+            try (var connection = fixture.appConnection()) {
+                var credential = Ui2Rows.insertCredentialReference(connection);
+                device = Ui2Rows.insertDevice(connection, credential, "ENROLLED");
+            }
+            var jobs = new JooqJobRecordDao(tx, JobWindowTestPolicy.PERMISSIVE);
+            jobs.insertRequestedIfAbsent("backup-job", "backup-key", "cp_gateway_backup", device, "read",
+                "cp_gateway_backup", "synthetic-actor", "fixture").orElseThrow();
+            var leases = new JooqJobLeaseDao(tx, JobWindowTestPolicy.PERMISSIVE);
+            assertTrue(leases.claimNext("general-pod", List.of("cp_gateway_backup"), Duration.ofMinutes(10)).isEmpty());
+            var claim = leases.claimNext("backup-pod", List.of("cp_gateway_backup"), Duration.ofMinutes(10)).orElseThrow();
+            var admission = new EndpointAdmissionRepository(tx);
+            var owner = new Owner(claim.jobId(), claim.leaseEpoch(), null, 0, "backup", "backup-pod",
+                runtime.generation(claim.jobId(), claim.leaseEpoch()), "BACKUP", false);
+            var permit = admission.acquire("backup-ticket", "backup.example.invalid:22", "backup-session", owner).orElseThrow();
+            assertTrue(admission.releaseClosed(permit));
+        }
+    }
+
+    @Test void nothingMovesClaimsToTheBackupPodWhileGeneralOwnsBackupAndAStuckDrainIsStamped() throws Exception {
+        try (var fixture = Ui2PostgresFixture.createAndMigrate("backup_general_claims")) {
+            var tx = new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES));
+            var runtime = new ModuleRuntimeRepository(tx);
+            assertTrue(runtime.heartbeat("general", "general-pod"));
+            assertTrue(runtime.heartbeat("backup", "backup-pod"));
+            String device;
+            try (var connection = fixture.appConnection()) {
+                var credential = Ui2Rows.insertCredentialReference(connection);
+                device = Ui2Rows.insertDevice(connection, credential, "ENROLLED");
+            }
+            var jobs = new JooqJobRecordDao(tx, JobWindowTestPolicy.PERMISSIVE);
+            jobs.insertRequestedIfAbsent("general-owned-job", "general-owned-key", "cp_gateway_backup", device, "read",
+                "cp_gateway_backup", "synthetic-actor", "fixture").orElseThrow();
+            var leases = new JooqJobLeaseDao(tx, JobWindowTestPolicy.PERMISSIVE);
+            // A live backup pod with the claim fence of a general-owned module never receives the job.
+            assertTrue(leases.claimNext("backup-pod", List.of("cp_gateway_backup"), Duration.ofMinutes(10)).isEmpty());
+            // A requested drain (cutover started, nothing handed over) stops every claim, and is stamped with its start.
+            releaseSql(fixture, "update module_runtime_control set drain_requested=true,drain_generation=drain_generation+1 where module='backup'");
+            assertTrue(leases.claimNext("general-pod", List.of("cp_gateway_backup"), Duration.ofMinutes(10)).isEmpty());
+            assertTrue(leases.claimNext("backup-pod", List.of("cp_gateway_backup"), Duration.ofMinutes(10)).isEmpty());
+            assertTrue(tx.<Boolean>inTransaction(db -> db.fetchOne(
+                "select drain_requested_at is not null and drain_requested_at>now()-interval '1 minute' from module_runtime_control where module='backup'")
+                .get(0, Boolean.class)));
+            // Cancelling the drain while general still owns backup returns claims to the general worker only.
+            releaseSql(fixture, "update module_runtime_control set drain_requested=false,drain_ack_at=null,drain_ack_generation=null where module='backup' and effective_owner='general'");
+            assertTrue(tx.<Boolean>inTransaction(db -> db.fetchOne(
+                "select drain_requested_at is null and effective_owner='general' and fallback_enabled from module_runtime_control where module='backup'")
+                .get(0, Boolean.class)));
+            assertTrue(leases.claimNext("backup-pod", List.of("cp_gateway_backup"), Duration.ofMinutes(10)).isEmpty());
+            assertTrue(leases.claimNext("general-pod", List.of("cp_gateway_backup"), Duration.ofMinutes(10)).isPresent());
+        }
+    }
+
 }

@@ -6,7 +6,7 @@ source proves implementation, not the current deployment or device health.
 
 ## Product today
 
-UI2 is the maintained Java/React product; repository schema on main is **V223**; the ship queue adds V225 and V227.
+UI2 is the maintained Java/React product; repository schema on main is **V223**; the ship queue adds V225, V226, V227 and V228.
 Inventory, configuration, compliance, encrypted backups, Operations, Policy,
 lifecycle and security checks, Packet Analysis and device system logs use
 masked `aiview` projections. Restore from the UI remains disabled. Sign-in uses

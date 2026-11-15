@@ -129,7 +129,7 @@ describe("Zone matrix: Zones tab", () => {
     render(<ZoneMatrixScreen />);
     await openZones();
     const table = await screen.findByRole("table", { name: "Zones" });
-    expect(screen.getByText("Zones are sets of IP blocks the bank maintains. Statements are policy intent; nothing is evaluated against firewall rules yet.")).toBeInTheDocument();
+    expect(screen.getByText("Zones are sets of IP blocks the bank maintains. Statements and evaluations show policy intent as defined in management, not observed traffic.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Version 3/ })).toBeInTheDocument();
     const app = within(table).getByText("Z-APP").closest("tr")!;
     expect(within(app).getByText("Application")).toBeInTheDocument();
@@ -144,7 +144,7 @@ describe("Zone matrix: Zones tab", () => {
     for (const name of ["Add zone", "Edit", "Delete", "Show blocks"]) expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
     expect(screen.queryByText(/recorded in the audit log/)).not.toBeInTheDocument();
     expect(screen.queryByRole("form", { name: "Address lookup" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Matrix", "Zones", "Versions"]);
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Matrix", "Zones", "Versions", "Evaluate"]);
   });
 
   it("renders a masked response as it is", async () => {
