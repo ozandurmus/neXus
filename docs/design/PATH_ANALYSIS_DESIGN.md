@@ -118,6 +118,20 @@ translation is not evaluated (A0-ASA-18 UNKNOWN), so a hop is UNKNOWN (`NAT_UNKN
 its real or mapped destination, contains a tuple address or does not resolve; the tuple is never translated. A deny is
 undone by a route taint as for Palo Alto (the egress interface came from the route).
 
+Amendment 2026-11-15 (FortiGate policy step 8,
+`PATH_ANALYSIS_VENDOR_SEMANTICS_AMENDMENT_2026_11_14_ASA_FORTIGATE.md`, FROZEN). Enrolled `fortinet` gateways are
+part of the topology and path engine, one node per VDOM context (`physical` on a single-VDOM unit, the VDOM name on a
+multi-VDOM unit): (1) Interfaces and HA: inventory interfaces and routes already use the FortiOS interface name, which
+is also the policy placement (`srcintf`/`dstintf`, A0-FG-9), so each FortiGate attachment carries its interface name as
+its zone; an HA A-P pair's `primary` member is the active routing member (`a-a` stays `ACTIVE_MEMBER_UNPROVEN`). (2)
+Routes: `get router info routing-table all` rows in a recognised form (`via` or `is directly connected`) are stored
+`is_active = true` with next-hop kind `IP` / `CONNECTED`, equal-cost continuation lines as `is_ecmp = true`, and any
+other form keeps UNKNOWN. (3) Policy binding and hop: `PathPolicyBinder` maps `physical` to the `root` VDOM snapshot
+and each named VDOM context to its matching VDOM snapshot. Security evaluation runs `PolicyLookup` on the arriving tuple
+with the ingress and egress interface names (`FGT_IMPLICIT_DENY`, `FGT_INTRAZONE_UNKNOWN`); VIP DNAT (A0-FG-17..20),
+central SNAT (A0-FG-21) and policy-mode SNAT (A0-FG-22) are not evaluated, so any VIP, central SNAT or reachable policy
+SNAT rule that may touch the tuple makes the hop UNKNOWN (`NAT_UNKNOWN`, NAT reason `FGT_NAT_NOT_EVALUATED`).
+
 ## 5. Path engine
 
 Query, ingress, output contract: F§4.1, F§4.2, F§4.7, plus A's `executive_summary` block. IPv4 only. Source port not

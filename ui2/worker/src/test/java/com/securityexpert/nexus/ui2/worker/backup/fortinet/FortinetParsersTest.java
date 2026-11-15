@@ -130,14 +130,31 @@ class FortinetParsersTest {
                 C       192.0.2.0/24 is directly connected, port1
                 B       203.0.113.0/24 [20/0] via 198.51.100.9 (recursive is directly connected, port2), 2d01h
                 O E2    10.9.0.0/16 [110/20] via 192.0.2.10, port1, 01:02:03
+                                    [110/20] via 192.0.2.11, port2, 01:02:03
+                S       198.51.100.128/25 [10/0] is a summary, Null
                 """);
-        assertEquals(4, routes.size());
+        assertEquals(6, routes.size());
         assertEquals(InventoryRoute.PROTOCOL_DEFAULT, routes.get(0).protocol());
         assertEquals(Optional.of("port1"), routes.get(0).interfaceName());
+        assertEquals(Optional.of(true), routes.get(0).active());
+        assertEquals(Optional.of(InventoryRoute.NEXT_HOP_IP), routes.get(0).nextHopKind());
+        assertEquals(Optional.empty(), routes.get(0).ecmp());
         assertEquals(InventoryRoute.PROTOCOL_CONNECTED, routes.get(1).protocol());
+        assertEquals(Optional.of(true), routes.get(1).active());
+        assertEquals(Optional.of(InventoryRoute.NEXT_HOP_CONNECTED), routes.get(1).nextHopKind());
         assertEquals(Optional.of("198.51.100.9"), routes.get(2).nextHop());
         assertEquals(Optional.of("port2"), routes.get(2).interfaceName());
+        assertEquals(Optional.of(true), routes.get(2).active());
+        assertEquals(Optional.of(InventoryRoute.NEXT_HOP_IP), routes.get(2).nextHopKind());
         assertEquals(InventoryRoute.PROTOCOL_OSPF, routes.get(3).protocol());
+        assertEquals(Optional.of("192.0.2.10"), routes.get(3).nextHop());
+        assertEquals(Optional.of("port1"), routes.get(3).interfaceName());
+        assertEquals(Optional.of(true), routes.get(3).ecmp());
+        assertEquals(Optional.of("192.0.2.11"), routes.get(4).nextHop());
+        assertEquals(Optional.of("port2"), routes.get(4).interfaceName());
+        assertEquals(Optional.of(true), routes.get(4).ecmp());
+        assertEquals(Optional.empty(), routes.get(5).active());
+        assertEquals(Optional.empty(), routes.get(5).nextHopKind());
     }
 
     @Test

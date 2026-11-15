@@ -86,7 +86,7 @@ class PathPolicyBinderTest {
         assertEquals(new HopPolicySource.Unbound(PathReasons.POLICY_BINDING_UNPROVEN),
                 bind(catalog, node(TopologyInput.VENDOR_CHECK_POINT, "physical", null), NOW));
         assertEquals(new HopPolicySource.Unbound(PathReasons.UNSUPPORTED_NODE_VENDOR),
-                bind(catalog, node("fortinet", "physical", "dev-t04"), NOW));
+                bind(catalog, node("radware", "physical", "dev-t04"), NOW));
     }
 
     @Test
@@ -161,5 +161,43 @@ class PathPolicyBinderTest {
                 bind(catalog, node(TopologyInput.VENDOR_CISCO_ASA, "physical", "dev-t04"), NOW));
         assertEquals(new HopPolicySource.Unbound(PathReasons.POLICY_CONTEXT_UNPROVEN),
                 bind(catalog, node(TopologyInput.VENDOR_CISCO_ASA, "ctx1", "dev-asa-1"), NOW));
+    }
+
+    @Test
+    void aFortiGateUnitBindsRootForPhysicalAndEachNamedVdomSnapshot() {
+        var snapshots = com.securityexpert.nexus.ui2.policy.fortigate.FortiGatePolicyMapper.map("dev-fgt-1",
+                "FortiGate dev-fgt-1", "2026-11-04T05:00:00Z", "artefact",
+                com.securityexpert.nexus.ui2.policy.fortigate.FortiGateConfigPolicyParser.parse("""
+                        #config-version=FG10E1-7.4.4-FW-build2662-240514:opmode=0:vdom=1
+                        config vdom
+                        edit root
+                        next
+                        edit VD-ALPHA
+                        next
+                        end
+                        config vdom
+                        edit root
+                        config firewall policy
+                        end
+                        end
+                        config vdom
+                        edit VD-ALPHA
+                        config firewall policy
+                        end
+                        end
+                        """));
+        assertEquals(2, snapshots.size());
+        var catalog = new InMemoryPathPolicyCatalog().add(snapshots.get(0)).add(snapshots.get(1));
+        assertEquals(Optional.of("root"), PathPolicyBinder.policyContext(TopologyInput.VENDOR_FORTINET, "physical"));
+        assertEquals(Optional.of("root"), PathPolicyBinder.policyContext(TopologyInput.VENDOR_FORTINET, "root"));
+        assertEquals(Optional.of("VD-ALPHA"), PathPolicyBinder.policyContext(TopologyInput.VENDOR_FORTINET, "VD-ALPHA"));
+        var rootFromPhysical = assertInstanceOf(HopPolicySource.Bound.class,
+                bind(catalog, node(TopologyInput.VENDOR_FORTINET, "physical", "dev-fgt-1"), NOW));
+        assertSame(snapshots.get(0), rootFromPhysical.prepared().snapshot());
+        var vdomAlpha = assertInstanceOf(HopPolicySource.Bound.class,
+                bind(catalog, node(TopologyInput.VENDOR_FORTINET, "VD-ALPHA", "dev-fgt-1"), NOW));
+        assertSame(snapshots.get(1), vdomAlpha.prepared().snapshot());
+        assertEquals(new HopPolicySource.Unbound(PathReasons.POLICY_BINDING_UNPROVEN),
+                bind(catalog, node(TopologyInput.VENDOR_FORTINET, "VD-MISSING", "dev-fgt-1"), NOW));
     }
 }

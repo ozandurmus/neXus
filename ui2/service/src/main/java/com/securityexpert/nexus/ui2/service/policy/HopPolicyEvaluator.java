@@ -36,9 +36,9 @@ import java.util.function.Function;
  * NAT evaluation is {@link HopNatEvaluator}; the per-hop order of NAT and access is {@link #checkPoint},
  * {@link #paloAlto} and {@link Prepared#asa}.
  *
- * <p>Cisco ASA (ASA policy step 8): the snapshot is the device's own configuration, so there is no device view (no
- * install-on or target); the zones are the ingress and egress interface {@code nameif}s and {@link PolicyLookup} runs
- * the ASA interface chain (same-security check, inbound list, global list, implicit deny, outbound list).</p>
+ * <p>Cisco ASA and FortiGate (step 8): the snapshot is the device's (or VDOM's) own configuration, so there is no device
+ * view (no install-on or target); the zones are the ingress and egress interface {@code nameif}s (ASA) or FortiOS
+ * interface names (FortiGate) and {@link PolicyLookup} runs the ASA interface chain or the FortiGate VDOM policy list.</p>
  */
 public final class HopPolicyEvaluator {
     private HopPolicyEvaluator() {}
@@ -74,6 +74,9 @@ public final class HopPolicyEvaluator {
     public static final String ASA_SAME_SECURITY_INTRA_DENIED = "ASA_SAME_SECURITY_INTRA_DENIED";
     public static final String ASA_INTERFACE_UNKNOWN = "ASA_INTERFACE_UNKNOWN";
     public static final String ASA_ACCESS_LIST_RESULTS = "ASA_ACCESS_LIST_RESULTS";
+    // FortiGate (detail carries the PolicyLookup reason).
+    public static final String FGT_IMPLICIT_DENY = "FGT_IMPLICIT_DENY";
+    public static final String FGT_INTRAZONE_UNKNOWN = "FGT_INTRAZONE_UNKNOWN";
     // Per-rule reasons the device view adds to undecidable rules.
     public static final String INSTALL_ON_UNPROVEN = "INSTALL_ON_UNPROVEN";
     public static final String PAN_TARGET_UNPROVEN = "PAN_TARGET_UNPROVEN";
@@ -213,8 +216,8 @@ public final class HopPolicyEvaluator {
             this.snapshot = snapshot; this.device = device; this.binding = binding; this.workLimit = workLimit;
             this.vendor = snapshot.metadata().vendor();
             this.view = Set.of("CP", "PAN").contains(vendor) ? view(snapshot, device, binding)
-                // The ASA snapshot is the device's own configuration: nothing to select per device.
-                : vendor.equals("ASA") ? new View(snapshot, Map.of(), Set.of(), true) : null;
+                // The ASA and FortiGate snapshots are the device's (or VDOM's) own configuration: nothing to select per device.
+                : Set.of("ASA", "FGT").contains(vendor) ? new View(snapshot, Map.of(), Set.of(), true) : null;
             this.lookup = view == null ? null : PolicyLookup.prepare(view.snapshot(), workLimit);
         }
         public PolicySnapshot snapshot() { return snapshot; }
@@ -316,6 +319,24 @@ public final class HopPolicyEvaluator {
             return new Hop(security.verdict(), security.reason(), nat, security, null, egressZone, caveats, notes);
         }
 
+        /**
+         * FortiGate VDOM hop (A0-FG-1..27, design 5.3/5.4): policies match the arriving tuple with the ingress and
+         * egress FortiOS interface names as {@code from}/{@code to} (A0-FG-9). VIP DNAT (before routing and policy,
+         * A0-FG-17..20), central SNAT (A0-FG-21) and policy-mode SNAT (A0-FG-22) are not evaluated: when any NAT rule
+         * or policy SNAT may touch the tuple the hop is UNKNOWN ({@link #NAT_UNKNOWN}) and the security evaluation on
+         * the arriving tuple is kept as context only.
+         */
+        public Hop fortiGate(Tuple tuple, String ingressZone, String egressZone) {
+            if (!vendor.equals("FGT")) return new Hop(UNKNOWN, UNSUPPORTED_VENDOR, null, null, null, null, List.of(), List.of());
+            var nat = nat(tuple, ingressZone, egressZone, null);
+            Verdict security = security(tuple, ingressZone, egressZone);
+            List<String> notes = new ArrayList<>(nat.notes()), caveats = new ArrayList<>(nat.caveats());
+            caveats.addAll(security.caveats()); notes.addAll(security.notes());
+            if (nat.status().equals(HopNatEvaluator.UNKNOWN))
+                return new Hop(UNKNOWN, NAT_UNKNOWN, nat, security, null, egressZone, caveats, notes);
+            return new Hop(security.verdict(), security.reason(), nat, security, null, egressZone, caveats, notes);
+        }
+
         /** UNKNOWN reason when the snapshot is not proven to be this device's policy, else {@code null}. */
         private String targetGate(List<String> caveats) {
             var targets = snapshot.metadata().targets().stream()
@@ -373,6 +394,8 @@ public final class HopPolicyEvaluator {
             case PolicyLookup.ASA_SAME_INTRA -> ASA_SAME_SECURITY_INTRA_DENIED;
             case PolicyLookup.ASA_INTERFACE_UNKNOWN -> ASA_INTERFACE_UNKNOWN;
             case PolicyLookup.ASA_RESULTS -> ASA_ACCESS_LIST_RESULTS;
+            case PolicyLookup.FGT_IMPLICIT_DENY -> FGT_IMPLICIT_DENY;
+            case PolicyLookup.FGT_INTRAZONE_UNKNOWN -> FGT_INTRAZONE_UNKNOWN;
             default -> LOOKUP_UNKNOWN;
         };
     }

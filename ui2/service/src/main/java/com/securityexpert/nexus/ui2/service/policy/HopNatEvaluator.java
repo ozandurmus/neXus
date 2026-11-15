@@ -38,6 +38,11 @@ import java.util.*;
  * a destination clause its real and mapped destination, must resolve and contain neither tuple address. Anything else is
  * UNKNOWN ({@link #ASA_NAT_NOT_EVALUATED}, or {@link #NAT_RULE_SELECTOR_UNRESOLVED} for a cell that does not resolve);
  * no rule touching the tuple is {@code NO_TRANSLATION}.
+ *
+ * <p><b>FortiGate</b> (section source {@code FGT NAT} and policy-mode SNAT on {@code FGT firewall policy}): VIP DNAT
+ * (A0-FG-17..20), central SNAT (A0-FG-21) and policy-mode SNAT (A0-FG-22) are not evaluated. The evaluator proves that
+ * no VIP, central SNAT or reachable policy SNAT rule can touch the tuple; anything else is UNKNOWN
+ * ({@link #FGT_NAT_NOT_EVALUATED}, or {@link #NAT_RULE_SELECTOR_UNRESOLVED}).
  */
 public final class HopNatEvaluator {
     private HopNatEvaluator() {}
@@ -55,6 +60,7 @@ public final class HopNatEvaluator {
     public static final String NAT_ANALYSIS_BUDGET = "NAT_ANALYSIS_BUDGET";
     public static final String NAT_UNSUPPORTED_VENDOR = "NAT_UNSUPPORTED_VENDOR";
     public static final String ASA_NAT_NOT_EVALUATED = "ASA_NAT_NOT_EVALUATED";
+    public static final String FGT_NAT_NOT_EVALUATED = "FGT_NAT_NOT_EVALUATED";
     // Per-rule reasons of undecidable NAT rules.
     public static final String NAT_RULE_SELECTOR_UNRESOLVED = "NAT_RULE_SELECTOR_UNRESOLVED";
     public static final String NAT_RULE_ENABLED_UNKNOWN = "NAT_RULE_ENABLED_UNKNOWN";
@@ -90,6 +96,7 @@ public final class HopNatEvaluator {
             if (vendor.equals("CP")) return checkPoint(snapshot, device, binding, tuple, budget);
             if (vendor.equals("PAN")) return paloAlto(snapshot, device, tuple, ingressZone, provisionalEgressZone, egressInterface, budget);
             if (vendor.equals("ASA")) return asa(snapshot, tuple, budget);
+            if (vendor.equals("FGT")) return fortiGate(snapshot, tuple, ingressZone, provisionalEgressZone, budget);
             return unknown(tuple, NAT_UNSUPPORTED_VENDOR, List.of());
         } catch (Unknown exhausted) {
             return unknown(tuple, NAT_ANALYSIS_BUDGET, List.of());
@@ -426,6 +433,160 @@ public final class HopNatEvaluator {
             }
         }
         return null;
+    }
+
+    // ---- FortiGate -----------------------------------------------------------------------------------------------------
+
+    private static Nat fortiGate(PolicySnapshot snapshot, Tuple tuple, String ingressZone, String egressZone, Budget budget) {
+        var resolver = new Resolver(snapshot.objects(), budget);
+        List<Map<String, Object>> touching = new ArrayList<>();
+        boolean touched = false;
+        for (Section section : snapshot.sections()) {
+            if ("FGT NAT".equals(section.source())) {
+                if (section.rules().isEmpty()) {
+                    touched = true;
+                    continue;
+                }
+                for (Rule rule : section.rules()) {
+                    budget.spend();
+                    if (Boolean.FALSE.equals(rule.enabled())) continue;
+                    String reason = "FGT VIP".equals(section.name())
+                        ? fgtVipTouches(snapshot, rule, tuple, resolver)
+                        : fgtCentralSnatTouches(rule, tuple, resolver);
+                    if (reason == null) continue;
+                    touched = true;
+                    if (touching.size() < ASA_NAT_ROWS) touching.add(row(new Candidate(section, rule), reason));
+                }
+            } else if ("FGT firewall policy".equals(section.source())) {
+                boolean earlierUnresolved = false;
+                for (Rule rule : section.rules()) {
+                    budget.spend();
+                    if (Boolean.FALSE.equals(rule.enabled())) continue;
+                    if (!rule.extras().containsKey("source-translation-type")) {
+                        if (!earlierUnresolved && fgtPolicyDefinitelyMatches(snapshot, rule, tuple, ingressZone, egressZone, resolver)) break;
+                        if (fgtPolicyMayMatch(snapshot, rule, tuple, ingressZone, egressZone, resolver) == null) continue;
+                        if (!fgtPolicyClean(snapshot, rule, ingressZone, egressZone)) earlierUnresolved = true;
+                        continue;
+                    }
+                    if ("deny".equals(rule.action())) continue;
+                    String reason = fgtPolicyMayMatch(snapshot, rule, tuple, ingressZone, egressZone, resolver);
+                    if (reason == null) continue;
+                    touched = true;
+                    if (touching.size() < ASA_NAT_ROWS) touching.add(row(new Candidate(section, rule), reason));
+                }
+            }
+        }
+        if (touched) return unknown(tuple, FGT_NAT_NOT_EVALUATED, touching);
+        return new Nat(NO_TRANSLATION, NAT_NO_RULE_MATCHED, tuple, tuple, List.of(), List.of(), List.of(), List.of());
+    }
+
+    private static String fgtVipTouches(PolicySnapshot snapshot, Rule rule, Tuple tuple, Resolver resolver) {
+        Boolean ext = fgtVipExternalTouches(snapshot, rule.destination().refs(), tuple, resolver.budget);
+        if (ext == null) return NAT_RULE_SELECTOR_UNRESOLVED;
+        List<String> mapped = rule.extras().get("translated-destination");
+        if (mapped == null || mapped.isEmpty()) return NAT_RULE_SELECTOR_UNRESOLVED;
+        boolean mappedTouches;
+        try {
+            Selector selector = resolver.cell(new Cell(mapped, false), "address");
+            mappedTouches = point(selector, "ipv4", tuple.sourceValue(), resolver.budget)
+                || point(selector, "ipv4", tuple.destinationValue(), resolver.budget);
+        } catch (Unknown unresolved) {
+            if (unresolved.getMessage().equals("analysis budget")) throw unresolved;
+            return NAT_RULE_SELECTOR_UNRESOLVED;
+        }
+        return ext || mappedTouches ? FGT_NAT_NOT_EVALUATED : null;
+    }
+
+    /** {@code null} when the VIP external object does not resolve, else whether it covers either tuple address. */
+    private static Boolean fgtVipExternalTouches(PolicySnapshot snapshot, List<String> refs, Tuple tuple, Budget budget) {
+        if (refs == null || refs.isEmpty()) return null;
+        boolean touches = false;
+        for (String id : refs) {
+            budget.spend();
+            PolicyObject o = snapshot.objects().get(id);
+            if (o == null || !"RESOLVED".equals(o.status())) return null;
+            boolean found = false;
+            for (String value : o.values()) {
+                budget.spend();
+                if (!value.startsWith("ip-netmask: ") && !value.startsWith("ip-range: ")) continue;
+                found = true;
+                try {
+                    long[] r = PolicyRuleQuery.interval(value.substring(value.indexOf(": ") + 2));
+                    if (tuple.sourceValue() >= r[0] && tuple.sourceValue() <= r[1]
+                            || tuple.destinationValue() >= r[0] && tuple.destinationValue() <= r[1]) touches = true;
+                } catch (IllegalArgumentException invalid) {
+                    return null;
+                }
+            }
+            if (!found) return null;
+        }
+        return touches;
+    }
+
+    private static String fgtCentralSnatTouches(Rule rule, Tuple tuple, Resolver resolver) {
+        if (rule.extras().containsKey("fgt-unparsed")) return NAT_RULE_SELECTOR_UNRESOLVED;
+        try {
+            Selector src = resolver.cell(rule.source(), "address"), dst = resolver.cell(rule.destination(), "address");
+            Selector pool = rule.extras().containsKey("translated-source")
+                ? resolver.cell(new Cell(rule.extras().get("translated-source"), false), "address") : null;
+            boolean matches = point(src, "ipv4", tuple.sourceValue(), resolver.budget)
+                && point(dst, "ipv4", tuple.destinationValue(), resolver.budget);
+            boolean poolTouches = pool != null && (point(pool, "ipv4", tuple.sourceValue(), resolver.budget)
+                || point(pool, "ipv4", tuple.destinationValue(), resolver.budget));
+            return matches || poolTouches ? FGT_NAT_NOT_EVALUATED : null;
+        } catch (Unknown unresolved) {
+            if (unresolved.getMessage().equals("analysis budget")) throw unresolved;
+            return NAT_RULE_SELECTOR_UNRESOLVED;
+        }
+    }
+
+    private static String fgtPolicyMayMatch(PolicySnapshot snapshot, Rule rule, Tuple tuple, String ingressZone,
+            String egressZone, Resolver resolver) {
+        if (!fgtZonePlacement(snapshot, rule)) {
+            List<String> from = rule.extras().get("from"), to = rule.extras().get("to");
+            if (from != null && !from.isEmpty() && ingressZone != null && !ingressZone.isEmpty()
+                    && !from.contains("any") && !from.contains(ingressZone)) return null;
+            if (to != null && !to.isEmpty() && egressZone != null && !egressZone.isEmpty()
+                    && !to.contains("any") && !to.contains(egressZone)) return null;
+        }
+        boolean unresolved = false;
+        for (int i = 0; i < 3; i++) {
+            Cell cell = i == 0 ? rule.source() : i == 1 ? rule.destination() : rule.service();
+            String family = i < 2 ? "address" : "service";
+            try {
+                Selector sel = resolver.cell(cell, family);
+                if (i == 0 && !point(sel, "ipv4", tuple.sourceValue(), resolver.budget)) return null;
+                if (i == 1 && !point(sel, "ipv4", tuple.destinationValue(), resolver.budget)) return null;
+                if (i == 2 && !sel.any()) {
+                    if (tuple.service() == null || !point(sel, tuple.protocol(), tuple.destinationPort(), resolver.budget)) return null;
+                }
+            } catch (Unknown u) {
+                if (u.getMessage().equals("analysis budget")) throw u;
+                unresolved = true;
+            }
+        }
+        return unresolved ? NAT_RULE_SELECTOR_UNRESOLVED : FGT_NAT_NOT_EVALUATED;
+    }
+
+    private static boolean fgtPolicyClean(PolicySnapshot snapshot, Rule rule, String ingressZone, String egressZone) {
+        if (!Boolean.TRUE.equals(rule.enabled()) || !TERMINAL_ACTIONS.contains(rule.action())
+                || !rule.application().refs().isEmpty() || rule.application().negated() || fgtZonePlacement(snapshot, rule)) return false;
+        List<String> from = rule.extras().get("from"), to = rule.extras().get("to");
+        if (from == null || from.isEmpty() || to == null || to.isEmpty()
+                || ingressZone == null || ingressZone.isEmpty() || egressZone == null || egressZone.isEmpty()) return false;
+        for (String key : rule.extras().keySet()) {
+            if (!Set.of("from", "to").contains(key) && !fgtInert(snapshot, key)) return false;
+        }
+        return true;
+    }
+
+    private static boolean fgtPolicyDefinitelyMatches(PolicySnapshot snapshot, Rule rule, Tuple tuple, String ingressZone,
+            String egressZone, Resolver resolver) {
+        if (!fgtPolicyClean(snapshot, rule, ingressZone, egressZone)) return false;
+        List<String> from = rule.extras().get("from"), to = rule.extras().get("to");
+        if (!from.contains("any") && !from.contains(ingressZone)) return false;
+        if (!to.contains("any") && !to.contains(egressZone)) return false;
+        return cells(rule, tuple, resolver) == Outcome.MATCH;
     }
 
     private static Map<String, Object> rule(Candidate candidate) { return HopPolicyEvaluator.ruleView(candidate.section(), candidate.rule()); }

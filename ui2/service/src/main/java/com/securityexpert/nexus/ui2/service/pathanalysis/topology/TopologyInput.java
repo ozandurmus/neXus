@@ -10,8 +10,8 @@ import java.util.Set;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun;
 
 /**
- * Everything one build reads: enrolled Check Point / Palo Alto / Cisco ASA devices with their newest inventory run, and
- * the overrides. The builder never reads anything else and never contacts a device.
+ * Everything one build reads: enrolled Check Point / Palo Alto / Cisco ASA / FortiGate devices with their newest
+ * inventory run, and the overrides. The builder never reads anything else and never contacts a device.
  *
  * @param idSalt per-snapshot secret for the opaque ids; never persisted, logged or returned
  * @param managementVs Check Point Virtual System management objects whose interface addresses may give a VSX VIP its
@@ -29,10 +29,12 @@ public record TopologyInput(String snapshotId, Instant builtAt, List<DeviceFacts
     public static final String VENDOR_CHECK_POINT = "check_point";
     public static final String VENDOR_PALO_ALTO = "palo_alto";
     public static final String VENDOR_CISCO_ASA = "cisco_asa";
+    public static final String VENDOR_FORTINET = "fortinet";
 
     /** The vendors a topology is built from. */
     public static boolean supportedVendor(String vendor) {
-        return VENDOR_CHECK_POINT.equals(vendor) || VENDOR_PALO_ALTO.equals(vendor) || VENDOR_CISCO_ASA.equals(vendor);
+        return VENDOR_CHECK_POINT.equals(vendor) || VENDOR_PALO_ALTO.equals(vendor)
+                || VENDOR_CISCO_ASA.equals(vendor) || VENDOR_FORTINET.equals(vendor);
     }
 
     /**

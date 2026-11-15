@@ -372,10 +372,11 @@ public final class PathEngine {
             boolean checkPoint = TopologyInput.VENDOR_CHECK_POINT.equals(node.vendor());
             boolean paloAlto = TopologyInput.VENDOR_PALO_ALTO.equals(node.vendor());
             boolean asa = TopologyInput.VENDOR_CISCO_ASA.equals(node.vendor());
+            boolean fortigate = TopologyInput.VENDOR_FORTINET.equals(node.vendor());
             HopPolicySource.HopPolicy policy = policy(node);
             Optional<HopPolicySource.Bound> bound = policy instanceof HopPolicySource.Bound b ? Optional.of(b) : Optional.empty();
             String unboundReason = policy instanceof HopPolicySource.Unbound u ? u.reason() : null;
-            if (!checkPoint && !paloAlto && !asa) {
+            if (!checkPoint && !paloAlto && !asa && !fortigate) {
                 unboundReason = UNSUPPORTED_NODE_VENDOR;
                 bound = Optional.empty();
             }
@@ -387,6 +388,9 @@ public final class PathEngine {
             }
             if (bound.isPresent() && asa) {
                 return asa(ctx, ingressZone.orElse(null));
+            }
+            if (bound.isPresent() && fortigate) {
+                return fortiGate(ctx, ingressZone.orElse(null));
             }
             HopPolicyEvaluator.Hop hop = null;
             String failure = unboundReason;
@@ -474,6 +478,41 @@ public final class PathEngine {
                 String failure = null;
                 try {
                     hop = ctx.bound().orElseThrow().prepared().asa(tuple, ingressZone, zone);
+                } catch (RuntimeException e) {
+                    failure = POLICY_EVALUATION_FAILED;
+                }
+                out.addAll(choices(ctx, hop, failure, tuple, group.getValue(), new ArrayList<>(first.taints()), zone,
+                        first.ecmp()));
+            }
+            return out;
+        }
+
+        /**
+         * FortiGate (FortiGate policy step 8): one evaluation per distinct egress FortiOS interface of the VDOM's route
+         * lookup on the destination; the ingress and egress interface names are the lookup's {@code from}/{@code to}
+         * placements. The NAT evaluator proves that no VIP, central SNAT or reachable policy SNAT rule touches the tuple
+         * (else the hop is UNKNOWN), so the tuple is never translated here.
+         */
+        private List<Choice> fortiGate(Context ctx, String ingressZone) {
+            Node node = ctx.node();
+            Tuple tuple = ctx.tuple();
+            RouteLookup.Result first = RouteLookup.lookup(node, host(tuple.destination()));
+            Map<List<String>, List<InventoryRoute>> groups = new LinkedHashMap<>();
+            for (InventoryRoute route : first.routes()) {
+                String zone = egressZone(node, route, host(tuple.destination())).orElse(null);
+                groups.computeIfAbsent(java.util.Arrays.asList(zone, route.interfaceName().orElse(null)), k -> new ArrayList<>())
+                        .add(route);
+            }
+            if (groups.isEmpty()) {
+                groups.put(java.util.Arrays.asList(null, null), List.of());
+            }
+            List<Choice> out = new ArrayList<>();
+            for (var group : groups.entrySet()) {
+                String zone = group.getKey().get(0);
+                HopPolicyEvaluator.Hop hop = null;
+                String failure = null;
+                try {
+                    hop = ctx.bound().orElseThrow().prepared().fortiGate(tuple, ingressZone, zone);
                 } catch (RuntimeException e) {
                     failure = POLICY_EVALUATION_FAILED;
                 }

@@ -66,7 +66,7 @@ class TopologyServiceTest {
                 DeviceEnrollmentState.ENROLLED, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                 Optional.empty());
-        when(devices.listAll()).thenReturn(List.of(draft, manager, gateway("dev-f", "fortinet"),
+        when(devices.listAll()).thenReturn(List.of(draft, manager, gateway("dev-f", "radware"),
                 gateway("dev-g", TopologyInput.VENDOR_CHECK_POINT)));
         var inventory = mock(DeviceInventoryRepository.class);
         when(inventory.findLatestRuns(anyList())).thenReturn(List.of());

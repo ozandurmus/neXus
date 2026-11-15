@@ -277,45 +277,96 @@ public final class FortiGatePlan {
     }
 
     private static final Pattern ROUTE = Pattern.compile(
-            "^([A-Z*]+(?:\\s+(?:E1|E2|N1|N2|IA|L1|L2|ia))?)\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+/\\d+)\\s+(.*)$");
+            "^([A-Za-z*]+(?:\\s+(?:E1|E2|N1|N2|IA|L1|L2|ia|\\*))*)\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+/\\d+)(?:\\s+(.*))?$");
     /** "via hop, port1" or "via hop (recursive is directly connected, port2), 2d01h" -- the interface in brackets then. */
     private static final Pattern VIA = Pattern.compile("via (\\d+\\.\\d+\\.\\d+\\.\\d+)(?: \\(([^)]*)\\))?,\\s*([^,\\s]+)");
     private static final Pattern CONNECTED = Pattern.compile("is directly connected,\\s*([^,\\s]+)");
+    /** An equal-cost path of the route above: "[distance/metric] via {next hop}, {iface}..." with no code or destination. */
+    private static final Pattern CONTINUATION = Pattern.compile("^\\[\\d+/\\d+\\]\\s+(via\\s+\\d+\\.\\d+\\.\\d+\\.\\d+.*)$");
 
-    /** "get router info routing-table all": code, destination/prefix, then "via next hop, interface" or "directly connected". */
+    /**
+     * {@code get router info routing-table all}: code, destination/prefix, then "via next hop, interface" or
+     * "is directly connected, interface"; a following line with only "[distance/metric] via ..." is another equal-cost
+     * path of the same route (also when a long destination line wraps onto the next line).
+     *
+     * <p>Every row in a recognised form is stored active with its next-hop kind ({@link InventoryRoute#NEXT_HOP_IP} or
+     * {@link InventoryRoute#NEXT_HOP_CONNECTED}); multiple paths of one route are stored ECMP. A row in any other form
+     * keeps active, ECMP and next-hop kind UNKNOWN.</p>
+     */
     public static List<InventoryRoute> parseRoutes(String out) {
         List<InventoryRoute> routes = new ArrayList<>();
         if (out == null) {
             return routes;
         }
+        String destination = null;
+        String protocol = null;
+        int groupStart = -1;
         for (String raw : out.split("\\R")) {
-            Matcher m = ROUTE.matcher(raw.strip());
+            String line = raw.strip();
+            Matcher m = ROUTE.matcher(line);
             if (!m.matches()) {
+                Matcher more = CONTINUATION.matcher(line);
+                if (more.matches() && destination != null && groupStart >= 0 && (routes.size() == groupStart
+                        || routes.get(routes.size() - 1).nextHopKind().filter(InventoryRoute.NEXT_HOP_IP::equals).isPresent())) {
+                    Matcher via = VIA.matcher(more.group(1));
+                    if (!via.find()) {
+                        destination = null;
+                        groupStart = -1;
+                        continue;
+                    }
+                    Matcher inner = via.group(2) == null ? null : CONNECTED.matcher(via.group(2));
+                    String iface = inner != null && inner.find() ? inner.group(1) : via.group(3);
+                    routes.add(route(destination, Optional.of(via.group(1)), Optional.of(iface), protocol, false,
+                            InventoryRoute.NEXT_HOP_IP));
+                    for (int i = groupStart; i < routes.size() && routes.size() - groupStart > 1; i++) {
+                        InventoryRoute r = routes.get(i);
+                        routes.set(i, new InventoryRoute(r.routeId(), r.destination(), r.nextHop(), r.interfaceName(),
+                                r.protocol(), r.routeTable(), r.active(), Optional.of(true), r.metric(), r.nextHopKind()));
+                    }
+                } else if (!line.isEmpty()) {
+                    destination = null;
+                    groupStart = -1;
+                }
                 continue;
             }
             String code = m.group(1).replace("*", "").trim().split("\\s+")[0];
-            Optional<String> hop = Optional.empty();
-            Optional<String> iface = Optional.empty();
-            Matcher via = VIA.matcher(m.group(3));
-            Matcher conn = CONNECTED.matcher(m.group(3));
-            if (via.find()) {
-                hop = Optional.of(via.group(1));
-                Matcher inner = via.group(2) == null ? null : CONNECTED.matcher(via.group(2));
-                iface = Optional.of(inner != null && inner.find() ? inner.group(1) : via.group(3));
-            } else if (conn.find()) {
-                iface = Optional.of(conn.group(1));
-            }
-            String protocol = switch (code) {
+            String rest = m.group(3) == null ? "" : m.group(3);
+            destination = m.group(2);
+            protocol = switch (code) {
                 case "C" -> InventoryRoute.PROTOCOL_CONNECTED;
-                case "S" -> m.group(2).equals("0.0.0.0/0") ? InventoryRoute.PROTOCOL_DEFAULT : InventoryRoute.PROTOCOL_STATIC;
+                case "S" -> destination.equals("0.0.0.0/0") ? InventoryRoute.PROTOCOL_DEFAULT : InventoryRoute.PROTOCOL_STATIC;
                 case "O" -> InventoryRoute.PROTOCOL_OSPF;
                 case "B" -> InventoryRoute.PROTOCOL_BGP;
                 case "R" -> InventoryRoute.PROTOCOL_RIP;
                 default -> InventoryRoute.PROTOCOL_UNKNOWN;
             };
-            routes.add(new InventoryRoute(UUID.randomUUID().toString(), m.group(2), hop, iface, protocol, Optional.empty()));
+            groupStart = routes.size();
+            if (rest.isEmpty()) {
+                continue;
+            }
+            Matcher via = VIA.matcher(rest);
+            Matcher conn = CONNECTED.matcher(rest);
+            if (via.find()) {
+                Matcher inner = via.group(2) == null ? null : CONNECTED.matcher(via.group(2));
+                String iface = inner != null && inner.find() ? inner.group(1) : via.group(3);
+                routes.add(route(destination, Optional.of(via.group(1)), Optional.of(iface), protocol, false,
+                        InventoryRoute.NEXT_HOP_IP));
+            } else if (conn.find()) {
+                routes.add(route(destination, Optional.empty(), Optional.of(conn.group(1)), protocol, false,
+                        InventoryRoute.NEXT_HOP_CONNECTED));
+            } else {
+                groupStart = -1;
+                routes.add(new InventoryRoute(UUID.randomUUID().toString(), destination, Optional.empty(), Optional.empty(),
+                        protocol, Optional.empty()));
+            }
         }
         return routes;
+    }
+
+    private static InventoryRoute route(String destination, Optional<String> nextHop, Optional<String> iface, String protocol,
+            boolean ecmp, String nextHopKind) {
+        return new InventoryRoute(UUID.randomUUID().toString(), destination, nextHop, iface, protocol, Optional.empty(),
+                Optional.of(true), ecmp ? Optional.of(true) : Optional.empty(), Optional.empty(), Optional.of(nextHopKind));
     }
 
     /** A configuration backup starts with FortiOS's own header line. */
