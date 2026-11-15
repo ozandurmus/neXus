@@ -136,6 +136,24 @@ public final class JooqSupportBundleUploadStore {
                         r.get("state", String.class))));
     }
 
+    /** What the screen shows about a request's leftover directory: whether one is recorded and uncleaned, and the last cleanup. */
+    public record CleanupStatus(boolean pending, String state, String outcome) {
+    }
+
+    public java.util.Map<UUID, CleanupStatus> cleanupStatuses(java.util.Collection<UUID> requestIds) {
+        if (requestIds.isEmpty()) return java.util.Map.of();
+        String ids = requestIds.stream().map(UUID::toString).reduce((a, b) -> a + "," + b).orElse("");
+        return tx.inTransaction(dsl -> {
+            java.util.Map<UUID, CleanupStatus> out = new java.util.HashMap<>();
+            for (var r : dsl.fetch("select id::text as id, (work_dir_path is not null and work_dir_cleaned = false) as pending, "
+                    + "cleanup_state, cleanup_outcome from support_bundle_request where id = any(string_to_array({0}, ',')::uuid[])", ids)) {
+                out.put(UUID.fromString(r.get("id", String.class)), new CleanupStatus(Boolean.TRUE.equals(r.get("pending", Boolean.class)),
+                        r.get("cleanup_state", String.class), r.get("cleanup_outcome", String.class)));
+            }
+            return out;
+        });
+    }
+
     /** Marks the cleanup requested (atomic: a second click finds it already requested). */
     public boolean markCleanupRequested(UUID requestId, String actor, String reason) {
         return audited.inTransaction(actor, ACTION_CLEANUP, requestId.toString(), dsl -> dsl.execute(

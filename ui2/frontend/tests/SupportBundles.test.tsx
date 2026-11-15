@@ -3,14 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SupportBundlesScreen, bundleDevice, collisionHint } from "../src/screens/SupportBundlesScreen";
 import {
-  deleteSupportBundle, getSupportBundleCatalogue, listDevices, listSupportBundles, requestSupportBundle,
-  requestSupportBundleDownloadTicket,
+  cleanupSupportBundleWorkDir, deleteSupportBundle, getSupportBundleCatalogue, getSupportBundleUploadDestinations, listDevices,
+  listSupportBundleUploads, listSupportBundles, requestSupportBundle, requestSupportBundleDownloadTicket, startSupportBundleUpload,
 } from "../src/auth/adminApi";
 
 vi.mock("../src/auth/adminApi", async (original) => ({
   ...(await original<typeof import("../src/auth/adminApi")>()),
   listSupportBundles: vi.fn(), getSupportBundleCatalogue: vi.fn(), listDevices: vi.fn(), requestSupportBundle: vi.fn(),
   cancelSupportBundle: vi.fn(), deleteSupportBundle: vi.fn(), requestSupportBundleDownloadTicket: vi.fn(),
+  getSupportBundleUploadDestinations: vi.fn(), listSupportBundleUploads: vi.fn(), startSupportBundleUpload: vi.fn(),
+  cleanupSupportBundleWorkDir: vi.fn(),
 }));
 
 /** Support bundles screen (SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md 5.12). Masked names and documentation values only. */
@@ -41,6 +43,12 @@ beforeEach(() => {
   vi.mocked(getSupportBundleCatalogue).mockResolvedValue({ kinds } as never);
   vi.mocked(listDevices).mockResolvedValue({ devices: [{ device_id: "d-cp", hostname: "FW-TANGO-04", vendor_hint: "check_point" }] } as never);
   vi.mocked(listSupportBundles).mockResolvedValue({ support_bundles: [row()] } as never);
+  vi.mocked(getSupportBundleUploadDestinations).mockResolvedValue({ manual_only_vendors: ["check_point"], destinations: [
+    { id: "cisco_cxd_https", label: "Cisco CXD (HTTPS)", method: "HTTPS_PUT", vendor: "cisco_asa", host: "cxd.cisco.com", port: 443, generic: false },
+    { id: "fortinet_sftp", label: "Fortinet support (SFTP)", method: "SFTP", vendor: "fortinet", host: "support.fortinet.com", port: 2222, generic: false },
+    { id: "generic_sftp", label: "Generic SFTP server", method: "SFTP", vendor: null, host: null, port: 22, generic: true },
+  ] } as never);
+  vi.mocked(listSupportBundleUploads).mockResolvedValue({ uploads: [] } as never);
 });
 
 describe("support bundles screen", () => {
@@ -147,5 +155,101 @@ describe("support bundles screen", () => {
     expect(collisionHint("2026-11-16T03:10")).toMatch(/HCP/);
     expect(collisionHint("2026-11-16T06:00")).toMatch(/system-log/);
     expect(collisionHint("2026-11-16T04:00")).toBeNull();
+  });
+
+  it("shows Check Point as a manual upload and offers only the generic SFTP server", async () => {
+    render(<SupportBundlesScreen />);
+    fireEvent.click(await screen.findByRole("button", { name: "Upload" }));
+    expect(await screen.findByText(/Manual upload: Check Point has no scriptable upload route yet/)).toBeTruthy();
+    fireEvent.mouseDown(within(screen.getByRole("dialog")).getByLabelText("Destination"));
+    expect(screen.getByRole("option", { name: /Generic SFTP server/ })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: /Cisco CXD/ })).toBeNull();
+    expect(screen.queryByRole("option", { name: /Fortinet/ })).toBeNull();
+  });
+
+  it("sends a Cisco upload only after the confirmation, with the credential from the field, and clears it afterwards", async () => {
+    vi.mocked(listSupportBundles).mockResolvedValue({ support_bundles: [row({ vendor: "cisco_asa", case_ref: "CASE-1" })] } as never);
+    vi.mocked(startSupportBundleUpload).mockResolvedValue({ upload_id: "u1", status: "RUNNING" });
+    render(<SupportBundlesScreen />);
+    fireEvent.click(await screen.findByRole("button", { name: "Upload" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    fireEvent.mouseDown(dialog.getByLabelText("Destination"));
+    fireEvent.click(await screen.findByRole("option", { name: /Cisco CXD/ }));
+    expect(screen.queryByRole("option", { name: /Fortinet/ })).toBeNull();
+    fireEvent.change(dialog.getByLabelText("Case (SR) number"), { target: { value: "CASE-1" } });
+    const secret = dialog.getByLabelText("Upload token") as HTMLInputElement;
+    expect(secret.type).toBe("password");
+    fireEvent.change(secret, { target: { value: "synthetic-token-1" } });
+    fireEvent.change(dialog.getByLabelText(/Reason/), { target: { value: "Attach to the TAC case" } });
+    const send = dialog.getByRole("button", { name: "Send" }) as HTMLButtonElement;
+    expect(send.disabled).toBe(true);   // not confirmed yet
+    expect(dialog.getByText(/bank firewall may need an opening/)).toBeTruthy();
+    fireEvent.click(dialog.getByLabelText(/I confirm that this bundle may be sent to cxd.cisco.com:443/));
+    expect(send.disabled).toBe(false);
+    fireEvent.click(send);
+    await waitFor(() => expect(startSupportBundleUpload).toHaveBeenCalled());
+    expect(vi.mocked(startSupportBundleUpload).mock.calls[0][1]).toMatchObject({
+      destination: "cisco_cxd_https", user: "CASE-1", password: "synthetic-token-1", reason: "Attach to the TAC case",
+      item_kinds: ["cp_gaia_extras"], case_ref: "CASE-1" });
+    await waitFor(() => expect((dialog.getByLabelText("Upload token") as HTMLInputElement).value).toBe(""));
+  });
+
+  it("takes the host and port of a generic SFTP upload and refuses a bad port before sending", async () => {
+    vi.mocked(startSupportBundleUpload).mockResolvedValue({ upload_id: "u1", status: "RUNNING" });
+    render(<SupportBundlesScreen />);
+    fireEvent.click(await screen.findByRole("button", { name: "Upload" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    fireEvent.mouseDown(dialog.getByLabelText("Destination"));
+    fireEvent.click(await screen.findByRole("option", { name: /Generic SFTP server/ }));
+    fireEvent.change(dialog.getByLabelText("Host"), { target: { value: "sftp.example.com" } });
+    fireEvent.change(dialog.getByLabelText("Port"), { target: { value: "70000" } });
+    fireEvent.change(dialog.getByLabelText("User"), { target: { value: "svc" } });
+    fireEvent.change(dialog.getByLabelText("Password"), { target: { value: "synthetic-pw" } });
+    fireEvent.change(dialog.getByLabelText(/Reason/), { target: { value: "Send to the lab server" } });
+    fireEvent.click(dialog.getByLabelText(/I confirm that this bundle may be sent to sftp.example.com/));
+    expect((dialog.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(dialog.getByLabelText("Port"), { target: { value: "2022" } });
+    fireEvent.click(dialog.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(startSupportBundleUpload).toHaveBeenCalled());
+    expect(vi.mocked(startSupportBundleUpload).mock.calls[0][1]).toMatchObject({ destination: "generic_sftp", host: "sftp.example.com", port: 2022, user: "svc" });
+  });
+
+  it("shows an upload's progress, result, a changed host key warning and a clear connection failure", async () => {
+    vi.mocked(listSupportBundleUploads).mockResolvedValue({ uploads: [
+      { id: "u1", request_id: ID, destination: "cisco_cxd_sftp", destination_host: "cxd.cisco.com", destination_port: 22, remote_name: "b.tgz",
+        state: "COMPLETED", started_at: null, finished_at: null, attempts: 1, bytes_total: 2097152, bytes_sent: 2097152,
+        sha256: "ab".repeat(32), remote_status: "SFTP_OK size 2097152 confirmed", error_code: null, error_detail: null,
+        host_key_changed: true, item_count: 1 },
+      { id: "u2", request_id: ID, destination: "cisco_cxd_sftp", destination_host: "cxd.cisco.com", destination_port: 22, remote_name: "b.tgz",
+        state: "FAILED", started_at: null, finished_at: null, attempts: 2, bytes_total: 2097152, bytes_sent: 0, sha256: null, remote_status: null,
+        error_code: "CONNECTION_FAILED", error_detail: "Could not reach cxd.cisco.com:22. The bank firewall may need an opening.",
+        host_key_changed: false, item_count: 1 },
+    ] } as never);
+    render(<SupportBundlesScreen />);
+    fireEvent.click(await screen.findByRole("button", { name: "Upload" }));
+    expect(await screen.findByText(/Remote answer: SFTP_OK size 2097152 confirmed/)).toBeTruthy();
+    expect(screen.getByText(/host key differs from one seen before. The upload was not blocked/)).toBeTruthy();
+    expect(screen.getByText(/CONNECTION_FAILED: Could not reach cxd.cisco.com:22/)).toBeTruthy();
+  });
+
+  it("offers the admin-confirmed removal of a leftover work directory only where one is recorded", async () => {
+    vi.mocked(listSupportBundles).mockResolvedValue({ support_bundles: [row({ state: "FAILED", work_dir_pending: true, cleanup_state: null })] } as never);
+    vi.mocked(cleanupSupportBundleWorkDir).mockResolvedValue({ id: ID, job_id: "j", status: "ACCEPTED" });
+    render(<SupportBundlesScreen />);
+    expect(await screen.findByText(/work directory from this run is still on the device/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Remove leftover work directory" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    fireEvent.change(dialog.getByLabelText(/Reason/), { target: { value: "Remove the leftover directory" } });
+    const remove = dialog.getByRole("button", { name: "Remove" }) as HTMLButtonElement;
+    expect(remove.disabled).toBe(true);
+    fireEvent.click(dialog.getByLabelText(/I confirm that the leftover work directory/));
+    fireEvent.click(remove);
+    await waitFor(() => expect(cleanupSupportBundleWorkDir).toHaveBeenCalledWith(ID, "Remove the leftover directory"));
+  });
+
+  it("offers no removal when no directory is left", async () => {
+    render(<SupportBundlesScreen />);
+    await screen.findByText("FW-TANGO-04", { selector: "td" });
+    expect(screen.queryByRole("button", { name: "Remove leftover work directory" })).toBeNull();
   });
 });

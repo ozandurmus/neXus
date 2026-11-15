@@ -62,3 +62,29 @@ continues, the observation is audited, and the job and device are flagged `ssh_i
 sent. STRICT mode, a rejected device and failover execution still refuse. This is narrow: the MDS export and every other class
 1 job still refuse a mismatch. This amends the "WARN is read only" rule of `SshHostKeyPolicyStore` for these four capabilities
 only.
+
+## 5. Amendment - 2026-11-16 (Product Owner, relayed by the PO session): vendor upload and work directory cleanup
+
+**5.1 Vendor upload (design S8) - APPROVED, built in migration V236.** Q8 and Q9 stand: upload for all vendors, no four-eyes; the
+same `security_admin` may request, download and upload. Approved targets: Cisco CXD (`cxd.cisco.com`, SFTP or SCP on 22, HTTPS PUT on
+443; user is the case number, password the per-case upload token), Fortinet (`support.fortinet.com`, SFTP on 2222; per-ticket user and
+password), Palo Alto (`tacupload.paloaltonetworks.com`, SCP; user is the case number with leading zeros, password the case contact
+email) and a generic SFTP server whose host, port, user and password the administrator types per upload. Check Point is not built
+(research pending): the screen says "manual upload". This replaces design 5.1 (`approved_by <> requested_by`), 5.10 (`approve` and
+`SELF_APPROVAL_REFUSED`) and the three-route set: there is one upload route, `POST /api/v2/support-bundles/{id}/uploads`
+(`support_bundle_upload`, `security_admin`, never aiview), with an explicit `confirm`.
+
+Implementation decisions recorded here: the credential never reaches a database row, log or audit row, so the transfer runs in the
+service process (the only place a never-stored secret can be held; the worker has no channel to receive one); it is held in a
+`char[]` and zeroed at the end of the job. The vault is streamed twice (measure, then send) and the digests must match. A host key
+change is recorded and warned about on the upload row, never refused. One retry, only for a connection that failed before any byte
+was sent, never after an authentication refusal. A vendor destination accepts only bundles of its own vendor; the generic server
+accepts any. The generic host must be a host name or IP literal and the port 1 to 65535. The start of an upload is the audited row
+insert (committed before the first vault byte, with one `backup_artefact_retrieval` row per item); the end is the audited state change.
+Egress from the neXus host to these destinations may need bank firewall openings; a connection failure is shown as such.
+
+**5.2 Remove leftover work directory - APPROVED.** For a request whose recorded work directory was not cleaned, a `security_admin`
+may, after an explicit confirmation and a reason, have it removed. The job uses the already approved C20 literal only
+(`cp_sb_remove_workdir` / `cpm_sb_remove_workdir`, `rm -rf <dir> <dir>.tgz`) for the exact name in `work_dir_path`, which must match
+the work directory pattern; no new literal. Route `POST /api/v2/support-bundles/{id}/cleanup-workdir` (`support_bundle_cleanup_workdir`,
+`security_admin`, never aiview). Audited on the request row; the executor retries the removal once.
