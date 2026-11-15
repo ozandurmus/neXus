@@ -112,6 +112,8 @@ public final class FileArtefactStore implements ArtefactStore {
     private long storeQuotasAtNanos;
     private boolean storeQuotasLoaded;
     private final Map<String, long[]> storeUsage = new ConcurrentHashMap<>();
+    /** Audit of refused writes (V227); a no-op until a recorder is wired. */
+    private volatile ArtefactStoreRefusalRecorder refusalRecorder = r -> { };
 
     public FileArtefactStore(Path root, ArtefactStoreCipher cipher) {
         this(root, cipher, LEGACY_MAX_BYTES, resolveQuotaBytes(root, System.getenv()));
@@ -154,6 +156,26 @@ public final class FileArtefactStore implements ArtefactStore {
         return this;
     }
 
+    /**
+     * Records every write this store refuses because of a quota (the global one or a per-store one) through
+     * {@code recorder}, once per refused write. A recorder failure never changes the refusal.
+     */
+    public FileArtefactStore withRefusalRecorder(ArtefactStoreRefusalRecorder recorder) {
+        this.refusalRecorder = Objects.requireNonNull(recorder, "recorder");
+        return this;
+    }
+
+    /** Records {@code e} for the audit (best effort) and returns it, so a caller can {@code throw refused(...)}. */
+    private QuotaExceededException refused(QuotaExceededException e, String store, String deviceId, String jobId) {
+        try {
+            refusalRecorder.record(new ArtefactStoreRefusalRecorder.Refusal(e.store() != null ? e.store() : store,
+                    e.store() == null ? "global" : "store", e.usedBytes(), e.quotaBytes(), e.attemptedBytes(), deviceId, jobId));
+        } catch (RuntimeException ignored) {
+            // recording is best effort
+        }
+        return e;
+    }
+
     /** The per-store quota of {@code store} in bytes, if one is configured. */
     public Optional<Long> storeQuotaBytes(String store) {
         synchronized (storeQuotaLock) {
@@ -186,12 +208,12 @@ public final class FileArtefactStore implements ArtefactStore {
     }
 
     /** Refuses with the per-store reason when {@code store} has reached its own quota. */
-    private void checkStoreQuota(String store, Path ownTempFile) throws QuotaExceededException {
+    private void checkStoreQuota(String store, Path ownTempFile, String deviceId, String jobId) throws QuotaExceededException {
         Optional<Long> limit = storeQuotaBytes(store);
         if (limit.isPresent()) {
             long used = currentStoreUsedBytes(store, ownTempFile);
             if (used >= limit.get()) {
-                throw new QuotaExceededException(store, used, limit.get(), 0L);
+                throw refused(new QuotaExceededException(store, used, limit.get(), 0L), store, deviceId, jobId);
             }
         }
     }
@@ -336,26 +358,29 @@ public final class FileArtefactStore implements ArtefactStore {
 
     @Override
     public void checkQuota() throws QuotaExceededException {
+        checkGlobalQuota(null, null, null);
+    }
+
+    private void checkGlobalQuota(String store, String deviceId, String jobId) throws QuotaExceededException {
         long used = currentUsedBytes(null);
         if (used >= quotaBytes) {
-            throw new QuotaExceededException(used, quotaBytes, 0L);
+            throw refused(new QuotaExceededException(used, quotaBytes, 0L), store, deviceId, jobId);
         }
     }
 
     @Override
     public void checkQuota(String store) throws QuotaExceededException {
-        checkQuota();
-        checkStoreQuota(safeSegment(store), null);
+        String segment = safeSegment(store);
+        checkGlobalQuota(segment, null, null);
+        checkStoreQuota(segment, null, null, null);
     }
 
     @Override
     public ArtefactHandle open(String deviceId, String jobId, String vendor, boolean gzip) throws IOException {
-        long usedBeforeOpen = currentUsedBytes(null);
-        if (usedBeforeOpen >= quotaBytes) {
-            throw new QuotaExceededException(usedBeforeOpen, quotaBytes, 0L);
-        }
         String store = safeSegment(vendor);
-        checkStoreQuota(store, null);
+        checkGlobalQuota(store, deviceId, jobId);
+        long usedBeforeOpen = currentUsedBytes(null);
+        checkStoreQuota(store, null, deviceId, jobId);
         Optional<Long> storeLimit = storeQuotaBytes(store);
         long storeUsedBeforeOpen = storeLimit.isPresent() ? currentStoreUsedBytes(store, null) : 0L;
         Path vendorDir = root.resolve(store).resolve(safeSegment(deviceId));
@@ -363,7 +388,7 @@ public final class FileArtefactStore implements ArtefactStore {
         Path tempFile = Files.createTempFile(vendorDir, "artefact-", ".tmp");
         try {
             return new FileArtefactHandle(tempFile, vendorDir, gzip, usedBeforeOpen, store, storeLimit.orElse(Long.MAX_VALUE),
-                    storeUsedBeforeOpen);
+                    storeUsedBeforeOpen, deviceId, jobId);
         } catch (Throwable t) {
             try {
                 Files.deleteIfExists(tempFile);
@@ -419,10 +444,15 @@ public final class FileArtefactStore implements ArtefactStore {
 
         private final String store;
         private final long storeQuota;
+        private final String deviceId;
+        private final String jobId;
+        private boolean refusalRecorded;
 
         FileArtefactHandle(Path tempFile, Path vendorDeviceDir, boolean gzip, long usedBeforeOpen, String store,
-                long storeQuota, long storeUsedBeforeOpen) throws IOException {
+                long storeQuota, long storeUsedBeforeOpen, String deviceId, String jobId) throws IOException {
             this.store = store;
+            this.deviceId = deviceId;
+            this.jobId = jobId;
             this.storeQuota = storeQuota;
             this.tempFile = tempFile;
             this.vendorDeviceDir = vendorDeviceDir;
@@ -432,11 +462,19 @@ public final class FileArtefactStore implements ArtefactStore {
             this.dataKey = cipher.generateDataKey();
             this.fileOut = Files.newOutputStream(tempFile);
             this.ciphertextCounter = new CountingDigestOutputStream(fileOut, usedBeforeOpen, quotaBytes, tempFile,
-                    store, storeUsedBeforeOpen, storeQuota);
+                    store, storeUsedBeforeOpen, storeQuota, this::recordRefusalOnce);
             OutputStream cipherOut = cipher.encryptingStream(ciphertextCounter, dataKey);
             OutputStream compressOut = gzip ? new GZIPOutputStream(cipherOut) : cipherOut;
             this.plaintextCounter = new CountingDigestOutputStream(compressOut);
             this.sink = plaintextCounter;
+        }
+
+        /** A refused write is audited once, however many layers see the same exception. */
+        private synchronized void recordRefusalOnce(QuotaExceededException e) {
+            if (!refusalRecorded) {
+                refusalRecorded = true;
+                refused(e, store, deviceId, jobId);
+            }
         }
 
         @Override
@@ -456,12 +494,17 @@ public final class FileArtefactStore implements ArtefactStore {
                 // Re-checked against the (possibly refreshed) usage: other writers may have committed since open().
                 long otherBytes = currentUsedBytes(tempFile);
                 if (otherBytes + ciphertextBytes > quotaBytes) {
-                    throw new QuotaExceededException(otherBytes, quotaBytes, ciphertextBytes);
+                    QuotaExceededException refusal = new QuotaExceededException(otherBytes, quotaBytes, ciphertextBytes);
+                    recordRefusalOnce(refusal);
+                    throw refusal;
                 }
                 if (storeQuota != Long.MAX_VALUE) {
                     long otherStoreBytes = currentStoreUsedBytes(store, tempFile);
                     if (otherStoreBytes + ciphertextBytes > storeQuota) {
-                        throw new QuotaExceededException(store, otherStoreBytes, storeQuota, ciphertextBytes);
+                        QuotaExceededException refusal =
+                                new QuotaExceededException(store, otherStoreBytes, storeQuota, ciphertextBytes);
+                        recordRefusalOnce(refusal);
+                        throw refusal;
                     }
                 }
                 String ciphertextSha256 = ciphertextCounter.digestHex();
@@ -521,19 +564,23 @@ public final class FileArtefactStore implements ArtefactStore {
         private long count;
         private boolean aborted;
         private QuotaExceededException abortCause;
+        private final java.util.function.Consumer<QuotaExceededException> onRefused;
 
         CountingDigestOutputStream(OutputStream out) {
-            this(out, false, 0L, Long.MAX_VALUE, null, null, 0L, Long.MAX_VALUE);
+            this(out, false, 0L, Long.MAX_VALUE, null, null, 0L, Long.MAX_VALUE, e -> { });
         }
 
         CountingDigestOutputStream(OutputStream out, long usedBeforeOpen, long quotaBytes, Path tempFile,
-                String store, long storeUsedBeforeOpen, long storeQuotaBytes) {
-            this(out, true, usedBeforeOpen, quotaBytes, tempFile, store, storeUsedBeforeOpen, storeQuotaBytes);
+                String store, long storeUsedBeforeOpen, long storeQuotaBytes,
+                java.util.function.Consumer<QuotaExceededException> onRefused) {
+            this(out, true, usedBeforeOpen, quotaBytes, tempFile, store, storeUsedBeforeOpen, storeQuotaBytes, onRefused);
         }
 
         private CountingDigestOutputStream(OutputStream out, boolean enforceQuota, long usedBeforeOpen,
-                long quotaBytes, Path tempFile, String store, long storeUsedBeforeOpen, long storeQuotaBytes) {
+                long quotaBytes, Path tempFile, String store, long storeUsedBeforeOpen, long storeQuotaBytes,
+                java.util.function.Consumer<QuotaExceededException> onRefused) {
             super(wrapWithDigest(out, newSha256()));
+            this.onRefused = onRefused;
             this.rawOut = out;
             this.digest = ((DigestOutputStream) this.out).getMessageDigest();
             this.enforceQuota = enforceQuota;
@@ -599,6 +646,7 @@ public final class FileArtefactStore implements ArtefactStore {
                     } catch (IOException ignored) {
                     }
                 }
+                onRefused.accept(abortCause);
                 throw abortCause;
             }
         }

@@ -219,7 +219,9 @@ public final class Ui2WorkerMain {
         ArtefactStore artefactStore =
                 new FileArtefactStore(artefactStoreRoot, ArtefactStoreCipher.fromBase64Key(artefactStoreKeyBase64))
                         .withStoreQuotas(new com.securityexpert.nexus.ui2.persistence.artefact.JooqArtefactStoreQuotaRepository(
-                                transactionBoundary)::findAll);
+                                transactionBoundary)::findAll)
+                        .withRefusalRecorder(new com.securityexpert.nexus.ui2.persistence.artefact.JooqArtefactStoreRefusalRecorder(
+                                transactionBoundary, "worker", com.securityexpert.nexus.ui2.platform.WorkerActor.RESERVED_ACTOR_FINGERPRINT));
         DeviceInventoryRepository deviceInventoryRepository = new JooqDeviceInventoryRepository(transactionBoundary);
         // PO 2026-10-24: a PAN-OS 12 firewall's interfaces come from its newest stored effective-running configuration.
         InventoryCapabilityExecutor inventoryCapabilityExecutor = new InventoryCapabilityExecutor(compositeTransport,
@@ -679,7 +681,9 @@ public final class Ui2WorkerMain {
         var policies = new com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository(boundary);
         var deadline = Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_POLICY_RUN_DEADLINE_SECONDS", "7200")));
         var store = new FileArtefactStore(root, ArtefactStoreCipher.fromBase64Key(key))
-                .withStoreQuotas(new com.securityexpert.nexus.ui2.persistence.artefact.JooqArtefactStoreQuotaRepository(boundary)::findAll);
+                .withStoreQuotas(new com.securityexpert.nexus.ui2.persistence.artefact.JooqArtefactStoreQuotaRepository(boundary)::findAll)
+                .withRefusalRecorder(new com.securityexpert.nexus.ui2.persistence.artefact.JooqArtefactStoreRefusalRecorder(
+                        boundary, "policy_worker", com.securityexpert.nexus.ui2.platform.WorkerActor.RESERVED_ACTOR_FINGERPRINT));
         var jobs = new JooqJobRecordDao(boundary);
         var transport = new CompositeDeviceTransport(WorkerBootstrap.buildTransportRegistry(ssh, pan));
         var cpCollector = new com.securityexpert.nexus.ui2.worker.policy.CheckPointPolicyCollector(ssh, gates, policies, deadline);

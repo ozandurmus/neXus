@@ -522,6 +522,55 @@ class BackupJobExecutorEndToEndTest {
         assertEquals("snapshot", harness.manifestRepo.recorded.get(0).backupType());
     }
 
+    /** The worker backup writer: a per-store refusal fails the job with the shared reason, leaves no partial file and is audited. */
+    @Test
+    void perStoreQuotaRefusalFailsTheBackupJobLeavesNoPartialFileAndIsRecordedForTheAudit(@TempDir Path tempDir)
+            throws Exception {
+        ArtefactStoreCipher cipher = ArtefactStoreCipher.fromBase64Key(Base64.getEncoder().encodeToString(new byte[32]));
+        String firstArchiveContent = "first-valid-backup-archive-bytes";
+        long firstStoredBytes;
+        try (ArtefactStore.ArtefactHandle h = new FileArtefactStore(tempDir.resolve("probe"), cipher)
+                .open(DEVICE_ID, "probe-job", "check_point", false)) {
+            h.sink().write(firstArchiveContent.getBytes(StandardCharsets.UTF_8));
+            firstStoredBytes = h.finish().ciphertextBytes();
+        }
+        Path recoveryDir = tempDir.resolve("recovery");
+        java.util.List<com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStoreRefusalRecorder.Refusal> refusals =
+                new java.util.concurrent.CopyOnWriteArrayList<>();
+        FileArtefactStore store = new FileArtefactStore(recoveryDir, cipher)
+                .withStoreQuotas(() -> java.util.Map.of("check_point", firstStoredBytes + 16L))
+                .withRefusalRecorder(refusals::add);
+
+        ScriptedBackupTransport firstTransport = happyPathTransportUpTo("succeeded");
+        firstTransport.fetchedContent = firstArchiveContent;
+        firstTransport.execOutputs.put(BackupReadPlan.archiveDigestCommand(ARCHIVE_NAME),
+                sha256Hex(firstArchiveContent) + "  " + ARCHIVE_NAME + "\n");
+        firstTransport.execOutputs.put(BackupReadPlan.deleteBackupCommand(ARCHIVE_NAME), "");
+        Harness first = new Harness(firstTransport, store, Duration.ofMillis(5), Duration.ofSeconds(5), recoveryDir);
+        assertTrue(first.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request()) instanceof JobOutcome.Completed);
+        assertTrue(refusals.isEmpty(), "a write within the per-store quota is not a refusal");
+
+        String secondArchiveContent = "second-backup-archive-that-exceeds-remaining-quota-budget";
+        ScriptedBackupTransport secondTransport = happyPathTransportUpTo("succeeded");
+        secondTransport.fetchedContent = secondArchiveContent;
+        secondTransport.execOutputs.put(BackupReadPlan.archiveDigestCommand(ARCHIVE_NAME),
+                sha256Hex(secondArchiveContent) + "  " + ARCHIVE_NAME + "\n");
+        secondTransport.execOutputs.put(BackupReadPlan.deleteBackupCommand(ARCHIVE_NAME), "");
+        Harness second = new Harness(secondTransport, store, Duration.ofMillis(5), Duration.ofSeconds(5), recoveryDir);
+        var failed = org.junit.jupiter.api.Assertions.assertInstanceOf(JobOutcome.Failed.class,
+                second.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request()));
+        assertTrue(failed.terminalReason().contains(FileArtefactStore.QUOTA_EXCEEDED_REASON + ": store=check_point"),
+                failed.terminalReason());
+        assertEquals(0, second.manifestRepo.recorded.size());
+        try (var walk = java.nio.file.Files.walk(recoveryDir)) {
+            assertEquals(1, walk.filter(java.nio.file.Files::isRegularFile).count(), "existing backup kept, no partial file");
+        }
+        assertEquals(1, refusals.size(), "the refusal is recorded once, however many layers saw it");
+        assertEquals("check_point", refusals.get(0).store());
+        assertEquals("store", refusals.get(0).scope());
+        assertEquals(DEVICE_ID, refusals.get(0).deviceId());
+    }
+
     @Test
     void quotaExceededRefusesBackupJobWithNamedReasonLeavesNoPartialFileAndPreservesExistingBackups(@TempDir Path tempDir)
             throws Exception {

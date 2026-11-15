@@ -139,6 +139,46 @@ class ReportServiceTest {
         }
     }
 
+    /** The report store is a writer into a quota-bound store: a refused report stores nothing, fails with the quota code and is audited. */
+    @Test
+    void aReportRefusedByThePerStoreQuotaFailsWithTheQuotaCodeStoresNothingAndIsAudited() throws IOException {
+        var refusals = new java.util.concurrent.CopyOnWriteArrayList<
+                com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStoreRefusalRecorder.Refusal>();
+        var limited = store(root.resolve("limited")).withStoreQuotas(() -> Map.of(ArtefactClass.REPORT_VENDOR, 1L))
+                .withRefusalRecorder(refusals::add);
+        // the first file fits nothing: the store is empty, so the quota check passes and the stream is refused
+        var limitedService = service(runs, limited, direct());
+        var row = limitedService.submit("synthetic-secadmin", false, ReportTemplate.RPT_03, params(ReportTemplate.RPT_03),
+                ProjectionMode.MASKED, ReportFormat.CSV);
+        assertEquals("FAILED", row.state());
+        assertEquals("STORE_QUOTA_EXCEEDED", row.errorCode());
+        assertNull(row.artefactId());
+        assertTrue(runs.artefacts.isEmpty());
+        try (Stream<Path> files = Files.walk(root.resolve("limited"))) {
+            assertEquals(0, files.filter(Files::isRegularFile).count(), "no partial report file");
+        }
+        assertEquals(1, refusals.size());
+        assertEquals(ArtefactClass.REPORT_VENDOR, refusals.get(0).store());
+        assertEquals("store", refusals.get(0).scope());
+        assertEquals(row.runId().toString(), refusals.get(0).jobId());
+        assertEquals(ArtefactClass.REPORT_DEVICE_ID, refusals.get(0).deviceId());
+
+        // the global quota refuses the same way (reason format, no file, audited)
+        var globalRefusals = new java.util.concurrent.CopyOnWriteArrayList<
+                com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStoreRefusalRecorder.Refusal>();
+        var tiny = FileArtefactStore.withQuota(root.resolve("tiny"),
+                ArtefactStoreCipher.fromBase64Key(Base64.getEncoder().encodeToString(new byte[32])), 8L)
+                .withRefusalRecorder(globalRefusals::add);
+        var globalRow = service(new InMemoryReportRunStore(), tiny, direct()).submit("synthetic-secadmin", false,
+                ReportTemplate.RPT_03, params(ReportTemplate.RPT_03), ProjectionMode.MASKED, ReportFormat.CSV);
+        assertEquals("STORE_QUOTA_EXCEEDED", globalRow.errorCode());
+        assertEquals(1, globalRefusals.size());
+        assertEquals("global", globalRefusals.get(0).scope());
+        try (Stream<Path> files = Files.walk(root.resolve("tiny"))) {
+            assertEquals(0, files.filter(Files::isRegularFile).count());
+        }
+    }
+
     @Test
     void aDownloadIsAuditedOnceBeforeTheFileIsOpened() throws IOException {
         var row = service.submit("synthetic-viewer", false, ReportTemplate.RPT_03, params(ReportTemplate.RPT_03),

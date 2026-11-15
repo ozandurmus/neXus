@@ -358,4 +358,85 @@ class FileArtefactStoreTest {
         writeOne(store, "check_point", "job-1", new byte[64]);
         assertEquals(java.util.Optional.empty(), store.storeQuotaBytes("check_point"));
     }
+
+    private static final class Recorded implements ArtefactStoreRefusalRecorder {
+        final java.util.List<Refusal> refusals = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        @Override
+        public void record(Refusal refusal) {
+            refusals.add(refusal);
+        }
+    }
+
+    /** Every refused write is audited once, at each point it can be refused, with the same reason the caller sees. */
+    @Test
+    void everyQuotaRefusalIsRecordedOnceForTheAuditAtEachRefusalPoint(@TempDir Path root) throws IOException {
+        ArtefactStoreCipher cipher = ArtefactStoreCipher.fromBase64Key(randomKeyBase64());
+        byte[] payload = new byte[256];
+        new SecureRandom().nextBytes(payload);
+        long one = writeOne(new FileArtefactStore(root.resolve("probe"), cipher), "check_point", "probe", payload);
+        Recorded recorded = new Recorded();
+
+        // per-store quota: refused while streaming (job-2), at the pre-check and at open() once full
+        FileArtefactStore limited = new FileArtefactStore(root.resolve("limited"), cipher)
+                .withStoreQuotas(() -> java.util.Map.of("check_point", one + 32L)).withRefusalRecorder(recorded);
+        writeOne(limited, "check_point", "job-1", payload);
+        assertThrows(ArtefactStore.QuotaExceededException.class, () -> {
+            try (ArtefactStore.ArtefactHandle h = limited.open("device-1", "job-2", "check_point", false)) {
+                h.sink().write(new byte[4096]);
+                h.sink().write(new byte[4096]); // a second write after the abort must not record a second row
+                h.finish();
+            }
+        });
+        assertEquals(1, recorded.refusals.size());
+        var streamed = recorded.refusals.get(0);
+        assertEquals("check_point", streamed.store());
+        assertEquals("store", streamed.scope());
+        assertEquals("device-1", streamed.deviceId());
+        assertEquals("job-2", streamed.jobId());
+        assertEquals(one + 32L, streamed.quotaBytes());
+        assertTrue(streamed.attemptedBytes() > 0);
+        try (var walk = Files.walk(root.resolve("limited"))) {
+            assertEquals(1, walk.filter(Files::isRegularFile).count(), "no partial file");
+        }
+
+        FileArtefactStore full = new FileArtefactStore(root.resolve("full"), cipher)
+                .withStoreQuotas(() -> java.util.Map.of("check_point", one)).withRefusalRecorder(recorded);
+        writeOne(full, "check_point", "job-4", payload);
+        recorded.refusals.clear();
+        assertThrows(ArtefactStore.QuotaExceededException.class, () -> full.open("device-9", "job-5", "check_point", false));
+        assertThrows(ArtefactStore.QuotaExceededException.class, () -> full.checkQuota("check_point"));
+        assertEquals(2, recorded.refusals.size());
+        assertEquals("job-5", recorded.refusals.get(0).jobId());
+        assertEquals(null, recorded.refusals.get(1).jobId(), "the pre-check has no job");
+        full.checkQuota("palo_alto"); // an unlimited store is not refused, so nothing is recorded
+        assertEquals(2, recorded.refusals.size());
+
+        // the global quota: scope "global", refusal at open() and at finish() when another writer filled the store
+        FileArtefactStore global = FileArtefactStore.withQuota(root.resolve("global"), cipher, one).withRefusalRecorder(recorded);
+        writeOne(global, "palo_alto", "job-6", payload);
+        recorded.refusals.clear();
+        ArtefactStore.QuotaExceededException refused = assertThrows(ArtefactStore.QuotaExceededException.class,
+                () -> global.open("device-1", "job-7", "palo_alto", false));
+        assertTrue(refused.getMessage().startsWith(ArtefactStore.QUOTA_EXCEEDED_REASON + ": used="), refused.getMessage());
+        assertEquals(1, recorded.refusals.size());
+        assertEquals("global", recorded.refusals.get(0).scope());
+        assertEquals("palo_alto", recorded.refusals.get(0).store());
+    }
+
+    @Test
+    void aFailingRefusalRecorderNeverChangesTheRefusal(@TempDir Path root) throws IOException {
+        ArtefactStoreCipher cipher = ArtefactStoreCipher.fromBase64Key(randomKeyBase64());
+        byte[] payload = new byte[128];
+        long one = writeOne(new FileArtefactStore(root.resolve("probe"), cipher), "check_point", "probe", payload);
+        FileArtefactStore store = new FileArtefactStore(root.resolve("s"), cipher)
+                .withStoreQuotas(() -> java.util.Map.of("check_point", one))
+                .withRefusalRecorder(r -> {
+                    throw new IllegalStateException("database unavailable");
+                });
+        writeOne(store, "check_point", "job-1", payload);
+        ArtefactStore.QuotaExceededException e = assertThrows(ArtefactStore.QuotaExceededException.class,
+                () -> store.open("device-1", "job-2", "check_point", false));
+        assertEquals("check_point", e.store());
+    }
 }

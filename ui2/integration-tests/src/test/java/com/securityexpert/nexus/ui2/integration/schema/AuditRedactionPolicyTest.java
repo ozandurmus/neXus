@@ -308,6 +308,11 @@ class AuditRedactionPolicyTest {
             // audited in full like the other settings tables
             "artefact_store_quota.quota_bytes", "artefact_store_quota.store_name",
             "artefact_store_quota.updated_at", "artefact_store_quota.updated_by",
+            // artefact_store_refusal (V227): store name, writer, sizes and opaque device/job ids; never artefact content
+            "artefact_store_refusal.attempted_bytes", "artefact_store_refusal.device_id", "artefact_store_refusal.job_id",
+            "artefact_store_refusal.quota_bytes", "artefact_store_refusal.refusal_id", "artefact_store_refusal.refused_at",
+            "artefact_store_refusal.scope", "artefact_store_refusal.store_name", "artefact_store_refusal.used_bytes",
+            "artefact_store_refusal.writer",
             // local_password_policy_settings (V223): the single policy row; rule switches and numbers, updated_by is the
             // administrator's actor name, audited in full like the other settings tables
             "local_password_policy_settings.enabled", "local_password_policy_settings.history_count",
