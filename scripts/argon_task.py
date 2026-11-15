@@ -4,7 +4,7 @@
 PO decision 2026-10-15 (docs/design/PO_DECISION_RECORD_2026_10_15_ARGON_WORKER.md): Argon takes development lanes
 next to Claude so parallel work fits the usage budget. The worker writes code and commits on the worktree's branch
 with a `Co-Authored-By` trailer derived from `--model` (`gemini-4-argon-*` -> `Gemini 4 Argon`,
-`gemini-4-carbon-*` -> `Gemini 4 Carbon`, `claude-sonnet-5-5-*` / `claude-opus-5-5-*` (served by Antigravity on its own limit) -> `Claude Sonnet 5.5` / `Claude Opus 5.5`, with no e-mail address; any other model family is refused); it never
+`gemini-4-carbon-*` -> `Gemini 4 Carbon`, `gemini-4-hydrogen-*` -> `Gemini 4 Hydrogen`, `claude-sonnet-5-5-*` / `claude-opus-5-5-*` (served by Antigravity on its own limit) -> `Claude Sonnet 5.5` / `Claude Opus 5.5`, with no e-mail address; any other model family is refused); it never
 pushes, opens PRs, deploys, touches HOST-A or devices. Claude reviews, tests and ships.
 
 Usage:
@@ -28,6 +28,7 @@ DEFAULT_MODEL = "gemini-4-argon-high"
 MODEL_FAMILIES: dict[str, str] = {
     "gemini-4-argon-": "Gemini 4 Argon",
     "gemini-4-carbon-": "Gemini 4 Carbon",
+    "gemini-4-hydrogen-": "Gemini 4 Hydrogen",
     "claude-sonnet-5-5-": "Claude Sonnet 5.5",
     "claude-opus-5-5-": "Claude Opus 5.5",
 }
