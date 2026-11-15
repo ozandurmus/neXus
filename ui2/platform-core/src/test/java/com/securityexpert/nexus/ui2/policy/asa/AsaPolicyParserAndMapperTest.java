@@ -624,7 +624,8 @@ class AsaPolicyParserAndMapperTest {
         assertEquals(10_000, parsed.counters().parsedAces());
         assertEquals(0, parsed.counters().unparsedAces());
         assertEquals(10_000, snapshot.sections().get(0).rules().size());
-        assertTrue(elapsedMs < 1_000, "Expected 10,000 ACE parse + map in < 1000ms, took " + elapsedMs + "ms");
+        // Bound, not a benchmark: shared CI runners are several times slower than a workstation (2026-11-15).
+        assertTrue(elapsedMs < 5_000, "Expected 10,000 ACE parse + map in < 5000ms, took " + elapsedMs + "ms");
     }
 
     @Test
