@@ -70,7 +70,6 @@ class AsaFailoverJobExecutorTest {
             boolean active = ACTIVE.equals(member);
             int n = asked.merge(member + "|" + command, 1, Integer::sum);
             return switch (command) {
-                case "terminal pager 0" -> "";
                 case "show curpriv" -> "Username        : synthetic\nCurrent privilege level : 15\n";
                 case "show mode" -> mode;
                 case "show failover" -> (active ? AsaFixtures.active() : AsaFixtures.standby()).text();
@@ -192,7 +191,7 @@ class AsaFailoverJobExecutorTest {
     @Test void signedOffGatesSendTheFourLiteralsInTheExactOrderAndTheResultIsReady() {
         Script script = new Script();
         Outcome out = run(script, signedOffGates(), "READINESS", ON, PAIR);
-        List<String> perMember = List.of("terminal pager 0", "show curpriv", "show mode", "show failover", "show failover",
+        List<String> perMember = List.of("show curpriv", "show mode", "show failover", "show failover",
             "show failover state", "show failover history", "show conn count");
         List<String> expected = new ArrayList<>();
         for (String member : List.of(STANDBY, ACTIVE)) for (String c : perMember) expected.add(member + ":" + c);

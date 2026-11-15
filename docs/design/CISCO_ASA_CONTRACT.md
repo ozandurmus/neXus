@@ -14,10 +14,20 @@ IMPLEMENTED until the real-environment measurement below.
 ## Commands (all reads, gate rows V78)
 | Use | Command |
 |---|---|
-| session | `terminal pager 0` (this login's pager only; never saved) |
+| session | none: `terminal pager 0` was removed per PO 2026-11-15 (Cisco warns it can raise CPU); see Paging below |
 | every run | `show curpriv`, `show version` |
 | inventory | `show ip address`, `show interface ip brief`, `show route`, `show failover \| include This host`, `show mode` |
 | backup | `more system:running-config`, `show startup-config`, `show version`, `show mode` |
+
+## Paging (PO 2026-11-15)
+The session never changes the device's pager. `InteractiveShellSession` answers the pager prompt `<--- More --->` with one
+space, removes the prompt and the erase the ASA sends after it (CR-spaces-CR, backspaces, or backspace-space-backspace),
+and keeps reading, so the parsers get the same text as with an unpaged answer. A marker only counts at the start of a line
+and at the end of the buffer (a `<--- More --->` inside a data line is data). Bounded: 100,000 pages per command
+(`InteractiveShellSession.MAX_PAGES`) and the command's own timeout (180 s for `more system:running-config`). Each page is
+one round trip (an ASA page is 24 lines), so a very large configuration over a slow link can reach the timeout; that shows
+as a timed-out read, never as a re-added `terminal pager 0`. The gate row `asa_terminal_pager_0` is BLOCKED (V224).
+Not yet measured on a real ASA: the exact erase bytes and the time of a large `more system:running-config`.
 
 ## What is stored
 - **Confirm:** hostname (the "<name> up …" line), model (`Hardware:`), software version. Not an ASA → failed.

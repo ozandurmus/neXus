@@ -1765,15 +1765,15 @@ gates:
     transport_kind: 'SSH_EXEC'
     canonical_command_key: 'terminal pager 0'
     action_class: 'read'
-    sign_off_state: 'SIGNED_OFF'
+    sign_off_state: 'BLOCKED'
     timeout_s: 30
     retry_rule: 'none'
-    max_frequency: 'once per session'
+    max_frequency: 'never -- removed per PO 2026-11-15'
     session_reuse_rule: 'one session per device per run'
     unsupported_behavior_ref: 'a refusal leaves paging on; reads still bounded by their timeout'
     secret_output_risk: 'none'
     safe_telemetry_fields: []
-    source_document_pointer: 'Cisco ASA command reference (terminal pager); Backbox ASA 9.4+ trail 2026-09-22'
+    source_document_pointer: 'docs/design/CISCO_ASA_CONTRACT.md (withdrawn 2026-11-15: Cisco CPU warning; the shell answers "<--- More --->"); was Cisco ASA command reference (terminal pager); Backbox ASA 9.4+ trail 2026-09-22'
   - gate_id: asa_show_curpriv
     vendor: 'cisco_asa'
     platform_role_scope: 'cisco_asa_firewall'
