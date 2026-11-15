@@ -214,3 +214,30 @@ and the docs checks run before the ship.
   recorded PO decision. Sections of this plan never authorize a change by themselves.
 - **Counting.** Lines include blanks and comments; the 152k figure and the 53k outside `history/` both
   repeat if the review counts again with `cloc`, but class sizes shift by a few percent.
+
+## 8. Step 1 execution record (2026-11-15, lane legacypy-1115)
+
+Step 1 as written in section 5 is "this document (docs only)": it is complete. Steps 2 (PO decisions,
+section 6) and 3 (deletions) are gated on the Product Owner, and the only pure move step (4) needs an
+`AGENTS.md` line 399 amendment with a recorded PO decision. So this lane **moved and deleted nothing**; it
+re-verified the references that would block the first move/delete steps, at `batch/b9-1115` cf8669be:
+
+- **29 one-shot consult scripts (step 4).** `git grep -w <name>` over `ui2/`, `tools/`, `.github/`, `deploy/`
+  (excluding `history/`, `docs/history`) finds no caller for 27 of 28. Exception:
+  `consult_claude_log_trial_judge` is called by `tools/llm_trial/judge.py` (step 5, class c-evidence), so it must
+  move with `tools/llm_trial`, not in step 4. Other path mentions that a move must rewrite: `consult_fable_resume_on_astra_review`
+  (named in `consult_codex_ui_visual_review.py`, itself a one-shot), `consult_fable_ui_review_2026_10_17`
+  (`docs/design/UI_REVIEW_2026_10_18_FABLE_PART1.md`), `consult_fable_ui_visual_review`
+  (`docs/design/OVERVIEW_EXCEPTION_SCREEN_CONTRACT.md`), `consult_ui_effectiveness_council`
+  (`docs/design/FAILOVER_PILOT_COUNCIL_2026_10_06.md`). No k8s manifest or workflow references any of them.
+  Recount: `scripts/consult_*.py` is 30 files; minus the two kept (`consult_argon`, `consult_fable_design`)
+  leaves 28, of which 27 are step 4 and the judge belongs to step 5 (the plan's "29" was off by one or two).
+- **Step 3 touches ship tooling, so it is not a pure delete.** `tools/delivery/orchestrator_verify.py` line 119
+  runs `tests/test_architecture_convergence.py` as a merge-mode check (red today, 10 failures);
+  `tools/delivery/ci_regression_scope.py` lines 85-91 list `tests/test_action_taxonomy_java_parity.py` and
+  `tests/test_gov_po_2_privacy_entrypoint.py`; `tools/tests/test_live_tooling_discovery.py` lines 13, 31-32 and
+  `tools/README.md` line 47 name `utils/__init__.py` and the parity test. Deleting any of these requires the
+  matching edits and tests in the same PR, as section 5 step 3 already says.
+- **Nothing under `ui2/`, `.github/` or `deploy/` references `main.py`, `utils/__init__.py` or the dead root tests.**
+
+Left for later steps: all of steps 2-8.
