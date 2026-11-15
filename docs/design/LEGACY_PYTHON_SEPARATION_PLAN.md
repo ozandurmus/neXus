@@ -290,3 +290,15 @@ Command shape: `git grep -n <pattern> -- ui2 tools .github deploy scripts projec
   `docs/design/FAILOVER_PILOT_COUNCIL_2026_10_06.md` (`consult_ui_effectiveness_council`). No workflow,
   manifest, ship tool or `ui2/` file names any of the 27. `AGENTS.md` line 399 names the class
   `scripts/consult_*.py`.
+
+### 9.2 Step 3 result (lane legacypy2-1115)
+
+Deleted (4 files, 174 lines): `main.py` (52), `utils/__init__.py` (0), `tests/test_gov_po_2_privacy_entrypoint.py`
+(114), `tests/test_action_taxonomy_java_parity.py` (8). The `utils/` directory is gone. References fixed in the
+same change: `tools/delivery/ci_regression_scope.py` (two `TOOLING_FILES` entries),
+`tools/tests/test_live_tooling_discovery.py` (the parity-test `remove` and the two exclusions),
+`tools/README.md`, `tests/README.md`, `tests/test_architecture_convergence.py` (docstring),
+`AI_START_HERE.md` (retired CLI matrix replaced by a pointer to `history/README.md`; the privacy-gate command
+row is kept), `deploy/secrets/README.md` (retired `main.py` command), `docs/repo_inventory.csv` (4 rows).
+No split of the convergence test was needed (section 9.1).
+

@@ -44,7 +44,8 @@ by replacing the process. Use the new paths for new callers.
 Other files retained under `scripts/` are UNSURE: consultation and one-off
 review/measurement helpers, staged review runners, the legacy fixture extractor,
 `hosta_export_all.sh` and `measurement/`. They are not default live tooling;
-retention does not authorize execution. `utils/__init__.py` remains in place.
+retention does not authorize execution. The root `main.py`, `utils/__init__.py` and two uncollectable root tests were deleted on 2026-11-15
+(PO 2026-11-15, `docs/design/LEGACY_PYTHON_SEPARATION_PLAN.md` section 9).
 
 The inventory and plan are baseline evidence. Archived files, closed relay
 records, fixture snapshots and engineering-owned state/handover records retain

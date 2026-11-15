@@ -88,8 +88,7 @@ TOOLING_FILES = {
     "tools/privacy/repository_privacy_check.py", "tools/privacy/repository_privacy.py",
     "tools/tests/test_live_project_governance.py", "tools/tests/test_live_tooling_discovery.py",
     "tests/README.md", "tools/tests/test_cold_start_budget.py",
-    "tests/test_action_taxonomy_java_parity.py",
-    "tests/test_gov_po_2_privacy_entrypoint.py", "tools/tests/test_security_scans.py",
+    "tools/tests/test_security_scans.py",
     "tools/tests/test_dev0_4_repository_privacy_gate.py",
 }
 COMPONENT_PREFIXES = (
