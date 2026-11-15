@@ -45,5 +45,7 @@ CREATE TRIGGER trg_audit_local_password_policy_settings
     FOR EACH ROW EXECUTE FUNCTION fn_audit_capture('settings_id');
 
 -- Seeded after the trigger exists so the audit log records where the defaults came from.
+SELECT set_config('app.actor_fingerprint', 'migration:V223_local_password_policy', true);
+SELECT set_config('app.action_id', 'local_password_policy_seed_by_migration', true);
 INSERT INTO local_password_policy_settings(settings_id, updated_by) VALUES ('default', 'password-policy-migration')
 ON CONFLICT (settings_id) DO NOTHING;
