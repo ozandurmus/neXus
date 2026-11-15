@@ -179,7 +179,7 @@ public final class RbacEvaluator {
             try {
                 String reference = groupReferenceCipher.decryptDirectory(binding.groupReferenceEncrypted(), binding.directoryProfileId(),
                         binding.bindingKind(), binding.groupReferenceKeyId());
-                boolean matches = binding.bindingKind() == DirectoryBindingKind.DIRECTORY_GROUP
+                boolean matches = binding.bindingKind().isGroupKind()
                         ? state.groupReferences().contains(reference) : principal.equals(reference);
                 if (reference.isBlank()) { unevaluable = true; continue; }
                 if (matches && (match == null || binding.bindingId().compareTo(match) < 0)) match = binding.bindingId();

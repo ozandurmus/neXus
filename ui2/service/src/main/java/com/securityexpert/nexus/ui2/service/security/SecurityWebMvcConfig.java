@@ -295,6 +295,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/config/ldap", ActionRegistry.LDAP_CONFIG_READ),
             Map.entry("PUT /api/v2/config/ldap", ActionRegistry.LDAP_CONFIG_WRITE),
             Map.entry("POST /api/v2/config/ldap/test", ActionRegistry.LDAP_CONFIG_WRITE),
+            Map.entry("GET /api/v2/config/saml", ActionRegistry.SAML_CONFIG_READ),
+            Map.entry("PUT /api/v2/config/saml", ActionRegistry.SAML_CONFIG_WRITE),
             Map.entry("GET /api/v2/ssh-trust", ActionRegistry.SSH_TRUST_READ),
             Map.entry("PUT /api/v2/ssh-trust/mode", ActionRegistry.SSH_TRUST_MANAGE),
             Map.entry("POST /api/v2/ssh-trust/observations/*/accept", ActionRegistry.SSH_TRUST_MANAGE),
@@ -420,7 +422,12 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
                 "POST /local-credentials/change-password",
                 "GET /healthz",
                 // PO 2026-11-15: HEAD answers like GET (Spring MVC serves HEAD from the GET handler).
-                "HEAD /healthz"));
+                "HEAD /healthz",
+                // Migration plan Step 4: the SAML 2.0 handshake runs before any session exists. SamlLoginController answers 404
+                // to every one of them while SAML is switched off.
+                "GET " + SamlSettingsService.AUTHENTICATE_PATH,
+                "POST " + SamlSettingsService.ACS_PATH,
+                "GET " + SamlSettingsService.METADATA_PATH));
         // Advisory ingest (ADVISORY_MATCHING_CONTRACT.md section 4): internal port only, authenticated by the fetcher's own
         // token. The lookup is exact, so each source key is listed; an unknown source stays unmapped and is refused.
         for (String source : com.securityexpert.nexus.ui2.service.advisorystore.AdvisorySources.KEYS) {

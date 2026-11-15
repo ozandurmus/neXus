@@ -86,7 +86,7 @@ public final class RoleBindingAdminService {
     public List<RoleBindingView> listActiveBindings() {
         return roleBindingRepository.findAllActive().stream().map(row -> {
             String reference = "";
-            if (row.bindingKind() == DirectoryBindingKind.DIRECTORY_GROUP || row.bindingKind() == DirectoryBindingKind.DIRECTORY_PRINCIPAL) {
+            if (row.bindingKind().isGroupKind() || row.bindingKind() == DirectoryBindingKind.DIRECTORY_PRINCIPAL) {
                 try {
                     reference = groupReferenceCipher.decryptDirectory(row.groupReferenceEncrypted(), row.directoryProfileId(),
                             row.bindingKind(), row.groupReferenceKeyId());
@@ -272,7 +272,7 @@ public final class RoleBindingAdminService {
                 || !target.profileId().equals(state.get().directoryProfileId())) return new Outcome.NotEvaluated();
         String principal = groupReferenceCipher.decryptDirectory(state.get().principalReferenceEncrypted(), target.profileId(),
                 DirectoryBindingKind.DIRECTORY_PRINCIPAL, state.get().principalReferenceKeyId());
-        boolean self = target.kind() == DirectoryBindingKind.DIRECTORY_GROUP
+        boolean self = target.kind().isGroupKind()
                 ? state.get().groupReferences().contains(target.reference()) : principal.equals(target.reference());
         return self ? new Outcome.SelfGrantRefused() : null;
     }

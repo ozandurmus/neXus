@@ -46,6 +46,10 @@ postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" 
 jooq = { module = "org.jooq:jooq", version.ref = "jooq" }
 unboundid-ldapsdk = { module = "com.unboundid:unboundid-ldapsdk", version.ref = "unboundid" }
 bouncycastle-provider = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
+# OpenSAML (via cryptacular) brings bcpkix and bcutil 1.77; a bcprov 1.86 beside them fails with NoClassDefFoundError
+# (EdECObjectIdentifiers), so the three move together (constraints in service/build.gradle.kts).
+bouncycastle-pkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bouncycastle" }
+bouncycastle-util = { module = "org.bouncycastle:bcutil-jdk18on", version.ref = "bouncycastle" }
 testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
 testcontainers-postgresql = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
 testcontainers-junit-jupiter = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers" }
@@ -59,6 +63,8 @@ spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-star
 spring-boot-webmvc-test = { module = "org.springframework.boot:spring-boot-webmvc-test", version.ref = "springboot" }
 # Spring Security 7 (version managed by the Spring Boot 4.0.8 BOM); Step 1 of docs/design/SPRING_SECURITY_MIGRATION_PLAN_2026_11_15.md.
 spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-starter-security", version.ref = "springboot" }
+# SAML 2.0 service provider (ADFS), Step 4 of the migration plan; brings OpenSAML 5 from the Shibboleth release repository.
+spring-security-saml2-service-provider = { module = "org.springframework.security:spring-security-saml2-service-provider", version.ref = "spring-security" }
 spring-security-test = { module = "org.springframework.security:spring-security-test", version.ref = "spring-security" }
 snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
 jsch = { module = "com.github.mwiede:jsch", version.ref = "jsch" }

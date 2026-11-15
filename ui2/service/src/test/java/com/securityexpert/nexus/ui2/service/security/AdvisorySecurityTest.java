@@ -49,7 +49,7 @@ class AdvisorySecurityTest {
         assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/advisories/infoblox"));
         assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("GET /internal/advisories/paloalto"));
         assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/machine-session"));
-        assertEquals(12 + 10 + 6, SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.size(), "two lifecycle-source ingest routes per online source");
+        assertEquals(12 + 10 + 6 + 3, SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.size(), "two lifecycle-source ingest routes per online source, plus the three SAML handshake routes");
     }
 
     @Test void anIngestRouteReachesItsOwnTokenCheckAndAnUnknownSourceIsRefused() throws Exception {

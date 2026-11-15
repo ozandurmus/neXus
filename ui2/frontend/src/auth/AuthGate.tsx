@@ -8,7 +8,7 @@ import { m3Theme } from "../theme/m3Theme";
 import { LoginScreen } from "./LoginScreen";
 import { PasswordChangeScreen } from "./PasswordChangeScreen";
 import { SessionContext } from "./SessionContext";
-import { getSessionStatus, logoutSession, resetSharedApiCache } from "./adminApi";
+import { getSessionStatus, isSamlLoginOffered, logoutSession, resetSharedApiCache } from "./adminApi";
 
 type AuthState = "checking" | "authenticated" | "must-change-password" | "unauthenticated";
 
@@ -70,9 +70,12 @@ async function signOut(): Promise<void> {
 export function AuthGate({ children }: { readonly children: ReactNode }) {
   const [state, setState] = useState<AuthState>("checking");
   const [session, setSession] = useState<SessionStatus>(UNAUTHENTICATED_STATUS);
+  const [samlEnabled, setSamlEnabled] = useState(false);
 
   function applyStatus(status: SessionStatus) {
     setSession(status);
+    // Single sign-on is offered only while the server says it is on (the signed-out status answer carries saml_enabled).
+    setSamlEnabled(!status.authenticated && isSamlLoginOffered());
     if (!status.authenticated) {
       setState("unauthenticated");
     } else if (status.mustChangePassword) {
@@ -119,7 +122,7 @@ export function AuthGate({ children }: { readonly children: ReactNode }) {
     <ThemeProvider theme={m3Theme}>
       <CssBaseline />
       {state === "unauthenticated" ? (
-        <LoginScreen onAuthenticated={() => { resetSharedApiCache(); return checkSession(true).then(applyStatus); }} />
+        <LoginScreen samlEnabled={samlEnabled} onAuthenticated={() => { resetSharedApiCache(); return checkSession(true).then(applyStatus); }} />
       ) : state === "must-change-password" ? (
         <PasswordChangeScreen
           username={session.displayName ?? ""}

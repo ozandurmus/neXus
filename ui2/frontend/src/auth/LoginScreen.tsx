@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
 import markLightOnDark from "../assets/app-mark-light-on-dark.svg";
@@ -51,9 +51,12 @@ async function submitLogin(username: string, password: string, mechanism: LoginM
 export function LoginScreen({
   onAuthenticated,
   productName = PRODUCT_NAME,
+  samlEnabled = false,
 }: {
   readonly onAuthenticated: () => void;
   readonly productName?: string;
+  /** Single sign-on through ADFS (SAML) is switched on: offer it beside the password form. */
+  readonly samlEnabled?: boolean;
 }) {
   if (typeof document !== "undefined" && document.title !== productName) {
     document.title = productName;
@@ -65,6 +68,20 @@ export function LoginScreen({
   const [conflictToken, setConflictToken] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // A single sign-on that found the account already signed in elsewhere comes back with the takeover token in the address.
+  // It is taken out of the address at once and offered through the same prompt a password sign-in uses.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("saml_conflict_token");
+    if (!token) return;
+    params.delete("saml_conflict_token");
+    const rest = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : "") + window.location.hash);
+    setConflictToken(token);
+    setError(CONFLICT_MESSAGE);
+  }, []);
 
   async function handleSubmit(event?: FormEvent) {
     event?.preventDefault();
@@ -239,6 +256,10 @@ export function LoginScreen({
                 {submitting ? "Signing in…" : "Sign in"}
               </button>
             )}
+
+            {samlEnabled ? (
+              <a className="lx-sso" href="/saml2/authenticate/adfs">Sign in with SSO (ADFS)</a>
+            ) : null}
 
             <div className="lx-foot">{productName} · on-premises</div>
           </form>

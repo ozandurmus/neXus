@@ -173,6 +173,10 @@ public final class ActionRegistry {
     public static final String RBAC_ROLE_WRITE = "rbac_role_write";
     public static final String LDAP_CONFIG_READ = "ldap_config_read";
     public static final String LDAP_CONFIG_WRITE = "ldap_config_write";
+    /** The SAML (ADFS) settings ({@code GET /api/v2/config/saml}, migration plan Step 4); security_admin, never aiview. */
+    public static final String SAML_CONFIG_READ = "saml_config_read";
+    /** Saves the SAML settings and the group mapping ({@code PUT /api/v2/config/saml}); security_admin, never aiview. */
+    public static final String SAML_CONFIG_WRITE = "saml_config_write";
     /** Administration › Notifications (syslog, SMTP relay), 2026-09-22. */
     public static final String SSH_TRUST_READ = "ssh_trust_read";
     public static final String SSH_TRUST_MANAGE = "ssh_trust_manage";
@@ -448,6 +452,8 @@ public final class ActionRegistry {
         register(new ActionDescriptor(RBAC_ROLE_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(LDAP_CONFIG_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(LDAP_CONFIG_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(SAML_CONFIG_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(SAML_CONFIG_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SSH_TRUST_READ, true, Optional.empty()));
         register(new ActionDescriptor(SSH_TRUST_MANAGE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(NOTIFICATION_CONFIG_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));

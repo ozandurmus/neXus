@@ -158,6 +158,12 @@ function invalidateDevicesAfter<T>(work: Promise<T>): Promise<T> {
   });
 }
 
+/** True when the last signed-out `GET /session/status` answered `saml_enabled: true` (SAML sign-in is switched on). */
+let samlLoginOffered = false;
+export function isSamlLoginOffered(): boolean {
+  return samlLoginOffered;
+}
+
 export function getSessionStatus(options?: { readonly force?: boolean }): Promise<Record<string, unknown> | null> {
   if (options?.force) invalidateSessionStatusCache();
   return readSharedCache(
@@ -165,7 +171,12 @@ export function getSessionStatus(options?: { readonly force?: boolean }): Promis
     SESSION_STATUS_STALE_MS,
     async () => {
       const response = await fetch("/session/status", { credentials: "include" });
-      if (!response.ok) return null;
+      if (!response.ok) {
+        // The signed-out answer says whether single sign-on (SAML) is on; read it from the one request already made.
+        samlLoginOffered = await response.json().then((body: { saml_enabled?: unknown }) => body?.saml_enabled === true, () => false);
+        return null;
+      }
+      samlLoginOffered = false;
       return (await response.json()) as Record<string, unknown>;
     },
     (result) => result !== null,
@@ -610,6 +621,71 @@ export function saveLdapSettings(body: LdapSettingsBody): Promise<LdapSettingsVi
 /** Test the form as entered, unsaved: service bind, user search and group membership; never a user sign-in. */
 export function testLdapSettings(settings: LdapSettingsBody, testUser: string): Promise<LdapTestResult> {
   return call<LdapTestResult>("/api/v2/config/ldap/test", "POST", { settings, testUser });
+}
+
+/** SAML 2.0 (ADFS) sign-in settings and group mapping (migration plan Step 4; security_admin). The SP private key is write-only. */
+export interface SamlSpKeyView {
+  /** NONE, FILE (environment paths) or SETTINGS (stored encrypted). */
+  readonly source: "NONE" | "FILE" | "SETTINGS";
+  readonly certPem: string;
+  readonly privateKeySet: boolean;
+}
+
+export interface SamlSettingsView {
+  readonly configured: boolean;
+  readonly enabled: boolean;
+  readonly spBaseUrl: string;
+  readonly spEntityId: string;
+  readonly acsUrl: string;
+  readonly metadataUrl: string;
+  readonly loginUrl: string;
+  readonly idpEntityId: string;
+  readonly idpSsoUrl: string;
+  readonly idpSsoBinding: "REDIRECT" | "POST";
+  readonly idpSigningCertPem: string;
+  readonly groupClaimAttribute: string;
+  readonly adminGroupValue: string;
+  readonly usersGroupValue: string;
+  readonly clockSkewSeconds: number;
+  readonly signAuthnRequests: boolean;
+  readonly spKey: SamlSpKeyView;
+  readonly updatedAt: string | null;
+  readonly adminGroupRoles: readonly string[];
+  readonly usersGroupRoles: readonly string[];
+}
+
+export interface SamlSettingsBody {
+  readonly enabled?: boolean;
+  readonly spBaseUrl?: string;
+  readonly spEntityId?: string;
+  readonly idpMetadataXml?: string;
+  readonly idpEntityId?: string;
+  readonly idpSsoUrl?: string;
+  readonly idpSsoBinding?: string;
+  readonly idpSigningCertPem?: string;
+  readonly groupClaimAttribute?: string;
+  readonly adminGroupValue?: string;
+  readonly usersGroupValue?: string;
+  readonly clockSkewSeconds?: number;
+  readonly signAuthnRequests?: boolean;
+  readonly spCertPem?: string;
+  /** Blank keeps the stored key. */
+  readonly spPrivateKeyPem?: string;
+  readonly clearSpKey?: boolean;
+}
+
+export interface SamlSettingsProblem {
+  readonly field: string;
+  readonly message: string;
+}
+
+export function getSamlSettings(): Promise<SamlSettingsView> {
+  return call<SamlSettingsView>("/api/v2/config/saml", "GET");
+}
+
+/** Save the form; a body of only `{ enabled: false }` switches SAML sign-in off and keeps every setting. */
+export function saveSamlSettings(body: SamlSettingsBody): Promise<SamlSettingsView> {
+  return call<SamlSettingsView>("/api/v2/config/saml", "PUT", body);
 }
 
 /** Which local accounts may sign in with a password (migration plan Step 3; security_admin). */
