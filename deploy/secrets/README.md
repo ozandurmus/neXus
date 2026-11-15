@@ -41,8 +41,6 @@ cp <your corporate CA bundle> pan-ca-bundle.pem
 ## Verifying the contract
 
 After mounting both files and bringing the production overlay up, run the
-DEV.2.2 offline check (no network, no credentials, no key material printed):
-
-```
-docker compose exec worker python main.py --persistent-secret-material-check
-```
+DEV.2.2 offline check (no network, no credentials, no key material printed). The
+Python `main.py` that implemented it was retired and deleted on 2026-11-15
+(`history/README.md`), so the command this section used to give no longer exists.

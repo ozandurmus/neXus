@@ -8,7 +8,7 @@ rules and the governance-document invariants live here.
 
 The action-taxonomy and failover-package tests of the retired Python product
 moved to `history/tests/test_architecture_convergence_legacy.py`; the live
-taxonomy is the Java `ActionClass` (see tests/test_action_taxonomy_java_parity.py).
+taxonomy is the Java `ActionClass` (Java `ActionRegistry` and `ui2/architecture-tests`).
 """
 from __future__ import annotations
 
