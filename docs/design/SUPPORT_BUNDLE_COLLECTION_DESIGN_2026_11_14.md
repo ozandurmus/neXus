@@ -2,10 +2,12 @@
 
 ## Status
 
-**DRAFT — DO NOT FREEZE.** Written 2026-11-14 from the Product Owner's request of the same day. It guides
-investigation only. It approves no device command, schema, role or upload path. Every command in §6 needs the PO's
-exact-literal approval through the network-device command gate before any code issues it. Every `UNKNOWN` below
-stays `UNKNOWN` until a vendor page or a PO-attended lab or pilot measurement settles it.
+**DRAFT — DO NOT FREEZE.** Written 2026-11-14 from the Product Owner's request of the same day; completed 2026-11-15
+with exact bundle contents, part-by-part fail-closed masking, size limits, retention mechanics, RBAC descriptors,
+audit ledger rules, CLI parity, codebase-resolved design questions, and a step-by-step shippable build plan with
+named tests. Status remains `DRAFT — DO NOT FREEZE` because §6's network-device command literals and §10.2's policy
+decisions require Product Owner ratification before freeze. Every `UNKNOWN` below stays `UNKNOWN` until a vendor page
+or a PO-attended lab or pilot measurement settles it.
 
 Research notes with the full per-artefact tables (outside the repository, session notes of 2026-11-14):
 `support-bundle-research-{checkpoint,paloalto,fortigate,cisco-asa}-1114.md`. Vendor pages were read through a
@@ -84,17 +86,22 @@ Not in scope:
 | Need | Existing piece | Reuse |
 |---|---|---|
 | Run a long vendor tool without holding SSH open; exit code in a file; never re-run after a lost lease | `MdsExportExecutor` / `MdsExportPlan` (`ui2/worker/.../backup/cp/`), V61 + V206 gate rows | Same pattern for `cpinfo` and `hcp -r`: `setsid nohup bash --noprofile --norc -c "...; echo $? > rc"`, poll, point-of-no-return marker, `OUTCOME_UNKNOWN` leaves the work directory |
-| Check Point shell normalization (no login shell, `BASH_ENV`/`ENV` cleared) | `MdsExportPlan.CP_ENV` (CP_REMOTE_SHELL_NORMALIZATION_CONTRACT_2026_11_11.md §6.1) | Mandatory prefix for every CP command here. The 2026-11-11 MDS fork storm came from a login shell under `mds_backup` |
+| Check Point shell normalization (no login shell, `BASH_ENV`/`ENV` cleared) | `MdsExportPlan.CP_ENV` (`CP_REMOTE_SHELL_NORMALIZATION_CONTRACT_2026_11_11.md` §6.1) | Mandatory prefix for every CP command here. The 2026-11-11 MDS fork storm came from a login shell under `mds_backup` |
 | Free-space precheck | `df -P /var/log` + `BackupCapabilityExecutor.parseDfAvailableBytes` | Same parser |
 | Bundle → digest → SFTP stream into the vault → compare → remove by exact name (BK-3) | `MdsExportExecutor.run`, `ArtefactStore.open(...).sink()`, `DeviceTransport.fetchStreaming` | Same, unchanged |
 | PAN XML API with streamed export into the vault | `PaloAltoBackupExecutor` (`type=export&category=device-state` streaming), `PanXmlApiTransport`, keygen per run | Same transport. Adds the async job (start / status / get) |
 | FortiGate interactive shell, `config global`, `--More--` answered in session (no console config change) | `FortiGatePlan`, `FortiGateExecutor` (V80 gate rows) | Same session handling. Output streamed to the vault, not to memory or transcript |
 | ASA privileged session, file on `disk0:`, SCP pull, delete by name | `CiscoAsaPlan.backupArchive / scpPath / deleteArchive`, the ASA team's SCP enablement | Session capture first. The disk0 + SCP form is a fallback only |
-| Device's own HCP report already copied daily | System-log phase B `cp_hcp_report` (newest `*.tar.gz` in `/var/log/hcp/last/`, 06:00 window, 7 days, ≤ 4.73 MiB measured on 52 gateways) | Artefact `cp_hcp_latest` can copy the already-stored file. **No device contact** |
-| Browser download of a large artefact: role, reason ≥ 8 chars, single-use 60 s ticket, audit row before the first byte | `BackupController.downloadTicket / download`, `BackupDownloadService`, PO record 2026-09-22 | Same two-step route under its own action and role |
+| Device's own HCP report already copied daily | System-log phase B `cp_hcp_report` (`CpSystemLogCollectJobExecutor`, newest `*.tar.gz` in `/var/log/hcp/last/`, 06:00 window, 7 days, ≤ 4.73 MiB measured on 52 gateways) | Artefact `cp_hcp_latest` can copy the already-stored file. **No device contact** |
+| Browser download of a large artefact: role, reason ≥ 8 chars, single-use 60 s ticket, audit row before the first byte | `BackupController.downloadTicket / download`, `BackupDownloadService`, `JooqBackupArtefactRetrievalRepository`, PO record 2026-09-22 | Same two-step route under its own action (`support_bundle_retrieve`) and role (`security_admin`) |
 | Admin manual ops bypass windows; business-hours confirmation | `ManualAdmission`, `JobWindowPolicy.requireDeviceJobOpen`, `jobs.window_bypass_role`, PO record 2026-10-20 | "Run now" uses it as is. "Run at a time" needs Q1 |
 | Deferred claim | `jobs.admission_not_before` (V128, used by endpoint admission deferrals) | The scheduled start time and "device busy, retry in 10 min" |
-| Expiring artefacts with a janitor | `ArtefactClass.REPORT` + `expires_at` + retention janitor (V190) | New class `support_bundle` with `expires_at` |
+| Expiring artefacts with a janitor | `ArtefactClass.REPORT` + `expires_at` + `RetentionPruningService` / `JooqRetentionQueries` (V190) | New class `ArtefactClass.SUPPORT_BUNDLE = "support_bundle"` with `expires_at` |
+| Write-time secret scrubbing on text captures | `LogRedactor` (`cp-text-v1`, `SecretRules`), `PanLogRedactor` (`pan-config-v2`), `DiagnosticText.scrubSecrets` | Every text-based support-bundle item (`cp_gaia_extras`, `asa_crashinfo`, `asa_show_tech`, `fgt_crashlog`, `fgt_tac_report`) is scrubbed line-by-line before encryption |
+| Read-time / export-time identity masking & filename masking | `LogMasking` (`logmask-v8`, `LogMasking.Session.maskFileName`, `LogMasking.Session.maskLine`), `FreeTextIdentityRules`, `Sanitizer` / `TextSanitizer` | HCP filenames masked on ingest (`hcp_report_FW-TANGO-04_...tar.gz`); optional `?mode=sanitized` text export reuses `LogMasking.Session` and fails closed on `MaskingUnavailableException` |
+| AIView HTTP response masking funnel | `PrivacyMaskingResponseBodyAdvice`, `TopologyNamePseudonymizer`, `SubnetPreservingIpMasker`, `FreeTextEstate`, `AiviewMaskingLeakAuditTest`, `AiviewDiagnosticReadOnlyTest` | Every `support_bundle_read` route returns `Map<String, Object>` through the funnel, omits `requested_by`, `approved_by`, `reason`, and `case_ref` for `aiview`, and fails closed (`FreeTextEstate.UNAVAILABLE`) if cold |
+| Application log IP scrubbing & audit column redaction | `MaskingFormatter` / `LogAddressMasker` (`ui2/platform-core/logging/`), `AuditRedactionPolicy` (`audit_redaction_policy` table) | All worker/service logs scrub IPs to `<ip>`; `reason`, `case_ref`, and `outcome_detail` registered in `audit_redaction_policy` |
+| Session CLI parity | `NexusSessionCli`, `SanitizerCli`, `CutoverCli`, `FailoverCli` (`ui2/cli`) | New `SupportBundleCli` wired into `NexusSessionCli` using the same session cookie, CSRF header, `--business-hours-ack` flag, and streamed downloads |
 | A transient device file is not a recovery write | PO record 14K BW-2 ("a backup creation writes a transient artefact and removes it") | Same classification for the work directory, bundle and TSF job file |
 
 ## 3. Vendor research
@@ -244,55 +251,326 @@ Download stays inside the bank. The real exposure is the upload. The proposed ru
 
 ## 5. Architecture
 
-### 5.1 Objects
+### 5.1 Objects and database schema
 
-- **Support bundle request.** One device, a list of artefact kinds, a run mode (`NOW` or `AT <time>`), an optional
-  vendor case reference (free text up to 40 characters, `[A-Za-z0-9-]`; used only as a label and for a later upload),
-  a reason of at least 8 characters, and the requester. Requests for several devices create one request per device.
-- **Item.** One artefact kind inside a request, with its own state and outcome, artefact reference, size, SHA-256 and
-  gate ids used.
-- **Job.** One `jobs` row per request: job type `support_bundle_collect`, capability per vendor
+- **Support bundle request (`support_bundle_request`).** One device, a list of artefact kinds, a run mode (`NOW` or
+  `AT`), an optional vendor case reference (free text up to 40 characters, `^[A-Za-z0-9_-]{1,40}$`; used only as a
+  label for `security_admin` and for a later upload), a mandatory operator justification (`reason` of 8..500
+  characters), the requesting actor fingerprint, timestamps, expiry, and single-extension state. Requests for several
+  devices create one independent request row per device.
+- **Item (`support_bundle_item`).** One artefact kind (and optional VSX `vs_id` or `domain_ref`) inside a request, with
+  its own execution state, outcome code, masked/safe outcome detail, foreign key to `backup_artefact(artefact_id)`,
+  archive entry filename, plaintext size, SHA-256 digest, redaction ruleset tag, and gate IDs used.
+- **Job (`jobs`).** One `jobs` row per request: job type `support_bundle_collect`, capability per vendor
   (`cp_support_bundle`, `pan_support_bundle`, `fgt_support_bundle`, `asa_support_bundle`). Items run **sequentially
-  in one session**, cheapest first. A failed item does not stop the next, except a failed precheck, which stops them
-  all.
+  in one session**, cheapest first. A failed item does not stop the next, except a failed precheck or lost session,
+  which stops the remaining items that depend on it.
 
-Schema, numbered at implementation time and dry-run on the live DB in `BEGIN/ROLLBACK` before the deploy:
+Exact DDL shape (numbered at implementation time after the active migration reservation queue in `CURRENT_STATE.md`
+and dry-run on the live DB in `BEGIN/ROLLBACK` before deploy):
 
-- `support_bundle_request`: `id`, `device_id`, `run_mode`, `run_at`, `case_ref`, `reason`, `requested_by`,
-  `requested_at`, `job_id`, `state`, `outcome`.
-- `support_bundle_item`: `request_id`, `kind`, `state`, `outcome_code`, `outcome_detail`, `artefact_ref`,
-  `size_bytes`, `sha256`, `started_at`, `finished_at`, `vs_id` or `domain_ref` where used.
-- Phase S8: `support_bundle_upload` (`id`, items, `destination_kind`, `case_ref`, `requested_by`, `approved_by`,
-  `approved_at`, `expires_at`, `state`, `bytes_sent`, `http_status`).
-- `backup_artefact.artefact_class` gains `support_bundle`.
+```sql
+CREATE TABLE IF NOT EXISTS support_bundle_request (
+    id                  UUID        PRIMARY KEY,
+    device_id           TEXT        NOT NULL,
+    vendor              TEXT        NOT NULL CHECK (vendor IN ('check_point', 'palo_alto', 'fortinet', 'cisco_asa')),
+    platform_role       TEXT        NOT NULL,
+    run_mode            TEXT        NOT NULL CHECK (run_mode IN ('NOW', 'AT')),
+    run_at              TIMESTAMPTZ NOT NULL,
+    case_ref            TEXT        CHECK (case_ref IS NULL OR case_ref ~ '^[A-Za-z0-9_-]{1,40}$'),
+    reason              TEXT        NOT NULL CHECK (char_length(btrim(reason)) BETWEEN 8 AND 500),
+    requested_by        TEXT        NOT NULL,
+    requested_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    started_at          TIMESTAMPTZ,
+    finished_at         TIMESTAMPTZ,
+    expires_at          TIMESTAMPTZ NOT NULL,
+    extended_once       BOOLEAN     NOT NULL DEFAULT FALSE,
+    extended_by         TEXT,
+    extended_reason     TEXT        CHECK (extended_reason IS NULL OR char_length(btrim(extended_reason)) BETWEEN 8 AND 500),
+    deleted_by          TEXT,
+    deleted_at          TIMESTAMPTZ,
+    deleted_reason      TEXT        CHECK (deleted_reason IS NULL OR char_length(btrim(deleted_reason)) BETWEEN 8 AND 500),
+    job_id              TEXT        REFERENCES jobs(job_id),
+    work_dir_path       TEXT        CHECK (work_dir_path IS NULL OR work_dir_path ~ '^/var/log/nexus-sb-[a-z0-9]{12}$'),
+    work_dir_cleaned    BOOLEAN     NOT NULL DEFAULT TRUE,
+    precheck_json       JSONB       NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(precheck_json) = 'object'),
+    state               TEXT        NOT NULL CHECK (state IN (
+                            'QUEUED', 'RUNNING', 'COMPLETED', 'PARTIAL', 'FAILED', 'CANCELLED', 'EXPIRED', 'DELETED')),
+    outcome             TEXT        CHECK (outcome IS NULL OR outcome IN (
+                            'COMPLETED', 'PARTIAL', 'FAILED', 'CANCELLED', 'NOT_STARTED_DEVICE_BUSY'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_support_bundle_active_per_device
+    ON support_bundle_request (device_id)
+    WHERE state IN ('QUEUED', 'RUNNING');
+
+CREATE INDEX IF NOT EXISTS idx_support_bundle_request_device_time
+    ON support_bundle_request (device_id, requested_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_support_bundle_request_expiry
+    ON support_bundle_request (expires_at)
+    WHERE state IN ('COMPLETED', 'PARTIAL');
+
+CREATE TABLE IF NOT EXISTS support_bundle_item (
+    id                  UUID        PRIMARY KEY,
+    request_id          UUID        NOT NULL REFERENCES support_bundle_request(id) ON DELETE CASCADE,
+    ordinal             INT         NOT NULL CHECK (ordinal BETWEEN 1 AND 32),
+    kind                TEXT        NOT NULL CHECK (kind IN (
+                            'cp_hcp_latest', 'cp_gaia_extras', 'cp_hcp_run', 'cp_cpinfo',
+                            'pan_tsf', 'asa_crashinfo', 'asa_show_tech', 'fgt_crashlog', 'fgt_tac_report')),
+    vs_id               INT         CHECK (vs_id IS NULL OR vs_id BETWEEN 0 AND 4095),
+    domain_ref          TEXT,
+    state               TEXT        NOT NULL CHECK (state IN (
+                            'QUEUED', 'RUNNING', 'COMPLETED', 'PARTIAL', 'REFUSED_PRECHECK',
+                            'UNSUPPORTED', 'TIMED_OUT', 'TOO_LARGE', 'DIGEST_MISMATCH',
+                            'OUTCOME_UNKNOWN', 'CLEANUP_FAILED', 'REDACTION_FAILED', 'CANCELLED')),
+    outcome_code        TEXT        CHECK (outcome_code IS NULL OR outcome_code ~ '^[A-Z0-9_]{1,64}$'),
+    outcome_detail      TEXT        CHECK (outcome_detail IS NULL OR char_length(outcome_detail) <= 500),
+    archive_entry_name  TEXT        CHECK (archive_entry_name IS NULL OR archive_entry_name ~ '^[A-Za-z0-9_./-]{1,160}$'),
+    artefact_id         TEXT        REFERENCES backup_artefact(artefact_id),
+    size_bytes          BIGINT      CHECK (size_bytes IS NULL OR size_bytes >= 0),
+    sha256              TEXT        CHECK (sha256 IS NULL OR sha256 ~ '^[0-9a-f]{64}$'),
+    redaction_ruleset   TEXT        NOT NULL DEFAULT 'none',
+    gate_ids_used       TEXT[]      NOT NULL DEFAULT '{}',
+    started_at          TIMESTAMPTZ,
+    finished_at         TIMESTAMPTZ,
+    UNIQUE (request_id, kind, COALESCE(vs_id, -1), COALESCE(domain_ref, ''))
+);
+
+CREATE INDEX IF NOT EXISTS idx_support_bundle_item_request
+    ON support_bundle_item (request_id, ordinal);
+```
+
+Phase S8 adds `support_bundle_upload` (`id`, `request_id`, `item_ids UUID[]`, `destination_kind` in
+`('cisco_cxd', 'fortinet_sftp')`, `destination_host`, `case_ref`, `reason`, `requested_by`, `requested_at`,
+`approved_by`, `approved_at`, `approval_reason`, `expires_at`, `state`, `bytes_sent`, `remote_status`, `finished_at`,
+with `CHECK (approved_by IS NULL OR approved_by <> requested_by)` enforcing four-eyes in the database).
+
+`backup_artefact.artefact_class` check constraint (`V190` pattern) gains `'support_bundle'`, and a partial index
+`idx_backup_artefact_support_bundle_expiry ON backup_artefact (expires_at) WHERE artefact_class = 'support_bundle'`
+accelerates hourly janitor pruning.
 
 ### 5.2 Artefact catalogue (closed vocabulary; the browser sends kinds, never commands)
 
-| Kind | Vendor / role | Device load (expected) | Default | Step |
-|---|---|---|---|---|
-| `cp_hcp_latest` | CP gateway, VSX host | **none** if the system-log copy from today is in the vault; otherwise one `ls` + one SFTP get | ticked | S2 |
-| `cp_gaia_extras` | CP all | four short reads | ticked | S2 |
-| `cp_hcp_run` | CP gateway; VSX `-c <VSID>`; MDS `--domain` off | medium (vendor tests; impact level per test) | unticked | S6 |
-| `cp_cpinfo` | CP gateway; VSX per VS; SMS with `-x`; **MDS off by default** | **high** (vendor: no core above 70%) | unticked | S6 |
-| `cp_cpsdc` | CP, only if Q3 says yes | `UNKNOWN` | hidden | — |
-| `pan_tsf` | PAN firewall, Panorama | management plane, `UNKNOWN` | ticked | S3 |
-| `asa_crashinfo` | ASA | low | ticked | S4 |
-| `asa_show_tech` | ASA (system context in multi-context) | `UNKNOWN`. Cisco's pager warning | ticked | S4 |
-| `fgt_crashlog` | FortiGate | low | ticked | S5 |
-| `fgt_tac_report` | FortiGate | `UNKNOWN`. Refused on versions with the known defect when the stored configuration has a DoS policy (§5.4) | ticked | S5 |
+| Kind | Vendor / role | Execution order | Device load (expected) | Default | Step |
+|---|---|---|---|---|---|
+| `cp_gaia_extras` | CP all | 1 (cheapest) | five short reads (two shared with precheck) | ticked | S2 |
+| `cp_hcp_latest` | CP gateway, VSX host | 2 | **none** if today's system-log copy is in the vault; otherwise one `ls` + one SFTP get | ticked | S2 |
+| `cp_hcp_run` | CP gateway; VSX `-c <VSID>`; MDS `--domain` off | 3 | medium (vendor tests; impact level per test) | unticked | S6 |
+| `cp_cpinfo` | CP gateway; VSX per VS; SMS with `-x`; **MDS off by default** | 4 (heaviest) | **high** (vendor: no core above 70%) | unticked | S6 |
+| `cp_cpsdc` | CP, only if Q3 says yes | — | `UNKNOWN` | hidden | — |
+| `pan_tsf` | PAN firewall, Panorama | 1 | management plane, `UNKNOWN` | ticked | S3 |
+| `asa_crashinfo` | ASA | 1 | low | ticked | S4 |
+| `asa_show_tech` | ASA (system context in multi-context) | 2 | `UNKNOWN`. Cisco's pager warning | ticked | S4 |
+| `fgt_crashlog` | FortiGate | 1 | low | ticked | S5 |
+| `fgt_tac_report` | FortiGate | 2 | `UNKNOWN`. Refused on versions with the known defect when the stored configuration has a DoS policy (§5.8) | ticked | S5 |
 
 `cp_cpinfo` options are fixed, not chosen per request:
 
-- **Always:** `-z -D -d -S`. Compressed, no upload, no self-update check, hashes censored.
+- **Always:** `-z -D -d -S`. Compressed, no upload, no self-update check, password hashes censored.
 - **Also `-x` on SMS.**
 - **Never** `-l` (traffic log) or `-k` (kernel tables). If TAC asks for them, they are a separate kind and a separate
   approval (Q4).
 
-### 5.3 Scheduling and job windows
+### 5.3 Exact contents of a bundle and `manifest.json` specification
+
+A support bundle is downloaded as a single streamed gzipped tar archive (`.tgz`) assembled on the fly by
+`SupportBundleDownloadService` from the request's completed item artefacts in `ArtefactStore` plus a freshly rendered
+`manifest.json`. The outer archive file name in `Content-Disposition` follows `BackupController.download`:
+
+```text
+nexus-support-bundle-<vendor>-<requestId.substring(0, 8)>-<yyyyMMdd-HHmm>.tgz
+```
+
+It never contains a raw device hostname, management IP, serial number, or case reference.
+
+#### 5.3.1 Outer `.tgz` archive directory layout
+
+```text
+nexus-support-bundle-<requestId-8>/
+├── manifest.json
+└── items/
+    ├── cp_gaia_extras/
+    │   ├── show-version-all.txt
+    │   ├── show-asset-all.txt
+    │   ├── cphaprob-stat.txt
+    │   ├── multi-cpu.txt
+    │   └── df-var-log.txt
+    ├── cp_hcp_latest/
+    │   └── hcp_report_<device-pseudonym>_<dd>_<mm>_<yy>_<HH>_<MM>.tar.gz
+    ├── cp_hcp_run/
+    │   ├── hcp_report_<device-pseudonym>_<dd>_<mm>_<yy>_<HH>_<MM>.tar.gz
+    │   └── vs-<vsid>/hcp_report_<device-pseudonym>_<dd>_<mm>_<yy>_<HH>_<MM>.tar.gz
+    ├── cp_cpinfo/
+    │   ├── cpinfo.info.gz
+    │   └── vs-<vsid>/cpinfo.info.gz
+    ├── pan_tsf/
+    │   └── techsupport.tgz
+    ├── asa_crashinfo/
+    │   └── show-crashinfo.txt
+    ├── asa_show_tech/
+    │   └── show-tech-support.txt
+    ├── fgt_crashlog/
+    │   └── diagnose-debug-crashlog-read.txt
+    └── fgt_tac_report/
+        └── execute-tac-report.txt
+```
+
+Only items requested in that run and reaching `COMPLETED` or `PARTIAL` appear under `items/`; skipped, refused, or
+failed items are recorded in `manifest.json` with their `state` and `outcome_code` so the engineer has a complete record
+of why an item is absent.
+
+#### 5.3.2 Exact per-item contents and storage format
+
+| Kind | Vault storage format (`backup_artefact`) | Inner files / structure | Write-time processing |
+|---|---|---|---|
+| `cp_gaia_extras` | One `.tar.gz` artefact (`ArtefactClass.SUPPORT_BUNDLE`) containing 5 UTF-8 text files | `show-version-all.txt` (`clish -c 'show version all'`), `show-asset-all.txt` (`clish -c 'show asset all'`), `cphaprob-stat.txt` (`cphaprob stat`), `multi-cpu.txt` (`cpstat os -f multi_cpu` from precheck), `df-var-log.txt` (`df -P /var/log` from precheck) | Each text file passes through `LogRedactor` (`cp-text-v1`) + `DiagnosticText.scrubSecrets` before entering the tar stream |
+| `cp_hcp_latest` | One `.tar.gz` artefact (either cloned inside the vault from a `cp_hcp_report` system-log artefact $\le 24\text{ h}$ old or SFTP-streamed from `/var/log/hcp/last/`) | Vendor HCP archive (`hcp_report_<pseudonym>_<dd>_<mm>_<yy>_<HH>_<MM>.tar.gz`) containing Check Point HTML/JSON/text health report | Entry filename masked via `LogMasking.Session.maskFileName`; binary `.tar.gz` bytes verified for gzip magic (`0x1f 0x8b`) and kept intact for vendor tools |
+| `cp_hcp_run` | One `.tar.gz` artefact per run (or per VS when `-c <VSID>` is used) | Freshly generated vendor HCP archive copied from `/var/log/hcp/last/`. Note: `hcp.log` and `hcp.rc` in `/var/log/nexus-sb-<token>` are control files only and are never archived | Entry filename masked via `LogMasking.Session.maskFileName`; gzip magic verified |
+| `cp_cpinfo` | One `.info.gz` artefact per run (or per VS under `vs-<vsid>/cpinfo.info.gz`) | Output of `cpinfo -z -D -d -S -o %s/cpinfo` (`-x` added on SMS). `cpinfo.log` and `cpinfo.rc` are control files only and are never archived | Check Point `-S` censors password hashes at generation; gzip magic and device-side `sha256sum` verified against vault stream digest (BK-3) |
+| `pan_tsf` | One `.tgz` artefact | Output of PAN-OS XML API `type=export&category=tech-support&action=get&job-id=<n>` (`techsupport.tgz`) | Verified for gzip magic (`0x1f 0x8b`), rejecting XML `<response status="error">` bodies (`PaloAltoBackupExecutor` rule) |
+| `asa_crashinfo` | One `.txt.gz` artefact | UTF-8 session capture of `show crashinfo`, decompressed into `items/asa_crashinfo/show-crashinfo.txt` (or kept `.txt` in the outer `.tgz`) | Streamed line-by-line through `LogRedactor` (`cp-text-v1`) + `DiagnosticText.scrubSecrets` before vault encryption |
+| `asa_show_tech` | One `.txt.gz` artefact | UTF-8 session capture of `show tech-support` (from `system` context on multi-context ASA, answering `<--- More --->` in session) | Streamed line-by-line through `LogRedactor` (`cp-text-v1`) + `DiagnosticText.scrubSecrets` before vault encryption |
+| `fgt_crashlog` | One `.txt.gz` artefact | UTF-8 session capture of `diagnose debug crashlog read` (`config global` on multi-VDOM) | Streamed line-by-line through `LogRedactor` (`cp-text-v1`) + `DiagnosticText.scrubSecrets` before vault encryption |
+| `fgt_tac_report` | One `.txt.gz` artefact | UTF-8 session capture of `execute tac report` (`config global` on multi-VDOM, answering `--More--` in session) | Streamed line-by-line through `LogRedactor` (`cp-text-v1`) + `DiagnosticText.scrubSecrets` (including FortiGate `ENC <blob>` scrubbing) before vault encryption |
+
+#### 5.3.3 Exact `manifest.json` schema
+
+`manifest.json` is written as the first entry of the outer `.tgz`. It contains only opaque identifiers, deterministic
+AIView pseudonyms, timestamps, precheck metrics, and per-item outcomes and digests — **never** a raw device hostname,
+management IP, serial number, `requested_by`, `reason`, or `case_ref`:
+
+```json
+{
+  "schema_version": 1,
+  "nexus_version": "2.0.0",
+  "download_mode": "raw",
+  "request_id": "d8f19c2a-4b10-4e8e-9c1a-7b3e2f109a44",
+  "job_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+  "device_id": "3f9a1c02-7d44-4b88-91e0-5c2d1a8f0b11",
+  "device_pseudonym": "FW-TANGO-04",
+  "vendor": "check_point",
+  "platform_role": "cp_gaia_gateway",
+  "requested_at": "2026-11-15T01:00:00Z",
+  "started_at": "2026-11-15T01:00:04Z",
+  "finished_at": "2026-11-15T01:02:19Z",
+  "expires_at": "2026-11-29T01:02:19Z",
+  "state": "COMPLETED",
+  "outcome": "COMPLETED",
+  "prechecks": {
+    "cpu_max_core_pct": 32,
+    "disk_free_bytes": 12884901888,
+    "version_guard": "PASSED"
+  },
+  "items": [
+    {
+      "ordinal": 1,
+      "kind": "cp_gaia_extras",
+      "vs_id": null,
+      "state": "COMPLETED",
+      "outcome_code": "COMPLETED",
+      "archive_entry_name": "items/cp_gaia_extras/",
+      "artefact_id": "9f8e7d6c-5b4a-4321-8765-1029384756ab",
+      "size_bytes": 18432,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "redaction_ruleset": "cp-text-v1+diagnostic-secrets-v1",
+      "gate_ids_used": [
+        "cp_sb_show_version_all",
+        "cp_sb_show_asset_all",
+        "cp_sb_cphaprob_stat",
+        "cp_sb_cpu_multi",
+        "cp_sb_df_var_log"
+      ],
+      "started_at": "2026-11-15T01:00:05Z",
+      "finished_at": "2026-11-15T01:00:14Z"
+    }
+  ]
+}
+```
+
+### 5.4 Masking applied to each part (reusing existing maskers, fail-closed)
+
+Every surface of the support-bundle subsystem MUST reuse the existing repository maskers without inventing parallel
+regexes or fallback pass-throughs, and every masker MUST fail closed when its dictionary or key state is unavailable:
+
+| Surface / Part | Existing Masker Reused (Exact Class & Method) | What is Masked / Scrubbed | Fail-Closed Behaviour |
+|---|---|---|---|
+| **1. Text-based items at write time** (`cp_gaia_extras`, `asa_crashinfo`, `asa_show_tech`, `fgt_crashlog`, `fgt_tac_report`) | `LogRedactor.redact(line, result)` (`ui2/worker/systemlog/redaction/LogRedactor.java`, ruleset `cp-text-v1` + `SecretRules`) chained with `DiagnosticText.scrubSecrets(line)` (`ui2/platform-core/DiagnosticText.java`) | Passwords, SNMP communities/USM keys, RADIUS/TACACS/LDAP shared secrets, WPA/IKE PSKs, CLI `-p`/`-w` flags, auth blobs, `$1$/$5$/$6$/$2a$` crypt hashes, 32/40/64-hex keys, PEM `PRIVATE KEY` blocks, FortiGate `ENC <blob>` secrets, and secret-keyword lines $\rightarrow$ `<redacted>` / `[SECRET REDACTED]` | Line buffer is bounded to 64 KiB; a line exceeding 64 KiB without `\n` is replaced wholesale with `[LINE_REDACTED_OVERLONG]`. Any `RuntimeException` inside the redactor aborts the item stream (`state = 'REDACTION_FAILED'`), closes/deletes the partial vault sink without committing a `backup_artefact` row, and persists **zero** unredacted bytes |
+| **2. Text-based items in optional sanitized download mode** (`?mode=sanitized`, CLI `--sanitized`) | `LogMasking.openSession()` $\rightarrow$ `LogMasking.Session.maskLine(line, rawDeviceHostname)` (`ui2/service/systemlog/LogMasking.java`, ruleset `logmask-v8`: `SerialRule`, `IdentityFields`, `TextSanitizer` with `TokenSink.DISCARD`, `EstateDictionary`, `EstateNameCatalog`, `FreeTextIdentityRules`) | Replaces device/cluster/VS/domain/policy/rule/object/zone names (`FW-TANGO-04`, `CLS-ROMEO-01`, `POL-`, `RUL-`, `OBJ-`, `ZON-`), serials (`SN-`), principals (`USR-`), IPv4/IPv6 addresses (`SubnetPreservingIpMasker` / `TextSanitizer`), FQDNs, home paths, and hex/dash IPs | If `LogMasking.openSession()` cannot build the `EstateDictionary` and has no cached snapshot, it throws `LogMasking.MaskingUnavailableException`; `SupportBundleDownloadService` catches it before opening the response stream and returns HTTP `503 Service Unavailable` (`MASKING_UNAVAILABLE`) with zero bytes sent. Binary items (`cp_cpinfo`, `cp_hcp_*`, `pan_tsf`) are omitted in `sanitized` mode (`"omitted_in_sanitized_mode": true` in `manifest.json`) because byte-level rewriting corrupts compressed archives |
+| **3. Binary / vendor-archive items** (`cp_hcp_latest`, `cp_hcp_run`, `cp_cpinfo`, `pan_tsf`) | Check Point native `-S` flag on `cpinfo` (censors password hashes); `LogMasking.Session.maskFileName(rawName, rawDeviceHostname)` on HCP archive filenames; AES-256-GCM envelope encryption in `ArtefactStore` | HCP filename `hcp_report_<rawHost>_15_11_26_03_00.tar.gz` becomes `hcp_report_FW-TANGO-04_15_11_26_03_00.tar.gz`. Binary archive payload is kept intact for TAC tools in default (`mode=raw`) downloads | If `LogMasking.openSession()` throws `MaskingUnavailableException` during worker ingest, the worker falls back to the fixed literal filename `hcp_report.tar.gz` (never retaining the raw hostname in `archive_entry_name`). Binary items are strictly unreachable by `aiview` (`role:replay_viewer`) and omitted in `mode=sanitized` |
+| **4. `manifest.json` and outer `.tgz` filename** | `TopologyNamePseudonymizer.pseudonymizeDevice(rawHostname)` (`ui2/service/privacy/TopologyNamePseudonymizer.java`) | `device_pseudonym` holds `FW-TANGO-04`; outer filename uses `<vendor>` and `<requestId.substring(0, 8)>`. Raw hostname, management IP, serial, `requested_by`, `reason`, and `case_ref` are excluded from `manifest.json` | If `rawHostname` is null/blank or `TopologyNamePseudonymizer` fails, `device_pseudonym` is written as `"UNKNOWN"` (never falling back to a raw hostname or address) |
+| **5. HTTP API JSON responses (`support_bundle_read`) & AIView (`role:replay_viewer`)** | `PrivacyMaskingResponseBodyAdvice` (`ui2/service/privacy/PrivacyMaskingResponseBodyAdvice.java`), `TopologyNamePseudonymizer`, `SubnetPreservingIpMasker`, `FreeTextEstate` (`ui2/service/privacy/FreeTextEstate.java`) | All read routes return `ResponseEntity<Map<String, Object>>` (an approved `FUNNEL_TYPES` in `AiviewMaskingLeakAuditTest`). Keys `"hostname"`, `"reason"`, and `"detail"` (for `outcome_detail`) are automatically rewritten by the advice for `aiview`. In addition, when `GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE` is `true`, `SupportBundleController` explicitly **omits** `requested_by`, `extended_by`, `deleted_by`, `approved_by`, `reason`, `extended_reason`, `deleted_reason`, and `case_ref` from the response map | On a cold pod where `TopologyNamePseudonymizer`'s `deviceDirectory` or `FreeTextEstate`'s `EstateDictionary` has not loaded, `TopologyNamePseudonymizer.maskText` returns `FreeTextEstate.UNAVAILABLE` (`"<masked: estate dictionary unavailable>"`), never raw prose. `AiviewMaskingLeakAuditTest` fails the build if any unreviewed identity key or unmasked return type is introduced |
+| **6. Precheck & failure `outcome_detail` strings** | Safe structured templates at construction + `TopologyNamePseudonymizer.maskText` / `SubnetPreservingIpMasker.maskFreeText` via `PrivacyMaskingResponseBodyAdvice` | `outcome_detail` is generated exclusively from numeric measurements and closed enums (e.g., `"CPU core 2 at 78% exceeds 70% limit"`, `"/var/log free 1420 MiB below 2048 MiB limit"`, `"FortiOS 7.4.4 with DoS-policy refused (VENDOR_DEFECT_SESSION_CRASH)"`), never echoing raw device CLI banners or paths | If an unexpected transport exception message is caught, only the exception class name and a fixed code (`TRANSPORT_IO_ERROR`, `SSH_EOF`) are stored in `outcome_detail` — raw exception messages (`e.getMessage()`) are never stored in `support_bundle_item.outcome_detail` |
+| **7. Job logs, transcripts, and diagnostic previews** | `PrivacyMaskingResponseBodyAdvice` (`JobEvent` branch), `DiagnosticText.masked` (256 KiB cap, `/diagnostic-safe-words.txt` allowlist), `PayloadMasker` (`ui2/packet-analysis/privacy/PayloadMasker.java`), `MaskingFormatter` / `LogAddressMasker` (`ui2/platform-core/logging/`) | Session captures are streamed directly to `ArtefactStore` and **never** written to `job_transcript`. Transcript rows hold only gate IDs, byte counts, durations, and `rc`. Service/worker logs scrub IPv4/IPv6 to `<ip>` via `LogAddressMasker` | `DiagnosticText.masked` hashes every token not in `/diagnostic-safe-words.txt`; `PayloadMasker` fails closed to `TXT-<10hex>` for any unclassified key |
+| **8. Audit log (`audit_log`)** | `AuditRedactionPolicy` (`ui2/service/audit/AuditRedactionPolicy.java`) + DB `fn_audit_redact` reading `audit_redaction_policy` | `support_bundle_request.reason`, `case_ref`, `extended_reason`, `deleted_reason`, `support_bundle_item.outcome_detail`, and `support_bundle_upload.case_ref` / `reason` are registered in `audit_redaction_policy` (tier 1) | `fn_audit_capture` raises an exception and aborts the transaction if `app.actor_fingerprint` or `app.action_id` is unset |
+
+### 5.5 Size limits, buffer bounds, and quota rules
+
+All byte limits are enforced during streaming via a bounded stream wrapper (`BoundedInputStream` /
+`BoundedOutputStream`) **before** bytes are written to `ArtefactStore`. Exceeding any item or request limit immediately
+aborts the stream, closes and discards the partial vault file without inserting a `backup_artefact` row, removes any
+temporary file on the device (`C20` / `P6`), and records `state = 'TOO_LARGE'`.
+
+| Limit Scope | Target | Exact Limit | Enforcement & Rationale |
+|---|---|---|---|
+| **Per-item byte limit** | `cp_gaia_extras` | **1 MiB** (`1,048,576` B) total; **256 KiB** (`262,144` B, `DiagnosticText.MAX_BYTES`) per command | 5 short CLI text outputs (`show version all`, `show asset all`, `cphaprob stat`, `multi_cpu`, `df -P /var/log`) |
+| **Per-item byte limit** | `cp_hcp_latest` | **16 MiB** (`16,777,216` B) | Matches `CpSystemLogCollectJobExecutor.HCP_MAX_BYTES`; fleet max across 52 gateways is $4.73\text{ MiB}$ |
+| **Per-item byte limit** | `cp_hcp_run` | **16 MiB** (`16,777,216` B) per gateway / VS | Same as `cp_hcp_latest` |
+| **Per-item byte limit** | `cp_cpinfo` | **20 GiB** (`21,474,836,480` B) per `.info.gz` | Check Point SR upload limit is 10 GB (`sk92526`); 20 GiB is $2\times$ vendor upload cap |
+| **Per-item byte limit** | `pan_tsf` | **2 GiB** (`2,147,483,648` B) | Typical firewall TSF is 20–200 MiB; Panorama/large firewalls up to ~1.5 GiB |
+| **Per-item byte limit** | `asa_crashinfo` | **64 MiB** (`67,108,864` B) | Latest flash crashinfo file |
+| **Per-item byte limit** | `asa_show_tech` | **256 MiB** (`268,435,456` B) | Session capture of `show tech-support` |
+| **Per-item byte limit** | `fgt_crashlog` | **32 MiB** (`33,554,432` B) | Ring buffer of at most 16,384 lines |
+| **Per-item byte limit** | `fgt_tac_report` | **256 MiB** (`268,435,456` B) | Session capture of `execute tac report` |
+| **Per-request aggregate cap** | All items in one `support_bundle_request` | **25 GiB** (`26,843,545,600` B) plaintext | Bounds a multi-item or multi-VS Check Point request |
+| **In-memory stream buffer** | Worker SFTP / HTTP / SSH stream copy & download `.tgz` assembly | **64 KiB** (`65,536` B) chunk buffer; **64 KiB** max line buffer for text redaction | Zero whole-file heap buffering (`byte[]` prohibited); constant heap footprint regardless of bundle size |
+| **Control log tail read** | `cpinfo.log` / `hcp.log` on non-zero `.rc` | **8 KiB** (`8,192` B) tail | Used only to classify failure code (`UNSUPPORTED`, `DISK_FULL`); never stored raw |
+| **Per-device request count cap** | Live (`COMPLETED` / `PARTIAL`, non-expired, non-deleted) requests per `device_id` | **3 requests** | Refused at submission with HTTP `409 Conflict` (`DEVICE_BUNDLE_QUOTA_EXCEEDED`), naming the oldest request ID and its `expires_at` |
+| **Fleet storage quota** | Sum of live `backup_artefact.ciphertext_bytes` where `artefact_class = 'support_bundle'` and `NOT_REMOVED` | **50 GiB** (`53,687,091,200` B, configurable) | Excluded from `JooqRetentionQueries.liveCiphertextBytes()` (just like `system_log`) so support bundles never consume the 400 GiB backup/configuration budget (`DEFAULT_STORAGE_BUDGET_BYTES`). Refused at submission (`FLEET_BUNDLE_QUOTA_EXCEEDED`) when exceeded |
+| **Store volume free-space floor** | `ArtefactStore` filesystem usable space | $\ge$ **10%** of total volume and $\ge$ **5 GiB** free (`SystemLogArtefactVolume.MIN_FREE_FRACTION` rule) | Checked at admission and before each item write; fails closed with `STORE_VOLUME_LOW_SPACE` |
+| **Device disk precheck** | Check Point `/var/log` (`df -P /var/log`); Palo Alto `/` and `/opt/panlogs` (`show system disk-space`) | CP `/var/log` $\ge$ **2 GiB** free for `cp_hcp_run`, $\ge$ **5 GiB** free for `cp_cpinfo`; PAN `/` and `/opt/panlogs` $\le$ **90%** used | Refuses heavy items (`REFUSED_PRECHECK`) while allowing no-disk items (`cp_gaia_extras`, vault-cached `cp_hcp_latest`) |
+
+### 5.6 Retention, TTL extension, early deletion, and janitor integration
+
+- **Artefact class.** `ArtefactClass.SUPPORT_BUNDLE = "support_bundle"` in
+  `ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/artefact/ArtefactClass.java`. Every stored
+  item writes a `backup_artefact` row with `artefact_class = 'support_bundle'`, `retention_tier = 'support_bundle_14d'`
+  (or `'support_bundle_extended'`), and `expires_at` matching the parent `support_bundle_request.expires_at`.
+- **Default TTL (14 days).** At request completion, `expires_at = finished_at + INTERVAL '14 days'` (Q2).
+- **Single extension up to 60 days.** A `security_admin` may call `POST /api/v2/support-bundles/{id}/extend`
+  (`support_bundle_retention_set`) with `{"days": 1..60, "reason": "<>= 8 chars>"}` while the request is `COMPLETED` or
+  `PARTIAL` and `extended_once = FALSE`. In one `AuditedTransactionBoundary`:
+  1. `support_bundle_request.expires_at` is set to ` LEAST(requested_at + INTERVAL '60 days', now() + (days || ' days')::interval) `,
+     `extended_once = TRUE`, `extended_by = actorFingerprint`, `extended_reason = reason`.
+  2. All live `backup_artefact` rows linked via `support_bundle_item.artefact_id` have their `expires_at` and
+     `retention_tier = 'support_bundle_extended'` updated to match.
+  3. A second extension call on the same request is refused with HTTP `409 Conflict` (`ALREADY_EXTENDED`).
+- **Early deletion by `security_admin`.** `POST /api/v2/support-bundles/{id}/delete` (`support_bundle_delete`) requires
+  a `reason` of at least 8 characters. For each live item artefact:
+  1. The encrypted file on the recovery volume is deleted via `RetentionStorePort.deleteArtefact` (`Files.deleteIfExists`).
+  2. Only after the file is confirmed gone from disk, `JooqRetentionQueries.recordRemoved` inserts the `'removed'` row
+     into `artefact_retention_ledger` under the acting `security_admin`'s fingerprint and `support_bundle_delete`
+     action ID (preserving the truthful-tombstone invariant).
+  3. `support_bundle_request` transitions to `state = 'DELETED'`, recording `deleted_by`, `deleted_at`, and
+     `deleted_reason`.
+- **Hourly retention janitor (`RetentionPruningService` + `JooqRetentionQueries`).**
+  - `RetentionPruningService.RetentionStorePort` adds `default List<ArtefactRecord> findExpiredSupportBundles() { return List.of(); }`
+    and `PruningSummary` adds `int supportBundlesPruned` (mirroring `findExpiredReports()` and `reportsPruned` in
+    `V190`).
+  - `JooqRetentionQueries.expiredSupportBundles()` selects `from backup_artefact a where a.artefact_class = 'support_bundle' and a.expires_at is not null and a.expires_at < now()` + `NOT_REMOVED` ordered by `a.expires_at, a.artefact_id`.
+  - **No "keep last per device" exemption:** Unlike `backup` (`isSoleRemainingBackupForDevice`) and `configuration`
+    (`isLatestConfigurationArchive`), support bundles are temporary case forensics and follow the `report` rule: once
+    `expires_at < now()`, every expired support-bundle artefact is deleted from disk and tombstoned in
+    `artefact_retention_ledger`, and its parent `support_bundle_request.state` is updated to `'EXPIRED'`.
+- **Never parsed, never shown.** Bundles never feed inventory, compliance, the sanitizer, aiview or any report. This
+  design is the forensics contract that the raw-evidence law requires before raw device output may be retained.
+
+### 5.7 Scheduling and job windows
 
 - **Run now.** This is an administrator's manual job (PO 2026-10-20): `security_admin` only, never held to a window,
-  and inside business hours (08:00–20:00) the existing confirmation (`BUSINESS_HOURS_CONFIRM_REQUIRED`, ack header)
-  applies. The job carries `window_bypass_role`.
+  and inside business hours (08:00–20:00 `Europe/Istanbul`) the existing confirmation
+  (`BUSINESS_HOURS_CONFIRM_REQUIRED`, `X-Nexus-Business-Hours-Ack: true` header) applies via
+  `JobWindowPolicy.requireDeviceJobOpen`. The job carries `window_bypass_role = 'role:security_admin'`.
 - **Run at a time.** Today `JobWindowPolicy.requireOpen(Instant)` says "an explicit time: always the window, grant or
   not". It was written for the failover scheduled start. Two options (Q1):
   - **(a) Recommended: treat it as a deferred admin manual job.** The administrator picks any time in the next 7 days.
@@ -306,68 +584,72 @@ Schema, numbered at implementation time and dry-run on the live DB in `BEGIN/ROL
   - about 03:00, the device's own HCP run (measured on 36/52 gateways);
   - 06:00, the system-log HCP copy.
 
-  It suggests 00:00 or 04:00. A collision is not refused. The busy-device guard (§5.4) defers the run instead.
-- A scheduled request may be cancelled until its job is claimed. After the point of no return (§5.5) a cancel only
+  It suggests 00:00 or 04:00. A collision is not refused. The busy-device guard (§5.8) defers the run instead.
+- A scheduled request may be cancelled until its job is claimed. After the point of no return (§5.9) a cancel only
   stops further items. The running tool finishes and its work directory is cleaned up if its exit code arrives.
 
-### 5.4 Device-load guards (all fail-closed; refusal reasons shown to the requester)
+### 5.8 Device-load guards (all fail-closed; refusal reasons shown to the requester)
 
 | Guard | Where | Rule |
 |---|---|---|
-| One bundle per device | DB, partial unique index on active support-bundle jobs per `device_id` | A second request for a device with one already waiting or running is refused at submission (`SUPPORT_BUNDLE_ALREADY_ACTIVE`) |
-| Not both HA members at once | claim | If a support-bundle job is RUNNING on another member of the same cluster or HA pair, defer by 10 minutes (`admission_not_before`). Requesting both members is allowed; they run one after the other. Membership comes from inventory (cluster id). Unknown membership is treated as "single", and the UI says so |
-| Device busy | claim | A RUNNING backup, MDS export, configuration or policy job on the same device defers by 10 minutes. Per-device job serialization is written but not merged, so this is a local check until it lands |
-| Give up | claim | Not started within 3 hours after its time: `NOT_STARTED_DEVICE_BUSY` (proposal) |
-| Fleet cap | claim | At most 2 support-bundle jobs running fleet-wide (setting); the rest defer |
+| One bundle per device | DB, partial unique index `uq_support_bundle_active_per_device` on active support-bundle requests per `device_id` | A second request for a device with one already `QUEUED` or `RUNNING` is refused at submission (`SUPPORT_BUNDLE_ALREADY_ACTIVE`) |
+| Not both HA members at once | claim | If a support-bundle job is `RUNNING` on another member of the same cluster or HA pair, defer by 10 minutes (`admission_not_before`). Requesting both members is allowed; they run one after the other. Membership comes from inventory (cluster id). Unknown membership is treated as "single", and the UI says so |
+| Device busy | claim | A `RUNNING` backup, MDS export, configuration, readiness, or policy job on the same device defers by 10 minutes |
+| Give up | claim | Not started within 3 hours after its scheduled `run_at`: request transitions to `FAILED` with outcome `NOT_STARTED_DEVICE_BUSY` |
+| Fleet cap | claim | At most 2 support-bundle jobs running fleet-wide (setting); the rest defer by 5 minutes |
 | CPU precheck | first commands of the run | CP: any core above 70% refuses `cp_cpinfo` and `cp_hcp_run` (**vendor rule**, sk92739), and the cheap items still run. PAN, FGT, ASA: management CPU above 80% (**local heuristic**, not a vendor figure) refuses `pan_tsf`, `fgt_tac_report` and `asa_show_tech` |
-| Disk precheck | first commands | CP: free bytes in `/var/log` below 2 GiB refuses `cp_cpinfo` and `cp_hcp_run` (local heuristic, same parser as the MDS export). PAN: `show system disk-space` with root or `/opt/panlogs` above 90% refuses `pan_tsf` (heuristic). ASA: no file is written in the default form. FGT: no file |
+| Disk precheck | first commands | CP: free bytes in `/var/log` below 2 GiB refuses `cp_hcp_run` and below 5 GiB refuses `cp_cpinfo` (local heuristic, same `BackupCapabilityExecutor.parseDfAvailableBytes` parser as MDS export). PAN: `show system disk-space` with root or `/opt/panlogs` above 90% refuses `pan_tsf` (heuristic). ASA: no file is written in the default form. FGT: no file |
 | Version guard | before connect, from stored data | FortiGate below 7.4.10 (7.4 train), below 7.6.6 (7.6 train), or on 7.0/7.2, **and** a stored configuration containing `config firewall DoS-policy`: `fgt_tac_report` is refused (`VENDOR_DEFECT_SESSION_CRASH`) and the crash log still runs. Uses the stored configuration; no device command |
-| Size bound | fetch | Per kind, as a safety bound, not a vendor figure: cpinfo 20 GiB (vendor upload cap is 10 GB, so twice that); TSF 2 GiB; session captures 256 MiB; HCP 16 MiB (as system-log). Over the bound: `TOO_LARGE`, nothing stored, device file removed |
-| Run deadline | worker | cpinfo and HCP runs: 2 h; TSF job: 30 min; session captures: 20 min. On deadline: PAN `action=finish`; CP: `OUTCOME_UNKNOWN`, work directory left (the MDS export rule); FGT and ASA: session closed, item `TIMED_OUT` |
+| Size bound | fetch | Per kind, enforced via bounded stream (§5.5): `cp_gaia_extras` 1 MiB; `cp_hcp_*` 16 MiB; `cp_cpinfo` 20 GiB; `pan_tsf` 2 GiB; `asa_crashinfo` 64 MiB; `fgt_crashlog` 32 MiB; `asa_show_tech` and `fgt_tac_report` 256 MiB. Over the bound: `TOO_LARGE`, nothing stored, device file removed |
+| Run deadline | worker | `cp_cpinfo` and `cp_hcp_run`: 2 h; `pan_tsf` job: 30 min; session captures: 20 min. On deadline: PAN `action=finish`; CP: `OUTCOME_UNKNOWN`, work directory left (the MDS export rule); FGT and ASA: session closed, item `TIMED_OUT` |
 
-### 5.5 Execution per vendor
+### 5.9 Execution per vendor
 
-Every CP command carries the `CP_ENV` prefix. The work directory is `/var/log/nexus-sb-<token>`, with the token
-taken from the job id only (`MdsExportPlan.workDir` rule).
+Every CP command carries the `MdsExportPlan.CP_ENV` prefix (`unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; `). The work directory is `/var/log/nexus-sb-<token>`, with the 12-char `<token>` derived from the job UUID (`MdsExportPlan.workDir` rule).
 
 **Check Point (SSH, Expert):**
 
 1. Version: `show version all` (existing gate).
 2. Prechecks: `cpstat os -f multi_cpu` and `df -P /var/log`.
-3. `cp_gaia_extras`: four reads, streamed into the bundle directory.
+3. `cp_gaia_extras`: `show version all`, `show asset all`, `cphaprob stat`, plus the two precheck outputs, scrubbed
+   line-by-line via `LogRedactor` + `DiagnosticText.scrubSecrets` and packaged into one `.tar.gz` artefact in the vault.
 4. `cp_hcp_latest`:
    1. If the system-log store holds a `cp_hcp_report` for this device from the last 24 hours, copy it inside the
       vault. No device contact.
-   2. Otherwise `ls -lgo /var/log/hcp/last/` and SFTP-get the newest `*.tar.gz` by its listed name.
-5. `mkdir`. **Point of no return marked.**
-6. Heavy items, one at a time: start with `setsid nohup ... echo $? > <tool>.rc`, poll the rc file every 30 s up to
-   the deadline, then `ls`.
+   2. Otherwise `ls -lgo --time-style=+%s /var/log/hcp/last/` and SFTP-get the newest `*.tar.gz` by its listed name
+      (validated against `^[A-Za-z0-9_.-]{1,128}$`), masking its stored entry name via
+      `LogMasking.Session.maskFileName`.
+5. `mkdir -p /var/log/nexus-sb-<token>` (only when `cp_hcp_run` or `cp_cpinfo` is in the request). **Point of no return
+   marked** (`work_dir_path` recorded, `work_dir_cleaned = FALSE`).
+6. Heavy items, one at a time: start with `setsid nohup bash --noprofile --norc -c "...; echo \$? > <tool>.rc" </dev/null >/dev/null 2>&1 &`, poll the `.rc` file every 30 s up to the deadline, then `ls -l`.
    - HCP writes into `/var/log/hcp/last/`. neXus copies the newest archive by its listed name into the work
      directory. It **replaces the device's own "last" report**: that is what any manual `hcp -r` does, and the UI
      says so.
-7. `tar -czf`, `sha256sum`, SFTP stream into the vault, compare, then `rm -rf` of the exact work directory and
-   bundle.
-   - A digest mismatch deletes nothing on the device (BK-3).
+7. For each produced archive, compute `sha256sum` on the device, SFTP-stream into the `ArtefactStore` sink, compare
+   device SHA-256 against the streamed vault SHA-256, and only on `MATCH` execute `rm -rf` of the exact work directory
+   and mark `work_dir_cleaned = TRUE`.
+   - A digest mismatch deletes nothing on the device (`DIGEST_MISMATCH`, BK-3).
 
 **VSX:**
 
-- cpinfo runs once per selected VS: `vsenv <VSID>` and cpinfo in one command line. The VSID is validated as an
-  integer from inventory.
-- HCP runs from VS0 with `-c <VSID>`.
+- `cp_cpinfo` runs once per selected VS: `vsenv <VSID> >/dev/null 2>&1 && cpinfo ...` in one command line. The VSID is
+  validated as an integer ($0..4095$) against stored inventory for that gateway.
+- `cp_hcp_run` runs from VS0 with `-c <VSID>`.
 
 **MDS:** `cp_cpinfo` and `cp_hcp_run` are hidden until Q5 (fork-storm history).
 
 **Palo Alto (XML API, one key per run):**
 
 1. Prechecks: `show system resources` and `show system disk-space`.
-2. Start `type=export&category=tech-support` and record the job id.
-3. Poll `action=status` every 15 s until `FIN`, up to 30 minutes.
-4. Stream `action=get` into the vault through the existing streaming transport. A successful get deletes the job on
-   the device. The SHA-256 is computed on receipt. There is no device-side digest, the same as device-state backups.
-5. On deadline, send `action=finish`, then record `TIMED_OUT`.
+2. Start `type=export&category=tech-support` and record the numeric `<job>` ID (`^[0-9]{1,12}$`).
+3. Poll `action=status&job-id=<n>` every 15 s until `<status>FIN</status>`, up to 30 minutes.
+4. Stream `action=get&job-id=<n>` into the vault through the existing streaming transport. A successful `get` deletes
+   the job on the device. The SHA-256 is computed on receipt. There is no device-side digest, the same as device-state
+   backups.
+5. On deadline, send `action=finish&job-id=<n>`, then record `TIMED_OUT`.
 
-The size bound and gzip check reuse `PaloAltoBackupExecutor`'s stream validation (`gzip` magic, XML error body →
-refusal).
+The size bound and gzip check reuse `PaloAltoBackupExecutor`'s stream validation (`gzip` magic `0x1f 0x8b`, XML error
+body → refusal).
 
 **FortiGate (SSH interactive, existing session handling):**
 
@@ -375,56 +657,116 @@ refusal).
 2. `get system performance status` as the CPU precheck.
 3. `config global` (multi-VDOM only).
 4. `diagnose debug crashlog read`, then `execute tac report`, then `end`.
-5. Output is **streamed into the vault sink** as it arrives. It is never buffered whole in memory and never written
-   to the job transcript, which records only lengths and timings.
-6. `--More--` is answered in session.
-7. Completion: the prompt returns. A session that drops mid-report gives `SESSION_LOST`, and the partial capture is
-   stored and marked partial (TAC can still use it).
+5. Output is **streamed line-by-line through `LogRedactor` + `DiagnosticText.scrubSecrets` into the vault sink** as it
+   arrives. It is never buffered whole in memory and never written to the job transcript, which records only lengths
+   and timings.
+6. `--More--` is answered in session (`FortiGatePlan`).
+7. Completion: the prompt returns. A session that drops mid-report gives `PARTIAL` (with `outcome_code = 'SESSION_LOST'`)
+   if at least 4 KiB was captured, or `FAILED` otherwise.
 
 **Cisco ASA (SSH, privileged EXEC):**
 
 1. Precheck `show cpu usage`.
 2. Multi-context: `changeto system`.
 3. `show crashinfo`, then `show tech-support`.
-4. Output is streamed into the vault sink.
+4. Output is streamed line-by-line through `LogRedactor` + `DiagnosticText.scrubSecrets` into the vault sink.
 
 **This session does not send `terminal pager 0`**, because of Cisco's CPU warning. The `<--- More --->` prompt is
 answered in session instead. That is a behaviour difference from the inventory session, which does send it. Whether
-that inventory practice should change is a separate question (risk R7).
+that inventory practice should change is a separate question (risk R7 / Q12).
 
 **Fallback, behind its own approval:** `show tech-support file disk0:/nexus-sb-<hex>.txt`, SCP pull, then
 `delete /noconfirm disk0:/nexus-sb-<hex>.txt`. It is used only if session capture proves unreliable in the pilot.
 
-### 5.6 Storage, retention, quota
+### 5.10 RBAC actions (`ActionRegistry`) and audit ledger
 
-- **Store.** Encrypted artefact store, class `support_bundle`, one artefact per item, plus a `manifest.json` per
-  request (kinds, sizes, digests, neXus version, device pseudonym, no hostname). The download is a `.tgz` of the
-  items, produced as a stream.
-- **Retention.** `expires_at` = collection plus **14 days** by default (Q2). A `security_admin` may extend it once to
-  60 days with a reason, for example while a case is open. The retention janitor deletes expired items.
-  `security_admin` may delete early with a reason (audited).
-- **Quota.** Per device at most 3 requests stored. Fleet cap 50 GiB of `support_bundle` bytes (setting; proposal,
-  Q2). A request that would exceed it is refused at submission with the current use shown. This integrates with the
-  vault quota lane (`vault_has_no_enforced_quota_on_a_shared_host`): when that lane lands, `support_bundle` is one
-  of its classes and these caps become its per-class limits.
-- **Never parsed, never shown.** Bundles never feed inventory, compliance, the sanitizer, aiview or any report. This
-  design is the forensics contract that the raw-evidence law requires before raw device output may be retained.
+#### 5.10.1 Exact `ActionRegistry` descriptors and `SecurityWebMvcConfig` route bindings
 
-### 5.7 RBAC and audit
+Every route is registered in `SecurityWebMvcConfig.ACTION_ID_BY_ROUTE` and evaluated by `GateChain` (E3 + E4). No
+write, cancel, retrieve, retention, cleanup, or upload action ever includes `RoleToken.REPLAY_VIEWER`, and
+`SupportBundleController` also checks `!Boolean.TRUE.equals(request.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE))`
+on every non-read handler as defense-in-depth (matching `PAN_FAILOVER_CONFIG_SYNC` and `TOPOLOGY_OVERRIDE_WRITE`).
 
-| Action (new, `ActionRegistry`) | Route | Who |
-|---|---|---|
-| `support_bundle_read` | `GET /api/v2/support-bundles`, `GET /api/v2/devices/{id}/support-bundles` | operator and above, and aiview: **metadata only**. Pseudonymised device, kinds, state, outcome, size, digest prefix. Never bytes, paths or case reference |
-| `support_bundle_request` | `POST /api/v2/devices/{id}/support-bundles` | `security_admin` only (Q6: also `operation_admin`?) |
-| `support_bundle_cancel` | `POST /api/v2/support-bundles/{id}/cancel` | `security_admin` |
-| `support_bundle_retrieve` | `POST .../{id}/download-ticket`, `GET .../{id}/download?ticket=` | `security_admin`. Reason of at least 8 characters, single-use 60 s ticket, audit row before the first byte (the backup download pattern). **Never aiview** |
-| `support_bundle_retention_set` / `support_bundle_delete` | `POST .../{id}/extend`, `POST .../{id}/delete` | `security_admin`, with a reason |
-| `support_bundle_upload_request` / `_approve` (S8) | `POST .../{id}/uploads`, `POST /api/v2/support-bundle-uploads/{id}/approve` | `security_admin`. The approver must differ from the requester (four-eyes) |
+| `ActionRegistry` Constant & Action ID | `consoleSubmittable` | Required / Permitted `RoleToken`s | HTTP Route(s) | Notes & `aiview` Boundary |
+|---|---|---|---|---|
+| `SUPPORT_BUNDLE_READ = "support_bundle_read"` | `true` | `Optional.of(RoleToken.OPERATOR)`, alternatives `Set.of(RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN, RoleToken.VIEWER, RoleToken.REPLAY_VIEWER)` | `GET /api/v2/support-bundles`<br>`GET /api/v2/devices/*/support-bundles`<br>`GET /api/v2/support-bundles/*` | Metadata only: opaque IDs, pseudonymised `hostname`, kinds, states, outcomes, sizes, 12-char `digest_prefix`, `expires_at`. For `aiview`, controller omits `requested_by`, `extended_by`, `deleted_by`, `approved_by`, `reason`, `extended_reason`, `deleted_reason`, and `case_ref`. Added to `AiviewDiagnosticReadOnlyTest` `held` allowlist |
+| `SUPPORT_BUNDLE_REQUEST = "support_bundle_request"` | `true` | `Optional.of(RoleToken.SECURITY_ADMIN)` (Q6 asks whether `RoleToken.OPERATION_ADMIN` should also be added) | `POST /api/v2/devices/*/support-bundles` | Mandatory `reason` ($\ge 8$ chars), closed `kinds` list; inside business hours requires `X-Nexus-Business-Hours-Ack: true`. **Never `aiview`** |
+| `SUPPORT_BUNDLE_CANCEL = "support_bundle_cancel"` | `true` | `Optional.of(RoleToken.SECURITY_ADMIN)` | `POST /api/v2/support-bundles/*/cancel` | Mandatory `reason` ($\ge 8$ chars). Cancels queued job or stops remaining unstarted items. **Never `aiview`** |
+| `SUPPORT_BUNDLE_RETRIEVE = "support_bundle_retrieve"` | `true` | `Optional.of(RoleToken.SECURITY_ADMIN)` | `POST /api/v2/support-bundles/*/download-ticket`<br>`GET /api/v2/support-bundles/*/download`<br>`POST /api/v2/support-bundles/*/download` | Mandatory `reason` ($\ge 8$ chars). Two-step 60 s single-use ticket for browser download (`?ticket=`) or direct `POST` for CLI; supports optional `?mode=sanitized`. Pre-first-byte audit row required. **Never `aiview`** |
+| `SUPPORT_BUNDLE_RETENTION_SET = "support_bundle_retention_set"` | `true` | `Optional.of(RoleToken.SECURITY_ADMIN)` | `POST /api/v2/support-bundles/*/extend` | Mandatory `reason` ($\ge 8$ chars); single extension up to 60 days from `requested_at`. **Never `aiview`** |
+| `SUPPORT_BUNDLE_DELETE = "support_bundle_delete"` | `true` | `Optional.of(RoleToken.SECURITY_ADMIN)` | `POST /api/v2/support-bundles/*/delete` | Mandatory `reason` ($\ge 8$ chars); deletes encrypted files on disk first, then writes `removed` ledger rows. **Never `aiview`** |
+| `SUPPORT_BUNDLE_CLEANUP_WORKDIR = "support_bundle_cleanup_workdir"` | `true` | `Optional.of(RoleToken.SECURITY_ADMIN)` | `POST /api/v2/support-bundles/*/cleanup-workdir` | Mandatory `reason` ($\ge 8$ chars); admits a one-command cleanup job (`C20`) for an `OUTCOME_UNKNOWN` request whose `.rc` file has landed. **Never `aiview`** |
+| `SUPPORT_BUNDLE_UPLOAD_REQUEST = "support_bundle_upload_request"` (S8) | `true` | `Optional.of(RoleToken.SECURITY_ADMIN)` | `POST /api/v2/support-bundles/*/uploads` | Creates a `PENDING_APPROVAL` upload row for named items and a `case_ref`. **Never `aiview`** |
+| `SUPPORT_BUNDLE_UPLOAD_APPROVE = "support_bundle_upload_approve"` (S8) | `true` | `Optional.of(RoleToken.SECURITY_ADMIN)` | `POST /api/v2/support-bundle-uploads/*/approve` | Approver fingerprint MUST differ from `requested_by` (`SELF_APPROVAL_REFUSED`, four-eyes). Valid 24 h. **Never `aiview`** |
+| `SUPPORT_BUNDLE_UPLOAD_EXECUTE = "support_bundle_upload_execute"` (S8) | `true` | `Optional.of(RoleToken.SECURITY_ADMIN)` | `POST /api/v2/support-bundle-uploads/*/execute` | Accepts the one-time case token/password in the request body, holds it in worker memory only for the transfer, never persists it. **Never `aiview`** |
 
-Every action is audited through the existing audit ledger. CLI parity: `nexus support-bundle request | list | cancel
-| download | extend | delete`, under the same actions.
+All nine write/retrieve/upload actions are added to the `closed` assertion array in
+`AiviewDiagnosticReadOnlyTest.replayViewerHoldsExactlyTheDecidedActionsAndPacketAnalysisRunNeverRawView()`.
 
-### 5.8 Download UI
+#### 5.10.2 Audit ledger, pre-first-byte download invariant, and `AuditRedactionPolicy`
+
+1. **Transactional audit capture (`AuditedTransactionBoundary`).** Every insert or update on `support_bundle_request`,
+   `support_bundle_item`, and `support_bundle_upload` runs inside
+   `AuditedTransactionBoundary.inTransaction(actorFingerprint, actionId, ...)`, which sets `app.actor_fingerprint` and
+   `app.action_id` on the PostgreSQL transaction.
+   - `trg_audit_support_bundle_request` fires `AFTER INSERT OR UPDATE ON support_bundle_request FOR EACH ROW EXECUTE FUNCTION fn_audit_capture('id')`.
+   - `trg_audit_support_bundle_item` fires `AFTER UPDATE OF state ON support_bundle_item FOR EACH ROW WHEN (NEW.state IN ('COMPLETED', 'PARTIAL', 'REFUSED_PRECHECK', 'UNSUPPORTED', 'TIMED_OUT', 'TOO_LARGE', 'DIGEST_MISMATCH', 'OUTCOME_UNKNOWN', 'CLEANUP_FAILED', 'REDACTION_FAILED', 'CANCELLED') AND OLD.state IS DISTINCT FROM NEW.state) EXECUTE FUNCTION fn_audit_capture('id')` (mirroring `trg_audit_report_run` in `V190` so polling updates do not spam `audit_log`).
+2. **Pre-first-byte download audit (`SupportBundleDownloadService`).** Directly reuses the `BackupDownloadService` /
+   `JooqBackupArtefactRetrievalRepository` pattern (14I `OR-3` and PO decision record 2026-09-22):
+   - Step 1 (`POST /api/v2/support-bundles/{id}/download-ticket`): validates `id` format, authenticated
+     `actorFingerprint`, and `reason.strip().length() >= 8`; issues a 24-byte random hex single-use ticket valid for
+     60 seconds bound to `(requestId, actorFingerprint, reason, mode)`.
+   - Step 2 (`GET /api/v2/support-bundles/{id}/download?ticket=...` or direct CLI `POST /api/v2/support-bundles/{id}/download`):
+     `SupportBundleDownloadService.prepare(actorFingerprint, requestId, reason, mode)` verifies the request has at least
+     one `COMPLETED` or `PARTIAL` item, and **before opening any `ArtefactStore.retrieve` stream**, executes an
+     `AuditedTransactionBoundary` (`action_id = 'support_bundle_retrieve'`) that records one
+     `backup_artefact_retrieval` row per included item (`action = 'support_bundle_downloaded'` or
+     `'support_bundle_downloaded_sanitized'`) and invokes `audit_support_bundle_download(p_request_id, p_mode)`.
+   - **Fail-closed guarantee:** If the audit write throws any `RuntimeException` or `SQLException`,
+     `SupportBundleDownloadService.prepare` returns `Outcome.AuditRefused` $\rightarrow$ HTTP `500 Internal Server Error`
+     (`AUDIT_REFUSED`), and **zero bytes** are decrypted or sent.
+3. **`audit_redaction_policy` (`AuditRedactionPolicy.java`).** The migration inserts tier-1 redaction policy rows into
+   `audit_redaction_policy` for every free-text / case-reference column so `fn_audit_redact` redacts them in
+   `audit_log.before_state` and `after_state`:
+   - `('support_bundle_request', 'reason', 1, 'Operator justification may contain environment names')`
+   - `('support_bundle_request', 'extended_reason', 1, 'Operator retention extension justification')`
+   - `('support_bundle_request', 'deleted_reason', 1, 'Operator early deletion justification')`
+   - `('support_bundle_request', 'case_ref', 1, 'External vendor support case reference')`
+   - `('support_bundle_item', 'outcome_detail', 1, 'Precheck or failure detail string')`
+   - `('support_bundle_upload', 'case_ref', 1, 'External vendor support case reference')`
+   - `('support_bundle_upload', 'reason', 1, 'Operator upload justification')`
+   - `('support_bundle_upload', 'approval_reason', 1, 'Approver upload justification')`
+
+### 5.11 CLI parity (`SupportBundleCli` / `NexusSessionCli`)
+
+Per Product Owner standing rule (`cli_parity_for_every_ui_action`), every UI button has a 1-to-1 session-authenticated
+CLI command in `ui2/cli/src/main/java/com/securityexpert/nexus/ui2/cli/SupportBundleCli.java`, wired into
+`NexusSessionCli.run(...)` and `NexusSessionCli.printUsage()` alongside `FailoverCli`, `SanitizerCli`, and
+`CutoverCli`. All commands use the stored session cookie (`ui2_session`), CSRF token (`X-CSRF-Token`), and global
+`--business-hours-ack` flag (`X-Nexus-Business-Hours-Ack: true`) over the exact same HTTP routes and `GateChain` role
+gates as the browser:
+
+| CLI Command & Arguments | HTTP Method & Route | RBAC Action | Behaviour & Stream Handling |
+|---|---|---|---|
+| `support-bundles [deviceId] [state=<state>] [limit=<n>]` | `GET /api/v2/devices/<deviceId>/support-bundles` or `GET /api/v2/support-bundles?...` | `support_bundle_read` | Prints JSON list of support-bundle requests (masked when the session belongs to `aiview`) |
+| `support-bundle <requestId>` | `GET /api/v2/support-bundles/<requestId>` | `support_bundle_read` | Prints full request status, prechecks, per-item states, sizes, 12-char `digest_prefix`, and `expires_at` |
+| `support-bundle-request <deviceId> <kindsCsv> <reason> [--at <ISO-8601>] [--case <caseRef>] [--vs <vsidCsv>] [--business-hours-ack]` | `POST /api/v2/devices/<deviceId>/support-bundles` | `support_bundle_request` | Validates `<deviceId>` and comma-separated `<kindsCsv>`, sends JSON request body; inside business hours without `--business-hours-ack`, prints `409 BUSINESS_HOURS_CONFIRM_REQUIRED` and exits `1` |
+| `support-bundle-cancel <requestId> <reason>` | `POST /api/v2/support-bundles/<requestId>/cancel` | `support_bundle_cancel` | Cancels a `QUEUED` request or stops remaining items of a `RUNNING` request |
+| `support-bundle-download <requestId> <reason> <destPath.tgz> [--sanitized]` | `POST /api/v2/support-bundles/<requestId>/download[?mode=sanitized]` | `support_bundle_retrieve` | Streams `HttpResponse.BodyHandlers.ofInputStream()` directly to `<destPath.tgz>` via `Files.copy` (never buffered in heap, matching `NexusSessionCli.backupDownload`), prints byte size and warning banner |
+| `support-bundle-extend <requestId> <days> <reason>` | `POST /api/v2/support-bundles/<requestId>/extend` | `support_bundle_retention_set` | Extends `expires_at` once by up to 60 days from `requested_at` |
+| `support-bundle-delete <requestId> <reason>` | `POST /api/v2/support-bundles/<requestId>/delete` | `support_bundle_delete` | Early deletion of stored item artefacts with mandatory reason |
+| `support-bundle-cleanup <requestId> <reason>` | `POST /api/v2/support-bundles/<requestId>/cleanup-workdir` | `support_bundle_cleanup_workdir` | Enqueues cleanup of a leftover `/var/log/nexus-sb-<token>` work directory after an `OUTCOME_UNKNOWN` run has written its `.rc` file |
+| `support-bundle-upload-request <requestId> <cisco_cxd\|fortinet_sftp> <caseRef> <kindsCsv> <reason>` (S8) | `POST /api/v2/support-bundles/<requestId>/uploads` | `support_bundle_upload_request` | Submits a per-case upload request for four-eyes approval |
+| `support-bundle-upload-approve <uploadId> <reason>` (S8) | `POST /api/v2/support-bundle-uploads/<uploadId>/approve` | `support_bundle_upload_approve` | Second `security_admin` approves the pending upload |
+| `support-bundle-upload-execute <uploadId> [--token-file <path>]` (S8) | `POST /api/v2/support-bundle-uploads/<uploadId>/execute` | `support_bundle_upload_execute` | Reads the one-time CXD token or Fortinet ticket password from `--token-file <path>` (`SecretFile.readRequired`) or `System.console().readPassword(...)` (**never** a command-line argument), zeroes the `char[]` in `finally`, and triggers the upload |
+
+**Exit codes** (identical to `NexusSessionCli` and `SanitizerCli`):
+- `0`: HTTP `2xx` success (and file written for `support-bundle-download`).
+- `1`: HTTP `400`/`404`/`409`/`5xx` refusal or I/O error (prints structured error code and reason to `stderr`).
+- `2`: CLI usage error (missing argument, malformed UUID, unknown flag).
+- `3`: HTTP `401` or `403` authentication/authorization refusal.
+
+### 5.12 Download UI
 
 The UI lives under **Tools → Support bundles** (the Tools group already holds Packet analysis, Data sanitizer and
 Diagnostics). The device workspace gets a "Collect support bundle" action that opens the same form with the device
@@ -432,14 +774,17 @@ preset. The mockup is `ops-scripts/support-bundle-mockup-1114.html`. It is outsi
 masked state only.
 
 1. **New request.**
-   - Device picker.
-   - Vendor-specific ticks, each with a load badge and an "Adds to device load" note.
+   - Device picker (rendering deterministic pseudonyms such as `FW-TANGO-04` under `aiview`).
+   - Vendor-specific ticks, each with a load badge, size cap badge, and an "Adds to device load" note.
    - Run now / Run at, with the window and collision hints.
-   - Optional case reference and a reason.
+   - Optional case reference and a mandatory reason ($\ge 8$ chars).
    - A live guard preview. Examples: "HA peer FW-TANGO-05 has a bundle scheduled 00:00, this one will start
      after it", "Fortinet defect guard: TAC report will be skipped".
-2. **Requests list.** State per item, size, digest prefix, expiry, and a Download button (asks for a reason, then
-   the browser download).
+2. **Requests list.** State per item, size, 12-char digest prefix, expiry, Extend TTL button, Delete button, and a
+   Download button (asks for a reason and optional "Sanitized text-only export" toggle, requests the 60 s download
+   ticket, and triggers the browser's native streamed download). Under `aiview`, action buttons (`Request`, `Cancel`,
+   `Download`, `Extend`, `Delete`, `Upload`) are disabled/hidden and `requested_by`, `reason`, and `case_ref` are
+   withheld.
 3. **Upload panel (S8).** Request, approve and history, with destination host and item digests.
 
 ## 6. Command gate table (proposed literals; each needs the PO's exact-literal approval)
@@ -539,12 +884,13 @@ Every row also needs these gate fields at contract time:
 Per item:
 
 - `COMPLETED`
-- `PARTIAL` (FGT/ASA capture ended early; stored and marked)
-- `REFUSED_PRECHECK` (CPU / disk / version, with the measured value)
+- `PARTIAL` (FGT/ASA capture ended early after $\ge 4\text{ KiB}$; stored and marked)
+- `REFUSED_PRECHECK` (CPU / disk / version, with the measured numeric value)
 - `UNSUPPORTED`
 - `TIMED_OUT`
 - `TOO_LARGE`
 - `DIGEST_MISMATCH` (nothing removed on the device)
+- `REDACTION_FAILED` (write-time secret redactor threw an exception; partial vault file discarded, zero bytes stored)
 - `OUTCOME_UNKNOWN` (lost contact after start; work directory left; the UI offers "remove leftover work directory",
   which issues C20 for that exact recorded name after an rc file is seen)
 - `CLEANUP_FAILED`
@@ -555,7 +901,12 @@ Per request:
 - `COMPLETED` when every item completed;
 - `PARTIAL` when at least one item stored;
 - `FAILED` otherwise;
+- `CANCELLED` when cancelled before any item stored;
 - `NOT_STARTED_DEVICE_BUSY`.
+
+Request lifecycle states (`support_bundle_request.state`): `QUEUED`, `RUNNING`, `COMPLETED`, `PARTIAL`, `FAILED`,
+`CANCELLED`, `EXPIRED` (set by the hourly retention janitor once all item artefacts expire), and `DELETED` (set by
+`support_bundle_delete`).
 
 Notifications reuse the existing masked notification path: request finished or failed, and leftover work directory.
 
@@ -563,36 +914,58 @@ Notifications reuse the existing masked notification path: request finished or f
 
 | # | Risk | Mitigation |
 |---|---|---|
-| R1 | Bundles carry bank secrets (configuration, hashes, possibly keys) | encrypted at rest; `security_admin` only; reason and audit per download; 14-day expiry; never parsed or shown; upload off by default with four-eyes |
+| R1 | Bundles carry bank secrets (configuration, hashes, possibly keys) | encrypted at rest; write-time `LogRedactor` + `DiagnosticText.scrubSecrets` on all text items; `cpinfo -S` on Check Point; `security_admin` only; reason and pre-byte audit per download; 14-day expiry; never parsed or shown; upload off by default with four-eyes |
 | R2 | cpinfo or HCP loads a production gateway | vendor 70% per-core rule enforced; HA one member at a time; fleet cap 2; off by default; pilot measures first |
 | R3 | MDS: the fork storm history (2026-11-11) | MDS heavy items hidden (Q5); `CP_ENV` normalization on every CP command |
 | R4 | FortiGate session crash defect | version and DoS-policy guard from stored data; crash log still collected |
 | R5 | Leftover files on devices after lost contact | exit code file, exact-name cleanup, UI action, notification; never wildcard deletes |
-| R6 | Vault growth | 14-day expiry, per-device and fleet caps, the vault quota lane |
+| R6 | Vault growth | 14-day expiry, per-device (3) and fleet (50 GiB) caps excluded from the 400 GiB backup budget, 10% volume free-space floor |
 | R7 | ASA `terminal pager 0` CPU warning applies to the existing inventory session too | this design avoids it. A follow-up is proposed to review the inventory session (not changed here) |
 | R8 | HCP run replaces the device's own "last" report | stated in the UI. `cp_hcp_latest` (no run) is the default |
 | R9 | Upload sends bank data abroad | S8 only after Q8 and the bank's compliance office; neXus-side egress only; per-case four-eyes; credentials never stored |
 | R10 | Vendor option wording was read through summaries | lab verification of every literal before freeze (S1 task) |
 | R11 | A scheduled time collides with backups, HCP or system logs | UI hints; claim-time deferral; give-up after 3 h |
 
-## 9. Delivery plan (small steps; each ships alone)
+## 9. Delivery plan (shippable steps with concrete tests)
 
-| Step | What | Device contact | Needs |
+Every step is independently shippable, leaves `main` green, and runs the module unit/integration tests, architecture
+tests, frontend Vitest suite, preview e2e suite, and `tools/privacy/repository_privacy_check.py` before merge. Steps
+`S2`–`S6` reach `AUTOMATED_VALIDATED` at merge and advance to `REAL_ENV_VALIDATED` / `DONE` only after the PO-attended
+pilot (`S7`).
+
+| Step | Scope & Deliverables | Device Contact | Gate Rows | Concrete Tests Required to Ship |
+|---|---|---|---|---|
+| **S0** | PO answers Q1–Q12 (§10.2) and ratifies the §6 command-gate literals for `S2`–`S3`; this design document transitions from `DRAFT — DO NOT FREEZE` to `FROZEN` for the ratified scope. Verify every literal in §6 against raw vendor pages | none | — | `python3 tools/privacy/repository_privacy_check.py`<br>`pytest tools/tests/test_live_project_governance.py` |
+| **S1** | **Foundation, schema, RBAC, download/masking plumbing, retention janitor, CLI & UI shell (no device execution):**<br>• Flyway migration (`support_bundle_request`, `support_bundle_item`, `backup_artefact` class `'support_bundle'`, `trg_audit_support_bundle_*`, `audit_support_bundle_download`, `audit_redaction_policy` rows)<br>• `ArtefactClass.SUPPORT_BUNDLE`, `JooqSupportBundleRepository`, `JooqRetentionQueries.expiredSupportBundles()` & exclusion of `'support_bundle'` from `liveCiphertextBytes()`, `RetentionPruningService` support-bundle pass<br>• `ActionRegistry` descriptors (`SUPPORT_BUNDLE_READ`, `SUPPORT_BUNDLE_REQUEST`, `SUPPORT_BUNDLE_CANCEL`, `SUPPORT_BUNDLE_RETRIEVE`, `SUPPORT_BUNDLE_RETENTION_SET`, `SUPPORT_BUNDLE_DELETE`, `SUPPORT_BUNDLE_CLEANUP_WORKDIR`) & `SecurityWebMvcConfig` route map<br>• `SupportBundleController`, `SupportBundleService` (quota checks: 3/device, 50 GiB fleet, 10% volume floor, active-per-device guard, window/business-hours check), `SupportBundleDownloadService` (60 s single-use ticket, pre-first-byte audit, streamed `.tgz` + `manifest.json`, `?mode=sanitized` via `LogMasking.Session` failing closed on `MaskingUnavailableException`)<br>• `SupportBundleTextRedactor` (`LogRedactor` + `DiagnosticText.scrubSecrets` with 64 KiB line cap and fail-closed `REDACTION_FAILED`)<br>• `SupportBundleCli` wired into `NexusSessionCli`<br>• Frontend `SupportBundlesScreen.tsx` & `SupportBundlesPreview.tsx` with catalogue rendered (kinds disabled until their vendor step lands) | none | none | • **Schema & Audit IT:** `SupportBundleSchemaAndAuditIntegrationTest` (constraints, `uq_support_bundle_active_per_device`, `trg_audit_support_bundle_request`, `trg_audit_support_bundle_item` terminal-only firing, `AuditRedactionPolicy` coverage for `reason`/`case_ref`/`outcome_detail`)<br>• **Service & Download Unit:** `SupportBundleServiceTest` (3/device cap, 50 GiB fleet cap, 10% free-space floor, business-hours ack, single TTL extension up to 60 d, early delete truthful tombstone), `SupportBundleDownloadServiceTest` (pre-first-byte audit refusal sends 0 bytes, 60 s single-use ticket binding, `manifest.json` has pseudonym `FW-TANGO-04` and zero raw host/IP/serial/reason/case\_ref, `?mode=sanitized` masks lines via `LogMasking` and returns 503 `MASKING_UNAVAILABLE` when cold while omitting binary items)<br>• **Redactor Unit:** `SupportBundleTextRedactorTest` (redacts `SecretRules`, PEM keys, FortiGate `ENC`, 64 KiB overlong line $\rightarrow$ `[LINE_REDACTED_OVERLONG]`, exception $\rightarrow$ `REDACTION_FAILED` with 0 bytes persisted)<br>• **Retention Unit & IT:** `SupportBundleRetentionPruningTest` (expired bundles pruned without sole-backup exemption; `liveCiphertextBytes()` excludes `support_bundle`)<br>• **Security & Architecture:** `AiviewDiagnosticReadOnlyTest` (`SUPPORT_BUNDLE_READ` in `held`; all write/retrieve actions in `closed`), `AiviewMaskingLeakAuditTest` (all routes return `FUNNEL_TYPES`, `aiview` responses omit `requested_by`/`reason`/`case_ref` and mask `hostname`/`detail`, cold pod returns `FreeTextEstate.UNAVAILABLE`)<br>• **CLI Unit:** `SupportBundleCliTest` (all subcommands, `--business-hours-ack`, `--sanitized`, exit codes 0/1/2/3)<br>• **Frontend & E2E:** `SupportBundlesScreen.test.tsx` (Vitest) + preview Playwright check |
+| **S2** | **Check Point light items (`cp_gaia_extras`, `cp_hcp_latest`):**<br>• `CpSupportBundleExecutor` & `CpSupportBundlePlan` (`MdsExportPlan.CP_ENV` prefix on all commands)<br>• CPU (`cpstat os -f multi_cpu`) & disk (`df -P /var/log`) precheck parsers<br>• `cp_gaia_extras`: 5 text outputs scrubbed via `SupportBundleTextRedactor` and tarred into `ArtefactStore` (1 MiB cap)<br>• `cp_hcp_latest`: zero-contact vault copy when a `cp_hcp_report` $\le 24\text{ h}$ old exists; otherwise `ls -lgo --time-style=+%s /var/log/hcp/last/` + SFTP stream (16 MiB cap), filename masked via `LogMasking.Session.maskFileName` (fallback `hcp_report.tar.gz` on `MaskingUnavailableException`)<br>• Enable `cp_gaia_extras` and `cp_hcp_latest` in UI catalogue | read-only, light | `C1`–`C7` | • `CpSupportBundlePlanTest` (`CP_ENV` prefix on every literal, no login shell, gate ID resolution)<br>• `CpSupportBundleLightExecutorTest` (vault-copy hit makes 0 SSH calls; SFTP fallback picks newest `.tar.gz`, rejects unsafe names, masks `<host>` in filename via `LogMasking`, enforces 1 MiB / 16 MiB stream bounds, records zero command output in `job_transcript`)<br>• `GateRegistryFixtureTest` (`C1`–`C7` registered and read-only) |
+| **S3** | **Palo Alto Tech Support File (`pan_tsf`):**<br>• `PanSupportBundleExecutor` using `PanXmlApiTransport`<br>• `show system resources` (MP CPU $\le 80\%$ guard) and `show system disk-space` (`/` and `/opt/panlogs` $\le 90\%$ guard)<br>• Async export `type=export&category=tech-support` $\rightarrow$ poll `action=status&job-id=<n>` every 15 s (up to 30 min) $\rightarrow$ stream `action=get&job-id=<n>` into `ArtefactStore` (2 GiB bound, gzip magic `0x1f 0x8b` check, XML error refusal) $\rightarrow$ `action=finish&job-id=<n>` on timeout<br>• Enable `pan_tsf` in UI catalogue | XML API, BW-2 transient | `P1`–`P6` | • `PanSupportBundleExecutorTest` (CPU > 80% or disk > 90% $\rightarrow$ `REFUSED_PRECHECK`; async poll until `FIN`; gzip magic verified; XML error body refused; > 2 GiB stream aborted as `TOO_LARGE` with 0 vault rows; 30 min timeout calls `action=finish` and records `TIMED_OUT`; job ID parser rejects non-digits) |
+| **S4** | **Cisco ASA (`asa_crashinfo`, `asa_show_tech`):**<br>• `AsaSupportBundleExecutor` over `SSH_INTERACTIVE` (privileged EXEC, **never** sending `terminal pager 0`, answering `<--- More --->` in session)<br>• `show cpu usage` precheck ($\le 80\%$)<br>• Multi-context `changeto system`<br>• Stream `show crashinfo` (64 MiB cap) and `show tech-support` (256 MiB cap) through `SupportBundleTextRedactor` into `ArtefactStore`; mid-stream disconnect $\ge 4\text{ KiB}$ stored as `PARTIAL` (`SESSION_LOST`)<br>• Enable `asa_crashinfo` and `asa_show_tech` in UI catalogue | read-only | `A1`–`A4` (`A5`–`A7` only if pilot requires disk0 fallback) | • `AsaSupportBundleExecutorTest` (asserts `terminal pager 0` is never sent; `<--- More --->` pager handled; multi-context sends `changeto system`; CPU > 80% refuses `asa_show_tech` while allowing `asa_crashinfo`; secrets redacted via `SupportBundleTextRedactor`; 64 MiB / 256 MiB bounds enforced; mid-session drop $\rightarrow$ `PARTIAL`) |
+| **S5** | **FortiGate (`fgt_crashlog`, `fgt_tac_report`) with defect guard:**<br>• `FgtSupportBundleExecutor` over `SSH_INTERACTIVE` (`FortiGatePlan` `--More--` handling, `config global` / `end` on multi-VDOM)<br>• Pre-connection stored-data version guard: FortiOS $< 7.4.10$ (7.4), $< 7.6.6$ (7.6), or $7.0/7.2$ combined with `config firewall DoS-policy` in stored configuration refuses `fgt_tac_report` (`VENDOR_DEFECT_SESSION_CRASH`) before running it, while still collecting `fgt_crashlog`<br>• `get system status` live version corroboration + `get system performance status` CPU guard ($\le 80\%$)<br>• Stream `diagnose debug crashlog read` (32 MiB cap) and `execute tac report` (256 MiB cap) through `SupportBundleTextRedactor` into `ArtefactStore`<br>• Enable `fgt_crashlog` and `fgt_tac_report` in UI catalogue | read-only | `F1`–`F5` | • `FgtSupportBundleDefectGuardTest` (matrix of FortiOS versions 7.0.x, 7.2.x, 7.4.4, 7.4.10, 7.6.5, 7.6.6, 8.0.0 $\times$ presence/absence of `config firewall DoS-policy`)<br>• `FgtSupportBundleExecutorTest` (`config global` / `end` on multi-VDOM; `--More--` pager handling; `ENC` secrets scrubbed; 32 MiB / 256 MiB stream bounds; session drop $\rightarrow$ `PARTIAL`) |
+| **S6** | **Check Point heavy items (`cp_hcp_run`, `cp_cpinfo`):**<br>• Extend `CpSupportBundleExecutor` with per-core CPU $< 70\%$ check and `/var/log` free space ($\ge 2\text{ GiB}$ for `cp_hcp_run`, $\ge 5\text{ GiB}$ for `cp_cpinfo`)<br>• Workdir `/var/log/nexus-sb-<12hex>`, point-of-no-return marker (`work_dir_path`, `work_dir_cleaned = FALSE`), detached `setsid nohup bash --noprofile --norc -c "...; echo \$? > .rc" </dev/null >/dev/null 2>&1 &`, 30 s `.rc` polling up to 2 h deadline<br>• VSX per-VS execution (`-c <VSID>` for HCP, `vsenv <VSID>` for cpinfo); SMS `-x` flag; MDS blocked unless Q5 enables it<br>• Device `sha256sum` vs. streamed vault SHA-256 verification (BK-3) before `rm -rf`; leftover workdir cleanup route & UI button (`C20` after `.rc` exists)<br>• HA peer serialization & fleet concurrency cap (2) at claim time | heavy, BW-2 | `C8`–`C20` | • `CpSupportBundleHeavyExecutorTest` (any CPU core $> 70\%$ or `/var/log` low refuses heavy items while completing `cp_gaia_extras` and `cp_hcp_latest`; detached launch never retries after point of no return; SHA-256 mismatch leaves workdir intact and marks `DIGEST_MISMATCH`; lost lease / timeout marks `OUTCOME_UNKNOWN` and keeps workdir; cleanup job runs `C20` only when `.rc` is present and matches exact `/var/log/nexus-sb-<12hex>` pattern; VSX integer validation; SMS adds `-x`; MDS refused)<br>• `SupportBundleClaimConcurrencyTest` (HA peer `RUNNING` defers by 10 min; device busy defers by 10 min; 3 h give-up marks `NOT_STARTED_DEVICE_BUSY`; fleet cap 2 enforced) |
+| **S7** | **PO-attended real-environment pilot:**<br>• Run one bundle per vendor on a PO-selected pilot device outside business hours (`aiview` verification mode in UI)<br>• Measure runtime, output size, and CPU/disk before and after; commit the masked measurement record (`FW-TANGO-04`, etc.) | real devices (PO present) | ratified `C1`–`C20`, `P1`–`P6`, `A1`–`A4`, `F1`–`F5` | • Live `BEGIN/ROLLBACK` migration dry-run before deploy<br>• Post-run verification under `aiview` persona (`X-Nexus-Masked: true`)<br>• `python3 tools/privacy/repository_privacy_check.py` on the measurement record |
+| **S8** | **Per-case vendor upload (`support_bundle_upload`):**<br>• Only after Q8 approval and bank compliance sign-off<br>• `support_bundle_upload` table, four-eyes approval (`SUPPORT_BUNDLE_UPLOAD_REQUEST`, `SUPPORT_BUNDLE_UPLOAD_APPROVE`, `SUPPORT_BUNDLE_UPLOAD_EXECUTE`), 24 h approval TTL, deployment egress host allowlist (`cxd.cisco.com`, `support.fortinet.com:2222`), proxy support, one-time token/password in worker memory only (zeroed in `finally`), pre-byte and post-byte audit rows, CLI & UI upload panel | vendor hosts from neXus (never from firewall) | none | • `SupportBundleUploadServiceTest` (self-approval refused `SELF_APPROVAL_REFUSED`; expired > 24 h approval refused; host outside allowlist refused; token/password char array zeroed after run and absent from DB, logs, and `audit_log`; pre-byte audit failure aborts upload)<br>• `CiscoCxdUploadClientTest` & `FortinetSftpUploadClientTest` (local loopback mock servers)<br>• `AiviewDiagnosticReadOnlyTest` (`SUPPORT_BUNDLE_UPLOAD_*` in `closed`) |
+
+## 10. Resolved design questions and open Product Owner decisions
+
+### 10.1 Questions resolved by existing codebase and frozen contracts
+
+The following architectural and implementation questions are settled by existing repository code and frozen contracts
+and do not require a new Product Owner decision:
+
+| # | Question | Resolution from Codebase / Contract | Authority / Code Reference |
 |---|---|---|---|
-| S0 | PO answers Q1–Q12; this document moves to FROZEN for S1–S3 scope | none | PO |
-| S1 | Schema (request, item, artefact class), RBAC actions, list/download routes, CLI parity, UI shell with the catalogue but every kind disabled, retention janitor class, quota counters. Verify every literal in §6 against the raw vendor pages | none | migration dry-run, Java tests, preview e2e |
-| S2 | CP `cp_hcp_latest` (copy from the vault first) and `cp_gaia_extras` | read-only, light | gates C1–C7 |
-| S3 | PAN `pan_tsf` | API, BW-2 transient | gates P1–P6 |
-| S4 | ASA `asa_crashinfo`, `asa_show_tech` (session capture) | read-only | gates A1–A4 |
-| S5 | FortiGate `fgt_crashlog`, `fgt_tac_report` with the version guard | read-only | gates F1–F5 |
-| S6 | CP `cp_hcp_run` and `cp_cpinfo` (gateways, VSX per VS, SMS with `-x`) | heavy, BW-2 | gates C8–C20 |
-| S7 | PO-attended pilot: one device per vendor, outside business hours; record runtime, size, CPU before and after into a measurement record (committed with the commands it used) | yes | PO present |
-| S8 | Upload, Cisco CXD first (HTTPS PUT, typed token), Fortinet SFTP second (typed per-ticket password), four-eyes, allowlist, audit | vendor hosts, from neXus | Q8, bank compliance, egress allowlist |
+| R-1 | How must Check Point SSH commands be wrapped to prevent login-shell side effects or fork storms? | Every Check Point command is prefixed with `MdsExportPlan.CP_ENV` (`unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; `) and long tools run detached under `setsid nohup bash --noprofile --norc -c "...; echo \$? > .rc" </dev/null >/dev/null 2>&1 &`. | `CP_REMOTE_SHELL_NORMALIZATION_CONTRACT_2026_11_11.md` §6.1; `MdsExportPlan.java` line 49 |
+| R-2 | How is the Check Point HCP report filename contradiction (`hcp_last_report.tar.gz` vs. `hcp_report_<host>_<dd_mm_yy_HH_MM>.tar.gz`) handled, and how is `<host>` kept out of filenames? | Never hardcode the filename. List `/var/log/hcp/last/` with `ls -lgo --time-style=+%s /var/log/hcp/last/`, filter by `SAFE_FILE_NAME` (`^[A-Za-z0-9_.-]{1,128}$`) ending in `.tar.gz`, pick the newest mtime, and mask the stored entry name via `LogMasking.Session.maskFileName(name, deviceHostname)` (falling back to `hcp_report.tar.gz` on `MaskingUnavailableException`). | `DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md` §8.1; `CpSystemLogCollectJobExecutor.java` lines 77–81, 315–329; `LogMasking.java` line 183 |
+| R-3 | How do support-bundle bytes avoid consuming the 400 GiB backup/configuration vault budget, and how are expired bundles pruned without keeping the "sole remaining backup for a device"? | `JooqRetentionQueries.liveCiphertextBytes()` excludes `artefact_class IN ('system_log', 'support_bundle')`, while `liveSupportBundleCiphertextBytes()` enforces the separate 50 GiB support-bundle cap. `RetentionPruningService` prunes `support_bundle` rows past `expires_at` using the `V190` `expiredReports()` pattern (no `isSoleRemainingBackupForDevice` check, file deleted on disk before writing the `removed` row in `artefact_retention_ledger`). | `JooqRetentionQueries.java` lines 115–159; `RetentionPruningService.java` lines 215–224; `V190__reports_r1_report_run.sql` |
+| R-4 | How are multi-gigabyte bundles downloaded in the browser and CLI without buffering in memory or sending bytes before the audit row is committed? | Reuse the `BackupController.downloadTicket` / `download` + `BackupDownloadService.prepare` two-step pattern: a 60 s single-use ticket bound to `(requestId, actorFingerprint, reason, mode)`, an `AuditedTransactionBoundary` writing `backup_artefact_retrieval` and `audit_log` before `ArtefactStore.retrieve` opens any ciphertext stream, and `StreamingResponseBody` piping `TarArchiveOutputStream` $\rightarrow$ `GzipCompressorOutputStream` in 64 KiB chunks. | `BackupController.java` lines 94–193; `BackupDownloadService.java` lines 67–99; `JooqBackupArtefactRetrievalRepository.java` |
+| R-5 | How are text items (`cp_gaia_extras`, `asa_crashinfo`, `asa_show_tech`, `fgt_crashlog`, `fgt_tac_report`), API responses, `manifest.json`, and `aiview` projections masked so they reuse existing maskers and fail closed? | Write-time text streams chain `LogRedactor` (`cp-text-v1` + `SecretRules`) and `DiagnosticText.scrubSecrets` (64 KiB line cap; exception $\rightarrow$ `REDACTION_FAILED` with 0 bytes stored). Optional `?mode=sanitized` export runs `LogMasking.Session.maskLine` (`logmask-v8`, failing closed with 503 `MASKING_UNAVAILABLE` if cold) and omits binary items. Read APIs return `Map<String, Object>` through `PrivacyMaskingResponseBodyAdvice`, omit `requested_by`/`approved_by`/`reason`/`case_ref` for `aiview`, and fail closed to `FreeTextEstate.UNAVAILABLE` if dictionaries are cold. | `LogRedactor.java`; `DiagnosticText.java`; `LogMasking.java`; `PrivacyMaskingResponseBodyAdvice.java`; `FreeTextEstate.java`; `AiviewMaskingLeakAuditTest.java`; `AiviewDiagnosticReadOnlyTest.java` |
+| R-6 | How does FortiGate session capture avoid changing `config system console / set output standard`? | Reuse `FortiGateExecutor` / `FortiGatePlan`, which answers `--More--` prompts interactively in the SSH channel without modifying device console configuration. | `FortiGateExecutor.java`; `V80` gate rows |
+| R-7 | Are temporary work directories and tech-support dump files on a device classified as Class 1/2 configuration writes? | No. Per PO decision record 14K `BW-2` and `V61`/`V206` (`MdsExportPlan`), creating and deleting a transient archive in `/var/log/nexus-sb-<token>` or `/tmp/techsupport.tgz` is a `BW-2` transient operational artefact, not a device configuration or recovery mutation. | PO decision record 14K `BW-2`; `V61` / `V206` |
 
-Every step runs the Java tests, the architecture tests, the tools tests and the preview e2e before ship (standing
-rules). Steps S2–S6 are each AUTOMATED_VALIDATED at merge and REAL_ENV_VALIDATED only after S7.
+### 10.2 Open policy and command-gate decisions for the Product Owner
 
-## 10. Open questions for the Product Owner
+The following 12 policy questions and the §6 command-gate literals remain open for Product Owner decision before this
+document can transition from `DRAFT — DO NOT FREEZE` to `FROZEN`:
 
 | # | Question | Recommendation |
 |---|---|---|
