@@ -13,6 +13,7 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
+import { PRODUCT_NAME } from "../brand/product";
 import { reconcileJob, type JobReconcileOutcome } from "../auth/adminApi";
 import { EVIDENCE_MAX, RECONCILE_OUTCOMES, reconcileRefusalWords } from "../jobs/jobReconcile";
 import { m3 } from "../theme/m3Theme";
@@ -60,7 +61,7 @@ export function JobReconcileDialog({ jobId, onClose, onReconciled, onStale }: {
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-            neXus could not tell whether this job's command took effect. Check the device yourself, then record what you found.
+            {PRODUCT_NAME} could not tell whether this job's command took effect. Check the device yourself, then record what you found.
             This records your decision only: it does not contact the device and does not run the job again.
           </Typography>
           <FormControl>
