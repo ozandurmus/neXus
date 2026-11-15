@@ -19,13 +19,14 @@ import java.util.regex.Pattern;
  * times do not parse as IPv6 and survive. A bare four-part version such as {@code 10.1.2.3} is indistinguishable
  * from an address and is masked.</p>
  *
- * <p>Escape hatch for lab debugging only: environment variable {@value #RAW_ENV} set to {@code 1} switches masking
- * off. It is forbidden in production.</p>
+ * <p>Escape hatch: environment variable {@value #RAW_ENV} set to {@code 1} switches masking off. The code default is
+ * masked; the live manifests in {@code deploy/ui2} set it so application logs on HOST-A show addresses (PO 2026-11-15).
+ * Output that leaves HOST-A (aiview, diagnostics, exports, support bundles) does not depend on this layer.</p>
  */
 public final class LogAddressMasker {
 
     public static final String PLACEHOLDER = "<ip>";
-    /** Lab-only escape hatch; forbidden in production. */
+    /** Escape hatch; unset means masked. Set by the live manifests (PO 2026-11-15). */
     public static final String RAW_ENV = "NEXUS_LOG_RAW_ADDRESSES";
 
     private static final String OCTET = "(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)";

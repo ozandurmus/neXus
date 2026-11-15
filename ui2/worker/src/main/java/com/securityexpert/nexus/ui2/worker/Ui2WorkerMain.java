@@ -91,7 +91,7 @@ public final class Ui2WorkerMain {
     }
 
     public static void main(String[] args) {
-        // Last-line masking of IPv4/IPv6 literals in java.util.logging output (NEXUS_LOG_RAW_ADDRESSES=1 is lab-only).
+        // Last-line masking of IPv4/IPv6 literals in java.util.logging output (NEXUS_LOG_RAW_ADDRESSES=1 is set by the live manifests, PO 2026-11-15).
         com.securityexpert.nexus.ui2.platform.logging.MaskingFormatter.install();
         com.securityexpert.nexus.ui2.platform.JobWindowPolicy.SYSTEM.logPolicy();
         String role = resolveRole(args, System.getenv("NEXUS_WORKLOAD_ROLE"));

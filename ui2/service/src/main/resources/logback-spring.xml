@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   Spring Boot's default console logging (base.xml) with the last-line address masking: the message and the stack
-  trace pass through LogAddressMasker (IPv4/IPv6 literals become <ip>). Lab escape hatch NEXUS_LOG_RAW_ADDRESSES=1
-  is forbidden in production.
+  trace pass through LogAddressMasker (IPv4/IPv6 literals become <ip>). Escape hatch NEXUS_LOG_RAW_ADDRESSES=1
+  (set by the live manifests, PO 2026-11-15, so logs on HOST-A show addresses; unset keeps masking).
 -->
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
