@@ -1,7 +1,8 @@
 # Least-Privilege Database Roles and Data Ownership per Module
 
-- **Status**: `DRAFT`
-- **Date**: 2026-11-14
+- **Status**: `DRAFT` (the document stays a draft until the PO freezes it; the implementation progress below is a fact about the repository, not a freeze)
+- **Date**: 2026-11-14 (rollout status and §6–§7 added 2026-11-16)
+- **Rollout status (2026-11-16)**: PO decision 2026-11-16 fixed the direction (per-module database users with least privilege first, working with the database in the cluster or on a separate server; the network egress rule comes later). **Step 1 is `IMPLEMENTED` + `AUTOMATED_VALIDATED`** (migration `V238`, integration test `DatabaseRoleGrantMatrixIntegrationTest`, 13 tests on PostgreSQL 16); `REAL_ENV_VALIDATED` is pending (BEGIN/ROLLBACK dry-run on the live database, §6.5). **Step 0 and Steps 2–6 are `PLANNED`**; no workload uses a module role, no credential or connection changed. What step 1 built and what it found: §6. The external-database case: §7.
 - **Backlog Item**: `ui2_database_roles_and_data_ownership`
 - **Related Contracts & Designs**:
   - `docs/design/MODULE_POD_RUNTIME_CONTRACT.md` (`FROZEN`)
@@ -672,7 +673,7 @@ flowchart LR
 
 ### 4.2 Step-by-Step Rollout with Dry-Run and Rollback
 
-> Migration numbers: the four new migrations are written M1..M4 here. Their Flyway version numbers are assigned when they are built; V212..V215 are already used by other work (2026-11-14 review).
+> Migration numbers: the four new migrations are written M1..M4 here. Their Flyway version numbers are assigned when they are built; V212..V215 are already used by other work (2026-11-14 review). **`M2` is `V238`** (built 2026-11-16, §6); `M1`, `M3`, `M4` are not assigned yet.
 
 #### Step 0 — Refactor Cross-Domain Triggers to `SECURITY DEFINER` & Create Read Views (`M1`)
 - **Action**:
@@ -685,6 +686,7 @@ flowchart LR
   - `ALTER FUNCTION <fn> SECURITY INVOKER;` (zero impact on `ui2_app` since `ui2_app` still holds existing table grants).
 
 #### Step 1 — Create Module Roles and Apply Full `GRANT` Matrix Alongside `ui2_app` (`M2` + `10-configmap.yaml`)
+- **Status (2026-11-16)**: `IMPLEMENTED` + `AUTOMATED_VALIDATED`; `REAL_ENV_VALIDATED` pending. Built as `V238` plus the in-cluster role hook; the as-built differences from the text below are in §6.1. Nothing runs as a module role yet.
 - **Action**:
   1. Update `create-app-role.sh` in `deploy/ui2/10-configmap.yaml` to idempotently create login roles `ui2_service`, `ui2_policy`, `ui2_packet_analysis`, `ui2_backup`, `ui2_inventory`, `ui2_diagnostics`, `ui2_failover`, `ui2_configuration`, `ui2_compliance`, `ui2_scheduler`, and `ui2_worker_general` (all `NOLOGIN` until their respective Kubernetes Secret is provisioned, or `LOGIN` with per-role passwords from `ui2-db-bootstrap`).
   2. Ship Flyway migration `M2__module_role_grants.sql` applying the exact `GRANT` matrix from §2.3 to each role **without revoking `ui2_app` yet**.
@@ -819,3 +821,65 @@ Add `DatabaseRoleGrantMatrixIntegrationTest` in `ui2/integration-tests`:
    - Today `PacketAnalysisWorkerTask` can mint deterministic pseudonyms in `pseudonym_registry` (`SELECT, INSERT`) if a capture introduces an unseen host token. Should `ui2_packet_analysis` retain `SELECT, INSERT` on `pseudonym_registry` (append-only; `UPDATE`/`DELETE` are already revoked), or should pseudonym minting be proxied exclusively through `ui2-service` so `ui2_packet_analysis` has `SELECT`-only access?
 4. **Q4 — Secret Rotation Mechanism (Single Role Restart vs Dual-Slot `_a`/`_b` Login Roles)**:
    - Is rolling the single affected module Deployment (`kubectl rollout restart deployment/ui2-<module>`) upon password rotation sufficient for our operational SLO, or should we implement the dual-slot (`ui2_<module>_a` / `ui2_<module>_b` inheriting `ui2_<module>_role`) pattern in §3.3 from day one?
+
+---
+
+## 6. Step 1 As Built (2026-11-16)
+
+Status: `IMPLEMENTED` + `AUTOMATED_VALIDATED`. Nothing in this step changes runtime behavior: no workload credential, connection, Secret or Deployment changed, `ui2_app` keeps every privilege it had, and no existing object was altered.
+
+### 6.1 What was built, and where it differs from §4.2 Step 1
+
+| Item | As built |
+| :--- | :--- |
+| Migration | `ui2/service/src/main/resources/db/migration/V238__module_database_roles_grants.sql`: installs `ui2_apply_module_role_grants(p_role_prefix text DEFAULT 'ui2_') RETURNS integer` and calls it once. The function only `GRANT`s (never `REVOKE`s), so it is idempotent and safe to re-run; it returns the number of module roles it could not find. `EXECUTE` is revoked from `PUBLIC` (schema owner only). |
+| Roles | Eleven roles: `ui2_service`, `ui2_policy`, `ui2_packet_analysis`, `ui2_backup`, `ui2_inventory`, `ui2_diagnostics`, `ui2_failover`, `ui2_configuration`, `ui2_compliance`, `ui2_scheduler`, `ui2_worker_general`. **The migration does not create them**: role creation is cluster-wide and `ui2_migrate` is `NOCREATEROLE` (and on a separate server the DBA owns roles, §7). They are created `NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`, with no password, by the in-cluster hook (`deploy/ui2/10-configmap.yaml`, `create-app-role.sh`, second block) or by the DBA (§6.3). A role missing when `V238` runs is skipped with a `NOTICE`; the hook re-applies the grants at every database start once the function exists, and `SELECT ui2_apply_module_role_grants();` does the same by hand. |
+| Grants | 571 (table, role) grants over 155 of the 157 tables, plus the 13 column-level `UPDATE` grants on `module_runtime_control`, the `endpoint_permit_epoch` / `failover_schedule_ledger_id_seq` / `local_break_glass_event_event_id_seq` / `local_password_history_history_id_seq` sequence grants, `EXECUTE` on the audit RPC and the failover-lease helper functions, `USAGE` on `public`, `CONNECT` on the database. `flyway_schema_history` and `audit_redaction_policy` stay schema-owner-only. `TRUNCATE`, `REFERENCES`, `TRIGGER` are never granted; no role owns an object or may create one. |
+| Source of the matrix | §2.3, **intersected with what `ui2_app` holds today**: a module role never holds a privilege `ui2_app` lacks (the test proves it). Cells that exceeded `ui2_app` were not granted: `service` `DELETE` on `ldap_settings`, `report_run`, `topology_link_override`, `backup_deviation_record`, `cp_device_archive`, `credential_failure_alert`, `ha_pair_identity`, `failover_resume`, `pan_config_sync`; `UPDATE` on `sanitize_vault_entry`, `topology_snapshot`, `topology_conflict`, `cluster_member_diff`, `backup_endpoint_ineligibility`; `INSERT`/`DELETE` on `backup_policy`, `notification_settings`; the matching `backup`/`inventory`/`configuration`/`worker_general` cells on `cp_device_archive`, `ha_pair_identity`, `cluster_member_diff`, `backup_endpoint_ineligibility`. |
+| `ui2_worker_general` | Not a §2.3 column. Granted the union of the `policy`, `backup`, `inventory`, `diagnostics`, `failover`, `configuration` **and `scheduler`** columns: `JobReconciler` runs inside the general worker today (`Ui2WorkerMain`), so the transitional role needs the scheduler rows too. It gets no `service`, `packet_analysis` or `compliance` privilege. R-4 (immediate removal of `policy_*` from it, Q2) is still open and is a one-line revoke in a later migration. |
+| Tables newer than §1.4 | 21 tables created by `V214`–`V231` are not in §2.3. Provisional grants, derived from the repository classes that use them: `service` for all of them; additionally `inventory` on `pan_vsys_zone_set`; `backup`/`configuration`/`diagnostics` `SELECT` on `artefact_store_quota` and `INSERT` on `artefact_store_refusal`; `ui2_worker_general` `S,I,U` on `support_bundle_request`/`support_bundle_item`. Re-verify each at the dry-run of the module's cutover. |
+| In-cluster hook | `create-app-role.sh` gained two blocks: create the eleven roles `NOLOGIN` if missing (never altering an existing one), then, if `ui2_apply_module_role_grants` exists, call it. Both are guarded so that a failure is printed and skipped: step 1 must never stop the database from starting. |
+
+### 6.2 Findings that change later steps
+
+1. **F1 — Step 0 is larger than nine triggers.** Today 26 trigger functions are `SECURITY INVOKER`, not nine: besides §2.2's list, `ui2_failover_run_guard`, `ui2_failover_dispatch_admission`, `ui2_failover_dispatch_guard`, `ui2_failover_incident_guard`, `ui2_failover_approval_guard`, `ui2_failover_run_approval_guard`, `ui2_failover_run_resume_fence`, `ui2_failover_resume_guard`, `ui2_pan_config_sync_guard`, `ui2_stamp_drain_requested_at`, `failover_history_immutable`, `failover_ledger_append`, `fn_expire_directory_authz_after_session_end`, `fn_topology_override_orphan_mark`, `fn_zone_matrix_append_only`, `fn_zone_matrix_version_guard`, `fn_guard_cutover_assessment_flow`. Observed while building the test: with row triggers enabled, `INSERT INTO failover_run` as `ui2_scheduler` (which holds `INSERT` on the table) fails with `42501` from inside a trigger. The non-trigger helpers `ui2_release_orphan_quarantines()` and `ui2_quarantine_owner_gone(text)` are also `INVOKER`, are called from every module's heartbeat/admission path (`ModuleRuntimeRepository`, `EndpointAdmissionRepository`) and touch the failover tables. Step 0 (`M1`) must cover this complete list, and its integration test must exercise a representative write per role **with triggers enabled**; step 1's grant test deliberately runs the per-privilege probes with row triggers off (`session_replication_role = replica`) so that it proves the grant itself.
+2. **F2 — Column-restricted cells were not granted.** `devices` `U(pan_serial)` (`configuration`) and `credential_references` `U(canary)` (`backup`) name columns/paths that do not exist in the source (no `updatePanoramaManagedUnitSerials`, no canary write to `credential_references`), so only `SELECT` was granted. Conversely, workers do write `devices` columns that §2.3 gives them as `S` only (`ssh_identity_unverified` by the SSH host-key policy store in every SSH-contacting worker; `https_certificate_strict` by the HTTPS trust repository). Column-level `UPDATE` grants for these belong in the module cutover steps once the dry-run shows the `42501`.
+3. **F3 — Capabilities without a module.** `ui2_job_module()` returns `NULL` for the support-bundle capabilities, so the row-level security of §2.4 (`ui2_job_module(capability_id) = ui2_current_role_module()`) would deny them to every worker role. They need a module mapping (or an explicit RLS rule) before `M3`.
+4. **F4 — Stale names in §1.4/§2.4/§4.3.** `ui2_request_module_drain` and `ui2_set_module_fallback` do not exist in `V1`–`V235`; the `module_runtime_control` key column is `module`, not `module_id`; the table count is 157 (not 135) at `V235`. The completeness check of §4.3.2 is implemented against the live catalog, so the count no longer matters.
+
+### 6.3 Statements for a DBA (external server) or by hand
+
+No passwords appear in the repository; the DBA chooses and stores them (a later step, §6.4).
+
+```sql
+-- once per cluster, as a role that may create roles
+CREATE ROLE ui2_service NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+-- ... the same statement for ui2_policy, ui2_packet_analysis, ui2_backup, ui2_inventory, ui2_diagnostics,
+--     ui2_failover, ui2_configuration, ui2_compliance, ui2_scheduler, ui2_worker_general
+-- then, per database, as ui2_migrate (the schema owner) after V238 has run:
+SELECT ui2_apply_module_role_grants();   -- returns 0 when all eleven roles exist
+```
+
+### 6.4 How a credential reaches a module role (later step, not built here)
+
+Each role stays `NOLOGIN` until its cutover step (§4.2 Steps 2–5). Then, per module and out-of-band from the repository: the DBA (or the in-cluster bootstrap) runs `ALTER ROLE ui2_<module> LOGIN PASSWORD '…' CONNECTION LIMIT <R-3 budget>` with a fresh CSPRNG secret; the same value is stored as the per-module Kubernetes Secret `ui2-db-<module>` (§3.1, mounted with `items:`, §3.2); one Deployment is switched and rolled; rotation follows §3.3. No migration ever sets a password or a `LOGIN` attribute, and `ui2_apply_module_role_grants` neither reads nor writes one.
+
+### 6.5 Validation
+
+- `DatabaseRoleGrantMatrixIntegrationTest` (`ui2/integration-tests`, real PostgreSQL 16, 13 tests): roles are `NOLOGIN`, passwordless, attribute-free; `V238`'s SQL is additive and secret-free; on 38 representative tables every role is checked for every privilege both by catalog (`has_table_privilege`) and by real execution (`SET ROLE` then `SELECT`/`INSERT`/`UPDATE`/`DELETE`/`TRUNCATE`, `42501` = denied); real row work as `ui2_service` (audited through the `SECURITY DEFINER` trigger), refused work as `ui2_policy` and `ui2_packet_analysis`, no role can `CREATE`/`DROP`/`ALTER`/`CREATE ROLE`; catalog-wide: every table covered, no `TRUNCATE`/`REFERENCES`/`TRIGGER`, nothing beyond `ui2_app`, no owned object, credential/identity/audit planes reachable only as §2.3 says, sequence/column/function grants; re-applying is a no-op; absent roles are skipped; a rolled-back dry run leaves no trace; the in-cluster hook SQL creates `NOLOGIN` roles idempotently and its grant statement runs.
+- Real environment (pending, Product Owner): dry-run the migration text on the live database inside `BEGIN; … ROLLBACK;` as `ui2_migrate` (before the roles exist it only prints `NOTICE`s and installs the function; after, it also issues the grants), then let `V238` run through the normal rollout. Check that nothing else changes: `SELECT count(*) FROM pg_stat_activity WHERE usename LIKE 'ui2\_%' AND usename <> 'ui2_app' AND usename <> 'ui2_migrate'` stays `0`.
+
+---
+
+## 7. External Database (PostgreSQL Outside the Cluster)
+
+PO decision 2026-11-16: per-module database users with least privilege come first and must work whether PostgreSQL runs in the cluster or on a separate server; a network egress rule is a later, additional layer. The roles and grants of §6 live inside the database, so they move with it unchanged; what differs is who owns the cluster-wide pieces and how the connection is protected. `UNKNOWN` marks what is not decided or not verified in the repository.
+
+1. **Role creation is the DBA's.** `ui2_migrate` and `ui2_app` are created outside the migrations today (V1 says so); the eleven module roles follow the same rule. The DBA runs the statements of §6.3, then `ui2_migrate` runs `SELECT ui2_apply_module_role_grants();` (or simply lets Flyway run `V238` after the roles exist). The migration user needs no `CREATEROLE`.
+2. **What the database sees is the node IP, not the pod and not the module.** Pod traffic leaves the cluster through the node (source NAT), so every module pod on a node arrives from that node's address. The network control is therefore per node; the module separation is the per-module role. Both are needed and neither replaces the other.
+3. **DBA allowlist.** The DBA allows only the cluster's node addresses, per database and per role, in `pg_hba.conf`, with `hostssl` entries (never plain `host`) and `scram-sha-256`, for example (synthetic addresses): `hostssl ui2 ui2_policy 192.0.2.11/32 scram-sha-256`, one line per (node address, role), `ui2_migrate` allowed only from the node that runs the Flyway Job, and a final reject for everything else. The operator keeps the current node address list outside the repository and gives it to the DBA; adding or replacing a node is a change to that list and to the allowlist **before** the node takes neXus pods. A stale list fails closed: the connection is refused and the module reports unhealthy, nothing falls back to another role.
+4. **TLS.** The server must offer TLS; clients connect with `sslmode=verify-full` against the DBA-provided CA certificate (a non-secret file mounted into each pod), so the server identity is verified and the password never travels in the clear. `UNKNOWN`/not built: today the JDBC URL is composed in the manifests as `jdbc:postgresql://$(UI2_DB_HOST):$(UI2_DB_PORT)/$(UI2_DB_NAME)` with no `ssl*` parameter, and whether the connection pool code can pass `sslmode`/`sslrootcert` without a code change is not verified; this is a connection-configuration step of its own, separate from step 1. Client-certificate authentication instead of (or beside) passwords is a possible hardening and is not decided here.
+5. **Connection budget.** `ALTER ROLE … CONNECTION LIMIT` (R-3) is part of the credential step, and an external server's `max_connections` is the DBA's to size for the sum of the per-module pools.
+6. **Credentials stay out of band.** Per-module passwords are set by the DBA and delivered as the per-module Secrets of §3.1 (§6.4); on an external server the rotation of §3.3 also needs the DBA for `ALTER ROLE`.
+7. **Egress rule (later).** A Kubernetes-side egress control that lets only the neXus namespace reach the database port, or pins one source address, is the planned second layer; it is intentionally not part of step 1 and changes nothing here.
+8. **Same proof.** The integration test of §6.5 runs against any PostgreSQL 16 (`UI2_TEST_JDBC_URL`), so the same matrix is verified on an external server by pointing the test at a disposable instance of the same version; it never needs the production server.

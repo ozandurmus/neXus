@@ -56,3 +56,27 @@ data:
         :'ui2_app_role',
         :'ui2_app_pw') \gexec
     UI2_SQL
+
+    # Per-module runtime roles (docs/design/DATABASE_ROLES_AND_DATA_OWNERSHIP_DESIGN_2026_11_14.md, step 1).
+    # NOLOGIN and passwordless: nothing connects as one of them yet, and no credential is created here. A role
+    # that already exists is left exactly as it is (a later step gives it LOGIN and a password). The grants are
+    # per database: once the schema carries V238 the second statement (re)applies them, and it is a no-op
+    # before V238. Neither statement may stop the database from starting, so a failure is reported and skipped.
+    psql --set ON_ERROR_STOP=1 <<'UI2_ROLES_SQL' || echo "ui2 module role creation failed; continuing" >&2
+    DO $do$
+    DECLARE r text;
+    BEGIN
+        FOREACH r IN ARRAY ARRAY['ui2_service', 'ui2_policy', 'ui2_packet_analysis', 'ui2_backup', 'ui2_inventory',
+            'ui2_diagnostics', 'ui2_failover', 'ui2_configuration', 'ui2_compliance', 'ui2_scheduler',
+            'ui2_worker_general'] LOOP
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+                EXECUTE format('CREATE ROLE %I NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS', r);
+            END IF;
+        END LOOP;
+    END
+    $do$;
+    UI2_ROLES_SQL
+    psql --set ON_ERROR_STOP=1 -d "${POSTGRESQL_DATABASE:-ui2}" <<'UI2_GRANTS_SQL' || echo "ui2 module role grants not applied; continuing" >&2
+    SELECT CASE WHEN to_regprocedure('ui2_apply_module_role_grants(text)') IS NOT NULL
+                THEN ui2_apply_module_role_grants() END;
+    UI2_GRANTS_SQL

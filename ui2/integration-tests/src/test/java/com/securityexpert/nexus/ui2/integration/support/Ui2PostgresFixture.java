@@ -72,6 +72,16 @@ public final class Ui2PostgresFixture implements AutoCloseable {
     public static final String APP_ROLE = "ui2_app";
 
     /**
+     * The per-module runtime roles of docs/design/DATABASE_ROLES_AND_DATA_OWNERSHIP_DESIGN_2026_11_14.md §2.1, in the
+     * column order of its §2.3 matrix with {@code ui2_worker_general} last. Like the two roles above they are
+     * cluster-wide objects created outside the migrations (V238 only grants to them): here {@code NOLOGIN}, no
+     * password, no attribute — the shape the in-cluster hook and the DBA statement of design §6.3 create.
+     */
+    public static final java.util.List<String> MODULE_ROLES = java.util.List.of(
+            "ui2_service", "ui2_policy", "ui2_packet_analysis", "ui2_backup", "ui2_inventory", "ui2_diagnostics",
+            "ui2_failover", "ui2_configuration", "ui2_compliance", "ui2_scheduler", "ui2_worker_general");
+
+    /**
      * The migration location the packaged image uses. {@code V1..V4} live in
      * {@code service/src/main/resources/db/migration} (B1-1 Amendment
      * B1-1-A item 3) and are packaged into {@code service} from there; this
@@ -251,6 +261,11 @@ public final class Ui2PostgresFixture implements AutoCloseable {
             statement.execute("REVOKE ALL ON ui2_test_harness_role_secret FROM PUBLIC");
             migratePassword = ensureRole(admin, statement, MIGRATE_ROLE, migratePassword);
             appPassword = ensureRole(admin, statement, APP_ROLE, appPassword);
+            for (String moduleRole : MODULE_ROLES) {
+                statement.execute("DO $do$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = "
+                        + sqlLiteral(moduleRole) + ") THEN CREATE ROLE " + quoteIdentifier(moduleRole)
+                        + " NOLOGIN; END IF; END $do$;");
+            }
             admin.commit();
         } catch (SQLException | RuntimeException e) {
             admin.rollback();
@@ -369,6 +384,14 @@ public final class Ui2PostgresFixture implements AutoCloseable {
 
     public Connection adminConnection() throws SQLException {
         return connect(adminUrl, adminUser, adminPassword);
+    }
+
+    /**
+     * A harness-superuser connection to this fixture's own database, for a test that must {@code SET ROLE} to a
+     * NOLOGIN module role (superusers may; the role's own privileges then apply, never the superuser's).
+     */
+    public Connection adminDatabaseConnection() throws SQLException {
+        return connect(jdbcUrl(databaseName), adminUser, adminPassword);
     }
 
     /** A {@code ui2_migrate} connection to this fixture's own database. */
