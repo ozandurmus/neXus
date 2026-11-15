@@ -113,9 +113,37 @@ def test_recovery_preserves_quarantine_and_unrelated_work(monkeypatch):
     assert "ui2_job_module(capability_id)='policy'" in calls[0]
     assert "owner_role='policy'" in calls[0]
     assert 'QUARANTINED' in calls[0] and 'DELETE' not in calls[0]
+    monkeypatch.setattr(deploy, 'query', lambda sql: calls.append(sql) or 'backup')
+    deploy.reset_to_general('synthetic-snapshot', 'backup', 8)
+    assert "ui2_job_module(capability_id)='backup'" in calls[-1]
+    assert "(owner_role='backup' or purpose_class='BACKUP')" in calls[-1]
     monkeypatch.setattr(deploy, 'query', lambda sql: '')
     with pytest.raises(deploy.Blocked, match='uncertain'):
         deploy.reset_to_general('synthetic-snapshot', 'policy', 7)
+
+
+def test_backup_creation_and_handover_require_live_heartbeat_and_generation(monkeypatch):
+    calls = []
+    monkeypatch.setattr(deploy, 'run', lambda *a, **kw: calls.append((a, kw)) or '')
+    monkeypatch.setattr(deploy, 'prepare_policy_public_trust', lambda: calls.append(('trust', {})))
+    assert deploy.ensure_backup(IMAGE) is None
+    import yaml
+    objects = list(yaml.safe_load_all(calls[-1][1]['input']))
+    assert {item['kind'] for item in objects} == {'ServiceAccount', 'Deployment', 'NetworkPolicy'}
+    obj = next(item for item in objects if item['kind'] == 'Deployment')
+    assert obj['spec']['replicas'] == 0
+    assert obj['spec']['template']['spec']['containers'][0]['image'] == IMAGE
+
+    queries = []
+    monkeypatch.setattr(deploy, 'query', lambda sql: queries.append(sql) or '2')
+    deploy.handover_backup(7, 'synthetic-snapshot', 'synthetic-approval')
+    sql = queries[0]
+    assert "effective_owner='backup'" in sql and "where module='backup'" in sql
+    assert "owner_heartbeat_at>now()-interval '60 seconds'" in sql
+    assert 'drain_generation=7' in sql and 'drain_ack_generation=drain_generation' in sql
+    monkeypatch.setattr(deploy, 'query', lambda sql: '')
+    with pytest.raises(deploy.Blocked, match='fence or heartbeat'):
+        deploy.handover_backup(7, 'synthetic-snapshot', 'synthetic-approval')
 
 
 def test_kubectl_failure_is_diagnosable_and_masked(monkeypatch):

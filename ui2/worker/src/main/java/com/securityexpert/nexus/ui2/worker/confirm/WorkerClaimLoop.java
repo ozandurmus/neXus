@@ -68,14 +68,33 @@ public final class WorkerClaimLoop {
             BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL, BackupCapabilityIds.CP_SPARK_SFTP_BACKUP, BackupCapabilityIds.CP_GAIA_SNAPSHOT,
             BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP, BackupCapabilityIds.CP_MDS_EXPORT, BackupCapabilityIds.RDW_CC_CONFIG_BACKUP,
             BackupCapabilityIds.CREDENTIAL_CANARY);
+    public static final List<String> BACKUP_CAPABILITY_IDS = List.of(
+            BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL, BackupCapabilityIds.CP_SPARK_SFTP_BACKUP,
+            BackupCapabilityIds.CP_GAIA_SNAPSHOT, BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP,
+            BackupCapabilityIds.CP_MDS_EXPORT, BackupCapabilityIds.HTTPS_VENDOR_BACKUP,
+            BackupCapabilityIds.RDW_CC_CONFIG_BACKUP, BackupCapabilityIds.ASA_CONFIG_BACKUP,
+            BackupCapabilityIds.FGT_CONFIG_BACKUP, BackupCapabilityIds.CREDENTIAL_CANARY);
     private List<String> eligibleCapabilityIds = claimCapabilities("general", false);
-    public static List<String> claimCapabilities(String role, boolean policyFallback) {
+    public static List<String> claimCapabilities(String role, boolean fallback) {
+        if ("policy".equals(role)) return fallback ? List.of() : List.of("cp_policy_collect", "pan_policy_collect");
+        if ("backup".equals(role)) return fallback ? List.of() : BACKUP_CAPABILITY_IDS;
+        return claimCapabilities(role, fallback, true);
+    }
+    public static List<String> claimCapabilities(String role, boolean policyFallback, boolean backupFallback) {
         if ("policy".equals(role)) return policyFallback ? List.of() : List.of("cp_policy_collect", "pan_policy_collect");
+        if ("backup".equals(role)) return backupFallback ? List.of() : BACKUP_CAPABILITY_IDS;
         if (!"general".equals(role)) throw new IllegalArgumentException("UNKNOWN_WORKER_ROLE");
-        return ALL_CAPABILITY_IDS.stream().filter(id -> policyFallback || !List.of("cp_policy_collect", "pan_policy_collect").contains(id)).toList();
+        return ALL_CAPABILITY_IDS.stream()
+                .filter(id -> policyFallback || !List.of("cp_policy_collect", "pan_policy_collect").contains(id))
+                .filter(id -> backupFallback || !BACKUP_CAPABILITY_IDS.contains(id))
+                .toList();
     }
     public WorkerClaimLoop withRole(String role, boolean policyFallback) {
         eligibleCapabilityIds = claimCapabilities(role, policyFallback);
+        return this;
+    }
+    public WorkerClaimLoop withRole(String role, boolean policyFallback, boolean backupFallback) {
+        eligibleCapabilityIds = claimCapabilities(role, policyFallback, backupFallback);
         return this;
     }
     private static final int DEFAULT_SSH_PORT = 22;
@@ -262,6 +281,26 @@ public final class WorkerClaimLoop {
         return new WorkerClaimLoop(leases, jobs, devices, policy, instance, cpTrust, panTrust, fallback);
     }
 
+    private WorkerClaimLoop(JobLeaseRepository leases, JobRecordDao jobs, DeviceRepository devices,
+            BackupJobExecutor backup, String instance, Duration leaseDuration, String cpTrust, String panTrust,
+            Optional<String> backupCredentialRef, boolean fallback) {
+        leaseRepository = Objects.requireNonNull(leases); jobRecordDao = Objects.requireNonNull(jobs);
+        deviceRepository = Objects.requireNonNull(devices); backupJobExecutor = Objects.requireNonNull(backup);
+        confirmJobExecutor = null; inventoryJobExecutor = null; configurationJobExecutor = null;
+        discoveryJobExecutor = null; workerId = Objects.requireNonNull(instance);
+        this.leaseDuration = Objects.requireNonNull(leaseDuration);
+        checkPointTrustRuleRef = Objects.requireNonNull(cpTrust);
+        paloAltoTrustRuleRef = Objects.requireNonNull(panTrust);
+        this.backupCredentialRef = Objects.requireNonNull(backupCredentialRef);
+        withRole("backup", fallback);
+    }
+    public static WorkerClaimLoop backup(JobLeaseRepository leases, JobRecordDao jobs, DeviceRepository devices,
+            BackupJobExecutor backup, String instance, Duration leaseDuration, String cpTrust, String panTrust,
+            Optional<String> backupCredentialRef, boolean fallback) {
+        return new WorkerClaimLoop(leases, jobs, devices, backup, instance, leaseDuration, cpTrust, panTrust,
+                backupCredentialRef, fallback);
+    }
+
     private com.securityexpert.nexus.ui2.persistence.runtime.EndpointAdmissionRepository endpointAdmission;
     private com.securityexpert.nexus.ui2.persistence.runtime.ModuleRuntimeRepository moduleRuntime;
     public WorkerClaimLoop withRuntimeAdmission(
@@ -274,9 +313,11 @@ public final class WorkerClaimLoop {
         var job = jobRecordDao.find(claim.jobId()).orElseThrow();
         String capability = job.capabilityId();
         String purpose = purposeOf(capability);
+        String ownerRole = workerId.startsWith("policy-") ? "policy"
+            : workerId.startsWith("backup-") ? "backup" : "general";
         return com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.open(
             new com.securityexpert.nexus.ui2.persistence.runtime.EndpointAdmissionRepository.Owner(
-                claim.jobId(), claim.leaseEpoch(), null, 0, workerId.startsWith("policy-") ? "policy" : "general",
+                claim.jobId(), claim.leaseEpoch(), null, 0, ownerRole,
                 workerId, moduleRuntime.generation(claim.jobId(), claim.leaseEpoch()), purpose, capability.equals("cp_policy_collect")));
     }
 

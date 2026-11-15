@@ -1011,7 +1011,7 @@ def assert_module_claims(repo, workers):
              if c.get("args", [])[:1] == ["worker"]}
     if not {"general", "policy"}.issubset(roles):
         raise RuntimeError("Preview lacks a required claim owner pod")
-    owners = sorted({"general", "policy"} | ({"packet_analysis"} & roles))
+    owners = sorted({"general", "policy"} | ({"backup", "packet_analysis"} & roles))
     def db(sql):
         return k(NS, "exec", "-i", preview_name("ui2-preview-db"), "--", "sh", "-c",
                  PG_ENV + "exec psql -XqAt --set=ON_ERROR_STOP=1 -d ui2", input=sql)
@@ -1026,7 +1026,9 @@ def assert_module_claims(repo, workers):
        "SELECT set_config('app.action_id','preview_policy_handover',true);"
        "SELECT pg_advisory_xact_lock(294611);"
        "UPDATE module_runtime_control SET effective_owner='policy',fallback_enabled=FALSE,generation=generation+1 "
-       "WHERE module='policy' AND owner_instance IS NOT NULL AND owner_heartbeat_at>now()-interval '60 seconds';COMMIT;")
+       "WHERE module='policy' AND owner_instance IS NOT NULL AND owner_heartbeat_at>now()-interval '60 seconds';"
+       "UPDATE module_runtime_control SET effective_owner='backup',fallback_enabled=FALSE,generation=generation+1 "
+       "WHERE module='backup' AND owner_instance IS NOT NULL AND owner_heartbeat_at>now()-interval '60 seconds';COMMIT;")
     source = (repo / "ui2/job-engine/src/main/java/com/securityexpert/nexus/ui2/jobs/lease/ClaimStatementText.java").read_text()
     claim = source.split('"""', 2)[1].strip()
     capabilities = sorted(set(re.findall(r"'([a-z]+_[a-z_]+)'", job_module_mapping(repo))) -

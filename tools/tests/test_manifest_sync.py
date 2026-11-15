@@ -47,6 +47,7 @@ def cluster(monkeypatch, replicas='1', differs=True):
     monkeypatch.setattr(deploy, 'module_e2e', lambda commit=None: events.append((('e2e',), None)))
     monkeypatch.setattr(deploy, 'wait_heartbeat', lambda target: None)
     monkeypatch.setattr(deploy, 'handover_policy', lambda *a: events.append((('handover',), None)))
+    monkeypatch.setattr(deploy, 'handover_backup', lambda *a: events.append((('handover',), None)))
     return events, diffs
 
 
@@ -163,8 +164,9 @@ def test_other_deployments_roll_back_by_image_only(monkeypatch, target):
 
 def test_the_worker_manifest_is_in_the_synced_set_and_packet_analysis_keeps_its_own_path():
     assert deploy.SYNCED_MANIFESTS['worker'] == 'deploy/ui2/52-worker-deployment.yaml'
+    assert deploy.SYNCED_MANIFESTS['backup'] == 'deploy/ui2/53-backup-deployment.yaml'
     assert 'packet-analysis' not in deploy.SYNCED_MANIFESTS
-    assert set(deploy.SYNCED_MANIFESTS) == {'service', 'configuration', 'compliance', 'policy', 'worker'}
+    assert set(deploy.SYNCED_MANIFESTS) == {'service', 'configuration', 'compliance', 'policy', 'backup', 'worker'}
 
 
 def test_the_worker_is_rendered_like_the_others_with_its_committed_env_unchanged():
