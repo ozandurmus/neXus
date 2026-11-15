@@ -66,7 +66,7 @@ public final class SshExecTransport implements DeviceTransport {
      * <p>Keeps RSA family first so existing dual-key appliances enrolled with {@code ssh-rsa} continue to present
      * their RSA host key, while negotiating RFC 8332 {@code rsa-sha2-512}/{@code rsa-sha2-256} when supported and
      * falling back to {@code ssh-rsa} for legacy appliances. Also allows {@code ecdsa-sha2-nistp*} and
-     * {@code ssh-ed25519}. Weak {@code ssh-dss} is never enabled.
+     * {@code ssh-ed25519}. {@code ssh-dss} is last resort only.
      */
     static final String HOST_KEY_ALGORITHMS = String.join(",",
             "rsa-sha2-512",
@@ -75,14 +75,16 @@ public final class SshExecTransport implements DeviceTransport {
             "ecdsa-sha2-nistp256",
             "ecdsa-sha2-nistp384",
             "ecdsa-sha2-nistp521",
-            "ssh-ed25519");
+            "ssh-ed25519",
+            // Last resort only: JSch 0.1.55 offered ssh-dss; a device that only has a DSS key must stay reachable.
+            "ssh-dss");
 
     /**
      * Explicit SSH key-exchange algorithms (`kex`).
      *
      * <p>Prefers modern {@code curve25519-sha256}, {@code ecdh-sha2-nistp*}, and SHA-2 DH groups while retaining
-     * {@code diffie-hellman-group14-sha1} (2048-bit MODP) as a fallback for existing devices. Weak 1024-bit
-     * {@code diffie-hellman-group1-sha1} and {@code diffie-hellman-group-exchange-sha1} are never enabled.
+     * {@code diffie-hellman-group14-sha1} (2048-bit MODP) as a fallback for existing devices. 1024-bit
+     * group1-sha1 and group-exchange-sha1 are last-resort fallbacks.
      */
     static final String KEX_ALGORITHMS = String.join(",",
             "curve25519-sha256",
@@ -94,19 +96,51 @@ public final class SshExecTransport implements DeviceTransport {
             "diffie-hellman-group16-sha512",
             "diffie-hellman-group18-sha512",
             "diffie-hellman-group14-sha256",
-            "diffie-hellman-group14-sha1");
+            "diffie-hellman-group14-sha1",
+            // Legacy fallbacks (JSch 0.1.55 offered them); modern algorithms are always tried first.
+            "diffie-hellman-group-exchange-sha1",
+            "diffie-hellman-group1-sha1");
 
     /**
      * Explicit SSH symmetric ciphers (`cipher.s2c` and `cipher.c2s`).
      *
-     * <p>Allows AEAD GCM and CTR-mode AES ciphers; never enables weak CBC, 3DES, Blowfish, or Arcfour ciphers.
+     * <p>Allows AEAD GCM and CTR-mode AES ciphers; CBC/3DES/Blowfish only as last-resort fallbacks; Arcfour is never enabled.
      */
     static final String CIPHER_ALGORITHMS = String.join(",",
             "aes128-gcm@openssh.com",
             "aes256-gcm@openssh.com",
             "aes128-ctr",
             "aes192-ctr",
-            "aes256-ctr");
+            "aes256-ctr",
+            // Last-resort legacy fallbacks (JSch 0.1.55 offered them); GCM/CTR are always preferred.
+            "aes256-cbc",
+            "aes192-cbc",
+            "aes128-cbc",
+            "3des-cbc",
+            "3des-ctr",
+            "blowfish-cbc");
+
+    /** Explicit MACs (`mac.s2c`/`mac.c2s`): modern first, legacy SHA-1/MD5 fallbacks last (JSch 0.1.55 parity). */
+    static final String MAC_ALGORITHMS = String.join(",",
+            "hmac-sha2-256-etm@openssh.com",
+            "hmac-sha2-512-etm@openssh.com",
+            "hmac-sha2-256",
+            "hmac-sha2-512",
+            "hmac-sha1-etm@openssh.com",
+            "hmac-sha1",
+            "hmac-sha1-96",
+            "hmac-md5",
+            "hmac-md5-96");
+
+    /** Client public-key authentication signature algorithms (`PubkeyAcceptedAlgorithms`); keeps ssh-rsa for old servers. */
+    static final String PUBKEY_ACCEPTED_ALGORITHMS = String.join(",",
+            "rsa-sha2-512",
+            "rsa-sha2-256",
+            "ssh-rsa",
+            "ecdsa-sha2-nistp256",
+            "ecdsa-sha2-nistp384",
+            "ecdsa-sha2-nistp521",
+            "ssh-ed25519");
 
     private final SshCredentialResolver credentialResolver;
     private final TrustRuleResolver trustRuleResolver;
@@ -270,6 +304,14 @@ public final class SshExecTransport implements DeviceTransport {
         session.setConfig("kex", KEX_ALGORITHMS);
         session.setConfig("cipher.s2c", CIPHER_ALGORITHMS);
         session.setConfig("cipher.c2s", CIPHER_ALGORITHMS);
+        // mwiede 0.2.26 ships SignatureDSA but registers no "ssh-dss" implementation; 0.1.55 did. Re-register it
+        // (last in the preference list) so DSS-only devices stay reachable.
+        if (session.getConfig("ssh-dss") == null) {
+            session.setConfig("ssh-dss", "com.jcraft.jsch.jce.SignatureDSA");
+        }
+        session.setConfig("mac.s2c", MAC_ALGORITHMS);
+        session.setConfig("mac.c2s", MAC_ALGORITHMS);
+        session.setConfig("PubkeyAcceptedAlgorithms", PUBKEY_ACCEPTED_ALGORITHMS);
     }
 
     static String hostKeyAlgorithmsFor(java.util.Optional<java.util.List<String>> authorizedHostKeyAlgorithms) {
