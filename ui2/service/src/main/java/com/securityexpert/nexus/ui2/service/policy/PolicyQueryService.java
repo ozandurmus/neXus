@@ -56,6 +56,29 @@ public final class PolicyQueryService {
         this.firewalls = devices == null ? null : new PolicyFirewallNames(devices);
     }
 
+    /** The stored zone names of each Palo Alto firewall virtual system (V229); absent in unit tests that set none: every zone universe is then unknown. */
+    private volatile com.securityexpert.nexus.ui2.persistence.device.PanVsysZoneRepository zoneSets;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setPanVsysZoneRepository(com.securityexpert.nexus.ui2.persistence.device.PanVsysZoneRepository zoneSets) {
+        this.zoneSets = zoneSets;
+    }
+
+    /**
+     * The zones the snapshot's rules reach ({@link ZoneUniverse}), or {@link ZoneUniverse#UNKNOWN} for another vendor, a
+     * target without a fresh stored zone set, or any failure reading them: a missing universe only leaves a verdict undecided.
+     */
+    ZoneUniverse zoneUniverse(PolicySnapshot snapshot, java.time.Instant now) {
+        var repository = zoneSets;
+        if (repository == null || !"PAN".equals(snapshot.metadata().vendor()) || snapshot.metadata().targets().isEmpty()) return ZoneUniverse.UNKNOWN;
+        try {
+            var ids = snapshot.metadata().targets().stream().map(Target::deviceId).distinct().toList();
+            return ZoneUniverse.of(snapshot, repository.findForDevices(ids), now);
+        } catch (RuntimeException unreadable) {
+            return ZoneUniverse.UNKNOWN;
+        }
+    }
+
     private Map<String, String> sourceHostnames() {
         var repository = devices;
         if (repository == null) return null;
@@ -676,7 +699,8 @@ public final class PolicyQueryService {
         if (compute) {
             hygieneSlots.acquireUninterruptibly();
             try {
-                entry.result().complete(PolicyHygiene.analyze(snapshot, days, now, PolicyHygiene.TOTAL_WORK, breadthObjects(snapshot, inventoryIndex(snapshot))));
+                entry.result().complete(PolicyHygiene.analyze(snapshot, days, now, PolicyHygiene.TOTAL_WORK, breadthObjects(snapshot, inventoryIndex(snapshot)),
+                    zoneUniverse(snapshot, now)));
             } catch (RuntimeException | Error failed) {
                 entry.result().completeExceptionally(failed);
                 synchronized (hygieneCache) { hygieneCache.remove(id, entry); }

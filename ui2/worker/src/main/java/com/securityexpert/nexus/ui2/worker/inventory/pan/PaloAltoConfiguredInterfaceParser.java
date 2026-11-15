@@ -42,7 +42,10 @@ import com.securityexpert.nexus.ui2.worker.inventory.ParsedInterface;
  *       {@code show interface all} does); an interface no vsys imports is unassigned ({@code 0});</li>
  *   <li>zone: {@code vsys/entry/zone/entry/network/*}/member}; virtual router: {@code network/virtual-router/entry/interface/member}
  *       or, under advanced routing, {@code network/logical-router/entry/vrf/entry/interface/member} (the logical router's name);</li>
- *   <li>HA ports: {@code deviceconfig/high-availability/interface/{ha1,ha1-backup,ha2,ha2-backup}/port}.</li>
+ *   <li>HA ports: {@code deviceconfig/high-availability/interface/{ha1,ha1-backup,ha2,ha2-backup}/port};</li>
+ *   <li>zone names (V229, PAN_VSYS_ZONE_UNIVERSE_2026_11_15.md): {@code vsys/entry/zone/entry@name} of every virtual system,
+ *       a zone with no interface member included. A virtual system whose zone entry has no name, or that is named twice,
+ *       is left out (UNKNOWN), never reported with the zones that could be read.</li>
  * </ul>
  *
  * <p>Grade C (configuration intent, not runtime truth): every interface's link state is UNKNOWN and no MAC is
@@ -58,7 +61,15 @@ public final class PaloAltoConfiguredInterfaceParser {
 
     /** The interfaces in {@code show interface all}'s shape, the configured HA port of each HA link, and safe counts. */
     public record Configured(PaloAltoInterfaceParseResult interfaces, Map<String, String> haPortByLink,
-            int addressesNotLiteral, int ambiguousAttributions) {
+            int addressesNotLiteral, int ambiguousAttributions, Map<String, List<String>> zoneNamesByVsys) {
+        public Configured {
+            zoneNamesByVsys = zoneNamesByVsys == null ? Map.of() : Map.copyOf(zoneNamesByVsys);
+        }
+
+        public Configured(PaloAltoInterfaceParseResult interfaces, Map<String, String> haPortByLink, int addressesNotLiteral,
+                int ambiguousAttributions) {
+            this(interfaces, haPortByLink, addressesNotLiteral, ambiguousAttributions, Map.of());
+        }
     }
 
     private static final int MAX_KEPT_ELEMENTS = 200_000;
@@ -220,7 +231,46 @@ public final class PaloAltoConfiguredInterfaceParser {
         Map<String, String> routingContext = new LinkedHashMap<>(nameToRouter);
         routingContext.keySet().removeAll(logicalRouterMembers);
         return new Configured(new PaloAltoInterfaceParseResult(byVsys, physicalPorts, nameToVsys, nameToRouter, nameToZone,
-                Map.of(), routingContext), haPortByLink, counts[0], counts[1]);
+                Map.of(), routingContext), haPortByLink, counts[0], counts[1], zoneNames(device));
+    }
+
+    /**
+     * The zone names of each virtual system, sorted and distinct, keyed by the vsys entry name as the configuration gives it
+     * ({@code vsys1}). An empty list is a virtual system read with no zone. A virtual system that cannot be read in full
+     * (a zone entry without a name, two entries of one name) is not in the map.
+     */
+    static Map<String, List<String>> zoneNames(Element device) {
+        Map<String, List<String>> byVsys = new LinkedHashMap<>();
+        Set<String> unreadable = new HashSet<>();
+        for (Element vsys : children(only(device, "vsys"), "entry")) {
+            String name = vsys.getAttribute("name").strip();
+            if (name.isEmpty() || byVsys.containsKey(name) || unreadable.contains(name)) {
+                if (!name.isEmpty()) {
+                    byVsys.remove(name);
+                    unreadable.add(name);
+                }
+                continue;
+            }
+            java.util.TreeSet<String> zones = new java.util.TreeSet<>();
+            boolean readable = true;
+            for (Element container : children(vsys, "zone")) {
+                for (Element zone : children(container, "entry")) {
+                    // Opaque and exact, as the rules' zone members are: no stripping, no case folding.
+                    String zoneName = zone.getAttribute("name");
+                    if (zoneName.isBlank() || zoneName.length() > 128) {
+                        readable = false;
+                    } else {
+                        zones.add(zoneName);
+                    }
+                }
+            }
+            if (readable) {
+                byVsys.put(name, List.copyOf(zones));
+            } else {
+                unreadable.add(name);
+            }
+        }
+        return byVsys;
     }
 
     private static void place(List<ParsedInterface> logical, Map<String, String> vsysOf, Map<String, String> routerOf,
