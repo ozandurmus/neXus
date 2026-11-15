@@ -50,6 +50,9 @@ public final class AsaInterfaceNames implements InterfaceNameSource {
 
     /** The physical-to-nameif table of one snapshot, or {@code null} when it is absent or not unambiguous. */
     static Map<String, String> table(PolicySnapshot snapshot) {
+        if (!snapshot.failures().isEmpty()) {
+            return null;
+        }
         Map<String, String> table = null;
         for (PolicySnapshot.PolicyObject object : snapshot.objects().values()) {
             if (!"asa-interfaces".equals(object.type())) {

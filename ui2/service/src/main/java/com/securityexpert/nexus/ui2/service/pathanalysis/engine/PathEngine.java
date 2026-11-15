@@ -781,6 +781,10 @@ public final class PathEngine {
                 if (named.isPresent()) {
                     return named;
                 }
+                Node node = nodes.get(nodeId);
+                if (node != null && TopologyInput.VENDOR_CISCO_ASA.equals(node.vendor())) {
+                    return Optional.empty();
+                }
             }
             if (address.isPresent()) {
                 Optional<Attachment> exact = on.stream().filter(a -> a.address().flatMap(Ipv4Prefix::parseHost)
