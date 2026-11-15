@@ -54,6 +54,8 @@ public final class ActionRegistry {
     public static final String ZONE_MATRIX_PUBLISH = "zone_matrix_publish";
     /** ZONE_MATRIX_CONTRACT.md sections 3.4 and 6.1: set a cell's reference to CONFIRMED; compliance_admin only. */
     public static final String ZONE_MATRIX_REFERENCE_CONFIRM = "zone_matrix_reference_confirm";
+    /** ZONE_MATRIX_CONTRACT.md section 3.4: start an on-demand evaluation of stored policies; security_admin and compliance_admin, never aiview. */
+    public static final String ZONE_MATRIX_EVALUATE = "zone_matrix_evaluate";
     public static final String FMG_DIAGNOSTIC_READ = "fmg_diagnostic_read";
     public static final String FMG_DIAGNOSTIC_RUN = "fmg_diagnostic_run";
     /** System-log programme phase A (M3/M4): admits one Palo Alto log measurement job per enrolled firewall; administrators only. */
@@ -310,6 +312,8 @@ public final class ActionRegistry {
         register(new ActionDescriptor(ZONE_MATRIX_PUBLISH, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.COMPLIANCE_ADMIN)));
         register(new ActionDescriptor(ZONE_MATRIX_REFERENCE_CONFIRM, true, Optional.of(RoleToken.COMPLIANCE_ADMIN)));
+        register(new ActionDescriptor(ZONE_MATRIX_EVALUATE, true, Optional.of(RoleToken.SECURITY_ADMIN),
+                java.util.Set.of(RoleToken.COMPLIANCE_ADMIN)));
         register(new ActionDescriptor(POLICY_COLLECT, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(POLICY_READ, true, Optional.of(RoleToken.SECURITY_ADMIN),
