@@ -22,6 +22,7 @@ from scripts import argon_task  # noqa: E402
         ("gemini-4-argon-low", "Gemini 4 Argon", "Co-Authored-By: Gemini 4 Argon"),
         ("gemini-4-carbon-high", "Gemini 4 Carbon", "Co-Authored-By: Gemini 4 Carbon"),
         ("gemini-4-carbon-medium", "Gemini 4 Carbon", "Co-Authored-By: Gemini 4 Carbon"),
+        ("gemini-4-hydrogen-high", "Gemini 4 Hydrogen", "Co-Authored-By: Gemini 4 Hydrogen"),
         ("claude-sonnet-5-5-high", "Claude Sonnet 5.5", "Co-Authored-By: Claude Sonnet 5.5"),
         ("claude-opus-5-5-high", "Claude Opus 5.5", "Co-Authored-By: Claude Opus 5.5"),
     ],
@@ -124,3 +125,4 @@ def test_module_docstring_documents_both_model_families() -> None:
     assert "gemini-4-carbon-*" in doc
     assert "Gemini 4 Argon" in doc
     assert "Gemini 4 Carbon" in doc
+    assert "gemini-4-hydrogen-*" in doc and "Gemini 4 Hydrogen" in doc
