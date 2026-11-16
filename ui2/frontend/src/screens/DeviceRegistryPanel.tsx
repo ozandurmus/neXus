@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { memo, useCallback, useState } from "react";
 
 import Box from "@mui/material/Box";
 import Checkbox from "@mui/material/Checkbox";
@@ -275,6 +275,56 @@ function ConfirmDeleteDialog({
   );
 }
 
+/**
+ * One registry row. Memoised on the device, whether it is selected and the table's stable handlers, so a header click, a
+ * page step or a selection elsewhere does not draw the other rows again.
+ */
+const RegistryRow = memo(function RegistryRow({ device, selected, onToggle, onChangeCredentials, onDelete }: {
+  readonly device: DeviceSummary;
+  readonly selected: boolean;
+  readonly onToggle: (deviceId: string) => void;
+  readonly onChangeCredentials: (device: DeviceSummary) => void;
+  readonly onDelete: (deviceId: string) => void;
+}) {
+  return (
+    <TableRow hover selected={selected}>
+      <TableCell padding="checkbox">
+        <Checkbox
+          checked={selected}
+          onChange={() => onToggle(device.device_id)}
+          size="small"
+          sx={{ p: 0.5 }}
+          inputProps={{ "aria-label": `Select ${deviceNameLabel(device.hostname)}` }}
+        />
+      </TableCell>
+      <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <Typography variant="body2" title={device.vendor_hint} sx={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {vendorLabel(device.vendor_hint)}
+        </Typography>
+      </TableCell>
+      <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis" }}><HostnameCell device={device} /></TableCell>
+      <TableCell sx={{ whiteSpace: "nowrap" }}>
+        {(() => {
+          const chip = onboardingChip(device.onboarding);
+          return chip
+            ? <span title={chip.title}><StatusChip tone={chip.tone} label={chip.label} dense /></span>
+            : <StatusChip tone={enrollmentStateTone(device.enrollment_state)} label={enrollmentStateLabel(device.enrollment_state)} dense />;
+        })()}
+      </TableCell>
+      <TableCell sx={{ whiteSpace: "nowrap" }}><Stamp at={device.inventory_collected_at} /></TableCell>
+      <TableCell align="right">
+        <CapabilityMenu
+          ariaLabel={`${deviceNameLabel(device.hostname)} actions`}
+          items={[
+            { label: "Change credentials…", onSelect: () => onChangeCredentials(device) },
+            { label: "Delete", destructive: true, dividerBefore: true, onSelect: () => onDelete(device.device_id) },
+          ]}
+        />
+      </TableCell>
+    </TableRow>
+  );
+});
+
 function DeviceRegistryCard({
   devices,
   deleteError,
@@ -309,6 +359,16 @@ function DeviceRegistryCard({
   const [pageSize, setPageSize] = useState<number>(50);
   const firstPage = useCallback(() => setPage(0), []);
   const sort = useTableSort(REGISTRY_SORT, { onChange: firstPage });
+  // Row handlers kept stable (state setters and a functional update) so the memoised rows are not drawn again by the table.
+  const handleToggleRow = useCallback((deviceId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(deviceId)) next.delete(deviceId);
+      else next.add(deviceId);
+      return next;
+    });
+  }, []);
+  const deleteOne = useCallback((deviceId: string) => setConfirmIds([deviceId]), []);
 
   if (devices === null) {
     return <StatePanel variant="empty" title="Device registry" body="Loading…" />;
@@ -332,14 +392,6 @@ function DeviceRegistryCard({
     }
   };
 
-  const handleToggleRow = (deviceId: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(deviceId)) next.delete(deviceId);
-      else next.add(deviceId);
-      return next;
-    });
-  };
 
   const selectAllDraft = () => {
     if (!devices) return;
@@ -472,41 +524,8 @@ function DeviceRegistryCard({
             </TableHead>
             <TableBody>
               {pageRows.map((device) => (
-                <TableRow key={device.device_id} hover selected={selectedIds.has(device.device_id)}>
-                  <TableCell padding="checkbox">
-                    <Checkbox
-                      checked={selectedIds.has(device.device_id)}
-                      onChange={() => handleToggleRow(device.device_id)}
-                      size="small"
-                      sx={{ p: 0.5 }}
-                      inputProps={{ "aria-label": `Select ${deviceNameLabel(device.hostname)}` }}
-                    />
-                  </TableCell>
-                  <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    <Typography variant="body2" title={device.vendor_hint} sx={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {vendorLabel(device.vendor_hint)}
-                    </Typography>
-                  </TableCell>
-                  <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis" }}><HostnameCell device={device} /></TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>
-                    {(() => {
-                      const chip = onboardingChip(device.onboarding);
-                      return chip
-                        ? <span title={chip.title}><StatusChip tone={chip.tone} label={chip.label} dense /></span>
-                        : <StatusChip tone={enrollmentStateTone(device.enrollment_state)} label={enrollmentStateLabel(device.enrollment_state)} dense />;
-                    })()}
-                  </TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}><Stamp at={device.inventory_collected_at} /></TableCell>
-                  <TableCell align="right">
-                    <CapabilityMenu
-                      ariaLabel={`${deviceNameLabel(device.hostname)} actions`}
-                      items={[
-                        { label: "Change credentials…", onSelect: () => setCredentialsFor(device) },
-                        { label: "Delete", destructive: true, dividerBefore: true, onSelect: () => setConfirmIds([device.device_id]) },
-                      ]}
-                    />
-                  </TableCell>
-                </TableRow>
+                <RegistryRow key={device.device_id} device={device} selected={selectedIds.has(device.device_id)} onToggle={handleToggleRow}
+                  onChangeCredentials={setCredentialsFor} onDelete={deleteOne} />
               ))}
               {pageRows.length === 0 && (
                 <TableRow><TableCell colSpan={6}><Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>No device matches these filters.</Typography></TableCell></TableRow>

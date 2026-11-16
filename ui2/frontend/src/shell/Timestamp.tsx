@@ -1,5 +1,5 @@
 import Box from "@mui/material/Box";
-import Tooltip from "@mui/material/Tooltip";
+import { LazyTooltip } from "./LazyTooltip";
 
 import { m3 } from "../theme/m3Theme";
 import { TYPE } from "../theme/tokens";
@@ -40,7 +40,7 @@ export function Timestamp({ at, age = true, stacked = false, compact = false, se
     );
   }
   return (
-    <Tooltip title={exact}>
+    <LazyTooltip title={exact}>
       <Box component="time" dateTime={at} data-stamp={stamp} sx={{ ...mono, whiteSpace: "nowrap", display: stacked ? "inline-block" : "inline" }}>
         <Box component="span">{stamp}</Box>
         {age && relative
@@ -51,6 +51,6 @@ export function Timestamp({ at, age = true, stacked = false, compact = false, se
             </Box>
           : null}
       </Box>
-    </Tooltip>
+    </LazyTooltip>
   );
 }

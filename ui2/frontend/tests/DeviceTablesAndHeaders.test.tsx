@@ -11,6 +11,7 @@ import {
 } from "../src/screens/InventoryPanels";
 import { DeviceIdentityTable } from "../src/screens/DeviceShared";
 import { InventoryScreen } from "../src/screens/InventoryScreen";
+import { bodyRowsOf, cellsOf, getByAria, getSortButton } from "./fastQueries";
 import type { DeviceSummary, InventoryContext } from "../src/auth/adminApi";
 
 /**
@@ -337,10 +338,11 @@ describe("routing table headers order every filtered route, not the page (Produc
     return { destination: `198.51.100.${i}/32`, next_hop: i % 6 === 0 ? null : `192.0.2.${i}`, interface: `ethernet1/${i % 20}`, protocol: i % 2 ? "static" : "connected" };
   });
   const contexts = [{ context: "physical", vs_name: null, ha: null, interfaces: [], routes: scrambled }] as unknown as InventoryContext[];
-  const rows = () => screen.getAllByRole("row").slice(1);
-  const column = (index: number) => rows().map((row) => within(row).getAllByRole("cell")[index].textContent);
-  const header = (name: string) => screen.getByRole("button", { name });
-  const next = () => fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
+  // plain-selector forms of the row, cell, header-button and pager lookups (same elements; see fastQueries.ts)
+  const rows = () => bodyRowsOf();
+  const column = (index: number) => rows().map((row) => cellsOf(row)[index].textContent);
+  const header = (name: string) => getSortButton(document.body, name);
+  const next = () => fireEvent.click(getByAria(document.body, "Go to next page"));
   const mount = () => render(as(null, <RoutesPanel contexts={contexts} member={{ device_id: "d1", hostname: "FW-TANGO-01" }} />));
 
   it("sorts Destination over all 120 routes with numeric collation, continues on page 2, flips, and the third click restores collection order", () => {

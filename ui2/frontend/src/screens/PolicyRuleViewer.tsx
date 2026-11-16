@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, Checkbox, Chip, Stack, Table, TableBody, TableCell, TableHead, TableRow, Tooltip, Typography } from "@mui/material";
 import { relativeAge, formatTime, formatStamp, DISPLAY_TZ, DISPLAY_TZ_LABEL } from "../shell/time";
+import { LazyTooltip } from "../shell/LazyTooltip";
 import { VendorBadge } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
 import { UNKNOWN_HATCH } from "../theme/tokens";
@@ -119,8 +120,8 @@ export function SnapshotFreshnessChip({ at, now, sentence = true }: { at: string
   const fresh = snapshotFreshness(at, now);
   const warn = fresh.state === "stale" || fresh.state === "old";
   return <Box data-freshness={fresh.state} sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1, minWidth: 0 }}>
-    <Tooltip title={fresh.reason}><Chip size="small" title={at ?? undefined} label={fresh.label} variant={warn ? "filled" : "outlined"}
-      color={fresh.state === "old" ? "error" : fresh.state === "stale" ? "warning" : "default"} sx={{ fontWeight: warn ? 600 : undefined }} /></Tooltip>
+    <LazyTooltip title={fresh.reason}><Chip size="small" title={at ?? undefined} label={fresh.label} variant={warn ? "filled" : "outlined"}
+      color={fresh.state === "old" ? "error" : fresh.state === "stale" ? "warning" : "default"} sx={{ fontWeight: warn ? 600 : undefined }} /></LazyTooltip>
     {warn && sentence && <Typography role="status" variant="caption" sx={{ color: freshnessColor(fresh.state), fontWeight: 500 }}>{fresh.reason}</Typography>}
   </Box>;
 }
@@ -524,28 +525,14 @@ const line2 = { fontSize: 11, color: m3.onSurfaceVar, overflow: "hidden", textOv
 const line2Wrap = { ...line2, whiteSpace: "normal", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", lineHeight: 1.2 } as const;
 /** The token the masked view (AIView) writes in place of a value it withholds (`PolicyPrivacy`); never a real comment. */
 const WITHHELD = "Withheld in AIView";
-/**
- * The rulebase as a table of rules: one fixed-height, two-line row per rule (number + name as the anchor, FROM → TO ·
- * SERVICES · ACTION as the reading order, objects as named chips), section groups as collapsible header rows, and an
- * inline detail panel per expanded row holding everything the rule carries. Only rows inside the scroll window render.
- */
-export function PolicyRuleTable({ sections, collapsed, scrollTop, viewportHeight = 0, stickyTop = 0, toggle, objects, metadata, openObject, selected, onSelect, openRuleId, openHygiene, headerSelect, sort, now = new Date() }: {
-  sections: PolicyPage["sections"]; collapsed: Set<string>; scrollTop: number; viewportHeight?: number; stickyTop?: number; toggle: (id: string) => void;
-  objects: Map<string, PolicyObject>; metadata: PolicyMetadata; openObject: (id: string) => void;
-  selected: Set<string>; onSelect: (id: string) => void; openRuleId?: (id: string) => void; openHygiene?: (findingClass: string) => void; headerSelect?: React.ReactNode; sort?: ServerTableSortState; now?: Date;
-}) {
-  const fallbackSort = useServerTableSort();
-  const activeSort = sort ?? fallbackSort;
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [showEmpty, setShowEmpty] = useState(false);
-  const [heights, setHeights] = useState<Record<string, number>>({});
-  const onHeight = useCallback((id: string, height: number) => setHeights(current => current[id] === height ? current : { ...current, [id]: height }), []);
-  const toggleRule = (key: string) => setExpanded(current => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; });
-  const showApplication = metadata.vendor === "PAN" || sections.some(section => section.rules.some(rule => rule.application.refs.length > 0));
+/** The rule table's columns for one render context. Built once per change of its inputs (see {@link PolicyRuleTable}), so the memoised rows share them. */
+function ruleColumns({ showApplication, objects, openObject, openHygiene, now }: {
+  showApplication: boolean; objects: Map<string, PolicyObject>; openObject: (id: string) => void; openHygiene?: (findingClass: string) => void; now: Date;
+}): Column[] {
   const cell = (key: "source" | "destination" | "service" | "application") => (rule: PolicyRule, api: { open: () => void }) => <CompactCell cell={rule[key]} objects={objects} openObject={openObject} onMore={api.open} />;
   // Widths at 1440 (N4): the object columns get the room, the action and the number give it up; a short header word where
   // the full one cannot fit (`Apps`, `Permissive`), the full word as the column's accessible name and on hover.
-  const columns: Column[] = [
+  return [
     { key: "name", label: "Rule", width: showApplication ? "12%" : "14%", cell: rule => <Box sx={{ minWidth: 0 }}>
       <Box component="span" title={rule.name || undefined} sx={{ fontWeight: 600, fontSize: 12.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block", textDecoration: rule.enabled === false ? "line-through" : undefined, textDecorationColor: m3.outline }}>{rule.name || rule.uuid.slice(0, 8) || "Unnamed rule"}</Box>
       <Box sx={{ ...line2, display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -590,7 +577,66 @@ export function PolicyRuleTable({ sections, collapsed, scrollTop, viewportHeight
           {badges.length ? gap!.text : gap ? `No findings · ${gap.text}` : "No findings"}</Box>}
       </Box>;
     } },
-  ];
+  ] as Column[];
+}
+
+interface RuleRowProps {
+  rule: PolicyRule; ruleKey: string; open: boolean; checked: boolean; columns: Column[];
+  onSelect: (id: string) => void; toggleRule: (key: string) => void; keyDown: (event: React.KeyboardEvent<HTMLTableRowElement>, key: string) => void;
+}
+/**
+ * One rule row. Memoised: the table is redrawn on every scroll frame (the window moves), every selection and every clock
+ * tick, and a row's own inputs (the rule, whether it is open or ticked, the shared columns) change far less often.
+ */
+const RuleRow = memo(function RuleRow({ rule, ruleKey, open, checked, columns, onSelect, toggleRule, keyDown }: RuleRowProps) {
+  const disabled = rule.enabled === false;
+  const api = { open: () => { if (!open) toggleRule(ruleKey); } };
+  return (
+    <TableRow data-policy-rule hover tabIndex={0} aria-expanded={open} aria-label={`Rule ${rule.number}: ${rule.name || "Unnamed rule"}`}
+      onClick={event => { if (!(event.target as HTMLElement).closest("button, a, input, label")) toggleRule(ruleKey); }} onKeyDown={event => keyDown(event, ruleKey)}
+      sx={{ height: RULE_ROW_HEIGHT, cursor: "pointer", bgcolor: checked ? m3.primaryContainer : open ? m3.scLow : undefined,
+        "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: -2 },
+        "& > td": { py: 0, px: 1, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", verticalAlign: "middle", borderBottom: open ? 0 : `1px solid ${m3.outlineVar}`, opacity: disabled ? 0.55 : 1 },
+        "& > td:first-of-type": { px: 0.5, opacity: 1 } }}>
+      <TableCell padding="checkbox" sx={{ boxShadow: rule.timeStatus === "expired" ? `inset 3px 0 0 ${m3.error}` : disabled ? `inset 3px 0 0 ${m3.outlineVar}` : undefined }}>
+        <Checkbox size="small" checked={checked} inputProps={{ "aria-label": `Select rule ${rule.number}` }} onChange={() => onSelect(rule.id)} />
+      </TableCell>
+      <TableCell data-column="number" sx={{ fontVariantNumeric: "tabular-nums", color: m3.onSurfaceVar }}>
+        <Box component="span" aria-hidden sx={{ color: m3.outline, mr: 0.5, fontSize: 10 }}>{open ? "▾" : "▸"}</Box>
+        <Box component="span" sx={{ fontWeight: 700, color: m3.onSurface }}>{rule.number || "—"}</Box>
+      </TableCell>
+      {columns.map(column => <TableCell key={column.key} data-column={column.key} sx={column.key === "destination" ? { position: "relative", pl: "18px !important", "&::before": { content: '"→"', position: "absolute", left: 4, top: "50%", transform: "translateY(-50%)", color: m3.outline, fontSize: 12 } } : undefined}>{column.cell(rule, api)}</TableCell>)}
+    </TableRow>
+  );
+});
+
+/**
+ * The rulebase as a table of rules: one fixed-height, two-line row per rule (number + name as the anchor, FROM → TO ·
+ * SERVICES · ACTION as the reading order, objects as named chips), section groups as collapsible header rows, and an
+ * inline detail panel per expanded row holding everything the rule carries. Only rows inside the scroll window render.
+ */
+export function PolicyRuleTable({ sections, collapsed, scrollTop, viewportHeight = 0, stickyTop = 0, toggle, objects, metadata, openObject, selected, onSelect, openRuleId, openHygiene, headerSelect, sort, now = new Date() }: {
+  sections: PolicyPage["sections"]; collapsed: Set<string>; scrollTop: number; viewportHeight?: number; stickyTop?: number; toggle: (id: string) => void;
+  objects: Map<string, PolicyObject>; metadata: PolicyMetadata; openObject: (id: string) => void;
+  selected: Set<string>; onSelect: (id: string) => void; openRuleId?: (id: string) => void; openHygiene?: (findingClass: string) => void; headerSelect?: React.ReactNode; sort?: ServerTableSortState; now?: Date;
+}) {
+  const fallbackSort = useServerTableSort();
+  const activeSort = sort ?? fallbackSort;
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [showEmpty, setShowEmpty] = useState(false);
+  const [heights, setHeights] = useState<Record<string, number>>({});
+  const onHeight = useCallback((id: string, height: number) => setHeights(current => current[id] === height ? current : { ...current, [id]: height }), []);
+  const toggleRule = useCallback((key: string) => setExpanded(current => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; }), []);
+  // The caller passes fresh closures on every render; the rows get these stable ones, which call the newest.
+  const latest = useRef({ openObject, openHygiene, onSelect });
+  latest.current = { openObject, openHygiene, onSelect };
+  const stable = useMemo(() => ({
+    openObject: (id: string) => latest.current.openObject(id),
+    openHygiene: openHygiene ? (findingClass: string) => latest.current.openHygiene?.(findingClass) : undefined,
+    onSelect: (id: string) => latest.current.onSelect(id),
+  }), [Boolean(openHygiene)]);
+  const showApplication = metadata.vendor === "PAN" || sections.some(section => section.rules.some(rule => rule.application.refs.length > 0));
+  const columns = useMemo(() => ruleColumns({ showApplication, objects, openObject: stable.openObject, openHygiene: stable.openHygiene, now }), [showApplication, objects, stable, now]);
   const span = columns.length + 2;
   const viewport = viewportHeight > 0 ? viewportHeight : VIEWPORT_FALLBACK;
   const start = Math.max(0, scrollTop - OVERSCAN), end = scrollTop + viewport + OVERSCAN;
@@ -602,14 +648,14 @@ export function PolicyRuleTable({ sections, collapsed, scrollTop, viewportHeight
     else rows.push(render());
     offset += size;
   };
-  const keyDown = (event: React.KeyboardEvent<HTMLTableRowElement>, key: string) => {
+  const keyDown = useCallback((event: React.KeyboardEvent<HTMLTableRowElement>, key: string) => {
     if (event.target !== event.currentTarget) return;
     if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleRule(key); return; }
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
     const all = [...(event.currentTarget.closest("tbody")?.querySelectorAll<HTMLElement>("[data-policy-rule]") ?? [])];
     const next = all[all.indexOf(event.currentTarget) + (event.key === "ArrowDown" ? 1 : -1)];
     if (next) { event.preventDefault(); next.focus(); }
-  };
+  }, [toggleRule]);
   const emptySections = sections.filter(section => section.total === 0);
   if (emptySections.length) append(() => <TableRow key="empty-sections" data-policy-empty-sections sx={{ height: SECTION_ROW_HEIGHT }}>
     <TableCell colSpan={span} sx={{ py: 0, bgcolor: m3.sc, borderBottom: `1px solid ${m3.outlineVar}` }}>
@@ -639,23 +685,8 @@ export function PolicyRuleTable({ sections, collapsed, scrollTop, viewportHeight
     </TableRow>, SECTION_ROW_HEIGHT);
     if (collapsed.has(section.id)) continue;
     for (const rule of section.rules) {
-      const key = `${section.id}:${rule.id}`, open = expanded.has(key), checked = selected.has(rule.id), disabled = rule.enabled === false;
-      const api = { open: () => { if (!open) toggleRule(key); } };
-      append(() => <TableRow key={key} data-policy-rule hover tabIndex={0} aria-expanded={open} aria-label={`Rule ${rule.number}: ${rule.name || "Unnamed rule"}`}
-        onClick={event => { if (!(event.target as HTMLElement).closest("button, a, input, label")) toggleRule(key); }} onKeyDown={event => keyDown(event, key)}
-        sx={{ height: RULE_ROW_HEIGHT, cursor: "pointer", bgcolor: checked ? m3.primaryContainer : open ? m3.scLow : undefined,
-          "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: -2 },
-          "& > td": { py: 0, px: 1, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", verticalAlign: "middle", borderBottom: open ? 0 : `1px solid ${m3.outlineVar}`, opacity: disabled ? 0.55 : 1 },
-          "& > td:first-of-type": { px: 0.5, opacity: 1 } }}>
-        <TableCell padding="checkbox" sx={{ boxShadow: rule.timeStatus === "expired" ? `inset 3px 0 0 ${m3.error}` : disabled ? `inset 3px 0 0 ${m3.outlineVar}` : undefined }}>
-          <Checkbox size="small" checked={checked} inputProps={{ "aria-label": `Select rule ${rule.number}` }} onChange={() => onSelect(rule.id)} />
-        </TableCell>
-        <TableCell data-column="number" sx={{ fontVariantNumeric: "tabular-nums", color: m3.onSurfaceVar }}>
-          <Box component="span" aria-hidden sx={{ color: m3.outline, mr: 0.5, fontSize: 10 }}>{open ? "▾" : "▸"}</Box>
-          <Box component="span" sx={{ fontWeight: 700, color: m3.onSurface }}>{rule.number || "—"}</Box>
-        </TableCell>
-        {columns.map(column => <TableCell key={column.key} data-column={column.key} sx={column.key === "destination" ? { position: "relative", pl: "18px !important", "&::before": { content: '"→"', position: "absolute", left: 4, top: "50%", transform: "translateY(-50%)", color: m3.outline, fontSize: 12 } } : undefined}>{column.cell(rule, api)}</TableCell>)}
-      </TableRow>, RULE_ROW_HEIGHT);
+      const key = `${section.id}:${rule.id}`, open = expanded.has(key), checked = selected.has(rule.id);
+      append(() => <RuleRow key={key} rule={rule} ruleKey={key} open={open} checked={checked} columns={columns} onSelect={stable.onSelect} toggleRule={toggleRule} keyDown={keyDown} />, RULE_ROW_HEIGHT);
       if (open) append(() => <MeasuredRow key={`${key}:detail`} id={key} onHeight={onHeight}>
         <TableCell colSpan={span} sx={{ p: 0, bgcolor: m3.scLow, borderBottom: `1px solid ${m3.outlineVar}` }}>
           <Box role="region" aria-label={`Rule ${rule.number} details`} sx={{ p: 2, borderLeft: `3px solid ${rule.timeStatus === "expired" ? m3.error : m3.primary}`, whiteSpace: "normal", overflowWrap: "anywhere" }}>

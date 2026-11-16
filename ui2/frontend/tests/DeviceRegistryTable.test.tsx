@@ -4,6 +4,7 @@ import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { DeviceManagementPane, registryMatches } from "../src/screens/DeviceRegistryPanel";
 import type { DeviceSummary } from "../src/auth/adminApi";
+import { bodyRowsOf, getByAria, getSortButton } from "./fastQueries";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -18,7 +19,7 @@ function mount(devices: DeviceSummary[]) {
   return render(<ThemeProvider theme={m3Theme}><DeviceManagementPane /></ThemeProvider>);
 }
 const table = () => screen.getByRole("table", { name: "Device registry" });
-const hostnames = () => within(table()).getAllByRole("row").slice(1).map((row) => row.textContent?.match(/FW-ALPHA-\d{3}/)?.[0]);
+const hostnames = () => bodyRowsOf(table()).map((row) => row.textContent?.match(/FW-ALPHA-\d{3}/)?.[0]);
 
 const FLEET = [
   device(1), device(2), device(3), device(4, { enrollment_state: "DRAFT", hostname: null, inventory_collected_at: null }),
@@ -130,10 +131,10 @@ describe("column headers order the whole filtered registry, not the page (Produc
       inventory_collected_at: n % 5 === 0 ? null : new Date(Date.UTC(2026, 9, 1) + ((n * 37) % 120) * 3_600_000).toISOString(),
     });
   });
-  const rows = () => within(table()).getAllByRole("row").slice(1);
+  const rows = () => bodyRowsOf(table());
   const names = () => rows().map((row) => row.textContent?.match(/FW-ALPHA-\d+|UNKNOWN hostname/)?.[0]);
-  const header = (name: string) => within(table()).getByRole("button", { name });
-  const next = () => fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
+  const header = (name: string) => getSortButton(table(), name);
+  const next = () => fireEvent.click(getByAria(document.body, "Go to next page"));
 
   it("sorts DEVICE / HOSTNAME over all 120 rows with numeric collation, continues on page 2, flips, and the third click restores registry order", async () => {
     mount(estate);

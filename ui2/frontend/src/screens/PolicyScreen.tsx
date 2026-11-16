@@ -5,6 +5,7 @@ import { ScreenRoot, ScreenHeader, EmptyPanel } from "../shell/ScreenLayout";
 import { PRODUCT_NAME } from "../brand/product";
 import { Ts, VendorBadge } from "../shell/States";
 import { Icon } from "../shell/Icon";
+import { LazyTooltip } from "../shell/LazyTooltip";
 import { relativeAge } from "../shell/time";
 import { useServerTableSort } from "../shell/tableSort";
 import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
@@ -179,14 +180,16 @@ function JobMenuItem({ disabled, children, ...props }: MenuItemProps) {
 /** The per-source / per-domain collection actions behind one compact trigger, so they do not crowd the tree. */
 function CollectMenu({ name, disabled, onCollect }: { name: string; disabled: boolean; onCollect: (mode: PolicyCollectionMode) => void }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  // Built on the first open: the tree carries one of these per source and per domain.
+  const [built, setBuilt] = useState(false);
   const run = (mode: PolicyCollectionMode) => { setAnchor(null); onCollect(mode); };
   return <>
     <IconButton size="small" aria-label={`Collection actions for ${name}`} aria-haspopup="menu" aria-expanded={anchor ? true : undefined}
-      onClick={event => setAnchor(event.currentTarget)} sx={{ ml: "auto", flexShrink: 0 }}><Icon name="more" size={18} /></IconButton>
-    <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} MenuListProps={{ "aria-label": `Collection actions for ${name}` }}>
+      onClick={event => { setBuilt(true); setAnchor(event.currentTarget); }} sx={{ ml: "auto", flexShrink: 0 }}><Icon name="more" size={18} /></IconButton>
+    {built && <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} MenuListProps={{ "aria-label": `Collection actions for ${name}` }}>
       <JobMenuItem disabled={disabled} onClick={() => run("CHANGED_ONLY")}>Collect changes</JobMenuItem>
       <JobMenuItem disabled={disabled} onClick={() => run("FULL")}>Full refresh (incl. hit counts)</JobMenuItem>
-    </Menu>
+    </Menu>}
   </>;
 }
 /** Batch actions for the ticked policies behind one trigger; every action stays reachable, none takes a row of the narrow tree pane. */
@@ -307,12 +310,12 @@ function ContainerSummaryTable({ rows, sourceCount, now, open }: { rows: Contain
               <TableCell>{row.policyIds.length}</TableCell>
               <TableCell>{row.rules ?? "UNKNOWN"}</TableCell>
               <TableCell>{row.gateways.length === 0 ? "Unassigned"
-                : <Tooltip title={row.gateways.join(", ")}><span>{row.gateways.slice(0, GATEWAYS_SHOWN).join(", ")}{row.gateways.length > GATEWAYS_SHOWN ? ` +${row.gateways.length - GATEWAYS_SHOWN} more` : ""}</span></Tooltip>}</TableCell>
+                : <LazyTooltip title={row.gateways.join(", ")}><span>{row.gateways.slice(0, GATEWAYS_SHOWN).join(", ")}{row.gateways.length > GATEWAYS_SHOWN ? ` +${row.gateways.length - GATEWAYS_SHOWN} more` : ""}</span></LazyTooltip>}</TableCell>
               {/* Installation as a column with its status (UI review 2026-11-05, C2): what the management server reports per
                   target, in one line; a target it made no claim about is "not reported", never a fault of the target. */}
               <TableCell>{(() => { const status = installationSummary(row.vendor, row.syncStates ?? []);
-                return <Tooltip title={status.reason}><Box component="span" data-installation={status.tone}
-                  sx={{ color: status.tone === "warn" ? m3.warning : status.tone === "good" ? m3.success : m3.onSurfaceVar, fontWeight: status.tone === "warn" ? 600 : undefined }}>{status.text}</Box></Tooltip>; })()}</TableCell>
+                return <LazyTooltip title={status.reason}><Box component="span" data-installation={status.tone}
+                  sx={{ color: status.tone === "warn" ? m3.warning : status.tone === "good" ? m3.success : m3.onSurfaceVar, fontWeight: status.tone === "warn" ? 600 : undefined }}>{status.text}</Box></LazyTooltip>; })()}</TableCell>
               {/* The age in freshness ink: a snapshot the refresh has not touched for a day, or a week, is visible before it is opened. */}
               <TableCell title={row.collectedAt ? `${row.collectedAt} · ${fresh.reason}` : undefined}>
                 <Box component="span" data-freshness={fresh.state} sx={{ color: freshnessColor(fresh.state), fontWeight: fresh.state === "old" ? 600 : undefined }}>

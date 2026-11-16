@@ -283,12 +283,15 @@ export function CapabilityMenu({
   readonly items: readonly CapabilityMenuItem[];
 }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  // The Menu is built on the first open: a table row carries one of these, and a closed Menu is several styled layers a
+  // 50-row page does not need until somebody asks for one.
+  const [built, setBuilt] = useState(false);
   return (
     <>
-      <IconButton aria-label={ariaLabel} onClick={(e) => setAnchor(e.currentTarget)} sx={{ color: m3.onSurfaceVar }}>
+      <IconButton aria-label={ariaLabel} onClick={(e) => { setBuilt(true); setAnchor(e.currentTarget); }} sx={{ color: m3.onSurfaceVar }}>
         <Icon name="more" size={20} />
       </IconButton>
-      <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)}>
+      {built && <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)}>
         {items.flatMap((item) => {
           const entry = (
             <MenuItem
@@ -309,7 +312,7 @@ export function CapabilityMenu({
           );
           return item.dividerBefore ? [<Divider key={`${item.label}-divider`} sx={{ my: 1 }} />, entry] : [entry];
         })}
-      </Menu>
+      </Menu>}
     </>
   );
 }

@@ -4,7 +4,7 @@ import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { PolicyScreen } from "../src/screens/PolicyScreen";
 import { reportPolicyLoadError } from "../src/screens/PolicyRuleViewer";
-import { expandByText, findButtonByText, findByAria, getByAria } from "./fastQueries";
+import { expandByText, findButtonByText, findByAria, getButtonsMatching, getByAria, getColumnHeader } from "./fastQueries";
 import responses from "./fixtures/policy-live/aiview-responses.json";
 
 const page = JSON.parse(responses["/api/v2/policy/policies/{id}?page=0&q="]);
@@ -43,10 +43,11 @@ it("renders the masked live policy page, rule details and empty history without 
   await navigate();
   const rulebase = await findByAria("Policy rulebase");
   expect(rulebase.querySelectorAll("[data-policy-rule]").length).toBeGreaterThan(0);
-  const group = within(rulebase).getByRole("button", { name: /Device-group post-rules/ });
+  const [group, ...otherGroups] = getButtonsMatching(rulebase, /Device-group post-rules/);
+  expect(otherGroups).toHaveLength(0);
   expect(group).toHaveAttribute("aria-expanded", "true"); expect(group).toHaveTextContent("866");
   expect(within(rulebase).getByText("5 empty sections")).toBeInTheDocument();
-  expect(within(rulebase).getByRole("columnheader", { name: "Application" })).toHaveTextContent("Apps");
+  expect(getColumnHeader(rulebase, "Application")).toHaveTextContent("Apps");
   expect(screen.getByText("1–200 of 866 rules")).toBeInTheDocument();
   expect(container.textContent).not.toMatch(/could not be loaded/i);
   const row = getByAria(rulebase, `Rule ${rule.number}: ${rule.name}`);
@@ -80,7 +81,7 @@ it.each([
     fireEvent.click(getByAria(rulebase, `Rule ${rule.number}: ${rule.name}`));
     const drawer = getByAria(rulebase, `Rule ${rule.number} details`);
     fireEvent.click(within(drawer).getByText(scope === "object" ? "Objects" : "Rule history", { selector: "button" }));
-    if (scope === "object") fireEvent.click(within(drawer).getAllByRole("button", { name: new RegExp(`^${page.objects[0].name}`) })[0]);
+    if (scope === "object") fireEvent.click(getButtonsMatching(drawer, new RegExp(`^${page.objects[0].name}`))[0]);
   }
   const error = await screen.findByText(String(message));
   const code = status === 200 ? "INVALID_RESPONSE_SHAPE" : "HTTP_503";

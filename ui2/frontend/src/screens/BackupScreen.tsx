@@ -1,13 +1,13 @@
 import { useGate } from "../shell/JobWindow";
 import { PRODUCT_NAME } from "../brand/product";
-import { BackupAttempts, LatestAttemptCell, latestAttemptTime, useLatestBackupAttempts } from "./BackupAttempts";
+import { BackupAttempts, LatestAttemptCell, latestAttemptTime, useLatestBackupAttempts, type LatestAttempt } from "./BackupAttempts";
 import { DeviationChip, ValidationChip, deviationState } from "./backupWords";
 import { BackupStoreQuotaCard } from "./BackupStoreQuotaCard";
 import { BackupDeviationCard, MajorDeviationDrawer, majorDeviceIds } from "./BackupDeviationCard";
 import { bytesTitle, formatBytes } from "../shell/bytes";
 import { urlParam } from "../shell/urlParams";
 import { relativeAge } from "../shell/time";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
@@ -59,7 +59,7 @@ import {
 } from "../auth/adminApi";
 import { ScreenHeader, MetricGrid, MetricCard, ScreenRoot } from "../shell/ScreenLayout";
 import { backupFleetCounts, isBackupFleetRow, retentionNote, type BackupFleetCounts } from "./backupCounts";
-import { largeBackupFlag, largeBackupTitle, vendorMedianSizes } from "./backupSize";
+import { largeBackupFlag, largeBackupTitle, vendorMedianSizes, type LargeBackupFlag } from "./backupSize";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { PLANE_OPERATIONS, ROLE_LOCK_LABEL, ROLE_REFUSAL, useRoleAllows } from "../shell/actionAccess";
 import { Icon } from "../shell/Icon";
@@ -1052,16 +1052,21 @@ function GateMenuItem({ plane, deviceJob = false, disabled = false, note, destru
 
 function RowMenu({ name, children }: { readonly name: string; readonly children: ReactNode }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  // The Menu (a Popover, a Modal, a Paper and a list: several styled layers) is built on the first open. Until then a
+  // row carries only its trigger, so a 50-row page does not pay for 50 closed menus.
+  const [built, setBuilt] = useState(false);
   return (
     <>
       <IconButton size="small" aria-label={`Actions for ${name}`} aria-haspopup="menu" aria-expanded={anchor ? true : undefined}
-        onClick={(e) => setAnchor(e.currentTarget)} sx={{ color: m3.onSurfaceVar }}>
+        onClick={(e) => { setBuilt(true); setAnchor(e.currentTarget); }} sx={{ color: m3.onSurfaceVar }}>
         <Icon name="more" size={20} />
       </IconButton>
-      <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)} onClick={() => setAnchor(null)}
-        MenuListProps={{ "aria-label": `Actions for ${name}` }}>
-        {children}
-      </Menu>
+      {built && (
+        <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)} onClick={() => setAnchor(null)}
+          MenuListProps={{ "aria-label": `Actions for ${name}` }}>
+          {children}
+        </Menu>
+      )}
     </>
   );
 }
@@ -1105,6 +1110,119 @@ const FLEET_SORT: ReadonlyArray<SortColumn<FleetRow>> = [
   { key: "attempt", value: (r) => r.attemptAt, kind: "time" },
 ];
 const TIME_WORDS = { asc: "oldest first", desc: "newest first" } as const;
+
+/** What a row can ask of its table: one stable object, so a row's props stay equal and a memoised row is not rendered again by a sort, a page step or the filter box. */
+interface FleetRowActions {
+  readonly toggle: (summary: DeviceSummary, enabled: boolean) => void;
+  readonly onBackupNow: (d: BackupDeviceItem, type: "standard" | "snapshot" | "mds_export") => void;
+  readonly onHistory: (d: BackupDeviceItem) => void;
+  readonly onContents: (d: BackupDeviceItem) => void;
+  readonly onCompare: (d: BackupDeviceItem) => void;
+  readonly onDownload: (d: BackupDeviceItem) => void;
+  readonly onDeleteOrphan: (d: BackupDeviceItem) => void;
+}
+
+interface FleetTableRowProps {
+  readonly summary: DeviceSummary | null;
+  readonly item: BackupDeviceItem | null;
+  readonly id: string;
+  readonly latest: LatestAttempt;
+  readonly large: LargeBackupFlag | null;
+  readonly roleAllowed: boolean;
+  readonly comparisonRun: boolean;
+  /** A backup is being requested for this device (the menu entries are disabled meanwhile). */
+  readonly busy: boolean;
+  /** The target switch of this device is being changed. */
+  readonly switchBusy: boolean;
+  /** A baseline archive is set for this device (the History entry carries a star). */
+  readonly baselined: boolean;
+  readonly actions: FleetRowActions;
+}
+
+/**
+ * One fleet row. Memoised on plain values and one stable actions object: a row costs several dozen MUI elements, and the
+ * table re-renders on every header click, page step, filter keystroke and attempt read, while a row's own inputs
+ * change only when its device, archive, attempt or busy state does.
+ */
+const FleetTableRow = memo(function FleetTableRow({ summary, item, id, latest, large, roleAllowed, comparisonRun, busy, switchBusy, baselined, actions }: FleetTableRowProps) {
+  const name = summary?.hostname ?? item?.name ?? id.slice(0, 8);
+  const vendor = summary?.vendor_hint ?? item?.vendor;
+  const target = Boolean(summary?.backup_target);
+  const modelVersion = modelVersionText(summary);
+  return (
+    <TableRow hover>
+      <TableCell>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <VendorBadge vendor={vendor} size={24} />
+          <Typography title={name} sx={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</Typography>
+        </Box>
+      </TableCell>
+      <TableCell sx={{ color: m3.onSurfaceVar, fontSize: 12 }} title={modelVersion}>{modelVersion}</TableCell>
+      <TableCell sx={{ fontFamily: MONO, fontSize: 12, color: m3.onSurfaceVar }}
+        title={summary?.cluster_member_ref ?? "standalone"}>{summary?.cluster_member_ref ?? "standalone"}</TableCell>
+      <TableCell align="center">
+        {summary ? (
+          roleAllowed ? (
+            <Switch size="small" checked={target} disabled={switchBusy}
+              onChange={(e) => actions.toggle(summary, e.target.checked)}
+              inputProps={{ "aria-label": `Backup target ${name}` }} />
+          ) : (
+            // A role that cannot change the target sees the fact as a read-only pill, not a switch that looks live.
+            <Box component="span" role="img" aria-label={`Backup target ${name}: ${target ? "on" : "off"}, locked for your role`}
+              title={`Backup target: ${target ? "on" : "off"}. Locked · ${ROLE_LOCK_LABEL}`}>
+              {/* A neutral fact, not an achievement (R11): the pill is grey either way; the word carries the state. */}
+              <StatusChip tone="neutral" label={target ? "Target · locked" : "Not a target · locked"} dense />
+            </Box>
+          )
+        ) : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>Not a backup target</Typography>}
+      </TableCell>
+      <TableCell sx={{ fontSize: 12.5 }}>
+        {item ? <Stamp at={item.lastBackupTime} compact />
+          : target ? <StatusChip tone="warn" label="No archive" dense />
+          : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>No archive</Typography>}
+      </TableCell>
+      <TableCell align="right" sx={{ fontSize: 12.5 }} title={item ? bytesTitle(item.sizeBytes) : undefined}>
+        {item ? (
+          <Box component="span" sx={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 0.75, maxWidth: "100%" }}>
+            {large ? <StatusChip tone="warn" label="Large" dense title={largeBackupTitle(large)} /> : null}
+            <Box component="span">{formatBytes(item.sizeBytes)}</Box>
+          </Box>
+        ) : ""}
+      </TableCell>
+      <TableCell>{item ? <ValidationChip level={item.validationLevel} withLevel /> : null}</TableCell>
+      <TableCell>{item ? <DeviationChip state={item.deviationState} comparisonRun={comparisonRun} /> : null}</TableCell>
+      <TableCell sx={{ fontSize: 12.5 }}><LatestAttemptCell latest={latest} /></TableCell>
+      <TableCell align="right">
+        <RowMenu name={name}>
+          {item || target ? (
+            <GateMenuItem plane={PLANE_OPERATIONS} deviceJob disabled={busy || !target} note="Not a backup target"
+              title="Take a configuration and state backup of this device now (needs it switched on as a backup target)"
+              onClick={() => actions.onBackupNow(item ?? blankItem(id, name, vendor), "standard")}>Backup Now</GateMenuItem>
+          ) : null}
+          {vendor === "check_point" && summary?.role === "management_server" && target ? (
+            <GateMenuItem plane={PLANE_OPERATIONS} deviceJob disabled={busy}
+              title="Multi-Domain Server export: one mds_backup of the whole server and every domain. Locks the MDS database while it runs; after an operator-watched export, used as the daily 02:00 GMT+3 backup."
+              onClick={() => actions.onBackupNow(item ?? blankItem(id, name, vendor, "management_server"), "mds_export")}>MDS export</GateMenuItem>
+          ) : null}
+          {vendor === "check_point" && item ? (
+            <GateMenuItem plane={PLANE_OPERATIONS} deviceJob disabled={busy}
+              title="Check Point only: a full Gaia OS snapshot, in addition to the configuration backup. Palo Alto has no equivalent here."
+              onClick={() => actions.onBackupNow(item, "snapshot")}>Snapshot</GateMenuItem>
+          ) : null}
+          <GateMenuItem title={baselined ? "Every backup of this device; ★ = a baseline archive is set for comparison" : "Every backup of this device"}
+            onClick={() => actions.onHistory(item ?? blankItem(id, name, vendor))}>{`History${baselined ? " ★" : ""}`}</GateMenuItem>
+          <GateMenuItem disabled={!item?.artefactId} note="No archive" onClick={() => item && actions.onContents(item)}>Contents</GateMenuItem>
+          <GateMenuItem disabled={!item?.artefactId} note="No archive" onClick={() => item && actions.onCompare(item)}>Compare</GateMenuItem>
+          <GateMenuItem disabled={!item?.artefactId} note="No archive" onClick={() => item && actions.onDownload(item)}>Download</GateMenuItem>
+          {!summary && item ? (
+            <GateMenuItem destructive title={`This device is no longer in ${PRODUCT_NAME}: remove its stored backups (asks for a reason; audited)`}
+              onClick={() => actions.onDeleteOrphan(item)}>Delete</GateMenuItem>
+          ) : null}
+        </RowMenu>
+      </TableCell>
+    </TableRow>
+  );
+});
 
 /**
  * Backups (Product Owner, 2026-09-22; merged per the UI review 2026-09-23; one-line rows per the UI review 2026-10-18):
@@ -1176,6 +1294,19 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
     }
   };
 
+  // The row actions as one stable object (see FleetRowActions): each call goes to the newest handlers of this render.
+  const latestHandlers = useRef({ toggle, onBackupNow, onHistory, onContents, onCompare, onDownload, onDeleteOrphan });
+  latestHandlers.current = { toggle, onBackupNow, onHistory, onContents, onCompare, onDownload, onDeleteOrphan };
+  const actions = useMemo<FleetRowActions>(() => ({
+    toggle: (summary, enabled) => void latestHandlers.current.toggle(summary, enabled),
+    onBackupNow: (d, type) => latestHandlers.current.onBackupNow(d, type),
+    onHistory: (d) => latestHandlers.current.onHistory(d),
+    onContents: (d) => latestHandlers.current.onContents(d),
+    onCompare: (d) => latestHandlers.current.onCompare(d),
+    onDownload: (d) => latestHandlers.current.onDownload(d),
+    onDeleteOrphan: (d) => latestHandlers.current.onDeleteOrphan(d),
+  }), []);
+
   const byId = new Map(fleet.map((f) => [f.deviceId, f] as const));
   // Every enrolled device neXus can back up (and any enrolled target), plus any device the store holds an archive
   // for that is not in that list.
@@ -1192,8 +1323,11 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
   const targetCount = counts.targets;
   const withoutArchive = counts.targetsWithoutArchive;
   // Each device's latest archive against its vendor's median (backupSize.ts): the whole store listing, not the page.
-  const medians = vendorMedianSizes(fleet);
-  const largeById = new Map(fleet.flatMap((f) => { const flag = largeBackupFlag(f, medians); return flag ? [[f.deviceId, flag] as const] : []; }));
+  // (memoised on the store listing: a flag is an object, and a fresh one per render would defeat the memoised rows)
+  const largeById = useMemo(() => {
+    const medians = vendorMedianSizes(fleet);
+    return new Map(fleet.flatMap((f) => { const flag = largeBackupFlag(f, medians); return flag ? [[f.deviceId, flag] as const] : []; }));
+  }, [fleet]);
   const q = search.trim().toLowerCase();
   // The "Large backups" chip shows the largest first unless a header was clicked; the other chips keep hostname order.
   const order: TableSort | null = sort.sort ?? (show === "large" ? { key: "size", direction: "desc" } : null);
@@ -1278,87 +1412,11 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
               </TableRow>
             </TableHead>
             <TableBody>
-              {pageRows.map(({ summary, item, id }) => {
-                const name = summary?.hostname ?? item?.name ?? id.slice(0, 8);
-                const vendor = summary?.vendor_hint ?? item?.vendor;
-                const busy = busyDeviceId === id;
-                const target = Boolean(summary?.backup_target);
-                const large = largeById.get(id) ?? null;
-                const modelVersion = modelVersionText(summary);
-                return (
-                  <TableRow key={id} hover>
-                    <TableCell>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <VendorBadge vendor={vendor} size={24} />
-                        <Typography title={name} sx={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={{ color: m3.onSurfaceVar, fontSize: 12 }} title={modelVersion}>{modelVersion}</TableCell>
-                    <TableCell sx={{ fontFamily: MONO, fontSize: 12, color: m3.onSurfaceVar }}
-                      title={summary?.cluster_member_ref ?? "standalone"}>{summary?.cluster_member_ref ?? "standalone"}</TableCell>
-                    <TableCell align="center">
-                      {summary ? (
-                        roleAllowed ? (
-                          <Switch size="small" checked={target} disabled={busyId === id}
-                            onChange={(e) => void toggle(summary, e.target.checked)}
-                            inputProps={{ "aria-label": `Backup target ${name}` }} />
-                        ) : (
-                          // A role that cannot change the target sees the fact as a read-only pill, not a switch that looks live.
-                          <Box component="span" role="img" aria-label={`Backup target ${name}: ${target ? "on" : "off"}, locked for your role`}
-                            title={`Backup target: ${target ? "on" : "off"}. Locked · ${ROLE_LOCK_LABEL}`}>
-                            {/* A neutral fact, not an achievement (R11): the pill is grey either way; the word carries the state. */}
-                            <StatusChip tone="neutral" label={target ? "Target · locked" : "Not a target · locked"} dense />
-                          </Box>
-                        )
-                      ) : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>Not a backup target</Typography>}
-                    </TableCell>
-                    <TableCell sx={{ fontSize: 12.5 }}>
-                      {item ? <Stamp at={item.lastBackupTime} compact />
-                        : target ? <StatusChip tone="warn" label="No archive" dense />
-                        : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>No archive</Typography>}
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontSize: 12.5 }} title={item ? bytesTitle(item.sizeBytes) : undefined}>
-                      {item ? (
-                        <Box component="span" sx={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 0.75, maxWidth: "100%" }}>
-                          {large ? <StatusChip tone="warn" label="Large" dense title={largeBackupTitle(large)} /> : null}
-                          <Box component="span">{formatBytes(item.sizeBytes)}</Box>
-                        </Box>
-                      ) : ""}
-                    </TableCell>
-                    <TableCell>{item ? <ValidationChip level={item.validationLevel} withLevel /> : null}</TableCell>
-                    <TableCell>{item ? <DeviationChip state={item.deviationState} comparisonRun={comparisonRun} /> : null}</TableCell>
-                    <TableCell sx={{ fontSize: 12.5 }}><LatestAttemptCell latest={attempts.get(id) ?? "loading"} /></TableCell>
-                    <TableCell align="right">
-                      <RowMenu name={name}>
-                        {item || target ? (
-                          <GateMenuItem plane={PLANE_OPERATIONS} deviceJob disabled={busy || !target} note="Not a backup target"
-                            title="Take a configuration and state backup of this device now (needs it switched on as a backup target)"
-                            onClick={() => onBackupNow(item ?? blankItem(id, name, vendor), "standard")}>Backup Now</GateMenuItem>
-                        ) : null}
-                        {vendor === "check_point" && summary?.role === "management_server" && target ? (
-                          <GateMenuItem plane={PLANE_OPERATIONS} deviceJob disabled={busy}
-                            title="Multi-Domain Server export: one mds_backup of the whole server and every domain. Locks the MDS database while it runs; after an operator-watched export, used as the daily 02:00 GMT+3 backup."
-                            onClick={() => onBackupNow(item ?? blankItem(id, name, vendor, "management_server"), "mds_export")}>MDS export</GateMenuItem>
-                        ) : null}
-                        {vendor === "check_point" && item ? (
-                          <GateMenuItem plane={PLANE_OPERATIONS} deviceJob disabled={busy}
-                            title="Check Point only: a full Gaia OS snapshot, in addition to the configuration backup. Palo Alto has no equivalent here."
-                            onClick={() => onBackupNow(item, "snapshot")}>Snapshot</GateMenuItem>
-                        ) : null}
-                        <GateMenuItem title={baselines[id] ? "Every backup of this device; ★ = a baseline archive is set for comparison" : "Every backup of this device"}
-                          onClick={() => onHistory(item ?? blankItem(id, name, vendor))}>{`History${baselines[id] ? " ★" : ""}`}</GateMenuItem>
-                        <GateMenuItem disabled={!item?.artefactId} note="No archive" onClick={() => item && onContents(item)}>Contents</GateMenuItem>
-                        <GateMenuItem disabled={!item?.artefactId} note="No archive" onClick={() => item && onCompare(item)}>Compare</GateMenuItem>
-                        <GateMenuItem disabled={!item?.artefactId} note="No archive" onClick={() => item && onDownload(item)}>Download</GateMenuItem>
-                        {!summary && item ? (
-                          <GateMenuItem destructive title={`This device is no longer in ${PRODUCT_NAME}: remove its stored backups (asks for a reason; audited)`}
-                            onClick={() => onDeleteOrphan(item)}>Delete</GateMenuItem>
-                        ) : null}
-                      </RowMenu>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {pageRows.map(({ summary, item, id }) => (
+                <FleetTableRow key={id} summary={summary} item={item} id={id} latest={attempts.get(id) ?? "loading"} large={largeById.get(id) ?? null}
+                  roleAllowed={roleAllowed} comparisonRun={comparisonRun} busy={busyDeviceId === id} switchBusy={busyId === id}
+                  baselined={Boolean(baselines[id])} actions={actions} />
+              ))}
             </TableBody>
           </Table>
         </TableContainer>
