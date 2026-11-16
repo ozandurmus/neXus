@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-15T22:06:30Z
+Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T04:33:58Z
 
 ## Now
 - NXS-LOCAL-0391 — Release queue: ASA readiness, integration gate, CP advisories, zone matrix, ACI step 1, API latency, Backups batch (in_progress)
@@ -18,7 +18,6 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-15T22:06:30Z
 - P1/planned recertification_council
 - P1/planned recovery_offhost_key_custody
 - P1/planned spring_boot_4_spring_security_migration
-- P1/planned ui2_networkpolicy_in_cluster_db_reach
 - P2/in_progress backup_screen_backbox_model
 - P2/in_progress lifecycle_vendor_catalog
 - P2/in_progress manifest_drift_service_worker_configuration_policy
