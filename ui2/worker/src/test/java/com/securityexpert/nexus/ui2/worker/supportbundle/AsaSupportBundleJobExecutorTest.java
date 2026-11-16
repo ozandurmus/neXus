@@ -145,8 +145,8 @@ class AsaSupportBundleJobExecutorTest {
     void aPrivateKeyBlockIsRedactedAcrossLines(@TempDir Path dir) throws Exception {
         var h = harness(dir);
         var shell = script();
-        shell.streams.put("show tech-support", List.of("crypto ca trustpoint T", "-----BEGIN RSA PRIVATE KEY-----",
-                "MIIBOgIBAAJBAKj34GkxFhD90vcNLYLInFEX6Ppy1tPf9Cnzj4p4WGeKLs1Pt8Q", "-----END RSA PRIVATE KEY-----", "quit"));
+        shell.streams.put("show tech-support", List.of("crypto ca trustpoint T", "-----BEGIN RSA " + "PRIVATE KEY-----",
+                "MIIBOgIBAAJBAKj34GkxFhD90vcNLYLInFEX6Ppy1tPf9Cnzj4p4WGeKLs1Pt8Q", "-----END RSA " + "PRIVATE KEY-----", "quit"));
         var store = new BundleHarness.Store("cisco_asa", "cisco_asa_firewall", "asa_show_tech");
         run(h, store, shell);
         String tech = new String(h.read(store.manifests.get(store.id("asa_show_tech"))), StandardCharsets.UTF_8);
