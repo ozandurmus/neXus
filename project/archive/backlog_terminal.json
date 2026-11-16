@@ -1224,6 +1224,15 @@
       "priority": "P2",
       "target": "Design in progress 2026-11-14",
       "note": ""
+    },
+    {
+      "id": "failover_four_eyes_enforcement_verify_before_scc_handover",
+      "category": "failover",
+      "title": "Verify failover four-eyes enforcement before the SCC handover",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "FailoverAuthorizationService / FourEyesValidationRule",
+      "note": "see docs/history/backlog/failover_four_eyes_enforcement_verify_before_scc_handover.md"
     }
   ]
 }

@@ -452,15 +452,6 @@
       "note": ""
     },
     {
-      "id": "failover_four_eyes_enforcement_verify_before_scc_handover",
-      "category": "failover",
-      "title": "Verify failover four-eyes enforcement before the SCC handover",
-      "status": "planned",
-      "priority": "P1",
-      "target": "FailoverAuthorizationService / FourEyesValidationRule",
-      "note": ""
-    },
-    {
       "id": "device_software_version_history",
       "category": "inventory",
       "title": "Device software version history: when was each device upgraded, from our own observations",
@@ -468,6 +459,15 @@
       "priority": "P1",
       "target": "V243 device_software_version_history / SoftwareHistoryController / Lifecycle Recent upgrades",
       "note": ""
+    },
+    {
+      "id": "failover_approver_role_recheck_at_worker",
+      "category": "failover",
+      "title": "Re-check approver and initiator roles at worker admission; a disabled or demoted approver's approval stays valid today",
+      "status": "planned",
+      "priority": "P2",
+      "target": "JooqCpFailoverRepository.mutationAdmission",
+      "note": "see docs/history/backlog/failover_approver_role_recheck_at_worker.md"
     }
   ]
 }
