@@ -44,6 +44,11 @@ dependencies {
         implementation(libs.bouncycastle.provider)
         implementation(libs.bouncycastle.pkix)
         implementation(libs.bouncycastle.util)
+        // Security floors for OpenSAML's transitive dependencies (dependency scan 2026-11-16: CVE-2026-102554 guava,
+        // CVE-2026-54399 httpcore5, CVE-2026-54428 httpcore5-h2).
+        implementation("com.google.guava:guava:33.7.2-jre") { because("CVE-2026-102554, fixed in 33.7.2") }
+        implementation("org.apache.httpcomponents.core5:httpcore5:5.4.3") { because("CVE-2026-54399, fixed in 5.4.3") }
+        implementation("org.apache.httpcomponents.core5:httpcore5-h2:5.4.3") { because("CVE-2026-54428, fixed in 5.4.3") }
     }
     // Failover Engine Stage 2 (durable schedules/ledger/quarantine): plain
     // JdbcTemplate over the same C1 section 6 DataSource bean, auto-configured
