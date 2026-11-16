@@ -1170,6 +1170,60 @@
       "priority": "P1",
       "target": "After ASA wiring (batch 4)",
       "note": ""
+    },
+    {
+      "id": "backup_screen_backbox_model",
+      "category": "ui2",
+      "title": "Backup screen: per-store storage quota (rest shipped)",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "PO directive 2026-09-22 (Backbox standard)",
+      "note": "see docs/history/backlog/backup_screen_backbox_model.md"
+    },
+    {
+      "id": "fortigate_policy_wiring",
+      "category": "policy",
+      "title": "FortiGate policy into the policy model and Trace",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "After the ASA wiring",
+      "note": ""
+    },
+    {
+      "id": "lifecycle_vendor_catalog",
+      "category": "lifecycle",
+      "title": "Lifecycle catalog from vendor publications (V219)",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "Freeze + two hosts approved 11-14",
+      "note": ""
+    },
+    {
+      "id": "asa_readiness_signoff_migration",
+      "category": "failover",
+      "title": "ASA readiness: record the PO approval of four reads",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "V222 in the ship queue; PO approved 11-14; switch stays off",
+      "note": ""
+    },
+    {
+      "id": "cp_advisories_jumbo",
+      "category": "security",
+      "title": "Check Point advisories from Jumbo resolved-issues pages",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "Amendment frozen 11-14; V213 dry run",
+      "note": ""
+    },
+    {
+      "id": "support_bundles",
+      "category": "operations",
+      "title": "Support bundles: finish the design, then build",
+      "status": "automated_validated",
+      "priority": "P2",
+      "target": "Design in progress 2026-11-14",
+      "note": ""
     }
   ]
 }

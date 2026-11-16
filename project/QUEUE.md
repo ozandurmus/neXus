@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T04:33:58Z
+Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T08:39:36Z
 
 ## Now
 - NXS-LOCAL-0391 — Release queue: ASA readiness, integration gate, CP advisories, zone matrix, ACI step 1, API latency, Backups batch (in_progress)
@@ -9,17 +9,14 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T04:33:58Z
 - P1/in_progress aci_segmentation_step1 — ACI step 1: pre-cutover impact analysis, one segment
 - P1/in_progress aiview_masking_leak_audit — Masking leak audit: compare aiview responses against the..
 - P1/in_progress asa_fortigate_policy_model — ASA and FortiGate policy model for lookup and hygiene
-- P1/in_progress asa_readiness_signoff_migration — ASA readiness: record the PO approval of four reads
-- P1/in_progress cp_advisories_jumbo — Check Point advisories from Jumbo resolved-issues pages
 - P1/in_progress policy_collection_gaps — Policy collection gaps: CP gateway objects (D-1), PAN App-
 - P1/in_progress rule_recertification_campaigns — Rule recertification and cleanup campaigns
 - P1/in_progress zone_matrix_delivery — Zone matrix: freeze contract, then deliver in steps
 - P1/planned enterprise_phase0_logging_monitoring_scans
+- P1/planned failover_four_eyes_enforcement_verify_before_scc_handover
 - P1/planned recertification_council
 - P1/planned recovery_offhost_key_custody
 - P1/planned spring_boot_4_spring_security_migration
-- P2/in_progress backup_screen_backbox_model
-- P2/in_progress lifecycle_vendor_catalog
 - P2/in_progress manifest_drift_service_worker_configuration_policy
 - P2/in_progress topology_sources_apic_citrix_f5
 - P2/in_progress ui2_database_roles_and_data_ownership
@@ -30,23 +27,24 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T04:33:58Z
 - P2/planned change_ticket_matching
 - P2/planned cp_spark_backup_settings_sftp
 - P2/planned deploy1_evidence_egress_policy
-- P2/planned fortigate_policy_wiring
 - P2/planned https_configuration_collect
 - P2/planned module_per_pod_split
+- P2/planned nightly_e2e_fails_on_legitimate_platform_status_warning
 - P2/planned nspm_wave1_acceptance
 - P2/planned path_analysis_phase_b
 - P2/planned product_rename_identity
 - P2/planned reports_r2
 - P2/planned script_execution_module
 - P2/planned support_bundle_collection_s3_s8
-- P2/planned support_bundles
 - P2/planned task_executor_automation_module
 - P2/planned ubi_base_glibc_fix_pending
 - P2/planned zone_matrix_steps_3_plus
 - P3/planned CP-SHELL-M2-LAB-READ
+- P3/planned advisory_fetch_cisa_kev_ingest_refused_during_deploy_overlap
 - P3/planned corporate_inspection_ca_verify_with_it
 - P3/planned cp_policy_chunked_hits_acceptance
 - P3/planned cp_vsx_config_collected_without_vs_context
+- P3/planned deploy_scan_parallelism
 - P3/planned device_admin_accounts_and_privileges
 - P3/planned enterprise_platform_conformance
 - P3/planned fmg_link_state_diagnose_nic
@@ -57,6 +55,7 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T04:33:58Z
 - P3/planned old_export_copies_disposal
 - P3/planned opt_nexus_step_d_delete_old_copies
 - P3/planned radware_cc_identity_and_defensepro_reads
+- P3/planned trivy_cache_pvc_enable_attended
 - P3/planned waf_fortiweb_capability_scope_and_measurement
 ## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)
 - P0 deploy1_oidc_viewer

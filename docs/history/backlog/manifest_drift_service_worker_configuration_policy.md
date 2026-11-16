@@ -11,3 +11,5 @@ status: in_progress · target: tools/delivery/module_deploy.py (SYNCED_MANIFESTS
 2026-11-14: worker manifest sync in ship batch 3.
 
 2026-11-15 10:00 backlog refresh: 2026-11-15: worker is now in SYNCED_MANIFESTS (tools/delivery/module_deploy.py; commit 'Fail fast on failed module e2e jobs and sync worker manifest on deploy', on main). Left open: real-env validation of the synced modules on a release.
+
+2026-11-16 backlog refresh (origin/main db9b2ecd, live through batch 14, schema V242): the backup module manifest joined the worker in SYNCED_MANIFESTS (service, configuration, compliance, policy, backup, worker). The deploys of batches 10-14 applied them; no dedicated drift check on the live objects was run in this refresh, so real-env validation stays open.
