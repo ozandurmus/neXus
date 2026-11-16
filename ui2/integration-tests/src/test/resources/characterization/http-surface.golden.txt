@@ -735,7 +735,7 @@ header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
-body: {"as_of":"2026-11-15","devices":[],"summary":{"devices":"<n>","license_problems":"<n>","licenses_collected":"<n>","licenses_within_60_days":"<n>","lifecycle_needs_review":"<n>","lifecycle_not_evaluated":"<n>","live_patch_missing":"<n>","live_patch_not_active":"<n>","no_lifecycle_data":"<n>","past_end_of_support":"<n>","vuln_devices_affected":"<n>","vuln_devices_exploited":"<n>","vuln_devices_not_evaluated":"<n>","vuln_oldest_source_age_days":null,"within_180_days":"<n>","within_365_days":"<n>"}}
+body: {"as_of":"<day>","devices":[],"summary":{"devices":"<n>","license_problems":"<n>","licenses_collected":"<n>","licenses_within_60_days":"<n>","lifecycle_needs_review":"<n>","lifecycle_not_evaluated":"<n>","live_patch_missing":"<n>","live_patch_not_active":"<n>","no_lifecycle_data":"<n>","past_end_of_support":"<n>","vuln_devices_affected":"<n>","vuln_devices_exploited":"<n>","vuln_devices_not_evaluated":"<n>","vuln_oldest_source_age_days":null,"within_180_days":"<n>","within_365_days":"<n>"}}
 
 ### admin GET unmapped route
 status: 404

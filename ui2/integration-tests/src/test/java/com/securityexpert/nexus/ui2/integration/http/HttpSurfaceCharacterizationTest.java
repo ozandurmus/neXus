@@ -849,6 +849,8 @@ class HttpSurfaceCharacterizationTest {
     private static final Pattern TIMESTAMP = Pattern.compile("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:?\\d{2})?");
     private static final Pattern HEX12 = Pattern.compile("[0-9a-f]{12}");
     private static final Pattern HEX64 = Pattern.compile("[0-9a-f]{64}");
+    // A bare calendar day (e.g. lifecycle "as_of") depends on the run date, not on the HTTP surface (2026-11-16).
+    private static final Pattern DAY = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
     private static final Pattern UUID = Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
 
     static String render(List<Entry> entries) {
@@ -913,6 +915,7 @@ class HttpSurfaceCharacterizationTest {
             String value = node.asText();
             if (HEX12.matcher(value).matches()) return factory.textNode("<hex12>");
             value = TIMESTAMP.matcher(value).replaceAll("<ts>");
+            if (DAY.matcher(value).matches()) value = "<day>";
             value = UUID.matcher(value).replaceAll("<id>");
             value = TOKEN.matcher(value).replaceAll("<token>");
             return factory.textNode(value);
