@@ -93,4 +93,16 @@ class InventoryInstallHistoryDiscoveryTest {
         var commands = run("ID | Type | Name\n0 | S | VS0\n3 | S | vs-lab\n");
         assertTrue(commands.stream().noneMatch(c -> c.contains("DA_Actions")), commands.toString());
     }
+
+    @Test
+    void logLinesKeepOnlyFileNameAndDateCharactersAndAreBounded() {
+        String out = "total 8\n-rw-r--r-- 1 u g 12 2026-10-01T02:03:04 install_jumbo_T119.log\n\n weird$`line\n"
+                + "x".repeat(300) + "\n" + "a\n".repeat(200);
+        var lines = InventoryCapabilityExecutor.installHistoryDiscoveryLogLines(out);
+        org.junit.jupiter.api.Assertions.assertEquals("-rw-r--r-- 1 u g 12 2026-10-01T02:03:04 install_jumbo_T119.log", lines.get(1));
+        org.junit.jupiter.api.Assertions.assertEquals("weird??line", lines.get(2));
+        org.junit.jupiter.api.Assertions.assertEquals(160, lines.get(3).length());
+        org.junit.jupiter.api.Assertions.assertEquals(90, lines.size());
+        org.junit.jupiter.api.Assertions.assertTrue(InventoryCapabilityExecutor.installHistoryDiscoveryLogLines(null).isEmpty());
+    }
 }

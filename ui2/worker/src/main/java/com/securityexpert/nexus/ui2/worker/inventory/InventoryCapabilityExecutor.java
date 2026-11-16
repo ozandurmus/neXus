@@ -113,6 +113,18 @@ public final class InventoryCapabilityExecutor {
                 && !managementServer && !vsxHost && !clishLanding;
     }
 
+    /** The V245 answer as log lines: blank lines dropped, every character outside file-name/date characters replaced
+     *  by '?', each line cut at 160 characters, at most 90 lines. */
+    static List<String> installHistoryDiscoveryLogLines(String output) {
+        if (output == null) {
+            return List.of();
+        }
+        return output.lines().map(String::strip).filter(l -> !l.isEmpty())
+                .map(l -> l.replaceAll("[^A-Za-z0-9_.:/ +\\-]", "?"))
+                .map(l -> l.length() > 160 ? l.substring(0, 160) : l)
+                .limit(90).toList();
+    }
+
     /** The gated timeout of {@code cp_identity_mds_ha_status} (V194: 60 s). */
     static final Duration MDS_HA_TIMEOUT = Duration.ofSeconds(60);
     private static final Pattern API_KEY = Pattern.compile("<key>([^<]+)</key>");
@@ -575,10 +587,18 @@ public final class InventoryCapabilityExecutor {
                 try {
                     String history = execOutput(session, InventoryReadPlan.CP_INSTALL_HISTORY_DISCOVERY_ONCE, false, READ_TIMEOUT);
                     LOG.log(System.Logger.Level.INFO, "[CP_INSTALL_HISTORY_DISCOVERY] length={0}", history.length());
+                    // Inventory jobs keep no transcript: the approved answer (file names and time stamps only) goes to
+                    // the worker log, reduced to file-name and date characters, at most 90 lines.
+                    for (String line : installHistoryDiscoveryLogLines(history)) {
+                        LOG.log(System.Logger.Level.INFO, "[CP_INSTALL_HISTORY_DISCOVERY] line={0}", line);
+                    }
                 } catch (RuntimeException e) {
                     com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
                     LOG.log(System.Logger.Level.WARNING, "[CP_INSTALL_HISTORY_DISCOVERY] outcome=READ_FAILED {0}", e.getClass().getSimpleName());
                 }
+            } else if (deviceId.equals(installHistoryDiscoveryDevice())) {
+                LOG.log(System.Logger.Level.INFO, "[CP_INSTALL_HISTORY_DISCOVERY] outcome=SKIPPED management={0} vsx={1} clish={2}",
+                        managementServer, vsxHost, clishLanding);
             }
             // Lifecycle reads, group A: last, after every other read of the run; never changes the result.
             if (lifecycleReads.anyFor(deviceId)) {
