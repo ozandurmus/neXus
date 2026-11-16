@@ -268,7 +268,7 @@ public class DeviceCompositionConfiguration {
                 com.securityexpert.nexus.ui2.jobs.diagnostic.PanSystemLogCollect.capability(gateRegistryPort),
                 com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect.capability(gateRegistryPort),
                 com.securityexpert.nexus.ui2.jobs.supportbundle.CpSupportBundle.capability(gateRegistryPort),
-                // Support bundle collection, steps S3-S5 (V232): placeholder capabilities like the other vendor jobs; the
+                // Support bundle collection, steps S3-S5 (V237): placeholder capabilities like the other vendor jobs; the
                 // worker resolves every P/A/F gate row against the live registry before it sends anything.
                 confirmCapability(com.securityexpert.nexus.ui2.jobs.supportbundle.PanSupportBundle.CAPABILITY, "palo_alto",
                         "pan_firewall", TransportKind.PAN_XML_API),

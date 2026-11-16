@@ -20,7 +20,7 @@ import com.securityexpert.nexus.ui2.platform.ActionClass;
 
 /**
  * Support bundle steps S3-S5 (PO approval 2026-11-15): exactly the approved Palo Alto, Cisco ASA and FortiGate literals are
- * gated, the fixture and V232 agree, the unapproved ASA fallback A5-A7 has no row, and {@code terminal pager 0} is nowhere.
+ * gated, the fixture and V237 agree, the unapproved ASA fallback A5-A7 has no row, and {@code terminal pager 0} is nowhere.
  */
 class SupportBundleVendorGateTest {
 
@@ -160,7 +160,7 @@ class SupportBundleVendorGateTest {
 
     @Test
     void v232SeedsTheSameRowsAsTheFixtureAndV230IsNotTheirHome() throws IOException {
-        String sql = Files.readString(Path.of("../service/src/main/resources/db/migration/V232__support_bundle_vendor_gates.sql"));
+        String sql = Files.readString(Path.of("../service/src/main/resources/db/migration/V237__support_bundle_vendor_gates.sql"));
         assertTrue(sql.contains("set_config('app.actor_fingerprint'") && sql.contains("ON CONFLICT (gate_id) DO NOTHING"));
         for (GateRow r : vendorRows()) {
             assertTrue(sql.contains("('" + r.gateId() + "', '" + r.vendor() + "', '" + r.platformRoleScope() + "', '" + r.shellContext()

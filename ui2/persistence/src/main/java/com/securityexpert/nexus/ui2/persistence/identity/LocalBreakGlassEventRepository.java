@@ -1,6 +1,6 @@
 package com.securityexpert.nexus.ui2.persistence.identity;
 
-/** Insert-only break-glass sign-in events (migration plan Step 3, V231); each insert is one audited row under its own action id. */
+/** Insert-only break-glass sign-in events (migration plan Step 3, V236); each insert is one audited row under its own action id. */
 public interface LocalBreakGlassEventRepository {
     String LOGIN_SUCCEEDED_ACTION = "local_break_glass_login_succeeded";
     String REFUSED_ACTION = "local_non_break_glass_refused";

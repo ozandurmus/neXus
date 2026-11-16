@@ -10,7 +10,7 @@ import com.securityexpert.nexus.ui2.platform.ActionClass;
 
 /**
  * Support bundle collection, Cisco ASA (step S4; PO approval 2026-11-15, rows A1-A4 of
- * SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6). The four reads, each resolved against its live V232 gate
+ * SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6). The four reads, each resolved against its live V237 gate
  * row before it is sent. {@code terminal pager 0} is never sent here (PO Q12): the {@code <--- More --->} prompt is
  * answered in session. The fallback rows A5-A7 (a file on {@code disk0:}) are not approved and do not exist.
  */

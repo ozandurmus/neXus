@@ -31,9 +31,9 @@ class CpSupportBundleGateTest {
     private static final String RUN = P + "cd %1$s && setsid nohup bash --noprofile --norc -c \"timeout 1800 cpdata_collector --run "
             + "-p %1$s/cpsdc.tgz -t 3 -m 100 > %1$s/cpsdc.log 2>&1; echo \\$? > %1$s/cpsdc.rc\" </dev/null >/dev/null 2>&1 &";
 
-    /** The gateway rows step S6 added in V234 (C8-C20); V230 stays as it was. */
+    /** The gateway rows step S6 added in V238 (C8-C20); V230 stays as it was. */
     private static final List<String> V234_STEMS = List.of("mkdir", "hcp_start", "hcp_start_vs", "copy_hcp", "cpinfo_start",
-            "cpinfo_start_sms", "cpinfo_start_vs", "poll_rc", "list_workdir", "bundle", "sha256", "sftp_get_bundle", "remove_workdir", "poll_cpsdc" /* V235 */);
+            "cpinfo_start_sms", "cpinfo_start_vs", "poll_rc", "list_workdir", "bundle", "sha256", "sftp_get_bundle", "remove_workdir", "poll_cpsdc" /* V239 */);
 
     private static List<GateRow> fixture() {
         return GateRegistryFixtureLoader.loadFromStream(CpSupportBundleGateTest.class.getClassLoader()

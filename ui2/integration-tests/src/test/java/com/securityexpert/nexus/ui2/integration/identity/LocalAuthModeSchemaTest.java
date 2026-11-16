@@ -18,7 +18,7 @@ import com.securityexpert.nexus.ui2.persistence.identity.JooqLocalAuthModeReposi
 import com.securityexpert.nexus.ui2.persistence.identity.JooqLocalBreakGlassEventRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.LocalAuthModeRepository;
 
-/** V231 (migration plan Step 3): the default mode, the audited mode write, the audited break-glass events, and an insert-only event table. */
+/** V236 (migration plan Step 3): the default mode, the audited mode write, the audited break-glass events, and an insert-only event table. */
 class LocalAuthModeSchemaTest {
 
     @Test

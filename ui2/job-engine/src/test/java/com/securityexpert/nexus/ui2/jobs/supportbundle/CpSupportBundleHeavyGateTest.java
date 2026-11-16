@@ -21,7 +21,7 @@ import com.securityexpert.nexus.ui2.platform.ActionClass;
 
 /**
  * Support bundle step S6 (PO approval 2026-11-15): exactly the approved Check Point heavy literals C8-C20 and the two
- * cpdata_collector literals are gated, under the gateway and the management scope; the fixture and V234 agree; every literal
+ * cpdata_collector literals are gated, under the gateway and the management scope; the fixture and V238 agree; every literal
  * carries CP_ENV; the write literals are recovery-write (BW-2) and the reads are class 0.
  */
 class CpSupportBundleHeavyGateTest {
@@ -147,7 +147,7 @@ class CpSupportBundleHeavyGateTest {
 
     @Test
     void v234SeedsTheSameRowsAsTheFixtureAndEarlierMigrationsAreUntouched() throws IOException {
-        String sql = Files.readString(Path.of("../service/src/main/resources/db/migration/V234__support_bundle_cp_heavy.sql"));
+        String sql = Files.readString(Path.of("../service/src/main/resources/db/migration/V238__support_bundle_cp_heavy.sql"));
         assertTrue(sql.contains("set_config('app.actor_fingerprint'") && sql.contains("ON CONFLICT (gate_id) DO NOTHING"));
         List<GateRow> s6 = fixture().stream().filter(r -> !r.gateId().endsWith("_poll_cpsdc")).filter(r -> r.gateId().startsWith("cpm_sb_") || (r.gateId().startsWith("cp_sb_")
                 && List.of("mkdir", "hcp_start", "hcp_start_vs", "copy_hcp", "cpinfo_start", "cpinfo_start_sms", "cpinfo_start_vs", "poll_rc",
@@ -160,7 +160,7 @@ class CpSupportBundleHeavyGateTest {
         }
         assertEquals(30, sql.split("'SIGNED_OFF'", -1).length - 1);
         String v230 = Files.readString(Path.of("../service/src/main/resources/db/migration/V230__support_bundle_collection.sql"));
-        String v232 = Files.readString(Path.of("../service/src/main/resources/db/migration/V232__support_bundle_vendor_gates.sql"));
+        String v232 = Files.readString(Path.of("../service/src/main/resources/db/migration/V237__support_bundle_vendor_gates.sql"));
         for (GateRow r : s6) {
             assertFalse(v230.contains("('" + r.gateId() + "'"), r.gateId());
             assertFalse(v232.contains("('" + r.gateId() + "'"), r.gateId());
@@ -170,7 +170,7 @@ class CpSupportBundleHeavyGateTest {
 
     @Test
     void v235SeedsTheApprovedCpsdcPollForBothScopesAndNothingElse() throws IOException {
-        String sql = Files.readString(Path.of("../service/src/main/resources/db/migration/V235__support_bundle_cpsdc_poll.sql"));
+        String sql = Files.readString(Path.of("../service/src/main/resources/db/migration/V239__support_bundle_cpsdc_poll.sql"));
         assertTrue(sql.contains("set_config('app.actor_fingerprint'") && sql.contains("ON CONFLICT (gate_id) DO NOTHING"));
         assertEquals(2, sql.split("'SIGNED_OFF'", -1).length - 1);
         for (String id : List.of("cp_sb_poll_cpsdc", "cpm_sb_poll_cpsdc")) {

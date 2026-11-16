@@ -1,4 +1,4 @@
--- V234 -- support bundle collection step S6: Check Point heavy items (C8-C20), the optional cpdata_collector item, and the
+-- V238 -- support bundle collection step S6: Check Point heavy items (C8-C20), the optional cpdata_collector item, and the
 -- management server (SMS / Multi-Domain Server) scope
 -- (docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md, FROZEN 2026-11-15;
 -- docs/design/PO_DECISION_RECORD_2026_11_15_SUPPORT_BUNDLE_COLLECTION.md section 2, Q3 and Q5).
@@ -7,10 +7,10 @@
 -- approved literals for the management scope (cpm_sb_*: C0, C1, C2, C6, C8, C9, C11-C13, C15-C20 and the two cpdata_collector
 -- rows; C10 and C14 are per virtual system and exist for a gateway only). Every literal carries the CP_ENV prefix. The write rows
 -- (C8, C9, C10, C11, C12, C13, C14, C17, C20 and the cpdata_collector run) are recovery-write by the V61 precedent and BW-2:
--- the device writes a transient artefact and the run removes it by exact name. V230 and V232 are not edited.
+-- the device writes a transient artefact and the run removes it by exact name. V230 and V237 are not edited.
 -- Also: the item kind check gains cpdata_collector_run (the optional item built on the two cpdata_collector rows).
 -- Idempotent. Dry-run in BEGIN/ROLLBACK on the live database before deploy is an engineer step.
-SELECT set_config('app.actor_fingerprint', 'migration:V234_support_bundle_cp_heavy', true);
+SELECT set_config('app.actor_fingerprint', 'migration:V238_support_bundle_cp_heavy', true);
 SELECT set_config('app.action_id', 'support_bundle_cp_heavy_by_migration', true);
 
 ALTER TABLE support_bundle_item DROP CONSTRAINT IF EXISTS support_bundle_item_kind_check;
