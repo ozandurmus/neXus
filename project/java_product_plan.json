@@ -369,7 +369,12 @@
     "opt_nexus_step_d_delete_old_copies": "agent_operations",
     "shipq2_docs_only_fix": "agent_operations",
     "asa_inventory_session_pager_review": "java_debt",
-    "support_bundle_collection_s3_s8": "java_feature"
+    "support_bundle_collection_s3_s8": "java_feature",
+    "nightly_e2e_fails_on_legitimate_platform_status_warning": "agent_operations",
+    "advisory_fetch_cisa_kev_ingest_refused_during_deploy_overlap": "java_debt",
+    "trivy_cache_pvc_enable_attended": "agent_operations",
+    "deploy_scan_parallelism": "agent_operations",
+    "failover_four_eyes_enforcement_verify_before_scc_handover": "java_debt"
   },
   "converted_lessons": [
     {
