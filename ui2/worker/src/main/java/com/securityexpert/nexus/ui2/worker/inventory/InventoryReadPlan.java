@@ -122,6 +122,11 @@ public final class InventoryReadPlan {
     /** A management server's own HA role (V194 gate cp_identity_mds_ha_status, PO approval 2026-11-07): the Management
      *  API at Multi-Domain Server level, issued in the interactive Expert shell where mgmt_cli has its environment. */
     public static final String CP_MDS_HA_STATUS = "mgmt_cli -r true -f json show-ha-status";
+    /** One-off (V245 gate cp_install_history_discovery_once, PO approval 2026-11-16 "Evet, onaylıyorum"): where Check Point
+     *  keeps Jumbo/hotfix install history. Plain expert shell exactly like {@link #CP_UPTIME}; never wrapped in bash -lc,
+     *  vsenv or any login shell. Sent only for the device named by UI2_CP_INSTALL_HISTORY_DISCOVERY_DEVICE. */
+    public static final String CP_INSTALL_HISTORY_DISCOVERY_ONCE = "unset BASH_ENV ENV; ls -l --time-style=+%Y-%m-%dT%H:%M:%S /opt/CPInstLog 2>&1 | tail -n 80; find /opt/CPda /var/log/CPda -maxdepth 3 -name 'DA_Actions*' 2>/dev/null | head -5";
+
     /** One-off (V196 gate cp_identity_mds_ha_status_accept_once, PO approval 2026-11-09 "Yes, send it once"): the same
      *  read once with the management API certificate fingerprint accepted automatically, after the MDS certificate changed
      *  and every MDS-level mgmt_cli read stopped at the fingerprint prompt. Sent only while the worker runs with

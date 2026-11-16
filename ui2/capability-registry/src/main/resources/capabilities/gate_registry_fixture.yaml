@@ -232,6 +232,24 @@ gates:
     safe_telemetry_fields: [outcome, servers, role]
     source_document_pointer: "docs/design/CP_MEASUREMENTS_2026_11_06_AFTERNOON.md §5 (PO chat approval 2026-11-09)"
 
+  # One-off (V245, PO approval 2026-11-16 "Evet, onaylıyorum"): where Check Point keeps Jumbo/hotfix install history.
+  - gate_id: cp_install_history_discovery_once
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "unset BASH_ENV ENV; ls -l --time-style=+%Y-%m-%dT%H:%M:%S /opt/CPInstLog 2>&1 | tail -n 80; find /opt/CPda /var/log/CPda -maxdepth 3 -name 'DA_Actions*' 2>/dev/null | head -5"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once, one STANDBY non-VSX R81.20 gateway (2026-11-16)"
+    session_reuse_rule: "the inventory session"
+    unsupported_behavior_ref: "a failure or no answer is logged in the job transcript; the inventory outcome is unchanged"
+    secret_output_risk: "none (file names, sizes and dates only)"
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_11_16_CP_INSTALL_HISTORY_DISCOVERY.md (PO chat approval 2026-11-16)"
+
   # Management-server HA role (V194, PO approval 2026-11-07): Management API show-ha-status at MDS level.
   - gate_id: cp_identity_mds_ha_status
     vendor: check_point
