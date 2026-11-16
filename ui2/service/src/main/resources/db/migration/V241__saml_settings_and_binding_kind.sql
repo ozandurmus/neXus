@@ -1,4 +1,4 @@
--- V237 -- SAML 2.0 service provider for ADFS (docs/design/SPRING_SECURITY_MIGRATION_PLAN_2026_11_15.md, Step 4; PO decisions
+-- V241 -- SAML 2.0 service provider for ADFS (docs/design/SPRING_SECURITY_MIGRATION_PLAN_2026_11_15.md, Step 4; PO decisions
 -- D1-D5 of 2026-11-15).
 --
 -- 1. saml_settings: one row (id = 1), OFF by default (no row = SAML off). It holds the SP identity, the IdP data taken from the

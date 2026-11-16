@@ -60,8 +60,8 @@ data:
     # Per-module runtime roles (docs/design/DATABASE_ROLES_AND_DATA_OWNERSHIP_DESIGN_2026_11_14.md, step 1).
     # NOLOGIN and passwordless: nothing connects as one of them yet, and no credential is created here. A role
     # that already exists is left exactly as it is (a later step gives it LOGIN and a password). The grants are
-    # per database: once the schema carries V238 the second statement (re)applies them, and it is a no-op
-    # before V238. Neither statement may stop the database from starting, so a failure is reported and skipped.
+    # per database: once the schema carries V242 the second statement (re)applies them, and it is a no-op
+    # before V242. Neither statement may stop the database from starting, so a failure is reported and skipped.
     psql --set ON_ERROR_STOP=1 <<'UI2_ROLES_SQL' || echo "ui2 module role creation failed; continuing" >&2
     DO $do$
     DECLARE r text;

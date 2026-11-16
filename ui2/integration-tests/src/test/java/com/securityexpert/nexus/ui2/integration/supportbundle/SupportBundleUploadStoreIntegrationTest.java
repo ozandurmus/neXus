@@ -24,7 +24,7 @@ import com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleS
 import com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleUploadStore;
 import com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleUploadStore.UploadRow;
 
-/** V236 against a real PostgreSQL 16: the upload row, its audit, the host key record, the stale reap and the cleanup state. */
+/** V240 against a real PostgreSQL 16: the upload row, its audit, the host key record, the stale reap and the cleanup state. */
 class SupportBundleUploadStoreIntegrationTest {
 
     private static final String ADMIN = "ACTOR-ALPHA";
@@ -159,9 +159,9 @@ class SupportBundleUploadStoreIntegrationTest {
                         + "and row_pk = '" + request + "'");
                 assertFalse(audit.contains("Remove the leftover work directory"), "the cleanup reason is redacted");
                 assertTrue(audit.contains("cleanup_state"), "the cleanup state is audited");
-                // V236 is idempotent
+                // V240 is idempotent
                 String sql;
-                try (var in = getClass().getResourceAsStream("/db/migration/V236__support_bundle_upload_and_cleanup.sql")) {
+                try (var in = getClass().getResourceAsStream("/db/migration/V240__support_bundle_upload_and_cleanup.sql")) {
                     sql = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
                 }
                 db.setAutoCommit(false);

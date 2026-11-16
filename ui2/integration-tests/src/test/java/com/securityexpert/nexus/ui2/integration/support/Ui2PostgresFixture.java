@@ -74,7 +74,7 @@ public final class Ui2PostgresFixture implements AutoCloseable {
     /**
      * The per-module runtime roles of docs/design/DATABASE_ROLES_AND_DATA_OWNERSHIP_DESIGN_2026_11_14.md §2.1, in the
      * column order of its §2.3 matrix with {@code ui2_worker_general} last. Like the two roles above they are
-     * cluster-wide objects created outside the migrations (V238 only grants to them): here {@code NOLOGIN}, no
+     * cluster-wide objects created outside the migrations (V242 only grants to them): here {@code NOLOGIN}, no
      * password, no attribute — the shape the in-cluster hook and the DBA statement of design §6.3 create.
      */
     public static final java.util.List<String> MODULE_ROLES = java.util.List.of(

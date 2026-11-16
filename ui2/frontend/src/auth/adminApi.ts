@@ -4823,7 +4823,7 @@ export interface SupportBundleRequest {
   readonly run_mode: string; readonly run_at: string; readonly requested_at: string; readonly finished_at: string | null;
   readonly expires_at: string; readonly expiry_warning: boolean; readonly downloaded_at: string | null; readonly download_count: number;
   readonly state: string; readonly outcome: string | null; readonly items: readonly SupportBundleItem[];
-  /** A work directory the run left on the device and did not remove (V236); the admin may have it removed. */
+  /** A work directory the run left on the device and did not remove (V240); the admin may have it removed. */
   readonly work_dir_pending?: boolean; readonly cleanup_state?: string | null; readonly cleanup_outcome?: string | null;
   /** Absent for the replay viewer (aiview). */
   readonly reason?: string; readonly case_ref?: string | null; readonly requested_by?: string;
@@ -4850,7 +4850,7 @@ export const requestSupportBundleDownloadTicket = (id: string, reason: string, s
 export const cleanupSupportBundleWorkDir = (id: string, reason: string) =>
   call<{ id: string; job_id: string; status: string }>(`${SUPPORT_BUNDLES}/${encodeURIComponent(id)}/cleanup-workdir`, "POST", { reason, confirm: true });
 
-/** Vendor upload (V236; PO 2026-11-15/16): no four-eyes, the credential is typed per upload and never stored or shown again. */
+/** Vendor upload (V240; PO 2026-11-15/16): no four-eyes, the credential is typed per upload and never stored or shown again. */
 export interface SupportBundleUploadDestination {
   readonly id: string; readonly label: string; readonly method: string; readonly vendor: string | null;
   readonly host: string | null; readonly port: number; readonly generic: boolean;

@@ -1,4 +1,4 @@
--- V236 -- support bundle collection: vendor upload (step S8) and the leftover work directory cleanup
+-- V240 -- support bundle collection: vendor upload (step S8) and the leftover work directory cleanup
 -- (docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md, FROZEN 2026-11-15;
 -- docs/design/PO_DECISION_RECORD_2026_11_15_SUPPORT_BUNDLE_COLLECTION.md; PO decisions of 2026-11-15 and 2026-11-16).
 --
@@ -14,7 +14,7 @@
 --      existing approved gate literal C20, nothing new). The work directory name still comes from work_dir_path only.
 --
 -- Dry-run in BEGIN/ROLLBACK on the live database before deploy is an engineer step. Idempotent.
-SELECT set_config('app.actor_fingerprint', 'migration:V236_support_bundle_upload_and_cleanup', true);
+SELECT set_config('app.actor_fingerprint', 'migration:V240_support_bundle_upload_and_cleanup', true);
 SELECT set_config('app.action_id', 'support_bundle_schema_by_migration', true);
 
 -- 1. Upload rows.

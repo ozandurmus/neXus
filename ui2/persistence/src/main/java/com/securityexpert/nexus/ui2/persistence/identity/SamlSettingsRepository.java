@@ -2,7 +2,7 @@ package com.securityexpert.nexus.ui2.persistence.identity;
 
 import java.util.Optional;
 
-/** {@code saml_settings} persistence port (V237): one row or none (none = SAML off). */
+/** {@code saml_settings} persistence port (V241): one row or none (none = SAML off). */
 public interface SamlSettingsRepository {
 
     Optional<SamlSettingsRecord> find();

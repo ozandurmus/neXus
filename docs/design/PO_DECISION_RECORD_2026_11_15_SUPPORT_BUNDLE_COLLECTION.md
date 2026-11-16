@@ -65,7 +65,7 @@ only.
 
 ## 5. Amendment - 2026-11-16 (Product Owner, relayed by the PO session): vendor upload and work directory cleanup
 
-**5.1 Vendor upload (design S8) - APPROVED, built in migration V236.** Q8 and Q9 stand: upload for all vendors, no four-eyes; the
+**5.1 Vendor upload (design S8) - APPROVED, built in migration V240.** Q8 and Q9 stand: upload for all vendors, no four-eyes; the
 same `security_admin` may request, download and upload. Approved targets: Cisco CXD (`cxd.cisco.com`, SFTP or SCP on 22, HTTPS PUT on
 443; user is the case number, password the per-case upload token), Fortinet (`support.fortinet.com`, SFTP on 2222; per-ticket user and
 password), Palo Alto (`tacupload.paloaltonetworks.com`, SCP; user is the case number with leading zeros, password the case contact

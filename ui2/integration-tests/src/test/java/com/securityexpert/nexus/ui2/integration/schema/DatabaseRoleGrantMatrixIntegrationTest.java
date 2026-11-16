@@ -28,7 +28,7 @@ import com.securityexpert.nexus.ui2.integration.support.Ui2Rows;
 
 /**
  * Per-module database roles, step 1 (docs/design/DATABASE_ROLES_AND_DATA_OWNERSHIP_DESIGN_2026_11_14.md §4.2 Step 1,
- * §4.3.2), proved against a real PostgreSQL 16 server: V238 grants the eleven NOLOGIN module roles exactly their
+ * §4.3.2), proved against a real PostgreSQL 16 server: V242 grants the eleven NOLOGIN module roles exactly their
  * least-privilege matrix — and nothing else — while {@code ui2_app} keeps what it has.
  *
  * <p>Two complementary proofs. On a representative set of tables every role is checked twice for every privilege:
@@ -130,7 +130,7 @@ class DatabaseRoleGrantMatrixIntegrationTest {
     @Test
     void migrationSqlIsAdditiveAndCarriesNoSecret() throws IOException {
         String sql = Files.readString(Ui2PostgresFixture.migrationDirectory()
-                .resolve("V238__module_database_roles_grants.sql"));
+                .resolve("V242__module_database_roles_grants.sql"));
         StringBuilder code = new StringBuilder();
         for (String line : sql.split("\n")) {
             if (!line.stripLeading().startsWith("--")) {
@@ -140,10 +140,10 @@ class DatabaseRoleGrantMatrixIntegrationTest {
         String body = code.toString().toUpperCase(java.util.Locale.ROOT);
         for (String forbidden : List.of("CREATE ROLE", "ALTER ROLE", "DROP ", "WITH PASSWORD", "ENCRYPTED PASSWORD", "PASSWORD '", " LOGIN", "TRUNCATE",
                 "TO UI2_APP", "FROM UI2_APP", "ALTER TABLE", "ALTER FUNCTION", "CREATE TRIGGER", "ALTER DEFAULT")) {
-            assertFalse(body.contains(forbidden), "V238 must not contain: " + forbidden.strip());
+            assertFalse(body.contains(forbidden), "V242 must not contain: " + forbidden.strip());
         }
         // The only REVOKE is the one that keeps the re-apply function away from PUBLIC.
-        assertEquals(1, body.split("REVOKE ", -1).length - 1, "V238 may contain exactly one REVOKE");
+        assertEquals(1, body.split("REVOKE ", -1).length - 1, "V242 may contain exactly one REVOKE");
         assertTrue(body.contains("REVOKE ALL ON FUNCTION UI2_APPLY_MODULE_ROLE_GRANTS(TEXT) FROM PUBLIC"));
     }
 

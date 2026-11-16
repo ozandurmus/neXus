@@ -13,7 +13,7 @@ import com.securityexpert.nexus.ui2.persistence.AuditedTransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 
 /**
- * Persistence of vendor uploads and of the cleanup of a leftover work directory (V236). No credential ever reaches this
+ * Persistence of vendor uploads and of the cleanup of a leftover work directory (V240). No credential ever reaches this
  * class: the upload row holds the destination, the remote account name, the counters and the remote answer only. The row
  * insert is the audited start (committed before the first byte), the move to a final state the audited end.
  */
