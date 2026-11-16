@@ -29,3 +29,6 @@ The worker sends the read only while `UI2_CP_INSTALL_HISTORY_DISCOVERY_DEVICE` e
 inventoried (unset or empty means never), in the physical context of a non-VSX Gaia gateway. The env is set for one
 inventory run and removed right after. The output is recorded only in the job transcript; it is not parsed or stored. A
 failure or timeout is logged and never changes the inventory outcome.
+
+## 2026-11-16 first run: no answer kept
+The first run (16:41) completed the inventory, but inventory jobs keep no transcript and the worker logged only the answer length; the worker pod was replaced when the switch was removed, so the answer was lost. Fix: the worker now logs the answer reduced to file-name and date characters (at most 90 lines of 160 characters), and logs SKIPPED with the reason when the switch names the device but the read does not apply. A second run of the same literal on the same device needs the PO's go-ahead.
