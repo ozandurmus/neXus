@@ -81,6 +81,9 @@ class DatabaseRoleGrantMatrixIntegrationTest {
             artefact_store_refusal         SI   -    -    I    -    I    -    I    -    -    I
             zone_matrix_version            SIU  -    -    -    -    -    -    -    -    -    -
             local_break_glass_event        SI   -    -    -    -    -    -    -    -    -    -
+            saml_settings                  SIU  -    -    -    -    -    -    -    -    -    -
+            support_bundle_upload          SIU  -    -    -    -    -    -    -    -    -    -
+            support_bundle_upload_host_key SIU  -    -    -    -    -    -    -    -    -    -
             """;
 
     private static final List<String> TABLE_PRIVILEGES =
