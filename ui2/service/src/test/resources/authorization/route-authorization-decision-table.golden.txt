@@ -1,4 +1,4 @@
-# route authorization decision table; kinds=18 routes=574 rows=10332
+# route authorization decision table; kinds=18 routes=578 rows=10404
 # columns: kind | METHOD path | PERMIT attributes | REFUSE status content-type body ; then authz rows and machine audits
 anonymous | DELETE /api/v2/cutover/assessments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | DELETE /api/v2/cutover/assessments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
@@ -2376,6 +2376,24 @@ machine-replay-viewer | GET /api/v2/search | REFUSE 403 application/json {"error
 viewer-no-csrf | GET /api/v2/search | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"global_search_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[global_search_read:DENIED]
 viewer-no-origin | GET /api/v2/search | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"global_search_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[global_search_read:DENIED]
 must-change | GET /api/v2/search | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
+anonymous | GET /api/v2/software-history/changes | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+unknown-cookie | GET /api/v2/software-history/changes | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
+expired | GET /api/v2/software-history/changes | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
+revoked | GET /api/v2/software-history/changes | REFUSE 401 application/json {"error":"SESSION_REVOKED","reason":"session is not ACTIVE: REVOKED"}
+no-role | GET /api/v2/software-history/changes | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+role-viewer | GET /api/v2/software-history/changes | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+role-operator | GET /api/v2/software-history/changes | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+role-onboarding_admin | GET /api/v2/software-history/changes | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+role-backup_admin | GET /api/v2/software-history/changes | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+role-compliance_admin | GET /api/v2/software-history/changes | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+role-security_admin | GET /api/v2/software-history/changes | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+role-operation_admin | GET /api/v2/software-history/changes | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+role-replay_viewer | GET /api/v2/software-history/changes | PERMIT actor=match session=match replay-viewer=true | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+root | GET /api/v2/software-history/changes | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:PERMITTED]
+machine-replay-viewer | GET /api/v2/software-history/changes | PERMIT actor=match session=match replay-viewer=true | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+viewer-no-csrf | GET /api/v2/software-history/changes | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+viewer-no-origin | GET /api/v2/software-history/changes | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+must-change | GET /api/v2/software-history/changes | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
 anonymous | GET /api/v2/ssh-trust | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | GET /api/v2/ssh-trust | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | GET /api/v2/ssh-trust | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -3204,6 +3222,24 @@ machine-replay-viewer | GET /devices/synthetic-ref/management-tree | PERMIT acto
 viewer-no-csrf | GET /devices/synthetic-ref/management-tree | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
 viewer-no-origin | GET /devices/synthetic-ref/management-tree | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
 must-change | GET /devices/synthetic-ref/management-tree | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
+anonymous | GET /devices/synthetic-ref/software-history | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+unknown-cookie | GET /devices/synthetic-ref/software-history | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
+expired | GET /devices/synthetic-ref/software-history | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
+revoked | GET /devices/synthetic-ref/software-history | REFUSE 401 application/json {"error":"SESSION_REVOKED","reason":"session is not ACTIVE: REVOKED"}
+no-role | GET /devices/synthetic-ref/software-history | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+role-viewer | GET /devices/synthetic-ref/software-history | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+role-operator | GET /devices/synthetic-ref/software-history | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+role-onboarding_admin | GET /devices/synthetic-ref/software-history | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+role-backup_admin | GET /devices/synthetic-ref/software-history | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+role-compliance_admin | GET /devices/synthetic-ref/software-history | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+role-security_admin | GET /devices/synthetic-ref/software-history | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+role-operation_admin | GET /devices/synthetic-ref/software-history | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+role-replay_viewer | GET /devices/synthetic-ref/software-history | PERMIT actor=match session=match replay-viewer=true | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+root | GET /devices/synthetic-ref/software-history | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:PERMITTED]
+machine-replay-viewer | GET /devices/synthetic-ref/software-history | PERMIT actor=match session=match replay-viewer=true | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+viewer-no-csrf | GET /devices/synthetic-ref/software-history | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+viewer-no-origin | GET /devices/synthetic-ref/software-history | PERMIT actor=match session=match replay-viewer=- | authz=[device_read:NO_APPLICABLE_AUTHORITY]
+must-change | GET /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
 anonymous | GET /discovery/runs/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | GET /discovery/runs/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | GET /discovery/runs/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -5688,6 +5724,24 @@ machine-replay-viewer | HEAD /api/v2/search | REFUSE 403 application/json {"erro
 viewer-no-csrf | HEAD /api/v2/search | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | HEAD /api/v2/search | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | HEAD /api/v2/search | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+anonymous | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+unknown-cookie | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+expired | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+revoked | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+no-role | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-viewer | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-operator | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-onboarding_admin | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-backup_admin | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-compliance_admin | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-security_admin | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-operation_admin | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-replay_viewer | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+root | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+machine-replay-viewer | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+viewer-no-csrf | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+viewer-no-origin | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+must-change | HEAD /api/v2/software-history/changes | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | HEAD /api/v2/ssh-trust | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | HEAD /api/v2/ssh-trust | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | HEAD /api/v2/ssh-trust | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
@@ -6516,6 +6570,24 @@ machine-replay-viewer | HEAD /devices/synthetic-ref/management-tree | REFUSE 403
 viewer-no-csrf | HEAD /devices/synthetic-ref/management-tree | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | HEAD /devices/synthetic-ref/management-tree | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | HEAD /devices/synthetic-ref/management-tree | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+anonymous | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+unknown-cookie | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+expired | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+revoked | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+no-role | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-viewer | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-operator | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-onboarding_admin | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-backup_admin | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-compliance_admin | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-security_admin | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-operation_admin | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-replay_viewer | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+root | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+machine-replay-viewer | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+viewer-no-csrf | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+viewer-no-origin | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+must-change | HEAD /devices/synthetic-ref/software-history | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | HEAD /discovery/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | HEAD /discovery/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | HEAD /discovery/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
