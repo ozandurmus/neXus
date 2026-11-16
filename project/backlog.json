@@ -74,15 +74,6 @@
       "note": ""
     },
     {
-      "id": "backup_screen_backbox_model",
-      "category": "ui2",
-      "title": "Backup screen: per-store storage quota (rest shipped)",
-      "status": "in_progress",
-      "priority": "P2",
-      "target": "PO directive 2026-09-22 (Backbox standard)",
-      "note": "see docs/history/backlog/backup_screen_backbox_model.md"
-    },
-    {
       "id": "script_execution_module",
       "category": "ui2",
       "title": "Script Execution: operator scripts (.sh/.py/.jar or...",
@@ -362,33 +353,6 @@
       "note": ""
     },
     {
-      "id": "cp_advisories_jumbo",
-      "category": "security",
-      "title": "Check Point advisories from Jumbo resolved-issues pages",
-      "status": "in_progress",
-      "priority": "P1",
-      "target": "Amendment frozen 11-14; V213 dry run",
-      "note": ""
-    },
-    {
-      "id": "lifecycle_vendor_catalog",
-      "category": "lifecycle",
-      "title": "Lifecycle catalog from vendor publications (V219)",
-      "status": "in_progress",
-      "priority": "P2",
-      "target": "Freeze + two hosts approved 11-14",
-      "note": ""
-    },
-    {
-      "id": "asa_readiness_signoff_migration",
-      "category": "failover",
-      "title": "ASA readiness: record the PO approval of four reads",
-      "status": "in_progress",
-      "priority": "P1",
-      "target": "V222 in the ship queue; PO approved 11-14; switch stays off",
-      "note": ""
-    },
-    {
       "id": "policy_collection_gaps",
       "category": "collection",
       "title": "Policy collection gaps: CP gateway objects (D-1), PAN App-ID",
@@ -434,15 +398,6 @@
       "note": ""
     },
     {
-      "id": "fortigate_policy_wiring",
-      "category": "policy",
-      "title": "FortiGate policy into the policy model and Trace",
-      "status": "planned",
-      "priority": "P2",
-      "target": "After the ASA wiring",
-      "note": ""
-    },
-    {
       "id": "zone_matrix_steps_3_plus",
       "category": "policy",
       "title": "Zone matrix steps 3 and later (designed, not built)",
@@ -452,21 +407,57 @@
       "note": ""
     },
     {
-      "id": "support_bundles",
-      "category": "operations",
-      "title": "Support bundles: finish the design, then build",
-      "status": "planned",
-      "priority": "P2",
-      "target": "Design in progress 2026-11-14",
-      "note": ""
-    },
-    {
       "id": "support_bundle_collection_s3_s8",
       "category": "collection",
       "title": "Support bundle collection: S7 PO-attended pilot, S8 vendor upload, and the leftover work directory cleanup route (S1 core, S2-S5, S6 Check Point heavy items with the optional cpdata_collector run, SMS/MDS enabled with a warning, claim time HA peer / fleet cap / give-up, V238; design FROZEN 2026-11-15; ASA fallback A5-A7 not approved; cpsdc.rc has no approved poll literal)",
       "status": "planned",
       "priority": "P2",
       "target": "support-bundle",
+      "note": ""
+    },
+    {
+      "id": "nightly_e2e_fails_on_legitimate_platform_status_warning",
+      "category": "testing",
+      "title": "Nightly e2e fails when Platform status shows a legitimate disk or operations warning",
+      "status": "planned",
+      "priority": "P2",
+      "target": "nightly e2e guard",
+      "note": ""
+    },
+    {
+      "id": "advisory_fetch_cisa_kev_ingest_refused_during_deploy_overlap",
+      "category": "advisories",
+      "title": "Advisory fetch cisa_kev ends INGEST_REFUSED when it overlaps a deploy",
+      "status": "planned",
+      "priority": "P3",
+      "target": "advisory intake",
+      "note": ""
+    },
+    {
+      "id": "trivy_cache_pvc_enable_attended",
+      "category": "ci",
+      "title": "Enable the persistent Trivy cache claim (attended)",
+      "status": "planned",
+      "priority": "P3",
+      "target": "security gate Trivy cache (6fcfa976)",
+      "note": ""
+    },
+    {
+      "id": "deploy_scan_parallelism",
+      "category": "ci",
+      "title": "Deploy security scan parallelism (needs the PO)",
+      "status": "planned",
+      "priority": "P3",
+      "target": "PO decision",
+      "note": ""
+    },
+    {
+      "id": "failover_four_eyes_enforcement_verify_before_scc_handover",
+      "category": "failover",
+      "title": "Verify failover four-eyes enforcement before the SCC handover",
+      "status": "planned",
+      "priority": "P1",
+      "target": "FailoverAuthorizationService / FourEyesValidationRule",
       "note": ""
     }
   ]
