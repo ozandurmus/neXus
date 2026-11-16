@@ -59,6 +59,9 @@ dependencies {
 
 // CI shows a failure's full assertion message (the characterization golden prints the differing block) and stderr.
 tasks.withType<Test>().configureEach {
+    // The HTTP characterization golden records Content-Language: pin the JVM locale so CI (C.UTF-8 -> "en") and
+    // workstations ("en-US"/"tr-TR") record the same surface (2026-11-16).
+    jvmArgs("-Duser.language=en", "-Duser.country=US", "-Duser.timezone=UTC")
     testLogging {
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
         showCauses = true
