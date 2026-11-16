@@ -49,6 +49,8 @@ dependencies {
         implementation("com.google.guava:guava:33.7.2-jre") { because("CVE-2026-102554, fixed in 33.7.2") }
         implementation("org.apache.httpcomponents.core5:httpcore5:5.4.3") { because("CVE-2026-54399, fixed in 5.4.3") }
         implementation("org.apache.httpcomponents.core5:httpcore5-h2:5.4.3") { because("CVE-2026-54428, fixed in 5.4.3") }
+        // velocity-engine-core 2.3 shades commons-io 2.8.0 (CVE-2024-47554, image scan 2026-11-16); 2.4.1 shades none.
+        implementation("org.apache.velocity:velocity-engine-core:2.4.1") { because("embedded commons-io 2.8.0, CVE-2024-47554") }
     }
     // Failover Engine Stage 2 (durable schedules/ledger/quarantine): plain
     // JdbcTemplate over the same C1 section 6 DataSource bean, auto-configured
