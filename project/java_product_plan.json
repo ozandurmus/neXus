@@ -375,7 +375,8 @@
     "trivy_cache_pvc_enable_attended": "agent_operations",
     "deploy_scan_parallelism": "agent_operations",
     "failover_four_eyes_enforcement_verify_before_scc_handover": "java_debt",
-    "device_software_version_history": "java_feature"
+    "device_software_version_history": "java_feature",
+    "failover_approver_role_recheck_at_worker": "java_debt"
   },
   "converted_lessons": [
     {

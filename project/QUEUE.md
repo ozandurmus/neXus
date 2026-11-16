@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T11:40:30Z
+Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T11:49:44Z
 
 ## Now
 - NXS-LOCAL-0391 — Release queue: ASA readiness, integration gate, CP advisories, zone matrix, ACI step 1, API latency, Backups batch (in_progress)
@@ -14,7 +14,6 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T11:40:30Z
 - P1/in_progress rule_recertification_campaigns — Rule recertification and cleanup campaigns
 - P1/in_progress zone_matrix_delivery — Zone matrix: freeze contract, then deliver in steps
 - P1/planned enterprise_phase0_logging_monitoring_scans
-- P1/planned failover_four_eyes_enforcement_verify_before_scc_handover
 - P1/planned recertification_council
 - P1/planned recovery_offhost_key_custody
 - P1/planned spring_boot_4_spring_security_migration
@@ -28,6 +27,7 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T11:40:30Z
 - P2/planned change_ticket_matching
 - P2/planned cp_spark_backup_settings_sftp
 - P2/planned deploy1_evidence_egress_policy
+- P2/planned failover_approver_role_recheck_at_worker
 - P2/planned https_configuration_collect
 - P2/planned module_per_pod_split
 - P2/planned nightly_e2e_fails_on_legitimate_platform_status_warning
