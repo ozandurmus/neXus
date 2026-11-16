@@ -15,7 +15,7 @@ export const TAB_COVERAGE: readonly TabCoverageRow[] = [
   { screen: "reports", tabList: "Reports sections", labels: ["Catalogue", "Run & preview", "History"] },
   // Lifecycle and security is a view of the Devices screen with its own address and heading (navigation entry of the same
   // name under Compliance and security, PO 2026-11-13); the full e2e visits it there.
-  { screen: "inventory", tabList: "Lifecycle view", labels: ["Fleet", "Catalog", "Vulnerabilities"],
+  { screen: "inventory", tabList: "Lifecycle view", labels: ["Fleet", "Catalog", "Vulnerabilities", "Recent upgrades"],
     query: "screen=inventory&view=lifecycle", heading: "Lifecycle and security" },
   // Navigation redesign 2026-11-12: "HA and readiness" (was "HA & readiness"), "Packet analysis", "Data sanitizer".
   // Diagnostics moved to Tools and the Change feed to the Changes screen (UI review 2026-11-05, C3/C4).

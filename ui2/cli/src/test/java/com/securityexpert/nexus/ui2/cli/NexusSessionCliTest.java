@@ -391,6 +391,31 @@ class NexusSessionCliTest {
     }
 
     @Test
+    void softwareHistoryAndChangesCallTheReadRoutes(@TempDir Path home) throws Exception {
+        java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            calls.add(exchange.getRequestMethod() + " " + exchange.getRequestURI());
+            byte[] out = "{\"changes\":[]}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.start();
+        try {
+            NexusSessionCli cli = new NexusSessionCli(home);
+            cli.saveSession(new NexusSessionCli.Session("http://127.0.0.1:" + server.getAddress().getPort(), "opaque-cookie", "csrf-9"));
+            assertEquals(0, cli.run(new String[] {"software-history", "device-1"}));
+            assertEquals(0, cli.run(new String[] {"software-changes"}));
+            assertEquals(0, cli.run(new String[] {"software-changes", "days=30"}));
+            assertEquals(java.util.List.of("GET /devices/device-1/software-history", "GET /api/v2/software-history/changes",
+                    "GET /api/v2/software-history/changes?days=30"), calls);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void paDeviceEventsCallsTheCaseDeviceEventsRouteWithTheFindingAndWindow(@TempDir Path home) throws Exception {
         java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);

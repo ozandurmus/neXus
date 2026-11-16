@@ -444,6 +444,19 @@ export interface LifecycleAdvisorySource {
   trains?: { train: string; loaded_at: string | null; age_days: number | null; age_state: "OK" | "AMBER" | "RED" | "NEVER";
     cves: number; cves_without_advisory: number; usable: boolean }[];
 }
+export interface SoftwareStretch {
+  device_id: string; vendor: string | null; software_version: string; hotfix_level: string | null;
+  first_seen_at: string; last_seen_at: string; previous_software_version: string | null; previous_hotfix_level: string | null;
+  /** Last time the previous version was still seen: the change happened after this and by `window_end`. */
+  window_start: string | null; window_end: string | null; source: "inventory" | "discovery_backfill" | "platform_facts";
+}
+export interface SoftwareChange extends SoftwareStretch {
+  hostname: string | null; from_version: string | null; from_hotfix_level: string | null; to_version: string; to_hotfix_level: string | null;
+}
+export const getDeviceSoftwareHistory = (id: string) =>
+  call<{ device_id: string; known: boolean; stretches: SoftwareStretch[] }>(`/devices/${encodeURIComponent(id)}/software-history`, "GET");
+export const getSoftwareChanges = (days = 90) =>
+  call<{ days: number; since: string; changes: SoftwareChange[] }>(`/api/v2/software-history/changes?days=${days}`, "GET");
 export const getLifecycle = () => call<LifecycleFleet>("/api/v2/lifecycle", "GET");
 export const getDeviceLifecycle = (id: string) => call<LifecycleDevice>(`/devices/${encodeURIComponent(id)}/lifecycle`, "GET");
 export const getLifecycleAdvisories = () => call<{ as_of: string; advisories: LifecycleAdvisory[] }>("/api/v2/lifecycle/advisories", "GET");

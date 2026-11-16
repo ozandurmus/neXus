@@ -374,7 +374,8 @@
     "advisory_fetch_cisa_kev_ingest_refused_during_deploy_overlap": "java_debt",
     "trivy_cache_pvc_enable_attended": "agent_operations",
     "deploy_scan_parallelism": "agent_operations",
-    "failover_four_eyes_enforcement_verify_before_scc_handover": "java_debt"
+    "failover_four_eyes_enforcement_verify_before_scc_handover": "java_debt",
+    "device_software_version_history": "java_feature"
   },
   "converted_lessons": [
     {

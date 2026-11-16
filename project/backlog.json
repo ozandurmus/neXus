@@ -459,6 +459,15 @@
       "priority": "P1",
       "target": "FailoverAuthorizationService / FourEyesValidationRule",
       "note": ""
+    },
+    {
+      "id": "device_software_version_history",
+      "category": "inventory",
+      "title": "Device software version history: when was each device upgraded, from our own observations",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "V243 device_software_version_history / SoftwareHistoryController / Lifecycle Recent upgrades",
+      "note": ""
     }
   ]
 }
