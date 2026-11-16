@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T08:39:36Z
+Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T11:40:30Z
 
 ## Now
 - NXS-LOCAL-0391 — Release queue: ASA readiness, integration gate, CP advisories, zone matrix, ACI step 1, API latency, Backups batch (in_progress)
@@ -9,6 +9,7 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T08:39:36Z
 - P1/in_progress aci_segmentation_step1 — ACI step 1: pre-cutover impact analysis, one segment
 - P1/in_progress aiview_masking_leak_audit — Masking leak audit: compare aiview responses against the..
 - P1/in_progress asa_fortigate_policy_model — ASA and FortiGate policy model for lookup and hygiene
+- P1/in_progress device_software_version_history — Device software version history: when was each device upgr
 - P1/in_progress policy_collection_gaps — Policy collection gaps: CP gateway objects (D-1), PAN App-
 - P1/in_progress rule_recertification_campaigns — Rule recertification and cleanup campaigns
 - P1/in_progress zone_matrix_delivery — Zone matrix: freeze contract, then deliver in steps

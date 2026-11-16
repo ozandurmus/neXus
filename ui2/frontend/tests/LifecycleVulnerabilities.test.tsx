@@ -208,7 +208,7 @@ describe("Vulnerabilities tab", () => {
   it("is the third tab and lists sources and advisories with the counts line", async () => {
     themed(<LifecycleScreen />);
     await screen.findByRole("table", { name: "Fleet lifecycle" });
-    expect(screen.getAllByRole("tab").map(t => t.textContent)).toEqual(["Fleet", "Catalog", "Vulnerabilities"]);
+    expect(screen.getAllByRole("tab").map(t => t.textContent)).toEqual(["Fleet", "Catalog", "Vulnerabilities", "Recent upgrades"]);
     fireEvent.click(screen.getByRole("tab", { name: "Vulnerabilities" }));
     const list = await screen.findByRole("table", { name: "Security advisories" });
     expect(within(list).getAllByRole("columnheader").map(h => h.textContent)).toEqual(["Severity", "Advisory", "Exploited", "Devices", "Published", "Vendor page"]);

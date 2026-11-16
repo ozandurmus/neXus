@@ -7,6 +7,7 @@ import { downloadText, toCsv } from "./DeviceShared";
 import { LifecycleCatalogPanel, lifecycleError } from "./LifecycleCatalogPanel";
 import { LifecycleVulnerabilitiesPanel, VulnerabilityCell, VulnerabilityDetail, severityWord, advisorySourceName, vulnerabilityRank, vulnerabilitySummary } from "./LifecycleVulnerabilitiesPanel";
 import { m3 } from "../theme/m3Theme";
+import { RecentUpgradesPanel } from "./SoftwareHistoryPanel";
 
 const cards = [["devices", "Devices"], ["past_end_of_support", "Past end of support"], ["within_180_days", "Within 180 days"], ["within_365_days", "Within 365 days"], ["no_lifecycle_data", "No lifecycle data"], ["lifecycle_not_evaluated", "Lifecycle not evaluated"], ["lifecycle_needs_review", "Lifecycle needs review"], ["licenses_within_60_days", "Licenses within 60 days"], ["license_problems", "License problems"], ["live_patch_not_active", "Live Patch not active"], ["live_patch_missing", "No Live Patch package"]];
 const headings = ["Device / cluster", "Vendor", "Model", "Version", "Vulnerabilities", "Hardware end of support", "Software end of support", "Next milestone", "Nearest license expiry", "Risk", "Match basis", "Licenses", "Live Patch"];
@@ -213,7 +214,7 @@ export function LifecycleScreen() {
       </Stack>}
     </>}
   </Stack>;
-  return <Box sx={{ px: 3, pb: 3 }}><M3Tabs ariaLabel="Lifecycle view" tabs={[{ label: "Fleet", panel: panel }, { label: "Catalog", panel: <LifecycleCatalogPanel onChanged={fleet.refresh} /> }, { label: "Vulnerabilities", panel: <LifecycleVulnerabilitiesPanel /> }]} /></Box>;
+  return <Box sx={{ px: 3, pb: 3 }}><M3Tabs ariaLabel="Lifecycle view" tabs={[{ label: "Fleet", panel: panel }, { label: "Catalog", panel: <LifecycleCatalogPanel onChanged={fleet.refresh} /> }, { label: "Vulnerabilities", panel: <LifecycleVulnerabilitiesPanel /> }, { label: "Recent upgrades", panel: <RecentUpgradesPanel /> }]} /></Box>;
 }
 
 /** The one lifecycle sentence of a device: its risk word, then the support dates and licence expiry that explain it. */

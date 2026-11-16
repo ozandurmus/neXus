@@ -45,6 +45,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/zone-matrix/policies", ActionRegistry.ZONE_MATRIX_READ),
             Map.entry("POST /api/v2/zone-matrix/evaluate", ActionRegistry.ZONE_MATRIX_EVALUATE),
             Map.entry("GET /devices/*/lifecycle", ActionRegistry.DEVICE_READ),
+            Map.entry("GET /devices/*/software-history", ActionRegistry.DEVICE_READ),
+            Map.entry("GET /api/v2/software-history/changes", ActionRegistry.DEVICE_READ),
             Map.entry("GET /api/v2/lifecycle/catalog", ActionRegistry.DEVICE_READ),
             // Advisory matching part 1 (ADVISORY_MATCHING_CONTRACT.md section 8): read access follows the Lifecycle view.
             Map.entry("GET /api/v2/lifecycle/advisories", ActionRegistry.DEVICE_READ),

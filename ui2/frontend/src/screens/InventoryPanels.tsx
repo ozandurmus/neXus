@@ -83,6 +83,7 @@ import { DeviceLogsPanel, describeSystemLogCollectError, describeSystemLogCollec
 import { CpFailoverPanel } from "./CpFailoverPanel";
 import { CertificateStatePill, HttpsCertificateCard } from "./HttpsCertificatePanel";
 import { PLATFORM_IDENTITY_OPEN_KEY, PlatformIdentityPanel, PlatformIdentityPanelContext, identityTiles, platformFactsNote } from "./PlatformIdentity";
+import { DeviceSoftwareHistory } from "./SoftwareHistoryPanel";
 import { usePreferenceFlag } from "../shell/preference";
 import { FRESH_UNDER_MS } from "../shell/freshness";
 import {
@@ -2871,6 +2872,7 @@ export function DeviceInventoryPanels({
           <HttpsCertificateCard deviceId={device.device_id} data={certificateFetch.data}
             error={certificateFetch.error} refresh={certificateFetch.refresh} manager={device.role === "management_server"} />
           <IdentityBasisCard device={device} />
+          <DeviceSoftwareHistory deviceId={device.device_id} />
         </PlatformIdentityPanel>
       </InventoryEntityHeader>
 

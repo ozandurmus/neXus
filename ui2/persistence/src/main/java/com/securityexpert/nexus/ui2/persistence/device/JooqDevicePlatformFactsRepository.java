@@ -38,7 +38,8 @@ public final class JooqDevicePlatformFactsRepository implements DevicePlatformFa
             return;
         }
         String versions = toJson(facts.contentVersions());
-        transactionBoundary.inTransaction(dsl -> dsl.execute(
+        transactionBoundary.inTransaction(dsl -> {
+            dsl.execute(
                 "insert into device_platform_facts(device_id, serial_number, hotfix_level, platform_family, content_versions, "
                         + "uptime_text, source_read, observed_at) values ({0}, {1}, {2}, {3}, {4}::jsonb, {5}, {6}, now()) "
                         + "on conflict (device_id) do update set serial_number = excluded.serial_number, "
@@ -46,7 +47,15 @@ public final class JooqDevicePlatformFactsRepository implements DevicePlatformFa
                         + "content_versions = excluded.content_versions, uptime_text = excluded.uptime_text, "
                         + "source_read = excluded.source_read, observed_at = now()",
                 facts.deviceId(), facts.serialNumber().orElse(null), facts.hotfixLevel().orElse(null),
-                facts.platformFamily().orElse(null), versions, facts.uptimeText().orElse(null), facts.sourceRead()));
+                facts.platformFamily().orElse(null), versions, facts.uptimeText().orElse(null), facts.sourceRead());
+            // V243: a hotfix / Jumbo level read goes into the software version history in the same transaction.
+            // The version is the device's own observed one; no version yet means nothing to attach it to.
+            if (facts.hotfixLevel().isPresent()) {
+                dsl.fetch("select ui2_record_software_version(d.device_id, d.observed_software_version, {1}, 'platform_facts') "
+                        + "from devices d where d.device_id = {0}", facts.deviceId(), facts.hotfixLevel().get());
+            }
+            return null;
+        });
     }
 
     @Override

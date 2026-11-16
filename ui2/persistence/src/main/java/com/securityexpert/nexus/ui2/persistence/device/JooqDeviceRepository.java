@@ -160,7 +160,8 @@ public final class JooqDeviceRepository implements DeviceRepository {
         if (hostname.isEmpty() && model.isEmpty() && softwareVersion.isEmpty() && haRole.isEmpty()) {
             return false;
         }
-        return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, (DSLContext dsl) -> dsl.execute(
+        return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, (DSLContext dsl) -> {
+            int updated = dsl.execute(
                 "update devices set observed_hostname = coalesce({1}, observed_hostname), "
                         + "observed_model = coalesce({2}, observed_model), "
                         + "observed_software_version = coalesce({3}, observed_software_version), "
@@ -169,7 +170,19 @@ public final class JooqDeviceRepository implements DeviceRepository {
                         + "or observed_model is distinct from coalesce({2}, observed_model) "
                         + "or observed_software_version is distinct from coalesce({3}, observed_software_version) "
                         + "or observed_ha_role is distinct from coalesce({4}, observed_ha_role))",
-                deviceId, hostname.orElse(null), model.orElse(null), softwareVersion.orElse(null), haRole.orElse(null))) == 1;
+                deviceId, hostname.orElse(null), model.orElse(null), softwareVersion.orElse(null), haRole.orElse(null));
+            // V243: every observation of the version goes into the history in the same transaction (a change opens
+            // a stretch, an unchanged read moves last_seen_at), including the read that changed nothing in devices.
+            recordSoftwareVersion(dsl, deviceId, softwareVersion.orElse(null));
+            return updated;
+        }) == 1;
+    }
+
+    /** One observation of the device's version into {@code device_software_version_history} (V243), same transaction. */
+    private static void recordSoftwareVersion(DSLContext dsl, String deviceId, String softwareVersion) {
+        if (softwareVersion != null) {
+            dsl.fetch("select ui2_record_software_version({0}, {1}, null, 'inventory')", deviceId, softwareVersion);
+        }
     }
 
     @Override
@@ -359,7 +372,8 @@ public final class JooqDeviceRepository implements DeviceRepository {
     public boolean recordConfirmSuccess(String deviceId, DeviceConfirmFacts facts, String actorFingerprint,
             String actionId) {
         Timestamp now = Timestamp.from(Instant.now());
-        int updated = auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> dsl.execute(
+        int updated = auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
+            int rows = dsl.execute(
                 "update devices set "
                         + "enrollment_state = 'ENROLLED', "
                         + "observed_hostname = {0}, observed_model = {1}, observed_software_version = {2}, "
@@ -379,7 +393,12 @@ public final class JooqDeviceRepository implements DeviceRepository {
                 facts.identityMismatchState(), facts.identityMismatchPresentedPrimary().orElse(null),
                 facts.identityMismatchPresentedSecondary().orElse(null), facts.clusterMemberRef().orElse(null),
                 facts.virtualSystemRef().orElse(null), facts.peerFollowOutcome(), facts.peerFollowReason().orElse(null),
-                deviceId));
+                deviceId);
+            if (rows == 1) {
+                recordSoftwareVersion(dsl, deviceId, facts.observedSoftwareVersion().orElse(null));
+            }
+            return rows;
+        });
         return updated == 1;
     }
 

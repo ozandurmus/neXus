@@ -206,6 +206,12 @@ public class DeviceCompositionConfiguration {
     }
 
     @Bean
+    public com.securityexpert.nexus.ui2.persistence.device.DeviceSoftwareHistoryRepository deviceSoftwareHistoryRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.device.JooqDeviceSoftwareHistoryRepository(transactionBoundary);
+    }
+
+    @Bean
     public CredentialReferenceRepository credentialReferenceRepository(TransactionBoundary transactionBoundary) {
         return new JooqCredentialReferenceRepository(transactionBoundary);
     }
