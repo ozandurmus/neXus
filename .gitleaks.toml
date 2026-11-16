@@ -58,3 +58,11 @@ paths = [
 description = "Synthetic RSA key fixture in AsaSupportBundleJobExecutorTest history, 2026-11-16; review 2026-12-31"
 targetRules = ["private-key"]
 commits = ["7f945da813d64baddbdac7f6e94bc4629cc49754"]
+
+# 2026-11-16 (batch 14 SAML): Java parameter lists "PrivateKey key, X509Certificate ..." read as key=value by
+# generic-api-key. Exact match text only, so a real value after "key, " is still reported. Review 2026-12-31.
+[[allowlists]]
+description = "SAML Java signatures (PrivateKey ..., X509Certificate) misread as generic API keys, 2026-11-16; review 2026-12-31"
+targetRules = ["generic-api-key"]
+regexTarget = "match"
+regexes = ['''(?i)key, X509Certificate''']
