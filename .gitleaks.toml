@@ -24,6 +24,13 @@ description = "Retired local dashboard bearer token, PO 2026-09-30; advisory env
 targetRules = ["generic-api-key"]
 commits = ["8288cb4cd61178d049d348da39d95816f5e93852", "42ee5549bbbe89672e62d029043331404d736438"]
 
+# 7f945da8 (2026-11-16, batch 13 support bundle ASA test): a synthetic RSA key block proving the show tech-support
+# redaction; the working tree now builds the header at runtime. History only; review 2026-12-31.
+[[allowlists]]
+description = "Synthetic RSA key fixture in AsaSupportBundleJobExecutorTest history, 2026-11-16; review 2026-12-31"
+targetRules = ["private-key"]
+commits = ["7f945da813d64baddbdac7f6e94bc4629cc49754"]
+
 # Exact synthetic fixture paths, scoped to this rule; all other rules remain active.
 # Configuration syntax: https://github.com/gitleaks/gitleaks#configuration
 [[allowlists]]
