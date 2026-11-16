@@ -22,6 +22,10 @@ import org.junit.jupiter.api.Test;
 import com.securityexpert.nexus.ui2.integration.support.Ui2PostgresFixture;
 import com.securityexpert.nexus.ui2.integration.support.Ui2Rows;
 import com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary;
+import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactClass;
+import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactValidation;
+import com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestRecord;
+import com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupArtefactManifestRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSoftwareHistoryRepository.Stretch;
 import com.securityexpert.nexus.ui2.persistence.device.JooqDevicePlatformFactsRepository;
@@ -165,5 +169,97 @@ class SoftwareVersionHistoryTest {
         assertEquals("discovery_backfill", rows.get(0).source());
         assertEquals("10.1", rows.get(1).softwareVersion());
         assertTrue(rows.get(1).previousSoftwareVersion().isEmpty());
+    }
+
+    private static void insertBackupRow(Statement statement, String artefactId, String deviceId, String version, String createdAt)
+            throws SQLException {
+        statement.execute("INSERT INTO backup_artefact(artefact_id, device_id, artefact_class, vendor, software_version, "
+                + "hostname_fingerprint, plaintext_sha256, plaintext_bytes, ciphertext_sha256, ciphertext_bytes, key_id, "
+                + "wrapped_data_key, validation, retention_tier, recovery_volume_path, created_at) VALUES ('" + artefactId
+                + "', '" + deviceId + "', 'backup', 'check_point', " + (version == null ? "NULL" : "'" + version + "'")
+                + ", '" + "a".repeat(64) + "', 'plain-sha', 10, 'cipher-sha', 10, 'v1', decode('00', 'hex'), "
+                + "'{\"level_reached\":\"V1\",\"v3_status\":\"NOT_APPLICABLE\",\"restore_proven\":false}'::jsonb, "
+                + "'standard', '" + artefactId + ".enc', '" + createdAt + "')");
+    }
+
+    @Test
+    void backupsNarrowADiscoveryWindowInTheV244Rebuild() throws SQLException, IOException {
+        String id = newDevice();
+        refresh(id, "10.2");
+        String stable = Ui2Rows.opaqueId("stable");
+        try (Connection app = fixture.appConnection()) {
+            String credential = Ui2Rows.insertCredentialReference(app);
+            app.setAutoCommit(false);
+            Ui2Rows.setAuditContext(app, Ui2Rows.ACTOR, Ui2Rows.ACTION);
+            try (Statement statement = app.createStatement()) {
+                statement.execute("UPDATE devices SET discovery_match_key = 'synthetic_vendor|" + stable + "' WHERE device_id = '" + id + "'");
+                String[][] runs = { {"r1", "2026-09-01T00:00:00Z", "10.1"}, {"r2", "2026-09-20T00:00:00Z", "10.2"} };
+                for (String[] run : runs) {
+                    String runId = id + "-" + run[0];
+                    statement.execute("INSERT INTO discovery_run(run_id, vendor, management_address, credential_reference_id, "
+                            + "requested_by_actor_fingerprint, state, finished_at) VALUES ('" + runId + "', 'synthetic_vendor', "
+                            + "'synthetic-address', '" + credential + "', 'synthetic-actor', 'FINISHED', '" + run[1] + "')");
+                    statement.execute("INSERT INTO discovery_candidate(candidate_id, run_id, vendor, stable_identifier, kind, "
+                            + "software_version, importable) VALUES ('" + runId + "-c', '" + runId + "', 'synthetic_vendor', '"
+                            + stable + "', 'firewall', '" + run[2] + "', true)");
+                }
+                insertBackupRow(statement, id + "-b1", id, "10.1", "2026-09-05T02:00:00Z");
+                insertBackupRow(statement, id + "-b2", id, "10.1", "2026-09-10T02:00:00Z");
+                insertBackupRow(statement, id + "-b3", id, "10.2", "2026-09-15T02:00:00Z");
+                insertBackupRow(statement, id + "-b4", id, null, "2026-09-16T02:00:00Z");
+                // Seed the history the way V243 left it (discovery only), then run the V244 rebuild for this device.
+                statement.execute("DELETE FROM device_software_version_history WHERE device_id = '" + id + "'");
+                String sql = Files.readString(Ui2PostgresFixture.migrationDirectory().resolve("V244__software_version_history_backup_source.sql"));
+                String rebuild = sql.substring(sql.indexOf("INSERT INTO device_software_version_history"), sql.indexOf("-- 3."));
+                statement.execute(rebuild.replace("FROM chained;", "FROM chained WHERE device_id = '" + id + "';"));
+            }
+            app.commit();
+        }
+        List<Stretch> rows = history.forDevice(id);
+        assertEquals(2, rows.size());
+        Stretch now = rows.get(0);
+        assertEquals("10.2", now.softwareVersion());
+        assertEquals(Instant.parse("2026-09-15T02:00:00Z"), now.firstSeenAt(), "the backup, not the 09-20 discovery run, opens the stretch");
+        assertEquals("backup", now.source());
+        assertEquals(Optional.of("10.1"), now.previousSoftwareVersion());
+        assertEquals(Optional.of(Instant.parse("2026-09-10T02:00:00Z")), now.previousLastSeenAt(),
+                "the window is (last old backup, first new backup], not (discovery run, discovery run]");
+        assertEquals("10.1", rows.get(1).softwareVersion());
+        assertEquals(Instant.parse("2026-09-01T00:00:00Z"), rows.get(1).firstSeenAt());
+        assertEquals(Instant.parse("2026-09-10T02:00:00Z"), rows.get(1).lastSeenAt());
+        assertEquals("discovery_backfill", rows.get(1).source());
+    }
+
+    @Test
+    void aBackupInsertOpensAStretchAndALaterOneWithTheSameVersionBumpsIt() throws SQLException {
+        String id = newDevice();
+        var boundary = new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES));
+        var manifests = new JooqBackupArtefactManifestRepository(boundary);
+        manifests.record(manifest(id + "-m1", id, Optional.of("R81.10")), Ui2Rows.ACTOR, Ui2Rows.ACTION);
+        List<Stretch> first = history.forDevice(id);
+        assertEquals(1, first.size());
+        assertEquals("R81.10", first.get(0).softwareVersion());
+        assertEquals("backup", first.get(0).source());
+
+        manifests.record(manifest(id + "-m2", id, Optional.of("R81.10")), Ui2Rows.ACTOR, Ui2Rows.ACTION);
+        List<Stretch> bumped = history.forDevice(id);
+        assertEquals(1, bumped.size(), "the same version must not open a second stretch");
+        assertTrue(!bumped.get(0).lastSeenAt().isBefore(first.get(0).lastSeenAt()));
+
+        manifests.record(manifest(id + "-m3", id, Optional.empty()), Ui2Rows.ACTOR, Ui2Rows.ACTION);
+        assertEquals(1, history.forDevice(id).size(), "a manifest without a version records nothing");
+
+        manifests.record(manifest(id + "-m4", id, Optional.of("R82")), Ui2Rows.ACTOR, Ui2Rows.ACTION);
+        List<Stretch> changed = history.forDevice(id);
+        assertEquals(2, changed.size());
+        assertEquals("R82", changed.get(0).softwareVersion());
+        assertEquals(Optional.of("R81.10"), changed.get(0).previousSoftwareVersion());
+    }
+
+    private static BackupArtefactManifestRecord manifest(String artefactId, String deviceId, Optional<String> version) {
+        return new BackupArtefactManifestRecord(artefactId, deviceId, Optional.empty(), ArtefactClass.CONFIGURATION,
+                version.isPresent() ? "check_point" : "palo_alto", version, "a".repeat(64), "plain-sha", 100L, "cipher-sha", 132L, "v1",
+                new byte[] { 1, 2, 3 }, ArtefactValidation.reachedWithoutRestore("V1"), "standard", Optional.empty(),
+                artefactId + ".enc", Optional.empty());
     }
 }

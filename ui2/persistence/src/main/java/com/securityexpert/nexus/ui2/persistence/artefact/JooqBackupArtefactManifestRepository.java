@@ -58,6 +58,13 @@ public final class JooqBackupArtefactManifestRepository implements BackupArtefac
                 manifest.expiresAt().map(Timestamp::from).orElse(null), manifest.recoveryVolumePath(),
                 manifest.deviationState().orElse(null), manifest.backupType());
 
+        // V244: a backup is a software-version observation; same transaction as the manifest row. A manifest
+        // without a version (reports, bundles, logs) records nothing.
+        if (manifest.softwareVersion().isPresent()) {
+            dsl.fetch("select ui2_record_software_version({0}, {1}, null, 'backup')",
+                    manifest.deviceId(), manifest.softwareVersion().get());
+        }
+
         // BK-18: the ledger is written whenever an artefact is created.
         dsl.execute("insert into artefact_retention_ledger(ledger_id, artefact_id, event, retention_tier) "
                 + "values ({0}, {1}, {2}, {3})",
