@@ -121,6 +121,82 @@ class FourEyesValidationRuleTest {
         assertTrue(token.isExpired(testClock.instant()));
     }
 
+    private FailoverAuthorizationRequest request(String requester, String approver) {
+        return new FailoverAuthorizationRequest(
+            "cls-uuid-001", requester, approver, "Disaster recovery drill ticket CHG-9921",
+            "CHG-9921", "sha256:preflightdigest12345", "client-nonce-001");
+    }
+
+    @Test
+    @DisplayName("Case and surrounding-whitespace variants of the requester cannot act as the approver")
+    void refusesCaseAndWhitespaceVariantsOfTheSamePrincipal() {
+        for (String approver : new String[] {"Operator-Alice", "OPERATOR-ALICE", " operator-alice", "operator-alice ", "\toperator-alice\t"}) {
+            var result = rule.authorize(request("operator-alice", approver));
+            assertInstanceOf(FourEyesAuthorizationResult.Refused.class, result, "approver variant: [" + approver + "]");
+            assertEquals("FOUR_EYES_IDENTITY_COLLISION", ((FourEyesAuthorizationResult.Refused) result).code());
+        }
+    }
+
+    @Test
+    @DisplayName("A missing, empty or blank approver is refused as unauthenticated, never defaulted")
+    void refusesMissingApprover() {
+        for (String approver : new String[] {"", "   "}) {
+            var result = rule.authorize(request("operator-alice", approver));
+            assertEquals("AUTHENTICATION_REQUIRED", ((FourEyesAuthorizationResult.Refused) result).code());
+        }
+    }
+
+    @Test
+    @DisplayName("A lease is bound to its cluster, approver, requester and digest: changing any field breaks the signature")
+    void leaseSignatureCoversEveryAuthorizationField() {
+        var token = ((FourEyesAuthorizationResult.Authorized) rule.authorize(request("operator-alice", "operator-bob"))).leaseToken();
+        assertTrue(rule.verifyTokenSignature(token, "client-nonce-001"));
+        var otherCluster = new FailoverLeaseToken(token.tokenId(), "cls-uuid-002", token.requesterId(), token.approverId(),
+            token.assessmentDigest(), token.issuedAt(), token.expiresAt(), token.tokenSignature());
+        var otherApprover = new FailoverLeaseToken(token.tokenId(), token.clusterRef(), token.requesterId(), "operator-carol",
+            token.assessmentDigest(), token.issuedAt(), token.expiresAt(), token.tokenSignature());
+        var otherRequester = new FailoverLeaseToken(token.tokenId(), token.clusterRef(), "operator-carol", token.approverId(),
+            token.assessmentDigest(), token.issuedAt(), token.expiresAt(), token.tokenSignature());
+        var otherDigest = new FailoverLeaseToken(token.tokenId(), token.clusterRef(), token.requesterId(), token.approverId(),
+            "sha256:changedplan", token.issuedAt(), token.expiresAt(), token.tokenSignature());
+        var longerLease = new FailoverLeaseToken(token.tokenId(), token.clusterRef(), token.requesterId(), token.approverId(),
+            token.assessmentDigest(), token.issuedAt(), token.expiresAt().plus(Duration.ofHours(1)), token.tokenSignature());
+        for (var tampered : new FailoverLeaseToken[] {otherCluster, otherApprover, otherRequester, otherDigest, longerLease}) {
+            assertFalse(rule.verifyTokenSignature(tampered, "client-nonce-001"));
+        }
+    }
+
+    @Test
+    @DisplayName("A token signed by another key, or checked without a nonce, is never accepted")
+    void tokenFromAnotherKeyOrWithoutNonceIsRejected() {
+        var token = ((FourEyesAuthorizationResult.Authorized) rule.authorize(request("operator-alice", "operator-bob"))).leaseToken();
+        byte[] otherKey = "a-different-secret-key-of-16plus".getBytes(StandardCharsets.UTF_8);
+        assertFalse(new FourEyesValidationRule(otherKey, testClock).verifyTokenSignature(token, "client-nonce-001"));
+        assertFalse(rule.verifyTokenSignature(token, null));
+        assertFalse(rule.verifyTokenSignature(null, "client-nonce-001"));
+    }
+
+    @Test
+    @DisplayName("Missing maintenance window, assessment digest or nonce each refuse the authorization")
+    void refusesMissingWindowDigestOrNonce() {
+        var noWindow = new FailoverAuthorizationRequest("c", "operator-alice", "operator-bob", "long enough reason", " ", "d", "n");
+        var noDigest = new FailoverAuthorizationRequest("c", "operator-alice", "operator-bob", "long enough reason", "CHG-1", " ", "n");
+        var noNonce = new FailoverAuthorizationRequest("c", "operator-alice", "operator-bob", "long enough reason", "CHG-1", "d", " ");
+        assertEquals("MAINTENANCE_WINDOW_REQUIRED", ((FourEyesAuthorizationResult.Refused) rule.authorize(noWindow)).code());
+        assertEquals("PREFLIGHT_ASSESSMENT_REQUIRED", ((FourEyesAuthorizationResult.Refused) rule.authorize(noDigest)).code());
+        assertEquals("NONCE_REQUIRED", ((FourEyesAuthorizationResult.Refused) rule.authorize(noNonce)).code());
+    }
+
+    @Test
+    @DisplayName("The lease is valid up to its expiry instant and refused one millisecond after")
+    void leaseExpiryBoundary() {
+        var token = ((FourEyesAuthorizationResult.Authorized) rule.authorize(request("operator-alice", "operator-bob"))).leaseToken();
+        testClock.advance(FourEyesValidationRule.MAX_LEASE_DURATION);
+        assertTrue(rule.verifyTokenSignature(token, "client-nonce-001"));
+        testClock.advance(Duration.ofMillis(1));
+        assertFalse(rule.verifyTokenSignature(token, "client-nonce-001"));
+    }
+
     private static class MutableClock extends Clock {
         private Instant current;
 

@@ -168,6 +168,52 @@ class JooqFailoverApprovalTest {
             assertEquals(1,db.writes);
         }
     }
+    @Test void workerRefusesAnyDeviceWriteForATwoPersonRunWithoutSecondApproval() {
+        // A run row that exists without a recorded second approval (for example inserted directly) still cannot send.
+        for (String phase:List.of("FAILING_OVER","RETURNING")) {
+            Database db=new Database(); db.run.put("state",phase);
+            db.approval.put("policy",JooqCpFailoverRepository.TWO_PERSON); db.approval.put("approved_by",null);
+            assertEquals("SECOND_APPROVAL_REQUIRED",db.dispatch());
+            assertEquals(0,db.writes,"no dispatch authority is granted without the second approval");
+            db.approval.put("approved_by","principal-b");
+            assertEquals("ADMITTED",db.dispatch());
+        }
+    }
+    @Test void workerRefusesAWindowOnlyApprovalWithoutRequestBinding() {
+        Database db=new Database(); db.approval.put("request_revision",null);
+        assertEquals("REQUEST_BINDING_REQUIRED",db.dispatch());
+        db=new Database(); db.approval.put("warning_confirmed_at",null);
+        assertEquals("REQUEST_BINDING_REQUIRED",db.dispatch());
+        db=new Database(); db.run.put("requested_by","principal-b");
+        assertEquals("REQUEST_BINDING_REQUIRED",db.dispatch(),"the run must belong to the request's initiator");
+        assertEquals(0,db.writes);
+    }
+    @Test void workerRefusesWhenTheApprovalPolicyVersionChanged() {
+        Database db=new Database(); db.approval.put("policy_version",2);
+        assertEquals("POLICY_CHANGED",db.dispatch());
+        assertEquals(0,db.writes);
+    }
+    @Test void secondApprovalIsRefusedForRevokedExpiredChangedOrSinglePolicyRequests() {
+        Database db=new Database(); db.approval.put("policy",JooqCpFailoverRepository.TWO_PERSON); db.approval.put("approved_by",null);
+        db.approval.put("revoked_at",NOW.atOffset(ZoneOffset.UTC));
+        assertEquals("APPROVAL_REVOKED",db.repository.approveRequest("request-a",1,"principal-b","check_point",MEMBERS));
+        db.approval.put("revoked_at",null); db.clock=NOW.plusSeconds(30);
+        assertEquals("WINDOW_EXPIRED",db.repository.approveRequest("request-a",1,"principal-b","check_point",MEMBERS));
+        db.clock=NOW;
+        assertEquals("REQUEST_CHANGED",db.repository.approveRequest("request-a",2,"principal-b","check_point",MEMBERS));
+        assertEquals("REQUEST_CHANGED",db.repository.approveRequest("request-a",1,"principal-b","palo_alto",MEMBERS));
+        assertEquals("MEMBER_SET_CHANGED",db.repository.approveRequest("request-a",1,"principal-b","check_point",Set.of("member-a","member-z")));
+        assertNull(db.approval.get("approved_by"),"none of the refusals recorded an approval");
+        db.approval.put("policy",JooqCpFailoverRepository.ADMIN_SINGLE);
+        assertEquals("WRONG_POLICY",db.repository.approveRequest("request-a",1,"principal-b","check_point",MEMBERS));
+    }
+    @Test void aRecordedSecondApprovalIsNeverReplacedByAThirdPrincipal() {
+        Database db=new Database(); db.approval.put("policy",JooqCpFailoverRepository.TWO_PERSON); db.approval.put("approved_by",null);
+        assertEquals("APPROVED",db.repository.approveRequest("request-a",1,"principal-b","check_point",MEMBERS));
+        assertEquals("APPROVED",db.repository.approveRequest("request-a",1,"principal-b","check_point",MEMBERS));
+        assertEquals("ALREADY_APPROVED",db.repository.approveRequest("request-a",1,"principal-c","check_point",MEMBERS));
+        assertEquals("principal-b",db.approval.get("approved_by"));
+    }
     @Test void opaqueMemberRevisionIsOrderIndependentAndFramed() {
         assertEquals(JooqCpFailoverRepository.memberSetRevision(MEMBERS),
             JooqCpFailoverRepository.memberSetRevision(new LinkedHashSet<>(List.of("member-b","member-a"))));
