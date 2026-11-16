@@ -18,7 +18,7 @@ import com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.identity.JooqSamlSettingsRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.SamlSettingsRecord;
 
-/** V237 (migration plan Step 4): SAML is off with no row, the write is audited without any value, the constraints hold, SAML_GROUP is a binding kind. */
+/** V241 (migration plan Step 4): SAML is off with no row, the write is audited without any value, the constraints hold, SAML_GROUP is a binding kind. */
 class SamlSettingsSchemaTest {
 
     private static SamlSettingsRecord row(boolean enabled, String admin, String users, byte[] keyCipher, String keyId, String spCert) {

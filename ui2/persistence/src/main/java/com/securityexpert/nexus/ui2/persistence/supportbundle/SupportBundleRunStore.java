@@ -57,7 +57,7 @@ public interface SupportBundleRunStore {
         return List.of();
     }
 
-    /** The leftover work directory a cleanup job (V236, PO approved 2026-11-16) must remove; empty when this job is not a cleanup. */
+    /** The leftover work directory a cleanup job (V240, PO approved 2026-11-16) must remove; empty when this job is not a cleanup. */
     default Optional<JooqSupportBundleStore.CleanupWork> findCleanupByJob(String jobId) {
         return Optional.empty();
     }

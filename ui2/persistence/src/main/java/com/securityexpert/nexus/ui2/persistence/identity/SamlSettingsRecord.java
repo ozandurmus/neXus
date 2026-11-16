@@ -5,7 +5,7 @@ import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * The one {@code saml_settings} row (V237). Everything in it is public SAML data except {@code spPrivateKeyEncrypted},
+ * The one {@code saml_settings} row (V241). Everything in it is public SAML data except {@code spPrivateKeyEncrypted},
  * which is AES-256-GCM ciphertext under the credential store key and never leaves the server. Equality compares the
  * ciphertext by content so a reload is detected only when a value really changed.
  */
