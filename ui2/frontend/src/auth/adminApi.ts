@@ -173,7 +173,7 @@ export function getSessionStatus(options?: { readonly force?: boolean }): Promis
       const response = await fetch("/session/status", { credentials: "include" });
       if (!response.ok) {
         // The signed-out answer says whether single sign-on (SAML) is on; read it from the one request already made.
-        samlLoginOffered = await response.json().then((body: { saml_enabled?: unknown }) => body?.saml_enabled === true, () => false);
+        samlLoginOffered = await response.text().then((raw) => (JSON.parse(raw) as { saml_enabled?: unknown } | null)?.saml_enabled === true, () => false); // reading the error body also keeps a no-store response from staying pending in Chrome
         return null;
       }
       samlLoginOffered = false;
