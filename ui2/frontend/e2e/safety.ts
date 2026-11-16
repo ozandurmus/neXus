@@ -52,3 +52,16 @@ export async function installReadOnlyGuard(context: BrowserContext, origin: stri
 export function isErrorAlert(classes: string): boolean {
   return !/\bMuiAlert-(?:standard|outlined|filled)(?:Info|Success)\b/.test(classes);
 }
+
+/** An alert as the page renders it: its classes and whether it is an operational alert the status screen lists. */
+export type RenderedAlert = { className: string; statusAlert: string | null };
+
+/**
+ * Alerts that fail the screen check. The Platform status screen exists to show operational alerts from the status API
+ * (disk headroom, artefact quota, quarantined permits, unavailable pod data), so those carry data-status-alert="operational"
+ * and are allowed when they are warnings. An error-severity status alert is allowed only when it is also marked: a
+ * load-failure alert, an error boundary or any unmarked alert still fails. Informational alerts never fail.
+ */
+export function failingAlerts(alerts: readonly RenderedAlert[]): RenderedAlert[] {
+  return alerts.filter(alert => isErrorAlert(alert.className) && alert.statusAlert !== "operational");
+}

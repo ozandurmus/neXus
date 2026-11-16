@@ -107,7 +107,7 @@ export function SystemStatusPanel() {
   return (
     <Stack spacing={2}>
       {disk && fullVolumes.length > 0 && (
-        <Alert severity={disk.level === "critical" ? "error" : "warning"} data-disk-headroom={disk.level}>
+        <Alert severity={disk.level === "critical" ? "error" : "warning"} data-disk-headroom={disk.level} data-status-alert="operational">
           {`Disk ${disk.level === "critical" ? "critical" : "warning"}: ${fullVolumes.map((v) => `${v.name} ${v.used_percent}% used (${v.level})`).join(", ")}. Thresholds: warning ${disk.thresholds.warning_percent}%, critical ${disk.thresholds.critical_percent}%.`}
         </Alert>
       )}
@@ -115,7 +115,7 @@ export function SystemStatusPanel() {
         <Typography variant="overline" sx={{ color: m3.onSurfaceVar }}>Storage</Typography>
         <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5, mb: 1.5 }}>What the evidence takes</Typography>
         {(vol.quota_exceeded || vol.near_limit) && vol.quota_bytes !== undefined && (
-          <Alert severity={vol.quota_exceeded ? "error" : "warning"} sx={{ mb: 1.5 }} title={vol.warning ?? undefined}>
+          <Alert severity={vol.quota_exceeded ? "error" : "warning"} data-status-alert="operational" sx={{ mb: 1.5 }} title={vol.warning ?? undefined}>
             {vol.quota_exceeded
               ? `The artefact store is full: ${formatBytes(vol.used_bytes)} of its ${formatBytes(vol.quota_bytes)} quota. New backups and collections are refused until retention frees space or the quota is raised. Nothing is deleted automatically.`
               : `The artefact store is at ${vol.usage_percent ?? "?"}% of its quota (${formatBytes(vol.used_bytes)} of ${formatBytes(vol.quota_bytes)}). New writes are refused at 100%; nothing is deleted automatically.`}
@@ -196,10 +196,10 @@ export function SystemStatusPanel() {
             </Typography>}
           </Box>
         )}
-        {!pods.available && <Alert severity="warning">{pods.reason}</Alert>}
+        {!pods.available && <Alert severity="warning" data-status-alert="operational">{pods.reason}</Alert>}
         {(pods.quarantined_by_role ?? pods.modules ?? []).filter((row, index, rows) => row.quarantined_permits > 0
           && rows.findIndex((other) => other.owner === row.owner) === index).map((row) => (
-          <Alert key={row.owner} severity="warning" sx={{ mb: 1 }}>
+          <Alert key={row.owner} severity="warning" data-status-alert="operational" sx={{ mb: 1 }}>
             {row.owner}: {row.quarantined_permits} quarantined permits or task leases. Collection and deployment drain may be blocked.
           </Alert>
         ))}

@@ -1,6 +1,6 @@
 import { test as base, expect, type Frame, type Page, type Request, type Response } from "@playwright/test";
 import { baseURL } from "./settings.mjs";
-import { hasCanaryToken, isErrorAlert, isAiview, loadErrorText, installReadOnlyGuard } from "./safety";
+import { hasCanaryToken, failingAlerts, isAiview, loadErrorText, installReadOnlyGuard } from "./safety";
 import { fullMode, latencyViolation, pathTemplate } from "./latency";
 import { requestViolation, sanitizedPath } from "./requestPath";
 import { existsSync, readFileSync } from "node:fs";
@@ -54,8 +54,8 @@ export async function visibleSafety(page: Page) {
   // Assert booleans, never actual text: failures must not print a leaked identity.
   if (canaryDigests) expect(hasCanaryToken(text, canaryDigests), "Visible text matches a privacy canary (value withheld)").toBe(false);
   expect(loadErrorText.test(text), "Visible unhandled API/load error text (content withheld)").toBe(false);
-  const alerts = await page.getByRole("alert").evaluateAll(elements => elements.map(element => element.className));
-  expect(alerts.some(isErrorAlert), "A screen exposes an error/warning alert").toBe(false);
+  const alerts = await page.getByRole("alert").evaluateAll(elements => elements.map(element => ({ className: element.className, statusAlert: element.getAttribute("data-status-alert") })));
+  expect(failingAlerts(alerts).length > 0, "A screen exposes an error/warning alert").toBe(false);
   expect(await page.getByRole("button", { name: /transcript/i }).count(), "Transcript button must be absent under aiview").toBe(0);
 }
 

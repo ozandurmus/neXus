@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, afterEach, vi } from "vitest";
-import { hasCanaryToken, isErrorAlert, isAiview, readAllowed, installReadOnlyGuard } from "../e2e/safety";
+import { hasCanaryToken, isErrorAlert, failingAlerts, isAiview, readAllowed, installReadOnlyGuard } from "../e2e/safety";
 import { createHash } from "node:crypto";
 import { readFileSync, statSync, unlinkSync } from "node:fs";
 import { machineSetup } from "../e2e/global-setup";
@@ -116,4 +116,15 @@ it("accepts informational read-only notices but rejects warnings, errors and unk
   expect(isErrorAlert("MuiAlert-root MuiAlert-standardInfo")).toBe(false);
   expect(isErrorAlert("MuiAlert-filledSuccess")).toBe(false);
   for (const classes of ["", "MuiAlert-standardError", "MuiAlert-outlinedWarning"]) expect(isErrorAlert(classes)).toBe(true);
+});
+
+it("lets the status screen's operational alerts through but fails load errors and unmarked alerts", () => {
+  const warn = "MuiAlert-root MuiAlert-standardWarning";
+  const error = "MuiAlert-root MuiAlert-standardError";
+  expect(failingAlerts([{ className: warn, statusAlert: "operational" }, { className: error, statusAlert: "operational" }])).toEqual([]);
+  expect(failingAlerts([{ className: "MuiAlert-standardInfo", statusAlert: null }])).toEqual([]);
+  expect(failingAlerts([{ className: warn, statusAlert: null }])).toHaveLength(1);
+  expect(failingAlerts([{ className: error, statusAlert: null }])).toHaveLength(1);
+  expect(failingAlerts([{ className: error, statusAlert: "other" }])).toHaveLength(1);
+  expect(failingAlerts([{ className: warn, statusAlert: "operational" }, { className: error, statusAlert: null }])).toHaveLength(1);
 });
