@@ -1016,7 +1016,11 @@ def test_gitleaks_allowlists_only_the_approved_commit_and_seven_exact_test_paths
     config = tomllib.loads((REPO_ROOT / ".gitleaks.toml").read_text())
     assert config["extend"] == {"useDefault": True}
     assert "rules" not in config, "Keep the default detection rules intact"
-    synthetic, history, fixtures, syslog = config["allowlists"]
+    synthetic, history, fixtures, syslog, asa_history = config["allowlists"]
+    # 2026-11-16: one batch-13 history commit with a synthetic RSA key block, private-key rule only.
+    assert asa_history["commits"] == ["7f945da813d64baddbdac7f6e94bc4629cc49754"]
+    assert asa_history["targetRules"] == ["private-key"]
+    assert not {"paths", "regexes", "stopwords"} & asa_history.keys()
     assert synthetic["targetRules"] == ["generic-api-key"]
     assert synthetic["regexTarget"] == "secret"
     assert synthetic["regexes"] == [
