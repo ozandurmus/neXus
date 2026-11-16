@@ -36,3 +36,38 @@ export function getFieldByLabel(text: string): HTMLInputElement {
   if (!(field instanceof HTMLInputElement)) throw new Error(`Label "${text}" does not point at an input`);
   return field;
 }
+
+/**
+ * The body rows of a table, without its header row: the elements `getAllByRole("row").slice(1)` returns for a table with
+ * one header row. The role query decides, for every row of a 50-120 row page, whether it is hidden from the accessibility
+ * tree (a computed style per element and per ancestor); the structural selector reads the same rows at no cost.
+ */
+export function bodyRowsOf(root: ParentNode = document): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>("tbody tr"));
+}
+
+/** A row's data cells, as `within(row).getAllByRole("cell")` returns them. */
+export function cellsOf(row: ParentNode): HTMLElement[] {
+  return Array.from(row.querySelectorAll<HTMLElement>("td"));
+}
+
+/** The one sort-header button whose own text is `name`: what `getByRole("button", { name })` finds for a `SortHeaderCell`. */
+export function getSortButton(root: ParentNode, name: string): HTMLElement {
+  const found = Array.from(root.querySelectorAll<HTMLElement>('th [role="button"]')).filter((b) => b.textContent?.trim() === name);
+  if (found.length !== 1) throw new Error(`Expected exactly one sort header button "${name}", found ${found.length}`);
+  return found[0];
+}
+
+/** Buttons inside `root` whose text matches `pattern`: what `getAllByRole("button", { name: pattern })` finds when a button is named by its content. */
+export function getButtonsMatching(root: ParentNode, pattern: RegExp): HTMLElement[] {
+  const found = Array.from(root.querySelectorAll<HTMLElement>("button, [role=\"button\"]")).filter((b) => pattern.test((b.textContent ?? "").trim()));
+  if (found.length === 0) throw new Error(`Expected a button whose text matches ${pattern}, found none`);
+  return found;
+}
+
+/** The one column header named `name` (its `aria-label`, else its own text): what `getByRole("columnheader", { name })` finds. */
+export function getColumnHeader(root: ParentNode, name: string): HTMLElement {
+  const found = Array.from(root.querySelectorAll<HTMLElement>("th")).filter((h) => (h.getAttribute("aria-label") ?? h.textContent?.trim()) === name);
+  if (found.length !== 1) throw new Error(`Expected exactly one column header "${name}", found ${found.length}`);
+  return found[0];
+}

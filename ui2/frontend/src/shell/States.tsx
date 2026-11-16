@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import Tooltip from "@mui/material/Tooltip";
+import { LazyTooltip } from "./LazyTooltip";
 import Typography from "@mui/material/Typography";
 
 import { MONO, m3 } from "../theme/m3Theme";
@@ -132,7 +133,7 @@ export function VendorBadge({ vendor, vsx = false, size = 28 }: { readonly vendo
   const swatch = kind === "cp" ? m3.cp : kind === "pan" ? m3.pan : kind === "vsx" ? m3.vsx : m3.outline;
   const name = kind === "vsx" ? "Check Point VSX" : kind === "unknown" ? "Vendor UNKNOWN" : vendorDisplayName(vendor);
   return (
-    <Tooltip title={name}>
+    <LazyTooltip title={name}>
       <Box component="span" aria-label={name}
         sx={{ display: "inline-flex", alignItems: "center", gap: 0.6, height: size * 0.82, px: 0.9, borderRadius: `${RADIUS.pill}px`,
               border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLowest, fontSize: TYPE.label.fontSize, fontWeight: 700,
@@ -140,7 +141,7 @@ export function VendorBadge({ vendor, vsx = false, size = 28 }: { readonly vendo
         <Box component="span" sx={{ width: 7, height: 7, borderRadius: "2px", bgcolor: swatch }} />
         {label}
       </Box>
-    </Tooltip>
+    </LazyTooltip>
   );
 }
 

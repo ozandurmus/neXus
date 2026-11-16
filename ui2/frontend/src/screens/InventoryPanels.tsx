@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
@@ -985,9 +985,83 @@ function ClusterInterfacesTable({
   );
 }
 
+type RouteRowRoute = ClusterRoute & { readonly vsysLabel?: string };
+type RouteRowMembers = readonly { readonly device_id: string; readonly hostname?: string | null }[];
+
+/**
+ * One routing-table row. Memoised: a header click moves the same rows around (their keys do not change) and only the
+ * rows whose route, alignment words or columns changed are drawn again.
+ */
+const RouteRow = memo(function RouteRow({ route, diffLabel, isDiff, showVsysColumn, singleMember, members }: {
+  readonly route: RouteRowRoute;
+  readonly diffLabel: string | null;
+  readonly isDiff: boolean;
+  readonly showVsysColumn: boolean;
+  readonly singleMember: boolean;
+  readonly members: RouteRowMembers;
+}) {
+  return (
+    <TableRow
+      hover
+      sx={{
+        bgcolor: isDiff ? m3.errorContainer : "inherit",
+      }}
+    >
+      {showVsysColumn && (
+        <TableCell>
+          <ScopeTag label={route.vsysLabel ?? "Physical"} />
+        </TableCell>
+      )}
+      <TableCell sx={{ fontFamily: "monospace", fontWeight: 600, fontSize: "0.8125rem" }}>
+        {route.destination}
+      </TableCell>
+      <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
+        {route.next_hop ?? "—"}
+      </TableCell>
+      <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
+        {route.interface ?? "—"}
+      </TableCell>
+      <TableCell>
+        <StatusChip tone="neutral" label={route.protocol} dense />
+      </TableCell>
+      {!singleMember && <TableCell>
+        {isDiff && diffLabel ? (
+          <Stack direction="row" spacing={0.75} alignItems="center">
+            <Box
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                px: 1,
+                py: 0.25,
+                borderRadius: "6px",
+                bgcolor: m3.errorContainer,
+                border: `1px solid ${m3.criticalInk}`,
+                color: m3.onErrorContainer,
+                fontWeight: 700,
+                fontSize: "0.75rem",
+                fontFamily: "monospace",
+              }}
+            >
+              {diffLabel}
+            </Box>
+            {route.differences.length > 0 && (
+              <DifferencesNote differences={route.differences} members={members} />
+            )}
+          </Stack>
+        ) : (
+          // A route both members carry is the expected case (R11): plain text; colour only where they differ.
+          <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>Shared</Typography>
+        )}
+      </TableCell>}
+    </TableRow>
+  );
+});
+
+const NO_MEMBERS: RouteRowMembers = [];
+
 function ClusterRoutesTable({
   routes,
-  members = [],
+  members = NO_MEMBERS,
 }: {
   readonly routes: readonly (ClusterRoute & { readonly vsysLabel?: string })[];
   readonly members?: readonly { readonly device_id: string; readonly hostname?: string | null }[];
@@ -1034,6 +1108,7 @@ function ClusterRoutesTable({
   const pageCount = Math.max(1, Math.ceil(displayedRoutes.length / ROUTES_PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
   const pageRoutes = sort.apply(displayedRoutes).slice(safePage * ROUTES_PAGE_SIZE, (safePage + 1) * ROUTES_PAGE_SIZE);
+  const seen = new Map<string, number>();
 
   return (
     <Stack spacing={1.5}>
@@ -1135,8 +1210,7 @@ function ClusterRoutesTable({
             </TableRow>
           </TableHead>
           <TableBody>
-            {pageRoutes.map((route, rowIndex) => {
-              const index = safePage * ROUTES_PAGE_SIZE + rowIndex;
+            {pageRoutes.map((route) => {
               const isShared = route.presence === "all";
               const isDiff = !isShared || route.differences.length > 0;
               let diffLabel = null;
@@ -1146,62 +1220,14 @@ function ClusterRoutesTable({
               } else if (route.differences.length > 0) {
                 diffLabel = `DIFF > ${route.differences.map((d) => `${d.field}: ${d.value}`).join(", ")}`;
               }
-
+              // The key is the route's own content plus how many identical routes precede it on the page, not its position:
+              // a reorder then moves a row instead of rebuilding it.
+              const content = `${route.vsysLabel ?? ""}-${route.destination}-${route.next_hop ?? ""}-${route.interface ?? ""}`;
+              const occurrence = seen.get(content) ?? 0;
+              seen.set(content, occurrence + 1);
               return (
-                <TableRow
-                  key={`${route.vsysLabel ?? ""}-${route.destination}-${route.next_hop ?? ""}-${route.interface ?? ""}-${index}`}
-                  hover
-                  sx={{
-                    bgcolor: isDiff ? m3.errorContainer : "inherit",
-                  }}
-                >
-                  {showVsysColumn && (
-                    <TableCell>
-                      <ScopeTag label={route.vsysLabel ?? "Physical"} />
-                    </TableCell>
-                  )}
-                  <TableCell sx={{ fontFamily: "monospace", fontWeight: 600, fontSize: "0.8125rem" }}>
-                    {route.destination}
-                  </TableCell>
-                  <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
-                    {route.next_hop ?? "—"}
-                  </TableCell>
-                  <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
-                    {route.interface ?? "—"}
-                  </TableCell>
-                  <TableCell>
-                    <StatusChip tone="neutral" label={route.protocol} dense />
-                  </TableCell>
-                  {!singleMember && <TableCell>
-                    {isDiff && diffLabel ? (
-                      <Stack direction="row" spacing={0.75} alignItems="center">
-                        <Box
-                          sx={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            px: 1,
-                            py: 0.25,
-                            borderRadius: "6px",
-                            bgcolor: m3.errorContainer,
-                            border: `1px solid ${m3.criticalInk}`,
-                            color: m3.onErrorContainer,
-                            fontWeight: 700,
-                            fontSize: "0.75rem",
-                            fontFamily: "monospace",
-                          }}
-                        >
-                          {diffLabel}
-                        </Box>
-                        {route.differences.length > 0 && (
-                          <DifferencesNote differences={route.differences} members={members} />
-                        )}
-                      </Stack>
-                    ) : (
-                      // A route both members carry is the expected case (R11): plain text; colour only where they differ.
-                      <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>Shared</Typography>
-                    )}
-                  </TableCell>}
-                </TableRow>
+                <RouteRow key={`${content}-${occurrence}`} route={route} diffLabel={diffLabel} isDiff={isDiff} showVsysColumn={showVsysColumn}
+                  singleMember={singleMember} members={members} />
               );
             })}
           </TableBody>

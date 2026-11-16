@@ -1,5 +1,5 @@
 import Box from "@mui/material/Box";
-import Tooltip from "@mui/material/Tooltip";
+import { LazyTooltip } from "../shell/LazyTooltip";
 
 import { StatusChip } from "../shell/M3Widgets";
 import type { Tone } from "../shell/tone";
@@ -39,9 +39,9 @@ export function DeviationChip({ state, comparisonRun = false }: { readonly state
   const tone: Tone = state === "MAJOR DEVIATION" ? "bad" : state === "CHANGED" && comparisonRun ? "attn" : "neutral";
   const label = state === "CHANGED" && !comparisonRun ? "Bytes changed" : backupDisplayWord(state);
   return (
-    <Tooltip title={DEVIATION_MEANING[state] ?? state}>
+    <LazyTooltip title={DEVIATION_MEANING[state] ?? state}>
       <Box component="span"><StatusChip tone={tone} label={label} dense /></Box>
-    </Tooltip>
+    </LazyTooltip>
   );
 }
 
@@ -50,9 +50,9 @@ export function ValidationChip({ level, withLevel = false }: { readonly level: s
   const word = backupDisplayWord(level);
   const label = withLevel && word !== level ? `${word} (${level})` : word;
   return (
-    <Tooltip title={`Backup check: ${label}`}>
+    <LazyTooltip title={`Backup check: ${label}`}>
       <Box component="span"><StatusChip tone="neutral" label={label} dense /></Box>
-    </Tooltip>
+    </LazyTooltip>
   );
 }
 

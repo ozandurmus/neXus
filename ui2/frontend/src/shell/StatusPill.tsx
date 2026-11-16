@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Box from "@mui/material/Box";
 import Tooltip from "@mui/material/Tooltip";
+import { LazyTooltip } from "./LazyTooltip";
 
 import { m3 } from "../theme/m3Theme";
 import { RADIUS, ROLE_COLORS, TYPE, UNKNOWN_HATCH, isUnknownWord, type StateRole } from "../theme/tokens";
@@ -66,7 +67,10 @@ export function StatusPill({ tone, word, count, age, suffix, title, href, onClic
     : onClick
       ? <Box component="button" type="button" onClick={onClick} {...shared} sx={sx}>{content}</Box>
       : <Box component="span" {...shared} sx={sx}>{content}</Box>;
-  return title ? <Tooltip title={title}><Box component="span" sx={{ display: "inline-flex", maxWidth: "100%" }}>{body}</Box></Tooltip> : body;
+  if (!title) return body;
+  const wrapped = <Box component="span" sx={{ display: "inline-flex", maxWidth: "100%" }}>{body}</Box>;
+  // A pill that is a link or a button can hold keyboard focus, which a lazily built tooltip would drop when it replaces the element.
+  return interactive ? <Tooltip title={title}>{wrapped}</Tooltip> : <LazyTooltip title={title}>{wrapped}</LazyTooltip>;
 }
 
 /** A row of pills that wraps, with the product's one gap. */
