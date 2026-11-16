@@ -1,4 +1,4 @@
-# route authorization decision table; kinds=18 routes=568 rows=10224
+# route authorization decision table; kinds=18 routes=574 rows=10332
 # columns: kind | METHOD path | PERMIT attributes | REFUSE status content-type body ; then authz rows and machine audits
 anonymous | DELETE /api/v2/cutover/assessments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | DELETE /api/v2/cutover/assessments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
@@ -2466,6 +2466,42 @@ machine-replay-viewer | GET /api/v2/support-bundles/synthetic-ref/download | REF
 viewer-no-csrf | GET /api/v2/support-bundles/synthetic-ref/download | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_retrieve","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_retrieve:DENIED]
 viewer-no-origin | GET /api/v2/support-bundles/synthetic-ref/download | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_retrieve","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_retrieve:DENIED]
 must-change | GET /api/v2/support-bundles/synthetic-ref/download | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
+anonymous | GET /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+unknown-cookie | GET /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
+expired | GET /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
+revoked | GET /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 401 application/json {"error":"SESSION_REVOKED","reason":"session is not ACTIVE: REVOKED"}
+no-role | GET /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_read:DENIED]
+role-viewer | GET /api/v2/support-bundles/synthetic-ref/uploads | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_read:PERMITTED]
+role-operator | GET /api/v2/support-bundles/synthetic-ref/uploads | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_read:PERMITTED]
+role-onboarding_admin | GET /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_read:DENIED]
+role-backup_admin | GET /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_read:DENIED]
+role-compliance_admin | GET /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_read:DENIED]
+role-security_admin | GET /api/v2/support-bundles/synthetic-ref/uploads | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_read:PERMITTED]
+role-operation_admin | GET /api/v2/support-bundles/synthetic-ref/uploads | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_read:PERMITTED]
+role-replay_viewer | GET /api/v2/support-bundles/synthetic-ref/uploads | PERMIT actor=match session=match replay-viewer=true | authz=[support_bundle_read:PERMITTED]
+root | GET /api/v2/support-bundles/synthetic-ref/uploads | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_read:PERMITTED]
+machine-replay-viewer | GET /api/v2/support-bundles/synthetic-ref/uploads | PERMIT actor=match session=match replay-viewer=true | authz=[support_bundle_read:PERMITTED]
+viewer-no-csrf | GET /api/v2/support-bundles/synthetic-ref/uploads | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_read:PERMITTED]
+viewer-no-origin | GET /api/v2/support-bundles/synthetic-ref/uploads | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_read:PERMITTED]
+must-change | GET /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
+anonymous | GET /api/v2/support-bundles/upload-destinations | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+unknown-cookie | GET /api/v2/support-bundles/upload-destinations | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
+expired | GET /api/v2/support-bundles/upload-destinations | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
+revoked | GET /api/v2/support-bundles/upload-destinations | REFUSE 401 application/json {"error":"SESSION_REVOKED","reason":"session is not ACTIVE: REVOKED"}
+no-role | GET /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_read:DENIED]
+role-viewer | GET /api/v2/support-bundles/upload-destinations | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_read:PERMITTED]
+role-operator | GET /api/v2/support-bundles/upload-destinations | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_read:PERMITTED]
+role-onboarding_admin | GET /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_read:DENIED]
+role-backup_admin | GET /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_read:DENIED]
+role-compliance_admin | GET /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_read:DENIED]
+role-security_admin | GET /api/v2/support-bundles/upload-destinations | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_read:PERMITTED]
+role-operation_admin | GET /api/v2/support-bundles/upload-destinations | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_read:PERMITTED]
+role-replay_viewer | GET /api/v2/support-bundles/upload-destinations | PERMIT actor=match session=match replay-viewer=true | authz=[support_bundle_read:PERMITTED]
+root | GET /api/v2/support-bundles/upload-destinations | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_read:PERMITTED]
+machine-replay-viewer | GET /api/v2/support-bundles/upload-destinations | PERMIT actor=match session=match replay-viewer=true | authz=[support_bundle_read:PERMITTED]
+viewer-no-csrf | GET /api/v2/support-bundles/upload-destinations | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_read:PERMITTED]
+viewer-no-origin | GET /api/v2/support-bundles/upload-destinations | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_read:PERMITTED]
+must-change | GET /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
 anonymous | GET /api/v2/system-logs/chunks/synthetic-ref/text | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | GET /api/v2/system-logs/chunks/synthetic-ref/text | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | GET /api/v2/system-logs/chunks/synthetic-ref/text | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -5742,6 +5778,42 @@ machine-replay-viewer | HEAD /api/v2/support-bundles/synthetic-ref/download | RE
 viewer-no-csrf | HEAD /api/v2/support-bundles/synthetic-ref/download | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | HEAD /api/v2/support-bundles/synthetic-ref/download | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | HEAD /api/v2/support-bundles/synthetic-ref/download | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+anonymous | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+unknown-cookie | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+expired | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+revoked | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+no-role | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-viewer | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-operator | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-onboarding_admin | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-backup_admin | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-compliance_admin | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-security_admin | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-operation_admin | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-replay_viewer | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+root | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+machine-replay-viewer | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+viewer-no-csrf | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+viewer-no-origin | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+must-change | HEAD /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+anonymous | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+unknown-cookie | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+expired | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+revoked | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+no-role | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-viewer | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-operator | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-onboarding_admin | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-backup_admin | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-compliance_admin | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-security_admin | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-operation_admin | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-replay_viewer | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+root | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+machine-replay-viewer | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+viewer-no-csrf | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+viewer-no-origin | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+must-change | HEAD /api/v2/support-bundles/upload-destinations | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | HEAD /api/v2/system-logs/chunks/synthetic-ref/text | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | HEAD /api/v2/system-logs/chunks/synthetic-ref/text | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | HEAD /api/v2/system-logs/chunks/synthetic-ref/text | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
@@ -7902,6 +7974,24 @@ machine-replay-viewer | POST /api/v2/support-bundles/synthetic-ref/cancel | REFU
 viewer-no-csrf | POST /api/v2/support-bundles/synthetic-ref/cancel | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 viewer-no-origin | POST /api/v2/support-bundles/synthetic-ref/cancel | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
 must-change | POST /api/v2/support-bundles/synthetic-ref/cancel | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
+anonymous | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+unknown-cookie | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
+expired | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
+revoked | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | REFUSE 401 application/json {"error":"SESSION_REVOKED","reason":"session is not ACTIVE: REVOKED"}
+no-role | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_cleanup_workdir","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_cleanup_workdir:DENIED]
+role-viewer | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_cleanup_workdir","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_cleanup_workdir:DENIED]
+role-operator | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_cleanup_workdir","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_cleanup_workdir:DENIED]
+role-onboarding_admin | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_cleanup_workdir","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_cleanup_workdir:DENIED]
+role-backup_admin | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_cleanup_workdir","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_cleanup_workdir:DENIED]
+role-compliance_admin | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_cleanup_workdir","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_cleanup_workdir:DENIED]
+role-security_admin | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_cleanup_workdir:PERMITTED]
+role-operation_admin | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_cleanup_workdir","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_cleanup_workdir:DENIED]
+role-replay_viewer | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_cleanup_workdir","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_cleanup_workdir:DENIED]
+root | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_cleanup_workdir:PERMITTED]
+machine-replay-viewer | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
+viewer-no-csrf | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
+viewer-no-origin | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
+must-change | POST /api/v2/support-bundles/synthetic-ref/cleanup-workdir | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
 anonymous | POST /api/v2/support-bundles/synthetic-ref/delete | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | POST /api/v2/support-bundles/synthetic-ref/delete | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | POST /api/v2/support-bundles/synthetic-ref/delete | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -7956,6 +8046,24 @@ machine-replay-viewer | POST /api/v2/support-bundles/synthetic-ref/download-tick
 viewer-no-csrf | POST /api/v2/support-bundles/synthetic-ref/download-ticket | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 viewer-no-origin | POST /api/v2/support-bundles/synthetic-ref/download-ticket | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
 must-change | POST /api/v2/support-bundles/synthetic-ref/download-ticket | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
+anonymous | POST /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+unknown-cookie | POST /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
+expired | POST /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
+revoked | POST /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 401 application/json {"error":"SESSION_REVOKED","reason":"session is not ACTIVE: REVOKED"}
+no-role | POST /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_upload","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_upload:DENIED]
+role-viewer | POST /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_upload","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_upload:DENIED]
+role-operator | POST /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_upload","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_upload:DENIED]
+role-onboarding_admin | POST /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_upload","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_upload:DENIED]
+role-backup_admin | POST /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_upload","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_upload:DENIED]
+role-compliance_admin | POST /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_upload","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_upload:DENIED]
+role-security_admin | POST /api/v2/support-bundles/synthetic-ref/uploads | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_upload:PERMITTED]
+role-operation_admin | POST /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_upload","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_upload:DENIED]
+role-replay_viewer | POST /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"support_bundle_upload","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[support_bundle_upload:DENIED]
+root | POST /api/v2/support-bundles/synthetic-ref/uploads | PERMIT actor=match session=match replay-viewer=- | authz=[support_bundle_upload:PERMITTED]
+machine-replay-viewer | POST /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
+viewer-no-csrf | POST /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
+viewer-no-origin | POST /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
+must-change | POST /api/v2/support-bundles/synthetic-ref/uploads | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
 anonymous | POST /api/v2/system-logs/collect | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | POST /api/v2/system-logs/collect | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | POST /api/v2/system-logs/collect | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
