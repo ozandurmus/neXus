@@ -25,7 +25,7 @@ import static com.securityexpert.nexus.ui2.jobs.supportbundle.CpSupportBundle.CP
  * and the item's ordinal, never operator text): C8 creates it, the tool starts detached and writes its exit code to a file,
  * C15 polls that file, C16 lists the directory, C17 bundles it, C18 digests the bundle on the device, C19 streams it into the
  * vault, C20 removes exactly that directory and bundle once the two digests match. The gate rows exist per platform scope:
- * the gateway ids as designed ({@code cp_sb_*}) and the management scope ({@code cpm_sb_*}, V234).</p>
+ * the gateway ids as designed ({@code cp_sb_*}) and the management scope ({@code cpm_sb_*}, V238).</p>
  */
 public final class CpSupportBundleHeavy {
     private CpSupportBundleHeavy() {}
@@ -53,7 +53,7 @@ public final class CpSupportBundleHeavy {
 
     public static final String SFTP_GATE = "cp_sb_sftp_get_bundle";
 
-    /** C8-C20 plus the two cpdata_collector rows, byte-identical to the V234 and V230 literals. */
+    /** C8-C20 plus the two cpdata_collector rows, byte-identical to the V238 and V230 literals. */
     public enum Step {
         MKDIR("mkdir", CP_ENV + "mkdir -p %s", ActionClass.CLASS_1_RECOVERY_WRITE, 30, true),
         HCP_START("hcp_start", CP_ENV + "cd %1$s && setsid nohup bash --noprofile --norc -c \"hcp -r all --include-wts yes -s > %1$s/hcp.log 2>&1; "
@@ -72,11 +72,11 @@ public final class CpSupportBundleHeavy {
         BUNDLE("bundle", CP_ENV + "cd %1$s && tar -czf %1$s.tgz .", ActionClass.CLASS_1_RECOVERY_WRITE, 3600, true),
         SHA256("sha256", CP_ENV + "sha256sum %s.tgz", ActionClass.CLASS_0_READ, 600, true),
         REMOVE("remove_workdir", CP_ENV + "rm -rf %1$s %1$s.tgz", ActionClass.CLASS_1_RECOVERY_WRITE, 120, true),
-        /** Approved 2026-11-15 after the S2 brief; the gate rows are V230 (gateway) and V234 (management). */
+        /** Approved 2026-11-15 after the S2 brief; the gate rows are V230 (gateway) and V238 (management). */
         CPDATA_LIST("cpdata_collector_list", CP_ENV + "cpdata_collector --list", ActionClass.CLASS_0_READ, 60, true),
         CPDATA_RUN("cpdata_collector_run", CP_ENV + "cd %1$s && setsid nohup bash --noprofile --norc -c \"timeout 1800 cpdata_collector --run -p %1$s/cpsdc.tgz -t 3 -m 100 "
                 + "> %1$s/cpsdc.log 2>&1; echo \\$? > %1$s/cpsdc.rc\" </dev/null >/dev/null 2>&1 &", ActionClass.CLASS_1_RECOVERY_WRITE, 60, true),
-        /** Approved by the Product Owner 2026-11-15 (about 22:30): {@code cat <workdir>/cpsdc.rc}, a read, every 30 s until the deadline; gate rows are V235. */
+        /** Approved by the Product Owner 2026-11-15 (about 22:30): {@code cat <workdir>/cpsdc.rc}, a read, every 30 s until the deadline; gate rows are V239. */
         POLL_CPSDC("poll_cpsdc", CP_ENV + "cat %s/cpsdc.rc", ActionClass.CLASS_0_READ, 30, true);
 
         private final String stem;

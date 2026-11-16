@@ -24,7 +24,7 @@ import com.securityexpert.nexus.ui2.platform.ActionClass;
  * SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6). Each exec read is resolved against its live V230 gate row
  * before it is sent. Every literal carries the {@code CP_ENV} prefix (no login shell). The heavy items (C8-C22) are
  * {@link CpSupportBundleHeavy}. A Check Point management server or Multi-Domain Server (step S6) is collected through the
- * same literals under the {@code cp_multi_domain_server} platform scope (V234 rows, ids prefixed {@code cpm_sb_}).
+ * same literals under the {@code cp_multi_domain_server} platform scope (V238 rows, ids prefixed {@code cpm_sb_}).
  */
 public final class CpSupportBundle {
     private CpSupportBundle() {}

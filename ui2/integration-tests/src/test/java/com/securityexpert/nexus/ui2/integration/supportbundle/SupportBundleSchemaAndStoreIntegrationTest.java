@@ -66,7 +66,7 @@ class SupportBundleSchemaAndStoreIntegrationTest {
             fixture.runFlyway();
             try (Connection db = fixture.migrateConnection()) {
                 assertEquals(24, count(db, "select count(*) from gate_registry where gate_id like 'cp_sb_%'"));
-                // step S6 (V234) and V235: the management scope rows
+                // step S6 (V238) and V239: the management scope rows
                 assertEquals(18, count(db, "select count(*) from gate_registry where gate_id like 'cpm_sb_%' and platform_role_scope = 'cp_multi_domain_server' "
                         + "and sign_off_state = 'SIGNED_OFF'"));
                 assertEquals(8, count(db, "select count(*) from gate_registry where gate_id like 'cpm_sb_%' and action_class = 'recovery-write'"));

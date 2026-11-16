@@ -5590,7 +5590,7 @@ gates:
     safe_telemetry_fields: ["exitStatus"]
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_11_15_SUPPORT_BUNDLE_COLLECTION.md (cpdata_collector --run, PO approval relayed 2026-11-15)"
 
-  # Support bundle collection, steps S3-S5 (V232; PO approval 2026-11-15, SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6,
+  # Support bundle collection, steps S3-S5 (V237; PO approval 2026-11-15, SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6,
   # P1-P6 for pan_firewall and panorama, A1-A4 (A5-A7 not approved), F1-F5). Class recovery-write is BW-2 (a transient device file).
   - gate_id: "pan_sb_system_resources"
     vendor: "palo_alto"

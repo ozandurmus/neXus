@@ -51,7 +51,7 @@ separate lanes. S8 (upload) waits for its research.
 
 **4.1 cpdata_collector exit code read - APPROVED.** `cat <workdir>/cpsdc.rc` (gate `cp_sb_poll_cpsdc` for a gateway and
 `cpm_sb_poll_cpsdc` for a management server; Check Point, `CP_ENV` prefix like every Check Point exec literal; class 0 read;
-30 s; every 30 s until the deadline, which is the device bound `timeout 1800` plus one minute). Gate rows: migration V235 and
+30 s; every 30 s until the deadline, which is the device bound `timeout 1800` plus one minute). Gate rows: migration V239 and
 `gate_registry_fixture.yaml`. The `cpdata_collector_run` item polls it and no longer waits blind; the exit code is recorded
 as `TOOL_EXIT_<rc>` (127 stays `UNSUPPORTED`). The log tail literal (`cpsdc.log`) was **NOT** approved: nothing reads it.
 

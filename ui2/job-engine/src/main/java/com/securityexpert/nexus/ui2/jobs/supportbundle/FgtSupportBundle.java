@@ -11,7 +11,7 @@ import com.securityexpert.nexus.ui2.platform.ActionClass;
 /**
  * Support bundle collection, FortiGate (step S5; PO approval 2026-11-15, rows F1-F5 of
  * SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6; F3 is the two context literals {@code config global} and
- * {@code end}). Each is resolved against its live V232 gate row before it is sent. {@code --More--} is answered in
+ * {@code end}). Each is resolved against its live V237 gate row before it is sent. {@code --More--} is answered in
  * session; no console setting of the device is changed.
  */
 public final class FgtSupportBundle {

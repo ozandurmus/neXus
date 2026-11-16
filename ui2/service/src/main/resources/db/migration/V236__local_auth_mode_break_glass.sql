@@ -41,7 +41,7 @@ CREATE TRIGGER trg_audit_local_break_glass_event
     AFTER INSERT OR UPDATE OR DELETE ON local_break_glass_event
     FOR EACH ROW EXECUTE FUNCTION fn_audit_capture('event_id');
 
-SELECT set_config('app.actor_fingerprint', 'migration:V231_local_auth_mode', true);
+SELECT set_config('app.actor_fingerprint', 'migration:V236_local_auth_mode', true);
 SELECT set_config('app.action_id', 'local_auth_mode_seed_by_migration', true);
 INSERT INTO local_auth_mode_settings(settings_id, updated_by) VALUES ('default', 'local-auth-mode-migration')
 ON CONFLICT (settings_id) DO NOTHING;

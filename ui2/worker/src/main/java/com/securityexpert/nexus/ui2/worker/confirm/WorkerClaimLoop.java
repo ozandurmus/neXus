@@ -219,17 +219,17 @@ public final class WorkerClaimLoop {
         try { supportBundleAdmission.giveUpStale(now); } catch (RuntimeException ignored) { /* retried next minute */ }
     }
     private com.securityexpert.nexus.ui2.worker.supportbundle.PanSupportBundleJobExecutor panSupportBundleExecutor;
-    /** Support bundle collection, Palo Alto tech support file (V232, step S3). */
+    /** Support bundle collection, Palo Alto tech support file (V237, step S3). */
     public WorkerClaimLoop withPanSupportBundle(com.securityexpert.nexus.ui2.worker.supportbundle.PanSupportBundleJobExecutor executor) {
         this.panSupportBundleExecutor=executor; return this;
     }
     private com.securityexpert.nexus.ui2.worker.supportbundle.AsaSupportBundleJobExecutor asaSupportBundleExecutor;
-    /** Support bundle collection, Cisco ASA (V232, step S4). */
+    /** Support bundle collection, Cisco ASA (V237, step S4). */
     public WorkerClaimLoop withAsaSupportBundle(com.securityexpert.nexus.ui2.worker.supportbundle.AsaSupportBundleJobExecutor executor) {
         this.asaSupportBundleExecutor=executor; return this;
     }
     private com.securityexpert.nexus.ui2.worker.supportbundle.FgtSupportBundleJobExecutor fgtSupportBundleExecutor;
-    /** Support bundle collection, FortiGate (V232, step S5). */
+    /** Support bundle collection, FortiGate (V237, step S5). */
     public WorkerClaimLoop withFgtSupportBundle(com.securityexpert.nexus.ui2.worker.supportbundle.FgtSupportBundleJobExecutor executor) {
         this.fgtSupportBundleExecutor=executor; return this;
     }

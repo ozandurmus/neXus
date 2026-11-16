@@ -436,7 +436,7 @@ public final class Ui2WorkerMain {
                 leaseRepository, attemptRepository, deviceRepository, strictFailoverSsh, gateRegistry,
                 new com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore(transactionBoundary),
                 artefactStore, hostnameFingerprint);
-        // Support bundle collection, steps S3-S5 (V232): the Palo Alto tech support file over the XML API (the existing keygen),
+        // Support bundle collection, steps S3-S5 (V237): the Palo Alto tech support file over the XML API (the existing keygen),
         // the Cisco ASA and FortiGate session captures over the same trusted SSH session.
         var supportBundleStore = new com.securityexpert.nexus.ui2.persistence.supportbundle.JooqSupportBundleStore(transactionBoundary);
         var panSupportBundleExecutor = new com.securityexpert.nexus.ui2.worker.supportbundle.PanSupportBundleJobExecutor(

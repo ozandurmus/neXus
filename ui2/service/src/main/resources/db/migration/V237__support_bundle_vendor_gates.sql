@@ -1,4 +1,4 @@
--- V232 -- support bundle collection, vendor steps S3 (Palo Alto), S4 (Cisco ASA) and S5 (FortiGate)
+-- V237 -- support bundle collection, vendor steps S3 (Palo Alto), S4 (Cisco ASA) and S5 (FortiGate)
 -- (docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md, FROZEN 2026-11-15;
 -- docs/design/PO_DECISION_RECORD_2026_11_15_SUPPORT_BUNDLE_COLLECTION.md section 2).
 --
@@ -9,7 +9,7 @@
 --   * FortiGate F1-F5; F3 is the two context literals (config global, end).
 -- The support bundle tables (V230) are unchanged; V230 is not edited. Idempotent (ON CONFLICT DO NOTHING). Dry-run in
 -- BEGIN/ROLLBACK on the live database before deploy is an engineer step.
-SELECT set_config('app.actor_fingerprint', 'migration:V232_support_bundle_vendor_gates', true);
+SELECT set_config('app.actor_fingerprint', 'migration:V237_support_bundle_vendor_gates', true);
 SELECT set_config('app.action_id', 'support_bundle_vendor_gates_by_migration', true);
 
 INSERT INTO gate_registry (gate_id, vendor, platform_role_scope, shell_context, transport_kind, canonical_command_key, action_class, sign_off_state, timeout_s, retry_rule, max_frequency, session_reuse_rule, unsupported_behavior_ref, secret_output_risk, safe_telemetry_fields, source_document_pointer)

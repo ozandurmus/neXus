@@ -13,7 +13,7 @@ import com.securityexpert.nexus.ui2.platform.ActionClass;
 /**
  * Support bundle collection, Palo Alto Tech Support File (step S3; PO approval 2026-11-15, rows P1-P6 of
  * SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6). The six requests of the XML API, each resolved against its
- * live V232 gate row before it is sent, for a firewall ({@code pan_firewall}) and for a Panorama ({@code panorama}).
+ * live V237 gate row before it is sent, for a firewall ({@code pan_firewall}) and for a Panorama ({@code panorama}).
  * P3 and P6 are recovery-write (BW-2: the device writes and removes {@code /tmp/techsupport.tgz}); P4 and P5 take the
  * device-issued job number, digits only, and nothing else.
  */
