@@ -100,6 +100,19 @@ public final class InventoryCapabilityExecutor {
                 System.getenv().getOrDefault("UI2_CP_MDS_FINGERPRINT_ACCEPT_ONCE", "0")));
     }
 
+    /** V245 one-off: the device id named by {@code UI2_CP_INSTALL_HISTORY_DISCOVERY_DEVICE}; empty (default) = never. */
+    static String installHistoryDiscoveryDevice() {
+        return System.getProperty("ui2.cp.install-history.discovery-device",
+                System.getenv().getOrDefault("UI2_CP_INSTALL_HISTORY_DISCOVERY_DEVICE", "")).trim();
+    }
+
+    /** V245 one-off decision: physical gateway context only, the switch names exactly this device, never VSX/mgmt/clish. */
+    static boolean installHistoryDiscoveryApplies(String switchValue, String deviceId, boolean managementServer,
+            boolean vsxHost, boolean clishLanding) {
+        return switchValue != null && !switchValue.isBlank() && switchValue.equals(deviceId)
+                && !managementServer && !vsxHost && !clishLanding;
+    }
+
     /** The gated timeout of {@code cp_identity_mds_ha_status} (V194: 60 s). */
     static final Duration MDS_HA_TIMEOUT = Duration.ofSeconds(60);
     private static final Pattern API_KEY = Pattern.compile("<key>([^<]+)</key>");
@@ -554,6 +567,17 @@ public final class InventoryCapabilityExecutor {
                 } catch (RuntimeException e) {
                     com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
                     LOG.log(System.Logger.Level.WARNING, "[CP_MDS_HA] outcome=READ_FAILED {0}", e.getClass().getSimpleName());
+                }
+            }
+            // V245 one-off (PO 2026-11-16, gate cp_install_history_discovery_once): once, one device, plain expert shell,
+            // 30 s, no retry. The answer is only recorded in the job transcript by the transport; a failure changes nothing.
+            if (installHistoryDiscoveryApplies(installHistoryDiscoveryDevice(), deviceId, managementServer, vsxHost, clishLanding)) {
+                try {
+                    String history = execOutput(session, InventoryReadPlan.CP_INSTALL_HISTORY_DISCOVERY_ONCE, false, READ_TIMEOUT);
+                    LOG.log(System.Logger.Level.INFO, "[CP_INSTALL_HISTORY_DISCOVERY] length={0}", history.length());
+                } catch (RuntimeException e) {
+                    com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+                    LOG.log(System.Logger.Level.WARNING, "[CP_INSTALL_HISTORY_DISCOVERY] outcome=READ_FAILED {0}", e.getClass().getSimpleName());
                 }
             }
             // Lifecycle reads, group A: last, after every other read of the run; never changes the result.
