@@ -89,7 +89,11 @@ class FgtFailoverJobExecutorTest {
         java.util.Map<String, Integer> vdoms = new java.util.TreeMap<>(java.util.Map.of("Cust-A", 2, "Cust-B", 5, "root", 3));
         java.util.Set<String> unreadable = new java.util.HashSet<>(), refusedEdit = new java.util.HashSet<>();
         String currentVdom;
+        /** Live shape: the context moves "config vdom" and "edit <vdom>" complete with no output at all. */
+        boolean emptyMoves;
         private String answer(String command) {
+            if (emptyMoves && command.equals("config vdom")) return "";
+            if (emptyMoves && command.startsWith("edit ")) { currentVdom = command.substring(5); return null; }
             if (command.equals("config vdom")) return "FGT-SYNTH-1 (vdom) # ";
             if (command.startsWith("edit ")) {
                 String name = command.substring(5);
@@ -345,6 +349,17 @@ class FgtFailoverJobExecutorTest {
         assertTrue(evidence.contains("\"averageSessions\":1234"), evidence);
         assertFalse(evidence.contains("previous") || evidence.contains("arpByVdom") || evidence.contains("trafficScope"), evidence);
         for (String forbidden : List.of("192.0.2.", "00:00:5e", "port1")) assertFalse(String.join("\n", out.derived()).contains(forbidden), forbidden);
+    }
+    @Test void contextMovesThatCompleteWithNoOutputStillAllowThePerVdomArpRead() {
+        Script script = new Script();
+        script.multiVdom = true;
+        script.emptyMoves = true;
+        Outcome out = run(script, signedOffWithTraffic(), "READINESS", ON, CLUSTER);
+        assertEquals(3, script.count("get system arp"), "every VDOM is read");
+        String evidence = out.derived().get(out.derived().size() - 1);
+        assertTrue(evidence.contains("\"arpEntries\":10"), "2 + 5 + 3: " + evidence);
+        assertTrue(evidence.contains("\"arpByVdom\":{\"1\":2,\"2\":5,\"3\":3}"), evidence);
+        assertFalse(evidence.contains("ARP_UNAVAILABLE"), evidence);
     }
     @Test void aMultiVdomUnitReadsArpInsideEachVdomWithTheApprovedMovesAndLeavesEachOne() {
         Script script = new Script();

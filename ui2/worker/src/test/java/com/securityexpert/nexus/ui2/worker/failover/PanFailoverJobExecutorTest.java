@@ -83,6 +83,14 @@ class PanFailoverJobExecutorTest {
                     if (command.equals(PanFailoverJobExecutor.ARP)) {
                         arpCalls++; counterTargets.add("arp:"+((ApiTarget)args[0]).endpointId());
                         if ("error".equals(arp)) return new XmlApiResult.Completed(200,"<response status=\"error\"/>");
+                        if ("big".equals(arp)||"huge".equals(arp)) {
+                            StringBuilder b=new StringBuilder("<response status=\"success\"><result><entries>");
+                            int n=0;
+                            while (b.length()<("huge".equals(arp)?8*1024*1024+10:1_000_000)) {
+                                b.append("<entry><ip>192.0.2.").append(n%250+1).append("</ip><mac>00:00:5e:00:53:01</mac></entry>"); n++;
+                            }
+                            return new XmlApiResult.Completed(200,b.append("</entries></result></response>").toString());
+                        }
                         if ("zero".equals(arp)) return new XmlApiResult.Completed(200,
                             "<response status=\"success\"><result><total>0</total><entries/></result></response>");
                         return new XmlApiResult.Completed(200,"<response status=\"success\"><result><max>8192</max><total>3</total>"
@@ -751,6 +759,26 @@ class PanFailoverJobExecutorTest {
         result=run(script,true);
         assertEquals("READY",result.outcome());
         assertTrue(result.derived().stream().anyMatch(d -> d.contains("\"reason\":\"ARP_UNAVAILABLE\"")));
+    }
+    @Test void aLargeArpBodyIsAcceptedAndCountedButOverEightMiBIsRefused() {
+        trafficSigned=true;
+        Script script=new Script(); script.arp="big";
+        Result result=run(script,true);
+        assertEquals("READY",result.outcome());
+        assertTrue(result.derived().stream().anyMatch(d -> d.contains("\"arpEntries\":") && !d.contains("ARP_UNAVAILABLE")),result.derived().toString());
+        script=new Script(); script.arp="huge";
+        result=run(script,true);
+        assertTrue(result.derived().stream().anyMatch(d -> d.contains("\"reason\":\"ARP_UNAVAILABLE\"")));
+    }
+    @Test void onlyTheTwoInformationReadsMayExceedTheSmallCap() {
+        String big="<response status=\"success\">"+"x".repeat(262144)+"</response>";
+        var r=new XmlApiResult.Completed(200,big);
+        assertEquals("TOO_LARGE",PanFailoverJobExecutor.readFailure(r,"<show><other/></show>"));
+        assertNull(PanFailoverJobExecutor.readFailure(r,PanFailoverJobExecutor.ARP));
+        assertNull(PanFailoverJobExecutor.readFailure(r,PanFailoverJobExecutor.COUNTERS));
+        assertEquals("HTTP_500",PanFailoverJobExecutor.readFailure(new XmlApiResult.Completed(500,"x"),PanFailoverJobExecutor.ARP));
+        assertEquals("EMPTY",PanFailoverJobExecutor.readFailure(new XmlApiResult.Completed(200,""),PanFailoverJobExecutor.ARP));
+        assertEquals("NO_SUCCESS",PanFailoverJobExecutor.readFailure(new XmlApiResult.Completed(200,"<r/>"),PanFailoverJobExecutor.ARP));
     }
     @Test void aFailoverRunNeverReadsTrafficAndArp() {
         trafficSigned=true;

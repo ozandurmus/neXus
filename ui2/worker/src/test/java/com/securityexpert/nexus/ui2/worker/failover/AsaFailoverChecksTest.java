@@ -162,11 +162,32 @@ class AsaFailoverChecksTest {
         expect(AsaFailoverChecks.configurationSync(AsaFailoverChecks.parseState("State only\n"), AsaFailoverChecks.parseState(stateOk(true))),
             "UNKNOWN", "CONFIGURATION_STATE_MISSING");
         expect(AsaFailoverChecks.configurationSync(AsaFailoverChecks.parseState(state(false, null)), AsaFailoverChecks.parseState(stateOk(true))),
-            "UNKNOWN", "CONFIGURATION_STATE_MISSING");
+            "UNKNOWN", "SYNC_STATE_NOT_RECOGNISED");
+        // A present section with no recognised line is "not recognised", never "missing".
         expect(AsaFailoverChecks.configurationSync(AsaFailoverChecks.parseState(state(false, "Something else")), AsaFailoverChecks.parseState(stateOk(true))),
-            "UNKNOWN", "CONFIGURATION_STATE_MISSING");
+            "UNKNOWN", "SYNC_STATE_NOT_RECOGNISED");
         expect(AsaFailoverChecks.configurationSync(AsaFailoverChecks.parseState(state(false, "Sync Done\n        Something else")),
             AsaFailoverChecks.parseState(stateOk(true))), "UNKNOWN", "SYNC_STATE_NOT_RECOGNISED");
+    }
+
+    @Test void syncSkippedIsParsedAndIsNeverAPass() {
+        var skippedActive = AsaFailoverChecks.parseState(state(false, "Sync Skipped"));
+        assertEquals(1, skippedActive.skipped());
+        assertEquals(1, AsaFailoverChecks.parseState(state(false, "sync   SKIPPED - STANDBY")).skipped());
+        Result r = AsaFailoverChecks.configurationSync(skippedActive, AsaFailoverChecks.parseState(state(true, "Sync Skipped - STANDBY")));
+        expect(r, "UNKNOWN", "SYNC_SKIPPED");
+        assertEquals(2, r.evidence().get("observersSkipped"));
+        // One observer done, the other skipped: still not a PASS.
+        r = AsaFailoverChecks.configurationSync(skippedActive, AsaFailoverChecks.parseState(stateOk(true)));
+        expect(r, "UNKNOWN", "SYNC_SKIPPED");
+        assertEquals(1, r.evidence().get("observersSkipped"));
+        // A skipped line next to an unrecognised line is not recognised; a real not-done line still fails.
+        r = AsaFailoverChecks.configurationSync(AsaFailoverChecks.parseState(state(false, "Sync Skipped\n        Something else")),
+            AsaFailoverChecks.parseState(stateOk(true)));
+        expect(r, "UNKNOWN", "SYNC_STATE_NOT_RECOGNISED");
+        assertEquals(1, r.evidence().get("unrecognised"));
+        expect(AsaFailoverChecks.configurationSync(AsaFailoverChecks.parseState(state(false, "Sync Skipped\n        Bulk Sync")),
+            AsaFailoverChecks.parseState(stateOk(true))), "FAIL", "SYNC_NOT_DONE");
     }
 
     // ---- check 6 ----

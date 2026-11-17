@@ -81,8 +81,11 @@ public final class PanFailoverChecks {
     private static String value(Element parent,String name) {
         return text(parent,name).toLowerCase(Locale.ROOT);
     }
-    private static Element result(String xml) {
-        if (xml==null || xml.isBlank() || xml.length()>262144) return null;
+    private static Element result(String xml) { return result(xml,262144); }
+    /** The two information reads (interface counters, ARP table) may be larger than every other answer. */
+    private static final int INFORMATION_CAP=8*1024*1024;
+    private static Element result(String xml,int cap) {
+        if (xml==null || xml.isBlank() || xml.length()>cap) return null;
         try {
             var factory=DocumentBuilderFactory.newInstance();
             factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl",true);
@@ -281,7 +284,7 @@ public final class PanFailoverChecks {
      * repeated name, or no forwarding interface at all.
      */
     static java.util.Map<String,Long> hardwareBytes(String xml) {
-        Element hw=child(result(xml),"hw");
+        Element hw=child(result(xml,INFORMATION_CAP),"hw");
         if (hw==null) return null;
         java.util.Map<String,Long> bytes=new java.util.HashMap<>();
         for (Element entry:children(hw,"entry")) {
@@ -315,7 +318,7 @@ public final class PanFailoverChecks {
      * elements. Null when neither is present. Addresses and MACs are never read.
      */
     public static Integer arpEntries(String xml) {
-        Element result=result(xml);
+        Element result=result(xml,INFORMATION_CAP);
         if (result==null) return null;
         Element total=child(result,"total");
         if (total!=null) {
