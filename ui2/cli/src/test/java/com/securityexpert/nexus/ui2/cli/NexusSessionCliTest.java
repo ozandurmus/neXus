@@ -396,21 +396,27 @@ class NexusSessionCliTest {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             calls.add(exchange.getRequestMethod() + " " + exchange.getRequestURI());
-            byte[] out = "{\"changes\":[]}".getBytes(StandardCharsets.UTF_8);
+            byte[] out = "{\"changes\":[],\"install_events\":[{\"kind\":\"JUMBO_INSTALL\",\"jumbo_take\":65}]}".getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, out.length);
             exchange.getResponseBody().write(out);
             exchange.close();
         });
         server.start();
+        java.io.PrintStream realOut = System.out;
+        java.io.ByteArrayOutputStream captured = new java.io.ByteArrayOutputStream();
         try {
             NexusSessionCli cli = new NexusSessionCli(home);
             cli.saveSession(new NexusSessionCli.Session("http://127.0.0.1:" + server.getAddress().getPort(), "opaque-cookie", "csrf-9"));
+            System.setOut(new java.io.PrintStream(captured, true, StandardCharsets.UTF_8));
             assertEquals(0, cli.run(new String[] {"software-history", "device-1"}));
+            System.setOut(realOut);
+            assertTrue(captured.toString(StandardCharsets.UTF_8).contains("install_events"), "the install events are printed with the history");
             assertEquals(0, cli.run(new String[] {"software-changes"}));
             assertEquals(0, cli.run(new String[] {"software-changes", "days=30"}));
             assertEquals(java.util.List.of("GET /devices/device-1/software-history", "GET /api/v2/software-history/changes",
                     "GET /api/v2/software-history/changes?days=30"), calls);
         } finally {
+            System.setOut(realOut);
             server.stop(0);
         }
     }

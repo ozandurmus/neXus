@@ -2,6 +2,8 @@ package com.securityexpert.nexus.ui2.service.api;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -13,6 +15,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.securityexpert.nexus.ui2.persistence.device.DeviceInstallEventRepository;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceInstallEventRepository.Event;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSoftwareHistoryRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSoftwareHistoryRepository.Stretch;
@@ -31,10 +35,13 @@ public final class SoftwareHistoryController {
 
     private final DeviceSoftwareHistoryRepository history;
     private final DeviceRepository devices;
+    private final DeviceInstallEventRepository installEvents;
 
-    public SoftwareHistoryController(DeviceSoftwareHistoryRepository history, DeviceRepository devices) {
+    public SoftwareHistoryController(DeviceSoftwareHistoryRepository history, DeviceRepository devices,
+            DeviceInstallEventRepository installEvents) {
         this.history = history;
         this.devices = devices;
+        this.installEvents = installEvents;
     }
 
     @GetMapping("/devices/{deviceId}/software-history")
@@ -51,6 +58,12 @@ public final class SoftwareHistoryController {
         body.put("stretches", rows);
         // UNKNOWN is the honest answer when neXus has never observed a version for the device.
         body.put("known", !rows.isEmpty());
+        // V246: Check Point base/Jumbo install dates from the device's own install log, newest first.
+        List<Map<String, Object>> events = new ArrayList<>();
+        for (Event e : installEvents.forDevice(deviceId)) {
+            events.add(eventRow(e));
+        }
+        body.put("install_events", events);
         return ResponseEntity.ok(body);
     }
 
@@ -72,7 +85,29 @@ public final class SoftwareHistoryController {
         body.put("days", window);
         body.put("since", since.toString());
         body.put("changes", rows);
+        // V246: install-log events; the device prints its own clock, so the cutoff is compared with that clock as a plain
+        // local time (UTC "now" minus the window; a few hours of device clock offset is immaterial over days).
+        List<Map<String, Object>> events = new ArrayList<>();
+        for (Event e : installEvents.installedSince(LocalDateTime.now(ZoneOffset.UTC).minusDays(window), MAX_ROWS)) {
+            Map<String, Object> row = eventRow(e);
+            row.put("device_id", e.deviceId());
+            row.put("hostname", e.hostname().orElse(null));
+            events.add(row);
+        }
+        body.put("install_events", events);
         return body;
+    }
+
+    private static Map<String, Object> eventRow(Event e) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("kind", e.kind().name());
+        row.put("product_version", e.productVersion());
+        row.put("jumbo_take", e.jumboTake().orElse(null));
+        // The device's own clock, no offset.
+        row.put("installed_at_local", e.installedAtLocal().toString());
+        row.put("file_name", e.fileName());
+        row.put("first_observed_at", e.firstObservedAt().toString());
+        return row;
     }
 
     private static Map<String, Object> row(Stretch s) {

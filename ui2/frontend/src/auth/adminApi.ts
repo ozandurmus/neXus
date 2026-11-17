@@ -453,10 +453,16 @@ export interface SoftwareStretch {
 export interface SoftwareChange extends SoftwareStretch {
   hostname: string | null; from_version: string | null; from_hotfix_level: string | null; to_version: string; to_hotfix_level: string | null;
 }
+/** One install from a Check Point gateway's own install log (V246). `installed_at_local` is the device's clock, no offset. */
+export interface CpInstallEvent {
+  kind: "BASE_INSTALL" | "JUMBO_INSTALL"; product_version: string; jumbo_take: number | null;
+  installed_at_local: string; file_name: string; first_observed_at: string;
+}
+export interface CpInstallEventWithDevice extends CpInstallEvent { device_id: string; hostname: string | null }
 export const getDeviceSoftwareHistory = (id: string) =>
-  call<{ device_id: string; known: boolean; stretches: SoftwareStretch[] }>(`/devices/${encodeURIComponent(id)}/software-history`, "GET");
+  call<{ device_id: string; known: boolean; stretches: SoftwareStretch[]; install_events?: CpInstallEvent[] }>(`/devices/${encodeURIComponent(id)}/software-history`, "GET");
 export const getSoftwareChanges = (days = 90) =>
-  call<{ days: number; since: string; changes: SoftwareChange[] }>(`/api/v2/software-history/changes?days=${days}`, "GET");
+  call<{ days: number; since: string; changes: SoftwareChange[]; install_events?: CpInstallEventWithDevice[] }>(`/api/v2/software-history/changes?days=${days}`, "GET");
 export const getLifecycle = () => call<LifecycleFleet>("/api/v2/lifecycle", "GET");
 export const getDeviceLifecycle = (id: string) => call<LifecycleDevice>(`/devices/${encodeURIComponent(id)}/lifecycle`, "GET");
 export const getLifecycleAdvisories = () => call<{ as_of: string; advisories: LifecycleAdvisory[] }>("/api/v2/lifecycle/advisories", "GET");

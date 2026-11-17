@@ -32,3 +32,6 @@ failure or timeout is logged and never changes the inventory outcome.
 
 ## 2026-11-16 first run: no answer kept
 The first run (16:41) completed the inventory, but inventory jobs keep no transcript and the worker logged only the answer length; the worker pod was replaced when the switch was removed, so the answer was lost. Fix: the worker now logs the answer reduced to file-name and date characters (at most 90 lines of 160 characters), and logs SKIPPED with the reason when the switch names the device but the read does not apply. A second run of the same literal on the same device needs the PO's go-ahead.
+
+## Superseded
+Superseded on 2026-11-17 by `PO_DECISION_RECORD_2026_11_17_CP_INSTALL_HISTORY_INVENTORY.md`: the production read at every inventory run (gate `cp_install_history_inventory`, V246) replaces this one-off; its switch and code path are removed. The V245 migration and fixture entry stay as history.

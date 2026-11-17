@@ -264,7 +264,10 @@ public final class Ui2WorkerMain {
                         new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePolicyInstallRepository(transactionBoundary))
                 // V229: the zone names of each virtual system, parsed from the configuration the interfaces come from.
                 .withPanZoneRepository(
-                        new com.securityexpert.nexus.ui2.persistence.device.JooqPanVsysZoneRepository(transactionBoundary));
+                        new com.securityexpert.nexus.ui2.persistence.device.JooqPanVsysZoneRepository(transactionBoundary))
+                // V246: the Check Point base/Jumbo install dates from the device's install log.
+                .withInstallEventRepository(
+                        new com.securityexpert.nexus.ui2.persistence.device.JooqDeviceInstallEventRepository(transactionBoundary));
 
         DeviceConfigurationRepository deviceConfigurationRepository =
                 new JooqDeviceConfigurationRepository(transactionBoundary);

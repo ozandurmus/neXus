@@ -13,6 +13,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import com.securityexpert.nexus.ui2.persistence.device.DeviceInstallEventRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSoftwareHistoryRepository;
@@ -26,7 +27,38 @@ import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 class SoftwareVersionHistoryControllerTest {
     private final DeviceSoftwareHistoryRepository history = mock(DeviceSoftwareHistoryRepository.class);
     private final DeviceRepository devices = mock(DeviceRepository.class);
-    private final SoftwareHistoryController controller = new SoftwareHistoryController(history, devices);
+    private final DeviceInstallEventRepository installs = mock(DeviceInstallEventRepository.class);
+    private final SoftwareHistoryController controller = new SoftwareHistoryController(history, devices, installs);
+
+    private static DeviceInstallEventRepository.Event jumbo() {
+        return new DeviceInstallEventRepository.Event("device-1", Optional.of("synthetic-gateway"),
+                DeviceInstallEventRepository.Kind.JUMBO_INSTALL, "R81.20", Optional.of(119),
+                java.time.LocalDateTime.parse("2026-11-01T03:10:51"), "install_SecurePlatform_HOTFIX_R81_20_JUMBO_HF_MAIN.log",
+                Instant.parse("2026-11-17T10:00:00Z"));
+    }
+
+    @Test void installEventsAreCarriedOnTheDeviceAndTheFleetRoutes() {
+        when(devices.find("device-1")).thenReturn(Optional.of(new DeviceRecord("device-1", "gateway", "check_point", "manual",
+                Instant.EPOCH, false, DeviceEnrollmentState.ENROLLED, false, "cred")));
+        when(installs.forDevice("device-1")).thenReturn(List.of(jumbo()));
+        var events = (List<?>) controller.device("device-1").getBody().get("install_events");
+        assertEquals(1, events.size());
+        String row = events.get(0).toString();
+        assertTrue(row.contains("kind=JUMBO_INSTALL"));
+        assertTrue(row.contains("product_version=R81.20"));
+        assertTrue(row.contains("jumbo_take=119"));
+        assertTrue(row.contains("installed_at_local=2026-11-01T03:10:51"));
+        assertTrue(row.contains("first_observed_at=2026-11-17T10:00:00Z"));
+
+        when(installs.installedSince(any(), anyInt())).thenReturn(List.of(jumbo()));
+        var fleet = (List<?>) controller.fleet(30).get("install_events");
+        assertEquals(1, fleet.size());
+        assertTrue(fleet.get(0).toString().contains("hostname=synthetic-gateway"));
+        assertTrue(fleet.get(0).toString().contains("device_id=device-1"));
+
+        when(installs.forDevice("device-1")).thenReturn(List.of());
+        assertEquals(List.of(), controller.device("device-1").getBody().get("install_events"));
+    }
 
     private static Stretch change() {
         return new Stretch("device-1", Optional.of("synthetic-gateway"), Optional.of("check_point"), "R82", Optional.of("Take 10"),

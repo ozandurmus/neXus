@@ -250,6 +250,24 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_11_16_CP_INSTALL_HISTORY_DISCOVERY.md (PO chat approval 2026-11-16)"
 
+  # Every inventory run (V246, PO approval 2026-11-17 "Evet, onaylıyorum"): Check Point base-install and Jumbo-install dates.
+  - gate_id: cp_install_history_inventory
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "unset BASH_ENV ENV; cd /opt/CPInstLog 2>/dev/null || exit 0; for f in $(ls -1tr install_fw1_R*.elg install_SecurePlatform_HOTFIX_*JUMBO*.log 2>/dev/null | tail -n 20); do echo \"$(date -r \"$f\" +%Y-%m-%dT%H:%M:%S) $f $(grep -a -o -m1 -E 'Bundle_T[0-9]+' \"$f\" | head -n1)\"; done"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "each inventory run"
+    session_reuse_rule: "the inventory session"
+    unsupported_behavior_ref: "a failure or no answer is logged in the worker log; the inventory outcome is unchanged"
+    secret_output_risk: "none (file names, dates and Jumbo take numbers only)"
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_11_17_CP_INSTALL_HISTORY_INVENTORY.md (PO chat approval 2026-11-17)"
+
   # Management-server HA role (V194, PO approval 2026-11-07): Management API show-ha-status at MDS level.
   - gate_id: cp_identity_mds_ha_status
     vendor: check_point
