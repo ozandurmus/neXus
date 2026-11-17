@@ -445,10 +445,12 @@ public class DeviceCompositionConfiguration {
     }
 
     /** Mirrors {@code worker.backup.BackupCapabilities.checkPointMdsExport} and {@code MdsExportPlan.LITERALS} exactly (V61). */
+    private static final String MDS_CP_ENV = "unset BASH_ENV ENV; . /etc/profile.d/CP.sh >/dev/null 2>&1; unset BASH_ENV ENV; ";
     static final List<String> MDS_EXPORT_LITERALS = List.of("clish -c 'show version all'", "df -P /var/log", "mkdir -p %s",
-            "bash -lc 'mdsstat' > %s/mdsstat.txt 2>&1", "clish -c 'show configuration' > %s/gaia_config.txt",
-            "bash -lc 'cplic print -x' > %s/cplic.txt 2>&1", "netstat -rn > %s/netstat.txt", "uname -a > %s/uname.txt",
-            "cd /var/log && setsid nohup bash -lc '$CPMDIR/scripts/mds_backup -b -l -d %1$s > %1$s/mds_backup.log 2>&1; echo $? > %1$s/mds_backup.rc' </dev/null >/dev/null 2>&1 &",
+            MDS_CP_ENV + "mdsstat > %s/mdsstat.txt 2>&1", "clish -c 'show configuration' > %s/gaia_config.txt",
+            MDS_CP_ENV + "cplic print -x > %s/cplic.txt 2>&1", "netstat -rn > %s/netstat.txt", "uname -a > %s/uname.txt",
+            MDS_CP_ENV + "cd /var/log && setsid nohup bash --noprofile --norc -c \"$CPMDIR/scripts/mds_backup -b -l -d %1$s"
+                    + " > %1$s/mds_backup.log 2>&1; echo \\$? > %1$s/mds_backup.rc\" </dev/null >/dev/null 2>&1 &",
             "cat %s/mds_backup.rc", "ls %s", "cd %1$s && tar -czf %1$s.tgz .", "sha256sum %s.tgz", "rm -rf %1$s %1$s.tgz");
 
     /** Mirrors {@code worker.backup.BackupCapabilities.radwareCyberControllerBackup} and {@code CyberControllerBackupPlan.LITERALS} (V69). */

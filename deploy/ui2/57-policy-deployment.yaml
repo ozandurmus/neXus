@@ -131,6 +131,10 @@ spec:
         # requests stay full; a domain is reused only within UI2_POLICY_CP_CHANGED_ONLY_MAX_AGE_HOURS (default 24).
         - name: UI2_POLICY_CP_CHANGED_ONLY_DOMAINS
           value: "*"
+        # Palo Alto change actor from the Panorama configuration log (PO_DECISION_RECORD_2026_11_12_PAN_CHANGE_ACTOR_FROM_CONFIG_LOG.md
+        # D1; PO 2026-11-17 "Evet, ac"): the one Panorama policy source, by its opaque source id.
+        - name: UI2_POLICY_PAN_CONFIG_LOG_TRIAL_SOURCE
+          value: "a7dc1fa9-ac3e-4b20-a4b5-83753c4317c2"
         - name: JAVA_TOOL_OPTIONS
           value: -Dui2.db.pool.maximum-pool-size=6
         securityContext:
