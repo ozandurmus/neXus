@@ -70,6 +70,15 @@ class FgtFailoverChecksTest {
         assertEquals("UNSUPPORTED_MODE", one(ok().mode("HA A-A"), 1).reason());
         assertEquals("FAIL", one(ok().mode("Standalone"), 1).status());
     }
+    @Test void versionParityIsDerivedFromHealthOkAndBothMembersInSync() {
+        var pass = one(ok(), 7);
+        assertEquals("PASS", pass.status());
+        assertEquals("PARITY_DERIVED_FROM_HA_SYNC", pass.reason());
+        assertEquals("DERIVED", pass.evidence().get("evidence"));
+        assertEquals("UNKNOWN", one(ok().outOfSync(), 7).status());
+        assertEquals("UNKNOWN", one(ok().health("WARNING"), 7).status());
+        assertEquals("PASS", one(ok().bare(), 7).status());
+    }
     @Test void healthNotOkFails() {
         assertEquals("FAIL", one(ok().health("WARNING"), 1).status());
         assertEquals("HA_HEALTH_NOT_OK", one(ok().health("ERROR"), 1).reason());
@@ -79,11 +88,15 @@ class FgtFailoverChecksTest {
         assertEquals("FAIL", check(r, 8).status());
         assertEquals("OVERRIDE_ENABLED", check(r, 8).reason());
     }
-    @Test void check8NeedsUptimeAboveMarginAndNoLatchedFlag() {
-        assertEquals("FAIL", check(eval(obs(ok(), FgtFixtures.config("disable", "enable", "300"), FgtFixtures.checksums(true), FgtFixtures.dump(300), FgtFixtures.flag(false))), 8).status());
+    @Test void check8NeedsNoLatchedFlagAndTreatsTheUptimeMarginAsInformation() {
+        var low = check(eval(obs(ok(), FgtFixtures.config("disable", "enable", "300"), FgtFixtures.checksums(true), FgtFixtures.dump(300), FgtFixtures.flag(false))), 8);
+        assertEquals("PASS", low.status(), "uptime semantics are unmeasured: information, never blocking");
+        assertEquals(false, low.evidence().get("uptimeAboveMargin"));
         assertEquals("FAIL", check(eval(obs(ok(), FgtFixtures.config("disable", "enable", "300"), FgtFixtures.checksums(true), FgtFixtures.dump(1000), FgtFixtures.flag(true))), 8).status());
         assertEquals("UNKNOWN", check(eval(obs(ok(), FgtFixtures.config("disable", "enable", "300"), FgtFixtures.checksums(true), FgtFixtures.dump(1000), "something else\n")), 8).status());
-        assertEquals("UNKNOWN", check(eval(obs(ok(), FgtFixtures.config("disable", "enable", "300"), FgtFixtures.checksums(true), "no uptime here\n", FgtFixtures.flag(false))), 8).status());
+        var noUptime = check(eval(obs(ok(), FgtFixtures.config("disable", "enable", "300"), FgtFixtures.checksums(true), "no uptime here\n", FgtFixtures.flag(false))), 8);
+        assertEquals("PASS", noUptime.status());
+        assertEquals("UNKNOWN", noUptime.evidence().get("uptimeAboveMargin"));
         assertEquals("UNKNOWN", check(eval(obs(ok(), FgtFixtures.config("disable", "enable", "300"), FgtFixtures.checksums(true), null, null)), 8).status());
     }
     @Test void sessionPickupOffFailsAndUnreportedIsUnknown() {
@@ -107,12 +120,12 @@ class FgtFailoverChecksTest {
         var secondary = new Observation(o.ha(), null, null, null, null, Optional.empty(), Optional.of(SERIAL_B), true);
         assertEquals("ANSWERED_BY_SECONDARY", FgtFailoverChecks.roles(secondary, Optional.of(SERIAL_A)).reason());
     }
-    @Test void versionParityAndSessionsAreNeverPassInThisPhase() {
+    @Test void sessionsAreNotEvaluatedAndAHealthyInSyncClusterIsReady() {
         var r = eval(obs(ok()));
-        assertEquals("UNKNOWN", check(r, 7).status());
+        assertEquals("PASS", check(r, 7).status(), "parity derived from HA health OK and both members in-sync (PO 2026-11-17)");
         assertEquals("UNKNOWN", check(r, 6).status());
         assertFalse(check(r, 6).blocking());
-        assertEquals("UNKNOWN", FgtFailoverChecks.outcome(r), "version parity keeps the run from READY");
+        assertEquals("READY", FgtFailoverChecks.outcome(r));
     }
     @Test void lastFailoverUsesTheDevicesOwnClock() {
         assertEquals("OLDER_THAN_6H", one(ok(), 9).reason());

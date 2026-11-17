@@ -425,12 +425,33 @@ final class FgtFailoverChecks {
     }
 
     /**
-     * Check 7: version parity. The primary reports no version for its secondary (the HA status carries a model, never a
-     * firmware build), so the one-sided report cannot prove parity: UNKNOWN until the PO decides how it is evidenced.
+     * Check 7: version parity. The primary reports no firmware build for its secondary, so parity is evidenced indirectly
+     * (PO decision 2026-11-17, docs/design/PO_DECISION_RECORD_2026_11_17_FGT_FAILOVER_READINESS_READS.md): an FGCP cluster
+     * only forms and synchronises between members on the same firmware, so HA health OK plus both members reported
+     * in-sync counts as parity, marked {@code DERIVED}. Out-of-sync is not proof of a version difference: UNKNOWN, and
+     * check 4 already fails it. A health that is not OK, or missing sync states, stay UNKNOWN.
      */
     static Result versions(Observation o) {
-        return result(7, UNKNOWN, "SECONDARY_VERSION_NOT_OBSERVED", "primaryVersion", o.versionParsed() ? "PARSED" : "MISSING",
-            "healthOk", ok(o.ha()) && o.ha().health() != null && o.ha().health().equalsIgnoreCase("OK"), "basis", BASIS);
+        HaStatus ha = o.ha();
+        boolean healthOk = ok(ha) && ha.health() != null && ha.health().equalsIgnoreCase("OK");
+        String primary = o.versionParsed() ? "PARSED" : "MISSING";
+        if (!healthOk) {
+            return result(7, UNKNOWN, "SECONDARY_VERSION_NOT_OBSERVED", "primaryVersion", primary, "healthOk", false,
+                "basis", BASIS);
+        }
+        long inSync = 0;
+        boolean allKnown = ha.members().size() == 2;
+        for (var m : ha.members()) {
+            Boolean state = ha.inSync().get(m.serial());
+            if (state == null) allKnown = false;
+            else if (state) inSync++;
+        }
+        if (allKnown && inSync == 2) {
+            return result(7, PASS, "PARITY_DERIVED_FROM_HA_SYNC", "primaryVersion", primary, "healthOk", true, "inSync", 2,
+                "evidence", "DERIVED", "basis", BASIS);
+        }
+        return result(7, UNKNOWN, "SECONDARY_VERSION_NOT_OBSERVED", "primaryVersion", primary, "healthOk", true,
+            "inSync", inSync, "basis", BASIS);
     }
 
     /** Check 8: override disabled, the secondary's HA uptime above the margin, no failover flag latched. */
@@ -444,20 +465,19 @@ final class FgtFailoverChecks {
         Long margin = cfg.settings().containsKey("ha-uptime-diff-margin") && cfg.settings().get("ha-uptime-diff-margin").matches("\\d{1,9}")
             ? Long.valueOf(cfg.settings().get("ha-uptime-diff-margin")) : null;
         Optional<Member> secondary = pair(o.ha()).flatMap(p -> p.stream().filter(m -> m.role().equals("SECONDARY")).findFirst());
-        Long uptime = secondary.isPresent() && o.uptimes() != null ? o.uptimes().bySerial().get(secondary.get().serial()) : null;
-        if (uptime != null && margin != null && uptime <= margin)
-            return result(8, FAIL, "SECONDARY_UPTIME_BELOW_MARGIN", "overrideDisabled", true, "uptimeAboveMargin", false, "basis", BASIS);
+        Long uptime = secondary.isPresent() && o.uptimes() != null && o.uptimes().recognised()
+            ? o.uptimes().bySerial().get(secondary.get().serial()) : null;
+        // The HA uptime against ha-uptime-diff-margin is information only (2026-11-17, first live run): its meaning in
+        // `diagnose sys ha dump-by group` (absolute or relative uptime, unit) is not measured, and it only matters to the
+        // reset-uptime switch, which is not built. Never FAIL or UNKNOWN on it until measured.
+        Object uptimeAboveMargin = uptime == null || margin == null ? "UNKNOWN" : (Object) (uptime > margin);
         if (o.flag() == Flag.SET) return result(8, FAIL, "FAILOVER_FLAG_LATCHED", "overrideDisabled", true, "failoverFlagLatched", true);
-        if (o.uptimes() == null || o.flag() == null)
-            return result(8, UNKNOWN, "SWITCH_READS_NOT_AVAILABLE", "overrideDisabled", true,
-                "uptime", o.uptimes() == null ? "NOT_READ" : "READ", "failoverFlag", o.flag() == null ? "NOT_READ" : "READ");
-        if (margin == null) return result(8, UNKNOWN, "UPTIME_MARGIN_NOT_REPORTED", "overrideDisabled", true);
-        if (uptime == null || !o.uptimes().recognised())
-            return result(8, UNKNOWN, "UPTIME_NOT_RECOGNISED", "overrideDisabled", true, "uptime", "UNRECOGNISED", "basis", BASIS);
+        if (o.flag() == null)
+            return result(8, UNKNOWN, "SWITCH_READS_NOT_AVAILABLE", "overrideDisabled", true, "failoverFlag", "NOT_READ");
         if (o.flag() == Flag.UNRECOGNISED)
-            return result(8, UNKNOWN, "FAILOVER_FLAG_NOT_RECOGNISED", "overrideDisabled", true, "uptimeAboveMargin", true);
-        return result(8, PASS, "SWITCH_PRECONDITIONS_OK", "overrideDisabled", true, "uptimeAboveMargin", true,
-            "failoverFlagLatched", false, "basis", BASIS);
+            return result(8, UNKNOWN, "FAILOVER_FLAG_NOT_RECOGNISED", "overrideDisabled", true);
+        return result(8, PASS, "SWITCH_PRECONDITIONS_OK", "overrideDisabled", true, "failoverFlagLatched", false,
+            "uptimeAboveMargin", uptimeAboveMargin, "uptimeSemantics", "UNMEASURED_INFORMATION", "basis", BASIS);
     }
 
     /** Check 9 (information only): the newest role change in the HA status against the device's own clock. */
