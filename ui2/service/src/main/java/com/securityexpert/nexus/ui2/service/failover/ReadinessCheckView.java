@@ -101,6 +101,8 @@ public final class ReadinessCheckView {
             case 4 -> pass ? count(d,"monitoredNormal"," monitored interfaces Normal")
                 : "UNKNOWN".equals(status) ? "Interface lines missing or not recognised" : "A monitored interface is not Normal";
             case 5 -> pass ? "Configuration synchronised on both members"
+                : "SYNC_SKIPPED".equals(reason) ? "Configuration sync skipped: the units found their configurations equal at the last sync check"
+                : "SYNC_STATE_NOT_RECOGNISED".equals(reason) ? "Configuration state not recognised"
                 : "UNKNOWN".equals(status) ? "Configuration state missing or not recognised" : "Configuration not synchronised";
             case 6 -> pass ? "No error counter increased between two samples"
                 : "UNKNOWN".equals(status) ? "Stateful table missing or not recognised" : "Replication error counters increased or no traffic";

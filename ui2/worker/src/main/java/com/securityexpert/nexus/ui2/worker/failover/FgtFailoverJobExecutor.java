@@ -375,7 +375,9 @@ public final class FgtFailoverJobExecutor {
     private boolean moveChecked(TransportSession session, String command) {
         ExecResult result = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(
             () -> ssh.execInteractive(session, new ExecSpec(command, true), Duration.ofSeconds(30)));
-        return result instanceof ExecResult.Completed completed && completed.output() != null && !FortiGatePlan.isCliError(completed.output());
+        // A context move normally answers only with the new prompt, or with nothing at all: empty output is success.
+        return result instanceof ExecResult.Completed completed
+            && (completed.output() == null || completed.output().isBlank() || !FortiGatePlan.isCliError(completed.output()));
     }
 
     /** A context move ("config global", "end"): the answer is the new prompt; it is never a read and never recorded. */

@@ -336,6 +336,20 @@ public final class PanFailoverJobExecutor {
         return STATE.equals(command) || SESSION_SYNC.equals(command) || SESSIONS.equals(command)
             || SESSION_METER.equals(command) || COUNTERS.equals(command) || ARP.equals(command);
     }
+    private static final System.Logger LOG=System.getLogger(PanFailoverJobExecutor.class.getName());
+    static final int MAX_READ_CHARS=262144,MAX_INFORMATION_READ_CHARS=8*1024*1024;
+    /** The two information reads (ARP table, interface counters) may be large on big firewalls; every other read keeps the small cap. */
+    static int readCap(String command) {
+        return ARP.equals(command)||COUNTERS.equals(command)?MAX_INFORMATION_READ_CHARS:MAX_READ_CHARS;
+    }
+    /** Null when the read is usable; else a body-free cause word for the log. */
+    static String readFailure(XmlApiResult result,String command) {
+        if (!(result instanceof XmlApiResult.Completed c)) return "NOT_COMPLETED";
+        if (c.httpStatus()!=200) return "HTTP_"+c.httpStatus();
+        if (c.body()==null||c.body().isEmpty()) return "EMPTY";
+        if (c.body().length()>readCap(command)) return "TOO_LARGE";
+        return SUCCESS.matcher(c.body()).find()?null:"NO_SUCCESS";
+    }
     private String call(Peer peer,String command) throws InterruptedException {
         var g=gate(command);
         if (commandIndex > 0 && !commandPause.isZero()) pause.sleep(commandPause);
@@ -363,12 +377,13 @@ public final class PanFailoverJobExecutor {
         store.command(runId,g.gateId());
         var result=transport.xmlApiCall(peer.target(),new XmlApiSpec("POST","op","","direct_firewall",
             Map.of("cmd",command),Map.of("X-PAN-KEY",peer.key())),Duration.ofSeconds(g.timeoutS()));
-        if (!(result instanceof XmlApiResult.Completed completed) || completed.httpStatus()!=200
-                || completed.body()==null || completed.body().length()>262144
-                || !SUCCESS.matcher(completed.body()).find()) {
+        String failure=readFailure(result,command);
+        if (failure!=null) {
+            LOG.log(System.Logger.Level.INFO,"[READINESS_READ_FAILED] vendor=palo_alto gate={0} cause={1}",g.gateId(),failure);
             attempts.writeOutcome(attempt,epoch,"FAILED","COMMAND_UNAVAILABLE",false,null,null,null);
             throw new Stop("COMMAND_UNAVAILABLE",0);
         }
+        XmlApiResult.Completed completed=(XmlApiResult.Completed) result;
         if (!attempts.writeOutcome(attempt,epoch,"MATCHED",null,true,null,null,null))
             throw new Stop("ATTEMPT_RECORD_FAILED",0);
         boolean meter=SESSION_METER.equals(command);

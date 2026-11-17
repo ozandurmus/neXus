@@ -133,12 +133,12 @@ final class AsaFailoverChecks {
     // ---- show failover state ------------------------------------------------------------------------------------
 
     /** Configuration-sync lines of {@code ====Configuration State===}, classified; last-failure columns are history. */
-    record SyncState(boolean sectionPresent, int done, int standbyDone, int notDone, int unrecognised) {}
+    record SyncState(boolean sectionPresent, int done, int standbyDone, int skipped, int notDone, int unrecognised) {}
 
     static SyncState parseState(String output) {
-        if (output == null) return new SyncState(false, 0, 0, 0, 0);
+        if (output == null) return new SyncState(false, 0, 0, 0, 0, 0);
         boolean present = false, inSection = false;
-        int done = 0, standbyDone = 0, notDone = 0, other = 0;
+        int done = 0, standbyDone = 0, skipped = 0, notDone = 0, other = 0;
         for (String line : output.split("\\R")) {
             String text = line.strip();
             if (text.startsWith("====")) {
@@ -150,11 +150,12 @@ final class AsaFailoverChecks {
             String lower = text.toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
             if (lower.equals("sync done")) done++;
             else if (lower.equals("sync done - standby")) standbyDone++;
+            else if (lower.equals("sync skipped") || lower.equals("sync skipped - standby")) skipped++;
             else if (lower.startsWith("cold standby") || lower.startsWith("sync config") || lower.startsWith("sync file system")
                     || lower.startsWith("bulk sync")) notDone++;
             else other++;
         }
-        return new SyncState(present, done, standbyDone, notDone, other);
+        return new SyncState(present, done, standbyDone, skipped, notDone, other);
     }
 
     // ---- show failover history ----------------------------------------------------------------------------------
@@ -361,9 +362,15 @@ final class AsaFailoverChecks {
             return result(5, UNKNOWN, "CONFIGURATION_STATE_MISSING");
         int notDone = a.notDone() + b.notDone();
         if (notDone > 0) return result(5, FAIL, "SYNC_NOT_DONE", "notDone", notDone);
-        boolean empty = a.done() + a.standbyDone() == 0 || b.done() + b.standbyDone() == 0;
-        if (empty) return result(5, UNKNOWN, "CONFIGURATION_STATE_MISSING");
-        if (a.unrecognised() + b.unrecognised() > 0) return result(5, UNKNOWN, "SYNC_STATE_NOT_RECOGNISED", "unrecognised", a.unrecognised() + b.unrecognised());
+        int unrecognised = a.unrecognised() + b.unrecognised();
+        if (unrecognised > 0) return result(5, UNKNOWN, "SYNC_STATE_NOT_RECOGNISED", "unrecognised", unrecognised);
+        boolean aRecognised = a.done() + a.standbyDone() + a.skipped() > 0, bRecognised = b.done() + b.standbyDone() + b.skipped() > 0;
+        // A section with no recognised line: present, but its words are not known (not "missing").
+        if (!aRecognised || !bRecognised) return result(5, UNKNOWN, "SYNC_STATE_NOT_RECOGNISED", "unrecognised", unrecognised);
+        int skipped = a.skipped() + b.skipped();
+        // "Sync Skipped" means the units found equal hashes at the last sync check; later changes are not reflected. Never a PASS.
+        if (skipped > 0)
+            return result(5, UNKNOWN, "SYNC_SKIPPED", "observersSkipped", (a.skipped() > 0 ? 1 : 0) + (b.skipped() > 0 ? 1 : 0));
         return result(5, PASS, "SYNC_DONE", "observersSyncDone", 2);
     }
 

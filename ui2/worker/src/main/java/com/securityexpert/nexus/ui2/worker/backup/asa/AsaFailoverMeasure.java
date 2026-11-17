@@ -158,7 +158,7 @@ public final class AsaFailoverMeasure {
             "check", "file", "system", "none", "ifc", "events", "is", "the", "and", "for", "a", "an", "hardware",
             "model", "mode", "single", "multiple", "context", "contexts", "jan", "feb", "mar", "apr", "may", "jun",
             "jul", "aug", "sep", "oct", "nov", "dec", "mon", "tue", "wed", "thu", "fri", "sat", "sun", "inspection",
-            "bfd", "monitoring", "rule", "timer", "auth", "data", "service", "license");
+            "bfd", "monitoring", "rule", "timer", "auth", "data", "service", "license", "skipped");
 
     /** The shape of one answer: at most {@code maxLines} non-empty lines, each projected by {@link #shapeLine}. */
     public static List<String> shape(String output, int maxLines) {
