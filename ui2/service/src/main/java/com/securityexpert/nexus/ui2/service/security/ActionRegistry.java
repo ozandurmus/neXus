@@ -84,6 +84,11 @@ public final class ActionRegistry {
      */
     public static final String SCHEDULED_JOBS_READ = "scheduled_jobs_read";
     /**
+     * OPERATIONS_POLICY_INSTALL_P1_MONITORING_CONTRACT_2026_11_18.md (FROZEN): P1 read-only monitoring status
+     * ({@code GET /api/v2/operations/policy-install/status}); open to any authenticated session, masked for aiview.
+     */
+    public static final String POLICY_INSTALL_READ = "policy_install_read";
+    /**
      * V203: switches one family on or off ({@code PUT /api/v2/config/scheduled-jobs/{family}}) with a mandatory reason and,
      * inside business hours, the acknowledgement; operation_admin and security_admin, never aiview.
      */
@@ -396,6 +401,7 @@ public final class ActionRegistry {
         // V203: reading the schedule switches is open to every signed-in session; changing one is for the two administrator
         // roles that already own the job windows' manual bypass (PO decision 2026-10-20). The controller refuses aiview.
         register(new ActionDescriptor(SCHEDULED_JOBS_READ, true, Optional.empty()));
+        register(new ActionDescriptor(POLICY_INSTALL_READ, true, Optional.empty()));
         register(new ActionDescriptor(SCHEDULED_JOBS_SET, true, Optional.of(RoleToken.OPERATION_ADMIN),
                 java.util.Set.of(RoleToken.SECURITY_ADMIN)));
         // PO 2026-11-11 (PO_DECISION_RECORD_2026_11_11_AIVIEW_CONFIGURATION_AND_DISCOVERY.md): aiview (replay_viewer) may

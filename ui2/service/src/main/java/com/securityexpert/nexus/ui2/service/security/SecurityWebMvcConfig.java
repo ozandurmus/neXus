@@ -146,6 +146,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/policy/changes/actor-candidates", ActionRegistry.POLICY_READ),
             // Operations > Change feed: gated like Policy > Changes; the stored-log sources also need system_log_read (checked in the controller).
             Map.entry("GET /api/v2/changes/feed", ActionRegistry.POLICY_READ),
+            // Operations > Policy installation, Phase 1 (OPERATIONS_POLICY_INSTALL_P1_MONITORING_CONTRACT_2026_11_18.md): GET-only monitoring.
+            Map.entry("GET /api/v2/operations/policy-install/status", ActionRegistry.POLICY_INSTALL_READ),
             Map.entry("GET /api/v2/policy/tree", ActionRegistry.POLICY_READ),
             Map.entry("GET /api/v2/policy/collections/*", ActionRegistry.POLICY_READ),
             Map.entry("POST /api/v2/policy/sources/*/collect", ActionRegistry.POLICY_COLLECT),

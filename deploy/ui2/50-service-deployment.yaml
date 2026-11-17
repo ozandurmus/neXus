@@ -95,6 +95,12 @@ spec:
             # PO 2026-11-10 ("artık veri toplamaya geçelim"): schedules resumed; development mode ends for collection.
             - name: UI2_SCHEDULING_ENABLED
               value: "true"
+            # PO 2026-11-18 ("al", to "put the MDS export back on the schedule"): the scheduled MDS export, once per night,
+            # requested from 02:30 inside the 02:00-02:59 backup window and only while the server has no running job
+            # (Check Point TAC: serialise the Gaia backup and mds_backup). Code default is off; set "false" to stop it
+            # (restart required). The 2026-11-11 safeties (45 min ceiling, no retry, failure alert) stay.
+            - name: UI2_CP_MDS_EXPORT_SCHEDULE
+              value: "true"
             # BK-11: the distinct backup credential (Admin > Credentials: Backup-User-LDAP), never the collection credential.
             - name: UI2_CP_BACKUP_CREDENTIAL_REF
               value: "a5c22471-26af-4cb1-a13e-090311c88c96"

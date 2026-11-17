@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT -- DO NOT IMPLEMENT** (2026-11-17). Design and contract draft only (`AGENTS.md` "Contract-status law"). This document authorizes no product code, no schema migration, no network-device command, and no change to `ui2/capability-registry/src/main/resources/capabilities/gate_registry_fixture.yaml`. Every candidate command literal in §2.5 is **UNAPPROVED** and every unmeasured vendor field is marked **`UNKNOWN`** (`AGENTS.md` "UNKNOWN / fail-closed law", "Vendor semantics law").
+**P1 superseded by [OPERATIONS_POLICY_INSTALL_P1_MONITORING_CONTRACT_2026_11_18.md](OPERATIONS_POLICY_INSTALL_P1_MONITORING_CONTRACT_2026_11_18.md) (FROZEN); P2-P4 remain DRAFT** (`DRAFT -- DO NOT IMPLEMENT` for P2–P4, 2026-11-17; updated 2026-11-18 per [PO_DECISION_RECORD_2026_11_18_POLICY_INSTALL_P1_MONITORING.md](PO_DECISION_RECORD_2026_11_18_POLICY_INSTALL_P1_MONITORING.md)). For P2–P4, this document remains a design and contract draft only (`AGENTS.md` "Contract-status law") and authorizes no P2–P4 product code, no schema migration, no network-device command, and no change to `ui2/capability-registry/src/main/resources/capabilities/gate_registry_fixture.yaml`. Every candidate command literal in §2.5 is **UNAPPROVED** and every unmeasured vendor field is marked **`UNKNOWN`** (`AGENTS.md` "UNKNOWN / fail-closed law", "Vendor semantics law").
 
 Trigger: Product Owner request (2026-11-17, translated):
 > *"Another item under the Operations tab: automatic firewall policy installation. One screen for all vendors, schedule, verify beforehand, detect the log on failure and notify by mail, monitor from one screen which ones are installed and which are not, switch it off and on from one screen."*

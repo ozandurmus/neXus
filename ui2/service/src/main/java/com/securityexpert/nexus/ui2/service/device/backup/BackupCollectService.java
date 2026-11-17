@@ -300,6 +300,27 @@ public final class BackupCollectService {
         return new BulkOutcome(targets, admitted, targets - admitted, held);
     }
 
+    /**
+     * One scheduled MDS export for one management server (PO 2026-11-18). The caller has already checked that the device
+     * is due (no non-terminal job, no export yet tonight); the idempotency key is per device and local day, so a repeat
+     * of this call the same night admits nothing new. Only inside the backup window; a credential held by an open
+     * failure alert is not sent.
+     */
+    public boolean requestScheduledMdsExport(String deviceId) {
+        Instant now = clock.instant();
+        if (!ScheduledBackupWindowPolicy.isOpen(now)) return false;
+        var device = deviceRepository.find(deviceId);
+        if (device.isPresent() && heldByCredentialAlert(deviceId, device.get().vendorHint())) return false;
+        Optional<String> nonce = Optional.of("scheduled:" + now.atZone(
+                com.securityexpert.nexus.ui2.platform.JobWindowPolicy.ZONE_ID).toLocalDate());
+        try {
+            return requestCollect(deviceId, ScheduledBackupWindowPolicy.MDS_ACTOR,
+                    "Scheduled MDS export", nonce, "mds_export") instanceof Outcome.Admitted;
+        } catch (com.securityexpert.nexus.ui2.platform.JobWindowPolicy.OutsideWindow e) {
+            return false;
+        }
+    }
+
     private String minuteBucket() {
         Instant now = Instant.now(clock);
         return String.valueOf(now.getEpochSecond() / 60);
