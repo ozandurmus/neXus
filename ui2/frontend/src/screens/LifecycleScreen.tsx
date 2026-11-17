@@ -1,18 +1,29 @@
-import { Fragment, useEffect, useState } from "react";
-import { Alert, Box, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
+import { Fragment, useCallback, useEffect, useState } from "react";
+import { Alert, Box, Checkbox, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TableSortLabel, TextField, Tooltip, Typography } from "@mui/material";
 import { getLifecycle, getDeviceLifecycle, type LifecycleDevice, type LifecycleLicense } from "../auth/adminApi";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { M3Button, M3Tabs } from "../shell/M3Widgets";
+import { useTableSort, type SortColumn } from "../shell/tableSort";
+import { useUrlParamSync, writeUrlParams } from "../shell/urlParams";
 import { downloadText, toCsv } from "./DeviceShared";
 import { LifecycleCatalogPanel, lifecycleError } from "./LifecycleCatalogPanel";
-import { LifecycleVulnerabilitiesPanel, VulnerabilityCell, VulnerabilityDetail, severityWord, advisorySourceName, vulnerabilityRank, vulnerabilitySummary } from "./LifecycleVulnerabilitiesPanel";
+import {
+  LifecycleVulnerabilitiesPanel, VULN_SCORE_FORMULA, VULN_SEVERITY_OPTIONS, VulnScoreCell, VulnerabilityCell,
+  VulnerabilityDetail, advisorySourceName, matchesVulnerabilitySeverity, parseVulnSeverityParam,
+  serializeVulnSeverityParam, severityWord, vulnScoreSummary, vulnerabilityRank, vulnerabilityScore,
+  vulnerabilitySummary, type VulnSeverityFilter,
+} from "./LifecycleVulnerabilitiesPanel";
 import { m3 } from "../theme/m3Theme";
 import { RecentUpgradesPanel } from "./SoftwareHistoryPanel";
 
 const cards = [["devices", "Devices"], ["past_end_of_support", "Past end of support"], ["within_180_days", "Within 180 days"], ["within_365_days", "Within 365 days"], ["no_lifecycle_data", "No lifecycle data"], ["lifecycle_not_evaluated", "Lifecycle not evaluated"], ["lifecycle_needs_review", "Lifecycle needs review"], ["licenses_within_60_days", "Licenses within 60 days"], ["license_problems", "License problems"], ["live_patch_not_active", "Live Patch not active"], ["live_patch_missing", "No Live Patch package"]];
-const headings = ["Device / cluster", "Vendor", "Model", "Version", "Vulnerabilities", "Hardware end of support", "Software end of support", "Next milestone", "Nearest license expiry", "Risk", "Match basis", "Licenses", "Live Patch"];
-/** Positions in {@link lifecycleCells} that the table draws as more than their text. Vulnerabilities sits beside the version it judges. */
-const COL = { device: 0, vulnerabilities: 4, hardware: 5, software: 6, basis: 10, licenses: 11, livePatch: 12 } as const;
+const headings = ["Device / cluster", "Vendor", "Model", "Version", "Vulnerabilities", "Vuln score", "Hardware end of support", "Software end of support", "Next milestone", "Nearest license expiry", "Risk", "Match basis", "Licenses", "Live Patch"];
+/** Positions in {@link lifecycleCells} that the table draws as more than their text. Vulnerabilities and Vuln score sit beside the version they judge. */
+const COL = { device: 0, vulnerabilities: 4, vulnScore: 5, hardware: 6, software: 7, basis: 11, licenses: 12, livePatch: 13 } as const;
+const SCORE_SORT_COLUMNS: readonly SortColumn<LifecycleDevice>[] = [
+  { key: "vuln_score", kind: "number", firstDirection: "desc", value: d => vulnerabilityScore(d.vulnerabilities).score },
+];
+const SEVERITY_OPTION_LABELS = new Map<string, string>(VULN_SEVERITY_OPTIONS);
 const shown = (value: string | null | undefined) => value || "UNKNOWN";
 /** A support date, or why there is none; a vendor date given only as a month is shown as that month. */
 export function supportText(m: LifecycleDevice["hardware"]): string {
@@ -45,7 +56,8 @@ function livePatchBase(d: LifecycleDevice): string {
 }
 const notActive = (d: LifecycleDevice) => (d.live_patch?.ready ?? 0) > 0;
 export function lifecycleCells(d: LifecycleDevice): string[] {
-  return [shown(d.hostname) + (d.cluster_member_ref ? ` · ${d.cluster_member_ref}` : ""), d.vendor, shown(d.model), shown(d.software_version), vulnerabilitySummary(d.vulnerabilities),
+  return [shown(d.hostname) + (d.cluster_member_ref ? ` · ${d.cluster_member_ref}` : ""), d.vendor, shown(d.model), shown(d.software_version),
+    vulnerabilitySummary(d.vulnerabilities), vulnScoreSummary(d.vulnerabilities),
     supportText(d.hardware), supportText(d.software),
     d.next_milestone ? `${d.next_milestone.name}: ${d.next_milestone.precision === "MONTH" ? d.next_milestone.date.slice(0, 7) : d.next_milestone.date} (${d.next_milestone.days_remaining} days)` : "UNKNOWN",
     d.nearest_license?.expiry ?? "UNKNOWN", d.risk,
@@ -160,19 +172,34 @@ export function LifecycleScreen() {
   const [risk, setRisk] = useState("all");
   const [missing, setMissing] = useState("all");
   const [vulnerability, setVulnerability] = useState("all");
+  const [vulnSeverity, setVulnSeverityState] = useState<VulnSeverityFilter[]>(() =>
+    typeof window === "undefined" ? [] : parseVulnSeverityParam(window.location.search));
+  useUrlParamSync("vuln_severity", useCallback(() => {
+    setVulnSeverityState(parseVulnSeverityParam(window.location.search));
+  }, []));
+  const setVulnSeverity = (next: VulnSeverityFilter[]) => {
+    const serialized = serializeVulnSeverityParam(next);
+    setVulnSeverityState(serialized ? parseVulnSeverityParam(`?vuln_severity=${serialized}`) : []);
+    writeUrlParams({ vuln_severity: serialized });
+  };
+  const [limit, setLimit] = useState(LIFECYCLE_PAGE);
+  const resetPage = useCallback(() => setLimit(LIFECYCLE_PAGE), []);
+  const tableSort = useTableSort(SCORE_SORT_COLUMNS, { onChange: resetPage });
+  useEffect(() => { setLimit(LIFECYCLE_PAGE); }, [search, vendor, risk, missing, vulnerability, vulnSeverity]);
   const rows = fleet.data?.devices ?? [];
   // Devices affected by an exploited advisory come first, then the other affected devices; the rest keep the server's order.
   const filtered = rows.filter(d => (vendor === "all" || d.vendor === vendor) && (risk === "all" || d.risk === risk)
     && (missing === "all" || d.status !== "MATCHED") && vulnerabilityFilters[vulnerability]?.[1](d) !== false
+    && matchesVulnerabilitySeverity(d.vulnerabilities, vulnSeverity)
     && lifecycleCells(d).join(" ").toLowerCase().includes(search.toLowerCase()))
     .map((d, i) => [d, i] as const).sort((a, b) => vulnerabilityRank(a[0].vulnerabilities) - vulnerabilityRank(b[0].vulnerabilities) || a[1] - b[1]).map(([d]) => d);
   // Paged at 50 with "+N more" (1.7): every row stays reachable, the CSV export still takes the whole filtered set.
+  const sorted = tableSort.apply(filtered);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const toggle = (id: string) => setOpen(prev => { const next = new Set(prev); if (!next.delete(id)) next.add(id); return next; });
-  const [limit, setLimit] = useState(LIFECYCLE_PAGE);
-  useEffect(() => { setLimit(LIFECYCLE_PAGE); }, [search, vendor, risk, missing, vulnerability]);
-  const visible = filtered.slice(0, limit);
-  const remaining = filtered.length - visible.length;
+  const visible = sorted.slice(0, limit);
+  const remaining = sorted.length - visible.length;
+  const scoreSort = tableSort.header("vuln_score");
   const panel = <Stack spacing={2}>
     {fleet.error && <Alert severity="error">{fleet.error}<M3Button emphasis="tonal" onClick={fleet.refresh}>Retry</M3Button></Alert>}
     {!fleet.data && !fleet.error && <Typography>Loading lifecycle…</Typography>}
@@ -186,15 +213,50 @@ export function LifecycleScreen() {
         <TextField label="Risk" select size="small" value={risk} onChange={e => setRisk(e.target.value)}>{["all", "EXPIRED", "HIGH", "MEDIUM", "LOW", "UNKNOWN", "NOT_EVALUATED"].map(r => <MenuItem key={r} value={r}>{r === "all" ? "All risks" : r}</MenuItem>)}</TextField>
         <TextField label="Lifecycle data" select size="small" value={missing} onChange={e => setMissing(e.target.value)}><MenuItem value="all">All devices</MenuItem><MenuItem value="missing">Not matched (no data, not evaluated, needs review)</MenuItem></TextField>
         <TextField label="Vulnerability state" select size="small" value={vulnerability} sx={{ minWidth: 170 }} onChange={e => setVulnerability(e.target.value)}>{Object.entries(vulnerabilityFilters).map(([key, [label]]) => <MenuItem key={key} value={key}>{label}</MenuItem>)}</TextField>
-        <M3Button emphasis="tonal" disabled={!filtered.length} onClick={() => downloadText("lifecycle.csv", lifecycleCsv(filtered))}>Export lifecycle CSV</M3Button>
+        <TextField
+          label="Vulnerability severity"
+          select
+          size="small"
+          value={vulnSeverity}
+          sx={{ minWidth: 190 }}
+          InputLabelProps={{ shrink: true }}
+          SelectProps={{
+            multiple: true,
+            displayEmpty: true,
+            renderValue: selected => {
+              const items = Array.isArray(selected) ? selected : [];
+              return items.length === 0 ? "Any severity" : items.map(k => SEVERITY_OPTION_LABELS.get(String(k)) ?? String(k)).join(", ");
+            },
+          }}
+          onChange={e => {
+            const raw = e.target.value;
+            const next = (Array.isArray(raw) ? raw : String(raw).split(",")).filter(Boolean) as VulnSeverityFilter[];
+            setVulnSeverity(next);
+          }}
+        >
+          {VULN_SEVERITY_OPTIONS.map(([key, label]) => (
+            <MenuItem key={key} value={key}>
+              <Checkbox size="small" checked={vulnSeverity.includes(key)} tabIndex={-1} disableRipple sx={{ p: 0, mr: 1 }} />
+              {label}
+            </MenuItem>
+          ))}
+        </TextField>
+        <M3Button emphasis="tonal" disabled={!sorted.length} onClick={() => downloadText("lifecycle.csv", lifecycleCsv(sorted))}>Export lifecycle CSV</M3Button>
         <M3Button emphasis="tonal" onClick={fleet.refresh}>Refresh</M3Button>
       </Stack>
       <Typography variant="caption">Risk uses the earliest known hardware/software end of support: EXPIRED before today, HIGH under 180 days, MEDIUM under 365 days. LOW requires both support dates; missing dates remain UNKNOWN. NOT_EVALUATED: no current vendor source or catalog row to compare with (see the Catalog tab). End of sale and engineering are separate milestones.</Typography>
       <Typography variant="caption">Vulnerabilities compares each device's software version with the vendor's security advisories. Affected: an advisory names this version (by version alone; exposure depends on configuration). Exploited: the advisory is listed in the CISA Known Exploited Vulnerabilities catalog. "None affected" is only said with what was compared; a device that was not evaluated is not known to be safe. Advisory sources turn amber after 7 days and red after 30, when their devices stop being evaluated.</Typography>
-      <TableContainer><Table size="small" aria-label="Fleet lifecycle"><TableHead><TableRow>{headings.map(h => <TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead><TableBody>
+      <TableContainer><Table size="small" aria-label="Fleet lifecycle"><TableHead><TableRow>{headings.map((h, i) => i === COL.vulnScore ? (
+        <TableCell key={h} sortDirection={scoreSort.sortDirection}>
+          <Tooltip describeChild title={VULN_SCORE_FORMULA}>
+            <TableSortLabel active={scoreSort.active} direction={scoreSort.direction} onClick={scoreSort.onClick}>{h}</TableSortLabel>
+          </Tooltip>
+        </TableCell>
+      ) : <TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead><TableBody>
         {visible.map(d => <Fragment key={d.device_id}><TableRow>{lifecycleCells(d).map((cell, i) => <TableCell key={i}>
           {i === COL.licenses ? <Typography variant="body2" component="span" color={d.license_problem ? "error" : "text.primary"}>{cell}</Typography>
             : i === COL.vulnerabilities ? <VulnerabilityCell v={d.vulnerabilities} />
+            : i === COL.vulnScore ? <VulnScoreCell v={d.vulnerabilities} />
             : i === COL.livePatch ? (d.live_patch ? <>{d.live_patch.missing ? <Typography variant="body2" component="span" sx={{ color: "warning.main" }}>{livePatchBase(d)}</Typography> : livePatchBase(d)}{notActive(d) && <Typography variant="body2" component="span" sx={{ color: "warning.main" }}>{` · ${d.live_patch.ready} not active`}</Typography>}</> : cell)
             : i === COL.device ? <><a href={`?screen=inventory&device_id=${encodeURIComponent(d.device_id)}`}>{shown(d.hostname)}</a>{d.cluster_member_ref && <Typography variant="caption" display="block">{d.cluster_member_ref}</Typography>}
             <M3Button emphasis="text" aria-expanded={open.has(d.device_id)} onClick={() => toggle(d.device_id)}>{open.has(d.device_id) ? "Hide details" : "Details"}</M3Button></> : cell}
@@ -205,12 +267,12 @@ export function LifecycleScreen() {
           {i === COL.basis && d.status !== "MATCHED" && <Typography variant="caption" display="block">{d.status}</Typography>}
         </TableCell>)}</TableRow>
         {open.has(d.device_id) && <TableRow><TableCell colSpan={headings.length}><LifecycleDetail d={d} /></TableCell></TableRow>}</Fragment>)}
-        {!filtered.length && <TableRow><TableCell colSpan={headings.length}>No devices match these filters</TableCell></TableRow>}
+        {!sorted.length && <TableRow><TableCell colSpan={headings.length}>No devices match these filters</TableCell></TableRow>}
       </TableBody></Table></TableContainer>
-      {filtered.length > 0 && <Stack direction="row" spacing={2} alignItems="center">
-        <Typography variant="caption" data-lifecycle-page>{`1–${visible.length} of ${filtered.length}${remaining > 0 ? ` · +${remaining} more` : ""}`}</Typography>
+      {sorted.length > 0 && <Stack direction="row" spacing={2} alignItems="center">
+        <Typography variant="caption" data-lifecycle-page>{`1–${visible.length} of ${sorted.length}${remaining > 0 ? ` · +${remaining} more` : ""}`}</Typography>
         {remaining > 0 && <M3Button emphasis="tonal" onClick={() => setLimit(n => n + LIFECYCLE_PAGE)}>Show next {Math.min(LIFECYCLE_PAGE, remaining)}</M3Button>}
-        {remaining > 0 && <M3Button emphasis="text" onClick={() => setLimit(filtered.length)}>Show all {filtered.length}</M3Button>}
+        {remaining > 0 && <M3Button emphasis="text" onClick={() => setLimit(sorted.length)}>Show all {sorted.length}</M3Button>}
       </Stack>}
     </>}
   </Stack>;

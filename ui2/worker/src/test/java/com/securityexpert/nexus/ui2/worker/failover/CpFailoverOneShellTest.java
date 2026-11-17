@@ -128,7 +128,7 @@ class CpFailoverOneShellTest {
     void timeoutMakesTheRunUnknownWithoutASecondShell() {
         var run = readiness(true, t -> t.hangOn = "cphaprob tablestat");
         assertEquals("UNKNOWN", run.store().outcome);
-        assertEquals("COMMAND_UNAVAILABLE", run.store().stopCode);
+        assertTrue(run.store().stopCode.startsWith("COMMAND_UNAVAILABLE:"),run.store().stopCode);
         run.transport().shells.values().forEach(list -> assertEquals(1, list.size()));
         assertEquals(1, run.transport().shells.get("192.0.2.11").get(0).closes);
         assertEquals(List.of(), run.transport().execLiterals);

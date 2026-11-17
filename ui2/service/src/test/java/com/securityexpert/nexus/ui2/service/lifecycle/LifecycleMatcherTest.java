@@ -18,9 +18,14 @@ class LifecycleMatcherTest {
     private static final Instant NOW = Instant.parse("2026-11-13T10:00:00Z");
 
     private static VendorEntry vendor(String origin, String vendor, String kind, String key, LocalDate support, long ageDays, String state) {
-        return new VendorEntry(origin + ":" + key + ":" + ageDays + ":" + support, origin, "cisco_eol", "OPERATOR_PAGE".equals(origin) ? "up-12345678" : null,
-                vendor, kind, key, key + " (EOL00001)", null, null, "PARSED".equals(state) ? support : null, null, null, List.of(), state,
-                "PARSED".equals(state) ? null : "MILESTONE_CONFLICT", "EOL00001", "https://www.cisco.com/c/en/us/products/collateral/security/x/y.html",
+        String source = "PALOALTO".equals(vendor) ? "paloalto_eol" : "CHECKPOINT".equals(vendor) ? "checkpoint_lifecycle" : "cisco_eol";
+        String ref = "PALOALTO".equals(vendor) ? ("HARDWARE".equals(kind) ? "paloalto-hardware-eol" : "paloalto-panos-eol-summary") : "EOL00001";
+        String url = "PALOALTO".equals(vendor)
+                ? "https://www.paloaltonetworks.com/services/support/end-of-life-announcements/hardware-end-of-life-dates"
+                : "https://www.cisco.com/c/en/us/products/collateral/security/x/y.html";
+        return new VendorEntry(origin + ":" + key + ":" + ageDays + ":" + support, origin, source, "OPERATOR_PAGE".equals(origin) ? "up-12345678" : null,
+                vendor, kind, key, key + " (" + ref + ")", null, null, "PARSED".equals(state) ? support : null, null, null, List.of(), state,
+                "PARSED".equals(state) ? null : "MILESTONE_CONFLICT", ref, url,
                 "0".repeat(64), NOW.minus(Duration.ofDays(ageDays)));
     }
 
@@ -44,6 +49,21 @@ class LifecycleMatcherTest {
         assertNull(LifecycleKeys.model("CHECKPOINT", "Check Point 1570/1590 Appliances"), "two models in one text is not one key");
         assertEquals("PA-3220", LifecycleKeys.model("PALOALTO", "PA-3220"));
         assertEquals("PA-3220", LifecycleKeys.model("PALOALTO", "PAN-PA-3220-ZTP"));
+        assertEquals("PA-5445", LifecycleKeys.model("PALOALTO", "PA-5445"));
+        assertEquals("PA-5410", LifecycleKeys.model("PALOALTO", "PA-5410"));
+        assertEquals("PA-3440", LifecycleKeys.model("PALOALTO", "PA-3440"));
+        assertEquals("PA-5450", LifecycleKeys.model("PALOALTO", "PAN-PA-5450-AC-SYS"));
+        assertEquals("M-200", LifecycleKeys.model("PALOALTO", "M-200"));
+        assertEquals("M-300", LifecycleKeys.model("PALOALTO", "M-300"));
+        assertEquals("M-600", LifecycleKeys.model("PALOALTO", "M-600"));
+        assertEquals("M-700", LifecycleKeys.model("PALOALTO", "M-700"));
+        assertEquals("M-600", LifecycleKeys.model("PALOALTO", "Panorama M-600"));
+        assertEquals("Panorama", LifecycleKeys.model("PALOALTO", "Panorama"));
+        assertEquals("Panorama", LifecycleKeys.model("PALOALTO", "Panorama VM"));
+        assertEquals("Panorama", LifecycleKeys.model("PALOALTO", "Panorama-VM"));
+        assertEquals("Panorama", LifecycleKeys.model("PALOALTO", "Panorama on VM"));
+        assertEquals("Panorama", LifecycleKeys.model("PALOALTO", "Panorama (VM)"));
+        assertEquals("Panorama", LifecycleKeys.model("PALOALTO", "PAN-PRA-VM"));
         assertEquals("FG600E", LifecycleKeys.model("FORTINET", "FortiGate-600E"));
         assertEquals("FG60F", LifecycleKeys.model("FORTINET", "FGT60F"));
         assertEquals("FMG400G", LifecycleKeys.model("FORTINET", "FortiManager-400G"));
@@ -143,5 +163,70 @@ class LifecycleMatcherTest {
         var old = operator("CHECKPOINT", "HARDWARE", "6600", LocalDate.of(2031, 1, 1), 5000);
         var result = LifecycleMatcher.match("CHECKPOINT", "HARDWARE", false, "6600", "6600", LifecycleMatcher.Catalog.operatorOnly(List.of(old)));
         assertEquals("MATCHED", result.get("status"));
+    }
+
+    @Test
+    void paloAltoCurrentHardwareModelsReportNotAnnouncedWhenVendorPageIsFresh() {
+        var pa5250 = vendor("FEED", "PALOALTO", "HARDWARE", "PA-5250", LocalDate.of(2028, 7, 31), 0, "PARSED");
+        var pa5220 = vendor("FEED", "PALOALTO", "HARDWARE", "PA-5220", LocalDate.of(2028, 7, 31), 0, "PARSED");
+        var catalog = List.of(pa5250, pa5220);
+
+        var matched5250 = match("PALOALTO", "HARDWARE", "PA-5250", List.of(), catalog);
+        assertEquals("MATCHED", matched5250.get("status"));
+        assertEquals("model key · Palo Alto end-of-life page (online)", matched5250.get("basis"));
+        @SuppressWarnings("unchecked") var cat5250 = (Map<String, Object>) matched5250.get("catalog");
+        assertEquals("2028-07-31", cat5250.get("end_of_support"));
+
+        for (String currentModel : List.of("PA-5445", "PA-5410", "PA-3440", "M-300", "M-700")) {
+            var res = match("PALOALTO", "HARDWARE", currentModel, List.of(), catalog);
+            assertEquals("MATCHED", res.get("status"), currentModel);
+            assertEquals("No end-of-life announced for this model on the vendor page (checked 2026-11-13)", res.get("basis"), currentModel);
+            assertEquals("No end-of-life announced for this model on the vendor page (checked 2026-11-13)", res.get("reason"), currentModel);
+            @SuppressWarnings("unchecked") var cat = (Map<String, Object>) res.get("catalog");
+            assertNotNull(cat, currentModel);
+            assertEquals("Not announced", cat.get("end_of_support"), currentModel);
+            assertEquals("Not announced", cat.get("end_of_sale"), currentModel);
+            assertEquals("Not announced", cat.get("end_of_engineering"), currentModel);
+            assertEquals("paloalto_eol", cat.get("source"), currentModel);
+        }
+    }
+
+    @Test
+    void panoramaVirtualAndMSeriesHardwareAndSoftwareMatching() {
+        var m200 = vendor("FEED", "PALOALTO", "HARDWARE", "M-200", LocalDate.of(2028, 11, 15), 0, "PARSED");
+        var m600 = vendor("FEED", "PALOALTO", "HARDWARE", "M-600", LocalDate.of(2028, 11, 15), 0, "PARSED");
+        var pan121 = vendor("FEED", "PALOALTO", "SOFTWARE", "PAN-OS 12.1", LocalDate.of(2028, 8, 28), 0, "PARSED");
+        var catalog = new LifecycleMatcher.Catalog(List.of(), List.of(m200, m600, pan121), NOW);
+
+        for (String vmForm : List.of("Panorama", "Panorama VM", "Panorama-VM", "Panorama on VM", "Panorama (VM)")) {
+            var hwVm = LifecycleMatcher.match("PALOALTO", "HARDWARE", true, vmForm, vmForm, catalog);
+            assertEquals("MATCHED", hwVm.get("status"), vmForm);
+            assertEquals("Panorama", hwVm.get("key"), vmForm);
+            @SuppressWarnings("unchecked") var hwCat = (Map<String, Object>) hwVm.get("catalog");
+            assertEquals("Not applicable", hwCat.get("end_of_support"), vmForm);
+            assertEquals("Not applicable", hwCat.get("end_of_sale"), vmForm);
+
+            var swVm = LifecycleMatcher.match("PALOALTO", "SOFTWARE", true, vmForm, "12.1.10", catalog);
+            assertEquals("MATCHED", swVm.get("status"), vmForm);
+            assertEquals("PAN-OS 12.1", swVm.get("key"), vmForm);
+            @SuppressWarnings("unchecked") var swCat = (Map<String, Object>) swVm.get("catalog");
+            assertEquals("2028-08-28", swCat.get("end_of_support"), vmForm);
+        }
+
+        for (String listedM : List.of("M-200", "M-600")) {
+            var hwListed = LifecycleMatcher.match("PALOALTO", "HARDWARE", true, listedM, listedM, catalog);
+            assertEquals("MATCHED", hwListed.get("status"), listedM);
+            assertEquals("model key · Palo Alto end-of-life page (online)", hwListed.get("basis"), listedM);
+            @SuppressWarnings("unchecked") var cat = (Map<String, Object>) hwListed.get("catalog");
+            assertEquals("2028-11-15", cat.get("end_of_support"), listedM);
+        }
+
+        for (String currentM : List.of("M-300", "M-700")) {
+            var hwCurrent = LifecycleMatcher.match("PALOALTO", "HARDWARE", true, currentM, currentM, catalog);
+            assertEquals("MATCHED", hwCurrent.get("status"), currentM);
+            assertEquals("No end-of-life announced for this model on the vendor page (checked 2026-11-13)", hwCurrent.get("basis"), currentM);
+            @SuppressWarnings("unchecked") var cat = (Map<String, Object>) hwCurrent.get("catalog");
+            assertEquals("Not announced", cat.get("end_of_support"), currentM);
+        }
     }
 }

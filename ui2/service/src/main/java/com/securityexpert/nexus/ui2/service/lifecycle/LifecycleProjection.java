@@ -19,7 +19,7 @@ import com.securityexpert.nexus.ui2.persistence.lifecycle.LifecycleCatalogEntry;
 /** Pure stored-evidence projection. Product labels never supply vendor milestone dates. */
 public final class LifecycleProjection {
     private static final Pattern CP = Pattern.compile("^(R\\d{2}\\.\\d{2})(?:$|[\\s+].*)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern PAN = Pattern.compile("^(?:PAN-OS\\s+)?(\\d+\\.\\d+)(?:\\.\\d+(?:-h\\d+)?)?$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PAN = Pattern.compile("^(?:(?:PAN-OS|Panorama)\\s+)?(\\d+\\.\\d+)(?:\\.\\d+(?:-h\\d+)?)?$", Pattern.CASE_INSENSITIVE);
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final String LIVE_PATCH_READ = "cp_cplp_list";
     private static final java.util.Set<String> PROBLEM_STATES = java.util.Set.of("EXPIRED", "EVAL_EXPIRED", "UNREGISTERED", "OUT_OF_COMPLIANCE");
@@ -243,7 +243,7 @@ public final class LifecycleProjection {
         for (var part : List.of(Map.entry("Hardware", hw), Map.entry("Software", sw))) {
             if (!(part.getValue().get("catalog") instanceof Map<?, ?> dates)) continue;
             for (String field : List.of("end_of_sale", "end_of_support", "end_of_engineering")) {
-                if (dates.get(field) instanceof String date) {
+                if (dates.get(field) instanceof String date && date.matches("\\d{4}-\\d{2}-\\d{2}")) {
                     long days = ChronoUnit.DAYS.between(today, LocalDate.parse(date));
                     boolean monthOnly = dates.get("month_only") instanceof List<?> months && months.contains(field);
                     // A month-only vendor date is stored as the first day of the month and shown as the month.
@@ -260,8 +260,12 @@ public final class LifecycleProjection {
                 .min(Comparator.comparingLong(m -> (long) m.get("days_remaining")));
         var next = future.orElseGet(() -> milestones.stream().max(Comparator.comparingLong(m -> (long) m.get("days_remaining"))).orElse(null));
         Long minimum = supportDays.stream().min(Long::compare).orElse(null);
+        boolean hwDateExempt = hw.get("catalog") instanceof Map<?, ?> hwDates
+                && hwDates.get("end_of_support") instanceof String hwSupport
+                && (LifecycleMatcher.NOT_ANNOUNCED.equalsIgnoreCase(hwSupport)
+                        || LifecycleMatcher.NOT_APPLICABLE.equalsIgnoreCase(hwSupport));
         String risk = minimum != null && minimum < 0 ? "EXPIRED" : minimum != null && minimum < 180 ? "HIGH"
-                : minimum != null && minimum < 365 ? "MEDIUM" : supportDays.size() == 2 ? "LOW" : "UNKNOWN";
+                : minimum != null && minimum < 365 ? "MEDIUM" : supportDays.size() == (hwDateExempt ? 1 : 2) ? "LOW" : "UNKNOWN";
         boolean matched = "MATCHED".equals(hw.get("status")) && "MATCHED".equals(sw.get("status"));
         boolean review = "NEEDS_REVIEW".equals(hw.get("status")) || "NEEDS_REVIEW".equals(sw.get("status"));
         boolean notEvaluated = "NOT_EVALUATED".equals(hw.get("status")) || "NOT_EVALUATED".equals(sw.get("status"));

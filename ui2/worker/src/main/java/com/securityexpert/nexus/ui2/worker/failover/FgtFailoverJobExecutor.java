@@ -168,7 +168,7 @@ public final class FgtFailoverJobExecutor {
                     : TrafficArpCheck.previous(store, runId, FgtFailoverChecks.TRAFFIC_ARP));
             evaluated.add(new Result(FgtFailoverChecks.TRAFFIC_ARP, traffic.status(), traffic.reason(), traffic.evidence()));
             List<Result> results = withGateReasons(evaluated, refused, reading.trafficScope() != null);
-            for (Result result : results) store.check(runId, "pre", deviceId, null, result.check(), result.status(), derived(result));
+            for (Result result : results) store.check(runId, "pre", deviceId, null, result.check(), result.status(), derived(withEnrolledRole(result)));
             String outcome = FgtFailoverChecks.outcome(results);
             Result lead = results.stream().filter(Result::blocking).filter(r -> "FAIL".equals(r.status())).findFirst()
                 .or(() -> results.stream().filter(Result::blocking).filter(r -> !"PASS".equals(r.status())).findFirst()).orElse(null);
@@ -224,6 +224,18 @@ public final class FgtFailoverJobExecutor {
             out.add(reason.isPresent() && "UNKNOWN".equals(r.status()) ? new Result(r.check(), r.status(), reason.get(), r.evidence()) : r);
         }
         return out;
+    }
+
+    /**
+     * Check 1 PASS means the status lists one primary and one secondary and the enrolled unit is the primary (identity MATCH):
+     * the enrolled device is recorded as the active member, as the primary reports. The secondary has no device record of its
+     * own (it has no address; design question Q2), so no row is written for it and no identity is invented.
+     */
+    static Result withEnrolledRole(Result result) {
+        if (result.check() != 1 || !"PASS".equals(result.status()) || !"MATCH".equals(result.evidence().get("identity"))) return result;
+        Map<String, Object> evidence = new LinkedHashMap<>(result.evidence());
+        evidence.put("role", "ACTIVE");
+        return new Result(result.check(), result.status(), result.reason(), evidence);
     }
 
     private static String derived(Result result) {

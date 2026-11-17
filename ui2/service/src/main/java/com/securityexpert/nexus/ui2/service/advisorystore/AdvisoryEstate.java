@@ -75,7 +75,14 @@ public final class AdvisoryEstate {
 
     /** The Vulnerabilities part of one device's Lifecycle row (contract section 7 and 8). */
     public record DeviceAssessment(String state, String reason, String productKey, int affected, int affectedExploited,
-            int affectedCriticalHigh, int notEvaluable, int fixed, String worstSeverity, SourceState compared, int pending) { }
+            int affectedCriticalHigh, int affectedCritical, int affectedHigh, int affectedMedium, int affectedLow,
+            int notEvaluable, int fixed, String worstSeverity, SourceState compared, int pending) {
+        public DeviceAssessment(String state, String reason, String productKey, int affected, int affectedExploited,
+                int affectedCriticalHigh, int notEvaluable, int fixed, String worstSeverity, SourceState compared, int pending) {
+            this(state, reason, productKey, affected, affectedExploited, affectedCriticalHigh, 0, 0, 0, 0,
+                    notEvaluable, fixed, worstSeverity, compared, pending);
+        }
+    }
 
     /** One advisory with its exploited flag and the verdicts of the estate's devices. */
     public record AdvisoryRow(StoredAdvisory advisory, boolean exploited, LocalDate exploitedSince, Counts counts,
@@ -201,7 +208,8 @@ public final class AdvisoryEstate {
                     continue;
                 }
             }
-            int affected = 0, affectedExploited = 0, criticalHigh = 0, notEvaluable = 0, fixed = 0, pending = 0;
+            int affected = 0, affectedExploited = 0, criticalHigh = 0, affectedCritical = 0, affectedHigh = 0,
+                    affectedMedium = 0, affectedLow = 0, notEvaluable = 0, fixed = 0, pending = 0;
             Severity worst = null;
             for (Prepared p : candidates) {
                 Verdict verdict;
@@ -217,7 +225,13 @@ public final class AdvisoryEstate {
                     case AFFECTED -> {
                         affected++;
                         if (p.exploited()) affectedExploited++;
-                        if (p.severity() == Severity.CRITICAL || p.severity() == Severity.HIGH) criticalHigh++;
+                        switch (p.severity()) {
+                            case CRITICAL -> { affectedCritical++; criticalHigh++; }
+                            case HIGH -> { affectedHigh++; criticalHigh++; }
+                            case MEDIUM -> affectedMedium++;
+                            case LOW -> affectedLow++;
+                            default -> { }
+                        }
                         if (worst == null || p.severity().ordinal() < worst.ordinal()) worst = p.severity();
                     }
                     case NOT_EVALUABLE -> { if (pending(verdict.basis())) pending++; else notEvaluable++; }
@@ -226,7 +240,8 @@ public final class AdvisoryEstate {
                 }
             }
             assessments.put(device.deviceId(), new DeviceAssessment(EVALUATED, null, product, affected, affectedExploited,
-                    criticalHigh, notEvaluable, fixed, worst == null ? null : worst.name(), compared(source), pending));
+                    criticalHigh, affectedCritical, affectedHigh, affectedMedium, affectedLow,
+                    notEvaluable, fixed, worst == null ? null : worst.name(), compared(source), pending));
         }
 
         List<AdvisoryRow> rows = new ArrayList<>(prepared.size());
@@ -258,7 +273,7 @@ public final class AdvisoryEstate {
             .thenComparing(r -> r.advisory().advisoryId());
 
     private static DeviceAssessment empty(String state, String reason, String product, SourceState compared) {
-        return new DeviceAssessment(state, reason, product, 0, 0, 0, 0, 0, null, compared, 0);
+        return new DeviceAssessment(state, reason, product, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, compared, 0);
     }
 
     /** True for a verdict that waits for a fix rule confirmation (PO decision 2026-11-10, question 4). */

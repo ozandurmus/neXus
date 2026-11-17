@@ -64,6 +64,11 @@ class ReadinessCheckViewTest {
         assertEquals("Configuration sync field missing or not recognised",
             row(true,4,"UNKNOWN","{\"missing\":[\"first.running-sync\"],\"unrecognised\":[]}").get("summary"));
     }
+    @Test void panConfigSyncDisabledFailIsNamedWithCount() throws Exception {
+        assertEquals("Config sync is disabled on 2 member(s): the running configurations are not kept equal",
+            row(true,4,"FAIL","{\"reason\":\"CONFIG_SYNC_DISABLED\",\"membersDisabled\":2}").get("summary"));
+        assertEquals("Configuration not synchronized",row(true,4,"FAIL","{\"first\":{}}").get("summary"));
+    }
     /** PO decision 2026-10-20 item 2: the "Recovery mode" row the PO picks a pilot unit by. */
     @Test void recoveryModeRowIsBlockingAndNamesTheObservedMode() throws Exception {
         var active=row(false,15,"PASS","{\"recoveryMode\":\"ACTIVE_UP\",\"reason\":\"ACTIVE_UP\"}");
@@ -223,6 +228,13 @@ class ReadinessCheckViewTest {
             ReadinessCheckView.fields("fortinet",4,"Member 1","UNKNOWN",JSON.readTree("{\"reason\":\"GATE_NOT_SIGNED_OFF\"}"),OBSERVED).get("summary"));
         var summary=(String)ReadinessCheckView.fields("fortinet",1,"Member 1","FAIL",JSON.readTree("{\"reason\":\"IDENTITY_MISMATCH\"}"),OBSERVED).get("summary");
         assertFalse(summary.matches(".*FGT.*"));
+    }
+
+    @Test void fortigateVersionParityShowsTheDerivationOnPassAndTheLimitOtherwise() throws Exception {
+        assertEquals("Same software version on both members (derived: health OK and both in sync, as the primary reports)",
+            vendorRow("fortinet",7,"PASS","{\"reason\":\"PARITY_DERIVED_FROM_HA_SYNC\"}").get("summary"));
+        assertEquals("The primary cannot report its secondary's software version",
+            vendorRow("fortinet",7,"UNKNOWN","{\"reason\":\"SECONDARY_VERSION_NOT_OBSERVED\"}").get("summary"));
     }
 
     private static Map<String,Object> vendorRow(String vendor,int no,String status,String derived) throws Exception {

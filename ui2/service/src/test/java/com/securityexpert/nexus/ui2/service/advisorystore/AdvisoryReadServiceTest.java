@@ -94,16 +94,61 @@ class AdvisoryReadServiceTest {
         assertEquals(2, d1.get("affected"));
         assertEquals(1, d1.get("affected_exploited"));
         assertEquals(1, d1.get("affected_critical_high"));
+        assertEquals(1, d1.get("affected_critical"));
+        assertEquals(0, d1.get("affected_high"));
+        assertEquals(1, d1.get("affected_medium"));
+        assertEquals(0, d1.get("affected_low"));
         assertEquals(1, d1.get("not_evaluable"));
         assertEquals("CRITICAL", d1.get("worst_severity"));
         var d2 = vulns("d2");
         assertEquals(0, d2.get("affected"));
+        assertEquals(0, d2.get("affected_critical"));
+        assertEquals(0, d2.get("affected_high"));
+        assertEquals(0, d2.get("affected_medium"));
+        assertEquals(0, d2.get("affected_low"));
         assertEquals(2, d2.get("fixed"));
         assertNull(d2.get("worst_severity"));
         @SuppressWarnings("unchecked") var compared = (Map<String, Object>) d2.get("compared");
         assertEquals(3, compared.get("advisories"));
         assertEquals("2026-03-01", compared.get("oldest"));
         assertEquals(1L, compared.get("age_days"));
+    }
+
+    @Test void perSeverityCountsSeparateCriticalHighMediumAndLowAffectedAdvisories() {
+        when(devices.listAll()).thenReturn(List.of(
+                device("d-all", "palo_alto", "gateway", "FW-TANGO-04", "11.1.2"),
+                device("d-partial", "palo_alto", "gateway", "FW-JULIET-06", "11.1.6"),
+                device("d-uneval", "fortinet", "gateway", "FW-OSCAR-05", "7.4.1")));
+        repo.seedRun("paloalto", "OK", 1, NOW);
+        store("paloalto", "CVE-2026-1001", Severity.CRITICAL, ParseState.PARSED, List.of(), below(PRODUCT_PAN_OS, "11.1", 5, null));
+        store("paloalto", "CVE-2026-1002", Severity.CRITICAL, ParseState.PARSED, List.of(), below(PRODUCT_PAN_OS, "11.1", 4, null));
+        store("paloalto", "CVE-2026-1003", Severity.HIGH, ParseState.PARSED, List.of(), below(PRODUCT_PAN_OS, "11.1", 8, null));
+        store("paloalto", "CVE-2026-1004", Severity.MEDIUM, ParseState.PARSED, List.of(), below(PRODUCT_PAN_OS, "11.1", 8, null));
+        store("paloalto", "CVE-2026-1005", Severity.LOW, ParseState.PARSED, List.of(), below(PRODUCT_PAN_OS, "11.1", 8, null));
+        store("paloalto", "CVE-2026-1006", Severity.UNKNOWN, ParseState.PARSED, List.of(), below(PRODUCT_PAN_OS, "11.1", 5, null));
+        store("paloalto", "CVE-2026-1007", Severity.CRITICAL, ParseState.NEEDS_REVIEW, List.of(), below(PRODUCT_PAN_OS, "11.1", 8, null));
+        var dAll = vulns("d-all");
+        assertEquals(6, dAll.get("affected"));
+        assertEquals(3, dAll.get("affected_critical_high"));
+        assertEquals(2, dAll.get("affected_critical"));
+        assertEquals(1, dAll.get("affected_high"));
+        assertEquals(1, dAll.get("affected_medium"));
+        assertEquals(1, dAll.get("affected_low"));
+        assertEquals(1, dAll.get("not_evaluable"));
+        var dPartial = vulns("d-partial");
+        assertEquals(3, dPartial.get("affected"));
+        assertEquals(1, dPartial.get("affected_critical_high"));
+        assertEquals(0, dPartial.get("affected_critical"));
+        assertEquals(1, dPartial.get("affected_high"));
+        assertEquals(1, dPartial.get("affected_medium"));
+        assertEquals(1, dPartial.get("affected_low"));
+        assertEquals(3, dPartial.get("fixed"));
+        var dUneval = vulns("d-uneval");
+        assertEquals("NOT_EVALUATED", dUneval.get("state"));
+        assertEquals(0, dUneval.get("affected_critical"));
+        assertEquals(0, dUneval.get("affected_high"));
+        assertEquals(0, dUneval.get("affected_medium"));
+        assertEquals(0, dUneval.get("affected_low"));
     }
 
     @Test void productsWithoutAComparatorAndUnusableVersionsAreSaidSo() {

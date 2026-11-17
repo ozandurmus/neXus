@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { Alert, Box, FormControlLabel, Link, MenuItem, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
+import { Alert, Box, Chip, FormControlLabel, Link, MenuItem, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
 import {
   getLifecycleAdvisories, getLifecycleAdvisory, getLifecycleAdvisorySources,
   type LifecycleAdvisory, type LifecycleAdvisoryDevice, type LifecycleAdvisorySource, type LifecycleVulnerabilities,
@@ -11,7 +11,19 @@ import { PillRow, StatusPill } from "../shell/StatusPill";
 import { plural } from "../shell/plural";
 import { formatStamp, relativeAge } from "../shell/time";
 import { m3 } from "../theme/m3Theme";
+import { RADIUS, ROLE_COLORS, TYPE, UNKNOWN_HATCH, type StateRole } from "../theme/tokens";
 import { lifecycleError } from "./LifecycleCatalogPanel";
+import {
+  VULN_SCORE_FORMULA, VULN_SEVERITY_OPTIONS, matchesVulnerabilitySeverity, parseVulnSeverityParam,
+  serializeVulnSeverityParam, vulnScoreSummary, vulnerabilityScore,
+  type VulnSeverityFilter, type VulnerabilityLevel, type VulnerabilityScoreResult,
+} from "./vulnerabilityScore";
+
+export {
+  VULN_SCORE_FORMULA, VULN_SEVERITY_OPTIONS, matchesVulnerabilitySeverity, parseVulnSeverityParam,
+  serializeVulnSeverityParam, vulnScoreSummary, vulnerabilityScore,
+  type VulnSeverityFilter, type VulnerabilityLevel, type VulnerabilityScoreResult,
+};
 
 /*
  * The vulnerability check (ADVISORY_MATCHING_CONTRACT.md, sections 1, 7 and 8) in words.
@@ -161,6 +173,31 @@ export function VulnerabilityCell({ v }: { v: LifecycleVulnerabilities | null | 
   return <Box data-vulnerability="not-evaluated">
     <StatusPill tone="unknown" word={v.state === "VERSION_UNKNOWN" ? "Version not known" : "Not evaluated"} dense fact="vulnerability:not-evaluated" />
     {caption(reason ?? (v.state === "VERSION_UNKNOWN" || v.state === "NOT_EVALUATED" ? "reason not reported" : String(v.state)))}
+  </Box>;
+}
+
+const SCORE_LEVEL_TONE: Readonly<Record<VulnerabilityLevel, StateRole>> = {
+  "CRITICAL": "bad",
+  "HIGH-RISK": "attn",
+  "ELEVATED": "warn",
+  "LOW": "neutral",
+  "None affected": "neutral",
+  "Not evaluated": "unknown",
+};
+
+/** The Vuln score cell of the Fleet table: 0–100 score + level chip, or "Not evaluated" chip without a numeric score. */
+export function VulnScoreCell({ v }: { v: LifecycleVulnerabilities | null | undefined }) {
+  const { score, level } = vulnerabilityScore(v);
+  const colors = ROLE_COLORS[SCORE_LEVEL_TONE[level]];
+  return <Box data-vuln-score={score === null ? "not-evaluated" : String(score)} sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, whiteSpace: "nowrap" }}>
+    {score !== null && <Typography variant="body2" component="span" data-vuln-score-value={score}
+      sx={{ fontVariantNumeric: "tabular-nums", fontWeight: score > 0 ? 600 : 400 }}>{score}</Typography>}
+    <Chip size="small" label={level} data-vuln-level={level} sx={{
+      height: 20, borderRadius: `${RADIUS.pill}px`, bgcolor: colors.bg, color: colors.fg,
+      border: `1px solid ${colors.border}`, backgroundImage: colors.hatched ? UNKNOWN_HATCH : "none",
+      fontSize: TYPE.label.fontSize, lineHeight: TYPE.label.lineHeight, fontWeight: 500,
+      "& .MuiChip-label": { px: 1 },
+    }} />
   </Box>;
 }
 

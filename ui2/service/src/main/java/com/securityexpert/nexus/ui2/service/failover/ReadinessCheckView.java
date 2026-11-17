@@ -62,7 +62,8 @@ public final class ReadinessCheckView {
                 : "CHECKSUM_DIFFERS".equals(reason) ? "Cluster checksums differ" : "A member is out of sync";
             case 5 -> pass ? "Session pickup enabled" : "UNKNOWN".equals(status) ? "Session pickup setting missing" : "Session pickup is disabled";
             case 6 -> "Not evaluated yet";
-            case 7 -> "The primary cannot report its secondary's software version";
+            case 7 -> pass ? "Same software version on both members (derived: health OK and both in sync, as the primary reports)"
+                : "The primary cannot report its secondary's software version";
             case 8 -> pass ? "Override disabled, secondary uptime above the margin, no failover flag latched"
                 : "UNKNOWN".equals(status) ? "Override, uptime or failover flag missing or not recognised"
                 : "OVERRIDE_ENABLED".equals(reason) ? "Override is enabled" : "FAILOVER_FLAG_LATCHED".equals(reason) ? "A failover flag is latched"
@@ -193,7 +194,10 @@ public final class ReadinessCheckView {
             case 1 -> role(d);
             case 2 -> pass ? "Reciprocal peer relationship verified" : "Peer relationship not ready";
             case 3 -> pass ? "Required HA links up on both members" : "An HA link is down";
-            case 4 -> pass ? "Running configuration synchronized on both members" : "Configuration not synchronized";
+            case 4 -> pass ? "Running configuration synchronized on both members"
+                : "CONFIG_SYNC_DISABLED".equals(d.path("reason").asText())
+                    ? "Config sync is disabled on " + d.path("membersDisabled").asInt() + " member(s): the running configurations are not kept equal"
+                    : "Configuration not synchronized";
             case 5 -> sessionSyncSummary(status,d);
             case 6 -> count(d,"count"," active sessions")+(pass ? "" : ", below carry tolerance")
                 // PO 2026-10-24: on PAN-OS 12 or later the count is the sum of show session meter's current sessions.

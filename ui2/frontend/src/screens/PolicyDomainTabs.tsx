@@ -13,12 +13,15 @@ export function installedUnknownReason(vendor: string | null | undefined) {
   return vendor === "CP" ? "Installation state not reported by Check Point; this is not a fault of the target. Targets are package intent."
     : "The management server did not report whether this package is installed on the target.";
 }
-type UsageEvidence = Pick<PolicyInventoryObject, "ruleCount" | "groupCount" | "usageComplete" | "usageReasons">;
+type UsageEvidence = Pick<PolicyInventoryObject, "ruleCount" | "groupCount" | "usageComplete" | "usageReasons"> & { managementInUse?: boolean };
 /** A count is only exact when the server proved it; a missing flag fails closed to UNKNOWN / lower bound. */
 export function whereUsedLabel(usage: UsageEvidence) {
   const counts = `${usage.ruleCount} rules · ${usage.groupCount} groups`;
   if (usage.usageComplete === true) return counts;
-  return usage.ruleCount + usage.groupCount === 0 ? "UNKNOWN" : `at least ${counts}`;
+  if (usage.ruleCount + usage.groupCount > 0) return `at least ${counts}`;
+  // No collected rule or group shows it, but the management's own report lists it as in use (another package, NAT, VPN, threat prevention).
+  // None found in what was collected; other uses (other rulebases, device groups, templates) are not checked, so never "unused".
+  return usage.managementInUse === true ? "In use elsewhere" : "Not in collected rules";
 }
 const reasonText = (reasons: string[] | undefined, fallback: string) => reasons?.length ? reasons.join(" ") : fallback;
 
@@ -111,7 +114,7 @@ export function PolicyDomainTab({ tab, metadata, policies }: { tab: "Objects" | 
             <TableCell sx={{ overflowWrap: "anywhere", maxWidth: 320 }}>{object.schedule ? scheduleLabel(object.schedule) : object.values?.join("; ") || "—"}</TableCell>
             <TableCell>{object.members?.length ?? 0}</TableCell><TableCell>
               {object.unused == null ? <Tooltip describeChild title={reasonText(object.unusedReasons, "Unused evidence is not available.")}>
-                <Chip size="small" label="Unused: UNKNOWN" /></Tooltip> : object.unused && <Chip size="small" label="Unused" />}
+                <Chip size="small" label="Unused: not proven" /></Tooltip> : object.unused && <Chip size="small" label="Unused" />}
               {object.emptyGroup && <Chip size="small" label="Empty group" />}{object.singleMember && <Chip size="small" label="Single member" />}
               {object.duplicateId && <Chip size="small" label={`Duplicate set ${duplicates.indexOf(object.duplicateId) + 1}`} />}
             </TableCell><TableCell><Tooltip describeChild title={object.usageComplete === true ? "Proven by the management unused-object report."
@@ -144,7 +147,7 @@ export function PolicyDomainTab({ tab, metadata, policies }: { tab: "Objects" | 
           <Typography variant="subtitle2" sx={{ mt: 2 }}>Groups referencing object</Typography>
           {usage.groups.map(g => <Typography key={g.id}>{g.name}</Typography>)}
           {!usage.ruleCount && !usage.groupCount && <Typography>{usage.usageComplete === true ? "No references; confirmed by the management unused-object report."
-            : "No references in collected rules and groups; usage remains UNKNOWN."}</Typography>}
+            : "No references in collected rules and groups; other uses are not checked."}</Typography>}
           <Paging page={usagePage} total={Math.max(usage.ruleCount, usage.groupCount)} size={usage.pageSize} change={setUsagePage} />
         </>}
       </Box>

@@ -271,6 +271,10 @@ public final class AdvisoryReadService {
         body.put("affected", a.affected());
         body.put("affected_exploited", a.affectedExploited());
         body.put("affected_critical_high", a.affectedCriticalHigh());
+        body.put("affected_critical", a.affectedCritical());
+        body.put("affected_high", a.affectedHigh());
+        body.put("affected_medium", a.affectedMedium());
+        body.put("affected_low", a.affectedLow());
         body.put("not_evaluable", a.notEvaluable());
         body.put("fixed", a.fixed());
         body.put("pending", a.pending());

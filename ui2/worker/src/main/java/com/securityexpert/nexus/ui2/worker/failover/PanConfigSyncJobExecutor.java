@@ -111,6 +111,8 @@ public final class PanConfigSyncJobExecutor {
             String roles = PanFailoverChecks.roles(a, b, "active", "passive");
             if ("UNKNOWN".equals(roles)) throw new Stop("HA_STATE_UNKNOWN");
             if (!"PASS".equals(roles)) throw new Stop("ROLES_CHANGED");
+            // Config sync switched off on the device is not a state this write repairs.
+            if ("no".equals(a.runningSyncEnabled()) || "no".equals(b.runningSyncEnabled())) throw new Stop("CONFIG_SYNC_DISABLED");
             String configSync = PanFailoverChecks.sync(a, b);
             if ("PASS".equals(configSync)) throw new Stop("CONFIG_ALREADY_SYNCHRONIZED");
             if (!"FAIL".equals(configSync)) throw new Stop("CONFIG_SYNC_STATE_UNKNOWN");

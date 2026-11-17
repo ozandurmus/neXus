@@ -17,9 +17,28 @@ import { M3Button } from "../shell/M3Widgets";
 import { readinessReasonLabel } from "../shell/presenters";
 import { m3 } from "../theme/m3Theme";
 
-function checkRows(checks: ReadinessCheck[], labels: ReadinessMember[] = []) {
+/** Check 10 (traffic and ARP) is read on the active member only. */
+const TRAFFIC_ARP_CHECK = 10;
+const SECONDARY_NOT_ACTIVE = "Read on the active member only";
+
+/**
+ * A single-address FortiGate cluster has one enrolled device: the secondary has no address, device record or checks of its
+ * own (design question Q2). The primary's reads describe both members, so the second column is filled from the primary's report.
+ */
+export function primaryReportsPeer(vendor: string | undefined, members: ReadinessMember[]) {
+  return vendor === "fortinet" && members.length === 1;
+}
+/** Check 1 PASS means one primary and one secondary, the enrolled unit identified as the primary (identity MATCH). */
+export function primaryRolesConfirmed(checks: ReadinessCheck[]) {
+  return checks.some(check => check.checkNo === 1 && check.result === "PASS");
+}
+
+function checkRows(checks: ReadinessCheck[], labels: ReadinessMember[] = [], peerFromPrimary = false) {
   return [...new Set(checks.map(check => check.checkNo))].sort((a, b) => a - b).map(no => {
-    const members = ["Member 1", "Member 2"].map((member, index) => checks.find(check => check.checkNo === no && (check.device_id && labels.length ? check.device_id === labels[index]?.device_id : check.member === member)));
+    const members = ["Member 1", "Member 2"].map((member, index) => {
+      if (peerFromPrimary) return checks.find(check => check.checkNo === no && (!check.device_id || check.device_id === labels[0]?.device_id));
+      return checks.find(check => check.checkNo === no && (check.device_id && labels.length ? check.device_id === labels[index]?.device_id : check.member === member));
+    });
     const first = checks.find(check => check.checkNo === no)!;
     const blocking = checks.some(check => check.checkNo === no && check.blocking);
     const failed = blocking && members.some(check => check?.result === "FAIL");
@@ -29,20 +48,25 @@ function checkRows(checks: ReadinessCheck[], labels: ReadinessMember[] = []) {
 }
 
 /** `rowAction`: an action the server offers for one check row (the PAN config sync on check 4), rendered under its title. */
-export function ReadinessChecksTable({ checks, members = [], compact = false, rowAction }: { checks: ReadinessCheck[]; members?: ReadinessMember[]; compact?: boolean;
-  rowAction?: (checkNo: number, failed: boolean) => ReactNode }) {
+export function ReadinessChecksTable({ checks, members = [], compact = false, rowAction, vendor }: { checks: ReadinessCheck[]; members?: ReadinessMember[]; compact?: boolean;
+  rowAction?: (checkNo: number, failed: boolean) => ReactNode; vendor?: string }) {
+  const peer = primaryReportsPeer(vendor, members);
+  const confirmed = peer && primaryRolesConfirmed(checks);
   // Order presentation by observed role; retain opaque device IDs for check matching.
   const ordered = [...members].sort((a, b) => Number(a.ha_role?.toLowerCase() !== "active") - Number(b.ha_role?.toLowerCase() !== "active"));
   const memberOrder = [0, 1].map(index => members.length ? members.indexOf(ordered[index]) : index);
   return <Table size="small" aria-label="Readiness results" sx={{ width: "100%", tableLayout: "fixed" }}>
     <TableHead><TableRow>
       <TableCell sx={{ width: "24%" }}>Check</TableCell>
-      {[0, 1].map(index => <TableCell key={index}>
+      {peer ? [0, 1].map(index => <TableCell key={index}>
+        {index === 0 ? members[0].hostname ?? "Primary" : "Secondary"}
+        <Typography component="span" variant="caption" sx={{ color: m3.onSurfaceVar }}> · {confirmed ? (index === 0 ? "active" : "standby") : "role unknown"} (as the primary reports)</Typography>
+      </TableCell>) : [0, 1].map(index => <TableCell key={index}>
         {ordered[index]?.hostname ?? `Member ${index + 1}`}
         <Typography component="span" variant="caption" sx={{ color: m3.onSurfaceVar }}> · {ordered[index]?.ha_role?.toLowerCase() ?? "role unknown"}</Typography>
       </TableCell>)}
     </TableRow></TableHead>
-    <TableBody>{checkRows(checks, members).map(row => {
+    <TableBody>{checkRows(checks, members, peer).map(row => {
       const icon = row.failed ? "x-circle" : row.passed ? "check-circle" : "info";
       const result = row.failed ? "Blocking" : row.passed ? "Passed" : !row.blocking ? "Info" : "Unknown";
       return <TableRow key={row.no} sx={{ bgcolor: row.failed ? m3.errorContainer : undefined }}>
@@ -54,7 +78,9 @@ export function ReadinessChecksTable({ checks, members = [], compact = false, ro
           </Stack>
           {rowAction?.(row.no, row.failed)}
         </TableCell>
-        {memberOrder.map((memberIndex, index) => <TableCell key={index} sx={{ py: compact ? 0.5 : 1.5, whiteSpace: "normal", overflowWrap: "anywhere" }}><CheckMessage text={row.members[memberIndex]?.summary ?? "Not collected"} /></TableCell>)}
+        {memberOrder.map((memberIndex, index) => <TableCell key={index} sx={{ py: compact ? 0.5 : 1.5, whiteSpace: "normal", overflowWrap: "anywhere" }}>
+          <CheckMessage text={peer ? (index === 1 && row.no === TRAFFIC_ARP_CHECK ? SECONDARY_NOT_ACTIVE : row.members[0]?.summary ?? "Not collected")
+            : row.members[memberIndex]?.summary ?? "Not collected"} /></TableCell>)}
       </TableRow>;
     })}</TableBody>
   </Table>;
@@ -80,7 +106,7 @@ function CheckMessage({ text }: { text: string }) {
 }
 
 export function readinessStopReason(stopCode?: string | null) {
-  return stopCode === "COMMAND_UNAVAILABLE" ? readinessReasonLabel(stopCode) : null;
+  return stopCode === "COMMAND_UNAVAILABLE" || stopCode?.startsWith("COMMAND_UNAVAILABLE:") ? readinessReasonLabel(stopCode) : null;
 }
 
 export function ReadinessCard({ checks, members, status, cluster, vendor, observedAt, masked = false, running = false, disabled = false, canRun, onRun, error, stopCode, rowAction }: {
@@ -88,7 +114,7 @@ export function ReadinessCard({ checks, members, status, cluster, vendor, observ
   vendor?: string; observedAt?: string | null; masked?: boolean; running?: boolean; disabled?: boolean; canRun: boolean;
   onRun: () => void; error?: string | null; stopCode?: string | null; rowAction?: (checkNo: number, failed: boolean) => ReactNode;
 }) {
-  const rows = checkRows(checks, members);
+  const rows = checkRows(checks, members, primaryReportsPeer(vendor, members ?? []));
   const blocking = rows.filter(row => row.failed).length;
   const ready = !running && status === "READY";
   const notReady = !running && status === "NOT_READY";
@@ -119,7 +145,7 @@ export function ReadinessCard({ checks, members, status, cluster, vendor, observ
     </Box>
     {!running && readinessStopReason(stopCode) && <Typography variant="body2" sx={{ mb: 1 }}>{readinessStopReason(stopCode)}</Typography>}
     {error && <Typography role="alert" variant="body2" sx={{ color: m3.criticalInk, mb: 1 }}>{error}</Typography>}
-    <TableContainer><ReadinessChecksTable checks={checks} members={members} rowAction={rowAction} /></TableContainer>
+    <TableContainer><ReadinessChecksTable checks={checks} members={members} rowAction={rowAction} vendor={vendor} /></TableContainer>
     {!checks.length && <Typography variant="body2" sx={{ color: m3.onSurfaceVar, py: 2 }}>No observations yet</Typography>}
     <Typography variant="caption" sx={{ display: "block", color: m3.onSurfaceVar, mt: 2 }}>Failover runs re-check everything at start.</Typography>
   </Card>;

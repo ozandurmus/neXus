@@ -103,7 +103,8 @@ public final class PanConfigSyncService {
         if (readiness != null && readiness.checks() != null) try {
             for (var check : JSON.readTree(readiness.checks())) {
                 int no = check.path("checkNo").asInt();
-                if (no == 4 && "FAIL".equals(check.path("status").asText())) failed = true;
+                if (no == 4 && "FAIL".equals(check.path("status").asText())
+                        && !"CONFIG_SYNC_DISABLED".equals(check.path("derived").path("reason").asText())) failed = true;
                 // Argon P1-1: a role counts only from a check 1 row that passed.
                 if (no == 1 && "PASS".equals(check.path("status").asText()))
                     roles.put(check.path("memberRef").asText(), check.path("derived").path("role").asText());

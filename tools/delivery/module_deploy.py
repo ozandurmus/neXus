@@ -38,6 +38,11 @@ CONCURRENT_SAFE = ("configuration", "compliance")
 # read-only transaction.
 DRAIN_POLL_S = 2
 OLD_POD_POLL_S = 2
+# Module e2e cadence. "each" (default, unchanged): one module e2e after every step. "edges": after the FIRST step (the
+# service, which every module e2e exercises) and after the LAST step only; the steps between roll out and are checked by
+# rollout status plus the heartbeat/handover checks, and the e2e of the last step covers the finished release. The ship's
+# own production e2e after the deploy is unaffected. Measured 2026-11-17: about 30 s per skipped e2e, four per full ship.
+MODULE_E2E_MODES = ("each", "edges")
 _print_lock = threading.Lock()
 
 
@@ -575,7 +580,7 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
     print(json.dumps(result), flush=True)
 
 
-def replace_concurrently(group, image_for, snapshot, limit, commit, authorization, rollback):
+def replace_concurrently(group, image_for, snapshot, limit, commit, authorization, rollback, run_e2e=True):
     """Roll out several barrier-free modules at the same time, then run ONE module e2e for the group.
 
     Every member goes through the same `replace` (its own checks, rollout status and error handling); only the wait is
@@ -604,15 +609,23 @@ def replace_concurrently(group, image_for, snapshot, limit, commit, authorizatio
     if failures:
         return failures, any(not errors[t].continuable for t in failures)
     try:
-        with phase("group_" + "_".join(group), "e2e"):
-            module_e2e(commit)
+        if run_e2e:
+            with phase("group_" + "_".join(group), "e2e"):
+                module_e2e(commit)
     except Blocked as error:
         for target in group:
             print(json.dumps({"module": target, "status": "BLOCKED", "reason": str(error)}), flush=True)
         return list(group), not error.continuable
     for target in group:
+        if not run_e2e:
+            results[target]["e2e"] = "BATCHED"
         print(json.dumps(results[target]), flush=True)
     return [], False
+
+
+def e2e_after_step(index, count, mode="each"):
+    """Whether the module e2e runs after step `index` (0-based) of `count`. Unknown modes behave like "each"."""
+    return mode != "edges" or index == 0 or index == count - 1
 
 
 def rollout_steps(targets, concurrent=True):
@@ -684,6 +697,9 @@ def main():
     parser.add_argument("--rollback", action="store_true")
     parser.add_argument("--no-concurrent", dest="concurrent_safe", action="store_false",
                         help="roll the barrier-free modules (configuration, compliance) one after another")
+    parser.add_argument("--module-e2e", choices=MODULE_E2E_MODES,
+                        default=os.environ.get("NEXUS_MODULE_E2E", "each"),
+                        help="each: a module e2e after every step (default); edges: after the first and the last step only")
     parser.add_argument("--allow-newer-schema", action="store_true")
     parser.add_argument("--return-policy-to-general", action="store_true")
     parser.add_argument("--return-backup-to-general", action="store_true")
@@ -739,9 +755,13 @@ def main():
                     args.packet_analysis_image if target == "packet-analysis" else args.image)
 
         stopped = False
-        for step in rollout_steps(targets, args.concurrent_safe and not args.rollback):
+        steps = rollout_steps(targets, args.concurrent_safe and not args.rollback)
+        # A rollback keeps the e2e after every step: it is the recovery path and must verify each restored module.
+        e2e_mode = "each" if args.rollback or returning else args.module_e2e
+        for index, step in enumerate(steps):
             if stopped:
                 break
+            run_e2e = e2e_after_step(index, len(steps), e2e_mode)
             if len(step) > 1:
                 # Resolve every image before any member starts (a missing rollback digest must change nothing).
                 try:
@@ -751,14 +771,20 @@ def main():
                     print(json.dumps({"module": step[0], "status": "BLOCKED", "reason": str(error)}), flush=True)
                     break
                 failed, hard = replace_concurrently(step, image_for, directory.name, args.wait_limit, args.commit,
-                                                    args.authorization_ref, args.rollback)
+                                                    args.authorization_ref, args.rollback, run_e2e)
                 failures.extend(failed)
                 stopped = hard
                 continue
             target = step[0]
             try:
-                replace(target, image_for(target), directory.name, args.wait_limit, args.commit, args.authorization_ref,
-                        rollback=args.rollback)
+                if run_e2e:
+                    replace(target, image_for(target), directory.name, args.wait_limit, args.commit,
+                            args.authorization_ref, rollback=args.rollback)
+                else:
+                    result = replace(target, image_for(target), directory.name, args.wait_limit, args.commit,
+                                     args.authorization_ref, rollback=args.rollback, defer_e2e=True)
+                    result["e2e"] = "BATCHED"
+                    print(json.dumps(result), flush=True)
             except Blocked as error:
                 failures.append(target)
                 print(json.dumps({"module": target, "status": "BLOCKED", "reason": str(error)}), flush=True)

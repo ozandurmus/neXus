@@ -103,4 +103,29 @@ describe("Readiness card", () => {
     expect(cells[1].textContent).toBe("Read on the active member only");
     expect(screen.getAllByText("info")).toHaveLength(1);
   });
+
+  describe("single-address FortiGate (the primary reports both members)", () => {
+    const one = [{ device_id: "opaque-1", hostname: "FW-FGT-01", ha_role: null }];
+    const row = (checkNo: number, result: ReadinessCheck["result"], blocking = true, summary = "As reported") =>
+      ({ checkNo, title: `Check ${checkNo}`, member: "Member 1", device_id: "opaque-1", result, summary, blocking });
+    const fgt = [row(1, "PASS"), row(7, "PASS"), row(10, "PASS", false, "1 MB/s, 40 ARP entries")];
+    it("fills the second column from the primary, shows pass icons and the active/standby roles", () => {
+      render(<ReadinessCard {...props} vendor="fortinet" members={one} checks={fgt} status="READY" />);
+      const table = screen.getByRole("table");
+      expect(within(table).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(
+        ["Check", "FW-FGT-01 · active (as the primary reports)", "Secondary · standby (as the primary reports)"]);
+      const rows = within(table).getAllByRole("row");
+      expect(within(rows[1]).getAllByRole("cell").map(cell => cell.textContent)).toEqual(["As reported", "As reported"]);
+      expect(within(rows[3]).getAllByRole("cell").map(cell => cell.textContent)).toEqual(["1 MB/s, 40 ARP entries", "Read on the active member only"]);
+      expect(screen.getAllByRole("img", { name: "Passed" })).toHaveLength(2);
+      expect(screen.getAllByRole("img", { name: "Info" })).toHaveLength(1);
+      expect(table.textContent).not.toContain("Not collected");
+      expect(table.textContent).not.toContain("role unknown");
+    });
+    it("names no role when check 1 did not pass", () => {
+      render(<ReadinessCard {...props} vendor="fortinet" members={one} checks={[row(1, "UNKNOWN"), row(7, "PASS")]} status="UNKNOWN" />);
+      expect(within(screen.getByRole("table")).getAllByRole("columnheader")[2].textContent).toBe("Secondary · role unknown (as the primary reports)");
+      expect(screen.getAllByRole("img", { name: "Unknown" })).toHaveLength(1);
+    });
+  });
 });

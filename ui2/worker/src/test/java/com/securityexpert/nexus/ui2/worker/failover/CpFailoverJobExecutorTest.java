@@ -1025,15 +1025,17 @@ class CpFailoverJobExecutorTest {
         run(store,script);
         check("UNKNOWN".equals(store.outcome) && store.checks.size()==4);
         check(script.commands.size()==3 && script.downCount==0);
-        check("COMMAND_UNAVAILABLE".equals(store.stopCode));
+        check("COMMAND_UNAVAILABLE:EXIT_1:cphaprob tablestat".equals(store.stopCode));
     }
     @Test void loginEnvironmentErrorsCarryStopCodeEvenWithZeroExit() {
+        var reasons=List.of("COMMAND_NOT_FOUND","NO_SUCH_FILE","PERMISSION_DENIED");
+        int n=0;
         for(String error:List.of("cphaprob: command not found","bash: /synthetic/profile: No such file or directory","Permission denied")) {
             Store store=new Store(); store.kind="READINESS";
             Script script=new Script(); script.measured=Map.of("cphaprob stat",error);
             run(store,script);
             check("UNKNOWN".equals(store.outcome));
-            check("COMMAND_UNAVAILABLE".equals(store.stopCode));
+            check(("COMMAND_UNAVAILABLE:"+reasons.get(n++)+":cphaprob stat").equals(store.stopCode));
             check(store.checks.isEmpty() && script.commands.size()==1 && script.downCount==0);
         }
     }
@@ -1053,7 +1055,7 @@ class CpFailoverJobExecutorTest {
         Script script=new Script(); script.badPre=true; script.failedCommand="arp -an";
         run(store,script);
         check("NOT_READY".equals(store.outcome));
-        check("COMMAND_UNAVAILABLE".equals(store.stopCode));
+        check(store.stopCode.startsWith("COMMAND_UNAVAILABLE:") && store.stopCode.endsWith(":arp -an"));
         check(script.downCount==0);
     }
     @Test void unhealthyVslsRunFailsWithEvidenceAndStillCollectsLaterChecks() {

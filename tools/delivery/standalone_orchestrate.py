@@ -898,6 +898,41 @@ def _wait_for_checks(url: str, timeout: float = CHECKS_TIMEOUT_S, poll: float = 
         sleep(poll)
 
 
+PRETEST_TIMEOUT_S = int(os.environ.get("NEXUS_PRETEST_TIMEOUT_S", str(30 * 60)))
+PRETEST_POLL_S = 5
+
+
+def _await_pretest(path: str, timeout: float = PRETEST_TIMEOUT_S, poll: float = PRETEST_POLL_S,
+                   sleep=None, clock=None) -> None:
+    """Block until the caller's unit-test run (started in parallel with this ship) wrote its verdict; stop otherwise.
+
+    2026-11-17: the queue wrapper ran the full unit tests BEFORE the ship (8-10 min, strictly serial). With
+    `--await-pretest FILE` it starts them in the background and the ship runs the isolated preview meanwhile; nothing
+    merges until FILE holds a first line `PASS`. Fails closed: `FAIL...`, any other first line, a missing file or a
+    timeout all stop the ship before the merge (the pull request is closed by the caller, as for a red preview)."""
+    sleep = sleep or time.sleep
+    clock = clock or time.monotonic
+    started = clock()
+    last = None
+    while True:
+        try:
+            lines = Path(path).read_text(errors="replace").splitlines()
+        except OSError:
+            lines = []
+        first = lines[0].strip() if lines else ""
+        if first == "PASS":
+            print(json.dumps({"pretest": "pass", "waited_s": round(clock() - started)}), flush=True)
+            return
+        if first:
+            raise SystemExit("unit tests did not pass (" + first[:200] + "); not merged")
+        if last is None:
+            print(json.dumps({"pretest": "waiting"}), flush=True)
+            last = "waiting"
+        if clock() - started >= timeout:
+            raise SystemExit("unit test verdict still missing after " + str(int(timeout)) + " s (" + path + "); not merged")
+        sleep(poll)
+
+
 def _pr_body(branch: str, commits: str, notes: str) -> str:
     return ("## What changed\n" + commits + "\n\n## Checks before merge\n"
             "- Java: `:service:test :worker:test :architecture-tests:test` (reviewer, locally)\n"
@@ -1112,6 +1147,17 @@ def _ship(args: argparse.Namespace) -> int:
             raise
     if not url:
         url = open_pull_request()
+    pretest_file = getattr(args, "await_pretest", None)
+    if pretest_file:
+        try:
+            _await_pretest(pretest_file)
+        except SystemExit:
+            subprocess.run(["gh", "pr", "close", url, "--comment",
+                            "Closed by the ship: the unit tests that ran beside the preview did not pass."],
+                           cwd=str(REPO_ROOT), capture_output=True, text=True)
+            subprocess.run(["git", "push", "-q", "origin", "--delete", branch], cwd=str(REPO_ROOT),
+                           capture_output=True)
+            raise
     # Merge only after GitHub's own checks have passed (2026-11-03: the merge used to run 4 s after PR creation).
     if skip_checks is None:
         _wait_for_checks(url)
@@ -1199,6 +1245,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="push nothing until the preview has passed (the early pull request is the default)")
     sh.add_argument("--no-fast-path", action="store_true",
                     help="never take the docs-only or frontend fast path (preview, image build and the full deploy always run)")
+    sh.add_argument("--await-pretest", metavar="FILE",
+                    help="unit tests run in parallel with the preview; merge only after FILE's first line is PASS "
+                         "(FAIL, a missing verdict or a timeout stops the ship and closes the pull request)")
     sh.add_argument("--notes", help="extra lines for the PR body (live validation, measurements)")
     sh.add_argument("--skip-security", metavar="REASON", help="emergency bypass; a reason is mandatory and printed")
     preview = sh.add_mutually_exclusive_group()

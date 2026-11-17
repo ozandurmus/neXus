@@ -4,7 +4,8 @@ import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { LifecycleScreen, lifecycleCsv } from "../src/screens/LifecycleScreen";
 import {
-  ADVISORY_PAGE, AFFECTED_BY_VERSION, CHECKPOINT_COVERAGE, LifecycleVulnerabilitiesPanel, VulnerabilityDetail, basisSentence, vendorLink, vulnerabilityBasis, vulnerabilitySummary,
+  ADVISORY_PAGE, AFFECTED_BY_VERSION, CHECKPOINT_COVERAGE, LifecycleVulnerabilitiesPanel, VULN_SCORE_FORMULA,
+  VulnerabilityDetail, basisSentence, vendorLink, vulnerabilityBasis, vulnerabilitySummary,
 } from "../src/screens/LifecycleVulnerabilitiesPanel";
 import * as api from "../src/auth/adminApi";
 import type { LifecycleAdvisory, LifecycleAdvisoryDevice, LifecycleAdvisorySource, LifecycleDevice, LifecycleVulnerabilities } from "../src/auth/adminApi";
@@ -70,6 +71,7 @@ const detailRow = (hostname: string, verdict: LifecycleAdvisoryDevice["verdict"]
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.history.replaceState(null, "", "/");
   loadFleet(fleet, { vuln_devices_exploited: 1, vuln_devices_affected: 2, vuln_devices_not_evaluated: 3, vuln_oldest_source_age_days: 9 });
   vi.mocked(api.getLifecycleCatalog).mockResolvedValue({ can_manage: false, entries: [] });
   vi.mocked(api.getLifecycleCatalogSources).mockResolvedValue({ feeds: [], page_forms: [], uploads: [], needs_review: [], vendor_entries: 0, hand_loaded_fresh_days: 180 });
@@ -81,28 +83,40 @@ describe("Fleet tab: the Vulnerabilities cell", () => {
     themed(<LifecycleScreen />);
     const table = await screen.findByRole("table", { name: "Fleet lifecycle" });
     expect(within(table).getByRole("columnheader", { name: "Vulnerabilities" })).toBeInTheDocument();
-    expect(within(table).getAllByRole("columnheader").map(h => h.textContent).slice(3, 5)).toEqual(["Version", "Vulnerabilities"]);
+    expect(within(table).getByRole("columnheader", { name: "Vuln score" })).toBeInTheDocument();
+    expect(within(table).getAllByRole("columnheader").map(h => h.textContent).slice(3, 6)).toEqual(["Version", "Vulnerabilities", "Vuln score"]);
 
     const exploited = rowOf(table, "FW-TANGO-04");
     expect(within(exploited).getByText("3 affected").closest("[data-pill]")).toHaveAttribute("data-pill", "warn");
     expect(within(exploited).getByText("2 exploited").closest("[data-pill]")).toHaveAttribute("data-pill", "bad");
     expect(within(exploited).getByText("2 critical or high · 1 could not be judged")).toBeInTheDocument();
+    expect(exploited.querySelector("[data-vuln-score-value]")).toHaveTextContent("97");
+    expect(exploited.querySelector("[data-vuln-level]")).toHaveAttribute("data-vuln-level", "CRITICAL");
     expect(table.querySelectorAll('[data-pill="bad"]')).toHaveLength(1);
 
     const affected = rowOf(table, "FW-JULIET-06");
     expect(within(affected).getByText("1 affected")).toBeInTheDocument();
     expect(within(affected).queryByText(/exploited/)).toBeNull();
+    expect(affected.querySelector("[data-vuln-score-value]")).toHaveTextContent("12");
+    expect(affected.querySelector("[data-vuln-level]")).toHaveAttribute("data-vuln-level", "LOW");
 
     const clean = rowOf(table, "FW-BRAVO-02");
-    expect(within(clean).getByText("None affected")).toBeInTheDocument();
+    expect(within(clean.querySelector("[data-vulnerability]") as HTMLElement).getByText("None affected")).toBeInTheDocument();
     expect(within(clean).getByText("of 359 advisories, loaded 1 d ago")).toBeInTheDocument();
+    expect(clean.querySelector("[data-vuln-score-value]")).toHaveTextContent("0");
+    expect(clean.querySelector("[data-vuln-level]")).toHaveAttribute("data-vuln-level", "None affected");
 
     const partly = rowOf(table, "FW-PAPA-03");
     expect(within(partly).getByText("None affected")).toBeInTheDocument();
     expect(within(partly).getByText("2 could not be judged")).toBeInTheDocument();
+    expect(partly.querySelector("[data-vuln-score-value]")).toBeNull();
+    expect(partly.querySelector("[data-vuln-level]")).toHaveAttribute("data-vuln-level", "Not evaluated");
 
-    expect(within(rowOf(table, "FW-OSCAR-05")).getByText("Not evaluated").closest("[data-pill]")).toHaveAttribute("data-pill", "unknown");
-    expect(within(rowOf(table, "FW-OSCAR-05")).getByText("advisory source never loaded")).toBeInTheDocument();
+    const oscar = rowOf(table, "FW-OSCAR-05");
+    expect(within(oscar.querySelector("[data-vulnerability]") as HTMLElement).getByText("Not evaluated").closest("[data-pill]")).toHaveAttribute("data-pill", "unknown");
+    expect(oscar.querySelector("[data-vuln-score-value]")).toBeNull();
+    expect(oscar.querySelector("[data-vuln-level]")).toHaveAttribute("data-vuln-level", "Not evaluated");
+    expect(within(oscar).getByText("advisory source never loaded")).toBeInTheDocument();
     expect(within(rowOf(table, "FW-SIERRA-07")).getByText("advisory source older than 30 days")).toBeInTheDocument();
     expect(within(rowOf(table, "CLS-ROMEO-01")).getByText("No advisory source for this product")).toBeInTheDocument();
     expect(within(rowOf(table, "FW-KILO-08")).getByText("Version not known")).toBeInTheDocument();
@@ -201,6 +215,110 @@ describe("Fleet tab: the Vulnerabilities cell", () => {
     expect(second).toContain("NOT_EVALUATED,SOURCE_NEVER_LOADED,,,,,,,,,,,");
     expect(third).toContain("No vulnerability data");
     expect(third.split(",")).toHaveLength(columns.length);
+  });
+
+  it("shows the score formula tooltip on the Vuln score column header and sorts without altering the default order", async () => {
+    const scoredFleet = [
+      device("d-clean", "FW-BRAVO-02", evaluated({ fixed: 10 })),
+      device("d-uneval", "FW-OSCAR-05", unjudged("NOT_EVALUATED", "SOURCE_NEVER_LOADED")),
+      device("d-low", "FW-JULIET-06", evaluated({ affected: 1, affected_low: 1, worst_severity: "LOW" })),
+      device("d-elevated", "FW-PAPA-03", evaluated({ affected: 1, affected_high: 1, affected_critical_high: 1, worst_severity: "HIGH" })),
+      device("d-highrisk", "FW-SIERRA-07", evaluated({ affected: 2, affected_critical: 2, affected_critical_high: 2, worst_severity: "CRITICAL" })),
+      device("d-exploited", "FW-TANGO-04", evaluated({ affected: 1, affected_exploited: 1, affected_critical: 1, affected_critical_high: 1, worst_severity: "CRITICAL" })),
+    ];
+    loadFleet(scoredFleet);
+    themed(<LifecycleScreen />);
+    const table = await screen.findByRole("table", { name: "Fleet lifecycle" });
+    const names = () => within(table).getAllByRole("link").map(a => a.textContent);
+    const defaultOrder = ["FW-TANGO-04", "FW-PAPA-03", "FW-SIERRA-07", "FW-JULIET-06", "FW-BRAVO-02", "FW-OSCAR-05"];
+    // Default order is unchanged: exploited first, critical/high in server order (PAPA before SIERRA), other affected, then rest in server order.
+    expect(names()).toEqual(defaultOrder);
+
+    const header = within(table).getByRole("columnheader", { name: "Vuln score" });
+    const sortButton = within(header).getByRole("button", { name: "Vuln score" });
+    fireEvent.mouseOver(sortButton);
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip).toHaveTextContent(VULN_SCORE_FORMULA);
+
+    // First click: descending by score (92, 75, 40, 10, 0), with Not evaluated last.
+    fireEvent.click(sortButton);
+    expect(header).toHaveAttribute("aria-sort", "descending");
+    expect(names()).toEqual(["FW-TANGO-04", "FW-SIERRA-07", "FW-PAPA-03", "FW-JULIET-06", "FW-BRAVO-02", "FW-OSCAR-05"]);
+
+    // Second click: ascending by score (0, 10, 40, 75, 92), with Not evaluated still last (never treated as 0).
+    fireEvent.click(sortButton);
+    expect(header).toHaveAttribute("aria-sort", "ascending");
+    expect(names()).toEqual(["FW-BRAVO-02", "FW-JULIET-06", "FW-PAPA-03", "FW-SIERRA-07", "FW-TANGO-04", "FW-OSCAR-05"]);
+
+    // Third click: back to the unchanged default order.
+    fireEvent.click(sortButton);
+    expect(header).not.toHaveAttribute("aria-sort");
+    expect(names()).toEqual(defaultOrder);
+  });
+
+  it("filters rows and CSV export by multi-select Vulnerability severity and persists the selection in the URL query", async () => {
+    const richFleet = [
+      device("d-exp", "FW-TANGO-04", evaluated({ affected: 2, affected_exploited: 1, affected_critical: 1, affected_low: 1, affected_critical_high: 1, worst_severity: "CRITICAL" })),
+      device("d-crit", "FW-SIERRA-07", evaluated({ affected: 1, affected_critical: 1, affected_critical_high: 1, worst_severity: "CRITICAL" })),
+      device("d-high", "FW-PAPA-03", evaluated({ affected: 1, affected_high: 1, affected_critical_high: 1, worst_severity: "HIGH" })),
+      device("d-med", "FW-JULIET-06", evaluated({ affected: 1, affected_medium: 1, worst_severity: "MEDIUM" })),
+      device("d-none", "FW-BRAVO-02", evaluated({ fixed: 8 })),
+      device("d-unjudged", "FW-KILO-08", evaluated({ not_evaluable: 2 })),
+      device("d-never", "FW-OSCAR-05", unjudged("NOT_EVALUATED", "SOURCE_NEVER_LOADED")),
+    ];
+    loadFleet(richFleet);
+    window.history.replaceState(null, "", "/?screen=inventory&view=lifecycle&vuln_severity=high,exploited");
+    const firstRender = themed(<LifecycleScreen />);
+    const table = await screen.findByRole("table", { name: "Fleet lifecycle" });
+    const names = () => within(table).getAllByRole("link").map(a => a.textContent);
+    // Restored from initial URL query (?vuln_severity=high,exploited)
+    expect(names()).toEqual(["FW-TANGO-04", "FW-PAPA-03"]);
+
+    const combo = screen.getByRole("combobox", { name: "Vulnerability severity" });
+    expect(combo).toHaveTextContent("High, Exploited (CISA KEV)");
+    fireEvent.mouseDown(combo);
+    // Deselect High and Exploited, select Critical and None affected
+    fireEvent.click(screen.getByRole("option", { name: "High" }));
+    fireEvent.click(screen.getByRole("option", { name: "Exploited (CISA KEV)" }));
+    fireEvent.click(screen.getByRole("option", { name: "Critical" }));
+    fireEvent.click(screen.getByRole("option", { name: "None affected" }));
+    fireEvent.keyDown(screen.getByRole("listbox"), { key: "Escape" });
+    expect(names()).toEqual(["FW-TANGO-04", "FW-SIERRA-07", "FW-BRAVO-02"]);
+    expect(new URLSearchParams(window.location.search).get("vuln_severity")).toBe("critical,none");
+    expect(new URLSearchParams(window.location.search).get("screen")).toBe("inventory");
+
+    // Verify CSV export receives only the filtered rows
+    const createUrl = vi.fn(() => "blob:synthetic");
+    const revokeUrl = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, writable: true, value: createUrl });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, writable: true, value: revokeUrl });
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    fireEvent.click(screen.getByRole("button", { name: "Export lifecycle CSV" }));
+    expect(createUrl).toHaveBeenCalledTimes(1);
+    const exportedBlob = (createUrl.mock.calls[0] as unknown as [Blob])[0];
+    const csvText = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(exportedBlob);
+    });
+    expect(csvText).toContain("FW-TANGO-04");
+    expect(csvText).toContain("FW-SIERRA-07");
+    expect(csvText).toContain("FW-BRAVO-02");
+    expect(csvText).not.toContain("FW-PAPA-03");
+    expect(csvText).not.toContain("FW-JULIET-06");
+    expect(csvText).not.toContain("FW-KILO-08");
+    expect(csvText).not.toContain("FW-OSCAR-05");
+    clickSpy.mockRestore();
+
+    // Deselecting all options clears vuln_severity from the URL query
+    fireEvent.mouseDown(combo);
+    fireEvent.click(screen.getByRole("option", { name: "Critical" }));
+    fireEvent.click(screen.getByRole("option", { name: "None affected" }));
+    fireEvent.keyDown(screen.getByRole("listbox"), { key: "Escape" });
+    expect(new URLSearchParams(window.location.search).get("vuln_severity")).toBeNull();
+    expect(names()).toHaveLength(richFleet.length);
+    firstRender.unmount();
   });
 });
 

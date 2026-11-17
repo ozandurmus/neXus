@@ -215,9 +215,26 @@ function codeWords(code: string): string {
  * A `partial:<CODE>` outcome of a log collection (one source failed, the others were stored) reads `Partial — <code words>`;
  * the raw code stays on hover through `<Presented>`.
  */
+const UNAVAILABLE_READ_WORDS: Readonly<Record<string, string>> = {
+  COMMAND_NOT_FOUND: "was not found in the device login shell",
+  NO_SUCH_FILE: "reported no such file in the device login shell",
+  PERMISSION_DENIED: "was refused with permission denied for the SSH account",
+  TIMED_OUT: "did not answer in time",
+  CHANNEL_FAILED: "failed on the SSH channel",
+};
+
+/** A read the worker recorded as unavailable, in words: which command and how it failed (`EXIT_1` is an exit status). */
+function unavailableReadLabel(reason: string, command: string): string {
+  const exit = /^EXIT_(\d+)$/.exec(reason);
+  const how = exit ? `ended with exit status ${exit[1]} and no usable output` : UNAVAILABLE_READ_WORDS[reason] ?? codeWords(reason);
+  return `Command not available on device: "${command}" ${how}`;
+}
+
 export function readinessReasonLabel(code: string | null | undefined): string {
   const value = (code ?? "").trim();
   if (!value) return "UNKNOWN";
+  const unavailable = /^COMMAND_UNAVAILABLE:([A-Z0-9_]+):(.+)$/.exec(value);
+  if (unavailable) return unavailableReadLabel(unavailable[1], unavailable[2]);
   const partial = /^partial:([A-Z0-9_]+)$/.exec(value);
   if (partial) return `Partial \u2014 ${codeWords(partial[1])}`;
   return REASON_LABELS[value] ?? value;

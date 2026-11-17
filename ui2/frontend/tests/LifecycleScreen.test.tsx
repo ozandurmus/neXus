@@ -32,6 +32,7 @@ function themed(node: React.ReactNode) { return render(<ThemeProvider theme={m3T
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.history.replaceState(null, "", "/");
   vi.mocked(api.getLifecycle).mockResolvedValue({ as_of: "2026-10-09", devices: [row("dev-1"), row("dev-2", "HIGH")],
     summary: { devices: 2, no_lifecycle_data: 2, past_end_of_support: 0, within_180_days: 0, within_365_days: 0, licenses_within_60_days: 0, license_problems: 1, licenses_collected: 0, live_patch_not_active: 2 } });
   vi.mocked(api.getLifecycleCatalog).mockResolvedValue({ can_manage: false, entries: [] });
