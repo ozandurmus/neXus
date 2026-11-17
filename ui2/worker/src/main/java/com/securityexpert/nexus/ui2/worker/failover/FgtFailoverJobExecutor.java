@@ -56,11 +56,13 @@ public final class FgtFailoverJobExecutor {
     private static final Duration CONNECT = Duration.ofSeconds(30);
     private static final Duration READ_CAP = Duration.ofSeconds(30);
     private static final int MAX_OUTPUT_CHARS = 262144;
+    /** The inventory's own bound on VDOMs per unit; the rest are counted as unread, never skipped silently. */
+    private static final int MAX_VDOMS = 64;
     private static final Pattern DEVICE_ID = Pattern.compile("[A-Za-z0-9._-]{1,128}");
 
     @FunctionalInterface public interface Pause { void sleep(Duration duration) throws InterruptedException; }
 
-    /** The eight reads: gate id, shell context of the gate row, literal, shape-log line cap. */
+    /** The nine reads: gate id, shell context of the gate row, literal, shape-log line cap. */
     enum Read {
         STATUS("fgt_get_system_status", "top_or_global", "get system status", 40),
         HA_STATUS("fgt_get_system_ha_status", "cli", "get system ha status", 120),
@@ -70,7 +72,12 @@ public final class FgtFailoverJobExecutor {
         FLAG("fgt_failover_ha_failover_status", "top_or_global", "execute ha failover status", 10),
         /** Information check 10 (traffic and ARP). The two literals live here and in V248 (DRAFTED until the PO approves). */
         PERFORMANCE("fgt_failover_performance_status", "top_or_global", "get system performance status", 20),
-        ARP("fgt_failover_arp", "top_or_global", "get system arp", 10);
+        ARP("fgt_failover_arp", "top_or_global", "get system arp", 10),
+        /**
+         * The already approved row that lists the VDOMs (the inventory's own read, fgt_show_system_interface, global context): a
+         * multi-VDOM unit's ARP is read inside each VDOM it names. Sent only when the ARP read is approved and VDOMs are on.
+         */
+        INTERFACES("fgt_show_system_interface", "global", "show system interface", 30);
         final String gateId, shell, command; final int maxShapeLines;
         Read(String gateId, String shell, String command, int maxShapeLines) {
             this.gateId = gateId; this.shell = shell; this.command = command; this.maxShapeLines = maxShapeLines;
@@ -160,7 +167,7 @@ public final class FgtFailoverJobExecutor {
                 reading.trafficBytesPerSecond() == null && reading.arpEntries() == null ? Optional.empty()
                     : TrafficArpCheck.previous(store, runId, FgtFailoverChecks.TRAFFIC_ARP));
             evaluated.add(new Result(FgtFailoverChecks.TRAFFIC_ARP, traffic.status(), traffic.reason(), traffic.evidence()));
-            List<Result> results = withGateReasons(evaluated, refused);
+            List<Result> results = withGateReasons(evaluated, refused, reading.trafficScope() != null);
             for (Result result : results) store.check(runId, "pre", deviceId, null, result.check(), result.status(), derived(result));
             String outcome = FgtFailoverChecks.outcome(results);
             Result lead = results.stream().filter(Result::blocking).filter(r -> "FAIL".equals(r.status())).findFirst()
@@ -200,7 +207,7 @@ public final class FgtFailoverJobExecutor {
     }
 
     /** A check made UNKNOWN by a read that was never sent says why. */
-    private static List<Result> withGateReasons(List<Result> results, Map<Read, String> refused) {
+    private static List<Result> withGateReasons(List<Result> results, Map<Read, String> refused, boolean multiVdom) {
         if (refused.isEmpty()) return results;
         List<Result> out = new ArrayList<>();
         for (Result r : results) {
@@ -210,7 +217,7 @@ public final class FgtFailoverJobExecutor {
                 case 5 -> List.of(Read.HA_CONFIG);
                 case 8 -> List.of(Read.HA_CONFIG, Read.DUMP, Read.FLAG);
                 case 9 -> List.of(Read.HA_STATUS, Read.STATUS);
-                case FgtFailoverChecks.TRAFFIC_ARP -> List.of(Read.PERFORMANCE, Read.ARP);
+                case FgtFailoverChecks.TRAFFIC_ARP -> multiVdom ? List.of(Read.PERFORMANCE, Read.ARP, Read.INTERFACES) : List.of(Read.PERFORMANCE, Read.ARP);
                 default -> List.<Read>of();
             };
             Optional<String> reason = needs.stream().map(refused::get).filter(java.util.Objects::nonNull).findFirst();
@@ -281,12 +288,34 @@ public final class FgtFailoverJobExecutor {
             Optional<String> dump = approved.containsKey(Read.DUMP) ? read(session, approved.get(Read.DUMP), Read.DUMP) : Optional.empty();
             Optional<String> flag = approved.containsKey(Read.FLAG) ? read(session, approved.get(Read.FLAG), Read.FLAG) : Optional.empty();
             Optional<String> performance = approved.containsKey(Read.PERFORMANCE) ? read(session, approved.get(Read.PERFORMANCE), Read.PERFORMANCE) : Optional.empty();
-            Optional<String> arp = approved.containsKey(Read.ARP) ? read(session, approved.get(Read.ARP), Read.ARP) : Optional.empty();
             var performanceParsed = FgtFailoverChecks.parsePerformance(performance.orElse(null));
-            Integer arpEntries = FgtFailoverChecks.arpEntries(arp.orElse(null));
             logShape(Read.PERFORMANCE, performance, approved.containsKey(Read.PERFORMANCE) && performanceParsed.bytesPerSecond() == null);
-            logShape(Read.ARP, arp, approved.containsKey(Read.ARP) && arpEntries == null);
-            var reading = new TrafficArpCheck.Reading(performanceParsed.bytesPerSecond(), arpEntries, performanceParsed.averageSessions());
+            Integer arpEntries = null;
+            Map<String, Integer> arpByVdom = null;
+            if (!enterGlobal) {
+                Optional<String> arp = approved.containsKey(Read.ARP) ? read(session, approved.get(Read.ARP), Read.ARP) : Optional.empty();
+                arpEntries = FgtFailoverChecks.arpEntries(arp.orElse(null));
+                logShape(Read.ARP, arp, approved.containsKey(Read.ARP) && arpEntries == null);
+            } else if (approved.containsKey(Read.ARP) && approved.containsKey(Read.INTERFACES)) {
+                // Multi-VDOM: list the VDOMs from the global context, leave it, then read the ARP table inside each VDOM.
+                Optional<String> listing = read(session, approved.get(Read.INTERFACES), Read.INTERFACES);
+                var vdoms = vdomNames(listing.orElse(null));
+                logShape(Read.INTERFACES, listing, vdoms.isEmpty());
+                move(session, FortiGatePlan.END);
+                moved = false;
+                arpByVdom = new java.util.LinkedHashMap<>();
+                int ordinal = 0;
+                for (String vdom : vdoms) {
+                    String label = String.valueOf(++ordinal);
+                    arpByVdom.put(label, ordinal > MAX_VDOMS ? null : vdomArp(session, approved.get(Read.ARP), vdom));
+                }
+                int sum = 0;
+                boolean complete = !arpByVdom.isEmpty();
+                for (Integer count : arpByVdom.values()) { if (count == null) complete = false; else sum += count; }
+                arpEntries = complete ? sum : null;
+            }
+            var reading = new TrafficArpCheck.Reading(performanceParsed.bytesPerSecond(), arpEntries, performanceParsed.averageSessions(),
+                arpByVdom, enterGlobal ? "BOX" : null);
             var haParsed = FgtFailoverChecks.parseHaStatus(ha.orElse(null));
             var configParsed = FgtFailoverChecks.parseHaConfig(config.orElse(null));
             var sumsParsed = FgtFailoverChecks.parseChecksums(sums.orElse(null));
@@ -314,6 +343,41 @@ public final class FgtFailoverJobExecutor {
             parsed.serial(), parsed.version().isPresent(), traffic);
     }
 
+    /**
+     * The VDOM names of {@code show system interface} (the inventory's own enumeration), sorted so that the ordinal given to a
+     * VDOM does not depend on the order the device printed its interfaces. A name outside FortiOS's own rules
+     * ({@link FortiGatePlan#validVdom}) can not be put in "edit": it stays in the list and is counted as a VDOM that
+     * could not be read, so the count of VDOMs stays true.
+     */
+    private static java.util.List<String> vdomNames(String listing) {
+        java.util.Set<String> names = new java.util.TreeSet<>();
+        for (FortiGatePlan.Iface iface : FortiGatePlan.parseInterfaces(listing)) names.add(iface.vdom());
+        return new ArrayList<>(names);
+    }
+
+    /** One VDOM's ARP count: "config vdom", "edit <vdom>", the read, "end". Null (unread) when a move or the read fails. */
+    private Integer vdomArp(TransportSession session, GateResolution.Known gate, String vdom) throws InterruptedException {
+        if (!FortiGatePlan.validVdom(vdom)) return null;
+        boolean entered = false;
+        try {
+            entered = moveChecked(session, FortiGatePlan.CONFIG_VDOM) && moveChecked(session, FortiGatePlan.editVdom(vdom));
+            if (!entered) return null;
+            Optional<String> arp = read(session, gate, Read.ARP);
+            Integer count = FgtFailoverChecks.arpEntries(arp.orElse(null));
+            logShape(Read.ARP, arp, count == null);
+            return count;
+        } finally {
+            move(session, FortiGatePlan.END);
+        }
+    }
+
+    /** A context move whose refusal is known: false when the shell answered with an error. */
+    private boolean moveChecked(TransportSession session, String command) {
+        ExecResult result = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(
+            () -> ssh.execInteractive(session, new ExecSpec(command, true), Duration.ofSeconds(30)));
+        return result instanceof ExecResult.Completed completed && completed.output() != null && !FortiGatePlan.isCliError(completed.output());
+    }
+
     /** A context move ("config global", "end"): the answer is the new prompt; it is never a read and never recorded. */
     private void move(TransportSession session, String command) {
         com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(
@@ -328,7 +392,7 @@ public final class FgtFailoverJobExecutor {
         if (attempt == null) throw new Stop("PRE_CONTACT_RECORD_FAILED");
         if (!attempts.markBoundaryCrossed(attempt, epoch)) throw new Stop("PRE_CONTACT_UNCERTAIN");
         store.command(runId, gate.gateId());
-        Duration timeout = Duration.ofSeconds(gate.timeoutS()).compareTo(READ_CAP) > 0 ? READ_CAP : Duration.ofSeconds(gate.timeoutS());
+        Duration timeout = read != Read.INTERFACES && Duration.ofSeconds(gate.timeoutS()).compareTo(READ_CAP) > 0 ? READ_CAP : Duration.ofSeconds(gate.timeoutS());
         ExecResult result = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(
             () -> ssh.execInteractive(session, new ExecSpec(read.command, true), timeout));
         if (!(result instanceof ExecResult.Completed completed) || FortiGatePlan.isCliError(completed.output())

@@ -245,6 +245,14 @@ public final class ReadinessCheckView {
         if (!traffic && !arp) return "Traffic rate and ARP count unavailable";
         StringBuilder text=new StringBuilder(traffic ? rate(d.path("trafficBytesPerSecond")) : "Traffic rate unavailable")
             .append(", ").append(arp ? d.path("arpEntries").asLong()+" ARP entries" : "ARP count unavailable");
+        if (d.path("arpByVdom").isObject()) {
+            // Per VDOM by ordinal (VDOM names are never stored); a VDOM that could not be read maps to null.
+            var counts=new java.util.ArrayList<String>();
+            d.path("arpByVdom").fields().forEachRemaining(e -> counts.add(e.getValue().isIntegralNumber() ? e.getValue().asText() : "unread"));
+            text.append(" in ").append(counts.size()).append(counts.size()==1 ? " VDOM" : " VDOMs");
+            if (!counts.isEmpty()) text.append(" (").append(String.join(", ",counts)).append(")");
+        }
+        if ("BOX".equals(d.path("trafficScope").asText())) text.append("; traffic is box-wide");
         if (d.path("averageSessions").isIntegralNumber()) text.append(", ").append(d.path("averageSessions").asLong()).append(" average sessions");
         if (reason.endsWith("_ZERO")) text.append(" (a zero may be a quiet window or an empty table)");
         if (d.path("previousArpEntries").isIntegralNumber() && measuredRate(d.path("previousTrafficBytesPerSecond"))) {
@@ -252,6 +260,8 @@ public final class ReadinessCheckView {
                 .append(d.path("previousArpEntries").asLong()).append(" ARP entries");
             if (d.path("trafficRatio").isNumber()) text.append("; traffic ").append(percent(d.path("trafficRatio").asDouble()));
             if (d.path("arpRatio").isNumber()) text.append("; ARP ").append(percent(d.path("arpRatio").asDouble()));
+            if (d.path("arpDroppedVdoms").isIntegralNumber() && d.path("arpDroppedVdoms").asLong()>0)
+                text.append("; ").append(d.path("arpDroppedVdoms").asLong()).append(" VDOM ARP tables below 50% of the earlier run");
             if (d.path("trafficDropped").asBoolean(false) || d.path("arpDropped").asBoolean(false)) {
                 var dropped=new java.util.ArrayList<String>();
                 if (d.path("trafficDropped").asBoolean(false)) dropped.add("traffic");

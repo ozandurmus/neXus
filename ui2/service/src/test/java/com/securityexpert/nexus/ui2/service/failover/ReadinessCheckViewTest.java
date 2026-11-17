@@ -272,4 +272,15 @@ class ReadinessCheckViewTest {
         assertEquals("Traffic rate and ARP count unavailable",
             vendorRow("palo_alto",8,"UNKNOWN","{\"reason\":\"TRAFFIC_AND_ARP_UNAVAILABLE\"}").get("summary"));
     }
+    @Test void multiVdomTrafficAndArpShowsCountsByOrdinalTheBoxScopeAndUnreadVdoms() throws Exception {
+        assertEquals("2.5 KB/s, 10 ARP entries in 3 VDOMs (2, 5, 3); traffic is box-wide (as the primary reports)",
+            vendorRow("fortinet",10,"PASS","{\"reason\":\"TRAFFIC_AND_ARP_PRESENT\",\"trafficBytesPerSecond\":2500,\"arpEntries\":10,"
+                +"\"trafficScope\":\"BOX\",\"arpByVdom\":{\"1\":2,\"2\":5,\"3\":3},\"arpVdomCount\":3,\"arpVdomUnknown\":0}").get("summary"));
+        assertEquals("2.5 KB/s, ARP count unavailable in 3 VDOMs (2, unread, 3); traffic is box-wide (as the primary reports)",
+            vendorRow("fortinet",10,"UNKNOWN","{\"reason\":\"ARP_UNAVAILABLE\",\"trafficBytesPerSecond\":2500,\"trafficScope\":\"BOX\","
+                +"\"arpByVdom\":{\"1\":2,\"2\":null,\"3\":3},\"arpVdomUnknown\":1}").get("summary"));
+        String withDrop=(String)vendorRow("fortinet",10,"PASS","{\"trafficBytesPerSecond\":2500,\"arpEntries\":10,\"previousTrafficBytesPerSecond\":2500,"
+            +"\"previousArpEntries\":20,\"arpRatio\":0.5,\"arpDropped\":false,\"arpDroppedVdoms\":1}").get("summary");
+        assertTrue(withDrop.contains("1 VDOM ARP tables below 50% of the earlier run"),withDrop);
+    }
 }

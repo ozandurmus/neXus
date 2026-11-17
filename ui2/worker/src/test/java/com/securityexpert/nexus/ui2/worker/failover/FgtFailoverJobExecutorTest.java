@@ -42,6 +42,11 @@ class FgtFailoverJobExecutorTest {
     private static final String ARP = "Address           Age(min)   Hardware Addr      Interface\n"
         + "192.0.2.1         0          00:00:5e:00:53:01  port1\n192.0.2.2         3          00:00:5e:00:53:02  port1\n"
         + "192.0.2.3         10         00:00:5e:00:53:03  port2\n";
+    private static String arpWith(int entries) {
+        StringBuilder b = new StringBuilder("Address           Age(min)   Hardware Addr      Interface\n");
+        for (int i = 1; i <= entries; i++) b.append("192.0.2.").append(i).append("         0          00:00:5e:00:53:").append(String.format("%02x", i)).append("  port1\n");
+        return b.toString();
+    }
     private static final Set<String> TRAFFIC_GATES = Set.of("fgt_failover_performance_status", "fgt_failover_arp");
     private static Optional<JooqCpFailoverRepository.Check> previousTraffic = Optional.empty();
     @org.junit.jupiter.api.BeforeEach void resetPrevious() { previousTraffic = Optional.empty(); }
@@ -80,10 +85,31 @@ class FgtFailoverJobExecutorTest {
                     }
                 });
         }
+        /** Multi-VDOM ARP fixtures: VDOM name -> number of entries; a name in {@code unreadable} answers with a CLI error; one in {@code refusedEdit} refuses "edit". */
+        java.util.Map<String, Integer> vdoms = new java.util.TreeMap<>(java.util.Map.of("Cust-A", 2, "Cust-B", 5, "root", 3));
+        java.util.Set<String> unreadable = new java.util.HashSet<>(), refusedEdit = new java.util.HashSet<>();
+        String currentVdom;
         private String answer(String command) {
+            if (command.equals("config vdom")) return "FGT-SYNTH-1 (vdom) # ";
+            if (command.startsWith("edit ")) {
+                String name = command.substring(5);
+                if (refusedEdit.contains(name)) return "Command fail. Return code -3\n";
+                currentVdom = name;
+                return "FGT-SYNTH-1 (" + name + ") # ";
+            }
+            if (command.equals("show system interface")) {
+                StringBuilder b = new StringBuilder("config system interface\n");
+                int i = 0;
+                for (String name : vdoms.keySet()) b.append("    edit \"port").append(++i).append("\"\n        set vdom \"").append(name).append("\"\n        set type physical\n    next\n");
+                return b.append("end\n").toString();
+            }
+            if (command.equals("get system arp") && currentVdom != null) {
+                if (unreadable.contains(currentVdom)) return "Command fail. Return code -3\n";
+                return arpWith(vdoms.get(currentVdom));
+            }
             switch (command) {
                 case "config global" -> { inGlobal = true; return "FGT-SYNTH-1 (global) # "; }
-                case "end" -> { inGlobal = false; return "FGT-SYNTH-1 # "; }
+                case "end" -> { inGlobal = false; currentVdom = null; return "FGT-SYNTH-1 # "; }
                 case "get system status" -> {
                     if (statusRefusedAtTopLevel && !inGlobal) return "Command fail. Return code -1\n";
                     return status(SERIAL_A, multiVdom);
@@ -293,13 +319,12 @@ class FgtFailoverJobExecutorTest {
         assertTrue(out.checks().contains("10:UNKNOWN"));
         assertTrue(out.derived().get(out.derived().size() - 1).contains("GATE_NOT_SIGNED_OFF"));
     }
-    @Test void signedOffTrafficReadsAreSentOnceInTheGlobalContextAfterTheOtherReads() {
+    @Test void aSingleVdomUnitReadsTrafficAndArpAtTheTopLevelAsBefore() {
         Script script = new Script();
-        script.multiVdom = true;
         Outcome out = run(script, signedOffWithTraffic(), "READINESS", ON, CLUSTER);
-        assertEquals(List.of("get system status", "config global", "get system ha status", "show full-configuration system ha",
+        assertEquals(List.of("get system status", "get system ha status", "show full-configuration system ha",
             "diagnose sys ha checksum cluster", "diagnose sys ha dump-by group", "execute ha failover status",
-            "get system performance status", "get system arp", "end"), script.commands);
+            "get system performance status", "get system arp"), script.commands);
         assertEquals(1, script.connects);
         assertEquals(8, out.ledgered());
         assertEquals("READY", out.outcome());
@@ -308,8 +333,92 @@ class FgtFailoverJobExecutorTest {
         assertTrue(evidence.contains("\"trafficBytesPerSecond\":2500"), evidence);
         assertTrue(evidence.contains("\"arpEntries\":3"), evidence);
         assertTrue(evidence.contains("\"averageSessions\":1234"), evidence);
-        assertFalse(evidence.contains("previous"));
+        assertFalse(evidence.contains("previous") || evidence.contains("arpByVdom") || evidence.contains("trafficScope"), evidence);
         for (String forbidden : List.of("192.0.2.", "00:00:5e", "port1")) assertFalse(String.join("\n", out.derived()).contains(forbidden), forbidden);
+    }
+    @Test void aMultiVdomUnitReadsArpInsideEachVdomWithTheApprovedMovesAndLeavesEachOne() {
+        Script script = new Script();
+        script.multiVdom = true;
+        Outcome out = run(script, signedOffWithTraffic(), "READINESS", ON, CLUSTER);
+        assertEquals(List.of("get system status", "config global", "get system ha status", "show full-configuration system ha",
+            "diagnose sys ha checksum cluster", "diagnose sys ha dump-by group", "execute ha failover status",
+            "get system performance status", "show system interface", "end",
+            "config vdom", "edit Cust-A", "get system arp", "end",
+            "config vdom", "edit Cust-B", "get system arp", "end",
+            "config vdom", "edit root", "get system arp", "end"), script.commands);
+        assertEquals(1, script.connects);
+        assertEquals(11, out.ledgered(), "status, five HA reads, performance, interface listing, three ARP reads");
+        assertEquals("READY", out.outcome());
+        String evidence = out.derived().get(out.derived().size() - 1);
+        assertTrue(out.checks().contains("10:PASS"));
+        assertTrue(evidence.contains("\"arpEntries\":10"), "2 + 5 + 3: " + evidence);
+        assertTrue(evidence.contains("\"arpByVdom\":{\"1\":2,\"2\":5,\"3\":3}"), evidence);
+        assertTrue(evidence.contains("\"trafficScope\":\"BOX\"") && evidence.contains("\"trafficBytesPerSecond\":2500"), evidence);
+        String all = String.join("\n", out.derived());
+        for (String forbidden : List.of("Cust-A", "Cust-B", "root", "192.0.2.", "00:00:5e", "port1")) assertFalse(all.contains(forbidden), forbidden);
+    }
+    @Test void aVdomWhoseArpFailsMakesTheTotalUnknownButKeepsTheOtherCounts() {
+        for (boolean refuseTheMove : new boolean[] {false, true}) {
+            Script script = new Script();
+            script.multiVdom = true;
+            if (refuseTheMove) script.refusedEdit.add("Cust-B"); else script.unreadable.add("Cust-B");
+            Outcome out = run(script, signedOffWithTraffic(), "READINESS", ON, CLUSTER);
+            String evidence = out.derived().get(out.derived().size() - 1);
+            assertEquals("READY", out.outcome(), "information only");
+            assertTrue(out.checks().contains("10:UNKNOWN"));
+            assertTrue(evidence.contains("ARP_UNAVAILABLE"), evidence);
+            assertFalse(evidence.contains("\"arpEntries\""), evidence);
+            assertTrue(evidence.contains("\"arpByVdom\":{\"1\":2,\"2\":null,\"3\":3}"), evidence);
+            assertTrue(evidence.contains("\"arpVdomUnknown\":1"), evidence);
+            // Every VDOM that was entered is left again, and a refused "edit" is not followed by a read in the wrong context.
+            long moves = script.commands.stream().filter("config vdom"::equals).count();
+            assertEquals(3, moves);
+            assertEquals(3, script.commands.stream().filter("end"::equals).count() - 1, "one end per VDOM after the global one");
+            assertEquals(refuseTheMove ? 2 : 3, script.count("get system arp"));
+            assertEquals("end", script.commands.get(script.commands.size() - 1));
+        }
+    }
+    @Test void anEarlierMultiVdomRunGivesPerVdomRatiosAndCountsTheDrops() {
+        previousTraffic = Optional.of(new JooqCpFailoverRepository.Check("pre", DEVICE, null, 10, "PASS",
+            "{\"trafficBytesPerSecond\":2500,\"arpEntries\":20,\"arpByVdom\":{\"1\":4,\"2\":5,\"3\":11}}", Instant.EPOCH));
+        Script script = new Script();
+        script.multiVdom = true;
+        Outcome out = run(script, signedOffWithTraffic(), "READINESS", ON, CLUSTER);
+        String evidence = out.derived().get(out.derived().size() - 1);
+        assertEquals("READY", out.outcome());
+        assertTrue(evidence.contains("\"arpRatio\":0.5") && evidence.contains("\"arpDropped\":false"), evidence);
+        assertTrue(evidence.contains("\"arpDroppedVdoms\":1"), "only 3 of 11 is below 0.50 (2 of 4 is exactly half): " + evidence);
+        assertTrue(out.checks().contains("10:PASS"));
+    }
+    @Test void aDifferentNumberOfVdomsGivesNoPerVdomComparison() {
+        previousTraffic = Optional.of(new JooqCpFailoverRepository.Check("pre", DEVICE, null, 10, "PASS",
+            "{\"trafficBytesPerSecond\":2500,\"arpEntries\":20,\"arpByVdom\":{\"1\":4,\"2\":16}}", Instant.EPOCH));
+        Script script = new Script();
+        script.multiVdom = true;
+        Outcome out = run(script, signedOffWithTraffic(), "READINESS", ON, CLUSTER);
+        String evidence = out.derived().get(out.derived().size() - 1);
+        assertTrue(evidence.contains("\"previousArpEntries\":20"), evidence);
+        assertFalse(evidence.contains("arpDroppedVdoms"), evidence);
+    }
+    @Test void aMultiVdomUnitWithADraftedArpGateOrAnUnavailableListingSendsNoVdomMoves() {
+        Script script = new Script();
+        script.multiVdom = true;
+        run(script, signedOff(), "READINESS", ON, CLUSTER);
+        assertTrue(script.commands.stream().noneMatch(c -> c.equals("config vdom") || c.startsWith("edit ") || c.equals("show system interface")
+            || c.equals("get system arp") || c.equals("get system performance status")), script.commands.toString());
+        // The ARP gate approved but the listing read refused (a registry without the inventory row): nothing is guessed.
+        var rows = fixtureRows().stream().filter(r -> !r.gateId().equals("fgt_show_system_interface")).toList();
+        GateRegistryPort gates = key -> rows.stream().filter(r -> r.key().equals(key)).map(r -> TRAFFIC_GATES.contains(r.gateId())
+            ? new GateRow(r.gateId(), r.vendor(), r.platformRoleScope(), r.shellContext(), r.transportKind(), r.canonicalCommandKey(),
+                r.actionClass(), SignOffState.SIGNED_OFF, r.timeoutS(), r.retryRule(), r.maxFrequency(), r.sessionReuseRule(),
+                r.unsupportedBehaviorRef(), r.secretOutputRisk(), r.safeTelemetryFields(), r.sourceDocumentPointer()) : r).toList();
+        Script other = new Script();
+        other.multiVdom = true;
+        Outcome out = run(other, gates, "READINESS", ON, CLUSTER);
+        assertTrue(other.commands.stream().noneMatch(c -> c.equals("config vdom") || c.equals("get system arp")), other.commands.toString());
+        assertEquals("READY", out.outcome());
+        assertTrue(out.checks().contains("10:UNKNOWN"));
+        assertTrue(out.derived().get(out.derived().size() - 1).contains("GATE_UNAVAILABLE"));
     }
     @Test void anEarlierRunGivesTheBeforeAfterRatiosAndAFlagWithoutBlocking() {
         previousTraffic = Optional.of(new JooqCpFailoverRepository.Check("pre", DEVICE, null, 10, "PASS",
