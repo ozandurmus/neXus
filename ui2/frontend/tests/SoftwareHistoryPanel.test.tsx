@@ -41,6 +41,37 @@ describe("device software history", () => {
   });
 });
 
+describe("Check Point install log", () => {
+  const ev = (o: Partial<api.CpInstallEvent>): api.CpInstallEvent => ({ kind: "JUMBO_INSTALL", product_version: "R81.20", jumbo_take: null,
+    installed_at_local: "2026-01-24T03:10:51", file_name: "install_SecurePlatform_HOTFIX_R81_20_JUMBO_HF_MAIN_3.log", first_observed_at: "2026-11-17T10:00:00Z", ...o });
+  it("shows the events below the stretches in the device's own clock, only when there are some", async () => {
+    vi.mocked(api.getDeviceSoftwareHistory).mockResolvedValue({ device_id: "dev-1", known: true, stretches: [stretch({})], install_events: [
+      ev({ jumbo_take: 119 }), ev({ jumbo_take: null, installed_at_local: "2025-01-02T04:05:06", file_name: "b.log" }),
+      ev({ kind: "BASE_INSTALL", file_name: "install_fw1_R81.20.elg", installed_at_local: "2024-02-23T12:33:58" })] });
+    themed(<DeviceSoftwareHistory deviceId="dev-1" />);
+    const table = await screen.findByRole("table", { name: "Check Point install log" });
+    expect(within(table).getByText("Jumbo R81.20 Take 119")).toBeInTheDocument();
+    expect(within(table).getByText("Jumbo R81.20 (take not in log)")).toBeInTheDocument();
+    expect(within(table).getByText("Base install R81.20")).toBeInTheDocument();
+    expect(within(table).getByText("2026-01-24 03:10:51")).toBeInTheDocument();
+    expect(screen.getByText(/device's own clock/)).toBeInTheDocument();
+  });
+  it("shows no install table without events", async () => {
+    vi.mocked(api.getDeviceSoftwareHistory).mockResolvedValue({ device_id: "dev-1", known: true, stretches: [stretch({})], install_events: [] });
+    themed(<DeviceSoftwareHistory deviceId="dev-1" />);
+    await screen.findByRole("table", { name: "Software version history" });
+    expect(screen.queryByRole("table", { name: "Check Point install log" })).toBeNull();
+  });
+  it("lists the fleet's installs in Recent upgrades", async () => {
+    vi.mocked(api.getSoftwareChanges).mockResolvedValue({ days: 90, since: "2026-08-01T00:00:00Z", changes: [], install_events: [
+      { ...ev({ jumbo_take: 119 }), device_id: "dev-1", hostname: "FW-TANGO-04" }] });
+    themed(<RecentUpgradesPanel />);
+    const table = await screen.findByRole("table", { name: "Check Point installs" });
+    expect(within(table).getByText("FW-TANGO-04")).toBeInTheDocument();
+    expect(within(table).getByText("Jumbo R81.20 Take 119")).toBeInTheDocument();
+  });
+});
+
 describe("recent upgrades", () => {
   it("shows from, to and window per device and an empty message", async () => {
     vi.mocked(api.getSoftwareChanges).mockResolvedValue({ days: 90, since: "2026-08-01T00:00:00Z", changes: [{

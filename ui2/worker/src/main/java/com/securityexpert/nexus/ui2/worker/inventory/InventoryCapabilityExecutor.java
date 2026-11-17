@@ -21,6 +21,7 @@ import com.securityexpert.nexus.ui2.jobs.transport.ExecSpec;
 import com.securityexpert.nexus.ui2.jobs.transport.TransportSession;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiResult;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiSpec;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceInstallEventRepository;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryAddress;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryHaFact;
@@ -32,6 +33,7 @@ import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointClusterVirtual
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointClusterVirtualInterfaceParser.VirtualInterfaceAddress;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointHaStateParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointFwGetifsParser;
+import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointInstallLogParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointIpAddrParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointIpRouteParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointVsxStatParser;
@@ -100,29 +102,29 @@ public final class InventoryCapabilityExecutor {
                 System.getenv().getOrDefault("UI2_CP_MDS_FINGERPRINT_ACCEPT_ONCE", "0")));
     }
 
-    /** V245 one-off: the device id named by {@code UI2_CP_INSTALL_HISTORY_DISCOVERY_DEVICE}; empty (default) = never. */
-    static String installHistoryDiscoveryDevice() {
-        return System.getProperty("ui2.cp.install-history.discovery-device",
-                System.getenv().getOrDefault("UI2_CP_INSTALL_HISTORY_DISCOVERY_DEVICE", "")).trim();
+    /** V246: the install-history read is on by default; {@code UI2_CP_INSTALL_HISTORY_READ=0} (property
+     *  {@code ui2.cp.install-history.read}) turns it off. */
+    static boolean installHistoryReadEnabled() {
+        return !"0".equals(System.getProperty("ui2.cp.install-history.read",
+                System.getenv().getOrDefault("UI2_CP_INSTALL_HISTORY_READ", "1")).trim());
     }
 
-    /** V245 one-off decision: physical gateway context only, the switch names exactly this device, never VSX/mgmt/clish. */
-    static boolean installHistoryDiscoveryApplies(String switchValue, String deviceId, boolean managementServer,
-            boolean vsxHost, boolean clishLanding) {
-        return switchValue != null && !switchValue.isBlank() && switchValue.equals(deviceId)
-                && !managementServer && !vsxHost && !clishLanding;
-    }
-
-    /** The V245 answer as log lines: blank lines dropped, every character outside file-name/date characters replaced
-     *  by '?', each line cut at 160 characters, at most 90 lines. */
-    static List<String> installHistoryDiscoveryLogLines(String output) {
-        if (output == null) {
-            return List.of();
+    /** Why the install-history read is not sent for this run, or empty when it applies (Check Point gateway context only). */
+    static Optional<String> installHistorySkipReason(boolean switchOn, boolean managementServer, boolean vsxHost,
+            boolean clishLanding) {
+        if (!switchOn) {
+            return Optional.of("switch_off");
         }
-        return output.lines().map(String::strip).filter(l -> !l.isEmpty())
-                .map(l -> l.replaceAll("[^A-Za-z0-9_.:/ +\\-]", "?"))
-                .map(l -> l.length() > 160 ? l.substring(0, 160) : l)
-                .limit(90).toList();
+        if (managementServer) {
+            return Optional.of("management_server");
+        }
+        if (vsxHost) {
+            return Optional.of("vsx_host");
+        }
+        if (clishLanding) {
+            return Optional.of("clish_landing");
+        }
+        return Optional.empty();
     }
 
     /** The gated timeout of {@code cp_identity_mds_ha_status} (V194: 60 s). */
@@ -581,24 +583,23 @@ public final class InventoryCapabilityExecutor {
                     LOG.log(System.Logger.Level.WARNING, "[CP_MDS_HA] outcome=READ_FAILED {0}", e.getClass().getSimpleName());
                 }
             }
-            // V245 one-off (PO 2026-11-16, gate cp_install_history_discovery_once): once, one device, plain expert shell,
-            // 30 s, no retry. The answer is only recorded in the job transcript by the transport; a failure changes nothing.
-            if (installHistoryDiscoveryApplies(installHistoryDiscoveryDevice(), deviceId, managementServer, vsxHost, clishLanding)) {
+            // Install history (V246, PO 2026-11-17, gate cp_install_history_inventory): every run, Check Point gateway context
+            // only, plain expert shell, 30 s, no retry. Parsed in memory; a failure changes nothing about the inventory.
+            List<DeviceInstallEventRepository.Observed> installEvents = List.of();
+            Optional<String> installSkip = installHistorySkipReason(installHistoryReadEnabled(), managementServer, vsxHost, clishLanding);
+            if (installSkip.isEmpty()) {
                 try {
-                    String history = execOutput(session, InventoryReadPlan.CP_INSTALL_HISTORY_DISCOVERY_ONCE, false, READ_TIMEOUT);
-                    LOG.log(System.Logger.Level.INFO, "[CP_INSTALL_HISTORY_DISCOVERY] length={0}", history.length());
-                    // Inventory jobs keep no transcript: the approved answer (file names and time stamps only) goes to
-                    // the worker log, reduced to file-name and date characters, at most 90 lines.
-                    for (String line : installHistoryDiscoveryLogLines(history)) {
-                        LOG.log(System.Logger.Level.INFO, "[CP_INSTALL_HISTORY_DISCOVERY] line={0}", line);
-                    }
+                    String history = execOutput(session, InventoryReadPlan.CP_INSTALL_HISTORY, false, READ_TIMEOUT);
+                    installEvents = CheckPointInstallLogParser.parse(history);
+                    long base = installEvents.stream().filter(e -> e.kind() == DeviceInstallEventRepository.Kind.BASE_INSTALL).count();
+                    LOG.log(System.Logger.Level.INFO, "[CP_INSTALL_HISTORY] outcome=READ events={0} base={1} jumbo={2}",
+                            installEvents.size(), base, installEvents.size() - base);
                 } catch (RuntimeException e) {
                     com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
-                    LOG.log(System.Logger.Level.WARNING, "[CP_INSTALL_HISTORY_DISCOVERY] outcome=READ_FAILED {0}", e.getClass().getSimpleName());
+                    LOG.log(System.Logger.Level.WARNING, "[CP_INSTALL_HISTORY] outcome=READ_FAILED {0}", e.getClass().getSimpleName());
                 }
-            } else if (deviceId.equals(installHistoryDiscoveryDevice())) {
-                LOG.log(System.Logger.Level.INFO, "[CP_INSTALL_HISTORY_DISCOVERY] outcome=SKIPPED management={0} vsx={1} clish={2}",
-                        managementServer, vsxHost, clishLanding);
+            } else {
+                LOG.log(System.Logger.Level.INFO, "[CP_INSTALL_HISTORY] outcome=SKIPPED reason={0}", installSkip.get());
             }
             // Lifecycle reads, group A: last, after every other read of the run; never changes the result.
             if (lifecycleReads.anyFor(deviceId)) {
@@ -608,7 +609,7 @@ public final class InventoryCapabilityExecutor {
             InventoryResult.ObservedIdentity observed = new InventoryResult.ObservedIdentity(gaiaHostname,
                     observedModel, gaiaVersion, mdsHaRole);
             return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString),
-                    Optional.of(platformFacts), observed);
+                    Optional.of(platformFacts), observed, List.of(), Optional.empty(), installEvents);
         } finally {
             transport.disconnect(session);
         }

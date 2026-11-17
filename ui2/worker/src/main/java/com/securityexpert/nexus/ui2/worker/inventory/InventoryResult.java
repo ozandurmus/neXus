@@ -3,6 +3,7 @@ package com.securityexpert.nexus.ui2.worker.inventory;
 import java.util.List;
 import java.util.Optional;
 
+import com.securityexpert.nexus.ui2.persistence.device.DeviceInstallEventRepository;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryHaFact;
 
@@ -36,20 +37,28 @@ public sealed interface InventoryResult {
     /**
      * {@code panZones}: the zone names of each virtual system read from the stored effective-running configuration this run
      * derived its interfaces from (V229); empty when this run did not read it.
+     * {@code installEvents}: the Check Point base/Jumbo install dates read from the device's install log (V246); empty otherwise.
      */
     record Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems,
             Optional<PlatformFactsRead> platformFacts, ObservedIdentity observedIdentity, List<String> notCollected,
-            Optional<PanZoneRead> panZones)
+            Optional<PanZoneRead> panZones, List<DeviceInstallEventRepository.Observed> installEvents)
             implements InventoryResult {
 
         public Completed {
             panZones = panZones == null ? Optional.empty() : panZones;
+            installEvents = installEvents == null ? List.of() : List.copyOf(installEvents);
             notCollected = notCollected == null ? List.of() : List.copyOf(notCollected);
             contexts = contexts == null ? List.of() : List.copyOf(contexts);
             haFacts = haFacts == null ? List.of() : List.copyOf(haFacts);
             virtualSystems = virtualSystems == null ? Optional.empty() : virtualSystems;
             platformFacts = platformFacts == null ? Optional.empty() : platformFacts;
             observedIdentity = observedIdentity == null ? ObservedIdentity.NONE : observedIdentity;
+        }
+
+        public Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems,
+                Optional<PlatformFactsRead> platformFacts, ObservedIdentity observedIdentity, List<String> notCollected,
+                Optional<PanZoneRead> panZones) {
+            this(contexts, haFacts, virtualSystems, platformFacts, observedIdentity, notCollected, panZones, List.of());
         }
 
         public Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems,

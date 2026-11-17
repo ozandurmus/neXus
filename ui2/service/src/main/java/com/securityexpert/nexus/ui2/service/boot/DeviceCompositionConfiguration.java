@@ -212,6 +212,12 @@ public class DeviceCompositionConfiguration {
     }
 
     @Bean
+    public com.securityexpert.nexus.ui2.persistence.device.DeviceInstallEventRepository deviceInstallEventRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.device.JooqDeviceInstallEventRepository(transactionBoundary);
+    }
+
+    @Bean
     public CredentialReferenceRepository credentialReferenceRepository(TransactionBoundary transactionBoundary) {
         return new JooqCredentialReferenceRepository(transactionBoundary);
     }

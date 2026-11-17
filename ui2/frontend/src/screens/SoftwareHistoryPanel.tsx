@@ -1,5 +1,5 @@
 import { Alert, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material";
-import { getDeviceSoftwareHistory, getSoftwareChanges, type SoftwareChange, type SoftwareStretch } from "../auth/adminApi";
+import { getDeviceSoftwareHistory, getSoftwareChanges, type CpInstallEvent, type SoftwareChange, type SoftwareStretch } from "../auth/adminApi";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { M3Button } from "../shell/M3Widgets";
 import { formatStamp } from "../shell/time";
@@ -12,6 +12,14 @@ export function changeWindowText(s: Pick<SoftwareStretch, "window_start" | "wind
   if (!s.window_start || !s.window_end) return "UNKNOWN (first version seen)";
   return `${formatStamp(s.window_start)} to ${formatStamp(s.window_end)}`;
 }
+/** The device prints its own clock with no offset: shown as it is, never converted to the display zone. */
+export const deviceLocalStamp = (iso: string) => iso.replace("T", " ").slice(0, 19);
+/** "Base install R81.20", "Jumbo R81.20 Take 119" or "Jumbo R81.20 (take not in log)". */
+export function installEventText(e: Pick<CpInstallEvent, "kind" | "product_version" | "jumbo_take">): string {
+  if (e.kind === "BASE_INSTALL") return `Base install ${e.product_version}`;
+  return e.jumbo_take != null ? `Jumbo ${e.product_version} Take ${e.jumbo_take}` : `Jumbo ${e.product_version} (take not in log)`;
+}
+const INSTALL_CLOCK_NOTE = "Times are the device's own clock, as printed in its install log.";
 const apiError = (e: unknown) => e instanceof Error ? e.message : "Software history could not be loaded";
 
 /**
@@ -36,6 +44,16 @@ export function DeviceSoftwareHistory({ deviceId }: { deviceId: string }) {
         </TableRow>)}</TableBody>
       </Table></TableContainer>
       <Typography variant="caption">{`A change is dated by what ${PRODUCT_NAME} observed: it happened after the last time the previous version was seen and no later than the first time the new one was. It is not a vendor upgrade log.`}</Typography>
+    </>}
+    {history.data && (history.data.install_events?.length ?? 0) > 0 && <>
+      <Typography variant="subtitle2">Check Point install log</Typography>
+      <TableContainer><Table size="small" aria-label="Check Point install log">
+        <TableHead><TableRow>{["Installed (device local time)", "What", "File"].map(h => <TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead>
+        <TableBody>{history.data.install_events!.map((e, i) => <TableRow key={`${e.file_name}-${e.installed_at_local}-${i}`}>
+          <TableCell>{deviceLocalStamp(e.installed_at_local)}</TableCell><TableCell>{installEventText(e)}</TableCell><TableCell>{e.file_name}</TableCell>
+        </TableRow>)}</TableBody>
+      </Table></TableContainer>
+      <Typography variant="caption">{INSTALL_CLOCK_NOTE}</Typography>
     </>}
   </Stack>;
 }
@@ -62,6 +80,17 @@ export function RecentUpgradesPanel() {
           {!rows.length && <TableRow><TableCell colSpan={4}>No software changes observed in this period</TableCell></TableRow>}
         </TableBody>
       </Table></TableContainer>
+      {(changes.data.install_events?.length ?? 0) > 0 && <>
+        <Typography variant="subtitle2">Check Point installs (device install log)</Typography>
+        <TableContainer><Table size="small" aria-label="Check Point installs">
+          <TableHead><TableRow>{["Device", "Installed (device local time)", "What"].map(h => <TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead>
+          <TableBody>{changes.data.install_events!.map((e, i) => <TableRow key={`${e.device_id}-${e.file_name}-${e.installed_at_local}-${i}`}>
+            <TableCell><a href={`?screen=inventory&device_id=${encodeURIComponent(e.device_id)}`}>{e.hostname || e.device_id}</a></TableCell>
+            <TableCell>{deviceLocalStamp(e.installed_at_local)}</TableCell><TableCell>{installEventText(e)}</TableCell>
+          </TableRow>)}</TableBody>
+        </Table></TableContainer>
+        <Typography variant="caption">{INSTALL_CLOCK_NOTE} These dates come from the install log on the device, not from what {PRODUCT_NAME} observed.</Typography>
+      </>}
     </>}
   </Stack>;
 }

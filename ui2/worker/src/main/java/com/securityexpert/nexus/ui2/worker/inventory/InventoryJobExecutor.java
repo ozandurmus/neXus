@@ -64,6 +64,15 @@ public final class InventoryJobExecutor {
     private com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstallRepository policyInstallRepository =
             com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstallRepository.NONE;
 
+    private com.securityexpert.nexus.ui2.persistence.device.DeviceInstallEventRepository installEventRepository =
+            com.securityexpert.nexus.ui2.persistence.device.DeviceInstallEventRepository.NONE;
+
+    /** Where the Check Point install-log dates go (V246); unset, they are dropped. */
+    public InventoryJobExecutor withInstallEventRepository(com.securityexpert.nexus.ui2.persistence.device.DeviceInstallEventRepository repository) {
+        this.installEventRepository = Objects.requireNonNull(repository, "repository");
+        return this;
+    }
+
     private com.securityexpert.nexus.ui2.persistence.device.PanVsysZoneRepository panZoneRepository =
             com.securityexpert.nexus.ui2.persistence.device.PanVsysZoneRepository.NONE;
 
@@ -237,6 +246,17 @@ public final class InventoryJobExecutor {
                 LOG.log(System.Logger.Level.WARNING, "[PAN_ZONE_SETS_WRITE_FAILED] Inventory job {0}: {1}", jobId, zonesFailed.getClass().getSimpleName());
             }
         });
+
+        // V246: the install dates read from the device's install log; a write that fails is logged, never fails the job.
+        if (!completed.installEvents().isEmpty()) {
+            try {
+                int written = installEventRepository.record(targetDeviceId, completed.installEvents());
+                LOG.log(System.Logger.Level.INFO, "[CP_INSTALL_HISTORY_WRITTEN] job {0}: events={1}", jobId, written);
+            } catch (RuntimeException eventsFailed) {
+                com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(eventsFailed);
+                LOG.log(System.Logger.Level.WARNING, "[CP_INSTALL_HISTORY_WRITE_FAILED] Inventory job {0}: {1}", jobId, eventsFailed.getClass().getSimpleName());
+            }
+        }
 
         long elapsed = System.currentTimeMillis() - jobStart;
         LOG.log(System.Logger.Level.INFO,
