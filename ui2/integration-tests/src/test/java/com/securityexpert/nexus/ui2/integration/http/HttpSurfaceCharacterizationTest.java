@@ -874,6 +874,8 @@ class HttpSurfaceCharacterizationTest {
             case "content-length" -> "<n>";
             case "allow" -> java.util.Arrays.stream(value.split(",\\s*")).sorted().collect(java.util.stream.Collectors.joining(", "));
             case "etag" -> "<etag>";
+            // Enterprise phase 0.3: every response carries its correlation id (a generated UUID per request).
+            case "x-request-id" -> "<request-id>";
             case "set-cookie" -> HTTP_DATE.matcher(value.replaceAll("ui2_session=[^;]*", "ui2_session=<v>")).replaceAll("<date>");
             default -> HTTP_DATE.matcher(value).replaceAll("<date>");
         };

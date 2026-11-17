@@ -7,6 +7,7 @@ header: content-type: text/plain;charset=UTF-8
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: text ok
 
 ### anon HEAD /healthz
@@ -18,6 +19,7 @@ header: content-type: text/plain;charset=UTF-8
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: <empty>
 
 ### anon POST /healthz
@@ -31,6 +33,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Method Not Allowed","path":"/healthz","status":"<n>","timestamp":"<ts>"}
 
 ### anon PUT /healthz
@@ -44,6 +47,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Method Not Allowed","path":"/healthz","status":"<n>","timestamp":"<ts>"}
 
 ### anon TRACE /healthz
@@ -57,6 +61,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Method Not Allowed","path":"/healthz","status":"<n>","timestamp":"<ts>"}
 
 ### anon GET /
@@ -71,6 +76,7 @@ header: date: <date>
 header: last-modified: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: <text/html, non-empty>
 
 ### anon GET /index.html
@@ -84,6 +90,7 @@ header: date: <date>
 header: last-modified: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: <text/html, non-empty>
 
 ### anon GET / gzip
@@ -98,6 +105,7 @@ header: date: <date>
 header: last-modified: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: <text/html, non-empty>
 
 ### anon GET hashed asset
@@ -111,6 +119,7 @@ header: date: <date>
 header: last-modified: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: <text/javascript, non-empty>
 
 ### anon GET hashed asset conditional
@@ -121,6 +130,7 @@ header: date: <date>
 header: last-modified: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: <empty>
 
 ### anon GET missing asset
@@ -134,6 +144,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/assets/does-not-exist.js","status":"<n>","timestamp":"<ts>"}
 
 ### anon GET missing static file
@@ -146,6 +157,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/does-not-exist.txt","status":"<n>","timestamp":"<ts>"}
 
 ### anon GET /session/status
@@ -158,6 +170,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":false}
 
 ### anon GET /session/status garbage cookie
@@ -170,6 +183,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":false}
 
 ### anon GET /devices (gated read)
@@ -181,6 +195,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 
 ### anon GET /api/v2/overview (gated read)
@@ -192,6 +207,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 
 ### anon GET /sessions (admin read)
@@ -203,6 +219,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 
 ### anon POST /devices/add-single (gated write)
@@ -214,6 +231,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 
 ### anon POST /role-bindings (admin write)
@@ -225,6 +243,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 
 ### anon GET unmapped route
@@ -237,6 +256,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/no-such-route","status":"<n>","timestamp":"<ts>"}
 
 ### anon GET unmapped /api route
@@ -248,6 +268,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"ACTION_MAPPING_REQUIRED"}
 
 ### anon POST unmapped route
@@ -260,6 +281,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/no-such-route","status":"<n>","timestamp":"<ts>"}
 
 ### anon DELETE unmapped route
@@ -272,6 +294,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/no-such-route","status":"<n>","timestamp":"<ts>"}
 
 ### anon POST /session/logout
@@ -285,6 +308,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID"}
 
 ### anon POST /local-credentials/change-password
@@ -297,6 +321,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"INVALID_CREDENTIALS"}
 
 ### anon GET /error
@@ -309,6 +334,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"None","status":"<n>","timestamp":"<ts>"}
 
 ### anon POST /error
@@ -321,6 +347,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"None","status":"<n>","timestamp":"<ts>"}
 
 ### anon OPTIONS /devices
@@ -332,6 +359,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"ACTION_MAPPING_REQUIRED"}
 
 ### anon OPTIONS /devices cors preflight
@@ -343,6 +371,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"ACTION_MAPPING_REQUIRED"}
 
 ### anon OPTIONS /
@@ -354,6 +383,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"ACTION_MAPPING_REQUIRED"}
 
 ### anon GET /internal/machine-session (main port)
@@ -366,6 +396,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/internal/machine-session","status":"<n>","timestamp":"<ts>"}
 
 ### anon POST /internal/machine-session (main port)
@@ -378,6 +409,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/internal/machine-session","status":"<n>","timestamp":"<ts>"}
 
 ### anon GET /internal (main port)
@@ -390,6 +422,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/internal","status":"<n>","timestamp":"<ts>"}
 
 ### anon POST /internal/advisories/paloalto (main port)
@@ -402,6 +435,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/internal/advisories/paloalto","status":"<n>","timestamp":"<ts>"}
 
 ### anon GET /devices with Origin header
@@ -413,6 +447,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 
 ### login bad password
@@ -425,6 +460,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"INVALID_CREDENTIALS"}
 
 ### login unknown user
@@ -437,6 +473,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"INVALID_CREDENTIALS"}
 
 ### login unknown mechanism
@@ -449,6 +486,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"UNKNOWN_MECHANISM"}
 
 ### login ldap not configured
@@ -461,6 +499,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"DIRECTORY_UNAVAILABLE"}
 
 ### login empty object
@@ -473,6 +512,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"INVALID_CREDENTIALS"}
 
 ### login malformed json
@@ -485,6 +525,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Bad Request","path":"/login","status":"<n>","timestamp":"<ts>"}
 
 ### login empty body
@@ -497,6 +538,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Bad Request","path":"/login","status":"<n>","timestamp":"<ts>"}
 
 ### login text/plain body
@@ -510,6 +552,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Unsupported Media Type","path":"/login","status":"<n>","timestamp":"<ts>"}
 
 ### login GET
@@ -523,6 +566,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Method Not Allowed","path":"/login","status":"<n>","timestamp":"<ts>"}
 
 ### login resolve bogus token
@@ -535,6 +579,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"LOGIN_REFUSED_ACTIVE_SESSION","reason_code":"conflict_token_expired_or_unknown"}
 
 ### login resolve empty
@@ -547,6 +592,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"LOGIN_REFUSED_ACTIVE_SESSION","reason_code":"conflict_token_expired_or_unknown"}
 
 ### admin login
@@ -560,6 +606,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### admin login again (active session)
@@ -572,6 +619,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"conflict_token":"<token>","error":"LOGIN_CONFLICT","prior_session":{"created_at":"<ts>","last_seen_at":"<ts>"}}
 
 ### admin resolve with refusal
@@ -584,6 +632,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"LOGIN_REFUSED_ACTIVE_SESSION","reason_code":"login_refused_active_session"}
 
 ### admin login again after refusal
@@ -596,6 +645,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"conflict_token":"<token>","error":"LOGIN_CONFLICT","prior_session":{"created_at":"<ts>","last_seen_at":"<ts>"}}
 
 ### admin resolve takeover
@@ -609,6 +659,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### admin old cookie after takeover
@@ -620,6 +671,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_SUPERSEDED","reason":"session is not ACTIVE: SUPERSEDED"}
 
 ### admin GET /session/status
@@ -632,6 +684,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":true,"can_read_administration":true,"csrf_token":"<token>","display_name":"nexusadmin","must_change_password":false,"permissions":["Devices","Config","Compliance","PacketAnalysis","Sanitizer","Operations","Policy","Admin"],"role_tokens":["role:viewer","role:operator","role:onboarding_admin","role:backup_admin","role:compliance_admin","role:security_admin","role:operation_admin","role:replay_viewer"]}
 
 ### admin GET /healthz
@@ -643,6 +696,7 @@ header: content-type: text/plain;charset=UTF-8
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: text ok
 
 ### admin GET /
@@ -657,6 +711,7 @@ header: date: <date>
 header: last-modified: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: <text/html, non-empty>
 
 ### admin GET hashed asset
@@ -670,6 +725,7 @@ header: date: <date>
 header: last-modified: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: <text/javascript, non-empty>
 
 ### admin GET /devices
@@ -683,6 +739,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"devices":[]}
 
 ### admin GET /api/v2/overview
@@ -697,6 +754,7 @@ header: vary: Cookie
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"attention":{"backup_missing":{"count":"<n>","of":"<n>","previous":"<n>","state":"OK"},"cluster_diff":{"count":"<n>","of":"<n>","state":"UNKNOWN","unknown":"<n>"},"config_changed":{"count":"<n>","of":"<n>","state":"OK"},"failed_jobs_24h":{"count":"<n>","last_at":null,"other_terminal_24h":"<n>","previous":"<n>","state":"OK","terminal_24h":"<n>"},"managed_not_enrolled":{"count":"<n>","of":"<n>","state":"UNKNOWN"},"stale_inventory":{"count":"<n>","of":"<n>","previous":"<n>","state":"OK"}},"compliance":{"reason":"not_evaluated","state":"UNKNOWN"},"denominators":{"active_devices":"<n>","backup_targets":"<n>","clusters":"<n>","clusters_enrolled":"<n>","enrolled_devices":"<n>","gateways":"<n>"},"estate":{"compliance_state":"UNKNOWN","counts":{"ageing":"<n>","clear":"<n>","critical":"<n>","not_assessed":"<n>","partly_assessed":"<n>"},"devices":[],"facts":{"backups":{"a":"<n>","b":"<n>"},"critical":{"state":"UNKNOWN"},"evidence":{"d":"<n>","never":"<n>","r":"<n>"}},"no_archive":"<n>"},"evidence":{"backup":{"at":null,"state":"UNKNOWN"},"compliance":{"at":null,"state":"UNKNOWN"},"configuration":{"at":null,"state":"UNKNOWN"},"inventory":{"at":null,"state":"UNKNOWN"},"jobs":{"at":null,"state":"UNKNOWN"},"platform_facts":{"at":null,"state":"UNKNOWN"}},"exceptions":{"cluster_diff":{"all_refs":[],"rows":[],"total":"<n>","unknown":"<n>"},"config_changes":{"rows":[],"total":"<n>"},"failed_jobs":{"reasons":[],"rows":[],"total":"<n>"}},"generated_at":"<ts>","inventory_age":{"gt72h":"<n>","h24_72":"<n>","lt24h":"<n>","never":"<n>","of":"<n>"},"masked":true,"nexus":{"completed_24h":"<n>","last_inventory":{"check_point":null,"palo_alto":null},"oldest_running_submitted_at":null,"running":"<n>"},"platform":{"check_point":"<n>","clusters":"<n>","devices":"<n>","evidence_at":null,"hotfix_levels":[{"count":"<n>","level":null}],"palo_alto":"<n>","versions":{"check_point":{"major":[],"minor":[],"model":[]},"palo_alto":{"major":[],"minor":[],"model":[]}}},"policy_install":{"days_2_7":"<n>","last_read_at":null,"newest_at":null,"of":"<n>","older":"<n>","oldest_at":null,"state":"UNKNOWN","today":"<n>","unknown":"<n>","yesterday":"<n>"}}
 
 ### admin GET /sessions
@@ -710,6 +768,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"absolute_lifetime_seconds":"<n>","identity_labels":{"<hex64>":"nexusadmin"},"idle_timeout_seconds":"<n>","sessions":[{"absolute_expires_at":"<ts>","actor_fingerprint":"<hex12>","created_at":"<ts>","end_reason":null,"ended_by_actor_fingerprint":null,"idle_deadline_at":"<ts>","last_seen_at":"<ts>","machine":false,"session_id":"<token>","state":"ACTIVE","superseded_by_session_id":null}]}
 
 ### admin GET /role-bindings
@@ -723,6 +782,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: [{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:replay_viewer"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:viewer"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:replay_viewer"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:viewer"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:viewer"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:replay_viewer"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:operation_admin"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:security_admin"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:compliance_admin"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:backup_admin"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:onboarding_admin"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:operator"},{"binding_id":"<id>","binding_kind":"LEGACY","created_at":"<ts>","created_by_actor_fingerprint":"system:bootstrap","directory_profile_id":null,"group_reference":"<id>","role_token":"role:viewer"}]
 
 ### admin GET /api/v2/lifecycle
@@ -735,6 +795,7 @@ header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"as_of":"<day>","devices":[],"summary":{"devices":"<n>","license_problems":"<n>","licenses_collected":"<n>","licenses_within_60_days":"<n>","lifecycle_needs_review":"<n>","lifecycle_not_evaluated":"<n>","live_patch_missing":"<n>","live_patch_not_active":"<n>","no_lifecycle_data":"<n>","past_end_of_support":"<n>","vuln_devices_affected":"<n>","vuln_devices_exploited":"<n>","vuln_devices_not_evaluated":"<n>","vuln_oldest_source_age_days":null,"within_180_days":"<n>","within_365_days":"<n>"}}
 
 ### admin GET unmapped route
@@ -747,6 +808,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/no-such-route","status":"<n>","timestamp":"<ts>"}
 
 ### admin GET unmapped /api route
@@ -758,6 +820,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"ACTION_MAPPING_REQUIRED"}
 
 ### admin GET unmapped POST-only route
@@ -771,6 +834,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"error":"NOT_FOUND"}
 
 ### admin POST unmapped route
@@ -783,6 +847,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/no-such-route","status":"<n>","timestamp":"<ts>"}
 
 ### admin POST /devices/add-single no csrf
@@ -794,6 +859,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 
 ### admin POST /devices/add-single wrong csrf
@@ -805,6 +871,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 
 ### admin POST /devices/add-single no origin
@@ -816,6 +883,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
 
 ### admin POST /devices/add-single empty object
@@ -829,6 +897,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"error":"VALIDATION_FAILED","reason_code":"vendor_hint_invalid"}
 
 ### admin POST /devices/add-single malformed json
@@ -842,6 +911,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"error":"Bad Request","path":"/devices/add-single","status":"<n>","timestamp":"<ts>"}
 
 ### admin PUT /devices/add-single
@@ -855,6 +925,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Method Not Allowed","path":"/devices/add-single","status":"<n>","timestamp":"<ts>"}
 
 ### admin POST /role-bindings empty object
@@ -868,6 +939,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"error":"AUTHZ_NOT_EVALUATED"}
 
 ### admin POST /session/logout no csrf
@@ -880,6 +952,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID"}
 
 ### admin POST /session/logout wrong csrf
@@ -892,6 +965,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID"}
 
 ### admin POST /session/logout first session
@@ -905,6 +979,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### admin login after logout
@@ -918,6 +993,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### admin GET /session/status second session
@@ -930,6 +1006,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":true,"can_read_administration":true,"csrf_token":"<token>","display_name":"nexusadmin","must_change_password":false,"permissions":["Devices","Config","Compliance","PacketAnalysis","Sanitizer","Operations","Policy","Admin"],"role_tokens":["role:viewer","role:operator","role:onboarding_admin","role:backup_admin","role:compliance_admin","role:security_admin","role:operation_admin","role:replay_viewer"]}
 
 ### admin POST /session/logout
@@ -943,6 +1020,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### admin GET /session/status after logout
@@ -955,6 +1033,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":false}
 
 ### admin GET /devices after logout
@@ -966,6 +1045,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_REVOKED","reason":"session is not ACTIVE: REVOKED"}
 
 ### viewer login
@@ -979,6 +1059,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### viewer GET /session/status
@@ -991,6 +1072,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":true,"can_read_administration":false,"csrf_token":"<token>","display_name":"claudeadmin","must_change_password":false,"permissions":["Devices","Config","Compliance"],"role_tokens":["role:viewer"]}
 
 ### viewer GET /devices
@@ -1003,6 +1085,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"devices":[]}
 
 ### viewer GET /api/v2/overview
@@ -1016,6 +1099,7 @@ header: transfer-encoding: chunked
 header: vary: Cookie
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"attention":{"backup_missing":{"count":"<n>","of":"<n>","previous":"<n>","state":"OK"},"cluster_diff":{"count":"<n>","of":"<n>","state":"UNKNOWN","unknown":"<n>"},"config_changed":{"count":"<n>","of":"<n>","state":"OK"},"failed_jobs_24h":{"count":"<n>","last_at":null,"other_terminal_24h":"<n>","previous":"<n>","state":"OK","terminal_24h":"<n>"},"managed_not_enrolled":{"count":"<n>","of":"<n>","state":"UNKNOWN"},"stale_inventory":{"count":"<n>","of":"<n>","previous":"<n>","state":"OK"}},"compliance":{"reason":"not_evaluated","state":"UNKNOWN"},"denominators":{"active_devices":"<n>","backup_targets":"<n>","clusters":"<n>","clusters_enrolled":"<n>","enrolled_devices":"<n>","gateways":"<n>"},"estate":{"compliance_state":"UNKNOWN","counts":{"ageing":"<n>","clear":"<n>","critical":"<n>","not_assessed":"<n>","partly_assessed":"<n>"},"devices":[],"facts":{"backups":{"a":"<n>","b":"<n>"},"critical":{"state":"UNKNOWN"},"evidence":{"d":"<n>","never":"<n>","r":"<n>"}},"no_archive":"<n>"},"evidence":{"backup":{"at":null,"state":"UNKNOWN"},"compliance":{"at":null,"state":"UNKNOWN"},"configuration":{"at":null,"state":"UNKNOWN"},"inventory":{"at":null,"state":"UNKNOWN"},"jobs":{"at":null,"state":"UNKNOWN"},"platform_facts":{"at":null,"state":"UNKNOWN"}},"exceptions":{"cluster_diff":{"all_refs":[],"rows":[],"total":"<n>","unknown":"<n>"},"config_changes":{"rows":[],"total":"<n>"},"failed_jobs":{"reasons":[],"rows":[],"total":"<n>"}},"generated_at":"<ts>","inventory_age":{"gt72h":"<n>","h24_72":"<n>","lt24h":"<n>","never":"<n>","of":"<n>"},"masked":false,"nexus":{"completed_24h":"<n>","last_inventory":{"check_point":null,"palo_alto":null},"oldest_running_submitted_at":null,"running":"<n>"},"platform":{"check_point":"<n>","clusters":"<n>","devices":"<n>","evidence_at":null,"hotfix_levels":[{"count":"<n>","level":null}],"palo_alto":"<n>","versions":{"check_point":{"major":[],"minor":[],"model":[]},"palo_alto":{"major":[],"minor":[],"model":[]}}},"policy_install":{"days_2_7":"<n>","last_read_at":null,"newest_at":null,"of":"<n>","older":"<n>","oldest_at":null,"state":"UNKNOWN","today":"<n>","unknown":"<n>","yesterday":"<n>"}}
 
 ### viewer GET /sessions (refused)
@@ -1027,6 +1111,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"action_id":"session_revoke_by_admin","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
 
 ### viewer GET /role-bindings (refused)
@@ -1038,6 +1123,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"action_id":"role_binding_create","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
 
 ### viewer POST /devices/add-single (refused)
@@ -1049,6 +1135,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"action_id":"device_register","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
 
 ### viewer POST /role-bindings (refused)
@@ -1060,6 +1147,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"action_id":"role_binding_create","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
 
 ### viewer POST /session/logout
@@ -1073,6 +1161,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### replay viewer login
@@ -1086,6 +1175,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### replay viewer GET /session/status
@@ -1098,6 +1188,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":true,"can_read_administration":false,"csrf_token":"<token>","display_name":"aiview","must_change_password":false,"permissions":["Devices","Config","Compliance","Policy","PacketAnalysis"],"role_tokens":["role:viewer","role:replay_viewer"]}
 
 ### replay viewer GET /devices
@@ -1111,6 +1202,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"devices":[]}
 
 ### replay viewer GET /api/v2/overview
@@ -1125,6 +1217,7 @@ header: vary: Cookie
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"attention":{"backup_missing":{"count":"<n>","of":"<n>","previous":"<n>","state":"OK"},"cluster_diff":{"count":"<n>","of":"<n>","state":"UNKNOWN","unknown":"<n>"},"config_changed":{"count":"<n>","of":"<n>","state":"OK"},"failed_jobs_24h":{"count":"<n>","last_at":null,"other_terminal_24h":"<n>","previous":"<n>","state":"OK","terminal_24h":"<n>"},"managed_not_enrolled":{"count":"<n>","of":"<n>","state":"UNKNOWN"},"stale_inventory":{"count":"<n>","of":"<n>","previous":"<n>","state":"OK"}},"compliance":{"reason":"not_evaluated","state":"UNKNOWN"},"denominators":{"active_devices":"<n>","backup_targets":"<n>","clusters":"<n>","clusters_enrolled":"<n>","enrolled_devices":"<n>","gateways":"<n>"},"estate":{"compliance_state":"UNKNOWN","counts":{"ageing":"<n>","clear":"<n>","critical":"<n>","not_assessed":"<n>","partly_assessed":"<n>"},"devices":[],"facts":{"backups":{"a":"<n>","b":"<n>"},"critical":{"state":"UNKNOWN"},"evidence":{"d":"<n>","never":"<n>","r":"<n>"}},"no_archive":"<n>"},"evidence":{"backup":{"at":null,"state":"UNKNOWN"},"compliance":{"at":null,"state":"UNKNOWN"},"configuration":{"at":null,"state":"UNKNOWN"},"inventory":{"at":null,"state":"UNKNOWN"},"jobs":{"at":null,"state":"UNKNOWN"},"platform_facts":{"at":null,"state":"UNKNOWN"}},"exceptions":{"cluster_diff":{"all_refs":[],"rows":[],"total":"<n>","unknown":"<n>"},"config_changes":{"rows":[],"total":"<n>"},"failed_jobs":{"reasons":[],"rows":[],"total":"<n>"}},"generated_at":"<ts>","inventory_age":{"gt72h":"<n>","h24_72":"<n>","lt24h":"<n>","never":"<n>","of":"<n>"},"masked":true,"nexus":{"completed_24h":"<n>","last_inventory":{"check_point":null,"palo_alto":null},"oldest_running_submitted_at":null,"running":"<n>"},"platform":{"check_point":"<n>","clusters":"<n>","devices":"<n>","evidence_at":null,"hotfix_levels":[{"count":"<n>","level":null}],"palo_alto":"<n>","versions":{"check_point":{"major":[],"minor":[],"model":[]},"palo_alto":{"major":[],"minor":[],"model":[]}}},"policy_install":{"days_2_7":"<n>","last_read_at":null,"newest_at":null,"of":"<n>","older":"<n>","oldest_at":null,"state":"UNKNOWN","today":"<n>","unknown":"<n>","yesterday":"<n>"}}
 
 ### replay viewer GET /sessions (refused)
@@ -1136,6 +1229,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"action_id":"session_revoke_by_admin","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
 
 ### replay viewer POST /devices/add-single (refused)
@@ -1147,6 +1241,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"action_id":"device_register","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
 
 ### replay viewer POST /session/logout
@@ -1160,6 +1255,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### async anon GET changes.csv
@@ -1171,6 +1267,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 
 ### async anon GET reports run download
@@ -1182,6 +1279,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 
 ### async anon GET backup download with ticket
@@ -1193,6 +1291,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 
 ### async anon POST backup download
@@ -1204,6 +1303,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 
 ### multipart anon POST sanitize
@@ -1215,6 +1315,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 
 ### multipart anon POST offline-analyses
@@ -1226,6 +1327,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 
 ### async admin login
@@ -1239,6 +1341,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### async admin GET /session/status
@@ -1251,6 +1354,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":true,"can_read_administration":true,"csrf_token":"<token>","display_name":"nexusadmin","must_change_password":false,"permissions":["Devices","Config","Compliance","PacketAnalysis","Sanitizer","Operations","Policy","Admin"],"role_tokens":["role:viewer","role:operator","role:onboarding_admin","role:backup_admin","role:compliance_admin","role:security_admin","role:operation_admin","role:replay_viewer"]}
 
 ### async admin GET changes.csv
@@ -1265,6 +1369,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: <text/csv, non-empty>
 
 ### async admin GET changes.csv filtered
@@ -1279,6 +1384,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: <text/csv, non-empty>
 
 ### async admin GET changes.csv bad filter
@@ -1292,6 +1398,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"error":"INVALID_CHANGE_FILTERS"}
 
 ### async admin GET changes.csv bad limit type
@@ -1305,6 +1412,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"error":"INVALID_CHANGE_FILTERS"}
 
 ### async admin HEAD changes.csv
@@ -1316,6 +1424,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: <empty>
 
 ### async admin GET reports run download
@@ -1328,6 +1437,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"RUN_NOT_FOUND","reason":"No such report run"}
 
 ### async admin GET reports run download bad id
@@ -1340,6 +1450,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"INVALID_ID","reason":"Run ids are opaque UUIDs"}
 
 ### async admin GET backup download with bad ticket
@@ -1352,6 +1463,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"code":"TICKET_INVALID","error":"TICKET_INVALID","reason":"The download ticket is missing, used, expired, or not yours; start the download again"}
 
 ### async admin POST backup download bad id
@@ -1364,6 +1476,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"code":"MALFORMED_IDENTIFIER","error":"INVALID_ARTEFACT_ID","reason":"Artefact identifier must be an opaque id"}
 
 ### async admin POST backup download no csrf
@@ -1375,6 +1488,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 
 ### async admin POST backup download
@@ -1387,6 +1501,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"code":"ARTEFACT_STORE_NOT_MOUNTED","error":"DOWNLOAD_UNAVAILABLE","reason":"the service has no artefact store mounted (UI2_ARTEFACT_STORE_KEY_FILE / UI2_ARTEFACT_STORE_ROOT)"}
 
 ### async admin POST backup download malformed json
@@ -1400,6 +1515,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"error":"Bad Request","path":"/backups/0123456789abcdef/download","status":"<n>","timestamp":"<ts>"}
 
 ### multipart admin POST sanitize no csrf
@@ -1411,6 +1527,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 
 ### multipart admin POST sanitize no origin
@@ -1422,6 +1539,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
 
 ### multipart admin POST sanitize no file part
@@ -1435,6 +1553,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"error":"RUN_ROLE_REQUIRED","reason":"Sanitizing needs operator, operation_admin or security_admin"}
 
 ### multipart admin POST sanitize empty body
@@ -1448,6 +1567,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"error":"RUN_ROLE_REQUIRED","reason":"Sanitizing needs operator, operation_admin or security_admin"}
 
 ### multipart admin POST sanitize broken body
@@ -1461,6 +1581,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"error":"RUN_ROLE_REQUIRED","reason":"Sanitizing needs operator, operation_admin or security_admin"}
 
 ### multipart admin POST sanitize no boundary
@@ -1474,6 +1595,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"error":"RUN_ROLE_REQUIRED","reason":"Sanitizing needs operator, operation_admin or security_admin"}
 
 ### multipart admin POST sanitize json content type
@@ -1487,6 +1609,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Unsupported Media Type","path":"/api/v2/sanitize","status":"<n>","timestamp":"<ts>"}
 
 ### multipart admin POST sanitize revert no file part
@@ -1500,6 +1623,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"error":"REVERT_ROLE_REQUIRED","reason":"Reverting needs security_admin or the sanitize job's creator"}
 
 ### multipart admin POST offline-analyses unknown policy
@@ -1513,6 +1637,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"error":"ADMIN_REQUIRED"}
 
 ### multipart admin POST offline-analyses file first
@@ -1526,6 +1651,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"error":"ADMIN_REQUIRED"}
 
 ### multipart admin POST offline-analyses json content type
@@ -1539,6 +1665,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Unsupported Media Type","path":"/api/v2/policy/policies/no-such-policy/offline-analyses","status":"<n>","timestamp":"<ts>"}
 
 ### multipart admin POST cutover assessments unknown segment
@@ -1552,6 +1679,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"error":"ADMIN_REQUIRED"}
 
 ### multipart admin POST cutover assessments broken body
@@ -1565,6 +1693,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"error":"ADMIN_REQUIRED"}
 
 ### async admin POST /session/logout
@@ -1578,6 +1707,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### async viewer login
@@ -1591,6 +1721,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### async viewer GET /session/status
@@ -1603,6 +1734,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":true,"can_read_administration":false,"csrf_token":"<token>","display_name":"claudeadmin","must_change_password":false,"permissions":["Devices","Config","Compliance"],"role_tokens":["role:viewer"]}
 
 ### async viewer GET changes.csv
@@ -1614,6 +1746,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"action_id":"policy_read","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
 
 ### async viewer GET reports run download
@@ -1625,6 +1758,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"action_id":"report_generate","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
 
 ### async viewer POST backup download
@@ -1636,6 +1770,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"action_id":"device_backup_retrieve","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
 
 ### multipart viewer POST sanitize
@@ -1647,6 +1782,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"action_id":"data_sanitize_run","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
 
 ### multipart viewer POST offline-analyses
@@ -1658,6 +1794,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"action_id":"policy_offline_write","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
 
 ### async viewer POST /session/logout
@@ -1671,6 +1808,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### async replay viewer login
@@ -1684,6 +1822,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### async replay viewer GET /session/status
@@ -1696,6 +1835,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":true,"can_read_administration":false,"csrf_token":"<token>","display_name":"aiview","must_change_password":false,"permissions":["Devices","Config","Compliance","Policy","PacketAnalysis"],"role_tokens":["role:viewer","role:replay_viewer"]}
 
 ### async replay viewer GET changes.csv
@@ -1710,6 +1850,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: <text/csv, non-empty>
 
 ### async replay viewer GET reports run download
@@ -1722,6 +1863,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"RUN_NOT_FOUND","reason":"No such report run"}
 
 ### multipart replay viewer POST sanitize
@@ -1733,6 +1875,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"action_id":"data_sanitize_run","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
 
 ### async replay viewer POST /session/logout
@@ -1746,6 +1889,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### machine 8086 no token [8086]
@@ -1757,6 +1901,7 @@ header: date: <date>
 header: transfer-encoding: chunked
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"MACHINE_SESSION_REFUSED"}
 
 ### machine 8086 wrong token [8086]
@@ -1768,6 +1913,7 @@ header: date: <date>
 header: transfer-encoding: chunked
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"MACHINE_SESSION_REFUSED"}
 
 ### machine 8086 e2e token wrong purpose [8086]
@@ -1779,6 +1925,7 @@ header: date: <date>
 header: transfer-encoding: chunked
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"MACHINE_SESSION_REFUSED"}
 
 ### machine 8086 probe token [8086]
@@ -1791,6 +1938,7 @@ header: set-cookie: ui2_session=<v>; Path=/; Secure; HttpOnly; SameSite=Strict
 header: transfer-encoding: chunked
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"csrf_token":"<token>"}
 
 ### machine 8086 e2e token [8086]
@@ -1803,6 +1951,7 @@ header: set-cookie: ui2_session=<v>; Path=/; Secure; HttpOnly; SameSite=Strict
 header: transfer-encoding: chunked
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"csrf_token":"<token>"}
 
 ### machine 8086 GET machine-session [8086]
@@ -1814,6 +1963,7 @@ header: date: <date>
 header: transfer-encoding: chunked
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/internal/machine-session","status":"<n>","timestamp":"<ts>"}
 
 ### machine 8086 GET /healthz [8086]
@@ -1825,6 +1975,7 @@ header: date: <date>
 header: transfer-encoding: chunked
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/healthz","status":"<n>","timestamp":"<ts>"}
 
 ### machine 8086 POST /login [8086]
@@ -1836,6 +1987,7 @@ header: date: <date>
 header: transfer-encoding: chunked
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/login","status":"<n>","timestamp":"<ts>"}
 
 ### machine 8086 GET /devices with machine cookie [8086]
@@ -1847,6 +1999,7 @@ header: date: <date>
 header: transfer-encoding: chunked
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/devices","status":"<n>","timestamp":"<ts>"}
 
 ### machine 8086 POST /internal/advisories/paloalto no token [8086]
@@ -1857,6 +2010,7 @@ header: content-length: <n>
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: <empty>
 
 ### machine 8086 POST /internal/advisories/unknown [8086]
@@ -1868,6 +2022,7 @@ header: date: <date>
 header: transfer-encoding: chunked
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/internal/advisories/unknown","status":"<n>","timestamp":"<ts>"}
 
 ### machine 8086 POST /internal/lifecycle-sources/cisco_eol no token [8086]
@@ -1878,6 +2033,7 @@ header: content-length: <n>
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: <empty>
 
 ### machine GET /session/status
@@ -1890,6 +2046,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":true,"can_read_administration":false,"csrf_token":"<token>","display_name":"aiview-e2e","must_change_password":false,"permissions":["Devices","Config","Compliance","Policy","PacketAnalysis"],"role_tokens":["role:viewer","role:replay_viewer"]}
 
 ### machine GET /devices
@@ -1903,6 +2060,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"devices":[]}
 
 ### machine GET /api/v2/overview
@@ -1917,6 +2075,7 @@ header: vary: Cookie
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"attention":{"backup_missing":{"count":"<n>","of":"<n>","previous":"<n>","state":"OK"},"cluster_diff":{"count":"<n>","of":"<n>","state":"UNKNOWN","unknown":"<n>"},"config_changed":{"count":"<n>","of":"<n>","state":"OK"},"failed_jobs_24h":{"count":"<n>","last_at":null,"other_terminal_24h":"<n>","previous":"<n>","state":"OK","terminal_24h":"<n>"},"managed_not_enrolled":{"count":"<n>","of":"<n>","state":"UNKNOWN"},"stale_inventory":{"count":"<n>","of":"<n>","previous":"<n>","state":"OK"}},"compliance":{"reason":"not_evaluated","state":"UNKNOWN"},"denominators":{"active_devices":"<n>","backup_targets":"<n>","clusters":"<n>","clusters_enrolled":"<n>","enrolled_devices":"<n>","gateways":"<n>"},"estate":{"compliance_state":"UNKNOWN","counts":{"ageing":"<n>","clear":"<n>","critical":"<n>","not_assessed":"<n>","partly_assessed":"<n>"},"devices":[],"facts":{"backups":{"a":"<n>","b":"<n>"},"critical":{"state":"UNKNOWN"},"evidence":{"d":"<n>","never":"<n>","r":"<n>"}},"no_archive":"<n>"},"evidence":{"backup":{"at":null,"state":"UNKNOWN"},"compliance":{"at":null,"state":"UNKNOWN"},"configuration":{"at":null,"state":"UNKNOWN"},"inventory":{"at":null,"state":"UNKNOWN"},"jobs":{"at":null,"state":"UNKNOWN"},"platform_facts":{"at":null,"state":"UNKNOWN"}},"exceptions":{"cluster_diff":{"all_refs":[],"rows":[],"total":"<n>","unknown":"<n>"},"config_changes":{"rows":[],"total":"<n>"},"failed_jobs":{"reasons":[],"rows":[],"total":"<n>"}},"generated_at":"<ts>","inventory_age":{"gt72h":"<n>","h24_72":"<n>","lt24h":"<n>","never":"<n>","of":"<n>"},"masked":true,"nexus":{"completed_24h":"<n>","last_inventory":{"check_point":null,"palo_alto":null},"oldest_running_submitted_at":null,"running":"<n>"},"platform":{"check_point":"<n>","clusters":"<n>","devices":"<n>","evidence_at":null,"hotfix_levels":[{"count":"<n>","level":null}],"palo_alto":"<n>","versions":{"check_point":{"major":[],"minor":[],"model":[]},"palo_alto":{"major":[],"minor":[],"model":[]}}},"policy_install":{"days_2_7":"<n>","last_read_at":null,"newest_at":null,"of":"<n>","older":"<n>","oldest_at":null,"state":"UNKNOWN","today":"<n>","unknown":"<n>","yesterday":"<n>"}}
 
 ### machine GET /sessions (refused)
@@ -1928,6 +2087,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"action_id":"session_revoke_by_admin","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
 
 ### machine GET unmapped route
@@ -1940,6 +2100,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/no-such-route","status":"<n>","timestamp":"<ts>"}
 
 ### machine POST /devices/add-single (read-only session)
@@ -1951,6 +2112,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"}
 
 ### machine PUT /devices/add-single (read-only session)
@@ -1964,6 +2126,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Method Not Allowed","path":"/devices/add-single","status":"<n>","timestamp":"<ts>"}
 
 ### machine DELETE unmapped (read-only session)
@@ -1975,6 +2138,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"}
 
 ### machine POST /role-bindings (read-only session)
@@ -1986,6 +2150,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"}
 
 ### machine POST /session/logout
@@ -1997,6 +2162,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"}
 
 ### odd target GET //healthz
@@ -2009,6 +2175,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"//healthz","status":"<n>","timestamp":"<ts>"}
 
 ### odd target GET /healthz/
@@ -2021,6 +2188,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/healthz/","status":"<n>","timestamp":"<ts>"}
 
 ### odd target GET /healthz;x=1
@@ -2032,6 +2200,7 @@ header: content-type: text/plain;charset=UTF-8
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: text ok
 
 ### odd target GET /healthz;jsessionid=abc
@@ -2043,6 +2212,7 @@ header: content-type: text/plain;charset=UTF-8
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: text ok
 
 ### odd target GET /./healthz
@@ -2055,6 +2225,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/./healthz","status":"<n>","timestamp":"<ts>"}
 
 ### odd target GET /healthz/.
@@ -2067,6 +2238,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/healthz/.","status":"<n>","timestamp":"<ts>"}
 
 ### odd target GET /a/../healthz
@@ -2079,6 +2251,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/a/../healthz","status":"<n>","timestamp":"<ts>"}
 
 ### odd target GET /healthz%2f
@@ -2100,6 +2273,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/%2e/healthz","status":"<n>","timestamp":"<ts>"}
 
 ### odd target GET /%2e%2e/healthz
@@ -2130,6 +2304,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/healthz%25","status":"<n>","timestamp":"<ts>"}
 
 ### odd target GET /%C3%A9
@@ -2142,6 +2317,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/%C3%A9","status":"<n>","timestamp":"<ts>"}
 
 ### odd target GET /a%5Cb
@@ -2180,6 +2356,7 @@ header: content-type: text/plain;charset=UTF-8
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: text ok
 
 ### odd target GET /healthz?x=1&x=2
@@ -2191,6 +2368,7 @@ header: content-type: text/plain;charset=UTF-8
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: text ok
 
 ### odd target GET /devices;x=1
@@ -2202,6 +2380,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 
 ### odd target GET /devices/
@@ -2214,6 +2393,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/devices/","status":"<n>","timestamp":"<ts>"}
 
 ### odd target GET //devices
@@ -2226,6 +2406,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"//devices","status":"<n>","timestamp":"<ts>"}
 
 ### odd target GET /devices%2f
@@ -2247,6 +2428,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/devices/%2e%2e/healthz","status":"<n>","timestamp":"<ts>"}
 
 ### odd target GET /session/status;x=1
@@ -2259,6 +2441,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":false}
 
 ### odd target GET /session/status/
@@ -2271,6 +2454,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/session/status/","status":"<n>","timestamp":"<ts>"}
 
 ### odd target GET /login;x=1
@@ -2284,6 +2468,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Method Not Allowed","path":"/login;x=1","status":"<n>","timestamp":"<ts>"}
 
 ### odd target GET /login/
@@ -2296,6 +2481,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"/login/","status":"<n>","timestamp":"<ts>"}
 
 ### odd target GET very long target (9001 chars)
@@ -2317,6 +2503,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"Not Found","path":"//login","status":"<n>","timestamp":"<ts>"}
 
 ### odd target POST /login;x=1
@@ -2329,6 +2516,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"INVALID_CREDENTIALS"}
 
 ### odd target absolute-form
@@ -2340,6 +2528,7 @@ header: content-type: text/plain;charset=UTF-8
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: text ok
 
 ### odd request duplicate cookie
@@ -2352,6 +2541,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":false}
 
 ### odd request long cookie
@@ -2363,6 +2553,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"no matching session row"}
 
 ### odd request Authorization basic header
@@ -2374,6 +2565,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 
 ### odd request X-Forwarded headers
@@ -2385,6 +2577,7 @@ header: content-type: text/plain;charset=UTF-8
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: text ok
 
 ### odd request Accept text/html on gated route
@@ -2396,6 +2589,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 
 ### odd request Accept text/html on unmapped route
@@ -2408,5 +2602,6 @@ header: content-type: text/html;charset=UTF-8
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: <text/html, non-empty>
 
