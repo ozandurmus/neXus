@@ -482,6 +482,9 @@ public final class Ui2WorkerMain {
         var haPairIdentities = new com.securityexpert.nexus.ui2.persistence.device.JooqHaPairIdentityRepository(transactionBoundary);
         System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.INFO,
                 "[ASA_FAILOVER] readiness " + (asaReadinessSwitch.enabled() ? "on" : "off"));
+        var fgtReadinessSwitch = com.securityexpert.nexus.ui2.jobs.failover.FgtFailoverReadinessSwitch.fromEnvironment();
+        System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.INFO,
+                "[FGT_FAILOVER] readiness " + (fgtReadinessSwitch.enabled() ? "on" : "off"));
         for (int i = 0; i < 10; i++) {
             var cpFailoverExecutor = new com.securityexpert.nexus.ui2.worker.failover.CpFailoverJobExecutor(
                     new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary),
@@ -507,6 +510,12 @@ public final class Ui2WorkerMain {
                     .withCpFailover(cpFailoverExecutor)
                     .withPanFailover(panFailoverExecutor)
                     .withAsaFailover(asaFailoverExecutor)
+                    .withFgtFailover(new com.securityexpert.nexus.ui2.worker.failover.FgtFailoverJobExecutor(
+                        new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary),
+                        deviceRepository, leaseRepository, attemptRepository, strictFailoverSsh, gateRegistry,
+                        new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePlatformFactsRepository(transactionBoundary),
+                        fgtReadinessSwitch, Duration.ofSeconds(Long.parseLong(
+                            System.getenv().getOrDefault("UI2_FAILOVER_COMMAND_PAUSE_SECONDS", "2")))))
                     .withPanConfigSync(new com.securityexpert.nexus.ui2.worker.failover.PanConfigSyncJobExecutor(
                         new com.securityexpert.nexus.ui2.persistence.JooqPanConfigSyncRepository(transactionBoundary),
                         deviceRepository, leaseRepository, attemptRepository, panTransport, panCredentialResolver, gateRegistry))

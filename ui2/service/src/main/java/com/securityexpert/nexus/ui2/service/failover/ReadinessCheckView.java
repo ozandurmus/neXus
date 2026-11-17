@@ -16,12 +16,57 @@ public final class ReadinessCheckView {
     public static Map<String,Object> fields(String vendor,int no,String member,String status,JsonNode d,Instant observedAt) {
         if ("cisco_asa".equals(vendor)) return Map.of("title",asaTitle(no),"member",member,"result",status,
             "blocking",no!=9,"summary",asaSummary(no,status,d));
+        if ("fortinet".equals(vendor)) return Map.of("title",fgtTitle(no),"member",member,"result",status,
+            "blocking",no!=6 && no!=9,"summary",fgtSummary(no,status,d));
         boolean pan="palo_alto".equals(vendor);
         // A VSX chassis has no traffic interface in VS0: each Virtual System's unit measures its own traffic.
         boolean perVirtualSystem=!pan && no==8 && "NOT_EVALUATED".equals(status)
             && "TRAFFIC_MEASURED_PER_VIRTUAL_SYSTEM".equals(d.path("reason").asText());
         return Map.of("title",title(pan,no),"member",member,"result",status,
             "blocking",pan || (no!=5 && no!=13 && !perVirtualSystem),"summary",summary(pan,no,status,d,observedAt));
+    }
+
+    private static String fgtTitle(int no) {
+        return switch(no) {
+            case 1 -> "HA mode and members"; case 2 -> "Heartbeat links"; case 3 -> "Monitored interfaces";
+            case 4 -> "Configuration sync"; case 5 -> "Session pickup"; case 6 -> "Sessions carried (not evaluated yet)";
+            case 7 -> "Version parity"; case 8 -> "Switch preconditions"; case 9 -> "Last failover (information)";
+            default -> "Check";
+        };
+    }
+    /** FortiGate: reason codes and counts only, and always "as the primary reports"; never a serial, host name, address or version. */
+    private static String fgtSummary(int no,String status,JsonNode d) {
+        String reason=d.path("reason").asText();
+        if ("GATE_NOT_SIGNED_OFF".equals(reason)) return "Not read: the command is not approved yet";
+        if ("GATE_UNAVAILABLE".equals(reason)) return "Not read: the command gate is unavailable";
+        if ("UNSUPPORTED_MODE".equals(reason)) return "Only an active-passive cluster without virtual clustering is supported";
+        boolean pass="PASS".equals(status);
+        return switch(no) {
+            case 1 -> pass ? "Active-passive, one primary and one secondary, health OK, identity matches (as the primary reports)"
+                : "IDENTITY_MISMATCH".equals(reason) ? "The recorded unit is not a member of the reported cluster"
+                : "RECORDED_SERIAL_MISSING".equals(reason) ? "No recorded serial for the enrolled unit yet"
+                : "HA_OFF".equals(reason) ? "HA is not configured"
+                : "ANSWERED_BY_SECONDARY".equals(reason) ? "The enrolled address answered from the secondary"
+                : "UNKNOWN".equals(status) ? "HA status not recognised" : "Members or health are not as expected";
+            case 2 -> pass ? count(d,"heartbeatUp"," heartbeat links up on both members (as the primary reports)")
+                : "UNKNOWN".equals(status) ? "Heartbeat lines missing or not recognised" : "A heartbeat link is down";
+            case 3 -> pass ? count(d,"monitoredUp"," monitored interfaces up on both members (as the primary reports)")
+                : "UNKNOWN".equals(status) ? "Monitored interface lines missing or none configured"
+                : "MONITORED_COUNT_DIFFERS".equals(reason) ? "The members monitor different numbers of interfaces" : "A monitored interface is down";
+            case 4 -> pass ? "Both members in sync and the cluster checksums equal"
+                : "UNKNOWN".equals(status) ? "Sync state or checksums missing or not recognised"
+                : "CHECKSUM_DIFFERS".equals(reason) ? "Cluster checksums differ" : "A member is out of sync";
+            case 5 -> pass ? "Session pickup enabled" : "UNKNOWN".equals(status) ? "Session pickup setting missing" : "Session pickup is disabled";
+            case 6 -> "Not evaluated yet";
+            case 7 -> "The primary cannot report its secondary's software version";
+            case 8 -> pass ? "Override disabled, secondary uptime above the margin, no failover flag latched"
+                : "UNKNOWN".equals(status) ? "Override, uptime or failover flag missing or not recognised"
+                : "OVERRIDE_ENABLED".equals(reason) ? "Override is enabled" : "FAILOVER_FLAG_LATCHED".equals(reason) ? "A failover flag is latched"
+                : "Secondary uptime is below the margin";
+            case 9 -> "WARN".equals(status) ? "Last failover less than 6 hours ago"
+                : pass ? "Last failover more than 6 hours ago" : "Last failover time not available";
+            default -> "Check result unavailable";
+        };
     }
 
     private static String asaTitle(int no) {

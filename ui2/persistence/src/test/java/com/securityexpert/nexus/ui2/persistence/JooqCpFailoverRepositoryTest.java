@@ -262,6 +262,18 @@ class JooqCpFailoverRepositoryTest {
         assertTrue(db.statements.stream().anyMatch(sql -> sql.startsWith("insert into jobs")));
     }
 
+    /** PO_DECISION_RECORD_2026_11_17_FGT_FAILOVER_READINESS_READS.md: a FortiGate readiness run is the job type fgt_failover_readiness. */
+    @org.junit.jupiter.api.Test
+    void fortigateReadinessIsAdmittedAsTheFgtFailoverReadinessJob() {
+        var db = new ReadinessAdmissionDatabase();
+        assertEquals("ADMITTED", db.repository().requestReadiness("fgt-single|DEV-TEST-01", null, "actor-1", "DEV-TEST-01", "fortinet").code());
+        int jobs = 0;
+        for (int i = 0; i < db.statements.size(); i++) if (db.statements.get(i).startsWith("insert into jobs")) jobs = i;
+        assertEquals("fgt_failover_readiness", db.bindings.get(jobs)[1]);
+        Object[] bound = db.bindings.get(jobs);
+        assertEquals("read", bound[bound.length - 1]);
+    }
+
     /** PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS.md: a Cisco ASA readiness run is the job type asa_cluster_failover. */
     @org.junit.jupiter.api.Test
     void ciscoAsaReadinessIsAdmittedAsTheAsaClusterFailoverJob() {

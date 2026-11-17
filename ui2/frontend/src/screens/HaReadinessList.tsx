@@ -65,7 +65,9 @@ export function haReadinessItems(clusters: readonly Cluster[], rows: Record<stri
     const vendor = cluster.members[0]?.vendor_hint;
     // Cisco ASA is evaluated (readiness only) when the server says readinessAvailable; otherwise it is listed only.
     const asaReadiness = vendor === "cisco_asa" && units.some(unit => unit.readinessAvailable === true);
-    const unsupported = Boolean(vendor && !["check_point", "palo_alto"].includes(vendor) && !asaReadiness);
+    // FortiGate likewise: one enrolled cluster address, evaluated for readiness only, when the server says readinessAvailable.
+    const fgtReadiness = vendor === "fortinet" && units.some(unit => unit.readinessAvailable === true);
+    const unsupported = Boolean(vendor && !["check_point", "palo_alto"].includes(vendor) && !asaReadiness && !fgtReadiness);
     const status: Status = unsupported ? "UNSUPPORTED" : base?.readiness?.status ?? "UNKNOWN";
     return { cluster, units, base, vendor, status };
   });

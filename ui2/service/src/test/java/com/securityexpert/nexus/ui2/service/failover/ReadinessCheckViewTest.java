@@ -209,4 +209,19 @@ class ReadinessCheckViewTest {
         assertEquals("Cluster state",row(false,1,"PASS","{\"role\":\"ACTIVE\"}").get("title"));
         assertEquals("HA mode and roles",row(true,1,"PASS","{\"role\":\"active\"}").get("title"));
     }
+
+    /** FortiGate (PO_DECISION_RECORD_2026_11_17_FGT_FAILOVER_READINESS_READS.md): own titles, checks 6 and 9 never decide. */
+    @Test void fortigateChecksHaveTheirOwnTitlesAndOnlySessionsAndLastFailoverAreNonBlocking() throws Exception {
+        for (int no=1;no<=9;no++) {
+            var view=ReadinessCheckView.fields("fortinet",no,"Member 1","PASS",JSON.readTree("{\"reason\":\"X\",\"heartbeatUp\":2,\"monitoredUp\":4}"),OBSERVED);
+            assertFalse(((String)view.get("title")).isBlank());
+            assertEquals(no!=6 && no!=9,view.get("blocking"),"check "+no);
+            assertFalse(((String)view.get("summary")).isBlank());
+        }
+        assertEquals("HA mode and members",ReadinessCheckView.fields("fortinet",1,"Member 1","PASS",JSON.readTree("{}"),OBSERVED).get("title"));
+        assertEquals("Not read: the command is not approved yet",
+            ReadinessCheckView.fields("fortinet",4,"Member 1","UNKNOWN",JSON.readTree("{\"reason\":\"GATE_NOT_SIGNED_OFF\"}"),OBSERVED).get("summary"));
+        var summary=(String)ReadinessCheckView.fields("fortinet",1,"Member 1","FAIL",JSON.readTree("{\"reason\":\"IDENTITY_MISMATCH\"}"),OBSERVED).get("summary");
+        assertFalse(summary.matches(".*FGT.*"));
+    }
 }

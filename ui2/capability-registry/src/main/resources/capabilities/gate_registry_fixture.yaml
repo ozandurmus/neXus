@@ -5453,6 +5453,55 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: 'Cisco ASA command reference (show conn count); PO approval 2026-11-14 (''Onaylıyorum'': readiness checks only, both members, read-only, masked output); PO_DECISION_RECORD_2026_11_14_ASA_FAILOVER_READINESS_READS.md'
 
+  - gate_id: fgt_failover_checksum_cluster
+    vendor: 'fortinet'
+    platform_role_scope: 'fortigate'
+    shell_context: 'top_or_global'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'diagnose sys ha checksum cluster'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per run, only when a readiness run runs'
+    session_reuse_rule: 'one SSH session on the enrolled cluster address (global context when VDOMs are on), commands one at a time with a configurable pause'
+    unsupported_behavior_ref: 'refused, unparsable or timed out -> the check is UNKNOWN (fail-closed); nothing is retried'
+    secret_output_risk: 'output names serials and hostnames; reduced in memory to derived values, never stored or recorded in the transcript'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiOS CLI reference (diagnose sys ha checksum cluster); checksum equality of the two members (check 4); the "checksum recalculate" form is not requested; PO decision record docs/design/PO_DECISION_RECORD_2026_11_17_FGT_FAILOVER_READINESS_READS.md (PO chat approval 2026-11-17)'
+  - gate_id: fgt_failover_dump_by_group
+    vendor: 'fortinet'
+    platform_role_scope: 'fortigate'
+    shell_context: 'top_or_global'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'diagnose sys ha dump-by group'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per run, only when a readiness run runs'
+    session_reuse_rule: 'one SSH session on the enrolled cluster address (global context when VDOMs are on), commands one at a time with a configurable pause'
+    unsupported_behavior_ref: 'refused, unparsable or timed out -> the check is UNKNOWN (fail-closed); nothing is retried'
+    secret_output_risk: 'output names serials and hostnames; reduced in memory to derived values, never stored or recorded in the transcript'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiOS CLI reference (diagnose sys ha dump-by group); per-member HA uptime (check 8); PO decision record docs/design/PO_DECISION_RECORD_2026_11_17_FGT_FAILOVER_READINESS_READS.md (PO chat approval 2026-11-17)'
+  - gate_id: fgt_failover_ha_failover_status
+    vendor: 'fortinet'
+    platform_role_scope: 'fortigate'
+    shell_context: 'top_or_global'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'execute ha failover status'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per run, only when a readiness run runs'
+    session_reuse_rule: 'one SSH session on the enrolled cluster address (global context when VDOMs are on), commands one at a time with a configurable pause'
+    unsupported_behavior_ref: 'refused, unparsable or timed out -> the check is UNKNOWN (fail-closed); nothing is retried'
+    secret_output_risk: 'output names serials and hostnames; reduced in memory to derived values, never stored or recorded in the transcript'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiOS CLI reference (execute ha failover status); is a failover flag latched (check 8); status only, the "execute" verb sets nothing; PO decision record docs/design/PO_DECISION_RECORD_2026_11_17_FGT_FAILOVER_READINESS_READS.md (PO chat approval 2026-11-17)'
+
   # Support bundle collection, step S2 (V230; PO approval 2026-11-15, SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6, C0-C7,
   # plus the two cpdata_collector literals approved later the same day: gate rows only, no executor uses them yet).
 

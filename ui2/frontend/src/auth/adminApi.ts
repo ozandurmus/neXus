@@ -2449,7 +2449,7 @@ export function getOverview(): Promise<OverviewView> {
 export type CpFailoverState = "PLANNED" | "PRECHECK" | "FAILING_OVER" | "SWITCHED" | "POSTCHECK" | "RETURNING" | "DONE" | "STOPPED";
 export type CpFailoverCheckStatus = "PASS" | "FAIL" | "UNKNOWN" | "WARN";
 export interface ReadinessMember { device_id: string; hostname: string | null; ha_role: string | null }
-export interface CpFailoverUnit { maskedName?: string; maskedMembers?: Array<Omit<ReadinessMember, "hostname"> & { maskedLabel: string }>; masked?: boolean; members?: ReadinessMember[]; unitId: string; clusterId: string; cluster_member_ref: string; vendor?: "check_point" | "palo_alto" | "cisco_asa"; virtual_system?: string;
+export interface CpFailoverUnit { maskedName?: string; maskedMembers?: Array<Omit<ReadinessMember, "hostname"> & { maskedLabel: string }>; masked?: boolean; members?: ReadinessMember[]; unitId: string; clusterId: string; cluster_member_ref: string; vendor?: "check_point" | "palo_alto" | "cisco_asa" | "fortinet"; virtual_system?: string;
   /** VSX: the chassis and each Virtual System are separate units; the chassis is listed first (VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md). */
   unitKind?: "CLUSTER" | "VSX_CHASSIS" | "VIRTUAL_SYSTEM";
   /** Set when the server never fails this unit over (the VSX chassis); approvals and starts are refused with this code. */
@@ -2500,7 +2500,8 @@ export interface CpFailoverCheck extends ReadinessCheck { phase: "pre" | "post" 
 export interface CpFailoverRunDetail extends CpFailoverRun { checks: CpFailoverCheck[] }
 
 /** Cisco ASA has the read endpoints and the readiness request only (PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS.md). */
-const failoverPath = (vendor?: string) => vendor === "palo_alto" ? "/api/v2/pan-failover" : vendor === "cisco_asa" ? "/api/v2/asa-failover" : "/api/v2/cp-failover";
+/** FortiGate likewise (PO_DECISION_RECORD_2026_11_17_FGT_FAILOVER_READINESS_READS.md). */
+const failoverPath = (vendor?: string) => vendor === "palo_alto" ? "/api/v2/pan-failover" : vendor === "cisco_asa" ? "/api/v2/asa-failover" : vendor === "fortinet" ? "/api/v2/fgt-failover" : "/api/v2/cp-failover";
 const cpQuery = (unit: CpFailoverUnit) => `clusterId=${encodeURIComponent(unit.clusterId)}&unitId=${encodeURIComponent(unit.unitId)}`;
 /** By a member's device id; display names are masked by the server for aiview. */
 export const listCpFailoverUnits = (memberDeviceId: string, vendor?: string) => call<CpFailoverUnit[]>(`${failoverPath(vendor)}/units?memberDeviceId=${encodeURIComponent(memberDeviceId)}`, "GET");

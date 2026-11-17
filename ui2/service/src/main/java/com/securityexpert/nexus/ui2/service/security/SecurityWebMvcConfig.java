@@ -198,6 +198,13 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/asa-failover/runs", ActionRegistry.CP_FAILOVER_READ),
             Map.entry("GET /api/v2/asa-failover/runs/*", ActionRegistry.CP_FAILOVER_READ),
             Map.entry("POST /api/v2/asa-failover/units/*/readiness", ActionRegistry.CP_READINESS_START),
+            // PO_DECISION_RECORD_2026_11_17_FGT_FAILOVER_READINESS_READS.md: FortiGate is read-only plus the readiness request, like ASA.
+            Map.entry("GET /api/v2/fgt-failover/units", ActionRegistry.CP_FAILOVER_READ),
+            Map.entry("GET /api/v2/fgt-failover/units/*", ActionRegistry.CP_FAILOVER_READ),
+            Map.entry("GET /api/v2/fgt-failover/summary", ActionRegistry.CP_FAILOVER_READ),
+            Map.entry("GET /api/v2/fgt-failover/runs", ActionRegistry.CP_FAILOVER_READ),
+            Map.entry("GET /api/v2/fgt-failover/runs/*", ActionRegistry.CP_FAILOVER_READ),
+            Map.entry("POST /api/v2/fgt-failover/units/*/readiness", ActionRegistry.CP_READINESS_START),
             Map.entry("POST /role-bindings/selections", ActionRegistry.ROLE_BINDING_CREATE),
             Map.entry("GET /role-bindings", ActionRegistry.ROLE_BINDING_CREATE),
             Map.entry("POST /role-bindings", ActionRegistry.ROLE_BINDING_CREATE),

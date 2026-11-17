@@ -19,10 +19,12 @@ import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAd
 /**
  * Opaque-unit API for the Check Point and Palo Alto failover screens. The Cisco ASA prefix serves the read endpoints and
  * the readiness request only (docs/design/PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS.md): its other routes
- * are unmapped at the gate chain, and every write entry point here and in the service refuses a Cisco ASA vendor.
+ * are unmapped at the gate chain, and every write entry point here and in the service refuses a Cisco ASA vendor. The
+ * FortiGate prefix (/api/v2/fgt-failover, docs/design/PO_DECISION_RECORD_2026_11_17_FGT_FAILOVER_READINESS_READS.md) is
+ * mapped and refused the same way.
  */
 @RestController
-@RequestMapping({"/api/v2/cp-failover", "/api/v2/pan-failover", "/api/v2/asa-failover"})
+@RequestMapping({"/api/v2/cp-failover", "/api/v2/pan-failover", "/api/v2/asa-failover", "/api/v2/fgt-failover"})
 public final class CpFailoverController {
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
     public record ApprovalRequest(String clusterId, String unitId, Instant windowFrom, Instant windowUntil, String reason, String requestId) {}
@@ -75,10 +77,12 @@ public final class CpFailoverController {
     private static String vendor(HttpServletRequest request) {
         String path=request.getServletPath();
         return path.startsWith("/api/v2/asa-failover") ? "cisco_asa"
+            : path.startsWith("/api/v2/fgt-failover") ? "fortinet"
             : path.startsWith("/api/v2/pan-failover") ? "palo_alto" : "check_point";
     }
     private static void refuseAsa(HttpServletRequest request) {
-        if ("cisco_asa".equals(vendor(request))) throw new CpFailoverService.Refusal(CpFailoverService.VENDOR_NOT_AVAILABLE);
+        String vendor=vendor(request);
+        if ("cisco_asa".equals(vendor) || "fortinet".equals(vendor)) throw new CpFailoverService.Refusal(CpFailoverService.VENDOR_NOT_AVAILABLE);
     }
     private static Map<String,Object> approval(JooqCpFailoverRepository.Approval a) {
         Map<String,Object> m=new LinkedHashMap<>();
@@ -148,12 +152,12 @@ public final class CpFailoverController {
         if (readiness!=null && !"READY".equals(readiness.outcome()) && (refusal==null || refusal.isBlank())) refusal="READINESS_NOT_READY";
         if (projections!=null) {
             String incidentKey=u.members().get(0).clusterMemberRef().orElseThrow()+"|"
-                +u.members().get(0).deviceId()+"|"+u.members().get(1).deviceId();
+                +u.members().get(0).deviceId()+"|"+u.members().get(u.members().size()-1).deviceId();
             boolean incident=incidents.computeIfAbsent(incidentKey,key -> projections.inTransaction(db -> db.fetchOne(
                 "select exists(select 1 from failover_quarantine where active and (cluster_ref={0} "
                     + "or quarantined_member_ids @> jsonb_build_array({1}::text) "
                     + "or quarantined_member_ids @> jsonb_build_array({2}::text))) as open",
-                u.members().get(0).clusterMemberRef().orElseThrow(),u.members().get(0).deviceId(),u.members().get(1).deviceId())
+                u.members().get(0).clusterMemberRef().orElseThrow(),u.members().get(0).deviceId(),u.members().get(u.members().size()-1).deviceId())
                 .get("open",Boolean.class)));
             if (incident) refusal="OPEN_INCIDENT";
         }
@@ -198,7 +202,7 @@ public final class CpFailoverController {
                 m.put("masked",masked);
                 // Role facts; a unit the server never fails over says so in failoverRefusal (the VSX chassis), and every
                 // approval or start for it is refused server-side whatever these flags say.
-                boolean asa="cisco_asa".equals(vendor);
+                boolean asa="cisco_asa".equals(vendor) || "fortinet".equals(vendor);
                 // Cisco ASA is readiness only: no approval, start or schedule control, whatever the role.
                 m.put("canApprove",!asa && canApprove);
                 m.put("canStart",!asa && canStart);
