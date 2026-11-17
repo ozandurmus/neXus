@@ -1233,6 +1233,33 @@
       "priority": "P1",
       "target": "FailoverAuthorizationService / FourEyesValidationRule",
       "note": "see docs/history/backlog/failover_four_eyes_enforcement_verify_before_scc_handover.md"
+    },
+    {
+      "id": "recovery_offhost_key_custody",
+      "category": "Recovery / Security",
+      "title": "Off-host recovery artifacts and encryption-key custody",
+      "status": "deferred",
+      "priority": "P1",
+      "target": "DEPLOY.1; blocks reliance on RB.3b recovery",
+      "note": "see docs/history/backlog/recovery_offhost_key_custody.md"
+    },
+    {
+      "id": "spring_boot_4_spring_security_migration",
+      "category": "Security",
+      "title": "Spring Security: SAML (ADFS), LDAP, break-glass, then authz map",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "ENTERPRISE_STACK_ALIGNMENT 0.2, 1.1",
+      "note": "see docs/history/backlog/spring_boot_4_spring_security_migration.md"
+    },
+    {
+      "id": "device_software_version_history",
+      "category": "inventory",
+      "title": "Device software version history: when was each device upgraded, from our own observations",
+      "status": "real_env_validated",
+      "priority": "P1",
+      "target": "V243 device_software_version_history / SoftwareHistoryController / Lifecycle Recent upgrades",
+      "note": "see docs/history/backlog/device_software_version_history.md"
     }
   ]
 }

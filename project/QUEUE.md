@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T11:49:44Z
+Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-17T08:30:29Z
 
 ## Now
 - NXS-LOCAL-0391 — Release queue: ASA readiness, integration gate, CP advisories, zone matrix, ACI step 1, API latency, Backups batch (in_progress)
@@ -9,14 +9,12 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T11:49:44Z
 - P1/in_progress aci_segmentation_step1 — ACI step 1: pre-cutover impact analysis, one segment
 - P1/in_progress aiview_masking_leak_audit — Masking leak audit: compare aiview responses against the..
 - P1/in_progress asa_fortigate_policy_model — ASA and FortiGate policy model for lookup and hygiene
-- P1/in_progress device_software_version_history — Device software version history: when was each device upgr
 - P1/in_progress policy_collection_gaps — Policy collection gaps: CP gateway objects (D-1), PAN App-
 - P1/in_progress rule_recertification_campaigns — Rule recertification and cleanup campaigns
 - P1/in_progress zone_matrix_delivery — Zone matrix: freeze contract, then deliver in steps
+- P1/planned cyberark_archive_key_custody
 - P1/planned enterprise_phase0_logging_monitoring_scans
 - P1/planned recertification_council
-- P1/planned recovery_offhost_key_custody
-- P1/planned spring_boot_4_spring_security_migration
 - P2/in_progress manifest_drift_service_worker_configuration_policy
 - P2/in_progress topology_sources_apic_citrix_f5
 - P2/in_progress ui2_database_roles_and_data_ownership
@@ -26,6 +24,7 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T11:49:44Z
 - P2/planned backup_plane_separate_service
 - P2/planned change_ticket_matching
 - P2/planned cp_spark_backup_settings_sftp
+- P2/planned cyberark_device_credentials
 - P2/planned deploy1_evidence_egress_policy
 - P2/planned failover_approver_role_recheck_at_worker
 - P2/planned https_configuration_collect
@@ -33,6 +32,7 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T11:49:44Z
 - P2/planned nightly_e2e_fails_on_legitimate_platform_status_warning
 - P2/planned nspm_wave1_acceptance
 - P2/planned path_analysis_phase_b
+- P2/planned platform_backup_step1_host_roll
 - P2/planned product_rename_identity
 - P2/planned reports_r2
 - P2/planned script_execution_module
@@ -47,8 +47,10 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T11:49:44Z
 - P3/planned cp_vsx_config_collected_without_vs_context
 - P3/planned deploy_scan_parallelism
 - P3/planned device_admin_accounts_and_privileges
+- P3/planned device_upgrade_dates_vendor_reads
 - P3/planned enterprise_platform_conformance
 - P3/planned fmg_link_state_diagnose_nic
+- P3/planned full_regression_architecture_test_oom
 - P3/planned github_open_pr_triage
 - P3/planned hosta_apparmor_stacked_label_override
 - P3/planned https_inventory_collect_radware
@@ -76,6 +78,7 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-16T11:49:44Z
 - P1 operator_console
 - P1 pan_collection_contract_from_measurement
 - P1 pcp_collector_target_selection_seams
+- P1 recovery_offhost_key_custody
 - P1 relay_id_reuse_when_record_uncommitted
 - P1 ui2_auth_placement_second_authenticated_surface
 - P1 ui2_b1_05_extract_cp_inventory_subset
