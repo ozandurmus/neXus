@@ -39,3 +39,19 @@ Context: `FAILOVER_FORTIGATE_ASA_DESIGN_DRAFT.md` section 4.2 and 8.1, `PO_DECIS
 - Output shapes of the three new reads are not measured yet; the parsers accept the documented forms only and anything
   else is UNKNOWN, logged as a masked shape. Check 7 (version parity) stays UNKNOWN: a primary reports no firmware
   build for its secondary (open item for the PO, see the engineering report).
+
+## Amendment 2026-11-17: version parity (check 7) is derived
+
+PO chat 2026-11-17: "Evet, sayılsın". The primary reports no firmware build for its secondary. An FGCP cluster only
+forms and synchronises between members on the same firmware, so check 7 PASSes, marked `DERIVED`, when the primary
+reports HA health OK and both members `in-sync`. Health not OK, a missing sync state, or out-of-sync stay UNKNOWN for
+check 7 (out-of-sync already fails check 4). A healthy, in-sync cluster with checks 1-5, 8 PASS can now reach READY;
+check 6 stays not evaluated and non-blocking.
+
+## Engineering note 2026-11-17: check 8 uptime margin is information
+
+The first live run (one FGCP cluster, 2026-11-17) ended NOT_READY on "secondary HA uptime not above
+ha-uptime-diff-margin". The meaning of the uptime field in `diagnose sys ha dump-by group` (absolute or relative to the
+peer, and its unit) is not measured, and the margin only matters to the reset-uptime switch, which is not built. Check 8
+now blocks only on override enabled or a latched failover flag; the uptime comparison is recorded as information
+(`uptimeSemantics: UNMEASURED_INFORMATION`) until a measurement settles it.

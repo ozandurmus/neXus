@@ -184,11 +184,9 @@ class FgtFailoverJobExecutorTest {
             "diagnose sys ha checksum cluster", "diagnose sys ha dump-by group", "execute ha failover status"), script.commands);
         assertEquals(1, script.connects);
         assertEquals(6, out.ledgered(), "every read is ledgered before it is sent");
-        for (int no : new int[] {1, 2, 3, 4, 5, 8, 9}) assertTrue(out.checks().contains(no + ":PASS"), "check " + no);
+        for (int no : new int[] {1, 2, 3, 4, 5, 7, 8, 9}) assertTrue(out.checks().contains(no + ":PASS"), "check " + no);
         assertTrue(out.checks().contains("6:UNKNOWN"));
-        assertTrue(out.checks().contains("7:UNKNOWN"));
-        assertEquals("UNKNOWN", out.outcome());
-        assertEquals("Version parity", out.failedCheck());
+        assertEquals("READY", out.outcome());
         for (String sent : script.commands) {
             assertFalse(sent.startsWith("execute ha failover set") || sent.contains("reset-uptime") || sent.contains("session stat")
                 || sent.startsWith("config system") || sent.startsWith("set "), sent);
