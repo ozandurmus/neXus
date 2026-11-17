@@ -33,7 +33,10 @@ public final class DiagnosticRead {
         "asa_failover_show_failover", "asa_failover_show_failover_state", "asa_failover_show_failover_history",
         "asa_failover_show_conn_count",
         // FortiGate failover readiness (PO_DECISION_REQUEST_2026_11_17_FGT_FAILOVER_READINESS.md): only the readiness job issues them.
-        "fgt_failover_checksum_cluster", "fgt_failover_dump_by_group", "fgt_failover_ha_failover_status");
+        "fgt_failover_checksum_cluster", "fgt_failover_dump_by_group", "fgt_failover_ha_failover_status",
+        // "Traffic and ARP (information)" readiness reads (V248): only the readiness jobs issue them.
+        "asa_failover_show_traffic", "asa_failover_show_arp_statistics", "fgt_failover_performance_status", "fgt_failover_arp",
+        "pan_failover_traffic_counters", "pan_failover_arp_table");
     // Phase A measurement reads whose "%s" is a literal field of the remote command (stat -c "%i %s %Y",
     // ls --time-style=+%s), not a template placeholder. The placeholder guard in eligible() would otherwise hide them.
     public static final Set<String> LITERAL_PERCENT_S_GATES = Set.of(

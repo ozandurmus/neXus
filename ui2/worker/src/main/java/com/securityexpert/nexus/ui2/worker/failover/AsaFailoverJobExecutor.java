@@ -62,12 +62,15 @@ public final class AsaFailoverJobExecutor {
 
     @FunctionalInterface public interface Pause { void sleep(Duration duration) throws InterruptedException; }
 
-    /** The four approved literals, their gate ids and the shape-log line caps. */
+    /** The approved literals (and the two information reads of check 10), their gate ids and the shape-log line caps. */
     enum Read {
         SHOW_FAILOVER("asa_failover_show_failover", "show failover", 160),
         SHOW_FAILOVER_STATE("asa_failover_show_failover_state", "show failover state", 60),
         SHOW_FAILOVER_HISTORY("asa_failover_show_failover_history", "show failover history", 80),
-        SHOW_CONN_COUNT("asa_failover_show_conn_count", "show conn count", 10);
+        SHOW_CONN_COUNT("asa_failover_show_conn_count", "show conn count", 10),
+        /** Information check 10, read on the active member only. The two literals live here and in V248 (DRAFTED until the PO approves). */
+        SHOW_TRAFFIC("asa_failover_show_traffic", "show traffic", 60),
+        SHOW_ARP_STATISTICS("asa_failover_show_arp_statistics", "show arp statistics", 20);
         final String gateId, command; final int maxShapeLines;
         Read(String gateId, String command, int maxShapeLines) {
             this.gateId = gateId; this.command = command; this.maxShapeLines = maxShapeLines;
@@ -161,12 +164,25 @@ public final class AsaFailoverJobExecutor {
                 first = collect(members.get(0), approved);
                 second = collect(members.get(1), approved);
             }
-            final List<Result> results = withGateReasons(
-                AsaFailoverChecks.evaluate(first, second, identities.find(clusterRef), clock.instant()), refused);
+            List<Result> evaluated = new ArrayList<>(
+                AsaFailoverChecks.evaluate(first, second, identities.find(clusterRef), clock.instant()));
+            // Check 10 (information): the active member's reading against the unit's earlier readiness run.
+            int activeIndex = activeIndex(first, second);
+            TrafficArpCheck.Reading reading = activeIndex < 0 ? TrafficArpCheck.Reading.NONE
+                : (activeIndex == 0 ? first : second).traffic();
+            if (reading == null) reading = TrafficArpCheck.Reading.NONE;
+            TrafficArpCheck.Outcome traffic = activeIndex < 0 ? TrafficArpCheck.notRead("ACTIVE_MEMBER_NOT_DETERMINED")
+                : TrafficArpCheck.evaluate(reading, previousTraffic(reading));
+            evaluated.add(new Result(AsaFailoverChecks.TRAFFIC_ARP, traffic.status(), traffic.reason(), traffic.evidence()));
+            final List<Result> results = withGateReasons(evaluated, refused);
             for (Result result : results) {
                 String derived = derived(result);
-                store.check(runId, "pre", members.get(0).deviceId(), null, result.check(), result.status(), derived);
-                store.check(runId, "pre", members.get(1).deviceId(), null, result.check(), result.status(), derived);
+                for (int i = 0; i < 2; i++) {
+                    boolean standbyOfTraffic = result.check() == AsaFailoverChecks.TRAFFIC_ARP && activeIndex >= 0 && i != activeIndex;
+                    store.check(runId, "pre", members.get(i).deviceId(), null, result.check(),
+                        standbyOfTraffic ? TrafficArpCheck.NOT_EVALUATED : result.status(),
+                        standbyOfTraffic ? derived(new Result(result.check(), TrafficArpCheck.NOT_EVALUATED, TrafficArpCheck.NOT_ACTIVE_MEMBER, Map.of())) : derived);
+                }
             }
             String outcome = AsaFailoverChecks.outcome(results);
             Result lead = results.stream().filter(Result::blocking).filter(r -> "FAIL".equals(r.status())).findFirst()
@@ -183,6 +199,17 @@ public final class AsaFailoverJobExecutor {
         }
     }
 
+    /** The member that reported itself Active, or -1 when neither (or both) did. */
+    private static int activeIndex(Observer first, Observer second) {
+        boolean a = AsaFailoverChecks.active(first.first()).orElse(false), b = AsaFailoverChecks.active(second.first()).orElse(false);
+        return a == b ? -1 : a ? 0 : 1;
+    }
+
+    private Optional<TrafficArpCheck.Previous> previousTraffic(TrafficArpCheck.Reading reading) {
+        return reading.trafficBytesPerSecond() == null && reading.arpEntries() == null ? Optional.empty()
+            : TrafficArpCheck.previous(store, runId, AsaFailoverChecks.TRAFFIC_ARP);
+    }
+
     private static CanonicalCommandKey key(Read read) {
         return new CanonicalCommandKey(VENDOR, "cisco_asa_firewall", "privileged_exec", "SSH_INTERACTIVE", read.command);
     }
@@ -196,6 +223,7 @@ public final class AsaFailoverJobExecutor {
                 case 5 -> List.of(Read.SHOW_FAILOVER_STATE);
                 case 6, 7 -> List.of(Read.SHOW_FAILOVER, Read.SHOW_CONN_COUNT);
                 case 9 -> List.of(Read.SHOW_FAILOVER_HISTORY);
+                case AsaFailoverChecks.TRAFFIC_ARP -> List.of(Read.SHOW_TRAFFIC, Read.SHOW_ARP_STATISTICS);
                 default -> List.of(Read.SHOW_FAILOVER);
             };
             Optional<String> reason = needs.stream().map(refused::get).filter(java.util.Objects::nonNull).findFirst();
@@ -220,7 +248,7 @@ public final class AsaFailoverJobExecutor {
         return switch (check) {
             case 1 -> "Failover state and roles"; case 2 -> "Pair identity"; case 3 -> "Failover and state links";
             case 4 -> "Monitored interfaces"; case 5 -> "Configuration sync"; case 6 -> "Stateful replication";
-            case 7 -> "Sessions carried"; case 8 -> "Version parity"; case 9 -> "Last failover"; default -> "Pre-check";
+            case 7 -> "Sessions carried"; case 8 -> "Version parity"; case 9 -> "Last failover"; case AsaFailoverChecks.TRAFFIC_ARP -> "Traffic and ARP"; default -> "Pre-check";
         };
     }
 
@@ -255,6 +283,22 @@ public final class AsaFailoverJobExecutor {
                 history = read(session, approved.get(Read.SHOW_FAILOVER_HISTORY), Read.SHOW_FAILOVER_HISTORY, index++);
             if (approved.containsKey(Read.SHOW_CONN_COUNT))
                 conn = read(session, approved.get(Read.SHOW_CONN_COUNT), Read.SHOW_CONN_COUNT, index);
+            // Check 10: traffic and ARP on the member that reports itself Active, in this same session.
+            index++;
+            var activeShow = AsaFailoverChecks.parseShow(failover1.orElse(null));
+            TrafficArpCheck.Reading reading = null;
+            if (AsaFailoverChecks.active(activeShow).orElse(false)
+                    && (approved.containsKey(Read.SHOW_TRAFFIC) || approved.containsKey(Read.SHOW_ARP_STATISTICS))) {
+                Optional<String> traffic = approved.containsKey(Read.SHOW_TRAFFIC)
+                    ? read(session, approved.get(Read.SHOW_TRAFFIC), Read.SHOW_TRAFFIC, index++) : Optional.empty();
+                Optional<String> arp = approved.containsKey(Read.SHOW_ARP_STATISTICS)
+                    ? read(session, approved.get(Read.SHOW_ARP_STATISTICS), Read.SHOW_ARP_STATISTICS, index++) : Optional.empty();
+                var rate = AsaFailoverChecks.trafficBytesPerSecond(traffic.orElse(null));
+                var entries = AsaFailoverChecks.arpEntries(arp.orElse(null));
+                logShapes(Read.SHOW_TRAFFIC, traffic, approved.containsKey(Read.SHOW_TRAFFIC) && rate.isEmpty());
+                logShapes(Read.SHOW_ARP_STATISTICS, arp, approved.containsKey(Read.SHOW_ARP_STATISTICS) && entries.isEmpty());
+                reading = new TrafficArpCheck.Reading(rate.orElse(null), entries.orElse(null), null);
+            }
             var show1 = AsaFailoverChecks.parseShow(failover1.orElse(null));
             var show2 = AsaFailoverChecks.parseShow(failover2.orElse(null));
             var sync = AsaFailoverChecks.parseState(state.orElse(null));
@@ -267,7 +311,7 @@ public final class AsaFailoverJobExecutor {
             return new Observer(approved.containsKey(Read.SHOW_FAILOVER) ? show1 : null,
                 approved.containsKey(Read.SHOW_FAILOVER) ? show2 : null,
                 approved.containsKey(Read.SHOW_FAILOVER_STATE) ? sync : null,
-                approved.containsKey(Read.SHOW_FAILOVER_HISTORY) ? hist : null, inUse);
+                approved.containsKey(Read.SHOW_FAILOVER_HISTORY) ? hist : null, inUse, reading);
         } finally {
             ssh.disconnect(session);
         }

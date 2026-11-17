@@ -41,8 +41,8 @@ final class FgtFailoverChecks {
         Result {
             evidence = Collections.unmodifiableMap(new LinkedHashMap<>(evidence));
         }
-        /** Check 6 (not evaluated in this phase) and check 9 (information) never decide the outcome. */
-        boolean blocking() { return check != 6 && check != 9; }
+        /** Check 6 (not evaluated in this phase), check 9 (information) and check 10 (traffic and ARP, information) never decide the outcome. */
+        boolean blocking() { return check != 6 && check != 9 && check != TRAFFIC_ARP; }
     }
 
     // ---- get system ha status -----------------------------------------------------------------------------------
@@ -269,7 +269,62 @@ final class FgtFailoverChecks {
      * answered {@code get system status}, held in memory for the identity comparison only.
      */
     record Observation(HaStatus ha, HaConfig config, Checksums checksums, Uptimes uptimes, Flag flag,
-            Optional<LocalDateTime> systemTime, Optional<String> answeringSerial, boolean versionParsed) {}
+            Optional<LocalDateTime> systemTime, Optional<String> answeringSerial, boolean versionParsed,
+            TrafficArpCheck.Reading traffic) {
+        Observation(HaStatus ha, HaConfig config, Checksums checksums, Uptimes uptimes, Flag flag,
+                Optional<LocalDateTime> systemTime, Optional<String> answeringSerial, boolean versionParsed) {
+            this(ha, config, checksums, uptimes, flag, systemTime, answeringSerial, versionParsed, null);
+        }
+    }
+
+    // ---- get system performance status, get system arp (information check 10) -----------------------------------
+
+    /** The "Traffic and ARP (information)" check; read on the enrolled primary only and never blocking. */
+    static final int TRAFFIC_ARP = 10;
+    private static final java.util.regex.Pattern NETWORK_USAGE = java.util.regex.Pattern.compile(
+        "(?m)^\\s*Average network usage:\\s*(\\d{1,12}(?:\\.\\d{1,6})?)\\s*/\\s*(\\d{1,12}(?:\\.\\d{1,6})?)\\s*kbps in 1 minute\\b");
+    private static final java.util.regex.Pattern AVERAGE_SESSIONS = java.util.regex.Pattern.compile(
+        "(?m)^\\s*Average sessions:\\s*(\\d{1,15})\\s+sessions in 1 minute\\b");
+    private static final java.util.regex.Pattern ARP_ENTRY = java.util.regex.Pattern.compile(
+        "^\\s*\\d{1,3}(?:\\.\\d{1,3}){3}\\s+\\S+\\s+\\S+\\s+\\S+\\s*$");
+    private static final java.util.regex.Pattern ARP_HEADER = java.util.regex.Pattern.compile(
+        "^\\s*Address\\s+Age\\(min\\)\\s+Hardware Addr\\s+Interface\\s*$");
+
+    /** The parsed {@code get system performance status}: the one-minute inbound plus outbound rate and the average sessions. */
+    record Performance(Long bytesPerSecond, Long averageSessions) {}
+
+    /**
+     * "Average network usage: X / Y kbps in 1 minute" (inbound / outbound) as bytes per second (1 kbps = 125 bytes/s), and
+     * "Average sessions: N sessions in 1 minute". A line that is absent leaves its number null: never a default.
+     */
+    static Performance parsePerformance(String output) {
+        if (output == null) return new Performance(null, null);
+        Long rate = null, sessions = null;
+        var usage = NETWORK_USAGE.matcher(output);
+        if (usage.find()) {
+            double kbps = Double.parseDouble(usage.group(1)) + Double.parseDouble(usage.group(2));
+            rate = Math.round(kbps * 125.0);
+        }
+        var average = AVERAGE_SESSIONS.matcher(output);
+        if (average.find()) sessions = Long.parseLong(average.group(1));
+        return new Performance(rate, sessions);
+    }
+
+    /**
+     * {@code get system arp}: the number of entry lines (an IPv4 address and three more columns). Only the count leaves this
+     * method: no address, MAC or interface name is kept. The column header proves the answer's shape: an answer with neither
+     * entry lines nor the header is not recognised (null), and an answer with the header and no entries is zero.
+     */
+    static Integer arpEntries(String output) {
+        if (output == null) return null;
+        int entries = 0;
+        boolean header = false;
+        for (String line : output.split("\\R")) {
+            if (ARP_HEADER.matcher(line).matches()) header = true;
+            else if (ARP_ENTRY.matcher(line).matches()) entries++;
+        }
+        return entries > 0 || header ? entries : null;
+    }
 
     // ---- the nine checks --------------------------------------------------------------------------------------------
 

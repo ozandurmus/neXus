@@ -28,13 +28,16 @@ import com.securityexpert.nexus.ui2.persistence.device.HaPairIdentity;
 final class AsaFailoverChecks {
     private AsaFailoverChecks() {}
 
+    /** The "Traffic and ARP (information)" check; it is read on the active member only and never blocks. */
+    static final int TRAFFIC_ARP = 10;
     static final String PASS = "PASS", FAIL = "FAIL", UNKNOWN = "UNKNOWN", WARN = "WARN";
     /** A check's result: status, one reason code, and derived evidence of booleans, counts and enums only. */
     record Result(int check, String status, String reason, Map<String, Object> evidence) {
         Result {
             evidence = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(evidence));
         }
-        boolean blocking() { return check != 9; }
+        /** Checks 9 (last failover) and 10 (traffic and ARP) are information only. */
+        boolean blocking() { return check != 9 && check != TRAFFIC_ARP; }
     }
 
     // ---- show failover ------------------------------------------------------------------------------------------
@@ -209,7 +212,62 @@ final class AsaFailoverChecks {
     // ---- one observer -------------------------------------------------------------------------------------------
 
     /** Everything one member (observer) answered: two {@code show failover} samples and the other reads. */
-    record Observer(Show first, Show second, SyncState state, History history, Optional<Long> inUse) {}
+    record Observer(Show first, Show second, SyncState state, History history, Optional<Long> inUse,
+            TrafficArpCheck.Reading traffic) {
+        Observer(Show first, Show second, SyncState state, History history, Optional<Long> inUse) {
+            this(first, second, state, history, inUse, null);
+        }
+    }
+
+    // ---- show traffic, show arp statistics (information check 10) -----------------------------------------------
+
+    private static final Pattern INPUT_RATE = Pattern.compile("(?m)^\\s*1 minute input rate\\s+\\d+\\s+pkts/sec,\\s*(\\d{1,18})\\s+bytes/sec\\s*$");
+    private static final Pattern OUTPUT_RATE = Pattern.compile("(?m)^\\s*1 minute output rate\\s+\\d+\\s+pkts/sec,\\s*(\\d{1,18})\\s+bytes/sec\\s*$");
+    private static final Pattern AGGREGATED = Pattern.compile("(?im)^\\s*Aggregated Traffic on Physical Interface\\b.*$");
+
+    /**
+     * {@code show traffic}: the one-minute input plus output byte rates summed over the "Aggregated Traffic on Physical
+     * Interface" section when the answer has one, else over every interface. Empty when no pair of rates parses or the
+     * input and output rate lines do not pair up: never a guessed number.
+     */
+    static Optional<Long> trafficBytesPerSecond(String output) {
+        if (output == null || output.isBlank()) return Optional.empty();
+        Matcher section = AGGREGATED.matcher(output);
+        String scope = section.find() ? output.substring(section.end()) : output;
+        long sum = 0;
+        int input = 0, outputs = 0;
+        try {
+            Matcher in = INPUT_RATE.matcher(scope);
+            while (in.find()) { sum = Math.addExact(sum, Long.parseLong(in.group(1))); input++; }
+            Matcher out = OUTPUT_RATE.matcher(scope);
+            while (out.find()) { sum = Math.addExact(sum, Long.parseLong(out.group(1))); outputs++; }
+        } catch (ArithmeticException | NumberFormatException invalid) {
+            return Optional.empty();
+        }
+        return input == 0 || input != outputs ? Optional.empty() : Optional.of(sum);
+    }
+
+    private static final Pattern ARP_SAME_LINE = Pattern.compile("(?im)^\\s*Number of ARP entries[^:\\r\\n]*:\\s*(\\d{1,9})\\s*$");
+    private static final Pattern ARP_HEADING = Pattern.compile("(?im)^\\s*Number of ARP entries[^:\\r\\n]*:?\\s*$");
+    private static final Pattern ARP_NEXT_LINE = Pattern.compile("^\\s*[A-Za-z][A-Za-z0-9_-]*\\s*:\\s*(\\d{1,9})\\s*$");
+
+    /**
+     * {@code show arp statistics}: "Number of ARP entries" (the total), on the same line or as the first "name : N" line
+     * under the heading. Empty when the line is absent or the number does not parse.
+     */
+    static Optional<Integer> arpEntries(String output) {
+        if (output == null) return Optional.empty();
+        Matcher same = ARP_SAME_LINE.matcher(output);
+        if (same.find()) return Optional.of(Integer.parseInt(same.group(1)));
+        Matcher heading = ARP_HEADING.matcher(output);
+        if (!heading.find()) return Optional.empty();
+        for (String line : output.substring(heading.end()).split("\\R")) {
+            if (line.isBlank()) continue;
+            Matcher next = ARP_NEXT_LINE.matcher(line);
+            return next.matches() ? Optional.of(Integer.parseInt(next.group(1))) : Optional.empty();
+        }
+        return Optional.empty();
+    }
 
     // ---- the nine checks ----------------------------------------------------------------------------------------
 
@@ -347,7 +405,7 @@ final class AsaFailoverChecks {
     private static boolean usable(Show s) {
         return parsed(s) && s.tableHeader() && !s.table().isEmpty() && s.table().stream().allMatch(java.util.Objects::nonNull);
     }
-    private static Optional<Boolean> active(Show s) {
+    static Optional<Boolean> active(Show s) {
         return !parsed(s) || s.thisHost() == null ? Optional.empty() : Optional.of("Active".equals(s.thisHost().state()));
     }
 

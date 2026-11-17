@@ -265,6 +265,67 @@ public final class PanFailoverChecks {
     public static String sessionsMixedSources(String own,String other) {
         return "{\"reason\":\"mixed_sources\",\"source\":\""+own+"\",\"other_source\":\""+other+"\"}";
     }
+    // ---- information check 8: traffic and ARP (show counter interface all, show arp entry name all) -------------------
+
+    /** The "Traffic and ARP (information)" check number; read on the active firewall only and never blocking. */
+    public static final int TRAFFIC_ARP=8;
+    /** Hardware interfaces that carry management or HA traffic, not forwarded traffic: left out of the rate (like Check Point's sync interface). */
+    private static boolean forwardingInterface(String name) {
+        String lower=name.toLowerCase(Locale.ROOT);
+        return !(lower.startsWith("mgt") || lower.startsWith("mgmt") || lower.startsWith("ha"));
+    }
+    /**
+     * One {@code show counter interface all} sample: the sum of {@code ibytes} plus {@code obytes} of every forwarding
+     * hardware interface ({@code result/hw/entry}), per interface name (names never leave this class's callers' memory).
+     * Null when the answer is not recognised: no hardware block, an entry without a name or a non-numeric counter, a
+     * repeated name, or no forwarding interface at all.
+     */
+    static java.util.Map<String,Long> hardwareBytes(String xml) {
+        Element hw=child(result(xml),"hw");
+        if (hw==null) return null;
+        java.util.Map<String,Long> bytes=new java.util.HashMap<>();
+        for (Element entry:children(hw,"entry")) {
+            String name=text(entry,"name");
+            Long in=count(text(entry,"ibytes")),out=count(text(entry,"obytes"));
+            if (name.isEmpty() || in==null || out==null || bytes.containsKey(name)) return null;
+            if (!forwardingInterface(name)) continue;
+            try { bytes.put(name,Math.addExact(in,out)); } catch (ArithmeticException overflow) { return null; }
+        }
+        return bytes.isEmpty()?null:bytes;
+    }
+    /**
+     * The traffic rate in bytes per second between two samples of {@link #hardwareBytes}. Null (UNKNOWN) when either sample
+     * is not recognised, the elapsed time is not positive, an interface is missing from a sample, or a counter went down
+     * (a reset): never a negative or guessed rate.
+     */
+    public static Long trafficBytesPerSecond(String before,String after,long elapsedNanos) {
+        var first=hardwareBytes(before);
+        var second=hardwareBytes(after);
+        if (first==null || second==null || elapsedNanos<=0 || !first.keySet().equals(second.keySet())) return null;
+        long delta=0;
+        for (var entry:first.entrySet()) {
+            long later=second.get(entry.getKey());
+            if (later<entry.getValue()) return null;
+            try { delta=Math.addExact(delta,later-entry.getValue()); } catch (ArithmeticException overflow) { return null; }
+        }
+        return Math.round(delta/(elapsedNanos/1_000_000_000.0));
+    }
+    /**
+     * {@code show arp entry name all}: the {@code total} field when it is a number, else the number of {@code entries/entry}
+     * elements. Null when neither is present. Addresses and MACs are never read.
+     */
+    public static Integer arpEntries(String xml) {
+        Element result=result(xml);
+        if (result==null) return null;
+        Element total=child(result,"total");
+        if (total!=null) {
+            Long value=count(total.getTextContent().strip());
+            return value!=null && value<=Integer.MAX_VALUE?(int) (long) value:null;
+        }
+        Element entries=child(result,"entries");
+        if (entries==null) return null;
+        return children(entries,"entry").size();
+    }
     private static Long count(String value) {
         try { return value.matches("[0-9]+")?Long.parseLong(value):null; }
         catch(NumberFormatException invalid) { return null; }

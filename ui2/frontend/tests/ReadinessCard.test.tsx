@@ -84,4 +84,23 @@ describe("Readiness card", () => {
       expect(message).toHaveStyle({ WebkitLineClamp: "2" });
     } finally { vi.restoreAllMocks(); }
   });
+
+  it("shows the traffic and ARP information row with the numbers, the earlier-run ratios and a standby note, without blocking", () => {
+    const title = "Traffic and ARP (information)";
+    const traffic: ReadinessCheck[] = [
+      { checkNo: 10, title, member: "Member 1", device_id: "opaque-1", result: "PASS", blocking: false,
+        summary: "4 KB/s, 10 ARP entries; earlier run: 10 KB/s, 10 ARP entries; traffic 40% of the earlier run; ARP 100% of the earlier run; traffic below 50% of the earlier run" },
+      { checkNo: 10, title, member: "Member 2", device_id: "opaque-2", result: "NOT_EVALUATED", blocking: false, summary: "Read on the active member only" },
+    ];
+    render(<ReadinessCard {...props} vendor="cisco_asa" status="READY" checks={[...checks.filter(check => check.checkNo === 1), ...traffic]} />);
+    expect(screen.getByText("Ready")).toBeInTheDocument();
+    expect(screen.getByLabelText("Blocking: 0")).toBeInTheDocument();
+    expect(screen.getByLabelText("Passed: 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Info: 1")).toBeInTheDocument();
+    const cells = within(screen.getByText(title).closest("tr")!).getAllByRole("cell");
+    expect(cells[0].textContent).toContain("4 KB/s, 10 ARP entries");
+    expect(cells[0].textContent).toContain("traffic below 50% of the earlier run");
+    expect(cells[1].textContent).toBe("Read on the active member only");
+    expect(screen.getAllByText("info")).toHaveLength(1);
+  });
 });

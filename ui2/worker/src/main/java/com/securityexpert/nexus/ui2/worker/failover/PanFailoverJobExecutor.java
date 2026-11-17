@@ -35,6 +35,14 @@ public final class PanFailoverJobExecutor {
     private static final String SESSIONS="<show><session><info/></session></show>";
     /** PO 2026-10-24 (GR-7, gate row pan_failover_session_meter): check 6's read on PAN-OS 12 or later under replace_12. */
     private static final String SESSION_METER="<show><session><meter/></session></show>";
+    /**
+     * Information check 8, "Traffic and ARP": the two reads on the active firewall of a readiness run. The literals live here
+     * and in V248 (DRAFTED until the PO approves). The counter read is taken twice, {@link #SAMPLE_GAP} apart.
+     */
+    static final String COUNTERS="<show><counter><interface>all</interface></counter></show>";
+    static final String ARP="<show><arp><entry name = 'all'/></arp></show>";
+    static final String COUNTERS_GATE="pan_failover_traffic_counters",ARP_GATE="pan_failover_arp_table";
+    static final Duration SAMPLE_GAP=Duration.ofSeconds(5);
     private static final String SUSPEND="<request><high-availability><state><suspend/></state></high-availability></request>";
     private static final String FUNCTIONAL="<request><high-availability><state><functional/></state></high-availability></request>";
     private static final Pattern SUCCESS=Pattern.compile("status\\s*=\\s*[\"']success[\"']");
@@ -70,6 +78,9 @@ public final class PanFailoverJobExecutor {
     private final com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches panSwitches;
     /** The read the pre-phase active count came from; a later phase compared against it must use the same read. */
     private String beforeSessionSource;
+    private java.util.function.LongSupplier nanos=System::nanoTime;
+    /** Test hook: the clock that times the two counter samples. */
+    void useNanoClock(java.util.function.LongSupplier clock) { this.nanos=java.util.Objects.requireNonNull(clock); }
 
     public PanFailoverJobExecutor(JooqCpFailoverRepository store,DeviceRepository devices,
             JobLeaseRepository leases,JobStepAttemptRepository attempts,DeviceTransport transport,
@@ -146,6 +157,7 @@ public final class PanFailoverJobExecutor {
             PanFailoverChecks.State a=read(first),b=read(second);
             Long before=checks("pre",first,second,a,b,null,null);
             if (readiness) {
+                trafficAndArp(first,second,a,b);
                 finishReadiness("READY",0,"PASS");
                 return;
             }
@@ -215,8 +227,71 @@ public final class PanFailoverJobExecutor {
         return switch (check) {
             case 1 -> "Mode and roles"; case 2 -> "Peer relationship"; case 3 -> "HA links";
             case 4 -> "Configuration sync"; case 5 -> "Session synchronization";
-            case 6 -> "Sessions carried"; case 7 -> "Version parity"; default -> "Pre-check";
+            case 6 -> "Sessions carried"; case 7 -> "Version parity";
+            case PanFailoverChecks.TRAFFIC_ARP -> "Traffic and ARP"; default -> "Pre-check";
         };
+    }
+
+    /**
+     * Check 8 (information), readiness runs only: the active firewall's traffic rate (two counter samples at least
+     * {@link #SAMPLE_GAP} apart) and ARP entry count, compared with the unit's earlier readiness run. It never reaches
+     * {@code readinessFailure}: a result of any status leaves the run's outcome to checks 1-7. A gate that is not
+     * approved sends nothing; a read the firewall refuses leaves its number unknown.
+     */
+    private void trafficAndArp(Peer first,Peer second,PanFailoverChecks.State a,PanFailoverChecks.State b)
+            throws InterruptedException {
+        boolean firstActive="active".equals(a.role()),secondActive="active".equals(b.role());
+        Peer active=firstActive==secondActive?null:firstActive?first:second;
+        TrafficArpCheck.Outcome outcome;
+        if (active==null) outcome=TrafficArpCheck.notRead("ACTIVE_MEMBER_NOT_DETERMINED");
+        else {
+            String counterRefusal=gateRefusal(COUNTERS,COUNTERS_GATE),arpRefusal=gateRefusal(ARP,ARP_GATE);
+            Long rate=null;
+            Integer entries=null;
+            try {
+                if (counterRefusal==null) {
+                    String sampleA=call(active,COUNTERS);
+                    long start=nanos.getAsLong();
+                    pause.sleep(SAMPLE_GAP);
+                    String sampleB=call(active,COUNTERS);
+                    rate=PanFailoverChecks.trafficBytesPerSecond(sampleA,sampleB,nanos.getAsLong()-start);
+                }
+            } catch (Stop refused) { if (!"COMMAND_UNAVAILABLE".equals(refused.code)) throw refused; }
+            try {
+                if (arpRefusal==null) entries=PanFailoverChecks.arpEntries(call(active,ARP));
+            } catch (Stop refused) { if (!"COMMAND_UNAVAILABLE".equals(refused.code)) throw refused; }
+            var reading=new TrafficArpCheck.Reading(rate,entries,null);
+            outcome=TrafficArpCheck.evaluate(reading,rate==null && entries==null?java.util.Optional.empty()
+                :TrafficArpCheck.previous(store,runId,PanFailoverChecks.TRAFFIC_ARP));
+            String refusal=counterRefusal!=null?counterRefusal:arpRefusal;
+            if (refusal!=null && TrafficArpCheck.UNKNOWN.equals(outcome.status()))
+                outcome=new TrafficArpCheck.Outcome(outcome.status(),refusal,outcome.evidence());
+        }
+        for (Peer peer:java.util.List.of(first,second)) {
+            boolean standby=active!=null && peer!=active;
+            store.check(runId,"pre",peer.id(),null,PanFailoverChecks.TRAFFIC_ARP,
+                standby?TrafficArpCheck.NOT_EVALUATED:outcome.status(),
+                trafficDerived(standby?"NOT_ACTIVE_MEMBER":outcome.reason(),standby?java.util.Map.of():outcome.evidence()));
+        }
+    }
+    private static String trafficDerived(String reason,java.util.Map<String,Object> evidence) {
+        var body=new java.util.LinkedHashMap<String,Object>();
+        body.put("reason",reason);
+        body.putAll(evidence);
+        try { return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(body); }
+        catch (com.fasterxml.jackson.core.JsonProcessingException invalid) { throw new IllegalStateException("Derived projection unavailable"); }
+    }
+    /** Null when the gate resolves KNOWN; otherwise the reason the read is not sent. */
+    private String gateRefusal(String command,String gateId) {
+        try {
+            var resolved=GateResolver.resolve(new CanonicalCommandKey("palo_alto","pan_firewall",
+                "not_applicable","PAN_XML_API",command),java.util.Optional.of(ActionClass.CLASS_0_READ),gates);
+            if (resolved instanceof GateResolution.Known known && gateId.equals(known.gateId())) return null;
+            if (resolved instanceof GateResolution.Unknown unknown && unknown.reason().contains("DRAFTED")) return "GATE_NOT_SIGNED_OFF";
+            return "GATE_UNAVAILABLE";
+        } catch (com.securityexpert.nexus.ui2.capability.AmbiguousGateResolutionException ambiguous) {
+            return "GATE_UNAVAILABLE";
+        }
     }
     private Peer peer(DeviceSummaryRecord summary) {
         var device=devices.find(summary.deviceId()).filter(d -> d.permitsReadCollection())
@@ -244,7 +319,8 @@ public final class PanFailoverJobExecutor {
             :SESSIONS.equals(command)?"pan_failover_session_info"
             :SESSION_METER.equals(command)?"pan_failover_session_meter"
             :SUSPEND.equals(command)?"pan_failover_suspend"
-            :FUNCTIONAL.equals(command)?"pan_failover_functional":null;
+            :FUNCTIONAL.equals(command)?"pan_failover_functional"
+            :COUNTERS.equals(command)?COUNTERS_GATE:ARP.equals(command)?ARP_GATE:null;
         if (expected==null) throw new Stop("COMMAND_NOT_APPROVED",0);
         var resolved=GateResolver.resolve(new CanonicalCommandKey("palo_alto","pan_firewall",
             "not_applicable","PAN_XML_API",command),java.util.Optional.of(isRead(command)
@@ -258,7 +334,7 @@ public final class PanFailoverJobExecutor {
     }
     private static boolean isRead(String command) {
         return STATE.equals(command) || SESSION_SYNC.equals(command) || SESSIONS.equals(command)
-            || SESSION_METER.equals(command);
+            || SESSION_METER.equals(command) || COUNTERS.equals(command) || ARP.equals(command);
     }
     private String call(Peer peer,String command) throws InterruptedException {
         var g=gate(command);

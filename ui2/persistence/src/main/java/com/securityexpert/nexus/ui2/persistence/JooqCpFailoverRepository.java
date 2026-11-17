@@ -237,6 +237,28 @@ public class JooqCpFailoverRepository {
                 c.get("derived",JSONB.class).data(),c.get("observed_at",java.time.OffsetDateTime.class).toInstant())));
     }
 
+    /**
+     * The most recent earlier finished readiness run of the SAME unit (vendor, cluster reference, opaque VS) that stored a
+     * numeric {@code trafficBytesPerSecond} and {@code arpEntries} for the given check number, for the before/after
+     * comparison of the "Traffic and ARP" information check. The member is not part of the key on purpose: the active
+     * member changes across a failover, and the numbers are the unit's. Numbers only; an earlier run without them is skipped.
+     */
+    public Optional<Check> previousReadinessTraffic(String currentRun,int checkNo) {
+        return boundary.inTransaction(dsl -> dsl.fetch(
+            "select c.* from failover_check_result c join failover_run r on r.run_id=c.run_id "
+            + "join failover_run current on current.run_id={0} where r.run_id<>current.run_id "
+            + "and r.vendor=current.vendor and r.cluster_ref=current.cluster_ref "
+            + "and r.vs_id is not distinct from current.vs_id and r.run_kind='READINESS' "
+            + "and r.state in ('DONE','STOPPED') and r.finished_at<=current.started_at "
+            + "and c.check_no={1} and c.phase='pre' "
+            + "and jsonb_typeof(c.derived->'trafficBytesPerSecond')='number' "
+            + "and jsonb_typeof(c.derived->'arpEntries')='number' "
+            + "order by c.observed_at desc,c.result_id desc limit 1",currentRun,checkNo)
+            .stream().findFirst().map(c -> new Check(c.get("phase",String.class),c.get("member_ref",String.class),
+                c.get("vs_id",String.class),c.get("check_no",Integer.class),c.get("status",String.class),
+                c.get("derived",JSONB.class).data(),c.get("observed_at",java.time.OffsetDateTime.class).toInstant())));
+    }
+
     public Approval createApproval(String cluster, String vsId, Instant from, Instant until, String reason, String actor) {
         return createApproval(cluster,vsId,from,until,reason,actor,"check_point");
     }

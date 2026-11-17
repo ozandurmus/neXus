@@ -2447,7 +2447,7 @@ export function getOverview(): Promise<OverviewView> {
 }
 
 export type CpFailoverState = "PLANNED" | "PRECHECK" | "FAILING_OVER" | "SWITCHED" | "POSTCHECK" | "RETURNING" | "DONE" | "STOPPED";
-export type CpFailoverCheckStatus = "PASS" | "FAIL" | "UNKNOWN" | "WARN";
+export type CpFailoverCheckStatus = "PASS" | "FAIL" | "UNKNOWN" | "WARN" | "NOT_EVALUATED";
 export interface ReadinessMember { device_id: string; hostname: string | null; ha_role: string | null }
 export interface CpFailoverUnit { maskedName?: string; maskedMembers?: Array<Omit<ReadinessMember, "hostname"> & { maskedLabel: string }>; masked?: boolean; members?: ReadinessMember[]; unitId: string; clusterId: string; cluster_member_ref: string; vendor?: "check_point" | "palo_alto" | "cisco_asa" | "fortinet"; virtual_system?: string;
   /** VSX: the chassis and each Virtual System are separate units; the chassis is listed first (VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md). */
