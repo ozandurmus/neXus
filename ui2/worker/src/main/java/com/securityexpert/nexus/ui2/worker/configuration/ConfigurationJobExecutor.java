@@ -93,6 +93,16 @@ public final class ConfigurationJobExecutor {
 
     public JobOutcome execute(String jobId, long leaseEpoch, String targetDeviceId, ConfigurationRequest request,
             boolean strictRefuseEnabled) {
+        String defaultKind = request != null && request.vendor() != null
+                ? request.vendor().name().toLowerCase(java.util.Locale.ROOT) + "_configuration_collect"
+                : "configuration_collect";
+        try (var jobLog = com.securityexpert.nexus.ui2.platform.logging.JobLogContext.open(jobId, defaultKind)) {
+            return executeScoped(jobId, leaseEpoch, targetDeviceId, request, strictRefuseEnabled);
+        }
+    }
+
+    private JobOutcome executeScoped(String jobId, long leaseEpoch, String targetDeviceId, ConfigurationRequest request,
+            boolean strictRefuseEnabled) {
 
         Optional<com.securityexpert.nexus.ui2.jobs.device.DeviceEnrollmentSnapshot> enrollment =
                 deviceEnrollmentReadPort.findEnrollment(targetDeviceId);

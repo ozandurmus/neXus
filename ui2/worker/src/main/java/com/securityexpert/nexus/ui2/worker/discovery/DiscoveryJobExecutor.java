@@ -103,6 +103,12 @@ public final class DiscoveryJobExecutor {
     }
 
     public JobOutcome execute(String jobId, long leaseEpoch, String runId) {
+        try (var jobLog = com.securityexpert.nexus.ui2.platform.logging.JobLogContext.open(jobId, "discovery_enumerate")) {
+            return executeScoped(jobId, leaseEpoch, runId);
+        }
+    }
+
+    private JobOutcome executeScoped(String jobId, long leaseEpoch, String runId) {
         LOGGER.log(System.Logger.Level.DEBUG, "Executing discovery job");
         Optional<DiscoveryRun> run = discoveryRunRepository.findRun(runId);
         if (run.isEmpty() || run.get().state() != DiscoveryRunState.REQUESTED) {

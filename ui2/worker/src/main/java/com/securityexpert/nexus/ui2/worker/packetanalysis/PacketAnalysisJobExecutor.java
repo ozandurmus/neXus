@@ -51,6 +51,13 @@ public final class PacketAnalysisJobExecutor {
 
     /** @return the terminal job state this call wrote, or {@code null} when the lease was lost (zombie stop). */
     public JobState execute(String jobId, long epoch, String caseId) {
+        try (var jobLog = com.securityexpert.nexus.ui2.platform.logging.JobLogContext.open(
+                jobId, com.securityexpert.nexus.ui2.platform.PacketAnalysisJob.CAPABILITY)) {
+            return executeScoped(jobId, epoch, caseId);
+        }
+    }
+
+    private JobState executeScoped(String jobId, long epoch, String caseId) {
         Optional<PacketAnalysisRepository.RunRow> run = repository.runForJob(jobId);
         Optional<PacketAnalysisRepository.CaseRow> found = PacketAnalysisPaths.isId(caseId)
                 ? repository.caseForWorker(caseId) : Optional.empty();

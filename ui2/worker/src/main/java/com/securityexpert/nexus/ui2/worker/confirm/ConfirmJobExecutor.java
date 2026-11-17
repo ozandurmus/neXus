@@ -78,6 +78,16 @@ public final class ConfirmJobExecutor {
      */
     public JobOutcome execute(String jobId, long leaseEpoch, String targetDeviceId, ConfirmRequest request,
             PeerFollowResolver.ConfirmRequestFactory peerRequestFactory, boolean strictRefuseEnabled) {
+        String defaultKind = request != null && request.vendor() == Vendor.PALO_ALTO
+                ? "device_confirm_palo_alto"
+                : "device_confirm_check_point";
+        try (var jobLog = com.securityexpert.nexus.ui2.platform.logging.JobLogContext.open(jobId, defaultKind)) {
+            return executeScoped(jobId, leaseEpoch, targetDeviceId, request, peerRequestFactory, strictRefuseEnabled);
+        }
+    }
+
+    private JobOutcome executeScoped(String jobId, long leaseEpoch, String targetDeviceId, ConfirmRequest request,
+            PeerFollowResolver.ConfirmRequestFactory peerRequestFactory, boolean strictRefuseEnabled) {
 
         long jobStart = System.currentTimeMillis();
         LOG.log(System.Logger.Level.INFO,

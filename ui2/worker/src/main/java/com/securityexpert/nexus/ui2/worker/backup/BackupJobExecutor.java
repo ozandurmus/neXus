@@ -201,7 +201,8 @@ public final class BackupJobExecutor {
 
     public JobOutcome execute(String jobId, long leaseEpoch, String targetDeviceId, BackupRequest request, String capabilityId) {
         JobTranscript transcript = new JobTranscript();
-        try (JobTranscriptScope ignored = JobTranscriptScope.open(transcript)) {
+        try (var jobLog = com.securityexpert.nexus.ui2.platform.logging.JobLogContext.open(jobId, capabilityId);
+             JobTranscriptScope ignored = JobTranscriptScope.open(transcript)) {
             JobTranscriptScope.add("job", "note", "backup started: " + capabilityId);
             try {
                 JobOutcome outcome = executeScoped(jobId, leaseEpoch, targetDeviceId, request, capabilityId);

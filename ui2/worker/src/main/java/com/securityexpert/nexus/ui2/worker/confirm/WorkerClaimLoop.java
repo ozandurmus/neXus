@@ -461,13 +461,15 @@ public final class WorkerClaimLoop {
         // it while it was still running, a second thread started the same backup on the same device,
         // and the pair looped until the fifth epoch failed it.
         java.util.concurrent.ScheduledFuture<?> heartbeat = scheduleHeartbeat(claimed);
-        try (var admission = admissionScope(claimed);
+        try (var jobLog = com.securityexpert.nexus.ui2.platform.logging.JobLogContext.open(String.valueOf(claimed.jobId()));
+             var admission = admissionScope(claimed);
              var cancellation = new com.securityexpert.nexus.ui2.worker.JobCancellationScope(
                 () -> leaseRepository.cancellationRequested(claimed.jobId(), claimed.leaseEpoch()))) {
             com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
             if (admission != null) {
                 admission.acquireFleet();
                 var job = jobRecordDao.find(claimed.jobId()).orElseThrow();
+                com.securityexpert.nexus.ui2.platform.logging.JobLogContext.setJobKind(job.capabilityId());
                 if ("discovery_run".equals(job.targetKind())) {
                     moduleRuntime.discoveryEndpointKey(job.targetRef()).ifPresent(admission::preflight);
                 } else deviceRepository.findEndpointByDeviceId(job.targetDeviceId()).ifPresent(endpoint -> {
@@ -534,6 +536,7 @@ public final class WorkerClaimLoop {
             return true;
         }
         JobRow job = jobOpt.get();
+        com.securityexpert.nexus.ui2.platform.logging.JobLogContext.setJobKind(job.capabilityId());
         LOGGER.log(System.Logger.Level.INFO,
                 "[WORKER_CLAIM] Worker {0} claimed job {1} ({2}) for device {3} leaseEpoch={4}",
                 workerId, claimed.jobId(), job.capabilityId(), job.targetDeviceId(), claimed.leaseEpoch());
