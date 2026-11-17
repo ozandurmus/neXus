@@ -152,7 +152,7 @@ final class AsaFailoverChecks {
             else if (lower.equals("sync done - standby")) standbyDone++;
             else if (lower.equals("sync skipped") || lower.equals("sync skipped - standby")) skipped++;
             else if (lower.startsWith("cold standby") || lower.startsWith("sync config") || lower.startsWith("sync file system")
-                    || lower.startsWith("bulk sync")) notDone++;
+                    || lower.startsWith("bulk sync") || lower.startsWith("config syncing") || lower.startsWith("interface config syncing")) notDone++;
             else other++;
         }
         return new SyncState(present, done, standbyDone, skipped, notDone, other);
@@ -368,9 +368,11 @@ final class AsaFailoverChecks {
         // A section with no recognised line: present, but its words are not known (not "missing").
         if (!aRecognised || !bRecognised) return result(5, UNKNOWN, "SYNC_STATE_NOT_RECOGNISED", "unrecognised", unrecognised);
         int skipped = a.skipped() + b.skipped();
-        // "Sync Skipped" means the units found equal hashes at the last sync check; later changes are not reflected. Never a PASS.
+        // "Sync Skipped" (ASA 9.18(1)+, Config Sync Optimization): the active and standby configurations match, so no
+        // configuration sync was needed (Cisco ASA command reference, show failover state). An in-sync state; later
+        // changes keep replicating command by command.
         if (skipped > 0)
-            return result(5, UNKNOWN, "SYNC_SKIPPED", "observersSkipped", (a.skipped() > 0 ? 1 : 0) + (b.skipped() > 0 ? 1 : 0));
+            return result(5, PASS, "SYNC_SKIPPED_CONFIG_MATCH", "observersSkipped", (a.skipped() > 0 ? 1 : 0) + (b.skipped() > 0 ? 1 : 0));
         return result(5, PASS, "SYNC_DONE", "observersSyncDone", 2);
     }
 
