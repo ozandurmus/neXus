@@ -305,7 +305,7 @@ public final class AsaFailoverJobExecutor {
             var hist = AsaFailoverChecks.parseHistory(history.orElse(null));
             var inUse = AsaFailoverChecks.inUse(conn.orElse(null));
             logShapes(Read.SHOW_FAILOVER, failover1, show1.failoverOn() == null || !show1.tableHeader());
-            logShapes(Read.SHOW_FAILOVER_STATE, state, !sync.sectionPresent());
+            logShapes(Read.SHOW_FAILOVER_STATE, state, !sync.sectionPresent() || sync.done() + sync.standbyDone() == 0 || sync.unrecognised() > 0);
             logShapes(Read.SHOW_FAILOVER_HISTORY, history, hist.entries() == 0);
             logShapes(Read.SHOW_CONN_COUNT, conn, inUse.isEmpty());
             return new Observer(approved.containsKey(Read.SHOW_FAILOVER) ? show1 : null,

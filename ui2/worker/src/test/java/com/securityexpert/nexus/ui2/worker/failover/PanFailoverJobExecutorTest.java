@@ -209,10 +209,12 @@ class PanFailoverJobExecutorTest {
     private static GateRegistryPort gates() {
         var loaded=GateRegistryFixtureLoader.loadFromStream(PanFailoverJobExecutorTest.class
             .getResourceAsStream("/capabilities/gate_registry_fixture.yaml"));
-        var rows=loaded.stream().map(r -> trafficSigned && java.util.Set.of(PanFailoverJobExecutor.COUNTERS_GATE,
+        // V249 signed both rows off (PO 2026-11-17); the tests start from the state before it unless trafficSigned.
+        var rows=loaded.stream().map(r -> java.util.Set.of(PanFailoverJobExecutor.COUNTERS_GATE,
                 PanFailoverJobExecutor.ARP_GATE).contains(r.gateId())
             ? new com.securityexpert.nexus.ui2.capability.GateRow(r.gateId(),r.vendor(),r.platformRoleScope(),r.shellContext(),
-                r.transportKind(),r.canonicalCommandKey(),r.actionClass(),com.securityexpert.nexus.ui2.capability.SignOffState.SIGNED_OFF,
+                r.transportKind(),r.canonicalCommandKey(),r.actionClass(),trafficSigned ? com.securityexpert.nexus.ui2.capability.SignOffState.SIGNED_OFF
+                    : com.securityexpert.nexus.ui2.capability.SignOffState.DRAFTED,
                 r.timeoutS(),r.retryRule(),r.maxFrequency(),r.sessionReuseRule(),r.unsupportedBehaviorRef(),r.secretOutputRisk(),
                 r.safeTelemetryFields(),r.sourceDocumentPointer()):r).toList();
         return key -> rows.stream().filter(row -> row.key().equals(key)).toList();

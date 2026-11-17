@@ -157,8 +157,18 @@ class FgtFailoverJobExecutorTest {
             });
     }
     private static List<GateRow> fixtureRows() {
-        return GateRegistryFixtureLoader.loadFromStream(FgtFailoverJobExecutorTest.class.getResourceAsStream("/capabilities/gate_registry_fixture.yaml"));
+        return trafficArpDrafted(GateRegistryFixtureLoader.loadFromStream(FgtFailoverJobExecutorTest.class.getResourceAsStream("/capabilities/gate_registry_fixture.yaml")));
     }
+    /** V249 signed the traffic and ARP rows off (PO 2026-11-17); these tests start from the state before it, and the
+     *  tests about the information check force them SIGNED_OFF themselves. */
+    private static List<GateRow> trafficArpDrafted(List<GateRow> rows) {
+        var ids = java.util.Set.of("asa_failover_show_traffic", "asa_failover_show_arp_statistics", "fgt_failover_performance_status",
+            "fgt_failover_arp", "pan_failover_traffic_counters", "pan_failover_arp_table");
+        return rows.stream().map(r -> ids.contains(r.gateId()) ? new GateRow(r.gateId(), r.vendor(), r.platformRoleScope(), r.shellContext(),
+            r.transportKind(), r.canonicalCommandKey(), r.actionClass(), SignOffState.DRAFTED, r.timeoutS(), r.retryRule(), r.maxFrequency(),
+            r.sessionReuseRule(), r.unsupportedBehaviorRef(), r.secretOutputRisk(), r.safeTelemetryFields(), r.sourceDocumentPointer()) : r).toList();
+    }
+
     private static GateRegistryPort signedOff() {
         var rows = fixtureRows();
         assertTrue(rows.stream().filter(r -> NEW_GATES.contains(r.gateId())).allMatch(r -> r.signOffState() == SignOffState.SIGNED_OFF));
