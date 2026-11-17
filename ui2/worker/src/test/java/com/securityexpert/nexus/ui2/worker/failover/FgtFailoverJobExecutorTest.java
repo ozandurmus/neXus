@@ -79,7 +79,11 @@ class FgtFailoverJobExecutorTest {
                         case "execInteractive" -> {
                             String command = ((ExecSpec) args[1]).command();
                             commands.add(command);
-                            return new ExecResult.Completed(answer(command), 0);
+                            String answer = answer(command);
+                            // The real SSH transport reports a prompt that came back with no text as ChannelFailed("empty output").
+                            if (emptyMoves && (command.equals("config vdom") || command.startsWith("edit ")))
+                                return new ExecResult.ChannelFailed("empty output");
+                            return new ExecResult.Completed(answer, 0);
                         }
                         default -> throw new AssertionError(method.getName());
                     }
