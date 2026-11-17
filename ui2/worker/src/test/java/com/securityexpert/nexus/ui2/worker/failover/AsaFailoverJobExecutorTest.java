@@ -35,11 +35,19 @@ class AsaFailoverJobExecutorTest {
     private static final List<String> FAILOVER_GATES = List.of("asa_failover_show_failover", "asa_failover_show_failover_state",
         "asa_failover_show_failover_history", "asa_failover_show_conn_count");
 
+    private static final String TRAFFIC_WITH_AGGREGATE = AsaFixtures.traffic(true);
+    private static final List<String> TRAFFIC_GATES = List.of("asa_failover_show_traffic", "asa_failover_show_arp_statistics");
+    /** The earlier readiness run's row for check 10, when a test wants one. */
+    private static Optional<JooqCpFailoverRepository.Check> previousTraffic = Optional.empty();
+    @org.junit.jupiter.api.BeforeEach void resetPrevious() { previousTraffic = Optional.empty(); }
+
     private static final class Script {
         final List<String> commands = new ArrayList<>();
         final List<String> sessions = new ArrayList<>();
         int connects;
         String mode = "Security context mode: single\n";
+        /** Synthetic answers of the two information reads (check 10). */
+        String traffic = TRAFFIC_WITH_AGGREGATE, arp = "Number of ARP entries:\nASA : 15\n";
         /** Per member and command, how many answers were given (sample 1 vs sample 2 of show failover). */
         final java.util.Map<String, Integer> asked = new java.util.HashMap<>();
 
@@ -76,6 +84,8 @@ class AsaFailoverJobExecutorTest {
                 case "show failover state" -> AsaFixtures.stateOk(!active);
                 case "show failover history" -> AsaFixtures.history(3, "10:11:12 +03 Nov 10 2026");
                 case "show conn count" -> AsaFixtures.conn(active ? 4778 : 3801, 1_085_767);
+                case "show traffic" -> traffic;
+                case "show arp statistics" -> arp;
                 default -> throw new AssertionError("unexpected command: " + command);
             };
         }
@@ -139,8 +149,17 @@ class AsaFailoverJobExecutorTest {
         return key -> rows.stream().filter(row -> row.key().equals(key)).toList();
     }
 
+    /** The two information reads forced SIGNED_OFF (the committed rows are DRAFTED until the PO approves the literals). */
+    private static GateRegistryPort signedOffWithTraffic() {
+        var rows = fixtureRows().stream().map(r -> TRAFFIC_GATES.contains(r.gateId())
+            ? new GateRow(r.gateId(), r.vendor(), r.platformRoleScope(), r.shellContext(), r.transportKind(), r.canonicalCommandKey(),
+                r.actionClass(), SignOffState.SIGNED_OFF, r.timeoutS(), r.retryRule(), r.maxFrequency(), r.sessionReuseRule(),
+                r.unsupportedBehaviorRef(), r.secretOutputRisk(), r.safeTelemetryFields(), r.sourceDocumentPointer()) : r).toList();
+        return key -> rows.stream().filter(row -> row.key().equals(key)).toList();
+    }
+
     private record Outcome(String state, String outcome, String failedCheck, String message, List<String> checks, List<String> derived,
-            List<JobState> job, Script script, List<Duration> pauses, int ledgered) {}
+            List<JobState> job, Script script, List<Duration> pauses, int ledgered, List<String> rows) {}
 
     private static Outcome run(Script script, GateRegistryPort gates, String kind, AsaFailoverReadinessSwitch readinessSwitch,
             Optional<HaPairIdentity> recorded) {
@@ -154,7 +173,10 @@ class AsaFailoverJobExecutorTest {
             last.set(0, String.valueOf((Object) inv.getArgument(3))); last.set(1, String.valueOf((Object) inv.getArgument(4))); last.set(2, String.valueOf((Object) inv.getArgument(5)));
             return null;
         }).when(store).state(anyString(), anyString(), anyString(), nullable(String.class), nullable(String.class), nullable(String.class));
-        doAnswer(inv -> { checks.add(inv.getArgument(4) + ":" + inv.getArgument(5)); derived.add(inv.getArgument(6)); return null; })
+        List<String> rows = new ArrayList<>();
+        when(store.previousReadinessTraffic(anyString(), anyInt())).thenAnswer(inv -> previousTraffic);
+        doAnswer(inv -> { checks.add(inv.getArgument(4) + ":" + inv.getArgument(5)); derived.add(inv.getArgument(6));
+                rows.add(inv.getArgument(2) + "|" + inv.getArgument(4) + "|" + inv.getArgument(5) + "|" + inv.getArgument(6)); return null; })
             .when(store).check(anyString(), anyString(), anyString(), nullable(String.class), anyInt(), anyString(), anyString());
         AtomicInteger ledger = new AtomicInteger();
         doAnswer(inv -> { ledger.incrementAndGet(); return null; }).when(store).command(anyString(), anyString());
@@ -166,7 +188,7 @@ class AsaFailoverJobExecutorTest {
             readinessSwitch, pauses::add, Duration.ZERO, Clock.fixed(Instant.parse("2026-11-13T12:00:00Z"), ZoneOffset.UTC))
             .execute("job-1", 1);
         return new Outcome(states.isEmpty() ? null : states.get(states.size() - 1), last.get(0), last.get(1), last.get(2),
-            checks, derived, leases.to(), script, pauses, ledger.get());
+            checks, derived, leases.to(), script, pauses, ledger.get(), rows);
     }
     private static final Optional<HaPairIdentity> PAIR = Optional.of(new HaPairIdentity(CLUSTER, "cisco_asa",
         AsaFixtures.SERIAL_A, AsaFixtures.SERIAL_B, HaPairIdentity.State.MATCH));
@@ -179,11 +201,11 @@ class AsaFailoverJobExecutorTest {
         assertTrue(script.commands.isEmpty());
         assertEquals("DONE", out.state());
         assertEquals("UNKNOWN", out.outcome());
-        assertEquals(18, out.checks().size());
-        for (int no = 1; no <= 9; no++) {
+        assertEquals(20, out.checks().size());
+        for (int no = 1; no <= 10; no++) {
             assertTrue(out.checks().contains(no + ":UNKNOWN"), "check " + no);
         }
-        assertEquals(18, out.derived().stream().filter(d -> d.contains("\"reason\":\"GATE_NOT_SIGNED_OFF\"")).count());
+        assertEquals(20, out.derived().stream().filter(d -> d.contains("\"reason\":\"GATE_NOT_SIGNED_OFF\"")).count());
         assertEquals(List.of(JobState.EXECUTING, JobState.COMPLETED), out.job());
         assertEquals(0, out.ledgered());
     }
@@ -266,5 +288,67 @@ class AsaFailoverJobExecutorTest {
         String all = String.join("\n", out.derived());
         for (String forbidden : List.of("SYNTH000", "9.18", "192.0.2.", "outside", "GigabitEthernet", "FW-TANGO", "FW-JULIET"))
             assertFalse(all.contains(forbidden), forbidden);
+    }
+
+    // ---- information check 10: traffic and ARP -----------------------------------------------------------------------
+
+    private static String row(Outcome out, String member) {
+        return out.rows().stream().filter(r -> r.startsWith(member + "|10|")).findFirst().orElseThrow();
+    }
+
+    @Test void draftedTrafficRowsSendNothingNewAndCheckTenIsUnknownNonBlocking() {
+        Script script = new Script();
+        Outcome out = run(script, signedOffGates(), "READINESS", ON, PAIR);
+        assertEquals(0, script.count("show traffic") + script.count("show arp statistics"));
+        assertEquals("READY", out.outcome(), "an unapproved information check never blocks");
+        assertEquals(1, out.checks().stream().filter("10:UNKNOWN"::equals).count());
+        assertEquals(1, out.checks().stream().filter("10:NOT_EVALUATED"::equals).count());
+        assertTrue(row(out, ACTIVE).contains("GATE_NOT_SIGNED_OFF"));
+        assertEquals(10, out.ledgered());
+    }
+    @Test void signedOffTrafficReadsAreSentOnceOnTheActiveMemberOnly() {
+        Script script = new Script();
+        Outcome out = run(script, signedOffWithTraffic(), "READINESS", ON, PAIR);
+        assertEquals(1, script.count("show traffic"));
+        assertEquals(1, script.count("show arp statistics"));
+        assertTrue(script.commands.stream().filter(c -> c.contains("show traffic") || c.contains("show arp statistics"))
+            .allMatch(c -> c.startsWith(ACTIVE + ":")), "never on the standby");
+        assertEquals(1, script.sessions.stream().filter(ACTIVE::equals).count(), "the existing session, no new one");
+        assertEquals(List.of(ACTIVE + ":show conn count", ACTIVE + ":show traffic", ACTIVE + ":show arp statistics"),
+            script.commands.subList(script.commands.size() - 3, script.commands.size()));
+        assertEquals(12, out.ledgered());
+        assertEquals("READY", out.outcome());
+        String active = row(out, ACTIVE);
+        assertTrue(active.contains("|PASS|"), active);
+        assertTrue(active.contains("\"trafficBytesPerSecond\":3000"), active);
+        assertTrue(active.contains("\"arpEntries\":15"), active);
+        assertFalse(active.contains("previous"));
+        assertTrue(row(out, STANDBY).contains("|NOT_EVALUATED|") && row(out, STANDBY).contains("NOT_ACTIVE_MEMBER"));
+        assertFalse(String.join("\n", out.derived()).contains("GigabitEthernet"));
+    }
+    @Test void anEarlierRunGivesTheBeforeAfterRatiosAndAFlagWithoutBlocking() {
+        previousTraffic = Optional.of(new JooqCpFailoverRepository.Check("pre", STANDBY, null, 10, "PASS",
+            "{\"trafficBytesPerSecond\":10000,\"arpEntries\":15}", Instant.EPOCH));
+        Outcome out = run(new Script(), signedOffWithTraffic(), "READINESS", ON, PAIR);
+        String active = row(out, ACTIVE);
+        assertEquals("READY", out.outcome());
+        assertTrue(active.contains("\"previousTrafficBytesPerSecond\":10000") && active.contains("\"previousArpEntries\":15"), active);
+        assertTrue(active.contains("\"trafficRatio\":0.3") && active.contains("\"trafficDropped\":true"), active);
+        assertTrue(active.contains("\"arpRatio\":1.0") && active.contains("\"arpDropped\":false"), active);
+        assertTrue(active.contains("|PASS|"));
+    }
+    @Test void unparsableAndZeroAnswersAreUnknownAndNeverBlock() {
+        Script script = new Script();
+        script.traffic = "outside:\n\treceived (in 5.0 secs):\n"; script.arp = "ERROR: invalid\n";
+        Outcome out = run(script, signedOffWithTraffic(), "READINESS", ON, PAIR);
+        assertEquals("READY", out.outcome());
+        assertTrue(row(out, ACTIVE).contains("|UNKNOWN|") && row(out, ACTIVE).contains("TRAFFIC_AND_ARP_UNAVAILABLE"));
+        script = new Script();
+        script.traffic = AsaFixtures.traffic(false).replaceAll("\\d+ bytes/sec", "0 bytes/sec"); script.arp = "Number of ARP entries:\nASA : 0\n";
+        out = run(script, signedOffWithTraffic(), "READINESS", ON, PAIR);
+        assertEquals("READY", out.outcome());
+        String active = row(out, ACTIVE);
+        assertTrue(active.contains("|UNKNOWN|") && active.contains("TRAFFIC_AND_ARP_ZERO"), active);
+        assertTrue(active.contains("\"trafficBytesPerSecond\":0") && active.contains("\"arpEntries\":0"), active);
     }
 }

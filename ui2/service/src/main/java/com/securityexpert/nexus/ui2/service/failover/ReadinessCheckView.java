@@ -13,17 +13,21 @@ import com.fasterxml.jackson.databind.JsonNode;
 public final class ReadinessCheckView {
     private ReadinessCheckView() {}
 
+    /** "Traffic and ARP (information)": check 10 of Cisco ASA and FortiGate, check 8 of Palo Alto. Never blocking. */
+    private static final int TRAFFIC_ARP=10,PAN_TRAFFIC_ARP=8;
+    private static final String TRAFFIC_ARP_TITLE="Traffic and ARP (information)";
+
     public static Map<String,Object> fields(String vendor,int no,String member,String status,JsonNode d,Instant observedAt) {
         if ("cisco_asa".equals(vendor)) return Map.of("title",asaTitle(no),"member",member,"result",status,
-            "blocking",no!=9,"summary",asaSummary(no,status,d));
+            "blocking",no!=9 && no!=TRAFFIC_ARP,"summary",asaSummary(no,status,d));
         if ("fortinet".equals(vendor)) return Map.of("title",fgtTitle(no),"member",member,"result",status,
-            "blocking",no!=6 && no!=9,"summary",fgtSummary(no,status,d));
+            "blocking",no!=6 && no!=9 && no!=TRAFFIC_ARP,"summary",fgtSummary(no,status,d));
         boolean pan="palo_alto".equals(vendor);
         // A VSX chassis has no traffic interface in VS0: each Virtual System's unit measures its own traffic.
         boolean perVirtualSystem=!pan && no==8 && "NOT_EVALUATED".equals(status)
             && "TRAFFIC_MEASURED_PER_VIRTUAL_SYSTEM".equals(d.path("reason").asText());
         return Map.of("title",title(pan,no),"member",member,"result",status,
-            "blocking",pan || (no!=5 && no!=13 && !perVirtualSystem),"summary",summary(pan,no,status,d,observedAt));
+            "blocking",pan ? no!=PAN_TRAFFIC_ARP : (no!=5 && no!=13 && !perVirtualSystem),"summary",summary(pan,no,status,d,observedAt));
     }
 
     private static String fgtTitle(int no) {
@@ -31,7 +35,7 @@ public final class ReadinessCheckView {
             case 1 -> "HA mode and members"; case 2 -> "Heartbeat links"; case 3 -> "Monitored interfaces";
             case 4 -> "Configuration sync"; case 5 -> "Session pickup"; case 6 -> "Sessions carried (not evaluated yet)";
             case 7 -> "Version parity"; case 8 -> "Switch preconditions"; case 9 -> "Last failover (information)";
-            default -> "Check";
+            case TRAFFIC_ARP -> TRAFFIC_ARP_TITLE; default -> "Check";
         };
     }
     /** FortiGate: reason codes and counts only, and always "as the primary reports"; never a serial, host name, address or version. */
@@ -65,6 +69,7 @@ public final class ReadinessCheckView {
                 : "Secondary uptime is below the margin";
             case 9 -> "WARN".equals(status) ? "Last failover less than 6 hours ago"
                 : pass ? "Last failover more than 6 hours ago" : "Last failover time not available";
+            case TRAFFIC_ARP -> trafficArpSummary(d,true);
             default -> "Check result unavailable";
         };
     }
@@ -74,7 +79,7 @@ public final class ReadinessCheckView {
             case 1 -> "Failover state and roles"; case 2 -> "Pair identity"; case 3 -> "Failover and state links";
             case 4 -> "Monitored interfaces"; case 5 -> "Configuration sync"; case 6 -> "Stateful replication";
             case 7 -> "Sessions carried"; case 8 -> "Version parity"; case 9 -> "Last failover (information)";
-            default -> "Check";
+            case TRAFFIC_ARP -> TRAFFIC_ARP_TITLE; default -> "Check";
         };
     }
     /** Cisco ASA: reason codes and counts only; never a serial, address, interface name or version value. */
@@ -106,6 +111,7 @@ public final class ReadinessCheckView {
                 : "UNKNOWN".equals(status) ? "Version line missing" : "Software versions differ";
             case 9 -> "WARN".equals(status) ? "Last failover less than 6 hours ago"
                 : pass ? "Last failover more than 6 hours ago" : "Last failover time not available";
+            case TRAFFIC_ARP -> trafficArpSummary(d,false);
             default -> "Check result unavailable";
         };
     }
@@ -114,7 +120,8 @@ public final class ReadinessCheckView {
         if (pan) return switch(no) {
             case 1 -> "HA mode and roles"; case 2 -> "Peer relationship"; case 3 -> "HA links";
             case 4 -> "Configuration sync"; case 5 -> "Session synchronization";
-            case 6 -> "Sessions carried"; case 7 -> "Version parity"; default -> "Check";
+            case 6 -> "Sessions carried"; case 7 -> "Version parity"; case PAN_TRAFFIC_ARP -> TRAFFIC_ARP_TITLE;
+            default -> "Check";
         };
         return switch(no) {
             case 1 -> "Cluster state"; case 2 -> "Cluster IP table"; case 3 -> "Cluster interfaces";
@@ -127,6 +134,12 @@ public final class ReadinessCheckView {
 
     private static String summary(boolean pan,int no,String status,JsonNode d,Instant observedAt) {
         boolean pass="PASS".equals(status);
+        if (pan && no==PAN_TRAFFIC_ARP) {
+            String reason=d.path("reason").asText();
+            if ("GATE_NOT_SIGNED_OFF".equals(reason)) return "Not read: the command is not approved yet";
+            if ("GATE_UNAVAILABLE".equals(reason)) return "Not read: the command gate is unavailable";
+            return trafficArpSummary(d,false);
+        }
         if (!pan && no==8 && "NOT_EVALUATED".equals(status)
                 && "TRAFFIC_MEASURED_PER_VIRTUAL_SYSTEM".equals(d.path("reason").asText()))
             return "Measured per Virtual System";
@@ -216,6 +229,40 @@ public final class ReadinessCheckView {
             default -> "Check result unavailable";
         };
     }
+
+    /**
+     * The "Traffic and ARP (information)" line: the two numbers, and against the unit's earlier readiness run the earlier
+     * numbers, the two ratios and a flag when one fell below 50 %. Numbers only, never an address, MAC or interface name.
+     * {@code fortigate}: the primary reports it, so the line says so, and the average session count is added.
+     */
+    private static String trafficArpSummary(JsonNode d,boolean fortigate) {
+        String reason=d.path("reason").asText();
+        if ("NOT_ACTIVE_MEMBER".equals(reason)) return "Read on the active member only";
+        if ("ACTIVE_MEMBER_NOT_DETERMINED".equals(reason)) return "Not read: the active member could not be determined";
+        if ("GATE_NOT_SIGNED_OFF".equals(reason)) return "Not read: the command is not approved yet";
+        if ("GATE_UNAVAILABLE".equals(reason)) return "Not read: the command gate is unavailable";
+        boolean traffic=measuredRate(d.path("trafficBytesPerSecond")),arp=d.path("arpEntries").isIntegralNumber();
+        if (!traffic && !arp) return "Traffic rate and ARP count unavailable";
+        StringBuilder text=new StringBuilder(traffic ? rate(d.path("trafficBytesPerSecond")) : "Traffic rate unavailable")
+            .append(", ").append(arp ? d.path("arpEntries").asLong()+" ARP entries" : "ARP count unavailable");
+        if (d.path("averageSessions").isIntegralNumber()) text.append(", ").append(d.path("averageSessions").asLong()).append(" average sessions");
+        if (reason.endsWith("_ZERO")) text.append(" (a zero may be a quiet window or an empty table)");
+        if (d.path("previousArpEntries").isIntegralNumber() && measuredRate(d.path("previousTrafficBytesPerSecond"))) {
+            text.append("; earlier run: ").append(rate(d.path("previousTrafficBytesPerSecond"))).append(", ")
+                .append(d.path("previousArpEntries").asLong()).append(" ARP entries");
+            if (d.path("trafficRatio").isNumber()) text.append("; traffic ").append(percent(d.path("trafficRatio").asDouble()));
+            if (d.path("arpRatio").isNumber()) text.append("; ARP ").append(percent(d.path("arpRatio").asDouble()));
+            if (d.path("trafficDropped").asBoolean(false) || d.path("arpDropped").asBoolean(false)) {
+                var dropped=new java.util.ArrayList<String>();
+                if (d.path("trafficDropped").asBoolean(false)) dropped.add("traffic");
+                if (d.path("arpDropped").asBoolean(false)) dropped.add("ARP");
+                text.append("; ").append(String.join(" and ",dropped)).append(" below 50% of the earlier run");
+            }
+        }
+        if (fortigate) text.append(" (as the primary reports)");
+        return text.toString();
+    }
+    private static String percent(double ratio) { return Math.round(ratio*100)+"% of the earlier run"; }
 
     /** Check 7's evidence names each field MATCH / MISMATCH / MISSING (never a version value): the names with this outcome. */
     private static String versionFields(JsonNode d,String outcome) {

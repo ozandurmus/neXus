@@ -43,6 +43,10 @@ class PanFailoverJobExecutorTest {
         /** PO 2026-10-24: the synthetic show session meter answer -- "ok" (two vsys entries), "malformed", "empty". */
         String meter="ok";
         int suspendCount,functionalCount,callCount;
+        /** Information check 8 (synthetic): "ok", "reset" (a counter goes down), "malformed", "error" (error envelope). */
+        String counters="ok",arp="ok";
+        int counterSamples,arpCalls;
+        final List<String> counterTargets=new ArrayList<>();
         DeviceTransport transport() {
             return (DeviceTransport) Proxy.newProxyInstance(DeviceTransport.class.getClassLoader(),
                 new Class<?>[]{DeviceTransport.class},(proxy,method,args) -> {
@@ -62,6 +66,30 @@ class PanFailoverJobExecutorTest {
                         return writeReply("RETURNING");
                     }
                     boolean first=A.equals(((ApiTarget)args[0]).endpointId());
+                    if (command.equals(PanFailoverJobExecutor.COUNTERS)) {
+                        counterSamples++; counterTargets.add(((ApiTarget)args[0]).endpointId());
+                        if ("error".equals(counters)) return new XmlApiResult.Completed(200,"<response status=\"error\"/>");
+                        if ("malformed".equals(counters)) return new XmlApiResult.Completed(200,
+                            "<response status=\"success\"><result><hw><entry><name>ethernet1/1</name><ibytes>many</ibytes><obytes>1</obytes></entry></hw></result></response>");
+                        long n="reset".equals(counters)?3-counterSamples:counterSamples;
+                        return new XmlApiResult.Completed(200,"<response status=\"success\"><result>"
+                            +"<ifnet><entry><name>ethernet1/1</name><ibytes>7</ibytes><obytes>7</obytes></entry></ifnet><hw>"
+                            +"<entry><name>ethernet1/1</name><ibytes>"+(1_000_000+n*10_000)+"</ibytes><obytes>"+(2_000_000+n*10_000)+"</obytes></entry>"
+                            +"<entry><name>ethernet1/2</name><ibytes>"+(3_000_000+n*10_000)+"</ibytes><obytes>"+(4_000_000+n*10_000)+"</obytes></entry>"
+                            +"<entry><name>mgt</name><ibytes>"+(9_000_000+n*777_000)+"</ibytes><obytes>5</obytes></entry>"
+                            +"<entry><name>ha1</name><ibytes>"+(8_000_000+n*777_000)+"</ibytes><obytes>5</obytes></entry>"
+                            +"</hw></result></response>");
+                    }
+                    if (command.equals(PanFailoverJobExecutor.ARP)) {
+                        arpCalls++; counterTargets.add("arp:"+((ApiTarget)args[0]).endpointId());
+                        if ("error".equals(arp)) return new XmlApiResult.Completed(200,"<response status=\"error\"/>");
+                        if ("zero".equals(arp)) return new XmlApiResult.Completed(200,
+                            "<response status=\"success\"><result><total>0</total><entries/></result></response>");
+                        return new XmlApiResult.Completed(200,"<response status=\"success\"><result><max>8192</max><total>3</total>"
+                            +"<entries><entry><ip>192.0.2.1</ip><mac>00:00:5e:00:53:01</mac></entry>"
+                            +"<entry><ip>192.0.2.2</ip><mac>00:00:5e:00:53:02</mac></entry>"
+                            +"<entry><ip>192.0.2.3</ip><mac>00:00:5e:00:53:03</mac></entry></entries></result></response>");
+                    }
                     if (missingFields && !first && (command.contains("<state-synchronization/>")
                             || command.contains("<session><info/>")))
                         return new XmlApiResult.Completed(200,"<response status=\"success\"><result><other/>"
@@ -169,9 +197,24 @@ class PanFailoverJobExecutorTest {
                 default -> throw new AssertionError(method.getName());
             });
     }
+    /** Test state for information check 8: the two new rows forced SIGNED_OFF (the committed rows are DRAFTED), the earlier run, the clock. */
+    private static boolean trafficSigned;
+    private static Optional<JooqCpFailoverRepository.Check> previousTraffic=Optional.empty();
+    private static java.util.function.LongSupplier nanoClock;
+    @org.junit.jupiter.api.BeforeEach void resetTrafficState() {
+        trafficSigned=false; previousTraffic=Optional.empty();
+        var ticks=new java.util.concurrent.atomic.AtomicLong(-5_000_000_000L);
+        nanoClock=() -> ticks.addAndGet(5_000_000_000L);
+    }
     private static GateRegistryPort gates() {
-        var rows=GateRegistryFixtureLoader.loadFromStream(PanFailoverJobExecutorTest.class
+        var loaded=GateRegistryFixtureLoader.loadFromStream(PanFailoverJobExecutorTest.class
             .getResourceAsStream("/capabilities/gate_registry_fixture.yaml"));
+        var rows=loaded.stream().map(r -> trafficSigned && java.util.Set.of(PanFailoverJobExecutor.COUNTERS_GATE,
+                PanFailoverJobExecutor.ARP_GATE).contains(r.gateId())
+            ? new com.securityexpert.nexus.ui2.capability.GateRow(r.gateId(),r.vendor(),r.platformRoleScope(),r.shellContext(),
+                r.transportKind(),r.canonicalCommandKey(),r.actionClass(),com.securityexpert.nexus.ui2.capability.SignOffState.SIGNED_OFF,
+                r.timeoutS(),r.retryRule(),r.maxFrequency(),r.sessionReuseRule(),r.unsupportedBehaviorRef(),r.secretOutputRisk(),
+                r.safeTelemetryFields(),r.sourceDocumentPointer()):r).toList();
         return key -> rows.stream().filter(row -> row.key().equals(key)).toList();
     }
     private static Result run(Script script) { return run(script,false); }
@@ -223,10 +266,12 @@ class PanFailoverJobExecutorTest {
         doAnswer(inv -> {checks.add(inv.getArgument(1)+":"+inv.getArgument(4)+":"+inv.getArgument(5));
             derived.add(inv.getArgument(6)); return null;})
             .when(store).check(anyString(),anyString(),anyString(),nullable(String.class),anyInt(),anyString(),anyString());
-        new PanFailoverJobExecutor(store,devices(),leases(),attempts(),script.transport(),
+        when(store.previousReadinessTraffic(anyString(),anyInt())).thenAnswer(inv -> previousTraffic);
+        var executor=new PanFailoverJobExecutor(store,devices(),leases(),attempts(),script.transport(),
             ref -> new PanCredentialMaterial("synthetic-user","synthetic-password".toCharArray()),gates(),d -> {},
-            Duration.ZERO,mutationSwitch,panSwitches)
-            .execute("job-1",1);
+            Duration.ZERO,mutationSwitch,panSwitches);
+        executor.useNanoClock(nanoClock);
+        executor.execute("job-1",1);
         return new Result(state.get(),outcome.get(),checks,derived,failedCheck.get());
     }
     private record Result(String state,String outcome,List<String> checks,List<String> derived,String failedCheck) {}
@@ -460,7 +505,7 @@ class PanFailoverJobExecutorTest {
         Script script=new Script(); script.missingFields=true; script.badVersion=true;
         Result result=run(script,true);
         assertEquals("NOT_READY",result.outcome());
-        assertEquals(14,result.checks().size());
+        assertEquals(16,result.checks().size(),"seven checks and the information check 8, both members");
         assertTrue(result.checks().contains("pre:4:UNKNOWN"));
         assertEquals(2,result.checks().stream().filter(c -> c.equals("pre:7:FAIL")).count());
         assertEquals(0,script.suspendCount);
@@ -627,5 +672,89 @@ class PanFailoverJobExecutorTest {
         test.switchTimeoutDoesNotReturn(); test.postcheckFailDoesNotReturn(); test.addedPrecheckFailuresNeverSuspend();
         test.lowSessionCarryStopsBeforeReturn();
         test.readinessNeverWritesAndRejectsWriteCommands();
+    }
+
+    // ---- information check 8: traffic and ARP ---------------------------------------------------------------------------
+
+    private static final String TRAFFIC_ROW_PREFIX="pre:8:";
+    private static JooqCpFailoverRepository.Check earlierRun(String derived) {
+        return new JooqCpFailoverRepository.Check("pre",B,null,8,"PASS",derived,Instant.EPOCH);
+    }
+    private static String active8(Result r) {
+        return r.derived().stream().filter(d -> d.contains("trafficBytesPerSecond")).findFirst().orElse("");
+    }
+
+    @Test void draftedTrafficRowsSendNothingAndCheckEightIsUnknownAndNonBlocking() {
+        Script script=new Script();
+        Result result=run(script,true);
+        assertEquals(0,script.counterSamples+script.arpCalls);
+        assertEquals("READY",result.outcome(),"an unapproved information check never blocks");
+        assertEquals(2,result.checks().stream().filter(c -> c.startsWith(TRAFFIC_ROW_PREFIX)).count());
+        assertTrue(result.checks().contains("pre:8:NOT_EVALUATED"),"the standby's row");
+        assertTrue(result.checks().contains("pre:8:UNKNOWN"));
+        assertTrue(result.derived().stream().anyMatch(d -> d.contains("\"reason\":\"GATE_NOT_SIGNED_OFF\"")));
+        assertTrue(script.sentCommands.stream().noneMatch(c -> c.contains("<counter>") || c.contains("<arp>")));
+    }
+    @Test void signedOffRowsReadCountersTwiceAndArpOnceOnTheActiveFirewallOnly() {
+        trafficSigned=true;
+        Script script=new Script();
+        Result result=run(script,true);
+        assertEquals("READY",result.outcome());
+        assertEquals(2,script.counterSamples);
+        assertEquals(1,script.arpCalls);
+        assertEquals(List.of(A,A,"arp:"+A),script.counterTargets,"the active member (first) only");
+        assertEquals(1,result.checks().stream().filter(c -> c.equals("pre:8:PASS")).count());
+        assertEquals(1,result.checks().stream().filter(c -> c.equals("pre:8:NOT_EVALUATED")).count());
+        String evidence=active8(result);
+        // Two forwarding interfaces, 2 x 2 x 10000 bytes in 5 s; mgt and ha1 are left out; ARP total 3.
+        assertTrue(evidence.contains("\"trafficBytesPerSecond\":8000"),evidence);
+        assertTrue(evidence.contains("\"arpEntries\":3"),evidence);
+        assertFalse(evidence.contains("previous"));
+        assertFalse(evidence.contains("192.0.2") || evidence.contains("00:00:5e") || evidence.contains("ethernet"));
+    }
+    @Test void anEarlierRunGivesRatiosAndFlagsADropWithoutBlocking() {
+        trafficSigned=true;
+        previousTraffic=Optional.of(earlierRun("{\"trafficBytesPerSecond\":20000,\"arpEntries\":3}"));
+        Result result=run(new Script(),true);
+        String evidence=active8(result);
+        assertEquals("READY",result.outcome());
+        assertTrue(evidence.contains("\"previousTrafficBytesPerSecond\":20000"),evidence);
+        assertTrue(evidence.contains("\"previousArpEntries\":3"),evidence);
+        assertTrue(evidence.contains("\"trafficRatio\":0.4"),evidence);
+        assertTrue(evidence.contains("\"trafficDropped\":true"),evidence);
+        assertTrue(evidence.contains("\"arpRatio\":1.0"),evidence);
+        assertTrue(evidence.contains("\"arpDropped\":false"),evidence);
+        assertTrue(result.checks().contains("pre:8:PASS"),"a drop is flagged, not failed");
+    }
+    @Test void aCounterResetAndAnErrorEnvelopeLeaveTrafficUnknownButStillCountArp() {
+        trafficSigned=true;
+        for (String mode:List.of("reset","malformed","error")) {
+            Script script=new Script(); script.counters=mode;
+            Result result=run(script,true);
+            assertEquals("READY",result.outcome(),mode);
+            assertTrue(result.checks().contains("pre:8:UNKNOWN"),mode);
+            String evidence=result.derived().stream().filter(d -> d.contains("TRAFFIC_UNAVAILABLE")).findFirst().orElse("");
+            assertTrue(evidence.contains("\"arpEntries\":3"),mode+" "+evidence);
+            assertFalse(evidence.contains("trafficBytesPerSecond"),mode);
+            assertEquals(1,script.arpCalls);
+        }
+    }
+    @Test void anEmptyArpTableIsAQuietWindowUnknownNeverBlocking() {
+        trafficSigned=true;
+        Script script=new Script(); script.arp="zero";
+        Result result=run(script,true);
+        assertEquals("READY",result.outcome());
+        assertTrue(result.derived().stream().anyMatch(d -> d.contains("\"reason\":\"ARP_ZERO\"") && d.contains("\"arpEntries\":0")));
+        script=new Script(); script.arp="error";
+        result=run(script,true);
+        assertEquals("READY",result.outcome());
+        assertTrue(result.derived().stream().anyMatch(d -> d.contains("\"reason\":\"ARP_UNAVAILABLE\"")));
+    }
+    @Test void aFailoverRunNeverReadsTrafficAndArp() {
+        trafficSigned=true;
+        Script script=new Script();
+        Result result=run(script,false);
+        assertEquals(0,script.counterSamples+script.arpCalls);
+        assertTrue(result.checks().stream().noneMatch(c -> c.contains(":8:")));
     }
 }

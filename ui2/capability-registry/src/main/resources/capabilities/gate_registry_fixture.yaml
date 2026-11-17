@@ -6573,3 +6573,99 @@ gates:
     secret_output_risk: "secret-bearing (collector archive)"
     safe_telemetry_fields: ["exitStatus"]
     source_document_pointer: "docs/design/SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md section 6 (cpdata_collector --run); PO approval 2026-11-15 (PO record section 2)"
+  - gate_id: asa_failover_show_traffic
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_INTERACTIVE'
+    canonical_command_key: 'show traffic'
+    action_class: 'read'
+    sign_off_state: 'DRAFTED'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per readiness run, on the active member only'
+    session_reuse_rule: 'the existing readiness SSH session of the active member (privilege 15, single context), after the failover reads'
+    unsupported_behavior_ref: 'refused, unparsable or timed out -> the "Traffic and ARP (information)" check is UNKNOWN and never blocks; nothing is retried'
+    secret_output_risk: 'output names interfaces; reduced in memory to one summed byte rate, never stored or recorded in the transcript'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cisco ASA command reference (show traffic): 1 minute input rate plus 1 minute output rate, bytes/sec, over the Aggregated Traffic on Physical Interface section or else every interface; DRAFT, awaiting PO approval of the exact literals (PO chat 2026-11-17)'
+  - gate_id: asa_failover_show_arp_statistics
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_INTERACTIVE'
+    canonical_command_key: 'show arp statistics'
+    action_class: 'read'
+    sign_off_state: 'DRAFTED'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per readiness run, on the active member only'
+    session_reuse_rule: 'the existing readiness SSH session of the active member (privilege 15, single context), after the failover reads'
+    unsupported_behavior_ref: 'refused, unparsable or timed out -> the "Traffic and ARP (information)" check is UNKNOWN and never blocks; nothing is retried'
+    secret_output_risk: 'output carries counters only; reduced in memory to the Number of ARP entries line, never stored or recorded in the transcript'
+    safe_telemetry_fields: []
+    source_document_pointer: 'Cisco ASA command reference (show arp statistics): Number of ARP entries; DRAFT, awaiting PO approval of the exact literals (PO chat 2026-11-17)'
+  - gate_id: fgt_failover_performance_status
+    vendor: 'fortinet'
+    platform_role_scope: 'fortigate'
+    shell_context: 'top_or_global'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'get system performance status'
+    action_class: 'read'
+    sign_off_state: 'DRAFTED'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per readiness run, on the enrolled primary only'
+    session_reuse_rule: 'one SSH session on the enrolled cluster address (global context when VDOMs are on), commands one at a time with a configurable pause'
+    unsupported_behavior_ref: 'refused, unparsable or timed out -> the "Traffic and ARP (information)" check is UNKNOWN and never blocks; nothing is retried'
+    secret_output_risk: 'output carries counters only; reduced in memory to the 1-minute network usage and average sessions, never stored or recorded in the transcript'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiOS CLI reference (get system performance status): Average network usage inbound / outbound kbps in 1 minute, Average sessions in 1 minute; DRAFT, awaiting PO approval of the exact literals (PO chat 2026-11-17)'
+  - gate_id: fgt_failover_arp
+    vendor: 'fortinet'
+    platform_role_scope: 'fortigate'
+    shell_context: 'top_or_global'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'get system arp'
+    action_class: 'read'
+    sign_off_state: 'DRAFTED'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per readiness run, on the enrolled primary only'
+    session_reuse_rule: 'one SSH session on the enrolled cluster address (global context when VDOMs are on), commands one at a time with a configurable pause'
+    unsupported_behavior_ref: 'refused, unparsable or timed out -> the "Traffic and ARP (information)" check is UNKNOWN and never blocks; nothing is retried'
+    secret_output_risk: 'output names addresses, MAC addresses and interfaces; reduced in memory to the number of entry lines, never stored or recorded in the transcript'
+    safe_telemetry_fields: []
+    source_document_pointer: 'FortiOS CLI reference (get system arp): entry lines are counted, addresses are never kept; DRAFT, awaiting PO approval of the exact literals (PO chat 2026-11-17)'
+  - gate_id: pan_failover_traffic_counters
+    vendor: 'palo_alto'
+    platform_role_scope: 'pan_firewall'
+    shell_context: 'not_applicable'
+    transport_kind: 'PAN_XML_API'
+    canonical_command_key: '<show><counter><interface>all</interface></counter></show>'
+    action_class: 'read'
+    sign_off_state: 'DRAFTED'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'twice per readiness run, at least 5 s apart, on the active firewall only (counter reset or decrease -> UNKNOWN)'
+    session_reuse_rule: 'one key per peer per run'
+    unsupported_behavior_ref: 'refused, unparsable or timed out -> the "Traffic and ARP (information)" check is UNKNOWN and never blocks; nothing is retried'
+    secret_output_risk: 'output names interfaces; reduced in memory to one summed ibytes plus obytes delta per second over the hardware interfaces, never stored'
+    safe_telemetry_fields: []
+    source_document_pointer: 'PAN-OS XML API op command (show counter interface all): hardware interface ibytes and obytes; DRAFT, awaiting PO approval of the exact literals (PO chat 2026-11-17)'
+  - gate_id: pan_failover_arp_table
+    vendor: 'palo_alto'
+    platform_role_scope: 'pan_firewall'
+    shell_context: 'not_applicable'
+    transport_kind: 'PAN_XML_API'
+    canonical_command_key: '<show><arp><entry name = ''all''/></arp></show>'
+    action_class: 'read'
+    sign_off_state: 'DRAFTED'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per readiness run, on the active firewall only'
+    session_reuse_rule: 'one key per peer per run'
+    unsupported_behavior_ref: 'refused, unparsable or timed out -> the "Traffic and ARP (information)" check is UNKNOWN and never blocks; nothing is retried'
+    secret_output_risk: 'output names addresses, MAC addresses and interfaces; reduced in memory to the total field (else the entry count), never stored'
+    safe_telemetry_fields: []
+    source_document_pointer: 'PAN-OS XML API op command (show arp all): total; DRAFT, awaiting PO approval of the exact literals (PO chat 2026-11-17)'

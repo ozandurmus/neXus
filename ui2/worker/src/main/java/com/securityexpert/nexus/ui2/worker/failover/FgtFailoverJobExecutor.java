@@ -60,14 +60,17 @@ public final class FgtFailoverJobExecutor {
 
     @FunctionalInterface public interface Pause { void sleep(Duration duration) throws InterruptedException; }
 
-    /** The six reads: gate id, shell context of the gate row, literal, shape-log line cap. */
+    /** The eight reads: gate id, shell context of the gate row, literal, shape-log line cap. */
     enum Read {
         STATUS("fgt_get_system_status", "top_or_global", "get system status", 40),
         HA_STATUS("fgt_get_system_ha_status", "cli", "get system ha status", 120),
         HA_CONFIG("fgt_show_full_configuration_system_ha", "top_or_global", "show full-configuration system ha", 80),
         CHECKSUM("fgt_failover_checksum_cluster", "top_or_global", "diagnose sys ha checksum cluster", 40),
         DUMP("fgt_failover_dump_by_group", "top_or_global", "diagnose sys ha dump-by group", 60),
-        FLAG("fgt_failover_ha_failover_status", "top_or_global", "execute ha failover status", 10);
+        FLAG("fgt_failover_ha_failover_status", "top_or_global", "execute ha failover status", 10),
+        /** Information check 10 (traffic and ARP). The two literals live here and in V248 (DRAFTED until the PO approves). */
+        PERFORMANCE("fgt_failover_performance_status", "top_or_global", "get system performance status", 20),
+        ARP("fgt_failover_arp", "top_or_global", "get system arp", 10);
         final String gateId, shell, command; final int maxShapeLines;
         Read(String gateId, String shell, String command, int maxShapeLines) {
             this.gateId = gateId; this.shell = shell; this.command = command; this.maxShapeLines = maxShapeLines;
@@ -149,8 +152,15 @@ public final class FgtFailoverJobExecutor {
             Observation observation = approved.isEmpty()
                 ? new Observation(null, null, null, null, null, Optional.empty(), Optional.empty(), false)
                 : collect(device.credentialReferenceId(), approved, movesOk);
-            List<Result> results = withGateReasons(FgtFailoverChecks.evaluate(observation,
-                platformFacts.find(deviceId).flatMap(f -> f.serialNumber()).map(String::strip).filter(s -> !s.isEmpty())), refused);
+            List<Result> evaluated = new ArrayList<>(FgtFailoverChecks.evaluate(observation,
+                platformFacts.find(deviceId).flatMap(f -> f.serialNumber()).map(String::strip).filter(s -> !s.isEmpty())));
+            // Check 10 (information): the primary's reading against the unit's earlier readiness run.
+            TrafficArpCheck.Reading reading = observation.traffic() == null ? TrafficArpCheck.Reading.NONE : observation.traffic();
+            TrafficArpCheck.Outcome traffic = TrafficArpCheck.evaluate(reading,
+                reading.trafficBytesPerSecond() == null && reading.arpEntries() == null ? Optional.empty()
+                    : TrafficArpCheck.previous(store, runId, FgtFailoverChecks.TRAFFIC_ARP));
+            evaluated.add(new Result(FgtFailoverChecks.TRAFFIC_ARP, traffic.status(), traffic.reason(), traffic.evidence()));
+            List<Result> results = withGateReasons(evaluated, refused);
             for (Result result : results) store.check(runId, "pre", deviceId, null, result.check(), result.status(), derived(result));
             String outcome = FgtFailoverChecks.outcome(results);
             Result lead = results.stream().filter(Result::blocking).filter(r -> "FAIL".equals(r.status())).findFirst()
@@ -200,6 +210,7 @@ public final class FgtFailoverJobExecutor {
                 case 5 -> List.of(Read.HA_CONFIG);
                 case 8 -> List.of(Read.HA_CONFIG, Read.DUMP, Read.FLAG);
                 case 9 -> List.of(Read.HA_STATUS, Read.STATUS);
+                case FgtFailoverChecks.TRAFFIC_ARP -> List.of(Read.PERFORMANCE, Read.ARP);
                 default -> List.<Read>of();
             };
             Optional<String> reason = needs.stream().map(refused::get).filter(java.util.Objects::nonNull).findFirst();
@@ -224,7 +235,8 @@ public final class FgtFailoverJobExecutor {
         return switch (check) {
             case 1 -> "HA mode and members"; case 2 -> "Heartbeat links"; case 3 -> "Monitored interfaces";
             case 4 -> "Configuration sync"; case 5 -> "Session pickup"; case 6 -> "Sessions carried";
-            case 7 -> "Version parity"; case 8 -> "Switch preconditions"; case 9 -> "Last failover"; default -> "Pre-check";
+            case 7 -> "Version parity"; case 8 -> "Switch preconditions"; case 9 -> "Last failover";
+            case FgtFailoverChecks.TRAFFIC_ARP -> "Traffic and ARP"; default -> "Pre-check";
         };
     }
 
@@ -260,7 +272,7 @@ public final class FgtFailoverJobExecutor {
             boolean enterGlobal = multiVdom;
             if (enterGlobal && !movesOk) {
                 // VDOMs are on and the context moves are not approved: the global reads cannot be asked.
-                return observation(null, null, null, null, null, status, parsedStatus);
+                return observation(null, null, null, null, null, status, parsedStatus, null);
             }
             if (enterGlobal) { move(session, FortiGatePlan.CONFIG_GLOBAL); moved = true; }
             Optional<String> ha = approved.containsKey(Read.HA_STATUS) ? read(session, approved.get(Read.HA_STATUS), Read.HA_STATUS) : Optional.empty();
@@ -268,6 +280,13 @@ public final class FgtFailoverJobExecutor {
             Optional<String> sums = approved.containsKey(Read.CHECKSUM) ? read(session, approved.get(Read.CHECKSUM), Read.CHECKSUM) : Optional.empty();
             Optional<String> dump = approved.containsKey(Read.DUMP) ? read(session, approved.get(Read.DUMP), Read.DUMP) : Optional.empty();
             Optional<String> flag = approved.containsKey(Read.FLAG) ? read(session, approved.get(Read.FLAG), Read.FLAG) : Optional.empty();
+            Optional<String> performance = approved.containsKey(Read.PERFORMANCE) ? read(session, approved.get(Read.PERFORMANCE), Read.PERFORMANCE) : Optional.empty();
+            Optional<String> arp = approved.containsKey(Read.ARP) ? read(session, approved.get(Read.ARP), Read.ARP) : Optional.empty();
+            var performanceParsed = FgtFailoverChecks.parsePerformance(performance.orElse(null));
+            Integer arpEntries = FgtFailoverChecks.arpEntries(arp.orElse(null));
+            logShape(Read.PERFORMANCE, performance, approved.containsKey(Read.PERFORMANCE) && performanceParsed.bytesPerSecond() == null);
+            logShape(Read.ARP, arp, approved.containsKey(Read.ARP) && arpEntries == null);
+            var reading = new TrafficArpCheck.Reading(performanceParsed.bytesPerSecond(), arpEntries, performanceParsed.averageSessions());
             var haParsed = FgtFailoverChecks.parseHaStatus(ha.orElse(null));
             var configParsed = FgtFailoverChecks.parseHaConfig(config.orElse(null));
             var sumsParsed = FgtFailoverChecks.parseChecksums(sums.orElse(null));
@@ -281,7 +300,7 @@ public final class FgtFailoverJobExecutor {
             logShape(Read.FLAG, flag, flagParsed == FgtFailoverChecks.Flag.UNRECOGNISED);
             return observation(ha.isPresent() ? haParsed : null, config.isPresent() ? configParsed : null,
                 sums.isPresent() ? sumsParsed : null, dump.isPresent() ? dumpParsed : null,
-                flag.isPresent() ? flagParsed : null, status, parsedStatus);
+                flag.isPresent() ? flagParsed : null, status, parsedStatus, reading);
         } finally {
             try { if (moved) move(session, FortiGatePlan.END); }
             finally { ssh.disconnect(session); }
@@ -290,9 +309,9 @@ public final class FgtFailoverJobExecutor {
 
     private static Observation observation(FgtFailoverChecks.HaStatus ha, FgtFailoverChecks.HaConfig config,
             FgtFailoverChecks.Checksums sums, FgtFailoverChecks.Uptimes dump, FgtFailoverChecks.Flag flag,
-            Optional<String> status, FortiGatePlan.Status parsed) {
+            Optional<String> status, FortiGatePlan.Status parsed, TrafficArpCheck.Reading traffic) {
         return new Observation(ha, config, sums, dump, flag, FgtFailoverChecks.systemTime(status.orElse(null)),
-            parsed.serial(), parsed.version().isPresent());
+            parsed.serial(), parsed.version().isPresent(), traffic);
     }
 
     /** A context move ("config global", "end"): the answer is the new prompt; it is never a read and never recorded. */

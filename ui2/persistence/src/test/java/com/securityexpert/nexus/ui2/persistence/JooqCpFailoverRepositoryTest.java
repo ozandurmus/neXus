@@ -167,6 +167,27 @@ class JooqCpFailoverRepositoryTest {
         });
         assertTrue(repository.previousReadinessSync("run-current","member-opaque","01").isEmpty());
     }
+    @org.junit.jupiter.api.Test
+    void trafficBaselineIsScopedToThePreviousReadinessUnitNotTheMemberAndNeedsBothNumbers() {
+        var dsl=DSL.using(new MockConnection(query -> {
+            String sql=query.sql();
+            assertTrue(sql.contains("r.vendor=current.vendor and r.cluster_ref=current.cluster_ref"));
+            assertTrue(sql.contains("r.vs_id is not distinct from current.vs_id"));
+            assertTrue(sql.contains("r.run_kind='READINESS'"));
+            assertTrue(sql.contains("r.finished_at<=current.started_at"));
+            assertTrue(sql.contains("r.run_id<>current.run_id"));
+            assertFalse(sql.contains("member_ref="),"the active member changes across a failover: the unit is the key");
+            assertTrue(sql.contains("c.check_no=? and c.phase='pre'"));
+            assertTrue(sql.contains("jsonb_typeof(c.derived->'trafficBytesPerSecond')='number'"));
+            assertTrue(sql.contains("jsonb_typeof(c.derived->'arpEntries')='number'"));
+            assertArrayEquals(new Object[]{"run-current",10},query.bindings());
+            return new MockResult[]{new MockResult(0,DSL.using(SQLDialect.POSTGRES).newResult(DSL.field("phase",String.class)))};
+        }),SQLDialect.POSTGRES);
+        var repository=new JooqCpFailoverRepository(new TransactionBoundary() {
+            @Override public <T> T inTransaction(Function<DSLContext,T> work) { return work.apply(dsl); }
+        });
+        assertTrue(repository.previousReadinessTraffic("run-current",10).isEmpty());
+    }
     @ParameterizedTest
     @ValueSource(strings = {"READINESS", "FAILOVER"})
     void readinessRefusesEitherActiveRunKindBeforeAnyInsert(String activeKind) {

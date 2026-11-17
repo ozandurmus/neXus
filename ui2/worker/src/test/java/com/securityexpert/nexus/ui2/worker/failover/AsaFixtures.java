@@ -129,4 +129,28 @@ final class AsaFixtures {
     }
 
     static String conn(long inUse, long mostUsed) { return inUse + " in use, " + mostUsed + " most used\n"; }
+
+    /**
+     * A synthetic {@code show traffic}: two logical interfaces (948 bytes/sec in and out in total) and, when asked, the
+     * "Aggregated Traffic on Physical Interface" section (3000 bytes/sec in and out in total).
+     */
+    static String traffic(boolean aggregated) {
+        StringBuilder b = new StringBuilder();
+        String[][] interfaces = {{"outside", "488", "300"}, {"inside", "100", "60"}};
+        for (String[] i : interfaces) {
+            b.append(i[0]).append(":\n\treceived (in 102.410 secs):\n\t\t1000 packets\t50000 bytes\n\t\t9 pkts/sec\t488 bytes/sec\n")
+                .append("\ttransmitted (in 102.410 secs):\n\t\t900 packets\t40000 bytes\n\t\t7 pkts/sec\t300 bytes/sec\n")
+                .append("\t1 minute input rate 9 pkts/sec,  ").append(i[1]).append(" bytes/sec\n")
+                .append("\t1 minute output rate 7 pkts/sec,  ").append(i[2]).append(" bytes/sec\n")
+                .append("\t1 minute drop rate, 0 pkts/sec\n\t5 minute input rate 9 pkts/sec,  9999 bytes/sec\n")
+                .append("\t5 minute output rate 7 pkts/sec,  9999 bytes/sec\n");
+        }
+        if (aggregated) {
+            b.append("Aggregated Traffic on Physical Interface\nGigabitEthernet0/0:\n\treceived (in 102.410 secs):\n")
+                .append("\t\t1000 packets\t50000 bytes\n")
+                .append("\t1 minute input rate 9 pkts/sec,  1000 bytes/sec\n\t1 minute output rate 7 pkts/sec,  2000 bytes/sec\n")
+                .append("\t1 minute drop rate, 0 pkts/sec\n");
+        }
+        return b.toString();
+    }
 }

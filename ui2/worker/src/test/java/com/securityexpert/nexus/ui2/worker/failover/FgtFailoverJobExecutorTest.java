@@ -34,6 +34,26 @@ class FgtFailoverJobExecutorTest {
     private static final String DEVICE = "DEV-SYNTH-01", CLUSTER = "fgt-single|" + DEVICE;
     private static final Set<String> NEW_GATES = Set.of("fgt_failover_checksum_cluster", "fgt_failover_dump_by_group", "fgt_failover_ha_failover_status");
 
+    private static final String PERFORMANCE = "CPU states: 0% user 0% system 0% nice 100% idle 0% iowait 0% irq 0% softirq\n"
+        + "Memory: 4045364k total, 1700916k used (42.0%), 2000000k free (49.4%), 344448k freeable (8.5%)\n"
+        + "Average network usage: 12 / 8 kbps in 1 minute, 11 / 7 kbps in 10 minutes, 10 / 6 kbps in 30 minutes\n"
+        + "Maximal network usage: 99 / 99 kbps in 1 minute, 99 / 99 kbps in 10 minutes, 99 / 99 kbps in 30 minutes\n"
+        + "Average sessions: 1234 sessions in 1 minute, 1200 sessions in 10 minutes, 1100 sessions in 30 minutes\n";
+    private static final String ARP = "Address           Age(min)   Hardware Addr      Interface\n"
+        + "192.0.2.1         0          00:00:5e:00:53:01  port1\n192.0.2.2         3          00:00:5e:00:53:02  port1\n"
+        + "192.0.2.3         10         00:00:5e:00:53:03  port2\n";
+    private static final Set<String> TRAFFIC_GATES = Set.of("fgt_failover_performance_status", "fgt_failover_arp");
+    private static Optional<JooqCpFailoverRepository.Check> previousTraffic = Optional.empty();
+    @org.junit.jupiter.api.BeforeEach void resetPrevious() { previousTraffic = Optional.empty(); }
+    /** The two information reads forced SIGNED_OFF (the committed rows are DRAFTED until the PO approves the literals). */
+    private static GateRegistryPort signedOffWithTraffic() {
+        var rows = fixtureRows().stream().map(r -> TRAFFIC_GATES.contains(r.gateId())
+            ? new GateRow(r.gateId(), r.vendor(), r.platformRoleScope(), r.shellContext(), r.transportKind(), r.canonicalCommandKey(),
+                r.actionClass(), SignOffState.SIGNED_OFF, r.timeoutS(), r.retryRule(), r.maxFrequency(), r.sessionReuseRule(),
+                r.unsupportedBehaviorRef(), r.secretOutputRisk(), r.safeTelemetryFields(), r.sourceDocumentPointer()) : r).toList();
+        return key -> rows.stream().filter(row -> row.key().equals(key)).toList();
+    }
+
     private static final class Script {
         final List<String> commands = new ArrayList<>();
         int connects;
@@ -41,6 +61,8 @@ class FgtFailoverJobExecutorTest {
         boolean statusRefusedAtTopLevel;
         String recorded = SERIAL_A;
         boolean inGlobal;
+        /** Synthetic answers of the two information reads (check 10): 12 + 8 kbps = 2500 bytes/s, 3 entries. */
+        String performance = PERFORMANCE, arp = ARP;
 
         DeviceTransport transport() {
             return (DeviceTransport) Proxy.newProxyInstance(DeviceTransport.class.getClassLoader(),
@@ -71,6 +93,8 @@ class FgtFailoverJobExecutorTest {
                 case "diagnose sys ha checksum cluster" -> { return checksums(true); }
                 case "diagnose sys ha dump-by group" -> { return dump(1000); }
                 case "execute ha failover status" -> { return flag(false); }
+                case "get system performance status" -> { return performance; }
+                case "get system arp" -> { return arp; }
                 default -> throw new AssertionError("unexpected command: " + command);
             }
         }
@@ -139,6 +163,7 @@ class FgtFailoverJobExecutorTest {
         }).when(store).state(anyString(), anyString(), anyString(), nullable(String.class), nullable(String.class), nullable(String.class));
         doAnswer(inv -> { assertEquals(DEVICE, inv.getArgument(2)); checks.add(inv.getArgument(4) + ":" + inv.getArgument(5)); derived.add(inv.getArgument(6)); return null; })
             .when(store).check(anyString(), anyString(), anyString(), nullable(String.class), anyInt(), anyString(), anyString());
+        when(store.previousReadinessTraffic(anyString(), anyInt())).thenAnswer(inv -> previousTraffic);
         AtomicInteger ledger = new AtomicInteger();
         doAnswer(inv -> { ledger.incrementAndGet(); return null; }).when(store).command(anyString(), anyString());
         DevicePlatformFactsRepository facts = mock(DevicePlatformFactsRepository.class);
@@ -175,7 +200,7 @@ class FgtFailoverJobExecutorTest {
         assertEquals(0, script.connects);
         assertTrue(script.commands.isEmpty());
         assertEquals("UNKNOWN", out.outcome());
-        assertEquals(9, out.checks().size());
+        assertEquals(10, out.checks().size());
     }
     @Test void signedOffGatesSendTheSixLiteralsInOrderOnOneSession() {
         Script script = new Script();
@@ -256,5 +281,61 @@ class FgtFailoverJobExecutorTest {
         assertTrue(shaped.contains("HA cluster index"));
         for (String forbidden : List.of("FGT60F", "FGT-SYNTH", "secret", "wan1", "192.0.2.7", "12:30"))
             assertFalse(shaped.contains(forbidden), forbidden);
+    }
+
+    // ---- information check 10: traffic and ARP -----------------------------------------------------------------------
+
+    @Test void draftedTrafficRowsSendNothingNewAndCheckTenIsUnknownNonBlocking() {
+        Script script = new Script();
+        Outcome out = run(script, signedOff(), "READINESS", ON, CLUSTER);
+        assertEquals(0, script.count("get system performance status") + script.count("get system arp"));
+        assertEquals("READY", out.outcome(), "an unapproved information check never blocks");
+        assertTrue(out.checks().contains("10:UNKNOWN"));
+        assertTrue(out.derived().get(out.derived().size() - 1).contains("GATE_NOT_SIGNED_OFF"));
+    }
+    @Test void signedOffTrafficReadsAreSentOnceInTheGlobalContextAfterTheOtherReads() {
+        Script script = new Script();
+        script.multiVdom = true;
+        Outcome out = run(script, signedOffWithTraffic(), "READINESS", ON, CLUSTER);
+        assertEquals(List.of("get system status", "config global", "get system ha status", "show full-configuration system ha",
+            "diagnose sys ha checksum cluster", "diagnose sys ha dump-by group", "execute ha failover status",
+            "get system performance status", "get system arp", "end"), script.commands);
+        assertEquals(1, script.connects);
+        assertEquals(8, out.ledgered());
+        assertEquals("READY", out.outcome());
+        assertTrue(out.checks().contains("10:PASS"));
+        String evidence = out.derived().get(out.derived().size() - 1);
+        assertTrue(evidence.contains("\"trafficBytesPerSecond\":2500"), evidence);
+        assertTrue(evidence.contains("\"arpEntries\":3"), evidence);
+        assertTrue(evidence.contains("\"averageSessions\":1234"), evidence);
+        assertFalse(evidence.contains("previous"));
+        for (String forbidden : List.of("192.0.2.", "00:00:5e", "port1")) assertFalse(String.join("\n", out.derived()).contains(forbidden), forbidden);
+    }
+    @Test void anEarlierRunGivesTheBeforeAfterRatiosAndAFlagWithoutBlocking() {
+        previousTraffic = Optional.of(new JooqCpFailoverRepository.Check("pre", DEVICE, null, 10, "PASS",
+            "{\"trafficBytesPerSecond\":10000,\"arpEntries\":3}", Instant.EPOCH));
+        Outcome out = run(new Script(), signedOffWithTraffic(), "READINESS", ON, CLUSTER);
+        String evidence = out.derived().get(out.derived().size() - 1);
+        assertEquals("READY", out.outcome());
+        assertTrue(evidence.contains("\"previousTrafficBytesPerSecond\":10000") && evidence.contains("\"previousArpEntries\":3"), evidence);
+        assertTrue(evidence.contains("\"trafficRatio\":0.25") && evidence.contains("\"trafficDropped\":true"), evidence);
+        assertTrue(evidence.contains("\"arpRatio\":1.0") && evidence.contains("\"arpDropped\":false"), evidence);
+        assertTrue(out.checks().contains("10:PASS"));
+    }
+    @Test void unparsableAndZeroAnswersAreUnknownAndNeverBlock() {
+        Script script = new Script();
+        script.performance = "Command fail. Return code -3\n"; script.arp = "unknown action 0\n";
+        Outcome out = run(script, signedOffWithTraffic(), "READINESS", ON, CLUSTER);
+        assertEquals("READY", out.outcome());
+        assertTrue(out.checks().contains("10:UNKNOWN"));
+        assertTrue(out.derived().get(out.derived().size() - 1).contains("TRAFFIC_AND_ARP_UNAVAILABLE"));
+        script = new Script();
+        script.performance = PERFORMANCE.replace("12 / 8 kbps in 1 minute", "0 / 0 kbps in 1 minute");
+        script.arp = "Address           Age(min)   Hardware Addr      Interface\n";
+        out = run(script, signedOffWithTraffic(), "READINESS", ON, CLUSTER);
+        String evidence = out.derived().get(out.derived().size() - 1);
+        assertEquals("READY", out.outcome());
+        assertTrue(evidence.contains("TRAFFIC_AND_ARP_ZERO") && evidence.contains("\"trafficBytesPerSecond\":0")
+            && evidence.contains("\"arpEntries\":0"), evidence);
     }
 }

@@ -224,4 +224,52 @@ class ReadinessCheckViewTest {
         var summary=(String)ReadinessCheckView.fields("fortinet",1,"Member 1","FAIL",JSON.readTree("{\"reason\":\"IDENTITY_MISMATCH\"}"),OBSERVED).get("summary");
         assertFalse(summary.matches(".*FGT.*"));
     }
+
+    private static Map<String,Object> vendorRow(String vendor,int no,String status,String derived) throws Exception {
+        return ReadinessCheckView.fields(vendor,no,"Member 1",status,JSON.readTree(derived),OBSERVED);
+    }
+    /** "Traffic and ARP (information)": check 10 of Cisco ASA and FortiGate, check 8 of Palo Alto; numbers and ratios, never blocking. */
+    @Test void trafficAndArpIsAnInformationRowForTheThreeVendors() throws Exception {
+        String now="{\"reason\":\"TRAFFIC_AND_ARP_PRESENT\",\"trafficBytesPerSecond\":2500,\"arpEntries\":3}";
+        for (Object[] c:new Object[][]{{"cisco_asa",10},{"fortinet",10},{"palo_alto",8}}) {
+            var view=vendorRow((String)c[0],(int)c[1],"PASS",now);
+            assertEquals("Traffic and ARP (information)",view.get("title"));
+            assertEquals(false,view.get("blocking"),(String)c[0]);
+            String summary=(String)view.get("summary");
+            assertTrue(summary.startsWith("2.5 KB/s, 3 ARP entries"),summary);
+        }
+        // The other checks of the same vendors are as blocking as before.
+        assertEquals(true,vendorRow("palo_alto",7,"PASS","{}").get("blocking"));
+        assertEquals(true,vendorRow("cisco_asa",8,"PASS","{}").get("blocking"));
+        assertEquals(true,vendorRow("fortinet",8,"PASS","{}").get("blocking"));
+        // Check Point's own check 10 is untouched.
+        assertEquals("Installed policy parity",row(false,10,"PASS","{}").get("title"));
+    }
+    @Test void trafficAndArpShowsTheEarlierRunTheRatiosAndAFlag() throws Exception {
+        String derived="{\"reason\":\"TRAFFIC_AND_ARP_PRESENT\",\"trafficBytesPerSecond\":4000,\"arpEntries\":10,"
+            +"\"previousTrafficBytesPerSecond\":10000,\"previousArpEntries\":10,\"trafficRatio\":0.4,\"trafficDropped\":true,"
+            +"\"arpRatio\":1.0,\"arpDropped\":false,\"averageSessions\":1234}";
+        assertEquals("4 KB/s, 10 ARP entries, 1234 average sessions; earlier run: 10 KB/s, 10 ARP entries; traffic 40% of the earlier run; "
+            +"ARP 100% of the earlier run; traffic below 50% of the earlier run (as the primary reports)",
+            vendorRow("fortinet",10,"PASS",derived).get("summary"));
+        assertEquals("4 KB/s, 10 ARP entries, 1234 average sessions; earlier run: 10 KB/s, 10 ARP entries; traffic 40% of the earlier run; "
+            +"ARP 100% of the earlier run; traffic below 50% of the earlier run",
+            vendorRow("cisco_asa",10,"PASS",derived).get("summary"));
+    }
+    @Test void trafficAndArpUnknownCasesAreExplainedNotBlocking() throws Exception {
+        assertEquals("Read on the active member only",
+            vendorRow("palo_alto",8,"NOT_EVALUATED","{\"reason\":\"NOT_ACTIVE_MEMBER\"}").get("summary"));
+        assertEquals("Not read: the command is not approved yet",
+            vendorRow("palo_alto",8,"UNKNOWN","{\"reason\":\"GATE_NOT_SIGNED_OFF\"}").get("summary"));
+        assertEquals("Not read: the command is not approved yet",
+            vendorRow("cisco_asa",10,"UNKNOWN","{\"reason\":\"GATE_NOT_SIGNED_OFF\"}").get("summary"));
+        assertEquals("Not read: the active member could not be determined",
+            vendorRow("cisco_asa",10,"UNKNOWN","{\"reason\":\"ACTIVE_MEMBER_NOT_DETERMINED\"}").get("summary"));
+        assertEquals("0 bytes/s, 0 ARP entries (a zero may be a quiet window or an empty table)",
+            vendorRow("cisco_asa",10,"UNKNOWN","{\"reason\":\"TRAFFIC_AND_ARP_ZERO\",\"trafficBytesPerSecond\":0,\"arpEntries\":0}").get("summary"));
+        assertEquals("Traffic rate unavailable, 5 ARP entries",
+            vendorRow("palo_alto",8,"UNKNOWN","{\"reason\":\"TRAFFIC_UNAVAILABLE\",\"arpEntries\":5}").get("summary"));
+        assertEquals("Traffic rate and ARP count unavailable",
+            vendorRow("palo_alto",8,"UNKNOWN","{\"reason\":\"TRAFFIC_AND_ARP_UNAVAILABLE\"}").get("summary"));
+    }
 }
