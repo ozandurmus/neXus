@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.service.failover;
 
 import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
 import com.securityexpert.nexus.ui2.jobs.failover.AsaFailoverReadinessSwitch;
+import com.securityexpert.nexus.ui2.jobs.failover.FgtFailoverReadinessSwitch;
 import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
 
 import java.nio.charset.StandardCharsets;
@@ -78,6 +79,13 @@ public final class CpFailoverService {
      * request / approval / resume entry point reads it.
      */
     private final AsaFailoverReadinessSwitch asaReadiness;
+    /**
+     * FortiGate (FGCP) failover readiness (docs/design/PO_DECISION_RECORD_2026_11_17_FGT_FAILOVER_READINESS_READS.md), read once
+     * at startup. Readiness only: it never makes {@link FailoverVendor#executionAvailable()} true for FortiGate.
+     */
+    private final FgtFailoverReadinessSwitch fgtReadiness;
+    /** The unit of an enrolled single-address FGCP cluster is named by its device (the secondary has no address of its own). */
+    public static final String FGT_SINGLE_PREFIX = "fgt-single|";
 
     public CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
             JooqCpFailoverRepository store, RbacEvaluator rbac, ManagementEndpointSshTrustRepository trust) {
@@ -91,11 +99,17 @@ public final class CpFailoverService {
         this(devices, inventory, store, rbac, trust, mutationSwitch, JobWindowPolicy.SYSTEM);
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
     public CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
             JooqCpFailoverRepository store, RbacEvaluator rbac, ManagementEndpointSshTrustRepository trust,
             FailoverMutationSwitch mutationSwitch, AsaFailoverReadinessSwitch asaReadiness) {
-        this(devices, inventory, store, rbac, trust, mutationSwitch, JobWindowPolicy.SYSTEM, asaReadiness);
+        this(devices, inventory, store, rbac, trust, mutationSwitch, JobWindowPolicy.SYSTEM, asaReadiness, FgtFailoverReadinessSwitch.OFF);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
+            JooqCpFailoverRepository store, RbacEvaluator rbac, ManagementEndpointSshTrustRepository trust,
+            FailoverMutationSwitch mutationSwitch, AsaFailoverReadinessSwitch asaReadiness, FgtFailoverReadinessSwitch fgtReadiness) {
+        this(devices, inventory, store, rbac, trust, mutationSwitch, JobWindowPolicy.SYSTEM, asaReadiness, fgtReadiness);
     }
 
     CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
@@ -107,7 +121,15 @@ public final class CpFailoverService {
     CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
             JooqCpFailoverRepository store, RbacEvaluator rbac, ManagementEndpointSshTrustRepository trust,
             FailoverMutationSwitch mutationSwitch, JobWindowPolicy windows, AsaFailoverReadinessSwitch asaReadiness) {
+        this(devices, inventory, store, rbac, trust, mutationSwitch, windows, asaReadiness, FgtFailoverReadinessSwitch.OFF);
+    }
+
+    CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
+            JooqCpFailoverRepository store, RbacEvaluator rbac, ManagementEndpointSshTrustRepository trust,
+            FailoverMutationSwitch mutationSwitch, JobWindowPolicy windows, AsaFailoverReadinessSwitch asaReadiness,
+            FgtFailoverReadinessSwitch fgtReadiness) {
         this.asaReadiness = java.util.Objects.requireNonNull(asaReadiness);
+        this.fgtReadiness = java.util.Objects.requireNonNull(fgtReadiness);
         this.windows = windows;
         this.mutationSwitch=java.util.Objects.requireNonNull(mutationSwitch);
         this.devices=devices; this.inventory=inventory; this.store=store; this.rbac=rbac;
@@ -164,14 +186,29 @@ public final class CpFailoverService {
         Map<StatusKey, JooqCpFailoverRepository.ReadinessStatus> readiness = store.readinessStatuses().stream()
             .collect(Collectors.toMap(s -> new StatusKey(s.clusterRef(), s.vsId(), s.vendor()), s -> s));
         Map<String, List<DeviceSummaryRecord>> clusters = devices.listAll().stream()
-            .filter(CpFailoverService::failoverVendor)
+            .filter(this::failoverMember).map(this::overlay)
             .collect(Collectors.groupingBy(d -> d.clusterMemberRef().orElseThrow()));
-        return clusters.entrySet().stream().filter(e -> e.getValue().size() == 2)
+        return clusters.entrySet().stream().filter(e -> e.getValue().size() == (e.getKey().startsWith(FGT_SINGLE_PREFIX) ? 1 : 2))
             .flatMap(e -> clusterSummaries(e.getKey(), e.getValue(), canRunReadiness, facts, statuses, readiness))
             .toList();
     }
     private static boolean failoverVendor(DeviceSummaryRecord d) {
         return d.clusterMemberRef().isPresent() && FailoverVendor.of(d.vendorHint()).isPresent();
+    }
+    /**
+     * An enrolled FortiGate that reports an FGCP pair but has no corroborated peer of its own: the one enrolled cluster
+     * address. With the switch on it is a one-device readiness unit named {@code fgt-single|<device id>}; the row is
+     * overlaid with that reference on the read side only, nothing is written to the device row.
+     */
+    private boolean singleFgt(DeviceSummaryRecord d) {
+        return fgtReadiness.enabled() && "fortinet".equals(d.vendorHint()) && "gateway".equals(d.role())
+            && d.clusterMemberRef().isEmpty() && d.haPeerUnconfirmed();
+    }
+    private DeviceSummaryRecord overlay(DeviceSummaryRecord d) {
+        return singleFgt(d) ? d.withClusterMemberRef(Optional.of(FGT_SINGLE_PREFIX + d.deviceId())) : d;
+    }
+    private boolean failoverMember(DeviceSummaryRecord d) {
+        return failoverVendor(d) || singleFgt(d);
     }
     private static boolean isVendor(String vendor, FailoverVendor expected) {
         return FailoverVendor.of(vendor).filter(expected::equals).isPresent();
@@ -188,7 +225,8 @@ public final class CpFailoverService {
      * switch is on. FailoverVendor stays immutable; {@link #requireAvailable} keeps refusing every execution entry point.
      */
     private boolean readinessOn(FailoverVendor v) {
-        return v.readinessAvailable() || v == FailoverVendor.CISCO_ASA && asaReadiness.enabled();
+        return v.readinessAvailable() || v == FailoverVendor.CISCO_ASA && asaReadiness.enabled()
+            || v == FailoverVendor.FORTINET && fgtReadiness.enabled();
     }
     private boolean readinessUnavailable(String vendor) {
         return FailoverVendor.of(vendor).filter(v -> !readinessOn(v)).isPresent();
@@ -207,15 +245,17 @@ public final class CpFailoverService {
         List<DeviceSummaryRecord> pair = members.stream()
             .sorted(Comparator.comparing(DeviceSummaryRecord::deviceId)).toList();
         String vendor = pair.get(0).vendorHint();
+        boolean singleFortigate = pair.size() == 1;
         FailoverVendor descriptor = FailoverVendor.of(vendor).orElse(null);
-        if (descriptor == null || !vendor.equals(pair.get(1).vendorHint()) || pair.stream().anyMatch(m -> {
+        if (descriptor == null || (!singleFortigate && !vendor.equals(pair.get(1).vendorHint())) || pair.stream().anyMatch(m -> {
             List<JooqCpFailoverRepository.SummaryMember> rows = facts.get(m.deviceId());
             return rows == null || rows.isEmpty() || !rows.get(0).readable()
                 || rows.get(0).transportKind() == null || !rows.get(0).inventoryPresent()
                 || descriptor.requiredTransportKind().filter(k -> !k.equalsIgnoreCase(rows.get(0).transportKind())).isPresent()
                 || (descriptor == FailoverVendor.PALO_ALTO && !rows.get(0).panSupported());
         })) return java.util.stream.Stream.<Summary>empty();
-        if (!readinessOn(descriptor)) {
+        // A FortiGate pair of two enrolled members is listed only for now: its per-member readiness is a later step (Q2).
+        if (!readinessOn(descriptor) || descriptor == FailoverVendor.FORTINET && !singleFortigate) {
             // Listed only: one unit per pair, no virtual systems, no readiness, no actions.
             Unit only = new Unit(opaque(clusterRef), opaque(clusterRef), clusterRef, null, pair);
             var status = statuses.get(new StatusKey(clusterRef, null, vendor));
@@ -233,6 +273,7 @@ public final class CpFailoverService {
                 .anyMatch(r -> r.context() != null && !"physical".equals(r.context())));
         if (vsx && common.isEmpty()) return java.util.stream.Stream.<Summary>empty();
         List<Unit> units = descriptor == FailoverVendor.PALO_ALTO || descriptor == FailoverVendor.CISCO_ASA
+            || descriptor == FailoverVendor.FORTINET
             ? List.of(new Unit(opaque(clusterRef), opaque(clusterRef), clusterRef, null, pair))
             : namedUnits(clusterRef, pair, common);
         return units.stream().map(u -> {
@@ -258,8 +299,8 @@ public final class CpFailoverService {
         for (var entry : byCluster.entrySet()) {
             String ref = entry.getKey();
             List<DeviceSummaryRecord> members = entry.getValue().get(0).members().stream()
-                .filter(CpFailoverService::failoverVendor).toList();
-            if (members.size() != 2) continue;
+                .filter(this::failoverMember).map(this::overlay).toList();
+            if (members.size() != (ref.startsWith(FGT_SINGLE_PREFIX) ? 1 : 2)) continue;
             Map<String, List<JooqCpFailoverRepository.SummaryMember>> facts = store.summaryMembers(
                 members.stream().map(DeviceSummaryRecord::deviceId).toList()).stream()
                 .collect(Collectors.groupingBy(JooqCpFailoverRepository.SummaryMember::deviceId));
@@ -292,7 +333,7 @@ public final class CpFailoverService {
     }
     public List<Unit> unitsForMember(String memberDeviceId, String actor, String vendor) {
         requireReader(actor);
-        String ref = memberDeviceId == null ? null : devices.findSummary(memberDeviceId)
+        String ref = memberDeviceId == null ? null : devices.findSummary(memberDeviceId).map(this::overlay)
             .flatMap(DeviceSummaryRecord::clusterMemberRef).orElse(null);
         return lookupUnits(ref, actor, vendor);
     }
@@ -305,7 +346,7 @@ public final class CpFailoverService {
     private List<Unit> lookupUnits(String clusterRef, String actor, String vendor) {
         try {
             if (clusterRef == null) throw new Refusal("CLUSTER_NOT_FOUND");
-            List<DeviceSummaryRecord> members = devices.findMembersByClusterRef(clusterRef);
+            List<DeviceSummaryRecord> members = membersOf(clusterRef);
             if (members.isEmpty()) throw new Refusal("CLUSTER_NOT_FOUND");
             return resolveUnits(clusterRef, members, vendor);
         } catch (Refusal refused) {
@@ -320,16 +361,23 @@ public final class CpFailoverService {
     }
     public List<Unit> units(String clusterId, String actor, String vendor) {
         requireReader(actor);
-        List<String> clusters = devices.listAll().stream().map(DeviceSummaryRecord::clusterMemberRef)
+        List<String> clusters = devices.listAll().stream().map(this::overlay).map(DeviceSummaryRecord::clusterMemberRef)
             .flatMap(Optional::stream).distinct().filter(ref -> opaque(ref).equals(clusterId)).toList();
         if (clusters.size() != 1) throw new Refusal("CLUSTER_NOT_FOUND");
         String cluster=clusters.get(0);
-        return resolveUnits(cluster, devices.findMembersByClusterRef(cluster), vendor);
+        return resolveUnits(cluster, membersOf(cluster), vendor);
+    }
+    /** The members of a cluster reference; the reference of an enrolled single-address FortiGate names its one device. */
+    private List<DeviceSummaryRecord> membersOf(String clusterRef) {
+        if (clusterRef != null && clusterRef.startsWith(FGT_SINGLE_PREFIX))
+            return devices.findSummary(clusterRef.substring(FGT_SINGLE_PREFIX.length()))
+                .filter(this::singleFgt).map(this::overlay).stream().toList();
+        return devices.findMembersByClusterRef(clusterRef);
     }
     /** Eligibility and unit derivation for one cluster; each member's stored inventory is read in slices, never reassembled. */
     private List<Unit> resolveUnits(String cluster, List<DeviceSummaryRecord> members, String vendor) {
         String clusterId = opaque(cluster);
-        if (members.size()!=2) throw new Refusal("CLUSTER_NOT_ELIGIBLE");
+        if (members.size()!=(cluster.startsWith(FGT_SINGLE_PREFIX) ? 1 : 2)) throw new Refusal("CLUSTER_NOT_ELIGIBLE");
         Map<String, com.securityexpert.nexus.ui2.persistence.device.EndpointRecord> endpoints = new java.util.HashMap<>();
         for (DeviceSummaryRecord m : members) {
             if (!vendor.equals(m.vendorHint()) || devices.find(m.deviceId()).filter(d -> d.permitsReadCollection()).isEmpty())

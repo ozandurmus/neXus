@@ -211,7 +211,7 @@ describe("reconcile helpers", () => {
     for (const type of ["cp_cluster_failover", "pan_cluster_failover", "CP_CLUSTER_FAILOVER"]) {
       expect(isFailoverRunJob(type)).toBe(true);
     }
-    for (const type of ["inventory", "cp_failover_readiness", "pan_failover_readiness", "asa_cluster_failover", "pan_failover_config_sync", "cp_gateway_backup", "", null, undefined]) {
+    for (const type of ["inventory", "cp_failover_readiness", "pan_failover_readiness", "asa_cluster_failover", "fgt_failover_readiness", "pan_failover_config_sync", "cp_gateway_backup", "", null, undefined]) {
       expect(isFailoverRunJob(type)).toBe(false);
     }
     expect(isReconcilable({ state: "OUTCOME_UNKNOWN", job_type: "asa_cluster_failover" })).toBe(true);
@@ -224,7 +224,7 @@ describe("reconcile helpers", () => {
     // Labels that are audit action names, not job types: no job row carries them, so no Reconcile decision applies.
     const notJobTypes = new Set(["cp_failover_start", "pan_failover_start"]);
     const reconcilable = new Set([
-      "cp_failover_readiness", "pan_failover_readiness", "asa_cluster_failover", "pan_failover_config_sync",
+      "cp_failover_readiness", "pan_failover_readiness", "asa_cluster_failover", "fgt_failover_readiness", "pan_failover_config_sync",
     ]);
     for (const type of Object.keys(JOB_TYPE_LABELS)) {
       if (notJobTypes.has(type)) continue;

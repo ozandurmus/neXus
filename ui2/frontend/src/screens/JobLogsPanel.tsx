@@ -177,6 +177,7 @@ const FAILOVER_JOB_TYPES = new Set([
   "cp_failover_readiness",
   "pan_failover_readiness",
   "asa_cluster_failover",
+  "fgt_failover_readiness",
   "cp_cluster_failover",
   "pan_cluster_failover",
   "cp_failover_resume",

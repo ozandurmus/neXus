@@ -146,4 +146,11 @@ public record DeviceSummaryRecord(
                 latestJobTerminalReason,
                 Optional.empty());
     }
+
+    /** The same row under another cluster reference (a read-side overlay; nothing is written). */
+    public DeviceSummaryRecord withClusterMemberRef(Optional<String> ref) {
+        return new DeviceSummaryRecord(deviceId, role, vendorHint, enrollmentState, observedHostname, observedModel,
+                observedSoftwareVersion, observedHaRole, ref, latestJobState, latestJobType, latestJobTerminalReason,
+                virtualSystems, managementIp, ipAddresses, backupTarget, haPeerUnconfirmed);
+    }
 }

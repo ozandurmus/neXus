@@ -86,11 +86,13 @@ export function OperationsScreen() {
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
   // The enrolled clusters, from the device list (cluster reference -> members). Replaces two hardcoded
   // demo names and their demo checks (2026-09-22): nothing here is shown that the store did not return.
-  const [clusters, setClusters] = useState<ReadonlyArray<{ ref: string; title: string; members: DeviceSummary[] }> | null>(null);
+  const [baseClusters, setClusters] = useState<ReadonlyArray<{ ref: string; title: string; members: DeviceSummary[] }> | null>(null);
+  const [fgtDevices, setFgtDevices] = useState<DeviceSummary[]>([]);
   useEffect(() => {
     listDevices()
       .then(({ devices }) => {
         const byRef = new Map<string, DeviceSummary[]>();
+        setFgtDevices((devices ?? []).filter(d => d.vendor_hint === "fortinet" && !d.cluster_member_ref && d.ha_peer_unconfirmed === true));
         for (const d of devices ?? []) {
           if (d.cluster_member_ref) byRef.set(d.cluster_member_ref, [...(byRef.get(d.cluster_member_ref) ?? []), d]);
         }
@@ -99,8 +101,13 @@ export function OperationsScreen() {
       })
       .catch(() => setClusters([]));
   }, []);
-  const selected = clusters?.find((c) => c.ref === selectedCluster) ?? null;
   const [cpRows, setCpRows] = useState<Record<string, CpFailoverSummary[]>>({});
+  // An enrolled single-address FortiGate cluster has no cluster reference of its own; the server names its readiness unit
+  // `fgt-single|<device id>` and lists it only while its readiness switch is on, so it is shown only when a row came back.
+  const clusters = baseClusters === null ? null : [...baseClusters, ...fgtDevices
+    .filter(d => (cpRows[`fgt-single|${d.device_id}`] ?? []).length > 0)
+    .map(d => ({ ref: `fgt-single|${d.device_id}`, title: deriveClusterTitle(`fgt-single|${d.device_id}`, [d]), members: [d] }))];
+  const selected = clusters?.find((c) => c.ref === selectedCluster) ?? null;
   useEffect(() => {
     let mounted = true;
     void listCpFailoverSummary().then(rows => {
@@ -286,7 +293,7 @@ export function OperationsScreen() {
         {selected?.members[0] && ["check_point", "palo_alto"].includes(selected.members[0].vendor_hint) ?
           <CpFailoverPanel key={selectedCluster} memberDeviceId={selected.members[0].device_id}
             vendor={selected.members[0].vendor_hint as "check_point" | "palo_alto"} initialUnitId={expandedUnit} />
-          : <StatePanel variant="empty" title={readinessReasonLabel("UNSUPPORTED_MODE")} body={selected?.members[0]?.vendor_hint === "cisco_asa" ? (selectedReadinessRow?.readinessAvailable ? "Cisco ASA pairs are evaluated for readiness only; failover is not offered." : "Readiness is not available yet for Cisco ASA pairs.") : "Failover and readiness detail are offered for Check Point and Palo Alto clusters only."} code="UNSUPPORTED_MODE" />}
+          : <StatePanel variant="empty" title={readinessReasonLabel("UNSUPPORTED_MODE")} body={selected?.members[0]?.vendor_hint === "fortinet" && selectedReadinessRow?.readinessAvailable ? "FortiGate clusters are evaluated for readiness only, from the enrolled address (as the primary reports); failover is not offered." : selected?.members[0]?.vendor_hint === "cisco_asa" ? (selectedReadinessRow?.readinessAvailable ? "Cisco ASA pairs are evaluated for readiness only; failover is not offered." : "Readiness is not available yet for Cisco ASA pairs.") : "Failover and readiness detail are offered for Check Point and Palo Alto clusters only."} code="UNSUPPORTED_MODE" />}
       </>}
     </Drawer>
   </>;

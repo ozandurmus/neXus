@@ -20,7 +20,7 @@ export const RECONCILE_OUTCOMES: ReadonlyArray<{ readonly value: JobReconcileOut
  * The job types whose command a failover run sends (the run's own job; a resume run uses the same type). The server
  * refuses these with JOB_BELONGS_TO_FAILOVER_RUN because each has a failover_dispatch_intent row. Mirrors the backend:
  * JooqCpFailoverRepository creates `cp_cluster_failover`, and the Palo Alto run is `pan_cluster_failover`. Readiness
- * checks (including `asa_cluster_failover`, the Cisco ASA readiness-only job) and the HA configuration sync send no
+ * checks (including `asa_cluster_failover`, the Cisco ASA and FortiGate readiness-only jobs, `fgt_failover_readiness`) and the HA configuration sync send no
  * failover command and stay reconcilable. An explicit set, never a substring guess: a new job type must be classified.
  */
 export const FAILOVER_EXECUTION_JOB_TYPES: ReadonlySet<string> = new Set(["cp_cluster_failover", "pan_cluster_failover"]);

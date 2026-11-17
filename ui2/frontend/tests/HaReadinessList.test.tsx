@@ -433,3 +433,12 @@ it.each([
   expect(within(item).getByText("Sync: Unknown (not collected)")).toBeInTheDocument();
   expect(within(item).queryByRole("button")).toBeNull();
 });
+it("evaluates a single-address FortiGate cluster in the main list when its readiness is available, with the same run action", () => {
+  const fgt: CpFailoverSummary = { ...summary("CLS-DELTA-04", "READY"), vendor: "fortinet", readinessAvailable: true, canRunReadiness: true };
+  const { onRun } = setup({ rows: { ...rows, "CLS-DELTA-04": [fgt] } });
+  expect(row("CLS-DELTA-04")).toBeInTheDocument();
+  expect(screen.queryByText("Readiness not available yet")).toBeNull();
+  fireEvent.click(within(row("CLS-DELTA-04")).getByRole("button", { name: "Run pre-checks" }));
+  expect(onRun).toHaveBeenCalledWith(fgt);
+  expect(screen.queryByText(/Start failover|Resume return step/)).toBeNull();
+});
