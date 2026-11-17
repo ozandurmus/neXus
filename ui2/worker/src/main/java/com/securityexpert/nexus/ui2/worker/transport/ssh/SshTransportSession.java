@@ -3,7 +3,6 @@ package com.securityexpert.nexus.ui2.worker.transport.ssh;
 import java.util.Optional;
 
 import com.jcraft.jsch.HostKey;
-import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
 import com.securityexpert.nexus.ui2.jobs.transport.TransportSession;
 
@@ -43,7 +42,31 @@ final class SshTransportSession implements TransportSession {
         if (hostKey == null) {
             return Optional.empty();
         }
-        return Optional.of(hostKey.getFingerPrint(new JSch()));
+        return Optional.of(md5ColonHex(java.util.Base64.getDecoder().decode(hostKey.getKey())));
+    }
+
+    /**
+     * The recorded-identity form: MD5 of the host-key blob as lowercase hex pairs joined by {@code ':'}, which is what
+     * {@code com.jcraft:jsch 0.1.55} {@code HostKey.getFingerPrint} returned and what every Check Point
+     * {@code recorded_identity_primary} was recorded in. Computed here, not through {@code getFingerPrint}, because the
+     * maintained fork defaults to {@code SHA256:<base64>} (2026-11-15 upgrade broke every Check Point identity comparison).
+     * An identity label only: trust is decided by {@link HostKeyVerifier} on its own SHA-256.
+     */
+    static String md5ColonHex(byte[] keyBlob) {
+        byte[] digest;
+        try {
+            digest = java.security.MessageDigest.getInstance("MD5").digest(keyBlob);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("MD5 not available", e);
+        }
+        StringBuilder out = new StringBuilder(digest.length * 3);
+        for (int i = 0; i < digest.length; i++) {
+            if (i > 0) {
+                out.append(':');
+            }
+            out.append(String.format("%02x", digest[i] & 0xff));
+        }
+        return out.toString();
     }
 
     @Override
