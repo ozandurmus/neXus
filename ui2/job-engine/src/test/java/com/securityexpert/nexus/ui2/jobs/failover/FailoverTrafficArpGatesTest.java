@@ -16,8 +16,8 @@ import com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead;
 import com.securityexpert.nexus.ui2.platform.ActionClass;
 
 /**
- * The "Traffic and ARP (information)" reads (V248, PO chat 2026-11-17): six exact literals, read-only, inserted DRAFTED.
- * A DRAFTED row never resolves, so nothing is sent until the Product Owner approves them.
+ * The "Traffic and ARP (information)" reads (V248, PO chat 2026-11-17): six exact literals, read-only, inserted DRAFTED and
+ * signed off by V249 ("Evet, onaylıyorum", PO 2026-11-17). Each resolves to its own row and nothing else.
  */
 class FailoverTrafficArpGatesTest {
     private static final Map<String, String> LITERALS = Map.of(
@@ -34,12 +34,13 @@ class FailoverTrafficArpGatesTest {
         return ROWS.stream().filter(r -> r.gateId().equals(id)).findFirst().orElseThrow(() -> new AssertionError(id));
     }
 
-    @Test void sixRowsExactLiteralsReadOnlyAndDraftedUntilTheProductOwnerApproves() {
+    @Test void sixRowsExactLiteralsReadOnlyAndSignedOffByTheProductOwner() {
         for (var entry : LITERALS.entrySet()) {
             GateRow r = row(entry.getKey());
             assertEquals(entry.getValue(), r.canonicalCommandKey(), entry.getKey());
             assertEquals(ActionClass.CLASS_0_READ, r.actionClass(), entry.getKey());
-            assertEquals(SignOffState.DRAFTED, r.signOffState(), entry.getKey());
+            assertEquals(SignOffState.SIGNED_OFF, r.signOffState(), entry.getKey());
+            assertTrue(r.sourceDocumentPointer().contains("PO_DECISION_RECORD_2026_11_17_FAILOVER_TRAFFIC_ARP_READS.md"), entry.getKey());
             assertEquals(30, r.timeoutS());
             assertEquals("none", r.retryRule());
             assertFalse(r.violatesWriteMarkerDenylist());
@@ -53,13 +54,18 @@ class FailoverTrafficArpGatesTest {
         assertEquals("PAN_XML_API", row("pan_failover_arp_table").transportKind());
     }
 
-    @Test void aDraftedRowNeverResolvesAndEveryKeyIsUnique() {
+    @Test void eachRowResolvesToItselfAndEveryKeyIsUnique() {
         var registry = (com.securityexpert.nexus.ui2.capability.GateRegistryPort) key -> ROWS.stream().filter(r -> r.key().equals(key)).toList();
         for (String id : LITERALS.keySet()) {
             var resolved = GateResolver.resolve(row(id).key(), java.util.Optional.of(ActionClass.CLASS_0_READ), registry);
-            assertInstanceOf(GateResolution.Unknown.class, resolved, id);
-            assertTrue(((GateResolution.Unknown) resolved).reason().contains("DRAFTED"), id);
+            assertInstanceOf(GateResolution.Known.class, resolved, id);
+            assertEquals(id, ((GateResolution.Known) resolved).gateId());
         }
+        // The VDOM list at a FortiGate readiness run reuses the approved inventory read; only its stated frequency widened.
+        GateRow interfaces = row("fgt_show_system_interface");
+        assertEquals(SignOffState.SIGNED_OFF, interfaces.signOffState());
+        assertEquals("show system interface", interfaces.canonicalCommandKey());
+        assertTrue(interfaces.maxFrequency().contains("readiness run"));
         assertEquals(ROWS.size(), ROWS.stream().map(GateRow::key).distinct().count(), "one row per canonical key");
         // The FortiGate support-bundle row for the same command has another transport and purpose and stays SIGNED_OFF.
         assertEquals(SignOffState.SIGNED_OFF, row("fgt_sb_performance_status").signOffState());
