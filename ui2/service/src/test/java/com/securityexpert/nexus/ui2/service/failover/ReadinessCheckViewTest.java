@@ -263,8 +263,8 @@ class ReadinessCheckViewTest {
             vendorRow("palo_alto",8,"UNKNOWN","{\"reason\":\"GATE_NOT_SIGNED_OFF\"}").get("summary"));
         assertEquals("Not read: the command is not approved yet",
             vendorRow("cisco_asa",10,"UNKNOWN","{\"reason\":\"GATE_NOT_SIGNED_OFF\"}").get("summary"));
-        assertEquals("Configuration sync skipped: the units found their configurations equal at the last sync check",
-            vendorRow("cisco_asa",5,"UNKNOWN","{\"reason\":\"SYNC_SKIPPED\",\"observersSkipped\":1}").get("summary"));
+        assertEquals("Configuration synchronised on both members",
+            vendorRow("cisco_asa",5,"PASS","{\"reason\":\"SYNC_SKIPPED_CONFIG_MATCH\",\"observersSkipped\":1}").get("summary"));
         assertEquals("Configuration state not recognised",
             vendorRow("cisco_asa",5,"UNKNOWN","{\"reason\":\"SYNC_STATE_NOT_RECOGNISED\",\"unrecognised\":1}").get("summary"));
         assertEquals("Not read: the active member could not be determined",

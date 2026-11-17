@@ -170,16 +170,16 @@ class AsaFailoverChecksTest {
             AsaFailoverChecks.parseState(stateOk(true))), "UNKNOWN", "SYNC_STATE_NOT_RECOGNISED");
     }
 
-    @Test void syncSkippedIsParsedAndIsNeverAPass() {
+    @Test void syncSkippedMeansTheConfigurationsMatchAndPasses() {
         var skippedActive = AsaFailoverChecks.parseState(state(false, "Sync Skipped"));
         assertEquals(1, skippedActive.skipped());
         assertEquals(1, AsaFailoverChecks.parseState(state(false, "sync   SKIPPED - STANDBY")).skipped());
         Result r = AsaFailoverChecks.configurationSync(skippedActive, AsaFailoverChecks.parseState(state(true, "Sync Skipped - STANDBY")));
-        expect(r, "UNKNOWN", "SYNC_SKIPPED");
+        expect(r, "PASS", "SYNC_SKIPPED_CONFIG_MATCH");
         assertEquals(2, r.evidence().get("observersSkipped"));
-        // One observer done, the other skipped: still not a PASS.
+        // One observer done, the other skipped: both are in-sync states.
         r = AsaFailoverChecks.configurationSync(skippedActive, AsaFailoverChecks.parseState(stateOk(true)));
-        expect(r, "UNKNOWN", "SYNC_SKIPPED");
+        expect(r, "PASS", "SYNC_SKIPPED_CONFIG_MATCH");
         assertEquals(1, r.evidence().get("observersSkipped"));
         // A skipped line next to an unrecognised line is not recognised; a real not-done line still fails.
         r = AsaFailoverChecks.configurationSync(AsaFailoverChecks.parseState(state(false, "Sync Skipped\n        Something else")),
