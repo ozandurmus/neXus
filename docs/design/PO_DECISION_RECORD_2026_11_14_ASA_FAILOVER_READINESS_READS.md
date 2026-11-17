@@ -37,3 +37,11 @@ implementation authority for signing off the four readiness read rows only. It a
 - **Q2 (run `show failover` twice or once)** was not answered separately; the approval covers the literals as the
   request's §1 states their use, which is twice per run.
 - Execution, approvals and resume for `cisco_asa` keep refusing with `FAILOVER_VENDOR_NOT_AVAILABLE`.
+
+## Amendment 2026-11-17: readiness switch on, all five pairs (Q3)
+
+PO chat 2026-11-17, before a site-to-site failover planned for 2026-11-18: "Evet, 5 çifte birden" (yes, all five pairs
+at once). `UI2_ASA_FAILOVER_READINESS=on` is set on `ui2-service` and `ui2-worker` (live 2026-11-17 and in
+`deploy/ui2/50-service-deployment.yaml`, `deploy/ui2/52-worker-deployment.yaml`). Every ASA pair now offers
+"Run pre-checks" and joins the scheduled readiness pass. Nothing else changes: the same four signed-off reads, readiness
+only; execution, approvals and resume for `cisco_asa` still refuse with `FAILOVER_VENDOR_NOT_AVAILABLE`.
