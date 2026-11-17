@@ -172,4 +172,17 @@ class TrafficArpParsersTest {
         stored.accept("not json");
         assertTrue(TrafficArpCheck.previous(store, "run", 10).isEmpty());
     }
+    @Test void perVdomComparisonNeedsTheSameNumberOfVdomsAndIgnoresUnreadOnes() {
+        var byVdom = new java.util.LinkedHashMap<String, Integer>();
+        byVdom.put("1", 2); byVdom.put("2", null); byVdom.put("3", 3);
+        var reading = new TrafficArpCheck.Reading(1000L, null, null, byVdom, "BOX");
+        var earlier = Optional.of(new TrafficArpCheck.Previous(1000, 20, java.util.Map.of("1", 10L, "2", 5L, "3", 3L)));
+        var out = TrafficArpCheck.evaluate(reading, earlier);
+        assertEquals("ARP_UNAVAILABLE", out.reason());
+        assertEquals("BOX", out.evidence().get("trafficScope"));
+        assertEquals(1L, out.evidence().get("arpVdomUnknown"));
+        assertEquals(1L, out.evidence().get("arpDroppedVdoms"), "2 of 10 is below 0.50; the unread VDOM is not counted");
+        var other = TrafficArpCheck.evaluate(reading, Optional.of(new TrafficArpCheck.Previous(1000, 20, java.util.Map.of("1", 10L))));
+        assertFalse(other.evidence().containsKey("arpDroppedVdoms"));
+    }
 }
