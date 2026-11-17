@@ -85,9 +85,11 @@ public final class PacketAnalysisClaimLoop {
                 LOG.log(System.Logger.Level.WARNING, "[PACKET_ANALYSIS] lease renewal failed");
             }
         }, period, period, java.util.concurrent.TimeUnit.SECONDS);
-        try {
+        try (var jobLog = com.securityexpert.nexus.ui2.platform.logging.JobLogContext.open(
+                String.valueOf(claimed.jobId()), PacketAnalysisJob.CAPABILITY)) {
             Optional<JobRow> job = jobs.find(claimed.jobId());
             if (job.isEmpty()) return true;
+            com.securityexpert.nexus.ui2.platform.logging.JobLogContext.setJobKind(job.get().capabilityId());
             if (!PacketAnalysisJob.CAPABILITY.equals(job.get().capabilityId())
                     || !PacketAnalysisJob.TARGET_KIND.equals(job.get().targetKind())) {
                 leases.transitionState(claimed.jobId(), claimed.leaseEpoch(), JobState.CLAIMED, JobState.REJECTED,

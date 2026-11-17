@@ -111,6 +111,16 @@ public final class InventoryJobExecutor {
 
     public JobOutcome execute(String jobId, long leaseEpoch, String targetDeviceId, InventoryRequest request,
             boolean strictRefuseEnabled) {
+        String defaultKind = request != null && request.vendor() == InventoryVendor.PALO_ALTO
+                ? "pan_inventory_collect"
+                : "cp_inventory_collect";
+        try (var jobLog = com.securityexpert.nexus.ui2.platform.logging.JobLogContext.open(jobId, defaultKind)) {
+            return executeScoped(jobId, leaseEpoch, targetDeviceId, request, strictRefuseEnabled);
+        }
+    }
+
+    private JobOutcome executeScoped(String jobId, long leaseEpoch, String targetDeviceId, InventoryRequest request,
+            boolean strictRefuseEnabled) {
         long jobStart = System.currentTimeMillis();
         LOG.log(System.Logger.Level.INFO,
                 "[JOB_START] Inventory job {0} for device {1} leaseEpoch={2}",

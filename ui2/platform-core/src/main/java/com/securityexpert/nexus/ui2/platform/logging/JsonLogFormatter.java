@@ -2,58 +2,92 @@ package com.securityexpert.nexus.ui2.platform.logging;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.logging.Formatter;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 
 /**
  * java.util.logging formatter that writes one JSON object per line (the worker's counterpart of the service's
- * {@code NEXUS_LOG_FORMAT=json}). Fields: {@code @timestamp} (ISO-8601 UTC), {@code level}, {@code logger_name},
- * {@code thread_name}, {@code message}, {@code stack_trace} (only with an exception) and {@code job_id} (only while
- * {@link JobLogContext} holds one). The message and the stack trace pass through {@link LogAddressMasker} before they
- * are escaped. JDK only. Non-ASCII characters are written as {@code \}{@code uXXXX} escapes so the line is valid
- * whatever the console encoding is.
+ * {@code NEXUS_LOG_FORMAT=json}). Standard fields ({@link JsonLogFields}): {@code @timestamp} (ISO-8601 UTC),
+ * {@code level}, {@code logger_name}, {@code thread_name}, {@code message}, top-level MDC keys ({@code correlation_id},
+ * {@code job_id}, {@code job_kind}, {@code request_correlation_id}, etc. from {@link JobLogContext#mdcSnapshot()}),
+ * and {@code stack_trace} (only with an exception). The message, MDC values and stack trace pass through
+ * {@link LogAddressMasker} before they are escaped. Non-ASCII characters are written as {@code \}{@code uXXXX} escapes
+ * so the line is valid whatever the console encoding is.
  */
 public final class JsonLogFormatter extends Formatter {
 
+    private static final Set<String> CORE_FIELDS = Set.of(
+            JsonLogFields.TIMESTAMP,
+            JsonLogFields.LEVEL,
+            JsonLogFields.LOGGER_NAME,
+            JsonLogFields.THREAD_NAME,
+            JsonLogFields.MESSAGE,
+            JsonLogFields.STACK_TRACE);
+
     private final boolean rawAddresses;
+    private final JsonLogFields fields;
 
     public JsonLogFormatter() {
-        this(LogAddressMasker.rawAddressesEnabled(System::getenv));
+        this(LogAddressMasker.rawAddressesEnabled(System::getenv), JsonLogFields.fromEnvironment());
     }
 
     JsonLogFormatter(boolean rawAddresses) {
+        this(rawAddresses, JsonLogFields.fromEnvironment());
+    }
+
+    public JsonLogFormatter(boolean rawAddresses, JsonLogFields fields) {
         this.rawAddresses = rawAddresses;
+        this.fields = Objects.requireNonNull(fields, "fields");
     }
 
     @Override
     public String format(LogRecord record) {
         StringBuilder out = new StringBuilder(256);
-        out.append("{\"@timestamp\":");
-        quote(out, record.getInstant().toString());
-        out.append(",\"level\":");
-        quote(out, levelName(record.getLevel()));
-        out.append(",\"logger_name\":");
-        quote(out, record.getLoggerName() == null ? "" : record.getLoggerName());
-        out.append(",\"thread_name\":");
-        quote(out, threadName(record));
-        out.append(",\"message\":");
-        quote(out, LogAddressMasker.mask(formatMessage(record), rawAddresses));
-        String jobId = JobLogContext.current();
-        if (jobId != null) {
-            out.append(",\"job_id\":");
-            quote(out, LogAddressMasker.mask(jobId, rawAddresses));
+        out.append('{');
+        boolean first = true;
+        first = appendField(out, first, JsonLogFields.TIMESTAMP, record.getInstant().toString());
+        first = appendField(out, first, JsonLogFields.LEVEL, levelName(record.getLevel()));
+        first = appendField(out, first, JsonLogFields.LOGGER_NAME,
+                record.getLoggerName() == null ? "" : record.getLoggerName());
+        first = appendField(out, first, JsonLogFields.THREAD_NAME, threadName(record));
+        first = appendField(out, first, JsonLogFields.MESSAGE,
+                LogAddressMasker.mask(formatMessage(record), rawAddresses));
+
+        Map<String, String> mdc = JobLogContext.mdcSnapshot();
+        for (Map.Entry<String, String> entry : mdc.entrySet()) {
+            String key = entry.getKey();
+            String value = entry.getValue();
+            if (key != null && value != null && !CORE_FIELDS.contains(key)) {
+                first = appendField(out, first, key, LogAddressMasker.mask(value, rawAddresses));
+            }
         }
+
         Throwable thrown = record.getThrown();
         if (thrown != null) {
             StringWriter trace = new StringWriter();
             try (PrintWriter writer = new PrintWriter(trace)) {
                 thrown.printStackTrace(writer);
             }
-            out.append(",\"stack_trace\":");
-            quote(out, LogAddressMasker.mask(trace.toString(), rawAddresses));
+            appendField(out, first, JsonLogFields.STACK_TRACE, LogAddressMasker.mask(trace.toString(), rawAddresses));
         }
         return out.append("}\n").toString();
+    }
+
+    private boolean appendField(StringBuilder out, boolean first, String canonicalName, String value) {
+        if (!fields.includes(canonicalName)) {
+            return first;
+        }
+        if (!first) {
+            out.append(',');
+        }
+        quote(out, fields.fieldName(canonicalName));
+        out.append(':');
+        quote(out, value);
+        return false;
     }
 
     @Override

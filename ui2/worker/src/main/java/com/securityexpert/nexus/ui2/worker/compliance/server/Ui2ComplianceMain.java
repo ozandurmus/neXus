@@ -11,6 +11,7 @@ public final class Ui2ComplianceMain {
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
+        com.securityexpert.nexus.ui2.platform.logging.MaskingFormatter.install();
         int port = resolvePort();
         Ui2ComplianceServer server = new Ui2ComplianceServer(port);
         server.start();

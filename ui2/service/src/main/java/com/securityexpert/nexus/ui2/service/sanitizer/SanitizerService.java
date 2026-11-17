@@ -146,9 +146,16 @@ public final class SanitizerService {
         String jobId = UUID.randomUUID().toString();
         Path in = receive(jobId, upload);
         VaultCrypto.JobKey key = crypto.newJobKey();
+        String requestCorrelationId = com.securityexpert.nexus.ui2.platform.logging.JobLogContext.get(
+                com.securityexpert.nexus.ui2.platform.logging.JsonLogFields.CORRELATION_ID);
         try {
             repository.createJob(jobId, actor, key.wrapped(), key.keyId(), retentionDays);
-            executor.execute(() -> runSanitize(jobId, actor, key, in));
+            executor.execute(() -> {
+                try (var ignored = com.securityexpert.nexus.ui2.platform.logging.JobLogContext.open(
+                        jobId, "sanitizer_sanitize", requestCorrelationId)) {
+                    runSanitize(jobId, actor, key, in);
+                }
+            });
         } catch (RejectedExecutionException full) {
             Files.deleteIfExists(in);
             repository.finishJob(jobId, actor, false, null, 0, 0, "{}", BUSY, 0);
@@ -214,9 +221,16 @@ public final class SanitizerService {
         String restrictTo = scope == Scope.ONE_JOB ? sourceJobId : null;
         String revertId = UUID.randomUUID().toString();
         Path in = receive(revertId, upload);
+        String requestCorrelationId = com.securityexpert.nexus.ui2.platform.logging.JobLogContext.get(
+                com.securityexpert.nexus.ui2.platform.logging.JsonLogFields.CORRELATION_ID);
         try {
             repository.createRevert(revertId, actor, scope.name(), restrictTo);
-            executor.execute(() -> runRevert(revertId, actor, createdBy, restrictTo, in));
+            executor.execute(() -> {
+                try (var ignored = com.securityexpert.nexus.ui2.platform.logging.JobLogContext.open(
+                        revertId, "sanitizer_revert", requestCorrelationId)) {
+                    runRevert(revertId, actor, createdBy, restrictTo, in);
+                }
+            });
         } catch (RejectedExecutionException full) {
             Files.deleteIfExists(in);
             repository.finishRevert(revertId, actor, false, null, 0, 0, "{}", BUSY, 0);

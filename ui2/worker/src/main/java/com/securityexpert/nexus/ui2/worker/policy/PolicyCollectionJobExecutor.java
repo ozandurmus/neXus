@@ -73,7 +73,8 @@ public final class PolicyCollectionJobExecutor {
     public JobOutcome execute(String jobId, long epoch, String runId) {
         var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
         var pending = new java.util.concurrent.ConcurrentHashMap<Long, String>();
-        try (var cancellation = new com.securityexpert.nexus.ui2.worker.JobCancellationScope(
+        try (var jobLog = com.securityexpert.nexus.ui2.platform.logging.JobLogContext.open(jobId, "policy_collect");
+             var cancellation = new com.securityexpert.nexus.ui2.worker.JobCancellationScope(
                 () -> leases.cancellationRequested(jobId, epoch));
              var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript);
              var trace = new PolicyCollectionTrace(runId, (step, total) -> {

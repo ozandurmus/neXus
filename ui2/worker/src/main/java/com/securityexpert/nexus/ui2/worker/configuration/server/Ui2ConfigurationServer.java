@@ -70,11 +70,22 @@ public final class Ui2ConfigurationServer {
         server = HttpServer.create(new InetSocketAddress(port), 0);
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
 
-        server.createContext("/healthz", new HealthHandler());
-        server.createContext("/api/v1/parse", new ParseHandler());
+        registerContext(server, "/healthz", new HealthHandler());
+        registerContext(server, "/api/v1/parse", new ParseHandler());
 
         server.start();
         System.out.println("ui2-configuration microservice started on port " + port);
+    }
+
+    private static void registerContext(HttpServer server, String path, HttpHandler handler) {
+        server.createContext(path, exchange -> {
+            String correlationId = com.securityexpert.nexus.ui2.platform.logging.JsonLogFields.resolveRequestId(
+                    exchange.getRequestHeaders().getFirst(com.securityexpert.nexus.ui2.platform.logging.JsonLogFields.REQUEST_ID_HEADER));
+            exchange.getResponseHeaders().set(com.securityexpert.nexus.ui2.platform.logging.JsonLogFields.REQUEST_ID_HEADER, correlationId);
+            try (var ignored = com.securityexpert.nexus.ui2.platform.logging.JobLogContext.openRequest(correlationId)) {
+                handler.handle(exchange);
+            }
+        });
     }
 
     public synchronized void stop() {

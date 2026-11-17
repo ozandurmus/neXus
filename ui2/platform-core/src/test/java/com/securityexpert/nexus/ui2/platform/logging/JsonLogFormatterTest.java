@@ -76,9 +76,64 @@ class JsonLogFormatterTest {
     void jobIdAppearsOnlyInsideTheScope() {
         LogRecord r = new LogRecord(Level.INFO, "m");
         try (var scope = JobLogContext.open("job-\"7\"")) {
-            assertTrue(line(r, false).contains("\"job_id\":\"job-\\\"7\\\"\""));
+            String formatted = line(r, false);
+            assertTrue(formatted.contains("\"correlation_id\":\"job:job-\\\"7\\\"\""), formatted);
+            assertTrue(formatted.contains("\"job_id\":\"job-\\\"7\\\"\""), formatted);
         }
-        assertFalse(line(r, false).contains("job_id"));
+        String outside = line(r, false);
+        assertFalse(outside.contains("job_id"), outside);
+        assertFalse(outside.contains("correlation_id"), outside);
+    }
+
+    @Test
+    void jobScopeCarriesCorrelationIdJobKindAndRequestCorrelationIdAndClearsAfter() {
+        LogRecord r = new LogRecord(Level.INFO, "work");
+        try (var scope = JobLogContext.open("42", "cp_inventory_collect", "req_12345678")) {
+            String formatted = line(r, false);
+            assertTrue(formatted.contains("\"correlation_id\":\"job:42\""), formatted);
+            assertTrue(formatted.contains("\"job_id\":\"42\""), formatted);
+            assertTrue(formatted.contains("\"job_kind\":\"cp_inventory_collect\""), formatted);
+            assertTrue(formatted.contains("\"request_correlation_id\":\"req_12345678\""), formatted);
+        }
+        String outside = line(r, false);
+        assertFalse(outside.contains("correlation_id"), outside);
+        assertFalse(outside.contains("job_id"), outside);
+        assertFalse(outside.contains("job_kind"), outside);
+        assertFalse(outside.contains("request_correlation_id"), outside);
+    }
+
+    @Test
+    void configurableFieldSetRenamesAndFiltersFromOnePlace() {
+        JsonLogFields custom = new JsonLogFields(
+                java.util.Map.of("@timestamp", "ts", "correlation_id", "ark_corr_id"),
+                java.util.Set.of("@timestamp", "level", "message", "correlation_id"),
+                java.util.Set.of("thread_name"));
+        LogRecord r = new LogRecord(Level.INFO, "hello");
+        r.setLoggerName("a.b.C");
+        try (var scope = JobLogContext.openRequest("valid-req-1234")) {
+            String out = new JsonLogFormatter(false, custom).format(r);
+            assertTrue(out.contains("\"ts\":\""), out);
+            assertTrue(out.contains("\"ark_corr_id\":\"valid-req-1234\""), out);
+            assertFalse(out.contains("\"logger_name\""), out);
+            assertFalse(out.contains("\"thread_name\""), out);
+        }
+    }
+
+    @Test
+    void requestIdValidationAcceptsWellFormedAndRejectsInvalid() {
+        assertTrue(JsonLogFields.isValidRequestId("abcd1234"));
+        assertTrue(JsonLogFields.isValidRequestId("Req_2026-11.17-ABCDEF0123456789"));
+        assertTrue(JsonLogFields.isValidRequestId("a".repeat(64)));
+        assertFalse(JsonLogFields.isValidRequestId(null));
+        assertFalse(JsonLogFields.isValidRequestId(""));
+        assertFalse(JsonLogFields.isValidRequestId("short77"));
+        assertFalse(JsonLogFields.isValidRequestId("a".repeat(65)));
+        assertFalse(JsonLogFields.isValidRequestId("bad space 123"));
+        assertFalse(JsonLogFields.isValidRequestId("bad:colon:123"));
+        assertEquals("valid_id-1234", JsonLogFields.resolveRequestId("valid_id-1234"));
+        String generated = JsonLogFields.resolveRequestId("bad id!");
+        assertTrue(JsonLogFields.isValidRequestId(generated), generated);
+        assertEquals(36, generated.length());
     }
 
     @Test
