@@ -130,7 +130,7 @@ it("renders empty/single-member flags and readable schedule values in Objects", 
   const table = await screen.findByRole("table", { name: "Policy objects" });
   expect(within(table).getByText("Empty group")).toBeInTheDocument();
   expect(within(table).getByText("Single member")).toBeInTheDocument();
-  expect(within(table).getByText("Unused: UNKNOWN")).toBeInTheDocument();
+  expect(within(table).getByText("Unused: not proven")).toBeInTheDocument();
   expect(within(table).getByText(/Weekdays 08:00–17:00/)).toHaveTextContent("From 1 Oct 2026 00:00");
 });
 

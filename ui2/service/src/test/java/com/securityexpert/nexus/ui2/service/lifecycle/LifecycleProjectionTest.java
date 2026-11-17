@@ -345,4 +345,59 @@ class LifecycleProjectionTest {
         assertTrue(old.containsKey("live_patch"));
         assertNull(project(device("device-1", "palo_alto", null), List.of(), null, TODAY).get("live_patch"));
     }
+
+    @Test void riskFollowsSoftwareSupportWhenHardwareIsNotAnnouncedOrNotApplicable() {
+        var checkedAt = Instant.parse("2026-11-13T10:00:00Z");
+        var pa5250 = new com.securityexpert.nexus.ui2.persistence.lifecycle.LifecycleVendorRepository.VendorEntry(
+                "FEED:paloalto_eol:paloalto-hardware-eol:HARDWARE:PA-5250", "FEED", "paloalto_eol", null,
+                "PALOALTO", "HARDWARE", "PA-5250", "PA-5200 Series (PA-5220, PA-5250)",
+                LocalDate.of(2023, 7, 31), null, LocalDate.of(2028, 7, 31), null, null, List.of(), "PARSED", null,
+                "paloalto-hardware-eol",
+                "https://www.paloaltonetworks.com/services/support/end-of-life-announcements/hardware-end-of-life-dates",
+                "0".repeat(64), checkedAt);
+
+        for (int days : new int[]{-1, 30, 200, 500}) {
+            String expectedRisk = days < 0 ? "EXPIRED" : days < 180 ? "HIGH" : days < 365 ? "MEDIUM" : "LOW";
+            var sw111 = new com.securityexpert.nexus.ui2.persistence.lifecycle.LifecycleVendorRepository.VendorEntry(
+                    "FEED:paloalto_eol:paloalto-panos-eol-summary:SOFTWARE:PAN-OS 11.1", "FEED", "paloalto_eol", null,
+                    "PALOALTO", "SOFTWARE", "PAN-OS 11.1", "PAN-OS 11.1",
+                    null, null, TODAY.plusDays(days), null, null, List.of(), "PARSED", null,
+                    "paloalto-panos-eol-summary",
+                    "https://www.paloaltonetworks.com/services/support/end-of-life-announcements/end-of-life-summary",
+                    "0".repeat(64), checkedAt);
+            var sw121 = new com.securityexpert.nexus.ui2.persistence.lifecycle.LifecycleVendorRepository.VendorEntry(
+                    "FEED:paloalto_eol:paloalto-panos-eol-summary:SOFTWARE:PAN-OS 12.1", "FEED", "paloalto_eol", null,
+                    "PALOALTO", "SOFTWARE", "PAN-OS 12.1", "PAN-OS 12.1",
+                    null, null, TODAY.plusDays(days), null, null, List.of(), "PARSED", null,
+                    "paloalto-panos-eol-summary",
+                    "https://www.paloaltonetworks.com/services/support/end-of-life-announcements/end-of-life-summary",
+                    "0".repeat(64), checkedAt);
+            var catalog = new LifecycleMatcher.Catalog(List.of(), List.of(pa5250, sw111, sw121), checkedAt);
+
+            for (String model : List.of("PA-5445", "PA-5410", "PA-3440")) {
+                var fw = new DeviceSummaryRecord("dev-" + model, "gateway", "palo_alto", DeviceEnrollmentState.ENROLLED,
+                        Optional.of("FW-TANGO-04"), Optional.of(model), Optional.of("11.1.10-h7"), Optional.empty(), Optional.empty());
+                var projected = LifecycleProjection.device(fw, catalog,
+                        new com.securityexpert.nexus.ui2.persistence.lifecycle.LifecycleCatalogRepository.StoredInventory(
+                                model, "11.1.10-h7", null), TODAY, LifecycleProjection.Stored.EMPTY);
+                assertEquals("MATCHED", projected.get("status"), model);
+                assertEquals(expectedRisk, projected.get("risk"), model + " at " + days + " days");
+                @SuppressWarnings("unchecked") var hw = (Map<String, Object>) projected.get("hardware");
+                @SuppressWarnings("unchecked") var hwCat = (Map<String, Object>) hw.get("catalog");
+                assertEquals("Not announced", hwCat.get("end_of_support"));
+                assertEquals("No end-of-life announced for this model on the vendor page (checked 2026-11-13)", hw.get("basis"));
+            }
+
+            var panorama = new DeviceSummaryRecord("dev-panorama", "management_server", "palo_alto", DeviceEnrollmentState.ENROLLED,
+                    Optional.of("FW-TANGO-04"), Optional.of("Panorama"), Optional.of("12.1.10"), Optional.empty(), Optional.empty());
+            var projectedPanorama = LifecycleProjection.device(panorama, catalog,
+                    new com.securityexpert.nexus.ui2.persistence.lifecycle.LifecycleCatalogRepository.StoredInventory(
+                            "Panorama", "12.1.10", null), TODAY, LifecycleProjection.Stored.EMPTY);
+            assertEquals("MATCHED", projectedPanorama.get("status"));
+            assertEquals(expectedRisk, projectedPanorama.get("risk"), "Panorama at " + days + " days");
+            @SuppressWarnings("unchecked") var panHw = (Map<String, Object>) projectedPanorama.get("hardware");
+            @SuppressWarnings("unchecked") var panHwCat = (Map<String, Object>) panHw.get("catalog");
+            assertEquals("Not applicable", panHwCat.get("end_of_support"));
+        }
+    }
 }

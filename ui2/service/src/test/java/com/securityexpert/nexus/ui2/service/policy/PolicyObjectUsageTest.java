@@ -123,6 +123,8 @@ class PolicyObjectUsageTest {
         var outside = row(index, "u2");
         assertEquals(false, outside.get("unused")); assertEquals(false, outside.get("usageComplete"));
         assertTrue(reasons(outside).contains(PolicyDomainIndex.MANAGEMENT_IN_USE));
+        assertEquals(true, outside.get("managementInUse"), "the management's own report is a positive fact, not an unknown");
+        assertEquals(false, proven.get("managementInUse"));
         var conflict = row(index, "group-uid");
         assertEquals(1, conflict.get("ruleCount"));
         assertNull(conflict.get("unused"), "a stored reference contradicts the unused report: hygiene must not say Unused");
@@ -147,5 +149,34 @@ class PolicyObjectUsageTest {
         assertEquals(List.of(PolicyDomainIndex.PAN_RULEBASES, "UNKNOWN"), masked.get("usageReasons"));
         assertEquals(List.of(PolicyDomainIndex.UNRESOLVED), masked.get("usageGaps"));
         assertEquals(false, masked.get("usageComplete"));
+    }
+
+    @Test void panWhereUsedIsALowerBoundFromStoredSecurityAndNatRulesAfterAJsonRoundTrip() throws Exception {
+        String xml = "<config><shared><address><entry name='ADDR-SHARED-01'><ip-netmask>192.0.2.1/32</ip-netmask></entry>"
+            + "<entry name='ADDR-NAT-01'><ip-netmask>198.51.100.1/32</ip-netmask></entry></address></shared>"
+            + "<devices><entry><device-group><entry name='DG-TANGO-04'><pre-rulebase><security><rules><entry name='RULE-01' uuid='uuid-1'>"
+            + "<source><member>ADDR-SHARED-01</member></source><destination><member>any</member></destination>"
+            + "<service><member>application-default</member></service><application><member>any</member></application><action>allow</action></entry></rules></security>"
+            + "<nat><rules><entry name='NAT-01' uuid='uuid-n1'><source><member>any</member></source><destination><member>any</member></destination>"
+            + "<service>any</service><source-translation><static-ip><translated-address>ADDR-NAT-01</translated-address></static-ip></source-translation></entry></rules></nat>"
+            + "</pre-rulebase></entry></device-group></entry></devices></config>";
+        var snapshot = new PanoramaPolicyMapper().mapUnverifiedPrecedence(pan(), PolicyXml.parse(xml).getDocumentElement(), "DG-TANGO-04", Map.of());
+        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        var stored = json.readValue(json.writeValueAsString(snapshot), PolicySnapshot.class);
+        var index = new PolicyDomainIndex(List.of(), List.of(stored));
+        var byName = new HashMap<String, Map<String, Object>>();
+        index.objects.forEach(o -> byName.put((String) o.get("name"), o));
+        assertEquals(1, byName.get("ADDR-SHARED-01").get("ruleCount"));
+        assertEquals(1, byName.get("ADDR-NAT-01").get("ruleCount"), "a NAT translated address is a stored reference too");
+        assertEquals(false, byName.get("ADDR-SHARED-01").get("usageComplete"));
+        assertNull(byName.get("ADDR-SHARED-01").get("unused"), "Unused stays UNKNOWN without the management report");
+    }
+    @Test void derivedPoliciesAreFoundByTheirSourceAndContainer() {
+        var inDomain = new PolicySnapshot(pan(), List.of(), Map.of());
+        var otherMeta = new Metadata("policy-other", "source-1", "Synthetic", "FGT", "domain-2", "VDOM-TANGO-04", "VDOM-TANGO-04",
+            "2026-10-15T00:00:00Z", "artifact-2", List.of());
+        var other = new PolicySnapshot(otherMeta, List.of(), Map.of());
+        assertEquals(List.of(inDomain), PolicyQueryService.localDomainSnapshots(List.of(inDomain, other), "source-1", "domain-1"));
+        assertEquals(List.of(), PolicyQueryService.localDomainSnapshots(List.of(inDomain, other), "source-2", "domain-1"));
     }
 }

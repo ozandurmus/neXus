@@ -168,6 +168,8 @@ final class PolicyDomainIndex {
             row.put("ruleCount", ruleCount);
             row.put("groupCount", groupCount);
             row.put("usageComplete", complete);
+            // The management's own report lists the object as in use: a positive fact, even when no collected rule shows it.
+            row.put("managementInUse", Boolean.FALSE.equals(reported));
             row.put("usageReasons", List.copyOf(usageReasons));
             objects.add(Collections.unmodifiableMap(row));
         }

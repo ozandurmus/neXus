@@ -405,7 +405,9 @@ export interface LifecycleVulnerabilities {
     | "JUMBO_TAKE_MISSING" | "JUMBO_TRAIN_MISMATCH" | "SPARK_NOT_COVERED" | "TRAIN_NOT_COVERED"
     | "TRAIN_NEVER_LOADED" | "TRAIN_STALE" | "TRAIN_RECORDS_MISSING" | null;
   product_key?: string | null;
-  affected?: number; affected_exploited?: number; affected_critical_high?: number; not_evaluable?: number; fixed?: number;
+  affected?: number; affected_exploited?: number; affected_critical_high?: number;
+  affected_critical?: number; affected_high?: number; affected_medium?: number; affected_low?: number;
+  not_evaluable?: number; fixed?: number;
   /** Check Point: not judged because a proposed fix rule waits for a security_admin's confirmation; kept out of the other counts. */
   pending?: number;
   worst_severity?: AdvisorySeverity | null;
@@ -2659,14 +2661,14 @@ export interface PolicyInventoryObject extends Omit<PolicyObject, "status"> {
   uid: string; unused: boolean | null; emptyGroup: boolean; singleMember: boolean;
   duplicateId: string | null; ruleCount: number; groupCount: number;
   /** True only when a zero/total count is proven; otherwise counts are a lower bound and usageReasons explain why. */
-  usageComplete?: boolean; usageReasons?: string[]; unusedReasons?: string[];
+  usageComplete?: boolean; managementInUse?: boolean; usageReasons?: string[]; unusedReasons?: string[];
 }
 export interface PolicyTypeState { type: string; status: string; collectedAt: string; objects: number }
 export interface PolicyObjectPage { objects: PolicyInventoryObject[]; total: number; page: number; pageSize: number; types: PolicyTypeState[]; usageGaps?: string[] }
 export interface PolicyUsage {
   object: PolicyInventoryObject; rules: { policyId: string; policyName: string; layerRef: string; layerName: string; ruleId: string; number: number }[];
   groups: { id: string; uid: string; name: string; type: string }[]; ruleCount: number; groupCount: number; page: number; pageSize: number;
-  usageComplete?: boolean; usageReasons?: string[];
+  usageComplete?: boolean; managementInUse?: boolean; usageReasons?: string[];
 }
 export interface PolicyInstallation {
   id: string; policyId: string; policyName: string; name: string; deviceId: string;

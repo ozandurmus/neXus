@@ -3,6 +3,7 @@ package com.securityexpert.nexus.ui2.service.lifecycle;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -39,6 +40,8 @@ public final class LifecycleMatcher {
     public static final String NO_LIFECYCLE_DATA = "NO_LIFECYCLE_DATA";
     public static final String NOT_EVALUATED = "NOT_EVALUATED";
     public static final String NEEDS_REVIEW = "NEEDS_REVIEW";
+    public static final String NOT_ANNOUNCED = "Not announced";
+    public static final String NOT_APPLICABLE = "Not applicable";
 
     /** The whole catalog, loaded once per request. {@code now} null switches the age rule off (old callers and tests). */
     public record Catalog(List<LifecycleCatalogEntry> operator, List<VendorEntry> vendor, Instant now) {
@@ -81,6 +84,11 @@ public final class LifecycleMatcher {
             return body(MATCHED, null, basisWord + " · operator entry", dates, key);
         }
 
+        if (hardware && LifecycleKeys.virtualPanorama(vendor, key)) {
+            String basis = basisWord + " · virtual Panorama (hardware not applicable)";
+            return body(MATCHED, basis, basis, notApplicableView(vendor, kind, key), key);
+        }
+
         var vendorRows = catalog.vendor().stream().filter(e -> e.vendor().equals(vendor) && e.kind().equals(kind)
                 && key.equals(e.productKey())).toList();
         var fresh = vendorRows.stream().filter(e -> fresh(e, catalog.now())).toList();
@@ -103,9 +111,21 @@ public final class LifecycleMatcher {
             return body(MATCHED, null, basisWord + " · " + describe(chosen), vendorView(chosen, catalog.now()), key);
         }
 
+        var freshVendorSource = catalog.vendor().stream()
+                .filter(e -> e.vendor().equals(vendor) && e.kind().equals(kind) && fresh(e, catalog.now()))
+                .min(Comparator.comparing((VendorEntry e) -> "FEED".equals(e.origin()) ? 0 : 1)
+                        .thenComparing(VendorEntry::confirmedAt, Comparator.nullsLast(Comparator.reverseOrder())));
+        if (hardware && "PALOALTO".equals(vendor) && freshVendorSource.isPresent()) {
+            VendorEntry sourceEntry = freshVendorSource.get();
+            LocalDate checked = checkedDate(sourceEntry.confirmedAt(), catalog.now());
+            String note = "No end-of-life announced for this model on the vendor page"
+                    + (checked == null ? "" : " (checked " + checked + ")");
+            return body(MATCHED, note, note, notAnnouncedView(sourceEntry, key, catalog.now()), key);
+        }
+
         boolean covered = catalog.operator().stream().anyMatch(e -> e.vendor().equals(vendor) && e.kind().equals(kind)
                 && !operatorStale(e, catalog.now()))
-                || catalog.vendor().stream().anyMatch(e -> e.vendor().equals(vendor) && e.kind().equals(kind) && fresh(e, catalog.now()));
+                || freshVendorSource.isPresent();
         if (covered) {
             return body(NO_LIFECYCLE_DATA, "No catalog match"
                     + ("CISCO_ASA".equals(vendor) ? " (no end-of-life bulletin names this " + (hardware ? "model" : "train") + ")" : ""),
@@ -171,6 +191,42 @@ public final class LifecycleMatcher {
         body.put("confirmed_at", e.confirmedAt() == null ? null : e.confirmedAt().toString());
         body.put("age_days", ageDays(e.confirmedAt(), now));
         return body;
+    }
+
+    private static Map<String, Object> notAnnouncedView(VendorEntry e, String productKey, Instant now) {
+        var body = new LinkedHashMap<String, Object>();
+        body.put("vendor", e.vendor());
+        body.put("kind", e.kind());
+        body.put("product", productKey);
+        body.put("end_of_sale", NOT_ANNOUNCED);
+        body.put("end_of_support", NOT_ANNOUNCED);
+        body.put("end_of_engineering", NOT_ANNOUNCED);
+        body.put("month_only", List.of());
+        body.put("source", e.source());
+        body.put("origin", e.origin());
+        body.put("document_ref", e.documentRef());
+        body.put("source_url", e.sourceUrl());
+        body.put("confirmed_at", e.confirmedAt() == null ? null : e.confirmedAt().toString());
+        body.put("age_days", ageDays(e.confirmedAt(), now));
+        return body;
+    }
+
+    private static Map<String, Object> notApplicableView(String vendor, String kind, String product) {
+        var body = new LinkedHashMap<String, Object>();
+        body.put("vendor", vendor);
+        body.put("kind", kind);
+        body.put("product", product);
+        body.put("end_of_sale", NOT_APPLICABLE);
+        body.put("end_of_support", NOT_APPLICABLE);
+        body.put("end_of_engineering", NOT_APPLICABLE);
+        body.put("month_only", List.of());
+        body.put("origin", "NOT_APPLICABLE");
+        return body;
+    }
+
+    private static LocalDate checkedDate(Instant confirmedAt, Instant now) {
+        Instant at = confirmedAt != null ? confirmedAt : now;
+        return at == null ? null : at.atOffset(ZoneOffset.UTC).toLocalDate();
     }
 
     private static Map<String, Object> body(String status, String reason, String basis, Map<String, Object> catalog, String key) {

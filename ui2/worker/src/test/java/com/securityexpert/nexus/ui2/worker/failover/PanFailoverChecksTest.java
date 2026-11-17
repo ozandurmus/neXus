@@ -292,6 +292,22 @@ class PanFailoverChecksTest {
             .replace("<conn-ha2-backup><conn-status>down</conn-status></conn-ha2-backup>",""));
         assertEquals("UNKNOWN",PanFailoverChecks.links(a,required));
     }
+    @Test void configurationSyncDisabledOnEitherMemberFailsWithNamedReason() throws Exception {
+        String healthy=xml("active","passive","0011","0022","up","up","not synchronized")
+            .replace("<running-sync>","<running-sync-enabled>yes</running-sync-enabled><running-sync>");
+        var enabled=PanFailoverChecks.parse(healthy);
+        var disabled=PanFailoverChecks.parse(healthy.replace("<running-sync-enabled>yes","<running-sync-enabled>no"));
+        var one=PanFailoverChecks.syncEvidence(enabled,disabled);
+        assertEquals("FAIL",one.status());
+        org.junit.jupiter.api.Assertions.assertTrue(one.derived().contains("\"reason\":\"CONFIG_SYNC_DISABLED\""));
+        org.junit.jupiter.api.Assertions.assertTrue(one.derived().contains("\"membersDisabled\":1"));
+        var both=PanFailoverChecks.syncEvidence(disabled,disabled);
+        assertEquals("FAIL",both.status());
+        org.junit.jupiter.api.Assertions.assertTrue(both.derived().contains("\"membersDisabled\":2"));
+        var enabledBoth=PanFailoverChecks.syncEvidence(enabled,enabled);
+        assertEquals("FAIL",enabledBoth.status());
+        org.junit.jupiter.api.Assertions.assertFalse(enabledBoth.derived().contains("CONFIG_SYNC_DISABLED"));
+    }
     @Test void configurationSyncVocabularyRequiresReachableEnabledPeerForFailure() throws Exception {
         String healthy=xml("active","passive","0011","0022","up","up","synchronized")
             .replace("<running-sync>","<running-sync-enabled>YES</running-sync-enabled><running-sync>");
@@ -301,7 +317,7 @@ class PanFailoverChecksTest {
             var result=PanFailoverChecks.syncEvidence(good,bad);
             assertEquals("FAIL",result.status());
             org.junit.jupiter.api.Assertions.assertTrue(result.derived().contains(state));
-            for(String enabled:new String[]{"no","pending99",""})
+            for(String enabled:new String[]{"pending99",""})
                 assertEquals("UNKNOWN",PanFailoverChecks.sync(good,PanFailoverChecks.parse(
                     healthy.replace("synchronized",state).replace("<running-sync-enabled>YES", "<running-sync-enabled>"+enabled))));
             assertEquals("UNKNOWN",PanFailoverChecks.sync(good,PanFailoverChecks.parse(

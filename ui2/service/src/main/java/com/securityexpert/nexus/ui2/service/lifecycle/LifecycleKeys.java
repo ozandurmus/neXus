@@ -24,7 +24,11 @@ public final class LifecycleKeys {
     private static final Pattern CP_MODEL = Pattern.compile(
             "^(?:Check ?Point\\s+)?(?:Quantum\\s+)?(SMART-1\\s+\\d{2,5}(?:-[A-Z0-9]{1,4})?|\\d{3,5}[A-Z]{0,3}(?:-[A-Z0-9]{1,4})?)"
                     + "(?:\\s+(?:Appliance|Security Gateway|Gateway|Chassis))?$", Pattern.CASE_INSENSITIVE);
-    private static final Pattern PAN_MODEL = Pattern.compile("^(?:PAN-)?(PA-\\d{3,4}[A-Z]?|M-\\d{3,4})(?:-ZTP)?$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PAN_VIRTUAL_PANORAMA = Pattern.compile(
+            "^(?:(?:PAN-)?Panorama(?:(?:\\s+on)?[\\s-]+VM|\\s*\\(VM\\)|\\s+Virtual(?:\\s+Appliance)?)?|PAN-PRA-VM)$",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern PAN_MODEL = Pattern.compile(
+            "^(?:PAN-|Panorama\\s+)?(PA-\\d{3,4}[A-Z]?|M-\\d{3,4})(?:-ZTP|-(?:AC|DC)(?:-SYS)?)?$", Pattern.CASE_INSENSITIVE);
     private static final Pattern CISCO_MODEL = Pattern.compile(
             "^(?:Cisco\\s+)?(?:(ASA)\\s?-?(55\\d\\d)(?:-X)?|(?:FPR|Firepower|Secure Firewall)\\s?-?(\\d{4}))"
                     + "(?:\\s+(?:Security Appliance|Appliance|Threat Defense|NGFW|Series))?$", Pattern.CASE_INSENSITIVE);
@@ -35,7 +39,8 @@ public final class LifecycleKeys {
     // Software
     private static final Pattern CP_TRAIN = Pattern.compile("^(?:Check Point\\s+)?(R\\d{2}(?:\\.\\d{2})?)(?:$|[\\s+].*)", Pattern.CASE_INSENSITIVE);
     private static final Pattern CP_SPARK = Pattern.compile("^(?:Check Point\\s+)?R(\\d{2}\\.\\d{2})\\.(?:\\d{2}|xx)$", Pattern.CASE_INSENSITIVE);
-    private static final Pattern PAN_TRAIN = Pattern.compile("^(?:PAN-OS\\s+)?(\\d{1,2}\\.\\d{1,2})(?:\\.x|\\.\\d+(?:-h\\d+)?)?$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PAN_TRAIN = Pattern.compile("^(?:(?:PAN-OS|Panorama)\\s+)?(\\d{1,2}\\.\\d{1,2})(?:\\.x|\\.\\d+(?:-h\\d+)?)?$",
+            Pattern.CASE_INSENSITIVE);
     private static final Pattern ASA_TRAIN = Pattern.compile("^(?:ASA\\s+)?(\\d{1,2}\\.\\d{1,2})(?:\\(\\d{1,3}\\)\\d{0,4}|\\.\\d{1,3}(?:\\.\\d{1,4})?|\\(x\\)|\\.x)?$",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern FORTI_VERSION = Pattern.compile("^v?(\\d{1,2}\\.\\d{1,2})(?:\\.\\d{1,3})?(?:[- ]?build\\s?\\d{1,5})?$",
@@ -66,6 +71,7 @@ public final class LifecycleKeys {
                 return m.matches() ? m.group(1).toUpperCase(Locale.ROOT).replaceAll("\\s+", " ") : null;
             }
             case "PALOALTO" -> {
+                if (PAN_VIRTUAL_PANORAMA.matcher(value).matches()) return "Panorama";
                 m = PAN_MODEL.matcher(value);
                 return m.matches() ? m.group(1).toUpperCase(Locale.ROOT) : null;
             }
@@ -141,12 +147,17 @@ public final class LifecycleKeys {
         }
     }
 
+    /** True when the hardware key represents a virtual Panorama appliance (no physical hardware lifecycle). */
+    public static boolean virtualPanorama(String vendor, String key) {
+        return "PALOALTO".equals(vendor) && "Panorama".equals(key);
+    }
+
     /** What a catalog product of this vendor and kind must look like; shown when an import row is refused. */
     public static String expectedForm(String vendor, String kind) {
         boolean hardware = "HARDWARE".equals(kind);
         return switch (vendor) {
             case "CHECKPOINT" -> hardware ? "a model such as 6600, 3600 Appliance or Smart-1 6000-L" : "a version such as R81.20, R82 or R81.10.xx";
-            case "PALOALTO" -> hardware ? "a model such as PA-3220 or M-600" : "a train such as 11.1 or PAN-OS 11.1";
+            case "PALOALTO" -> hardware ? "a model such as PA-3220, M-600 or Panorama" : "a train such as 11.1 or PAN-OS 11.1";
             case "CISCO_ASA" -> hardware ? "a model such as FPR-4115, Firepower 4115 or ASA5516-X" : "a train such as 9.18 or ASA 9.18";
             case "FORTINET" -> hardware ? "a model such as FortiGate-600E, FGT60F or FortiManager-400G" : "FortiOS 7.4 or FortiManager 7.4";
             default -> "any text";

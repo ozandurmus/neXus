@@ -122,6 +122,8 @@ public final class CpFailoverJobExecutor {
     private record Pair(Measure a, Measure b) {
         Measure forMember(Member member,Member first) { return member==first?a:b; }
     }
+    /** The latest COMMAND_UNAVAILABLE as REASON:command, appended to the readiness run message. */
+    private String unavailableDetail;
     private static final class Stop extends RuntimeException {
         final String code; final int check; final String status;
         Stop(String code,int check) { this(code,check,"FAIL"); }
@@ -407,7 +409,7 @@ public final class CpFailoverJobExecutor {
             code=readinessFailure.code; check=readinessFailure.check; status=readinessFailure.status;
         }
         String outcome="PASS".equals(status)?"READY":"FAIL".equals(status)?"NOT_READY":"UNKNOWN";
-        state("DONE","DONE",outcome,check==0?null:checkName(check),"COMMAND_UNAVAILABLE".equals(stopCode)?stopCode:code);
+        state("DONE","DONE",outcome,check==0?null:checkName(check),"COMMAND_UNAVAILABLE".equals(stopCode)?(unavailableDetail==null?stopCode:stopCode+":"+unavailableDetail):code);
         leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
             "system:cp-failover-worker","cp_readiness_done",outcome);
     }
@@ -619,6 +621,8 @@ public final class CpFailoverJobExecutor {
         if(!(result instanceof ExecResult.Completed completed) || completed.exitStatus()!=0
                 || commandUnavailable(completed.output())) {
             attempts.writeOutcome(attempt,epoch,"FAILED","COMMAND_UNAVAILABLE",false,null,null,null);
+            // No new command: record which read failed and how, so the run message says why (no device output kept).
+            unavailableDetail=unavailableReason(result)+":"+command;
             throw new Stop("COMMAND_UNAVAILABLE",0);
         }
         if(completed.output()==null || completed.output().length()>262144)
@@ -633,6 +637,16 @@ public final class CpFailoverJobExecutor {
         };
         if (check!=0) shapes.capture(check,completed.output(),pty,sessionCommandIndex,sessionElapsedMs);
         return check==0 && !BOND_MEMBERS.equals(command)?completed.output():normalizeRead(command,completed.output(),context(),shapes);
+    }
+    /** Why a read counted as unavailable: a short code from the result shape and three fixed shell phrases only. */
+    static String unavailableReason(ExecResult result) {
+        if(result instanceof ExecResult.TimedOut) return "TIMED_OUT";
+        if(!(result instanceof ExecResult.Completed completed)) return "CHANNEL_FAILED";
+        String lower=completed.output()==null?"":completed.output().toLowerCase(java.util.Locale.ROOT);
+        if(lower.contains("command not found")) return "COMMAND_NOT_FOUND";
+        if(lower.contains("no such file or directory")) return "NO_SUCH_FILE";
+        if(lower.contains("permission denied")) return "PERMISSION_DENIED";
+        return "EXIT_"+completed.exitStatus();
     }
     static boolean commandUnavailable(String output) {
         if(output==null) return false;

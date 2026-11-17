@@ -64,7 +64,7 @@ export function FailoverRun({ run, unit }: { run: CpFailoverRunDetail; unit: CpF
     {phaseGroups.map(group => <Box key={group.key}>
       <Typography variant="subtitle2">{group.title}</Typography>
       {run.checks.some(c => (group.phases as ReadonlyArray<string>).includes(c.phase))
-        ? <ReadinessChecksTable checks={run.checks.filter(c => (group.phases as ReadonlyArray<string>).includes(c.phase))} members={unit.members} />
+        ? <ReadinessChecksTable checks={run.checks.filter(c => (group.phases as ReadonlyArray<string>).includes(c.phase))} members={unit.members} vendor={unit.vendor} />
         : <Typography variant="body2">Not evaluated</Typography>}
       {group.key !== "pre" && <Typography variant="body2">Session continuity: not evaluated</Typography>}
     </Box>)}

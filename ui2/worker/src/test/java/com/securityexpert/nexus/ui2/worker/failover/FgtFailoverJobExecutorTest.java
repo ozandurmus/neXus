@@ -313,6 +313,19 @@ class FgtFailoverJobExecutorTest {
         assertEquals("NOT_READY", mismatch.outcome());
         assertEquals("IDENTITY_MISMATCH", mismatch.message());
     }
+    @Test void checkOnePassRecordsTheEnrolledUnitAsActiveAndNoOtherDeviceIsWritten() {
+        Outcome out = run(new Script(), signedOff(), "READINESS", ON, CLUSTER);
+        assertTrue(out.checks().contains("1:PASS"));
+        // The recording hook asserts every row names the enrolled device; the secondary has no device record.
+        assertEquals(1, out.derived().stream().filter(d -> d.contains("\"role\":\"ACTIVE\"")).count());
+        assertTrue(out.derived().stream().filter(d -> d.contains("\"role\"")).allMatch(d -> d.contains("\"identity\":\"MATCH\"")));
+    }
+    @Test void aNonPassingCheckOneCarriesNoRole() {
+        var failed = FgtFailoverJobExecutor.withEnrolledRole(new FgtFailoverChecks.Result(1, "FAIL", "IDENTITY_MISMATCH", java.util.Map.of("identity", "MISMATCH")));
+        assertFalse(failed.evidence().containsKey("role"));
+        var other = FgtFailoverJobExecutor.withEnrolledRole(new FgtFailoverChecks.Result(2, "PASS", "X", java.util.Map.of("identity", "MATCH")));
+        assertFalse(other.evidence().containsKey("role"));
+    }
     @Test void derivedRowsCarryNoDeviceValue() {
         Outcome out = run(new Script(), signedOff(), "READINESS", ON, CLUSTER);
         String all = String.join("\n", out.derived());

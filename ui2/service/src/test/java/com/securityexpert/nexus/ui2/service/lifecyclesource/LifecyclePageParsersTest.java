@@ -166,15 +166,19 @@ class LifecyclePageParsersTest {
                 <tr><td>PAN-PA-410<br>PAN-PA-415</td><td>Mar 22, 2027</td><td>Mar 21, 2032</td><td></td><td>PAN-OS 12.1</td></tr>
                 <tr><td>PA-800 Series<br>(PA-820, PA-850)<br>(PA-820-ZTP, PA-850-ZTP)</td><td>August 31, 2024</td><td>August 31, 2029</td><td></td><td>PAN-OS 11.1</td></tr>
                 <tr><td>VM-Series legacy bundle</td><td>June 15th, 2024</td><td>February 1st, 2029</td><td></td><td></td></tr>
+                <tr><td>PA-5200 Series (PA-5220, PA-5250, PA-5260, PA-5280)</td><td>January 31, 2024</td><td>January 31, 2029</td><td></td><td>PAN-OS 11.1</td></tr>
                 <tr><td>PA-5450 Series PAN-PA-5450-AC-SYS PAN-PA-5400-DPC-A PAN-PA-5400-NC-A</td><td>Nov 22, 2026</td><td>Nov 21, 2031</td><td></td><td></td></tr>
                 <tr><td>PA-7050-SMC PA-7080-SMC PA-7000-LPC</td><td>February 28, 2021</td><td>February 28, 2026 (EOL)</td><td></td><td></td></tr>
+                <tr><td>M-200 and M-600</td><td>November 15, 2023</td><td>November 15, 2028</td><td></td><td></td></tr>
                 <tr><td>M-500</td><td>February 29, 2020</td><td>February 28, 2025 (EOL)</td><td></td><td></td></tr>
                 <tr><td>LightCyber Magna Master (M-100)</td><td>December 31, 2017</td><td>December 31, 2020 (EOL)</td><td></td><td></td></tr>
                 </tbody></table>""";
         var result = PaloAltoEolParser.hardware(html("<h2>Hardware End-of-Life Dates</h2>" + table));
         var entries = byKey(result);
-        assertEquals(java.util.Set.of("HARDWARE PA-410", "HARDWARE PA-415", "HARDWARE PA-820", "HARDWARE PA-850", "HARDWARE PA-5450",
-                "HARDWARE M-500"), entries.keySet(), "card and module part numbers and other product lines are not models");
+        assertEquals(java.util.Set.of("HARDWARE PA-410", "HARDWARE PA-415", "HARDWARE PA-820", "HARDWARE PA-850",
+                "HARDWARE PA-5220", "HARDWARE PA-5250", "HARDWARE PA-5260", "HARDWARE PA-5280", "HARDWARE PA-5450",
+                "HARDWARE M-200", "HARDWARE M-500", "HARDWARE M-600"), entries.keySet(),
+                "card and module part numbers and other product lines are not models");
         assertEquals(3, result.rowsSkipped());
         assertEquals(LocalDate.of(2025, 2, 28), entries.get("HARDWARE M-500").date("end_of_support"), "the (EOL) marker is removed");
         assertEquals(LocalDate.of(2024, 8, 31), entries.get("HARDWARE PA-820").date("end_of_sale"));

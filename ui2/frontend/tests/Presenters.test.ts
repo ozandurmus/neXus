@@ -53,6 +53,10 @@ describe("readiness reasons", () => {
   it("passes a sentence the server wrote, or an unknown code, through unchanged", () => {
     expect(readinessReasonLabel("the readiness job was cancelled before the run started")).toBe("the readiness job was cancelled before the run started");
     expect(readinessReasonLabel("SOME_FUTURE_CODE")).toBe("SOME_FUTURE_CODE");
+    expect(readinessReasonLabel("COMMAND_UNAVAILABLE:COMMAND_NOT_FOUND:cphaprob stat"))
+      .toBe('Command not available on device: "cphaprob stat" was not found in the device login shell');
+    expect(readinessReasonLabel("COMMAND_UNAVAILABLE:EXIT_1:cphaprob stat"))
+      .toBe('Command not available on device: "cphaprob stat" ended with exit status 1 and no usable output');
     expect(readinessReasonLabel(undefined)).toBe("UNKNOWN");
   });
 });

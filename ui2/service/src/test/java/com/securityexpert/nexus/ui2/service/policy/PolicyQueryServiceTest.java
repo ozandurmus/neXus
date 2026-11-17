@@ -34,6 +34,18 @@ class PolicyQueryServiceTest {
         assertEquals("rule-4800", body.path("sections").get(0).path("rules").get(0).path("id").asText());
         assertEquals(0, mapper.valueToTree(query.page(snapshot, Integer.MAX_VALUE, "", false).body()).path("sections").get(0).path("rules").size());
     }
+    @Test void aRuleWithoutAVendorUuidStillPages() {
+        // Cisco ASA and FortiGate rules carry no vendor uuid: the page must render them with the identity fallback.
+        var meta = new Metadata("policy-asa", "source-1", "Synthetic manager", "ASA", "single", "single",
+                "ASA access rules", "2026-11-17T12:00:00Z", "artifact-1", List.of());
+        var empty = new Cell(List.of(), false);
+        var rule = new Rule("rule-1", null, 1, "Synthetic rule", true, empty, empty, empty, empty, "Accept", "Log", "",
+                Map.<String, List<String>>of());
+        var snapshot = new PolicySnapshot(meta, List.of(new Section("section-1", "Synthetic section", "ASA access list", null, List.of(rule))), Map.of());
+        var body = mapper.valueToTree(query.page(snapshot, 0, "", false).body());
+        assertEquals(1, body.path("total").asInt());
+        assertTrue(body.path("sections").get(0).path("rules").get(0).path("identityFallback").asBoolean());
+    }
     @Test void maskedSearchCannotBeUsedAsAnOracleForRawNamesOrComments() {
         var snapshot = snapshot();
         assertEquals(0, query.page(snapshot, 0, "Sensitive synthetic", true).body().get("total"));

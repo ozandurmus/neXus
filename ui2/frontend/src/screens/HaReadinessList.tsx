@@ -31,7 +31,7 @@ import { formatStamp, relativeAge } from "../shell/time";
 import { FRESH_UNDER_MS, isPastFresh } from "../shell/freshness";
 import { urlParam } from "../shell/urlParams";
 import { m3 } from "../theme/m3Theme";
-import { ReadinessChecksTable, readinessStopReason } from "./ReadinessChecksTable";
+import { ReadinessChecksTable, primaryReportsPeer, primaryRolesConfirmed, readinessStopReason } from "./ReadinessChecksTable";
 import { PanConfigSyncAction } from "./PanConfigSyncAction";
 import { HaPairLine } from "./HaPairLine";
 
@@ -129,8 +129,16 @@ export function canRunReadiness(row?: CpFailoverSummary) {
 /** The one-line rule that tells the three non-ready words apart (UI review 2026-10-18, F-12). */
 export const READINESS_RULE = "Not ready: a pre-check found a blocking condition · UNKNOWN: readiness could not be established (no result, or not enough evidence) · neither is Ready.";
 
+/** The lead blocking check in words (its own summary) when the stored reason is only the generic "pre-check failed". */
+function leadCheckReason(row: CpFailoverSummary): string | null {
+  const checks = row.readiness?.checks ?? [];
+  const lead = checks.find(c => c.blocking && c.result === "FAIL") ?? checks.find(c => c.blocking && c.result === "UNKNOWN");
+  return lead?.summary ? `${lead.title}: ${lead.summary}` : null;
+}
+
 function primaryReason(row?: CpFailoverSummary) {
   if (!row) return "INSUFFICIENT_EVIDENCE";
+  if (row.refusalReason === "CHECK_NOT_READY") return leadCheckReason(row) || row.refusalReason;
   return row?.refusalReason || readinessStopReason(row?.readiness?.stopCode) || (row?.readiness?.status === "NOT_READY" ? row.readiness.failedCheck || "Blocking conditions observed"
     : row?.readiness?.status === "READY" ? "No blocking conditions observed" : "Readiness has not been established");
 }
@@ -223,7 +231,11 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
     const s = statuses[status];
     const rolesAt = nested ? row?.readiness?.observedAt : cluster.members.map(m => m.inventory_collected_at ?? "").sort().at(-1);
     const roleMembers = nested ? row?.members ?? [] : cluster.members;
-    const roleNames = (roles: string[]) => roleMembers.filter(m => roles.includes((m.ha_role ?? "").toLowerCase())).map(m => m.hostname ?? "Unknown member").join(", ") || "Not observed";
+    // A single-address FortiGate has one enrolled device and no inventory role: check 1 PASS (one primary, one secondary, the
+    // enrolled unit is the primary) gives primary = active and secondary = standby, as the primary reports.
+    const fgtRoles = !nested && primaryReportsPeer(vendor, roleMembers) && primaryRolesConfirmed(row?.readiness?.checks ?? []);
+    const roleNames = (roles: string[]) => fgtRoles ? (roles.includes("active") ? roleMembers[0].hostname ?? "Unknown member" : "Secondary (as the primary reports)")
+      : roleMembers.filter(m => roles.includes((m.ha_role ?? "").toLowerCase())).map(m => m.hostname ?? "Unknown member").join(", ") || "Not observed";
     const at = row?.readiness?.observedAt;
     const children = item.units.filter(unit => unit.unitId !== unit.clusterId);
     const isExpanded = expanded.has(key);
@@ -278,7 +290,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
       </TableRow>
       {isExpanded && <TableRow><TableCell colSpan={hasActions ? 7 : 6} sx={{ bgcolor: m3.scLow, p: 1.5 }}>
         <Box id={`checks-${encodeURIComponent(key)}`} role="region" aria-label={`Checks for ${title}`}>
-          {row?.readiness?.checks.length ? <ReadinessChecksTable checks={row.readiness.checks} members={row.members?.length ? row.members : cluster.members} compact
+          {row?.readiness?.checks.length ? <ReadinessChecksTable vendor={vendor} checks={row.readiness.checks} members={row.members?.length ? row.members : cluster.members} compact
             rowAction={checkNo => checkNo === 4 && row.vendor === "palo_alto"
               ? <PanConfigSyncAction unit={row} members={row.members?.length ? row.members : cluster.members} onDone={onChanged} /> : null} />
             : <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>No observations yet</Typography>}

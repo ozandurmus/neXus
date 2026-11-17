@@ -179,6 +179,11 @@ public final class PolicyQueryService {
             header.collectedAt(), header.status(), header.reason(), items, header.pages(), header.seconds());
     }
 
+    /** The derived-on-read policies of one source and domain (container). */
+    static List<PolicySnapshot> localDomainSnapshots(List<PolicySnapshot> all, String source, String domain) {
+        return all.stream().filter(s -> s.metadata().sourceId().equals(source) && s.metadata().containerId().equals(domain)).toList();
+    }
+
     private record CachedDomain(String revision, PolicyDomainIndex index) {}
     private final Map<String, CachedDomain> domainCache = new LinkedHashMap<>(16, 0.75f, true);
 
@@ -188,6 +193,13 @@ public final class PolicyQueryService {
         // Snapshot rows change only with a strictly newer collected_at (see PolicySnapshotRepository.save), so the
         // revision check no longer reads and hashes every full snapshot document on each request.
         var snapshotRevisions = repository.domainSnapshotRevisions(source, domain);
+        // Policies derived on read (Cisco ASA, FortiGate, a Palo Alto firewall without Panorama) are never stored in
+        // policy_snapshot, so a domain with no stored row is looked up among them; their ids never collide with a stored domain.
+        List<PolicySnapshot> derived = List.of();
+        if (inventories.isEmpty() && snapshotRevisions.isEmpty() && local != null) {
+            derived = localDomainSnapshots(local.snapshots(), source, domain);
+            snapshotRevisions = derived.stream().map(s -> s.metadata().id() + "|" + s.metadata().collectedAt() + "|" + s.metadata().artefactRef()).toList();
+        }
         String revision;
         try {
             var digest = java.security.MessageDigest.getInstance("SHA-256");
@@ -200,7 +212,7 @@ public final class PolicyQueryService {
         var cached = domainCache.get(key);
         if (cached != null && cached.revision().equals(revision)) return cached.index();
         var index = new PolicyDomainIndex(consume -> inventoryChunks(source, domain, consume),
-            repository.domainSnapshots(source, domain).stream().map(json -> readSnapshot(json)).toList());
+            derived.isEmpty() ? repository.domainSnapshots(source, domain).stream().map(json -> readSnapshot(json)).toList() : derived);
         domainCache.put(key, new CachedDomain(revision, index));
         if (domainCache.size() > 32) domainCache.remove(domainCache.keySet().iterator().next());
         return index;
@@ -362,7 +374,8 @@ public final class PolicyQueryService {
         }
         return Optional.of(new PolicyResponse(Map.of("object", object.get(), "rules", rules.stream().skip((long) page * 200).limit(200).toList(),
             "groups", groups.stream().skip((long) page * 200).limit(200).toList(), "ruleCount", rules.size(), "groupCount", groups.size(), "page", page, "pageSize", 200,
-            "usageComplete", object.get().get("usageComplete"), "usageReasons", object.get().get("usageReasons"))));
+            "usageComplete", object.get().get("usageComplete"), "managementInUse", object.get().get("managementInUse"),
+            "usageReasons", object.get().get("usageReasons"))));
     }
     public Optional<PolicyResponse> objectDuplicates(String source, String domain, int page, String q, boolean masked) {
         var index = domainIndex(source, domain);
@@ -714,7 +727,7 @@ public final class PolicyQueryService {
         }
     }
     private Map<String, Object> ruleView(Rule r, PolicySnapshot snapshot, PolicyHygiene.Result analysis) {
-        var rule = map(r); rule.put("identityFallback", r.uuid().isEmpty());
+        var rule = map(r); rule.put("identityFallback", r.uuid() == null || r.uuid().isEmpty());
         var assessment = analysis.rules().get(r.id());
         rule.put("hygiene", map(assessment));
         rule.put("timeStatus", assessment.timeStatus()); rule.put("expiring", assessment.expiring());
@@ -955,7 +968,7 @@ public final class PolicyQueryService {
     private static String ruleFlagsSortKey(Rule r, PolicyHygiene.Assessment assessment) {
         List<String> flags = new ArrayList<>();
         if (Boolean.FALSE.equals(r.enabled())) flags.add("disabled");
-        if (r.uuid().isEmpty()) flags.add("no-uuid");
+        if (r.uuid() == null || r.uuid().isEmpty()) flags.add("no-uuid");
         if (assessment != null) {
             if ("expired".equals(assessment.timeStatus())) flags.add("expired");
             if (assessment.expiring()) flags.add("expiring");

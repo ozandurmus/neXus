@@ -320,6 +320,9 @@ it("shows no row action and no Actions column outside the job window; the header
 // Post-release review 2026-10-20 (L1): the primary reason goes through the label map; a bare outcome token reads as the pill.
 it("words a bare READY reason as Ready and keeps check names and sentences as they came", () => {
   const ready = summary("CLS-ALPHA-01", "READY");
+  expect(primaryReasonWord({ ...ready, refusalReason: "CHECK_NOT_READY", readiness: { ...ready.readiness!, status: "NOT_READY", checks: [
+    { checkNo: 4, title: "Configuration sync", member: "FW-TANGO-04", result: "FAIL", summary: "Config sync is disabled on 1 member(s): the running configurations are not kept equal", blocking: true, status: "FAIL", derived: {} }] } }))
+    .toBe("Configuration sync: Config sync is disabled on 1 member(s): the running configurations are not kept equal");
   expect(primaryReasonWord({ ...ready, refusalReason: "READY" })).toBe("Ready");
   expect(primaryReasonWord({ ...ready, refusalReason: "NOT_READY" })).toBe("Not ready");
   expect(primaryReasonWord(ready)).toBe("No blocking conditions observed");
@@ -441,4 +444,20 @@ it("evaluates a single-address FortiGate cluster in the main list when its readi
   fireEvent.click(within(row("CLS-DELTA-04")).getByRole("button", { name: "Run pre-checks" }));
   expect(onRun).toHaveBeenCalledWith(fgt);
   expect(screen.queryByText(/Start failover|Resume return step/)).toBeNull();
+});
+it("shows the single FortiGate's roles from check 1 (primary active, secondary standby, as the primary reports) and none without it", () => {
+  const single = { ref: "CLS-FGT-05", title: "CLS-FGT-05", members: [
+    { device_id: "fgt-m1", hostname: "FW-FGT-05", vendor_hint: "fortinet", ha_role: null, inventory_collected_at: at }] as DeviceSummary[] };
+  const check = (result: "PASS" | "UNKNOWN") => ({ checkNo: 1, title: "HA mode and members", member: "Member 1", device_id: "fgt-m1", result,
+    summary: "x", blocking: true, status: result, derived: {} });
+  const unit = (result: "PASS" | "UNKNOWN"): CpFailoverSummary => ({ ...summary("CLS-FGT-05", "READY"), vendor: "fortinet", readinessAvailable: true,
+    members: single.members.map(m => ({ device_id: m.device_id, hostname: m.hostname, ha_role: null })),
+    readiness: { status: "READY", observedAt: at, failedCheck: "", checks: [check(result)] } });
+  const view = (result: "PASS" | "UNKNOWN") => render(<HaReadinessList clusters={[single]} rows={{ "CLS-FGT-05": [unit(result)] }} running={null} busy={false}
+    progress={{}} error={null} onOpen={vi.fn()} onRun={vi.fn()} onBulkRun={vi.fn()} />);
+  const first = view("PASS");
+  expect(within(row("CLS-FGT-05")).getByText(/Active: FW-FGT-05/).textContent).toContain("Standby: Secondary (as the primary reports)");
+  first.unmount();
+  view("UNKNOWN");
+  expect(within(row("CLS-FGT-05")).getByText(/Active:/).textContent).toBe("Active: Not observed ↔ Standby: Not observed");
 });

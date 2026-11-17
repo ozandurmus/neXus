@@ -479,6 +479,7 @@ public final class PanFailoverChecks {
         ObjectNode derived=JsonNodeFactory.instance.objectNode();
         ArrayNode missing=derived.putArray("missing"),unrecognised=derived.putArray("unrecognised");
         boolean failed=false,unknown=false;
+        int disabled=0;
         State[] states={a,b};
         String[] members={"first","second"};
         for(int i=0;i<states.length;i++) {
@@ -499,10 +500,19 @@ public final class PanFailoverChecks {
                 facts.put("peer-reachable","up".equals(state.peerConnection()));
             else if(state.peerConnection().isEmpty()) missing.add(members[i]+".peer-connection");
             else unrecognised.add(members[i]+".peer-connection:"+ReadinessShapeLog.valueShape(state.peerConnection()));
-            if(java.util.Set.of("yes","no").contains(state.runningSyncEnabled()))
+            if(java.util.Set.of("yes","no").contains(state.runningSyncEnabled())) {
                 facts.put("running-sync-enabled",state.runningSyncEnabled());
+                if("no".equals(state.runningSyncEnabled())) disabled++;
+            }
             else if(state.runningSyncEnabled().isEmpty()) missing.add(members[i]+".running-sync-enabled");
             else unrecognised.add(members[i]+".running-sync-enabled:"+ReadinessShapeLog.valueShape(state.runningSyncEnabled()));
+        }
+        // PAN-OS HA config synchronization switched off on a member (Device > High Availability > General > Setup >
+        // Enable Config Sync): the running configurations are not kept equal, a known state and not ready to switch.
+        if(disabled>0) {
+            derived.put("reason","CONFIG_SYNC_DISABLED");
+            derived.put("membersDisabled",disabled);
+            return new SessionSync("FAIL",derived.toString());
         }
         return new SessionSync(unknown?"UNKNOWN":failed?"FAIL":"PASS",derived.toString());
     }

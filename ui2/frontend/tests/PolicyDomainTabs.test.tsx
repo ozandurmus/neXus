@@ -23,9 +23,12 @@ afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 it("labels a count exact only when the server proved it", () => {
   expect(whereUsedLabel({ ruleCount: 0, groupCount: 0, usageComplete: true })).toBe("0 rules · 0 groups");
-  expect(whereUsedLabel({ ruleCount: 0, groupCount: 0, usageComplete: false })).toBe("UNKNOWN");
-  expect(whereUsedLabel({ ruleCount: 0, groupCount: 0 })).toBe("UNKNOWN");
+  expect(whereUsedLabel({ ruleCount: 0, groupCount: 0, usageComplete: false })).toBe("Not in collected rules");
+  expect(whereUsedLabel({ ruleCount: 0, groupCount: 0 })).toBe("Not in collected rules");
   expect(whereUsedLabel({ ruleCount: 2, groupCount: 0, usageComplete: false })).toBe("at least 2 rules · 0 groups");
+  // Management lists it as in use although no collected rule or group shows it: a fact, not an unknown.
+  expect(whereUsedLabel({ ruleCount: 0, groupCount: 0, usageComplete: false, managementInUse: true })).toBe("In use elsewhere");
+  expect(whereUsedLabel({ ruleCount: 1, groupCount: 0, usageComplete: false, managementInUse: true })).toBe("at least 1 rules · 0 groups");
 });
 
 it("reads the bulkhead's 503 POLICY_BUSY as a wait, not as a failed inventory read", async () => {
@@ -52,10 +55,10 @@ it("never shows an unproven zero and keeps hygiene and where-used consistent", a
   const row = (name: string) => within(table).getByText(name).closest("tr") as HTMLElement;
   expect(within(row("ADDR-PROVEN-01")).getByRole("button", { name: "Where used: ADDR-PROVEN-01" })).toHaveTextContent("0 rules · 0 groups");
   expect(within(row("ADDR-PROVEN-01")).getByText("Unused")).toBeInTheDocument();
-  expect(within(row("ADDR-UNKNOWN-02")).getByRole("button", { name: "Where used: ADDR-UNKNOWN-02" })).toHaveTextContent("UNKNOWN");
-  expect(within(row("ADDR-UNKNOWN-02")).getByText("Unused: UNKNOWN")).toBeInTheDocument();
+  expect(within(row("ADDR-UNKNOWN-02")).getByRole("button", { name: "Where used: ADDR-UNKNOWN-02" })).toHaveTextContent("Not in collected rules");
+  expect(within(row("ADDR-UNKNOWN-02")).getByText("Unused: not proven")).toBeInTheDocument();
   expect(within(row("ADDR-PARTIAL-03")).getByRole("button", { name: "Where used: ADDR-PARTIAL-03" })).toHaveTextContent("at least 3 rules · 1 groups");
-  expect(within(row("ADDR-LEGACY-04")).getByRole("button", { name: "Where used: ADDR-LEGACY-04" })).toHaveTextContent("UNKNOWN");
+  expect(within(row("ADDR-LEGACY-04")).getByRole("button", { name: "Where used: ADDR-LEGACY-04" })).toHaveTextContent("Not in collected rules");
   expect(within(table).queryAllByText("0 rules · 0 groups")).toHaveLength(1);
   expect(within(screen.getByRole("note", { name: "Where-used evidence gaps" })).getByText(`• ${NAT}`)).toBeInTheDocument();
   expect(screen.getByText(/Objects are listed from the stored policy/)).toBeInTheDocument();
@@ -70,8 +73,8 @@ it("explains an unknown zero in the usage drawer instead of claiming no referenc
   mount();
   fireEvent.click(await screen.findByRole("button", { name: "Where used: ADDR-UNKNOWN-02" }));
   const drawer = await screen.findByRole("dialog", { name: "Object usage" });
-  expect(await within(drawer).findByText("No references in collected rules and groups; usage remains UNKNOWN.")).toBeInTheDocument();
-  expect(within(drawer).getByText("Where used: UNKNOWN")).toBeInTheDocument();
+  expect(await within(drawer).findByText("No references in collected rules and groups; other uses are not checked.")).toBeInTheDocument();
+  expect(within(drawer).getByText("Where used: Not in collected rules")).toBeInTheDocument();
   expect(within(within(drawer).getByLabelText("Usage evidence gaps")).getByText(`• ${NAT}`)).toBeInTheDocument();
   await waitFor(() => expect(fetcher).toHaveBeenCalledWith(expect.stringContaining("uid=o2"), expect.anything()));
 });
