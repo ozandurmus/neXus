@@ -315,7 +315,7 @@ export function BackupScreen() {
       await loadFleet();
       setTargetsVersion((v) => v + 1);
     } catch (error) {
-      setListError(`${label} request for ${device.name} was refused: ${error instanceof Error ? error.message : String(error)}`);
+      setListError(`${label} request for ${device.name} was refused: ${refusalText(error)}`);
     } finally {
       setLoading(false);
       setTriggeringId(null);
@@ -1427,4 +1427,15 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
       )}
     </Card>
   );
+}
+
+/** An ApiError carries the server's code and reason in its body; show them instead of "[object Object]". */
+export function refusalText(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  const body = (error as { body?: { code?: unknown; reason?: unknown; error?: unknown } } | null)?.body;
+  if (body && typeof body === "object") {
+    const parts = [body.code, body.reason ?? body.error].filter(v => typeof v === "string" && v.length > 0);
+    if (parts.length) return parts.join(": ");
+  }
+  return String(error);
 }

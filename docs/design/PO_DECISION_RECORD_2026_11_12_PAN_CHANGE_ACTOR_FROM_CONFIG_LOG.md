@@ -51,3 +51,13 @@ any unresolved semantic. The design is to be frozen only after the first measure
   count, candidates in the detail view only.
 - Tests pin: no name for a commit or a failed command; no link without a covering window; two administrators give
   `AMBIGUOUS`; the list never carries candidate names.
+
+## Amendment 2026-11-17 (PO chat): config-log read switched on for standing use
+
+Asked "turn the Panorama config log read back on so Palo Alto changes show who changed them? The reads are already
+approved; only changes after it is on fill in", the PO answered "Evet, aç". `UI2_POLICY_PAN_CONFIG_LOG_TRIAL_SOURCE` now
+names the one Panorama policy source in `deploy/ui2/57-policy-deployment.yaml` (set live on `ui2-policy` the same evening).
+No literal changes. Known gap from the 2026-11-13 run (section 13 of the design): this Panorama logs commits as
+`Submitted`, and the join requires `Succeeded`; until the join is amended after reading the new telemetry, entries may
+stay UNKNOWN with reason `NO_COMMIT_SEEN`.
+
