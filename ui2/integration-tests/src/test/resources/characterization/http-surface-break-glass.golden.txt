@@ -9,6 +9,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### bg viewer GET /session/status
@@ -21,6 +22,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":true,"can_read_administration":false,"csrf_token":"<token>","display_name":"claudeadmin","must_change_password":false,"permissions":["Devices","Config","Compliance"],"role_tokens":["role:viewer"]}
 
 ### bg viewer GET mode (refused)
@@ -32,6 +34,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"action_id":"local_auth_mode_read","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
 
 ### bg viewer PUT mode (refused)
@@ -43,6 +46,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"action_id":"local_auth_mode_write","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
 
 ### bg viewer POST /session/logout
@@ -56,6 +60,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### bg admin login (default mode)
@@ -69,6 +74,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### bg admin GET /session/status
@@ -81,6 +87,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":true,"can_read_administration":true,"csrf_token":"<token>","display_name":"nexusadmin","must_change_password":false,"permissions":["Devices","Config","Compliance","PacketAnalysis","Sanitizer","Operations","Policy","Admin"],"role_tokens":["role:viewer","role:operator","role:onboarding_admin","role:backup_admin","role:compliance_admin","role:security_admin","role:operation_admin","role:replay_viewer"]}
 
 ### bg admin GET mode
@@ -94,6 +101,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"break_glass_accounts":["nexusadmin (root identity)","aiview"],"can_write":true,"mode":"ALL_LOCAL","modes":["ALL_LOCAL","BREAK_GLASS_ONLY"],"updated_at":"<ts>","updated_by":"local-auth-mode-migration"}
 
 ### bg admin PUT mode no csrf
@@ -105,6 +113,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 
 ### bg admin PUT mode empty body
@@ -118,6 +127,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"code":"LOCAL_AUTH_MODE_INVALID","error":"LOCAL_AUTH_MODE_INVALID","message":"The body must be exactly {\"mode\": \"ALL_LOCAL\" or \"BREAK_GLASS_ONLY\"}."}
 
 ### bg admin PUT mode unknown value
@@ -131,6 +141,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"code":"LOCAL_AUTH_MODE_INVALID","error":"LOCAL_AUTH_MODE_INVALID","message":"mode must be ALL_LOCAL or BREAK_GLASS_ONLY."}
 
 ### bg admin PUT mode extra field
@@ -144,6 +155,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"code":"LOCAL_AUTH_MODE_INVALID","error":"LOCAL_AUTH_MODE_INVALID","message":"The body must be exactly {\"mode\": \"ALL_LOCAL\" or \"BREAK_GLASS_ONLY\"}."}
 
 ### bg admin PUT mode BREAK_GLASS_ONLY
@@ -157,6 +169,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"break_glass_accounts":["nexusadmin (root identity)","aiview"],"can_write":true,"mode":"BREAK_GLASS_ONLY","modes":["ALL_LOCAL","BREAK_GLASS_ONLY"],"updated_at":"<ts>","updated_by":"<hex12>"}
 
 ### bg admin GET mode after
@@ -170,6 +183,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"break_glass_accounts":["nexusadmin (root identity)","aiview"],"can_write":true,"mode":"BREAK_GLASS_ONLY","modes":["ALL_LOCAL","BREAK_GLASS_ONLY"],"updated_at":"<ts>","updated_by":"<hex12>"}
 
 ### bg admin POST /session/logout
@@ -183,6 +197,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### bg claudeadmin right password (refused)
@@ -195,6 +210,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"INVALID_CREDENTIALS"}
 
 ### bg claudeadmin wrong password
@@ -207,6 +223,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"INVALID_CREDENTIALS"}
 
 ### bg unknown user
@@ -219,6 +236,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"INVALID_CREDENTIALS"}
 
 ### bg aiview-e2e interactive (machine only)
@@ -231,6 +249,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"error":"INVALID_CREDENTIALS"}
 
 ### bg aiview login
@@ -244,6 +263,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### bg aiview GET /session/status
@@ -256,6 +276,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":true,"can_read_administration":false,"csrf_token":"<token>","display_name":"aiview","must_change_password":false,"permissions":["Devices","Config","Compliance","Policy","PacketAnalysis"],"role_tokens":["role:viewer","role:replay_viewer"]}
 
 ### bg aiview GET mode (refused)
@@ -267,6 +288,7 @@ header: content-type: application/json;charset=ISO-8859-1
 header: date: <date>
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"action_id":"local_auth_mode_read","authority":"ui2_local","decision_id":"<n>","error":"ACTION_REFUSED","outcome":"DENIED","reason_code":"actor_not_in_required_group"}
 
 ### bg aiview POST /session/logout
@@ -280,6 +302,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### bg nexusadmin login (break-glass)
@@ -293,6 +316,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### bg nexusadmin GET /session/status
@@ -305,6 +329,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":true,"can_read_administration":true,"csrf_token":"<token>","display_name":"nexusadmin","must_change_password":false,"permissions":["Devices","Config","Compliance","PacketAnalysis","Sanitizer","Operations","Policy","Admin"],"role_tokens":["role:viewer","role:operator","role:onboarding_admin","role:backup_admin","role:compliance_admin","role:security_admin","role:operation_admin","role:replay_viewer"]}
 
 ### bg nexusadmin PUT mode ALL_LOCAL
@@ -318,6 +343,7 @@ header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
+header: x-request-id: <request-id>
 body: {"break_glass_accounts":["nexusadmin (root identity)","aiview"],"can_write":true,"mode":"ALL_LOCAL","modes":["ALL_LOCAL","BREAK_GLASS_ONLY"],"updated_at":"<ts>","updated_by":"<hex12>"}
 
 ### bg nexusadmin POST /session/logout
@@ -331,6 +357,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### bg claudeadmin login (default mode again)
@@ -344,6 +371,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
 ### bg claudeadmin GET /session/status
@@ -356,6 +384,7 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"authenticated":true,"can_read_administration":false,"csrf_token":"<token>","display_name":"claudeadmin","must_change_password":false,"permissions":["Devices","Config","Compliance"],"role_tokens":["role:viewer"]}
 
 ### bg claudeadmin POST /session/logout
@@ -369,5 +398,6 @@ header: transfer-encoding: chunked
 header: vary: accept-encoding
 header: x-content-type-options: nosniff
 header: x-frame-options: DENY
+header: x-request-id: <request-id>
 body: {"ok":true}
 
