@@ -375,7 +375,9 @@ public final class FgtFailoverJobExecutor {
     private boolean moveChecked(TransportSession session, String command) {
         ExecResult result = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(
             () -> ssh.execInteractive(session, new ExecSpec(command, true), Duration.ofSeconds(30)));
-        // A context move normally answers only with the new prompt, or with nothing at all: empty output is success.
+        // A context move normally answers only with the new prompt, or with nothing at all: empty output is success. The SSH
+        // transport reports a prompt that came back with no text as ChannelFailed("empty output") (seen live 2026-11-17).
+        if (result instanceof ExecResult.ChannelFailed failed && "empty output".equals(failed.reason())) return true;
         return result instanceof ExecResult.Completed completed
             && (completed.output() == null || completed.output().isBlank() || !FortiGatePlan.isCliError(completed.output()));
     }
