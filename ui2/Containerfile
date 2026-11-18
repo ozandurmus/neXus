@@ -168,7 +168,12 @@ EXPOSE 8080
 
 # EP-3: the JVM directly, with the packaged artifact. No shell wrapper, so
 # there is no place a credential could be assembled into a command line.
+# CVE-2026-114938 (Java4Shell, disclosed 2026-11-17): heap overflow in the AVX-512 VBMI Base64 decoder intrinsic.
+# HOST-A's CPU has avx512vbmi and the Red Hat build 21.0.13 has no fix yet, so the intrinsic is switched off
+# (interim mitigation published by the finder; costs only Base64 speed). Remove when the base image carries
+# Red Hat's fixed OpenJDK 21 build (backlog java4shell_redhat_fixed_jdk).
 ENTRYPOINT ["java", \
+            "-XX:-UseBASE64Intrinsics", \
             "-XX:MaxRAMPercentage=75.0", \
             "-Djava.io.tmpdir=/app/tmp", \
             "-Djavax.net.ssl.trustStore=/etc/pki/java/cacerts", \
