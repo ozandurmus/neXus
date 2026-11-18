@@ -49,7 +49,7 @@ window.console.error = (...args) => consoleErrors.push(args.map(String).join(" "
 window.addEventListener("error", (e) => consoleErrors.push(`window.onerror: ${e.message || e.error}`));
 window.addEventListener("unhandledrejection", (e) => consoleErrors.push(`unhandledrejection: ${e.reason}`));
 
-window.document.write(html.replace(/<script>[\s\S]*?<\/script>/, "<script></script>"));
+window.document.write(html.replace(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/i, "<script></script>"));
 await window.happyDOM.waitUntilComplete();
 try {
   window.eval(scriptMatch[1]);

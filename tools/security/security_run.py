@@ -117,14 +117,20 @@ def finish():
                 summary["passed"] = False
                 rc = 1
     (output / "summary.json").write_text(json.dumps(summary) + "\n")
-    # Only counts cross into the service's read-only notification mount.
+    # Only counts and a bounded identity list (no source, matches or secrets) cross into the service's read-only mount.
     if mode != "gate":
         notifications = ROOT / "notifications"
         notifications.mkdir(exist_ok=True)
         notifications.chmod(0o750)
         dest = notifications / (output.parent.name + "-" + output.name + ".json")
         temporary = dest.with_suffix(".tmp")
-        temporary.write_text(json.dumps(summary) + "\n")
+        notification = dict(summary)
+        try:
+            # HIGH/CRITICAL/MEDIUM list: rule ids and locations, bounded; absent when the projection failed.
+            notification.update(json.loads((output / "report-findings.json").read_text()))
+        except (OSError, ValueError):
+            pass
+        temporary.write_text(json.dumps(notification) + "\n")
         temporary.chmod(0o640)
         temporary.replace(dest)
     cutoff = date.today() - timedelta(days=90)

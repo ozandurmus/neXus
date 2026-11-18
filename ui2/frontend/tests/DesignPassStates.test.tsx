@@ -172,7 +172,9 @@ describe("global search", () => {
 
 describe("Administration System and Delivery plan", () => {
   it("shows storage first and keeps the pod table behind a disclosure", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (url: string) => url.includes("/system/pods")
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => url.includes("/security/scan-summary")
+      ? json({ code: "NOT_FOUND" }, 404)
+      : url.includes("/system/pods")
       ? json({ available: true, read_at: "2026-10-18T03:00:00Z", pods: [{ name: "ui2-service-abc", state: "Running", ready: "1/1", restarts: 0, started_at: "2026-10-17T03:00:00Z",
         cpu_millicores: 4, cpu_limit_millicores: 1000, memory_bytes: 1048576, memory_limit_bytes: 2097152, image_digest: "digest-synthetic-1" }], modules: [] })
       : json({ read_at: "2026-10-18T03:00:00Z", backups: [{ vendor: "bluecoat", class: "system_log", artefacts: 3, devices: 1, stored_bytes: 1024, original_bytes: 2048, oldest: "2026-10-01T03:00:00Z", newest: "2026-10-17T03:00:00Z" }],

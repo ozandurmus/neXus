@@ -333,7 +333,7 @@ public class SystemStatusService {
             }
             TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
             tmf.init(trust);
-            SSLContext ssl = SSLContext.getInstance("TLS");
+            SSLContext ssl = SSLContext.getInstance("TLSv1.3");  // TLSv1.3 context: same defaults as "TLS" (1.3 and 1.2); 1.0/1.1 stay off
             ssl.init(null, tmf.getTrustManagers(), null);
             return HttpClient.newBuilder().sslContext(ssl).connectTimeout(Duration.ofSeconds(5)).build();
         } catch (java.security.GeneralSecurityException e) {

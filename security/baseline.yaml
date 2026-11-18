@@ -1,30 +1,6 @@
 {
   "accepted": [
     {
-      "tool": "semgrep",
-      "rule": "weak-ssl-context",
-      "location": "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/transport/xmlapi/PanXmlApiTransport.java:286",
-      "reason": "Palo Alto certificate verification disabled by the ratified PO_DECISION_RECORD_2026_09_21_PAN_TLS_VERIFICATION_DISABLED.md; this acceptance is Palo Alto only.",
-      "owner": "PO",
-      "review_date": "2026-12-31"
-    },
-    {
-      "tool": "semgrep",
-      "rule": "unencrypted-socket",
-      "location": "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/notification/SmtpRelaySender.java:40",
-      "reason": "Unauthenticated internal SMTP relay with optional STARTTLS, explicitly retained by NOTIFICATION_ROUTING_CONTRACT.md; STARTTLS verifies the peer when enabled.",
-      "owner": "PO",
-      "review_date": "2026-12-31"
-    },
-    {
-      "tool": "semgrep",
-      "rule": "unencrypted-socket",
-      "location": "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/notification/SyslogSender.java:45",
-      "reason": "Configured syslog forwarding uses TCP or UDP without TLS; accepted by the PO security-baseline brief dated 2026-09-30.",
-      "owner": "PO",
-      "review_date": "2026-12-31"
-    },
-    {
       "tool": "gitleaks",
       "rule": "generic-api-key",
       "location": ".nexus/engineer.summary.log",
@@ -193,22 +169,6 @@
       "rule": "generic-api-key",
       "location": "ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/discovery/pan/StoreBackedPanCredentialResolverTest.java",
       "reason": "Synthetic test fixture constant used by isolated unit tests; no operational credential. Exact path and rule only in .gitleaks.toml.",
-      "owner": "PO",
-      "review_date": "2026-12-31"
-    },
-    {
-      "tool": "semgrep",
-      "rule": "weak-ssl-context",
-      "location": "ui2/ldap-adapter/src/main/java/com/securityexpert/nexus/ui2/identity/ldap/DirectoryTrustPolicy.java:155",
-      "reason": "SSLContext \"TLS\" with a trust store built from the configured directory CA and endpoint checking; the JDK 21 runtime disables TLS 1.0/1.1. Reviewed 2026-09-30 -- false positive on the protocol name only.",
-      "owner": "PO",
-      "review_date": "2026-12-31"
-    },
-    {
-      "tool": "semgrep",
-      "rule": "weak-ssl-context",
-      "location": "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/system/SystemStatusService.java:207",
-      "reason": "SSLContext \"TLS\" trusting only the cluster CA from the service-account mount; the JDK 21 runtime disables TLS 1.0/1.1. Reviewed 2026-09-30 -- false positive on the protocol name only.",
       "owner": "PO",
       "review_date": "2026-12-31"
     },
@@ -572,6 +532,686 @@
       "reason": "zlib in the Red Hat UBI9 openjdk-21-runtime base (service image and the images built from it): zlib-1.2.11-40.el9 is installed (RHEL 9.8). CVE-2026-76844 (HIGH; Red Hat CVSS 8.1) is a heap overflow in gz_write() of the gzFile API after a failed write(); first flagged by the deploy gate on 2026-11-13. No fixed RHEL 9 package was available to the gate's scanner. Exposure: neXus code does not use the gzFile API (no gzopen/gzwrite; java.util.zip uses the deflate/inflate stream API, not gzwrite). Time-boxed under the PO base-image rule (14 days): take the Red Hat fix with the next base refresh, or re-review on the review date.",
       "owner": "PO",
       "review_date": "2026-11-27"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.dockerfile.security.missing-user.missing-user",
+      "location": "history/Dockerfile:35",
+      "reason": "history/ holds the retired Python product, frozen by PO decision and not built or deployed by any pipeline; the image only idles (tail -f). No change to a retired artifact.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args",
+      "location": "history/scripts/consult_codex_ui_visual_review.py:72",
+      "reason": "archived consultation script under history/: subprocess.run with a list argv (no shell) invoking a fixed local program; the argument values come from the operator's own command line or repository files. Not part of the shipped product, CI or any cluster workload; no untrusted party controls the environment or arguments.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args",
+      "location": "history/scripts/consult_exec_overview_design.py:101",
+      "reason": "archived consultation script under history/: subprocess.run with a list argv (no shell) invoking a fixed local program; the argument values come from the operator's own command line or repository files. Not part of the shipped product, CI or any cluster workload; no untrusted party controls the environment or arguments.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args",
+      "location": "history/scripts/consult_fable_product_review_2026_10_18.py:85",
+      "reason": "archived consultation script under history/: subprocess.run with a list argv (no shell) invoking a fixed local program; the argument values come from the operator's own command line or repository files. Not part of the shipped product, CI or any cluster workload; no untrusted party controls the environment or arguments.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args",
+      "location": "history/scripts/consult_fable_resume_on_astra_review.py:66",
+      "reason": "archived consultation script under history/: subprocess.run with a list argv (no shell) invoking a fixed local program; the argument values come from the operator's own command line or repository files. Not part of the shipped product, CI or any cluster workload; no untrusted party controls the environment or arguments.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args",
+      "location": "history/scripts/consult_fable_ui_after_review_2026_10_18.py:74",
+      "reason": "archived consultation script under history/: subprocess.run with a list argv (no shell) invoking a fixed local program; the argument values come from the operator's own command line or repository files. Not part of the shipped product, CI or any cluster workload; no untrusted party controls the environment or arguments.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args",
+      "location": "history/scripts/consult_fable_ui_review_2026_10_17.py:88",
+      "reason": "archived consultation script under history/: subprocess.run with a list argv (no shell) invoking a fixed local program; the argument values come from the operator's own command line or repository files. Not part of the shipped product, CI or any cluster workload; no untrusted party controls the environment or arguments.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args",
+      "location": "history/scripts/consult_fable_ui_review_2026_11_05.py:67",
+      "reason": "archived consultation script under history/: subprocess.run with a list argv (no shell) invoking a fixed local program; the argument values come from the operator's own command line or repository files. Not part of the shipped product, CI or any cluster workload; no untrusted party controls the environment or arguments.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args",
+      "location": "history/scripts/consult_fable_ui_visual_review.py:99",
+      "reason": "archived consultation script under history/: subprocess.run with a list argv (no shell) invoking a fixed local program; the argument values come from the operator's own command line or repository files. Not part of the shipped product, CI or any cluster workload; no untrusted party controls the environment or arguments.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args",
+      "location": "scripts/consult_argon.py:45",
+      "reason": "operator-run consultation script: subprocess.run with a list argv (no shell) invoking a fixed local program; the argument values come from the operator's own command line or repository files. Not part of the shipped product, CI or any cluster workload; no untrusted party controls the environment or arguments.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args",
+      "location": "scripts/consult_argon.py:47",
+      "reason": "operator-run consultation script: subprocess.run with a list argv (no shell) invoking a fixed local program; the argument values come from the operator's own command line or repository files. Not part of the shipped product, CI or any cluster workload; no untrusted party controls the environment or arguments.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args",
+      "location": "scripts/consult_claude_log_trial_judge.py:57",
+      "reason": "operator-run consultation script: subprocess.run with a list argv (no shell) invoking a fixed local program; the argument values come from the operator's own command line or repository files. Not part of the shipped product, CI or any cluster workload; no untrusted party controls the environment or arguments.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args",
+      "location": "scripts/consult_fable_design.py:36",
+      "reason": "operator-run consultation script: subprocess.run with a list argv (no shell) invoking a fixed local program; the argument values come from the operator's own command line or repository files. Not part of the shipped product, CI or any cluster workload; no untrusted party controls the environment or arguments.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args",
+      "location": "tools/packet_analysis/parity/core_compare.py:454",
+      "reason": "developer-run packet-analysis parity harness: subprocess.run with a list argv (no shell) invoking a fixed local program; the argument values come from the operator's own command line or repository files. Not part of the shipped product, CI or any cluster workload; no untrusted party controls the environment or arguments.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args",
+      "location": "tools/packet_analysis/parity/det_a_compare.py:741",
+      "reason": "developer-run packet-analysis parity harness: subprocess.run with a list argv (no shell) invoking a fixed local program; the argument values come from the operator's own command line or repository files. Not part of the shipped product, CI or any cluster workload; no untrusted party controls the environment or arguments.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args",
+      "location": "tools/packet_analysis/parity/det_b_compare.py:380",
+      "reason": "developer-run packet-analysis parity harness: subprocess.run with a list argv (no shell) invoking a fixed local program; the argument values come from the operator's own command line or repository files. Not part of the shipped product, CI or any cluster workload; no untrusted party controls the environment or arguments.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args",
+      "location": "tools/packet_analysis/parity/det_c_compare.py:368",
+      "reason": "developer-run packet-analysis parity harness: subprocess.run with a list argv (no shell) invoking a fixed local program; the argument values come from the operator's own command line or repository files. Not part of the shipped product, CI or any cluster workload; no untrusted party controls the environment or arguments.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args",
+      "location": "tools/packet_analysis/parity/det_c_compare.py:562",
+      "reason": "developer-run packet-analysis parity harness: subprocess.run with a list argv (no shell) invoking a fixed local program; the argument values come from the operator's own command line or repository files. Not part of the shipped product, CI or any cluster workload; no untrusted party controls the environment or arguments.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.java.lang.security.audit.crypto.unencrypted-socket.unencrypted-socket",
+      "location": "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/notification/SmtpRelaySender.java:40",
+      "reason": "Unauthenticated internal SMTP relay with optional STARTTLS, explicitly retained by NOTIFICATION_ROUTING_CONTRACT.md; STARTTLS verifies the peer when enabled.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.java.lang.security.audit.crypto.unencrypted-socket.unencrypted-socket",
+      "location": "ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/notification/SyslogSender.java:45",
+      "reason": "Configured syslog forwarding uses TCP or UDP without TLS; accepted by the PO security-baseline brief dated 2026-09-30.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.java.lang.security.audit.weak-ssl-context.weak-ssl-context",
+      "location": "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/transport/https/HttpsDeviceClient.java:131",
+      "reason": "Device HTTPS client: trust is the endpoint's pinned leaf certificate with warn-not-refuse on change (PO decisions on host-key and certificate mismatch; devices are addressed by IP). The \"TLS\" context name enables TLS 1.3 and 1.2 only on the JDK 21 runtime (1.0/1.1 are disabled by jdk.tls.disabledAlgorithms). Not renamed so device connections are not touched without a device validation run.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.java.lang.security.audit.crypto.use-of-md5.use-of-md5",
+      "location": "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/transport/ssh/SshTransportSession.java:58",
+      "reason": "MD5 is used only to compute the colon-hex host-key fingerprint label that Check Point recorded identities were stored in (identity label for comparison, not a security control); trust is decided by HostKeyVerifier on its own SHA-256. Changing the algorithm would break every recorded identity comparison.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule": "rules.java.lang.security.audit.weak-ssl-context.weak-ssl-context",
+      "location": "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/transport/xmlapi/PanXmlApiTransport.java:307",
+      "reason": "Palo Alto certificate verification disabled by the ratified PO_DECISION_RECORD_2026_09_21_PAN_TLS_VERIFICATION_DISABLED.md; this acceptance is Palo Alto only. The finding is the protocol name \"TLS\" on the context that carries that trust decision.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0037",
+      "location": "hosta/traefik-config.yaml",
+      "reason": "Workload lives in kube-system by design: the cluster-internal image registry and the Traefik HelmChartConfig must be in the namespace the cluster runs them from (k3s).",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0011",
+      "location": "ui2-image-build/05-registry.yaml",
+      "reason": "No CPU limit by design: a CPU limit throttles a latency-sensitive pod below its request. Memory is limited and CPU is requested.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0015",
+      "location": "ui2-image-build/05-registry.yaml",
+      "reason": "Registry pod has no CPU request: its load is not measured and a request could leave it Pending on a full node; the pod is a single-replica infrastructure service that the build pipeline restarts, so a request is not added without measurement.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0016",
+      "location": "ui2-image-build/05-registry.yaml",
+      "reason": "Registry pod has no memory request: its load is not measured and a request could leave it Pending on a full node; added together with a measured limit, not blind.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0018",
+      "location": "ui2-image-build/05-registry.yaml",
+      "reason": "Registry pod has no memory limit: an unmeasured limit risks OOM-killing a push mid-layer and breaking image builds; set when a measured figure exists.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0021",
+      "location": "ui2-image-build/05-registry.yaml",
+      "reason": "Build and tooling pods run the vendor image's own numeric account; changing it breaks file ownership in the build context and caches.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0037",
+      "location": "ui2-image-build/05-registry.yaml",
+      "reason": "Workload lives in kube-system by design: the cluster-internal image registry and the Traefik HelmChartConfig must be in the namespace the cluster runs them from (k3s).",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0020",
+      "location": "ui2-image-build/20-context-loader.yaml",
+      "reason": "Build and tooling pods run the vendor image's own numeric account; changing it breaks file ownership in the build context and caches.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0021",
+      "location": "ui2-image-build/20-context-loader.yaml",
+      "reason": "Build and tooling pods run the vendor image's own numeric account; changing it breaks file ownership in the build context and caches.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0125",
+      "location": "ui2-image-build/20-context-loader.yaml",
+      "reason": "Image comes from the cluster-internal registry (populated by the digest-pinned build pipeline) or is pinned by digest from a vendor registry the build mirrors; not an untrusted registry.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0003",
+      "location": "ui2-image-build/30-build-job.yaml",
+      "reason": "Kaniko image-build Job keeps the default capability set: extracting base layers and changing ownership need them; same documented exception as the KSV-0014/KSV-0118 acceptances for these Jobs.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0004",
+      "location": "ui2-image-build/30-build-job.yaml",
+      "reason": "Kaniko image-build Job keeps the default capability set: extracting base layers and changing ownership need them; same documented exception as the KSV-0014/KSV-0118 acceptances for these Jobs.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0012",
+      "location": "ui2-image-build/30-build-job.yaml",
+      "reason": "Kaniko image builds run as root by design (documented exception, same as KSV-0118 for these Jobs).",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0020",
+      "location": "ui2-image-build/30-build-job.yaml",
+      "reason": "Build and tooling pods run the vendor image's own numeric account; changing it breaks file ownership in the build context and caches.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0021",
+      "location": "ui2-image-build/30-build-job.yaml",
+      "reason": "Build and tooling pods run the vendor image's own numeric account; changing it breaks file ownership in the build context and caches.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0106",
+      "location": "ui2-image-build/30-build-job.yaml",
+      "reason": "Kaniko image-build Job cannot drop ALL capabilities: layer extraction needs CHOWN/DAC_OVERRIDE/FOWNER/SETUID/SETGID; same documented exception as the KSV-0014/KSV-0118 acceptances for these Jobs.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0003",
+      "location": "ui2-image-build/32-e2e-build-job.yaml",
+      "reason": "Kaniko image-build Job keeps the default capability set: extracting base layers and changing ownership need them; same documented exception as the KSV-0014/KSV-0118 acceptances for these Jobs.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0004",
+      "location": "ui2-image-build/32-e2e-build-job.yaml",
+      "reason": "Kaniko image-build Job keeps the default capability set: extracting base layers and changing ownership need them; same documented exception as the KSV-0014/KSV-0118 acceptances for these Jobs.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0012",
+      "location": "ui2-image-build/32-e2e-build-job.yaml",
+      "reason": "Kaniko image builds run as root by design (documented exception, same as KSV-0118 for these Jobs).",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0020",
+      "location": "ui2-image-build/32-e2e-build-job.yaml",
+      "reason": "Build and tooling pods run the vendor image's own numeric account; changing it breaks file ownership in the build context and caches.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0021",
+      "location": "ui2-image-build/32-e2e-build-job.yaml",
+      "reason": "Build and tooling pods run the vendor image's own numeric account; changing it breaks file ownership in the build context and caches.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0106",
+      "location": "ui2-image-build/32-e2e-build-job.yaml",
+      "reason": "Kaniko image-build Job cannot drop ALL capabilities: layer extraction needs CHOWN/DAC_OVERRIDE/FOWNER/SETUID/SETGID; same documented exception as the KSV-0014/KSV-0118 acceptances for these Jobs.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0020",
+      "location": "ui2-image-build/33-integration-postgres.yaml",
+      "reason": "The integration database image is the vendor postgres image whose account is uid/gid 999; a different id would break its data directory ownership.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0021",
+      "location": "ui2-image-build/33-integration-postgres.yaml",
+      "reason": "The integration database image is the vendor postgres image whose account is uid/gid 999; a different id would break its data directory ownership.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0125",
+      "location": "ui2-image-build/33-integration-postgres.yaml",
+      "reason": "Image comes from the cluster-internal registry (populated by the digest-pinned build pipeline) or is pinned by digest from a vendor registry the build mirrors; not an untrusted registry.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0021",
+      "location": "ui2/05-flyway-bootstrap.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0125",
+      "location": "ui2/05-flyway-bootstrap.yaml",
+      "reason": "Image comes from the cluster-internal registry (populated by the digest-pinned build pipeline) or is pinned by digest from a vendor registry the build mirrors; not an untrusted registry.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-01010",
+      "location": "ui2/10-configmap.yaml",
+      "reason": "The ConfigMap holds non-secret configuration only (see its header); the flagged text is the database-initialisation script that mentions the word PASSWORD and binds values read from the environment. No credential is stored in it.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0020",
+      "location": "ui2/40-database-statefulset.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0021",
+      "location": "ui2/40-database-statefulset.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0125",
+      "location": "ui2/40-database-statefulset.yaml",
+      "reason": "Image comes from the cluster-internal registry (populated by the digest-pinned build pipeline) or is pinned by digest from a vendor registry the build mirrors; not an untrusted registry.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0020",
+      "location": "ui2/50-service-deployment.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0021",
+      "location": "ui2/50-service-deployment.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0125",
+      "location": "ui2/50-service-deployment.yaml",
+      "reason": "Image comes from the cluster-internal registry (populated by the digest-pinned build pipeline) or is pinned by digest from a vendor registry the build mirrors; not an untrusted registry.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0020",
+      "location": "ui2/52-worker-deployment.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0021",
+      "location": "ui2/52-worker-deployment.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0023",
+      "location": "ui2/52-worker-deployment.yaml",
+      "reason": "hostPath is the Radware Cyber Controller push inbox (OS-3a, RADWARE_CYBER_CONTROLLER_OWN_BACKUP_RECEIVER.md): a fixed directory with type Directory, mounted for the one receiver; no alternative is possible for a file push to the host.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0125",
+      "location": "ui2/52-worker-deployment.yaml",
+      "reason": "Image comes from the cluster-internal registry (populated by the digest-pinned build pipeline) or is pinned by digest from a vendor registry the build mirrors; not an untrusted registry.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0011",
+      "location": "ui2/53-backup-deployment.yaml",
+      "reason": "No CPU limit by design: a CPU limit throttles a latency-sensitive pod below its request. Memory is limited and CPU is requested.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0020",
+      "location": "ui2/53-backup-deployment.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0021",
+      "location": "ui2/53-backup-deployment.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0023",
+      "location": "ui2/53-backup-deployment.yaml",
+      "reason": "hostPath is the Radware Cyber Controller push inbox (OS-3a, RADWARE_CYBER_CONTROLLER_OWN_BACKUP_RECEIVER.md): a fixed directory with type Directory, mounted for the one receiver; no alternative is possible for a file push to the host.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0125",
+      "location": "ui2/53-backup-deployment.yaml",
+      "reason": "Image comes from the cluster-internal registry (populated by the digest-pinned build pipeline) or is pinned by digest from a vendor registry the build mirrors; not an untrusted registry.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0020",
+      "location": "ui2/54-configuration-deployment.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0021",
+      "location": "ui2/54-configuration-deployment.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0125",
+      "location": "ui2/54-configuration-deployment.yaml",
+      "reason": "Image comes from the cluster-internal registry (populated by the digest-pinned build pipeline) or is pinned by digest from a vendor registry the build mirrors; not an untrusted registry.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0020",
+      "location": "ui2/55-compliance-deployment.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0021",
+      "location": "ui2/55-compliance-deployment.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0125",
+      "location": "ui2/55-compliance-deployment.yaml",
+      "reason": "Image comes from the cluster-internal registry (populated by the digest-pinned build pipeline) or is pinned by digest from a vendor registry the build mirrors; not an untrusted registry.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0011",
+      "location": "ui2/57-policy-deployment.yaml",
+      "reason": "No CPU limit by design: a CPU limit throttles a latency-sensitive pod below its request. Memory is limited and CPU is requested.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0020",
+      "location": "ui2/57-policy-deployment.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0021",
+      "location": "ui2/57-policy-deployment.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0125",
+      "location": "ui2/57-policy-deployment.yaml",
+      "reason": "Image comes from the cluster-internal registry (populated by the digest-pinned build pipeline) or is pinned by digest from a vendor registry the build mirrors; not an untrusted registry.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0020",
+      "location": "ui2/58-packet-analysis-deployment.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0021",
+      "location": "ui2/58-packet-analysis-deployment.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0125",
+      "location": "ui2/58-packet-analysis-deployment.yaml",
+      "reason": "Image comes from the cluster-internal registry (populated by the digest-pinned build pipeline) or is pinned by digest from a vendor registry the build mirrors; not an untrusted registry.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0020",
+      "location": "ui2/59-advisory-fetch-cronjob.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0021",
+      "location": "ui2/59-advisory-fetch-cronjob.yaml",
+      "reason": "No fixed uid/gid by design (FS-7, FS-6): the numeric account is the image's own and the platform assigns it; a fixed value above 10000 would change file ownership on mounted volumes and cannot be validated off-cluster.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0125",
+      "location": "ui2/59-advisory-fetch-cronjob.yaml",
+      "reason": "Image comes from the cluster-internal registry (populated by the digest-pinned build pipeline) or is pinned by digest from a vendor registry the build mirrors; not an untrusted registry.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0020",
+      "location": "ui2/70-e2e-job.yaml",
+      "reason": "The e2e Job runs the e2e image's own account (uid/gid 1000); a different id would break file ownership in its workspace.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0021",
+      "location": "ui2/70-e2e-job.yaml",
+      "reason": "The e2e Job runs the e2e image's own account (uid/gid 1000); a different id would break file ownership in its workspace.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "KSV-0125",
+      "location": "ui2/70-e2e-job.yaml",
+      "reason": "Image comes from the cluster-internal registry (populated by the digest-pinned build pipeline) or is pinned by digest from a vendor registry the build mirrors; not an untrusted registry.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
     }
   ]
 }

@@ -76,7 +76,10 @@ class AiviewDiagnosticReadOnlyTest {
                 // step 1 under ACI-6); never cutover_assessment_write
                 ActionRegistry.CUTOVER_ASSESSMENT_READ,
                 // support bundle list and status, masked (SUPPORT_BUNDLE_COLLECTION_DESIGN_2026_11_14.md 5.10.1); never a write
-                ActionRegistry.SUPPORT_BUNDLE_READ)), held);
+                ActionRegistry.SUPPORT_BUNDLE_READ,
+                // latest daily security scan summary (counts, rule ids, paths; no device data), read-only, through the masking
+                // advice (PO request 2026-11-18: the daily HIGH/MEDIUM findings reach aiview too)
+                ActionRegistry.SECURITY_SCAN_SUMMARY_READ)), held);
         // the sibling writes stay closed to the replay viewer
         for (String closed : new String[]{ActionRegistry.DISCOVERY_RUN_IMPORT, ActionRegistry.DISCOVERY_ACKNOWLEDGE,
                 ActionRegistry.DEVICE_CONFIGURATION_TEXT_READ, ActionRegistry.DEVICE_REGISTER, ActionRegistry.DEVICE_DELETE,

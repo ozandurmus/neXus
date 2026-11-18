@@ -278,4 +278,24 @@ class LifecyclePageParsersTest {
         assertTrue(HtmlTables.read(new byte[HtmlTables.MAX_DOCUMENT_CHARS + 1]).tables().isEmpty());
         assertTrue(HtmlTables.read(null).tables().isEmpty());
     }
+
+    @Test
+    void aPageOfUnclosedTagsIsRefusedInBoundedTimeNotQuadraticTime() {
+        // Each unclosed tag makes the lazy block patterns rescan to the end of the page: quadratic without a budget.
+        String hostile = "<table ".repeat(150_000) + "<h1>" .repeat(150_000);
+        long started = System.nanoTime();
+        HtmlTables.Document read = HtmlTables.read(hostile.getBytes(StandardCharsets.UTF_8), java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(300));
+        long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+        assertTrue(read.tables().isEmpty());
+        assertTrue(elapsedMs < 5_000, "took " + elapsedMs + " ms");
+    }
+
+    @Test
+    void aWellFormedPageStillReadsWithinTheBudget() {
+        HtmlTables.Document read = HtmlTables.read(
+                "<html><title>T</title><h2>Heading</h2><table id=\"t1\"><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table></html>"
+                        .getBytes(StandardCharsets.UTF_8));
+        assertEquals(1, read.tables().size());
+        assertEquals(List.of(List.of("A", "B"), List.of("1", "2")), read.tables().get(0).rows());
+    }
 }
