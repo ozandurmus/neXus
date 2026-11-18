@@ -62,7 +62,7 @@ public final class SmtpRelaySender {
             }
             session.command("DATA", 354);
             StringBuilder message = new StringBuilder();
-            message.append("From: neXus <").append(settings.smtpFrom().strip()).append(">\r\n");
+            message.append("From: ").append(encodeHeader(MailBrand.name())).append(" <").append(settings.smtpFrom().strip()).append(">\r\n");
             message.append("To: ").append(String.join(", ", recipients)).append("\r\n");
             message.append("Subject: ").append(encodeHeader(subject)).append("\r\n");
             message.append("Date: ").append(DateTimeFormatter.RFC_1123_DATE_TIME.format(ZonedDateTime.now())).append("\r\n");

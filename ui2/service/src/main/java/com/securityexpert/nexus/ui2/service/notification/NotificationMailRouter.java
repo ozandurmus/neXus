@@ -58,7 +58,15 @@ final class NotificationMailRouter {
                 long audit = row.get("watermark_audit", Long.class) == null ? 0 : row.get("watermark_audit", Long.class);
                 Timestamp watermark = row.get("watermark_time", Timestamp.class);
                 Instant from = watermark == null ? Instant.EPOCH : watermark.toInstant();
-                Batch batch = collect(dsl, type, audit, from, identity);
+                Batch batch;
+                try {
+                    batch = collect(dsl, type, audit, from, identity);
+                } catch (IOException e) {
+                    // A collector's own read failure is not a relay failure; say which (no file contents, no values).
+                    dsl.execute("update notification_routes set last_error = {0} where type = {1}",
+                            "event collection failed: " + safeReason(e), type);
+                    continue;
+                }
                 if (batch.lines().isEmpty()) {
                     applyState(dsl, batch.state());
                     continue;
@@ -77,6 +85,12 @@ final class NotificationMailRouter {
         }
     }
 
+    private static String safeReason(IOException e) {
+        String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+        message = message.replaceAll("[\\r\\n]", " ").strip();
+        return message.length() > 120 ? message.substring(0, 120) : message;
+    }
+
     /** A route type without a collector: skipped, never an error on the route. */
     static final class UnhandledTypeException extends RuntimeException {
         UnhandledTypeException() { super("no collector for this notification type", null, false, false); }
@@ -92,7 +106,7 @@ final class NotificationMailRouter {
     static void resetWarnedTypesForTest() { WARNED_TYPES.clear(); }
 
     static String subject(String type, int count) {
-        return "neXus – " + NotificationRoute.TITLES.getOrDefault(type, type) + ": " + count + " event(s)";
+        return MailBrand.name() + " – " + NotificationRoute.TITLES.getOrDefault(type, type) + ": " + count + " event(s)";
     }
 
     static String digest(List<String> lines) {
