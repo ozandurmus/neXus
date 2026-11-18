@@ -446,18 +446,18 @@ it("evaluates a single-address FortiGate cluster in the main list when its readi
   expect(screen.queryByText(/Start failover|Resume return step/)).toBeNull();
 });
 it("shows the single FortiGate's roles from check 1 (primary active, secondary standby, as the primary reports) and none without it", () => {
-  const single = { ref: "CLS-FGT-05", title: "CLS-FGT-05", members: [
-    { device_id: "fgt-m1", hostname: "FW-FGT-05", vendor_hint: "fortinet", ha_role: null, inventory_collected_at: at }] as DeviceSummary[] };
+  const single = { ref: "CLS-TANGO-05", title: "CLS-TANGO-05", members: [
+    { device_id: "fgt-m1", hostname: "FW-TANGO-05", vendor_hint: "fortinet", ha_role: null, inventory_collected_at: at }] as DeviceSummary[] };
   const check = (result: "PASS" | "UNKNOWN") => ({ checkNo: 1, title: "HA mode and members", member: "Member 1", device_id: "fgt-m1", result,
     summary: "x", blocking: true, status: result, derived: {} });
-  const unit = (result: "PASS" | "UNKNOWN"): CpFailoverSummary => ({ ...summary("CLS-FGT-05", "READY"), vendor: "fortinet", readinessAvailable: true,
+  const unit = (result: "PASS" | "UNKNOWN"): CpFailoverSummary => ({ ...summary("CLS-TANGO-05", "READY"), vendor: "fortinet", readinessAvailable: true,
     members: single.members.map(m => ({ device_id: m.device_id, hostname: m.hostname, ha_role: null })),
     readiness: { status: "READY", observedAt: at, failedCheck: "", checks: [check(result)] } });
-  const view = (result: "PASS" | "UNKNOWN") => render(<HaReadinessList clusters={[single]} rows={{ "CLS-FGT-05": [unit(result)] }} running={null} busy={false}
+  const view = (result: "PASS" | "UNKNOWN") => render(<HaReadinessList clusters={[single]} rows={{ "CLS-TANGO-05": [unit(result)] }} running={null} busy={false}
     progress={{}} error={null} onOpen={vi.fn()} onRun={vi.fn()} onBulkRun={vi.fn()} />);
   const first = view("PASS");
-  expect(within(row("CLS-FGT-05")).getByText(/Active: FW-FGT-05/).textContent).toContain("Standby: Secondary (as the primary reports)");
+  expect(within(row("CLS-TANGO-05")).getByText(/Active: FW-TANGO-05/).textContent).toContain("Standby: Secondary (as the primary reports)");
   first.unmount();
   view("UNKNOWN");
-  expect(within(row("CLS-FGT-05")).getByText(/Active:/).textContent).toBe("Active: Not observed ↔ Standby: Not observed");
+  expect(within(row("CLS-TANGO-05")).getByText(/Active:/).textContent).toBe("Active: Not observed ↔ Standby: Not observed");
 });

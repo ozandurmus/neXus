@@ -756,8 +756,12 @@ public class DeviceCompositionConfiguration {
     public com.securityexpert.nexus.ui2.service.device.backup.BackupScheduler backupScheduler(
             com.securityexpert.nexus.ui2.persistence.artefact.BackupPolicyRepository policyRepository,
             BackupCollectService collectService,
-            com.securityexpert.nexus.ui2.service.schedule.FamilySwitch switches) {
-        return new com.securityexpert.nexus.ui2.service.device.backup.BackupScheduler(policyRepository, collectService, switches);
+            com.securityexpert.nexus.ui2.service.schedule.FamilySwitch switches,
+            com.securityexpert.nexus.ui2.service.device.backup.MdsExportEligibility mdsExportEligibility) {
+        // PO 2026-11-18: the scheduled MDS export; UI2_CP_MDS_EXPORT_SCHEDULE=true turns it on (code default off).
+        return new com.securityexpert.nexus.ui2.service.device.backup.BackupScheduler(policyRepository, collectService, switches)
+                .withMdsExport(mdsExportEligibility,
+                        () -> "true".equalsIgnoreCase(System.getenv().getOrDefault("UI2_CP_MDS_EXPORT_SCHEDULE", "false")));
     }
 
     @Bean
@@ -783,6 +787,11 @@ public class DeviceCompositionConfiguration {
                 scheduler.tick(java.time.Instant.now());
             } catch (RuntimeException e) {
                 LOG.warning("[BACKUP_SCHEDULE] tick failed: " + e.getMessage());
+            }
+            try {
+                scheduler.mdsExportTick(java.time.Instant.now());
+            } catch (RuntimeException e) {
+                LOG.warning("[BACKUP_SCHEDULE] MDS export tick failed: " + e.getMessage());
             }
         }
 

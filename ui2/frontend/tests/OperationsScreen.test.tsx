@@ -68,12 +68,12 @@ describe("OperationsScreen tabs", () => {
     }
   });
 
-  it("has three tabs, the fleet's live activity only: Scheduled jobs and Platform status are Administration pages (PO 2026-11-13 amendment)", async () => {
+  it("has four tabs, the fleet's live activity only: Scheduled jobs and Platform status are Administration pages (PO 2026-11-13 amendment)", async () => {
     stubFetch([], null);
     render(withTheme(<OperationsScreen />));
     await screen.findByText("No HA pair or cluster enrolled");
     const tablist = screen.getByRole("tablist", { name: "Operations sections" });
-    expect(within(tablist).getAllByRole("tab").map(t => t.textContent)).toEqual(["HA and readiness", "Jobs", "Device health"]);
+    expect(within(tablist).getAllByRole("tab").map(t => t.textContent)).toEqual(["HA and readiness", "Jobs", "Device health", "Policy installation"]);
     expect(screen.queryByRole("tab", { name: "Scheduled jobs" })).toBeNull();
     expect(screen.queryByRole("tab", { name: "Platform status" })).toBeNull();
   });

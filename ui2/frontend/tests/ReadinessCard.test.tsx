@@ -105,7 +105,7 @@ describe("Readiness card", () => {
   });
 
   describe("single-address FortiGate (the primary reports both members)", () => {
-    const one = [{ device_id: "opaque-1", hostname: "FW-FGT-01", ha_role: null }];
+    const one = [{ device_id: "opaque-1", hostname: "FW-TANGO-01", ha_role: null }];
     const row = (checkNo: number, result: ReadinessCheck["result"], blocking = true, summary = "As reported") =>
       ({ checkNo, title: `Check ${checkNo}`, member: "Member 1", device_id: "opaque-1", result, summary, blocking });
     const fgt = [row(1, "PASS"), row(7, "PASS"), row(10, "PASS", false, "1 MB/s, 40 ARP entries")];
@@ -113,7 +113,7 @@ describe("Readiness card", () => {
       render(<ReadinessCard {...props} vendor="fortinet" members={one} checks={fgt} status="READY" />);
       const table = screen.getByRole("table");
       expect(within(table).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(
-        ["Check", "FW-FGT-01 · active (as the primary reports)", "Secondary · standby (as the primary reports)"]);
+        ["Check", "FW-TANGO-01 · active (as the primary reports)", "Secondary · standby (as the primary reports)"]);
       const rows = within(table).getAllByRole("row");
       expect(within(rows[1]).getAllByRole("cell").map(cell => cell.textContent)).toEqual(["As reported", "As reported"]);
       expect(within(rows[3]).getAllByRole("cell").map(cell => cell.textContent)).toEqual(["1 MB/s, 40 ARP entries", "Read on the active member only"]);

@@ -21,12 +21,12 @@ describe("the navigation model (NAVIGATION_REDESIGN_2026_11_12.md section 2)", (
       ["Policy and changes", ["Policy", "Trace", "Changes", "Rule object usage", "Zone matrix", "Cutover impact"]],
       ["Compliance and security", ["Compliance", "Lifecycle and security"]],
       ["Backups", null],
-      ["Operations", ["HA and readiness", "Jobs", "Device health"]],
+      ["Operations", ["HA and readiness", "Jobs", "Device health", "Policy installation"]],
       ["Reports", null],
       ["Tools", ["Packet analysis", "Data sanitizer", "Diagnostics", "Support bundles"]],
       ["Administration", ["Device registry", "Access and identity", "Scheduled jobs", "Notifications and logging", "Platform status", "Audit log", "Delivery plan"]],
     ]);
-    expect(NAV_LEAVES).toHaveLength(26);
+    expect(NAV_LEAVES).toHaveLength(27);
   });
 
   it("gives every destination one entry: ids and addresses are unique, and every screen has a home", () => {
@@ -171,7 +171,7 @@ describe("what a session is shown (plane checks only)", () => {
       ["Overview", null],
       ["Policy and changes", ["Policy", "Trace", "Changes", "Rule object usage", "Zone matrix", "Cutover impact"]],
       ["Backups", null],
-      ["Operations", ["HA and readiness", "Jobs", "Device health"]],
+      ["Operations", ["HA and readiness", "Jobs", "Device health", "Policy installation"]],
       ["Reports", null],
       ["Tools", ["Packet analysis", "Diagnostics", "Support bundles"]],
       ["Administration", ["Device registry", "Access and identity", "Scheduled jobs", "Notifications and logging", "Platform status", "Audit log", "Delivery plan"]],

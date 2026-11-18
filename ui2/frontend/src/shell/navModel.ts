@@ -77,6 +77,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
     { id: "operations-ha", label: "HA and readiness", screen: "operations", href: "?screen=operations" },
     { id: "operations-jobs", label: "Jobs", screen: "operations", href: "?screen=operations&tab=jobs" },
     { id: "operations-health", label: "Device health", screen: "operations", href: "?screen=operations&tab=health" },
+    { id: "operations-policy-install", label: "Policy installation", screen: "operations", href: "?screen=operations&tab=policy-install" },
   ] },
   // Reports below the fleet screens (PO 2026-11-13): it reads the same evidence, it is not the second question of the day.
   { kind: "link", id: "reports", label: "Reports", icon: "report", screen: "reports", href: "?screen=reports" },
@@ -136,6 +137,7 @@ export function activeLeafId(screen: ScreenId, search: string): string {
       const tab = params.get("tab");
       if (tab === "jobs" || tab === "queue" || tab === "history") return "operations-jobs";
       if (tab === "health") return "operations-health";
+      if (tab === "policy-install") return "operations-policy-install";
       if (tab === "ha") return "operations-ha";
       // A job link that names only `?job=<id>` lands on Jobs (roadmap 3.6).
       return params.get("job") ? "operations-jobs" : "operations-ha";
