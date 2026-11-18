@@ -152,11 +152,11 @@ class PolicyInstallMonitoringServiceTest {
         assertNotEquals(PolicyInstallMonitoringService.STATE_INSTALLED, saved.state());
 
         DerivedStatus unsavedDigestDiff = PolicyInstallMonitoringService.deriveCiscoAsaState("sha256-aaa", "sha256-bbb", false);
-        assertEquals(PolicyInstallMonitoringService.STATE_UNSAVED, unsavedDigestDiff.state());
+        assertEquals(PolicyInstallMonitoringService.STATE_UNKNOWN, unsavedDigestDiff.state(), "digests of differently formed reads are not evidence (amendment 2026-11-18)");
         assertNotEquals(PolicyInstallMonitoringService.STATE_INSTALLED, unsavedDigestDiff.state());
 
         DerivedStatus unsavedNewerConfigChange = PolicyInstallMonitoringService.deriveCiscoAsaState("sha256-aaa", "sha256-aaa", true);
-        assertEquals(PolicyInstallMonitoringService.STATE_UNSAVED, unsavedNewerConfigChange.state());
+        assertEquals(PolicyInstallMonitoringService.STATE_UNKNOWN, unsavedNewerConfigChange.state());
 
         DerivedStatus unknownMissingStartup = PolicyInstallMonitoringService.deriveCiscoAsaState("sha256-aaa", null, false);
         assertEquals(PolicyInstallMonitoringService.STATE_UNKNOWN, unknownMissingStartup.state());

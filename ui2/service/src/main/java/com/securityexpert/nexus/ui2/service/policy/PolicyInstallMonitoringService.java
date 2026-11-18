@@ -294,13 +294,17 @@ public final class PolicyInstallMonitoringService {
                 || startupConfigSha256 == null || startupConfigSha256.isBlank()) {
             return new DerivedStatus(STATE_UNKNOWN, null, "Running vs startup configuration comparison not collected yet");
         }
-        if (!runningConfigSha256.trim().equalsIgnoreCase(startupConfigSha256.trim())
-                || newerChangedConfigurationRunExists) {
-            return new DerivedStatus(
-                    STATE_UNSAVED,
-                    null,
-                    "running-config differs from startup-config (unsaved running configuration changes)"
-            );
+        // Amendment 2026-11-18 (contract section 3.3): the two digests are not comparable evidence. running-config.txt is
+        // `more system:running-config` (keys in clear) and startup-config.txt is `show startup-config` (keys masked, its
+        // own header lines), so they differ on every ASA whether or not the configuration was saved. A digest difference
+        // is UNKNOWN, never UNSAVED; equal digests still prove SAVED unless a later configuration change was recorded.
+        if (!runningConfigSha256.trim().equalsIgnoreCase(startupConfigSha256.trim())) {
+            return new DerivedStatus(STATE_UNKNOWN, null,
+                    "Saved state not measured yet: the running and startup reads differ in form (keys, header lines)");
+        }
+        if (newerChangedConfigurationRunExists) {
+            return new DerivedStatus(STATE_UNKNOWN, null,
+                    "Configuration changed after the last backup; saved state not measured since");
         }
         return new DerivedStatus(STATE_SAVED, null, "running-config matches startup-config");
     }
