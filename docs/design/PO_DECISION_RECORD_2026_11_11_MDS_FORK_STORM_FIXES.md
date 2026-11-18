@@ -35,3 +35,25 @@ Earlier the same day: the MDS export runs by hand only, under watch, never sched
 - The other 137 rows of the normalization inventory stay as they are until M2 has run and phase 2 is redesigned,
   reviewed and approved literal by literal.
 - The remote kill of a runaway `mds_backup` is not approved (fix contract part E).
+
+## Amendment 2026-11-18: the MDS export is scheduled again
+
+**Status: RATIFIED - PO DECISION (PO session, 2026-11-18).** This amendment replaces the 2026-11-11 boundary "the MDS
+export runs by hand only, never scheduled" and the first bullet of section 2; everything else in this record stands.
+
+- Evidence: the first watched manual export after the fixes ran on 2026-11-18 between 01:25 and 01:30 local and completed
+  in about 5 minutes, with no growth in the process count on the MDS. Check Point TAC confirmed the root cause of the
+  2026-11-11 incident: `bash -lc` with `BASH_ENV` exported (the fork storm), which phase 1 removed.
+- PO answer (verbatim), to "put the MDS export back on the schedule": "al" ("take it").
+- Schedule rule: once per night per management server (Check Point, `role` management_server, `backup_target`,
+  enrolled, not disabled), inside the existing backup window (02:00-02:59 Europe/Istanbul; no new window). It is
+  requested from 02:30, and only on a night whose fleet backup run was claimed; a server is due only while it has no
+  non-terminal job of any type (TAC: serialise the Gaia backup and `mds_backup` on one server), and not if any
+  `cp_mds_export` job was already submitted for it that local day (whoever started it). A failed or unknown export is
+  never retried that night.
+- Safeties kept unchanged: the 45-minute ceiling, the point-of-no-return marking, the OUTCOME_UNKNOWN/FAILED alert route
+  (`backup_failure` and syslog), no retry, the three approved gate literals.
+- Switch: `UI2_CP_MDS_EXPORT_SCHEDULE` in `deploy/ui2/50-service-deployment.yaml` ("true"); the code default is off when
+  the variable is unset. Set it to "false" and roll the service to stop the schedule; manual exports are unaffected.
+- Code: `BackupScheduler.mdsExportTick` (02:30 rule), `MdsExportEligibility.dueTargets` (serialisation and once-a-night),
+  `BackupCollectService.requestScheduledMdsExport` (actor `system:mds-export-scheduler`, key per device and day).
