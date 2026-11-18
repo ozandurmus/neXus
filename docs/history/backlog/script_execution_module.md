@@ -13,3 +13,5 @@ Title (full): Script Execution: operator scripts (.sh/.py/.jar or inline) on a c
 Target (full): PO decision record 2026-09-22 (automation editor and script execution); contract SCRIPT_EXECUTION_CONTRACT.md to write first
 
 2026-11-14 backlog truth: still open (P2, size L). Today: Operator scripts cannot be scheduled in product; PO order put other work first. Evidence: SCRIPT_EXECUTION_CONTRACT.md exists; no script runner pod/migration/code in ui2
+
+2026-11-18 reconciliation: the PO asked about this module again and wants it language-independent. The contract docs/design/SCRIPT_EXECUTION_CONTRACT.md has been FROZEN since 2026-09-22 and already fixes language independence (its section 4 decision 4 and section 7: as many industry-standard languages as the runner image can carry, with .ps1 through PowerShell Core instead of .bat; the .sh/.py/.jar wording is only the first set). Nothing has been built. Priority raised from P2 to P1 because the contract names this item P1; the backlog row had drifted. The device-write part still needs the constitutional amendment named in the contract section 6.

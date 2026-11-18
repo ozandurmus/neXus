@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-17T08:30:29Z
+Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-18T07:22:09Z
 
 ## Now
 - NXS-LOCAL-0391 — Release queue: ASA readiness, integration gate, CP advisories, zone matrix, ACI step 1, API latency, Backups batch (in_progress)
@@ -15,11 +15,14 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-17T08:30:29Z
 - P1/planned cyberark_archive_key_custody
 - P1/planned enterprise_phase0_logging_monitoring_scans
 - P1/planned recertification_council
+- P1/planned script_execution_module
+- P1/planned verify_first_scheduled_mds_export_and_asa_saved_state
 - P2/in_progress manifest_drift_service_worker_configuration_policy
 - P2/in_progress topology_sources_apic_citrix_f5
 - P2/in_progress ui2_database_roles_and_data_ownership
 - P2/planned aiview_masked_readonly_admin
 - P2/planned analysis_container
+- P2/planned asa_failover_execution
 - P2/planned asa_fortinet_cluster_view
 - P2/planned backup_plane_separate_service
 - P2/planned change_ticket_matching
@@ -31,11 +34,13 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-17T08:30:29Z
 - P2/planned module_per_pod_split
 - P2/planned nightly_e2e_fails_on_legitimate_platform_status_warning
 - P2/planned nspm_wave1_acceptance
+- P2/planned pan_change_actor_submitted_join_gap
 - P2/planned path_analysis_phase_b
 - P2/planned platform_backup_step1_host_roll
+- P2/planned policy_install_p2_p4
 - P2/planned product_rename_identity
 - P2/planned reports_r2
-- P2/planned script_execution_module
+- P2/planned static_route_add_delete
 - P2/planned support_bundle_collection_s3_s8
 - P2/planned task_executor_automation_module
 - P2/planned ubi_base_glibc_fix_pending
@@ -50,6 +55,7 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-17T08:30:29Z
 - P3/planned device_upgrade_dates_vendor_reads
 - P3/planned enterprise_platform_conformance
 - P3/planned fmg_link_state_diagnose_nic
+- P3/planned fortigate_route_changes_via_fortimanager
 - P3/planned full_regression_architecture_test_oom
 - P3/planned github_open_pr_triage
 - P3/planned hosta_apparmor_stacked_label_override
@@ -118,10 +124,7 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-17T08:30:29Z
 - P4 pan_ha_peer_ipv6_pairing
 ## Open decisions
 - op_track_id — Track id: keep OP.x as a dedicated OPERATE track, or fold into 1.x after
-- op_four_eyes — Second-approver (four-eyes) sign-off for an authorised failover: mandato
 - op_emergency_evac — Emergency 'evacuate a failing member fast' path: in scope for OP.2, or a
-- op_aa_vsls_scope — PAN Active/Active and Check Point VSLS (per-VS load sharing) failover: f
-- op_continuity_tolerance — Session/connection continuity tolerance for post-action verification: fi
 - C-D4 — Maximum targets per operational-write request during the pilot.
 - C-D5 — May the console run on the server before OIDC/RBAC exists?
 - C-D6 — Mandatory operator reason text on every operational-write, and its reten
@@ -137,7 +140,6 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-17T08:30:29Z
 - D-V8 — CP hotfix parity command (optional check). Does not block OP.0b.0 freeze
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
-- po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the direct
 ## Recent builds
 - NXS-LOCAL-0391 (in_progress)
 - NXS-LOCAL-0390 (complete)
