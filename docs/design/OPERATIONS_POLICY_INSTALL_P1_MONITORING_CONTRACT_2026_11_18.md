@@ -98,6 +98,17 @@ Per `AGENTS.md` ("Evidence laws" and "UNKNOWN / fail-closed law"):
   3. If `running-config.txt` SHA-256 differs from `startup-config.txt` SHA-256, or if a newer `device_configuration_run` after the backup recorded `change_state = 'changed'`, return `state = UNSAVED`, `reason = "running-config differs from startup-config (unsaved running configuration changes)"`.
   4. If `running-config.txt` SHA-256 equals `startup-config.txt` SHA-256 (and no newer `change_state = 'changed'` configuration run exists), return `state = SAVED`, `reason = "running-config matches startup-config"`.
 
+**Amendment 2026-11-18 (live evidence, recorded under the PO standing rule "a parser gap is our bug").** The first
+live read showed every ASA `UNSAVED`. Steps 3 and 4 compared digests of two differently formed reads:
+`running-config.txt` is `more system:running-config` (keys in clear, its own header) and `startup-config.txt` is
+`show startup-config` (keys masked, its own header), so the digests differ on every ASA whatever the saved state.
+Until a normalized in-memory comparison is measured and recorded, step 3 is replaced: a digest difference returns
+`state = UNKNOWN`, `reason = "Saved state not measured yet: the running and startup reads differ in form (keys, header
+lines)"`; a newer `change_state = 'changed'` configuration run returns `state = UNKNOWN`, `reason = "Configuration
+changed after the last backup; saved state not measured since"`. Step 4 (equal digests, no newer change) stays
+`SAVED`. No new device command. `show checksum` is not a substitute: the Cisco ASA command reference says the
+checksum is computed when the configuration is stored in flash, so it describes the saved configuration only.
+
 ### 3.4 FortiGate (`fortinet`) and FortiManager — Council Fix (b) & (c)
 
 - **Directly managed FortiGate gateways (`vendor_hint = 'fortinet'`, `role in ('gateway', 'firewall')`):**
