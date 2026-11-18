@@ -36,19 +36,75 @@ public final class HtmlTables {
     private static final Pattern TAG = Pattern.compile("<[^>]{0,2000}>");
     private static final Pattern REFERENCE = Pattern.compile("&(#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z]{2,8});");
 
+    /** Wall-clock budget for the regular expressions of one {@link #read}: a crafted page cannot hold a thread longer. */
+    static final long MAX_PARSE_NANOS = java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+
     private HtmlTables() {
     }
 
+    /** Thrown from {@link Deadline#charAt} when the parse budget is spent; {@link #read} turns it into "no tables". */
+    private static final class BudgetExceeded extends RuntimeException {
+        BudgetExceeded() {
+            super("html parse budget exceeded", null, false, false);
+        }
+    }
+
+    /**
+     * A {@link CharSequence} that stops a runaway regular expression: the lazy block patterns above are quadratic on a
+     * page full of unclosed tags (untrusted input, contract rule 7), so every matcher reads through this view and the
+     * clock is checked every 4096 reads. All views of one parse share one deadline; linear pages never come near it.
+     */
+    private static final class Deadline implements CharSequence {
+        private final CharSequence text;
+        private final long expiresAt;
+        private int reads;
+
+        Deadline(CharSequence text, long expiresAt) {
+            this.text = text;
+            this.expiresAt = expiresAt;
+        }
+
+        @Override public int length() {
+            return text.length();
+        }
+
+        @Override public char charAt(int index) {
+            if ((++reads & 0xFFF) == 0 && System.nanoTime() - expiresAt > 0) throw new BudgetExceeded();
+            return text.charAt(index);
+        }
+
+        @Override public CharSequence subSequence(int start, int end) {
+            return text.subSequence(start, end);
+        }
+
+        @Override public String toString() {
+            return text.toString();
+        }
+    }
+
     public static Document read(byte[] document) {
+        return read(document, MAX_PARSE_NANOS);
+    }
+
+    static Document read(byte[] document, long budgetNanos) {
         if (document == null || document.length == 0 || document.length > MAX_DOCUMENT_CHARS) return new Document("", List.of(), "");
-        String html = DROP.matcher(new String(document, StandardCharsets.UTF_8)).replaceAll(" ");
-        Matcher title = TITLE.matcher(html);
+        try {
+            return parse(new String(document, StandardCharsets.UTF_8), budgetNanos);
+        } catch (BudgetExceeded exceeded) {
+            return new Document("", List.of(), "");
+        }
+    }
+
+    private static Document parse(String source, long budgetNanos) {
+        long expiresAt = System.nanoTime() + budgetNanos;
+        String html = DROP.matcher(new Deadline(source, expiresAt)).replaceAll(" ");
+        Matcher title = TITLE.matcher(new Deadline(html, expiresAt));
         String titleText = title.find() ? text(title.group(1)) : "";
         List<int[]> headingSpans = new ArrayList<>();
-        Matcher headings = HEADING.matcher(html);
+        Matcher headings = HEADING.matcher(new Deadline(html, expiresAt));
         while (headings.find()) headingSpans.add(new int[]{headings.start(1), headings.end(1)});
         List<Table> tables = new ArrayList<>();
-        Matcher table = TABLE.matcher(html);
+        Matcher table = TABLE.matcher(new Deadline(html, expiresAt));
         int next = 0;
         String heading = "";
         while (table.find() && tables.size() < MAX_TABLES) {
@@ -58,10 +114,10 @@ public final class HtmlTables {
             }
             Matcher id = ID.matcher(table.group(1));
             List<List<String>> rows = new ArrayList<>();
-            Matcher row = ROW.matcher(table.group(2));
+            Matcher row = ROW.matcher(new Deadline(table.group(2), expiresAt));
             while (row.find() && rows.size() < MAX_ROWS) {
                 List<String> cells = new ArrayList<>();
-                Matcher cell = CELL.matcher(row.group(1));
+                Matcher cell = CELL.matcher(new Deadline(row.group(1), expiresAt));
                 while (cell.find()) cells.add(text(cell.group(1)));
                 rows.add(List.copyOf(cells));
             }

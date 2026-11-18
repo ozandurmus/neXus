@@ -49,6 +49,10 @@ dependencies {
         implementation("com.google.guava:guava:33.7.2-jre") { because("CVE-2026-102554, fixed in 33.7.2") }
         implementation("org.apache.httpcomponents.core5:httpcore5:5.4.3") { because("CVE-2026-54399, fixed in 5.4.3") }
         implementation("org.apache.httpcomponents.core5:httpcore5-h2:5.4.3") { because("CVE-2026-54428, fixed in 5.4.3") }
+        // Image scan 2026-11-17: CVE-2026-64607 (classic client leaks a pooled connection on an unsupported Content-Encoding), fixed in 5.6.3;
+        // OpenSAML's metadata resolvers are the only consumer and run no request here. httpcore5 stays on the 5.4.3 line the client's own BOM names.
+        implementation("org.apache.httpcomponents.client5:httpclient5:5.6.3") { because("CVE-2026-64607, fixed in 5.6.3") }
+        implementation("org.apache.httpcomponents.client5:httpclient5-cache:5.6.3") { because("keeps the cache module on the client's line") }
         // velocity-engine-core 2.3 shades commons-io 2.8.0 (CVE-2024-47554, image scan 2026-11-16); 2.4.1 shades none.
         implementation("org.apache.velocity:velocity-engine-core:2.4.1") { because("embedded commons-io 2.8.0, CVE-2024-47554") }
     }

@@ -68,12 +68,16 @@ export function canonicalizeAppUrl(rawHref: string): URL {
 /** True when `rawHref` is an in-app screen or workspace route that should navigate via `history.pushState`. */
 export function isInAppNavigationHref(rawHref: string): boolean {
   const trimmed = rawHref.trim();
+  // Scheme check is case-insensitive and covers every script-capable scheme, not only javascript:.
+  const lowered = trimmed.toLowerCase();
   if (
     trimmed === "" ||
     trimmed.startsWith("#") ||
-    trimmed.startsWith("blob:") ||
-    trimmed.startsWith("mailto:") ||
-    trimmed.startsWith("javascript:")
+    lowered.startsWith("blob:") ||
+    lowered.startsWith("mailto:") ||
+    lowered.startsWith("javascript:") ||
+    lowered.startsWith("data:") ||
+    lowered.startsWith("vbscript:")
   ) {
     return false;
   }

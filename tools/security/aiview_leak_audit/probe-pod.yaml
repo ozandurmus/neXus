@@ -1,0 +1,47 @@
+# One-shot pod for the aiview masking leak audit (see README.md). Not part of deploy/: apply it by hand, delete it after.
+# Same image, labels and machine-token secret as the ui2-e2e job, so the same network policy applies.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: aiview-leak-audit
+  namespace: ui2
+  labels:
+    app.kubernetes.io/component: e2e
+spec:
+  restartPolicy: Never
+  activeDeadlineSeconds: 3600
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+    runAsUser: 1000
+    runAsGroup: 1000
+  containers:
+    - name: probe
+      image: SET_E2E_IMAGE
+      command: ["sleep", "3600"]
+      resources:
+        requests: { cpu: 100m, memory: 256Mi }
+        limits: { cpu: "1", memory: 1Gi }
+      env:
+        - name: T
+          valueFrom:
+            secretKeyRef:
+              name: ui2-e2e-machine-token
+              key: token
+      securityContext:
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+        seccompProfile:
+          type: RuntimeDefault
+      volumeMounts:
+        - name: work
+          mountPath: /work
+  volumes:
+    - name: work
+      emptyDir:
+        medium: Memory
+        sizeLimit: 64Mi

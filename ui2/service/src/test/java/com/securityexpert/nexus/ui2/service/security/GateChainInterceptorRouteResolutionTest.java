@@ -292,6 +292,7 @@ class GateChainInterceptorSecurityTest {
                 java.util.Map.entry("GET /api/v2/overview", ActionRegistry.SYSTEM_STATUS_READ),
                 java.util.Map.entry("GET /api/v2/search", ActionRegistry.GLOBAL_SEARCH_READ),
                 java.util.Map.entry("GET /api/v2/system/storage", ActionRegistry.SYSTEM_STATUS_READ),
+                java.util.Map.entry("GET /api/v2/security/scan-summary/latest", ActionRegistry.SECURITY_SCAN_SUMMARY_READ),
                 java.util.Map.entry("GET /api/v2/jobs/export.csv", ActionRegistry.JOB_LOG_READ));
         for (var entry : expected.entrySet()) {
             String[] parts = entry.getKey().split(" ", 2);

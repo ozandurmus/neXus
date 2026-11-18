@@ -189,6 +189,7 @@ public final class ActionRegistry {
     public static final String NOTIFICATION_CONFIG_WRITE = "notification_config_write";
     /** Administration › System: pods and storage use, read-only, 2026-09-22. */
     public static final String SYSTEM_STATUS_READ = "system_status_read";
+    public static final String SECURITY_SCAN_SUMMARY_READ = "security_scan_summary_read";
     public static final String AUDIT_LOG_READ = "audit_log_read";
     public static final String JOB_CANCEL = "job_cancel";
     /** C2 section 3.5: record the human reconciliation of an OUTCOME_UNKNOWN job; backup_admin or stronger (security_admin). */
@@ -473,6 +474,10 @@ public final class ActionRegistry {
         register(new ActionDescriptor(NOTIFICATION_CONFIG_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(NOTIFICATION_CONFIG_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SYSTEM_STATUS_READ, true, Optional.empty()));
+        // Latest daily scan: rule ids and paths of HIGH/MEDIUM findings, no device data. Administrators read it; aiview
+        // (replay_viewer) too, through the masking advice.
+        register(new ActionDescriptor(SECURITY_SCAN_SUMMARY_READ, true, Optional.of(RoleToken.SECURITY_ADMIN),
+                java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(AUDIT_LOG_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(JOB_CANCEL, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(JOB_RECONCILE, true, Optional.of(RoleToken.SECURITY_ADMIN),

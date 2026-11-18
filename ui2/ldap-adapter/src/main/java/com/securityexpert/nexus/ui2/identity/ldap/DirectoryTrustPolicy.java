@@ -108,7 +108,7 @@ public final class DirectoryTrustPolicy {
     static SocketFactory socketFactory(DirectoryProfile profile) {
         if (!profile.ldaps()) return SocketFactory.getDefault();
         try {
-            SSLContext context = SSLContext.getInstance("TLS");
+            SSLContext context = SSLContext.getInstance("TLSv1.3");  // TLSv1.3 context: same defaults as "TLS" (1.3 and 1.2); 1.0/1.1 stay off
             if (profile.trustMode() == DirectoryProfile.TrustMode.TRUST_ANY) {
                 // PO decision 2026-11-11 (PO_DECISION_RECORD_2026_11_11_LDAP_SERVICE_BIND.md item 3): no chain and
                 // no host-name check. An X509ExtendedTrustManager, so the JDK adds no check of its own.
