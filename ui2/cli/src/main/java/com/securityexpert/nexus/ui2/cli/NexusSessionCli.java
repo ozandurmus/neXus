@@ -155,6 +155,7 @@ final class NexusSessionCli {
         SanitizerCli.printUsage();
         CutoverCli.printUsage();
         SupportBundleCli.printUsage();
+        ScriptCli.printUsage();
     }
 
     /** @return exit code, or -1 when {@code args[0]} is not one of this class's commands */
@@ -406,7 +407,9 @@ final class NexusSessionCli {
                     int cutover = new CutoverCli(this).run(args);
                     if (cutover != -1) yield cutover;
                     int bundles = new SupportBundleCli(this).run(args);
-                    yield bundles != -1 ? bundles : new SanitizerCli(this).run(args);
+                    if (bundles != -1) yield bundles;
+                    int scripts = new ScriptCli(this).run(args);
+                    yield scripts != -1 ? scripts : new SanitizerCli(this).run(args);
                 }
             };
         } catch (IllegalArgumentException e) {

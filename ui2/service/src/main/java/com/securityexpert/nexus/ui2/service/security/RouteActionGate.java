@@ -96,7 +96,8 @@ public final class RouteActionGate {
                                 || ActionRegistry.CUTOVER_ASSESSMENT_WRITE.equals(actionId)
                                 || ActionRegistry.PACKET_ANALYSIS_RUN.equals(actionId)
                                 || ActionRegistry.DATA_SANITIZE_RUN.equals(actionId)
-                                || ActionRegistry.DATA_SANITIZE_REVERT.equals(actionId) ? Optional.empty()
+                                || ActionRegistry.DATA_SANITIZE_REVERT.equals(actionId)
+                                || ActionRegistry.SCRIPT_WRITE.equals(actionId) ? Optional.empty()
                         : Optional.ofNullable(request.getParameter("target_ref")));
 
         GateOutcome outcome = gateChain.evaluate(gateRequest, Instant.now());

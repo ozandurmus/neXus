@@ -99,6 +99,10 @@ subprojects {
                 testClassesDirs = testSourceSet.output.classesDirs
                 classpath = testSourceSet.runtimeClasspath
                 useJUnitPlatform()
+                // The ArchUnit suites import every module's classes (service, worker, packet-analysis, ...);
+                // the Gradle default test heap (512 MB) ran out as the product grew, so the heap is explicit.
+                maxHeapSize = "2g"
+                jvmArgs("-XX:+UseSerialGC", "-Xshare:auto")
             }
             "integration-tests" -> tasks.register<Test>("integrationTest") {
                 group = "verification"
