@@ -69,7 +69,8 @@ class PathValidationGateContractTest(unittest.TestCase):
             self.assertIn("'" + command.replace("'", "''") + "', 'read', 'SIGNED_OFF', 30, 'none'", sql)
             for name in ("max_frequency", "session_reuse_rule", "unsupported_behavior_ref", "secret_output_risk",
                          "source_document_pointer"):
-                self.assertIn("'" + json.loads(rows[gate][name]).replace("'", "''") + "'", sql, f"{gate} {name}")
+                v188_value = json.loads(rows[gate][name]).split("; static-route preview")[0]
+                self.assertIn("'" + v188_value.replace("'", "''") + "'", sql, f"{gate} {name}")
         self.assertIn("'cp_spike_layout_review','path_validation') THEN 'diagnostics'", sql)
         self.assertIn("CHECK (result = 'PENDING' OR plan IS NULL)", sql)
         columns = re.search(r"CREATE TABLE IF NOT EXISTS path_validation_hop \((.*?)\n\);", sql, re.S).group(1)

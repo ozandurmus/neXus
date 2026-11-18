@@ -105,7 +105,9 @@ class PathValidationGateTest {
             assertTrue(sql.contains("('" + gateId + "', '" + spec.get(0) + "', '" + spec.get(1) + "', '" + spec.get(2)
                     + "', '" + spec.get(3) + "',\n     '" + spec.get(4).replace("'", "''") + "', 'read', 'SIGNED_OFF', 30, 'none',"),
                     gateId);
-            for (String field : List.of(row.maxFrequency(), row.sessionReuseRule(), row.unsupportedBehaviorRef(),
+            for (String field : List.of(
+                    row.maxFrequency().split("; static-route preview")[0],
+                    row.sessionReuseRule(), row.unsupportedBehaviorRef(),
                     row.secretOutputRisk(), row.sourceDocumentPointer()))
                 assertTrue(sql.contains("'" + field.replace("'", "''") + "'"), gateId + ": " + field);
         });

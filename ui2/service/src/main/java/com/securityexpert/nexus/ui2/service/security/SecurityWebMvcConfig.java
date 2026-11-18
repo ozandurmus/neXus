@@ -148,6 +148,10 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/changes/feed", ActionRegistry.POLICY_READ),
             // Operations > Policy installation, Phase 1 (OPERATIONS_POLICY_INSTALL_P1_MONITORING_CONTRACT_2026_11_18.md): GET-only monitoring.
             Map.entry("GET /api/v2/operations/policy-install/status", ActionRegistry.POLICY_INSTALL_READ),
+            // Operations > Static routes, Phase R0 (OPERATIONS_STATIC_ROUTE_R0_READ_COMMANDS_2026_11_18.md): CLASS_0 read-only preview; no write routes exist.
+            Map.entry("POST /api/v2/operations/static-route/preview", ActionRegistry.STATIC_ROUTE_PREVIEW),
+            Map.entry("GET /api/v2/operations/static-route/preview", ActionRegistry.STATIC_ROUTE_READ),
+            Map.entry("GET /api/v2/operations/static-route/preview/*", ActionRegistry.STATIC_ROUTE_READ),
             Map.entry("GET /api/v2/policy/tree", ActionRegistry.POLICY_READ),
             Map.entry("GET /api/v2/policy/collections/*", ActionRegistry.POLICY_READ),
             Map.entry("POST /api/v2/policy/sources/*/collect", ActionRegistry.POLICY_COLLECT),

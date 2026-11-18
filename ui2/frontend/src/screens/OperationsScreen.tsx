@@ -15,6 +15,7 @@ import { StatePanel } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
 import { JobLogsPanel, type JobPill } from "./JobLogsPanel";
 import { PolicyInstallMonitoringPanel } from "./PolicyInstallMonitoringPanel";
+import { StaticRoutePreviewPanel } from "./StaticRoutePreviewPanel";
 import { SystemHealthPanel } from "./SystemHealthPanel";
 import { urlParam, useUrlParamSync, writeUrlParams } from "../shell/urlParams";
 import { useJobWindow } from "../shell/JobWindow";
@@ -31,7 +32,7 @@ import { readinessReasonLabel } from "../shell/presenters";
  * of 2026-11-13; the PO's amendment of that day made them Administration pages, so Operations is the fleet's live activity
  * only, and their `tab=` addresses are rewritten to those pages the same way.
  */
-const TAB_SLUGS = ["ha", "jobs", "health", "policy-install"] as const;
+const TAB_SLUGS = ["ha", "jobs", "health", "policy-install", "routes"] as const;
 /**
  * `?tab=<slug>` to a tab index and, for the retired Queue / History routes, the pill that stands for them. A job link
  * that names only `?job=<id>` (roadmap 3.6) lands on Jobs, where the id is opened; the tab slug wins when both are given.
@@ -43,6 +44,7 @@ export function tabFromUrl(slug: string | null, jobId: string | null = null): { 
     case "history": return { tab: 1, pill: "finished" };
     case "health": return { tab: 2, pill: null };
     case "policy-install": return { tab: 3, pill: null };
+    case "routes": return { tab: 4, pill: null };
     case "ha": return { tab: 0, pill: null };
     default: return jobId ? { tab: 1, pill: null } : { tab: 0, pill: null };
   }
@@ -326,6 +328,7 @@ export function OperationsScreen() {
           // neXus' own health is Administration > Platform status and the indicator in the top bar (PO 2026-11-13).
           { label: "Device health", panel: <SystemHealthPanel /> },
           { label: "Policy installation", panel: <PolicyInstallMonitoringPanel /> },
+          { label: "Static routes", panel: <StaticRoutePreviewPanel /> },
         ]}
       />
     </ScreenRoot>

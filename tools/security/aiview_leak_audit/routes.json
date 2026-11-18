@@ -50,6 +50,8 @@
   "/api/v2/lifecycle/catalog",
   "/api/v2/lifecycle/catalog-sources",
   "/api/v2/operations/policy-install/status",
+  "/api/v2/operations/static-route/preview",
+  "/api/v2/operations/static-route/preview/synthetic-ref",
   "/api/v2/overview",
   "/api/v2/packet-analysis/cases",
   "/api/v2/packet-analysis/cases/synthetic-ref",

@@ -152,7 +152,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per device per run"
+    max_frequency: "once per device per run; static-route preview and change jobs (PO 2026-11-18): once per member per preview and once before and after a route change"
     session_reuse_rule: "one session per device per run"
     unsupported_behavior_ref: "an empty table is a result, not an error"
     secret_output_risk: none
@@ -169,7 +169,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and twice in each post-switch and post-return phase per member; shared budget of 21 polls every 3 s across DOWN and UP per run; a resumed return adds one read per member before UP and at most 20 polls every 3 s after UP"
+    max_frequency: "once pre and twice in each post-switch and post-return phase per member; shared budget of 21 polls every 3 s across DOWN and UP per run; a resumed return adds one read per member before UP and at most 20 polls every 3 s after UP; static-route preview (PO 2026-11-18): once per member per preview or route-change job"
     session_reuse_rule: "one session per device per run"
     unsupported_behavior_ref: "a standalone gateway reporting no cluster is a result, not an error"
     secret_output_risk: none
@@ -744,7 +744,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre, once post-switch and twice post-return per peer; additionally every 3 s for at most 60 s per transition; config sync (PO 2026-10-24): once per member per config-sync job, immediately before its one write"
+    max_frequency: "once pre, once post-switch and twice post-return per peer; additionally every 3 s for at most 60 s per transition; config sync (PO 2026-10-24): once per member per config-sync job, immediately before its one write; static-route preview (PO 2026-11-18): once per member per preview or route-change job"
     session_reuse_rule: "the one key-generation session per run"
     unsupported_behavior_ref: "HA disabled means no peer, a result, not an error"
     secret_output_risk: none
@@ -778,7 +778,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per device per run"
+    max_frequency: "once per device per run; static-route preview and change jobs (PO 2026-11-18): once per member per preview and once before and after a route change"
     session_reuse_rule: "the one key-generation session per run"
     unsupported_behavior_ref: "an empty route table is a result, not an error"
     secret_output_risk: none
@@ -907,7 +907,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 120
     retry_rule: none
-    max_frequency: "once per device per run"
+    max_frequency: "once per device per run; static-route preview (PO 2026-11-18): once per member per preview or route-change job"
     session_reuse_rule: "the one key-generation session per run"
     unsupported_behavior_ref: "the read carries secret-bearing leaves -- withheld in the view, encrypted at rest; response measured at 11.8 MB, streamed, never held whole"
     secret_output_risk: none
@@ -1820,7 +1820,7 @@ gates:
     sign_off_state: 'SIGNED_OFF'
     timeout_s: 30
     retry_rule: 'none'
-    max_frequency: 'once per session'
+    max_frequency: 'once per session; static-route preview (PO 2026-11-18): once at session start and once after changeto context per preview or route-change job'
     session_reuse_rule: 'one session per device per run'
     unsupported_behavior_ref: 'below 15 -> the run stops with the level named'
     secret_output_risk: 'username of the session (never persisted)'
@@ -1932,7 +1932,7 @@ gates:
     sign_off_state: 'SIGNED_OFF'
     timeout_s: 30
     retry_rule: 'none'
-    max_frequency: 'one diagnostic command per endpoint per minute; original collection frequency unchanged'
+    max_frequency: 'one diagnostic command per endpoint per minute; original collection frequency unchanged; static-route preview (PO 2026-11-18): once per member per preview or route-change job'
     session_reuse_rule: 'one session per device per run'
     unsupported_behavior_ref: 'no answer -> single context assumed and logged'
     secret_output_risk: 'none'
@@ -1980,7 +1980,7 @@ gates:
     sign_off_state: 'SIGNED_OFF'
     timeout_s: 180
     retry_rule: 'none'
-    max_frequency: 'one diagnostic command per endpoint per minute; original collection frequency unchanged'
+    max_frequency: 'one diagnostic command per endpoint per minute; original collection frequency unchanged; static-route preview (PO 2026-11-18): once per context per preview and once before and after a route change'
     session_reuse_rule: 'one session per device per run'
     unsupported_behavior_ref: 'no rows -> no routes recorded'
     secret_output_risk: 'route destinations and next hops (masked to aiview)'
@@ -4954,7 +4954,7 @@ gates:
     sign_off_state: "SIGNED_OFF"
     timeout_s: 30
     retry_rule: "none"
-    max_frequency: "on a PO-chosen sample only: once per hop per path_validation job, at most four hops per validation request, never polled"
+    max_frequency: "on a PO-chosen sample only: once per hop per path_validation job, at most four hops per validation request, never polled; static-route preview (PO 2026-11-18): once before and once after a route change per member, preview included"
     session_reuse_rule: "one existing-authentication API key per job; serial per firewall; no retry"
     unsupported_behavior_ref: "an API error, an unknown answer shape or a missing field is NOT_EVALUABLE, never a MISMATCH"
     secret_output_risk: "output carries addresses and interface names; parsed in memory to a MATCH / MISMATCH / NOT_EVALUABLE comparison only; never stored, transcribed or logged (raw-evidence law)"
@@ -6669,3 +6669,117 @@ gates:
     secret_output_risk: 'output names addresses, MAC addresses and interfaces; reduced in memory to the total field (else the entry count), never stored'
     safe_telemetry_fields: []
     source_document_pointer: 'PAN-OS XML API op command (show arp all): total; PO approval 2026-11-17 (''Evet, onaylıyorum'': readiness runs only, read-only, reduced in memory); PO_DECISION_RECORD_2026_11_17_FAILOVER_TRAFFIC_ARP_READS.md'
+  # Operations static route -- phase R0 read commands (docs/design/OPERATIONS_STATIC_ROUTE_R0_READ_COMMANDS_2026_11_18.md,
+  # PO approval 2026-11-18: "go komutlar ok"). Seven CLASS_0 read rows; zero writes.
+  - gate_id: cp_route_show_route_static
+    vendor: 'check_point'
+    platform_role_scope: 'cp_gaia_gateway'
+    shell_context: 'expert'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'clish -c ''show route static'''
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per member per approved preview or job'
+    session_reuse_rule: 'one session or API key per member per job'
+    unsupported_behavior_ref: 'Clish error or lock text (Database is locked) is GAIA_DB_LOCKED, a result not a retry; empty output means no static routes'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: ['routeCount', 'routeTableSha256', 'unsupportedRouteAttribute']
+    source_document_pointer: 'docs/design/OPERATIONS_STATIC_ROUTE_R0_READ_COMMANDS_2026_11_18.md R0-CP-1 (PO chat approval 2026-11-18: "go komutlar ok")'
+  - gate_id: cp_route_ip_route_get
+    vendor: 'check_point'
+    platform_role_scope: 'cp_gaia_gateway'
+    shell_context: 'expert'
+    transport_kind: 'SSH_EXEC'
+    canonical_command_key: 'ip -4 route get <DST>'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once before and once after a change per member, preview included'
+    session_reuse_rule: 'one session or API key per member per job'
+    unsupported_behavior_ref: 'error, missing route line or unknown route type is UNKNOWN verdict, never a pass'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: ['selectedPrefix', 'nextHop', 'egressInterface', 'routeSourceType', 'digest']
+    source_document_pointer: 'docs/design/OPERATIONS_STATIC_ROUTE_R0_READ_COMMANDS_2026_11_18.md R0-CP-2 (PO chat approval 2026-11-18: "go komutlar ok")'
+  - gate_id: pan_route_show_vr_static_route
+    vendor: 'palo_alto'
+    platform_role_scope: 'pan_firewall'
+    shell_context: 'not_applicable'
+    transport_kind: 'PAN_XML_API'
+    canonical_command_key: 'type=config&action=show&xpath=/config/devices/entry[@name=''localhost.localdomain'']/network/virtual-router/entry[@name=''<VR>'']/routing-table/ip/static-route'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per member per preview or job'
+    session_reuse_rule: 'one session or API key per member per job'
+    unsupported_behavior_ref: 'missing VR is ROUTING_CONTEXT_NOT_FOUND; API status other than success is UNKNOWN'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: ['routeCount', 'digest']
+    source_document_pointer: 'docs/design/OPERATIONS_STATIC_ROUTE_R0_READ_COMMANDS_2026_11_18.md R0-PAN-1 (PO chat approval 2026-11-18: "go komutlar ok")'
+  - gate_id: pan_route_check_pending_changes
+    vendor: 'palo_alto'
+    platform_role_scope: 'pan_firewall'
+    shell_context: 'not_applicable'
+    transport_kind: 'PAN_XML_API'
+    canonical_command_key: 'type=op&cmd=<check><pending-changes/></check>'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per member per approved preview or job'
+    session_reuse_rule: 'one session or API key per member per job'
+    unsupported_behavior_ref: 'any other answer shape is UNKNOWN and stops the job'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: ['pendingChanges']
+    source_document_pointer: 'docs/design/OPERATIONS_STATIC_ROUTE_R0_READ_COMMANDS_2026_11_18.md R0-PAN-3 (PO chat approval 2026-11-18: "go komutlar ok")'
+  - gate_id: asa_route_changeto_context
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'context'
+    transport_kind: 'SSH_INTERACTIVE'
+    canonical_command_key: 'changeto context <CTX_NAME>'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per context per preview or job'
+    session_reuse_rule: 'one session or API key per member per job'
+    unsupported_behavior_ref: 'any prompt other than <host>/<CTX_NAME># aborts with UNEXPECTED_PROMPT; a refusal ends the read, nothing further is sent'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: ['success', 'promptShape']
+    source_document_pointer: 'docs/design/OPERATIONS_STATIC_ROUTE_R0_READ_COMMANDS_2026_11_18.md R0-ASA-3 (PO chat approval 2026-11-18: "go komutlar ok")'
+  - gate_id: asa_route_show_running_route
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_INTERACTIVE'
+    canonical_command_key: 'show running-config route'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once per member per approved preview or job'
+    session_reuse_rule: 'one session or API key per member per job'
+    unsupported_behavior_ref: 'empty output means no static routes in that context; unexpected prompt aborts'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: ['routeCount', 'digest', 'unsupportedRouteAttribute']
+    source_document_pointer: 'docs/design/OPERATIONS_STATIC_ROUTE_R0_READ_COMMANDS_2026_11_18.md R0-ASA-4 (PO chat approval 2026-11-18: "go komutlar ok")'
+  - gate_id: asa_route_show_route_host
+    vendor: 'cisco_asa'
+    platform_role_scope: 'cisco_asa_firewall'
+    shell_context: 'privileged_exec'
+    transport_kind: 'SSH_INTERACTIVE'
+    canonical_command_key: 'show route <HOST>'
+    action_class: 'read'
+    sign_off_state: 'SIGNED_OFF'
+    timeout_s: 30
+    retry_rule: 'none'
+    max_frequency: 'once before and once after a change'
+    session_reuse_rule: 'one session or API key per member per job'
+    unsupported_behavior_ref: 'unparsed or "not in table" answer gives UNKNOWN verdict'
+    secret_output_risk: 'none'
+    safe_telemetry_fields: ['selectedPrefix', 'nextHop', 'egressInterface', 'routeType', 'digest']
+    source_document_pointer: 'docs/design/OPERATIONS_STATIC_ROUTE_R0_READ_COMMANDS_2026_11_18.md R0-ASA-6 (PO chat approval 2026-11-18: "go komutlar ok")'

@@ -79,7 +79,10 @@ class AiviewDiagnosticReadOnlyTest {
                 ActionRegistry.SUPPORT_BUNDLE_READ,
                 // latest daily security scan summary (counts, rule ids, paths; no device data), read-only, through the masking
                 // advice (PO request 2026-11-18: the daily HIGH/MEDIUM findings reach aiview too)
-                ActionRegistry.SECURITY_SCAN_SUMMARY_READ)), held);
+                ActionRegistry.SECURITY_SCAN_SUMMARY_READ,
+                // Operations static route phase R0 (OPERATIONS_STATIC_ROUTE_R0_READ_COMMANDS_2026_11_18.md, APPROVED 2026-11-18):
+                // CLASS_0 read-only preview and preview read, always masked; no write route or action exists
+                ActionRegistry.STATIC_ROUTE_PREVIEW, ActionRegistry.STATIC_ROUTE_READ)), held);
         // the sibling writes stay closed to the replay viewer
         for (String closed : new String[]{ActionRegistry.DISCOVERY_RUN_IMPORT, ActionRegistry.DISCOVERY_ACKNOWLEDGE,
                 ActionRegistry.DEVICE_CONFIGURATION_TEXT_READ, ActionRegistry.DEVICE_REGISTER, ActionRegistry.DEVICE_DELETE,

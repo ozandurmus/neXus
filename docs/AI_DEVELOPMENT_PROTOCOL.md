@@ -207,7 +207,10 @@ Before adding/changing a device command, document:
 9. secret-bearing output risk,
 10. safe telemetry.
 
-No new class 2, 3 or 4 command at the current product maturity. A new class 1
+No new class 2, 3 or 4 command at the current product maturity, except the static
+IPv4 route add/delete commands (with save/commit and inverse) admitted by
+`PO_DECISION_RECORD_2026_11_18_STATIC_ROUTE_CONFIGURATION_WRITES.md` (RATIFIED), each with
+its own gate entry and the PO's literal sign-off per phase. A new class 1
 command requires the recovery contracts in
 `docs/design/RECOVERY_OPERATIONAL_WRITE_LEDGER.md` **and** an approved gate
 entry — `RB.3b`'s `add backup local` is the only precedent. A parse-scope
@@ -233,6 +236,8 @@ the exact exceptions in `AGENTS.md` "Git authority and execution law" remains.
 
 Prohibited at current maturity (taxonomy classes 2-4): firewall configuration
 writes, policy install, commit, reboot/shutdown, forced failover,
-interface/routing change, credential change and automatic remediation. Class 1
+interface/routing change, credential change and automatic remediation -- except
+one static IPv4 route add or delete (with its save or commit) under
+`PO_DECISION_RECORD_2026_11_18_STATIC_ROUTE_CONFIGURATION_WRITES.md`. Class 1
 controlled recovery writes are permitted only through their existing contracts
 and are never exposed on an HTTP surface.

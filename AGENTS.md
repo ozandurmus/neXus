@@ -465,6 +465,11 @@ own `RB.x`-kind per-vendor contract, and an explicit per-target `writes:
 allowed` set by a `security_admin`. A write missing any condition is refused
 before the command is issued. Class 2+ stays outside this amendment.
 
+**PO Amendment (2026-11-18, static route writes).** One static IPv4 route add or
+delete may run only under the conditions of
+`docs/design/PO_DECISION_RECORD_2026_11_18_STATIC_ROUTE_CONFIGURATION_WRITES.md`
+(RATIFIED); all other class 2-4 writes stay prohibited.
+
 New/changed device commands require the network-device command gate
 (`docs/AI_DEVELOPMENT_PROTOCOL.md`) before implementation — vendor,
 read/write class, shell/context, timeout, retry, frequency, session reuse,

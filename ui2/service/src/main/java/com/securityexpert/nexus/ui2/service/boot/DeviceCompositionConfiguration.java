@@ -276,6 +276,10 @@ public class DeviceCompositionConfiguration {
                 // path_validation_* gates against the live registry before it sends anything.
                 confirmCapability(com.securityexpert.nexus.ui2.jobs.pathvalidation.PathValidation.CAPABILITY,
                         "path_validation", "reviewed_read", TransportKind.SSH_EXEC),
+                // Operations static route phase R0 (V252): placeholder capability like path_validation; the worker
+                // resolves each approved CLASS_0 ReadGate against the live registry before it sends anything.
+                confirmCapability(com.securityexpert.nexus.ui2.jobs.staticroute.StaticRoutePreview.CAPABILITY,
+                        "static_route_preview", "reviewed_read", TransportKind.SSH_EXEC),
                 com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure.capability(gateRegistryPort),
                 com.securityexpert.nexus.ui2.jobs.diagnostic.PanSystemLogCollect.capability(gateRegistryPort),
                 com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect.capability(gateRegistryPort),

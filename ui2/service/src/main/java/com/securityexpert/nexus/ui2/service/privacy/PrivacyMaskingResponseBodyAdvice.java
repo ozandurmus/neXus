@@ -272,9 +272,10 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                 // field leaks the raw name.
                 case "routing_context", "table" ->
                     result.put(key, value instanceof String vrf ? topologyPseudonymizer.maskPolicyName("vrf", vrf) : value);
-                case "interface_name", "ingress_interface_name", "egress_interface_name", "vendor_interface" ->
+                case "interface_name", "ingress_interface_name", "egress_interface_name", "vendor_interface",
+                        "egress_interface", "egressInterface" ->
                     result.put(key, value instanceof String iface ? topologyPseudonymizer.maskPolicyName("interface", iface) : value);
-                case "policy_name", "rule_name", "section_name" ->
+                case "policy_name", "rule_name", "section_name", "route_name", "routeName" ->
                     result.put(key, value instanceof String r ? topologyPseudonymizer.maskPolicyName("rule", r) : value);
                 case "matched_source_objects", "matched_destination_objects", "matched_service_objects" -> {
                     if (value instanceof List<?> objList) {
@@ -309,7 +310,8 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                         result.put(key, value);
                     }
                 }
-                case "hostname", "subject_cn", "issuer_cn", "device", "point_label", "capture_name" -> {
+                case "hostname", "subject_cn", "issuer_cn", "device", "point_label", "capture_name",
+                        "target_label", "member_label" -> {
                     if (value instanceof String s && "hostname".equals(key) && rowDeviceId != null) {
                         // A name equal to the row's own management address is a display fallback, not a hostname.
                         String ownAddress = map.get("management_ip") instanceof String a ? a
@@ -432,7 +434,9 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                         "src", "dst", "client_ip", "server_ip", "client_cidrs", "source_cidr", "answers",
                         "observed_addresses", "matched_addresses", "interface_addresses",
                         "pre_nat_src", "pre_nat_dst", "post_nat_src", "post_nat_dst",
-                        "translated_src", "translated_dst", "assumed_subnet" ->
+                        "translated_src", "translated_dst", "assumed_subnet",
+                        "destination_prefix", "selected_prefix", "next_hop_ip", "representative_host",
+                        "selectedPrefix", "nextHopIp", "representativeHost" ->
                     result.put(key, maskAddressValue(value, clusterRef));
                 // Path analysis A3 (PO record 2026-11-03 D-8): an override's free-text note is never shown to aiview. The
                 // topology controller already leaves it out of a masked body; this is the second, independent barrier.
@@ -452,7 +456,8 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                         "member_device_ids", "node_kind", "segment_kind", "conflict_kind", "resolution", "link_kind",
                         "override_action", "reason_code", "override_status", "no_match_reason", "flags" ->
                     result.put(key, value);
-                case "terminal_reason", "latest_job_terminal_reason", "peer_follow_reason", "observed_value", "observedValue", "message" -> {
+                case "terminal_reason", "latest_job_terminal_reason", "peer_follow_reason", "observed_value",
+                        "observedValue", "message", "command_text", "commandText", "detail" -> {
                     if (value instanceof String s) {
                         result.put(key, topologyPseudonymizer.maskText(ipMasker.maskText(s)));
                     } else {
@@ -460,7 +465,8 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                     }
                 }
                 case "device_id", "unitId", "unit_id", "clusterId", "cluster_id", "runId", "run_id",
-                        "approvalId", "approval_id", "jobId", "job_id",
+                        "approvalId", "approval_id", "jobId", "job_id", "preview_id", "previewId",
+                        "target_device_id", "member_device_id", "memberDeviceId",
                         "case_id", "point_id", "capture_id", "interface_id",
                         "ingress_interface_id", "egress_interface_id",
                         "policy_id", "rule_id", "section_id", "nat_point_a", "nat_point_b" -> {
