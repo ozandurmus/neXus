@@ -755,7 +755,7 @@ public final class PolicyInstallMonitoringService {
 
             List<AsaInput> asaGateways = dsl.fetch("""
                     select d.device_id::text as device_id,
-                           coalesce(nullif(d.hostname, ''), d.device_id::text) as hostname,
+                           coalesce(nullif(d.observed_hostname, ''), d.device_id::text) as hostname,
                            b.created_at as backup_created_at,
                            b.running_sha256,
                            b.startup_sha256,
@@ -779,7 +779,6 @@ public final class PolicyInstallMonitoringService {
                         from device_configuration_run r
                         where r.device_id = d.device_id::text
                           and r.read_kind = 'show_configuration'
-                          and r.outcome = 'success'
                           and r.change_state = 'changed'
                     ) cfg on true
                     where d.vendor_hint = 'cisco_asa'
@@ -798,7 +797,7 @@ public final class PolicyInstallMonitoringService {
 
             List<FortiGateInput> fortinetDevices = dsl.fetch("""
                     select d.device_id::text as device_id,
-                           coalesce(nullif(d.hostname, ''), d.device_id::text) as hostname,
+                           coalesce(nullif(d.observed_hostname, ''), d.device_id::text) as hostname,
                            d.role,
                            chk.status as check_status,
                            chk.checksums as derived_checksums,
