@@ -350,6 +350,7 @@ public final class Ui2WorkerMain {
         httpsVendorExecutor.withLifecycleReads(lifecycleReads).withLifecycleResults(lifecycleResults);
         httpsVendorExecutor.withCiscoAsa(new com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaExecutor(sshTransport, artefactStore, sshTransport::scpFetch)
                 .withLifecycleReads(lifecycleReads).withLifecycleResults(lifecycleResults)
+                .withConfigRelationSink(asaRelationSink(transactionBoundary))
                 .withFailoverMeasure(com.securityexpert.nexus.ui2.worker.backup.asa.AsaFailoverMeasure.fromEnvironment()));
         configurationCapabilityExecutor.withHttpsVendorExecutor(httpsVendorExecutor);
         backupJobExecutor.withHttpsVendorExecutor(httpsVendorExecutor,
@@ -673,6 +674,12 @@ public final class Ui2WorkerMain {
                         .log(System.Logger.Level.WARNING, "System-log retention error: " + t.getClass().getSimpleName());
             }
         }, 300, 3600, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    private static com.securityexpert.nexus.ui2.worker.backup.asa.AsaConfigRelationSink asaRelationSink(TransactionBoundary tx) {
+        var repository = new com.securityexpert.nexus.ui2.persistence.device.JooqAsaConfigRelationRepository(tx);
+        return (deviceId, artefactId, r) -> repository.record(artefactId, deviceId, r.result().name(), r.linesCompared(),
+                r.linesDiffering(), r.linesEqualOnlyByMask());
     }
 
     static String resolveRole(String[] args, String environment) {

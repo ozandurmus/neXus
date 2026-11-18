@@ -89,6 +89,7 @@ class AuditCoverageCompletenessTest {
             Map.entry("cp_device_archive", "V45: product bookkeeping of device-side files; the jobs row is audited"),
             Map.entry("device_platform_facts", "V46: collected facts, never operator-written; the jobs row is audited"),
             Map.entry("device_software_version_history", "V243: observed software versions, never operator-written; the inventory jobs row is audited"),
+            Map.entry("asa_config_relation", "V250: derived running-vs-startup verdict and counts of an ASA backup, never operator-written; the backup jobs row is audited"),
             Map.entry("device_install_event", "V246: Check Point install-log dates, never operator-written; the inventory jobs row is audited"),
             Map.entry("device_lifecycle_read", "V200: outcome of a collected lifecycle read; the jobs row is audited"),
             Map.entry("device_license_item", "V200: collected license and contract facts, never operator-written; the jobs row is audited"),
