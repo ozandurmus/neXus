@@ -21,6 +21,14 @@ public final class ArtefactClass {
      */
     public static final String SUPPORT_BUNDLE = "support_bundle";
 
+    /**
+     * Operator-uploaded script bodies (Script Execution slice 1, V251; PO decision 2026-11-18): every script body
+     * (text or binary) is envelope-encrypted at rest and write-only (never returned over any API, CLI or UI route).
+     */
+    public static final String SCRIPT_BODY = "script_body";
+    public static final String SCRIPT_VENDOR = "script_body";
+    public static final String SCRIPT_DEVICE_ID = "platform:scripts";
+
     private ArtefactClass() {
     }
 }

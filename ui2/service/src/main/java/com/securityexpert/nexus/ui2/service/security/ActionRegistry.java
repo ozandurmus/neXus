@@ -319,6 +319,14 @@ public final class ActionRegistry {
     /** PO 2026-11-15/16 (Q8, Q9): vendor upload, no four-eyes; the same security_admin may request, download and upload. */
     public static final String SUPPORT_BUNDLE_UPLOAD = "support_bundle_upload";
 
+    /**
+     * Script Execution slice 1 (docs/design/SCRIPT_EXECUTION_CONTRACT.md section 3.6; PO decision 2026-11-18):
+     * read is open to everyone with {@link #JOB_LOG_READ} (any authenticated session; aiview masked, never script body);
+     * create, new version, settings edit and enable/disable require {@code role:security_admin}, never aiview.
+     */
+    public static final String SCRIPT_READ = "script_read";
+    public static final String SCRIPT_WRITE = "script_write";
+
     public static final String HTTPS_CERTIFICATE_ACCEPT = "https_certificate_accept";
     public static final String HTTPS_CERTIFICATE_STRICT = "https_certificate_strict";
 
@@ -515,6 +523,9 @@ public final class ActionRegistry {
         register(new ActionDescriptor(SUPPORT_BUNDLE_DELETE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SUPPORT_BUNDLE_CLEANUP_WORKDIR, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SUPPORT_BUNDLE_UPLOAD, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        // Script Execution slice 1 (SCRIPT_EXECUTION_CONTRACT.md section 3.6): read follows job_log_read; writes are security_admin.
+        register(new ActionDescriptor(SCRIPT_READ, true, Optional.empty()));
+        register(new ActionDescriptor(SCRIPT_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without

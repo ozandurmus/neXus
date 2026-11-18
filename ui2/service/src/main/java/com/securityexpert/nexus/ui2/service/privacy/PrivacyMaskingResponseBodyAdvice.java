@@ -437,6 +437,14 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                 // Path analysis A3 (PO record 2026-11-03 D-8): an override's free-text note is never shown to aiview. The
                 // topology controller already leaves it out of a masked body; this is the second, independent barrier.
                 case "override_note" -> result.put(key, null);
+                case "created_by_actor_fingerprint" -> {
+                    if (value instanceof String s && !s.isBlank() && !s.startsWith("system:")
+                            && !s.startsWith("migration:") && !s.startsWith("USR-")) {
+                        result.put(key, topologyPseudonymizer.identityTokens().user(s.strip()));
+                    } else {
+                        result.put(key, value);
+                    }
+                }
                 // Path analysis A3: topology ids are keyed hashes under a per-snapshot secret (no address or name
                 // inside), and the closed topology vocabularies are product facts, not identities.
                 case "snapshot_id", "node_id", "segment_id", "attachment_id", "conflict_id", "override_id",

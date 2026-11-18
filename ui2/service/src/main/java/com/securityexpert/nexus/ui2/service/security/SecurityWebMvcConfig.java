@@ -409,6 +409,14 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/reports/runs/*", ActionRegistry.REPORT_READ),
             Map.entry("POST /api/v2/reports/runs", ActionRegistry.REPORT_GENERATE),
             Map.entry("GET /api/v2/reports/runs/*/download", ActionRegistry.REPORT_GENERATE),
+            // Script Execution slice 1 (SCRIPT_EXECUTION_CONTRACT.md section 3.6, PO decision 2026-11-18).
+            Map.entry("GET /api/v2/scripts", ActionRegistry.SCRIPT_READ),
+            Map.entry("GET /api/v2/scripts/*", ActionRegistry.SCRIPT_READ),
+            Map.entry("POST /api/v2/scripts", ActionRegistry.SCRIPT_WRITE),
+            Map.entry("POST /api/v2/scripts/*/versions", ActionRegistry.SCRIPT_WRITE),
+            Map.entry("PATCH /api/v2/scripts/*", ActionRegistry.SCRIPT_WRITE),
+            Map.entry("POST /api/v2/scripts/*/enable", ActionRegistry.SCRIPT_WRITE),
+            Map.entry("POST /api/v2/scripts/*/disable", ActionRegistry.SCRIPT_WRITE),
             Map.entry("GET /project-plan", ActionRegistry.PROJECT_PLAN_READ));
 
     /**
