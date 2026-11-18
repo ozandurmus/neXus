@@ -4896,3 +4896,58 @@ export interface SupportBundleUploadInput {
 }
 export const startSupportBundleUpload = (id: string, input: SupportBundleUploadInput) =>
   call<{ upload_id: string; status: string }>(`${SUPPORT_BUNDLES}/${encodeURIComponent(id)}/uploads`, "POST", { ...input, confirm: true });
+
+// ---- Operations > Policy installation, Phase 1 (OPERATIONS_POLICY_INSTALL_P1_MONITORING_CONTRACT_2026_11_18.md, FROZEN) ----
+export type PolicyInstallState =
+  | "INSTALLED"
+  | "OUT_OF_DATE"
+  | "NOT_INSTALLED"
+  | "SAVED"
+  | "UNSAVED"
+  | "NOT_APPLICABLE"
+  | "UNKNOWN";
+
+export type PolicyInstallHaParity = "EQUAL" | "DIFFER" | "UNKNOWN";
+
+export interface PolicyInstallStatusRow {
+  readonly row_id: string;
+  readonly device_id: string | null;
+  readonly hostname: string;
+  readonly context: string;
+  readonly vendor: string;
+  readonly container_id: string;
+  readonly container_name: string;
+  readonly package_id: string;
+  readonly package_name: string;
+  readonly state: PolicyInstallState;
+  readonly ha_parity: PolicyInstallHaParity | null;
+  readonly policy_name: string | null;
+  readonly installed_at: string | null;
+  readonly last_change_at: string | null;
+  readonly reason: string;
+}
+
+export interface PolicyInstallStatusResponse {
+  readonly counts: Readonly<Record<PolicyInstallState, number>>;
+  readonly total: number;
+  readonly page: number;
+  readonly page_size: number;
+  readonly masked: boolean;
+  readonly contract_ref: string;
+  readonly rows: readonly PolicyInstallStatusRow[];
+}
+
+export function getPolicyInstallStatus(params: {
+  vendor?: string;
+  state?: string;
+  q?: string;
+  page?: number;
+} = {}): Promise<PolicyInstallStatusResponse> {
+  const qs = new URLSearchParams();
+  if (params.vendor) qs.set("vendor", params.vendor);
+  if (params.state) qs.set("state", params.state);
+  if (params.q) qs.set("q", params.q);
+  if (params.page !== undefined && params.page > 0) qs.set("page", String(params.page));
+  const suffix = qs.toString();
+  return call(`/api/v2/operations/policy-install/status${suffix ? `?${suffix}` : ""}`, "GET");
+}

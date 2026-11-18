@@ -333,7 +333,7 @@ describe("the sidebar folds to icons (PO 2026-10-20)", () => {
     expect(operations).toHaveAttribute("aria-expanded", "true");
     const items = within(menu).getAllByRole("menuitem");
     expect(items.map((i) => [i.textContent, i.getAttribute("href")])).toEqual([
-      ["HA and readiness", "?screen=operations"], ["Jobs", "?screen=operations&tab=jobs"], ["Device health", "?screen=operations&tab=health"],
+      ["HA and readiness", "?screen=operations"], ["Jobs", "?screen=operations&tab=jobs"], ["Device health", "?screen=operations&tab=health"], ["Policy installation", "?screen=operations&tab=policy-install"],
     ]);
     for (const item of items) expect(item.tagName).toBe("A");
     expect(items[1]).toHaveAttribute("aria-current", "page");

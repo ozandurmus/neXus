@@ -38,6 +38,55 @@ public final class BackupScheduler {
 
     private volatile java.time.LocalDate canaryDay;
 
+    /** Minutes after the window opens (02:00) before the MDS export may be requested: 02:30. */
+    public static final int MDS_EXPORT_DELAY_MINUTES = 30;
+    private MdsExportEligibility mdsEligibility;
+    private java.util.function.BooleanSupplier mdsExportSwitch = () -> false;
+    private final java.util.Set<String> mdsRequestedTonight = new java.util.HashSet<>();
+    private java.time.LocalDate mdsDay;
+
+    /**
+     * The scheduled MDS export (PO 2026-11-18). {@code enabled} is UI2_CP_MDS_EXPORT_SCHEDULE (code default off).
+     */
+    public BackupScheduler withMdsExport(MdsExportEligibility eligibility, java.util.function.BooleanSupplier enabled) {
+        this.mdsEligibility = Objects.requireNonNull(eligibility, "eligibility");
+        this.mdsExportSwitch = Objects.requireNonNull(enabled, "enabled");
+        return this;
+    }
+
+    /**
+     * Called every minute of the backup window, after {@link #tick}. From 02:30 on, and only on a night whose fleet run
+     * was claimed (the Gaia backups of that night were requested), each Check Point management server that is a backup
+     * target and has no non-terminal job gets one MDS export request; once requested it is never requested again that
+     * night (TAC: serialise the Gaia backup and mds_backup on one server). No retry after a failure.
+     *
+     * @return the number of exports admitted by this call
+     */
+    public int mdsExportTick(Instant now) {
+        if (mdsEligibility == null || !mdsExportSwitch.getAsBoolean()) return 0;
+        if (!ScheduledBackupWindowPolicy.isOpen(now)) return 0;
+        if (now.isBefore(ScheduledBackupWindowPolicy.start(now).plusMinutes(MDS_EXPORT_DELAY_MINUTES).toInstant())) return 0;
+        Optional<BackupPolicy> policy = policyRepository.find();
+        if (policy.isEmpty() || !policy.get().scheduleEnabled()) return 0;
+        var localDay = now.atZone(JobWindowPolicy.ZONE_ID).toLocalDate();
+        Instant dayStart = localDay.atStartOfDay(JobWindowPolicy.ZONE_ID).toInstant();
+        if (policy.get().lastScheduledRunAt().filter(last -> !last.isBefore(dayStart)).isEmpty()) return 0;
+        if (!switches.isOn(ScheduledJobFamily.SCHEDULED_BACKUP)) return 0;
+        if (!localDay.equals(mdsDay)) {
+            mdsDay = localDay;
+            mdsRequestedTonight.clear();
+        }
+        int admitted = 0;
+        for (String deviceId : mdsEligibility.dueTargets(dayStart)) {
+            if (!mdsRequestedTonight.add(deviceId)) continue;
+            if (collectService.requestScheduledMdsExport(deviceId)) {
+                admitted++;
+                LOG.info("[BACKUP_SCHEDULE] MDS export requested for " + localDay);
+            }
+        }
+        return admitted;
+    }
+
     /**
      * The nightly credential canary (V207): from 00:45 to 00:59 local, while the schedule and the scheduled-backup family
      * are on, admits one read-only {@code credential_canary} per backup credential (Check Point only in this release).
@@ -92,8 +141,8 @@ public final class BackupScheduler {
                 "Scheduled fleet backup (slot " + slot.get() + ")");
         LOG.info("[BACKUP_SCHEDULE] slot " + slot.get() + ": targets=" + outcome.targets() + " admitted="
                 + outcome.admitted() + " refused=" + outcome.refused() + " held_by_credential_alert=" + outcome.held());
-        // No MDS export is ever scheduled (PO 2026-11-11, "İzlenen elle çalışsın"; MDS fork storm fix contract B.1):
-        // an operator starts it by hand and watches it.
+        // The MDS export is not requested here: mdsExportTick asks for it from 02:30, after the Gaia backup is terminal
+        // (PO 2026-11-18, "al"; amends the 2026-11-11 "by hand only" decision).
         return slot;
     }
 }
