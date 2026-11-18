@@ -381,7 +381,13 @@
     "cyberark_device_credentials": "java_feature",
     "platform_backup_step1_host_roll": "agent_operations",
     "device_upgrade_dates_vendor_reads": "java_feature",
-    "full_regression_architecture_test_oom": "java_debt"
+    "full_regression_architecture_test_oom": "java_debt",
+    "verify_first_scheduled_mds_export_and_asa_saved_state": "agent_operations",
+    "policy_install_p2_p4": "java_feature",
+    "static_route_add_delete": "java_feature",
+    "asa_failover_execution": "java_feature",
+    "fortigate_route_changes_via_fortimanager": "java_feature",
+    "pan_change_actor_submitted_join_gap": "java_debt"
   },
   "converted_lessons": [
     {
