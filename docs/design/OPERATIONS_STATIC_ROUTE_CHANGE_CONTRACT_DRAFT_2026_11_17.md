@@ -7,6 +7,8 @@
 2. A **ratified Product Owner decision record** amending `docs/AI_DEVELOPMENT_PROTOCOL.md` (lines ~210 and ~234–235) and `AGENTS.md` ("Network action taxonomy") as specified in §1.4, and
 3. The Product Owner's literal-by-literal command-gate sign-off per phased rollout stage (`R0` → `R1` → `R2`, §1.3).
 
+Companion documents (2026-11-18): the proposed decision record `PO_DECISION_RECORD_2026_11_18_STATIC_ROUTE_CONFIGURATION_WRITES.md` (PROPOSED, awaiting PO ratification) and the `R0` read literal list `OPERATIONS_STATIC_ROUTE_R0_READ_COMMANDS_2026_11_18.md` (DRAFT, awaiting PO literal approval). Neither changes this document's status.
+
 ---
 
 ## 1. Scope, phased rollout, and constitutional boundary
@@ -291,7 +293,7 @@ CREATE TABLE static_route_dispatch_ledger (
 | **READ (mode & priv)** | `show curpriv`, `show mode`, `show version`, `show failover`, `show failover state` (existing gates in V78 / V210) | `VERIFIED` (V210) | `privileged_exec` / `SSH_INTERACTIVE` | 30 s | Cisco ASA Command Reference (`CISCO_ASA_CONTRACT.md`, `PO_DECISION_RECORD_2026_11_14_ASA_FAILOVER_READINESS_READS.md`) |
 | **CONTEXT SWITCH (multi-context only)** | `changeto context <CTX_NAME>` | `UNKNOWN` (verify prompt transition per ASA version in `R0`) | `context` / `SSH_INTERACTIVE` | 30 s | Cisco ASA 9.22 General Operations CLI Config Guide (*Multiple Context Mode*, `A0-ASA-19`) |
 | **READ (RIB & config)** | `show route` (existing gate `asa_show_route`) and `show running-config route` | `UNKNOWN` (`show running-config route` verified in `R0`) | `privileged_exec` (inside target context) / `SSH_INTERACTIVE` | 30 s | Cisco ASA Command Reference `S` (`show route`, `show running-config route`) |
-| **ADD** | `configure terminal` → `route <IF_NAME> <DEST_IP> <NETMASK> <NEXTHOP_IP> <DISTANCE>` → `end` (`<DISTANCE>` default `1`, range `1..255`; ASA `route` has no CLI comment parameter) | `UNKNOWN` (verify per ASA version in `R0`) | `config_mode` (inside target context) / `SSH_INTERACTIVE` | 30 s | Cisco ASA Command Reference `I–R` (`route if_name dest_ip mask gateway_ip [distance]`) |
+| **ADD** | `configure terminal` → `route <IF_NAME> <DEST_IP> <NETMASK> <NEXTHOP_IP> <DISTANCE>` → `end` (`<DISTANCE>` default `1`, range `1..254` per the Cisco ASA routing guide (R0 read-commands note); ASA `route` has no CLI comment parameter) | `UNKNOWN` (verify per ASA version in `R0`) | `config_mode` (inside target context) / `SSH_INTERACTIVE` | 30 s | Cisco ASA Command Reference `I–R` (`route if_name dest_ip mask gateway_ip [distance]`) |
 | **DELETE** | `configure terminal` → `no route <IF_NAME> <DEST_IP> <NETMASK> <NEXTHOP_IP>` → `end` | `UNKNOWN` (verify per ASA version in `R0`) | `config_mode` (inside target context) / `SSH_INTERACTIVE` | 30 s | Cisco ASA Command Reference `I–R` (`no route if_name dest_ip mask gateway_ip`) |
 | **SAVE** | `write memory` | `UNKNOWN` (verify confirmation output per ASA version in `R0`) | `privileged_exec` (inside target context) / `SSH_INTERACTIVE` | 60 s | Cisco ASA Command Reference `T–Z` (`write memory`) |
 
@@ -418,7 +420,7 @@ The browser submits typed JSON intent only; no CLI string, XPath, or shell fragm
 | `destinationPrefix` | Yes | Canonical IPv4 CIDR `A.B.C.D/M` with `M` in `1..32`, parsed to 32-bit int + prefix length and rebuilt from integer octets. **`0.0.0.0/0` is unconditionally rejected (`DEFAULT_ROUTE_FORBIDDEN`)**. Host bits after mask must be `0` (e.g., `192.0.2.5/24` rejected; must be `192.0.2.0/24`). Rejects loopback (`127.0.0.0/8`), RFC 3927 link-local, Class D multicast, limited broadcast, and non-default unspecified (`0.0.0.0/1..32`). Server derives dotted netmask from integer mask for ASA/FGT. |
 | `nextHopIp` | Yes | Unicast IPv4 `A.B.C.D`, parsed to 32-bit int and rebuilt from integer octets. Rejects `0.0.0.0`, loopback, link-local, multicast, broadcast, any local interface IP on `routingContext`, and any IP outside the connected UP subnets of `routingContext`. |
 | `interfaceName` | ASA, FGT: **Yes**; PAN: **Optional**; CP: **Omitted** | Must match an existing `UP` interface in stored inventory for `(unitId, routingContext)` (`\A[A-Za-z0-9_./:-]{1,48}\z`) whose connected subnet contains `nextHopIp`. |
-| `distance` | Optional | Integer administrative distance: PAN `1..255` (default `10`), ASA `1..255` (default `1`), FGT `1..255` (default `10`). Rejected if supplied for Check Point. |
+| `distance` | Optional | Integer administrative distance: PAN `1..255` (default `10`), ASA `1..254` (default `1`), FGT `1..255` (default `10`). Rejected if supplied for Check Point. |
 | `metric` / `priority` | Optional | Integer: CP `priority` `1..8`; PAN `metric` `1..65535` (default `10`); FGT `priority` `1..65535` (default `1`); rejected on ASA. |
 | `routeName` | PAN only | On `ADD`: optional `\A[A-Za-z0-9_.-]{1,31}\z` (defaults to deterministic `nxs-<yyyymmdd>-<hash6>`). On `DELETE`: resolved from the selected existing static route in running config (`src != "tpl"`). |
 | `deviceComment` | Optional (CP, FGT) | `\A[A-Za-z0-9 _.:/-]{0,80}\z` (strict ASCII allowlist; quotes, `$`, `` ` ``, `\`, `;`, `<`, `>`, `&`, newlines, and control chars rejected). Disabled in UI for ASA and PAN. |
@@ -488,8 +490,7 @@ Only the following five true Product Owner / estate decisions remain open:
    - What mandatory retention period (e.g., 5 years vs. 10 years) applies to `static_route_change_request` and the append-only `static_route_dispatch_ledger` under the bank's regulatory and internal-audit retention policy?
 4. **PO-4 — FortiManager central-management scope across the FortiGate estate**:
    - Are all enrolled FortiGate units managed by FortiManager (which Wave 1 refuses with `CENTRAL_MANAGEMENT_CONFLICT`), or are there standalone / non-FortiManager FortiGate units in scope for Phase `R2` after `R0` central-management measurement?
-5. **PO-5 (`Q3c`) — Palo Alto Advanced Routing Engine (`ARE` / `logical-router`) presence**:
-   - Do any of the 34 estate Palo Alto firewalls run the PAN-OS Advanced Routing Engine (`logical-router`, refused as `ROUTING_CONTEXT_UNSUPPORTED` in Wave 1), or are all 34 firewalls using legacy `virtual-router`?
+5. **PO-5 (`Q3c`) — Palo Alto Advanced Routing Engine (`ARE` / `logical-router`) presence — ANSWERED 2026-11-18**: all 38 enrolled active Palo Alto firewalls use legacy `virtual-router` in their latest inventory, none the Advanced Routing Engine (see `PO_DECISION_RECORD_2026_11_18_STATIC_ROUTE_CONFIGURATION_WRITES.md` §6); ARE stays refused.
 
 ## Appendix -- Path confirmation (PO 2026-11-18)
 
@@ -522,3 +523,12 @@ PO: "confirm the route took effect: before the change, look at which route the t
   overwritten by the next FortiManager install, so FortiGate stays out of R1/R2 for local writes (refused `FORTIMANAGER_MANAGED`); a FortiGate
   route change, if wanted, is a separate design through FortiManager (device-level static route in the FMG device database plus install), not part
   of this contract.
+
+## Appendix -- R0 approval and literal corrections (2026-11-18)
+
+- The R0 read literals were approved by the PO on 2026-11-18 ("go komutlar ok"): `OPERATIONS_STATIC_ROUTE_R0_READ_COMMANDS_2026_11_18.md`.
+  Phase R0 (reads, pre-checks and preview, zero writes) may be built under that list. R1/R2 writes still need the ratified decision record.
+- ASA administrative distance is `1..254` (Cisco ASA routing guide), corrected in §3.3 and §5.3.
+- The Check Point Gaia R82 guide shows next-hop removal as `set static-route <DEST_CIDR> nexthop gateway <NEXTHOP_IP> off` (no `address`
+  keyword) in its examples; §3.1's write literals stay `UNKNOWN` and are settled by the R0 Clish `?` verification before any R1 approval.
+- Estate count: 38 enrolled active Palo Alto firewalls (measured 2026-11-18), all on legacy virtual-router.

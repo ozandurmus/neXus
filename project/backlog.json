@@ -69,7 +69,7 @@
       "category": "ui2",
       "title": "Script Execution: operator scripts (.sh/.py/.jar or...",
       "status": "planned",
-      "priority": "P2",
+      "priority": "P1",
       "target": "PO decision record 2026-09-22 (automation...",
       "note": ""
     },
@@ -485,6 +485,60 @@
       "status": "planned",
       "priority": "P3",
       "target": "validation workflow full-regression job",
+      "note": ""
+    },
+    {
+      "id": "verify_first_scheduled_mds_export_and_asa_saved_state",
+      "category": "verification",
+      "title": "Verify the first scheduled MDS export (02:30) and the first ASA saved-state relations (V250 ***** mask assumption) after the 2026-11-19 nightly backup",
+      "status": "planned",
+      "priority": "P1",
+      "target": "Due 2026-11-19 morning; PR b86b93ae, 1fa4e9f1",
+      "note": ""
+    },
+    {
+      "id": "policy_install_p2_p4",
+      "category": "policy",
+      "title": "Policy installation P2-P4: verify-only, manual four-eyes install, scheduled install",
+      "status": "planned",
+      "priority": "P2",
+      "target": "OPERATIONS_POLICY_INSTALL_CONTRACT_DRAFT_2026_11_17 (DRAFT); blocked on GI-1..GI-10 measurements and a constitutional amendment",
+      "note": ""
+    },
+    {
+      "id": "static_route_add_delete",
+      "category": "operations",
+      "title": "Operations: static route add and delete on firewalls",
+      "status": "planned",
+      "priority": "P2",
+      "target": "OPERATIONS_STATIC_ROUTE_CHANGE_CONTRACT_DRAFT_2026_11_17 (DRAFT after council); decision record, R0 read list and amendment pending",
+      "note": ""
+    },
+    {
+      "id": "asa_failover_execution",
+      "category": "failover",
+      "title": "Cisco ASA failover execution (controlled, mutation-gated)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "Design draft lane started 2026-11-18; readiness on for all five pairs (PO 2026-11-17)",
+      "note": ""
+    },
+    {
+      "id": "fortigate_route_changes_via_fortimanager",
+      "category": "operations",
+      "title": "FortiGate route changes via FortiManager (separate design)",
+      "status": "planned",
+      "priority": "P3",
+      "target": "After static route R0; separate design",
+      "note": ""
+    },
+    {
+      "id": "pan_change_actor_submitted_join_gap",
+      "category": "collection",
+      "title": "Panorama config-log change actor: commits logged Submitted while the join needs Succeeded",
+      "status": "planned",
+      "priority": "P2",
+      "target": "PO_DECISION_RECORD_2026_11_12_PAN_CHANGE_ACTOR_FROM_CONFIG_LOG; trial switch on (642eb4ce)",
       "note": ""
     }
   ]

@@ -451,11 +451,13 @@
     {
       "id": "op_four_eyes",
       "area": "OP.2 Controlled Failover Execution",
-      "status": "open",
+      "status": "decided",
       "question": "Second-approver (four-eyes) sign-off for an authorised failover: mandatory, or configurable per environment?",
       "decide_by": "deployment/release policy before the OP.2.D pilot (not OP.2.0 architecture freeze)",
       "note": "Rebased from 'OP.2 contract freeze' on 2026-09-04, not resolved.",
-      "detail": "docs/history/roadmap/decision_op_four_eyes.md"
+      "detail": "docs/history/roadmap/decision_op_four_eyes.md",
+      "decision": "PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE s4: admin single, operation_admin two identities; kept by the 2026-10-20 record.",
+      "decided_on": "2026-11-18"
     },
     {
       "id": "op_emergency_evac",
@@ -469,20 +471,24 @@
     {
       "id": "op_aa_vsls_scope",
       "area": "OP.2 vendor coverage",
-      "status": "open",
+      "status": "decided",
       "question": "PAN Active/Active and Check Point VSLS (per-VS load sharing) failover: first-class in OP.2, or deferred?",
       "decide_by": "OP.3 scoping (not OP.2.0 architecture freeze)",
       "note": "Rebased from 'OP.2 contract freeze' on 2026-09-04, not resolved.",
-      "detail": "docs/history/roadmap/decision_op_aa_vsls_scope.md"
+      "detail": "docs/history/roadmap/decision_op_aa_vsls_scope.md",
+      "decision": "FAILOVER_EXECUTION_PLAN s4 (authority per the 2026-10-06 estate record): VSLS and PAN A/A are not execution targets; read-only assessment stays.",
+      "decided_on": "2026-11-18"
     },
     {
       "id": "op_continuity_tolerance",
       "area": "OP.2 post-action verification",
-      "status": "open",
+      "status": "decided",
       "question": "Session/connection continuity tolerance for post-action verification: fixed defaults, or operator-tunable per run? (Originally framed as the auto-rollback trigger; auto-rollback was removed by op_reversal_model on 2026-09-04, so the tolerance now bears only on whether a continuity observation can carry a verdict or a warning.)",
       "decide_by": "OP.2.D pilot calibration, before any continuity observation becomes verdict-bearing (not OP.2.0 architecture freeze)",
       "note": "Rebased from 'OP.2 contract freeze' on 2026-09-04, not resolved. PO classification 2026-09-04: NOT an OP.2.0 architecture freeze blocker -- continuity observations are recorded but not independently verdict-bearing; SUCCEEDED_WITH_WARNINGS was removed from the OP.2.0 state set until this is decided. See docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md 'Post-action verification'.",
-      "detail": "docs/history/roadmap/decision_op_continuity_tolerance.md"
+      "detail": "docs/history/roadmap/decision_op_continuity_tolerance.md",
+      "decision": "PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE s7: continuity read rejected; reads not evaluated, never a pass.",
+      "decided_on": "2026-11-18"
     },
     {
       "id": "C-D4",
@@ -633,11 +639,13 @@
     {
       "id": "po_ldap_tls_trust_policy",
       "area": "identity",
-      "status": "open",
+      "status": "decided",
       "question": "LDAP TLS trust: CA bundle format and whether the product pins the directory certificate.",
       "options": "",
       "recommendation": "",
-      "decide_by": "before LDAP authentication transport is implemented"
+      "decide_by": "before LDAP authentication transport is implemented",
+      "decision": "FROZEN UI2_0_C3C_LDAP_TLS_AND_PRINCIPAL_BINDINGS_CONTRACT s3: explicit CA file, format PEM/PKCS12/JKS.",
+      "decided_on": "2026-11-18"
     }
   ]
 }
