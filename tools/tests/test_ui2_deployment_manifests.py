@@ -1004,12 +1004,15 @@ def test_security_baseline_requires_owned_scoped_acceptances():
         assert all(entry[key] for key in ("tool", "rule", "location", "reason"))
         assert entry["owner"] == "PO" and date.fromisoformat(entry["review_date"]) <= date(2026, 12, 31)
         assert "*" not in entry["location"], "Accept individual findings, never directory wildcards"
-    tls = [entry for entry in entries if entry["rule"] == "weak-ssl-context"]
+    # The scanner reports the full rule id, so an acceptance only matches under that id (the short name never did).
+    tls = [entry for entry in entries if entry["rule"].endswith(".weak-ssl-context")]
     # PAN (PO_DECISION_RECORD_2026_09_21) and the appliance pinning trust manager
-    # (PO_DECISION_RECORD_2026_09_30_HTTPS_APPLIANCE_CERTIFICATE_PINNING).
+    # (PO_DECISION_RECORD_2026_09_30_HTTPS_APPLIANCE_CERTIFICATE_PINNING). The LDAP and cluster-API contexts name
+    # "TLSv1.3" (same defaults as "TLS") and need no acceptance.
     assert sorted(entry["location"].rsplit("/", 1)[1] for entry in tls) == [
-        "DirectoryTrustPolicy.java:155", "PanXmlApiTransport.java:286", "SystemStatusService.java:207"
+        "HttpsDeviceClient.java:131", "PanXmlApiTransport.java:307"
     ]
+    assert not [entry for entry in entries if entry["rule"] in ("weak-ssl-context", "unencrypted-socket")], "short rule ids never match"
 
 
 def test_gitleaks_allowlists_only_the_approved_commit_and_seven_exact_test_paths():

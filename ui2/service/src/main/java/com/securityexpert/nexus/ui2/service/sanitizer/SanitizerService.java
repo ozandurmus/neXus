@@ -364,7 +364,7 @@ public final class SanitizerService {
 
     private Path receive(String id, InputStream upload) throws IOException {
         ensureWorkDir();
-        Path in = workDir.resolve(id + ".in");
+        Path in = workFile(id, ".in");
         try {
             Files.createFile(in, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
         } catch (UnsupportedOperationException noPosix) {
@@ -391,7 +391,23 @@ public final class SanitizerService {
     }
 
     private Path output(String id) {
-        return workDir.resolve(id + ".out");
+        return workFile(id, ".out");
+    }
+
+    private static final java.util.regex.Pattern WORK_ID =
+            java.util.regex.Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+
+    /** A work file is named by a generated UUID only and must stay inside the work directory. */
+    static Path workFile(Path workDir, String id, String suffix) {
+        if (id == null || !WORK_ID.matcher(id).matches()) throw new IllegalArgumentException("SANITIZER_ID_INVALID");
+        Path base = workDir.toAbsolutePath().normalize();
+        Path file = base.resolve(id + suffix).normalize();
+        if (!file.startsWith(base)) throw new IllegalArgumentException("SANITIZER_PATH_ESCAPES_WORK_DIR");
+        return file;
+    }
+
+    private Path workFile(String id, String suffix) {
+        return workFile(workDir, id, suffix);
     }
 
     private static InputStream deletingStream(Path file) throws IOException {

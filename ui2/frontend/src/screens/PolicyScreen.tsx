@@ -870,7 +870,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
                 sx={{ position: "sticky", top: -PANE_PADDING, zIndex: 4, bgcolor: m3.scLowest, pt: `${PANE_PADDING}px`, pb: 0.5 }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>{data.total} rules found</Typography>
                 {selectedRules.size > 0 && <Typography variant="caption">{selectedRules.size} selected</Typography>}
-                {query && <>{(query.match(/[a-z.]+\s*=\s*(?:'(?:\\.|[^'])*'|true|false)/gi) ?? [query]).map((filter, index) => <Chip key={index} size="small" label={filter} title={query} sx={{ maxWidth: 500 }} />)}<Button size="small" onClick={() => setSearch("")}>Clear</Button></>}
+                {query && <>{(query.match(/[a-z.]+\s*=\s*(?:'(?:\\.|[^'\\])*'|true|false)/gi) ?? [query]).map((filter, index) => <Chip key={index} size="small" label={filter} title={query} sx={{ maxWidth: 500 }} />)}<Button size="small" onClick={() => setSearch("")}>Clear</Button></>}
                 <Button size="small" onClick={() => { drawerRequest.current++; setDrawer({ history: true }); }}>Policy history</Button>
                 {/* The one pagination footer (post-release review 2026-10-20, N15): `1–200 of 870 rules`, the same buttons every table has. */}
                 <PaginationFooter offset={page * RULE_PAGE_SIZE} size={RULE_PAGE_SIZE} total={data.total} noun="rules" onPage={offset => setPage(Math.floor(offset / RULE_PAGE_SIZE))} />

@@ -1,6 +1,7 @@
 """Offline security pipeline checks: synthetic reports, rendered manifests and fake Jobs only."""
 from datetime import date, timedelta
 import json
+import re
 from pathlib import Path
 import sys
 
@@ -255,6 +256,45 @@ def test_gate_rejects_inconsistent_pass_and_strips_unknown_content():
     assert "private content" not in json.dumps(host.safe_summary(json.dumps(result)))
 
 
+def test_report_findings_lists_high_and_medium_without_forbidden_fields():
+    forbidden = "SECRET-VALUE-9f3"
+    current = [
+        summary.finding("semgrep", "rule.new-high", "src/A.java:42", "HIGH"),
+        summary.finding("semgrep", "rule.low", "src/B.java:1", "LOW"),
+        summary.finding("gitleaks", "generic-key", "conf/app.env", "HIGH", commit="c" * 40),
+        summary.finding("trivy", "CVE-2026-0001", "registry/app: libfoo", "CRITICAL", fix_available=True),
+        summary.finding("trivy", "CVE-2026-0002", "registry/app: libbar", "MEDIUM"),
+        summary.finding("zap", "10021", "internal-ui", "MEDIUM"),
+        summary.finding("semgrep", "rule.old", "src/C.java:9", "HIGH"),
+        summary.finding("semgrep", "rule.acc", "src/D.java:3", "HIGH"),
+    ]
+    # Extra scanner fields never reach finding(): feed one through a hostile report to prove the projection.
+    rows = summary.project("semgrep", {"results": [{"check_id": "r", "path": "p.py", "start": {"line": 3},
+        "extra": {"severity": "ERROR", "lines": forbidden, "message": forbidden}}]})
+    previous = [dict(current[6]), dict(current[7])]
+    accepted = [dict(tool="semgrep", rule="rule.acc", location="src/D.java:3")]
+    listed, total = summary.report_findings(current + rows, previous, accepted)
+    assert total == len(listed) == 8
+    assert [r["severity"] for r in listed] == ["CRITICAL", "HIGH", "HIGH", "HIGH", "HIGH", "HIGH", "MEDIUM", "MEDIUM"]
+    high = [r for r in listed if r["severity"] == "HIGH"]
+    assert [r["status"] for r in high] == ["new", "new", "new", "existing", "accepted"]
+    assert listed[0] == dict(tool="trivy", rule="CVE-2026-0001", severity="CRITICAL", location="registry/app: libfoo",
+                             status="new", fix_available=True)
+    for r in listed:
+        assert set(r) == {"tool", "rule", "severity", "location", "status", "fix_available"}
+        assert not re.search(r":\d+$", r["location"])
+    text = json.dumps(listed)
+    assert forbidden not in text and "c" * 40 not in text and "LOW" not in text
+
+
+def test_report_findings_is_capped_worst_first():
+    current = [summary.finding("trivy", f"CVE-2026-{i:04d}", "registry/app: pkg", "MEDIUM") for i in range(250)]
+    current.append(summary.finding("trivy", "CVE-2026-9999", "registry/app: last", "HIGH"))
+    listed, total = summary.report_findings(current, [], [], cap=200)
+    assert len(listed) == 200 and total == 251
+    assert listed[0]["severity"] == "HIGH"
+
+
 def test_finalize_retention_sbom_and_counts_only_notification(tmp_path, monkeypatch, capsys):
     from datetime import datetime, timedelta, timezone
     import os
@@ -290,7 +330,7 @@ def test_finalize_retention_sbom_and_counts_only_notification(tmp_path, monkeypa
         assert not expired.exists()
         notification = next((root / "notifications").glob("*.json"))
         assert notification.stat().st_mode & 0o777 == 0o640
-        assert set(json.loads(notification.read_text())) == {"schema_version", "generated_at", "counts", "scan_errors", "blocking", "passed", "accepted_review"}
+        assert set(json.loads(notification.read_text())) == {"schema_version", "generated_at", "counts", "scan_errors", "blocking", "passed", "accepted_review", "findings", "findings_total"}
         assert json.loads(capsys.readouterr().out)["passed"] is True
         # A missing SBOM invalidates an otherwise clean scan.
         (work / "sbom-0.json").unlink()

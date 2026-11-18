@@ -29,7 +29,7 @@ public final class PacketAnalysisPaths {
     }
 
     public static Path caseDir(Path root, String caseId) {
-        return root.resolve("cases").resolve(requireId(caseId));
+        return within(root, root.resolve("cases").resolve(requireId(caseId)));
     }
 
     public static Path capturesDir(Path root, String caseId) {
@@ -38,7 +38,7 @@ public final class PacketAnalysisPaths {
 
     public static Path captureFile(Path root, String caseId, String storageKey) {
         if (storageKey == null || !STORAGE_KEY.matcher(storageKey).matches()) throw new IllegalArgumentException("STORAGE_KEY_INVALID");
-        return capturesDir(root, caseId).resolve(storageKey);
+        return within(root, capturesDir(root, caseId).resolve(storageKey));
     }
 
     public static Path telemetryDir(Path root, String caseId) {
@@ -47,11 +47,11 @@ public final class PacketAnalysisPaths {
 
     public static Path telemetryFile(Path root, String caseId, String storageKey) {
         if (storageKey == null || !TELEMETRY_KEY.matcher(storageKey).matches()) throw new IllegalArgumentException("STORAGE_KEY_INVALID");
-        return telemetryDir(root, caseId).resolve(storageKey);
+        return within(root, telemetryDir(root, caseId).resolve(storageKey));
     }
 
     public static Path runDir(Path root, String caseId, String jobId) {
-        return caseDir(root, caseId).resolve("runs").resolve(requireId(jobId));
+        return within(root, caseDir(root, caseId).resolve("runs").resolve(requireId(jobId)));
     }
 
     public static Path reportFile(Path root, String caseId, String jobId) {
@@ -64,6 +64,17 @@ public final class PacketAnalysisPaths {
 
     public static Path projectDuckDb(Path root, String caseId) {
         return caseDir(root, caseId).resolve("project.duckdb");
+    }
+
+    /**
+     * Defence in depth behind the id and storage-key patterns: the resolved, normalised path must stay under the
+     * volume root, so a future change to a pattern cannot turn a request value into a traversal.
+     */
+    private static Path within(Path root, Path path) {
+        Path base = root.toAbsolutePath().normalize();
+        Path resolved = path.toAbsolutePath().normalize();
+        if (!resolved.startsWith(base)) throw new IllegalArgumentException("PACKET_ANALYSIS_PATH_ESCAPES_ROOT");
+        return resolved;
     }
 
     private static String requireId(String value) {

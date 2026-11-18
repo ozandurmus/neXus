@@ -2379,6 +2379,49 @@ export function getSystemStorage(): Promise<StorageView> {
   return call("/api/v2/system/storage", "GET");
 }
 
+export type ScanSeverity = "UNKNOWN" | "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export interface ScanCountCell { readonly new: number; readonly fixed: number; readonly accepted: number; readonly existing: number }
+export interface ScanFindingRow {
+  readonly tool: string;
+  readonly rule: string;
+  readonly severity: "CRITICAL" | "HIGH" | "MEDIUM";
+  /** A file path, or an image and package. Never a source line, match, secret value or URL. */
+  readonly location: string;
+  readonly status: "new" | "existing" | "accepted";
+  readonly fix_available: boolean;
+}
+export interface SecurityScanMailState {
+  readonly route_enabled: boolean;
+  readonly smtp_configured: boolean;
+  readonly recipients_configured: boolean;
+  readonly delivering: boolean;
+  readonly last_sent_at: string | null;
+  readonly last_error: string | null;
+}
+/** The latest daily security scan (GET /api/v2/security/scan-summary/latest). */
+export interface SecurityScanSummaryView {
+  readonly available: boolean;
+  readonly reason?: "NO_DAILY_SUMMARY" | "SUMMARY_UNREADABLE";
+  readonly mail: SecurityScanMailState;
+  readonly stale_after_hours: number;
+  readonly generated_at?: string;
+  readonly age_hours?: number;
+  readonly stale?: boolean;
+  readonly passed?: boolean;
+  readonly scan_errors?: number;
+  readonly blocking?: number;
+  readonly counts?: Readonly<Record<string, Readonly<Record<string, ScanCountCell>>>>;
+  /** False for a summary written before the list existed. */
+  readonly findings_listed_in_summary?: boolean;
+  readonly findings_total?: number;
+  readonly findings?: readonly ScanFindingRow[];
+  readonly failed?: ReadonlyArray<{ file: string; cause: string }>;
+}
+
+export function getSecurityScanSummary(): Promise<SecurityScanSummaryView> {
+  return call("/api/v2/security/scan-summary/latest", "GET");
+}
+
 // ---------------------------------------------------------------------------------------------
 // Overview (OVERVIEW_EXCEPTION_SCREEN_CONTRACT, FROZEN 2026-09-23)
 // ---------------------------------------------------------------------------------------------

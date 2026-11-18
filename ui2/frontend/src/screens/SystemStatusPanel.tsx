@@ -19,6 +19,7 @@ import { artefactClassLabel, vendorLabel } from "../shell/presenters";
 import { formatStamp } from "../shell/time";
 import { m3 } from "../theme/m3Theme";
 import { getSystemPods, getSystemStorage, type PodStatusView, type PodsView, type StorageView } from "../auth/adminApi";
+import { SecurityScanCard } from "./SecurityScanCard";
 import { failedLatestRuns, platformHealth, podRoles, type PodRole } from "../shell/PlatformHealthIndicator";
 
 export function formatBytes(value: number | null | undefined): string {
@@ -111,6 +112,7 @@ export function SystemStatusPanel() {
           {`Disk ${disk.level === "critical" ? "critical" : "warning"}: ${fullVolumes.map((v) => `${v.name} ${v.used_percent}% used (${v.level})`).join(", ")}. Thresholds: warning ${disk.thresholds.warning_percent}%, critical ${disk.thresholds.critical_percent}%.`}
         </Alert>
       )}
+      <SecurityScanCard />
       <Card sx={{ p: 2, borderRadius: "16px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}` }}>
         <Typography variant="overline" sx={{ color: m3.onSurfaceVar }}>Storage</Typography>
         <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5, mb: 1.5 }}>What the evidence takes</Typography>

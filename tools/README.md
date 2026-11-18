@@ -19,7 +19,7 @@ python3 -m pytest -q -n 2 --dist worksteal
 python3 tools/privacy/repository_privacy_check.py
 python3 tools/delivery/project_queue.py check
 python3 tools/delivery/build_history_index.py --check
-node --test tools/tests/aiview_diag.test.mjs tools/tests/aiview_readiness.test.mjs
+node --test tools/tests/aiview_diag.test.mjs tools/tests/aiview_readiness.test.mjs tools/tests/aiview_leak_audit.test.mjs
 ```
 
 Python file entrypoints resolve the repository independently of caller CWD.

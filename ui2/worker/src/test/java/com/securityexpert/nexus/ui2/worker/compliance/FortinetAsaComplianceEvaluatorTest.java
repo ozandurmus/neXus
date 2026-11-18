@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.compliance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
 
@@ -129,5 +130,17 @@ class FortinetAsaComplianceEvaluatorTest {
         assertEquals(Verdict.NOT_APPLICABLE, result("cisco_asa", "asa_failover_link", asa("no failover")));
         assertEquals(Verdict.FAIL, result("cisco_asa", "asa_failover_link", asa("failover\nno failover lan interface")));
         assertEquals(Verdict.UNKNOWN, result("cisco_asa", "asa_failover_link", asa("failover\nfailover lan interface HA GigabitEthernet0/1")));
+    }
+
+    @Test
+    void heartbeatListMatchingIsLinearAndKeepsItsVerdicts() {
+        assertEquals(Verdict.PASS, result("fortinet", "fg_ha_heartbeat_defined",
+                fg("system ha", "set mode a-p\nset hbdev \"ha1\" 50 port3 100 \"ha 2\" 150")));
+        // A long run of tokens that almost match must fail fast, not backtrack through both name forms.
+        String hostile = "\"a\" 1 ".repeat(20_000) + "\"a\" x";
+        long started = System.nanoTime();
+        assertEquals(Verdict.UNKNOWN, result("fortinet", "fg_ha_heartbeat_defined",
+                fg("system ha", "set mode a-p\nset hbdev " + hostile)));
+        assertTrue(java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) < 5_000);
     }
 }

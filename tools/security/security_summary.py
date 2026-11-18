@@ -155,27 +155,32 @@ def accepted_review(current, acceptances, today):
     return result
 
 
-def summarize(current, previous, accepted, *, failures=()):
-    def indexed(rows):
-        result = {}
-        for r in rows:
-            clean = finding(**r)
-            key = identity(clean)
-            if key not in result or SEVERITIES.index(clean["severity"]) > SEVERITIES.index(result[key]["severity"]):
-                clean["fix_available"] = clean.get("fix_available", False) or result.get(key, {}).get("fix_available", False)
-                if not clean["fix_available"]:
-                    del clean["fix_available"]
-                result[key] = clean
-            elif clean.get("fix_available"):
-                result[key]["fix_available"] = True
-        return result
+def indexed(rows):
+    result = {}
+    for r in rows:
+        clean = finding(**r)
+        key = identity(clean)
+        if key not in result or SEVERITIES.index(clean["severity"]) > SEVERITIES.index(result[key]["severity"]):
+            clean["fix_available"] = clean.get("fix_available", False) or result.get(key, {}).get("fix_available", False)
+            if not clean["fix_available"]:
+                del clean["fix_available"]
+            result[key] = clean
+        elif clean.get("fix_available"):
+            result[key]["fix_available"] = True
+    return result
 
+
+def is_accepted(row, accepted):
+    return any(all(row[k] == a[k] for k in ("tool", "rule", "location"))
+               and (not a.get("commit") or row["commit"] == a["commit"]) for a in accepted)
+
+
+def summarize(current, previous, accepted, *, failures=()):
     now, before = indexed(current), indexed(previous)
     counts = {t: {s: dict(new=0, fixed=0, accepted=0, existing=0) for s in SEVERITIES} for t in TOOLS}
     unaccepted_high = 0
     for key, row in now.items():
-        match = any(all(row[k] == a[k] for k in ("tool", "rule", "location"))
-                    and (not a.get("commit") or row["commit"] == a["commit"]) for a in accepted)
+        match = is_accepted(row, accepted)
         is_new = key not in before or SEVERITIES.index(row["severity"]) > SEVERITIES.index(before[key]["severity"])
         status = "accepted" if match else "new" if is_new else "existing"
         counts[row["tool"]][row["severity"]][status] += 1
@@ -190,6 +195,45 @@ def summarize(current, previous, accepted, *, failures=()):
             "passed": not failures and unaccepted_high == 0}
 
 
+REPORT_SEVERITIES = ("CRITICAL", "HIGH", "MEDIUM")
+REPORT_STATUSES = ("new", "existing", "accepted")
+REPORT_ROW_CAP = 200
+
+
+def report_location(row):
+    """Where the finding is, never what it says: a file path or an image and package, no source line."""
+    location = row["location"]
+    if row["tool"] == "semgrep":
+        location = re.sub(r":\d+$", "", location)
+    return re.sub(r"[^A-Za-z0-9._+/@: -]", "_", location)[:160]
+
+
+def report_findings(current, previous, accepted, cap=REPORT_ROW_CAP):
+    """Bounded HIGH/CRITICAL/MEDIUM list for the daily notification: identity and status only.
+
+    Rows carry tool, rule id, severity, a path or image/package, new/existing/accepted and a fix flag. Source
+    lines, matches, secret values, commits, URLs and descriptions are never copied. Worst severity first, then
+    new before existing before accepted, so a cap drops the least urgent rows.
+    """
+    now, before = indexed(current), indexed(previous)
+    rows = []
+    for key, row in now.items():
+        if row["severity"] not in REPORT_SEVERITIES:
+            continue
+        if is_accepted(row, accepted):
+            status = "accepted"
+        elif key not in before or SEVERITIES.index(row["severity"]) > SEVERITIES.index(before[key]["severity"]):
+            status = "new"
+        else:
+            status = "existing"
+        rows.append(dict(tool=row["tool"], rule=re.sub(r"[^A-Za-z0-9._-]", "_", row["rule"])[:80],
+                         severity=row["severity"], location=report_location(row), status=status,
+                         fix_available=bool(row.get("fix_available"))))
+    rows.sort(key=lambda r: (-SEVERITIES.index(r["severity"]), REPORT_STATUSES.index(r["status"]),
+                             r["tool"], r["rule"], r["location"]))
+    return rows[:cap], len(rows)
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--reports", type=Path, required=True)
@@ -199,6 +243,7 @@ def main(argv=None):
     args = p.parse_args(argv)
     failures, current, previous, causes = [], [], [], []
     review = None
+    accepted = []
     today = date.today()
     try:
         acceptances = read_baseline(args.baseline)
@@ -230,12 +275,16 @@ def main(argv=None):
             summary["failed"] = causes
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         summary = summarize([], [], [], failures=TOOLS)
-        current = []
+        current, previous = [], []
     if review is not None:
         summary["accepted_review"] = review
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "findings.json").write_text(json.dumps(current, indent=2) + "\n")
     (args.output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    # Kept apart from summary.json (which is printed to Job logs): rule ids and locations only reach the
+    # service's notification mount, through finish().
+    listed, total = report_findings(current, previous, accepted)
+    (args.output / "report-findings.json").write_text(json.dumps(dict(findings=listed, findings_total=total)) + "\n")
     print(json.dumps(summary))
     return 0 if summary["passed"] else 1
 

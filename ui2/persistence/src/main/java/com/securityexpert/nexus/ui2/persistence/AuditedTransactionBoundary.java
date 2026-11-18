@@ -66,6 +66,13 @@ public final class AuditedTransactionBoundary {
         }
     }
 
+    /**
+     * {@code SET LOCAL} takes no bind parameter, so the value is a quoted literal: every single quote is doubled and,
+     * under PostgreSQL's default {@code standard_conforming_strings=on}, a backslash is an ordinary character, so the
+     * value cannot end the literal. The callers pass system-generated fingerprints and action ids, never request text.
+     * (Static-analysis alert java/sql-injection here is a false positive; the exact-text tests of every audited
+     * repository pin this statement form.)
+     */
     private static String sqlLiteral(String value) {
         return "'" + value.replace("'", "''") + "'";
     }

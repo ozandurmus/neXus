@@ -17,6 +17,36 @@ import com.securityexpert.nexus.ui2.worker.compliance.model.Verdict;
 
 /** Evaluates configuration intent only; it never interprets a missing or withheld setting as a default. */
 public final class FortinetAsaComplianceEvaluator {
+    /**
+     * True when {@code value} is one or more {@code name priority} pairs of {@code set hbdev}, separated by single
+     * spaces: a name is {@code "quoted"} or a bare word, a priority is digits. A single pass over the text (no
+     * regular expression, so no backtracking and no recursion on a long list).
+     */
+    static boolean heartbeatListValid(String value) {
+        int n = value.length();
+        int i = 0;
+        while (true) {
+            if (i >= n) return false;
+            char first = value.charAt(i);
+            if (first == '"') {
+                int close = value.indexOf('"', i + 1);
+                if (close < 0 || close == i + 1) return false;
+                i = close + 1;
+            } else {
+                if (Character.isWhitespace(first)) return false;
+                while (i < n && !Character.isWhitespace(value.charAt(i))) i++;
+            }
+            if (i >= n || value.charAt(i) != ' ') return false;
+            i++;
+            int digits = i;
+            while (i < n && value.charAt(i) >= '0' && value.charAt(i) <= '9') i++;
+            if (i == digits) return false;
+            if (i == n) return true;
+            if (value.charAt(i) != ' ') return false;
+            i++;
+        }
+    }
+
     private FortinetAsaComplianceEvaluator() {}
 
     private record Block(String section, String scope, String edit, Map<String, String> settings) {
@@ -207,8 +237,7 @@ public final class FortinetAsaComplianceEvaluator {
                 String heartbeat = b.get("hbdev");
                 if (heartbeat == null) return Verdict.UNKNOWN;
                 if (heartbeat.isBlank() || heartbeat.equals("\"\"")) return Verdict.FAIL;
-                return heartbeat.matches("(?:\\\"[^\\\"]+\\\"|\\S+) \\d+(?: (?:\\\"[^\\\"]+\\\"|\\S+) \\d+)*")
-                        ? Verdict.PASS : Verdict.UNKNOWN;
+                return heartbeatListValid(heartbeat) ? Verdict.PASS : Verdict.UNKNOWN;
             });
             default -> Verdict.UNKNOWN;
         };
