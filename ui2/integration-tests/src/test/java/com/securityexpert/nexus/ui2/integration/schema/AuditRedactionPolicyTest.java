@@ -504,6 +504,16 @@ class AuditRedactionPolicyTest {
             // scheduled_job_family (V203, 4805eb19): family key, switch, actor, time; the free-text reason is tier-2 redacted
             "scheduled_job_family.changed_at", "scheduled_job_family.changed_by",
             "scheduled_job_family.enabled", "scheduled_job_family.family_key",
+            // script (V251): identifiers, switches, schedule and limits; opaque device ids as every other device_id; role name;
+            // credential_refs and egress are redacted below
+            "script.created_at", "script.created_by_actor_fingerprint", "script.current_version", "script.egress_device_targets",
+            "script.enabled", "script.kind", "script.name", "script.notify", "script.run_as", "script.schedule",
+            "script.script_id", "script.timeout_s", "script.updated_at",
+            // script_version (V251): digest, size, artefact reference and key id (no key material); the wrapped key,
+            // secret findings and credential refs are redacted below
+            "script_version.artefact_ref", "script_version.created_at", "script_version.created_by",
+            "script_version.egress_device_targets", "script_version.key_id", "script_version.script_id",
+            "script_version.sha256", "script_version.size_bytes", "script_version.version",
             // system_log_chunk (V160)
             "system_log_chunk.bytes", "system_log_chunk.chunk_id", "system_log_chunk.ciphertext_bytes",
             "system_log_chunk.collected_at", "system_log_chunk.device_id", "system_log_chunk.end_offset",
@@ -832,7 +842,11 @@ class AuditRedactionPolicyTest {
             // V188 (decea8d5): the transient matcher plan of an (unaudited) validation hop.
             "path_validation_hop.plan", 2,
             // V203 (4805eb19): operator free text, as failover_approval.reason.
-            "scheduled_job_family.reason", 2);
+            "scheduled_job_family.reason", 2,
+            // V251: operator-declared egress targets and credential reference ids, secret-scan locations, wrapped key.
+            "script.egress", 2, "script.credential_refs", 2,
+            "script_version.credential_refs", 2, "script_version.secret_findings", 2,
+            "script_version.wrapped_data_key", 1);
 
     private static java.util.Map<String, Integer> declaredRedactions(Object... pairs) {
         java.util.Map<String, Integer> declared = new java.util.LinkedHashMap<>();

@@ -193,3 +193,13 @@ Image size is the cost; the runner is one pod, so it is paid once.
 - A run beyond `timeout_s` is killed and recorded `TIMED_OUT`; its scratch is wiped.
 - The per-run `nexus-cli` token is revoked at run end; a later use is 401.
 - A `script_run` job heartbeats its lease and survives a rollout (drain).
+
+## Amendment 2026-11-18
+
+Ratified in `docs/design/PO_DECISION_RECORD_2026_11_18_SCRIPT_EXECUTION_NO_REFUSALS.md` (PO decision 2026-11-18), which overrides §2, §3.1, §3.3, §3.6, §5 and §6 where they differ:
+
+1. **Secrets in a script are a warning, never a refusal; bodies are encrypted at rest and write-only.** Uploads are scanned with the repository privacy-gate patterns (`PRIVATE_KEY_MATERIAL`, `CREDENTIAL_LITERAL`), returning a warning (line numbers and pattern class, never the matched value, recommending credential-store references) and storing `secret_findings` on `script_version`. Every script body (text or binary) is stored encrypted at rest via the artefact store's envelope encryption (class `script_body`); the database stores only `sha256`, `size_bytes`, `artefact_ref`, `key_id`, `wrapped_data_key`, and `secret_findings`. No API, CLI or UI route ever returns a stored script body, not even to `role:security_admin`; only the slice 2 runner decrypts a version to execute it. Editing a script means uploading a new version.
+2. **Egress to an enrolled device address is a warning, never a refusal.** Any `host:port` may be declared. When a declared egress host matches an enrolled device's management address (stored data only), the version records `egress_device_targets` (opaque device IDs) and the API/UI/CLI returns a warning that this is a direct path outside neXus command gates.
+3. **`.bat`/`.cmd` remain refused** with `"cannot run on the Linux runner; use PowerShell (.ps1)"` (technical impossibility on the Linux runner).
+4. **The runner stays a dedicated pod** (§3.2, slice 2).
+5. **Declared credential-store references (`credential_refs`).** A script version declares `credential_refs` (credential-store reference IDs validated to exist, set by `role:security_admin` via API/CLI). Slice 2's runner resolves only those declared refs at run start (`NEXUS_CRED_<ALIAS>_USERNAME` / `_SECRET` or a `0600` scratch file), masks their values from captured output, and records the refs used on the run.

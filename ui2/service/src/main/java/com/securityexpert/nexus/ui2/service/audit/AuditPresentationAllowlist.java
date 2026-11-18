@@ -353,7 +353,17 @@ public final class AuditPresentationAllowlist {
             // contexts and interface names, the assumed subnet and the free-text note are redacted.
             Map.entry("topology_link_override", Set.of(
                     "a_device_id", "action", "b_device_id", "created_at", "created_by", "link_kind", "orphaned_at",
-                    "override_id", "reason_code", "revoked_at", "revoked_by")));
+                    "override_id", "reason_code", "revoked_at", "revoked_by")),
+            // V251 (Script Execution slice 1): script metadata and append-only version metadata; script.egress, script.credential_refs,
+            // script_version.credential_refs, script_version.secret_findings (tier 2) and script_version.wrapped_data_key
+            // (tier 1) are in audit_redaction_policy and therefore absent here. No plaintext body column exists.
+            Map.entry("script", Set.of(
+                    "created_at", "created_by_actor_fingerprint", "current_version",
+                    "egress_device_targets", "enabled", "kind", "name", "notify", "run_as", "schedule",
+                    "script_id", "timeout_s", "updated_at")),
+            Map.entry("script_version", Set.of(
+                    "artefact_ref", "created_at", "created_by", "egress_device_targets",
+                    "key_id", "script_id", "sha256", "size_bytes", "version")));
 
     private AuditPresentationAllowlist() {
     }
