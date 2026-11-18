@@ -98,8 +98,7 @@ public final class PolicyInstallMonitoringService {
     public record AsaInput(
             String deviceId,
             String hostname,
-            String runningSha256,
-            String startupSha256,
+            String relation,
             Instant backupCreatedAt,
             Instant latestChangedConfigAt
     ) {}
@@ -282,31 +281,32 @@ public final class PolicyInstallMonitoringService {
     }
 
     /**
-     * Council Fix (b): Cisco ASA rows display {@code SAVED} or {@code UNSAVED} (comparing
-     * {@code running-config} vs {@code startup-config}), never {@code INSTALLED}.
+     * Council Fix (b): Cisco ASA rows display {@code SAVED} or {@code UNSAVED}, never {@code INSTALLED}. The verdict is the
+     * worker's normalised running-vs-startup relation of the latest backup (contract section 3.3, amendment 2026-11-18):
+     * {@code MATCH}, {@code MISMATCH} or {@code NOT_EVALUABLE}; null when that backup has none.
      */
-    public static DerivedStatus deriveCiscoAsaState(
-            String runningConfigSha256,
-            String startupConfigSha256,
-            boolean newerChangedConfigurationRunExists
-    ) {
-        if (runningConfigSha256 == null || runningConfigSha256.isBlank()
-                || startupConfigSha256 == null || startupConfigSha256.isBlank()) {
-            return new DerivedStatus(STATE_UNKNOWN, null, "Running vs startup configuration comparison not collected yet");
-        }
-        // Amendment 2026-11-18 (contract section 3.3): the two digests are not comparable evidence. running-config.txt is
-        // `more system:running-config` (keys in clear) and startup-config.txt is `show startup-config` (keys masked, its
-        // own header lines), so they differ on every ASA whether or not the configuration was saved. A digest difference
-        // is UNKNOWN, never UNSAVED; equal digests still prove SAVED unless a later configuration change was recorded.
-        if (!runningConfigSha256.trim().equalsIgnoreCase(startupConfigSha256.trim())) {
+    public static DerivedStatus deriveCiscoAsaState(String relation, boolean newerChangedConfigurationRunExists) {
+        String r = relation == null ? "" : relation.trim().toUpperCase(java.util.Locale.ROOT);
+        if (r.isEmpty()) {
             return new DerivedStatus(STATE_UNKNOWN, null,
-                    "Saved state not measured yet: the running and startup reads differ in form (keys, header lines)");
+                    "Running vs startup comparison not measured for the latest backup yet");
+        }
+        if ("NOT_EVALUABLE".equals(r)) {
+            return new DerivedStatus(STATE_UNKNOWN, null,
+                    "Running vs startup comparison not possible: the backup lacks one of the two configuration texts");
         }
         if (newerChangedConfigurationRunExists) {
             return new DerivedStatus(STATE_UNKNOWN, null,
                     "Configuration changed after the last backup; saved state not measured since");
         }
-        return new DerivedStatus(STATE_SAVED, null, "running-config matches startup-config");
+        if ("MISMATCH".equals(r)) {
+            return new DerivedStatus(STATE_UNSAVED, null,
+                    "running-config differs from startup-config (unsaved running configuration changes)");
+        }
+        if ("MATCH".equals(r)) {
+            return new DerivedStatus(STATE_SAVED, null, "running-config matches startup-config");
+        }
+        return new DerivedStatus(STATE_UNKNOWN, null, "Running vs startup comparison has an unrecognised result");
     }
 
     /**
@@ -418,7 +418,7 @@ public final class PolicyInstallMonitoringService {
         for (AsaInput asa : evidence.asaGateways() == null ? List.<AsaInput>of() : evidence.asaGateways()) {
             boolean newerChanged = asa.latestChangedConfigAt() != null
                     && (asa.backupCreatedAt() == null || asa.latestChangedConfigAt().isAfter(asa.backupCreatedAt()));
-            DerivedStatus derived = deriveCiscoAsaState(asa.runningSha256(), asa.startupSha256(), newerChanged);
+            DerivedStatus derived = deriveCiscoAsaState(asa.relation(), newerChanged);
             Instant lastChange = asa.latestChangedConfigAt() != null ? asa.latestChangedConfigAt() : asa.backupCreatedAt();
             rows.add(toRowMap(
                     "asa:" + asa.deviceId(),
@@ -761,20 +761,15 @@ public final class PolicyInstallMonitoringService {
                     select d.device_id::text as device_id,
                            coalesce(nullif(d.observed_hostname, ''), d.device_id::text) as hostname,
                            b.created_at as backup_created_at,
-                           b.running_sha256,
-                           b.startup_sha256,
+                           b.relation,
                            cfg.latest_changed_at
                     from devices d
                     left join lateral (
-                        select a.created_at,
-                               max(case when e.entry_path = 'running-config.txt' then e.entry_sha256 end) as running_sha256,
-                               max(case when e.entry_path = 'startup-config.txt' then e.entry_sha256 end) as startup_sha256
+                        select a.created_at, rel.relation
                         from backup_artefact a
-                        join backup_artefact_entry e on e.artefact_id = a.artefact_id
+                        left join asa_config_relation rel on rel.artefact_id = a.artefact_id
                         where a.device_id = d.device_id::text
                           and a.artefact_class = 'backup'
-                          and e.entry_path in ('running-config.txt', 'startup-config.txt')
-                        group by a.artefact_id, a.created_at
                         order by a.created_at desc, a.artefact_id desc
                         limit 1
                     ) b on true
@@ -793,8 +788,7 @@ public final class PolicyInstallMonitoringService {
                     """).map(r -> new AsaInput(
                     r.get("device_id", String.class),
                     r.get("hostname", String.class),
-                    r.get("running_sha256", String.class),
-                    r.get("startup_sha256", String.class),
+                    r.get("relation", String.class),
                     toInstant(r.get("backup_created_at")),
                     toInstant(r.get("latest_changed_at"))
             ));

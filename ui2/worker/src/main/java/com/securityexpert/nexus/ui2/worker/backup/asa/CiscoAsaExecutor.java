@@ -81,6 +81,14 @@ public final class CiscoAsaExecutor {
         return this;
     }
 
+    private AsaConfigRelationSink relationSink = AsaConfigRelationSink.NONE;
+
+    /** Where the derived running-vs-startup relation of each stored backup goes (no new read; both texts are already held). */
+    public CiscoAsaExecutor withConfigRelationSink(AsaConfigRelationSink sink) {
+        this.relationSink = Objects.requireNonNull(sink, "sink");
+        return this;
+    }
+
     private AsaFailoverMeasure failoverMeasure = AsaFailoverMeasure.OFF;
     private java.util.function.Consumer<String> measureSink = line ->
             LOG.log(System.Logger.Level.INFO, "{0}", line);
@@ -468,6 +476,7 @@ public final class CiscoAsaExecutor {
             ArtefactStore.ArtefactMetadata metadata = handle.finish();
             LOG.log(System.Logger.Level.INFO, "[ASA_BACKUP] stored {0} text files, archive={1}, {2} bytes", members.size(),
                     archiveProblem.isEmpty() ? archiveBytes : "missing", metadata.plaintextBytes());
+            recordRelation(deviceId, metadata.ref().value(), members);
             if (cleanup.isPresent()) {
                 return new BackupResult.CleanupFailed(metadata, "asa-backup.tgz", cleanup.get());
             }
@@ -483,6 +492,25 @@ public final class CiscoAsaExecutor {
             return new BackupResult.ArtefactStoreFailed("bundle could not be stored: " + e.getClass().getSimpleName());
         } finally {
             deleteQuietly(temp);
+        }
+    }
+
+    /** Derives and stores the running-vs-startup relation; counts only, never text. A failure changes nothing else. */
+    private void recordRelation(String deviceId, String artefactId, Map<String, byte[]> members) {
+        try {
+            byte[] running = members.get("running-config.txt");
+            byte[] startup = members.get("startup-config.txt");
+            AsaConfigRelation relation = AsaConfigRelation.compare(
+                    running == null ? null : new String(running, StandardCharsets.UTF_8),
+                    startup == null ? null : new String(startup, StandardCharsets.UTF_8));
+            LOG.log(System.Logger.Level.INFO,
+                    "[ASA_CONFIG_RELATION] device={0} result={1} compared={2} differing={3} equal_by_mask={4}",
+                    deviceId, relation.result(), relation.linesCompared(), relation.linesDiffering(),
+                    relation.linesEqualOnlyByMask());
+            relationSink.record(deviceId, artefactId, relation);
+        } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            LOG.log(System.Logger.Level.WARNING, "[ASA_CONFIG_RELATION] not stored: {0}", e.getClass().getSimpleName());
         }
     }
 

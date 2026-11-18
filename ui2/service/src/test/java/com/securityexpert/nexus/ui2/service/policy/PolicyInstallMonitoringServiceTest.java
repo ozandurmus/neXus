@@ -146,20 +146,32 @@ class PolicyInstallMonitoringServiceTest {
     }
 
     @Test
-    void ciscoAsaShowsSavedOrUnsavedNeverInstalled() {
-        DerivedStatus saved = PolicyInstallMonitoringService.deriveCiscoAsaState("sha256-aaa", "sha256-aaa", false);
+    void ciscoAsaShowsSavedOrUnsavedFromTheNormalisedRelationNeverInstalled() {
+        DerivedStatus saved = PolicyInstallMonitoringService.deriveCiscoAsaState("MATCH", false);
         assertEquals(PolicyInstallMonitoringService.STATE_SAVED, saved.state());
         assertNotEquals(PolicyInstallMonitoringService.STATE_INSTALLED, saved.state());
 
-        DerivedStatus unsavedDigestDiff = PolicyInstallMonitoringService.deriveCiscoAsaState("sha256-aaa", "sha256-bbb", false);
-        assertEquals(PolicyInstallMonitoringService.STATE_UNKNOWN, unsavedDigestDiff.state(), "digests of differently formed reads are not evidence (amendment 2026-11-18)");
-        assertNotEquals(PolicyInstallMonitoringService.STATE_INSTALLED, unsavedDigestDiff.state());
+        DerivedStatus unsaved = PolicyInstallMonitoringService.deriveCiscoAsaState("MISMATCH", false);
+        assertEquals(PolicyInstallMonitoringService.STATE_UNSAVED, unsaved.state());
 
-        DerivedStatus unsavedNewerConfigChange = PolicyInstallMonitoringService.deriveCiscoAsaState("sha256-aaa", "sha256-aaa", true);
-        assertEquals(PolicyInstallMonitoringService.STATE_UNKNOWN, unsavedNewerConfigChange.state());
+        DerivedStatus matchButChangedSince = PolicyInstallMonitoringService.deriveCiscoAsaState("MATCH", true);
+        assertEquals(PolicyInstallMonitoringService.STATE_UNKNOWN, matchButChangedSince.state());
+        assertTrue(matchButChangedSince.reason().contains("changed after the last backup"));
 
-        DerivedStatus unknownMissingStartup = PolicyInstallMonitoringService.deriveCiscoAsaState("sha256-aaa", null, false);
-        assertEquals(PolicyInstallMonitoringService.STATE_UNKNOWN, unknownMissingStartup.state());
+        DerivedStatus mismatchButChangedSince = PolicyInstallMonitoringService.deriveCiscoAsaState("MISMATCH", true);
+        assertEquals(PolicyInstallMonitoringService.STATE_UNKNOWN, mismatchButChangedSince.state());
+
+        DerivedStatus notEvaluable = PolicyInstallMonitoringService.deriveCiscoAsaState("NOT_EVALUABLE", false);
+        assertEquals(PolicyInstallMonitoringService.STATE_UNKNOWN, notEvaluable.state());
+        assertTrue(notEvaluable.reason().contains("not possible"));
+
+        for (String none : new String[] {null, "", "  "}) {
+            DerivedStatus unmeasured = PolicyInstallMonitoringService.deriveCiscoAsaState(none, false);
+            assertEquals(PolicyInstallMonitoringService.STATE_UNKNOWN, unmeasured.state());
+            assertTrue(unmeasured.reason().contains("not measured"));
+        }
+        assertEquals(PolicyInstallMonitoringService.STATE_UNKNOWN,
+                PolicyInstallMonitoringService.deriveCiscoAsaState("SOMETHING_ELSE", false).state());
     }
 
     @Test
@@ -231,7 +243,7 @@ class PolicyInstallMonitoringServiceTest {
                 "dev-cp-fin-1", Optional.of("Finance-ACL-Policy"), Optional.of("17Nov2026 12:00:00"), Optional.of(t12),
                 "cp_policy_install_cpstat", Optional.of(t12)
         );
-        AsaInput asa = new AsaInput("dev-asa-1", "asa-customer-edge", "sha-1", "sha-1", t12, null);
+        AsaInput asa = new AsaInput("dev-asa-1", "asa-customer-edge", "MATCH", t12, null);
         FortiGateInput fgt = new FortiGateInput("dev-fgt-1", "fgt-customer-core", "gateway", "PASS", "MATCH", null, t12);
 
         StoredEvidence evidence = new StoredEvidence(

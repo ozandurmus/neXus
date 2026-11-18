@@ -109,6 +109,17 @@ changed after the last backup; saved state not measured since"`. Step 4 (equal d
 `SAVED`. No new device command. `show checksum` is not a substitute: the Cisco ASA command reference says the
 checksum is computed when the configuration is stored in flash, so it describes the saved configuration only.
 
+**Amendment 2026-11-18 (b): the normalized relation.** While both texts are in memory during the ASA backup, the worker
+(`AsaConfigRelation`, no new device command and no new read) drops lines beginning with `:` and `Cryptochecksum` lines,
+trims trailing whitespace, ignores blank lines, and compares the rest in order. A pair is equal when identical, or when
+the startup line holds the mask token `*****` and the running line equals it with each token replaced by a non-empty
+value (fixed pieces matched in order). The result is `MATCH`, `MISMATCH` or `NOT_EVALUABLE` (either text missing or not
+an ASA configuration) with three counts (lines compared, lines differing, lines equal only by mask); only that is stored,
+in `asa_config_relation` (V250, one row per backup artefact), never any text. Steps 3 and 4 become: the latest backup's
+relation `MATCH` with no newer `change_state = 'changed'` run is `SAVED`; `MISMATCH` (same condition) is `UNSAVED`; a
+newer changed run, `NOT_EVALUABLE`, or a backup with no stored relation (taken before V250) is `UNKNOWN` with the reason
+naming which. Assumption to confirm on a real unit: the ASA prints stored keys as `*****` in `show startup-config`.
+
 ### 3.4 FortiGate (`fortinet`) and FortiManager — Council Fix (b) & (c)
 
 - **Directly managed FortiGate gateways (`vendor_hint = 'fortinet'`, `role in ('gateway', 'firewall')`):**
