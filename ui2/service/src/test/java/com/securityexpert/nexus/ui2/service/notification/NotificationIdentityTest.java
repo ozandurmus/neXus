@@ -129,9 +129,12 @@ class NotificationIdentityTest {
         NotificationIdentity identity = NotificationIdentity.masked(names, ips);
         for (String type : NotificationRoute.TYPES) {
             if (type.equals("security_scan")) continue;
-            for (String line : NotificationMailRouter.collect(fixture(), type, 10, FROM, identity).lines()) {
+            NotificationMailRouter.Batch batch = NotificationMailRouter.collect(fixture(), type, 10, FROM, identity);
+            NotificationMailTemplate.RenderedMail mail = NotificationMailTemplate.render(type, batch);
+            for (String line : batch.lines()) {
                 for (String forbidden : FORBIDDEN) {
                     assertFalse(line.contains(forbidden), type + " leaked " + forbidden + ": " + line);
+                    assertFalse(mail.html().contains(forbidden), type + " HTML leaked " + forbidden);
                 }
             }
         }

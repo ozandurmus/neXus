@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -12,12 +13,27 @@ import java.util.Set;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-/** Projection of the local scanner's atomic summary files: counts plus a bounded HIGH/MEDIUM identity list. No source, matches or secrets. */
+/** Projection of the local scanner's atomic summary files: counts, a bounded HIGH/CRITICAL/MEDIUM identity list and scan errors, structured for the HTML template. No source, matches or secrets. */
 final class SecurityScanSummary {
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final List<String> TOOLS = List.of("semgrep", "gitleaks", "trivy", "zap");
-    private static final List<String> SEVERITIES = List.of("UNKNOWN", "INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL");
-    private static final List<String> COUNTS = List.of("new", "fixed", "accepted", "existing");
+    static final List<String> TOOLS = List.of("semgrep", "gitleaks", "trivy", "zap");
+    static final List<String> SEVERITIES = List.of("UNKNOWN", "INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL");
+    static final List<String> COUNTS = List.of("new", "fixed", "accepted", "existing");
+
+    record CountCell(int newCount, int fixed, int accepted, int existing) {
+        boolean allZero() {
+            return newCount == 0 && fixed == 0 && accepted == 0 && existing == 0;
+        }
+    }
+
+    record ReviewItem(String id, String pkg, String status) {}
+
+    record AcceptedReview(boolean attention, int fixAvailable, int dueSoon, int pastReview, int notReported,
+            List<ReviewItem> items) {}
+
+    record ScanReport(Instant generatedAt, int scanErrors, int blocking, boolean passed,
+            Map<String, Map<String, CountCell>> counts, List<Finding> findings, AcceptedReview acceptedReview,
+            List<Failed> failed) {}
 
     private SecurityScanSummary() {}
 
@@ -109,7 +125,10 @@ final class SecurityScanSummary {
 
     static NotificationMailRouter.Batch collect(Path directory, Instant from) throws IOException {
         List<String> lines = new ArrayList<>();
+        List<List<String>> rows = new ArrayList<>();
+        List<ScanReport> scans = new ArrayList<>();
         Instant newest = from;
+        Instant rowsAt = null;
         try (var paths = Files.list(directory)) {
             for (Path path : paths.sorted().toList()) {
                 if (!path.getFileName().toString().endsWith(".json")) continue;
@@ -119,25 +138,41 @@ final class SecurityScanSummary {
                 StringBuilder line = new StringBuilder(at + "  security scan");
                 line.append(" errors=").append(parsed.errors());
                 line.append(" blocking=").append(parsed.blocking());
+                Map<String, Map<String, CountCell>> countGrid = new LinkedHashMap<>();
                 for (var tool : parsed.counts().entrySet()) {
+                    Map<String, CountCell> toolMap = new LinkedHashMap<>();
                     for (var severity : tool.getValue().entrySet()) {
                         Map<String, Integer> values = severity.getValue();
+                        toolMap.put(severity.getKey(), new CountCell(values.get("new"), values.get("fixed"),
+                                values.get("accepted"), values.get("existing")));
                         if (values.values().stream().allMatch(n -> n == 0)) continue;
                         line.append("; ").append(tool.getKey()).append('/').append(severity.getKey());
                         for (var count : values.entrySet()) line.append(' ').append(count.getKey()).append('=').append(count.getValue());
                     }
+                    countGrid.put(tool.getKey(), toolMap);
                 }
                 if (!parsed.failed().isEmpty()) {
                     line.append("; scan failures");
                     for (Failed f : parsed.failed()) line.append(' ').append(f.file()).append(" (").append(f.cause()).append(')');
                 }
+                AcceptedReview review = parsed.review() == null ? null : reviewOf(parsed.review());
                 if (parsed.review() != null) appendReview(line, parsed.review());
                 appendFindings(line, parsed);
+                List<Finding> findings = parsed.findings();
+                // The mail shows the findings of the newest scan only; an older scan's list would repeat them.
+                if (rowsAt != null && at.isAfter(rowsAt)) rows.clear();
+                boolean addRows = rowsAt == null || at.isAfter(rowsAt);
+                if (addRows) rowsAt = at;
+                for (Finding finding : addRows ? findings : List.<Finding>of()) {
+                    rows.add(List.of(finding.tool(), finding.rule(), finding.severity(), finding.location(),
+                            finding.status(), finding.fixAvailable() ? "yes" : "no"));
+                }
                 lines.add(line.toString());
+                scans.add(new ScanReport(at, parsed.errors(), parsed.blocking(), parsed.passed(), countGrid, findings, review, parsed.failed()));
                 if (at.isAfter(newest)) newest = at;
             }
         }
-        return new NotificationMailRouter.Batch(lines, 0, newest, Map.of());
+        return new NotificationMailRouter.Batch(lines, rows, scans, 0, newest, Map.of());
     }
 
     /** HIGH/CRITICAL/MEDIUM list, worst and newest first (the scanner already sorts); extra rows stay in the console. */
@@ -183,6 +218,16 @@ final class SecurityScanSummary {
             String pkg = item.path("package").asText();
             if (!pkg.isEmpty()) line.append(' ').append(pkg);
         }
+    }
+
+    /** Structured view of an already validated accepted-review node. */
+    private static AcceptedReview reviewOf(JsonNode review) throws IOException {
+        List<ReviewItem> items = new ArrayList<>();
+        for (JsonNode item : review.path("items")) {
+            items.add(new ReviewItem(item.path("id").asText(), item.path("package").asText(), item.path("status").asText()));
+        }
+        return new AcceptedReview(review.path("attention").asBoolean(), number(review, "fix_available"),
+                number(review, "due_soon"), number(review, "past_review"), number(review, "not_reported"), List.copyOf(items));
     }
 
     private static int number(JsonNode node, String key) throws IOException {

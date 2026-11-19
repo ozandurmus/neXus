@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.securityexpert.nexus.ui2.service.notification.MailBrand;
+import com.securityexpert.nexus.ui2.service.notification.NotificationMailTemplate;
 import com.securityexpert.nexus.ui2.service.notification.NotificationSettings;
 import com.securityexpert.nexus.ui2.service.notification.NotificationRoute;
 import com.securityexpert.nexus.ui2.service.notification.NotificationSettingsStore;
@@ -91,9 +93,11 @@ public final class NotificationSettingsController {
                 .map(r -> r.effectiveRecipients(settings)).orElse(List.of());
         Map<String, Object> body = new LinkedHashMap<>();
         try {
+            NotificationMailTemplate.RenderedMail mail = NotificationMailTemplate.renderSample(
+                    type == null ? "admin_event" : type);
             SmtpRelaySender.send(settings, recipients,
-                    type == null ? com.securityexpert.nexus.ui2.service.notification.MailBrand.name() + " notification test" : com.securityexpert.nexus.ui2.service.notification.MailBrand.name() + " – " + type + ": test digest",
-                    "This is a sample " + com.securityexpert.nexus.ui2.service.notification.MailBrand.name() + " " + (type == null ? "notification" : type) + " digest.\n");
+                    type == null ? MailBrand.name() + " notification test" : mail.subject(),
+                    mail.text(), mail.html());
             body.put("sent", true);
             body.put("detail", "accepted by the relay for " + recipients.size() + " recipient(s)");
         } catch (java.io.IOException | RuntimeException e) {
