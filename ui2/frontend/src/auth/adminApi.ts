@@ -4994,3 +4994,132 @@ export function getPolicyInstallStatus(params: {
   const suffix = qs.toString();
   return call(`/api/v2/operations/policy-install/status${suffix ? `?${suffix}` : ""}`, "GET");
 }
+
+// ---- Operations > Static routes, Phase R0 (OPERATIONS_STATIC_ROUTE_R0_READ_COMMANDS_2026_11_18.md, APPROVED) ----
+export interface StaticRouteTargetOption {
+  readonly unit_id: string;
+  readonly device_id: string;
+  readonly cluster_id: string | null;
+  readonly target_label: string;
+  readonly vendor: "check_point" | "palo_alto" | "cisco_asa";
+  readonly ha_role: string;
+  readonly routing_contexts: readonly string[];
+  readonly interfaces: readonly string[];
+}
+
+export interface StaticRoutePreCheckRow {
+  readonly check_number: number;
+  readonly check_id: string;
+  readonly stage: string;
+  readonly status: "PASS" | "FAIL" | "WARN" | "UNKNOWN";
+  readonly reason_code: string;
+  readonly detail: string;
+}
+
+export interface StaticRouteBeforePath {
+  readonly representative_host: string;
+  readonly verdict: string;
+  readonly reason_code: string;
+  readonly selected_prefix: string | null;
+  readonly next_hop_ip: string | null;
+  readonly egress_interface: string | null;
+  readonly protocol: string | null;
+  readonly digest: string | null;
+}
+
+export interface StaticRoutePreviewStep {
+  readonly step_no: number;
+  readonly phase: string;
+  readonly member_device_id: string;
+  readonly member_label: string;
+  readonly command_text: string;
+  readonly command_sha256: string;
+}
+
+export interface StaticRouteCommandPlan {
+  readonly gate_version: string;
+  readonly request_digest: string;
+  readonly mutation_possible: false;
+  readonly note: string;
+  readonly forward_steps: readonly StaticRoutePreviewStep[];
+  readonly approved_command_sha256_set: readonly string[];
+  readonly inverse_steps: readonly StaticRoutePreviewStep[];
+  readonly inverse_command_sha256_set: readonly string[];
+}
+
+export interface StaticRoutePreviewRecord {
+  readonly preview_id: string;
+  readonly idempotency_key: string;
+  readonly requested_at: string;
+  readonly completed_at: string | null;
+  readonly requested_by: string | null;
+  readonly unit_id: string;
+  readonly target_device_id: string;
+  readonly target_label: string;
+  readonly vendor: string;
+  readonly routing_context: string;
+  readonly operation: "ADD" | "DELETE";
+  readonly destination_prefix: string;
+  readonly next_hop_ip: string;
+  readonly interface_name: string | null;
+  readonly distance: number | null;
+  readonly metric: number | null;
+  readonly priority: number | null;
+  readonly route_name: string | null;
+  readonly device_comment: string | null;
+  readonly representative_host: string;
+  readonly change_ticket_ref: string | null;
+  readonly reason: string | null;
+  readonly job_id: string | null;
+  readonly job_state: string | null;
+  readonly state: "QUEUED" | "RUNNING" | "DONE" | "STOPPED";
+  readonly verdict: "PENDING" | "PASS" | "FAIL" | "UNKNOWN";
+  readonly stop_code: string | null;
+  readonly mutation_possible: false;
+  readonly preview_badge: string;
+  readonly pre_route_table_sha256: string | null;
+  readonly pre_checks: readonly StaticRoutePreCheckRow[];
+  readonly before_path: StaticRouteBeforePath | null;
+  readonly command_plan: StaticRouteCommandPlan | null;
+  readonly inverse_plan: readonly StaticRoutePreviewStep[];
+}
+
+export interface StaticRoutePreviewListResponse {
+  readonly preview_badge: string;
+  readonly mutation_possible: false;
+  readonly targets: readonly StaticRouteTargetOption[];
+  readonly previews: readonly StaticRoutePreviewRecord[];
+}
+
+export interface StaticRoutePreviewInput {
+  readonly idempotency_key: string;
+  readonly unit_id: string;
+  readonly vendor?: string;
+  readonly routing_context: string;
+  readonly operation: "ADD" | "DELETE";
+  readonly destination_prefix: string;
+  readonly next_hop_ip: string;
+  readonly interface_name?: string;
+  readonly distance?: number;
+  readonly metric?: number;
+  readonly priority?: number;
+  readonly route_name?: string;
+  readonly device_comment?: string;
+  readonly representative_host?: string;
+  readonly change_ticket_ref?: string;
+  readonly reason?: string;
+}
+
+const STATIC_ROUTE_PREVIEW_BASE = "/api/v2/operations/static-route/preview";
+
+export function listStaticRoutePreviews(): Promise<StaticRoutePreviewListResponse> {
+  return call(STATIC_ROUTE_PREVIEW_BASE, "GET");
+}
+
+export function getStaticRoutePreview(previewId: string): Promise<StaticRoutePreviewRecord> {
+  return call(`${STATIC_ROUTE_PREVIEW_BASE}/${encodeURIComponent(previewId)}`, "GET");
+}
+
+export function submitStaticRoutePreview(input: StaticRoutePreviewInput): Promise<StaticRoutePreviewRecord> {
+  return call(STATIC_ROUTE_PREVIEW_BASE, "POST", input);
+}

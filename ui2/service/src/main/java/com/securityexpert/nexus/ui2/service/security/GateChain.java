@@ -215,6 +215,7 @@ public final class GateChain {
                 || ActionRegistry.POLICY_READ.equals(actionId)
                 || ActionRegistry.PATH_ANALYSIS_READ.equals(actionId)
                 || ActionRegistry.PATH_ANALYSIS_VALIDATE.equals(actionId)
+                || ActionRegistry.STATIC_ROUTE_PREVIEW.equals(actionId)
                 || ActionRegistry.REPORT_READ.equals(actionId)
                 || ActionRegistry.REPORT_GENERATE.equals(actionId));
     }

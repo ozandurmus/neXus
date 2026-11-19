@@ -58,6 +58,7 @@ public final class WorkerClaimLoop {
             com.securityexpert.nexus.ui2.jobs.supportbundle.FgtSupportBundle.CAPABILITY,
             com.securityexpert.nexus.ui2.jobs.systemlog.CpSpikeLayoutReview.CAPABILITY,
             com.securityexpert.nexus.ui2.jobs.pathvalidation.PathValidation.CAPABILITY,
+            com.securityexpert.nexus.ui2.jobs.staticroute.StaticRoutePreview.CAPABILITY,
             ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO,
             ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS, BackupCapabilityIds.HTTPS_VENDOR_BACKUP,
             ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA, InventoryCapabilityIds.ASA_INVENTORY_COLLECT, BackupCapabilityIds.ASA_CONFIG_BACKUP,
@@ -257,6 +258,11 @@ public final class WorkerClaimLoop {
     public WorkerClaimLoop withPathValidation(com.securityexpert.nexus.ui2.worker.pathvalidation.PathValidationJobExecutor executor) {
         this.pathValidationExecutor=executor; return this;
     }
+    private com.securityexpert.nexus.ui2.worker.staticroute.StaticRoutePreviewJobExecutor staticRoutePreviewExecutor;
+    /** Operations static route phase R0: approved CLASS_0 reads, Stage B pre-checks, before-path lookup, and command preview. */
+    public WorkerClaimLoop withStaticRoutePreview(com.securityexpert.nexus.ui2.worker.staticroute.StaticRoutePreviewJobExecutor executor) {
+        this.staticRoutePreviewExecutor=executor; return this;
+    }
     private com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerDiagnosticJobExecutor diagnosticJobExecutor;
 
     public WorkerClaimLoop withFortiManagerDiagnostic(
@@ -412,7 +418,8 @@ public final class WorkerClaimLoop {
             || capability.equals(com.securityexpert.nexus.ui2.jobs.supportbundle.AsaSupportBundle.CAPABILITY)
             || capability.equals(com.securityexpert.nexus.ui2.jobs.supportbundle.FgtSupportBundle.CAPABILITY)
             || capability.equals(com.securityexpert.nexus.ui2.jobs.systemlog.CpSpikeLayoutReview.CAPABILITY)
-            || capability.equals(com.securityexpert.nexus.ui2.jobs.pathvalidation.PathValidation.CAPABILITY) ? "DIAGNOSTIC" : "INVENTORY";
+            || capability.equals(com.securityexpert.nexus.ui2.jobs.pathvalidation.PathValidation.CAPABILITY)
+            || capability.equals(com.securityexpert.nexus.ui2.jobs.staticroute.StaticRoutePreview.CAPABILITY) ? "DIAGNOSTIC" : "INVENTORY";
     }
 
     private static final System.Logger LOGGER = System.getLogger(WorkerClaimLoop.class.getName());
@@ -726,6 +733,16 @@ public final class WorkerClaimLoop {
                         com.securityexpert.nexus.ui2.jobs.JobState.REJECTED,"system:worker","path_validation_claim_check","EXECUTOR_UNAVAILABLE");
                 } else {
                     pathValidationExecutor.execute(claimed.jobId(),claimed.leaseEpoch(),job.targetDeviceId(),
+                        hostOf(endpoint.addressRef()),portOf(endpoint.addressRef()),device.credentialReferenceId());
+                }
+                return true;
+            }
+            if (com.securityexpert.nexus.ui2.jobs.staticroute.StaticRoutePreview.CAPABILITY.equals(job.capabilityId())) {
+                if (staticRoutePreviewExecutor == null) {
+                    leaseRepository.transitionState(claimed.jobId(),claimed.leaseEpoch(),com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
+                        com.securityexpert.nexus.ui2.jobs.JobState.REJECTED,"system:worker","static_route_preview_claim_check","EXECUTOR_UNAVAILABLE");
+                } else {
+                    staticRoutePreviewExecutor.execute(claimed.jobId(),claimed.leaseEpoch(),job.targetDeviceId(),
                         hostOf(endpoint.addressRef()),portOf(endpoint.addressRef()),device.credentialReferenceId());
                 }
                 return true;

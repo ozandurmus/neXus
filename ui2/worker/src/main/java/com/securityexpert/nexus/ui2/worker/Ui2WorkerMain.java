@@ -463,6 +463,11 @@ public final class Ui2WorkerMain {
                 leaseRepository, attemptRepository, deviceRepository, deviceInventoryRepository, platformFactsRepository,
                 strictFailoverSsh, panTransport, panCredentialResolver, gateRegistry,
                 new com.securityexpert.nexus.ui2.persistence.pathvalidation.JooqPathValidationRepository(transactionBoundary));
+        // Operations static route phase R0 (V252): approved CLASS_0 reads, Stage B pre-checks, before-path lookup, and command preview.
+        var staticRoutePreviewExecutor = new com.securityexpert.nexus.ui2.worker.staticroute.StaticRoutePreviewJobExecutor(
+                leaseRepository, attemptRepository, deviceRepository, deviceInventoryRepository, platformFactsRepository,
+                strictFailoverSsh, panTransport, panCredentialResolver, gateRegistry,
+                new com.securityexpert.nexus.ui2.persistence.staticroute.JooqStaticRoutePreviewRepository(transactionBoundary));
         var credentialCanaryExecutor = new com.securityexpert.nexus.ui2.worker.backup.CredentialCanaryJobExecutor(
                 leaseRepository, attemptRepository, deviceEnrollmentReadPort, compositeTransport,
                 new com.securityexpert.nexus.ui2.worker.backup.CredentialFailureReporter(credentialFailureAlerts));
@@ -532,6 +537,7 @@ public final class Ui2WorkerMain {
                     .withCpSpikeLayoutReview(cpSpikeLayoutReviewExecutor)
                     .withCredentialCanary(credentialCanaryExecutor)
                     .withPathValidation(pathValidationExecutor)
+                    .withStaticRoutePreview(staticRoutePreviewExecutor)
                     .withPolicyCollection(policyCollectionExecutor)
                     .withRole(role, policyFallback, backupFallback)
                     .withRuntimeAdmission(endpointAdmission, moduleRuntime);

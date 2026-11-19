@@ -123,9 +123,13 @@ class PathValidationFenceTest {
         // V247 (FortiGate failover readiness) is V212's mapping plus one failover capability and nothing else.
         String v247 = caseBody(Files.readString(migrations.resolve("V247__fgt_failover_readiness.sql")));
         assertEquals(v212.replace("'asa_cluster_failover') THEN 'failover'", "'asa_cluster_failover','fgt_failover_readiness') THEN 'failover'"), v247);
+        // V252 (static route R0 preview) is V247's mapping plus one diagnostics capability and nothing else.
+        String v251 = caseBody(Files.readString(migrations.resolve("V252__static_route_r0_preview.sql")));
+        assertEquals(v247.replace("'path_validation') THEN 'diagnostics'", "'path_validation','static_route_preview') THEN 'diagnostics'"), v251);
         try (var files = Files.list(migrations)) {
             assertEquals(List.of("V178__pan_config_sync_remediation.sql", "V188__path_analysis_validation.sql",
-                    "V207__credential_failure_alert.sql", "V212__asa_failover_readiness.sql", "V247__fgt_failover_readiness.sql"),
+                    "V207__credential_failure_alert.sql", "V212__asa_failover_readiness.sql",
+                    "V247__fgt_failover_readiness.sql", "V252__static_route_r0_preview.sql"),
                     files.map(p -> p.getFileName().toString()).filter(n -> {
                         try {
                             return Files.readString(migrations.resolve(n)).contains("CREATE OR REPLACE FUNCTION ui2_job_module")

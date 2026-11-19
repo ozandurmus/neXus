@@ -270,3 +270,15 @@ Per `AGENTS.md` ("Automated validation and real-environment validation are separ
 5. **Q5 (Post-check Traffic and ARP enforcement — Check 10):** In `POSTCHECK` on the new Active unit, should a traffic rate (`show traffic`) below `50%` of the `pre` Active baseline **(a) block the run (`FAIL` -> `STOPPED` / `OUTCOME_UNKNOWN` + incident, matching Check Point Check 8) while ARP (`show arp statistics`) stays informational**, or **(b) keep both Traffic and ARP informational (`WARN`)** while Check 7 (`show conn count` session carry) serves as the blocking continuity gate?
 6. **Q6 (Switch-confirmation poll budget):** Do you approve the **120-second poll budget** (`show failover` every `3 s`, up to `40` polls per member across new SSH connections, vs `60 s` / `21` polls on CP/PAN) to accommodate TCP/SSH reconnects across the swapped management IPs and ASA's `Active Drain -> Active Applying Config -> Active` transition?
 7. **Q7 (Pilot pair and maintenance window):** Do you approve `FW-FOXTROT-07` (masked cluster `CLS-TANGO-01`) as the first attended pilot pair once the contract is frozen and implemented, and which maintenance window should be targeted?
+
+## 11. PO answers (chat 2026-11-18, ~13:50)
+
+- **Q1 approved:** "Onaylıyorum" -- the write literal `no failover active` (gate `asa_failover_inactive_switch`, CLASS_2, privileged
+  EXEC, 30 s, retry none, once per execution run on the verified Active unit) and the widened `max_frequency` of the signed-off ASA reads
+  for PRECHECK, switch-confirmation polling and POSTCHECK, as stated in §3.3 and Q1. The gate row is written when the contract is frozen.
+- **Q2:** Release 1 is **single context mode only** ("Sadece single"); multiple context mode is refused `UNSUPPORTED_MODE` as readiness does.
+- **Q5:** **(b) informational only** ("Sadece uyarı"): post-switch Traffic and ARP (Check 10) are `WARN` when below the pre baseline;
+  Check 7 (`show conn count` session carry) is the blocking continuity gate.
+- Still open: Q3 (session-dropping dispatch state, needs the decision council and code review per the 2026-11-13 phase-0 record), Q4
+  (request-time readiness freshness bound), Q6 (120 s poll budget), Q7 (pilot pair and window). The contract stays DRAFT until those are
+  answered.

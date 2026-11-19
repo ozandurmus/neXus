@@ -158,7 +158,10 @@ class AuditCoverageCompletenessTest {
                     + "row is audited; no trigger by decision (transient plan, registered tier 2)"),
             Map.entry("cp_domain_server_placement", "V197 (abb07013): parsed from the already-gated show-domains read "
                     + "and replaced per source on every policy collection, never operator-written; the jobs row is "
-                    + "audited"));
+                    + "audited"),
+            Map.entry("static_route_preview", "V252: derived R0 static-route preview record (zero writes, mutation_possible "
+                    + "constrained to false); the request is recorded in authz_decisions and the job through the jobs "
+                    + "audit trigger; no trigger so route prefixes and next-hops are never captured into audit_log"));
 
     static final Set<String> AUDIT_TRIGGER_EXCLUSIONS = union(CONTRACT_EXCLUSIONS,
             AUDITED_BY_NAMED_TRIGGER.keySet(), NOT_MUTATION_BEARING.keySet());

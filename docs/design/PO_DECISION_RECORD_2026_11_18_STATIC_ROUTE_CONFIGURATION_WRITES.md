@@ -1,11 +1,12 @@
-# PO decision record -- 2026-11-18: static route configuration writes (proposed carve-out)
+# PO decision record -- 2026-11-18: static route configuration writes (carve-out)
 
 ## Status
 
-**PROPOSED -- AWAITING PO RATIFICATION.** Drafted 2026-11-18 from `OPERATIONS_STATIC_ROUTE_CHANGE_CONTRACT_DRAFT_2026_11_17.md` (DRAFT)
-section 1.4 and the PO's chat answers of 2026-11-18. Until the PO ratifies this record, `docs/AI_DEVELOPMENT_PROTOCOL.md` and `AGENTS.md`
-are unchanged and static route configuration writes stay prohibited. This record approves no command literal, no code, no migration, no
-`gate_registry` row and no switch. No device or host was contacted while writing it.
+**RATIFIED -- PRODUCT OWNER DECISION, 2026-11-18** (chat, answering "Route yazma karar kaydı ... Onaylıyor musun?" with
+"Onaylıyorum"). Sections 2.1-2.3 are applied to `docs/AI_DEVELOPMENT_PROTOCOL.md` and `AGENTS.md` in the same change (wording
+condensed, same conditions). This record still approves no command literal, no code, no migration, no `gate_registry` row and no
+switch: R1 write literals need the PO's literal-by-literal sign-off and the static route contract must be FROZEN first. Drafted from
+`OPERATIONS_STATIC_ROUTE_CHANGE_CONTRACT_DRAFT_2026_11_17.md` section 1.4. No device or host was contacted.
 
 ## 1. What is asked
 
