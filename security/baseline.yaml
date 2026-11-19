@@ -261,6 +261,15 @@
       "review_date": "2026-11-28"
     },
     {
+      "tool": "gitleaks",
+      "rule": "generic-api-key",
+      "location": "ui2/platform-core/src/test/java/com/securityexpert/nexus/ui2/platform/PacketAnalysisPathsTest.java",
+      "commit": "9b3f35e0ebc79022036f880fcf3cf6e82e31ac43",
+      "reason": "History finding only: commit 9b3f35e0 carried two UUID-shaped synthetic test ids (a capture storage key and a case id), never a credential. a5938532 replaced them with ids derived at runtime; the current tree has no finding. Accepted by commit without rewriting history, like the BackupDeviationServiceTest precedent (b71e4148).",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
       "tool": "trivy",
       "rule": "CVE-2026-114938",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: java-21-openjdk-headless",
