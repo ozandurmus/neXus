@@ -92,8 +92,8 @@ public final class NotificationSettingsController {
         Map<String, Object> body = new LinkedHashMap<>();
         try {
             SmtpRelaySender.send(settings, recipients,
-                    type == null ? "neXus notification test" : "neXus – " + type + ": test digest",
-                    "This is a sample neXus " + (type == null ? "notification" : type) + " digest.\n");
+                    type == null ? com.securityexpert.nexus.ui2.service.notification.MailBrand.name() + " notification test" : com.securityexpert.nexus.ui2.service.notification.MailBrand.name() + " – " + type + ": test digest",
+                    "This is a sample " + com.securityexpert.nexus.ui2.service.notification.MailBrand.name() + " " + (type == null ? "notification" : type) + " digest.\n");
             body.put("sent", true);
             body.put("detail", "accepted by the relay for " + recipients.size() + " recipient(s)");
         } catch (java.io.IOException | RuntimeException e) {

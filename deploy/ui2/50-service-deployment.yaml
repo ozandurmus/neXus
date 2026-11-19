@@ -101,6 +101,9 @@ spec:
             # (restart required). The 2026-11-11 safeties (45 min ceiling, no retry, failure alert) stay.
             - name: UI2_CP_MDS_EXPORT_SCHEDULE
               value: "true"
+            # PO 2026-11-18: notification mail is sent as "Overwatch" (From display name and subject prefix).
+            - name: UI2_MAIL_PRODUCT_NAME
+              value: "Overwatch"
             # BK-11: the distinct backup credential (Admin > Credentials: Backup-User-LDAP), never the collection credential.
             - name: UI2_CP_BACKUP_CREDENTIAL_REF
               value: "a5c22471-26af-4cb1-a13e-090311c88c96"
