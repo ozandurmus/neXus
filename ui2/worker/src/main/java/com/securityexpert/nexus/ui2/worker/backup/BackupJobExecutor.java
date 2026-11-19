@@ -115,6 +115,18 @@ public final class BackupJobExecutor {
         return this;
     }
 
+    /**
+     * Called with (storage reference, manifest artefact id) once a backup's manifest row is on record, so a row derived
+     * while the bundle was written (the ASA saved-state relation) can be re-keyed to the id the manifest uses. Best
+     * effort; unset (tests, the CLI), nothing happens.
+     */
+    private java.util.function.BiConsumer<String, String> manifestRecordedHook = (storageRef, artefactId) -> { };
+
+    public BackupJobExecutor withManifestRecordedHook(java.util.function.BiConsumer<String, String> hook) {
+        this.manifestRecordedHook = Objects.requireNonNull(hook, "hook");
+        return this;
+    }
+
     /** V207: the credential failure alert; unset (tests, the CLI), nothing is recorded. */
     private CredentialFailureReporter credentialAlerts = CredentialFailureReporter.none();
 
@@ -514,6 +526,12 @@ public final class BackupJobExecutor {
                     ArtefactValidation.reachedWithoutRestore(BACKUP_VALIDATION_LEVEL), BACKUP_RETENTION_TIER,
                     Optional.empty(), artefact.ref().value(), Optional.of(deviationState), backupType);
             manifestRepository.record(manifest, ACTOR, ACTION_MANIFEST_RECORDED);
+            try {
+                manifestRecordedHook.accept(artefact.ref().value(), artefactId);
+            } catch (RuntimeException e) {
+                com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+                LOG.warning("[BACKUP] manifest hook failed: " + e.getClass().getSimpleName());
+            }
             checkSizeAnomaly(artefactId);
 
             // Retention is not run here. The worker's hourly RetentionPruningService.prune reads the backup_policy row

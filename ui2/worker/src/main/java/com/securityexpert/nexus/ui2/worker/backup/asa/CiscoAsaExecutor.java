@@ -504,9 +504,9 @@ public final class CiscoAsaExecutor {
                     running == null ? null : new String(running, StandardCharsets.UTF_8),
                     startup == null ? null : new String(startup, StandardCharsets.UTF_8));
             LOG.log(System.Logger.Level.INFO,
-                    "[ASA_CONFIG_RELATION] device={0} result={1} compared={2} differing={3} equal_by_mask={4}",
+                    "[ASA_CONFIG_RELATION] device={0} result={1} compared={2} differing={3} equal_by_mask={4} keywords={5}",
                     deviceId, relation.result(), relation.linesCompared(), relation.linesDiffering(),
-                    relation.linesEqualOnlyByMask());
+                    relation.linesEqualOnlyByMask(), relation.differingKeywords());
             relationSink.record(deviceId, artefactId, relation);
         } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);

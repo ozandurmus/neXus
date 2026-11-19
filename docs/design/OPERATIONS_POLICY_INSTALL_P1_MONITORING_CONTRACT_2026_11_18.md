@@ -120,6 +120,22 @@ relation `MATCH` with no newer `change_state = 'changed'` run is `SAVED`; `MISMA
 newer changed run, `NOT_EVALUABLE`, or a backup with no stored relation (taken before V250) is `UNKNOWN` with the reason
 naming which. Assumption to confirm on a real unit: the ASA prints stored keys as `*****` in `show startup-config`.
 
+**Amendment 2026-11-19: key and comparison fixed (live evidence: 0 of 12 relation rows joined; 7 of 12 showed
+2040-20775 differing lines).** Two defects. (1) The relation row was keyed by the storage reference of the stored bundle
+(the value the manifest keeps in `backup_artefact.recovery_volume_path`), but the service joins `backup_artefact.artefact_id`,
+a different random id, so no row ever joined and every ASA read "not measured". The worker now records the row under the
+storage reference while the bundle is written and, as soon as the manifest row exists, re-keys it to the manifest's
+`artefact_id` (`linkManifest`); V253 re-keys the existing rows through `recovery_volume_path`. (2) The in-order
+comparison cascaded after one inserted or removed line. The normalized lines are now aligned with a Myers diff (exact up
+to an edit distance of 2500, beyond that an order-free multiset difference, so cost stays bounded);
+`lines_differing` is inserted plus deleted lines (a changed line counts 2), and a deleted running line and an inserted
+startup line of the same change that are equal once the mask is applied count as one equal-by-mask pair. V253 adds
+`differing_keywords` (jsonb): the top 10 command keywords of the differing lines with counts. The keyword is the first
+word of the line's top-level command (sub-lines of a block count under their block, so a certificate's hex rows count
+under `crypto`); a word that is not a plain lower-case command word becomes `other`. Counts only: no line or value is
+stored or logged, and the `[ASA_CONFIG_RELATION]` log line carries the same counts. Purpose: tell real unsaved changes
+from read-format noise (for example blocks or defaults shown only by `more system:running-config`).
+
 ### 3.4 FortiGate (`fortinet`) and FortiManager — Council Fix (b) & (c)
 
 - **Directly managed FortiGate gateways (`vendor_hint = 'fortinet'`, `role in ('gateway', 'firewall')`):**

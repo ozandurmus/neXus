@@ -72,7 +72,7 @@ class AsaConfigRelationTest {
         AsaConfigRelation r = AsaConfigRelation.compare(running("interface Gi0/0", " nameif inside"),
                 startup("interface Gi0/0", " nameif outside"));
         assertEquals(Result.MISMATCH, r.result());
-        assertEquals(1, r.linesDiffering());
+        assertEquals(2, r.linesDiffering(), "a changed line is one deleted plus one inserted line");
     }
 
     @Test
@@ -89,5 +89,74 @@ class AsaConfigRelationTest {
         assertEquals(Result.NOT_EVALUABLE, AsaConfigRelation.compare(running("a"), "").result());
         assertEquals(Result.NOT_EVALUABLE, AsaConfigRelation.compare(running("a"), "ERROR: no configuration\n").result());
         assertEquals(Result.NOT_EVALUABLE, AsaConfigRelation.compare("hostname FW-TANGO-04\n", startup("a")).result());
+    }
+
+    @Test
+    void oneInsertedLineIsOneDifferenceNotACascade() {
+        String[] base = new String[400];
+        for (int i = 0; i < base.length; i++) {
+            base[i] = "object network host-" + i;
+        }
+        String[] shifted = new String[base.length + 1];
+        System.arraycopy(base, 0, shifted, 0, 10);
+        shifted[10] = "snmp-server enable";
+        System.arraycopy(base, 10, shifted, 11, base.length - 10);
+        AsaConfigRelation r = AsaConfigRelation.compare(running(shifted), startup(base));
+        assertEquals(Result.MISMATCH, r.result());
+        assertEquals(1, r.linesDiffering());
+        assertEquals(java.util.Map.of("snmp-server", 1), r.differingKeywords());
+    }
+
+    @Test
+    void oneRemovedLineAndMaskedKeysTogether() {
+        AsaConfigRelation r = AsaConfigRelation.compare(
+                running("a", "b", "c", "username admin password " + CLEAR_KEY + " privilege 15", "d"),
+                startup("a", "c", "username admin password " + M + " privilege 15", "d"));
+        assertEquals(1, r.linesDiffering());
+        assertEquals(1, r.linesEqualOnlyByMask());
+    }
+
+    @Test
+    void certificateBlockDifferencesCountUnderTheirCommandNeverByValue() {
+        String hex1 = "  3082" + CLEAR_KEY + "aa";
+        String hex2 = "  3082" + CLEAR_KEY_2 + "bb";
+        AsaConfigRelation r = AsaConfigRelation.compare(
+                running("crypto ca certificate chain TP-1", " certificate ca 0a1b", hex1, hex2, "  quit", "object network o1"),
+                startup("crypto ca certificate chain TP-1", " certificate ca 0a1b", "  quit", "object network o1"));
+        assertEquals(Result.MISMATCH, r.result());
+        assertEquals(2, r.linesDiffering());
+        assertEquals(java.util.Map.of("crypto", 2), r.differingKeywords());
+        assertEquals(false, r.differingKeywords().toString().contains(CLEAR_KEY));
+    }
+
+    @Test
+    void aValueIsNeverAKeywordAndNoSkipsToTheCommand() {
+        AsaConfigRelation r = AsaConfigRelation.compare(
+                running("no access-list x", "Zq9-Key" + CLEAR_KEY, "object network a"),
+                startup("object network a"));
+        assertEquals(java.util.Map.of("access-list", 1, "other", 1), r.differingKeywords());
+    }
+
+    @Test
+    void aMovedBlockIsBoundedAndNotACascade() {
+        java.util.List<String> a = new java.util.ArrayList<>();
+        java.util.List<String> b = new java.util.ArrayList<>();
+        for (int i = 0; i < 6000; i++) {
+            a.add("access-list acl-" + i + " permit ip any any");
+            b.add("access-list acl-" + (5999 - i) + " permit ip any any");
+        }
+        AsaConfigRelation r = AsaConfigRelation.compare(running(a.toArray(String[]::new)), startup(b.toArray(String[]::new)));
+        // beyond the exact bound: the order-free fallback; the same lines are present, so nothing differs
+        assertEquals(Result.MATCH, r.result());
+    }
+
+    @Test
+    void keywordsAreTheTopTenOnly() {
+        String[] extra = new String[15];
+        for (int i = 0; i < extra.length; i++) {
+            extra[i] = "cmd" + (char) ('a' + i) + " x";
+        }
+        AsaConfigRelation r = AsaConfigRelation.compare(running(extra), startup("same"));
+        assertEquals(10, r.differingKeywords().size());
     }
 }

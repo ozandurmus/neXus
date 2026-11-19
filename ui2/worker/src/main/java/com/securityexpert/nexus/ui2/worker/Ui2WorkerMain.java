@@ -321,6 +321,7 @@ public final class Ui2WorkerMain {
                 paloAltoBackupExecutor, deviationEngine, backupArtefactManifestRepository,
                 backupEndpointEligibilityRepository, hostnameFingerprint, artefactStoreRoot.toString(), contentListing);
         backupJobExecutor.withPlatformFacts(platformFactsRepository);
+        backupJobExecutor.withManifestRecordedHook(asaRelationLinker(transactionBoundary));
         // V180: backup size anomaly at ingest; retention keeps the last good backup until a security_admin accepts it.
         backupJobExecutor.withSizeAnomalyCheck(
                 new com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupSizeAnomalyRepository(transactionBoundary));
@@ -684,8 +685,14 @@ public final class Ui2WorkerMain {
 
     private static com.securityexpert.nexus.ui2.worker.backup.asa.AsaConfigRelationSink asaRelationSink(TransactionBoundary tx) {
         var repository = new com.securityexpert.nexus.ui2.persistence.device.JooqAsaConfigRelationRepository(tx);
-        return (deviceId, artefactId, r) -> repository.record(artefactId, deviceId, r.result().name(), r.linesCompared(),
-                r.linesDiffering(), r.linesEqualOnlyByMask());
+        return (deviceId, storageRef, r) -> repository.record(storageRef, deviceId, r.result().name(), r.linesCompared(),
+                r.linesDiffering(), r.linesEqualOnlyByMask(), r.differingKeywords());
+    }
+
+    /** Re-keys the relation row of a stored backup to the manifest's artefact id once the manifest row exists. */
+    private static java.util.function.BiConsumer<String, String> asaRelationLinker(TransactionBoundary tx) {
+        var repository = new com.securityexpert.nexus.ui2.persistence.device.JooqAsaConfigRelationRepository(tx);
+        return repository::linkManifest;
     }
 
     static String resolveRole(String[] args, String environment) {
