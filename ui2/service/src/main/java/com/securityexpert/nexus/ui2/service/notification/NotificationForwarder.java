@@ -84,6 +84,46 @@ public class NotificationForwarder {
         });
     }
 
+    /** Test mails use the newest real events: the last {@value #RECENT_TEST_ROWS} of the past seven days. */
+    static final int RECENT_TEST_ROWS = 10;
+    /** Audit-based types look back this many audit rows (primary key range, no scan). */
+    static final long RECENT_TEST_AUDIT_WINDOW = 20_000;
+
+    /**
+     * Renders a "Send test" mail for {@code type} from the newest real events of the past seven days, with the identity
+     * mode the live route uses (raw names and addresses when {@code notification_identity} is raw). Read only: no
+     * watermark or state moves. Empty when the type has no recent event (the caller then sends the synthetic sample).
+     */
+    public java.util.Optional<NotificationMailTemplate.RenderedMail> recentEventsMail(String type) {
+        NotificationSettings settings = store.read();
+        try {
+            return transactionBoundary.inTransaction(dsl -> {
+                NotificationIdentity identity = NotificationIdentity.of(settings, names, ips);
+                identity.warm(dsl);
+                Long maxAudit = dsl.fetchOne("select max(audit_id) as m from audit_log").get("m", Long.class);
+                long auditFloor = Math.max(0, (maxAudit == null ? 0 : maxAudit) - RECENT_TEST_AUDIT_WINDOW);
+                NotificationMailRouter.Batch batch;
+                try {
+                    batch = NotificationMailRouter.collect(dsl, type, auditFloor,
+                            Instant.now().minus(java.time.Duration.ofDays(7)), identity);
+                } catch (java.io.IOException | RuntimeException e) {
+                    return java.util.Optional.<NotificationMailTemplate.RenderedMail>empty();
+                }
+                if (batch.lines().isEmpty() && batch.scans().isEmpty()) return java.util.Optional.empty();
+                NotificationMailRouter.Batch recent = new NotificationMailRouter.Batch(tail(batch.lines()),
+                        tail(batch.rows()), batch.scans(), batch.audit(), batch.time(), java.util.Map.of());
+                return java.util.Optional.of(NotificationMailTemplate.render(type, recent, MailBrand.name(),
+                        MailBrand.publicBaseUrl(dsl), MailBrand.environment()));
+            });
+        } catch (RuntimeException e) {
+            return java.util.Optional.empty();
+        }
+    }
+
+    private static <T> List<T> tail(List<T> items) {
+        return items.size() <= RECENT_TEST_ROWS ? items : List.copyOf(items.subList(items.size() - RECENT_TEST_ROWS, items.size()));
+    }
+
     void forwardAudit(NotificationSettings settings) {
         long from = store.auditWatermark();
         List<Record> rows = transactionBoundary.inTransaction(dsl -> dsl.fetch(

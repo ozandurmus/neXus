@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.securityexpert.nexus.ui2.service.notification.MailBrand;
+import com.securityexpert.nexus.ui2.service.notification.NotificationForwarder;
 import com.securityexpert.nexus.ui2.service.notification.NotificationMailTemplate;
 import com.securityexpert.nexus.ui2.service.notification.NotificationSettings;
 import com.securityexpert.nexus.ui2.service.notification.NotificationRoute;
@@ -31,9 +32,17 @@ import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 public final class NotificationSettingsController {
 
     private final NotificationSettingsStore store;
+    private final org.springframework.beans.factory.ObjectProvider<NotificationForwarder> forwarder;
 
     public NotificationSettingsController(NotificationSettingsStore store) {
+        this(store, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public NotificationSettingsController(NotificationSettingsStore store,
+            org.springframework.beans.factory.ObjectProvider<NotificationForwarder> forwarder) {
         this.store = store;
+        this.forwarder = forwarder;
     }
 
     @GetMapping("/api/v2/config/notifications")
@@ -93,12 +102,16 @@ public final class NotificationSettingsController {
                 .map(r -> r.effectiveRecipients(settings)).orElse(List.of());
         Map<String, Object> body = new LinkedHashMap<>();
         try {
-            NotificationMailTemplate.RenderedMail mail = NotificationMailTemplate.renderSample(
-                    type == null ? "admin_event" : type);
-            SmtpRelaySender.send(settings, recipients,
-                    type == null ? MailBrand.name() + " notification test" : mail.subject(),
-                    mail.text(), mail.html());
+            String renderType = type == null ? "admin_event" : type;
+            NotificationForwarder live = forwarder == null ? null : forwarder.getIfAvailable();
+            java.util.Optional<NotificationMailTemplate.RenderedMail> recent = live == null
+                    ? java.util.Optional.empty() : live.recentEventsMail(renderType);
+            NotificationMailTemplate.RenderedMail mail = recent.orElseGet(() -> NotificationMailTemplate.renderSample(renderType));
+            String subject = type == null ? MailBrand.name() + " notification test"
+                    : "[TEST" + (recent.isPresent() ? "" : ", sample data") + "] " + mail.subject();
+            SmtpRelaySender.send(settings, recipients, subject, mail.text(), mail.html());
             body.put("sent", true);
+            body.put("data", recent.isPresent() ? "recent_events" : "sample");
             body.put("detail", "accepted by the relay for " + recipients.size() + " recipient(s)");
         } catch (java.io.IOException | RuntimeException e) {
             body.put("sent", false);
