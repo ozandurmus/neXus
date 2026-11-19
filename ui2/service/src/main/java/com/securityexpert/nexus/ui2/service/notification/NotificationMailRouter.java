@@ -222,11 +222,23 @@ final class NotificationMailRouter {
                 }
             }
             case "config_change" -> {
-                rows = dsl.fetch("select n.notification_id, n.kind, n.summary, n.created_at, "
+                // Override notifications (CG-7d) plus every primary configuration read that differs from the previous
+                // read of the same device (change_state 'changed'); a first read is not a change. Reads look back one day at most.
+                rows = dsl.fetch("select * from ("
+                        + "select n.notification_id, n.kind, n.summary, n.created_at, "
                         + "coalesce(d.observed_hostname, n.device_id) as device_name, d.observed_hostname as observed_hostname, "
                         + "n.device_id as device_id "
                         + "from configuration_notification n left join devices d on d.device_id = n.device_id "
-                        + "where n.created_at > {0} order by n.created_at, n.notification_id", Timestamp.from(from));
+                        + "where n.created_at > {0} "
+                        + "union all "
+                        + "select r.run_id, 'configuration_changed', "
+                        + "'configuration differs from the previous read (' || r.vendor || ', ' || r.read_kind || ')', "
+                        + "r.created_at, coalesce(d.observed_hostname, r.device_id), d.observed_hostname, r.device_id "
+                        + "from device_configuration_run r left join devices d on d.device_id = r.device_id "
+                        // An old watermark (this source was added 2026-11-19) must not replay months of changes.
+                        + "where r.change_state = 'changed' and r.is_primary "
+                        + "and r.created_at > greatest({0}, now() - interval '1 day')"
+                        + ") c order by c.created_at, c.notification_id", Timestamp.from(from));
                 for (Record r : rows) {
                     Instant createdAt = at(r, "created_at");
                     newestTime = max(newestTime, createdAt);
