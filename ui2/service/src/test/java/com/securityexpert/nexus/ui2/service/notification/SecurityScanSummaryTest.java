@@ -110,6 +110,7 @@ class SecurityScanSummaryTest {
         assertEquals(2, SecurityScanSummary.parse(directory.resolve("2026-11-18-daily-abc.json")).findings().size());
         assertFalse(SecurityScanSummary.parse(directory.resolve("2026-11-17-daily-old.json")).hasFindings());
         assertFalse(old.contains("High and medium"));
+        assertEquals(2, batch.rows().size(), "the template rows come from the newest scan only");
         assertTrue(current.contains("High and medium findings: 2"));
         assertTrue(current.contains("CRITICAL new  trivy CVE-2026-0001  registry/app: libfoo  fix available"));
         assertTrue(current.contains("MEDIUM existing  semgrep rule.x  src/A.java"));
@@ -142,6 +143,10 @@ class SecurityScanSummaryTest {
         var parsed = SecurityScanSummary.parse(file);
         assertEquals("trivy-image-0.json", parsed.failed().getFirst().file());
         assertTrue(SecurityScanSummary.collect(directory, Instant.EPOCH).lines().getFirst().contains("scan failures trivy-image-0.json (scanner failed)"));
+        var mail = NotificationMailTemplate.render("security_scan", SecurityScanSummary.collect(directory, Instant.EPOCH),
+                "Overwatch", "https://overwatch.example.test", "production");
+        assertTrue(mail.text().contains("Scan errors: trivy."), mail.text());
+        assertTrue(mail.html().contains("Scan errors: trivy."));
         root.put("findings_total", 0);
         Files.writeString(file, root.toString());
         assertThrows(IOException.class, () -> SecurityScanSummary.parse(file));

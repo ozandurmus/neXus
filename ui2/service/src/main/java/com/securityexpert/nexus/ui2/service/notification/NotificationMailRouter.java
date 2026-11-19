@@ -33,16 +33,34 @@ final class NotificationMailRouter {
     private NotificationMailRouter() {}
 
     static void tick(DSLContext dsl, NotificationSettings settings, NotificationIdentity identity) {
-        tick(dsl, settings, identity, SmtpRelaySender::send);
+        tick(dsl, settings, identity, new Mailer() {
+            @Override
+            public void send(NotificationSettings s, List<String> r, String subject, String body) throws IOException {
+                SmtpRelaySender.send(s, r, subject, body);
+            }
+
+            @Override
+            public void send(NotificationSettings s, List<String> r, String subject, String textBody, String htmlBody)
+                    throws IOException {
+                SmtpRelaySender.send(s, r, subject, textBody, htmlBody);
+            }
+        });
     }
 
     @FunctionalInterface
     interface Mailer {
         void send(NotificationSettings settings, List<String> recipients, String subject, String body) throws IOException;
+
+        default void send(NotificationSettings settings, List<String> recipients, String subject, String textBody,
+                String htmlBody) throws IOException {
+            send(settings, recipients, subject, textBody);
+        }
     }
 
     static void tick(DSLContext dsl, NotificationSettings settings, NotificationIdentity identity, Mailer mailer) {
         identity.warm(dsl);
+        String baseUrl = MailBrand.publicBaseUrl(dsl);
+        String environment = MailBrand.environment();
         for (Record row : dsl.fetch("select * from notification_routes order by type")) {
             if (!Boolean.TRUE.equals(row.get("enabled", Boolean.class))) continue;
             String type = row.get("type", String.class);
@@ -71,7 +89,9 @@ final class NotificationMailRouter {
                     applyState(dsl, batch.state());
                     continue;
                 }
-                mailer.send(settings, recipients, subject(type, batch.lines().size()), digest(batch.lines()));
+                NotificationMailTemplate.RenderedMail mail = NotificationMailTemplate.render(
+                        type, batch, MailBrand.name(), baseUrl, environment);
+                mailer.send(settings, recipients, mail.subject(), mail.text(), mail.html());
                 applyState(dsl, batch.state());
                 dsl.execute("update notification_routes set watermark_audit = {0}, watermark_time = {1}, "
                         + "last_sent_at = now(), last_error = null where type = {2}", batch.audit(),
@@ -114,11 +134,21 @@ final class NotificationMailRouter {
         return body + (lines.size() > 200 ? "\nand " + (lines.size() - 200) + " more" : "") + "\n";
     }
 
-    record Batch(List<String> lines, long audit, Instant time, Map<String, String> state) {}
+    record Batch(List<String> lines, List<List<String>> rows, List<SecurityScanSummary.ScanReport> scans, long audit,
+            Instant time, Map<String, String> state) {
+        Batch(List<String> lines, long audit, Instant time, Map<String, String> state) {
+            this(lines, List.of(), List.of(), audit, time, state);
+        }
+
+        Batch(List<String> lines, List<List<String>> rows, long audit, Instant time, Map<String, String> state) {
+            this(lines, rows, List.of(), audit, time, state);
+        }
+    }
 
     static Batch collect(DSLContext dsl, String type, long audit, Instant from, NotificationIdentity identity)
             throws IOException {
         List<String> lines = new ArrayList<>();
+        List<List<String>> structuredRows = new ArrayList<>();
         Map<String, String> state = new LinkedHashMap<>();
         long newestAudit = audit;
         Instant newestTime = from;
@@ -140,7 +170,10 @@ final class NotificationMailRouter {
                     String rowPk = "device_register".equals(action) || "device_delete".equals(action)
                             ? identity.deviceKey(r.get("row_pk", String.class))
                             : identity.text(r.get("row_pk", String.class));
-                    lines.add(at(r, "occurred_at") + "  " + action + "  " + safe(rowPk));
+                    Instant occurredAt = at(r, "occurred_at");
+                    String safeRowPk = safe(rowPk);
+                    lines.add(occurredAt + "  " + action + "  " + safeRowPk);
+                    structuredRows.add(List.of(occurredAt.toString(), safe(action), safeRowPk));
                 }
             }
             case "backup_failure", "job_failure" -> {
@@ -158,24 +191,33 @@ final class NotificationMailRouter {
                         + "left join devices d on d.device_id = j.target_device_id where j.finished_at > {0} and "
                         + predicate + " order by j.finished_at, j.job_id", Timestamp.from(from));
                 for (Record r : rows) {
-                    newestTime = max(newestTime, at(r, "finished_at"));
-                    String deviceName = "cp_cluster_failover".equals(r.get("job_type", String.class))
-                            ? "CP failover unit" : "pan_cluster_failover".equals(r.get("job_type", String.class))
+                    Instant finishedAt = at(r, "finished_at");
+                    newestTime = max(newestTime, finishedAt);
+                    String jobType = r.get("job_type", String.class);
+                    String deviceName = "cp_cluster_failover".equals(jobType)
+                            ? "CP failover unit" : "pan_cluster_failover".equals(jobType)
                             ? "PAN failover unit" : safe(identity.device(r, "target_device_id"));
-                    lines.add(at(r, "finished_at") + "  " + deviceName + "  "
-                            + r.get("job_type", String.class) + ": " + safe(identity.text(r.get("terminal_reason", String.class)))
-                            + "  /operations/jobs/" + r.get("job_id", String.class));
+                    String reason = safe(identity.text(r.get("terminal_reason", String.class)));
+                    String ref = "/operations/jobs/" + r.get("job_id", String.class);
+                    lines.add(finishedAt + "  " + deviceName + "  " + jobType + ": " + reason + "  " + ref);
+                    structuredRows.add(List.of(finishedAt.toString(), deviceName, safe(jobType), reason, safe(ref)));
                 }
                 if (type.equals("backup_failure")) {
                     // V207: an open backup credential failure alert that opened, or whose failed device count changed, since the watermark.
                     for (Record r : dsl.fetch("select credential_ref_digest, failed_device_count, first_failure_at, changed_at "
                             + "from credential_failure_alert where closed_at is null and changed_at > {0} "
                             + "order by changed_at, alert_id", Timestamp.from(from))) {
-                        newestTime = max(newestTime, at(r, "changed_at"));
-                        lines.add(at(r, "changed_at") + "  backup credential " + r.get("credential_ref_digest", String.class)
-                                + " failed authentication on " + r.get("failed_device_count", Integer.class)
-                                + " device(s) since " + at(r, "first_failure_at")
-                                + "; scheduled backups for it are held  /backups");
+                        Instant changedAt = at(r, "changed_at");
+                        Instant firstFailureAt = at(r, "first_failure_at");
+                        newestTime = max(newestTime, changedAt);
+                        String digest = r.get("credential_ref_digest", String.class);
+                        Integer count = r.get("failed_device_count", Integer.class);
+                        String detail = "failed authentication on " + count
+                                + " device(s) since " + firstFailureAt
+                                + "; scheduled backups for it are held";
+                        lines.add(changedAt + "  backup credential " + digest + " " + detail + "  /backups");
+                        structuredRows.add(List.of(changedAt.toString(), "backup credential " + safe(digest),
+                                "credential_failure_alert", detail, "/backups"));
                     }
                 }
             }
@@ -186,10 +228,14 @@ final class NotificationMailRouter {
                         + "from configuration_notification n left join devices d on d.device_id = n.device_id "
                         + "where n.created_at > {0} order by n.created_at, n.notification_id", Timestamp.from(from));
                 for (Record r : rows) {
-                    newestTime = max(newestTime, at(r, "created_at"));
-                    lines.add(at(r, "created_at") + "  " + safe(identity.device(r, "device_id")) + "  "
-                            + r.get("kind", String.class) + ": " + safe(identity.text(r.get("summary", String.class)))
-                            + "  (notification " + r.get("notification_id", String.class) + ")");
+                    Instant createdAt = at(r, "created_at");
+                    newestTime = max(newestTime, createdAt);
+                    String device = safe(identity.device(r, "device_id"));
+                    String kind = r.get("kind", String.class);
+                    String summary = safe(identity.text(r.get("summary", String.class)));
+                    String notificationId = r.get("notification_id", String.class);
+                    lines.add(createdAt + "  " + device + "  " + kind + ": " + summary + "  (notification " + notificationId + ")");
+                    structuredRows.add(List.of(createdAt.toString(), device, safe(kind), summary, safe(notificationId)));
                 }
             }
             case "device_crash_file" -> {
@@ -199,12 +245,17 @@ final class NotificationMailRouter {
                         + "from device_crash_alert a left join devices d on d.device_id = a.device_id "
                         + "where a.created_at > {0} order by a.created_at, a.alert_id", Timestamp.from(from));
                 for (Record r : rows) {
-                    newestTime = max(newestTime, at(r, "created_at"));
-                    lines.add(at(r, "created_at") + "  " + safe(identity.device(r, "device_id")) + "  "
-                            + r.get("file_count", Integer.class) + " new crash/dump file(s), process "
-                            + safe(r.get("process", String.class)) + ", newest at device time "
-                            + Instant.ofEpochSecond(r.get("newest_mtime", Long.class))
-                            + "  /operations/jobs/" + r.get("job_id", String.class));
+                    Instant createdAt = at(r, "created_at");
+                    newestTime = max(newestTime, createdAt);
+                    String device = safe(identity.device(r, "device_id"));
+                    Integer fileCount = r.get("file_count", Integer.class);
+                    String process = safe(r.get("process", String.class));
+                    Instant newestMtime = Instant.ofEpochSecond(r.get("newest_mtime", Long.class));
+                    String ref = "/operations/jobs/" + r.get("job_id", String.class);
+                    lines.add(createdAt + "  " + device + "  " + fileCount + " new crash/dump file(s), process "
+                            + process + ", newest at device time " + newestMtime + "  " + ref);
+                    structuredRows.add(List.of(createdAt.toString(), device, String.valueOf(fileCount), process,
+                            newestMtime.toString(), safe(ref)));
                 }
             }
             case "backup_size_anomaly" -> {
@@ -217,10 +268,13 @@ final class NotificationMailRouter {
                         + "where d.deviation_class in ('size_anomaly', 'fleet_large', 'firewall_logs') "
                         + "and d.detected_at > {0} order by d.detected_at, d.deviation_id", Timestamp.from(from));
                 for (Record r : rows) {
-                    newestTime = max(newestTime, at(r, "detected_at"));
-                    lines.add(at(r, "detected_at") + "  " + safe(identity.device(r, "device_id")) + "  "
-                            + r.get("deviation_class", String.class) + ": " + safe(identity.text(r.get("summary", String.class)))
-                            + "  /backups");
+                    Instant detectedAt = at(r, "detected_at");
+                    newestTime = max(newestTime, detectedAt);
+                    String device = safe(identity.device(r, "device_id"));
+                    String deviationClass = r.get("deviation_class", String.class);
+                    String summary = safe(identity.text(r.get("summary", String.class)));
+                    lines.add(detectedAt + "  " + device + "  " + deviationClass + ": " + summary + "  /backups");
+                    structuredRows.add(List.of(detectedAt.toString(), device, safe(deviationClass), summary, "/backups"));
                 }
             }
             case "compliance_regression" -> {
@@ -238,9 +292,14 @@ final class NotificationMailRouter {
                         if (control.isEmpty() || status.isEmpty()) continue;
                         String key = "c:" + r.get("device_id", String.class) + ":" + control;
                         if ("PASS".equals(previous.get(key)) && "FAIL".equals(status)) {
-                            lines.add(at(r, "evaluated_at") + "  " + safe(identity.device(r, "device_id"))
-                                    + "  " + safe(control) + " PASS -> FAIL (" + safe(item.path("severity").asText())
-                                    + ")  /compliance");
+                            Instant evaluatedAt = at(r, "evaluated_at");
+                            String device = safe(identity.device(r, "device_id"));
+                            String safeControl = safe(control);
+                            String severity = safe(item.path("severity").asText());
+                            lines.add(evaluatedAt + "  " + device + "  " + safeControl
+                                    + " PASS -> FAIL (" + severity + ")  /compliance");
+                            structuredRows.add(List.of(evaluatedAt.toString(), device, safeControl,
+                                    "PASS -> FAIL", severity, "/compliance"));
                         }
                         if (!status.equals(previous.get(key))) state.put(key, status);
                     }
@@ -268,14 +327,21 @@ final class NotificationMailRouter {
                         + "where j.finished_at > {0} and j.state = 'FAILED' "
                         + "and j.terminal_reason ilike '%host key mismatch%' order by j.finished_at, j.job_id",
                         Timestamp.from(from))) {
-                    lines.add(at(r, "finished_at") + "  " + safe(identity.device(r, "target_device_id"))
-                            + "  SSH host key mismatch  /operations/jobs/" + r.get("job_id", String.class));
-                    newestTime = max(newestTime, at(r, "finished_at"));
+                    Instant finishedAt = at(r, "finished_at");
+                    String device = safe(identity.device(r, "target_device_id"));
+                    String ref = "/operations/jobs/" + r.get("job_id", String.class);
+                    lines.add(finishedAt + "  " + device + "  SSH host key mismatch  " + ref);
+                    structuredRows.add(List.of(finishedAt.toString(), device, "SSH host key mismatch", safe(ref)));
+                    newestTime = max(newestTime, finishedAt);
                 }
                 for (Record r : dsl.fetch("select job_id, finished_at from jobs where finished_at > {0} "
                         + "and terminal_reason ilike '%certificate changed%' order by finished_at, job_id", Timestamp.from(from))) {
-                    lines.add(at(r, "finished_at") + "  HTTPS certificate changed  /operations/jobs/" + r.get("job_id", String.class));
-                    newestTime = max(newestTime, at(r, "finished_at"));
+                    Instant finishedAt = at(r, "finished_at");
+                    String ref = "/operations/jobs/" + r.get("job_id", String.class);
+                    lines.add(finishedAt + "  HTTPS certificate changed  " + ref);
+                    structuredRows.add(List.of(finishedAt.toString(), "discovery / endpoint",
+                            "HTTPS certificate changed", safe(ref)));
+                    newestTime = max(newestTime, finishedAt);
                 }
                 for (var entry : byDevice.entrySet()) {
                     List<Record> recent = entry.getValue();
@@ -285,12 +351,19 @@ final class NotificationMailRouter {
                     String key = "h:" + entry.getKey();
                     String old = previous.get(key);
                     if (failed && !"unreachable".equals(old)) {
-                        lines.add(at(latest, "finished_at") + "  " + safe(identity.device(latest, "target_device_id"))
-                                + "  unreachable after three transport failures  /operations/jobs/" + latest.get("job_id", String.class));
+                        Instant finishedAt = at(latest, "finished_at");
+                        String device = safe(identity.device(latest, "target_device_id"));
+                        String ref = "/operations/jobs/" + latest.get("job_id", String.class);
+                        lines.add(finishedAt + "  " + device + "  unreachable after three transport failures  " + ref);
+                        structuredRows.add(List.of(finishedAt.toString(), device,
+                                "unreachable after three transport failures", safe(ref)));
                         state.put(key, "unreachable");
                     } else if ("unreachable".equals(old) && "COMPLETED".equals(latest.get("state", String.class))) {
-                        lines.add(at(latest, "finished_at") + "  " + safe(identity.device(latest, "target_device_id"))
-                                + "  reachable again  /operations/jobs/" + latest.get("job_id", String.class));
+                        Instant finishedAt = at(latest, "finished_at");
+                        String device = safe(identity.device(latest, "target_device_id"));
+                        String ref = "/operations/jobs/" + latest.get("job_id", String.class);
+                        lines.add(finishedAt + "  " + device + "  reachable again  " + ref);
+                        structuredRows.add(List.of(finishedAt.toString(), device, "reachable again", safe(ref)));
                         state.put(key, "reachable");
                     } else if (old == null && !failed) {
                         state.put(key, "reachable");
@@ -299,7 +372,7 @@ final class NotificationMailRouter {
             }
             default -> throw new UnhandledTypeException();
         }
-        return new Batch(lines, newestAudit, newestTime, state);
+        return new Batch(lines, structuredRows, newestAudit, newestTime, state);
     }
 
     private static Map<String, String> states(DSLContext dsl, String prefix) {
