@@ -30,6 +30,20 @@ import java.util.function.Supplier;
 @Service
 public final class PolicyInstallMonitoringService {
 
+    /**
+     * The newest backup of a device (outer alias {@code d}) with its saved-state relation. The relation is keyed by the
+     * manifest's {@code backup_artefact.artefact_id} (V253); public so the integration test runs the very same join.
+     */
+    public static final String ASA_LATEST_BACKUP_RELATION_SQL = """
+            select a.created_at, rel.relation
+            from backup_artefact a
+            left join asa_config_relation rel on rel.artefact_id = a.artefact_id
+            where a.device_id = d.device_id::text
+              and a.artefact_class = 'backup'
+            order by a.created_at desc, a.artefact_id desc
+            limit 1""";
+
+
     public static final String CONTRACT_REF =
             "docs/design/OPERATIONS_POLICY_INSTALL_P1_MONITORING_CONTRACT_2026_11_18.md";
 
@@ -764,14 +778,7 @@ public final class PolicyInstallMonitoringService {
                            b.relation,
                            cfg.latest_changed_at
                     from devices d
-                    left join lateral (
-                        select a.created_at, rel.relation
-                        from backup_artefact a
-                        left join asa_config_relation rel on rel.artefact_id = a.artefact_id
-                        where a.device_id = d.device_id::text
-                          and a.artefact_class = 'backup'
-                        order by a.created_at desc, a.artefact_id desc
-                        limit 1
+                    left join lateral (""" + ASA_LATEST_BACKUP_RELATION_SQL + """
                     ) b on true
                     left join lateral (
                         select max(r.collected_at) as latest_changed_at
