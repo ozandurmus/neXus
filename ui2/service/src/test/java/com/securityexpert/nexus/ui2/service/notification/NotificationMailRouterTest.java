@@ -93,6 +93,28 @@ class NotificationMailRouterTest {
     }
 
     @Test
+    void configChangeDigestsChangedPrimaryConfigurationReadsNotOnlyOverrides() throws Exception {
+        DSLContext create = DSL.using(SQLDialect.POSTGRES);
+        DSLContext dsl = DSL.using(new MockConnection(ctx -> {
+            String sql = ctx.sql();
+            Result<Record> result = rows(create, new String[] { "empty" });
+            if (sql.contains("configuration_notification n")) {
+                assertTrue(sql.contains("from device_configuration_run r"), sql);
+                assertTrue(sql.contains("r.change_state = 'changed' and r.is_primary"), sql);
+                result = rows(create, new String[] { "notification_id", "kind", "summary", "created_at", "device_name" },
+                        new String[] { "run-7", "configuration_changed",
+                                "configuration differs from the previous read (palo_alto, merged)", AT, "FW-BRAVO-02" });
+            }
+            return new MockResult[] { new MockResult(result.size(), result) };
+        }), SQLDialect.POSTGRES);
+        var batch = NotificationMailRouter.collect(dsl, "config_change", 0, FROM, NotificationIdentity.raw());
+        assertEquals(1, batch.lines().size());
+        assertTrue(batch.lines().getFirst().contains("FW-BRAVO-02  configuration_changed: configuration differs"));
+        var mail = NotificationMailTemplate.render("config_change", batch);
+        assertTrue(mail.html().contains("Configuration changed"), mail.html());
+    }
+
+    @Test
     void certificateChangesRaiseDeviceHealthForSuccessfulAndDiscoveryJobs() throws Exception {
         DSLContext create = DSL.using(SQLDialect.POSTGRES);
         DSLContext dsl = DSL.using(new MockConnection(ctx -> {
