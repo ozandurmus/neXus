@@ -89,6 +89,17 @@ public final class ActionRegistry {
      */
     public static final String POLICY_INSTALL_READ = "policy_install_read";
     /**
+     * OPERATIONS_STATIC_ROUTE_R0_READ_COMMANDS_2026_11_18.md (APPROVED): CLASS_0 read-only static-route preview
+     * ({@code POST /api/v2/operations/static-route/preview}); operation_admin, security_admin, and aiview (masked).
+     */
+    public static final String STATIC_ROUTE_PREVIEW = "static_route_preview";
+    /**
+     * OPERATIONS_STATIC_ROUTE_R0_READ_COMMANDS_2026_11_18.md (APPROVED): read static-route preview results
+     * ({@code GET /api/v2/operations/static-route/preview} and {@code GET /api/v2/operations/static-route/preview/*});
+     * open to authenticated operator/viewer/admin/aiview sessions (masked for aiview).
+     */
+    public static final String STATIC_ROUTE_READ = "static_route_read";
+    /**
      * V203: switches one family on or off ({@code PUT /api/v2/config/scheduled-jobs/{family}}) with a mandatory reason and,
      * inside business hours, the acknowledgement; operation_admin and security_admin, never aiview.
      */
@@ -411,6 +422,10 @@ public final class ActionRegistry {
         // roles that already own the job windows' manual bypass (PO decision 2026-10-20). The controller refuses aiview.
         register(new ActionDescriptor(SCHEDULED_JOBS_READ, true, Optional.empty()));
         register(new ActionDescriptor(POLICY_INSTALL_READ, true, Optional.empty()));
+        register(new ActionDescriptor(STATIC_ROUTE_PREVIEW, true, Optional.of(RoleToken.OPERATION_ADMIN),
+                java.util.Set.of(RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER)));
+        register(new ActionDescriptor(STATIC_ROUTE_READ, true, Optional.of(RoleToken.OPERATOR),
+                java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN, RoleToken.VIEWER, RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(SCHEDULED_JOBS_SET, true, Optional.of(RoleToken.OPERATION_ADMIN),
                 java.util.Set.of(RoleToken.SECURITY_ADMIN)));
         // PO 2026-11-11 (PO_DECISION_RECORD_2026_11_11_AIVIEW_CONFIGURATION_AND_DISCOVERY.md): aiview (replay_viewer) may

@@ -839,6 +839,10 @@ class AuditRedactionPolicyTest {
             "policy_target_binding.context", 2,
             // V229: a firewall's virtual-system reference and its zone names.
             "pan_vsys_zone_set.vsys", 2, "pan_vsys_zone_set.zone_names", 2,
+            // V252: static route R0 preview -- target prefix, next hop, representative host, before path and both command plans.
+            "static_route_preview.destination_cidr", 2, "static_route_preview.nexthop_ip", 2,
+            "static_route_preview.representative_host", 2, "static_route_preview.before_path_json", 2,
+            "static_route_preview.command_plan_json", 2, "static_route_preview.inverse_plan_json", 2,
             // V188 (decea8d5): the transient matcher plan of an (unaudited) validation hop.
             "path_validation_hop.plan", 2,
             // V203 (4805eb19): operator free text, as failover_approval.reason.

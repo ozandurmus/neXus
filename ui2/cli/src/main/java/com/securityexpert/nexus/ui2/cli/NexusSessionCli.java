@@ -156,6 +156,7 @@ final class NexusSessionCli {
         CutoverCli.printUsage();
         SupportBundleCli.printUsage();
         ScriptCli.printUsage();
+        StaticRouteCli.printUsage();
     }
 
     /** @return exit code, or -1 when {@code args[0]} is not one of this class's commands */
@@ -409,7 +410,9 @@ final class NexusSessionCli {
                     int bundles = new SupportBundleCli(this).run(args);
                     if (bundles != -1) yield bundles;
                     int scripts = new ScriptCli(this).run(args);
-                    yield scripts != -1 ? scripts : new SanitizerCli(this).run(args);
+                    if (scripts != -1) yield scripts;
+                    int staticRoute = new StaticRouteCli(this).run(args);
+                    yield staticRoute != -1 ? staticRoute : new SanitizerCli(this).run(args);
                 }
             };
         } catch (IllegalArgumentException e) {
@@ -630,10 +633,18 @@ final class NexusSessionCli {
     }
 
     HttpResponse<byte[]> call(String method, String path, String jsonBody) throws IOException, InterruptedException {
+        return call(method, path, jsonBody, Map.of());
+    }
+
+    HttpResponse<byte[]> call(String method, String path, String jsonBody, Map<String, String> extraHeaders)
+            throws IOException, InterruptedException {
         Session session = loadSession().orElseThrow(() -> new UsageException("not logged in: run 'login <baseUrl> <username>' first"));
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(session.baseUrl() + path))
                 .header("Cookie", SESSION_COOKIE + "=" + session.cookie())
                 .header("Accept", "*/*");
+        if (extraHeaders != null) {
+            extraHeaders.forEach(request::header);
+        }
         if (!"GET".equals(method)) {
             request.header("X-CSRF-Token", session.csrf()).header("Content-Type", "application/json");
             if (businessHoursAck) request.header(BUSINESS_HOURS_ACK_HEADER, "true");
