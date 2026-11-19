@@ -4,7 +4,8 @@ package com.securityexpert.nexus.ui2.worker.backup.asa;
 @FunctionalInterface
 public interface AsaConfigRelationSink {
 
-    AsaConfigRelationSink NONE = (deviceId, artefactId, relation) -> { };
+    AsaConfigRelationSink NONE = (deviceId, storageRef, relation) -> { };
 
-    void record(String deviceId, String artefactId, AsaConfigRelation relation);
+    /** {@code storageRef}: the storage reference of the stored bundle (the manifest's recovery_volume_path), not yet the artefact id. */
+    void record(String deviceId, String storageRef, AsaConfigRelation relation);
 }
