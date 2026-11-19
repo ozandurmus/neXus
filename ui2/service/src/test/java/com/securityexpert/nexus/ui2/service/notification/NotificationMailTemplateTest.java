@@ -340,41 +340,7 @@ class NotificationMailTemplateTest {
     @Test
     void testMailControllerSendsRenderedMultipartTemplateForRequestedType() throws Exception {
         try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
-            CompletableFuture<String> received = CompletableFuture.supplyAsync(() -> {
-                try (var socket = server.accept();
-                        var in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-                        var out = new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8)) {
-                    out.write("220 synthetic relay\r\n");
-                    out.flush();
-                    StringBuilder message = new StringBuilder();
-                    boolean data = false;
-                    for (String line; (line = in.readLine()) != null;) {
-                        if (data) {
-                            if (line.equals(".")) {
-                                out.write("250 accepted\r\n");
-                                out.flush();
-                                data = false;
-                            } else {
-                                message.append(line.startsWith("..") ? line.substring(1) : line).append("\r\n");
-                            }
-                        } else if (line.startsWith("EHLO") || line.startsWith("MAIL FROM") || line.startsWith("RCPT TO")) {
-                            out.write("250 ok\r\n");
-                            out.flush();
-                        } else if (line.equals("DATA")) {
-                            data = true;
-                            out.write("354 send data\r\n");
-                            out.flush();
-                        } else if (line.equals("QUIT")) {
-                            out.write("221 bye\r\n");
-                            out.flush();
-                            break;
-                        }
-                    }
-                    return message.toString();
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
+            CompletableFuture<String> received = relay(server);
 
             NotificationSettingsStore store = mock(NotificationSettingsStore.class);
             NotificationSettings cfg = settings(server.getLocalPort());
@@ -393,6 +359,80 @@ class NotificationMailTemplateTest {
             assertTrue(htmlPart.contains("Backup size deviations"));
             assertTrue(htmlPart.contains("FW-TANGO-04"));
             assertTrue(htmlPart.contains("What to do"));
+            assertEquals("sample", response.getBody().get("data"));
+            assertTrue(subject(rawMime).startsWith("[TEST, sample data] "));
         }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testMailControllerPrefersRecentRealEventsOverTheSample() throws Exception {
+        try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            CompletableFuture<String> received = relay(server);
+            NotificationSettingsStore store = mock(NotificationSettingsStore.class);
+            NotificationSettings cfg = settings(server.getLocalPort());
+            when(store.read()).thenReturn(cfg);
+            Instant at = Instant.parse("2026-11-19T08:00:00Z");
+            NotificationMailRouter.Batch batch = new NotificationMailRouter.Batch(
+                    List.of(at + "  device_register  edge-fw-real-01"),
+                    List.of(List.of(at.toString(), "device_register", "edge-fw-real-01")), 7, at, Map.of());
+            NotificationMailTemplate.RenderedMail real = NotificationMailTemplate.render("admin_event", batch);
+            NotificationForwarder forwarder = mock(NotificationForwarder.class);
+            when(forwarder.recentEventsMail("admin_event")).thenReturn(java.util.Optional.of(real));
+            org.springframework.beans.factory.ObjectProvider<NotificationForwarder> provider =
+                    mock(org.springframework.beans.factory.ObjectProvider.class);
+            when(provider.getIfAvailable()).thenReturn(forwarder);
+            NotificationSettingsController controller = new NotificationSettingsController(store, provider);
+
+            var response = controller.testMail(new NotificationSettingsController.TestMailRequest("admin_event", cfg));
+            assertEquals(Boolean.TRUE, response.getBody().get("sent"));
+            assertEquals("recent_events", response.getBody().get("data"));
+            String rawMime = received.join();
+            assertTrue(subject(rawMime).startsWith("[TEST] "));
+            assertTrue(SmtpRelaySender.extractHtmlPart(rawMime).contains("edge-fw-real-01"));
+            assertFalse(SmtpRelaySender.extractHtmlPart(rawMime).contains("FW-TANGO-04"));
+        }
+    }
+
+    private static String subject(String rawMime) {
+        return SmtpRelaySender.decodeHeader(rawMime.lines().filter(l -> l.startsWith("Subject: ")).findFirst().orElse("Subject: ").substring(9));
+    }
+
+    private static CompletableFuture<String> relay(ServerSocket server) {
+    return CompletableFuture.supplyAsync(() -> {
+            try (var socket = server.accept();
+                    var in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                    var out = new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8)) {
+                out.write("220 synthetic relay\r\n");
+                out.flush();
+                StringBuilder message = new StringBuilder();
+                boolean data = false;
+                for (String line; (line = in.readLine()) != null;) {
+                    if (data) {
+                        if (line.equals(".")) {
+                            out.write("250 accepted\r\n");
+                            out.flush();
+                            data = false;
+                        } else {
+                            message.append(line.startsWith("..") ? line.substring(1) : line).append("\r\n");
+                        }
+                    } else if (line.startsWith("EHLO") || line.startsWith("MAIL FROM") || line.startsWith("RCPT TO")) {
+                        out.write("250 ok\r\n");
+                        out.flush();
+                    } else if (line.equals("DATA")) {
+                        data = true;
+                        out.write("354 send data\r\n");
+                        out.flush();
+                    } else if (line.equals("QUIT")) {
+                        out.write("221 bye\r\n");
+                        out.flush();
+                        break;
+                    }
+                }
+                return message.toString();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 }
