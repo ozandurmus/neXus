@@ -221,4 +221,39 @@ class SystemLogReadControllerTest {
         assertEquals(404, disabled.getStatus());
         assertTrue(disabled.getContentAsString().contains("DEVICE_NOT_FOUND"));
     }
+
+    @Test
+    void anUnmaskedTextResponseCarriesTheMaskedFormAlongsideWhileMaskedResponsesNeverDo() throws Exception {
+        for (String r : List.of(RoleToken.OPERATOR, RoleToken.SECURITY_ADMIN)) {
+            var maskedReq = request(r, false);
+            maskedReq.addHeader("Accept", "application/json, text/plain");
+            var maskedRes = controller.text(CHUNK, 0, 0, false, maskedReq);
+            assertEquals(200, maskedRes.getStatusCode().value(), r);
+            assertEquals("true", maskedRes.getHeaders().getFirst("X-Syslog-Masked"), r);
+            assertTrue(maskedRes.getHeaders().getFirst("X-Syslog-Masked-Text") == null, r);
+            assertTrue(maskedRes.getHeaders().getContentType().toString().startsWith("text/plain"), r);
+            assertFalse(body(maskedRes).contains("192.0.2.17"), r);
+        }
+        assertTrue(fx.ledgerRows.isEmpty());
+
+        var plainUnmasked = controller.text(CHUNK, 0, 0, true, request(RoleToken.SECURITY_ADMIN, false));
+        assertEquals(200, plainUnmasked.getStatusCode().value());
+        assertEquals("false", plainUnmasked.getHeaders().getFirst("X-Syslog-Masked"));
+        assertEquals(RAW, body(plainUnmasked));
+        String headerMasked = plainUnmasked.getHeaders().getFirst("X-Syslog-Masked-Text");
+        assertTrue(headerMasked != null && !headerMasked.isBlank());
+        String decodedHeader = new String( java.util.Base64.getDecoder().decode(headerMasked), StandardCharsets.UTF_8);
+        assertFalse(decodedHeader.contains("192.0.2.17"), decodedHeader);
+
+        var jsonReq = request(RoleToken.SECURITY_ADMIN, false);
+        jsonReq.addHeader("Accept", "application/json, text/plain");
+        var jsonUnmasked = controller.text(CHUNK, 0, 0, true, jsonReq);
+        assertEquals(200, jsonUnmasked.getStatusCode().value());
+        assertEquals("false", jsonUnmasked.getHeaders().getFirst("X-Syslog-Masked"));
+        assertTrue(jsonUnmasked.getHeaders().getContentType().toString().startsWith("application/json"));
+        var parsed = new com.fasterxml.jackson.databind.ObjectMapper().readTree((byte[]) jsonUnmasked.getBody());
+        assertEquals(RAW, parsed.get("text").asText());
+        assertEquals(decodedHeader, parsed.get("masked_text").asText());
+        assertEquals(2, fx.ledgerRows.size());
+    }
 }

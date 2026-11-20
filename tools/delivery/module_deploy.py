@@ -267,7 +267,9 @@ def ensure_policy(image):
         return json.loads(existing)["spec"]["template"]["spec"]["containers"][0]["image"]
     # Apply the ServiceAccount and NetworkPolicy together with the disabled Deployment.
     prepare_policy_public_trust()
-    run("kubectl", "-n", "ui2", "apply", "-f", "-", input=render_manifest("policy", image))
+    manifest = render_manifest("policy", image)
+    ensure_mounted_claims("policy", manifest)
+    run("kubectl", "-n", "ui2", "apply", "-f", "-", input=manifest)
     return None
 
 
@@ -278,7 +280,9 @@ def ensure_backup(image):
         return json.loads(existing)["spec"]["template"]["spec"]["containers"][0]["image"]
     # Apply the ServiceAccount and NetworkPolicy together with the disabled Deployment.
     prepare_policy_public_trust()
-    run("kubectl", "-n", "ui2", "apply", "-f", "-", input=render_manifest("backup", image))
+    manifest = render_manifest("backup", image)
+    ensure_mounted_claims("backup", manifest)
+    run("kubectl", "-n", "ui2", "apply", "-f", "-", input=manifest)
     return None
 
 
@@ -352,10 +356,61 @@ def live_replicas(target):
     return int(value)
 
 
+def mounted_claims(manifest):
+    """Every PersistentVolumeClaim name referenced by `claimName:` in a manifest, in order without duplicates."""
+    return tuple(dict.fromkeys(re.findall(r"(?m)^\s*claimName:\s*(\S+)\s*$", manifest)))
+
+
+def committed_claim_manifests():
+    """Committed PersistentVolumeClaim manifests in deploy/ui2, keyed by metadata.name with (filename, manifest)."""
+    claims = {}
+    directory = REPO / "deploy/ui2"
+    if not directory.is_dir():
+        return claims
+    for path in sorted(directory.glob("*.yaml")):
+        for doc in path.read_text().split("\n---\n"):
+            if re.search(r"(?m)^kind:\s*PersistentVolumeClaim\s*$", doc):
+                match = re.search(r"(?m)^  name:\s*(\S+)\s*$", doc)
+                if match:
+                    claims[match.group(1)] = (path.name, doc.strip() + "\n")
+    return claims
+
+
+def mounted_claim_manifests(target, manifest):
+    """Resolve every PersistentVolumeClaim a target's manifest mounts to its earlier-ordered committed manifest.
+
+    2026-11-05 outage lesson: a new PersistentVolumeClaim must exist before any Deployment manifest that mounts it is
+    applied. Every mounted claim must have a committed PersistentVolumeClaim manifest in deploy/ui2 whose filename
+    sorts before the Deployment manifest, and missing claims are applied before the Deployment."""
+    names = mounted_claims(manifest)
+    if not names:
+        return ()
+    committed = committed_claim_manifests()
+    target_file = Path(SYNCED_MANIFESTS[target]).name
+    resolved = []
+    for name in names:
+        if name not in committed:
+            raise Blocked(target + " manifest mounts unknown PersistentVolumeClaim " + name)
+        claim_file, claim_manifest = committed[name]
+        if claim_file >= target_file:
+            raise Blocked(target + " claim " + name + " (" + claim_file + ") must be ordered before " + target_file)
+        resolved.append((name, claim_manifest))
+    return tuple(resolved)
+
+
+def ensure_mounted_claims(target, manifest):
+    """Apply any missing PersistentVolumeClaim mounted by `manifest` before the Deployment manifest itself is applied."""
+    for claim, claim_manifest in mounted_claim_manifests(target, manifest):
+        if not run("kubectl", "-n", "ui2", "get", "pvc", claim, "--ignore-not-found", "-o", "name"):
+            run("kubectl", "-n", "ui2", "apply", "-f", "-", input=claim_manifest)
+
+
 def check_synced_manifest(target, image):
     """Read-only, before any drain: does the candidate manifest differ from the cluster? Applied after the drain."""
+    manifest = render_manifest(target, image, live_replicas(target))
+    mounted_claim_manifests(target, manifest)
     print(target + " manifest: " + ("differs from the cluster; applied after the drain"
-                                    if kubectl_diff(render_manifest(target, image, live_replicas(target)))
+                                    if kubectl_diff(manifest)
                                     else "already in sync"), flush=True)
 
 
@@ -469,7 +524,9 @@ def replace_image(target, image, sync_manifest=False):
     if target in SYNCED_MANIFESTS and sync_manifest:
         # One pod-template update installs the image together with the committed env, mounts and resources. The
         # live replica count is kept (the policy release scales the pod itself). Called only after the drain.
-        run("kubectl", "-n", "ui2", "apply", "-f", "-", input=render_manifest(target, image, live_replicas(target)))
+        manifest = render_manifest(target, image, live_replicas(target))
+        ensure_mounted_claims(target, manifest)
+        run("kubectl", "-n", "ui2", "apply", "-f", "-", input=manifest)
         if target == "service":
             sync_advisory_fetch(image)
         return

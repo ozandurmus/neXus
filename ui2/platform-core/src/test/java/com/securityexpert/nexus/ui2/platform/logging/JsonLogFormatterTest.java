@@ -168,4 +168,51 @@ class JsonLogFormatterTest {
         MaskingFormatter.install(json, true);
         assertTrue(json.getHandlers()[0].getFormatter() instanceof JsonLogFormatter);
     }
+
+    @Test
+    void extractsBracketedEventCodeIntoEventFieldWhenPresent() {
+        assertEquals("PAN_CONFIG_SYNC", JsonLogFields.extractEventCode("[PAN_CONFIG_SYNC] peer 192.0.2.4"));
+        assertEquals("NOTIFY_SYSLOG_FAILED", JsonLogFields.extractEventCode("[NOTIFY_SYSLOG_FAILED]: timeout"));
+        assertEquals("BACKUP", JsonLogFields.extractEventCode("[BACKUP]"));
+        org.junit.jupiter.api.Assertions.assertNull(JsonLogFields.extractEventCode("plain message [PAN_CONFIG_SYNC]"));
+        org.junit.jupiter.api.Assertions.assertNull(JsonLogFields.extractEventCode("[lowercase] not an event"));
+        org.junit.jupiter.api.Assertions.assertNull(JsonLogFields.extractEventCode("[REDACTED_IP] masked placeholder"));
+
+        LogRecord withEvent = new LogRecord(Level.WARNING, "[PAN_CONFIG_SYNC] peer " + LogAddressMaskerTest.v4());
+        String jsonWithEvent = line(withEvent, false);
+        assertTrue(jsonWithEvent.contains("\"event\":\"PAN_CONFIG_SYNC\""), jsonWithEvent);
+        assertTrue(jsonWithEvent.contains("\"message\":\"[PAN_CONFIG_SYNC] peer <ip>\""), jsonWithEvent);
+        assertFalse(jsonWithEvent.contains(LogAddressMaskerTest.v4()), jsonWithEvent);
+
+        LogRecord withoutEvent = new LogRecord(Level.INFO, "ordinary log line");
+        String jsonWithoutEvent = line(withoutEvent, false);
+        assertFalse(jsonWithoutEvent.contains("\"event\""), jsonWithoutEvent);
+    }
+
+    @Test
+    void rendersOneLogEventInBothFormatsAndKeepsMaskedValueMasked() {
+        LogRecord record = new LogRecord(
+                Level.WARNING, "[NOTIFY_SYSLOG_FAILED] target " + LogAddressMaskerTest.v4() + " unreachable");
+        record.setLoggerName("nexus.platform.test");
+        record.setThrown(new java.io.IOException("connect " + LogAddressMaskerTest.v6() + "\nretry aborted"));
+
+        String textOut = new MaskingFormatter(new java.util.logging.SimpleFormatter(), false).format(record);
+        assertFalse(textOut.trim().startsWith("{"), textOut);
+        assertTrue(textOut.contains("[NOTIFY_SYSLOG_FAILED] target <ip> unreachable"), textOut);
+        assertTrue(textOut.contains("IOException: connect <ip>"), textOut);
+        assertFalse(textOut.contains(LogAddressMaskerTest.v4()), textOut);
+        assertFalse(textOut.contains(LogAddressMaskerTest.v6()), textOut);
+
+        String jsonOut = new JsonLogFormatter(false).format(record);
+        assertEquals(1, jsonOut.chars().filter(c -> c == '\n').count(), jsonOut);
+        assertTrue(jsonOut.startsWith("{\"@timestamp\":\""), jsonOut);
+        assertTrue(jsonOut.contains("\"level\":\"WARN\""), jsonOut);
+        assertTrue(jsonOut.contains("\"logger_name\":\"nexus.platform.test\""), jsonOut);
+        assertTrue(jsonOut.contains("\"thread_name\":\""), jsonOut);
+        assertTrue(jsonOut.contains("\"message\":\"[NOTIFY_SYSLOG_FAILED] target <ip> unreachable\""), jsonOut);
+        assertTrue(jsonOut.contains("\"event\":\"NOTIFY_SYSLOG_FAILED\""), jsonOut);
+        assertTrue(jsonOut.contains("\"stack_trace\":\"java.io.IOException: connect <ip>\\nretry aborted"), jsonOut);
+        assertFalse(jsonOut.contains(LogAddressMaskerTest.v4()), jsonOut);
+        assertFalse(jsonOut.contains(LogAddressMaskerTest.v6()), jsonOut);
+    }
 }

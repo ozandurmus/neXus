@@ -111,10 +111,16 @@ public final class SystemLogReadService {
 
     /**
      * One page of text and what a client needs to ask for the next one. {@code maskRuleSet} names the masking rules a
-     * masked page went through ({@link LogMasking#RULE_SET}); null for an unmasked page.
+     * masked page went through ({@link LogMasking#RULE_SET}); null for an unmasked page. {@code maskedText} carries the
+     * masked projection of the same lines alongside an unmasked page so a client filter can match a pseudonym to its
+     * real value; null on a masked page.
      */
     public record TextPage(byte[] text, boolean masked, String sourceKey, long offset, long nextOffset, boolean eof,
-            long lines, long chunkBytes, int pageLimit, String maskRuleSet) {
+            long lines, long chunkBytes, int pageLimit, String maskRuleSet, byte[] maskedText) {
+        public TextPage(byte[] text, boolean masked, String sourceKey, long offset, long nextOffset, boolean eof,
+                long lines, long chunkBytes, int pageLimit, String maskRuleSet) {
+            this(text, masked, sourceKey, offset, nextOffset, eof, lines, chunkBytes, pageLimit, maskRuleSet, null);
+        }
     }
 
     /** The answer to a text request. */
@@ -378,6 +384,7 @@ public final class SystemLogReadService {
             return refusedText(500, "SYSTEM_LOG_CHUNK_UNREADABLE", "The chunk could not be decrypted.");
         }
         byte[] shown;
+        byte[] maskedCompanion = null;
         String ruleSet = null;
         try {
             if (masked) {
@@ -386,6 +393,14 @@ public final class SystemLogReadService {
                 ruleSet = session.ruleSet();
             } else {
                 shown = window.bytes;
+                try {
+                    byte[] projected = toUtf8(masking.session().maskChunk(window.bytes));
+                    if (projected.length <= MAX_RESPONSE_BYTES) {
+                        maskedCompanion = projected;
+                    }
+                } catch (LogMasking.MaskingUnavailableException ignored) {
+                    // An unmasked page is still served if the identity dictionary cannot be read.
+                }
             }
         } catch (LogMasking.MaskingUnavailableException e) {
             // Fail closed: without the estate dictionary no masked page is served.
@@ -397,7 +412,7 @@ public final class SystemLogReadService {
             return refusedText(500, "SYSTEM_LOG_PAGE_TOO_LARGE", "The page exceeded the response bound after masking.");
         }
         return new Text(new TextPage(utf8, masked, chunk.sourceKey(), request.offset(), request.offset() + window.bytes.length,
-                window.eof, countLines(window.bytes), chunk.bytes(), limit, ruleSet), null);
+                window.eof, countLines(window.bytes), chunk.bytes(), limit, ruleSet, maskedCompanion), null);
     }
 
     private static Text refusedText(int status, String code, String message) {

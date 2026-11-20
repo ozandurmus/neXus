@@ -1,6 +1,9 @@
 import { test as base, expect, type Frame, type Page, type Request, type Response } from "@playwright/test";
 import { baseURL } from "./settings.mjs";
-import { hasCanaryToken, failingAlerts, isAiview, loadErrorText, installReadOnlyGuard } from "./safety";
+import {
+  hasCanaryToken, failingAlerts, isAiview, loadErrorText, installReadOnlyGuard,
+  platformHealthIndicatorViolation, platformStatusViolations, type PlatformStatusSnapshot,
+} from "./safety";
 import { fullMode, latencyViolation, pathTemplate } from "./latency";
 import { requestViolation, sanitizedPath } from "./requestPath";
 import { existsSync, readFileSync } from "node:fs";
@@ -54,9 +57,57 @@ export async function visibleSafety(page: Page) {
   // Assert booleans, never actual text: failures must not print a leaked identity.
   if (canaryDigests) expect(hasCanaryToken(text, canaryDigests), "Visible text matches a privacy canary (value withheld)").toBe(false);
   expect(loadErrorText.test(text), "Visible unhandled API/load error text (content withheld)").toBe(false);
-  const alerts = await page.getByRole("alert").evaluateAll(elements => elements.map(element => ({ className: element.className, statusAlert: element.getAttribute("data-status-alert") })));
+  const alerts = await page.getByRole("alert").evaluateAll(elements => elements.map(element => ({
+    className: typeof element.className === "string" ? element.className : "",
+    statusAlert: element.getAttribute("data-status-alert"),
+    text: ((element as HTMLElement).innerText ?? element.textContent ?? "").trim(),
+  })));
   expect(failingAlerts(alerts).length > 0, "A screen exposes an error/warning alert").toBe(false);
+  const indicators = await page.locator("[data-platform-health]").evaluateAll(elements => elements.map(element => ({
+    state: element.getAttribute("data-platform-health"),
+    ariaLabel: element.getAttribute("aria-label"),
+  })));
+  for (const indicator of indicators) {
+    const issue = platformHealthIndicatorViolation(indicator);
+    expect(issue, issue ?? undefined).toBeNull();
+  }
   expect(await page.getByRole("button", { name: /transcript/i }).count(), "Transcript button must be absent under aiview").toBe(0);
+}
+
+/**
+ * Asserts Administration > Platform status rendered its panel, Storage/Service pods sections and health indicator:
+ * healthy or WARN/ATTENTION with a stated reason passes; error states, missing panels, reasonless warnings or UNKNOWN
+ * shown as healthy fail.
+ */
+export async function assertPlatformStatus(page: Page) {
+  const snapshot = await page.evaluate((): PlatformStatusSnapshot => {
+    const panel = document.querySelector('section[aria-label="Platform status"]');
+    const headings = panel
+      ? [...panel.querySelectorAll("h1, h2, h3, h4, h5, h6")].map((el) => (el.textContent ?? "").trim())
+      : [];
+    const hasStorageSection = headings.includes("What the evidence takes");
+    const servicePodsHeading = headings.find((h) => /^Service pods \(.+\)$/.test(h)) ?? null;
+    const panelText = panel ? ((panel as HTMLElement).innerText ?? panel.textContent ?? "") : "";
+    const observedUnknown = /Service view\s*·\s*observed\s+UNKNOWN\b/i.test(panelText);
+    const indicatorEl = document.querySelector("[data-platform-health]");
+    const indicator = indicatorEl ? {
+      state: indicatorEl.getAttribute("data-platform-health"),
+      ariaLabel: indicatorEl.getAttribute("aria-label"),
+    } : null;
+    const summaryEl = panel?.querySelector('[data-testid="platform-health-summary"]') ?? null;
+    const summary = summaryEl ? {
+      label: (summaryEl.children[0]?.textContent ?? "").trim(),
+      reason: (summaryEl.children[1]?.textContent ?? "").trim(),
+      text: ((summaryEl as HTMLElement).innerText ?? summaryEl.textContent ?? "").trim(),
+    } : null;
+    const alerts = panel ? [...panel.querySelectorAll('[role="alert"]')].map((el) => ({
+      className: typeof el.className === "string" ? el.className : "",
+      statusAlert: el.getAttribute("data-status-alert"),
+      text: ((el as HTMLElement).innerText ?? el.textContent ?? "").trim(),
+    })) : [];
+    return { hasPanel: Boolean(panel), hasStorageSection, servicePodsHeading, observedUnknown, indicator, summary, alerts };
+  });
+  expect(platformStatusViolations(snapshot), "Platform status panel and health indicator checks").toEqual([]);
 }
 
 export const test = base.extend<{ safety: Safety }>({

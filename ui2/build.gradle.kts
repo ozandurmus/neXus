@@ -102,6 +102,8 @@ subprojects {
                 // The ArchUnit suites import every module's classes (service, worker, packet-analysis, ...);
                 // the Gradle default test heap (512 MB) ran out as the product grew, so the heap is explicit.
                 maxHeapSize = "2g"
+                maxParallelForks = 1
+                forkEvery = 0
                 jvmArgs("-XX:+UseSerialGC", "-Xshare:auto")
             }
             "integration-tests" -> tasks.register<Test>("integrationTest") {
@@ -117,9 +119,18 @@ subprojects {
                 testClassesDirs = testSourceSet.output.classesDirs
                 classpath = testSourceSet.runtimeClasspath
                 useJUnitPlatform()
+                maxHeapSize = "768m"
+                jvmArgs("-XX:+UseSerialGC", "-Xshare:auto")
             }
         }
     }
+}
+
+project(":architecture-tests").tasks.withType<Test>().configureEach {
+    // On a 7 GB GitHub runner (`unitTest architectureTest` with `org.gradle.parallel=true` and a 1.5 GB Gradle daemon),
+    // keep the 2 GB ArchUnit worker JVM from overlapping parallel unitTest worker JVMs when both are scheduled.
+    mustRunAfter(subprojects.filter { it.name in javaProjects && it.name != "architecture-tests" }.map { "${it.path}:test" })
+    mustRunAfter(subprojects.filter { it.name in javaProjects && it.name != "architecture-tests" && it.name != "integration-tests" }.map { "${it.path}:unitTest" })
 }
 
 // ---------------------------------------------------------------------

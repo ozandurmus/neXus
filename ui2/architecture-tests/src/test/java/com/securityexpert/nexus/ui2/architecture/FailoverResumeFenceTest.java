@@ -16,8 +16,6 @@ import com.securityexpert.nexus.ui2.service.failover.CpFailoverService;
 import com.securityexpert.nexus.ui2.worker.failover.CpFailoverJobExecutor;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
-import com.tngtech.archunit.core.importer.ImportOption;
 
 /**
  * CP_FAILOVER_MEMBER_RECOVERY_CONTRACT.md §7 group 10: the resumed {@code clusterXL_admin up} is reachable only from
@@ -29,8 +27,7 @@ class FailoverResumeFenceTest {
 
     @BeforeAll
     static void importClasses() {
-        classes = new ClassFileImporter().withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-            .importPackages("com.securityexpert.nexus.ui2");
+        classes = Ui2ArchitectureTest.productionClasses();
         assertFalse(classes.isEmpty());
     }
 

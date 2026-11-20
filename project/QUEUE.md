@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-18T07:22:09Z
+Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-19T20:59:12Z
 
 ## Now
 - NXS-LOCAL-0391 — Release queue: ASA readiness, integration gate, CP advisories, zone matrix, ACI step 1, API latency, Backups batch (in_progress)
@@ -32,7 +32,6 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-18T07:22:09Z
 - P2/planned failover_approver_role_recheck_at_worker
 - P2/planned https_configuration_collect
 - P2/planned module_per_pod_split
-- P2/planned nightly_e2e_fails_on_legitimate_platform_status_warning
 - P2/planned nspm_wave1_acceptance
 - P2/planned pan_change_actor_submitted_join_gap
 - P2/planned path_analysis_phase_b

@@ -30,7 +30,16 @@ public final class JsonLogFields {
     public static final String LOGGER_NAME = "logger_name";
     public static final String THREAD_NAME = "thread_name";
     public static final String MESSAGE = "message";
+    public static final String EVENT = "event";
     public static final String STACK_TRACE = "stack_trace";
+
+    private static final Set<String> REDACTION_TOKENS = Set.of(
+            "REDACTED",
+            "REDACTED_IP",
+            "REDACTED_MAC",
+            "REDACTED_PATH",
+            "MASKED",
+            "LINE_REDACTED_OVERLONG");
 
     public static final String RENAME_ENV = "NEXUS_LOG_FIELD_RENAMES";
     public static final String INCLUDE_ENV = "NEXUS_LOG_FIELD_INCLUDES";
@@ -64,6 +73,41 @@ public final class JsonLogFields {
     /** Formats the job correlation id value {@code job:<jobId>}. */
     public static String jobCorrelationId(String jobId) {
         return "job:" + jobId;
+    }
+
+    /**
+     * Extracts the leading bracketed event code (for example {@code PAN_CONFIG_SYNC} from
+     * {@code "[PAN_CONFIG_SYNC] synced"} or {@code NOTIFY_SYSLOG_FAILED} from
+     * {@code "[NOTIFY_SYSLOG_FAILED] peer unreachable"}) when {@code message} starts with one, or returns
+     * {@code null} when the message has no leading bracketed event code.
+     */
+    public static String extractEventCode(String message) {
+        if (message == null || message.length() < 3 || message.charAt(0) != '[') {
+            return null;
+        }
+        int close = message.indexOf(']');
+        if (close < 2) {
+            return null;
+        }
+        if (close + 1 < message.length()) {
+            char next = message.charAt(close + 1);
+            if (!Character.isWhitespace(next) && next != ':') {
+                return null;
+            }
+        }
+        char first = message.charAt(1);
+        if (first < 'A' || first > 'Z') {
+            return null;
+        }
+        for (int i = 2; i < close; i++) {
+            char c = message.charAt(i);
+            boolean valid = (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
+            if (!valid) {
+                return null;
+            }
+        }
+        String code = message.substring(1, close);
+        return REDACTION_TOKENS.contains(code) ? null : code;
     }
 
     /** Reads optional field renames/includes/excludes from environment variables or system properties. */

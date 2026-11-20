@@ -166,6 +166,9 @@ class SystemLogReadServiceTest {
 
         assertEquals("drop src 192.0.2.17\nsecond 198.51.100.5\n", text(page));
         assertFalse(page.page().masked());
+        assertNotNull(page.page().maskedText(), "an unmasked page carries its masked projection alongside");
+        String maskedCompanion = new String(page.page().maskedText(), StandardCharsets.UTF_8);
+        assertFalse(maskedCompanion.contains("192.0.2.17"), maskedCompanion);
         assertEquals(1, fx.ledgerRows.size());
         var row = fx.ledgerRows.get(0);
         assertEquals(ref.artefactId(), row.artefactId());
@@ -173,6 +176,28 @@ class SystemLogReadServiceTest {
         assertEquals(ActionRegistry.SYSTEM_LOG_READ_UNMASKED, row.action());
         assertTrue(row.reason().contains(CHUNK) && row.reason().contains("offset=0"), row.reason());
         assertFalse(row.reason().contains("192.0.2.17"), "the ledger row carries page coordinates, never log text");
+    }
+
+    @Test
+    void anUnmaskedPageCarriesTheMaskedProjectionPerLineWhileAMaskedPageGetsNothingNew() throws Exception {
+        String user = syntheticWord(7, 51);
+        String stored = "Oct 17 10:00:00 edge-fw-01 sshd[12]: Accepted publickey for " + user + " from 192.0.2.17\n";
+        fx.chunk(CHUNK, bytes(stored));
+
+        var maskedPage = fx.service().text(masked(CHUNK, 0, 0));
+        String maskedText = text(maskedPage);
+        assertTrue(maskedPage.page().masked());
+        assertNull(maskedPage.page().maskedText(), "a masked page never carries a companion text");
+        assertTrue(maskedText.contains("FW-TANGO-04") && maskedText.contains("USR-"), maskedText);
+        assertFalse(maskedText.contains(user) || maskedText.contains("edge-fw-01") || maskedText.contains("192.0.2.17"));
+        assertTrue(fx.ledgerRows.isEmpty());
+
+        var unmaskedPage = fx.service().text(unmasked(CHUNK, 0, 0, true));
+        assertEquals(stored, text(unmaskedPage));
+        assertNotNull(unmaskedPage.page().maskedText());
+        assertEquals(maskedText, new String(unmaskedPage.page().maskedText(), StandardCharsets.UTF_8),
+                "the companion masked text matches the masked projection line for line");
+        assertEquals(1, fx.ledgerRows.size());
     }
 
     @Test

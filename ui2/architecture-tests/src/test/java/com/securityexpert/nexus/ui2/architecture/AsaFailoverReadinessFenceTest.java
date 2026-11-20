@@ -13,10 +13,8 @@ import com.securityexpert.nexus.ui2.capability.GateRegistryFixtureLoader;
 import com.securityexpert.nexus.ui2.capability.GateRow;
 import com.securityexpert.nexus.ui2.jobs.failover.AsaFailoverReadinessSwitch;
 import com.securityexpert.nexus.ui2.platform.ActionClass;
-import com.securityexpert.nexus.ui2.service.failover.CpFailoverService;
 import com.securityexpert.nexus.ui2.service.failover.FailoverVendor;
 import com.securityexpert.nexus.ui2.worker.failover.AsaFailoverJobExecutor;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
 
 /**
  * Cisco ASA failover is READINESS ONLY (PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS.md): the ASA switch
@@ -79,7 +77,7 @@ class AsaFailoverReadinessFenceTest {
     }
 
     @Test void theWorkerExecutorHasNoWritePathAndTheSwitchNeverEnablesExecution() {
-        var classes = new ClassFileImporter().importClasses(AsaFailoverJobExecutor.class, CpFailoverService.class);
+        var classes = Ui2ArchitectureTest.productionClasses();
         for (var type : classes) {
             if (type.getName().equals(AsaFailoverJobExecutor.class.getName()) || type.getName().startsWith(AsaFailoverJobExecutor.class.getName() + "$")) {
                 for (var method : type.getMethods())

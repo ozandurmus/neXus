@@ -79,6 +79,9 @@ spec:
         # Logs never leave HOST-A raw; aiview, diagnostics and bundles mask separately.
         - name: NEXUS_LOG_RAW_ADDRESSES
           value: "1"
+        # Console log format (json|text, default text; flip to json for one JSON object per line):
+        # - name: UI2_LOG_FORMAT
+        #   value: "json"
         # Development mode (PO 2026-11-03): the job window spans the whole 6-hour slot, so manual jobs are never
         # refused as OUTSIDE_JOB_WINDOW. Remove (default 60) when scheduled operation resumes.
         - name: UI2_JOB_WINDOW_MINUTES

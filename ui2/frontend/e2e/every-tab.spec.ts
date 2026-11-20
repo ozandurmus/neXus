@@ -2,7 +2,7 @@ import type { Locator, Page } from "@playwright/test";
 import type { DeviceSummary } from "../src/auth/adminApi";
 import { TAB_COVERAGE, BACKUP_SECTIONS, SCREEN_HEADINGS, ADMIN_PAGES } from "../src/shell/tabCoverage";
 import { SCREEN_IDS } from "../src/shell/types";
-import { test, expect, visit, browserGet } from "./fixtures";
+import { test, expect, visit, browserGet, assertPlatformStatus } from "./fixtures";
 
 async function content(page: Page, region: Locator = page.getByRole("main")) {
   expect((await region.innerText()).trim().length > 0, "Main/panel content is empty (text withheld)").toBe(true);
@@ -86,6 +86,9 @@ for (const { query, heading } of ADMIN_PAGES) {
     await visit(page, query, heading);
     await safety.checkpoint();
     await content(page);
+    if (query === "screen=administration&tab=platform-status") {
+      await assertPlatformStatus(page);
+    }
   });
 }
 for (const label of BACKUP_SECTIONS) {

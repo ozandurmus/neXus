@@ -24,13 +24,15 @@ def deployment(text):
     return next(d for d in yaml.safe_load_all(text) if d['kind'] == 'Deployment')
 
 
-def cluster(monkeypatch, replicas='1', differs=True):
+def cluster(monkeypatch, replicas='1', differs=True, missing_claims=()):
     """An already-released deployment: records kubectl calls, drain queries and diff checks in one ordered log."""
     events, diffs = [], []
     def run(*args, input=None, timeout=660):
         events.append((args, input))
         if 'get' in args and 'jsonpath={.spec.replicas}' in args:
             return replicas
+        if args[:5] == ('kubectl', '-n', 'ui2', 'get', 'pvc'):
+            return '' if args[5] in missing_claims else 'persistentvolumeclaim/' + args[5]
         if args[:5] == ('kubectl', '-n', 'ui2', 'get', 'deployment') and 'json' in args:
             return json.dumps({'spec': {'template': {'spec': {'containers': [{'image': OLD}]}}}})
         if 'jsonpath={.spec.template.spec.containers[0].image}' in args:
@@ -203,6 +205,84 @@ def test_a_worker_rollback_restores_only_the_recorded_image_with_the_runtime_pat
     assert not applies(events) and not diffs, 'the forward manifest is not applied or diffed on rollback'
     patch, = [args for args, _ in events if 'patch' in args]
     assert json.loads(patch[-1])['spec']['template']['spec']['containers'][0]['image'] == OLD
+
+
+def test_every_claim_mounted_by_the_worker_and_other_synced_manifests_has_an_earlier_committed_pvc_manifest():
+    worker_manifest = deploy.render_manifest('worker', IMAGE, 1)
+    assert deploy.mounted_claims(worker_manifest) == ('ui2-artefact-store', 'ui2-report-store')
+    assert [name for name, _ in deploy.mounted_claim_manifests('worker', worker_manifest)] == [
+        'ui2-artefact-store', 'ui2-report-store']
+    committed = deploy.committed_claim_manifests()
+    for target, rel_path in deploy.SYNCED_MANIFESTS.items():
+        manifest = deploy.render_manifest(target, IMAGE, 1)
+        resolved = deploy.mounted_claim_manifests(target, manifest)
+        assert tuple(name for name, _ in resolved) == deploy.mounted_claims(manifest)
+        for name, pvc_text in resolved:
+            pvc_file, expected_text = committed[name]
+            assert pvc_file < Path(rel_path).name, f'{target}: {pvc_file} must sort before {rel_path}'
+            assert pvc_text == expected_text
+            pvc = yaml.safe_load(pvc_text)
+            assert pvc['kind'] == 'PersistentVolumeClaim' and pvc['metadata']['name'] == name
+
+
+def test_a_worker_release_applies_a_missing_mounted_claim_before_the_worker_manifest(monkeypatch):
+    events, diffs = cluster(monkeypatch, replicas='1', missing_claims=('ui2-report-store',))
+    deploy.replace('worker', IMAGE, 'synthetic-snapshot', 20)
+    (claim_index, claim_manifest), (worker_index, worker_manifest) = applies(events)
+    assert yaml.safe_load(claim_manifest)['kind'] == 'PersistentVolumeClaim'
+    assert yaml.safe_load(claim_manifest)['metadata']['name'] == 'ui2-report-store'
+    assert worker_manifest == deploy.render_manifest('worker', IMAGE, 1) and diffs == [worker_manifest]
+    barrier = index(events, lambda a: a[0] == 'query' and 'drain_ack_generation=drain_generation' in a[1])
+    rollout = index(events, lambda a: 'rollout' in a)
+    assert index(events, lambda a: a == ('diff',)) < barrier < claim_index < worker_index < rollout
+
+
+def test_a_worker_manifest_mounting_an_unknown_or_late_ordered_claim_is_refused_before_any_drain(monkeypatch, tmp_path):
+    (tmp_path / 'deploy/ui2').mkdir(parents=True)
+    monkeypatch.setattr(deploy, 'REPO', tmp_path)
+    worker_path = tmp_path / deploy.SYNCED_MANIFESTS['worker']
+    worker_path.write_text('apiVersion: apps/v1\nkind: Deployment\nspec:\n  replicas: 1\n  template:\n    spec:\n'
+                           '      containers:\n        - name: worker\n          image: a@sha256:' + 'b' * 64 + '\n'
+                           '      volumes:\n        - name: v\n          persistentVolumeClaim:\n'
+                           '            claimName: ui2-synthetic-claim\n')
+    events, _ = cluster(monkeypatch, replicas='1')
+    with pytest.raises(deploy.Blocked, match='unknown PersistentVolumeClaim ui2-synthetic-claim'):
+        deploy.replace('worker', IMAGE, 'synthetic-snapshot', 20)
+    assert not applies(events) and not any(args[0] == 'query' and 'drain_requested' in args[1] for args, _ in events)
+
+    (tmp_path / 'deploy/ui2/60-late-pvc.yaml').write_text(
+        'apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: ui2-synthetic-claim\n')
+    events, _ = cluster(monkeypatch, replicas='1')
+    with pytest.raises(deploy.Blocked, match='must be ordered before 52-worker-deployment.yaml'):
+        deploy.replace('worker', IMAGE, 'synthetic-snapshot', 20)
+    assert not applies(events) and not any(args[0] == 'query' and 'drain_requested' in args[1] for args, _ in events)
+
+
+def test_a_worker_release_waits_for_old_pod_exit_rollout_status_heartbeat_and_e2e_in_order(monkeypatch):
+    events, diffs = cluster(monkeypatch, replicas='1')
+    inner = deploy.run
+    def run(*args, input=None, timeout=660):
+        if 'pods' in args:
+            events.append((args, input))
+            applied_deployment = any(a[:4] == ('kubectl', '-n', 'ui2', 'apply') and 'kind: Deployment' in (p or '')
+                                     for a, p in events)
+            uid = 'new-worker-pod' if applied_deployment else 'old-worker-pod'
+            return json.dumps({'items': [{'metadata': {'uid': uid}}]})
+        return inner(*args, input=input, timeout=timeout)
+    monkeypatch.setattr(deploy, 'run', run)
+    monkeypatch.setattr(deploy, 'wait_heartbeat', lambda target: events.append((('heartbeat', target), None)))
+    deploy.replace('worker', IMAGE, 'synthetic-snapshot', 20)
+    diff_idx = index(events, lambda a: a == ('diff',))
+    drain_idx = index(events, lambda a: a[0] == 'query' and 'drain_requested=true' in a[1].replace(' ', ''))
+    barrier_idx = index(events, lambda a: a[0] == 'query' and 'drain_ack_generation=drain_generation' in a[1])
+    (apply_idx, manifest), = applies(events)
+    clear_idx = index(events, lambda a: a[0] == 'query' and 'drain_requested=false' in a[1].replace(' ', ''))
+    rollout_idx = index(events, lambda a: a[:5] == ('kubectl', '-n', 'ui2', 'rollout', 'status')
+                        and 'deployment/ui2-worker' in a)
+    heartbeat_idx = index(events, lambda a: a == ('heartbeat', 'worker'))
+    e2e_idx = index(events, lambda a: a == ('e2e',))
+    assert manifest == deploy.render_manifest('worker', IMAGE, 1) and diffs == [manifest]
+    assert diff_idx < drain_idx < barrier_idx < apply_idx < clear_idx < rollout_idx < heartbeat_idx < e2e_idx
 
 
 @pytest.mark.parametrize('target', sorted(deploy.SYNCED_MANIFESTS))

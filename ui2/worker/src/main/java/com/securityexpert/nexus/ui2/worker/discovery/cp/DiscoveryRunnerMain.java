@@ -48,6 +48,7 @@ public final class DiscoveryRunnerMain {
     }
 
     public static void main(String[] args) {
+        com.securityexpert.nexus.ui2.platform.logging.MaskingFormatter.install();
         Arguments arguments = Arguments.parse(args);
         SshCredentialResolver credentialResolver = storeBackedCredentialResolver();
         DeviceTransport transport =

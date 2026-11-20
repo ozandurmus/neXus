@@ -18,3 +18,13 @@ dependencies {
     testImplementation(libs.archunit.junit5)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
+
+// ArchUnit imports every UI 2.0 module's compiled classes once per test JVM
+// (Ui2ArchitectureTest.productionClasses); keep a single non-recycled fork with
+// an explicit 2 GB heap on both `test` and `architectureTest` so local and CI runs
+// share the same cached class graph and memory ceiling.
+tasks.withType<Test>().configureEach {
+    maxHeapSize = "2g"
+    maxParallelForks = 1
+    forkEvery = 0
+}

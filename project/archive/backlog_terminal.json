@@ -1260,6 +1260,15 @@
       "priority": "P1",
       "target": "V243 device_software_version_history / SoftwareHistoryController / Lifecycle Recent upgrades",
       "note": "see docs/history/backlog/device_software_version_history.md"
+    },
+    {
+      "id": "nightly_e2e_fails_on_legitimate_platform_status_warning",
+      "category": "testing",
+      "title": "Nightly e2e fails when Platform status shows a legitimate disk or operations warning",
+      "status": "done",
+      "priority": "P2",
+      "target": "nightly e2e guard",
+      "note": ""
     }
   ]
 }

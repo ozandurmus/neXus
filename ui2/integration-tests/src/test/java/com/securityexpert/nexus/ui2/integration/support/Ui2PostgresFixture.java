@@ -220,8 +220,13 @@ public final class Ui2PostgresFixture implements AutoCloseable {
     private void bootstrap() {
         try (Connection admin = adminConnection(); Statement statement = admin.createStatement()) {
             ensureRoles(admin);
+            // UTF8 explicitly, as the live database is (sclorg postgresql-16 and the CI postgres:16 both initdb
+            // with UTF8). A local server initdb'd under the C locale defaults to SQL_ASCII, and template1 would
+            // pass that on: the device summary's chr(1114111) prefix bound then fails ("requested character too
+            // large for encoding"), which took the estate dictionary down and broke the HTTP characterization.
+            // template0 because template1 may carry another encoding; the server's own locale is kept.
             statement.execute("CREATE DATABASE " + quoteIdentifier(databaseName)
-                    + " OWNER " + quoteIdentifier(MIGRATE_ROLE));
+                    + " OWNER " + quoteIdentifier(MIGRATE_ROLE) + " ENCODING 'UTF8' TEMPLATE template0");
             // §7 test 1's ordering, enforced by the harness rather than
             // asserted about it: only ui2_migrate may connect until Flyway
             // has finished.
