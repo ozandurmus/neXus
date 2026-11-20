@@ -134,8 +134,9 @@ The readiness re-run is submitted by the job itself, in its own audited transact
 (`pan_config_sync_followup`), for the same unit, in the initiator's name and under the initiator's grant (its role). It
 is never refused for business hours: inside them its job carries the initiator's acknowledgement when the request had
 one, else the follow-up's own (`business_hours_ack_by = system:pan-config-sync-followup`), as the follow-up of an
-administrator's admitted write. It waits 15 s after the reply first, without contacting a device, so the peer has time
-to apply the configuration. If it cannot be admitted (another run started on the unit) or fails, the record keeps the
+administrator's admitted write. It waits 60 s after the reply first, without contacting a device, so the peer has time
+to apply the configuration (15 s until 2026-11-19; on live the peer reported synchronized about 55 s after the reply, so
+the earlier re-run showed a successful sync as still failing; PO 2026-11-19 asked for the fix). If it cannot be admitted (another run started on the unit) or fails, the record keeps the
 code in `followup_refusal` (never in its outcome) and the screen offers the normal "Run pre-checks".
 
 An uncertain outcome does not open a failover incident: the write does not move traffic or HA roles. Its uncertainty is

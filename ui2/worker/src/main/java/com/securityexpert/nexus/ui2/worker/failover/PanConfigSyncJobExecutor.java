@@ -43,8 +43,12 @@ public final class PanConfigSyncJobExecutor {
     private static final Pattern STATUS = Pattern.compile("\\A\\s*(?:<\\?xml[^>]{0,200}\\?>\\s*)?<response\\s+status\\s*=\\s*[\"'](success|error)[\"']");
     private static final int MAX_BODY = 262144;
     private static final String ACTOR = "system:pan-config-sync-worker";
-    /** Design §4: the settle pause between the reply and the readiness re-run; no device contact. */
-    public static final Duration DEFAULT_SETTLE = Duration.ofSeconds(15);
+    /**
+     * Design §4: the settle pause between the reply and the readiness re-run; no device contact. 60 s since 2026-11-19:
+     * on live the passive member reported "synchronized" about 55 s after the reply, so a 15 s pause re-ran readiness
+     * too early and showed "Configuration sync still fails" for a sync that succeeded (PO 2026-11-19).
+     */
+    public static final Duration DEFAULT_SETTLE = Duration.ofSeconds(60);
 
     private record Peer(String id, ApiTarget target, String key, String identity) {}
     static final class Stop extends RuntimeException {

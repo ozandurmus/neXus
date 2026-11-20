@@ -3429,6 +3429,25 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_23_VSX_CHASSIS_READINESS.md (RATIFIED); docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md section 3"
 
+  # PO 2026-11-19 "Onaylıyorum" (docs/design/PO_DECISION_RECORD_2026_11_19_CP_VS_CPSTAT_POLICY_GATE.md, RATIFIED; seeded
+  # by V254): the cpstat policy read in the VS context, the one per-VS failover read that was missing.
+  - gate_id: cp_policy_install_cpstat_vsid
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv <VSID> && cpstat -f policy fw'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run of a virtual system"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: "missing policy or install time -> UNKNOWN; blocks failover"
+    secret_output_risk: "policy identities stay in memory; only equality, presence and install-time skew are projected"
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_11_19_CP_VS_CPSTAT_POLICY_GATE.md (RATIFIED)"
+
   - gate_id: "cp_policy_packages"
     vendor: "check_point"
     platform_role_scope: "cp_multi_domain_server"
