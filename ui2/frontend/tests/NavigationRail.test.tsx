@@ -91,6 +91,7 @@ describe("the expanded sidebar (navigation redesign 2026-11-12)", () => {
     ["operations", "?screen=operations&tab=health", "Device health", "Operations"],
     ["operations", "?screen=operations&tab=policy-install", "Policy installation", "Operations"],
     ["operations", "?screen=operations&tab=routes", "Static routes", "Operations"],
+    ["operations", "?screen=operations&tab=script-execution", "Script execution", "Operations"],
     ["packet_analysis", "?screen=packet_analysis", "Packet analysis", "Tools"],
     ["sanitizer", "?screen=sanitizer", "Data sanitizer", "Tools"],
     ["diagnostics", "?screen=diagnostics", "Diagnostics", "Tools"],
@@ -340,6 +341,7 @@ describe("the sidebar folds to icons (PO 2026-10-20)", () => {
       ["Device health", "?screen=operations&tab=health"],
       ["Policy installation", "?screen=operations&tab=policy-install"],
       ["Static routes", "?screen=operations&tab=routes"],
+      ["Script execution", "?screen=operations&tab=script-execution"],
     ]);
     for (const item of items) expect(item.tagName).toBe("A");
     expect(items[1]).toHaveAttribute("aria-current", "page");

@@ -1,0 +1,239 @@
+# Script Execution: the ui2-script-runner broker and the guard rails of the per-run execution pods
+# (docs/design/SCRIPT_EXECUTION_CONTRACT.md Amendment 2026-11-18 (b); review ops-scripts/reviews/script-s2-review-1118.md).
+#
+# Two workloads:
+#   - ui2-script-runner (Deployment below): the broker. Service image, one replica. It holds the script_run job lease,
+#     asks ui2-service (internal port 8086, its own token) for the run's body, declared credentials and per-run session,
+#     and creates one short-lived Job script-run-<job id> per run. It never executes a script. It holds its own database
+#     login (ui2_script_runner, V258), its internal-port token and its namespaced service-account token; no artefact-store
+#     or credential-store key.
+#   - script-run-<job id> (Job, created by the broker, deleted by it at the end of every run): the execution pod. uid/gid
+#     20185, service account ui2-script-run with no token mounted, no Secret in its environment, no database / artefact /
+#     credential mount, read-only root, activeDeadlineSeconds = timeout_s. Its egress is the run's own NetworkPolicy
+#     (DNS, ui2-service:8080, the version's declared host:port as resolved at run start) on top of the default deny below.
+#
+# Hand-made on the host, never committed (tools/delivery/script_runner_db_login.py makes both in any order relative to
+# the first V258 ship):
+#   Secret ui2-db-script-runner      keys user, password      the broker's database login (role ui2_script_runner)
+#   Secret ui2-script-runner-token   keys token, sha256       the broker's internal-port token; ui2-service reads sha256
+# Without the Secrets, module_deploy.py applies the ServiceAccounts/Role/RoleBinding/NetworkPolicies only, ui2-service
+# starts cleanly without the runner token and reports runner_available=false until the Secrets and broker exist.
+#
+# UI2_SCRIPT_EXEC_IMAGE is rendered by tools/delivery/module_deploy.py (--script-exec-image, else the live value); the
+# committed placeholder is never valid, so a first release without an execution image fails visibly.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ui2-script-runner
+  namespace: ui2
+automountServiceAccountToken: false
+---
+# The execution pods' identity: no token, no RoleBinding.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ui2-script-run
+  namespace: ui2
+automountServiceAccountToken: false
+---
+# The broker's Kubernetes rights, namespaced. RBAC cannot restrict `create` by object name (the name does not exist
+# yet), so the script-run- prefix is enforced in the broker's code (ScriptRunKubernetes) and covered by tests. Secrets
+# get create/delete only: get/list/watch on secrets would let the broker read every Secret of the namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ui2-script-runner
+  namespace: ui2
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["create", "get", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ui2-script-runner
+  namespace: ui2
+subjects:
+  - kind: ServiceAccount
+    name: ui2-script-runner
+    namespace: ui2
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ui2-script-runner
+---
+# Default deny for every execution pod; each run adds its own allow policy (policies add up).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ui2-script-run-default-deny
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: script-run
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: script-run
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []
+---
+# The broker accepts no connection. Its egress (DNS, ui2-db, ui2-service-internal:8086, the Kubernetes API server) is not
+# restricted here, like ui2-service and ui2-worker: the API server's address is node configuration this file cannot
+# name. The broker runs no user code.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ui2-script-runner
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: script-runner
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: nexus-ui2
+      app.kubernetes.io/component: script-runner
+  policyTypes:
+    - Ingress
+  ingress: []
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui2-script-runner
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: script-runner
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: nexus-ui2
+      app.kubernetes.io/component: script-runner
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: nexus-ui2
+        app.kubernetes.io/component: script-runner
+    spec:
+      serviceAccountName: ui2-script-runner
+      # The broker calls the Kubernetes API (its Role above); no script ever runs in this pod.
+      automountServiceAccountToken: true
+      terminationGracePeriodSeconds: 900
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: script-runner
+          image: registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:966cf85b73bc107cc4331f9967f98dfad864e0035d96ea97aa4848fd7deeb136
+          imagePullPolicy: IfNotPresent
+          args:
+            - ui2-script-runner
+          env:
+            - name: NEXUS_LOG_RAW_ADDRESSES
+              value: "1"
+            - name: UI2_DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-config
+                  key: db_host
+            - name: UI2_DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-config
+                  key: db_port
+            - name: UI2_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-config
+                  key: db_name
+            - name: UI2_DB_URL
+              value: jdbc:postgresql://$(UI2_DB_HOST):$(UI2_DB_PORT)/$(UI2_DB_NAME)
+            - name: UI2_DB_APP_USER_FILE
+              value: /run/secrets/ui2-db/app-user
+            - name: UI2_DB_APP_PASSWORD_FILE
+              value: /run/secrets/ui2-db/app-password
+            - name: UI2_SCRIPT_RUNNER_TOKEN_FILE
+              value: /run/secrets/ui2-script-runner/token
+            - name: UI2_SCRIPT_RUNNER_SERVICE_URL
+              value: http://ui2-service-internal.ui2.svc.cluster.local:8086
+            - name: UI2_SERVICE_URL
+              value: http://ui2-service:8080
+            - name: UI2_NODE_IPS
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: UI2_SCRIPT_EXEC_IMAGE
+              value: set-by-module-deploy
+            - name: UI2_WORKER_DRAIN_SECONDS
+              value: "840"
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /app/tmp
+            - name: home
+              mountPath: /app/home
+            - name: db-credentials
+              mountPath: /run/secrets/ui2-db
+              readOnly: true
+            - name: runner-token
+              mountPath: /run/secrets/ui2-script-runner
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: home
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: db-credentials
+          secret:
+            secretName: ui2-db-script-runner
+            defaultMode: 0440
+            items:
+              - key: user
+                path: app-user
+              - key: password
+                path: app-password
+        - name: runner-token
+          secret:
+            secretName: ui2-script-runner-token
+            defaultMode: 0440
+            items:
+              - key: token
+                path: token

@@ -1,11 +1,13 @@
 package com.securityexpert.nexus.ui2.service.script;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -15,10 +17,14 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.springframework.beans.factory.annotation.Autowired;
 
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactClass;
+import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactRef;
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
 import com.securityexpert.nexus.ui2.persistence.device.CredentialReferenceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
@@ -26,10 +32,12 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.device.EndpointRecord;
 import com.securityexpert.nexus.ui2.persistence.script.ScriptRecord;
 import com.securityexpert.nexus.ui2.persistence.script.ScriptRepository;
+import com.securityexpert.nexus.ui2.persistence.script.ScriptRunRecord;
 import com.securityexpert.nexus.ui2.persistence.script.ScriptSecretFinding;
 import com.securityexpert.nexus.ui2.persistence.script.ScriptVersionRecord;
 import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
-import com.securityexpert.nexus.ui2.platform.RoleToken;
+import com.securityexpert.nexus.ui2.platform.ScriptCredentialAliases;
+import com.securityexpert.nexus.ui2.platform.ScriptExecutionJob;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 
 /**
@@ -51,13 +59,28 @@ import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
  */
 public final class ScriptExecutionService {
 
+    private static final Logger LOG = Logger.getLogger(ScriptExecutionService.class.getName());
+
     /** Maximum script upload size: 10 MiB (10,485,760 bytes). */
     public static final int MAX_SCRIPT_BYTES = 10 * 1024 * 1024;
+    /** Raw-evidence retention for captured script_output artefacts and inline output_tail (contract sections 2, 4.3). */
+    public static final Duration OUTPUT_RETENTION = Duration.ofDays(30);
+    public static final String RETENTION_ACTOR = "system:script_retention";
     public static final int DEFAULT_TIMEOUT_SECONDS = 300;
     public static final int MAX_TIMEOUT_SECONDS = 3600;
     public static final String DEFAULT_NOTIFY = "none";
-    public static final String DEFAULT_RUN_AS = RoleToken.OPERATOR;
+    public static final String DEFAULT_RUN_AS = ScriptExecutionJob.DEFAULT_RUN_AS;
+    static final String RUN_AS_MESSAGE = "run_as must be one of " + ScriptExecutionJob.RUN_AS_ALLOWLIST
+            + " (a role, never a user name, never role:security_admin)";
     public static final String BAT_CMD_REFUSAL_REASON = "cannot run on the Linux runner; use PowerShell (.ps1)";
+    /**
+     * Technical refusal (SCRIPT_EXECUTION_CONTRACT.md Amendment 2026-11-18 (b) item 8): PowerShell 7 is not in the
+     * execution image (no pinned offline package the image build can install), so a {@code .ps1} cannot run yet.
+     */
+    public static final String PS1_REFUSAL_REASON = "cannot run yet: PowerShell 7 (pwsh) is not installed in the "
+            + "script execution image (no pinned offline package is available to the image build)";
+    /** Kinds the execution image can run today: {@link #SUPPORTED_KINDS} minus {@code ps1}. */
+    public static final Set<String> RUNNABLE_KINDS = Set.of("sh", "bash", "py", "jar", "js", "mjs", "pl", "rb", "bin");
 
     public static final Set<String> SUPPORTED_KINDS = Set.of(
             "sh", "bash", "py", "jar", "js", "mjs", "pl", "rb", "ps1", "bin");
@@ -113,12 +136,39 @@ public final class ScriptExecutionService {
         }
     }
 
+    public sealed interface RunOutcome {
+        record RunSubmitted(ScriptRunRecord run) implements RunOutcome {
+        }
+
+        record Refused(int status, String code, String message) implements RunOutcome {
+        }
+    }
+
+    public sealed interface OutputOutcome {
+        record OutputReady(ScriptRunRecord run, byte[] plaintextBytes) implements OutputOutcome {
+            public OutputReady {
+                Objects.requireNonNull(run, "run");
+                plaintextBytes = plaintextBytes == null ? new byte[0] : plaintextBytes.clone();
+            }
+
+            @Override
+            public byte[] plaintextBytes() {
+                return plaintextBytes.clone();
+            }
+        }
+
+        record Refused(int status, String code, String message) implements OutputOutcome {
+        }
+    }
+
     private final ScriptRepository scriptRepository;
     private final CredentialReferenceRepository credentialReferences;
     private final DeviceRepository deviceRepository;
     private final ArtefactStore artefactStore;
     private final Clock clock;
     private final int maxScriptBytes;
+    private volatile ScriptCredentialSource credentialSource;
+    private volatile BooleanSupplier runnerTokenConfigured = () -> true;
 
     @Autowired
     public ScriptExecutionService(
@@ -145,6 +195,16 @@ public final class ScriptExecutionService {
             throw new IllegalArgumentException("maxScriptBytes must be between 1 and " + MAX_SCRIPT_BYTES);
         }
         this.maxScriptBytes = maxScriptBytes;
+    }
+
+    /** Display names of declared refs, for the alias-collision warning (Amendment 2026-11-18 (b) item 10). */
+    public void useCredentialSource(ScriptCredentialSource source) {
+        this.credentialSource = source;
+    }
+
+    /** Whether the service has a configured runner token digest (reports runner_available = false until it exists). */
+    public void useRunnerTokenConfigured(BooleanSupplier configured) {
+        this.runnerTokenConfigured = Objects.requireNonNull(configured, "configured");
     }
 
     public List<ScriptDetails> list() {
@@ -215,8 +275,8 @@ public final class ScriptExecutionService {
         String runAs = command.runAs() == null || command.runAs().isBlank()
                 ? DEFAULT_RUN_AS
                 : command.runAs().strip();
-        if ( isForbiddenRunAs(runAs)) {
-            return new Outcome.Refused(400, "INVALID_RUN_AS", "script run_as cannot be role:security_admin");
+        if (ScriptExecutionJob.isForbiddenRunAs(runAs)) {
+            return new Outcome.Refused(400, "INVALID_RUN_AS", RUN_AS_MESSAGE);
         }
 
         EgressValidation egressValidation = validateAndCorrelateEgress(command.egress());
@@ -431,8 +491,8 @@ public final class ScriptExecutionService {
         String runAs = existing.runAs();
         if (command.runAs().isPresent()) {
             runAs = command.runAs().get().strip();
-            if (runAs.isEmpty() || isForbiddenRunAs(runAs)) {
-                return new Outcome.Refused(400, "INVALID_RUN_AS", "script run_as cannot be empty or role:security_admin");
+            if (ScriptExecutionJob.isForbiddenRunAs(runAs)) {
+                return new Outcome.Refused(400, "INVALID_RUN_AS", RUN_AS_MESSAGE);
             }
         }
 
@@ -451,8 +511,32 @@ public final class ScriptExecutionService {
         if (updated.isEmpty()) {
             return new Outcome.Refused(404, "SCRIPT_NOT_FOUND", "No script with id '" + scriptId + "'");
         }
+        ScriptRecord current = updated.get();
+        // Credential refs are versioned (Amendment 2026-11-18 (b) item 10): a run injects exactly its version's refs, so
+        // changing them here records a new version with the same encrypted body and the new refs.
+        Optional<ScriptVersionRecord> currentVersion = scriptRepository.findVersion(current.scriptId(), current.currentVersion());
+        if (command.credentialRefs().isPresent() && currentVersion.isPresent()
+                && !currentVersion.get().credentialRefs().equals(credentialRefs)) {
+            ScriptVersionRecord base = currentVersion.get();
+            Instant now = clock.instant();
+            ScriptVersionRecord refsVersion = new ScriptVersionRecord(
+                    base.scriptId(),
+                    current.currentVersion() + 1,
+                    base.sha256(),
+                    base.sizeBytes(),
+                    base.artefactRef(),
+                    base.keyId(),
+                    base.wrappedDataKey(),
+                    base.secretFindings(),
+                    credentialRefs,
+                    egressDeviceTargets,
+                    actorFingerprint,
+                    now);
+            current = scriptRepository.appendVersion(current.scriptId(), refsVersion, actorFingerprint,
+                    ActionRegistry.SCRIPT_WRITE);
+        }
         List<ScriptVersionRecord> versions = scriptRepository.findVersions(existing.scriptId());
-        return new Outcome.Ok(toDetails(updated.get(), versions, clock.instant()));
+        return new Outcome.Ok(toDetails(current, versions, clock.instant()));
     }
 
     public Outcome setEnabled(String scriptId, boolean enabled, String actorFingerprint) {
@@ -469,6 +553,204 @@ public final class ScriptExecutionService {
         }
         List<ScriptVersionRecord> versions = scriptRepository.findVersions(scriptId.strip());
         return new Outcome.Ok(toDetails(updated.get(), versions, clock.instant()));
+    }
+
+    /**
+     * Submits an immediate manual {@code script_run} job for the current version of {@code scriptId}
+     * ({@code SCRIPT_EXECUTION_CONTRACT.md} sections 3.3, 3.4, 3.6).
+     */
+    public RunOutcome runNow(String scriptId, String actorFingerprint) {
+        if (actorFingerprint == null || actorFingerprint.isBlank()) {
+            return new RunOutcome.Refused(403, "AUTHENTICATION_REQUIRED", "An authenticated operator or administrator is required");
+        }
+        if (scriptId == null || scriptId.isBlank()) {
+            return new RunOutcome.Refused(400, "INVALID_SCRIPT_ID", "script_id is required");
+        }
+        String trimmedId = scriptId.strip();
+        Optional<ScriptRecord> scriptOpt = scriptRepository.findById(trimmedId);
+        if (scriptOpt.isEmpty()) {
+            return new RunOutcome.Refused(404, "SCRIPT_NOT_FOUND", "No script with id '" + trimmedId + "'");
+        }
+        ScriptRecord script = scriptOpt.get();
+        if (ScriptExecutionJob.isForbiddenRunAs(script.runAs())) {
+            return new RunOutcome.Refused(400, "INVALID_RUN_AS", RUN_AS_MESSAGE);
+        }
+        Optional<ScriptVersionRecord> versionOpt = scriptRepository.findVersion(script.scriptId(), script.currentVersion());
+        if (versionOpt.isEmpty()) {
+            return new RunOutcome.Refused(409, "SCRIPT_VERSION_MISSING",
+                    "Current version " + script.currentVersion() + " not found for script '" + script.scriptId() + "'");
+        }
+        ScriptVersionRecord version = versionOpt.get();
+        String jobId = UUID.randomUUID().toString();
+        Instant now = clock.instant();
+        // Egress is a script setting (not versioned): the run records the script's current list and its device targets.
+        List<String> egressTargets = script.egressDeviceTargets();
+        // A run injects exactly the refs of the version it runs (Amendment 2026-11-18 (b) item 10).
+        List<String> credRefs = version.credentialRefs();
+        Optional<ScriptRunRecord> admitted = scriptRepository.admitRun(
+                jobId,
+                script.scriptId(),
+                version.version(),
+                "MANUAL",
+                Optional.empty(),
+                script.runAs(),
+                script.egress(),
+                egressTargets,
+                credRefs,
+                now,
+                actorFingerprint,
+                ActionRegistry.SCRIPT_RUN);
+        if (admitted.isEmpty()) {
+            return new RunOutcome.Refused(500, "RUN_ADMISSION_FAILED", "Could not admit script_run job");
+        }
+        return new RunOutcome.RunSubmitted(admitted.get());
+    }
+
+    /**
+     * Claims a scheduled slot {@code (script_id, slot)} and admits at most one {@code script_run} job
+     * ({@code SCRIPT_EXECUTION_CONTRACT.md} section 3.4). Returns {@link Optional#empty()} if the script is disabled,
+     * has no schedule, or the slot was already claimed.
+     */
+    public Optional<ScriptRunRecord> runScheduledSlot(ScriptRecord script, Instant slot) {
+        if (script == null || slot == null || !script.enabled() || script.schedule().isEmpty()) {
+            return Optional.empty();
+        }
+        if (ScriptExecutionJob.isForbiddenRunAs(script.runAs())) {
+            return Optional.empty();
+        }
+        Optional<ScriptVersionRecord> versionOpt = scriptRepository.findVersion(script.scriptId(), script.currentVersion());
+        if (versionOpt.isEmpty()) {
+            return Optional.empty();
+        }
+        ScriptVersionRecord version = versionOpt.get();
+        String jobId = UUID.randomUUID().toString();
+        Instant now = clock.instant();
+        // Egress is a script setting (not versioned): the run records the script's current list and its device targets.
+        List<String> egressTargets = script.egressDeviceTargets();
+        // A run injects exactly the refs of the version it runs (Amendment 2026-11-18 (b) item 10).
+        List<String> credRefs = version.credentialRefs();
+        return scriptRepository.admitRun(
+                jobId,
+                script.scriptId(),
+                version.version(),
+                "SCHEDULED",
+                Optional.of(slot),
+                script.runAs(),
+                script.egress(),
+                egressTargets,
+                credRefs,
+                now,
+                "system:script_scheduler",
+                ScriptExecutionJob.CAPABILITY);
+    }
+
+    public List<ScriptRunRecord> listRuns(String scriptId, int limit) {
+        if (scriptId == null || scriptId.isBlank()) {
+            return List.of();
+        }
+        return scriptRepository.findRunsByScriptId(scriptId.strip(), limit <= 0 ? 50 : Math.min(limit, 500));
+    }
+
+    public Optional<ScriptRunRecord> findRun(String runId) {
+        if (runId == null || runId.isBlank()) {
+            return Optional.empty();
+        }
+        return scriptRepository.findRunByJobId(runId.strip());
+    }
+
+    public OutputOutcome downloadRunOutput(String runId, String actorFingerprint) {
+        if (actorFingerprint == null || actorFingerprint.isBlank()) {
+            return new OutputOutcome.Refused(403, "AUTHENTICATION_REQUIRED", "An authenticated session is required");
+        }
+        if (runId == null || runId.isBlank()) {
+            return new OutputOutcome.Refused(400, "INVALID_RUN_ID", "run_id is required");
+        }
+        Optional<ScriptRunRecord> runOpt = scriptRepository.findRunByJobId(runId.strip());
+        if (runOpt.isEmpty()) {
+            return new OutputOutcome.Refused(404, "SCRIPT_RUN_NOT_FOUND", "No script run with id '" + runId + "'");
+        }
+        ScriptRunRecord run = runOpt.get();
+        if (run.outputArtefactRef().isEmpty() || run.outputWrappedDataKey() == null) {
+            return new OutputOutcome.Refused(404, "SCRIPT_OUTPUT_NOT_AVAILABLE",
+                    "Run '" + run.jobId() + "' has no stored output artefact");
+        }
+        if (artefactStore == null) {
+            return new OutputOutcome.Refused(503, "STORE_UNAVAILABLE", "the service has no artefact store mounted");
+        }
+        // One audit row per download, before the first byte (Amendment 2026-11-18 (b) item 11).
+        try {
+            scriptRepository.auditOutputDownload(run.jobId(), actorFingerprint);
+        } catch (RuntimeException e) {
+            return new OutputOutcome.Refused(500, "SCRIPT_OUTPUT_AUDIT_FAILED", "Could not record the download audit row");
+        }
+        try (var in = artefactStore.retrieve(
+                new ArtefactRef(run.outputArtefactRef().get()),
+                run.outputWrappedDataKey(),
+                false)) {
+            return new OutputOutcome.OutputReady(run, in.readAllBytes());
+        } catch (IOException e) {
+            return new OutputOutcome.Refused(500, "SCRIPT_OUTPUT_READ_FAILED", "Could not read encrypted script output");
+        }
+    }
+
+    /**
+     * Records the mandatory {@code audit_script_output_download} row when serving captured script output (full output
+     * download or {@code output_tail} on {@code GET /api/v2/scripts/runs/{runId}}). Returns {@code false} if the audit
+     * row could not be written.
+     */
+    public boolean auditOutputRead(String runId, String actorFingerprint) {
+        if (runId == null || runId.isBlank() || actorFingerprint == null || actorFingerprint.isBlank()) {
+            return false;
+        }
+        try {
+            scriptRepository.auditOutputDownload(runId.strip(), actorFingerprint);
+            return true;
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Prunes {@code script_output} artefacts and clears {@code output_artefact_ref}, {@code output_key_id},
+     * {@code output_wrapped_data_key} and {@code output_tail} on terminal {@code script_run} rows older than
+     * {@link #OUTPUT_RETENTION} (30 days, contract sections 2 and 4.3).
+     */
+    public int pruneExpiredOutputs(Instant now) {
+        Instant reference = now == null ? clock.instant() : now;
+        Instant cutoff = reference.minus(OUTPUT_RETENTION);
+        List<ScriptRepository.ExpiredRunOutput> expired = scriptRepository.findRunsWithOutputOlderThan(cutoff, 200);
+        int pruned = 0;
+        for (ScriptRepository.ExpiredRunOutput item : expired) {
+            if (item.outputArtefactRef().isPresent() && artefactStore != null) {
+                try {
+                    artefactStore.delete(new ArtefactRef(item.outputArtefactRef().get()));
+                } catch (IOException | RuntimeException e) {
+                    LOG.log(Level.WARNING, "script_output_retention_file_delete_failed: job_id={0}", item.jobId());
+                    continue;
+                }
+            }
+            try {
+                if (scriptRepository.clearExpiredRunOutput(item.jobId(), RETENTION_ACTOR)) {
+                    pruned++;
+                }
+            } catch (RuntimeException e) {
+                LOG.log(Level.WARNING, "script_output_retention_db_clear_failed: job_id={0}", item.jobId());
+            }
+        }
+        return pruned;
+    }
+
+    /** True when the broker token exists and the broker heartbeated within the last minute (the screen's "runner available"). */
+    public boolean runnerAvailable() {
+        try {
+            return runnerTokenConfigured.getAsBoolean() && scriptRepository.runnerAvailable();
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    public ScriptRepository repository() {
+        return scriptRepository;
     }
 
     private Outcome.Refused validateKindAndBody(String fileName, String scriptName, String explicitKind, byte[] body) {
@@ -493,6 +775,9 @@ public final class ScriptExecutionService {
         if (resolved.isEmpty()) {
             return new Outcome.Refused(400, "UNSUPPORTED_SCRIPT_KIND",
                     "Could not determine script kind; supply a supported file extension or explicit kind");
+        }
+        if (!RUNNABLE_KINDS.contains(resolved.get())) {
+            return new Outcome.Refused(400, "UNSUPPORTED_SCRIPT_KIND", PS1_REFUSAL_REASON);
         }
         if (body == null || body.length == 0) {
             return new Outcome.Refused(400, "EMPTY_SCRIPT_BODY", "Script body must not be empty");
@@ -596,11 +881,6 @@ public final class ScriptExecutionService {
         }
     }
 
-    private static boolean isForbiddenRunAs(String runAs) {
-        String lower = runAs.strip().toLowerCase(Locale.ROOT);
-        return "role:security_admin".equals(lower) || "security_admin".equals(lower);
-    }
-
     private record EgressValidation(
             List<String> normalizedEgress,
             List<String> deviceTargets,
@@ -627,6 +907,7 @@ public final class ScriptExecutionService {
             }
             normalized.add(parsed.canonical());
             hosts.add(parsed.host());
+            normalizeLiteralAddress(parsed.host()).ifPresent(hosts::add);
         }
         Set<String> targets = new LinkedHashSet<>(scriptRepository.findEnrolledDeviceIdsByEndpointHosts(hosts));
         if (deviceRepository != null) {
@@ -716,6 +997,21 @@ public final class ScriptExecutionService {
         return new ParsedHostPort(normalizedHost, port, canonical);
     }
 
+    /**
+     * Normalizes numeric IPv4 / IPv6 literals (including IPv4-mapped IPv6 such as {@code ::ffff:c000:0201}) without
+     * issuing a DNS query, so device-egress correlation cannot be bypassed by alternate IP literal encodings.
+     */
+    private static Optional<String> normalizeLiteralAddress(String host) {
+        if (host == null || !(host.contains(":") || host.matches("[0-9.]+"))) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(InetAddress.getByName(host).getHostAddress().toLowerCase(Locale.ROOT));
+        } catch (IOException | RuntimeException e) {
+            return Optional.empty();
+        }
+    }
+
     private record CredentialRefsValidation(List<String> normalizedRefs, Outcome.Refused refusal) {
     }
 
@@ -741,9 +1037,9 @@ public final class ScriptExecutionService {
         return new CredentialRefsValidation(List.copyOf(normalized), null);
     }
 
-    private static ScriptDetails toDetails(ScriptRecord script, List<ScriptVersionRecord> versions, Instant now) {
+    private ScriptDetails toDetails(ScriptRecord script, List<ScriptVersionRecord> versions, Instant now) {
         List<Instant> nextFires = script.schedule()
-                .map(cron -> ScriptSchedule.nextFiveFires(cron, now))
+                .map(cron -> ScriptSchedule.nextFiveFires(cron, now, ScriptSchedule.zone()))
                 .orElse(List.of());
         List<String> warnings = new ArrayList<>();
         ScriptVersionRecord latest = versions.stream()
@@ -757,6 +1053,12 @@ public final class ScriptExecutionService {
             warnings.add("Declared egress targets enrolled device management address(es) "
                     + script.egressDeviceTargets()
                     + "; this is a direct path outside neXus command gates and will be recorded on each run.");
+        }
+        ScriptCredentialSource source = credentialSource;
+        if (latest != null && source != null && latest.credentialRefs().size() > 1) {
+            warnings.addAll(ScriptCredentialAliases.assign(latest.credentialRefs().stream()
+                    .map(ref -> new ScriptCredentialAliases.DeclaredRef(ref, source.displayName(ref).orElse("")))
+                    .toList()).warnings());
         }
         return new ScriptDetails(script, versions, nextFires, List.copyOf(warnings));
     }

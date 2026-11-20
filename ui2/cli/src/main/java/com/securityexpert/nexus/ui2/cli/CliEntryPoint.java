@@ -438,10 +438,12 @@ public final class CliEntryPoint {
     private static void postToRoleBindings(String baseUrl, String sessionCookieValue, String csrfToken, String path,
             String jsonBody) {
         try {
+            NexusSessionCli.allowOriginHeader();
             HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
             HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + path))
                     .header("Content-Type", "application/json")
                     .header("X-CSRF-Token", csrfToken)
+                    .header("Origin", NexusSessionCli.originOf(baseUrl))
                     .header("Cookie", "ui2_session=" + sessionCookieValue)
                     .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
                     .build();

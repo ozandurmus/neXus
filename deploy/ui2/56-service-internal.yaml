@@ -53,6 +53,14 @@ spec:
       ports:
         - protocol: TCP
           port: 8086
+    # Script Execution broker (SCRIPT_EXECUTION_CONTRACT.md Amendment 2026-11-18 (b) item 4): start, finish, abort.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: script-runner
+      ports:
+        - protocol: TCP
+          port: 8086
     - from:
         - namespaceSelector:
             matchLabels:

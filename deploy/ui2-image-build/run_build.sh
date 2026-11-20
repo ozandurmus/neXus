@@ -29,7 +29,7 @@ as_tree_owner() {
 # The deploy account cannot write the tree, so Python must not try to cache bytecode there.
 export PYTHONDONTWRITEBYTECODE=1
 cd "$REPO"
-NEXUS_DEPLOY_TARGETS="${NEXUS_DEPLOY_TARGETS:-service worker configuration compliance policy packet-analysis}"
+NEXUS_DEPLOY_TARGETS="${NEXUS_DEPLOY_TARGETS:-service worker configuration compliance policy script-runner packet-analysis}"
 as_tree_owner git fetch
 as_tree_owner git checkout main
 as_tree_owner git pull origin main
@@ -175,11 +175,25 @@ if [ "${NEXUS_BUILD_PACKET_ANALYSIS_IMAGE:-1}" != 0 ]; then
   timing packet_analysis_image "$pa_start"
 fi
 
+# The script execution image (SCRIPT_EXECUTION_CONTRACT.md Amendment 2026-11-18 (b) item 8): the main image just built,
+# by digest, plus the section 7 interpreters; it runs only in the per-run script-run-<id> pods. Tag <commit12>-sx,
+# scanned by the same gate, handed to the ui2-script-runner broker as UI2_SCRIPT_EXEC_IMAGE (module_deploy.py
+# --script-exec-image). NEXUS_BUILD_SCRIPT_EXEC_IMAGE=0 skips it; the broker then keeps its current execution image.
+SX_IMAGE=""
+if [ "${NEXUS_BUILD_SCRIPT_EXEC_IMAGE:-1}" != 0 ]; then
+  sx_start=$SECONDS
+  SX_IMAGE="$(python3 "$REPO/tools/delivery/hosta_script_exec_image.py" build --commit "$COMMIT_SHA" \
+    --service-image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST")"
+  echo "Script execution image is $SX_IMAGE"
+  timing script_exec_image "$sx_start"
+fi
+
 if [ -z "${NEXUS_SKIP_SECURITY_REASON:-}" ] && [ "$SECURITY_CONFIGURED" = 1 ]; then
   gate_start=$SECONDS
   echo "Running security-gate on the freshly built digest..."
   python3 "$REPO/tools/security/security_host.py" gate --config "$HOME/.config/nexus/security.json" \
     --image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST" ${PA_IMAGE:+--image "$PA_IMAGE"} \
+    ${SX_IMAGE:+--image "$SX_IMAGE"} \
     --commit "$COMMIT_SHA" --job-name "$SECURITY_JOB"
   timing security_gate_wait "$gate_start"
 fi
@@ -208,6 +222,7 @@ else
   python3 "$REPO/tools/delivery/module_deploy.py" --targets "$NEXUS_DEPLOY_TARGETS" \
     --image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST" \
     ${PA_IMAGE:+--packet-analysis-image "$PA_IMAGE"} \
+    ${SX_IMAGE:+--script-exec-image "$SX_IMAGE"} \
     --snapshot "$HOME/release-snapshots/$SNAPSHOT_ID" --commit "$COMMIT_SHA" --wait-limit "${WORKER_WAIT_LIMIT_S:-14400}" \
     --authorization-ref "${NEXUS_MODULE_AUTHORIZATION_REF:-}"
 fi

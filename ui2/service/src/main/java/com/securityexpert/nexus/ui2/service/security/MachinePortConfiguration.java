@@ -19,7 +19,8 @@ import com.securityexpert.nexus.ui2.service.advisorystore.AdvisorySources;
 /**
  * The internal port 8086 serves exactly these POST paths: the e2e machine session, the two advisory ingest paths of the
  * fetch workload (docs/design/ADVISORY_MATCHING_CONTRACT.md section 4) and the two lifecycle-source ingest paths
- * (docs/design/LIFECYCLE_CATALOG_SOURCES_CONTRACT.md section 3.1). Every other path answers 404 there, and every
+ * (docs/design/LIFECYCLE_CATALOG_SOURCES_CONTRACT.md section 3.1) and the three script-run broker paths
+ * (SCRIPT_EXECUTION_CONTRACT.md Amendment 2026-11-18 (b)). Every other path answers 404 there, and every
  * {@code /internal/**} path answers 404 on the main port.
  */
 @Configuration
@@ -41,6 +42,8 @@ public class MachinePortConfiguration {
     static boolean internalPortAllows(String method, String uri) {
         if (!"POST".equals(method) || uri == null) return false;
         if ("/internal/machine-session".equals(uri)) return true;
+        // Script Execution broker (SCRIPT_EXECUTION_CONTRACT.md Amendment 2026-11-18 (b) item 4).
+        if (com.securityexpert.nexus.ui2.service.api.ScriptRunnerInternalController.PATHS.contains(uri)) return true;
         String lifecycle = "/internal/lifecycle-sources/";
         if (uri.startsWith(lifecycle)) {
             String rest = uri.substring(lifecycle.length());

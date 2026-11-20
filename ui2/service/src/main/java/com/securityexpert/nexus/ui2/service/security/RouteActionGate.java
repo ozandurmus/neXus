@@ -116,9 +116,13 @@ public final class RouteActionGate {
                     try {
                         if (localIdentityResolver != null && localRoleTokenResolver != null) {
                             var identity = localIdentityResolver.resolve(proceed.actorFingerprint());
-                            replayViewer = identity.isPresent() && localRoleTokenResolver.resolve(identity.get().localIdentityId())
-                                    .contains(com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER);
-                        } else {
+                            if (identity.isPresent()) {
+                                replayViewer = localRoleTokenResolver.resolve(identity.get().localIdentityId())
+                                        .contains(com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER);
+                            } else if (gateChain != null) {
+                                replayViewer = gateChain.isReplayViewer(proceed.actorFingerprint());
+                            }
+                        } else if (gateChain != null) {
                             replayViewer = gateChain.isReplayViewer(proceed.actorFingerprint());
                         }
                         if (replayViewerBySession.size() > 10_000) {

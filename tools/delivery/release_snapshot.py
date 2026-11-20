@@ -320,7 +320,7 @@ def restore_items(directory, manifest, namespace):
 # Self-owned modules (V154) keep their own ownership and pod across every rollback: the analysis worker is
 # independent of the rolled-back binaries, and its retention pruner keeps the 7-day raw-evidence law
 # (PO decision record 2026-10-15 §5) running. The general worker never receives packet_analysis_run.
-KEEP_ON_ROLLBACK = {"ui2-packet-analysis": "packet_analysis"}
+KEEP_ON_ROLLBACK = {"ui2-packet-analysis": "packet_analysis", "ui2-script-runner": "script_runner"}
 
 
 def stop_split_runtime(snapshot):

@@ -119,7 +119,6 @@ class ScriptExecutionServiceTest {
         samples.put("mod.mjs", "export const ok = true;\n".getBytes(StandardCharsets.UTF_8));
         samples.put("report.pl", "print \"ok\\n\";\n".getBytes(StandardCharsets.UTF_8));
         samples.put("task.rb", "puts 'ok'\n".getBytes(StandardCharsets.UTF_8));
-        samples.put("winstyle.ps1", "Write-Output 'ok'\n".getBytes(StandardCharsets.UTF_8));
         samples.put("agent.bin", new byte[] {0x7f, 0x45, 0x4c, 0x46, (byte) 0x80, 0x00});
 
         for (Map.Entry<String, byte[]> entry : samples.entrySet()) {
@@ -133,7 +132,13 @@ class ScriptExecutionServiceTest {
             assertEquals(expectedKind, saved.kind());
             assertEquals(1, saved.currentVersion());
         }
-        assertEquals(10, service.list().size());
+        assertEquals(9, service.list().size());
+        // .ps1: technical refusal until PowerShell 7 is in the execution image (Amendment 2026-11-18 (b) item 8).
+        Outcome ps1 = service.create(new CreateScriptCommand(
+                null, "winstyle.ps1", null, "Write-Output 'ok'\n".getBytes(StandardCharsets.UTF_8), null, false, 120,
+                List.of(), List.of(), "none", null), "actor-secadmin");
+        assertTrue(ps1 instanceof Outcome.Refused);
+        assertEquals(ScriptExecutionService.PS1_REFUSAL_REASON, ((Outcome.Refused) ps1).message());
     }
 
     @Test
@@ -290,12 +295,13 @@ class ScriptExecutionServiceTest {
         assertEquals(List.of("dev-tango-04"), detailsV1.script().egressDeviceTargets(),
                 "Egress matching an enrolled device's management IP must record its opaque device_id");
         assertTrue(detailsV1.warnings().stream().anyMatch(w -> w.contains("dev-tango-04") && w.contains("outside neXus command gates")));
+        // Five-field cron is read in Europe/Istanbul (UTC+3): 02:00 local is 23:00Z the day before.
         assertEquals(List.of(
-                Instant.parse("2026-11-19T02:00:00Z"),
-                Instant.parse("2026-11-20T02:00:00Z"),
-                Instant.parse("2026-11-21T02:00:00Z"),
-                Instant.parse("2026-11-22T02:00:00Z"),
-                Instant.parse("2026-11-23T02:00:00Z")),
+                Instant.parse("2026-11-18T23:00:00Z"),
+                Instant.parse("2026-11-19T23:00:00Z"),
+                Instant.parse("2026-11-20T23:00:00Z"),
+                Instant.parse("2026-11-21T23:00:00Z"),
+                Instant.parse("2026-11-22T23:00:00Z")),
                 detailsV1.nextFiveFires());
 
         // Upload version 2
@@ -333,6 +339,48 @@ class ScriptExecutionServiceTest {
                 Instant.parse("2026-11-18T11:00:00Z"),
                 Instant.parse("2026-11-18T11:15:00Z")),
                 detailsPatched.nextFiveFires());
+    }
+
+    @Test
+    void changingCredentialRefsInSettingsRecordsANewVersionWithTheSameBody() {
+        // Review finding 10: a run injects its version's refs only, so a refs change is a new version.
+        Outcome created = service.create(new CreateScriptCommand(
+                "refs-check", "refs.sh", null, "echo ok\n".getBytes(StandardCharsets.UTF_8), null, false, 60,
+                List.of(), List.of("cred-ref-alpha"), "none", null), "actor-secadmin");
+        String scriptId = ((Outcome.Ok) created).details().script().scriptId();
+        ScriptVersionRecord v1 = ((Outcome.Ok) created).details().versions().get(0);
+        Outcome patched = service.updateSettings(scriptId, new UpdateSettingsCommand(
+                Optional.empty(), false, Optional.empty(), Optional.empty(), Optional.empty(),
+                Optional.of(List.of("cred-ref-bravo")), Optional.empty(), Optional.empty()), "actor-secadmin");
+        var details = ((Outcome.Ok) patched).details();
+        assertEquals(2, details.script().currentVersion());
+        ScriptVersionRecord v2 = details.versions().stream().filter(v -> v.version() == 2).findFirst().orElseThrow();
+        assertEquals(List.of("cred-ref-bravo"), v2.credentialRefs());
+        assertEquals(v1.sha256(), v2.sha256());
+        assertEquals(v1.artefactRef(), v2.artefactRef());
+        // Settings without a refs change record no new version.
+        Outcome again = service.updateSettings(scriptId, new UpdateSettingsCommand(
+                Optional.empty(), false, Optional.empty(), Optional.of(90), Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.empty()), "actor-secadmin");
+        assertEquals(2, ((Outcome.Ok) again).details().script().currentVersion());
+    }
+
+    @Test
+    void runAsIsARoleFromTheAllowlistOnly() {
+        for (String bad : List.of("operator-alice", "role:security_admin", "security_admin", "role:operation_admin",
+                "role:backup_admin", "ROLE:OPERATOR")) {
+            Outcome outcome = service.create(new CreateScriptCommand(
+                    "ra-" + Math.abs(bad.hashCode()), "ra.sh", null, "echo\n".getBytes(StandardCharsets.UTF_8), null,
+                    false, 60, List.of(), List.of(), "none", bad), "actor-secadmin");
+            assertTrue(outcome instanceof Outcome.Refused, bad);
+            assertEquals("INVALID_RUN_AS", ((Outcome.Refused) outcome).code(), bad);
+        }
+        for (String good : List.of("role:operator", "role:viewer", "role:replay_viewer")) {
+            Outcome outcome = service.create(new CreateScriptCommand(
+                    "ok-" + good.substring(5), "ok.sh", null, "echo\n".getBytes(StandardCharsets.UTF_8), null,
+                    false, 60, List.of(), List.of(), "none", good), "actor-secadmin");
+            assertTrue(outcome instanceof Outcome.Ok, good);
+        }
     }
 
     @Test
@@ -375,8 +423,12 @@ class ScriptExecutionServiceTest {
         controller.create(new CreateScriptRequest(
                 "aiview-check", "aiview.sh", "sh", "#!/usr/bin/env sh\necho ok\n", null,
                 "0 4 * * *", false, 300, List.of("192.0.2.10:443"), List.of("cred-ref-alpha"),
-                "none", "operator-alice"),
+                "none", "role:viewer"),
                 authedRequest("admin-bob", false));
+        // A user name is never a run_as (review finding 8): refused with the allowlist, nothing stored.
+        assertEquals(400, controller.create(new CreateScriptRequest(
+                "aiview-user", "aiview2.sh", "sh", "echo 1\n", null, null, false, 60, List.of(), List.of(),
+                "none", "operator-alice"), authedRequest("admin-bob", false)).getStatusCode().value());
 
         var viewerReq = authedRequest("viewer-aiview", true);
         var listResp = controller.list(viewerReq);
@@ -387,8 +439,6 @@ class ScriptExecutionServiceTest {
         Map<String, Object> item = scripts.get(0);
         assertFalse("admin-bob".equals(item.get("created_by_actor_fingerprint")),
                 "aiview must receive a masked actor token, not the raw actor");
-        assertFalse("operator-alice".equals(item.get("run_as")),
-                "aiview must receive a masked user token for a non-role run_as");
 
         String scriptId = (String) item.get("script_id");
         assertEquals(403, controller.create(new CreateScriptRequest(

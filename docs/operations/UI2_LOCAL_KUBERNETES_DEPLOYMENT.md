@@ -221,6 +221,37 @@ Postgres. The encrypted bytes themselves live under `UI2_ARTEFACT_STORE_ROOT`
 restart does not orphan the artefacts `device_configuration_run` rows still
 point at by `artefact_ref`).
 
+## 5d. First-ship bootstrap for the Script Execution broker (`ui2-script-runner`, V258)
+
+The Script Execution broker (`deploy/ui2/61-script-runner-deployment.yaml`) uses its own least-privilege database role
+(`ui2_script_runner`, V258) and internal-port token (`Secret/ui2-script-runner-token`). The bootstrap is safe in either
+order:
+
+1. **Roll out `ui2-service` (migration V258).** V258 creates `ui2_script_runner` `NOLOGIN` (when the migration role holds
+   `CREATEROLE`, or `10-configmap.yaml` `create-app-role.sh` created it on database start) and defines and runs
+   `ui2_apply_script_runner_role_grants()`. `ui2-service` starts without `Secret/ui2-script-runner-token`
+   (`secretKeyRef` `optional: true`) and reports `runner_available: false` until the secret and broker heartbeat exist.
+   While `Secret/ui2-db-script-runner` or `Secret/ui2-script-runner-token` is absent, `tools/delivery/module_deploy.py`
+   applies the broker's `ServiceAccount`s, `Role`, `RoleBinding` and `NetworkPolicy` objects and defers creating
+   `Deployment/ui2-script-runner`.
+2. **Provision the broker database login and internal-port token:**
+   ```sh
+   python3 tools/delivery/script_runner_db_login.py db-login
+   python3 tools/delivery/script_runner_db_login.py token
+   ```
+   `db-login` creates `ui2_script_runner` if absent, sets its SCRAM-SHA-256 verifier over `psql` stdin, applies
+   `ui2_apply_script_runner_role_grants()` (guarded by `to_regprocedure` so it also succeeds if run before V258), and
+   writes `Secret/ui2-db-script-runner`. `token` writes `Secret/ui2-script-runner-token` (`token` and `sha256`).
+3. **Restart `ui2-service` and roll out `ui2-script-runner`:**
+   Because `UI2_SCRIPT_RUNNER_TOKEN_SHA256` in `50-service-deployment.yaml` is an `env` `secretKeyRef` evaluated only at
+   pod start (never hot-projected), always restart `ui2-service` after creating `Secret/ui2-script-runner-token`:
+   ```sh
+   kubectl -n ui2 rollout restart deployment/ui2-service
+   kubectl -n ui2 rollout status deployment/ui2-service --timeout=600s
+   ```
+   Then run `tools/delivery/module_deploy.py --targets script-runner --image <service-digest> --script-exec-image <exec-digest> --snapshot <dir>`
+   (or run step 2 before the first `run_build.sh`, in which case the release rolls out `ui2-script-runner` in a single pass).
+
 ## 6. Apply the manifest set
 
 ```sh

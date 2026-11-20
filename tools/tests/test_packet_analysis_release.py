@@ -278,8 +278,9 @@ def test_full_rollback_keeps_packet_analysis_self_owned(monkeypatch):
     monkeypatch.setattr(snapshot, 'run', lambda *a, **kw: None)
     snapshot.stop_split_runtime('synthetic-snapshot')
     ownership = next(sql for sql in calls if 'full_rollback_ownership' in sql)
-    assert "effective_owner=case when module in ('packet_analysis') then module else 'general' end" in ownership
-    assert "fallback_enabled=case when module='general' or module in ('packet_analysis') then fallback_enabled else true end" in ownership
+    # Script Execution slice 2 adds script_runner as the second self-owned module (KEEP_ON_ROLLBACK).
+    assert "effective_owner=case when module in ('packet_analysis','script_runner') then module else 'general' end" in ownership
+    assert "fallback_enabled=case when module='general' or module in ('packet_analysis','script_runner') then fallback_enabled else true end" in ownership
 
 
 def test_full_rollback_keeps_and_restarts_an_added_packet_analysis_workload(tmp_path, monkeypatch, capfd):

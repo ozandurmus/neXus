@@ -338,6 +338,13 @@ public final class ActionRegistry {
      */
     public static final String SCRIPT_READ = "script_read";
     public static final String SCRIPT_WRITE = "script_write";
+    /** Script Execution slice 2 (SCRIPT_EXECUTION_CONTRACT.md section 3.6): run now requires operator or above, never aiview. */
+    public static final String SCRIPT_RUN = "script_run";
+    /**
+     * Script Execution output download (Amendment 2026-11-18 (b) item 11): operator or above, audited per download.
+     * The action id written to the audit row is {@code script_output_download}.
+     */
+    public static final String SCRIPT_OUTPUT_READ = "script_output_read";
 
     public static final String HTTPS_CERTIFICATE_ACCEPT = "https_certificate_accept";
     public static final String HTTPS_CERTIFICATE_STRICT = "https_certificate_strict";
@@ -543,9 +550,13 @@ public final class ActionRegistry {
         register(new ActionDescriptor(SUPPORT_BUNDLE_DELETE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SUPPORT_BUNDLE_CLEANUP_WORKDIR, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SUPPORT_BUNDLE_UPLOAD, true, Optional.of(RoleToken.SECURITY_ADMIN)));
-        // Script Execution slice 1 (SCRIPT_EXECUTION_CONTRACT.md section 3.6): read follows job_log_read; writes are security_admin.
+        // Script Execution slice 1 & 2 (SCRIPT_EXECUTION_CONTRACT.md section 3.6): read follows job_log_read; writes are security_admin; run is operator+.
         register(new ActionDescriptor(SCRIPT_READ, true, Optional.empty()));
         register(new ActionDescriptor(SCRIPT_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(SCRIPT_RUN, true, Optional.of(RoleToken.OPERATOR),
+                java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(SCRIPT_OUTPUT_READ, true, Optional.of(RoleToken.OPERATOR),
+                java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN)));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without

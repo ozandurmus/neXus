@@ -29,6 +29,13 @@ public final class ArtefactClass {
     public static final String SCRIPT_VENDOR = "script_body";
     public static final String SCRIPT_DEVICE_ID = "platform:scripts";
 
+    /**
+     * Captured script run output (Script Execution slice 2, V258; SCRIPT_EXECUTION_CONTRACT.md section 3.3 and 4.3):
+     * masked stdout and stderr up to 256 KiB each, envelope-encrypted at rest, 30-day default retention.
+     */
+    public static final String SCRIPT_OUTPUT = "script_output";
+    public static final String SCRIPT_OUTPUT_VENDOR = "script_output";
+
     private ArtefactClass() {
     }
 }

@@ -25,7 +25,7 @@ class ScriptCliTest {
 
     private static final String SCRIPT_ID = "11111111-2222-4333-8444-555555555555";
 
-    record Seen(String method, String path, String csrf, String body) {
+    record Seen(String method, String path, String csrf, String origin, String body) {
     }
 
     private static HttpServer serve(List<Seen> seen, int status, byte[] responseBody) throws Exception {
@@ -35,6 +35,7 @@ class ScriptCliTest {
                     exchange.getRequestMethod(),
                     exchange.getRequestURI().toString(),
                     exchange.getRequestHeaders().getFirst("X-CSRF-Token"),
+                    exchange.getRequestHeaders().getFirst("Origin"),
                     new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8)));
             exchange.sendResponseHeaders(status, responseBody.length);
             exchange.getResponseBody().write(responseBody);
@@ -81,7 +82,11 @@ class ScriptCliTest {
                     "--run-as", "role:operator"}));
             assertEquals(0, cli.run(new String[] {"script-enable", SCRIPT_ID}));
             assertEquals(0, cli.run(new String[] {"script-disable", SCRIPT_ID}));
+            assertEquals(0, cli.run(new String[] {"script-run", SCRIPT_ID}));
+            assertEquals(0, cli.run(new String[] {"script-runs", SCRIPT_ID}));
+            assertEquals(0, cli.run(new String[] {"script-output", "run-123"}));
 
+            String expectedOrigin = "http://127.0.0.1:" + server.getAddress().getPort();
             assertEquals(List.of(
                     "GET /api/v2/scripts",
                     "GET /api/v2/scripts/" + SCRIPT_ID,
@@ -89,8 +94,18 @@ class ScriptCliTest {
                     "POST /api/v2/scripts/" + SCRIPT_ID + "/versions",
                     "PATCH /api/v2/scripts/" + SCRIPT_ID,
                     "POST /api/v2/scripts/" + SCRIPT_ID + "/enable",
-                    "POST /api/v2/scripts/" + SCRIPT_ID + "/disable"),
+                    "POST /api/v2/scripts/" + SCRIPT_ID + "/disable",
+                    "POST /api/v2/scripts/" + SCRIPT_ID + "/run",
+                    "GET /api/v2/scripts/" + SCRIPT_ID + "/runs",
+                    "GET /api/v2/scripts/runs/run-123/output"),
                     seen.stream().map(s -> s.method() + " " + s.path()).toList());
+
+            for (Seen call : seen) {
+                if (!"GET".equals(call.method())) {
+                    assertEquals("csrf-token-1", call.csrf(), "CSRF header required on " + call.method() + " " + call.path());
+                    assertEquals(expectedOrigin, call.origin(), "Origin header required on " + call.method() + " " + call.path());
+                }
+            }
 
             assertTrue(seen.get(2).body().contains("\"file_name\":\"nightly_check.py\""));
             assertTrue(seen.get(2).body().contains("\"content_base64\":\"" + expectedBase64 + "\""));

@@ -186,6 +186,7 @@ final class SupportBundleCli {
         if (sanitized) body.put("mode", "sanitized");
         HttpRequest request = HttpRequest.newBuilder(URI.create(session.baseUrl() + BASE + "/" + uuid(args[1]) + "/download"))
                 .header("Cookie", "ui2_session=" + session.cookie()).header("X-CSRF-Token", session.csrf())
+                .header("Origin", NexusSessionCli.originOf(session.baseUrl()))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(NexusSessionCli.json(body))).build();
         HttpResponse<InputStream> response = cli.client().send(request, HttpResponse.BodyHandlers.ofInputStream());

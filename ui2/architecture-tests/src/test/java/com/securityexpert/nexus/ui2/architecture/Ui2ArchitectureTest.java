@@ -235,6 +235,11 @@ class Ui2ArchitectureTest {
             return Pattern.compile("^" + Pattern.quote(PYTHON_RPM_REMOVAL) + "$", Pattern.MULTILINE)
                     .matcher(content).replaceAll("").toLowerCase(java.util.Locale.ROOT);
         }
+        if (path.equals(ui2Root().resolve("Containerfile.script-exec"))) {
+            // SCRIPT_EXECUTION_CONTRACT.md section 7: only the per-run script execution image installs python3.12.
+            return Pattern.compile("^\\s*(?:python3\\.12|&& python3\\.12 -m pip install|&& ln -sf /usr/bin/python3\\.12).*$",
+                    Pattern.MULTILINE).matcher(content).replaceAll("");
+        }
         return content;
     }
 

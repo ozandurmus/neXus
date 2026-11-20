@@ -33,7 +33,9 @@ public final class Ui2Launcher {
             // cli_parity_for_every_ui_action: `java -jar service.jar cli <command>` in the shipped image.
             "cli", "com.securityexpert.nexus.ui2.cli.CliEntryPoint",
             // docs/design/ADVISORY_MATCHING_CONTRACT.md section 3: the outbound advisory fetch workload (JDK only, no keys).
-            "advisory-fetch", "com.securityexpert.nexus.ui2.platform.advisoryfetch.AdvisoryFetchMain");
+            "advisory-fetch", "com.securityexpert.nexus.ui2.platform.advisoryfetch.AdvisoryFetchMain",
+            // docs/design/SCRIPT_EXECUTION_CONTRACT.md section 3.2: dedicated script runner pod.
+            "ui2-script-runner", "com.securityexpert.nexus.ui2.worker.scriptrunner.Ui2ScriptRunnerMain");
 
     private Ui2Launcher() {
     }

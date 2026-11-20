@@ -21,12 +21,12 @@ describe("the navigation model (NAVIGATION_REDESIGN_2026_11_12.md section 2)", (
       ["Policy and changes", ["Policy", "Trace", "Changes", "Rule object usage", "Zone matrix", "Cutover impact"]],
       ["Compliance and security", ["Compliance", "Lifecycle and security"]],
       ["Backups", null],
-      ["Operations", ["HA and readiness", "Jobs", "Device health", "Policy installation", "Static routes"]],
+      ["Operations", ["HA and readiness", "Jobs", "Device health", "Policy installation", "Static routes", "Script execution"]],
       ["Reports", null],
       ["Tools", ["Packet analysis", "Data sanitizer", "Diagnostics", "Support bundles"]],
       ["Administration", ["Device registry", "Access and identity", "Scheduled jobs", "Notifications and logging", "Platform status", "Audit log", "Delivery plan"]],
     ]);
-    expect(NAV_LEAVES).toHaveLength(28);
+    expect(NAV_LEAVES).toHaveLength(29);
   });
 
   it("gives every destination one entry: ids and addresses are unique, and every screen has a home", () => {
@@ -103,6 +103,7 @@ describe("the lit entry", () => {
     ["operations", "?screen=operations&tab=health", "operations-health"],
     ["operations", "?screen=operations&tab=policy-install", "operations-policy-install"],
     ["operations", "?screen=operations&tab=routes", "operations-routes"],
+    ["operations", "?screen=operations&tab=script-execution", "operations-script-execution"],
     // The two Operations tabs of earlier on 2026-11-13 light their Administration pages, even before the shell rewrites.
     ["operations", "?screen=operations&tab=platform-status", "admin-platform-status"],
     ["operations", "?screen=operations&tab=schedules", "admin-scheduled-jobs"],
@@ -173,7 +174,7 @@ describe("what a session is shown (plane checks only)", () => {
       ["Overview", null],
       ["Policy and changes", ["Policy", "Trace", "Changes", "Rule object usage", "Zone matrix", "Cutover impact"]],
       ["Backups", null],
-      ["Operations", ["HA and readiness", "Jobs", "Device health", "Policy installation", "Static routes"]],
+      ["Operations", ["HA and readiness", "Jobs", "Device health", "Policy installation", "Static routes", "Script execution"]],
       ["Reports", null],
       ["Tools", ["Packet analysis", "Diagnostics", "Support bundles"]],
       ["Administration", ["Device registry", "Access and identity", "Scheduled jobs", "Notifications and logging", "Platform status", "Audit log", "Delivery plan"]],

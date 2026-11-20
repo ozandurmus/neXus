@@ -120,12 +120,18 @@ class PathValidationFenceTest {
         String v247 = caseBody(Files.readString(migrations.resolve("V247__fgt_failover_readiness.sql")));
         assertEquals(v212.replace("'asa_cluster_failover') THEN 'failover'", "'asa_cluster_failover','fgt_failover_readiness') THEN 'failover'"), v247);
         // V252 (static route R0 preview) is V247's mapping plus one diagnostics capability and nothing else.
-        String v251 = caseBody(Files.readString(migrations.resolve("V252__static_route_r0_preview.sql")));
-        assertEquals(v247.replace("'path_validation') THEN 'diagnostics'", "'path_validation','static_route_preview') THEN 'diagnostics'"), v251);
+        String v252 = caseBody(Files.readString(migrations.resolve("V252__static_route_r0_preview.sql")));
+        assertEquals(v247.replace("'path_validation') THEN 'diagnostics'", "'path_validation','static_route_preview') THEN 'diagnostics'"), v252);
+        // V258 (Script Execution slice 2) is route R0's V252 mapping plus script_run -> script_runner and nothing else.
+        String v258 = caseBody(Files.readString(migrations.resolve("V258__script_execution_slice2.sql")));
+        assertEquals(v252.replace("WHEN capability = 'packet_analysis_run' THEN 'packet_analysis'",
+                "WHEN capability = 'packet_analysis_run' THEN 'packet_analysis' WHEN capability = 'script_run' THEN 'script_runner'"),
+                v258);
         try (var files = Files.list(migrations)) {
             assertEquals(List.of("V178__pan_config_sync_remediation.sql", "V188__path_analysis_validation.sql",
                     "V207__credential_failure_alert.sql", "V212__asa_failover_readiness.sql",
-                    "V247__fgt_failover_readiness.sql", "V252__static_route_r0_preview.sql"),
+                    "V247__fgt_failover_readiness.sql", "V252__static_route_r0_preview.sql",
+                    "V258__script_execution_slice2.sql"),
                     files.map(p -> p.getFileName().toString()).filter(n -> {
                         try {
                             return Files.readString(migrations.resolve(n)).contains("CREATE OR REPLACE FUNCTION ui2_job_module")

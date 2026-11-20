@@ -1,0 +1,62 @@
+# Script execution image -- the per-run pods script-run-<job id> (docs/design/SCRIPT_EXECUTION_CONTRACT.md section 7 and
+# Amendment 2026-11-18 (b) item 8). Not the broker: ui2-script-runner runs the main service image unchanged.
+#
+# The main neXus image (ui2/Containerfile, built first, by digest) plus the section 7 interpreters, so they never enter
+# any other neXus image: bash 5 (already in the base), Python 3.12 with requests, paramiko and pyyaml, the OpenJDK 21
+# runtime and nexus-cli (already in the base), Node.js 22, perl 5 and ruby 3. A static binary needs nothing.
+#
+# PowerShell 7 is NOT installed: it is not in the UBI 9 repositories this build reaches and the repository carries no
+# digest-pinned offline package for it, so .ps1 uploads are refused with that technical reason until one is added
+# (ScriptExecutionService.PS1_REFUSAL_REASON).
+#
+# Build context: the repository root.
+#   --build-arg=SERVICE_IMAGE=registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:<digest>
+# Built by tools/delivery/hosta_script_exec_image.py in every ship, after the main image.
+
+ARG SERVICE_IMAGE
+FROM ${SERVICE_IMAGE}
+
+USER 0
+
+# Optional corporate CA anchors for this build's own downloads (as in ui2/Containerfile); removed afterwards.
+COPY ui2/.ca/ /tmp/corp-ca/
+RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
+      cp /tmp/corp-ca/*.pem /etc/pki/ca-trust/source/anchors/ && update-ca-trust; \
+    fi
+
+# Interpreters at image build time only; nothing is installed at run time. The package managers are removed afterwards.
+RUN microdnf module enable -y nodejs:22 \
+ && microdnf install -y --nodocs --setopt=install_weak_deps=0 \
+        python3.12 \
+        python3.12-pip \
+        nodejs \
+        perl-interpreter \
+        ruby \
+        sed \
+ && python3.12 -m pip install --no-cache-dir \
+        requests==2.32.3 \
+        paramiko==3.5.0 \
+        pyyaml==6.0.2 \
+ && ln -sf /usr/bin/python3.12 /usr/local/bin/python3 \
+ && microdnf clean all \
+ && rm -rf /var/cache/dnf /var/cache/yum /var/lib/dnf /var/log/* /root/.cache /tmp/corp-ca \
+ && (rpm -e --nodeps microdnf libdnf dnf-data librepo libsolv 2>/dev/null || true) \
+ && test ! -e /usr/bin/microdnf && test ! -e /usr/bin/dnf && test ! -e /usr/bin/yum
+
+# The execution pod runs as uid/gid 20185, neither owner nor group of /app: the jar and nexus-cli become world-readable
+# (they carry no secret), the directory traversable. Nothing under /app is writable; the pod's root filesystem is
+# read-only and /scratch and /app/tmp are emptyDir mounts.
+RUN chmod 0755 /app \
+ && chmod 0644 /app/service.jar \
+ && chmod 0755 /app/nexus-cli \
+ && mkdir -p /scratch \
+ && chmod 0755 /scratch
+
+WORKDIR /scratch
+ENV HOME=/scratch/home
+
+USER 20185
+
+# No entrypoint of its own: the broker sets the command of each container (seed step, launcher).
+ENTRYPOINT []
+CMD ["/bin/bash", "-c", "exit 64"]

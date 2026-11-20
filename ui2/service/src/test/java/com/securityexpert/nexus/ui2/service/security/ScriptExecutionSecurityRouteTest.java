@@ -38,15 +38,22 @@ class ScriptExecutionSecurityRouteTest {
     private static final String VERSIONS_ROUTE = "/api/v2/scripts/script-1/versions";
     private static final String ENABLE_ROUTE = "/api/v2/scripts/script-1/enable";
     private static final String DISABLE_ROUTE = "/api/v2/scripts/script-1/disable";
+    private static final String RUN_ROUTE = "/api/v2/scripts/script-1/run";
+    private static final String RUNS_ROUTE = "/api/v2/scripts/script-1/runs";
+    private static final String ONE_RUN_ROUTE = "/api/v2/scripts/runs/run-1";
+    private static final String RUN_OUTPUT_ROUTE = "/api/v2/scripts/runs/run-1/output";
 
     @Test
     void writeActionRequiresSecurityAdminAndReadActionIsOpenToEveryAuthenticatedRole() {
         var registry = new ActionRegistry();
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN),
                 registry.find(ActionRegistry.SCRIPT_WRITE).orElseThrow().requiredRoleTokens());
+        assertEquals(Set.of(RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN),
+                registry.find(ActionRegistry.SCRIPT_RUN).orElseThrow().requiredRoleTokens());
         assertTrue(registry.find(ActionRegistry.SCRIPT_READ).orElseThrow().requiredRoleTokens().isEmpty());
         assertTrue(registry.find(ActionRegistry.SCRIPT_READ).orElseThrow().consoleSubmittable());
         assertTrue(registry.find(ActionRegistry.SCRIPT_WRITE).orElseThrow().consoleSubmittable());
+        assertTrue(registry.find(ActionRegistry.SCRIPT_RUN).orElseThrow().consoleSubmittable());
     }
 
     @Test
@@ -62,6 +69,10 @@ class ScriptExecutionSecurityRouteTest {
         assertEquals(ActionRegistry.SCRIPT_WRITE, method.invoke(interceptor, "PATCH", ONE_ROUTE));
         assertEquals(ActionRegistry.SCRIPT_WRITE, method.invoke(interceptor, "POST", ENABLE_ROUTE));
         assertEquals(ActionRegistry.SCRIPT_WRITE, method.invoke(interceptor, "POST", DISABLE_ROUTE));
+        assertEquals(ActionRegistry.SCRIPT_RUN, method.invoke(interceptor, "POST", RUN_ROUTE));
+        assertEquals(ActionRegistry.SCRIPT_READ, method.invoke(interceptor, "GET", RUNS_ROUTE));
+        assertEquals(ActionRegistry.SCRIPT_READ, method.invoke(interceptor, "GET", ONE_RUN_ROUTE));
+        assertEquals(ActionRegistry.SCRIPT_OUTPUT_READ, method.invoke(interceptor, "GET", RUN_OUTPUT_ROUTE));
 
         // No body download route or DELETE route exists
         assertNull(method.invoke(interceptor, "GET", "/api/v2/scripts/script-1/body"));
@@ -109,7 +120,50 @@ class ScriptExecutionSecurityRouteTest {
                     .preHandle(request("GET", LIST_ROUTE), new MockHttpServletResponse(), new Object()), role);
             assertTrue(interceptor(role, false)
                     .preHandle(request("GET", ONE_ROUTE), new MockHttpServletResponse(), new Object()), role);
+            assertTrue(interceptor(role, false)
+                    .preHandle(request("GET", RUNS_ROUTE), new MockHttpServletResponse(), new Object()), role);
+            assertTrue(interceptor(role, false)
+                    .preHandle(request("GET", ONE_RUN_ROUTE), new MockHttpServletResponse(), new Object()), role);
         }
+    }
+
+    @Test
+    void outputDownloadIsOperatorAndAboveOnly() throws Exception {
+        // Amendment 2026-11-18 (b) item 11 (review finding 11): output may carry operational text, so it is operator+.
+        for (String permitted : List.of(RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN)) {
+            assertTrue(interceptor(permitted, false)
+                    .preHandle(request("GET", RUN_OUTPUT_ROUTE), new MockHttpServletResponse(), new Object()), permitted);
+        }
+        for (String refused : List.of(RoleToken.VIEWER, RoleToken.ONBOARDING_ADMIN, RoleToken.BACKUP_ADMIN,
+                RoleToken.COMPLIANCE_ADMIN, RoleToken.REPLAY_VIEWER)) {
+            var response = new MockHttpServletResponse();
+            assertFalse(interceptor(refused, false)
+                    .preHandle(request("GET", RUN_OUTPUT_ROUTE), response, new Object()), refused);
+            assertEquals(403, response.getStatus(), refused);
+        }
+    }
+
+    @Test
+    void operatorAndAboveMayRunScriptsWhileViewerAndReplayViewerAreRefused() throws Exception {
+        for (String permitted : List.of(RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN)) {
+            assertTrue(interceptor(permitted, false)
+                    .preHandle(request("POST", RUN_ROUTE), new MockHttpServletResponse(), new Object()),
+                    permitted + " must be permitted on POST " + RUN_ROUTE);
+        }
+        for (String refused : List.of(
+                RoleToken.VIEWER, RoleToken.ONBOARDING_ADMIN, RoleToken.BACKUP_ADMIN,
+                RoleToken.COMPLIANCE_ADMIN, RoleToken.REPLAY_VIEWER)) {
+            var response = new MockHttpServletResponse();
+            assertFalse(interceptor(refused, false)
+                    .preHandle(request("POST", RUN_ROUTE), response, new Object()),
+                    refused + " must be refused on POST " + RUN_ROUTE);
+            assertEquals(403, response.getStatus(), refused);
+        }
+        var machineResponse = new MockHttpServletResponse();
+        assertFalse(interceptor(RoleToken.OPERATOR, true)
+                .preHandle(request("POST", RUN_ROUTE), machineResponse, new Object()),
+                "machine session must be refused on POST " + RUN_ROUTE);
+        assertEquals(403, machineResponse.getStatus());
     }
 
     private static MockHttpServletRequest request(String method, String route) {

@@ -17,16 +17,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 TARGETS = {"service": "service", "worker": "worker", "policy": "policy", "backup": "backup",
            "configuration": "configuration", "compliance": "compliance",
+           "script-runner": "script-runner",
            "packet-analysis": "packet-analysis"}
-ROLES = {"worker": "general", "policy": "policy", "backup": "backup", "packet-analysis": "packet_analysis"}
+ROLES = {"worker": "general", "policy": "policy", "backup": "backup",
+         "script-runner": "script_runner", "packet-analysis": "packet_analysis"}
 POLICY_TYPES = ("cp_policy_collect", "pan_policy_collect")
 # V154: modules that own themselves with no general fallback. The general worker has no executor for their job
 # types, so no release path ever hands them to it; without their pod, their jobs wait in REQUESTED.
 NEVER_GENERAL = ("packet_analysis",)
+SELF_OWNED = ("packet_analysis", "script_runner")
 # Tasks ModuleRuntimeRepository.taskModule routes to the backup module (keep in step with it; a test compares).
 BACKUP_MODULE_TASKS = ("OrphanArtefactPurger.runOnce", "RetentionPruningService.prune")
 # Dedicated modules whose drain barrier covers exactly their own job types.
-DEDICATED = {"policy": "policy", "backup": "backup", "packet-analysis": "packet_analysis"}
+DEDICATED = {"policy": "policy", "backup": "backup",
+             "script-runner": "script_runner", "packet-analysis": "packet_analysis"}
 # Targets with NO drain barrier in this tool (not in ROLES): HTTP owners whose requests drain on SIGTERM within the pod
 # grace period. Consecutive ones are rolled out at the same time and share one module e2e afterwards
 # (MODULE_POD_RUNTIME_CONTRACT.md section 3: "Deploy waits ONLY for its module ... unrelated modules retain their digest
@@ -286,8 +290,86 @@ def ensure_backup(image):
     return None
 
 
+# The script execution image (SCRIPT_EXECUTION_CONTRACT.md Amendment 2026-11-18 (b) item 8) of this release, from
+# --script-exec-image; None keeps the broker's live value. The broker itself always runs the service image.
+SCRIPT_EXEC_IMAGE = None
+SCRIPT_EXEC_PLACEHOLDER = "set-by-module-deploy"
+
+
+def live_script_exec_image():
+    """The broker's current UI2_SCRIPT_EXEC_IMAGE, or None (no broker yet, or never set)."""
+    existing = run("kubectl", "-n", "ui2", "get", "deployment", "ui2-script-runner", "--ignore-not-found", "-o", "json")
+    if not existing:
+        return None
+    for container in json.loads(existing)["spec"]["template"]["spec"]["containers"]:
+        for entry in container.get("env", []):
+            if entry.get("name") == "UI2_SCRIPT_EXEC_IMAGE" and re.fullmatch(IMMUTABLE_IMAGE, entry.get("value", "")):
+                return entry["value"]
+    return None
+
+
+def script_exec_image(service_image):
+    """This release's execution image: --script-exec-image, else the live one; never the service image."""
+    exec_image = SCRIPT_EXEC_IMAGE or live_script_exec_image()
+    if exec_image is None:
+        raise Blocked("script-runner needs --script-exec-image (no execution image is set on the broker yet)")
+    if not re.fullmatch(IMMUTABLE_IMAGE, exec_image):
+        raise Blocked("script execution image must be immutable")
+    if exec_image == service_image:
+        raise Blocked("script execution image must differ from the main service image")
+    return exec_image
+
+
+def render_script_runner(image, exec_image, deployment=True):
+    """The broker's manifest set: the Deployment with the service image and UI2_SCRIPT_EXEC_IMAGE set; with
+    deployment=False only the other documents (service accounts, Role, RoleBinding, network policies)."""
+    manifest = (REPO / SCRIPT_RUNNER_MANIFEST).read_text()
+    manifest, count = re.subn(r"(?m)^(\s*image: )\S+$", lambda match: match[1] + image, manifest)
+    if count != 1:
+        raise Blocked("script-runner template must contain exactly one workload image")
+    manifest, count = re.subn(r"(?m)^(\s*- name: UI2_SCRIPT_EXEC_IMAGE\n\s*value: )" + re.escape(SCRIPT_EXEC_PLACEHOLDER) + "$",
+                              lambda match: match[1] + exec_image, manifest)
+    if count != 1:
+        raise Blocked("script-runner template must contain exactly one UI2_SCRIPT_EXEC_IMAGE placeholder")
+    if deployment:
+        return manifest
+    documents = [d for d in re.split(r"(?m)^---\s*$", manifest) if d.strip()]
+    kept = [d for d in documents if not re.search(r"(?m)^kind: Deployment\s*$", d)]
+    return "\n---\n".join(kept)
+
+
+SCRIPT_RUNNER_AWAITING_SECRETS = "awaiting-broker-secrets"
+
+
+def script_runner_secrets_ready():
+    """True when both hand-made broker Secrets exist (tools/delivery/script_runner_db_login.py)."""
+    for name in ("ui2-db-script-runner", "ui2-script-runner-token"):
+        if not run("kubectl", "-n", "ui2", "get", "secret", name, "--ignore-not-found", "-o", "jsonpath={.metadata.name}"):
+            return False
+    return True
+
+
+def ensure_script_runner(image):
+    """Every release re-applies the broker's service accounts, Role, RoleBinding and network policies (they can drift
+    or be new); a first release applies the whole set with the candidate once the broker Secrets exist, or only the
+    non-Deployment objects while awaiting script_runner_db_login.py. Returns the live broker image, None, or
+    SCRIPT_RUNNER_AWAITING_SECRETS."""
+    exec_image = script_exec_image(image)
+    existing = run("kubectl", "-n", "ui2", "get", "deployment", "ui2-script-runner",
+                   "--ignore-not-found", "-o", "json")
+    if existing:
+        run("kubectl", "-n", "ui2", "apply", "-f", "-", input=render_script_runner(image, exec_image, deployment=False))
+        return json.loads(existing)["spec"]["template"]["spec"]["containers"][0]["image"]
+    if not script_runner_secrets_ready():
+        run("kubectl", "-n", "ui2", "apply", "-f", "-", input=render_script_runner(image, exec_image, deployment=False))
+        return SCRIPT_RUNNER_AWAITING_SECRETS
+    run("kubectl", "-n", "ui2", "apply", "-f", "-", input=render_script_runner(image, exec_image))
+    return None
+
+
 IMMUTABLE_IMAGE = r".+@sha256:[a-f0-9]{64}"
 PACKET_ANALYSIS_MANIFEST = "deploy/ui2/58-packet-analysis-deployment.yaml"
+SCRIPT_RUNNER_MANIFEST = "deploy/ui2/61-script-runner-deployment.yaml"
 
 
 # Deployments whose committed manifest is rendered with the candidate image, diffed before the drain and applied after
@@ -493,7 +575,7 @@ def handover_backup(generation, snapshot, authorization):
 
 
 def reset_to_general(snapshot, module, generation, authorization="automatic-rollout-recovery"):
-    if module in NEVER_GENERAL:
+    if module in NEVER_GENERAL or module in SELF_OWNED:
         raise Blocked(module + " is never handed to the general worker; its jobs wait for its own pod")
     # Caller has fenced and stopped the dedicated owner. Never discard permits.
     permit_scope = "owner_role=" + literal(module)
@@ -516,6 +598,11 @@ def reset_to_general(snapshot, module, generation, authorization="automatic-roll
 
 
 def replace_image(target, image, sync_manifest=False):
+    if target == "script-runner" and sync_manifest:
+        # The broker's Deployment with the service image and this release's (or the live) execution image, after the
+        # drain; a plain image swap would leave UI2_SCRIPT_EXEC_IMAGE and the committed env behind.
+        run("kubectl", "-n", "ui2", "apply", "-f", "-", input=render_script_runner(image, script_exec_image(image)))
+        return
     if target == "packet-analysis" and sync_manifest:
         # One pod-template update installs the engine image together with the committed env and resources
         # (memory plan, JAVA_TOOL_OPTIONS), so manifest changes ship with the code. Called only after the drain.
@@ -556,9 +643,22 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
     if fallback and (not authorization or not re.fullmatch(r"[A-Za-z0-9_.:/-]{1,160}", authorization)):
         raise Blocked(target + " ownership transfer requires an opaque PO authorization reference")
     old = (ensure_policy(image) if target == "policy" else ensure_backup(image) if target == "backup"
+           else ensure_script_runner(image) if target == "script-runner"
            else ensure_packet_analysis(image, not rollback) if target == "packet-analysis"
            else run("kubectl", "-n", "ui2", "get", "deployment/ui2-" + target,
                     "-o", "jsonpath={.spec.template.spec.containers[0].image}"))
+    if target == "script-runner" and old == SCRIPT_RUNNER_AWAITING_SECRETS:
+        print("script-runner: broker secrets (ui2-db-script-runner, ui2-script-runner-token) not present yet; "
+              "ServiceAccounts, Role and NetworkPolicies applied; Deployment deferred until script_runner_db_login.py runs",
+              flush=True)
+        if not defer_e2e:
+            with phase(target, "e2e"):
+                module_e2e(commit)
+        result = {"module": target, "e2e": "PASS", "old_digest": None,
+                  "new_digest": image.rsplit("@", 1)[1], "ready": False, "drain_generation": None}
+        if not defer_e2e:
+            print(json.dumps(result), flush=True)
+        return result
     if old is not None and not re.fullmatch(IMMUTABLE_IMAGE, old):
         raise Blocked("old workload digest is not immutable")
     if target in SYNCED_MANIFESTS and old is not None and not rollback:
@@ -566,7 +666,7 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
     generation = None
     # A first release (ensure_packet_analysis created the deployment with the candidate image: old is None) has no
     # old owner to drain; draining it would wait for the new pod itself to stop (2026-10-16: drain retained).
-    if target in ROLES and not (target == "packet-analysis" and old is None):
+    if target in ROLES and not (target in ("packet-analysis", "script-runner") and old is None):
         try:
             with phase(target, "drain"):
                 generation = request_drain(target, snapshot)
@@ -581,7 +681,8 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
     try:
         with phase(target, "replace"):
             # A rollback restores the recorded digest only; the committed manifest belongs to the forward release.
-            replace_image(target, image, sync_manifest=(target == "packet-analysis" or target in SYNCED_MANIFESTS)
+            replace_image(target, image, sync_manifest=(target in ("packet-analysis", "script-runner")
+                                                        or target in SYNCED_MANIFESTS)
                           and old is not None and not rollback)
             if generation is not None:
                 deadline = time.monotonic() + 900
@@ -750,6 +851,9 @@ def main():
     parser.add_argument("--image")
     parser.add_argument("--packet-analysis-image", help="digest-pinned Packet Analysis engine image (main image plus "
                         "tshark); required when packet-analysis is a target, never defaults to --image")
+    parser.add_argument("--script-exec-image", help="digest-pinned script execution image (main image plus the "
+                        "interpreters); set on the ui2-script-runner broker as UI2_SCRIPT_EXEC_IMAGE, never --image; "
+                        "omitted, the broker keeps its live value")
     parser.add_argument("--commit")
     parser.add_argument("--rollback", action="store_true")
     parser.add_argument("--no-concurrent", dest="concurrent_safe", action="store_false",
@@ -776,6 +880,13 @@ def main():
             raise Blocked("candidate image must be immutable")
         if args.packet_analysis_image is not None and not re.fullmatch(IMMUTABLE_IMAGE, args.packet_analysis_image):
             raise Blocked("packet-analysis image must be immutable")
+        if args.script_exec_image is not None:
+            if not re.fullmatch(IMMUTABLE_IMAGE, args.script_exec_image):
+                raise Blocked("script execution image must be immutable")
+            if args.script_exec_image == args.image:
+                raise Blocked("script execution image must differ from the main service image")
+            global SCRIPT_EXEC_IMAGE
+            SCRIPT_EXEC_IMAGE = args.script_exec_image
         if not args.rollback and not returning and "packet-analysis" in targets:
             # The engine needs tshark, which the main service image does not have: fail closed, never fall back.
             if args.packet_analysis_image is None:

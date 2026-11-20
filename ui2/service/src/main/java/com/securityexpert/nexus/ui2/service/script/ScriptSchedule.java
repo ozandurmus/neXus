@@ -2,7 +2,6 @@ package com.securityexpert.nexus.ui2.service.script;
 
 import java.time.Instant;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,6 +16,25 @@ import org.springframework.scheduling.support.CronExpression;
 public final class ScriptSchedule {
 
     public static final int PREVIEW_FIRE_COUNT = 5;
+
+    /** The zone five-field cron is read in unless {@code UI2_SCRIPT_SCHEDULE_ZONE} names another (PO works in Istanbul). */
+    public static final ZoneId DEFAULT_ZONE = ZoneId.of("Europe/Istanbul");
+
+    /** {@code UI2_SCRIPT_SCHEDULE_ZONE} when it is a valid zone id, else {@link #DEFAULT_ZONE}. */
+    public static ZoneId zone() {
+        return zoneOf(System.getenv("UI2_SCRIPT_SCHEDULE_ZONE"));
+    }
+
+    static ZoneId zoneOf(String configured) {
+        if (configured == null || configured.isBlank()) {
+            return DEFAULT_ZONE;
+        }
+        try {
+            return ZoneId.of(configured.strip());
+        } catch (RuntimeException e) {
+            return DEFAULT_ZONE;
+        }
+    }
 
     private ScriptSchedule() {
     }
@@ -46,9 +64,9 @@ public final class ScriptSchedule {
         return normalizeFiveFieldCron(cron).isPresent();
     }
 
-    /** Computes the next five fire instants strictly after {@code from} in UTC. */
+    /** Computes the next five fire instants strictly after {@code from} in {@link #zone()}. */
     public static List<Instant> nextFiveFires(String cron, Instant from) {
-        return nextFiveFires(cron, from, ZoneOffset.UTC);
+        return nextFiveFires(cron, from, zone());
     }
 
     /** Computes the next five fire instants strictly after {@code from} in {@code zone}. */

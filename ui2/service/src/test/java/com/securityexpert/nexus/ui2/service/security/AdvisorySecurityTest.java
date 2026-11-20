@@ -49,7 +49,18 @@ class AdvisorySecurityTest {
         assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/advisories/infoblox"));
         assertFalse(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("GET /internal/advisories/paloalto"));
         assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/machine-session"));
-        assertEquals(12 + 10 + 6 + 3, SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.size(), "two lifecycle-source ingest routes per online source, plus the three SAML handshake routes");
+        assertEquals(12 + 10 + 6 + 3 + 3, SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.size(), "two lifecycle-source ingest routes per online source, the three SAML handshake routes and the three script-run broker routes");
+        for (String path : List.of("start", "finish", "abort")) {
+            assertTrue(SecurityWebMvcConfig.EXPLICITLY_UNGATED_ROUTES.contains("POST /internal/script-runs/" + path), path);
+        }
+    }
+
+    @Test void theScriptRunBrokerRoutesAreServedOnTheInternalPortOnly() {
+        for (String path : List.of("/internal/script-runs/start", "/internal/script-runs/finish", "/internal/script-runs/abort")) {
+            assertTrue(MachinePortConfiguration.internalPortAllows("POST", path), path);
+            assertFalse(MachinePortConfiguration.internalPortAllows("GET", path), path);
+        }
+        assertFalse(MachinePortConfiguration.internalPortAllows("POST", "/internal/script-runs/body"));
     }
 
     @Test void anIngestRouteReachesItsOwnTokenCheckAndAnUnknownSourceIsRefused() throws Exception {

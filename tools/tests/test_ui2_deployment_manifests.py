@@ -20,6 +20,8 @@ mappings and CronJob templates, so security checks cover every workload.
 from __future__ import annotations
 
 import base64
+import json
+import sys
 import re
 from datetime import date
 import tomllib
@@ -231,6 +233,7 @@ def test_the_rule_checks_below_have_something_to_check():
         "Deployment/ui2-configuration", "Deployment/ui2-compliance", "Deployment/ui2-policy",
         "Deployment/ui2-backup",
         "Deployment/ui2-packet-analysis",
+        "Deployment/ui2-script-runner",
         "Job/ui2-e2e", "CronJob/ui2-e2e",
         "CronJob/ui2-advisory-fetch",
     }
@@ -1290,12 +1293,13 @@ def test_database_ingress_policy_admits_exactly_the_workloads_with_a_jdbc_url():
     wants = {name for name, _, pod_spec in templates if has_jdbc(pod_spec)}
     admitted = {name for name, labels, _ in templates if _selector_matches(source["podSelector"], labels)}
     assert wants == {"ui2-service", "ui2-worker", "ui2-backup", "ui2-policy", "ui2-packet-analysis",
-                     "ui2-flyway-bootstrap"}
+                     "ui2-script-runner", "ui2-flyway-bootstrap"}
     assert admitted == wants, "every database-using workload is admitted and no other pod is"
 
 
 def test_the_new_network_policy_files_are_the_only_policy_change():
-    existing = {"ui2-policy", "ui2-packet-analysis", "ui2-backup", "ui2-service-machine-port", "ui2-advisory-fetch"}
+    existing = {"ui2-policy", "ui2-packet-analysis", "ui2-backup", "ui2-service-machine-port", "ui2-advisory-fetch",
+                "ui2-script-runner", "ui2-script-run-default-deny"}
     names = {doc["metadata"]["name"] for doc in _all_docs() if doc.get("kind") == "NetworkPolicy"}
     assert names == existing | {"ui2-db-ingress"}
     # The optional external-database allow is a template: never globbed, never applied by the tooling, allow-only.
@@ -1306,4 +1310,138 @@ def test_the_new_network_policy_files_are_the_only_policy_change():
     assert [(p["protocol"], p["port"]) for p in rule["ports"]] == [("TCP", 5432)]
     assert rule["to"][0]["ipBlock"]["cidr"] == "EXTERNAL_DB_CIDR_SET_AT_DEPLOY", "address is never committed"
     admitted = {name for name, labels, _ in _pod_templates_with_labels() if _selector_matches(external["spec"]["podSelector"], labels)}
-    assert admitted == {"ui2-service", "ui2-worker", "ui2-backup", "ui2-policy", "ui2-packet-analysis", "ui2-flyway-bootstrap"}
+    assert admitted == {"ui2-service", "ui2-worker", "ui2-backup", "ui2-policy", "ui2-packet-analysis",
+                        "ui2-script-runner", "ui2-flyway-bootstrap"}
+
+
+def _script_runner_documents():
+    text = (MANIFEST_DIR / "61-script-runner-deployment.yaml").read_text(encoding="utf-8")
+    return [(doc["kind"], doc["metadata"]["name"], doc) for doc in load_documents(text)]
+
+
+def test_script_runner_broker_manifest():
+    """SCRIPT_EXECUTION_CONTRACT.md Amendment 2026-11-18 (b): the broker runs the service image with its own database
+    login and internal-port token from files, its service-account token for its Role, and no store key of any kind."""
+    docs = {(kind, name): doc for kind, name, doc in _script_runner_documents()}
+    assert set(docs) == {("ServiceAccount", "ui2-script-runner"), ("ServiceAccount", "ui2-script-run"),
+                         ("Role", "ui2-script-runner"), ("RoleBinding", "ui2-script-runner"),
+                         ("NetworkPolicy", "ui2-script-run-default-deny"), ("NetworkPolicy", "ui2-script-runner"),
+                         ("Deployment", "ui2-script-runner")}
+    assert docs[("ServiceAccount", "ui2-script-run")]["automountServiceAccountToken"] is False
+    deployment = docs[("Deployment", "ui2-script-runner")]
+    assert deployment["spec"]["replicas"] == 1 and deployment["spec"]["strategy"] == {"type": "Recreate"}
+    pod = deployment["spec"]["template"]["spec"]
+    assert pod["serviceAccountName"] == "ui2-script-runner" and pod["automountServiceAccountToken"] is True
+    (container,) = pod["containers"]
+    assert container["name"] == "script-runner" and container["args"] == ["ui2-script-runner"]
+    assert re.fullmatch(r"registry\.kube-system\.svc\.cluster\.local/nexus-ui2-service@sha256:[0-9a-f]{64}",
+                        container["image"]), "the broker runs the main service image (its Base64-intrinsic entrypoint)"
+    assert container["securityContext"]["readOnlyRootFilesystem"] is True
+    assert container["securityContext"]["capabilities"]["drop"] == ["ALL"]
+    env = {e["name"]: e for e in container["env"]}
+    # No store key and no shared database login: the service releases what a run needs (finding 1).
+    for forbidden in ("UI2_ARTEFACT_STORE_KEY", "UI2_ARTEFACT_STORE_KEY_FILE", "UI2_CREDENTIAL_STORE_KEY",
+                      "UI2_CREDENTIAL_STORE_KEY_FILE", "UI2_DB_USERNAME", "UI2_DB_PASSWORD", "UI2_ARTEFACT_STORE_ROOT"):
+        assert forbidden not in env, forbidden
+    assert not any("valueFrom" in e and "secretKeyRef" in e["valueFrom"] for e in container["env"])
+    assert env["UI2_NODE_IPS"]["valueFrom"] == {"fieldRef": {"fieldPath": "status.hostIP"}}
+    assert env["UI2_SCRIPT_EXEC_IMAGE"]["value"] == "set-by-module-deploy"
+    secrets = {v["secret"]["secretName"] for v in pod["volumes"] if "secret" in v}
+    assert secrets == {"ui2-db-script-runner", "ui2-script-runner-token"}
+    assert not any("persistentVolumeClaim" in v or "hostPath" in v for v in pod["volumes"])
+
+
+def test_script_runner_role_is_namespaced_and_minimal():
+    """The broker's Role (finding 1/4 fix): only the verbs the broker uses, never get/list/watch on secrets, never
+    exec, never a cluster-wide binding. RBAC cannot restrict create by name; ScriptRunKubernetes enforces the prefix."""
+    docs = {(kind, name): doc for kind, name, doc in _script_runner_documents()}
+    role = docs[("Role", "ui2-script-runner")]
+    assert role["metadata"]["namespace"] == "ui2"
+    rules = {(tuple(r["apiGroups"]), tuple(r["resources"])): set(r["verbs"]) for r in role["rules"]}
+    assert rules == {
+        (("batch",), ("jobs",)): {"create", "get", "list", "watch", "delete"},
+        (("",), ("pods",)): {"get", "list", "watch"},
+        (("",), ("pods/log",)): {"get"},
+        (("",), ("secrets",)): {"create", "delete"},
+        (("networking.k8s.io",), ("networkpolicies",)): {"create", "get", "delete"},
+    }
+    allowed = {"create", "get", "list", "watch", "delete"}
+    assert all(verbs <= allowed for verbs in rules.values())
+    binding = docs[("RoleBinding", "ui2-script-runner")]
+    assert binding["roleRef"] == {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": "ui2-script-runner"}
+    assert binding["subjects"] == [{"kind": "ServiceAccount", "name": "ui2-script-runner", "namespace": "ui2"}]
+    assert not any(doc.get("kind") in ("ClusterRole", "ClusterRoleBinding") for doc in _all_docs()
+                   if "script" in doc.get("metadata", {}).get("name", ""))
+
+
+def test_execution_pods_are_default_denied_and_never_reach_the_database():
+    docs = {(kind, name): doc for kind, name, doc in _script_runner_documents()}
+    deny = docs[("NetworkPolicy", "ui2-script-run-default-deny")]["spec"]
+    assert deny["podSelector"] == {"matchLabels": {"app.kubernetes.io/component": "script-run"}}
+    assert deny["policyTypes"] == ["Ingress", "Egress"] and deny["ingress"] == [] and deny["egress"] == []
+    broker = docs[("NetworkPolicy", "ui2-script-runner")]["spec"]
+    assert broker["policyTypes"] == ["Ingress"] and broker["ingress"] == []
+    db = next(doc for doc in _all_docs() if doc.get("kind") == "NetworkPolicy" and doc["metadata"]["name"] == "ui2-db-ingress")
+    assert not _selector_matches(db["spec"]["ingress"][0]["from"][0]["podSelector"],
+                                 {"app.kubernetes.io/part-of": "nexus-ui2", "app.kubernetes.io/component": "script-run"})
+    machine = next(doc for doc in _all_docs() if doc.get("kind") == "NetworkPolicy"
+                   and doc["metadata"]["name"] == "ui2-service-machine-port")
+    froms = [rule.get("from", [{}])[0].get("podSelector", {}).get("matchLabels", {}) for rule in machine["spec"]["ingress"]]
+    assert {"app.kubernetes.io/component": "script-runner"} in froms
+    assert {"app.kubernetes.io/component": "script-run"} not in froms, "execution pods never reach port 8086"
+
+
+def test_no_secret_key_ref_reaches_a_script_execution_pod():
+    """Review finding 1: the execution pod spec is generated in Java (ScriptRunPodSpec, asserted there); no committed
+    manifest declares a script-run pod, and the broker's own pod carries no secretKeyRef either."""
+    for kind, name, doc in _script_runner_documents():
+        assert "secretKeyRef" not in json.dumps(doc), name
+    source = (REPO_ROOT / "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/scriptrunner/ScriptRunPodSpec.java"
+              ).read_text(encoding="utf-8")
+    for key in ('"secretKeyRef"', '"envFrom"', '"valueFrom"', '"configMapKeyRef"'):
+        assert key not in source, key
+    assert '"automountServiceAccountToken", false' in source
+
+
+def test_service_carries_the_broker_token_digest_and_a_writable_script_store():
+    service = next(doc for doc in _all_docs() if doc.get("kind") == "Deployment" and doc["metadata"]["name"] == "ui2-service")
+    (container,) = [c for c in service["spec"]["template"]["spec"]["containers"] if c["name"] == "service"] or \
+        service["spec"]["template"]["spec"]["containers"][:1]
+    env = {e["name"]: e for e in container["env"]}
+    ref = env["UI2_SCRIPT_RUNNER_TOKEN_SHA256"]["valueFrom"]["secretKeyRef"]
+    assert ref == {"name": "ui2-script-runner-token", "key": "sha256", "optional": True}
+    assert env["UI2_SCRIPT_STORE_ROOT"]["value"].startswith(env["UI2_REPORT_STORE_ROOT"]["value"] + "/")
+    assert env["UI2_SCRIPT_SCHEDULE_ZONE"]["value"] == "Europe/Istanbul"
+
+
+def test_script_exec_containerfile_and_image_builder():
+    """Amendment 2026-11-18 (b) item 8: the execution image is the main image by digest plus the section 7
+    interpreters, no PowerShell (refused at upload instead), built like the Packet Analysis image."""
+    sys.path.insert(0, str(REPO_ROOT / "tools" / "delivery"))
+    import hosta_script_exec_image as sx
+
+    cf = (REPO_ROOT / "ui2" / "Containerfile.script-exec").read_text(encoding="utf-8")
+    for token in ("ARG SERVICE_IMAGE", "FROM ${SERVICE_IMAGE}", "nodejs:22", "python3.12", "requests==", "paramiko==",
+                  "pyyaml==", "perl-interpreter", "ruby", "USER 20185", "chmod 0644 /app/service.jar"):
+        assert token in cf, token
+    assert "pwsh" not in cf.replace("PowerShell 7 is NOT installed", "").split("# Built by")[1]
+    assert not (REPO_ROOT / "ui2" / "Containerfile.script-runner").exists()
+    commit = "a" * 40
+    base = sx.REPOSITORY + "@sha256:" + "1" * 64
+    args = sx.builder_args(["--context=dir:///workspace", "--dockerfile=/x"], commit, base)
+    assert "--dockerfile=/workspace/ui2/Containerfile.script-exec" in args and "--dockerfile=/x" not in args
+    assert "--build-arg=SERVICE_IMAGE=" + base in args
+    assert "--destination=" + sx.REPOSITORY + ":" + commit[:12] + "-sx" in args
+    with pytest.raises(ValueError):
+        sx.service_image(sx.REPOSITORY + ":latest")
+
+
+def test_run_build_builds_scans_and_hands_over_the_script_exec_image():
+    text = (REPO_ROOT / "deploy/ui2-image-build/run_build.sh").read_text(encoding="utf-8")
+    build = text.index('hosta_script_exec_image.py" build')
+    gate = text.index("security_host.py\" gate")
+    rollout = text.index('module_deploy.py" --targets')
+    assert build < gate < rollout
+    assert '${SX_IMAGE:+--image "$SX_IMAGE"}' in text
+    assert '${SX_IMAGE:+--script-exec-image "$SX_IMAGE"}' in text
+    assert "script-runner" in text.split("NEXUS_DEPLOY_TARGETS=")[1].split("\n")[0]

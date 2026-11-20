@@ -515,11 +515,21 @@ class AuditRedactionPolicyTest {
             // scheduled_job_family (V203, 4805eb19): family key, switch, actor, time; the free-text reason is tier-2 redacted
             "scheduled_job_family.changed_at", "scheduled_job_family.changed_by",
             "scheduled_job_family.enabled", "scheduled_job_family.family_key",
-            // script (V251): identifiers, switches, schedule and limits; opaque device ids as every other device_id; role name;
+            // script (V251, V258): identifiers, switches, schedule, last_scheduled_slot and limits; opaque device ids as every other device_id; role name;
             // credential_refs and egress are redacted below
             "script.created_at", "script.created_by_actor_fingerprint", "script.current_version", "script.egress_device_targets",
-            "script.enabled", "script.kind", "script.name", "script.notify", "script.run_as", "script.schedule",
+            "script.enabled", "script.kind", "script.last_scheduled_slot", "script.name", "script.notify", "script.run_as", "script.schedule",
             "script.script_id", "script.timeout_s", "script.updated_at",
+            // script_run (V258): run ledger ids, counts, state/outcome enums, digests, role name and timestamps;
+            // output_wrapped_data_key, egress_declared, output_tail and credential_refs_used are redacted below
+            "script_run.dispatch_epoch", "script_run.duration_ms", "script_run.egress_device_targets",
+            "script_run.exit_code", "script_run.failure_reason", "script_run.finished_at", "script_run.job_id",
+            "script_run.outcome", "script_run.output_artefact_ref", "script_run.output_key_id",
+            "script_run.output_sha256", "script_run.output_size_bytes", "script_run.requested_at",
+            "script_run.requested_by", "script_run.run_as", "script_run.scheduled_slot", "script_run.script_id",
+            "script_run.session_id", "script_run.started_at", "script_run.state", "script_run.stderr_bytes",
+            "script_run.stderr_truncated", "script_run.stdout_bytes", "script_run.stdout_truncated",
+            "script_run.trigger_kind", "script_run.version",
             // script_version (V251): digest, size, artefact reference and key id (no key material); the wrapped key,
             // secret findings and credential refs are redacted below
             "script_version.artefact_ref", "script_version.created_at", "script_version.created_by",
@@ -858,8 +868,10 @@ class AuditRedactionPolicyTest {
             "path_validation_hop.plan", 2,
             // V203 (4805eb19): operator free text, as failover_approval.reason.
             "scheduled_job_family.reason", 2,
-            // V251: operator-declared egress targets and credential reference ids, secret-scan locations, wrapped key.
+            // V251 / V258: operator-declared egress targets and credential reference ids, secret-scan locations, wrapped keys, inline output tail.
             "script.egress", 2, "script.credential_refs", 2,
+            "script_run.credential_refs_used", 2, "script_run.egress_declared", 2,
+            "script_run.output_tail", 2, "script_run.output_wrapped_data_key", 1,
             "script_version.credential_refs", 2, "script_version.secret_findings", 2,
             "script_version.wrapped_data_key", 1);
 

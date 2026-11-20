@@ -257,6 +257,17 @@ class JobLogQueryServiceTest {
         JobEvent emptyEvent = JobLogQueryService.toEvent(emptyRow);
         assertEquals(null, emptyEvent.deviceName());
         assertEquals(null, emptyEvent.targetKind());
+
+        var fScriptName = org.jooq.impl.DSL.field("script_name", String.class);
+        var scriptRow = ctx.newRecord(fJobId, fType, fDevice, fName, fScriptName, fTargetKind, fTargetRef, fState, fOutcome, fReason, fSubmitted, fFinished, fTranscript, fDuration);
+        defaults.accept(scriptRow);
+        scriptRow.set(fType, "script_run");
+        scriptRow.set(fScriptName, "nightly-asa-dr-sync");
+        scriptRow.set(fTargetKind, "script");
+        scriptRow.set(fTargetRef, "script-1@2");
+        JobEvent scriptEvent = JobLogQueryService.toEvent(scriptRow);
+        assertEquals("nightly-asa-dr-sync", scriptEvent.deviceName());
+        assertEquals("script", scriptEvent.targetKind());
     }
 
     @Test
