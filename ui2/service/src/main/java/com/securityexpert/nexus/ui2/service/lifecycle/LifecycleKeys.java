@@ -22,28 +22,32 @@ public final class LifecycleKeys {
 
     // Hardware
     private static final Pattern CP_MODEL = Pattern.compile(
-            "^(?:Check ?Point\\s+)?(?:Quantum\\s+)?(SMART-1\\s+\\d{2,5}(?:-[A-Z0-9]{1,4})?|\\d{3,5}[A-Z]{0,3}(?:-[A-Z0-9]{1,4})?)"
-                    + "(?:\\s+(?:Appliance|Security Gateway|Gateway|Chassis))?$", Pattern.CASE_INSENSITIVE);
+            "^(?:Check ?Point\\s+)?(?:Quantum(?:\\s+(?:Spark|Force|Maestro))?\\s+)?(?:CPAP-SG)?(SMART-1\\s+\\d{2,5}(?:-[A-Z0-9]{1,4})?|\\d{3,5}[A-Z]{0,3}(?:-[A-Z0-9]{1,4})?)"
+                    + "(?:\\s+(?:Appliances?|Security Gateway|Gateway|Chassis))?(?:\\s*\\([^()]{1,40}\\))?$", Pattern.CASE_INSENSITIVE);
+    /** A model text that names no appliance: a virtual machine or an open server has no hardware lifecycle of its own. */
+    private static final Pattern VIRTUAL_PLATFORM = Pattern.compile(
+            "(?i)(?:^|[^a-z])(?:open\\s*server|virtual|vm\\d*|vm-?\\d+|vmware|kvm|hyper-?v|esxi?|azure|aws|gcp|cloudguard)(?:$|[^a-z])|^(?:PA|FG|FGT|FortiGate)-?VM|^ASAv|^FTDv|^FPR-?v");
     private static final Pattern PAN_VIRTUAL_PANORAMA = Pattern.compile(
             "^(?:(?:PAN-)?Panorama(?:(?:\\s+on)?[\\s-]+VM|\\s*\\(VM\\)|\\s+Virtual(?:\\s+Appliance)?)?|PAN-PRA-VM)$",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern PAN_MODEL = Pattern.compile(
             "^(?:PAN-|Panorama\\s+)?(PA-\\d{3,4}[A-Z]?|M-\\d{3,4})(?:-ZTP|-(?:AC|DC)(?:-SYS)?)?$", Pattern.CASE_INSENSITIVE);
     private static final Pattern CISCO_MODEL = Pattern.compile(
-            "^(?:Cisco\\s+)?(?:(ASA)\\s?-?(55\\d\\d)(?:-X)?|(?:FPR|Firepower|Secure Firewall)\\s?-?(\\d{4}))"
+            "^(?:Cisco\\s+)?(?:(ASA)\\s?-?(55\\d\\d)(?:-?X|-SSP-?\\d{1,2}|-K\\d)?(?:\\s+with\\s+.{1,60})?|(?:FPR|Firepower|Secure Firewall)\\s?-?(\\d{4}))"
                     + "(?:\\s+(?:Security Appliance|Appliance|Threat Defense|NGFW|Series))?$", Pattern.CASE_INSENSITIVE);
     private static final Pattern FORTI_MODEL = Pattern.compile(
             "^(FortiGate|FGT|FG|FortiManager|FMG)[-_ ]?(\\d{2,4}[A-Z]{1,2})(?:[-_ ](POE|DSL|LTE|SFP|3G4G|PLUS))?$",
             Pattern.CASE_INSENSITIVE);
 
     // Software
-    private static final Pattern CP_TRAIN = Pattern.compile("^(?:Check Point\\s+)?(R\\d{2}(?:\\.\\d{2})?)(?:$|[\\s+].*)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern CP_SPARK = Pattern.compile("^(?:Check Point\\s+)?R(\\d{2}\\.\\d{2})\\.(?:\\d{2}|xx)$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern CP_TRAIN = Pattern.compile("^(?:Check Point\\s+)?(?:Gaia\\s+)?(R\\d{2}(?:\\.\\d{2})?)(?:\\.M\\d)?(?:$|[\\s+,(].*)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern CP_SPARK = Pattern.compile("^(?:Check Point\\s+)?(?:Gaia\\s+)?R(\\d{2}\\.\\d{2})\\.(?:\\d{2}|xx)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern PAN_TRAIN = Pattern.compile("^(?:(?:PAN-OS|Panorama)\\s+)?(\\d{1,2}\\.\\d{1,2})(?:\\.x|\\.\\d+(?:-h\\d+)?)?$",
             Pattern.CASE_INSENSITIVE);
-    private static final Pattern ASA_TRAIN = Pattern.compile("^(?:ASA\\s+)?(\\d{1,2}\\.\\d{1,2})(?:\\(\\d{1,3}\\)\\d{0,4}|\\.\\d{1,3}(?:\\.\\d{1,4})?|\\(x\\)|\\.x)?$",
+    private static final Pattern ASA_TRAIN = Pattern.compile("^(?:(?:Cisco\\s+)?(?:Adaptive Security Appliance Software\\s+)?(?:ASA\\s+)?Version\\s+|ASA\\s+)?(\\d{1,2}\\.\\d{1,2})(?:\\(\\d{1,3}\\)\\d{0,4}|\\.\\d{1,3}(?:\\.\\d{1,4})?|\\(x\\)|\\.x)?$",
             Pattern.CASE_INSENSITIVE);
-    private static final Pattern FORTI_VERSION = Pattern.compile("^v?(\\d{1,2}\\.\\d{1,2})(?:\\.\\d{1,3})?(?:[- ]?build\\s?\\d{1,5})?$",
+    private static final Pattern FORTI_VERSION = Pattern.compile("^(?:Forti(?:OS|Manager|Gate)\\s+)?v?(\\d{1,2}\\.\\d{1,2})(?:\\.\\d{1,3})?"
+                    + "(?:[-, ]*build\\s?\\d{1,5}(?:[, ].{0,40})?|\\s*\\([^()]{1,40}\\))?$",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern FORTI_TRAIN = Pattern.compile("^(FortiOS|FortiManager)\\s+v?(\\d{1,2}\\.\\d{1,2})(?:\\.x)?$",
             Pattern.CASE_INSENSITIVE);
@@ -57,6 +61,11 @@ public final class LifecycleKeys {
             case "CHECKPOINT", "PALOALTO", "CISCO_ASA", "FORTINET" -> true;
             default -> false;
         };
+    }
+
+    /** True when a model text names a virtual machine or an open server (no appliance model exists to look up). */
+    public static boolean virtualPlatform(String text) {
+        return text != null && VIRTUAL_PLATFORM.matcher(text.strip()).find();
     }
 
     /** The hardware key of a model text (device or catalog), or null. */

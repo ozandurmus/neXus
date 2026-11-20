@@ -64,18 +64,25 @@ public final class LifecycleMatcher {
         String key = hardware ? LifecycleKeys.model(vendor, observed) : LifecycleKeys.deviceTrain(vendor, manager, model, observed);
         String basisWord = hardware ? ruled ? "model key" : "model exact" : ruled ? "version train" : "version exact";
         if (key == null) {
-            return body(NO_LIFECYCLE_DATA, observed == null || observed.isBlank() ? "Model/version missing"
-                    : "Model/version form not recognised for lifecycle matching", null, null, null);
+            if (observed == null || observed.isBlank()) {
+                return body(NO_LIFECYCLE_DATA, hardware ? "MODEL_MISSING" : "VERSION_MISSING", "Model/version missing", null, null, null);
+            }
+            if (hardware && LifecycleKeys.virtualPlatform(observed)) {
+                return body(NO_LIFECYCLE_DATA, "VIRTUAL_PLATFORM", "Virtual machine or open server (" + observed.strip()
+                        + "): no appliance model to look up", null, null, null);
+            }
+            return body(NO_LIFECYCLE_DATA, hardware ? "MODEL_FORM_UNRECOGNISED" : "VERSION_FORM_UNRECOGNISED",
+                    "Model/version form not recognised for lifecycle matching", null, null, null);
         }
 
         var operatorRows = catalog.operator().stream().filter(e -> e.vendor().equals(vendor) && e.kind().equals(kind))
                 .filter(e -> key.equals(catalogKey(vendor, kind, e.product()))).toList();
-        if (operatorRows.size() > 1) return body(NO_LIFECYCLE_DATA, "Ambiguous catalog matches", null, null, key);
+        if (operatorRows.size() > 1) return body(NO_LIFECYCLE_DATA, "AMBIGUOUS_CATALOG_MATCH", "Ambiguous catalog matches", null, null, key);
         if (operatorRows.size() == 1) {
             var row = operatorRows.getFirst();
             Long age = ageDays(row.importedAt(), catalog.now());
             if (age != null && age > HAND_LOADED_FRESH_DAYS) {
-                return body(NOT_EVALUATED, "Operator catalog entry is " + age + " days old (limit " + HAND_LOADED_FRESH_DAYS
+                return body(NOT_EVALUATED, "OPERATOR_ENTRY_STALE", "Operator catalog entry is " + age + " days old (limit " + HAND_LOADED_FRESH_DAYS
                         + "); confirm it against the vendor page", null, null, key);
             }
             var dates = LifecycleProjection.catalog(row, false);
@@ -94,18 +101,18 @@ public final class LifecycleMatcher {
         var fresh = vendorRows.stream().filter(e -> fresh(e, catalog.now())).toList();
         if (!vendorRows.isEmpty() && fresh.isEmpty()) {
             var newest = vendorRows.stream().max(Comparator.comparing(VendorEntry::confirmedAt)).orElseThrow();
-            return body(NOT_EVALUATED, "Vendor source " + newest.source() + " last confirmed this entry "
+            return body(NOT_EVALUATED, "VENDOR_ENTRY_STALE", "Vendor source " + newest.source() + " last confirmed this entry "
                     + ageDays(newest.confirmedAt(), catalog.now()) + " days ago (limit " + limit(newest) + ")", null, null, key);
         }
         if (!fresh.isEmpty()) {
             var review = fresh.stream().filter(e -> !"PARSED".equals(e.parseState())).findFirst();
             if (review.isPresent()) {
-                return body(NEEDS_REVIEW, "Vendor entry needs review (" + review.get().parseNote() + ", " + review.get().source() + ")",
+                return body(NEEDS_REVIEW, "VENDOR_ENTRY_NEEDS_REVIEW", "Vendor entry needs review (" + review.get().parseNote() + ", " + review.get().source() + ")",
                         null, vendorView(review.get(), catalog.now()), key);
             }
             Set<List<LocalDate>> distinct = new LinkedHashSet<>();
             for (var e : fresh) distinct.add(java.util.Arrays.asList(e.endOfSale(), e.endOfEngineering(), e.endOfSupport()));
-            if (distinct.size() > 1) return body(NEEDS_REVIEW, "Vendor sources disagree (CONFLICTING_SOURCES)", null, null, key);
+            if (distinct.size() > 1) return body(NEEDS_REVIEW, "VENDOR_SOURCES_DISAGREE", "Vendor sources disagree (CONFLICTING_SOURCES)", null, null, key);
             var chosen = fresh.stream().min(Comparator.comparing((VendorEntry e) -> "FEED".equals(e.origin()) ? 0 : 1)
                     .thenComparing(VendorEntry::confirmedAt, Comparator.reverseOrder())).orElseThrow();
             return body(MATCHED, null, basisWord + " · " + describe(chosen), vendorView(chosen, catalog.now()), key);
@@ -127,11 +134,11 @@ public final class LifecycleMatcher {
                 && !operatorStale(e, catalog.now()))
                 || freshVendorSource.isPresent();
         if (covered) {
-            return body(NO_LIFECYCLE_DATA, "No catalog match"
+            return body(NO_LIFECYCLE_DATA, "NO_CATALOG_MATCH", "No catalog match"
                     + ("CISCO_ASA".equals(vendor) ? " (no end-of-life bulletin names this " + (hardware ? "model" : "train") + ")" : ""),
                     null, null, key);
         }
-        return body(NOT_EVALUATED, "No lifecycle source loaded for " + vendor + " " + kind.toLowerCase(java.util.Locale.ROOT)
+        return body(NOT_EVALUATED, "NO_SOURCE_LOADED", "No lifecycle source loaded for " + vendor + " " + kind.toLowerCase(java.util.Locale.ROOT)
                 + "; load the vendor page or the catalog CSV", null, null, key);
     }
 
@@ -230,8 +237,14 @@ public final class LifecycleMatcher {
     }
 
     private static Map<String, Object> body(String status, String reason, String basis, Map<String, Object> catalog, String key) {
+        return body(status, null, reason, basis, catalog, key);
+    }
+
+    /** {@code code} is the stable reason word of a part that is not MATCHED (read-only; the UI shows the text beside it). */
+    private static Map<String, Object> body(String status, String code, String reason, String basis, Map<String, Object> catalog, String key) {
         var body = new LinkedHashMap<String, Object>();
         body.put("status", status);
+        body.put("reason_code", MATCHED.equals(status) ? null : code);
         body.put("reason", reason);
         body.put("basis", basis);
         body.put("catalog", MATCHED.equals(status) ? catalog : null);

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { LIFECYCLE_PAGE, LifecycleScreen, DeviceLifecycleLine, lifecycleCsv, livePatchCell, licenseLine, LifecycleDetail } from "../src/screens/LifecycleScreen";
+import { LIFECYCLE_PAGE, LifecycleScreen, DeviceLifecycleLine, lifecycleCells, lifecycleSentence, lifecycleCsv, livePatchCell, licenseLine, LifecycleDetail } from "../src/screens/LifecycleScreen";
 import { LifecycleCatalogPanel } from "../src/screens/LifecycleCatalogPanel";
 import * as api from "../src/auth/adminApi";
 import type { LifecycleDevice } from "../src/auth/adminApi";
@@ -338,5 +338,17 @@ describe("lifecycle vendor sources", () => {
     expect(within(table).getByText("2032-02")).toBeInTheDocument();
     expect(within(table).getAllByText("NOT_EVALUATED").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("Lifecycle not evaluated")).toBeInTheDocument();
+  });
+});
+
+describe("lifecycle reason", () => {
+  it("shows the read-only reason of an unmatched device in the basis column and the sentence, not a blank", () => {
+    const hw = { status: "NO_LIFECYCLE_DATA" as const, reason_code: "MODEL_MISSING", reason: "Model/version missing", basis: null, catalog: null };
+    const sw = { status: "MATCHED" as const, reason: null, basis: "version train · operator entry", catalog: null };
+    const d: LifecycleDevice = { ...row("dev-1"), hardware: hw, software: sw, reason: "Hardware: Model/version missing", reason_code: "MODEL_MISSING" };
+    expect(lifecycleCells(d)[11]).toBe("version train · operator entry · Hardware: Model/version missing");
+    expect(lifecycleSentence(d, null)).toContain("Reason: Hardware: Model/version missing");
+    const old = { ...d, reason: undefined, reason_code: undefined };
+    expect(lifecycleCells(old)[11]).toBe("Model/version missing · version train · operator entry");
   });
 });

@@ -334,6 +334,8 @@ export interface LifecycleMatch {
   /** NOT_EVALUATED: nothing current to compare with (no source, or the source is too old). NEEDS_REVIEW: the vendor entry could not be read safely. */
   status: "MATCHED" | "NO_LIFECYCLE_DATA" | "NOT_EVALUATED" | "NEEDS_REVIEW";
   reason: string | null;
+  /** Stable word for the reason (MODEL_MISSING, VERSION_FORM_UNRECOGNISED, VIRTUAL_PLATFORM, NO_CATALOG_MATCH, NO_SOURCE_LOADED ...); null when MATCHED. */
+  reason_code?: string | null;
   basis: string | null;
   catalog: LifecycleCatalogEntry | null;
   key?: string | null;
@@ -379,6 +381,9 @@ export interface LifecycleDevice {
   hardware: LifecycleMatch;
   software: LifecycleMatch;
   status: string;
+  /** Read-only: why the device is not MATCHED (each unmatched part and its reason); null when matched or from an older backend. */
+  reason?: string | null;
+  reason_code?: string | null;
   risk: "EXPIRED" | "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN" | "NOT_EVALUATED";
   support_days: number | null;
   next_milestone: { name: string; date: string; days_remaining: number; precision?: "DAY" | "MONTH" } | null;
