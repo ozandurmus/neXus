@@ -145,18 +145,13 @@ spec:
                   name: ui2-config
                   key: pan_discovery_trust_pinned_fingerprint_sha256
                   optional: true
-            # The credential reaches the process as four mounted files, per
-            # the C1 §6 secret-file rule the composition root implements: a
-            # missing, unreadable or empty file stops start-up rather than
-            # falling back. These entries carry paths, never values.
+            # The application credential reaches the worker as two mounted files,
+            # per the C1 §6 secret-file rule (and DATABASE_ROLES_AND_DATA_OWNERSHIP_DESIGN §3.2):
+            # workers never run Flyway and never mount migrate-user / migrate-password.
             - name: UI2_DB_APP_USER_FILE
               value: /run/secrets/ui2-db/app-user
             - name: UI2_DB_APP_PASSWORD_FILE
               value: /run/secrets/ui2-db/app-password
-            - name: UI2_DB_MIGRATE_USER_FILE
-              value: /run/secrets/ui2-db/migrate-user
-            - name: UI2_DB_MIGRATE_PASSWORD_FILE
-              value: /run/secrets/ui2-db/migrate-password
             # The worker role additionally needs the credential-store and
             # role-binding keys. Both reach the process by reference only
             # (SEC-4): no literal value carries a credential.
@@ -279,6 +274,11 @@ spec:
           secret:
             secretName: ui2-db
             defaultMode: 0440
+            items:
+              - key: app-user
+                path: app-user
+              - key: app-password
+                path: app-password
         - name: credential-store-key
           secret:
             secretName: ui2-credential-store-key

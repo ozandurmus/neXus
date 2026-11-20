@@ -1455,3 +1455,36 @@ def test_run_build_leaves_script_runner_out_when_its_image_fails():
     drop = text.index('if [ "${SX_FAILED:-0}" = 1 ]; then')
     assert drop < text.index('module_deploy.py" --targets')
     assert '[ "$target" = script-runner ] ||' in text
+
+
+def test_no_worker_deployment_mounts_or_references_migrate_credentials():
+    """DATABASE_ROLES_AND_DATA_OWNERSHIP_DESIGN §3.2: worker Deployments never run Flyway, never expose
+    UI2_DB_MIGRATE_USER_FILE / UI2_DB_MIGRATE_PASSWORD_FILE, and project only app-user / app-password from ui2-db."""
+    worker_deployments = {
+        "Deployment/ui2-worker",
+        "Deployment/ui2-backup",
+        "Deployment/ui2-policy",
+        "Deployment/ui2-packet-analysis",
+        "Deployment/ui2-configuration",
+        "Deployment/ui2-compliance",
+    }
+    seen = set()
+    for _, owner, spec in _pod_specs():
+        if owner not in worker_deployments:
+            continue
+        seen.add(owner)
+        for container in spec.get("containers") or []:
+            env_names = {entry.get("name") for entry in container.get("env") or []}
+            assert "UI2_DB_MIGRATE_USER_FILE" not in env_names, f"{owner}: must not expose UI2_DB_MIGRATE_USER_FILE"
+            assert "UI2_DB_MIGRATE_PASSWORD_FILE" not in env_names, f"{owner}: must not expose UI2_DB_MIGRATE_PASSWORD_FILE"
+        for volume in spec.get("volumes") or []:
+            secret = volume.get("secret")
+            if not secret or secret.get("secretName") != "ui2-db":
+                continue
+            items = secret.get("items")
+            assert items == [
+                {"key": "app-user", "path": "app-user"},
+                {"key": "app-password", "path": "app-password"},
+            ], f"{owner}: db-credentials volume must project only app-user and app-password via items"
+    assert seen == worker_deployments
+
