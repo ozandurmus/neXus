@@ -61,7 +61,8 @@ export function lifecycleCells(d: LifecycleDevice): string[] {
     supportText(d.hardware), supportText(d.software),
     d.next_milestone ? `${d.next_milestone.name}: ${d.next_milestone.precision === "MONTH" ? d.next_milestone.date.slice(0, 7) : d.next_milestone.date} (${d.next_milestone.days_remaining} days)` : "UNKNOWN",
     d.nearest_license?.expiry ?? "UNKNOWN", d.risk,
-    [d.hardware.basis ?? d.hardware.reason, d.software.basis ?? d.software.reason].filter(Boolean).join(" · "),
+    d.reason ? [d.hardware.status === "MATCHED" ? d.hardware.basis : null, d.software.status === "MATCHED" ? d.software.basis : null, d.reason].filter(Boolean).join(" · ")
+      : [d.hardware.basis ?? d.hardware.reason, d.software.basis ?? d.software.reason].filter(Boolean).join(" · "),
     licensesCell(d), livePatchCell(d)];
 }
 const CATEGORIES: [string, string][] = [["LICENSE", "Licenses"], ["SUBSCRIPTION", "Subscriptions"], ["SUPPORT_CONTRACT", "Support contracts"], ["SMART_LICENSING", "Smart Licensing"]];
@@ -284,6 +285,7 @@ export function lifecycleSentence(data: LifecycleDevice | null | undefined, erro
   return `${error ? "Unavailable" : data?.risk ?? "UNKNOWN"}`
     + `${data?.status === "NO_LIFECYCLE_DATA" ? " (no lifecycle data imported)" : data?.status === "NOT_EVALUATED" ? " (lifecycle not evaluated)"
       : data?.status === "NEEDS_REVIEW" ? " (lifecycle entry needs review)" : ""}`
+    + `${data?.reason ? ` · Reason: ${data.reason}` : ""}`
     + `${data?.hardware?.catalog?.end_of_support ? ` · Hardware support: ${data.hardware.catalog.end_of_support}` : ""}`
     + `${data?.software?.catalog?.end_of_support ? ` · Software support: ${data.software.catalog.end_of_support}` : ""}`
     + `${data?.nearest_license?.expiry ? ` · License expiry: ${data.nearest_license.expiry}` : ""}`

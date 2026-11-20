@@ -277,6 +277,8 @@ public final class LifecycleProjection {
         body.put("cluster_member_ref", d.clusterMemberRef().orElse(null)); body.put("vendor", vendor);
         body.put("model", model); body.put("software_version", version);
         body.put("hardware", hw); body.put("software", sw); body.put("status", status);
+        body.put("reason_code", matched ? null : rowReasonCode(status, hw, sw));
+        body.put("reason", matched ? null : rowReason(status, hw, sw));
         body.put("risk", risk); body.put("support_days", minimum); body.put("next_milestone", next);
         body.put("licenses", licenses); body.put("license_status", licenseStatus);
         body.put("license_reads", licenseReads.stream().map(r -> {
@@ -296,6 +298,28 @@ public final class LifecycleProjection {
                 .min(Comparator.comparing(l -> (String) l.get("expiry")));
         body.put("nearest_license", ahead.orElseGet(() -> dated.stream().min(Comparator.comparing(l -> (String) l.get("expiry"))).orElse(null)));
         return body;
+    }
+
+    /** The part (hardware first) whose state decided the device's status; null when none did. */
+    private static Map<String, Object> decisive(String status, Map<String, Object> hw, Map<String, Object> sw) {
+        if (status.equals(hw.get("status"))) return hw;
+        return status.equals(sw.get("status")) ? sw : null;
+    }
+
+    static String rowReasonCode(String status, Map<String, Object> hw, Map<String, Object> sw) {
+        var part = decisive(status, hw, sw);
+        return part == null ? null : (String) part.get("reason_code");
+    }
+
+    /** Why the device has no matched lifecycle, read-only: every part that is not MATCHED with its reason, hardware first. */
+    static String rowReason(String status, Map<String, Object> hw, Map<String, Object> sw) {
+        var parts = new ArrayList<String>();
+        for (var part : List.of(Map.entry("Hardware", hw), Map.entry("Software", sw))) {
+            if (!"MATCHED".equals(part.getValue().get("status")) && part.getValue().get("reason") instanceof String reason) {
+                parts.add(part.getKey() + ": " + reason);
+            }
+        }
+        return parts.isEmpty() ? null : String.join("; ", parts);
     }
 
     private static String text(LocalDate date) { return date == null ? null : date.toString(); }
