@@ -46,6 +46,8 @@ class JooqFailoverApprovalTest {
             run.put("vs_id",null); run.put("vendor","check_point"); run.put("state","PRECHECK");
             run.put("request_revision",1L); run.put("approval_id","request-a"); run.put("requested_by","principal-a"); run.put("job_id","job-a");
             run.put("mutation_possible",false);
+            // V256 columns of a request-bound approval.
+            approval.put("operation",JooqCpFailoverRepository.OPERATION_FAILOVER); approval.put("parent_approval_id",null);
         }
         @Override public <T> T inTransaction(Function<DSLContext,T> work) { return work.apply(sql); }
         private MockResult[] row(Map<String,Object> values) {

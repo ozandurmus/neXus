@@ -33,6 +33,9 @@ public class JooqCpFailoverRepository {
     public static final int APPROVAL_POLICY_VERSION = 1;
     public static final String ADMIN_SINGLE = "ADMIN_SINGLE";
     public static final String TWO_PERSON = "OPERATION_ADMIN_TWO_PERSON";
+    /** Approval operations (V137, V256): one unit's failover, or every VS of a VSLS chassis in sequence. */
+    public static final String OPERATION_FAILOVER = "FAILOVER";
+    public static final String OPERATION_ALL_VIRTUAL_SYSTEMS = "FAILOVER_ALL_VIRTUAL_SYSTEMS";
     public record RequestApproval(Approval approval, long revision, String unitRef,
             String memberSetRevision, String policy, int policyVersion, String initiatedBy,
             String executionNonce) {}
@@ -172,6 +175,7 @@ public class JooqCpFailoverRepository {
             + "and a.request_revision is not null and a.approved_by is not null "
             + "and a.policy_version=" + APPROVAL_POLICY_VERSION + " "
             + "and not exists(select 1 from failover_run used where used.approval_id=a.approval_id) "
+            + "and not exists(select 1 from failover_sequence used where used.approval_id=a.approval_id) "
             + "and a.window_from<=now() and now()<a.window_until) as active_window, "
             + "r.state,r.outcome,r.scheduled_for from unit_keys k left join lateral "
             + "(select state,outcome,scheduled_for from failover_run r where r.vendor=k.vendor "
@@ -278,7 +282,18 @@ public class JooqCpFailoverRepository {
 
     public RequestApproval createRequestApproval(String id,String cluster,String vsId,String unitRef,
             Set<String> members,Instant from,Instant until,String reason,String actor,String vendor,String policy) {
+        return createRequestApproval(id,cluster,vsId,unitRef,members,from,until,reason,actor,vendor,policy,OPERATION_FAILOVER);
+    }
+    /**
+     * {@code operation}: {@link #OPERATION_FAILOVER}, or {@link #OPERATION_ALL_VIRTUAL_SYSTEMS} for the chassis unit of a
+     * VSLS cluster (PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md option A; V256).
+     */
+    public RequestApproval createRequestApproval(String id,String cluster,String vsId,String unitRef,
+            Set<String> members,Instant from,Instant until,String reason,String actor,String vendor,String policy,
+            String operation) {
         if (!Set.of(ADMIN_SINGLE,TWO_PERSON).contains(policy)) throw new IllegalArgumentException("INVALID_POLICY");
+        if (!Set.of(OPERATION_FAILOVER,OPERATION_ALL_VIRTUAL_SYSTEMS).contains(operation)
+                || OPERATION_ALL_VIRTUAL_SYSTEMS.equals(operation) && vsId!=null) throw new IllegalArgumentException("INVALID_OPERATION");
         return audited.inTransaction(actor,"failover_request_create",dsl -> {
             lockAdmission(dsl);
             List<String> current=JooqDeviceRepository.enrolledFailoverMembers(dsl,cluster,vendor);
@@ -297,16 +312,18 @@ public class JooqCpFailoverRepository {
                         || !vendor.equals(existing.get("vendor",String.class))
                         || !from.equals(existing.get("window_from",java.time.OffsetDateTime.class).toInstant())
                         || !until.equals(existing.get("window_until",java.time.OffsetDateTime.class).toInstant())
-                        || !reason.equals(existing.get("reason",String.class))) throw new IllegalArgumentException("REQUEST_CHANGED");
+                        || !reason.equals(existing.get("reason",String.class))
+                        || !operation.equals(existing.get("operation",String.class))) throw new IllegalArgumentException("REQUEST_CHANGED");
                 return requestApproval(existing);
             }
             return requestApproval(dsl.fetchOne("insert into failover_approval(approval_id,cluster_ref,vs_id,"
                 + "window_from,window_until,reason,approved_by,approved_at,vendor,request_revision,unit_ref,"
                 + "member_set_revision,target_member_ids,operation,policy,policy_version,initiated_by,execution_nonce) "
                 + "values({0},{1},{2},{3},{4},{5},{6},case when {6}::text is null then null else clock_timestamp() end,"
-                + "{7},1,{8},{9},jsonb_build_array({10}::text,{11}::text),'FAILOVER',{12},{13},{14},{15}) returning *",
+                + "{7},1,{8},{9},jsonb_build_array({10}::text,{11}::text),{16},{12},{13},{14},{15}) returning *",
                 id,cluster,vsId,Timestamp.from(from),Timestamp.from(until),reason,ADMIN_SINGLE.equals(policy)?actor:null,
-                vendor,unitRef,revision,current.get(0),current.get(1),policy,APPROVAL_POLICY_VERSION,actor,UUID.randomUUID().toString()));
+                vendor,unitRef,revision,current.get(0),current.get(1),policy,APPROVAL_POLICY_VERSION,actor,UUID.randomUUID().toString(),
+                operation));
         });
     }
 
@@ -392,6 +409,8 @@ public class JooqCpFailoverRepository {
                     || !java.util.Objects.equals(vsId,a.get("vs_id",String.class))
                     || !vendor.equals(a.get("vendor",String.class))
                     || !Long.valueOf(revision).equals(a.get("request_revision",Long.class))) return new Decision("REQUEST_CHANGED",null);
+            // A VSLS chassis approval (V256) authorizes the sequence of VS runs only, never one unit run.
+            if (!OPERATION_FAILOVER.equals(a.get("operation",String.class))) return new Decision("REQUEST_CHANGED",null);
             if (!actor.equals(a.get("initiated_by",String.class))) return new Decision("WRONG_INITIATOR",null);
             if (!java.util.Objects.equals(nonce,a.get("execution_nonce",String.class))) return new Decision("NONCE_MISMATCH",null);
             if (!warningConfirmed) return new Decision("WARNING_CONFIRMATION_REQUIRED",null);
@@ -425,6 +444,204 @@ public class JooqCpFailoverRepository {
                 a.get("approval_id", String.class), actor, Timestamp.from(scheduledFor), vendor, members.get(0), members.get(1));
             if (immediate) admit(dsl, id, targetDeviceId, actor, vendor);
             return new Decision("ADMITTED", id);
+        });
+    }
+
+    /** The operation of a request-bound approval (V137 FAILOVER; V256 FAILOVER_ALL_VIRTUAL_SYSTEMS). */
+    public Optional<String> requestOperation(String id) {
+        return boundary.inTransaction(dsl -> dsl.fetch("select operation from failover_approval where approval_id={0} "
+            + "and request_revision is not null",id).stream().findFirst().map(r -> r.get("operation",String.class)));
+    }
+
+    // ---- "Fail over all virtual systems" of a VSLS chassis (PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md A) ----
+
+    /** One VS of a sequence: its opaque VSID and the opaque unit reference its derived approval names. */
+    public record SequenceStep(String vsId, String unitRef) {}
+    /** One sequence; opaque references only. */
+    public record Sequence(String id, String clusterRef, String approvalId, String initiatedBy, String admissionRole,
+            boolean businessHoursAck, List<String> vsIds, int nextIndex, String currentRunId, String state,
+            String outcome, String failedVsId, Instant requestedAt, Instant finishedAt) {
+        public boolean running() { return SEQUENCE_RUNNING.equals(state); }
+    }
+    public static final String SEQUENCE_RUNNING = "RUNNING";
+    /** The sequence ended because every VS run succeeded. */
+    public static final String SEQUENCE_ALL_DONE = "ALL_VIRTUAL_SYSTEMS_FAILED_OVER";
+    /** The sequence stopped at a VS run that did not succeed (that run carries its own stop code and resume). */
+    public static final String SEQUENCE_RUN_NOT_SUCCEEDED = "VIRTUAL_SYSTEM_RUN_NOT_SUCCEEDED";
+    public static final String SEQUENCE_ALREADY_RUNNING = "SEQUENCE_ALREADY_RUNNING";
+    private static final String SEQUENCE_ACTOR = "system:failover-sequence";
+
+    private static Sequence sequence(Record r) {
+        List<String> vs=new java.util.ArrayList<>();
+        try {
+            for (var node:new com.fasterxml.jackson.databind.ObjectMapper().readTree(r.get("vs_ids",JSONB.class).data()))
+                vs.add(node.asText());
+        } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
+            throw new IllegalStateException("failover_sequence.vs_ids is not an array",invalid);
+        }
+        return new Sequence(r.get("sequence_id",String.class),r.get("cluster_ref",String.class),
+            r.get("approval_id",String.class),r.get("initiated_by",String.class),r.get("admission_role",String.class),
+            Boolean.TRUE.equals(r.get("business_hours_ack",Boolean.class)),List.copyOf(vs),
+            r.get("next_index",Integer.class),r.get("current_run_id",String.class),r.get("state",String.class),
+            r.get("outcome",String.class),r.get("failed_vs_id",String.class),
+            r.get("requested_at",java.time.OffsetDateTime.class).toInstant(),
+            Optional.ofNullable(r.get("finished_at",java.time.OffsetDateTime.class)).map(java.time.OffsetDateTime::toInstant).orElse(null));
+    }
+
+    /**
+     * Start "Fail over all virtual systems" on a VSLS chassis: under lock 136, the chassis unit's approval request
+     * (operation FAILOVER_ALL_VIRTUAL_SYSTEMS, vs_id null) is bound exactly as {@link #requestBound} binds a unit's, the
+     * cluster has no open run and no running sequence, and the estate admits a mutation; then the sequence is recorded and
+     * its first VS run is admitted at once. The first VS start is checked before the insert; it never half-commits. A
+     * replay of the same request returns the sequence's current run. {@code admissionRole}/{@code businessHoursAck}: the
+     * administrator's manual grant on this request, re-established for each later VS start of the same sequence.
+     */
+    public Decision requestSequence(String cluster,String actor,String targetDeviceId,Set<String> expectedMembers,
+            String requestId,long revision,String nonce,boolean warningConfirmed,String policy,List<SequenceStep> steps,
+            String admissionRole,boolean businessHoursAck) {
+        if (!mutationEnabled) return new Decision("FAILOVER_MUTATION_DISABLED",null);
+        if (steps==null || steps.isEmpty() || steps.stream().anyMatch(st -> st.vsId()==null || !st.vsId().matches("[0-9]{1,10}")))
+            return new Decision("VSX_CONTEXT_INCOMPLETE",null);
+        windows.requireOpenFor(actor);
+        Set<String> binding=Set.copyOf(expectedMembers);
+        String vendor="check_point";
+        return audited.inTransaction(actor,"failover_sequence_request",dsl -> {
+            lockAdmission(dsl);
+            Record a=dsl.fetchOne("select * from failover_approval where approval_id={0} for update",requestId);
+            if (a==null || !cluster.equals(a.get("cluster_ref",String.class)) || a.get("vs_id")!=null
+                    || !vendor.equals(a.get("vendor",String.class))
+                    || !OPERATION_ALL_VIRTUAL_SYSTEMS.equals(a.get("operation",String.class))
+                    || !Long.valueOf(revision).equals(a.get("request_revision",Long.class))) return new Decision("REQUEST_CHANGED",null);
+            if (!actor.equals(a.get("initiated_by",String.class))) return new Decision("WRONG_INITIATOR",null);
+            if (!java.util.Objects.equals(nonce,a.get("execution_nonce",String.class))) return new Decision("NONCE_MISMATCH",null);
+            if (!warningConfirmed) return new Decision("WARNING_CONFIRMATION_REQUIRED",null);
+            if (!policy.equals(a.get("policy",String.class))) return new Decision("POLICY_CHANGED",null);
+            if (!memberSetRevision(binding).equals(a.get("member_set_revision",String.class))) return new Decision("MEMBER_SET_CHANGED",null);
+            Record consumed=dsl.fetchOne("select current_run_id from failover_sequence where approval_id={0}",requestId);
+            if (consumed!=null) return new Decision("ADMITTED",consumed.get("current_run_id",String.class));
+            String approvalRefusal=approvalRefusal(dsl,a,true);
+            if (approvalRefusal!=null) return new Decision(approvalRefusal,null);
+            if (!Boolean.TRUE.equals(dsl.fetchOne("select window_from<=clock_timestamp() as started from failover_approval "
+                    + "where approval_id={0}",requestId).get("started",Boolean.class))) return new Decision("OUTSIDE_WINDOW",null);
+            if (!dsl.fetch("select 1 from failover_sequence where cluster_ref={0} and state='RUNNING'",cluster).isEmpty())
+                return new Decision(SEQUENCE_ALREADY_RUNNING,null);
+            if (!dsl.fetch("select 1 from failover_run where cluster_ref={0} and vendor={1} and state not in ('DONE','STOPPED')",
+                    cluster,vendor).isEmpty()) return new Decision("RUN_ALREADY_ACTIVE",null);
+            List<String> members=JooqDeviceRepository.enrolledFailoverMembers(dsl,cluster,vendor);
+            if (members.size()!=2 || !members.contains(targetDeviceId)) return new Decision("CLUSTER_NOT_ELIGIBLE",null);
+            if (!Set.copyOf(members).equals(binding)) return new Decision("MEMBER_SET_CHANGED",null);
+            String refusal=sequenceStepRefusal(dsl,cluster,steps.get(0).vsId(),vendor,members);
+            if (refusal!=null) return new Decision(refusal,null);
+            dsl.execute("update failover_approval set warning_confirmed_at=clock_timestamp() where approval_id={0}",requestId);
+            String id=UUID.randomUUID().toString();
+            String vsJson=new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(steps.stream().map(SequenceStep::vsId).toList()).toString();
+            dsl.execute("insert into failover_sequence(sequence_id,cluster_ref,vendor,approval_id,initiated_by,admission_role,"
+                + "business_hours_ack,vs_ids,target_member_ids,next_index,state) values({0},{1},{2},{3},{4},{5},{6},{7}::jsonb,"
+                + "jsonb_build_array({8}::text,{9}::text),0,'RUNNING')",id,cluster,vendor,requestId,actor,admissionRole,
+                businessHoursAck,vsJson,members.get(0),members.get(1));
+            String runId=startSequenceStep(dsl,id,cluster,vendor,requestId,steps.get(0),0,actor,members,targetDeviceId);
+            return new Decision("ADMITTED",runId);
+        });
+    }
+
+    /** The refusals a VS start of a sequence shares with an immediate unit start: open run, step fence, estate fence. */
+    private static String sequenceStepRefusal(DSLContext dsl,String cluster,String vsId,String vendor,List<String> members) {
+        if (dsl.fetchOne("select run_id from failover_run where cluster_ref={0} and vs_id is not distinct from {1} "
+                + "and vendor={2} and state not in ('DONE','STOPPED') limit 1",cluster,vsId,vendor)!=null) return "RUN_ALREADY_ACTIVE";
+        String step=stepConflict(dsl,cluster,vsId,vendor,null,true);
+        if (step!=null) return step;
+        Decision refusal=admissionDecision(dsl,cluster,members,null);
+        return refusal==null?null:refusal.code();
+    }
+
+    /**
+     * One VS of a sequence: its own approval row derived from the chassis approval (V256 parent_approval_id; same window,
+     * reason, policy, initiator and approver; operation FAILOVER on that VS; a fresh execution nonce; the warning confirmed
+     * by the chassis request), its own run (PLANNED, then admitted at once as an immediate unit start) and its own job.
+     */
+    private String startSequenceStep(DSLContext dsl,String sequenceId,String cluster,String vendor,String parentApproval,
+            SequenceStep step,int index,String initiator,List<String> members,String targetDeviceId) {
+        String child=UUID.randomUUID().toString();
+        int inserted=dsl.execute("insert into failover_approval(approval_id,cluster_ref,vs_id,window_from,window_until,reason,"
+            + "approved_by,approved_at,vendor,request_revision,unit_ref,member_set_revision,target_member_ids,operation,policy,"
+            + "policy_version,initiated_by,execution_nonce,warning_confirmed_at,parent_approval_id) "
+            + "select {0},cluster_ref,{1},window_from,window_until,reason,approved_by,approved_at,vendor,1,{2},member_set_revision,"
+            + "target_member_ids,'FAILOVER',policy,policy_version,initiated_by,{3},clock_timestamp(),approval_id "
+            + "from failover_approval where approval_id={4} and approved_by is not null",
+            child,step.vsId(),step.unitRef(),UUID.randomUUID().toString(),parentApproval);
+        if (inserted!=1) throw new IllegalStateException("SEQUENCE_APPROVAL_NOT_DERIVED");
+        String runId=UUID.randomUUID().toString();
+        dsl.execute("insert into failover_run(run_id,cluster_ref,vs_id,approval_id,requested_by,scheduled_for,state,step,vendor,"
+            + "target_member_ids,request_revision,sequence_id) values({0},{1},{2},{3},{4},clock_timestamp(),'PLANNED','PLANNED',{5},"
+            + "jsonb_build_array({6}::text,{7}::text),1,{8})",runId,cluster,step.vsId(),child,initiator,vendor,
+            members.get(0),members.get(1),sequenceId);
+        admit(dsl,runId,targetDeviceId,initiator,vendor);
+        dsl.execute("update failover_sequence set current_run_id={1},next_index={2} where sequence_id={0}",sequenceId,runId,index+1);
+        return runId;
+    }
+
+    public List<Sequence> runningSequences() {
+        return boundary.inTransaction(dsl -> dsl.fetch("select * from failover_sequence where state='RUNNING' "
+            + "order by requested_at").map(JooqCpFailoverRepository::sequence));
+    }
+    /** The newest sequence of one cluster, for the chassis unit's view. */
+    public Optional<Sequence> latestSequence(String cluster) {
+        return boundary.inTransaction(dsl -> dsl.fetch("select * from failover_sequence where cluster_ref={0} "
+            + "order by requested_at desc limit 1",cluster).stream().findFirst().map(JooqCpFailoverRepository::sequence));
+    }
+    private static void finishSequence(DSLContext dsl,String id,String state,String outcome,String failedVs) {
+        dsl.execute("update failover_sequence set state={1},outcome={2},failed_vs_id={3},finished_at=clock_timestamp() "
+            + "where sequence_id={0} and state='RUNNING'",id,state,outcome,failedVs);
+    }
+    /** Stop a running sequence with a refusal raised outside its transaction (the window or business hours). */
+    public void stopSequence(String id,String code,String failedVs) {
+        audited.inTransaction(SEQUENCE_ACTOR,"failover_sequence_stop",id,dsl -> {
+            lockAdmission(dsl);
+            finishSequence(dsl,id,"STOPPED",code,failedVs);
+            return null;
+        });
+    }
+
+    /**
+     * Advance one running sequence: nothing while its current VS run is open; STOPPED at a run that did not end SUCCEEDED;
+     * DONE after the last VS; otherwise the next VS is started under the same checks as the first (the chassis approval
+     * still valid, the member set unchanged, no open run, the step fence and the estate fence). A refusal stops the
+     * sequence with that code; it never waits on a fence while the approval window runs out. Returns the outcome.
+     */
+    public String advanceSequence(String id,List<SequenceStep> steps,String targetDeviceId) {
+        return audited.inTransaction(SEQUENCE_ACTOR,"failover_sequence_advance",id,dsl -> {
+            lockAdmission(dsl);
+            Record q=dsl.fetchOne("select * from failover_sequence where sequence_id={0} for update",id);
+            if (q==null || !SEQUENCE_RUNNING.equals(q.get("state",String.class))) return "NOT_RUNNING";
+            Sequence seq=sequence(q);
+            Record run=seq.currentRunId()==null?null
+                :dsl.fetchOne("select state,outcome,vs_id from failover_run where run_id={0}",seq.currentRunId());
+            if (run!=null && !Set.of("DONE","STOPPED").contains(run.get("state",String.class))) return "IN_PROGRESS";
+            if (run==null || !"DONE".equals(run.get("state",String.class)) || !"SUCCEEDED".equals(run.get("outcome",String.class))) {
+                finishSequence(dsl,id,"STOPPED",SEQUENCE_RUN_NOT_SUCCEEDED,run==null?null:run.get("vs_id",String.class));
+                return SEQUENCE_RUN_NOT_SUCCEEDED;
+            }
+            if (seq.nextIndex()>=seq.vsIds().size()) {
+                finishSequence(dsl,id,"DONE",SEQUENCE_ALL_DONE,null);
+                return SEQUENCE_ALL_DONE;
+            }
+            String vs=seq.vsIds().get(seq.nextIndex());
+            SequenceStep step=steps.stream().filter(st -> vs.equals(st.vsId())).findFirst().orElse(null);
+            String refusal=!mutationEnabled?"FAILOVER_MUTATION_DISABLED":step==null?"VSX_CONTEXT_INCOMPLETE":null;
+            if (refusal==null) refusal=approvalRefusal(dsl,dsl.fetchOne("select * from failover_approval where approval_id={0} for update",
+                seq.approvalId()),true);
+            List<String> members=JooqDeviceRepository.enrolledFailoverMembers(dsl,seq.clusterRef(),"check_point");
+            if (refusal==null && (members.size()!=2 || !members.contains(targetDeviceId) || !Boolean.TRUE.equals(dsl.fetchOne(
+                    "select target_member_ids=jsonb_build_array({1}::text,{2}::text) as same from failover_sequence where sequence_id={0}",
+                    id,members.get(0),members.get(1)).get("same",Boolean.class)))) refusal="MEMBER_SET_CHANGED";
+            if (refusal==null) refusal=sequenceStepRefusal(dsl,seq.clusterRef(),vs,"check_point",members);
+            if (refusal!=null) {
+                finishSequence(dsl,id,"STOPPED",refusal,vs);
+                return refusal;
+            }
+            startSequenceStep(dsl,id,seq.clusterRef(),"check_point",seq.approvalId(),step,seq.nextIndex(),seq.initiatedBy(),
+                members,targetDeviceId);
+            return "ADMITTED";
         });
     }
 

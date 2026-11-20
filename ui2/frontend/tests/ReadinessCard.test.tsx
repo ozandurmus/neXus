@@ -22,7 +22,7 @@ describe("Readiness card", () => {
     for (const label of ["Passed: 1", "Blocking: 0", "Info: 2"]) expect(screen.getByLabelText(label)).toBeInTheDocument();
     const table = screen.getByRole("table");
     expect(within(table).getAllByRole("row")).toHaveLength(4);
-    expect(within(table).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Check", "FW-ROMEO-01-M1 · active", "FW-ROMEO-01-M2 · standby"]);
+    expect(within(table).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Check", "FW-ROMEO-01-M1 · active (inventory)", "FW-ROMEO-01-M2 · standby (inventory)"]);
     expect(screen.getAllByText("info")).toHaveLength(2);
     expect(screen.getByText("AIView Pseudonymized")).toBeInTheDocument();
     expect(screen.getByText("Failover runs re-check everything at start.")).toBeInTheDocument();
@@ -127,5 +127,28 @@ describe("Readiness card", () => {
       expect(within(screen.getByRole("table")).getAllByRole("columnheader")[2].textContent).toBe("Secondary · role unknown (as the primary reports)");
       expect(screen.getAllByRole("img", { name: "Unknown" })).toHaveLength(1);
     });
+  });
+
+  /** Live 2026-11-19: after a failover the inventory still said member 1 ACTIVE while the readiness said the reverse. */
+  it("labels the member columns with the latest readiness cluster-state roles and their time, not the inventory roles", () => {
+    const at = new Date(Date.now() - 300_000).toISOString();
+    const observed = checks.map(check => check.checkNo !== 1 ? check : { ...check, observedAt: at,
+      derived: check.device_id === "opaque-1" ? { role: "STANDBY", mode: "VSLS" } : JSON.stringify({ role: "ACTIVE", mode: "VSLS" }) });
+    render(<ReadinessCard {...props} checks={observed} status="READY" />);
+    const headers = within(screen.getByRole("table")).getAllByRole("columnheader");
+    expect(headers.map(cell => cell.textContent)).toEqual(["Check", "FW-ROMEO-01-M2 · active (readiness, 5 min ago)",
+      "FW-ROMEO-01-M1 · standby (readiness, 5 min ago)"]);
+    expect(headers[1].querySelector("[data-role-source]")).toHaveAttribute("data-role-source", "readiness");
+    // The rows follow the columns: member 2's check 1 summary is now in the first member column.
+    const row = within(screen.getByRole("table")).getAllByRole("row")[1];
+    expect(within(row).getAllByRole("cell").map(cell => cell.textContent)).toEqual(["Standby", "Active"]);
+  });
+
+  it("falls back to the inventory roles, labelled as such, when the readiness does not name every member", () => {
+    const partial = checks.map(check => check.checkNo === 1 && check.device_id === "opaque-1" ? { ...check, derived: { role: "STANDBY" } } : check);
+    render(<ReadinessCard {...props} checks={partial} status="READY" />);
+    const headers = within(screen.getByRole("table")).getAllByRole("columnheader");
+    expect(headers.map(cell => cell.textContent)).toEqual(["Check", "FW-ROMEO-01-M1 · active (inventory)", "FW-ROMEO-01-M2 · standby (inventory)"]);
+    expect(headers[1].querySelector("[data-role-source]")).toHaveAttribute("data-role-source", "inventory");
   });
 });
