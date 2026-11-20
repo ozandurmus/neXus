@@ -441,7 +441,7 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                 // Path analysis A3 (PO record 2026-11-03 D-8): an override's free-text note is never shown to aiview. The
                 // topology controller already leaves it out of a masked body; this is the second, independent barrier.
                 case "override_note" -> result.put(key, null);
-                case "created_by_actor_fingerprint" -> {
+                case "created_by_actor_fingerprint", "updated_by" -> {
                     if (value instanceof String s && !s.isBlank() && !s.startsWith("system:")
                             && !s.startsWith("migration:") && !s.startsWith("USR-")) {
                         result.put(key, topologyPseudonymizer.identityTokens().user(s.strip()));
