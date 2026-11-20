@@ -102,8 +102,10 @@ class FailoverPostconditionsGateContractTest(unittest.TestCase):
         self.assertEqual(cpstat["canonical_command_key"], "'bash -lc ''cpstat -f policy fw'''")
         self.assertIn("gateway Expert login shell", json.loads(cpstat["session_reuse_rule"]))
         self.assertIn("21 polls", json.loads(fixture["cp_inventory_cphaprob_stat"]["max_frequency"]))
-        # A VS-context policy command needs its own PO approval; never broaden the existing key silently.
-        self.assertNotIn("cp_policy_install_cpstat_vsid", fixture)
+        # The VS-context policy read has its own PO approval (2026-11-19, V254); the default key is never broadened.
+        vs_cpstat = fixture["cp_policy_install_cpstat_vsid"]
+        self.assertIn("vsenv <VSID> && cpstat -f policy fw", vs_cpstat["canonical_command_key"])
+        self.assertEqual(vs_cpstat["action_class"], "read")
 
     def test_connection_table_cannot_be_dispatched_by_failover(self):
         for path in WORKER.glob("*.java"):
