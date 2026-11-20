@@ -39,6 +39,7 @@ import {
   toCsv,
   vsListOf,
 } from "./DeviceShared";
+import { AsaSavedConfigNote, useAsaConfigRelations } from "./AsaSavedConfigDiff";
 import { IdentityCard, PlatformIdentitySummary, identityTiles, platformFactsNote } from "./PlatformIdentity";
 export { identityTiles } from "./PlatformIdentity";
 import {
@@ -295,6 +296,9 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
 
   // Backups "Active major deviations" links here with `config_tab=changes` (2026-10-23): open Details > Changes.
   const [openChanges] = useState(() => urlParam("config_tab") === "changes" && urlParam("device_id") === device.device_id);
+  // V253: an ASA whose newest backup differs from its startup configuration lists the differing keywords (text only).
+  const asaRelations = useAsaConfigRelations(device.vendor_hint === "cisco_asa");
+  const asaRelation = asaRelations?.find((r) => r.device_id === device.device_id);
 
   const configurationTab = (
     <Stack spacing={2}>
@@ -313,6 +317,7 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
       </Box>
       {/* The grid lives in the device header's Platform identity panel (PO 2026-11-06); the device tab strip shows it as one line that opens it. */}
       {embedded ? <PlatformIdentitySummary device={device} /> : <IdentityCard title={device.hostname ?? device.device_id} tiles={identityTiles(device, collectedAt)} note={platformFactsNote(device)} />}
+      <AsaSavedConfigNote relation={asaRelation} />
       {error && <EmptyPanel title="Configuration unavailable" body={error} />}
       {!error && loading && <EmptyPanel title="Configuration" body="Reading the device's configuration…" />}
       {!error && !loading && !projection && textForbidden && (

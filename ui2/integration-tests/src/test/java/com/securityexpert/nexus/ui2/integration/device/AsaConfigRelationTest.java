@@ -117,6 +117,34 @@ class AsaConfigRelationTest {
     }
 
     @Test
+    void theReaderReturnsTheNewestBackupsKeywordCountsAndSkipsAnUnmeasuredNewestBackup() throws SQLException {
+        var reader = new com.securityexpert.nexus.ui2.persistence.device.AsaConfigRelationReader(
+                new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES)));
+        try (Connection db = fixture.migrateConnection()) {
+            String device = Ui2Rows.insertDevice(db, Ui2Rows.insertCredentialReference(db), "ENROLLED");
+            String other = Ui2Rows.insertDevice(db, Ui2Rows.insertCredentialReference(db), "ENROLLED");
+            insertBackup(db, "rd-manifest-1", device, "rd-ref-1", "2026-11-18T22:00:00Z");
+            repository.record("rd-ref-1", device, "MISMATCH", 20, 4, 0, Map.of("access-list", 3, "object-group", 1));
+            assertTrue(repository.linkManifest("rd-ref-1", "rd-manifest-1"));
+            insertBackup(db, "rd-manifest-2", other, "rd-ref-2", "2026-11-18T22:00:00Z");
+            repository.record("rd-ref-2", other, "MATCH", 20, 0, 0, Map.of());
+            assertTrue(repository.linkManifest("rd-ref-2", "rd-manifest-2"));
+
+            var rows = reader.latestPerDevice().stream().filter(r -> r.deviceId().equals(device) || r.deviceId().equals(other)).toList();
+            assertEquals(2, rows.size());
+            var mismatch = rows.stream().filter(r -> r.deviceId().equals(device)).findFirst().orElseThrow();
+            assertEquals("MISMATCH", mismatch.relation());
+            assertEquals(Map.of("access-list", 3, "object-group", 1), mismatch.differingKeywords());
+            assertEquals(java.time.Instant.parse("2026-11-18T22:00:00Z"), mismatch.backupCreatedAt());
+            assertTrue(mismatch.derivedAt() != null);
+
+            // a newer backup without a relation: the device is absent, never the older verdict
+            insertBackup(db, "rd-manifest-3", device, "rd-ref-3", "2026-11-19T22:00:00Z");
+            assertTrue(reader.latestPerDevice().stream().noneMatch(r -> r.deviceId().equals(device)));
+        }
+    }
+
+    @Test
     void v253DropsThePositionalRowsSoNoBrokenVerdictIsShown() throws Exception {
         try (Connection db = fixture.migrateConnection()) {
             String device = Ui2Rows.insertDevice(db, Ui2Rows.insertCredentialReference(db), "ENROLLED");

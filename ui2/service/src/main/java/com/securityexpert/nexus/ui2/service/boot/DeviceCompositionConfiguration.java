@@ -696,6 +696,15 @@ public class DeviceCompositionConfiguration {
                 deviceConfigurationRepository, deviceRepository::listAll, java.time.Clock.systemUTC());
     }
 
+    /** V253: the saved-vs-running relation of each ASA's newest backup, shown on the deviations read (counts only). */
+    @Bean
+    public com.securityexpert.nexus.ui2.service.device.configuration.AsaConfigRelationViewService asaConfigRelationViewService(
+            TransactionBoundary transactionBoundary, DeviceRepository deviceRepository) {
+        return new com.securityexpert.nexus.ui2.service.device.configuration.AsaConfigRelationViewService(
+                new com.securityexpert.nexus.ui2.persistence.device.AsaConfigRelationReader(transactionBoundary)::latestPerDevice,
+                deviceRepository::listAll);
+    }
+
     /** V180 (PO decision 2026-10-30): open backup size anomalies on the deviations card and "accept new size". */
     @Bean
     public com.securityexpert.nexus.ui2.service.device.configuration.BackupSizeAnomalyService backupSizeAnomalyService(

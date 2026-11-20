@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.securityexpert.nexus.ui2.service.device.configuration.AsaConfigRelationViewService;
 import com.securityexpert.nexus.ui2.service.device.configuration.BackupDeviationService;
 import com.securityexpert.nexus.ui2.service.device.configuration.BackupSizeAnomalyService;
 import com.securityexpert.nexus.ui2.service.device.configuration.BackupDeviationService.DeviceClass;
@@ -44,10 +45,13 @@ public final class BackupDeviationController {
 
     private final BackupDeviationService service;
     private final BackupSizeAnomalyService sizeAnomalies;
+    private final AsaConfigRelationViewService asaRelations;
 
-    public BackupDeviationController(BackupDeviationService service, BackupSizeAnomalyService sizeAnomalies) {
+    public BackupDeviationController(BackupDeviationService service, BackupSizeAnomalyService sizeAnomalies,
+            AsaConfigRelationViewService asaRelations) {
         this.service = Objects.requireNonNull(service, "service");
         this.sizeAnomalies = Objects.requireNonNull(sizeAnomalies, "sizeAnomalies");
+        this.asaRelations = Objects.requireNonNull(asaRelations, "asaRelations");
     }
 
     @GetMapping("/api/v2/backups/deviations")
@@ -56,6 +60,8 @@ public final class BackupDeviationController {
         boolean canAccept = !com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)
                 && sizeAnomalies.mayAccept(actor(request));
         body.putAll(sizeAnomalyBody(sizeAnomalies.open(), canAccept));
+        // V253: the saved (startup) vs running configuration relation of each ASA's newest backup; counts only.
+        body.put("asa_config_relations", asaRelations.rows());
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body);
     }
 
