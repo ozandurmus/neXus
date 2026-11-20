@@ -26,6 +26,7 @@ public final class JsonLogFormatter extends Formatter {
             JsonLogFields.LOGGER_NAME,
             JsonLogFields.THREAD_NAME,
             JsonLogFields.MESSAGE,
+            JsonLogFields.EVENT,
             JsonLogFields.STACK_TRACE);
 
     private final boolean rawAddresses;
@@ -54,8 +55,13 @@ public final class JsonLogFormatter extends Formatter {
         first = appendField(out, first, JsonLogFields.LOGGER_NAME,
                 record.getLoggerName() == null ? "" : record.getLoggerName());
         first = appendField(out, first, JsonLogFields.THREAD_NAME, threadName(record));
+        String rawMessage = formatMessage(record);
         first = appendField(out, first, JsonLogFields.MESSAGE,
-                LogAddressMasker.mask(formatMessage(record), rawAddresses));
+                LogAddressMasker.mask(rawMessage, rawAddresses));
+        String eventCode = JsonLogFields.extractEventCode(rawMessage);
+        if (eventCode != null) {
+            first = appendField(out, first, JsonLogFields.EVENT, eventCode);
+        }
 
         Map<String, String> mdc = JobLogContext.mdcSnapshot();
         for (Map.Entry<String, String> entry : mdc.entrySet()) {

@@ -816,6 +816,8 @@ function RunDetails({ data }: { readonly data: SystemLogSources }) {
 interface TextState {
   readonly chunkId: string | null;
   readonly lines: readonly string[];
+  /** Parallel to `lines` on an unmasked page: each line's masked projection from the server; empty on a masked page. */
+  readonly maskedLines: readonly string[];
   readonly nextOffset: number;
   readonly eof: boolean;
   readonly masked: boolean | null;
@@ -826,7 +828,7 @@ interface TextState {
   readonly capped: boolean;
 }
 
-const EMPTY_TEXT: TextState = { chunkId: null, lines: [], nextOffset: 0, eof: false, masked: null, maskRules: null, loading: false, error: null, capped: false };
+const EMPTY_TEXT: TextState = { chunkId: null, lines: [], maskedLines: [], nextOffset: 0, eof: false, masked: null, maskRules: null, loading: false, error: null, capped: false };
 
 function splitLines(text: string): string[] {
   if (text === "") return [];
@@ -850,6 +852,7 @@ interface LogViewerModel {
   readonly unmasked: boolean; readonly setUnmasked: (on: boolean) => void;
   readonly text: TextState;
   readonly loadPage: (target: SystemLogChunk, offset: number, replace: boolean) => void;
+  readonly searchWholeRun: (target: SystemLogChunk) => void;
 }
 
 function useLogViewer(deviceId: string, sources: readonly SystemLogSource[]): LogViewerModel {
@@ -900,9 +903,15 @@ function useLogViewer(deviceId: string, sources: readonly SystemLogSource[]): Lo
       .then((page) => {
         if (seq !== requestSeq.current) return;
         setText((prev) => {
-          const merged = [...(replace ? [] : prev.lines), ...splitLines(page.text)];
+          const pageLines = splitLines(page.text);
+          const pageMasked = !page.masked && page.masked_text ? splitLines(page.masked_text) : [];
+          const merged = [...(replace ? [] : prev.lines), ...pageLines];
+          const mergedMasked = page.masked ? [] : [...(replace ? [] : prev.maskedLines), ...pageLines.map((_, i) => pageMasked[i] ?? "")];
           const capped = merged.length >= MAX_LOADED_LINES;
-          return { chunkId: target.chunk_id, lines: merged, nextOffset: page.next_offset, eof: page.eof, masked: page.masked, maskRules: page.mask_rules, loading: false, error: null, capped };
+          return {
+            chunkId: target.chunk_id, lines: merged, maskedLines: mergedMasked, nextOffset: page.next_offset,
+            eof: page.eof, masked: page.masked, maskRules: page.mask_rules, loading: false, error: null, capped,
+          };
         });
       })
       .catch((err: unknown) => {
@@ -913,6 +922,46 @@ function useLogViewer(deviceId: string, sources: readonly SystemLogSource[]): Lo
       });
   }, [unmasked]);
 
+  const searchWholeRun = useCallback((target: SystemLogChunk) => {
+    const seq = ++requestSeq.current;
+    const sameChunk = text.chunkId === target.chunk_id && text.lines.length > 0;
+    let lines = sameChunk ? [...text.lines] : [];
+    let maskedLines = sameChunk ? [...text.maskedLines] : [];
+    let nextOffset = sameChunk ? text.nextOffset : 0;
+    let eof = sameChunk ? text.eof : false;
+    if (eof || lines.length >= MAX_LOADED_LINES) return;
+    setText((prev) => ({ ...(sameChunk ? prev : EMPTY_TEXT), chunkId: target.chunk_id, loading: true, error: null }));
+    (async () => {
+      try {
+        while (!eof && lines.length < MAX_LOADED_LINES) {
+          const prevOffset = nextOffset;
+          const page = await getSystemLogText(target.chunk_id, { offset: nextOffset, unmasked });
+          if (seq !== requestSeq.current) return;
+          const pageLines = splitLines(page.text);
+          const pageMasked = !page.masked && page.masked_text ? splitLines(page.masked_text) : [];
+          lines = [...lines, ...pageLines];
+          maskedLines = page.masked ? [] : [...maskedLines, ...pageLines.map((_, i) => pageMasked[i] ?? "")];
+          nextOffset = page.next_offset;
+          eof = page.eof || nextOffset <= prevOffset;
+          const capped = lines.length >= MAX_LOADED_LINES;
+          setText({
+            chunkId: target.chunk_id, lines, maskedLines, nextOffset, eof,
+            masked: page.masked, maskRules: page.mask_rules, loading: !eof && !capped, error: null, capped,
+          });
+          if (capped) break;
+        }
+      } catch (err: unknown) {
+        if (seq !== requestSeq.current) return;
+        const r = refusalOf(err);
+        if (r.code === "SYSTEM_LOG_UNMASKED_NOT_PERMITTED") setUnmasked(false);
+        setText((prev) => ({
+          ...prev, loading: false,
+          error: r.code === "SYSTEM_LOG_CHUNK_PRUNED" ? "The bytes of this chunk were removed by retention." : describe(err),
+        }));
+      }
+    })();
+  }, [text, unmasked]);
+
   // First page of the selected chunk, again whenever the chunk or the masked/unmasked choice changes.
   useEffect(() => {
     if (!chunk || chunk.pruned) { setText(EMPTY_TEXT); return; }
@@ -922,45 +971,257 @@ function useLogViewer(deviceId: string, sources: readonly SystemLogSource[]): Lo
 
   return {
     source, setSource, chunks, chunksError, day, setDay, days, dayChunks, chunkId, setChunkId, chunk,
-    chunkIndex: dayChunks.findIndex((c) => c.chunk_id === chunkId), filter, setFilter, level, setLevel, unmasked, setUnmasked, text, loadPage,
+    chunkIndex: dayChunks.findIndex((c) => c.chunk_id === chunkId), filter, setFilter, level, setLevel, unmasked, setUnmasked, text, loadPage, searchWholeRun,
   };
 }
 
-/** The text with every filter match wrapped in a `mark`, case-insensitively; the text itself is never changed. */
-function highlight(text: string, needle: string, keyBase: string): React.ReactNode[] {
-  if (!needle) return [text];
-  const out: React.ReactNode[] = [];
-  const lower = text.toLowerCase();
-  let from = 0;
-  let n = 0;
-  for (let at = lower.indexOf(needle, from); at >= 0; at = lower.indexOf(needle, from)) {
-    if (at > from) out.push(text.slice(from, at));
-    out.push(<Box component="mark" key={`${keyBase}-${n++}`} sx={{ bgcolor: m3.primaryContainer, color: m3.onPrimaryContainer, borderRadius: "2px" }}>{text.slice(at, at + needle.length)}</Box>);
+interface AlignToken {
+  readonly text: string;
+  readonly start: number;
+  readonly end: number;
+  readonly word: boolean;
+}
+
+interface AlignedSegment {
+  readonly rawStart: number;
+  readonly rawEnd: number;
+  readonly maskStart: number;
+  readonly maskEnd: number;
+  readonly same: boolean;
+}
+
+const ALIGN_TOKEN_RE = /(?:USR|SN|ID|POL|RUL|OBJ|ZON|VSN|DMN)-[0-9A-Za-z]+|[hH]-[0-9a-fA-F]{8,}|(?:FW|CLS|VS|DOM|MD)-[A-Z]+-\d{2}(?:-(?:M\d{1,2}|\d{2}))?|<ip>|[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}|\d{1,3}(?:\.\d{1,3}){3}|\d{1,3}(?:-\d{1,3}){3}|[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*|\s+|./g;
+
+function tokenizeForAlign(text: string): AlignToken[] {
+  const out: AlignToken[] = [];
+  for (const m of text.matchAll(ALIGN_TOKEN_RE)) {
+    const token = m[0];
+    const start = m.index ?? 0;
+    out.push({ text: token, start, end: start + token.length, word: /^[A-Za-z0-9<]/.test(token) });
+  }
+  return out;
+}
+
+function lcsTokenPairs(raw: readonly AlignToken[], mask: readonly AlignToken[]): [number, number][] {
+  const n = raw.length;
+  const m = mask.length;
+  if (n === 0 || m === 0) return [];
+  const dp: Int32Array[] = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    const rText = raw[i].text;
+    const row = dp[i];
+    const nextRow = dp[i + 1];
+    for (let j = m - 1; j >= 0; j--) {
+      if (rText === mask[j].text) {
+        row[j] = 1 + nextRow[j + 1];
+      } else {
+        const down = nextRow[j];
+        const right = row[j + 1];
+        row[j] = down >= right ? down : right;
+      }
+    }
+  }
+  const pairs: [number, number][] = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (raw[i].text === mask[j].text && dp[i][j] === 1 + dp[i + 1][j + 1]) {
+      pairs.push([i, j]);
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      i++;
+    } else {
+      j++;
+    }
+  }
+  return pairs;
+}
+
+function alignGap(
+  rawTokens: readonly AlignToken[], rFrom: number, rTo: number,
+  maskTokens: readonly AlignToken[], mFrom: number, mTo: number,
+  out: AlignedSegment[], allowSubSplit: boolean,
+): void {
+  let rStart = rFrom;
+  let rEnd = rTo;
+  let mStart = mFrom;
+  let mEnd = mTo;
+  while (rStart < rEnd && mStart < mEnd && rawTokens[rStart].text === maskTokens[mStart].text) {
+    out.push({
+      rawStart: rawTokens[rStart].start, rawEnd: rawTokens[rStart].end,
+      maskStart: maskTokens[mStart].start, maskEnd: maskTokens[mStart].end, same: true,
+    });
+    rStart++;
+    mStart++;
+  }
+  const suffix: AlignedSegment[] = [];
+  while (rStart < rEnd && mStart < mEnd && rawTokens[rEnd - 1].text === maskTokens[mEnd - 1].text) {
+    rEnd--;
+    mEnd--;
+    suffix.push({
+      rawStart: rawTokens[rEnd].start, rawEnd: rawTokens[rEnd].end,
+      maskStart: maskTokens[mEnd].start, maskEnd: maskTokens[mEnd].end, same: true,
+    });
+  }
+  if (rStart < rEnd && mStart < mEnd) {
+    if (allowSubSplit && mEnd - mStart > 1 && rEnd - rStart > 1) {
+      const subRaw = rawTokens.slice(rStart, rEnd);
+      const subMask = maskTokens.slice(mStart, mEnd);
+      const subPairs = lcsTokenPairs(subRaw, subMask);
+      if (subPairs.length > 0) {
+        let sr = 0;
+        let sm = 0;
+        for (const [pr, pm] of subPairs) {
+          alignGap(subRaw, sr, pr, subMask, sm, pm, out, false);
+          out.push({
+            rawStart: subRaw[pr].start, rawEnd: subRaw[pr].end,
+            maskStart: subMask[pm].start, maskEnd: subMask[pm].end, same: true,
+          });
+          sr = pr + 1;
+          sm = pm + 1;
+        }
+        alignGap(subRaw, sr, subRaw.length, subMask, sm, subMask.length, out, false);
+      } else {
+        out.push({
+          rawStart: rawTokens[rStart].start, rawEnd: rawTokens[rEnd - 1].end,
+          maskStart: maskTokens[mStart].start, maskEnd: maskTokens[mEnd - 1].end, same: false,
+        });
+      }
+    } else {
+      out.push({
+        rawStart: rawTokens[rStart].start, rawEnd: rawTokens[rEnd - 1].end,
+        maskStart: maskTokens[mStart].start, maskEnd: maskTokens[mEnd - 1].end, same: false,
+      });
+    }
+  }
+  for (let k = suffix.length - 1; k >= 0; k--) {
+    out.push(suffix[k]);
+  }
+}
+
+function alignRawAndMasked(rawLine: string, maskedLine: string): AlignedSegment[] {
+  const rawTokens = tokenizeForAlign(rawLine);
+  const maskTokens = tokenizeForAlign(maskedLine);
+  const rawWordIdx: number[] = [];
+  const rawWords: AlignToken[] = [];
+  rawTokens.forEach((t, idx) => { if (t.word) { rawWordIdx.push(idx); rawWords.push(t); } });
+  const maskWordIdx: number[] = [];
+  const maskWords: AlignToken[] = [];
+  maskTokens.forEach((t, idx) => { if (t.word) { maskWordIdx.push(idx); maskWords.push(t); } });
+  const wordPairs = lcsTokenPairs(rawWords, maskWords);
+  const out: AlignedSegment[] = [];
+  let rCursor = 0;
+  let mCursor = 0;
+  for (const [rw, mw] of wordPairs) {
+    const rIdx = rawWordIdx[rw];
+    const mIdx = maskWordIdx[mw];
+    alignGap(rawTokens, rCursor, rIdx, maskTokens, mCursor, mIdx, out, true);
+    out.push({
+      rawStart: rawTokens[rIdx].start, rawEnd: rawTokens[rIdx].end,
+      maskStart: maskTokens[mIdx].start, maskEnd: maskTokens[mIdx].end, same: true,
+    });
+    rCursor = rIdx + 1;
+    mCursor = mIdx + 1;
+  }
+  alignGap(rawTokens, rCursor, rawTokens.length, maskTokens, mCursor, maskTokens.length, out, true);
+  return out;
+}
+
+/**
+ * Character ranges `[start, end)` in `line` that match `needle` (already lower-cased): direct substring matches in
+ * `line`, plus any match in `maskedLine` projected back onto the real value in `line` that produced that masked span.
+ */
+export function matchRanges(line: string, maskedLine: string | null | undefined, needle: string): [number, number][] {
+  if (!needle) return [];
+  const rawIntervals: [number, number][] = [];
+  const lowerLine = line.toLowerCase();
+  for (let from = 0, at = lowerLine.indexOf(needle, from); at >= 0; at = lowerLine.indexOf(needle, from)) {
+    rawIntervals.push([at, at + needle.length]);
     from = at + needle.length;
   }
-  if (from < text.length) out.push(text.slice(from));
+  if (maskedLine && maskedLine !== line) {
+    const lowerMasked = maskedLine.toLowerCase();
+    let at = lowerMasked.indexOf(needle, 0);
+    if (at >= 0) {
+      const segments = alignRawAndMasked(line, maskedLine);
+      while (at >= 0) {
+        const mStart = at;
+        const mEnd = at + needle.length;
+        let mappedStart = -1;
+        let mappedEnd = -1;
+        for (const seg of segments) {
+          if (seg.maskEnd <= mStart || seg.maskStart >= mEnd) continue;
+          const s = seg.same ? seg.rawStart + Math.max(0, mStart - seg.maskStart) : seg.rawStart;
+          const e = seg.same ? seg.rawStart + Math.min(seg.maskEnd - seg.maskStart, mEnd - seg.maskStart) : seg.rawEnd;
+          if (e > s) {
+            if (mappedStart < 0 || s < mappedStart) mappedStart = s;
+            if (e > mappedEnd) mappedEnd = e;
+          }
+        }
+        if (mappedStart >= 0 && mappedEnd > mappedStart) {
+          rawIntervals.push([mappedStart, mappedEnd]);
+        }
+        at = lowerMasked.indexOf(needle, mEnd);
+      }
+    }
+  }
+  if (rawIntervals.length <= 1) return rawIntervals;
+  rawIntervals.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const merged: [number, number][] = [rawIntervals[0]];
+  for (let i = 1; i < rawIntervals.length; i++) {
+    const prev = merged[merged.length - 1];
+    const cur = rawIntervals[i];
+    if (cur[0] < prev[1]) {
+      if (cur[1] > prev[1]) prev[1] = cur[1];
+    } else {
+      merged.push(cur);
+    }
+  }
+  return merged;
+}
+
+/** A slice `[sliceStart, sliceEnd)` of `text` with every overlapping match range wrapped in a `mark`; the text itself is never changed. */
+function highlightRanges(text: string, ranges: readonly (readonly [number, number])[], sliceStart: number, sliceEnd: number, keyBase: string): React.ReactNode[] {
+  const slice = text.slice(sliceStart, sliceEnd);
+  if (ranges.length === 0 || sliceStart >= sliceEnd) return [slice];
+  const out: React.ReactNode[] = [];
+  let from = sliceStart;
+  let n = 0;
+  for (const [rStart, rEnd] of ranges) {
+    if (rEnd <= sliceStart || rStart >= sliceEnd) continue;
+    const start = Math.max(rStart, sliceStart);
+    const end = Math.min(rEnd, sliceEnd);
+    if (start > from) out.push(text.slice(from, start));
+    out.push(<Box component="mark" key={`${keyBase}-${n++}`} sx={{ bgcolor: m3.primaryContainer, color: m3.onPrimaryContainer, borderRadius: "2px" }}>{text.slice(start, end)}</Box>);
+    from = end;
+  }
+  if (from === sliceStart) return [slice];
+  if (from < sliceEnd) out.push(text.slice(from, sliceEnd));
   return out;
 }
 
 /**
  * One raw line: the device time in a fixed column, then the line, wrapped (default) or on one row that scrolls sideways.
  * Nothing is cut away. A severity the line itself writes gets its colour on that word alone (design language: a state
- * is a word with a colour); a filter match is marked. Neither is ever invented.
+ * is a word with a colour); a filter match is marked (on the real value when a pseudonym matched in the unmasked view).
+ * Neither is ever invented.
  */
-function RawLine({ line, needle, wrap }: { readonly line: string; readonly needle: string; readonly wrap: boolean }) {
+function RawLine({ line, maskedLine, needle, wrap }: { readonly line: string; readonly maskedLine?: string | null; readonly needle: string; readonly wrap: boolean }) {
   const time = lineDeviceTime(line);
   const severity = lineSeverity(line);
+  const ranges = useMemo(() => matchRanges(line, maskedLine, needle), [line, maskedLine, needle]);
   let body: React.ReactNode[];
   if (severity && severity.tone) {
     const end = severity.index + severity.token.length;
     body = [
-      ...highlight(line.slice(0, severity.index), needle, "a"),
+      ...highlightRanges(line, ranges, 0, severity.index, "a"),
       <Box component="span" key="sev" data-severity={severity.token} title="Severity as the line writes it"
-        sx={{ color: severity.tone === "bad" ? m3.criticalInk : m3.warningInk, fontWeight: 600 }}>{highlight(severity.token, needle, "s")}</Box>,
-      ...highlight(line.slice(end), needle, "b"),
+        sx={{ color: severity.tone === "bad" ? m3.criticalInk : m3.warningInk, fontWeight: 600 }}>{highlightRanges(line, ranges, severity.index, end, "s")}</Box>,
+      ...highlightRanges(line, ranges, end, line.length, "b"),
     ];
   } else {
-    body = highlight(line, needle, "l");
+    body = highlightRanges(line, ranges, 0, line.length, "l");
   }
   return (
     <Box data-testid="log-line" data-wrap={wrap ? "on" : "off"}
@@ -1004,7 +1265,7 @@ function LogViewer({ vm, sources, canViewUnmasked, maxPageBytes, gaps, onJump }:
   readonly gaps: readonly SystemLogGap[];
   readonly onJump: (id: string) => void;
 }) {
-  const { source, setSource, chunks, chunksError, day, setDay, days, dayChunks, chunkId, setChunkId, chunk, chunkIndex, filter, setFilter, level, setLevel, unmasked, setUnmasked, text, loadPage } = vm;
+  const { source, setSource, chunks, chunksError, day, setDay, days, dayChunks, chunkId, setChunkId, chunk, chunkIndex, filter, setFilter, level, setLevel, unmasked, setUnmasked, text, loadPage, searchWholeRun } = vm;
   const [wrap, setWrap] = usePreferenceFlag("nx.logs.wrap", true);
   const [fullscreen, setFullscreen] = useState(false);
   const linesRef = useRef<HTMLDivElement>(null);
@@ -1029,9 +1290,18 @@ function LogViewer({ vm, sources, canViewUnmasked, maxPageBytes, gaps, onJump }:
   const needle = filter.trim().toLowerCase();
   const levels = useMemo(() => countLevels(text.lines), [text.lines]);
   const levelOf = (line: string): LineSeverity["tone"] => lineSeverity(line)?.tone ?? null;
-  const shown = text.lines.filter((l) => (!needle || l.toLowerCase().includes(needle))
-    && (level === "all" || (level === "error" ? levelOf(l) === "bad" : levelOf(l) === "warn")));
+  const shown: { readonly line: string; readonly maskedLine: string | null; readonly index: number }[] = [];
+  for (let i = 0; i < text.lines.length; i++) {
+    const l = text.lines[i];
+    const m = text.masked === false ? (text.maskedLines[i] || null) : null;
+    const textMatch = !needle || l.toLowerCase().includes(needle) || (m !== null && m.toLowerCase().includes(needle));
+    const levelMatch = level === "all" || (level === "error" ? levelOf(l) === "bad" : levelOf(l) === "warn");
+    if (textMatch && levelMatch) {
+      shown.push({ line: l, maskedLine: m, index: i });
+    }
+  }
   const filtered = Boolean(needle) || level !== "all";
+  const runLines = chunk ? Math.max(chunk.lines, text.lines.length) : text.lines.length;
   const selected = sources.find((s) => s.source_key === source) ?? null;
   // Gaps recorded by the run that stored this chunk, for this source: their place in the stream is known.
   const chunkGaps = chunk ? gaps.filter((g) => g.source_key === source && g.job_id === chunk.job_id) : [];
@@ -1141,17 +1411,27 @@ function LogViewer({ vm, sources, canViewUnmasked, maxPageBytes, gaps, onJump }:
           }}>
             {before.map((g) => <GapMarker key={g.gap_id} gap={g} where="before" onJump={onJump} />)}
             {text.loading && text.lines.length === 0 ? "Loading…" : shown.length === 0 ? (filtered ? "No loaded line matches the filter." : "This chunk holds no lines.") :
-              shown.map((line, i) => <RawLine key={`${chunk.chunk_id}:${i}`} line={line} needle={needle} wrap={wrap} />)}
+              shown.map((item) => <RawLine key={`${chunk.chunk_id}:${item.index}`} line={item.line} maskedLine={item.maskedLine} needle={needle} wrap={wrap} />)}
             {after.map((g) => <GapMarker key={g.gap_id} gap={g} where="after" onJump={onJump} />)}
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap", px: 0.5 }}>
             <Typography variant="caption" color="text.secondary">
-              {filtered ? `${shown.length} of ${text.lines.length} loaded lines match` : `${text.lines.length.toLocaleString("en-US")} lines loaded`}
+              {filtered ? `${shown.length} of ${text.lines.length} loaded lines match` : `${text.lines.length.toLocaleString("en-US")} of ${runLines.toLocaleString("en-US")} lines in the run loaded`}
               {text.capped ? ` (stopped at ${MAX_LOADED_LINES.toLocaleString("en-US")}; filter, or open another chunk)` : ""}
             </Typography>
+            {filtered && (
+              <Typography variant="caption" color="text.secondary">
+                {`${text.lines.length.toLocaleString("en-US")} of ${runLines.toLocaleString("en-US")} lines in the run loaded`}
+              </Typography>
+            )}
             {!text.eof && !text.capped && (
               <M3Button emphasis="outlined" disabled={text.loading} onClick={() => loadPage(chunk, text.nextOffset, false)}>
                 {text.loading ? "Loading…" : "Load more"}
+              </M3Button>
+            )}
+            {!text.eof && !text.capped && (
+              <M3Button emphasis="text" disabled={text.loading} onClick={() => searchWholeRun(chunk)}>
+                Search the whole run
               </M3Button>
             )}
             {text.eof && chunkIndex >= 0 && chunkIndex < dayChunks.length - 1 && (

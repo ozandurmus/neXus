@@ -1,10 +1,15 @@
 package com.securityexpert.nexus.ui2.service.api;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 import jakarta.servlet.http.HttpServletRequest;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
@@ -41,6 +46,9 @@ import com.securityexpert.nexus.ui2.service.systemlog.SystemLogReadService;
  */
 @RestController
 public final class SystemLogReadController {
+    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final int MAX_MASKED_HEADER_BYTES = 4096;
+
     private final SystemLogReadService service;
     private final ActionRegistry actions;
     private final RbacEvaluator rbac;
@@ -80,8 +88,7 @@ public final class SystemLogReadController {
         var response = ResponseEntity.ok();
         // Which masking rules a masked page went through, so the "Masked view" chip can name them.
         if (page.maskRuleSet() != null) response.header("X-Syslog-Mask-Rules", page.maskRuleSet());
-        return response.cacheControl(CacheControl.noStore())
-                .contentType(new MediaType("text", "plain", java.nio.charset.StandardCharsets.UTF_8))
+        response.cacheControl(CacheControl.noStore())
                 .header("X-Content-Type-Options", "nosniff")
                 .header("X-Syslog-Masked", String.valueOf(page.masked()))
                 .header("X-Syslog-Source", page.sourceKey())
@@ -90,8 +97,29 @@ public final class SystemLogReadController {
                 .header("X-Syslog-Eof", String.valueOf(page.eof()))
                 .header("X-Syslog-Lines", String.valueOf(page.lines()))
                 .header("X-Syslog-Chunk-Bytes", String.valueOf(page.chunkBytes()))
-                .header("X-Syslog-Page-Limit", String.valueOf(page.pageLimit()))
+                .header("X-Syslog-Page-Limit", String.valueOf(page.pageLimit()));
+        if (!page.masked() && page.maskedText() != null) {
+            if (acceptsJson(request)) {
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("text", new String(page.text(), StandardCharsets.UTF_8));
+                body.put("masked_text", new String(page.maskedText(), StandardCharsets.UTF_8));
+                try {
+                    return response.contentType(MediaType.APPLICATION_JSON).body(JSON.writeValueAsBytes(body));
+                } catch (JsonProcessingException ignored) {
+                    // Fall back to text/plain below.
+                }
+            }
+            if (page.maskedText().length <= MAX_MASKED_HEADER_BYTES) {
+                response.header("X-Syslog-Masked-Text", Base64.getEncoder().encodeToString(page.maskedText()));
+            }
+        }
+        return response.contentType(new MediaType("text", "plain", StandardCharsets.UTF_8))
                 .body(page.text());
+    }
+
+    private static boolean acceptsJson(HttpServletRequest request) {
+        String accept = request == null ? null : request.getHeader("Accept");
+        return accept != null && accept.contains("application/json");
     }
 
     @GetMapping("/api/v2/system-logs/gaps")

@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.architecture;
 
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -11,8 +12,6 @@ import java.nio.file.Paths;
 import org.junit.jupiter.api.Test;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
-import com.tngtech.archunit.core.importer.ImportOption;
 
 /**
  * Data Sanitizer module fence (docs/design/DATA_SANITIZER_CONTRACT.md §4 "plain-Java module"): the engine depends on
@@ -21,9 +20,8 @@ import com.tngtech.archunit.core.importer.ImportOption;
  */
 class SanitizerModuleFenceTest {
 
-    private static final JavaClasses SANITIZER = new ClassFileImporter()
-            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-            .importPackages("com.securityexpert.nexus.ui2.sanitizer");
+    private static final JavaClasses SANITIZER = Ui2ArchitectureTest.productionClasses()
+            .that(resideInAPackage("..ui2.sanitizer.."));
 
     @Test
     void theEngineIsPlainJavaWithNoPathToAnotherModuleTheDatabaseOrTheNetwork() {

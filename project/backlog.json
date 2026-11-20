@@ -398,15 +398,6 @@
       "note": ""
     },
     {
-      "id": "nightly_e2e_fails_on_legitimate_platform_status_warning",
-      "category": "testing",
-      "title": "Nightly e2e fails when Platform status shows a legitimate disk or operations warning",
-      "status": "planned",
-      "priority": "P2",
-      "target": "nightly e2e guard",
-      "note": ""
-    },
-    {
       "id": "advisory_fetch_cisa_kev_ingest_refused_during_deploy_overlap",
       "category": "advisories",
       "title": "Advisory fetch cisa_kev ends INGEST_REFUSED when it overlaps a deploy",

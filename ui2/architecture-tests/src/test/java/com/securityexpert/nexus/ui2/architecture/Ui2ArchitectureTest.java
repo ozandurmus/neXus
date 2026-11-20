@@ -45,6 +45,21 @@ class Ui2ArchitectureTest {
 
     private static JavaClasses classes;
 
+    private static final class ProductionClassesHolder {
+        static final JavaClasses CLASSES = new ClassFileImporter()
+                .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+                .importPackages("com.securityexpert.nexus.ui2");
+    }
+
+    /**
+     * Per-JVM cached ArchUnit import of all production {@code com.securityexpert.nexus.ui2}
+     * classes on the test classpath. Reused across the architecture test suite so the full
+     * class graph is imported and retained once per test worker JVM.
+     */
+    static JavaClasses productionClasses() {
+        return ProductionClassesHolder.CLASSES;
+    }
+
     private static final String PYTHON_RPM_REMOVAL =
             "RUN rpm -e --nodeps $(rpm -qa --qf '%{NAME}\\n' 'python3*') \\\n"
             + " && test -z \"$(rpm -qa 'python3*')\"";
@@ -61,9 +76,7 @@ class Ui2ArchitectureTest {
 
     @BeforeAll
     static void importClasses() {
-        classes = new ClassFileImporter()
-                .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-                .importPackages("com.securityexpert.nexus.ui2");
+        classes = productionClasses();
 
         // AC-5: the suite fails outright if the import found nothing —
         // a rule proved over zero classes is not proof of anything.

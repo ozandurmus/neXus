@@ -17,7 +17,8 @@ public final class Ui2ConfigurationMain {
         server.start();
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("Shutting down ui2-configuration microservice...");
+            System.getLogger(Ui2ConfigurationMain.class.getName()).log(
+                    System.Logger.Level.INFO, "Shutting down ui2-configuration microservice...");
             server.stop();
         }));
 

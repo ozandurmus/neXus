@@ -14,6 +14,9 @@ import java.util.logging.Logger;
  */
 public final class MaskingFormatter extends Formatter {
 
+    public static final String LOG_FORMAT_ENV = "UI2_LOG_FORMAT";
+    public static final String LEGACY_LOG_FORMAT_ENV = "NEXUS_LOG_FORMAT";
+
     private final Formatter delegate;
     private final boolean rawAddresses;
 
@@ -46,17 +49,35 @@ public final class MaskingFormatter extends Formatter {
         return delegate.getTail(h);
     }
 
-    /** True when {@code NEXUS_LOG_FORMAT=json} (environment variable or system property of the same name). */
+    /**
+     * True when {@code UI2_LOG_FORMAT=json} (or legacy {@code NEXUS_LOG_FORMAT=json} when {@code UI2_LOG_FORMAT}
+     * is unset) in the environment or system properties. Default is {@code text} ({@code false}).
+     */
     public static boolean jsonRequested() {
-        String value = System.getenv("NEXUS_LOG_FORMAT");
-        if (value == null || value.isBlank()) value = System.getProperty("NEXUS_LOG_FORMAT");
-        return value != null && value.trim().equalsIgnoreCase("json");
+        return jsonRequested(MaskingFormatter::lookupFormatProperty);
+    }
+
+    public static boolean jsonRequested(java.util.function.UnaryOperator<String> lookup) {
+        String ui2 = lookup.apply(LOG_FORMAT_ENV);
+        if (ui2 != null && !ui2.isBlank()) {
+            return "json".equalsIgnoreCase(ui2.trim());
+        }
+        String legacy = lookup.apply(LEGACY_LOG_FORMAT_ENV);
+        return legacy != null && "json".equalsIgnoreCase(legacy.trim());
+    }
+
+    private static String lookupFormatProperty(String key) {
+        String value = System.getenv(key);
+        if (value == null || value.isBlank()) {
+            value = System.getProperty(key);
+        }
+        return value;
     }
 
     /**
      * Wraps the formatter of each root-logger handler (idempotent). Call once at process start. With
-     * {@code NEXUS_LOG_FORMAT=json} each handler gets the {@link JsonLogFormatter} (which masks on its own);
-     * otherwise the existing text format is kept and masked.
+     * {@code UI2_LOG_FORMAT=json} (or {@code NEXUS_LOG_FORMAT=json}) each handler gets the {@link JsonLogFormatter}
+     * (which masks on its own); otherwise the existing text format is kept and masked.
      */
     public static void install() {
         install(LogManager.getLogManager().getLogger(""), jsonRequested());

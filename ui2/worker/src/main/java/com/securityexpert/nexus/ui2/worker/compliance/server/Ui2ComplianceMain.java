@@ -17,7 +17,8 @@ public final class Ui2ComplianceMain {
         server.start();
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("Shutting down ui2-compliance microservice...");
+            System.getLogger(Ui2ComplianceMain.class.getName()).log(
+                    System.Logger.Level.INFO, "Shutting down ui2-compliance microservice...");
             server.stop();
         }));
 

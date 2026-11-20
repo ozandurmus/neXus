@@ -105,7 +105,8 @@ public final class Ui2WorkerMain {
                 com.securityexpert.nexus.ui2.worker.configuration.server.Ui2ConfigurationMain.main(args);
                 return;
             } catch (Exception e) {
-                System.err.println("Failed to start ui2-configuration microservice: " + e.getMessage());
+                System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.ERROR,
+                        "Failed to start ui2-configuration microservice: " + e.getMessage(), e);
                 System.exit(1);
             }
         }
@@ -114,7 +115,8 @@ public final class Ui2WorkerMain {
                 com.securityexpert.nexus.ui2.worker.compliance.server.Ui2ComplianceMain.main(args);
                 return;
             } catch (Exception e) {
-                System.err.println("Failed to start ui2-compliance microservice: " + e.getMessage());
+                System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.ERROR,
+                        "Failed to start ui2-compliance microservice: " + e.getMessage(), e);
                 System.exit(1);
             }
         }

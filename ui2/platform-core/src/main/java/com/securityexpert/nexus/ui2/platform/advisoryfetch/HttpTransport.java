@@ -12,7 +12,9 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import javax.net.ssl.SSLException;
 
@@ -20,7 +22,9 @@ import javax.net.ssl.SSLException;
  * The two real ports of {@link AdvisoryFetchRun} (contract section 3). Outbound: {@code GET} only, no body, through the
  * configured proxy, the runtime's default trust store and host-name check (no custom trust, on any path), redirects
  * never followed, one request per second per host, a size cap. Ingest: direct to the service's internal port, never
- * through the proxy. No message of an exception is logged or returned: it could name the proxy.
+ * through the proxy, retrying transient refusals (connection refused/IO error, 429, 503/5xx while draining or not ready)
+ * with bounded backoff while failing real refusals (4xx other than 429) at once. No message of an exception is logged or
+ * returned: it could name the proxy.
  */
 public final class HttpTransport implements AdvisoryFetchRun.Outbound, AdvisoryFetchRun.Ingest {
 
@@ -36,9 +40,16 @@ public final class HttpTransport implements AdvisoryFetchRun.Outbound, AdvisoryF
     private final HttpClient direct;
     private final URI ingestBase;
     private final String token;
+    private final List<Duration> ingestBackoff;
+    private final Consumer<Duration> ingestSleeper;
     private final Map<String, Long> lastRequestNanos = new HashMap<>();
 
     public HttpTransport(String proxyHost, int proxyPort, URI ingestBase, String token) {
+        this(proxyHost, proxyPort, ingestBase, token, AdvisoryFetchRun.DEFAULT_INGEST_BACKOFF, HttpTransport::sleep);
+    }
+
+    public HttpTransport(String proxyHost, int proxyPort, URI ingestBase, String token,
+            List<Duration> ingestBackoff, Consumer<Duration> ingestSleeper) {
         this.outbound = HttpClient.newBuilder()
                 .proxy(ProxySelector.of(new InetSocketAddress(proxyHost, proxyPort)))
                 .followRedirects(HttpClient.Redirect.NEVER)
@@ -51,6 +62,8 @@ public final class HttpTransport implements AdvisoryFetchRun.Outbound, AdvisoryF
                 .build();
         this.ingestBase = ingestBase;
         this.token = token;
+        this.ingestBackoff = List.copyOf(ingestBackoff);
+        this.ingestSleeper = ingestSleeper;
     }
 
     @Override
@@ -84,34 +97,91 @@ public final class HttpTransport implements AdvisoryFetchRun.Outbound, AdvisoryF
 
     @Override
     public boolean document(String source, String runId, URI readFrom, byte[] body) {
+        return handOver(source, runId, readFrom, body).accepted();
+    }
+
+    @Override
+    public boolean complete(String source, String runId, int fetched, int failed, String reason) {
+        return close(source, runId, fetched, failed, reason, true).accepted();
+    }
+
+    @Override
+    public AdvisoryFetchRun.IngestResult handOver(String source, String runId, URI readFrom, byte[] body) {
         HttpRequest request = HttpRequest.newBuilder(ingestBase.resolve(AdvisorySources.ingestPath(source)))
                 .timeout(Duration.ofSeconds(120))
                 .header(TOKEN_HEADER, token).header(URL_HEADER, readFrom.toString()).header(RUN_HEADER, runId)
                 .header("Content-Type", "application/octet-stream")
                 .POST(HttpRequest.BodyPublishers.ofByteArray(body)).build();
-        return post(request);
+        return postWithRetry(request);
     }
 
     @Override
-    public boolean complete(String source, String runId, int fetched, int failed, String reason) {
+    public AdvisoryFetchRun.IngestResult close(String source, String runId, int fetched, int failed, String reason) {
+        return close(source, runId, fetched, failed, reason, true);
+    }
+
+    @Override
+    public AdvisoryFetchRun.IngestResult close(String source, String runId, int fetched, int failed, String reason,
+            boolean retryTransient) {
         String json = "{\"documents_fetched\":" + fetched + ",\"documents_failed\":" + failed + ",\"reason\":"
                 + (reason == null || !reason.matches("[A-Z0-9_]{1,40}") ? "null" : "\"" + reason + "\"") + "}";
         HttpRequest request = HttpRequest.newBuilder(ingestBase.resolve(AdvisorySources.ingestPath(source) + "/complete"))
                 .timeout(Duration.ofSeconds(120))
                 .header(TOKEN_HEADER, token).header(RUN_HEADER, runId).header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8)).build();
-        return post(request);
+        return retryTransient ? postWithRetry(request) : postOnce(request, 1);
     }
 
-    private boolean post(HttpRequest request) {
+    private AdvisoryFetchRun.IngestResult postWithRetry(HttpRequest request) {
+        int maxAttempts = ingestBackoff.size() + 1;
+        AdvisoryFetchRun.IngestResult last = AdvisoryFetchRun.IngestResult.permanentRefusal(1, AdvisoryFetchRun.INGEST_REFUSED);
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            if (attempt > 1) {
+                ingestSleeper.accept(ingestBackoff.get(attempt - 2));
+                if (Thread.currentThread().isInterrupted()) {
+                    return AdvisoryFetchRun.IngestResult.transientRefusal(attempt - 1, last.reason());
+                }
+            }
+            last = postOnce(request, attempt);
+            if (last.accepted() || !last.retryable() || Thread.currentThread().isInterrupted()) {
+                return last;
+            }
+        }
+        return last;
+    }
+
+    private AdvisoryFetchRun.IngestResult postOnce(HttpRequest request, int attempt) {
         try {
             int status = direct.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
-            return status >= 200 && status < 300;
-        } catch (IOException | RuntimeException e) {
-            return false;
+            if (status >= 200 && status < 300) {
+                return AdvisoryFetchRun.IngestResult.ok(attempt);
+            }
+            if (isTransientStatus(status)) {
+                return AdvisoryFetchRun.IngestResult.transientRefusal(attempt, AdvisoryFetchRun.INGEST_REFUSED);
+            }
+            return AdvisoryFetchRun.IngestResult.permanentRefusal(attempt, AdvisoryFetchRun.INGEST_REFUSED);
+        } catch (IOException e) {
+            return AdvisoryFetchRun.IngestResult.transientRefusal(attempt, AdvisoryFetchRun.INGEST_REFUSED);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return false;
+            return AdvisoryFetchRun.IngestResult.permanentRefusal(attempt, AdvisoryFetchRun.INGEST_REFUSED);
+        } catch (RuntimeException e) {
+            return AdvisoryFetchRun.IngestResult.permanentRefusal(attempt, AdvisoryFetchRun.INGEST_REFUSED);
+        }
+    }
+
+    static boolean isTransientStatus(int status) {
+        return status == 429 || (status >= 500 && status < 600);
+    }
+
+    private static void sleep(Duration duration) {
+        if (duration == null || duration.isZero() || duration.isNegative()) {
+            return;
+        }
+        try {
+            Thread.sleep(duration);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 

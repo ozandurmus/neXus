@@ -69,7 +69,8 @@ public final class Ui2ComplianceServer {
         registerContext(server, "/api/v1/compliance/evaluate", new EvaluateHandler());
 
         server.start();
-        System.out.println("ui2-compliance microservice started on port " + port);
+        System.getLogger(Ui2ComplianceServer.class.getName()).log(
+                System.Logger.Level.INFO, "ui2-compliance microservice started on port " + port);
     }
 
     private static void registerContext(HttpServer server, String path, HttpHandler handler) {
@@ -87,7 +88,8 @@ public final class Ui2ComplianceServer {
         if (server != null) {
             server.stop(1);
             server = null;
-            System.out.println("ui2-compliance microservice stopped");
+            System.getLogger(Ui2ComplianceServer.class.getName()).log(
+                    System.Logger.Level.INFO, "ui2-compliance microservice stopped");
         }
     }
 

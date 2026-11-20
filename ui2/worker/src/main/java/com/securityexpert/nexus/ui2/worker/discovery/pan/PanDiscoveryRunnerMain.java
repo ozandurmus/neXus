@@ -35,6 +35,7 @@ public final class PanDiscoveryRunnerMain {
     }
 
     public static void main(String[] args) {
+        com.securityexpert.nexus.ui2.platform.logging.MaskingFormatter.install();
         Arguments arguments = Arguments.parse(args);
         PanCredentialResolver credentialResolver = storeBackedCredentialResolver();
         DeviceTransport transport = new PanXmlApiTransport(arguments.trustRuleRef, EnvironmentPanTrustRuleResolver.INSTANCE);

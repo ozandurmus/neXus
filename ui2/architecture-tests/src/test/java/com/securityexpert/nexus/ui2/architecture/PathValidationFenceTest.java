@@ -15,8 +15,6 @@ import java.util.regex.Pattern;
 import com.tngtech.archunit.core.domain.JavaCall;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.properties.HasName;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
-import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.Test;
 
 import com.securityexpert.nexus.ui2.capability.GateRegistryFixtureLoader;
@@ -38,9 +36,7 @@ class PathValidationFenceTest {
     private static final String WORKER = "com.securityexpert.nexus.ui2.worker.pathvalidation..";
     private static final String BUILDERS = "cpRouteGet|panFibLookup|panSecurityPolicyMatch|panNatPolicyMatch";
 
-    private final JavaClasses classes = new ClassFileImporter()
-            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-            .importPackages("com.securityexpert.nexus.ui2");
+    private static final JavaClasses classes = Ui2ArchitectureTest.productionClasses();
 
     @Test
     void onlyTheWorkerAssemblesAnApprovedLiteralAndTheApiNeverReachesATransport() {

@@ -3,7 +3,6 @@ package com.securityexpert.nexus.ui2.architecture;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.tngtech.archunit.core.domain.JavaClass;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
 import org.junit.jupiter.api.Test;
 
 import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
@@ -16,8 +15,7 @@ import com.securityexpert.nexus.ui2.worker.failover.PanConfigSyncJobExecutor;
  * switch, and the worker's one write is prepared by the fenced repository call before the transport is invoked.
  */
 class PanConfigSyncFenceTest {
-    private final com.tngtech.archunit.core.domain.JavaClasses classes = new ClassFileImporter().importClasses(
-        PanConfigSyncService.class, PanConfigSyncJobExecutor.class, JooqPanConfigSyncRepository.class);
+    private static final com.tngtech.archunit.core.domain.JavaClasses classes = Ui2ArchitectureTest.productionClasses();
 
     private boolean calls(Class<?> owner, String method, Class<?> target, String targetMethod) {
         JavaClass type = classes.get(owner);

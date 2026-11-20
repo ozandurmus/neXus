@@ -68,7 +68,7 @@ class WorkerJsonLogTest {
         String hostile = "quote\" back\\ nl\n cr\r tab\t ctl\u0001\u001f uml\u00fc euro\u20ac emoji\uD83D\uDE00";
         try (var scope = JobLogContext.open("42")) {
             logger.log(Level.INFO, "{0}", hostile);
-            logger.log(Level.SEVERE, "boom 10.20.30.40", new IllegalStateException("bad " + hostile));
+            logger.log(Level.SEVERE, "[PAN_CONFIG_SYNC] boom 10.20.30.40", new IllegalStateException("bad " + hostile));
         }
         handler.flush();
         String[] lines = bytes.toString(StandardCharsets.UTF_8).split("\n");
@@ -76,12 +76,14 @@ class WorkerJsonLogTest {
         ObjectMapper mapper = new ObjectMapper();
         JsonNode first = mapper.readTree(lines[0]);
         assertEquals(hostile, first.get("message").asText());
+        assertFalse(first.has("event"));
         assertEquals("INFO", first.get("level").asText());
         assertEquals("job:42", first.get("correlation_id").asText());
         assertEquals("42", first.get("job_id").asText());
         assertTrue(first.has("@timestamp") && first.has("logger_name") && first.has("thread_name"));
         JsonNode second = mapper.readTree(lines[1]);
-        assertEquals("boom <ip>", second.get("message").asText());
+        assertEquals("[PAN_CONFIG_SYNC] boom <ip>", second.get("message").asText());
+        assertEquals("PAN_CONFIG_SYNC", second.get("event").asText());
         assertEquals("ERROR", second.get("level").asText());
         assertEquals("job:42", second.get("correlation_id").asText());
         String trace = second.get("stack_trace").asText();

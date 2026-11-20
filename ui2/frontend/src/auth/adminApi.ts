@@ -4200,6 +4200,8 @@ export interface SystemLogSpikeData {
 
 export interface SystemLogTextPage {
   readonly text: string;
+  /** The masked projection of `text` on an unmasked page, so a pseudonym filter still finds and highlights the real line; null on a masked page. */
+  readonly masked_text?: string | null;
   /** What the server did, from its own header: never what the browser asked for. */
   readonly masked: boolean;
   readonly source: string;
@@ -4428,33 +4430,59 @@ export const requestSystemLogCollect = (deviceId?: string) =>
     deviceId ? { device_id: deviceId } : {},
   );
 
+function decodeBase64Utf8(value: string): string {
+  try {
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return value;
+  }
+}
+
 /**
- * One page of a chunk's text. The page is `text/plain` with its paging facts in `X-Syslog-*` headers; a response
- * without them (a proxy that stripped them, a truncated body) is an error, never an empty page that reads as the end.
+ * One page of a chunk's text. The page is `text/plain` (or `application/json` on an unmasked page carrying its masked
+ * projection alongside) with its paging facts in `X-Syslog-*` headers; a response without them (a proxy that stripped
+ * them, a truncated body) is an error, never an empty page that reads as the end.
  */
 export async function getSystemLogText(chunkId: string, options: { readonly offset?: number; readonly limit?: number; readonly unmasked?: boolean } = {}): Promise<SystemLogTextPage> {
   const q = new URLSearchParams({ offset: String(options.offset ?? 0) });
   if (options.limit) q.set("limit", String(options.limit));
   if (options.unmasked) q.set("unmasked", "true");
   const response = await fetchWithTimeout(`/api/v2/system-logs/chunks/${encodeURIComponent(chunkId)}/text?${q.toString()}`,
-    { method: "GET", credentials: "include" }, 30_000);
+    { method: "GET", credentials: "include", headers: { Accept: "application/json, text/plain" } }, 30_000);
   noteMasking(response);
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     const error: ApiError = { status: response.status, body };
     throw error;
   }
-  const text = await response.text();
   const h = (name: string) => response.headers.get(name);
+  const contentType = h("Content-Type") ?? "";
+  let text: string;
+  let maskedText: string | null = null;
+  if (contentType.includes("application/json")) {
+    const body = (await response.json()) as { text?: unknown; masked_text?: unknown };
+    text = typeof body.text === "string" ? body.text : "";
+    maskedText = typeof body.masked_text === "string" ? body.masked_text : null;
+  } else {
+    text = await response.text();
+    const headerMasked = h("X-Syslog-Masked-Text");
+    if (headerMasked !== null) {
+      maskedText = decodeBase64Utf8(headerMasked);
+    }
+  }
   const next = Number(h("X-Syslog-Next-Offset"));
   const masked = h("X-Syslog-Masked");
   if (h("X-Syslog-Eof") === null || masked === null || !Number.isFinite(next)) {
     throw { status: 200, body: { error: "SYSTEM_LOG_TEXT_HEADERS_MISSING" } } satisfies ApiError;
   }
+  const isMasked = masked === "true";
   return {
-    text, masked: masked === "true", source: h("X-Syslog-Source") ?? "", offset: Number(h("X-Syslog-Offset") ?? options.offset ?? 0),
-    next_offset: next, eof: h("X-Syslog-Eof") === "true", lines: Number(h("X-Syslog-Lines") ?? 0),
-    mask_rules: h("X-Syslog-Mask-Rules"),
+    text, masked_text: isMasked ? null : maskedText, masked: isMasked, source: h("X-Syslog-Source") ?? "",
+    offset: Number(h("X-Syslog-Offset") ?? options.offset ?? 0), next_offset: next, eof: h("X-Syslog-Eof") === "true",
+    lines: Number(h("X-Syslog-Lines") ?? 0), mask_rules: h("X-Syslog-Mask-Rules"),
   };
 }
 

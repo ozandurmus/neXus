@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.architecture;
 
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -16,8 +17,6 @@ import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
 import com.securityexpert.nexus.ui2.platform.PacketAnalysisJob;
 import com.securityexpert.nexus.ui2.worker.confirm.WorkerClaimLoop;
 import com.securityexpert.nexus.ui2.worker.packetanalysis.PacketAnalysisClaimLoop;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
-import com.tngtech.archunit.core.importer.ImportOption;
 
 /**
  * Packet Analysis module fence (PO decision record 2026-10-15; the 2026-10-05 ownership incident): the new module
@@ -145,8 +144,7 @@ class PacketAnalysisModuleFenceTest {
     }
 
     @Test void theAnalysisWorkerHasNoDeviceOrCredentialPath() {
-        var classes = new ClassFileImporter().withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-                .importPackages("com.securityexpert.nexus.ui2.worker.packetanalysis");
+        var classes = Ui2ArchitectureTest.productionClasses().that(resideInAPackage("..worker.packetanalysis.."));
         assertFalse(classes.isEmpty());
         noClasses().that().resideInAPackage("..worker.packetanalysis..").should().dependOnClassesThat()
                 .resideInAnyPackage("..worker.transport..", "..worker.credential..", "..persistence.credential..",

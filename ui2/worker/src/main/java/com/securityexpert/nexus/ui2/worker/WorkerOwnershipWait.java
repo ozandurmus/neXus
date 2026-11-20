@@ -35,8 +35,9 @@ final class WorkerOwnershipWait {
             if (attempt > 0 && elapsed >= timeoutMillis) {
                 throw new IllegalStateException("MODULE_OWNER_CONFLICT");
             }
-            System.out.println("Worker ownership role=" + role + " attempt=" + (++attempt)
-                    + " elapsed_ms=" + elapsed);
+            System.getLogger(WorkerOwnershipWait.class.getName()).log(System.Logger.Level.INFO,
+                    "Worker ownership role=" + role + " attempt=" + (++attempt)
+                            + " elapsed_ms=" + elapsed);
             if (heartbeat.getAsBoolean()) return;
             long remaining = timeoutMillis - (clockMillis.getAsLong() - started);
             if (remaining <= 0) throw new IllegalStateException("MODULE_OWNER_CONFLICT");

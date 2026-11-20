@@ -1,6 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it, afterEach, vi } from "vitest";
-import { hasCanaryToken, isErrorAlert, failingAlerts, isAiview, readAllowed, installReadOnlyGuard } from "../e2e/safety";
+import {
+  hasCanaryToken, isErrorAlert, isWarningAlert, failingAlerts, isAiview, readAllowed, installReadOnlyGuard,
+  platformHealthIndicatorViolation, platformStatusViolations, type PlatformStatusSnapshot,
+} from "../e2e/safety";
 import { createHash } from "node:crypto";
 import { readFileSync, statSync, unlinkSync } from "node:fs";
 import { machineSetup } from "../e2e/global-setup";
@@ -118,13 +121,112 @@ it("accepts informational read-only notices but rejects warnings, errors and unk
   for (const classes of ["", "MuiAlert-standardError", "MuiAlert-outlinedWarning"]) expect(isErrorAlert(classes)).toBe(true);
 });
 
-it("lets the status screen's operational alerts through but fails load errors and unmarked alerts", () => {
+it("lets stated operational warnings through but fails operational errors, reasonless warnings, unknown styles and unmarked alerts", () => {
   const warn = "MuiAlert-root MuiAlert-standardWarning";
+  const outlinedWarn = "MuiAlert-root MuiAlert-outlinedWarning";
   const error = "MuiAlert-root MuiAlert-standardError";
-  expect(failingAlerts([{ className: warn, statusAlert: "operational" }, { className: error, statusAlert: "operational" }])).toEqual([]);
-  expect(failingAlerts([{ className: "MuiAlert-standardInfo", statusAlert: null }])).toEqual([]);
-  expect(failingAlerts([{ className: warn, statusAlert: null }])).toHaveLength(1);
-  expect(failingAlerts([{ className: error, statusAlert: null }])).toHaveLength(1);
-  expect(failingAlerts([{ className: error, statusAlert: "other" }])).toHaveLength(1);
-  expect(failingAlerts([{ className: warn, statusAlert: "operational" }, { className: error, statusAlert: null }])).toHaveLength(1);
+  expect(isWarningAlert(warn)).toBe(true);
+  expect(isWarningAlert(outlinedWarn)).toBe(true);
+  expect(isWarningAlert(error)).toBe(false);
+  expect(isWarningAlert("")).toBe(false);
+
+  // Legitimate operational warnings with a stated reason pass.
+  expect(failingAlerts([
+    { className: warn, statusAlert: "operational", text: "Disk warning: artefact_store 84% used (warning)." },
+    { className: outlinedWarn, statusAlert: "operational", text: "policy: 2 quarantined permits or task leases." },
+  ])).toEqual([]);
+  // Informational and success alerts never fail.
+  expect(failingAlerts([{ className: "MuiAlert-standardInfo", statusAlert: null, text: "" }])).toEqual([]);
+  // Error-severity alerts fail even when marked operational (e.g. disk critical or quota exceeded).
+  expect(failingAlerts([{ className: error, statusAlert: "operational", text: "Disk critical: artefact_store 94% used (critical)." }])).toHaveLength(1);
+  // Reasonless operational warnings fail.
+  expect(failingAlerts([{ className: warn, statusAlert: "operational", text: "" }])).toHaveLength(1);
+  expect(failingAlerts([{ className: warn, statusAlert: "operational", text: "   " }])).toHaveLength(1);
+  expect(failingAlerts([{ className: warn, statusAlert: "operational" }])).toHaveLength(1);
+  // Unknown alert styles fail closed even when marked operational.
+  expect(failingAlerts([{ className: "", statusAlert: "operational", text: "Disk warning: synthetic" }])).toHaveLength(1);
+  // Unmarked warnings/errors and other markers fail.
+  expect(failingAlerts([{ className: warn, statusAlert: null, text: "Unmarked warning" }])).toHaveLength(1);
+  expect(failingAlerts([{ className: error, statusAlert: null, text: "Load failed" }])).toHaveLength(1);
+  expect(failingAlerts([{ className: error, statusAlert: "other", text: "Other error" }])).toHaveLength(1);
+  expect(failingAlerts([
+    { className: warn, statusAlert: "operational", text: "Disk warning: artefact_store 84% used (warning)." },
+    { className: error, statusAlert: null, text: "System status could not be read (status 503)" },
+  ])).toHaveLength(1);
+});
+
+describe("Platform status and health indicator rules", () => {
+  const healthySnapshot = (over: Partial<PlatformStatusSnapshot> = {}): PlatformStatusSnapshot => ({
+    hasPanel: true,
+    hasStorageSection: true,
+    servicePodsHeading: "Service pods (3)",
+    observedUnknown: false,
+    indicator: { state: "ok", ariaLabel: "neXus status: OK. All 3 service pods running and ready." },
+    summary: { label: "neXus OK", reason: "All 3 service pods running and ready.", text: "neXus OK All 3 service pods running and ready." },
+    alerts: [],
+    ...over,
+  });
+
+  it("passes healthy and WARN/ATTENTION (degraded) states when a reason is stated", () => {
+    expect(platformStatusViolations(healthySnapshot())).toEqual([]);
+    // Disk usage warning keeps the top-bar light OK and shows a stated operational warning alert.
+    expect(platformStatusViolations(healthySnapshot({
+      alerts: [{ className: "MuiAlert-root MuiAlert-standardWarning", statusAlert: "operational", text: "Disk warning: root 84% used (warning)." }],
+    }))).toEqual([]);
+    // Operations warning (quarantined permits) degrades the light with a stated reason.
+    expect(platformStatusViolations(healthySnapshot({
+      indicator: { state: "degraded", ariaLabel: "neXus status: degraded. 2 permits or task leases quarantined; collection may be blocked." },
+      summary: { label: "neXus degraded", reason: "2 permits or task leases quarantined; collection may be blocked.", text: "neXus degraded 2 permits or task leases quarantined; collection may be blocked." },
+      alerts: [{ className: "MuiAlert-root MuiAlert-standardWarning", statusAlert: "operational", text: "policy: 2 quarantined permits or task leases." }],
+    }))).toEqual([]);
+    // Unavailable pod view shows UNKNOWN pod count, degraded light with stated reason, and operational warning alert.
+    expect(platformStatusViolations(healthySnapshot({
+      servicePodsHeading: "Service pods (UNKNOWN)",
+      indicator: { state: "degraded", ariaLabel: "neXus status: degraded. Service status cannot be read: no Kubernetes service account token." },
+      summary: null,
+      alerts: [{ className: "MuiAlert-root MuiAlert-standardWarning", statusAlert: "operational", text: "no Kubernetes service account token" }],
+    }))).toEqual([]);
+  });
+
+  it("fails on error states, missing panel/sections, reasonless warnings, and UNKNOWN shown as healthy", () => {
+    // Error state on the indicator (`down`) or operational error alert.
+    expect(platformHealthIndicatorViolation({ state: "down", ariaLabel: "neXus status: down. neXus could not read its own status (status 503)." }))
+      .toContain("error state (down)");
+    expect(platformStatusViolations(healthySnapshot({
+      alerts: [{ className: "MuiAlert-root MuiAlert-standardError", statusAlert: "operational", text: "Disk critical: artefact_store 95% used (critical)." }],
+    }))).toEqual(expect.arrayContaining([expect.stringContaining("error, unmarked, or reasonless alert")]));
+
+    // Missing panel, Storage section, Service pods section, summary or indicator.
+    expect(platformStatusViolations(healthySnapshot({ hasPanel: false }))).toContain("Platform status panel is missing");
+    expect(platformStatusViolations(healthySnapshot({ hasStorageSection: false }))).toContain("Platform status Storage section is missing");
+    expect(platformStatusViolations(healthySnapshot({ servicePodsHeading: null }))).toContain("Platform status Service pods section is missing");
+    expect(platformStatusViolations(healthySnapshot({ summary: null }))).toContain("Platform status health summary is missing");
+    expect(platformStatusViolations(healthySnapshot({ indicator: null }))).toContain("Platform health indicator is missing");
+
+    // Reasonless degraded state or placeholder "no reason given".
+    expect(platformHealthIndicatorViolation({ state: "degraded", ariaLabel: "neXus status: degraded. " })).toContain("no stated reason");
+    expect(platformHealthIndicatorViolation({ state: "degraded", ariaLabel: "neXus status: degraded. Service status cannot be read: no reason given." })).toContain("no stated reason");
+    expect(platformStatusViolations(healthySnapshot({
+      indicator: { state: "degraded", ariaLabel: "neXus status: degraded. 1 service pod not ready: svc-a (Pending)." },
+      summary: { label: "neXus degraded", reason: "", text: "neXus degraded" },
+    }))).toEqual(expect.arrayContaining([expect.stringContaining("no stated reason")]));
+
+    // UNKNOWN shown as healthy fails in every form.
+    expect(platformHealthIndicatorViolation({ state: "unknown", ariaLabel: "neXus status: unknown. Synthetic." })).toContain("invalid or unknown state");
+    expect(platformHealthIndicatorViolation({ state: "ok", ariaLabel: "neXus status: OK. Status is UNKNOWN." })).toContain("UNKNOWN");
+    expect(platformStatusViolations(healthySnapshot({
+      servicePodsHeading: "Service pods (UNKNOWN)",
+      summary: null,
+      alerts: [{ className: "MuiAlert-root MuiAlert-standardWarning", statusAlert: "operational", text: "pod status unavailable" }],
+    }))).toEqual(expect.arrayContaining([expect.stringContaining("service pods are UNKNOWN")]));
+    expect(platformStatusViolations(healthySnapshot({ observedUnknown: true })))
+      .toEqual(expect.arrayContaining([expect.stringContaining("observation time is UNKNOWN")]));
+    expect(platformStatusViolations(healthySnapshot({
+      summary: { label: "neXus OK", reason: "UNKNOWN pods", text: "neXus OK UNKNOWN pods" },
+    }))).toEqual(expect.arrayContaining([expect.stringContaining("alongside UNKNOWN")]));
+    // Summary / indicator contradiction fails.
+    expect(platformStatusViolations(healthySnapshot({
+      indicator: { state: "degraded", ariaLabel: "neXus status: degraded. 1 permit quarantined." },
+    }))).toEqual(expect.arrayContaining([expect.stringContaining("disagrees")]));
+  });
 });

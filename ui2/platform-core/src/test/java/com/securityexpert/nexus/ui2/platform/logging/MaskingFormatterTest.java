@@ -51,4 +51,15 @@ class MaskingFormatterTest {
         assertFalse(((MaskingFormatter) root.getHandlers()[0].getFormatter()).formatMessage(
                 new java.util.logging.LogRecord(Level.INFO, "x " + LogAddressMaskerTest.v4())).contains("192"));
     }
+
+    @Test
+    void ui2LogFormatSwitchDefaultsToTextAndHonoursJsonOrText() {
+        assertFalse(MaskingFormatter.jsonRequested(k -> null));
+        assertFalse(MaskingFormatter.jsonRequested(k -> "text"));
+        assertTrue(MaskingFormatter.jsonRequested(k -> "UI2_LOG_FORMAT".equals(k) ? "json" : null));
+        assertFalse(MaskingFormatter.jsonRequested(
+                k -> "UI2_LOG_FORMAT".equals(k) ? "text" : "json"));
+        assertTrue(MaskingFormatter.jsonRequested(
+                k -> "NEXUS_LOG_FORMAT".equals(k) ? "json" : null));
+    }
 }

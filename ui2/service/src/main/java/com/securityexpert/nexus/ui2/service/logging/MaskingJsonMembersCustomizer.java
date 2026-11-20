@@ -30,6 +30,7 @@ public class MaskingJsonMembersCustomizer implements StructuredLoggingJsonMember
 
     @Override
     public void customize(JsonWriter.Members<Object> members) {
+        members.add(JsonLogFields.EVENT, MaskingJsonMembersCustomizer::extractEvent).whenNotNull();
         members.addMapEntries(MaskingJsonMembersCustomizer::extraContextEntries);
         members.applyingPathFilter(path -> isTopLevel(path) && !fields.includes(path.name()));
         members.applyingNameProcessor((path, name) -> isTopLevel(path) ? fields.fieldName(name) : name);
@@ -40,6 +41,17 @@ public class MaskingJsonMembersCustomizer implements StructuredLoggingJsonMember
         return path != null && path.parent() != null && path.parent().parent() == null && path.name() != null;
     }
 
+    private static String extractEvent(Object event) {
+        if (event instanceof ILoggingEvent loggingEvent) {
+            Map<String, String> mdc = loggingEvent.getMDCPropertyMap();
+            if (mdc != null && mdc.containsKey(JsonLogFields.EVENT)) {
+                return null;
+            }
+            return JsonLogFields.extractEventCode(loggingEvent.getFormattedMessage());
+        }
+        return null;
+    }
+
     private static Map<String, String> extraContextEntries(Object event) {
         Map<String, String> snapshot = JobLogContext.mdcSnapshot();
         if (snapshot.isEmpty()) {
@@ -48,8 +60,12 @@ public class MaskingJsonMembersCustomizer implements StructuredLoggingJsonMember
         Map<String, String> existing = event instanceof ILoggingEvent loggingEvent
                 ? loggingEvent.getMDCPropertyMap()
                 : Map.of();
+        boolean hasExtractedEvent = extractEvent(event) != null;
         Map<String, String> extra = new LinkedHashMap<>();
         for (Map.Entry<String, String> entry : snapshot.entrySet()) {
+            if (hasExtractedEvent && JsonLogFields.EVENT.equals(entry.getKey())) {
+                continue;
+            }
             if (existing == null || !existing.containsKey(entry.getKey())) {
                 extra.put(entry.getKey(), entry.getValue());
             }

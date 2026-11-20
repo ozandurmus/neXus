@@ -12,8 +12,6 @@ import org.junit.jupiter.api.Test;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaConstructor;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
-import com.tngtech.archunit.core.importer.ImportOption;
 
 /**
  * A Spring stereotype class (service, component, controller, repository,
@@ -50,9 +48,7 @@ class SpringStereotypeConstructorTest {
 
     private static final String AUTOWIRED = "org.springframework.beans.factory.annotation.Autowired";
 
-    private static final JavaClasses CLASSES = new ClassFileImporter()
-            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-            .importPackages("com.securityexpert.nexus.ui2");
+    private static final JavaClasses CLASSES = Ui2ArchitectureTest.productionClasses();
 
     @Test
     void importedSomething() {

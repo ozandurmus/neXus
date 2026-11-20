@@ -74,7 +74,8 @@ public final class Ui2ConfigurationServer {
         registerContext(server, "/api/v1/parse", new ParseHandler());
 
         server.start();
-        System.out.println("ui2-configuration microservice started on port " + port);
+        System.getLogger(Ui2ConfigurationServer.class.getName()).log(
+                System.Logger.Level.INFO, "ui2-configuration microservice started on port " + port);
     }
 
     private static void registerContext(HttpServer server, String path, HttpHandler handler) {
@@ -92,7 +93,8 @@ public final class Ui2ConfigurationServer {
         if (server != null) {
             server.stop(1);
             server = null;
-            System.out.println("ui2-configuration microservice stopped");
+            System.getLogger(Ui2ConfigurationServer.class.getName()).log(
+                    System.Logger.Level.INFO, "ui2-configuration microservice stopped");
         }
     }
 

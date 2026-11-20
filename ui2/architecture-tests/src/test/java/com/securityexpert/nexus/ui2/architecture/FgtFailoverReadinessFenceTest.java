@@ -13,10 +13,8 @@ import com.securityexpert.nexus.ui2.capability.GateRegistryFixtureLoader;
 import com.securityexpert.nexus.ui2.capability.GateRow;
 import com.securityexpert.nexus.ui2.jobs.failover.FgtFailoverReadinessSwitch;
 import com.securityexpert.nexus.ui2.platform.ActionClass;
-import com.securityexpert.nexus.ui2.service.failover.CpFailoverService;
 import com.securityexpert.nexus.ui2.service.failover.FailoverVendor;
 import com.securityexpert.nexus.ui2.worker.failover.FgtFailoverJobExecutor;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
 
 /**
  * FortiGate failover is READINESS ONLY (PO_DECISION_RECORD_2026_11_17_FGT_FAILOVER_READINESS_READS.md): the switch method
@@ -55,7 +53,7 @@ class FgtFailoverReadinessFenceTest {
     }
 
     @Test void theWorkerExecutorHasNoWritePathAndTheSwitchNeverEnablesExecution() {
-        var classes = new ClassFileImporter().importClasses(FgtFailoverJobExecutor.class, CpFailoverService.class);
+        var classes = Ui2ArchitectureTest.productionClasses();
         for (var type : classes) {
             if (type.getName().equals(FgtFailoverJobExecutor.class.getName()) || type.getName().startsWith(FgtFailoverJobExecutor.class.getName() + "$")) {
                 for (var method : type.getMethods())

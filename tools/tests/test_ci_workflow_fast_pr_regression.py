@@ -342,3 +342,20 @@ def test_slow_security_scans_do_not_gate_the_merge():
     from tools.delivery import standalone_orchestrate as orchestrate
 
     assert {"dependency-scan", "Analyze (java-kotlin)", "Analyze (javascript-typescript)"} <= orchestrate.POST_MERGE_CHECKS
+
+
+def test_architecture_test_heap_budget_and_single_import_cache():
+    repo = WORKFLOW_PATH.parents[2]
+    arch_build = (repo / "ui2" / "architecture-tests" / "build.gradle.kts").read_text(encoding="utf-8")
+    root_build = (repo / "ui2" / "build.gradle.kts").read_text(encoding="utf-8")
+    gradle_props = (repo / "ui2" / "gradle.properties").read_text(encoding="utf-8")
+
+    assert 'maxHeapSize = "2g"' in arch_build
+    assert "maxParallelForks = 1" in arch_build
+    assert "forkEvery = 0" in arch_build
+    assert "mustRunAfter(" in root_build
+    assert "org.gradle.jvmargs=-Xmx1536m" in gradle_props
+
+    arch_sources = sorted((repo / "ui2" / "architecture-tests" / "src" / "test" / "java").rglob("*.java"))
+    importers = [p.name for p in arch_sources if "new ClassFileImporter(" in p.read_text(encoding="utf-8")]
+    assert importers == ["Ui2ArchitectureTest.java"]

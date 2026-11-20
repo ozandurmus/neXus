@@ -15,6 +15,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -499,6 +500,160 @@ class AdvisoryFetchTest {
             assertTrue(seen.get(2).endsWith("\"reason\":null}"), "a reason that is not a code word is not sent: " + seen.get(2));
         } finally {
             server.stop(0);
+        }
+    }
+
+    @Test
+    void transientIngestRefusalDuringDeployOverlapRetriesWithBoundedBackoffAndSucceeds() throws IOException {
+        assertEquals(5, AdvisoryFetchRun.DEFAULT_INGEST_MAX_ATTEMPTS);
+        assertEquals(Duration.ofMinutes(5),
+                AdvisoryFetchRun.DEFAULT_INGEST_BACKOFF.stream().reduce(Duration.ZERO, Duration::plus),
+                "5 tries over 5 minutes total backoff");
+
+        List<String> seen = new ArrayList<>();
+        List<Integer> ingestStatuses = new ArrayList<>(List.of(503, 429, 204));
+        HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        server.createContext("/", exchange -> {
+            byte[] body = exchange.getRequestBody().readAllBytes();
+            String path = exchange.getRequestURI().getPath();
+            seen.add(exchange.getRequestMethod() + " " + path + " body=" + new String(body, StandardCharsets.UTF_8));
+            int status = path.endsWith("/complete") ? 204 : ingestStatuses.remove(0);
+            exchange.sendResponseHeaders(status, -1);
+            exchange.close();
+        });
+        server.start();
+        try {
+            String token = "synthetic-" + "ingest-" + "value-" + "2".repeat(12);
+            List<Duration> waits = new ArrayList<>();
+            HttpTransport transport = new HttpTransport("localhost", 1,
+                    URI.create("http://localhost:" + server.getAddress().getPort()), token,
+                    AdvisoryFetchRun.DEFAULT_INGEST_BACKOFF, waits::add);
+            Ports outbound = new Ports();
+            outbound.bodies.put(AdvisorySources.CISA_KEV.startUri().toString(), bytes("{\"vulnerabilities\":[]}"));
+            List<String> log = new ArrayList<>();
+            AdvisoryFetchRun fetchRun = new AdvisoryFetchRun(outbound, transport, log::add, NOW, 7,
+                    AdvisoryFetchRun.DEFAULT_INGEST_BACKOFF, waits::add);
+
+            AdvisoryFetchRun.SourceResult result = fetchRun.run(AdvisorySources.CISA_KEV, "run-00000002");
+
+            assertTrue(result.ok());
+            assertNull(result.reason());
+            assertEquals(1, result.fetched());
+            assertEquals(0, result.failed());
+            assertEquals(1, result.handedOver());
+            assertEquals(3, result.attempts());
+            assertEquals(3, result.ingestAttempts());
+            assertEquals(List.of(Duration.ofSeconds(20), Duration.ofSeconds(40)), waits);
+            assertEquals(4, seen.size(), "3 document attempts + 1 complete call");
+            assertEquals("POST /internal/advisories/cisa_kev/complete body={\"documents_fetched\":1,\"documents_failed\":0,\"reason\":null}",
+                    seen.get(3));
+            assertEquals(List.of("[ADVISORY_FETCH] source=cisa_kev fetched=1 failed=0 handed_over=1 dropped=0 reason=none attempts=3"), log);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void transientIngestRefusalExhaustsBoundedRetriesAndRecordsAttemptsAndReason() throws IOException {
+        List<String> seen = new ArrayList<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        server.createContext("/", exchange -> {
+            byte[] body = exchange.getRequestBody().readAllBytes();
+            String path = exchange.getRequestURI().getPath();
+            seen.add(exchange.getRequestMethod() + " " + path + " body=" + new String(body, StandardCharsets.UTF_8));
+            exchange.sendResponseHeaders(path.endsWith("/complete") ? 204 : 503, -1);
+            exchange.close();
+        });
+        server.start();
+        int closedPort;
+        try (java.net.ServerSocket ephemeral = new java.net.ServerSocket(0)) {
+            closedPort = ephemeral.getLocalPort();
+        }
+        try {
+            String token = "synthetic-" + "ingest-" + "value-" + "3".repeat(12);
+            List<Duration> waits = new ArrayList<>();
+            HttpTransport transport = new HttpTransport("localhost", 1,
+                    URI.create("http://localhost:" + server.getAddress().getPort()), token,
+                    AdvisoryFetchRun.DEFAULT_INGEST_BACKOFF, waits::add);
+            Ports outbound = new Ports();
+            outbound.bodies.put(AdvisorySources.CISA_KEV.startUri().toString(), bytes("{\"vulnerabilities\":[]}"));
+            List<String> log = new ArrayList<>();
+            AdvisoryFetchRun fetchRun = new AdvisoryFetchRun(outbound, transport, log::add, NOW, 7,
+                    AdvisoryFetchRun.DEFAULT_INGEST_BACKOFF, waits::add);
+
+            AdvisoryFetchRun.SourceResult result = fetchRun.run(AdvisorySources.CISA_KEV, "run-00000003");
+
+            assertFalse(result.ok());
+            assertEquals("INGEST_REFUSED", result.reason());
+            assertEquals(1, result.fetched());
+            assertEquals(0, result.handedOver());
+            assertEquals(5, result.attempts());
+            assertEquals(AdvisoryFetchRun.DEFAULT_INGEST_BACKOFF, waits);
+            assertEquals(6, seen.size(), "5 document attempts + 1 best-effort complete call");
+            assertEquals("POST /internal/advisories/cisa_kev/complete body={\"documents_fetched\":1,\"documents_failed\":0,\"reason\":\"INGEST_REFUSED\"}",
+                    seen.get(5));
+            assertEquals(List.of("[ADVISORY_FETCH] source=cisa_kev fetched=1 failed=0 handed_over=0 dropped=0 reason=INGEST_REFUSED attempts=5"), log);
+
+            // Connection refused (service down/restarting on closed port) also retries all 5 attempts with bounded backoff.
+            List<Duration> refusedWaits = new ArrayList<>();
+            HttpTransport refusedTransport = new HttpTransport("localhost", 1,
+                    URI.create("http://localhost:" + closedPort), token,
+                    AdvisoryFetchRun.DEFAULT_INGEST_BACKOFF, refusedWaits::add);
+            List<String> refusedLog = new ArrayList<>();
+            AdvisoryFetchRun.SourceResult refusedResult = new AdvisoryFetchRun(outbound, refusedTransport, refusedLog::add, NOW, 7,
+                    AdvisoryFetchRun.DEFAULT_INGEST_BACKOFF, refusedWaits::add)
+                    .run(AdvisorySources.CISA_KEV, "run-00000004");
+            assertFalse(refusedResult.ok());
+            assertEquals("INGEST_REFUSED", refusedResult.reason());
+            assertEquals(5, refusedResult.attempts());
+            assertEquals(AdvisoryFetchRun.DEFAULT_INGEST_BACKOFF, refusedWaits);
+            assertEquals(List.of("[ADVISORY_FETCH] source=cisa_kev fetched=1 failed=0 handed_over=0 dropped=0 reason=INGEST_REFUSED attempts=5"),
+                    refusedLog);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void permanentIngestRefusalFailsAtOnceWithoutRetrying() throws IOException {
+        for (int permanentStatus : List.of(400, 401, 403, 404, 409, 413, 422)) {
+            List<String> seen = new ArrayList<>();
+            HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+            server.createContext("/", exchange -> {
+                byte[] body = exchange.getRequestBody().readAllBytes();
+                String path = exchange.getRequestURI().getPath();
+                seen.add(exchange.getRequestMethod() + " " + path + " body=" + new String(body, StandardCharsets.UTF_8));
+                exchange.sendResponseHeaders(path.endsWith("/complete") ? 204 : permanentStatus, -1);
+                exchange.close();
+            });
+            server.start();
+            try {
+                String token = "synthetic-" + "ingest-" + "value-" + "4".repeat(12);
+                List<Duration> waits = new ArrayList<>();
+                HttpTransport transport = new HttpTransport("localhost", 1,
+                        URI.create("http://localhost:" + server.getAddress().getPort()), token,
+                        AdvisoryFetchRun.DEFAULT_INGEST_BACKOFF, waits::add);
+                Ports outbound = new Ports();
+                outbound.bodies.put(AdvisorySources.CISA_KEV.startUri().toString(), bytes("{\"vulnerabilities\":[]}"));
+                List<String> log = new ArrayList<>();
+                AdvisoryFetchRun fetchRun = new AdvisoryFetchRun(outbound, transport, log::add, NOW, 7,
+                        AdvisoryFetchRun.DEFAULT_INGEST_BACKOFF, waits::add);
+
+                AdvisoryFetchRun.SourceResult result = fetchRun.run(AdvisorySources.CISA_KEV, "run-00000005");
+
+                assertFalse(result.ok(), "status=" + permanentStatus);
+                assertEquals("INGEST_REFUSED", result.reason(), "status=" + permanentStatus);
+                assertEquals(0, result.handedOver(), "status=" + permanentStatus);
+                assertEquals(1, result.attempts(), "status=" + permanentStatus);
+                assertEquals(List.of(), waits, "permanent refusal must not sleep or retry: status=" + permanentStatus);
+                assertEquals(2, seen.size(), "1 document attempt + 1 complete call for status=" + permanentStatus);
+                assertEquals("POST /internal/advisories/cisa_kev/complete body={\"documents_fetched\":1,\"documents_failed\":0,\"reason\":\"INGEST_REFUSED\"}",
+                        seen.get(1));
+                assertEquals(List.of("[ADVISORY_FETCH] source=cisa_kev fetched=1 failed=0 handed_over=0 dropped=0 reason=INGEST_REFUSED attempts=1"),
+                        log);
+            } finally {
+                server.stop(0);
+            }
         }
     }
 

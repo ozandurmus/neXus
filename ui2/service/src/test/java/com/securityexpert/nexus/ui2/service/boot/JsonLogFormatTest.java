@@ -19,7 +19,7 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Configuration;
 
-/** NEXUS_LOG_FORMAT=json turns on structured console logs; unset keeps the text format. */
+/** UI2_LOG_FORMAT=json (or legacy NEXUS_LOG_FORMAT=json) turns on structured console logs; text or unset keeps the text format. */
 class JsonLogFormatTest {
 
     @Configuration
@@ -27,12 +27,16 @@ class JsonLogFormatTest {
     }
 
     private static String run(String format, Runnable logging) throws Exception {
+        return run("UI2_LOG_FORMAT", format, logging);
+    }
+
+    private static String run(String propertyName, String format, Runnable logging) throws Exception {
         PrintStream original = System.out;
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        if (format == null) {
-            System.clearProperty("NEXUS_LOG_FORMAT");
-        } else {
-            System.setProperty("NEXUS_LOG_FORMAT", format);
+        System.clearProperty("UI2_LOG_FORMAT");
+        System.clearProperty("NEXUS_LOG_FORMAT");
+        if (format != null) {
+            System.setProperty(propertyName, format);
         }
         System.setOut(new PrintStream(bytes, true, StandardCharsets.UTF_8));
         try (ConfigurableApplicationContext ctx = new SpringApplicationBuilder(Empty.class)
@@ -40,6 +44,7 @@ class JsonLogFormatTest {
             logging.run();
         } finally {
             System.setOut(original);
+            System.clearProperty("UI2_LOG_FORMAT");
             System.clearProperty("NEXUS_LOG_FORMAT");
         }
         return bytes.toString(StandardCharsets.UTF_8);
@@ -56,6 +61,12 @@ class JsonLogFormatTest {
         }
     }
 
+    private static void emitWithBracketedEvent() {
+        Logger log = LoggerFactory.getLogger("nexus.jsonlogtest.event");
+        log.warn("[NOTIFY_SYSLOG_FAILED] syslog target 192.0.2.7 unreachable",
+                new IllegalStateException("boom 2001:db8::1"));
+    }
+
     @Test
     void jsonModeWritesOneObjectWithTheRequiredFields() throws Exception {
         String out = run("json", JsonLogFormatTest::emit);
@@ -67,6 +78,7 @@ class JsonLogFormatTest {
         assertTrue(n.has("thread_name"));
         // The log-time masker applies to the message and the stack trace in JSON mode too.
         assertTrue("device h-4f2a9c01 unreachable <ip>".equals(n.get("message").asText()), line);
+        assertFalse(n.has("event"), line);
         assertFalse(n.get("stack_trace").asText().contains("2001:db8"), line);
         assertTrue("job-123".equals(n.get("job_id").asText()));
         assertTrue("corr-456".equals(n.get("correlation_id").asText()));
@@ -74,11 +86,24 @@ class JsonLogFormatTest {
     }
 
     @Test
-    void defaultStaysTextFormat() throws Exception {
-        String out = run(null, JsonLogFormatTest::emit);
-        String line = out.lines().filter(l -> l.contains("nexus.jsonlogtest")).findFirst().orElseThrow();
-        assertFalse(line.trim().startsWith("{"));
-        assertTrue(line.contains("device h-4f2a9c01 unreachable <ip>"));
-        assertEquals(1, out.lines().filter(l -> l.contains("nexus.jsonlogtest")).count(), out);
+    void jsonModeExtractsLeadingBracketedEventCodeAndMasksMessage() throws Exception {
+        String out = run("json", JsonLogFormatTest::emitWithBracketedEvent);
+        String line = out.lines().filter(l -> l.contains("nexus.jsonlogtest.event")).findFirst().orElseThrow();
+        JsonNode n = new ObjectMapper().readTree(line);
+        assertEquals("NOTIFY_SYSLOG_FAILED", n.get("event").asText(), line);
+        assertEquals("[NOTIFY_SYSLOG_FAILED] syslog target <ip> unreachable", n.get("message").asText(), line);
+        assertFalse(line.contains("192.0.2.7"), line);
+        assertFalse(line.contains("2001:db8"), line);
+    }
+
+    @Test
+    void defaultAndExplicitTextStayTextFormat() throws Exception {
+        for (String mode : new String[] {null, "text"}) {
+            String out = run(mode, JsonLogFormatTest::emit);
+            String line = out.lines().filter(l -> l.contains("nexus.jsonlogtest")).findFirst().orElseThrow();
+            assertFalse(line.trim().startsWith("{"), line);
+            assertTrue(line.contains("device h-4f2a9c01 unreachable <ip>"), line);
+            assertEquals(1, out.lines().filter(l -> l.contains("nexus.jsonlogtest")).count(), out);
+        }
     }
 }

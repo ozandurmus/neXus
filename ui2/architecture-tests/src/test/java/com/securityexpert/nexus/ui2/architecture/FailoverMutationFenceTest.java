@@ -1,7 +1,6 @@
 package com.securityexpert.nexus.ui2.architecture;
 
 import com.tngtech.archunit.core.domain.JavaClass;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
 import com.securityexpert.nexus.ui2.jobs.failover.execution.*;
 import com.securityexpert.nexus.ui2.service.api.FailoverExecutionController;
@@ -19,10 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Pilot fences apply independently of controller routing and of transport registration. */
 class FailoverMutationFenceTest {
-    private final com.tngtech.archunit.core.domain.JavaClasses classes = new ClassFileImporter().importClasses(
-        FailoverExecutionController.class, FailoverScheduleController.class,
-        FailoverExecutionService.class, FailoverScheduleService.class, CpFailoverService.class,
-        CpFailoverJobExecutor.class, PanFailoverJobExecutor.class);
+    private static final com.tngtech.archunit.core.domain.JavaClasses classes = Ui2ArchitectureTest.productionClasses();
 
     private void mustCall(Class<?> owner, String method, Class<?> target, String targetMethod) {
         JavaClass type=classes.get(owner);

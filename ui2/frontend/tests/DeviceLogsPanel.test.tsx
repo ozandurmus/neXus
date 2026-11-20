@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DeviceLogsPanel, formatBytes, gapKindLabel, gapTone, gapWords, MAX_LOADED_LINES } from "../src/screens/DeviceLogsPanel";
+import { DeviceLogsPanel, formatBytes, gapKindLabel, gapTone, gapWords, matchRanges, MAX_LOADED_LINES } from "../src/screens/DeviceLogsPanel";
 import { lineDeviceTime, lineSeverity, windowWords } from "../src/screens/logLineTime";
 import { m3 } from "../src/theme/m3Theme";
 import type { SystemLogChunk, SystemLogGap, SystemLogSource, SystemLogSources } from "../src/auth/adminApi";
@@ -48,7 +48,7 @@ const GAP: SystemLogGap = {
 interface Setup {
   summary?: SystemLogSources | { status: number; body: unknown };
   chunks?: SystemLogChunk[];
-  pages?: Record<string, { text: string; next: number; eof: boolean; masked?: boolean }[]>;
+  pages?: Record<string, { text: string; unmaskedText?: string; next: number; eof: boolean; masked?: boolean }[]>;
   textFailure?: { status: number; body: unknown };
   crashNew?: number;
   gaps?: SystemLogGap[];
@@ -76,10 +76,17 @@ function stub(setup: Setup = {}) {
       const unmasked = url.includes("unmasked=true");
       const list = (setup.pages ?? {})[id] ?? [{ text: "Oct 17 first line\nOct 17 second line\nOct 17 third line\n", next: 100, eof: true }];
       const page = list.find((_, i) => (i === 0 ? offset === 0 : offset === list[i - 1].next)) ?? list[0];
-      return Promise.resolve(new Response(page.text, { headers: {
-        "X-Syslog-Masked": String(page.masked ?? !unmasked), "X-Syslog-Offset": String(offset), "X-Syslog-Next-Offset": String(page.next),
+      const isMasked = page.masked ?? !unmasked;
+      const headers: Record<string, string> = {
+        "X-Syslog-Masked": String(isMasked), "X-Syslog-Offset": String(offset), "X-Syslog-Next-Offset": String(page.next),
         "X-Syslog-Eof": String(page.eof), "X-Syslog-Lines": "3", "X-Syslog-Source": "cp_messages",
-        ...(setup.maskRules && !unmasked ? { "X-Syslog-Mask-Rules": setup.maskRules } : {}) } }));
+        ...(setup.maskRules && !unmasked ? { "X-Syslog-Mask-Rules": setup.maskRules } : {}),
+      };
+      if (!isMasked && page.unmaskedText !== undefined) {
+        return Promise.resolve(new Response(JSON.stringify({ text: page.unmaskedText, masked_text: page.text }),
+          { headers: { ...headers, "Content-Type": "application/json" } }));
+      }
+      return Promise.resolve(new Response(page.text, { headers }));
     }
     if (url.startsWith("/api/v2/jobs")) {
       const items = setup.job ? [{ job_id: "job-1", job_type: "cp_system_log_collect", target_device_id: DEVICE, submitted_at: "2026-10-17T08:59:50Z", finished_at: "2026-10-17T09:00:00Z", state: setup.job.state, has_transcript: false }] : [];
@@ -407,6 +414,102 @@ describe("the unmasked control", () => {
     // the server answered masked: the chip must say masked even though the switch is on
     await waitFor(() => expect(screen.getByText("Masked view")).toBeInTheDocument());
     expect(screen.queryByText("Unmasked view · recorded on the audit ledger")).toBeNull();
+  });
+
+  it("matches a pseudonym typed in the filter when unmasked is on and highlights the real value", async () => {
+    const maskedPage = [
+      "Oct 17 08:00:01 FW-TANGO-04 sshd[10]: Accepted publickey for USR-8750000000 from 198.51.100.42",
+      "Oct 17 08:00:02 FW-TANGO-04 kernel: quiet line",
+    ].join("\n") + "\n";
+    const unmaskedPage = [
+      "Oct 17 08:00:01 synthetic-gw-01 sshd[10]: Accepted publickey for synthetic_user_alpha from 192.0.2.17",
+      "Oct 17 08:00:02 synthetic-gw-01 kernel: quiet line",
+    ].join("\n") + "\n";
+    const { calls } = stub({
+      summary: summary({ can_view_unmasked: true }),
+      chunks: [chunk("c-2", "2026-10-17T09:00:00Z", { lines: 2 })],
+      pages: { "c-2": [{ text: maskedPage, unmaskedText: unmaskedPage, next: 120, eof: true }] },
+    });
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    await screen.findAllByTestId("log-line");
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter lines" }), { target: { value: "USR-875" } });
+    expect(screen.getAllByTestId("log-line")).toHaveLength(1);
+    expect(screen.getByTestId("log-line").querySelector("mark")?.textContent).toBe("USR-875");
+
+    // Switch Show unmasked on: the filter USR-875 still finds the line and highlights the real username.
+    fireEvent.click(screen.getByLabelText("Show unmasked"));
+    await screen.findByText("Unmasked view · recorded on the audit ledger");
+    const userLine = screen.getByTestId("log-line");
+    expect(userLine).toHaveTextContent("synthetic_user_alpha");
+    expect(Array.from(userLine.querySelectorAll("mark")).map((m) => m.textContent)).toEqual(["synthetic_user_alpha"]);
+    expect(screen.getByText("1 of 2 loaded lines match")).toBeInTheDocument();
+
+    // Filtering by device pseudonym FW-TANGO-04 highlights the real device name on both lines without another fetch.
+    const textCallsBefore = calls.filter((u) => u.includes("/text")).length;
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter lines" }), { target: { value: "FW-TANGO-04" } });
+    const hostLines = screen.getAllByTestId("log-line");
+    expect(hostLines).toHaveLength(2);
+    expect(hostLines[0].querySelector("mark")?.textContent).toBe("synthetic-gw-01");
+    expect(hostLines[1].querySelector("mark")?.textContent).toBe("synthetic-gw-01");
+
+    // Filtering by the masked IP 198.51.100.42 highlights the real IP 192.0.2.17.
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter lines" }), { target: { value: "198.51.100.42" } });
+    const ipLines = screen.getAllByTestId("log-line");
+    expect(ipLines).toHaveLength(1);
+    expect(ipLines[0].querySelector("mark")?.textContent).toBe("192.0.2.17");
+    expect(calls.filter((u) => u.includes("/text")).length).toBe(textCallsBefore);
+  });
+
+  it("shows loaded vs total lines in the run and searches the whole run when partial", async () => {
+    const { calls } = stub({
+      summary: summary({ can_view_unmasked: true }),
+      chunks: [chunk("c-2", "2026-10-17T09:00:00Z", { lines: 4 })],
+      pages: {
+        "c-2": [
+          {
+            text: "Oct 17 08:00:01 FW-TANGO-04 kernel: first page a\nOct 17 08:00:02 FW-TANGO-04 kernel: first page b\n",
+            unmaskedText: "Oct 17 08:00:01 synthetic-gw-01 kernel: first page a\nOct 17 08:00:02 synthetic-gw-01 kernel: first page b\n",
+            next: 100,
+            eof: false,
+          },
+          {
+            text: "Oct 17 08:00:03 FW-TANGO-04 sshd[10]: Accepted publickey for USR-8750000000 from 198.51.100.42\nOct 17 08:00:04 FW-TANGO-04 kernel: second page b\n",
+            unmaskedText: "Oct 17 08:00:03 synthetic-gw-01 sshd[10]: Accepted publickey for synthetic_user_alpha from 192.0.2.17\nOct 17 08:00:04 synthetic-gw-01 kernel: second page b\n",
+            next: 220,
+            eof: true,
+          },
+        ],
+      },
+    });
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    await waitFor(() => expect(screen.getAllByTestId("log-line")).toHaveLength(2));
+    expect(screen.getByText("2 of 4 lines in the run loaded")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Show unmasked"));
+    await screen.findByText("Unmasked view · recorded on the audit ledger");
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter lines" }), { target: { value: "USR-875" } });
+    expect(screen.getByText("0 of 2 loaded lines match")).toBeInTheDocument();
+    expect(screen.getByText("2 of 4 lines in the run loaded")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Search the whole run" }));
+    await waitFor(() => expect(screen.getAllByTestId("log-line")).toHaveLength(1));
+    expect(calls).toContain(`${BASE}/chunks/c-2/text?offset=100&unmasked=true`);
+    expect(screen.getByTestId("log-line").querySelector("mark")?.textContent).toBe("synthetic_user_alpha");
+    expect(screen.getByText("1 of 4 loaded lines match")).toBeInTheDocument();
+    expect(screen.getByText("4 of 4 lines in the run loaded")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Search the whole run" })).toBeNull();
+  });
+});
+
+describe("matchRanges", () => {
+  it("projects pseudonym, multi-word principal and phrase matches onto the real span in the unmasked line", () => {
+    const raw = "Oct 17 08:00:01 synthetic-gw-01 sshd[10]: login by synthetic_first synthetic_last from 192.0.2.17";
+    const masked = "Oct 17 08:00:01 FW-TANGO-04 sshd[10]: login by USR-8750000000 from 198.51.100.42";
+    const [uStart, uEnd] = matchRanges(raw, masked, "usr-875")[0];
+    expect(raw.slice(uStart, uEnd)).toBe("synthetic_first synthetic_last");
+    const [pStart, pEnd] = matchRanges(raw, masked, "by usr-875")[0];
+    expect(raw.slice(pStart, pEnd)).toBe("by synthetic_first synthetic_last");
   });
 });
 
