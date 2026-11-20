@@ -24,7 +24,7 @@ public final class PaloAltoComplianceCatalog {
      * configuration hash and this version (V59, ComplianceService rule-set fingerprint); an unbumped logic change stays
      * invisible until the 6-hour backstop re-evaluates.
      */
-    public static final String CATALOG_VERSION = "2026.10.09.guidance.1";
+    public static final String CATALOG_VERSION = "2026.11.20.pan-structure.1";
 
     private PaloAltoComplianceCatalog() {
     }
@@ -536,7 +536,7 @@ public final class PaloAltoComplianceCatalog {
                     new VendorBinding(
                         "palo_alto",
                         "pan_os",
-                        EvidenceRequirement.of("snmp_setting", "snmpv3", "system.snmp.v3_users", "PAN-GATE-SNMP3-01"),
+                        EvidenceRequirement.of("snmp_setting", "snmpv3", "system.snmp.v3_users", "pan_configuration_active"),
                         AssertionRule.present(),
                         ComplianceGuidanceCatalog.forControl("pan_cis_4_1_1_snmpv3_only")
                     )
@@ -560,7 +560,7 @@ public final class PaloAltoComplianceCatalog {
                     new VendorBinding(
                         "palo_alto",
                         "pan_os",
-                        EvidenceRequirement.of("network_interface", "link-state", "network.interface.down", "PAN-GATE-IFACE-01"),
+                        EvidenceRequirement.of("network_interface", "link-state", "network.interface.down", "pan_configuration_active"),
                         AssertionRule.present(),
                         ComplianceGuidanceCatalog.forControl("pan_cis_4_1_2_unused_interfaces_down")
                     )
@@ -583,7 +583,7 @@ public final class PaloAltoComplianceCatalog {
                     new VendorBinding(
                         "palo_alto",
                         "pan_os",
-                        EvidenceRequirement.of("ddns", "ddns-client", "system.ddns.state", "PAN-GATE-DDNS-01"),
+                        EvidenceRequirement.of("ddns", "ddns-client", "system.ddns.state", "pan_configuration_active"),
                         AssertionRule.absent(),
                         ComplianceGuidanceCatalog.forControl("pan_cis_4_1_3_ddns_disabled")
                     )

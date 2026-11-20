@@ -110,6 +110,7 @@ class PaloAltoPanOsComplianceEvaluatorTest {
         assertEquals(DEVICE_ID, eval.deviceId());
         assertEquals("palo_alto", eval.vendor());
         assertEquals(24, eval.totalAssigned());
+        // The three structure controls now read the active XML; this fixture has no SNMP, interface or DDNS evidence.
         assertEquals(4, eval.dataUnavailableCount());
 
         // 20 evaluable controls should all pass with this compliant XML
@@ -248,5 +249,52 @@ class PaloAltoPanOsComplianceEvaluatorTest {
         assertEquals(1, eval.passCount());
         assertEquals(100.0, eval.assuredCompliance());
         assertEquals(100.0, eval.observedCompliance());
+    }
+
+    private static String panXml(String deviceconfig, String network) {
+        return "<config version=\"11.1.0\"><devices><entry name=\"localhost.localdomain\"><deviceconfig><system><hostname>FW-TANGO-04</hostname>"
+                + deviceconfig + "</system></deviceconfig>" + network + "</entry></devices></config>";
+    }
+
+    private static com.securityexpert.nexus.ui2.worker.compliance.model.EvaluationItem item(String xml, String id) {
+        return PaloAltoPanOsComplianceEvaluator.evaluate(DEVICE_ID, "palo_alto", "pan_os", xml, Set.of(id)).items().get(0);
+    }
+
+    private static final String SNMP_ID = "pan_cis_4_1_1_snmpv3_only";
+    private static final String IFACE_ID = "pan_cis_4_1_2_unused_interfaces_down";
+    private static final String DDNS_ID = "pan_cis_4_1_3_ddns_disabled";
+
+    @Test
+    void snmpV3PassesFailsAndStaysUnknown() {
+        String v3 = "<snmp-setting><access-setting><version><v3><users><entry name=\"mon\"><authpwd>[REDACTED]</authpwd>"
+                + "<privpwd>[REDACTED]</privpwd></entry></users></v3></version></access-setting></snmp-setting>";
+        assertEquals(DisplayStatus.PASS, item(panXml(v3, ""), SNMP_ID).displayStatus());
+        String v2c = "<snmp-setting><access-setting><version><v2c><snmp-community-string>[REDACTED]</snmp-community-string></v2c></version></access-setting></snmp-setting>";
+        assertEquals(DisplayStatus.FAIL, item(panXml(v2c, ""), SNMP_ID).displayStatus());
+        String weak = "<snmp-setting><access-setting><version><v3><users><entry name=\"mon\"><authpwd>x</authpwd></entry></users></v3></version></access-setting></snmp-setting>";
+        assertEquals(DisplayStatus.FAIL, item(panXml(weak, ""), SNMP_ID).displayStatus());
+        assertEquals(DisplayStatus.DATA_UNAVAILABLE, item(panXml("", ""), SNMP_ID).displayStatus());
+        assertEquals(DisplayStatus.DATA_UNAVAILABLE, item("<config><unclosed>", SNMP_ID).displayStatus());
+    }
+
+    @Test
+    void unusedInterfacesNeedARolelessEntryAndLinkStateDown() {
+        String down = "<network><interface><ethernet><entry name=\"ethernet1/1\"><layer3><units><entry name=\"ethernet1/1.10\"/></units></layer3></entry>"
+                + "<entry name=\"ethernet1/9\"><link-state>down</link-state></entry></ethernet></interface></network>";
+        assertEquals(DisplayStatus.PASS, item(panXml("", down), IFACE_ID).displayStatus());
+        String up = down.replace("<link-state>down</link-state>", "<comment>spare</comment>");
+        assertEquals(DisplayStatus.FAIL, item(panXml("", up), IFACE_ID).displayStatus());
+        String none = "<network><interface><ethernet><entry name=\"ethernet1/1\"><layer3/></entry></ethernet></interface></network>";
+        assertEquals(DisplayStatus.DATA_UNAVAILABLE, item(panXml("", none), IFACE_ID).displayStatus());
+        assertEquals(DisplayStatus.DATA_UNAVAILABLE, item(panXml("", ""), IFACE_ID).displayStatus());
+    }
+
+    @Test
+    void ddnsFailsWhenEnabledPassesWhenInterfacesShowNone() {
+        String on = "<network><interface><ethernet><entry name=\"ethernet1/1\"><layer3><ddns-config><ddns-enabled>yes</ddns-enabled></ddns-config></layer3></entry></ethernet></interface></network>";
+        assertEquals(DisplayStatus.FAIL, item(panXml("", on), DDNS_ID).displayStatus());
+        String off = on.replace("yes", "no");
+        assertEquals(DisplayStatus.PASS, item(panXml("", off), DDNS_ID).displayStatus());
+        assertEquals(DisplayStatus.DATA_UNAVAILABLE, item(panXml("", ""), DDNS_ID).displayStatus());
     }
 }

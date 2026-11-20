@@ -25,6 +25,9 @@ import com.securityexpert.nexus.ui2.worker.compliance.model.Verdict;
  */
 public final class PaloAltoPanOsComplianceEvaluator {
 
+    private static final Set<String> STRUCTURE_CONTROLS = Set.of(
+            "pan_cis_4_1_1_snmpv3_only", "pan_cis_4_1_2_unused_interfaces_down", "pan_cis_4_1_3_ddns_disabled");
+
     private PaloAltoPanOsComplianceEvaluator() {
     }
 
@@ -38,6 +41,7 @@ public final class PaloAltoPanOsComplianceEvaluator {
         boolean hasConfig = xmlContent != null && !xmlContent.isBlank();
         List<ComplianceControl> catalog = PaloAltoComplianceCatalog.getControls();
         List<EvaluationItem> items = new ArrayList<>();
+        PanOsXmlFacts facts = null;
 
         for (ComplianceControl control : catalog) {
             if (assignedControlIds != null && !assignedControlIds.isEmpty() && !assignedControlIds.contains(control.id())) {
@@ -96,6 +100,28 @@ public final class PaloAltoPanOsComplianceEvaluator {
                         "Device has no configuration collected. Run 'Collect now' first.",
                         null
                 ));
+                continue;
+            }
+
+            // 2b. Controls decided from the structure of the active XML (counts and relationships, never values)
+            if (STRUCTURE_CONTROLS.contains(control.id())) {
+                if (facts == null) {
+                    facts = PanOsXmlFacts.read(xmlContent);
+                }
+                PanOsXmlFacts.Outcome o = switch (control.id()) {
+                    case "pan_cis_4_1_1_snmpv3_only" -> facts.snmpV3();
+                    case "pan_cis_4_1_2_unused_interfaces_down" -> facts.unusedInterfaces();
+                    default -> facts.ddns();
+                };
+                items.add(o.verdict() == Verdict.UNKNOWN
+                        ? new EvaluationItem(control.id(), control.title(), control.severity(), control.frameworks(),
+                                Verdict.UNKNOWN, ReasonCode.EVIDENCE_MISSING, DisplayStatus.DATA_UNAVAILABLE,
+                                binding.evidenceRequirement().requiredEvidenceId(), gateEntryId, o.message(), null)
+                        : new EvaluationItem(control.id(), control.title(), control.severity(), control.frameworks(),
+                                o.verdict(),
+                                o.verdict() == Verdict.PASS ? ReasonCode.ASSERTION_SATISFIED : ReasonCode.ASSERTION_FAILED,
+                                o.verdict() == Verdict.PASS ? DisplayStatus.PASS : DisplayStatus.FAIL,
+                                null, null, o.message(), o.observed()));
                 continue;
             }
 

@@ -131,7 +131,8 @@ public final class Ui2ComplianceServer {
                     "status", "UP",
                     "service", "ui2-compliance",
                     "version", "1.0.0",
-                    "catalog_version", CheckPointComplianceCatalog.CATALOG_VERSION + "+" + FortinetAsaComplianceCatalog.CATALOG_VERSION,
+                    "catalog_version", CheckPointComplianceCatalog.CATALOG_VERSION + "+" + FortinetAsaComplianceCatalog.CATALOG_VERSION
+                            + "+" + com.securityexpert.nexus.ui2.worker.compliance.catalog.PaloAltoComplianceCatalog.CATALOG_VERSION,
                     "controls_count", cpCount + panCount + fortiCount + asaCount,
                     "controls_by_vendor", Map.of(
                             "check_point", cpCount,
@@ -169,7 +170,8 @@ public final class Ui2ComplianceServer {
                 controls = combined;
             }
             sendResponse(exchange, 200, Map.of(
-                    "version", CheckPointComplianceCatalog.CATALOG_VERSION + "+" + FortinetAsaComplianceCatalog.CATALOG_VERSION,
+                    "version", CheckPointComplianceCatalog.CATALOG_VERSION + "+" + FortinetAsaComplianceCatalog.CATALOG_VERSION
+                            + "+" + com.securityexpert.nexus.ui2.worker.compliance.catalog.PaloAltoComplianceCatalog.CATALOG_VERSION,
                     "count", controls.size(),
                     "controls", controls
             ));

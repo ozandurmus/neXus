@@ -89,4 +89,84 @@ class CheckPointGaiaComplianceEvaluatorTest {
         assertEquals(Math.round(((eval.passCount() + eval.failCount()) * 100.0 / 24.0) * 10.0) / 10.0, eval.evidenceCoverage());
         assertEquals(Math.round((eval.passCount() * 100.0 / 24.0) * 10.0) / 10.0, eval.assuredCompliance());
     }
+
+    private EvaluationResult evaluateSanitized(String raw) {
+        ConfigParseContext ctx = new ConfigParseContext("c154432c-1e28-4a20-aa26-ab4a05c0d9af",
+                ConfigVendor.CHECK_POINT, ConfigFormat.GAIA_CLISH, "physical", Optional.empty());
+        // The stored text is the sanitized text: evaluate exactly what the collector would have stored.
+        String sanitized = parser.parse(ctx, new ByteArrayInputStream(raw.getBytes(StandardCharsets.UTF_8))).sanitizedText();
+        ConfigParseResult res = parser.parse(ctx, new ByteArrayInputStream(sanitized.getBytes(StandardCharsets.UTF_8)));
+        return CheckPointGaiaComplianceEvaluator.evaluate("c154432c-1e28-4a20-aa26-ab4a05c0d9af", "check_point", "gaia",
+                res.sections(), sanitized, null);
+    }
+
+    private static com.securityexpert.nexus.ui2.worker.compliance.model.EvaluationItem item(EvaluationResult r, String id) {
+        return r.items().stream().filter(i -> i.controlId().equals(id)).findFirst().orElseThrow();
+    }
+
+    @Test
+    void mgmtClientsPassWhenOnlyNamedClientsAndNeverEchoAddresses() {
+        EvaluationResult r = evaluateSanitized(String.join("\n",
+                "set hostname FW-TANGO-04",
+                "add allowed-client host ipv4-address 192.0.2.10",
+                "add allowed-client network ipv4-address 192.0.2.64 mask-length 26"));
+        var i = item(r, "gaia_cis_2_5_1_mgmt_trusted_subnets");
+        assertEquals(DisplayStatus.PASS, i.displayStatus());
+        assertTrue(!String.valueOf(i.observedValue()).contains("192.0.2"));
+        assertTrue(!i.message().contains("192.0.2"));
+    }
+
+    @Test
+    void mgmtClientsFailWhenAnyHostOrDefaultRoute() {
+        assertEquals(DisplayStatus.FAIL, item(evaluateSanitized(
+                "add allowed-client host any-host\nadd allowed-client host ipv4-address 192.0.2.10"),
+                "gaia_cis_2_5_1_mgmt_trusted_subnets").displayStatus());
+        assertEquals(DisplayStatus.FAIL, item(evaluateSanitized(
+                "add allowed-client network ipv4-address 0.0.0.0 mask-length 0"),
+                "gaia_cis_2_5_1_mgmt_trusted_subnets").displayStatus());
+    }
+
+    @Test
+    void mgmtClientsStayUnknownWhenNoEntryIsCollected() {
+        var i = item(evaluateSanitized("set hostname FW-TANGO-04"), "gaia_cis_2_5_1_mgmt_trusted_subnets");
+        assertEquals(DisplayStatus.DATA_UNAVAILABLE, i.displayStatus());
+    }
+
+    @Test
+    void snmpV3PassNeverKeepsPassPhrasesInStoredText() {
+        String raw = String.join("\n",
+                "set snmp agent-version v3-Only",
+                "add snmp usm user FW-TANGO-04-mon security-level authPriv auth-pass-phrase-hashed 0123abcdSECRETHASH"
+                        + " privacy-pass-phrase-hashed 4567efabSECRETHASH2 authentication-protocol SHA1 privacy-protocol AES");
+        ConfigParseContext ctx = new ConfigParseContext("d", ConfigVendor.CHECK_POINT, ConfigFormat.GAIA_CLISH, "physical", Optional.empty());
+        String sanitized = parser.parse(ctx, new ByteArrayInputStream(raw.getBytes(StandardCharsets.UTF_8))).sanitizedText();
+        assertTrue(!sanitized.contains("SECRETHASH"));
+        assertTrue(sanitized.contains("add snmp usm user FW-TANGO-04-mon security-level authPriv"));
+        var i = item(evaluateSanitized(raw), "gaia_cis_2_6_1_snmp_v3_only");
+        assertEquals(DisplayStatus.PASS, i.displayStatus());
+    }
+
+    @Test
+    void snmpV3FailsOnOlderAgentOrWeakUserAndStaysUnknownWithoutEvidence() {
+        assertEquals(DisplayStatus.FAIL, item(evaluateSanitized("set snmp agent-version any"),
+                "gaia_cis_2_6_1_snmp_v3_only").displayStatus());
+        assertEquals(DisplayStatus.FAIL, item(evaluateSanitized(
+                "set snmp agent-version v3-Only\nadd snmp usm user u1 security-level authNoPriv auth-pass-phrase-hashed AAAA"),
+                "gaia_cis_2_6_1_snmp_v3_only").displayStatus());
+        assertEquals(DisplayStatus.DATA_UNAVAILABLE, item(evaluateSanitized("set hostname FW-TANGO-04"),
+                "gaia_cis_2_6_1_snmp_v3_only").displayStatus());
+        assertEquals(DisplayStatus.DATA_UNAVAILABLE, item(evaluateSanitized("set snmp agent-version v3-Only"),
+                "gaia_cis_2_6_1_snmp_v3_only").displayStatus());
+        assertEquals(DisplayStatus.PASS, item(evaluateSanitized("set snmp agent off"),
+                "gaia_cis_2_6_1_snmp_v3_only").displayStatus());
+    }
+
+    @Test
+    void otherAddLinesAreStillDropped() {
+        ConfigParseContext ctx = new ConfigParseContext("d", ConfigVendor.CHECK_POINT, ConfigFormat.GAIA_CLISH, "physical", Optional.empty());
+        String sanitized = parser.parse(ctx, new ByteArrayInputStream(
+                "add user admin2 uid 0\nadd allowed-client host any-host\nset hostname FW-TANGO-04".getBytes(StandardCharsets.UTF_8))).sanitizedText();
+        assertTrue(!sanitized.contains("add user"));
+        assertTrue(sanitized.contains("add allowed-client host any-host"));
+    }
 }
