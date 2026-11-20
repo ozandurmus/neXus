@@ -28,6 +28,7 @@ import { requestBulkInventoryCollect, requestBulkConfigurationCollect, listConfi
 import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import { DeviceInventoryPanels, ClusterDetailPanels, VendorAvatar, deriveClusterTitle } from "./InventoryPanels";
+import { savedConfigDiffersIds, useAsaConfigRelations } from "./AsaSavedConfigDiff";
 import { ClusterConfigurationDetail, DeviceConfigurationDetail } from "./ConfigurationDetail";
 import { LifecycleScreen } from "./LifecycleScreen";
 import { FleetSummary } from "./FleetSummary";
@@ -1064,6 +1065,10 @@ export function InventoryScreen() {
   const [scopeFilter, setScopeFilter] = useState<FormFilter>(() => formFromUrl(urlParam("form"), urlParam("scope")));
   const [stateFilter, setStateFilter] = useState<"all" | "draft" | "failed" | "stale">("all");
   const [problemsOnly, setProblemsOnly] = useState<boolean>(() => urlParam("problems") === "1");
+  // V253: ASAs whose newest backup differs from their startup configuration ("Saved config differs").
+  const [savedDiffers, setSavedDiffers] = useState(false);
+  const asaRelations = useAsaConfigRelations(data?.some((d) => d.vendor_hint === "cisco_asa") === true);
+  const savedDiffersIds = useMemo(() => savedConfigDiffersIds(asaRelations), [asaRelations]);
   // Cross-screen links (global search, cluster context strip): preselect a cluster or a device once the list is in.
   const [pendingClusterRef, setPendingClusterRef] = useState<string | null>(() => urlParam("cluster_ref"));
   const [pendingDeviceId, setPendingDeviceId] = useState<string | null>(() => urlParam("device_id"));
@@ -1181,6 +1186,7 @@ export function InventoryScreen() {
   const problemIds = useMemo(() => problemDeviceIds(devices ?? []), [devices]);
   const filteredDevices = (devices ?? []).filter((device) => {
     if (problemsOnly && !problemIds.has(device.device_id)) return false;
+    if (savedDiffers && !savedDiffersIds.has(device.device_id)) return false;
     if (!matchesForm(device, scopeFilter)) return false;
     if (vendorFilter !== "all" && device.vendor_hint !== vendorFilter) return false;
     if (stateFilter === "draft" && device.enrollment_state !== "DRAFT") return false;
@@ -1332,12 +1338,21 @@ export function InventoryScreen() {
                 {devices === null ? "" : `${filteredCountLabel} · ${liveCount} Live`}
               </Typography>
               {/* UI review 2026-11-05, C5: one click to the devices that need a look. */}
+              <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap" }}>
+              {savedDiffersIds.size > 0 && (
+                <Chip size="small" clickable aria-pressed={savedDiffers} onClick={() => setSavedDiffers((v) => !v)}
+                  title="Cisco ASA units whose running configuration has changes not saved to startup"
+                  label={`Saved config differs · ${savedDiffersIds.size}`}
+                  sx={{ height: 24, fontSize: 12, borderRadius: "8px", border: `1px solid ${savedDiffers ? m3.primary : m3.outlineVar}`,
+                    bgcolor: savedDiffers ? m3.secondaryContainer : m3.scLow, color: savedDiffers ? m3.onSecondaryContainer : m3.onSurface }} />
+              )}
               {devices !== null && (
                 <Chip size="small" clickable aria-pressed={problemsOnly} onClick={() => setProblemsOnly((v) => !v)} title={PROBLEM_DEFINITION}
                   label={`Problems only · ${devices.filter(isProblemDevice).length}`}
                   sx={{ height: 24, fontSize: 12, borderRadius: "8px", border: `1px solid ${problemsOnly ? m3.primary : m3.outlineVar}`,
                     bgcolor: problemsOnly ? m3.secondaryContainer : m3.scLow, color: problemsOnly ? m3.onSecondaryContainer : m3.onSurface }} />
               )}
+              </Box>
             </Box>
             {error && (
               <EmptyPanel title="Inventory unavailable" body={error}>

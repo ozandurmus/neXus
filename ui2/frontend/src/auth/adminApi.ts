@@ -838,7 +838,21 @@ export interface BackupSizeAnomaly {
   readonly open_copies: number;
 }
 
+/** V253: the saved (startup) vs running configuration relation of an ASA's newest backup; counts only. */
+export interface AsaConfigRelation {
+  readonly device_id: string;
+  readonly hostname?: string | null;
+  readonly cluster_member_ref?: string | null;
+  readonly relation: "MATCH" | "MISMATCH" | "NOT_EVALUABLE";
+  readonly lines_differing: number;
+  /** Command keyword to number of differing lines (top 10). */
+  readonly differing_keywords: Readonly<Record<string, number>>;
+  readonly backup_created_at?: string | null;
+  readonly derived_at?: string | null;
+}
+
 export interface BackupDeviations {
+  readonly asa_config_relations?: readonly AsaConfigRelation[];
   readonly active_major_deviations: readonly BackupMajorDeviation[];
   readonly size_anomalies?: readonly BackupSizeAnomaly[];
   /** security_admin only; the replay viewer never. */

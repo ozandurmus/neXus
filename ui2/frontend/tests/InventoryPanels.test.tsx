@@ -87,6 +87,7 @@ describe("InventoryScreen device selection and panels", () => {
           "/devices/dev-1/inventory": { device_id: "dev-1", collected_at: null, contexts: [] },
           "/devices/dev-1/lifecycle": { device_id: "dev-1", risk: "UNKNOWN", status: "NO_LIFECYCLE_DATA" },
           "/api/v2/ssh-trust?device_id=dev-1": { mode: "WARN", observations: [] },
+          "/api/v2/backups/deviations": { active_major_deviations: [], total_deviations_checked: 0, asa_config_relations: [] },
         };
         return Promise.resolve(jsonResponse(url in bodies ? 200 : 404, bodies[url] ?? { error: "NOT_FOUND" }));
       });
@@ -94,14 +95,17 @@ describe("InventoryScreen device selection and panels", () => {
       render(withTheme(<InventoryScreen />));
       fireEvent.click(await screen.findByText("FW-TANGO-04"));
       await screen.findByRole("tablist", { name: "Device detail" });
-      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(9));
+      // A Cisco ASA fleet also reads the saved-vs-running relations (V253), once for the list and the Configuration tab.
+      const expectedCalls = vendor === "cisco_asa" ? 10 : 9;
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(expectedCalls));
       // The lifecycle is a cell of the Platform identity grid (the header's collapsible panel), so the header no longer reads it on its own; the
       // header's "Config read" age asks the small configuration summary route (F-9), and the state row (roadmap 2.1)
       // reads the backups and, for an assessed vendor, the device's compliance. No cluster inventory, no readiness.
       expect(fetchMock.mock.calls.map(([url]) => url).sort()).toEqual([
+        ...(vendor === "cisco_asa" ? ["/api/v2/backups/deviations"] : []),
         "/api/v2/overview", "/api/v2/ssh-trust?device_id=dev-1", "/devices", "/devices/dev-1", "/devices/dev-1/backups", "/devices/dev-1/compliance",
         "/devices/dev-1/configuration", "/devices/dev-1/https-certificate", "/devices/dev-1/inventory",
-      ]);
+      ].sort());
       expect(screen.getByText("This device has not been collected yet. Use Collect now to read its interfaces.")).toBeInTheDocument();
       expect(screen.queryByText("Inventory unavailable")).toBeNull();
       expect(screen.queryByRole("alert")).toBeNull();
@@ -751,5 +755,29 @@ describe("interface link facts (V148)", () => {
     expect(await screen.findByText("eth0")).toBeInTheDocument();
     expect(screen.queryByText("Zone")).toBeNull();
     expect(screen.queryByText("MAC")).toBeNull();
+  });
+});
+
+describe("Devices list: Saved config differs filter", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("narrows the list to the ASA units whose saved configuration differs", async () => {
+    const asa = (id: string, name: string) => ({ ...STANDALONE_DEVICE, device_id: id, vendor_hint: "cisco_asa", role: "gateway", hostname: name });
+    const bodies: Record<string, unknown> = {
+      "/devices": { devices: [asa("dev-1", "FW-TANGO-04"), asa("dev-2", "FW-TANGO-05")] },
+      "/api/v2/backups/deviations": { active_major_deviations: [], total_deviations_checked: 0, asa_config_relations: [
+        { device_id: "dev-1", relation: "MISMATCH", lines_differing: 4, differing_keywords: { "access-list": 3, "object-group": 1 } },
+        { device_id: "dev-2", relation: "MATCH", lines_differing: 0, differing_keywords: {} },
+      ] },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      return Promise.resolve(jsonResponse(url in bodies ? 200 : 404, bodies[url] ?? { error: "NOT_FOUND" }));
+    }));
+    render(withTheme(<InventoryScreen />));
+    expect(await screen.findByText("FW-TANGO-05")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: /Saved config differs · 1/ }));
+    await waitFor(() => expect(screen.queryByText("FW-TANGO-05")).toBeNull());
+    expect(screen.getByText("FW-TANGO-04")).toBeInTheDocument();
   });
 });
