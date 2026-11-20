@@ -475,3 +475,140 @@ it("offers the chassis failover its mode allows on the VSX parent row, or says w
   expect(within(row("CLS-ALPHA-01")).getByText(/VSX chassis mode not known/)).toHaveAttribute("title", "VSX_CHASSIS_MODE_UNKNOWN");
   expect(within(row("CLS-ALPHA-01")).queryByRole("button", { name: /Fail over/ })).toBeNull();
 });
+it("renders Cisco ASA and FortiGate pairs as first-class rows with readiness roles, inventory fallback, check table, vendor filter, single chip counts and execution-disabled notice", () => {
+  withNow();
+  const observedAt = hoursAgo(1);
+  const asaCluster = { ref: "CLS-DELTA-04", title: "CLS-DELTA-04", members: [
+    { device_id: "asa-m1", hostname: "FW-DELTA-04-M1", vendor_hint: "cisco_asa", ha_role: "active", inventory_collected_at: at },
+    { device_id: "asa-m2", hostname: "FW-DELTA-04-M2", vendor_hint: "cisco_asa", ha_role: "standby", inventory_collected_at: at },
+  ] as DeviceSummary[] };
+  const fgtCluster = { ref: "CLS-ECHO-05", title: "CLS-ECHO-05", members: [
+    { device_id: "fgt-m1", hostname: "FW-ECHO-05-M1", vendor_hint: "fortinet", ha_role: "primary", inventory_collected_at: at },
+    { device_id: "fgt-m2", hostname: "FW-ECHO-05-M2", vendor_hint: "fortinet", ha_role: "secondary", inventory_collected_at: at },
+  ] as DeviceSummary[] };
+  // ASA readiness check 1 observed roles swapped after failover (M2 active, M1 standby); check 5 failed with internal reason SYNC_NOT_DONE.
+  const asaRow: CpFailoverSummary = {
+    ...summary("CLS-DELTA-04", "NOT_READY"), vendor: "cisco_asa", readinessAvailable: true, canRunReadiness: true,
+    refusalReason: "SYNC_NOT_DONE", failoverRefusal: "FAILOVER_VENDOR_NOT_AVAILABLE",
+    members: asaCluster.members.map(m => ({ device_id: m.device_id, hostname: m.hostname, ha_role: m.ha_role })),
+    readiness: {
+      status: "NOT_READY", observedAt, failedCheck: "Configuration sync", stopCode: "SYNC_NOT_DONE",
+      checks: [
+        { checkNo: 1, title: "Failover state and roles", member: "Member 1", device_id: "asa-m1", result: "PASS", status: "PASS",
+          summary: "One Active and one Standby Ready; both views agree", blocking: true, observedAt, derived: { role: "STANDBY" } },
+        { checkNo: 1, title: "Failover state and roles", member: "Member 2", device_id: "asa-m2", result: "PASS", status: "PASS",
+          summary: "One Active and one Standby Ready; both views agree", blocking: true, observedAt, derived: { role: "ACTIVE" } },
+        { checkNo: 5, title: "Configuration sync", member: "Member 1", device_id: "asa-m1", result: "FAIL", status: "FAIL",
+          summary: "Configuration not synchronised", blocking: true, observedAt, derived: { reason: "SYNC_NOT_DONE" } },
+        { checkNo: 5, title: "Configuration sync", member: "Member 2", device_id: "asa-m2", result: "FAIL", status: "FAIL",
+          summary: "Configuration not synchronised", blocking: true, observedAt, derived: { reason: "SYNC_NOT_DONE" } },
+      ],
+    },
+  };
+  // FortiGate pair without check-1 roles yet falls back to inventory roles (primary/secondary) labelled "(inventory)".
+  const fgtRow: CpFailoverSummary = {
+    ...summary("CLS-ECHO-05", "READY"), vendor: "fortinet", readinessAvailable: true, canRunReadiness: true,
+    refusalReason: null, failoverRefusal: "FAILOVER_VENDOR_NOT_AVAILABLE",
+    members: fgtCluster.members.map(m => ({ device_id: m.device_id, hostname: m.hostname, ha_role: m.ha_role })),
+    readiness: {
+      status: "READY", observedAt, failedCheck: "",
+      checks: [
+        { checkNo: 4, title: "Configuration sync", member: "Member 1", device_id: "fgt-m1", result: "PASS", status: "PASS",
+          summary: "Both members in sync and the cluster checksums equal", blocking: true, observedAt, derived: {} },
+      ],
+    },
+  };
+  const allClusters = [clusters[0], clusters[1], asaCluster, fgtCluster];
+  const allRows = { ...rows, "CLS-DELTA-04": [asaRow], "CLS-ECHO-05": [fgtRow] };
+  const { onRun } = setup({ clusters: allClusters, rows: allRows });
+
+  // Fleet chips count each pair once in both Clusters and Readiness records views; none in Not supported.
+  expect(screen.getByRole("button", { name: "Ready: 2 clusters" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Not ready: 2 clusters" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Not supported: 0 clusters" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Clusters (4)" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Readiness records (4)" })).toBeInTheDocument();
+
+  // ASA row: status, primary reason from lead blocking check, readiness-observed roles with time, execution-disabled notice, Run pre-checks.
+  const asa = row("CLS-DELTA-04");
+  expect(within(asa).getByText("Not ready")).toBeInTheDocument();
+  expect(within(asa).getByText("Configuration sync: Configuration not synchronised")).toBeInTheDocument();
+  expect(within(asa).getByText(/Active: FW-DELTA-04-M2/)).toHaveTextContent("Standby: FW-DELTA-04-M1 (1 h ago)");
+  expect(asa.querySelector('[data-role-source="readiness"]')).toHaveTextContent("(1 h ago)");
+  expect(within(asa).getByText("Failover execution not enabled for Cisco ASA")).toBeInTheDocument();
+  fireEvent.click(within(asa).getByRole("button", { name: "Run pre-checks" }));
+  expect(onRun).toHaveBeenCalledWith(asaRow);
+
+  // Expand ASA row: same ReadinessChecksTable component ordered active-first with readiness roles and time.
+  fireEvent.click(within(asa).getByRole("button", { name: "Checks for CLS-DELTA-04" }));
+  const asaDetail = screen.getByRole("region", { name: "Checks for CLS-DELTA-04" });
+  expect(within(asaDetail).getAllByRole("columnheader").map(c => c.textContent)).toEqual([
+    "Check", "FW-DELTA-04-M2 · active (readiness, 1 h ago)", "FW-DELTA-04-M1 · standby (readiness, 1 h ago)",
+  ]);
+
+  // FortiGate row: status, primary reason, inventory fallback roles labelled "(inventory)", execution-disabled notice, check table on expand.
+  const fgt = row("CLS-ECHO-05");
+  expect(within(fgt).getByText("Ready")).toBeInTheDocument();
+  expect(within(fgt).getByText("No blocking conditions observed")).toBeInTheDocument();
+  expect(within(fgt).getByText(/Active: FW-ECHO-05-M1/)).toHaveTextContent("Standby: FW-ECHO-05-M2 (inventory)");
+  expect(fgt.querySelector('[data-role-source="inventory"]')).toHaveTextContent("(inventory)");
+  expect(within(fgt).getByText("Failover execution not enabled for FortiGate")).toBeInTheDocument();
+  fireEvent.click(within(fgt).getByRole("button", { name: "Checks for CLS-ECHO-05" }));
+  const fgtDetail = screen.getByRole("region", { name: "Checks for CLS-ECHO-05" });
+  expect(within(fgtDetail).getAllByRole("columnheader").map(c => c.textContent)).toEqual([
+    "Check", "FW-ECHO-05-M1 · primary (inventory)", "FW-ECHO-05-M2 · secondary (inventory)",
+  ]);
+
+  // Vendor filter narrows to Cisco ASA and Fortinet rows respectively.
+  fireEvent.mouseDown(screen.getByRole("combobox", { name: "Vendor" }));
+  fireEvent.click(screen.getByRole("option", { name: "Cisco ASA" }));
+  expect(row("CLS-DELTA-04")).toBeInTheDocument();
+  expect(screen.queryByRole("row", { name: "CLS-ECHO-05" })).toBeNull();
+  fireEvent.mouseDown(screen.getByRole("combobox", { name: "Vendor" }));
+  fireEvent.click(screen.getByRole("option", { name: "Fortinet" }));
+  expect(row("CLS-ECHO-05")).toBeInTheDocument();
+  expect(screen.queryByRole("row", { name: "CLS-DELTA-04" })).toBeNull();
+});
+it("derives readiness roles for an ASA pair from check 10 standby marker and for a two-member FortiGate pair from the primary check-1 PASS", () => {
+  withNow();
+  const observedAt = hoursAgo(2);
+  const asaCluster = { ref: "CLS-DELTA-04", title: "CLS-DELTA-04", members: [
+    { device_id: "asa-m1", hostname: "FW-DELTA-04-M1", vendor_hint: "cisco_asa", ha_role: "active", inventory_collected_at: at },
+    { device_id: "asa-m2", hostname: "FW-DELTA-04-M2", vendor_hint: "cisco_asa", ha_role: "standby", inventory_collected_at: at },
+  ] as DeviceSummary[] };
+  const fgtCluster = { ref: "CLS-ECHO-05", title: "CLS-ECHO-05", members: [
+    { device_id: "fgt-m1", hostname: "FW-ECHO-05-M1", vendor_hint: "fortinet", ha_role: "secondary", inventory_collected_at: at },
+    { device_id: "fgt-m2", hostname: "FW-ECHO-05-M2", vendor_hint: "fortinet", ha_role: "primary", inventory_collected_at: at },
+  ] as DeviceSummary[] };
+  const asaRow: CpFailoverSummary = {
+    ...summary("CLS-DELTA-04", "READY"), vendor: "cisco_asa", readinessAvailable: true, canRunReadiness: true,
+    members: asaCluster.members.map(m => ({ device_id: m.device_id, hostname: m.hostname, ha_role: m.ha_role })),
+    readiness: {
+      status: "READY", observedAt, failedCheck: "",
+      checks: [
+        { checkNo: 1, title: "Failover state and roles", member: "Member 1", device_id: "asa-m1", result: "PASS", status: "PASS",
+          summary: "One Active and one Standby Ready; both views agree", blocking: true, observedAt, derived: { oneActiveOneStandbyReady: true } },
+        { checkNo: 1, title: "Failover state and roles", member: "Member 2", device_id: "asa-m2", result: "PASS", status: "PASS",
+          summary: "One Active and one Standby Ready; both views agree", blocking: true, observedAt, derived: { oneActiveOneStandbyReady: true } },
+        { checkNo: 10, title: "Traffic and ARP (information)", member: "Member 1", device_id: "asa-m1", result: "NOT_EVALUATED", status: "NOT_EVALUATED",
+          summary: "Read on the active member only", blocking: false, observedAt, derived: { reason: "NOT_ACTIVE_MEMBER" } },
+        { checkNo: 10, title: "Traffic and ARP (information)", member: "Member 2", device_id: "asa-m2", result: "PASS", status: "PASS",
+          summary: "2 KB/s, 8 ARP entries", blocking: false, observedAt, derived: {} },
+      ],
+    },
+  };
+  const fgtRow: CpFailoverSummary = {
+    ...summary("CLS-ECHO-05", "READY"), vendor: "fortinet", readinessAvailable: true, canRunReadiness: true,
+    members: fgtCluster.members.map(m => ({ device_id: m.device_id, hostname: m.hostname, ha_role: m.ha_role })),
+    readiness: {
+      status: "READY", observedAt, failedCheck: "",
+      checks: [
+        { checkNo: 1, title: "HA mode and members", member: "Member 1", device_id: "fgt-m2", result: "PASS", status: "PASS",
+          summary: "Active-passive, one primary and one secondary, health OK, identity matches (as the primary reports)", blocking: true, observedAt, derived: {} },
+      ],
+    },
+  };
+  setup({ clusters: [asaCluster, fgtCluster], rows: { "CLS-DELTA-04": [asaRow], "CLS-ECHO-05": [fgtRow] } });
+  expect(within(row("CLS-DELTA-04")).getByText(/Active: FW-DELTA-04-M2/)).toHaveTextContent("Standby: FW-DELTA-04-M1 (2 h ago)");
+  expect(within(row("CLS-ECHO-05")).getByText(/Active: FW-ECHO-05-M2/)).toHaveTextContent("Standby: FW-ECHO-05-M1 (2 h ago)");
+});

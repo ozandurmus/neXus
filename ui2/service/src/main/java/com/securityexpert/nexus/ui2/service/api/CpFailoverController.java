@@ -163,6 +163,10 @@ public final class CpFailoverController {
             for (var check:JSON.readTree(readiness.checks())) if (check.path("checkNo").asInt()==1) {
                 var facts=check.path("derived");
                 String observedMode=facts.path("mode").asText();
+                if ("A-P".equals(observedMode)) observedMode="active-passive";
+                else if ("A-A".equals(observedMode)) observedMode="active-active";
+                else if (observedMode.isEmpty() && facts.path("failoverOn").asBoolean(false)
+                        && !facts.path("failoverGroups").asBoolean(false)) observedMode="active-passive";
                 if (java.util.Set.of("HA","VSLS","LOAD_SHARING","active-passive","active-active","UNKNOWN").contains(observedMode)) mode=observedMode;
                 String reason=facts.path("reason").asText();
                 if (java.util.Set.of("UNSUPPORTED_MODE","IDENTITY_NOT_RECORDED","UNSUPPORTED").contains(reason)) refusal=reason;
@@ -258,9 +262,12 @@ public final class CpFailoverController {
             m.put("readinessAvailable", s.readinessAvailable());
             // Cisco ASA and FortiGate pairs: the stored HA roles in the common cluster-view shape (no readiness, no device read).
             com.securityexpert.nexus.ui2.service.failover.FailoverVendor.of(s.vendor())
-                .filter(v -> !s.readinessAvailable() && com.securityexpert.nexus.ui2.service.failover.HaPairView.covers(v))
+                .filter(v -> (!s.readinessAvailable() || s.unit().members().size() == 2)
+                    && com.securityexpert.nexus.ui2.service.failover.HaPairView.covers(v))
                 .ifPresent(v -> m.put("haView", com.securityexpert.nexus.ui2.service.failover.HaPairView.of(v, s.unit().members()).toMap()));
             eligibility(m,s.unit(),s.readiness(),incidents);
+            if ("cisco_asa".equals(s.vendor()) || "fortinet".equals(s.vendor()))
+                m.put("failoverRefusal", CpFailoverService.VENDOR_NOT_AVAILABLE);
             if (s.unit().vsxChassis()) {
                 // The fleet list knows the chassis's own readiness: the mode, hence the action, or why none is offered.
                 var plan=CpFailoverService.chassisPlan(s.unit(),List.of(s.unit()),
@@ -274,6 +281,7 @@ public final class CpFailoverController {
                 var readiness = s.readiness();
                 try {
                     var rows=JSON.readTree(readiness.checks());
+                    enrichObservedRoles(s.vendor(),rows);
                     var members=new java.util.TreeSet<String>();
                     rows.forEach(row -> members.add(row.path("memberRef").asText()));
                     var ordered=List.copyOf(members);
@@ -296,6 +304,49 @@ public final class CpFailoverController {
             } else m.put("readiness", null);
             return m;
         }).toList());
+    }
+    /**
+     * Read-only role projection on check 1 for Cisco ASA and FortiGate readiness runs whose stored check-1 JSON omitted
+     * {@code role}: on an ASA pair with check 1 PASS (or oneActiveOneStandbyReady), check 10 records NOT_ACTIVE_MEMBER on
+     * the standby member and the other member is the active one; FortiGate gets no inferred role (a passing check 1 does not name the active member).
+     */
+    private static void enrichObservedRoles(String vendor, com.fasterxml.jackson.databind.JsonNode rows) {
+        if (!"cisco_asa".equals(vendor) && !"fortinet".equals(vendor)) return;
+        String standbyRef = null;
+        if ("cisco_asa".equals(vendor)) {
+            for (var row : rows) if (row.path("checkNo").asInt() == 10
+                    && "NOT_ACTIVE_MEMBER".equals(row.path("derived").path("reason").asText()))
+                standbyRef = row.path("memberRef").asText();
+        }
+        for (var row : rows) {
+            if (row.path("checkNo").asInt() != 1 || !(row.path("derived") instanceof com.fasterxml.jackson.databind.node.ObjectNode derived))
+                continue;
+            if (!derived.path("role").asText().isEmpty()) continue;
+            // FortiGate: a passing check 1 does not say which member is active (evidence law); no role is invented.
+            if ("cisco_asa".equals(vendor) && standbyRef != null && !standbyRef.isEmpty()
+                    && ("PASS".equals(row.path("status").asText()) || derived.path("oneActiveOneStandbyReady").asBoolean(false))) {
+                String memberRef = row.path("memberRef").asText();
+                if (!memberRef.isEmpty()) derived.put("role", memberRef.equals(standbyRef) ? "STANDBY" : "ACTIVE");
+            }
+        }
+    }
+    private static String asaStandbyRef(String vendor, List<JooqCpFailoverRepository.Check> checks) {
+        if (!"cisco_asa".equals(vendor)) return null;
+        for (var c : checks) if (c.checkNo() == 10) try {
+            if ("NOT_ACTIVE_MEMBER".equals(JSON.readTree(c.derived()).path("reason").asText())) return c.memberRef();
+        } catch (java.io.IOException ignored) {}
+        return null;
+    }
+    private static com.fasterxml.jackson.databind.JsonNode checkDerived(String vendor, JooqCpFailoverRepository.Check c, String standbyRef)
+            throws java.io.IOException {
+        var node = JSON.readTree(c.derived());
+        if (c.checkNo() == 1 && node instanceof com.fasterxml.jackson.databind.node.ObjectNode derived
+                && derived.path("role").asText().isEmpty()) {
+            if ("cisco_asa".equals(vendor) && standbyRef != null && !standbyRef.isEmpty()
+                    && ("PASS".equals(c.status()) || derived.path("oneActiveOneStandbyReady").asBoolean(false)))
+                derived.put("role", c.memberRef().equals(standbyRef) ? "STANDBY" : "ACTIVE");
+        }
+        return node;
     }
     @PostMapping("/approvals")
     public ResponseEntity<?> approve(@RequestBody ApprovalRequest body,HttpServletRequest request) {
@@ -404,10 +455,11 @@ public final class CpFailoverController {
             if ("check_point".equals(d.run().vendor()) && "FAILOVER".equals(d.run().kind()))
                 view.put("resume",resumeView(d.run(),request));
             view.put("sessionContinuity","NOT_EVALUATED");
+            String standbyRef=asaStandbyRef(d.run().vendor(),d.checks());
             view.put("lastConfirmedRoles",d.checks().stream().filter(c -> c.checkNo()==1 && "PASS".equals(c.status()))
                 .collect(java.util.stream.Collectors.toMap(JooqCpFailoverRepository.Check::memberRef,c -> {
                     try {
-                        String role=JSON.readTree(c.derived()).path("role").asText().toUpperCase(java.util.Locale.ROOT);
+                        String role=checkDerived(d.run().vendor(),c,standbyRef).path("role").asText().toUpperCase(java.util.Locale.ROOT);
                         return java.util.Set.of("ACTIVE","STANDBY","PASSIVE","DOWN","SUSPENDED").contains(role)?role:"UNKNOWN";
                     } catch (java.io.IOException invalid) { return "UNKNOWN"; }
                 },(earlier,later) -> later)));
@@ -417,14 +469,18 @@ public final class CpFailoverController {
                 check.put("phase",c.phase()); check.put("device_id",c.memberRef());
                 check.put("cluster_member_ref",d.run().clusterRef());
                 check.put("hostname",null);
+                String derivedText=c.derived();
                 try {
+                    var derivedNode=checkDerived(d.run().vendor(),c,standbyRef);
+                    if (c.checkNo()==1 && ("cisco_asa".equals(d.run().vendor()) || "fortinet".equals(d.run().vendor())))
+                        derivedText=JSON.writeValueAsString(derivedNode);
                     check.putAll(ReadinessCheckView.fields(d.run().vendor(),c.checkNo(),
-                        "Member "+(members.indexOf(c.memberRef())+1),c.status(),JSON.readTree(c.derived()),c.observedAt()));
+                        "Member "+(members.indexOf(c.memberRef())+1),c.status(),derivedNode,c.observedAt()));
                 } catch (java.io.IOException invalid) {
                     throw new IllegalStateException("Stored readiness checks are invalid",invalid);
                 }
                 check.put("checkNo",c.checkNo()); check.put("status",c.status());
-                check.put("derived",c.derived()); check.put("observedAt",c.observedAt());
+                check.put("derived",derivedText); check.put("observedAt",c.observedAt());
                 return check;
             }).toList());
             return view;

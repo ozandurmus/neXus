@@ -296,9 +296,10 @@ export function OperationsScreen() {
           members={selectedReadinessRow?.members} cluster={selected?.title ?? "Masked unit"} vendor={selectedReadinessRow?.vendor}
           masked={selectedReadinessRow?.masked} status={selectedReadinessRow?.readiness?.status}
           observedAt={selectedReadinessRow?.readiness?.observedAt} canRun={false} onRun={() => {}} />
-        {selected?.members[0] && ["check_point", "palo_alto"].includes(selected.members[0].vendor_hint) ?
+        {selected?.members[0] && (["check_point", "palo_alto"].includes(selected.members[0].vendor_hint)
+          || (["cisco_asa", "fortinet"].includes(selected.members[0].vendor_hint) && selectedReadinessRow?.readinessAvailable !== false)) ?
           <CpFailoverPanel key={selectedCluster} memberDeviceId={selected.members[0].device_id}
-            vendor={selected.members[0].vendor_hint as "check_point" | "palo_alto"} initialUnitId={expandedUnit} />
+            vendor={selected.members[0].vendor_hint as "check_point" | "palo_alto" | "cisco_asa" | "fortinet"} initialUnitId={expandedUnit} />
           : <StatePanel variant="empty" title={readinessReasonLabel("UNSUPPORTED_MODE")} body={selected?.members[0]?.vendor_hint === "fortinet" && selectedReadinessRow?.readinessAvailable ? "FortiGate clusters are evaluated for readiness only, from the enrolled address (as the primary reports); failover is not offered." : selected?.members[0]?.vendor_hint === "cisco_asa" ? (selectedReadinessRow?.readinessAvailable ? "Cisco ASA pairs are evaluated for readiness only; failover is not offered." : "Readiness is not available yet for Cisco ASA pairs.") : "Failover and readiness detail are offered for Check Point and Palo Alto clusters only."} code="UNSUPPORTED_MODE" />}
       </>}
     </Drawer>

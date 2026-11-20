@@ -117,4 +117,26 @@ class CpFgtFailoverReadinessTest {
         on.startDue();
         verify(store, never()).startDue(anyString(), anyString());
     }
+    @Test void switchOnAlsoListsATwoMemberEnrolledFortigatePairWithReadinessAvailable() {
+        String cluster = "CLS-ROMEO-04", a = "DEV-SYNTH-08", b = "DEV-SYNTH-09";
+        var first = new DeviceSummaryRecord(a, "gateway", "fortinet", DeviceEnrollmentState.ENROLLED, Optional.of("FW-ROMEO-04-M1"),
+            Optional.empty(), Optional.empty(), Optional.of("primary"), Optional.of(cluster));
+        var second = new DeviceSummaryRecord(b, "gateway", "fortinet", DeviceEnrollmentState.ENROLLED, Optional.of("FW-ROMEO-04-M2"),
+            Optional.empty(), Optional.empty(), Optional.of("secondary"), Optional.of(cluster));
+        when(rbac.evaluate(anyString(), any(), any())).thenReturn(new RbacEvaluator.Decision(
+            AuthzOutcome.PERMITTED, Optional.of(RbacEvaluator.ROOT_AUTHORITY), Optional.empty(), Optional.empty()));
+        when(devices.listAll()).thenReturn(List.of(first, second));
+        when(store.summaryMembers()).thenReturn(List.of(
+            new JooqCpFailoverRepository.SummaryMember(a, true, "ssh_exec", true, "physical", false),
+            new JooqCpFailoverRepository.SummaryMember(b, true, "ssh_exec", true, "physical", false)));
+        when(store.summaryStatuses()).thenReturn(List.of());
+        when(store.readinessStatuses()).thenReturn(List.of());
+        var rows = on.summary("actor-1");
+        assertEquals(1, rows.size());
+        assertEquals("fortinet", rows.get(0).vendor());
+        assertTrue(rows.get(0).readinessAvailable());
+        assertTrue(rows.get(0).canRunReadiness());
+        assertEquals(2, rows.get(0).unit().members().size());
+        assertFalse(off.summary("actor-1").get(0).readinessAvailable());
+    }
 }
