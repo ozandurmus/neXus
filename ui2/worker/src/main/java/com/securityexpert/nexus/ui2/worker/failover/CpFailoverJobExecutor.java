@@ -74,8 +74,27 @@ public final class CpFailoverJobExecutor {
     private boolean chassis;
     /** Stop code of a chassis read whose VS0 gate row is not signed off: nothing is sent. */
     static final String CHASSIS_COMMANDS_NOT_APPROVED="VSX_CHASSIS_COMMANDS_NOT_APPROVED";
-    /** Stop code of a chassis FAILOVER run: FROZEN FAILOVER_EXECUTION_CP_CONTRACT.md §10 does not fail the chassis over. */
-    static final String CHASSIS_FAILOVER_NOT_APPROVED="VSX_CHASSIS_FAILOVER_NOT_APPROVED";
+    /**
+     * Chassis failover, option B (PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md, RATIFIED; contract §17): only a
+     * chassis whose VS0 {@code cphaprob stat} reports High Availability on both members is failed over with the VS0
+     * writes. A VSLS chassis is failed over VS by VS (option A, a sequence of VS runs), never by this run.
+     */
+    static final String CHASSIS_MODE_VSLS="VSX_CHASSIS_MODE_VSLS_USE_SEQUENCE";
+    static final String CHASSIS_MODE_UNKNOWN="VSX_CHASSIS_MODE_UNKNOWN";
+    /** No virtual system common to both members in the stored inventory contexts: nothing to verify, nothing sent. */
+    static final String CHASSIS_CONTEXT_INCOMPLETE="VSX_CONTEXT_INCOMPLETE";
+    /** The PO's mitigation (record §7): every VS must follow the chassis; otherwise stop, never report success. */
+    static final String VS_NOT_ON_ACTIVE="VSX_VIRTUAL_SYSTEM_NOT_ON_ACTIVE_MEMBER";
+    static final String VS_NOT_MOVED="VSX_VIRTUAL_SYSTEM_NOT_MOVED";
+    static final String VS_NOT_RETURNED="VSX_VIRTUAL_SYSTEM_NOT_RETURNED";
+    /** Check 16 "Virtual systems moved" of a chassis failover run. */
+    static final int VS_CHECK=16;
+    /** After the switch (and after the return) the VS states are re-read every 3 s, at most this many rounds. */
+    static final int VS_MAX_ROUNDS=10;
+    /** The virtual systems of a chassis failover run, in VSID text order (opaque; never cast). */
+    private List<String> chassisVs=List.of();
+    /** Set only while one per-VS state read of a chassis run is issued (vsenv of that VS, its own gate row). */
+    private String vsOverride;
     private long epoch;
     private int commandIndex;
     private boolean wrote;
@@ -186,6 +205,7 @@ public final class CpFailoverJobExecutor {
                 "cp_failover_missing_run","RUN_NOT_FOUND"); return;
         }
         this.jobId=jobId; this.runId=run.get().id(); this.vsId=run.get().vsId(); this.chassis=false;
+        this.chassisVs=List.of(); this.vsOverride=null;
         this.readiness="READINESS".equals(run.get().kind());
         this.readinessFailure=null;
         this.shapes=new ReadinessShapeLog("check_point");
@@ -205,7 +225,8 @@ public final class CpFailoverJobExecutor {
                 chassis=true;
                 // The framing row names the bare read and the vsenv <VSID> form only; the chassis reads use SSH_EXEC.
                 shellRun=false;
-                if (!readiness) throw new Stop(CHASSIS_FAILOVER_NOT_APPROVED,0);
+                // A chassis failover (option B) verifies every VS of the chassis: their VSIDs come first, nothing sent.
+                if (!readiness) chassisVs=chassisVirtualSystems(members);
             }
             if (!readiness) {
                 requestCluster=run.get().clusterRef(); requestVs=run.get().vsId();
@@ -218,6 +239,7 @@ public final class CpFailoverJobExecutor {
             // A chassis run resolves every read before its first contact, the bond-member read included.
             if (chassis) gate(BOND_MEMBERS);
             if (!readiness) { gate(CPSTAT_POLICY); gate(DOWN); gate(UP); }
+            if (chassis && !readiness) gateVsState();
             if (shellRun) gateShellFraming();
             first=connect(members.get(0)); second=connect(members.get(1));
             if(first.session().presentedIdentity().equals(second.session().presentedIdentity()))
@@ -228,14 +250,17 @@ public final class CpFailoverJobExecutor {
                 finishReadiness("READY",0,"PASS");
                 return;
             }
+            if (chassis) requireChassisHaMode(before);
             Member formerActive="ACTIVE".equals(before.a().state().localRole())?first:second;
             Member formerStandby=formerActive==first?second:first;
+            if (chassis) verifyVirtualSystems("pre",first,second,formerActive,"STANDBY",VS_NOT_ON_ACTIVE,1);
             state("FAILING_OVER","FAILING_OVER",null,null,null);
             command(formerActive,DOWN);
             if(!waitFor(first,second,formerStandby,"ACTIVE",formerActive,"DOWN"))
                 throw new Stop("FAILOVER_TIMEOUT",1);
             confirmDispatch();
             state("SWITCHED","SWITCHED",null,null,null);
+            if (chassis) verifyVirtualSystems("post",first,second,formerStandby,null,VS_NOT_MOVED,VS_MAX_ROUNDS);
             state("POSTCHECK","POSTCHECK",null,null,null);
             checks("post",first,second,before,formerActive);
             if(polls>=maxPolls) throw new Stop("POLL_BUDGET_EXHAUSTED",1);
@@ -244,6 +269,7 @@ public final class CpFailoverJobExecutor {
             if(!waitFor(first,second,formerStandby,"ACTIVE",formerActive,"STANDBY"))
                 throw new Stop("RETURN_TIMEOUT",1);
             confirmDispatch();
+            if (chassis) verifyVirtualSystems("post_return",first,second,formerStandby,"STANDBY",VS_NOT_RETURNED,VS_MAX_ROUNDS);
             state("POSTCHECK","POST_RETURN",null,null,null);
             checks("post_return",first,second,before,formerActive);
             state("DONE","DONE","SUCCEEDED",null,"NO_PROBLEMS_FOUND");
@@ -275,6 +301,7 @@ public final class CpFailoverJobExecutor {
     private void resume(String jobId,long epoch,JooqCpFailoverRepository.Resume r) {
         this.resume=r; this.maxPolls=RESUME_MAX_POLLS;
         this.jobId=jobId; this.runId=r.runId(); this.vsId=null; this.chassis=false; this.readiness=false; this.readinessFailure=null;
+        this.chassisVs=List.of(); this.vsOverride=null;
         this.shapes=new ReadinessShapeLog("check_point");
         this.epoch=epoch; this.commandIndex=0; this.polls=0; this.wrote=false; this.dispatch=null;
         this.shellRun=shellMode.usesShell(r.clusterRef()); this.execEvidence=false;
@@ -289,10 +316,13 @@ public final class CpFailoverJobExecutor {
                     || !members.stream().map(DeviceSummaryRecord::deviceId).collect(java.util.stream.Collectors.toSet())
                         .equals(Set.copyOf(r.targetMembers())))
                 throw new Stop("MEMBERSHIP_CHANGED",0);
+            // A stopped chassis run (option B) returns in VS0 only, and verifies its virtual systems came back.
+            if (vsxEvidence(members)) { chassis=true; shellRun=false; chassisVs=chassisVirtualSystems(members); }
             requireResumeAdmission(true);
             if(!attempts.findByJobAndStep(jobId,0).isEmpty()) throw new Stop("PRIOR_ATTEMPT_NOT_REPLAYED",0);
             for(String command:List.of(STAT,TABLE,IF,ARP,TRAFFIC,SYNC,POLICY,CPSTAT_POLICY,PNOTES,BONDS,FAILOVER,ROUTING)) gate(command);
             gate(UP);
+            if (chassis) gateVsState();
             if (shellRun) gateShellFraming();
             // The baseline is the run's own stored pre rows; without it nothing is sent.
             Pair before=storedBaseline(members.get(0).deviceId(),members.get(1).deviceId());
@@ -310,6 +340,7 @@ public final class CpFailoverJobExecutor {
             command(formerActive,UP);
             if(!waitFor(first,second,peer,"ACTIVE",formerActive,"STANDBY")) throw new Stop("RETURN_TIMEOUT",1);
             confirmDispatch();
+            if (chassis) verifyVirtualSystems("post_return",first,second,peer,"STANDBY",VS_NOT_RETURNED,VS_MAX_ROUNDS);
             state("POST_RETURN","POST_RETURN",null,null,null);
             checks("post_return",first,second,before,formerActive);
             state("DONE","DONE","SUCCEEDED",null,"RETURN_VERIFIED");
@@ -420,7 +451,8 @@ public final class CpFailoverJobExecutor {
             case 5 -> "ARP"; case 6 -> "Connections"; case 8 -> "Traffic rate";
             case 9 -> "State synchronization"; case 10 -> "Installed policy parity";
             case 11 -> "Critical devices"; case 12 -> "Bond interfaces";
-            case 13 -> "Last failover"; case 14 -> "Routing"; case 15 -> "Recovery mode"; default -> "Pre-check";
+            case 13 -> "Last failover"; case 14 -> "Routing"; case 15 -> "Recovery mode";
+            case VS_CHECK -> "Virtual systems moved"; default -> "Pre-check";
         };
     }
     private Member connect(DeviceSummaryRecord summary) {
@@ -451,19 +483,23 @@ public final class CpFailoverJobExecutor {
         // Session provenance is identity-verified for mutations; missing enrollment is explicit in readiness.
         return member;
     }
+    /** Resolve before every send; up front for the whole run. A set {@link #vsOverride} is the per-VS state read of a chassis run. */
     private GateResolution.Known gate(String command) {
+        boolean vsRead=vsOverride!=null;
         boolean write=DOWN.equals(command)||UP.equals(command);
+        if (vsRead && (!chassis || !STAT.equals(command))) throw new Stop("COMMAND_NOT_APPROVED",0);
         if (write && !mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
         if(!writeAllowed(readiness ? "READINESS" : "FAILOVER", command))
             throw new Stop("READINESS_WRITE_REFUSED",0);
-        String key=chassis?"bash -lc 'vsenv 0 && "+command+"'"
+        String key=vsRead?"bash -lc 'vsenv <VSID> && "+command+"'"
+            :chassis?"bash -lc 'vsenv 0 && "+command+"'"
             :vsId==null?(CPSTAT_POLICY.equals(command)?"bash -lc '"+command+"'":command):"bash -lc 'vsenv <VSID> && "+command+"'";
         var resolution=GateResolver.resolve(new CanonicalCommandKey("check_point","cp_gaia_gateway",
             "expert","SSH_EXEC",key),java.util.Optional.of(write
                 ?ActionClass.CLASS_2_OPERATIONAL_STATE_CHANGE:ActionClass.CLASS_0_READ),gates);
         if(!(resolution instanceof GateResolution.Known known))
             throw new Stop(chassis?CHASSIS_COMMANDS_NOT_APPROVED:"COMMAND_GATE_UNAVAILABLE",0);
-        String expected=chassis?chassisGateId(command):switch(command) {
+        String expected=vsRead?"cp_inventory_vsid_cphaprob_stat":chassis?chassisGateId(command):switch(command) {
             case STAT -> vsId==null?"cp_inventory_cphaprob_stat":"cp_inventory_vsid_cphaprob_stat";
             case IF -> vsId==null?"cp_inventory_cphaprob_a_if":"cp_inventory_vsid_cphaprob_a_if";
             case TABLE -> "cp_failover_tablestat";
@@ -517,8 +553,78 @@ public final class CpFailoverJobExecutor {
         return store.summaryMembers(members.stream().map(DeviceSummaryRecord::deviceId).toList()).stream()
             .anyMatch(r -> r.context()!=null && !"physical".equals(r.context()));
     }
+    /**
+     * The VSIDs of a chassis failover run: the numeric inventory contexts both members carry (the rule CpFailoverService
+     * uses for the VS units), VS0 excluded, in text order. None: the run stops before any contact.
+     */
+    private List<String> chassisVirtualSystems(List<DeviceSummaryRecord> members) {
+        Map<String,Set<String>> contexts=new java.util.HashMap<>();
+        for(var row:store.summaryMembers(members.stream().map(DeviceSummaryRecord::deviceId).toList()))
+            if(row.context()!=null && row.context().matches("[0-9]{1,10}") && !"0".equals(row.context()))
+                contexts.computeIfAbsent(row.deviceId(),k -> new java.util.HashSet<>()).add(row.context());
+        Set<String> a=contexts.getOrDefault(members.get(0).deviceId(),Set.of());
+        Set<String> b=contexts.getOrDefault(members.get(1).deviceId(),Set.of());
+        List<String> common=a.stream().filter(b::contains).sorted().toList();
+        if(common.isEmpty()) throw new Stop(CHASSIS_CONTEXT_INCOMPLETE,0);
+        return common;
+    }
+    /** Option B only for VSX HA mode on both members (record §8): a VSLS chassis is refused before any write. */
+    private static void requireChassisHaMode(Pair before) {
+        String a=before.a().state().mode(), b=before.b().state().mode();
+        if("HA".equals(a) && "HA".equals(b)) return;
+        throw new Stop("VSLS".equals(a) && "VSLS".equals(b)?CHASSIS_MODE_VSLS:CHASSIS_MODE_UNKNOWN,1,
+            "VSLS".equals(a) && "VSLS".equals(b)?"FAIL":"UNKNOWN");
+    }
+    /** One VS's state on one member, read in that VS's context inside the member's session of this run. */
+    private CpFailoverChecks.State readVsState(Member member,String vs) throws InterruptedException {
+        vsOverride=vs;
+        try { return CpFailoverChecks.state(command(member,STAT),vs); }
+        finally { vsOverride=null; }
+    }
+    /**
+     * Check 16 (the PO's mitigation, record §7): every VS of the chassis is ACTIVE on {@code expectedActive} and, on the other
+     * member, {@code otherRole} (null: anything but ACTIVE, e.g. DOWN right after the switch), by both members' own reciprocal
+     * per-VS {@code cphaprob stat}. Before the switch: on the chassis's active member. After the switch: on the former
+     * standby. After the return: still on the former standby, with the former active back as STANDBY. VSs not yet there are re-read every
+     * 3 s for at most {@code rounds} rounds; any VS still elsewhere stops the run with {@code failCode} (never success).
+     * Only opaque VSIDs and counts are stored.
+     */
+    private void verifyVirtualSystems(String phase,Member first,Member second,Member expectedActive,String otherRole,
+            String failCode,int rounds)
+            throws InterruptedException {
+        java.util.Set<String> pending=new java.util.LinkedHashSet<>(chassisVs);
+        java.util.Set<String> unknown=new java.util.TreeSet<>();
+        for(int round=1;;round++) {
+            unknown.clear();
+            for(String vs:List.copyOf(pending)) {
+                var a=readVsState(first,vs);
+                var b=readVsState(second,vs);
+                if(!a.supportedMode() || !b.supportedMode() || !"PASS".equals(CpFailoverChecks.reciprocal(a,b))) { unknown.add(vs); continue; }
+                var active=expectedActive==first?a:b;
+                var other=expectedActive==first?b:a;
+                if("ACTIVE".equals(active.localRole()) && !"ACTIVE".equals(other.localRole())
+                        && (otherRole==null || otherRole.equals(other.localRole()))) pending.remove(vs);
+            }
+            if(pending.isEmpty() || round>=rounds) break;
+            pause.sleep(POLL_INTERVAL);
+        }
+        String status=pending.isEmpty()?"PASS":unknown.containsAll(pending)?"UNKNOWN":"FAIL";
+        Map<String,Object> derived=new java.util.LinkedHashMap<>();
+        derived.put("virtualSystems",chassisVs.size());
+        derived.put("onExpectedMember",chassisVs.size()-pending.size());
+        derived.put("notOnExpectedMember",pending.stream().sorted().toList());
+        derived.put("reason",pending.isEmpty()?"ALL_ON_EXPECTED_MEMBER":"UNKNOWN".equals(status)?"STATE_UNRECOGNIZED":failCode);
+        record(phase,first,VS_CHECK,status,json(derived));
+        record(phase,second,VS_CHECK,status,json(derived));
+        if(!pending.isEmpty()) throw new Stop(failCode,VS_CHECK,status);
+    }
+    /** The per-VS state read of a chassis failover run resolves to cp_inventory_vsid_cphaprob_stat before any contact. */
+    private void gateVsState() {
+        vsOverride="0";
+        try { gate(STAT); } finally { vsOverride=null; }
+    }
     /** The vsenv context of every read: the VSID of a VS run, 0 for the chassis step of a VSX cluster, none otherwise. */
-    private String context() { return chassis?"0":vsId; }
+    private String context() { return vsOverride!=null?vsOverride:chassis?"0":vsId; }
     /** With the one-shell switch on, the framing literal must itself be a signed-off read gate before any contact. */
     private void gateShellFraming() {
         var resolution=GateResolver.resolve(new CanonicalCommandKey("check_point","cp_gaia_gateway","expert",
@@ -569,6 +675,8 @@ public final class CpFailoverJobExecutor {
         Duration between=shellRun?shellMode.shellPause():commandPause;
         if (commandIndex > 0 && !between.isZero()) pause.sleep(between);
         if(vsId!=null && !vsId.matches("[0-9]{1,10}")) throw new Stop("VSID_INVALID",0);
+        if(vsOverride!=null && (!vsOverride.matches("[0-9]{1,10}") || DOWN.equals(command) || UP.equals(command)))
+            throw new Stop("VSID_INVALID",0);
         if (DOWN.equals(command) || UP.equals(command)) {
             if (!mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
             requireMutationAdmission(false);

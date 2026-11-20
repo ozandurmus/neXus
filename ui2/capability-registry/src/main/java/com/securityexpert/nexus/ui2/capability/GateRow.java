@@ -66,7 +66,10 @@ public record GateRow(
                     || ("cp_failover_down_vsid".equals(gateId)
                         && "bash -lc 'vsenv <VSID> && clusterXL_admin down'".equals(canonicalCommandKey))
                     || ("cp_failover_up_vsid".equals(gateId)
-                        && "bash -lc 'vsenv <VSID> && clusterXL_admin up'".equals(canonicalCommandKey))))
+                        && "bash -lc 'vsenv <VSID> && clusterXL_admin up'".equals(canonicalCommandKey))
+                    // PO 2026-11-19 (PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md, RATIFIED): the VS0 chassis forms.
+                    || (CP_CHASSIS_DOWN_GATE.equals(gateId) && CP_CHASSIS_DOWN_COMMAND.equals(canonicalCommandKey))
+                    || (CP_CHASSIS_UP_GATE.equals(gateId) && CP_CHASSIS_UP_COMMAND.equals(canonicalCommandKey))))
                 && !("palo_alto".equals(vendor) && "pan_firewall".equals(platformRoleScope)
                     && "not_applicable".equals(shellContext) && "PAN_XML_API".equals(transportKind)
                     && (("pan_failover_suspend".equals(gateId)
@@ -77,6 +80,12 @@ public record GateRow(
                 || actionClass == ActionClass.CLASS_4_POLICY_DEPLOYMENT);
         return isSignedOff && isHighClass;
     }
+
+    /** The exact VSX chassis forms (PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md §7, RATIFIED); nothing near them. */
+    public static final String CP_CHASSIS_DOWN_GATE = "cp_failover_down_vsenv0";
+    public static final String CP_CHASSIS_DOWN_COMMAND = "bash -lc 'vsenv 0 && clusterXL_admin down'";
+    public static final String CP_CHASSIS_UP_GATE = "cp_failover_up_vsenv0";
+    public static final String CP_CHASSIS_UP_COMMAND = "bash -lc 'vsenv 0 && clusterXL_admin up'";
 
     /** The exact PAN config-sync form (PO_DECISION_RECORD_2026_10_24_PAN_CONFIG_SYNC.md, RATIFIED); nothing near it. */
     public static final String PAN_CONFIG_SYNC_GATE = "pan_failover_config_sync";

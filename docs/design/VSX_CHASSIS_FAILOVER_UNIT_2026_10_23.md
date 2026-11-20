@@ -144,3 +144,13 @@ NOT_EVALUATED with reason TRAFFIC_MEASURED_PER_VIRTUAL_SYSTEM, is excluded from 
 checks 5, 6 and 13) and is shown as "Measured per Virtual System" (non-blocking, info). If VS0 does have traffic
 interfaces, check 8 measures and gates as before. A plain cluster and a VS unit are unchanged: NO_TRAFFIC_INTERFACES
 stays UNKNOWN and blocking. No schema change (NOT_EVALUATED is already an allowed check status, V139).
+
+## Amendment 2026-11-19: chassis failover decided (PO)
+
+`PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md` (RATIFIED) answers §5 items 1 and 2 and
+`FAILOVER_EXECUTION_CP_CONTRACT.md` §17 amends §10. `VSX_CHASSIS_FAILOVER_NOT_APPROVED` is lifted: a VSX HA-mode chassis
+is failed over with the two VS0 literals (V255 seeds `cp_failover_down_vsenv0` / `cp_failover_up_vsenv0`, the ids
+`CpFailoverJobExecutor.chassisGateId` already named), and a VSLS chassis gets "Fail over all virtual systems" (one
+per-VS run after another, V256 `failover_sequence`). The refusal codes of §4 are replaced by
+`VSX_CHASSIS_MODE_VSLS_USE_SEQUENCE` and `VSX_CHASSIS_MODE_UNKNOWN`; the step fence of §4 is unchanged.
+

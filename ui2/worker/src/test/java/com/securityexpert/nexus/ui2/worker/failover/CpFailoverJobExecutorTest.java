@@ -138,6 +138,8 @@ class CpFailoverJobExecutorTest {
         boolean extraTableRows,reverseActive,observerLocalIndices;
         boolean wrongIdentity,missingIdentity,opposedPeer,sameObserver,swapLocalIdsAfterDown;
         String reportedMode, recoverySuffix;
+        /** VSX chassis option B: these VSIDs keep their pre-switch roles whatever the chassis does. */
+        java.util.Set<String> stuckVs=java.util.Set.of();
         String peerPolicyTime;
         boolean zeroBaseline,preempt,extraPnote,adminOnNewActive,adminAfterReturn;
         String trafficFaultPhase,trafficFault,cpstatFaultPhase,cpstatFault;
@@ -217,14 +219,17 @@ class CpFailoverJobExecutorTest {
                     String member=((TransportSession)args[0]).sessionId();
                     String literal=((ExecSpec)args[1]).command();
                     commands.add(literal);
-                    var wrapped=java.util.regex.Pattern.compile("bash -lc 'vsenv (?:12|0) && (.*)'").matcher(literal);
-                    String cmd=wrapped.matches()?wrapped.group(1)
+                    var wrapped=java.util.regex.Pattern.compile("bash -lc 'vsenv ([0-9]+) && (.*)'").matcher(literal);
+                    boolean stuck=this.stuck || wrapped.matches() && stuckVs.contains(wrapped.group(1));
+                    boolean down=this.down && !(wrapped.matches() && stuckVs.contains(wrapped.group(1)));
+                    boolean up=this.up && !(wrapped.matches() && stuckVs.contains(wrapped.group(1)));
+                    String cmd=wrapped.matches()?wrapped.group(2)
                         :literal.startsWith("bash -lc '")?literal.substring("bash -lc '".length(),literal.length()-1):literal;
                     if (cmd.equals(failedCommand)) return new ExecResult.Completed("",1);
                     if (cmd.equals(unknownCommand)) return new ExecResult.Completed("unrecognized synthetic output",0);
                     boolean first=member.endsWith("11");
-                    if(cmd.endsWith("clusterXL_admin down")) {down=true;downCount++;return writeReply("FAILING_OVER");}
-                    if(cmd.endsWith("clusterXL_admin up")) {up=true;upCount++;return writeReply("RETURNING");}
+                    if(cmd.endsWith("clusterXL_admin down")) {this.down=true;downCount++;return writeReply("FAILING_OVER");}
+                    if(cmd.endsWith("clusterXL_admin up")) {this.up=true;upCount++;return writeReply("RETURNING");}
                     if(cmd.endsWith("cphaprob stat")) {
                         String roleA=up?(preempt?"Active":"Standby"):down&&!stuck?"Down":"Active";
                         String roleB=up&&preempt?"Standby":readyMember?"READY":down&&!stuck?"Active":"Standby";
@@ -531,13 +536,15 @@ class CpFailoverJobExecutorTest {
             assertTrue(resolution instanceof com.securityexpert.nexus.ui2.capability.GateResolution.Known known
                 && known.gateId().equals(gateId),read+" -> "+resolution);
         });
-        // No chassis write row: the chassis failover stays refused until the PO decides its exact literal (§10).
-        for(String write:List.of("clusterXL_admin down","clusterXL_admin up"))
-            assertFalse(com.securityexpert.nexus.ui2.capability.GateResolver.resolve(
+        // PO 2026-11-19 (V255): the two VS0 writes resolve to the ids chassisGateId names.
+        for(String write:List.of("clusterXL_admin down","clusterXL_admin up")) {
+            var resolution=com.securityexpert.nexus.ui2.capability.GateResolver.resolve(
                 new com.securityexpert.nexus.ui2.capability.CanonicalCommandKey("check_point","cp_gaia_gateway","expert",
                     "SSH_EXEC","bash -lc 'vsenv 0 && "+write+"'"),
-                Optional.of(com.securityexpert.nexus.ui2.platform.ActionClass.CLASS_2_OPERATIONAL_STATE_CHANGE),gates)
-                instanceof com.securityexpert.nexus.ui2.capability.GateResolution.Known,write);
+                Optional.of(com.securityexpert.nexus.ui2.platform.ActionClass.CLASS_2_OPERATIONAL_STATE_CHANGE),gates);
+            assertTrue(resolution instanceof com.securityexpert.nexus.ui2.capability.GateResolution.Known known
+                && known.gateId().equals(CpFailoverJobExecutor.chassisGateId(write)),write+" -> "+resolution);
+        }
     }
     private static void run(Store store,Script script,DeviceRepository devices,GateRegistryPort gates) {
         var nanos=new java.util.concurrent.atomic.AtomicLong();
@@ -622,15 +629,73 @@ class CpFailoverJobExecutorTest {
         assertFalse(CpFailoverChecks.chassisState("Context is set to Virtual Device VS-SYNTHETIC (ID 12).\n"+output).supportedMode());
         assertTrue(CpFailoverChecks.chassisState("Context is set to Virtual Device VSX-SYNTHETIC (ID 0).\n"+output).supportedMode());
     }
-    @Test void vsxChassisFailoverIsRefusedBeforeAdmissionOrContact() {
+    // ---- VSX chassis failover, option B (PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md, RATIFIED) ----
+    private static final List<String> CHASSIS_VS=List.of("12","13");
+    private static Store chassisStore() {
         Store store=new Store();
-        Script script=new Script();
+        List<JooqCpFailoverRepository.SummaryMember> rows=new ArrayList<>();
+        for(String member:List.of(A,B)) {
+            rows.add(new JooqCpFailoverRepository.SummaryMember(member,true,"ssh_exec",true,"physical",false));
+            for(String vs:CHASSIS_VS) rows.add(new JooqCpFailoverRepository.SummaryMember(member,true,"ssh_exec",true,vs,false));
+        }
+        store.contexts=rows;
+        return store;
+    }
+    private static final String VS_STAT=java.util.regex.Pattern.quote("bash -lc 'vsenv ")+"(12|13)"+java.util.regex.Pattern.quote(" && cphaprob stat'");
+    @Test void vsxHaChassisFailsOverWithTheVs0WritesAndVerifiesEveryVirtualSystem() {
+        Store store=chassisStore(); Script script=new Script();
+        run(store,script,devices(true,VSX_NAMES),gates());
+        assertEquals("DONE",store.state,store.stopCode);
+        assertEquals("SUCCEEDED",store.outcome);
+        assertEquals(List.of("bash -lc 'vsenv 0 && clusterXL_admin down'","bash -lc 'vsenv 0 && clusterXL_admin up'"),
+            script.commands.stream().filter(c -> c.contains("clusterXL_admin")).toList());
+        // Every other command is a VS0 read, or the per-VS state read of the verification; never a bare or other write.
+        assertTrue(script.commands.stream().allMatch(c -> c.startsWith("bash -lc 'vsenv 0 && ") || c.matches(VS_STAT)),
+            script.commands.toString());
+        assertTrue(script.commands.stream().filter(c -> c.matches(VS_STAT)).allMatch(c -> c.endsWith("cphaprob stat'")));
+        for(String phase:List.of("pre","post","post_return"))
+            assertEquals(2,store.checks.stream().filter((phase+":16:PASS")::equals).count(),phase);
+        assertEquals(1,script.downCount); assertEquals(1,script.upCount);
+        // pre, post, post_return: one read per VS per member each.
+        assertEquals(3*2*CHASSIS_VS.size(),script.commands.stream().filter(c -> c.matches(VS_STAT)).count());
+    }
+    @Test void aVirtualSystemThatDidNotMoveStopsTheChassisRunAndOffersTheReturn() throws Exception {
+        Store store=chassisStore(); Script script=new Script(); script.stuckVs=java.util.Set.of("13");
         run(store,script,devices(true,VSX_NAMES),gates());
         assertEquals("STOPPED",store.state);
-        assertEquals(CpFailoverJobExecutor.CHASSIS_FAILOVER_NOT_APPROVED,store.outcome);
-        assertEquals(0,store.admissionCount);
-        assertEquals(0,script.connectCount);
+        assertEquals(CpFailoverJobExecutor.VS_NOT_MOVED,store.outcome);
+        assertEquals(1,script.downCount);
+        assertEquals(0,script.upCount,"no automatic return: the operator resumes the return step");
+        assertTrue(store.incidentRequired,"a stop after the write opens the incident the resume needs");
+        assertEquals(2,store.checks.stream().filter("post:16:FAIL"::equals).count());
+        assertFalse(store.checks.stream().anyMatch(c -> c.startsWith("post_return:")));
+        // VS 12 moved at once and is not re-read; VS 13 is re-read every round up to the bound.
+        long reads13=script.commands.stream().filter("bash -lc 'vsenv 13 && cphaprob stat'"::equals).count();
+        assertEquals(2+2*CpFailoverJobExecutor.VS_MAX_ROUNDS,reads13);
+        var derived=new com.fasterxml.jackson.databind.ObjectMapper().readTree(store.derivedValues.get(store.checks.indexOf("post:16:FAIL")));
+        assertEquals(2,derived.get("virtualSystems").asInt());
+        assertEquals("13",derived.get("notOnExpectedMember").get(0).asText());
+    }
+    @Test void aVslsChassisIsRefusedBeforeAnyWrite() {
+        Store store=chassisStore(); Script script=new Script(); script.reportedMode="Virtual System Load Sharing";
+        run(store,script,devices(true,VSX_NAMES),gates());
+        assertEquals("STOPPED",store.state);
+        assertEquals(CpFailoverJobExecutor.CHASSIS_MODE_VSLS,store.outcome);
         assertEquals(0,script.downCount); assertEquals(0,script.upCount);
+        assertFalse(store.incidentRequired);
+    }
+    @Test void aChassisWithoutCommonVirtualSystemsOrWithoutItsWriteRowSendsNothing() {
+        Store noContexts=new Store(); Script first=new Script();
+        run(noContexts,first,devices(true,VSX_NAMES),gates());
+        assertEquals(CpFailoverJobExecutor.CHASSIS_CONTEXT_INCOMPLETE,noContexts.outcome);
+        assertEquals(0,first.connectCount);
+        for(String gate:List.of("cp_failover_down_vsenv0","cp_failover_up_vsenv0","cp_inventory_vsid_cphaprob_stat")) {
+            Store store=chassisStore(); Script script=new Script();
+            run(store,script,devices(true,VSX_NAMES),gatesWithout(gate));
+            assertEquals("STOPPED",store.state,gate);
+            assertEquals(CpFailoverJobExecutor.CHASSIS_COMMANDS_NOT_APPROVED,store.outcome,gate);
+            assertEquals(0,script.connectCount,gate);
+        }
     }
     @Test void vsUnitOfAVsxClusterKeepsItsOwnContext() {
         Store store=new Store(); store.vsId="12"; store.kind="READINESS";

@@ -124,7 +124,7 @@ public final class AuditPresentationAllowlist {
                     "approval_id", "approved_at", "approved_by", "cluster_ref", "execution_nonce",
                     "initiated_by", "member_set_revision", "operation", "policy", "policy_version",
                     "request_revision", "revoked_at", "revoked_by", "target_member_ids", "unit_ref",
-                    "vendor", "vs_id", "warning_confirmed_at", "window_from", "window_until")),
+                    "vendor", "vs_id", "warning_confirmed_at", "window_from", "window_until", "parent_approval_id")),
             Map.entry("failover_check_result", Set.of(
                     "check_no", "derived", "member_ref", "observed_at", "phase", "result_id",
                     "run_id", "status", "vs_id")),
@@ -142,7 +142,12 @@ public final class AuditPresentationAllowlist {
                     "approval_id", "cluster_ref", "failed_check", "finished_at", "job_id",
                     "mutation_possible", "outcome", "request_revision", "requested_by", "run_id",
                     "run_kind", "scheduled_for", "started_at", "state", "step", "target_member_ids",
-                    "vendor", "vs_id")),
+                    "vendor", "vs_id", "sequence_id")),
+            // failover_sequence (V256): opaque references, VSIDs, counts, codes and timestamps only; no free text.
+            Map.entry("failover_sequence", Set.of(
+                    "admission_role", "approval_id", "business_hours_ack", "cluster_ref", "current_run_id",
+                    "failed_vs_id", "finished_at", "initiated_by", "next_index", "outcome", "requested_at",
+                    "sequence_id", "state", "target_member_ids", "vendor", "vs_ids")),
             // pan_config_sync (V178): opaque references, codes, booleans and timestamps only; no free text.
             Map.entry("pan_config_sync", Set.of(
                     "business_hours_ack_at", "cluster_ref", "device_status", "finished_at",

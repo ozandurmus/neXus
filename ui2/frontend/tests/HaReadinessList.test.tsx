@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { CpFailoverSummary, DeviceSummary } from "../src/auth/adminApi";
 import { HaReadinessList, primaryReasonWord } from "../src/screens/HaReadinessList";
@@ -181,7 +181,7 @@ it("shows both observed members in inline details and wraps long messages", () =
   setup({ rows: { [cluster.ref]: [{ ...summary(cluster.ref, "NOT_READY"), masked: true, members: [...cluster.members].reverse(), readiness: { status: "NOT_READY", observedAt: at, failedCheck: "Cluster IP table", checks } }] } });
   fireEvent.click(row(cluster.title));
   const detail = screen.getByRole("region", { name: `Checks for ${cluster.title}` });
-  expect(within(detail).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Check", "FW-CLS-ALPHA-01-M1 · active", "FW-CLS-ALPHA-01-M2 · standby"]);
+  expect(within(detail).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Check", "FW-CLS-ALPHA-01-M1 · active (inventory)", "FW-CLS-ALPHA-01-M2 · standby (inventory)"]);
   expect(detail.querySelectorAll(".readiness-message")).toHaveLength(2);
   for (const message of detail.querySelectorAll(".readiness-message")) {
     expect(message.parentElement?.parentElement).toHaveStyle({ whiteSpace: "normal", overflowWrap: "anywhere" });
@@ -460,4 +460,18 @@ it("shows the single FortiGate's roles from check 1 (primary active, secondary s
   first.unmount();
   view("UNKNOWN");
   expect(within(row("CLS-TANGO-05")).getByText(/Active:/).textContent).toBe("Active: Not observed ↔ Standby: Not observed");
+});
+it("offers the chassis failover its mode allows on the VSX parent row, or says why none", () => {
+  const base: CpFailoverSummary = { ...summary("CLS-ALPHA-01", "READY"), unitKind: "VSX_CHASSIS" };
+  const vs: CpFailoverSummary = { ...summary("CLS-ALPHA-01", "READY"), unitId: "opaque-vs-13", unitKind: "VIRTUAL_SYSTEM", virtual_system: "VS-ALPHA-13" };
+  const { onOpen, unmount } = setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...base, chassisMode: "VSLS", chassisAction: "FAILOVER_ALL_VIRTUAL_SYSTEMS" }, vs] } });
+  fireEvent.click(within(row("CLS-ALPHA-01")).getByRole("button", { name: "Fail over all virtual systems" }));
+  expect(onOpen).toHaveBeenCalledWith("CLS-ALPHA-01", base.unitId);
+  unmount();
+  setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...base, chassisMode: "HA", chassisAction: "FAILOVER" }, vs] } });
+  expect(within(row("CLS-ALPHA-01")).getByRole("button", { name: "Fail over the chassis" })).toBeInTheDocument();
+  cleanup();
+  setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...base, failoverRefusal: "VSX_CHASSIS_MODE_UNKNOWN" }, vs] } });
+  expect(within(row("CLS-ALPHA-01")).getByText(/VSX chassis mode not known/)).toHaveAttribute("title", "VSX_CHASSIS_MODE_UNKNOWN");
+  expect(within(row("CLS-ALPHA-01")).queryByRole("button", { name: /Fail over/ })).toBeNull();
 });
