@@ -500,8 +500,9 @@ class CpFailoverJobExecutorTest {
             Script script=new Script(); script.reportedMode="Virtual System Load Sharing";
             script.prefix="Context is set to Virtual Device VS-SYNTHETIC (ID 12).\n";
             run(store,script);
-            assertEquals(readiness?"READY":"COMMAND_GATE_UNAVAILABLE",store.outcome);
-            assertEquals(0,script.downCount); assertEquals(0,script.upCount);
+            // V254 (PO 2026-11-19): the per-VS cpstat policy row exists, so a VS failover runs switch and return.
+            assertEquals(readiness?"READY":"SUCCEEDED",store.outcome);
+            assertEquals(readiness?0:1,script.downCount); assertEquals(readiness?0:1,script.upCount);
             assertTrue(script.commands.stream().allMatch(c -> c.startsWith("bash -lc 'vsenv 12 && ")));
         }
     }
@@ -1167,10 +1168,10 @@ class CpFailoverJobExecutorTest {
     }
     @Test void vsxNeverUsesChassisContext() {
         Store store=new Store(); store.vsId="12"; Script script=new Script(); run(store,script);
-        // No VS cpstat gate is approved: refuse before opening either session, never fall back to chassis.
-        assertEquals("COMMAND_GATE_UNAVAILABLE",store.outcome);
-        assertEquals(0,script.connectCount);
-        assertTrue(script.commands.isEmpty());
+        // V254 (PO 2026-11-19): the VS cpstat row is approved; every read and write stays in the VS context, never the chassis.
+        assertEquals("SUCCEEDED",store.outcome);
+        assertTrue(!script.commands.isEmpty() && script.commands.stream().allMatch(c -> c.startsWith("bash -lc 'vsenv 12 && ")));
+        assertTrue(script.commands.stream().noneMatch(c -> c.contains("vsenv 0")));
     }
     @Test void approvedBlockingChecksStopBeforeWrite() {
         for(String command:List.of("cphaprob -ia list","cphaprob show_bond","cpstat os -f routing")) {
