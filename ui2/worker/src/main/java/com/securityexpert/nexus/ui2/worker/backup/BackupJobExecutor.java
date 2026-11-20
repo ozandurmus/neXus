@@ -398,7 +398,7 @@ public final class BackupJobExecutor {
         if (result instanceof BackupResult.OutcomeUnknown outcomeUnknown) {
             // BK-5: a poll that never reaches a terminal state ends OUTCOME_UNKNOWN, never FAILED, and deletes nothing.
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.OUTCOME_UNKNOWN, ACTOR,
-                    ACTION_OUTCOME_UNKNOWN);
+                    ACTION_OUTCOME_UNKNOWN, outcomeUnknown.reason());
             return new JobOutcome.OutcomeUnknown(outcomeUnknown.reason());
         }
 

@@ -5,7 +5,7 @@ import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { SessionContext } from "../src/auth/SessionContext";
 import { ASA_BACKUP_LABEL, BACKUP_ATTEMPTS_SHOWN, BackupPanel } from "../src/screens/InventoryPanels";
-import { attemptWords } from "../src/screens/backupWords";
+import { CREDENTIALS_HREF, CREDENTIALS_LABEL, attemptWords, isArchiveManifestComplete } from "../src/screens/backupWords";
 import { bytesTitle, formatBytes } from "../src/shell/bytes";
 import type { JobEventView } from "../src/auth/adminApi";
 
@@ -120,8 +120,84 @@ describe("one status word per attempt", () => {
     expect(hostKey).toMatchObject({ word: "Host key mismatch", tone: "bad", inline: null });
     expect(hostKey.detail).toContain("host_key_mismatch");
     const partial = attemptWords("FAILED", "partial: stored without running-config.set (show config running: TimedOut)");
-    expect(partial).toMatchObject({ word: "Partial", tone: "warn", inline: null });
+    expect(partial).toMatchObject({
+      word: "Partial",
+      tone: "warn",
+      inline: "stored without running config (timeout)",
+    });
     expect(partial.detail).toBe("stored without running-config.set (show config running: TimedOut)");
+  });
+
+  it("shows PAN partial running-config timeout as a warning only when the stored archive is complete per the manifest", async () => {
+    const reason = "partial: stored without running-config.set (show config running: TimedOut)";
+    expect(isArchiveManifestComplete(archive(1))).toBe(true);
+    expect(isArchiveManifestComplete({ artefact_id: "a1", size_bytes: 0, validation_level: "V1" })).toBe(false);
+    expect(isArchiveManifestComplete({ artefact_id: "a1", size_bytes: 1024, validation_level: "UNKNOWN" })).toBe(false);
+    expect(isArchiveManifestComplete(null)).toBe(false);
+
+    expect(attemptWords("FAILED", reason, { archiveComplete: true })).toMatchObject({
+      word: "Partial",
+      tone: "warn",
+      inline: "stored without running config (timeout)",
+    });
+    expect(attemptWords("FAILED", reason, { archiveComplete: false })).toMatchObject({
+      word: "Failed",
+      tone: "bad",
+      inline: "stored without running config (timeout)",
+    });
+
+    stub([attempt(1, "FAILED", reason)], [archive(1)]);
+    const { unmount } = render(themed(<BackupPanel deviceId="dev-1" />));
+    expect(await screen.findByText("Partial · stored without running config (timeout)")).toBeInTheDocument();
+    expect(screen.queryByText(/^Failed/)).toBeNull();
+    unmount();
+
+    stub([attempt(1, "FAILED", reason)], []);
+    render(themed(<BackupPanel deviceId="dev-1" />));
+    expect(await screen.findByText("Failed · stored without running config (timeout)")).toBeInTheDocument();
+  });
+
+  it("names the missing credential slot for credential_unresolvable and links to Administration > Credentials", async () => {
+    const legacySpark = attemptWords("FAILED", "credential_unresolvable: Spark backup or receiver credential is missing");
+    expect(legacySpark).toMatchObject({
+      word: "Failed",
+      tone: "bad",
+      inline: "Spark backup or backup receiver credential (backup_receiver) is missing",
+      link: { label: CREDENTIALS_LABEL, href: CREDENTIALS_HREF },
+    });
+
+    const receiverOnly = attemptWords("FAILED", "credential_unresolvable: Spark backup receiver credential (backup_receiver) is missing (Administration > Credentials)");
+    expect(receiverOnly).toMatchObject({
+      word: "Failed",
+      tone: "bad",
+      inline: "backup receiver credential (backup_receiver) is missing",
+      link: { label: CREDENTIALS_LABEL, href: CREDENTIALS_HREF },
+    });
+
+    const backupOnly = attemptWords("FAILED", "credential_unresolvable: Spark backup credential is missing (Administration > Credentials)");
+    expect(backupOnly).toMatchObject({
+      word: "Failed",
+      tone: "bad",
+      inline: "Spark backup credential is missing",
+      link: { label: CREDENTIALS_LABEL, href: CREDENTIALS_HREF },
+    });
+
+    stub([attempt(1, "FAILED", "credential_unresolvable: Spark backup receiver credential (backup_receiver) is missing")]);
+    render(themed(<BackupPanel deviceId="dev-1" />));
+    expect(await screen.findByText("Failed · backup receiver credential (backup_receiver) is missing")).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: "Administration > Credentials" });
+    expect(link).toHaveAttribute("href", "?screen=administration&tab=registry&section=credentials");
+  });
+
+  it("surfaces the stage and transport detail for cp_gateway_backup OUTCOME_UNKNOWN", () => {
+    const reason = "show backup status never reported a terminal state for backup_fw-tango-04_20261120.tgz before the run deadline (stage=poll_backup_status, start_acknowledged=true, polls=180, transport=completed, last_status=in progress); the device-side archive is not deleted";
+    const unknown = attemptWords("OUTCOME_UNKNOWN", reason);
+    expect(unknown).toMatchObject({
+      word: "Outcome unknown",
+      tone: "neutral",
+      inline: null,
+      detail: reason,
+    });
   });
 
   it("keeps a short generic failure beside the word and moves a long one behind the disclosure", () => {

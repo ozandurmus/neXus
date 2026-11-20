@@ -87,10 +87,13 @@ Inputs: H (container = the rule's section source, i.e. `shared` or a device grou
 rule name; change type) and collection time C, the previous collection time P of the same policy (the baseline the
 trigger compared against; how the resolver reads P is an implementation detail — UNKNOWN until built).
 
-1. **Commit boundary.** Take the successful `commit` entries (`command_class = commit`, `result_class = Succeeded`) of
-   the same Panorama with device time in (P − margin, C + margin]. None → the row is **deferred** (reason `NO_COMMIT_SEEN`)
-   (also the outcome when the reader reported `BACKLOG` for that run: the log was not read up to C).
-2. **Edit window.** From the previous successful `commit` entry before the first commit of step 1 (call its time B) up
+1. **Commit boundary.** Pair each `Submitted` `commit` entry (`command_class = commit`, `result_class = Submitted`) with
+   its later completion (`Succeeded` or `Failed`) entry in the collected config log (by job reference when both carry one,
+   else by the same administrator in log order). Exclude any commit whose outcome is `Failed`. Take the remaining
+   (`Succeeded` or still-pending `Submitted`) commits of the same Panorama with device time in (P − margin, C + margin].
+   None → the row is **deferred** (reason `NO_COMMIT_SEEN`) (also the outcome when the reader reported `BACKLOG` for that
+   run: the log was not read up to C).
+2. **Edit window.** From the previous non-failed `commit` entry before the first commit of step 1 (call its time B) up
    to the last commit of step 1 (call it E). If no earlier commit is stored (evidence floor later than P), the window
    start is not covered, or lies more than 30 days before E: the row is **deferred** (reason `WINDOW_NOT_COVERED`).
    A deferred row gets **no link**: it stays pending and the next run tries it again, until it is 14 days old (fix of
@@ -113,7 +116,8 @@ trigger compared against; how the resolver reads P is an implementation detail �
    | Candidates | Outcome | Shown as |
    |---|---|---|
    | none | `UNKNOWN` (reason `NO_ENTRY`) | `UNKNOWN (observed by collection)` — as today |
-   | one or more, all by the same administrator | `MATCHED` | that administrator's name (masked by the existing privacy layer) |
+   | one or more, all by the same administrator X, covered by a `Succeeded` commit | `MATCHED` | that administrator's name (masked by the existing privacy layer) |
+   | one or more, all by the same administrator X, covered only by an uncompleted `Submitted` commit | `MATCHED` (outcome pending; re-evaluated on later runs) | `submitted by X, outcome pending` (X masked by the existing privacy layer) |
    | two or more different administrators | `AMBIGUOUS` | `AMBIGUOUS (n administrators before the commit)`; candidate names are **not** shown on the list (D6) |
 
    The commit's own administrator is a different fact (who activated the change) and is not used as the editor.

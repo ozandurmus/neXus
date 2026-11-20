@@ -43,9 +43,13 @@ public class MetricsConfiguration {
     }
 
     @Bean(destroyMethod = "close")
-    ScrapeServer scrapeServer(@Value("${ui2.metrics.port:0}") int port) throws IOException {
+    ScrapeServer scrapeServer(
+            @Value("${ui2.metrics.enabled:false}") boolean enabled,
+            @Value("${ui2.metrics.port:0}") int port) throws IOException {
         var registry = NexusMetrics.init("service");
-        return new ScrapeServer(port >= 1 && port <= 65535 ? MetricsServer.start(port, registry) : null);
+        if (!enabled) return new ScrapeServer(null);
+        int resolvedPort = port == 0 ? NexusMetrics.DEFAULT_PORT : port;
+        return new ScrapeServer(resolvedPort >= 1 && resolvedPort <= 65535 ? MetricsServer.start(resolvedPort, registry) : null);
     }
 
     @Bean
@@ -56,10 +60,12 @@ public class MetricsConfiguration {
     }
 
     @Bean
-    JobMetricsBinder jobMetricsBinder(DataSource dataSource) {
+    JobMetricsBinder jobMetricsBinder(DataSource dataSource,
+            org.springframework.beans.factory.ObjectProvider<com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess> artefactStoreAccess) {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         jdbc.setQueryTimeout(2);
-        JobMetrics.register(NexusMetrics.init("service"), () -> {
+        var registry = NexusMetrics.init("service");
+        JobMetrics.register(registry, () -> {
             Map<String, Long> counts = new HashMap<>();
             jdbc.query("SELECT state, count(*) AS n FROM jobs GROUP BY state",
                     rs -> {
@@ -67,6 +73,19 @@ public class MetricsConfiguration {
                     });
             return counts;
         });
+        com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess access =
+                artefactStoreAccess == null ? null : artefactStoreAccess.getIfAvailable();
+        if (access != null && access.storeOrNull() instanceof com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore fileStore) {
+            NexusMetrics.registerArtefactStoreBytes(registry, fileStore::cachedUsedBytes);
+        } else {
+            NexusMetrics.registerArtefactStoreBytes(registry, () -> {
+                Long bytes = jdbc.queryForObject(
+                        "SELECT coalesce((SELECT sum(ciphertext_bytes) FROM backup_artefact WHERE removed_at IS NULL), 0) "
+                                + "+ coalesce((SELECT sum(ciphertext_bytes) FROM configuration_artefact), 0)",
+                        Long.class);
+                return bytes == null ? 0L : bytes;
+            });
+        }
         return new JobMetricsBinder();
     }
 

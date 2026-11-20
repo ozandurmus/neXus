@@ -235,12 +235,14 @@ public final class Ui2WorkerMain {
                 deviceEnrollmentReadPort, deviceRepository, checkPointConfirmExecutor,
                 new PeerFollowResolver(checkPointConfirmExecutor)).withPlatformFacts(platformFactsRepository);
 
-        ArtefactStore artefactStore =
+        FileArtefactStore fileArtefactStore =
                 new FileArtefactStore(artefactStoreRoot, ArtefactStoreCipher.fromBase64Key(artefactStoreKeyBase64))
                         .withStoreQuotas(new com.securityexpert.nexus.ui2.persistence.artefact.JooqArtefactStoreQuotaRepository(
                                 transactionBoundary)::findAll)
                         .withRefusalRecorder(new com.securityexpert.nexus.ui2.persistence.artefact.JooqArtefactStoreRefusalRecorder(
                                 transactionBoundary, "worker", com.securityexpert.nexus.ui2.platform.WorkerActor.RESERVED_ACTOR_FINGERPRINT));
+        com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.registerArtefactStoreBytes(fileArtefactStore::cachedUsedBytes);
+        ArtefactStore artefactStore = fileArtefactStore;
         DeviceInventoryRepository deviceInventoryRepository = new JooqDeviceInventoryRepository(transactionBoundary);
         // PO 2026-10-24: a PAN-OS 12 firewall's interfaces come from its newest stored effective-running configuration.
         InventoryCapabilityExecutor inventoryCapabilityExecutor = new InventoryCapabilityExecutor(compositeTransport,
@@ -761,6 +763,7 @@ public final class Ui2WorkerMain {
                 .withStoreQuotas(new com.securityexpert.nexus.ui2.persistence.artefact.JooqArtefactStoreQuotaRepository(boundary)::findAll)
                 .withRefusalRecorder(new com.securityexpert.nexus.ui2.persistence.artefact.JooqArtefactStoreRefusalRecorder(
                         boundary, "policy_worker", com.securityexpert.nexus.ui2.platform.WorkerActor.RESERVED_ACTOR_FINGERPRINT));
+        com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.registerArtefactStoreBytes(store::cachedUsedBytes);
         var jobs = new JooqJobRecordDao(boundary);
         var transport = new CompositeDeviceTransport(WorkerBootstrap.buildTransportRegistry(ssh, pan));
         var cpCollector = new com.securityexpert.nexus.ui2.worker.policy.CheckPointPolicyCollector(ssh, gates, policies, deadline);
@@ -815,6 +818,7 @@ public final class Ui2WorkerMain {
         WorkerBootstrap.boot(CapabilityRegistry.of(BackupCapabilities.all(gates)), transportRegistry);
         var transport = new CompositeDeviceTransport(transportRegistry);
         var store = new FileArtefactStore(root, ArtefactStoreCipher.fromBase64Key(key));
+        com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.registerArtefactStoreBytes(store::cachedUsedBytes);
         var platformFacts = new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePlatformFactsRepository(boundary);
         var backupCredentialRef = Optional.ofNullable(System.getenv("UI2_CP_BACKUP_CREDENTIAL_REF")).filter(v -> !v.isBlank());
         long freeSpaceThreshold = Long.parseLong(System.getenv().getOrDefault("UI2_BACKUP_FREE_SPACE_THRESHOLD_BYTES", "104857600"));

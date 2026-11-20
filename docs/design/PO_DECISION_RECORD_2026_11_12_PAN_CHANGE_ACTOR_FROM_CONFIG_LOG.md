@@ -61,3 +61,13 @@ No literal changes. Known gap from the 2026-11-13 run (section 13 of the design)
 `Submitted`, and the join requires `Succeeded`; until the join is amended after reading the new telemetry, entries may
 stay UNKNOWN with reason `NO_COMMIT_SEEN`.
 
+## Amendment 2026-11-19 (`pan_change_actor_submitted_join_gap`): Submitted commit join
+
+`PolicyChangeActorResolver` now matches a `Submitted` commit entry to its later completion (`Succeeded` or `Failed`) entry in
+the collected config log (by job reference when both carry one, else by the same administrator in log order). Once the
+commit job's outcome is `Succeeded` (or for an existing `Succeeded`-only commit entry), the rule change's editor is
+attributed (`MATCHED` or `AMBIGUOUS`). When the commit job's outcome is `Failed`, the commit is excluded and no actor is
+attributed from it. When a `Submitted` commit has no later completion entry yet, a single matching editor `X` is kept as
+`submitted by X, outcome pending` (masked for `aiview` through `last-modifier`) and re-evaluated on later runs without new
+device reads.
+

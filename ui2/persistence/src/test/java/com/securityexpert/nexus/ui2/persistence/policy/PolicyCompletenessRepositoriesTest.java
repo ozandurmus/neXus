@@ -111,4 +111,20 @@ class PolicyCompletenessRepositoriesTest {
         assertEquals(0, repository.save("s", "j", List.of(), Optional.empty()));
         assertTrue(sql.isEmpty());
     }
+
+    @Test void actorRepositoryReadsSubmittedAndCompletedCommitsAndUpdatesOnlyPendingOutcomeLinks() {
+        var repository = new PolicyChangeActorRepository(boundary(q -> q.startsWith("select entry_ref")
+            ? one(new String[] {"entry_ref", "t", "admin_ref", "result_class", "path_hmac"},
+                new String[] {"12", "2026-11-12 11:50:00", "a".repeat(64), "Submitted", null})
+            : new MockResult[] { new MockResult(1) }));
+        var commits = repository.commits("manager-1");
+        assertEquals(1, commits.size());
+        assertEquals("Submitted", commits.get(0).resultClass());
+        assertTrue(sql.get(0).contains("result_class in ('Submitted', 'Succeeded', 'Failed')"));
+        repository.saveLinks("job-2", List.of(new PolicyChangeActorRepository.Link(7L, "MATCHED", null, List.of("admin-a"))));
+        assertTrue(sql.get(1).contains("on conflict (revision_id) do update"));
+        assertTrue(sql.get(1).contains("submitted by %, outcome pending"));
+        assertEquals(1, repository.deletePendingOutcomeLinks(List.of(7L)));
+        assertTrue(sql.get(2).startsWith("delete from policy_change_actor_link"));
+    }
 }

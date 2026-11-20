@@ -249,6 +249,7 @@ public final class FgtFailoverJobExecutor {
     private void finish(String outcome, Integer check, String code) {
         store.state(runId, "DONE", "DONE", outcome, check == null ? null : checkName(check), code);
         leases.transitionState(jobId, epoch, JobState.EXECUTING, JobState.COMPLETED, ACTOR, "fgt_readiness_done", outcome);
+        com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordReadinessRun(outcome);
     }
     private static String checkName(int check) {
         return switch (check) {

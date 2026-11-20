@@ -40,6 +40,8 @@ final class ScriptedBackupTransport implements DeviceTransport {
     boolean connectFails;
     /** When set, {@link #connect} answers this instead (a timeout, a host key rejection, ...). */
     ConnectResult connectOverride;
+    /** When set, {@code show backup status} answers this transport outcome instead of a completed string. */
+    ExecResult statusExecOverride;
     int connectCount;
     int execCount;
     int fetchCount;
@@ -66,6 +68,10 @@ final class ScriptedBackupTransport implements DeviceTransport {
             command = command.substring(10, command.length() - 1).replace("'\"'\"'", "'");
         }
         if (BackupReadPlan.CP_SHOW_BACKUP_STATUS.equals(command) && !execOutputs.containsKey(spec.command())) {
+            if (statusExecOverride != null) {
+                statusCallCount++;
+                return statusExecOverride;
+            }
             String output = statusSequence.isEmpty() ? ""
                     : statusSequence.get(Math.min(statusCallCount, statusSequence.size() - 1));
             statusCallCount++;

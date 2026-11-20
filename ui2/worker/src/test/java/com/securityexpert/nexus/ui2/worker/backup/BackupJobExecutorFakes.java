@@ -44,6 +44,7 @@ final class BackupJobExecutorFakes {
         final String jobId;
         final long leaseEpoch;
         JobState currentState;
+        String lastTerminalReason;
         List<ClaimedJob> expiredWithNoAttempt = List.of();
         List<ClaimedJob> expiredAllBoundaryNo = List.of();
         List<ClaimedJob> expiredUnconfirmedYes = List.of();
@@ -67,11 +68,18 @@ final class BackupJobExecutorFakes {
         @Override
         public boolean transitionState(String jobId, long leaseEpoch, JobState expectedFrom, JobState to,
                 String actorFingerprint, String actionId) {
+            return transitionState(jobId, leaseEpoch, expectedFrom, to, actorFingerprint, actionId, null);
+        }
+
+        @Override
+        public boolean transitionState(String jobId, long leaseEpoch, JobState expectedFrom, JobState to,
+                String actorFingerprint, String actionId, String terminalReason) {
             transitions.add(expectedFrom + "->" + to);
             if (!this.jobId.equals(jobId) || this.leaseEpoch != leaseEpoch || this.currentState != expectedFrom) {
                 return false;
             }
             this.currentState = to;
+            this.lastTerminalReason = terminalReason;
             return true;
         }
 

@@ -136,7 +136,9 @@ public class NotificationForwarder {
                     + " at=" + r.get("occurred_at", Timestamp.class).toInstant();
             try {
                 syslog.send(settings, SyslogSender.Severity.INFORMATIONAL, "AUDIT", message);
+                com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend("syslog_audit", "success");
             } catch (java.io.IOException e) {
+                com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend("syslog_audit", "failure");
                 LOG.log(System.Logger.Level.WARNING, "[NOTIFY_SYSLOG_FAILED] audit forwarding stopped at {0}: {1}", last, e.getMessage());
                 break;
             }
@@ -172,7 +174,9 @@ public class NotificationForwarder {
                         + r.get("first_failure_at", Timestamp.class).toInstant() + "; scheduled backups for it are held";
                 try {
                     syslog.send(settings, SyslogSender.Severity.ERROR, CREDENTIAL_ALERT_TAG, message);
+                    com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend("syslog_credential_alert", "success");
                 } catch (java.io.IOException e) {
+                    com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend("syslog_credential_alert", "failure");
                     LOG.log(System.Logger.Level.WARNING, "[NOTIFY_SYSLOG_FAILED] credential alert: {0}", e.getMessage());
                     break;
                 }
@@ -206,7 +210,9 @@ public class NotificationForwarder {
                     + " at=" + r.get("occurred_at", Timestamp.class).toInstant();
             try {
                 syslog.send(settings, SyslogSender.Severity.ERROR, BREAK_GLASS_TAG, message);
+                com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend("syslog_break_glass", "success");
             } catch (java.io.IOException e) {
+                com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend("syslog_break_glass", "failure");
                 LOG.log(System.Logger.Level.WARNING, "[NOTIFY_SYSLOG_FAILED] break-glass alert: {0}", e.getMessage());
                 break;
             }
@@ -258,7 +264,9 @@ public class NotificationForwarder {
             for (String line : lines) {
                 try {
                     syslog.send(settings, SyslogSender.Severity.ERROR, "JOB_FAILED", line);
+                    com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend("syslog_job_failure", "success");
                 } catch (java.io.IOException e) {
+                    com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend("syslog_job_failure", "failure");
                     LOG.log(System.Logger.Level.WARNING, "[NOTIFY_SYSLOG_FAILED] job failure: {0}", e.getMessage());
                     delivered = false;
                     break;
