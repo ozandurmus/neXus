@@ -21,7 +21,8 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
  * and {@code endpoints} are both audited on every INSERT/UPDATE/DELETE
  * (V1's {@code trg_audit_devices}/{@code trg_audit_endpoints}).
  */
-public final class JooqDeviceRepository implements DeviceRepository {
+public final class JooqDeviceRepository
+        implements DeviceRepository, DeviceAdminRepository, DeviceInventoryWriteRepository, DeviceReadRepository {
 
     private static final System.Logger LOG = System.getLogger(JooqDeviceRepository.class.getName());
 
