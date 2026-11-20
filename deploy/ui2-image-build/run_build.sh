@@ -182,9 +182,17 @@ fi
 SX_IMAGE=""
 if [ "${NEXUS_BUILD_SCRIPT_EXEC_IMAGE:-1}" != 0 ]; then
   sx_start=$SECONDS
-  SX_IMAGE="$(python3 "$REPO/tools/delivery/hosta_script_exec_image.py" build --commit "$COMMIT_SHA" \
-    --service-image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST")"
-  echo "Script execution image is $SX_IMAGE"
+  if SX_IMAGE="$(python3 "$REPO/tools/delivery/hosta_script_exec_image.py" build --commit "$COMMIT_SHA" \
+    --service-image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST")"; then
+    echo "Script execution image is $SX_IMAGE"
+  else
+    # 2026-11-20: the UBI package CDN answered 503 and stopped two releases. The execution image is optional for a
+    # release: without it the script-runner target is dropped and the broker keeps its current execution image (or
+    # stays absent, so the product reports the runner unavailable). Everything else still rolls out.
+    SX_IMAGE=""
+    SX_FAILED=1
+    echo "WARNING: script execution image build failed or unavailable; script-runner is left out of this rollout"
+  fi
   timing script_exec_image "$sx_start"
 fi
 
@@ -211,6 +219,13 @@ if [ -z "$PA_IMAGE" ]; then
     else
       KEPT_TARGETS="${KEPT_TARGETS:+$KEPT_TARGETS }$target"
     fi
+  done
+  NEXUS_DEPLOY_TARGETS="$KEPT_TARGETS"
+fi
+if [ "${SX_FAILED:-0}" = 1 ]; then
+  KEPT_TARGETS=""
+  for target in ${NEXUS_DEPLOY_TARGETS//,/ }; do
+    [ "$target" = script-runner ] || KEPT_TARGETS="${KEPT_TARGETS:+$KEPT_TARGETS }$target"
   done
   NEXUS_DEPLOY_TARGETS="$KEPT_TARGETS"
 fi

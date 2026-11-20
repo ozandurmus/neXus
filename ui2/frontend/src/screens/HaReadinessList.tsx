@@ -31,7 +31,7 @@ import { formatStamp, relativeAge } from "../shell/time";
 import { FRESH_UNDER_MS, isPastFresh } from "../shell/freshness";
 import { urlParam } from "../shell/urlParams";
 import { m3 } from "../theme/m3Theme";
-import { ReadinessChecksTable, primaryReportsPeer, primaryRolesConfirmed, readinessStopReason } from "./ReadinessChecksTable";
+import { ReadinessChecksTable, isActiveRole, isStandbyRole, observedRoles, primaryReportsPeer, primaryRolesConfirmed, readinessStopReason } from "./ReadinessChecksTable";
 import { PanConfigSyncAction } from "./PanConfigSyncAction";
 import { HaPairLine } from "./HaPairLine";
 
@@ -57,16 +57,25 @@ function evaluationAgeMs(at: string | null | undefined, now: Date): number | nul
   return Number.isNaN(t) ? null : Math.max(0, now.getTime() - t);
 }
 
+export function failoverVendorLabel(vendor?: string): string {
+  return vendor === "cisco_asa" ? "Cisco ASA" : vendor === "fortinet" ? "FortiGate" : vendor === "palo_alto" ? "Palo Alto" : "Check Point";
+}
+export function failoverExecutionDisabled(vendor?: string): boolean {
+  return vendor === "cisco_asa" || vendor === "fortinet";
+}
+
 /** Shared by the list and KPI: virtual systems never count as extra clusters. */
 export function haReadinessItems(clusters: readonly Cluster[], rows: Record<string, CpFailoverSummary[]>) {
   return clusters.map(cluster => {
     const units = rows[cluster.ref] ?? [];
     const base = units.find(row => row.unitId === row.clusterId);
-    const vendor = cluster.members[0]?.vendor_hint;
+    const vendor = cluster.members[0]?.vendor_hint ?? base?.vendor ?? units[0]?.vendor;
+    const hasReadinessUnit = units.some(unit => unit.readinessAvailable === true
+      || (unit.readinessAvailable !== false && (!unit.vendor || unit.vendor === vendor)));
     // Cisco ASA is evaluated (readiness only) when the server says readinessAvailable; otherwise it is listed only.
-    const asaReadiness = vendor === "cisco_asa" && units.some(unit => unit.readinessAvailable === true);
-    // FortiGate likewise: one enrolled cluster address, evaluated for readiness only, when the server says readinessAvailable.
-    const fgtReadiness = vendor === "fortinet" && units.some(unit => unit.readinessAvailable === true);
+    const asaReadiness = vendor === "cisco_asa" && hasReadinessUnit;
+    // FortiGate likewise: evaluated for readiness only when the server says readinessAvailable.
+    const fgtReadiness = vendor === "fortinet" && hasReadinessUnit;
     const unsupported = Boolean(vendor && !["check_point", "palo_alto"].includes(vendor) && !asaReadiness && !fgtReadiness);
     const status: Status = unsupported ? "UNSUPPORTED" : base?.readiness?.status ?? "UNKNOWN";
     return { cluster, units, base, vendor, status };
@@ -138,7 +147,9 @@ function leadCheckReason(row: CpFailoverSummary): string | null {
 
 function primaryReason(row?: CpFailoverSummary) {
   if (!row) return "INSUFFICIENT_EVIDENCE";
-  if (row.refusalReason === "CHECK_NOT_READY") return leadCheckReason(row) || row.refusalReason;
+  const lead = leadCheckReason(row);
+  if (lead && (!row.refusalReason || row.refusalReason === "CHECK_NOT_READY" || row.refusalReason === "READINESS_NOT_READY"
+      || readinessReasonLabel(row.refusalReason) === row.refusalReason)) return lead;
   return row?.refusalReason || readinessStopReason(row?.readiness?.stopCode) || (row?.readiness?.status === "NOT_READY" ? row.readiness.failedCheck || "Blocking conditions observed"
     : row?.readiness?.status === "READY" ? "No blocking conditions observed" : "Readiness has not been established");
 }
@@ -229,13 +240,31 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
     const key = JSON.stringify([cluster.ref, nested ? row?.unitId : null]);
     const status = nested ? row?.readiness?.status ?? "UNKNOWN" : item.status;
     const s = statuses[status];
-    const rolesAt = nested ? row?.readiness?.observedAt : cluster.members.map(m => m.inventory_collected_at ?? "").sort().at(-1);
-    const roleMembers = nested ? row?.members ?? [] : cluster.members;
+    const rawMembers = nested ? row?.members ?? [] : cluster.members.length ? cluster.members : row?.members ?? [];
+    const roleMembers = rawMembers.map(m => {
+      const rowMember = row?.members?.find(rm => rm.device_id === m.device_id);
+      const maskedMember = (row as { maskedMembers?: Array<{ device_id: string; maskedLabel: string; ha_role?: string | null }> } | undefined)
+        ?.maskedMembers?.find(mm => mm.device_id === m.device_id);
+      const haPairMember = row?.haView?.members?.find(hm => hm.device_id === m.device_id);
+      const haRole = m.ha_role ?? rowMember?.ha_role ?? maskedMember?.ha_role
+        ?? (haPairMember && haPairMember.role !== "unknown" ? haPairMember.role : null);
+      return { ...m, hostname: maskedMember?.maskedLabel ?? m.hostname ?? rowMember?.hostname ?? null, ha_role: haRole };
+    });
+    const checks = row?.readiness?.checks ?? [];
+    const observed = observedRoles(checks, roleMembers, row?.readiness?.observedAt, vendor);
     // A single-address FortiGate has one enrolled device and no inventory role: check 1 PASS (one primary, one secondary, the
     // enrolled unit is the primary) gives primary = active and secondary = standby, as the primary reports.
-    const fgtRoles = !nested && primaryReportsPeer(vendor, roleMembers) && primaryRolesConfirmed(row?.readiness?.checks ?? []);
-    const roleNames = (roles: string[]) => fgtRoles ? (roles.includes("active") ? roleMembers[0].hostname ?? "Unknown member" : "Secondary (as the primary reports)")
-      : roleMembers.filter(m => roles.includes((m.ha_role ?? "").toLowerCase())).map(m => m.hostname ?? "Unknown member").join(", ") || "Not observed";
+    const fgtRoles = !nested && primaryReportsPeer(vendor, roleMembers) && primaryRolesConfirmed(checks);
+    const fromReadiness = !fgtRoles && roleMembers.length > 0 && roleMembers.every(m => observed.has(m.device_id));
+    const readinessRolesAt = [...observed.values()].map(v => v.at).filter((t): t is string => Boolean(t)).sort().at(-1) ?? row?.readiness?.observedAt;
+    const inventoryRolesAt = nested ? row?.readiness?.observedAt : cluster.members.map(m => m.inventory_collected_at ?? "").filter(Boolean).sort().at(-1);
+    const rolesAt = (fromReadiness || fgtRoles) ? (readinessRolesAt ?? inventoryRolesAt) : inventoryRolesAt;
+    const roleOf = (m: { device_id: string; ha_role?: string | null }) =>
+      (fromReadiness ? observed.get(m.device_id)?.role : m.ha_role)?.toLowerCase() ?? "";
+    const hasInventoryRoles = !fromReadiness && !fgtRoles && roleMembers.some(m => isActiveRole(m.ha_role) || isStandbyRole(m.ha_role));
+    const roleNames = (match: (role: string) => boolean, activeSide: boolean) => fgtRoles
+      ? (activeSide ? roleMembers[0].hostname ?? "Unknown member" : "Secondary (as the primary reports)")
+      : roleMembers.filter(m => match(roleOf(m))).map(m => m.hostname ?? "Unknown member").join(", ") || "Not observed";
     const at = row?.readiness?.observedAt;
     const children = item.units.filter(unit => unit.unitId !== unit.clusterId);
     const isExpanded = expanded.has(key);
@@ -271,11 +300,18 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
             : row.chassisAction && <Button size="small" data-chassis-action={row.chassisAction} sx={{ p: 0, textTransform: "none" }}
                 onClick={event => { event.stopPropagation(); onOpen(cluster.ref, row.unitId); }}>
                 {row.chassisAction === "FAILOVER_ALL_VIRTUAL_SYSTEMS" ? "Fail over all virtual systems" : "Fail over the chassis"}</Button>)}
+          {!nested && failoverExecutionDisabled(vendor) && <Typography variant="caption" component="div" data-failover-execution-disabled
+            title={row?.failoverRefusal ?? "FAILOVER_VENDOR_NOT_AVAILABLE"} sx={{ color: m3.onSurfaceVar }}>
+            Failover execution not enabled for {failoverVendorLabel(vendor)}</Typography>}
           {row?.mode && row.mode !== "UNKNOWN" && <Typography variant="caption" component="div" title={`Mode: ${row.mode}`}
             sx={{ whiteSpace: "nowrap", overflowWrap: "normal", overflow: "hidden", textOverflow: "ellipsis" }}>Mode: {clusterModeWord(row.mode)}</Typography>}
         </TableCell>
         <TableCell title={`Roles observed: ${rolesAt ? formatStamp(rolesAt) : "Not observed"}`}>
-          Active: {roleNames(["active"])} <span aria-hidden>↔</span> Standby: {roleNames(["standby", "passive"])}
+          Active: {roleNames(isActiveRole, true)} <span aria-hidden>↔</span> Standby: {roleNames(isStandbyRole, false)}
+          {(fromReadiness || fgtRoles) && readinessRolesAt && <Typography component="span" variant="caption" data-role-source="readiness"
+            sx={{ color: m3.onSurfaceVar }}> ({relativeAge(readinessRolesAt, now)})</Typography>}
+          {hasInventoryRoles && <Typography component="span" variant="caption" data-role-source="inventory"
+            sx={{ color: m3.onSurfaceVar }}> (inventory)</Typography>}
         </TableCell>
         {/* The label map on the reason too (post-release review 2026-10-20, L1): a bare outcome token (`READY`) reads `Ready`, as
             the pill does; a check name or a sentence passes through as before. */}
@@ -296,9 +332,10 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
       </TableRow>
       {isExpanded && <TableRow><TableCell colSpan={hasActions ? 7 : 6} sx={{ bgcolor: m3.scLow, p: 1.5 }}>
         <Box id={`checks-${encodeURIComponent(key)}`} role="region" aria-label={`Checks for ${title}`}>
-          {row?.readiness?.checks.length ? <ReadinessChecksTable vendor={vendor} checks={row.readiness.checks} members={row.members?.length ? row.members : cluster.members} compact
+          {row?.readiness?.checks.length ? <ReadinessChecksTable vendor={vendor} checks={row.readiness.checks} members={roleMembers}
+            observedAt={row.readiness.observedAt} compact
             rowAction={checkNo => checkNo === 4 && row.vendor === "palo_alto"
-              ? <PanConfigSyncAction unit={row} members={row.members?.length ? row.members : cluster.members} onDone={onChanged} /> : null} />
+              ? <PanConfigSyncAction unit={row} members={roleMembers} onDone={onChanged} /> : null} />
             : <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>No observations yet</Typography>}
           <Button size="small" onClick={() => onOpen(cluster.ref, row?.unitId ?? null)}>Open full detail</Button>
         </Box>

@@ -1445,3 +1445,13 @@ def test_run_build_builds_scans_and_hands_over_the_script_exec_image():
     assert '${SX_IMAGE:+--image "$SX_IMAGE"}' in text
     assert '${SX_IMAGE:+--script-exec-image "$SX_IMAGE"}' in text
     assert "script-runner" in text.split("NEXUS_DEPLOY_TARGETS=")[1].split("\n")[0]
+
+
+def test_run_build_leaves_script_runner_out_when_its_image_fails():
+    """2026-11-20: a UBI CDN outage failed the execution image and stopped whole releases; the image is optional."""
+    text = (REPO_ROOT / "deploy/ui2-image-build/run_build.sh").read_text(encoding="utf-8")
+    assert 'if SX_IMAGE="$(python3 "$REPO/tools/delivery/hosta_script_exec_image.py" build' in text
+    assert "SX_FAILED=1" in text
+    drop = text.index('if [ "${SX_FAILED:-0}" = 1 ]; then')
+    assert drop < text.index('module_deploy.py" --targets')
+    assert '[ "$target" = script-runner ] ||' in text

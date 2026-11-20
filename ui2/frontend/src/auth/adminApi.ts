@@ -2506,7 +2506,7 @@ export interface CpFailoverUnit { maskedName?: string; maskedMembers?: Array<Omi
    * start would be refused now, and the latest "Fail over all virtual systems" sequence. */
   chassisMode?: "HA" | "VSLS" | "UNKNOWN"; chassisAction?: "FAILOVER" | "FAILOVER_ALL_VIRTUAL_SYSTEMS" | null;
   chassisStartRefusal?: string | null; sequence?: CpFailoverSequence;
-  canApprove: boolean; canStart: boolean; canSchedule: boolean; mode?: string; recoveryMode?: "ACTIVE_UP" | "PRIMARY_UP" | "UNKNOWN"; refusalReason?: string | null; readinessObservedAt?: string | null;
+  canApprove: boolean; canStart: boolean; canSchedule: boolean; canRunReadiness?: boolean; mode?: string; recoveryMode?: "ACTIVE_UP" | "PRIMARY_UP" | "UNKNOWN"; refusalReason?: string | null; readinessObservedAt?: string | null;
   /** Palo Alto units only: the server's config-sync facts (PAN_CONFIG_SYNC_REMEDIATION_2026_10_24.md §6). */
   configSync?: PanConfigSyncFacts }
 export type PanConfigSyncState = "QUEUED" | "READING_STATE" | "SYNCING" | "DONE" | "STOPPED";

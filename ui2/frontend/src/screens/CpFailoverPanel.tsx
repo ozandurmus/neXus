@@ -24,6 +24,7 @@ import { approveCpFailover, approveCpFailoverResume, getCpFailoverRun, listCpFai
 import { ReadinessCard, ReadinessChecksTable } from "./ReadinessChecksTable";
 import { FailoverIncidentsPanel } from "./FailoverIncidentsPanel";
 import { PanConfigSyncAction } from "./PanConfigSyncAction";
+import { failoverExecutionDisabled, failoverVendorLabel } from "./HaReadinessList";
 const labels = ["Checking readiness", "Failing over", "Role change confirmed", "Checking traffic and cluster after switch",
   "Returning former active to standby", "Verifying final cluster health", "Failover verified"];
 const activeStates: CpFailoverState[] = ["PLANNED", "PRECHECK", "FAILING_OVER", "SWITCHED", "POSTCHECK", "RETURNING"];
@@ -209,9 +210,13 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
   const shown = useRef(unit.readinessObservedAt);
   shown.current = unit.readinessObservedAt;
   const remember = (value: Draft) => { sessionStorage.setItem(storageKey, JSON.stringify(value)); setDraft(value); };
+  const executionDisabled = failoverExecutionDisabled(unit.vendor);
   const refresh = useCallback(async () => {
     try {
-      const [windows, runs] = await Promise.all([listCpFailoverApprovals(unit), listCpFailoverRuns(unit)]);
+      const [windows, runs] = await Promise.all([
+        executionDisabled ? Promise.resolve([] as CpFailoverApproval[]) : listCpFailoverApprovals(unit),
+        listCpFailoverRuns(unit),
+      ]);
       const failover = runs.find(item => item.kind !== "READINESS" && activeStates.includes(item.state)) ?? runs.find(item => item.kind !== "READINESS");
       const readiness = runs.find(item => item.kind === "READINESS");
       const [detail, checks] = await Promise.all([failover ? getCpFailoverRun(failover.runId, unit.vendor) : null,
@@ -259,7 +264,8 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
     }
   }, [expanded, bound, draft, loaded, active, run, unit.masked, unit.canStart]);
   const idle = loaded && !busy && !active && !(readinessRun && activeStates.includes(readinessRun.state));
-  const canOperate = unit.masked !== true && unit.canStart;
+  const canOperate = unit.masked !== true && unit.canStart && !executionDisabled;
+  const canRunChecks = unit.masked !== true && (unit.canRunReadiness ?? unit.canStart);
   // A VSX chassis is failed over as its mode allows (contract §17): one chassis run in VSX HA mode, every virtual system in
   // turn on VSLS; with the mode unknown the server offers nothing (failoverRefusal).
   const failoverOffered = canOperate && !unit.failoverRefusal;
@@ -278,10 +284,13 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
   });
   return <Card data-unit-kind={unit.unitKind ?? (unit.unitId === unit.clusterId ? "CLUSTER" : "VIRTUAL_SYSTEM")} sx={{ p: 2, ml: unit.unitId === unit.clusterId ? 0 : 3, bgcolor: m3.scLow }}>
     <M3Button emphasis="text" onClick={onExpand}>{unit.unitKind === "VSX_CHASSIS" ? `VSX chassis · ${label}` : unit.unitId === unit.clusterId ? label : `Virtual System · ${label}`}</M3Button>
-    <Typography variant="body2">{unit.vendor === "palo_alto" ? "Palo Alto" : "Check Point"} · Mode: <span title={unit.mode ?? undefined}>{clusterModeWord(unit.mode)}</span>{unit.vendor === "palo_alto" ? "" : ` · Recovery mode: ${recoveryLabel(unit.recoveryMode)}`} · Readiness age: {unit.readinessObservedAt ? relativeAge(unit.readinessObservedAt, new Date()) : "Not evaluated"}</Typography>
+    <Typography variant="body2">{failoverVendorLabel(unit.vendor)} · Mode: <span title={unit.mode ?? undefined}>{clusterModeWord(unit.mode)}</span>{!unit.vendor || unit.vendor === "check_point" ? ` · Recovery mode: ${recoveryLabel(unit.recoveryMode)}` : ""} · Readiness age: {unit.readinessObservedAt ? relativeAge(unit.readinessObservedAt, new Date()) : "Not evaluated"}</Typography>
     {unit.refusalReason && <Typography color="error">{unit.refusalReason}</Typography>}
-    {unit.failoverRefusal && <Typography variant="body2" data-failover-refusal title={unit.failoverRefusal}>
-      {readinessReasonLabel(unit.failoverRefusal)}: its pre-checks run here; each Virtual System below is failed over on its own.</Typography>}
+    {executionDisabled
+      ? <Typography variant="body2" data-failover-execution-disabled title={unit.failoverRefusal ?? "FAILOVER_VENDOR_NOT_AVAILABLE"}>
+          Failover execution not enabled for {failoverVendorLabel(unit.vendor)}</Typography>
+      : unit.failoverRefusal && <Typography variant="body2" data-failover-refusal title={unit.failoverRefusal}>
+          {readinessReasonLabel(unit.failoverRefusal)}: its pre-checks run here; each Virtual System below is failed over on its own.</Typography>}
     {unit.unitKind === "VSX_CHASSIS" && unit.chassisAction && <Typography variant="body2" data-chassis-action={unit.chassisAction}>
       {allVirtualSystems ? "VSLS chassis: every virtual system is failed over in turn, each with its own checks and return."
         : "VSX HA mode: the chassis fails over in VS0; every virtual system must follow it."}
@@ -306,7 +315,7 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
       <ReadinessCard checks={readinessRun?.checks.filter(c => c.phase === "pre") ?? []} members={unit.members} cluster={label}
         vendor={unit.vendor} status={readinessRun?.outcome} stopCode={readinessRun?.message}
         observedAt={readinessRun?.checks.map(c => c.observedAt).sort().at(-1)} masked={unit.masked === true}
-        running={Boolean(readinessRun && activeStates.includes(readinessRun.state))} disabled={!idle} canRun={canOperate}
+        running={Boolean(readinessRun && activeStates.includes(readinessRun.state))} disabled={!idle} canRun={canRunChecks}
         onRun={() => void act(() => runCpFailoverReadiness(unit))}
         rowAction={checkNo => checkNo === 4 && unit.vendor === "palo_alto"
           ? <PanConfigSyncAction unit={unit} onDone={() => { onRefreshUnits(); void refresh(); }} /> : null} />
@@ -338,7 +347,7 @@ export function orderUnits(units: CpFailoverUnit[]): CpFailoverUnit[] {
   const base = (unit: CpFailoverUnit) => unit.unitKind === "VSX_CHASSIS" || unit.unitId === unit.clusterId ? 0 : 1;
   return units.map((unit, index) => ({ unit, index })).sort((a, b) => base(a.unit) - base(b.unit) || a.index - b.index).map(entry => entry.unit);
 }
-export function CpFailoverPanel({ memberDeviceId, vendor = "check_point", initialUnitId }: { memberDeviceId: string; vendor?: "check_point" | "palo_alto"; initialUnitId?: string | null }) {
+export function CpFailoverPanel({ memberDeviceId, vendor = "check_point", initialUnitId }: { memberDeviceId: string; vendor?: "check_point" | "palo_alto" | "cisco_asa" | "fortinet"; initialUnitId?: string | null }) {
   const [units, setUnits] = useState<CpFailoverUnit[]>([]), [selected, setSelected] = useState<string | null>(initialUnitId ?? null);
   const [error, setError] = useState<string | null>(null);
   const refreshUnits = useCallback(() => {
@@ -351,7 +360,7 @@ export function CpFailoverPanel({ memberDeviceId, vendor = "check_point", initia
     listCpFailoverUnits(memberDeviceId, vendor).then(value => { if (!disposed) setUnits(orderUnits(value).map(unit => ({ ...unit, members: unit.maskedMembers?.map(member => ({ ...member, hostname: member.maskedLabel })) ?? unit.members }))); }).catch(e => { if (!disposed) setError(errorText(e)); });
     return () => { disposed = true; };
   }, [memberDeviceId, vendor, initialUnitId]);
-  return <Stack spacing={1} aria-label={`${vendor === "palo_alto" ? "Palo Alto" : "Check Point"} failover`}>
+  return <Stack spacing={1} aria-label={`${failoverVendorLabel(vendor)} failover`}>
     {error && <Typography role="alert" color="error">{error}</Typography>}
     {!error && units.length === 0 && <Typography>No eligible failover units</Typography>}
     {units.map(unit => <UnitPanel key={`${vendor}:${unit.unitId}`} unit={unit} expanded={selected === unit.unitId} onRefreshUnits={refreshUnits} onExpand={() => setSelected(selected === unit.unitId ? null : unit.unitId)} />)}
