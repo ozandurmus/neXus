@@ -279,6 +279,38 @@
     },
     {
       "tool": "trivy",
+      "rule": "CVE-2026-114939",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: java-21-openjdk-headless",
+      "reason": "Same OpenJDK vulnerability advisory as CVE-2026-114938 (2026-11-17); trivy reported it first on 2026-11-20. No fixed java-21-openjdk-headless build in the UBI repositories (Debian tracker: unfixed upstream on 2026-11-20); the image's package update step pulls the fix when Red Hat ships it. Accepted so deploys are not blocked by an unpatchable base package; the -XX:-UseBASE64Intrinsics mitigation covers CVE-2026-114938 only -- applicability of this CVE's mitigation is not yet established. Re-check at the review date or as soon as a fixed build exists.",
+      "owner": "PO",
+      "review_date": "2026-12-02"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-114940",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: java-21-openjdk-headless",
+      "reason": "Same OpenJDK vulnerability advisory as CVE-2026-114938 (2026-11-17); trivy reported it first on 2026-11-20. No fixed java-21-openjdk-headless build in the UBI repositories (Debian tracker: unfixed upstream on 2026-11-20); the image's package update step pulls the fix when Red Hat ships it. Accepted so deploys are not blocked by an unpatchable base package; the -XX:-UseBASE64Intrinsics mitigation covers CVE-2026-114938 only -- applicability of this CVE's mitigation is not yet established. Re-check at the review date or as soon as a fixed build exists.",
+      "owner": "PO",
+      "review_date": "2026-12-02"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-114941",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: java-21-openjdk-headless",
+      "reason": "Same OpenJDK vulnerability advisory as CVE-2026-114938 (2026-11-17); trivy reported it first on 2026-11-20. No fixed java-21-openjdk-headless build in the UBI repositories (Debian tracker: unfixed upstream on 2026-11-20); the image's package update step pulls the fix when Red Hat ships it. Accepted so deploys are not blocked by an unpatchable base package; the -XX:-UseBASE64Intrinsics mitigation covers CVE-2026-114938 only -- applicability of this CVE's mitigation is not yet established. Re-check at the review date or as soon as a fixed build exists.",
+      "owner": "PO",
+      "review_date": "2026-12-02"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-114942",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: java-21-openjdk-headless",
+      "reason": "Same OpenJDK vulnerability advisory as CVE-2026-114938 (2026-11-17); trivy reported it first on 2026-11-20. No fixed java-21-openjdk-headless build in the UBI repositories (Debian tracker: unfixed upstream on 2026-11-20); the image's package update step pulls the fix when Red Hat ships it. Accepted so deploys are not blocked by an unpatchable base package; the -XX:-UseBASE64Intrinsics mitigation covers CVE-2026-114938 only -- applicability of this CVE's mitigation is not yet established. Re-check at the review date or as soon as a fixed build exists.",
+      "owner": "PO",
+      "review_date": "2026-12-02"
+    },
+    {
+      "tool": "trivy",
       "rule": "CVE-2026-91403",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: java-21-openjdk-headless",
       "reason": "java-21-openjdk-headless 1:21.0.13.0.9-1.2.el9 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14) (service image and the packet-analysis image built from it). CRITICAL: the flaw is trusting intermediate CAs issued under the eMudhra (emSign) roots. Red Hat marks java-21-openjdk 'Will not fix' because RHEL's OpenJDK reads the system trust store and the remedy belongs in ca-certificates (CVE-2026-114406), so trivy will keep reporting this package version. Exposure in neXus: the image build blocklists every emSign root in the system trust store, from which Java cacerts is generated, and fails if any emSign entry is still trusted in tls-ca-bundle.pem or cacerts (ui2/Containerfile, PO 2026-10-23); device HTTPS/XML API and LDAP clients use that trust store plus the corporate CA, so no chain under those roots is trusted. Remove when Red Hat ships ca-certificates without the emSign roots and the blocklist step goes. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
