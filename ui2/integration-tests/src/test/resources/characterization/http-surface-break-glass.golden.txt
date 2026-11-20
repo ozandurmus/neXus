@@ -170,7 +170,7 @@ header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
 header: x-request-id: <request-id>
-body: {"break_glass_accounts":["nexusadmin (root identity)","aiview"],"can_write":true,"mode":"BREAK_GLASS_ONLY","modes":["ALL_LOCAL","BREAK_GLASS_ONLY"],"updated_at":"<ts>","updated_by":"<hex12>"}
+body: {"break_glass_accounts":["nexusadmin (root identity)","aiview"],"can_write":true,"mode":"BREAK_GLASS_ONLY","modes":["ALL_LOCAL","BREAK_GLASS_ONLY"],"updated_at":"<ts>","updated_by":"<user-pseudonym>"}
 
 ### bg admin GET mode after
 status: 200
@@ -184,7 +184,7 @@ header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
 header: x-request-id: <request-id>
-body: {"break_glass_accounts":["nexusadmin (root identity)","aiview"],"can_write":true,"mode":"BREAK_GLASS_ONLY","modes":["ALL_LOCAL","BREAK_GLASS_ONLY"],"updated_at":"<ts>","updated_by":"<hex12>"}
+body: {"break_glass_accounts":["nexusadmin (root identity)","aiview"],"can_write":true,"mode":"BREAK_GLASS_ONLY","modes":["ALL_LOCAL","BREAK_GLASS_ONLY"],"updated_at":"<ts>","updated_by":"<user-pseudonym>"}
 
 ### bg admin POST /session/logout
 status: 200
@@ -344,7 +344,7 @@ header: x-content-type-options: nosniff
 header: x-frame-options: DENY
 header: x-nexus-masked: true
 header: x-request-id: <request-id>
-body: {"break_glass_accounts":["nexusadmin (root identity)","aiview"],"can_write":true,"mode":"ALL_LOCAL","modes":["ALL_LOCAL","BREAK_GLASS_ONLY"],"updated_at":"<ts>","updated_by":"<hex12>"}
+body: {"break_glass_accounts":["nexusadmin (root identity)","aiview"],"can_write":true,"mode":"ALL_LOCAL","modes":["ALL_LOCAL","BREAK_GLASS_ONLY"],"updated_at":"<ts>","updated_by":"<user-pseudonym>"}
 
 ### bg nexusadmin POST /session/logout
 status: 200
