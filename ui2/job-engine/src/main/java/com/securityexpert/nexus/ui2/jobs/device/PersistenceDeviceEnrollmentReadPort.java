@@ -3,11 +3,12 @@ package com.securityexpert.nexus.ui2.jobs.device;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.securityexpert.nexus.ui2.persistence.device.DeviceReadRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 
 /**
  * {@link DeviceEnrollmentReadPort} adapter over {@code persistence}'s
- * {@link DeviceRepository}. Lives in {@code job-engine} rather than
+ * {@link DeviceReadRepository}. Lives in {@code job-engine} rather than
  * {@code persistence} because the interface it implements is declared
  * here (F12); {@code job-engine} is already allowed to depend on {@code
  * persistence} (contract §2 row), so this adapter introduces no new
@@ -16,10 +17,14 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
  */
 public final class PersistenceDeviceEnrollmentReadPort implements DeviceEnrollmentReadPort {
 
-    private final DeviceRepository deviceRepository;
+    private final DeviceReadRepository deviceRepository;
+
+    public PersistenceDeviceEnrollmentReadPort(DeviceReadRepository deviceRepository) {
+        this.deviceRepository = Objects.requireNonNull(deviceRepository, "deviceRepository");
+    }
 
     public PersistenceDeviceEnrollmentReadPort(DeviceRepository deviceRepository) {
-        this.deviceRepository = Objects.requireNonNull(deviceRepository, "deviceRepository");
+        this((DeviceReadRepository) deviceRepository);
     }
 
     @Override

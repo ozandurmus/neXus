@@ -1,9 +1,6 @@
 package com.securityexpert.nexus.ui2.persistence.device;
 
-import java.util.List;
 import java.util.Optional;
-
-import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
 
 /**
  * {@code devices}/{@code endpoints} persistence port (contract §12/F12
@@ -11,8 +8,13 @@ import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
  * registering role check and every validation in contract §4 are the
  * service layer's job ({@code service} module, F12); this port only ever
  * performs the write or read it is asked to.
+ *
+ * <p>Per {@code docs/design/DATABASE_ROLES_AND_DATA_OWNERSHIP_DESIGN_2026_11_14.md} §2.5.3 / §4.2 Step 0, the port is
+ * partitioned into {@link DeviceReadRepository} (read-only queries), {@link DeviceInventoryWriteRepository} (worker
+ * confirmation and observed-fact updates), and {@link DeviceAdminRepository} (service-only draft registration,
+ * disable, credential assignment, and cascading device deletion).</p>
  */
-public interface DeviceRepository {
+public interface DeviceRepository extends DeviceAdminRepository {
 
     enum BackupDisposition {
         KEEP,
@@ -22,181 +24,11 @@ public interface DeviceRepository {
     record DeleteResult(boolean deleted, long backupArtefactCount, boolean dispositionRequired) {
     }
 
-    Optional<DeviceRecord> find(String deviceId);
-
-    Optional<EndpointRecord> findEndpoint(String endpointId);
-
-    /** The one endpoint a manually-registered device carries (B1-4b contract §4: one device, one endpoint at this maturity). */
-    Optional<EndpointRecord> findEndpointByDeviceId(String deviceId);
-
-    /**
-     * The device (if any) that already owns an endpoint at this exact address
-     * reference -- the Product Owner's rule (2026-09-22): a device is never
-     * registered twice under the same address. Case-insensitive, whitespace
-     * ignored; a disabled device still counts (delete it first).
-     */
-    default Optional<String> findDeviceIdByEndpointAddress(String addressRef) {
-        return Optional.empty();
-    }
-
-    /**
-     * Registers a device as {@code DRAFT} together with its one endpoint,
-     * in a single audited transaction (contract §4: "the devices INSERT
-     * (and paired endpoints... rows) each get an audit_log row" -- one
-     * transaction, two INSERTs, two audit rows, or neither row exists;
-     * C1 §3.5's fail-closed trigger makes a partial write impossible).
-     *
-     * @return the registered device's opaque {@code device_id}
-     */
-    String registerDraft(DeviceDraft draft, String actorFingerprint, String actionId);
-
-    /**
-     * Applies one contract §3 transition, guarded by a
-     * {@code WHERE enrollment_state = fromState} condition so a
-     * concurrent or illegal transition never silently overwrites another.
-     *
-     * @return {@code true} only if a row matching {@code deviceId} AND
-     *         currently in {@code fromState} was updated; {@code false}
-     *         otherwise -- never throws for a mismatch, so the caller
-     *         (which already validated {@link DeviceEnrollmentState#canTransitionTo})
-     *         can distinguish "device not found" from "state already
-     *         moved on" without a race window.
-     */
-    boolean transitionEnrollmentState(String deviceId, DeviceEnrollmentState fromState, DeviceEnrollmentState toState,
-            String actorFingerprint, String actionId);
-
-    /** Contract §3 {@code DRAFT -> deleted}: withdrawal before confirmation. */
-    boolean withdrawDraft(String deviceId, String actorFingerprint, String actionId);
-
-    /** Deletes a device and its device-owned records in one audited transaction. */
-    default DeleteResult deleteDevice(String deviceId, BackupDisposition backupDisposition,
-            String actorFingerprint, String actionId) {
-        return new DeleteResult(false, 0, false);
-    }
-
-    /** Contract §3 {@code any -> disabled}: a separate boolean column, not a state. */
-    boolean setDisabled(String deviceId, boolean disabled, String actorFingerprint, String actionId);
-
-    /** Updates a device's confirmed cluster reference only when it differs. */
-    default boolean setClusterMemberRef(String deviceId, Optional<String> ref, String actorFingerprint, String actionId) {
-        throw new UnsupportedOperationException("setClusterMemberRef");
-    }
-
-    /** Store this device's claim and reconcile its pair in one audited transaction. */
-    default void recordHaPairClaim(String deviceId, String claim, String actorFingerprint, String actionId) {
-        throw new UnsupportedOperationException("recordHaPairClaim");
-    }
-
-    /**
-     * EC-J3: the confirm job's completion handler moves the row {@code
-     * DRAFT -> ENROLLED} with the observed facts, atomically, in one
-     * fenced update guarded by {@code WHERE enrollment_state = 'DRAFT'} --
-     * the same fenced-update pattern {@link #transitionEnrollmentState}
-     * uses. No other write path ever sets any V12 column or moves a row to
-     * {@code ENROLLED} on first contact (EC-J3: "no other code path
-     * changes enrollment state on first contact"). Never called for any
-     * job kind other than the enrollment confirm (EC-J1).
-     *
-     * @return {@code true} only if a row matching {@code deviceId} AND
-     *         currently {@code DRAFT} was updated; {@code false} means the
-     *         device was not found or already left {@code DRAFT} (a
-     *         zombie writer's own signal to stop, mirroring {@link
-     *         #transitionEnrollmentState}'s contract).
-     */
-    boolean recordConfirmSuccess(String deviceId, DeviceConfirmFacts facts, String actorFingerprint, String actionId);
-
-    /** The V12 facts a confirmed device carries, for a read model (GET /devices, GET /devices/{id}). */
-    Optional<DeviceConfirmFacts> findConfirmFacts(String deviceId);
-
-    /**
-     * PO 2026-09-25: observed facts follow every completed read. Each present value replaces the stored one when it
-     * differs (an absent value leaves the stored one alone); the identity baseline (recorded_identity_*) is untouched.
-     * True when the row changed. The fill-if-absent rule that preceded this hid an MDS upgrade for three days.
-     */
-    default boolean refreshObservedFacts(String deviceId, Optional<String> hostname, Optional<String> model,
-            Optional<String> softwareVersion, String actorFingerprint, String actionId) {
-        return refreshObservedFacts(deviceId, hostname, model, softwareVersion, Optional.empty(), actorFingerprint, actionId);
-    }
-
-    default boolean refreshObservedFacts(String deviceId, Optional<String> hostname, Optional<String> model,
-            Optional<String> softwareVersion, Optional<String> haRole, String actorFingerprint, String actionId) {
-        return false;
-    }
-
-    /**
-     * PO 2026-10-21 ({@link PanSystemInfoRetirement}): a Palo Alto firewall's model and software version came only from
-     * {@code show system info}, now retired -- a run that could not read them clears them rather than leave the previous
-     * value standing as current. The hostname is kept as the device's recorded name (it names the device everywhere;
-     * the screen says it is no longer refreshed); the identity baseline (recorded_identity_*) is untouched.
-     * True when the row changed.
-     */
-    default boolean clearObservedPlatformFacts(String deviceId, String actorFingerprint, String actionId) {
-        return false;
-    }
-
-    /** GET /devices (DeviceSummary rows), newest first -- every device, its vendor and its observed facts. */
-    List<DeviceSummaryRecord> listAll();
-
     /** One device's ID with the hostname and cluster reference {@link #listAll()} shows for it. */
     record NameIdentity(String deviceId, Optional<String> hostname, Optional<String> clusterMemberRef) {
     }
 
-    /**
-     * Every device's {@link NameIdentity}, oldest registration first (ties by device ID) -- the masking layer's
-     * input for keeping device pseudonyms unique. The default reverses {@link #listAll()}'s newest-first order.
-     */
-    default List<NameIdentity> listNameIdentities() {
-        List<NameIdentity> out = new java.util.ArrayList<>(listAll().stream()
-                .map(d -> new NameIdentity(d.deviceId(), d.observedHostname(), d.clusterMemberRef())).toList());
-        java.util.Collections.reverse(out);
-        return out;
-    }
-
     /** An enrolled Palo Alto firewall and the serial neXus recorded for it. */
     record PanSerial(String serial, String deviceId) {
-    }
-
-    /**
-     * Enrolled Palo Alto firewalls with their recorded serial -- the exact relation the Policy screen uses to show a
-     * firewall by hostname where Panorama names it by serial. The serial is the identity baseline
-     * ({@code recorded_identity_primary}), else the platform-facts serial; a device that carries neither is absent.
-     * Never a heuristic: callers match the whole value or not at all.
-     */
-    default List<PanSerial> listPanSerials() {
-        return List.of();
-    }
-
-    /** Read-eligible devices whose first endpoint uses the requested transport. */
-    default List<DeviceSummaryRecord> listReadCollectionTargets(String transport) {
-        return listAll().stream().filter(d -> find(d.deviceId()).filter(DeviceRecord::permitsReadCollection).isPresent()
-                && findEndpointByDeviceId(d.deviceId()).filter(e -> transport.equals(e.transportKind())).isPresent()).toList();
-    }
-
-    /** Backups > Backup targets: an audited devices UPDATE; false when the row is absent or already in that state. */
-    /** The device's login credential, replaced (PO, 2026-09-24); true when a row changed. */
-    default boolean setCredentialReference(String deviceId, String credentialReferenceId, String actorFingerprint, String actionId) {
-        throw new UnsupportedOperationException("setCredentialReference");
-    }
-
-    default boolean setBackupTarget(String deviceId, boolean backupTarget, String actorFingerprint, String actionId) {
-        throw new UnsupportedOperationException("setBackupTarget");
-    }
-
-    /**
-     * The same coalesced view {@link #listAll()} produces (device's own confirmed facts, falling
-     * back to its discovery candidate's, per {@code DEVICE_SUMMARY_SELECT}), narrowed to one
-     * device -- so a value such as {@code observedModel()} is available before that device has
-     * ever been confirmed, whenever its discovery candidate already carried one (e.g. a Check
-     * Point Management Server's own "hardware" field).
-     */
-    default Optional<DeviceSummaryRecord> findSummary(String deviceId) {
-        return listAll().stream().filter(summary -> summary.deviceId().equals(deviceId)).findFirst();
-    }
-
-    /** Returns members of a specific cluster (by cluster_member_ref or candidate display name) directly without full scan. */
-    default List<DeviceSummaryRecord> findMembersByClusterRef(String clusterMemberRef) {
-        return listAll().stream()
-                .filter(summary -> summary.clusterMemberRef().equals(Optional.ofNullable(clusterMemberRef)))
-                .toList();
     }
 }

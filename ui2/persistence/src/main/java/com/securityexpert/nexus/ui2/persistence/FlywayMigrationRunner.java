@@ -1,6 +1,12 @@
 package com.securityexpert.nexus.ui2.persistence;
 
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Properties;
 
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.output.MigrateResult;
@@ -43,5 +49,29 @@ public final class FlywayMigrationRunner {
                 .load();
 
         return flyway.migrate();
+    }
+
+    /**
+     * Verifies read-only via {@code public.ui2_schema_version_check(expected_version)} using the application
+     * credential files when {@code ui2-service} runs without {@code ui2_migrate} credentials mounted
+     * ({@code docs/design/DATABASE_ROLES_AND_DATA_OWNERSHIP_DESIGN_2026_11_14.md} §3.2, §4.2 Step 0 / Step 4).
+     */
+    public static boolean verifySchemaVersion(String jdbcUrl, Path appUserFile, Path appPasswordFile,
+            String expectedVersion) {
+        String user = SecretFile.readRequired(appUserFile, "ui2_app.user");
+        String password = SecretFile.readRequired(appPasswordFile, "ui2_app.password");
+        Properties properties = new Properties();
+        properties.setProperty("user", user);
+        properties.setProperty("password", password);
+        try (Connection connection = DriverManager.getConnection(jdbcUrl, properties);
+                PreparedStatement statement = connection.prepareStatement(
+                        "SELECT public.ui2_schema_version_check(?)")) {
+            statement.setString(1, expectedVersion);
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next() && rows.getBoolean(1);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("ui2 schema version check failed: sqlState=" + e.getSQLState(), e);
+        }
     }
 }

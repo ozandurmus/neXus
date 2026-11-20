@@ -18,13 +18,10 @@ public final class LatestEffectiveRunningReader {
     public record Stored(String artefactRef, byte[] wrappedDataKey, boolean gzip, Instant collectedAt) {
     }
 
-    static final String SQL = "select r.artefact_ref, a.wrapped_data_key, c.compression, r.collected_at "
-            + "from device_configuration_run r "
-            + "join configuration_artefact c on c.artefact_ref = r.artefact_ref "
-            + "join backup_artefact a on a.recovery_volume_path = r.artefact_ref and a.device_id = r.device_id "
-            + "where r.device_id = {0} and r.read_kind = '" + ConfigurationReadKind.EFFECTIVE_RUNNING + "' "
-            + "and not exists (select 1 from artefact_retention_ledger l where l.artefact_id = a.artefact_id and l.event = 'removed') "
-            + "order by r.collected_at desc limit 1";
+    static final String SQL = "select artefact_ref, wrapped_data_key, compression, collected_at "
+            + "from v_latest_effective_running_config "
+            + "where device_id = {0} "
+            + "order by collected_at desc limit 1";
 
     private final TransactionBoundary tx;
 

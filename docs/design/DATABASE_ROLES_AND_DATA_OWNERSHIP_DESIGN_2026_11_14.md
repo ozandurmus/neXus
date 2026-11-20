@@ -1,8 +1,8 @@
 # Least-Privilege Database Roles and Data Ownership per Module
 
 - **Status**: `DRAFT` (the document stays a draft until the PO freezes it; the implementation progress below is a fact about the repository, not a freeze)
-- **Date**: 2026-11-14 (rollout status and §6–§7 added 2026-11-16)
-- **Rollout status (2026-11-16)**: PO decision 2026-11-16 fixed the direction (per-module database users with least privilege first, working with the database in the cluster or on a separate server; the network egress rule comes later). **Step 1 is `IMPLEMENTED` + `AUTOMATED_VALIDATED`** (migration `V242`, integration test `DatabaseRoleGrantMatrixIntegrationTest`, 13 tests on PostgreSQL 16); `REAL_ENV_VALIDATED` is pending (BEGIN/ROLLBACK dry-run on the live database, §6.5). **Step 0 and Steps 2–6 are `PLANNED`**; no workload uses a module role, no credential or connection changed. What step 1 built and what it found: §6. The external-database case: §7.
+- **Date**: 2026-11-14 (rollout status and §6–§7 added 2026-11-16; Step 0 / `V259` built 2026-11-20)
+- **Rollout status (2026-11-20)**: PO decision 2026-11-16 fixed the direction (per-module database users with least privilege first, working with the database in the cluster or on a separate server; the network egress rule comes later). **Step 1 (`M2` = `V242`) and Step 0 (`M1` = `V259`) are `IMPLEMENTED` + `AUTOMATED_VALIDATED`** (migrations `V242` and `V259`, integration tests `DatabaseRoleGrantMatrixIntegrationTest` and `DatabaseRoleStep0TriggerAndViewIntegrationTest`, architecture test `ModuleDatabaseOwnershipArchTest`, plus removal of `UI2_DB_MIGRATE_USER_FILE` / `UI2_DB_MIGRATE_PASSWORD_FILE` and addition of explicit `items: [app-user, app-password]` on `deploy/ui2/52-worker-deployment.yaml`). **Next step is Step 2 (switching `ui2-packet-analysis` to `ui2_packet_analysis`)**, which requires an out-of-band HOST-A / DBA action to provision a login password on `ui2_packet_analysis` and create Kubernetes Secret `ui2-db-packet-analysis` before switching `secretName` in `58-packet-analysis-deployment.yaml` (exact steps in §4.2 Step 2 and §6.6). Steps 2–6 remain `PLANNED`; no workload uses a module role yet, and no credential or connection changed. What Step 1 and Step 0 built: §6. The external-database case: §7.
 - **Backlog Item**: `ui2_database_roles_and_data_ownership`
 - **Related Contracts & Designs**:
   - `docs/design/MODULE_POD_RUNTIME_CONTRACT.md` (`FROZEN`)
@@ -673,15 +673,17 @@ flowchart LR
 
 ### 4.2 Step-by-Step Rollout with Dry-Run and Rollback
 
-> Migration numbers: the four new migrations are written M1..M4 here. Their Flyway version numbers are assigned when they are built; V212..V215 are already used by other work (2026-11-14 review). **`M2` is `V242`** (built 2026-11-16, §6); `M1`, `M3`, `M4` are not assigned yet.
+> Migration numbers: the four new migrations are written M1..M4 here. Their Flyway version numbers are assigned when they are built; V212..V215 are already used by other work (2026-11-14 review). **`M2` is `V242`** (built 2026-11-16, §6) and **`M1` is `V259`** (built 2026-11-20, §6.6); `M3` and `M4` are not assigned yet.
 
-#### Step 0 — Refactor Cross-Domain Triggers to `SECURITY DEFINER` & Create Read Views (`M1`)
+#### Step 0 — Refactor Cross-Domain Triggers to `SECURITY DEFINER` & Create Read Views (`M1` = `V259`)
+- **Status (2026-11-20)**: `IMPLEMENTED` + `AUTOMATED_VALIDATED`; `REAL_ENV_VALIDATED` pending. Built as `V259__module_role_security_definer_triggers_and_views.sql`, Java interface split (`DeviceReadRepository`, `DeviceInventoryWriteRepository`, `DeviceAdminRepository`), `ModuleDatabaseOwnershipArchTest`, `DatabaseRoleStep0TriggerAndViewIntegrationTest`, and `52-worker-deployment.yaml` secret-mount hardening (§6.6).
 - **Action**:
-  1. Ship Flyway migration `M1__security_definer_triggers_and_read_views.sql` converting the 9 cross-domain `SECURITY INVOKER` triggers (§2.2) to `SECURITY DEFINER SET search_path = pg_catalog, public` owned by `ui2_migrate`.
-  2. Create `ui2_current_role_module()`, `ui2_schema_version_check(text)`, and read projection views (`v_latest_effective_running_config`, `v_compliance_device_evidence`).
-  3. Split `JooqDeviceRepository` interfaces so worker classes depend only on `DeviceReadRepository` / `DeviceInventoryWriteRepository`.
+  1. Ship Flyway migration `V259__module_role_security_definer_triggers_and_views.sql` converting all 27 `SECURITY INVOKER` trigger functions and 8 cross-domain runtime/lease helper functions (§2.2 and §6.2 F1) to `SECURITY DEFINER SET search_path = pg_catalog, public` owned by `ui2_migrate` with `PUBLIC` execute revoked.
+  2. Create `ui2_current_role_module()`, `ui2_schema_version_check(text)`, `ui2_capability_owner_module(text)` (§6.2 F3), `ui2_next_task_lease_epoch()`, and read projection views (`v_latest_effective_running_config`, `v_compliance_device_evidence`, `v_active_pseudonym_lookup`), and refresh `ui2_apply_module_role_grants()` to cover `V243`–`V252` tables, worker `runtime_instance_heartbeat` writes, and column-level `UPDATE` on `devices` (§6.2 F2).
+  3. Split `DeviceRepository` interfaces into `DeviceReadRepository`, `DeviceInventoryWriteRepository`, and `DeviceAdminRepository`, and enforce module boundaries in `ModuleDatabaseOwnershipArchTest`.
+  4. Remove `UI2_DB_MIGRATE_USER_FILE` and `UI2_DB_MIGRATE_PASSWORD_FILE` from `deploy/ui2/52-worker-deployment.yaml` and add explicit `items: [app-user, app-password]` on its `db-credentials` volume (§3.2).
 - **Dry-Run**:
-  - Run `./gradlew :integration-tests:test` against containerized PostgreSQL; query `pg_proc` to verify `prosecdef = true` and `proconfig @> ARRAY['search_path=pg_catalog, public']` for all 9 trigger functions.
+  - Run `./gradlew :integration-tests:test --tests "*DatabaseRole*" --tests "*LatestEffectiveRunningReaderSchemaTest*"` and `./gradlew :architecture-tests:architectureTest` against PostgreSQL 16; query `pg_proc` to verify `prosecdef = true` and `proconfig @> ARRAY['search_path=pg_catalog, public']` for all trigger and `SECURITY DEFINER` functions.
 - **Rollback**:
   - `ALTER FUNCTION <fn> SECURITY INVOKER;` (zero impact on `ui2_app` since `ui2_app` still holds existing table grants).
 
@@ -698,12 +700,30 @@ flowchart LR
   - All pods are still running as `ui2_app`; revoking grants from `ui2_<module>` has zero runtime effect.
 
 #### Step 2 — Switch `ui2-packet-analysis` to `ui2_packet_analysis` (Highest-Isolation Pilot)
-- **Action**:
-  1. Update `deploy/ui2/58-packet-analysis-deployment.yaml` volume `db-secret` from `secretName: ui2-db` to `secretName: ui2-db-packet-analysis`.
-  2. Roll `deployment/ui2-packet-analysis`.
+- **Status (2026-11-20)**: `PLANNED` (Next rollout step; gated on HOST-A / DBA credential provisioning after `V259` lands on the live database).
+- **Exact HOST-A / DBA Prerequisite & Cutover Steps**:
+  1. **Dry-run and apply `V259` on the live database**:
+     - Inside `ui2-db-0` (or external PostgreSQL as `ui2_migrate`), test `V259__module_role_security_definer_triggers_and_views.sql` inside `BEGIN; ... ROLLBACK;`, then let `V259` apply through the normal Flyway rollout (`05-flyway-bootstrap.yaml`).
+     - Confirm `SELECT ui2_apply_module_role_grants();` returns `0` and `SELECT ui2_schema_version_check('259');` returns `true`.
+  2. **Provision login password and connection limit for `ui2_packet_analysis` (out-of-band on HOST-A / DBA)**:
+     - Generate a fresh 32-byte CSPRNG password (`PA_DB_PASS="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=')"`) on HOST-A (never in git).
+     - As PostgreSQL superuser (`postgres` inside `ui2-db-0` or external DBA):
+       ```sql
+       ALTER ROLE ui2_packet_analysis LOGIN PASSWORD '<PA_DB_PASS>' CONNECTION LIMIT 4;
+       ```
+     - Create the per-module Kubernetes Secret `ui2-db-packet-analysis` in namespace `ui2` on HOST-A:
+       ```sh
+       kubectl -n ui2 create secret generic ui2-db-packet-analysis \
+         --from-literal=app-user=ui2_packet_analysis \
+         --from-literal="app-password=${PA_DB_PASS}" \
+         --dry-run=client -o yaml | kubectl apply -f -
+       ```
+  3. **Switch `58-packet-analysis-deployment.yaml` and manifest tests**:
+     - Update `deploy/ui2/20-secret.yaml` (stub metadata for `ui2-db-packet-analysis`, no secret data) and `deploy/ui2/58-packet-analysis-deployment.yaml` volume `db-credentials` from `secretName: ui2-db` to `secretName: ui2-db-packet-analysis` (keeping `items: [app-user, app-password]`), and update `tools/tests/test_ui2_deployment_manifests.py` (`test_packet_analysis_worker_is_low_priority_bounded_and_isolated` and secret count check).
+     - Roll `deployment/ui2-packet-analysis`.
 - **Dry-Run & Verification**:
   - Check `pg_stat_activity WHERE usename = 'ui2_packet_analysis'` to confirm active HikariCP connections.
-  - Check `module_runtime_control WHERE module_id = 'packet_analysis'` to verify `owner_heartbeat_at` advances and `pool_active` / `pool_idle` update cleanly.
+  - Check `module_runtime_control WHERE module = 'packet_analysis'` to verify `owner_heartbeat_at` advances and `pool_active` / `pool_idle` update cleanly.
   - Run an `aiview` synthetic packet analysis run and retention prune; confirm zero `42501` (`insufficient_privilege`) errors in PostgreSQL logs.
 - **Rollback**:
   - Revert `58-packet-analysis-deployment.yaml` `secretName` back to `ui2-db` (`ui2_app`) and run `kubectl rollout undo deployment/ui2-packet-analysis`.
@@ -868,6 +888,25 @@ Each role stays `NOLOGIN` until its cutover step (§4.2 Steps 2–5). Then, per 
 
 - `DatabaseRoleGrantMatrixIntegrationTest` (`ui2/integration-tests`, real PostgreSQL 16, 13 tests): roles are `NOLOGIN`, passwordless, attribute-free; `V242`'s SQL is additive and secret-free; on 38 representative tables every role is checked for every privilege both by catalog (`has_table_privilege`) and by real execution (`SET ROLE` then `SELECT`/`INSERT`/`UPDATE`/`DELETE`/`TRUNCATE`, `42501` = denied); real row work as `ui2_service` (audited through the `SECURITY DEFINER` trigger), refused work as `ui2_policy` and `ui2_packet_analysis`, no role can `CREATE`/`DROP`/`ALTER`/`CREATE ROLE`; catalog-wide: every table covered, no `TRUNCATE`/`REFERENCES`/`TRIGGER`, nothing beyond `ui2_app`, no owned object, credential/identity/audit planes reachable only as §2.3 says, sequence/column/function grants; re-applying is a no-op; absent roles are skipped; a rolled-back dry run leaves no trace; the in-cluster hook SQL creates `NOLOGIN` roles idempotently and its grant statement runs.
 - Real environment (pending, Product Owner): dry-run the migration text on the live database inside `BEGIN; … ROLLBACK;` as `ui2_migrate` (before the roles exist it only prints `NOTICE`s and installs the function; after, it also issues the grants), then let `V242` run through the normal rollout. Check that nothing else changes: `SELECT count(*) FROM pg_stat_activity WHERE usename LIKE 'ui2\_%' AND usename <> 'ui2_app' AND usename <> 'ui2_migrate'` stays `0`.
+
+### 6.6 Step 0 As Built (2026-11-20, `V259`)
+
+Status: `IMPLEMENTED` + `AUTOMATED_VALIDATED`. Closes Findings F1–F3 from §6.2 and the worker migrate-credential mount from §3.2 so the schema and codebase are ready for Step 2 (`ui2-packet-analysis` cutover) as soon as the HOST-A secret `ui2-db-packet-analysis` is provisioned:
+
+1. **Migration `V259__module_role_security_definer_triggers_and_views.sql`**:
+   - Converts all 27 `SECURITY INVOKER` trigger functions in `public` (§2.2 + §6.2 F1 + `V251`'s `fn_guard_script_version_append_only`) and all 8 cross-domain runtime/lease helper functions (`ui2_quarantine_owner_gone`, `ui2_release_orphan_quarantines`, `ui2_failover_lease_settled`, `ui2_release_settled_failover_leases`, `ui2_config_sync_lease_settled`, `ui2_release_settled_config_sync_leases`, `ui2_release_failover_incident`, `ui2_job_owner_valid`, plus `ui2_record_software_version`) to `SECURITY DEFINER SET search_path = pg_catalog, public` and revokes `PUBLIC` execute.
+   - Pins `SET search_path = pg_catalog, public` on all existing `SECURITY DEFINER` audit/RPC functions.
+   - Installs `ui2_current_role_module()`, `ui2_schema_version_check(text)`, `ui2_capability_owner_module(text)` (mapping support-bundle capabilities to `diagnostics`, resolving Finding F3 without altering `ui2_job_module`), and `ui2_next_task_lease_epoch()` (used by `ModuleRuntimeRepository.runTask` so non-device-contacting roles such as `ui2_packet_analysis` and `ui2_scheduler` acquire task leases without direct sequence grants on `endpoint_permit_epoch`).
+   - Installs read-only `SECURITY DEFINER` projection views `v_latest_effective_running_config` (used by `LatestEffectiveRunningReader` so `ui2_inventory` reads the latest effective-running config metadata without table grants on `backup_artefact` or `artefact_retention_ledger`), `v_compliance_device_evidence`, and `v_active_pseudonym_lookup`.
+   - Refreshes `ui2_apply_module_role_grants()` with the post-`V242` tables (`device_software_version_history`, `device_install_event`, `asa_config_relation`, `script`, `script_version`, `static_route_preview`), `SIU` on `runtime_instance_heartbeat` for worker roles (`ModuleRuntimeRepository.heartbeat`), column-level `UPDATE` on `devices` (`ssh_identity_unverified` for SSH-contacting workers; observed facts and HA pair claim columns for `ui2_configuration`, resolving Finding F2), `SELECT` on the projection views, and `EXECUTE` on the Step 0 functions.
+2. **Java Persistence & Boot Readiness**:
+   - Split `DeviceRepository` into `DeviceReadRepository`, `DeviceInventoryWriteRepository`, and `DeviceAdminRepository` (`DeviceRepository extends DeviceAdminRepository`; `JooqDeviceRepository` implements all four), and updated `PersistenceDeviceEnrollmentReadPort` to depend on `DeviceReadRepository`.
+   - Updated `MigrationStartupRunner` to support `ui2.db.migrations-enabled=false` (`UI2_MIGRATIONS_ENABLED=false`), verifying schema readiness read-only via `SELECT public.ui2_schema_version_check(?)` with `ui2.db.user-file` / `ui2.db.password-file` without reading `ui2.db.migrate-user-file` or `ui2.db.migrate-password-file`.
+3. **Manifest Hardening (`deploy/ui2/52-worker-deployment.yaml`)**:
+   - Removed `UI2_DB_MIGRATE_USER_FILE` and `UI2_DB_MIGRATE_PASSWORD_FILE` from `52-worker-deployment.yaml` and added explicit `items: [app-user, app-password]` projection on its `db-credentials` Secret volume (§3.2). Every worker Deployment in `deploy/ui2/` is now verified by `test_no_worker_deployment_mounts_or_references_migrate_credentials` in `tools/tests/test_ui2_deployment_manifests.py`.
+4. **Automated Validation**:
+   - `DatabaseRoleStep0TriggerAndViewIntegrationTest` (`ui2/integration-tests`, PostgreSQL 16): proves every trigger and `SECURITY DEFINER` function has `prosecdef = true`, `search_path = pg_catalog, public`, and `PUBLIC` execute revoked; proves representative writes with triggers enabled (`session_replication_role = origin`) under `ui2_packet_analysis`, `ui2_policy`, `ui2_scheduler` (including `INSERT INTO failover_run`), `ui2_inventory`, `ui2_configuration`, and `ui2_compliance`; proves `LatestEffectiveRunningReader` under `ui2_inventory` via `v_latest_effective_running_config`.
+   - `ModuleDatabaseOwnershipArchTest` (`ui2/architecture-tests`): enforces the `DeviceReadRepository` / `DeviceInventoryWriteRepository` / `DeviceAdminRepository` hierarchy, forbids worker/scheduler/job-engine classes from calling `DeviceAdminRepository` methods, and enforces persistence package isolation for `worker.packetanalysis` and service-only persistence packages.
 
 ---
 

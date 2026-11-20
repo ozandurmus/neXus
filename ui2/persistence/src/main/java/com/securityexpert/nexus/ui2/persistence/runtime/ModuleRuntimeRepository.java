@@ -54,7 +54,7 @@ public final class ModuleRuntimeRepository {
             db.fetch("select pg_advisory_xact_lock(294611)");
             db.fetch("select ui2_release_orphan_quarantines()");
             return db.execute("insert into runtime_task_lease(task_key,owner_role,owner_instance,owner_generation,token,epoch,state,expires_at) "
-                + "select {0},{1},{2},generation,{3},nextval('endpoint_permit_epoch'),'LEASED',now()+interval '60 seconds' "
+                + "select {0},{1},{2},generation,{3},ui2_next_task_lease_epoch(),'LEASED',now()+interval '60 seconds' "
                 + "from module_runtime_control where module={1} and owner_instance={2} and not drain_requested "
                 + "and owner_heartbeat_at>now()-interval '60 seconds' "
                 + "and exists(select 1 from module_runtime_control m where m.module={4} and m.effective_owner={1} and not m.drain_requested) "
