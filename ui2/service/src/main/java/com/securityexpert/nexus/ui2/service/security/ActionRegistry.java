@@ -351,8 +351,31 @@ public final class ActionRegistry {
 
     private final Map<String, ActionDescriptor> actions = new ConcurrentHashMap<>();
 
+    /** Env switch (default off): grants the masked read-only administration reads below to aiview (replay_viewer). */
+    public static final String AIVIEW_READONLY_ADMIN_ENV = "UI2_AIVIEW_READONLY_ADMIN";
+
+    /**
+     * Slice 1 of the aiview masked read-only administrator (design AIVIEW_MASKED_READONLY_ADMIN_DRAFT_2026_11_20.md):
+     * the only read actions the switch widens. Every one returns a masked settings projection with
+     * {@code can_write=false} for aiview; no write, raw, export or download action is ever in this set.
+     */
+    public static final java.util.Set<String> AIVIEW_READONLY_ADMIN_READS = java.util.Set.of(
+            SYSTEM_LOG_SETTINGS_READ, LOCAL_PASSWORD_POLICY_READ, LOCAL_AUTH_MODE_READ);
+
     public ActionRegistry() {
+        this("true".equalsIgnoreCase(System.getenv().getOrDefault(AIVIEW_READONLY_ADMIN_ENV, "false").strip()));
+    }
+
+    public ActionRegistry(boolean aiviewReadonlyAdmin) {
         seedActions();
+        if (aiviewReadonlyAdmin) {
+            for (String id : AIVIEW_READONLY_ADMIN_READS) {
+                ActionDescriptor d = actions.get(id);
+                java.util.Set<String> alt = new java.util.HashSet<>(d.alternativeRoleTokens());
+                alt.add(RoleToken.REPLAY_VIEWER);
+                register(new ActionDescriptor(d.actionId(), d.consoleSubmittable(), d.requiredRoleToken(), alt));
+            }
+        }
     }
 
     private void seedActions() {

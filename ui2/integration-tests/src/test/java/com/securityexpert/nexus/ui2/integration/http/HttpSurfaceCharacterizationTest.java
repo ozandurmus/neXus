@@ -848,6 +848,8 @@ class HttpSurfaceCharacterizationTest {
     private static final Pattern TOKEN = Pattern.compile("(?=[A-Za-z0-9_-]*[0-9A-Z])[A-Za-z0-9_-]{32,}");
     private static final Pattern TIMESTAMP = Pattern.compile("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:?\\d{2})?");
     private static final Pattern HEX12 = Pattern.compile("[0-9a-f]{12}");
+    /** A masked user pseudonym (per-run key, so its value changes between runs). */
+    private static final Pattern USER_PSEUDONYM = Pattern.compile("USR-[0-9A-F]{10}");
     private static final Pattern HEX64 = Pattern.compile("[0-9a-f]{64}");
     // A bare calendar day (e.g. lifecycle "as_of") depends on the run date, not on the HTTP surface (2026-11-16).
     private static final Pattern DAY = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
@@ -916,6 +918,7 @@ class HttpSurfaceCharacterizationTest {
         if (node.isTextual()) {
             String value = node.asText();
             if (HEX12.matcher(value).matches()) return factory.textNode("<hex12>");
+            if (USER_PSEUDONYM.matcher(value).matches()) return factory.textNode("<user-pseudonym>");
             value = TIMESTAMP.matcher(value).replaceAll("<ts>");
             if (DAY.matcher(value).matches()) value = "<day>";
             value = UUID.matcher(value).replaceAll("<id>");
