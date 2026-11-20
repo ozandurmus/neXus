@@ -114,4 +114,30 @@ class Ui2ConfigurationServerTest {
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
         assertEquals(400, response.statusCode());
     }
+
+    @Test
+    void metricsOnInternalHealthPortDefaultTo404AndServePrometheusTextWhenEnabled() throws Exception {
+        HttpRequest disabledReq = HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:" + port + "/metrics"))
+                .GET()
+                .build();
+        assertEquals(404, client.send(disabledReq, HttpResponse.BodyHandlers.ofString()).statusCode());
+
+        int enabledPort = 18094;
+        var registry = com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.create("configuration");
+        Ui2ConfigurationServer enabledServer = new Ui2ConfigurationServer(enabledPort, true, registry);
+        enabledServer.start();
+        try {
+            HttpRequest enabledReq = HttpRequest.newBuilder()
+                    .uri(URI.create("http://127.0.0.1:" + enabledPort + "/metrics"))
+                    .GET()
+                    .build();
+            HttpResponse<String> resp = client.send(enabledReq, HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, resp.statusCode());
+            assertTrue(resp.body().contains("jvm_memory_used_bytes"));
+            assertTrue(resp.body().contains("role=\"configuration\""));
+        } finally {
+            enabledServer.stop();
+        }
+    }
 }

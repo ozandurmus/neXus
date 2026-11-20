@@ -543,6 +543,7 @@ public final class WorkerClaimLoop {
 
     private boolean executeWithCertificateWarnings(ClaimedJob claimed) {
         long claimMs = System.currentTimeMillis();
+        long startNanos = System.nanoTime();
         Optional<JobRow> jobOpt = jobRecordDao.find(claimed.jobId());
         if (jobOpt.isEmpty()) {
             LOGGER.log(System.Logger.Level.WARNING, "Claimed job has no row: " + claimed.jobId());
@@ -555,19 +556,33 @@ public final class WorkerClaimLoop {
                 workerId, claimed.jobId(), job.capabilityId(), job.targetDeviceId(), claimed.leaseEpoch());
 
         if ("cp_policy_collect".equals(job.capabilityId()) || "pan_policy_collect".equals(job.capabilityId())) {
-            if (policyCollection == null || !"discovery_run".equals(job.targetKind()))
-                leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(), com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
-                    com.securityexpert.nexus.ui2.jobs.JobState.REJECTED, "system:worker", "policy_collect_rejected");
-            else policyCollection.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetRef());
+            try {
+                if (policyCollection == null || !"discovery_run".equals(job.targetKind())) {
+                    leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(), com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
+                        com.securityexpert.nexus.ui2.jobs.JobState.REJECTED, "system:worker", "policy_collect_rejected");
+                    recordJobMetrics(claimed.jobId(), job.capabilityId(), startNanos, "REJECTED");
+                } else {
+                    policyCollection.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetRef());
+                    recordJobMetrics(claimed.jobId(), job.capabilityId(), startNanos, "COMPLETED");
+                }
+            } catch (RuntimeException e) {
+                recordJobMetrics(claimed.jobId(), job.capabilityId(), startNanos, "FAILED");
+                throw e;
+            }
             return true;
         }
 
         // 14F DR-1: a discovery job's target is a discovery_run row, not a device -- dispatched before any
         // device/endpoint resolution below, which would otherwise crash on a job with no target_device_id.
         if (DiscoveryCapabilityIds.isDiscoveryCapability(job.capabilityId())) {
+            boolean discoveryFailed = false;
             try {
                 discoveryJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetRef());
+            } catch (RuntimeException e) {
+                discoveryFailed = true;
+                throw e;
             } finally {
+                recordJobMetrics(claimed.jobId(), job.capabilityId(), startNanos, discoveryFailed ? "FAILED" : "COMPLETED");
                 long totalJobTime = System.currentTimeMillis() - claimMs;
                 LOGGER.log(System.Logger.Level.INFO,
                         "[WORKER_RELEASE] Worker {0} finished discovery job {1} in {2}ms",
@@ -582,6 +597,7 @@ public final class WorkerClaimLoop {
             leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(), com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
                     com.securityexpert.nexus.ui2.jobs.JobState.FAILED, "system:worker", "claim_device_check",
                     "claimed job targets an unknown device: " + job.targetDeviceId());
+            recordJobMetrics(claimed.jobId(), job.capabilityId(), startNanos, "FAILED");
             return true;
         }
         DeviceRecord device = deviceOpt.get();
@@ -592,10 +608,12 @@ public final class WorkerClaimLoop {
             leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(), com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
                     com.securityexpert.nexus.ui2.jobs.JobState.FAILED, "system:worker", "claim_endpoint_check",
                     "claimed job's device has no endpoint: " + job.targetDeviceId());
+            recordJobMetrics(claimed.jobId(), job.capabilityId(), startNanos, "FAILED");
             return true;
         }
         EndpointRecord endpoint = endpointOpt.get();
 
+        boolean unhandledFailure = false;
         try {
             if ("cp_cluster_failover".equals(job.capabilityId())) {
                 if (cpFailoverExecutor == null) {
@@ -873,6 +891,7 @@ public final class WorkerClaimLoop {
                     peerRequestFactory, false);
             return true;
         } catch (Throwable t) {
+            unhandledFailure = true;
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(t);
             LOGGER.log(System.Logger.Level.ERROR,
                     "Worker {0} caught unhandled error executing job {1}: {2}",
@@ -888,10 +907,27 @@ public final class WorkerClaimLoop {
             }
             throw t;
         } finally {
+            recordJobMetrics(claimed.jobId(), job.capabilityId(), startNanos, unhandledFailure ? "FAILED" : "COMPLETED");
             long totalJobTime = System.currentTimeMillis() - claimMs;
             LOGGER.log(System.Logger.Level.INFO,
                     "[WORKER_RELEASE] Worker {0} finished job {1} in {2}ms",
                     workerId, claimed.jobId(), totalJobTime);
+        }
+    }
+
+    private void recordJobMetrics(String jobId, String capabilityId, long startNanos, String fallbackState) {
+        try {
+            String state = fallbackState;
+            Optional<JobRow> latest = jobRecordDao.find(jobId);
+            if (latest.isPresent() && latest.get().state() != null
+                    && !"CLAIMED".equals(latest.get().state()) && !"EXECUTING".equals(latest.get().state())) {
+                state = latest.get().state();
+            }
+            Duration elapsed = Duration.ofNanos(Math.max(0L, System.nanoTime() - startNanos));
+            com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordJobState(capabilityId, state);
+            com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordJobDuration(capabilityId, state, elapsed);
+        } catch (RuntimeException ignored) {
+            // metrics never break job execution
         }
     }
 

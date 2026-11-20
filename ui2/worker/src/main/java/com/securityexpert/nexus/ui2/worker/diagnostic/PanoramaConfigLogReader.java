@@ -284,10 +284,12 @@ public final class PanoramaConfigLogReader {
         String command = strip(fields.get("cmd")).toLowerCase(java.util.Locale.ROOT);
         String outcome = strip(fields.get("result"));
         String path = strip(fields.get("path"));
-        String pathHmac = fingerprint == null || path.isEmpty() ? null : fingerprint.ofContent(DOMAIN_PATH,
-                path.getBytes(StandardCharsets.UTF_8), 0, path.getBytes(StandardCharsets.UTF_8).length);
         String commandClass = COMMAND_CLASS.matcher(command).matches() ? command : null;
         String resultClass = RESULT_CLASS.matcher(outcome).matches() ? outcome : null;
+        String pathOrJob = path.isEmpty() && ("commit".equals(commandClass) || "commit-all".equals(commandClass))
+                ? commitJobRef(fields) : path;
+        String pathHmac = fingerprint == null || pathOrJob.isEmpty() ? null : fingerprint.ofContent(DOMAIN_PATH,
+                pathOrJob.getBytes(StandardCharsets.UTF_8), 0, pathOrJob.getBytes(StandardCharsets.UTF_8).length);
         // Rule reference and administrator name (design section 6, PO D2 2026-11-12). The reference needs the product key; the
         // name is kept only for a successful configuration-change command that names a rule, never for a commit, a failed
         // command or an entry whose path names no rule. A name that is not shaped as expected stays NULL (UNKNOWN).
@@ -305,6 +307,14 @@ public final class PanoramaConfigLogReader {
         if (!m.find()) return null;
         String name = m.group(1) != null ? m.group(1) : m.group(2);
         return name.contains(PanLogRedactor.REDACTED) ? null : PolicySnapshot.ref(sourceId, "device-group", name);
+    }
+
+    private static String commitJobRef(Map<String, String> fields) {
+        for (String key : new String[] {"jobid", "job_id", "job-id", "job"}) {
+            String value = strip(fields.get(key));
+            if (!value.isEmpty() && !value.contains(PanLogRedactor.REDACTED)) return "job:" + value;
+        }
+        return "";
     }
 
     private static String strip(String value) { return value == null ? "" : value.strip(); }

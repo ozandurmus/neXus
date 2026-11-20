@@ -1,7 +1,7 @@
 import { useGate } from "../shell/JobWindow";
 import { PRODUCT_NAME } from "../brand/product";
 import { BackupAttempts, LatestAttemptCell, latestAttemptTime, useLatestBackupAttempts, type LatestAttempt } from "./BackupAttempts";
-import { DeviationChip, ValidationChip, deviationState } from "./backupWords";
+import { DeviationChip, ValidationChip, deviationState, isArchiveManifestComplete } from "./backupWords";
 import { BackupStoreQuotaCard } from "./BackupStoreQuotaCard";
 import { BackupDeviationCard, MajorDeviationDrawer, majorDeviceIds } from "./BackupDeviationCard";
 import { bytesTitle, formatBytes } from "../shell/bytes";
@@ -897,7 +897,8 @@ export function BackupScreen() {
           <DialogTitle sx={{ fontWeight: 700 }}>Backup history: {historyFor.name}</DialogTitle>
           <DialogContent dividers>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>Backup attempts</Typography>
-            <BackupAttempts deviceId={historyFor.deviceId} />
+            <BackupAttempts deviceId={historyFor.deviceId}
+              archiveComplete={history ? history.some(isArchiveManifestComplete) : isArchiveManifestComplete(historyFor)} />
             <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>Retained archives</Typography>
             {historyError && <Alert severity="error" sx={{ mb: 1 }}>{historyError}</Alert>}
             {!history && !historyError && <CircularProgress size={20} />}
@@ -1191,7 +1192,7 @@ const FleetTableRow = memo(function FleetTableRow({ summary, item, id, latest, l
       </TableCell>
       <TableCell>{item ? <ValidationChip level={item.validationLevel} withLevel /> : null}</TableCell>
       <TableCell>{item ? <DeviationChip state={item.deviationState} comparisonRun={comparisonRun} /> : null}</TableCell>
-      <TableCell sx={{ fontSize: 12.5 }}><LatestAttemptCell latest={latest} /></TableCell>
+      <TableCell sx={{ fontSize: 12.5 }}><LatestAttemptCell latest={latest} archiveComplete={isArchiveManifestComplete(item)} /></TableCell>
       <TableCell align="right">
         <RowMenu name={name}>
           {item || target ? (

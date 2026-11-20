@@ -33,6 +33,7 @@ public final class MetricLabelGuard {
     private static final Pattern SAFE_VALUE = Pattern.compile("[A-Za-z0-9 _.:/{}*()\\-]{1,64}");
     private static final Pattern IPV4 = Pattern.compile(".*\\b\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b.*");
     private static final Pattern IPV6 = Pattern.compile(".*[0-9A-Fa-f]{0,4}:[0-9A-Fa-f]{0,4}:[0-9A-Fa-f:]*.*");
+    private static final Pattern DEVICE_PSEUDONYM = Pattern.compile("(?i).*\\b(fw|cls|vsys)-[a-z]+-\\d+\\b.*");
 
     private MetricLabelGuard() {
     }
@@ -40,7 +41,7 @@ public final class MetricLabelGuard {
     /** True when {@code value} may appear as a label value. */
     public static boolean safeValue(String value) {
         return value != null && SAFE_VALUE.matcher(value).matches() && !IPV4.matcher(value).matches()
-                && !IPV6.matcher(value).matches();
+                && !IPV6.matcher(value).matches() && !DEVICE_PSEUDONYM.matcher(value).matches();
     }
 
     public static MeterFilter filter() {

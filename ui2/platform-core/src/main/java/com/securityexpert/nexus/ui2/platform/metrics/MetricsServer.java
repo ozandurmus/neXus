@@ -47,21 +47,26 @@ public final class MetricsServer implements AutoCloseable {
                 exchange.sendResponseHeaders(404, -1);
                 return;
             }
-            String method = exchange.getRequestMethod();
-            if (!"GET".equals(method) && !"HEAD".equals(method)) {
-                exchange.getResponseHeaders().set("Allow", "GET, HEAD");
-                exchange.sendResponseHeaders(405, -1);
-                return;
-            }
-            byte[] body = registry.scrape().getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
-            if ("HEAD".equals(method)) {
-                exchange.sendResponseHeaders(200, -1);
-                return;
-            }
-            exchange.sendResponseHeaders(200, body.length);
-            exchange.getResponseBody().write(body);
+            handleMetrics(exchange, registry);
         }
+    }
+
+    /** Serves {@code GET /metrics} and {@code HEAD /metrics} on an internal server exchange; 405 for any other method. */
+    public static void handleMetrics(HttpExchange exchange, PrometheusMeterRegistry registry) throws IOException {
+        String method = exchange.getRequestMethod();
+        if (!"GET".equals(method) && !"HEAD".equals(method)) {
+            exchange.getResponseHeaders().set("Allow", "GET, HEAD");
+            exchange.sendResponseHeaders(405, -1);
+            return;
+        }
+        byte[] body = registry.scrape().getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+        if ("HEAD".equals(method)) {
+            exchange.sendResponseHeaders(200, -1);
+            return;
+        }
+        exchange.sendResponseHeaders(200, body.length);
+        exchange.getResponseBody().write(body);
     }
 
     @Override

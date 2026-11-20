@@ -412,6 +412,7 @@ public final class CpFailoverJobExecutor {
         state("DONE","DONE",outcome,check==0?null:checkName(check),"COMMAND_UNAVAILABLE".equals(stopCode)?(unavailableDetail==null?stopCode:stopCode+":"+unavailableDetail):code);
         leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
             "system:cp-failover-worker","cp_readiness_done",outcome);
+        com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordReadinessRun(outcome);
     }
     private static String checkName(int check) {
         return switch (check) {

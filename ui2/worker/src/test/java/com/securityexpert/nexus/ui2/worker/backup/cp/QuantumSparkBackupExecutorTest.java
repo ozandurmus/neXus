@@ -100,6 +100,30 @@ class QuantumSparkBackupExecutorTest {
         assertEquals(2, transport.logReads);
     }
 
+    @Test
+    void missingCredentialNamesTheExactSlotAndAdministrationCredentials() throws Exception {
+        Path inbox = Files.createDirectory(temp.resolve("slot-inbox"));
+        FakeTransport transport = new FakeTransport(inbox, false);
+        QuantumSparkBackupExecutor executor = new QuantumSparkBackupExecutor(transport, store(), inbox, "192.0.2.20",
+                ref -> RECEIVER_SECRET.toCharArray(), Duration.ZERO);
+
+        var missingReceiver = (BackupResult.CredentialUnresolvable) executor.collect(
+                request, Optional.empty(), "device", "job");
+        assertEquals("Spark backup receiver credential (backup_receiver) is missing (Administration > Credentials)",
+                missingReceiver.reason());
+
+        var noBackupReq = new BackupRequest(request.connectionTarget(), Optional.empty(), request.trustRuleRef());
+        var missingBackup = (BackupResult.CredentialUnresolvable) executor.collect(
+                noBackupReq, Optional.of("receiver-credential"), "device", "job");
+        assertEquals("Spark backup credential is missing (Administration > Credentials)",
+                missingBackup.reason());
+
+        var missingBoth = (BackupResult.CredentialUnresolvable) executor.collect(
+                noBackupReq, Optional.empty(), "device", "job");
+        assertEquals("Spark backup credential and backup receiver credential (backup_receiver) are missing (Administration > Credentials)",
+                missingBoth.reason());
+    }
+
     private ArtefactStore store() {
         return new FileArtefactStore(temp.resolve("store"),
                 ArtefactStoreCipher.fromBase64Key(Base64.getEncoder().encodeToString(new byte[32])));

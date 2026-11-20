@@ -37,6 +37,8 @@ public final class NotificationMailTemplate {
     private static final String FONT_STACK = "Segoe UI,-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif";
     private static final String MONO_STACK = "Consolas,ui-monospace,SFMono-Regular,Menlo,Monaco,monospace";
     private static final String JOB_PATH_PREFIX = "/operations/jobs/";
+    static final String CREDENTIALS_PATH = "/?screen=administration&tab=registry&section=credentials";
+    static final String CREDENTIALS_LABEL = "Administration > Credentials";
 
     public enum Band {
         RED("#dc2626", "#fef2f2", "#991b1b", "HIGH"),
@@ -74,6 +76,10 @@ public final class NotificationMailTemplate {
 
         static Cell link(String linkText, String path) {
             return new Cell("", linkText, path);
+        }
+
+        static Cell textWithLink(String text, String linkText, String path) {
+            return new Cell(text == null ? "" : text, linkText, path);
         }
     }
 
@@ -439,6 +445,43 @@ public final class NotificationMailTemplate {
         return Cell.of("");
     }
 
+    /** Names the missing credential slot for a {@code credential_unresolvable} failure and links to Administration > Credentials. */
+    static Cell whyCell(String rawReason) {
+        String reason = rawReason == null ? "" : rawReason.strip();
+        if (reason.toLowerCase(java.util.Locale.ROOT).startsWith("credential_unresolvable")) {
+            String detail = reason.replaceFirst("(?i)^credential_unresolvable[\\s:.-]*", "")
+                    .replaceFirst("(?i)\\s*\\(Administration\\s*>\\s*Credentials\\)\\s*$", "").strip();
+            String slot = credentialSlotDescription(detail);
+            return Cell.textWithLink(shorten(slot), CREDENTIALS_LABEL, CREDENTIALS_PATH);
+        }
+        return Cell.of(shorten(reason));
+    }
+
+    private static String credentialSlotDescription(String detail) {
+        String lower = detail.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("backup or receiver credential")
+                || (lower.contains("backup credential") && lower.contains("receiver credential"))) {
+            return "Missing Spark backup credential or backup receiver credential (backup_receiver)";
+        }
+        if (lower.contains("backup_receiver") || lower.contains("receiver credential")) {
+            return "Missing backup receiver credential (backup_receiver)";
+        }
+        if (lower.contains("export passphrase") || lower.contains("export_passphrase")
+                || lower.contains("passphrase credential")) {
+            return "Missing export passphrase credential (export_passphrase)";
+        }
+        if (lower.contains("spark backup credential")) {
+            return "Missing Spark backup credential";
+        }
+        if (lower.contains("backup credential")) {
+            return "Missing backup credential";
+        }
+        if (lower.contains("login credential") || lower.contains("ssh credential")) {
+            return "Missing login credential";
+        }
+        return detail.isEmpty() ? "Missing device credential" : "Missing device credential (" + detail + ")";
+    }
+
     // ---------------------------------------------------------------- summary sentence
 
     private static String summarize(String type, List<List<String>> rows) {
@@ -529,15 +572,16 @@ public final class NotificationMailTemplate {
                 linkCol = 3;
                 for (List<String> r : rows) {
                     out.add(List.of(Cell.of(localTime(cell(r, 0))), Cell.of(shorten(cell(r, 1))),
-                            Cell.of(shorten(cell(r, 3))), jobCell(cell(r, 4))));
+                            whyCell(cell(r, 3)), jobCell(cell(r, 4))));
                 }
             }
             case "job_failure" -> {
                 headers = List.of("Time", "Device", "What", "Why", "Job");
                 linkCol = 4;
                 for (List<String> r : rows) {
-                    out.add(List.of(Cell.of(localTime(cell(r, 0))), Cell.of(shorten(cell(r, 1))),
-                            Cell.of(capitalize(jobLabel(cell(r, 2), cell(r, 3)))), Cell.of(shorten(cell(r, 3))),
+                    out.add(List.of(localTime(cell(r, 0)).isEmpty() ? Cell.of("") : Cell.of(localTime(cell(r, 0))),
+                            Cell.of(shorten(cell(r, 1))),
+                            Cell.of(capitalize(jobLabel(cell(r, 2), cell(r, 3)))), whyCell(cell(r, 3)),
                             jobCell(cell(r, 4))));
                 }
             }
@@ -752,7 +796,16 @@ public final class NotificationMailTemplate {
             for (int i = 0; i < limit; i++) {
                 List<String> parts = new ArrayList<>();
                 for (Cell c : table.rows().get(i)) {
-                    String v = c.path() != null && baseUrl != null ? baseUrl + c.path() : c.text();
+                    String v;
+                    if (c.path() != null && baseUrl != null) {
+                        v = c.text().isEmpty()
+                                ? baseUrl + c.path()
+                                : c.text() + " — " + c.linkText() + " (" + baseUrl + c.path() + ")";
+                    } else if (c.linkText() != null && !c.text().isEmpty()) {
+                        v = c.text() + " — " + c.linkText();
+                    } else {
+                        v = c.text();
+                    }
                     parts.add(v.isEmpty() ? "-" : v);
                 }
                 t.append(String.join(" | ", parts)).append('\n');
@@ -904,9 +957,14 @@ public final class NotificationMailTemplate {
         for (Cell c : cells) {
             html.append("<td valign=\"top\" style=\"padding:8px 10px;border:1px solid #e2e8f0;color:#1e293b;line-height:1.4;word-break:break-word;\">");
             if (c.path() != null && baseUrl != null) {
+                if (!c.text().isEmpty()) {
+                    html.append(escapeHtml(c.text())).append(" — ");
+                }
                 html.append("<a href=\"").append(escapeHtml(baseUrl + c.path()))
                         .append("\" style=\"color:#1d4ed8;text-decoration:underline;\">")
                         .append(escapeHtml(c.linkText())).append("</a>");
+            } else if (c.linkText() != null && !c.text().isEmpty()) {
+                html.append(escapeHtml(c.text() + " — " + c.linkText()));
             } else {
                 html.append(escapeHtml(c.text()));
             }

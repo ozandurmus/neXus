@@ -50,8 +50,9 @@ ui2:
       enabled: ${UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_ENABLED:false}
       independent: ${UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_INDEPENDENT:false}
   metrics:
-    # Prometheus scrape port (docs/operations/METRICS.md): a separate JDK server, never routed by the Service or Ingress.
-    # 0 (unset) keeps it off; the deployment manifests set 9404.
+    # Prometheus scrape port (docs/operations/METRICS.md): a separate JDK server and internal port 8086, never routed by the public Service or Ingress.
+    # Off by default (UI2_METRICS_ENABLED=false); when enabled, serves GET /metrics on the internal port.
+    enabled: ${UI2_METRICS_ENABLED:false}
     port: ${UI2_METRICS_PORT:0}
   db:
     url: ${UI2_DB_URL:jdbc:postgresql://localhost:5432/ui2}

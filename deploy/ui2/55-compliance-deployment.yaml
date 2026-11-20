@@ -35,6 +35,8 @@ spec:
           image: registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:966cf85b73bc107cc4331f9967f98dfad864e0035d96ea97aa4848fd7deeb136
           args: ["worker", "compliance"]
           env:
+            - name: UI2_METRICS_ENABLED
+              value: "false"
             - name: UI2_METRICS_PORT
               value: "9404"
             # PO 2026-11-15: application logs on HOST-A show IP addresses (the code default stays masked).

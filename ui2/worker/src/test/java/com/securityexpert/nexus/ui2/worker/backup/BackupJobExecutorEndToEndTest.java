@@ -421,6 +421,15 @@ class BackupJobExecutorEndToEndTest {
         assertFalse(harness.transport.commandsIssued.contains(BackupReadPlan.deleteBackupCommand(ARCHIVE_NAME)));
         assertEquals(0, harness.manifestRepo.recorded.size());
         assertEquals(JobState.OUTCOME_UNKNOWN, harness.leaseRepo.currentState);
+        assertNotNull(harness.leaseRepo.lastTerminalReason,
+                "OUTCOME_UNKNOWN transition must persist the executor's finer reason to terminal_reason");
+        assertEquals(((JobOutcome.OutcomeUnknown) outcome).reason(), harness.leaseRepo.lastTerminalReason);
+        assertTrue(harness.leaseRepo.lastTerminalReason.contains("stage=poll_backup_status"),
+                harness.leaseRepo.lastTerminalReason);
+        assertTrue(harness.leaseRepo.lastTerminalReason.contains("transport=completed"),
+                harness.leaseRepo.lastTerminalReason);
+        assertTrue(harness.leaseRepo.lastTerminalReason.contains("last_status=in progress"),
+                harness.leaseRepo.lastTerminalReason);
     }
 
     @Test

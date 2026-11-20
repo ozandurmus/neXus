@@ -120,6 +120,47 @@ class NotificationMailTemplateTest {
     }
 
     @Test
+    void backupFailureMailNamesMissingCredentialSlotAndLinksToAdministrationCredentials() {
+        Instant t1 = Instant.parse("2026-11-20T02:04:00Z");
+        Instant t2 = Instant.parse("2026-11-20T02:05:00Z");
+        NotificationMailRouter.Batch batch = new NotificationMailRouter.Batch(
+                List.of(
+                        t1 + "  FW-TANGO-04  cp_spark_sftp_backup: credential_unresolvable: Spark backup or receiver credential is missing  /operations/jobs/job-sp-1",
+                        t2 + "  FW-BRAVO-02  cp_spark_sftp_backup: credential_unresolvable: Spark backup receiver credential (backup_receiver) is missing (Administration > Credentials)  /operations/jobs/job-sp-2"),
+                List.of(
+                        List.of(t1.toString(), "FW-TANGO-04", "cp_spark_sftp_backup",
+                                "credential_unresolvable: Spark backup or receiver credential is missing",
+                                "/operations/jobs/job-sp-1"),
+                        List.of(t2.toString(), "FW-BRAVO-02", "cp_spark_sftp_backup",
+                                "credential_unresolvable: Spark backup receiver credential (backup_receiver) is missing (Administration > Credentials)",
+                                "/operations/jobs/job-sp-2")),
+                0L, t2, Map.of());
+
+        NotificationMailTemplate.RenderedMail mail = NotificationMailTemplate.render(
+                "backup_failure", batch, "Overwatch", "https://overwatch.example.test", "production");
+
+        assertTrue(mail.html().contains("Missing Spark backup credential or backup receiver credential (backup_receiver)"),
+                mail.html());
+        assertTrue(mail.html().contains("Missing backup receiver credential (backup_receiver)"), mail.html());
+        assertTrue(mail.html().contains(
+                "href=\"https://overwatch.example.test/?screen=administration&amp;tab=registry&amp;section=credentials\""),
+                mail.html());
+        assertTrue(mail.html().contains(">Administration &gt; Credentials</a>"), mail.html());
+
+        assertTrue(mail.text().contains("Missing Spark backup credential or backup receiver credential (backup_receiver) — "
+                + "Administration > Credentials (https://overwatch.example.test/?screen=administration&tab=registry&section=credentials)"),
+                mail.text());
+        assertTrue(mail.text().contains("Missing backup receiver credential (backup_receiver) — "
+                + "Administration > Credentials (https://overwatch.example.test/?screen=administration&tab=registry&section=credentials)"),
+                mail.text());
+
+        NotificationMailTemplate.RenderedMail withoutBaseUrl = NotificationMailTemplate.render(
+                "backup_failure", batch, "Overwatch", null, "production");
+        assertFalse(withoutBaseUrl.html().contains("<a href="));
+        assertTrue(withoutBaseUrl.text().contains("Missing backup receiver credential (backup_receiver) — Administration > Credentials"));
+    }
+
+    @Test
     void timesAreEuropeIstanbulLocalWithoutSecondsOrZone() {
         assertEquals("18.11.2026 12:15", NotificationMailTemplate.localTime("2026-11-18T09:15:00Z"));
         assertEquals("01.01.2027 02:59", NotificationMailTemplate.localTime("2026-12-31T23:59:30Z"));

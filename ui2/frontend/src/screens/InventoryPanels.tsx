@@ -78,7 +78,7 @@ import {
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { BackupAttempts } from "./BackupAttempts";
 import { hasBackupMethod } from "./backupCounts";
-import { DeviationChip, ValidationChip, deviationState } from "./backupWords";
+import { DeviationChip, ValidationChip, deviationState, isArchiveManifestComplete } from "./backupWords";
 import { DeviceLogsPanel, describeSystemLogCollectError, describeSystemLogCollectOutcome } from "./DeviceLogsPanel";
 import { CpFailoverPanel } from "./CpFailoverPanel";
 import { CertificateStatePill, HttpsCertificateCard } from "./HttpsCertificatePanel";
@@ -3468,11 +3468,12 @@ export function BackupPanel({ deviceId, vendorHint, backupTarget }: { readonly d
         <RequestBackupControl deviceId={deviceId} onAdmitted={() => { fetcher.refresh(); setAttemptsVersion((v) => v + 1); }} />
         <EmptyPanel title="Not a backup target"
           body={`This device is not switched on as a backup target, so ${PRODUCT_NAME} keeps no archive for it and schedules no backup. The switch is on the Backups screen; a switched-on device is backed up at the next 02:00 GMT+3 run.`} />
-        <BackupAttempts key={deviceId} deviceId={deviceId} version={attemptsVersion} collapseTo={BACKUP_ATTEMPTS_SHOWN} quietWhenEmpty />
+        <BackupAttempts key={deviceId} deviceId={deviceId} version={attemptsVersion} collapseTo={BACKUP_ATTEMPTS_SHOWN} quietWhenEmpty archiveComplete={false} />
       </Stack>
     );
   }
 
+  const archiveComplete = backups.some(isArchiveManifestComplete);
   return (
     <Stack spacing={2.5}>
       <RequestBackupControl deviceId={deviceId} onAdmitted={() => { fetcher.refresh(); setAttemptsVersion((v) => v + 1); }} />
@@ -3521,7 +3522,7 @@ export function BackupPanel({ deviceId, vendorHint, backupTarget }: { readonly d
       </Box>
       <Box>
         <Typography variant="subtitle2" sx={{ mb: 1 }}>Backup attempts</Typography>
-        <BackupAttempts key={deviceId} deviceId={deviceId} version={attemptsVersion} collapseTo={BACKUP_ATTEMPTS_SHOWN} />
+        <BackupAttempts key={deviceId} deviceId={deviceId} version={attemptsVersion} collapseTo={BACKUP_ATTEMPTS_SHOWN} archiveComplete={archiveComplete} />
       </Box>
     </Stack>
   );
