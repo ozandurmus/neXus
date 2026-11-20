@@ -265,6 +265,12 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
           {/* The mode line only when it adds information: "Mode: UNKNOWN" next to a known role says nothing. */}
           {!nested && row?.unitKind === "VSX_CHASSIS" && <Typography variant="caption" component="div" data-vsx-chassis
             title="The chassis is its own unit: its status, pre-checks and selection are the chassis step; each Virtual System below has its own">VSX chassis</Typography>}
+          {/* The chassis failover the server offers for its mode (contract §17), started from the unit's detail; or why none. */}
+          {!nested && row?.unitKind === "VSX_CHASSIS" && (row.failoverRefusal
+            ? <Typography variant="caption" component="div" data-chassis-refusal title={row.failoverRefusal}>{readinessReasonLabel(row.failoverRefusal)}</Typography>
+            : row.chassisAction && <Button size="small" data-chassis-action={row.chassisAction} sx={{ p: 0, textTransform: "none" }}
+                onClick={event => { event.stopPropagation(); onOpen(cluster.ref, row.unitId); }}>
+                {row.chassisAction === "FAILOVER_ALL_VIRTUAL_SYSTEMS" ? "Fail over all virtual systems" : "Fail over the chassis"}</Button>)}
           {row?.mode && row.mode !== "UNKNOWN" && <Typography variant="caption" component="div" title={`Mode: ${row.mode}`}
             sx={{ whiteSpace: "nowrap", overflowWrap: "normal", overflow: "hidden", textOverflow: "ellipsis" }}>Mode: {clusterModeWord(row.mode)}</Typography>}
         </TableCell>

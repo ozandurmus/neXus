@@ -131,7 +131,8 @@ public final class ReadinessCheckView {
             case 5 -> "ARP"; case 6 -> "Connections"; case 8 -> "Traffic rate";
             case 9 -> "State synchronization"; case 10 -> "Installed policy parity";
             case 11 -> "Critical devices"; case 12 -> "Bond interfaces";
-            case 13 -> "Last failover"; case 14 -> "Routing"; case 15 -> "Recovery mode"; default -> "Check";
+            case 13 -> "Last failover"; case 14 -> "Routing"; case 15 -> "Recovery mode";
+            case 16 -> "Virtual systems moved"; default -> "Check";
         };
     }
 
@@ -187,6 +188,7 @@ public final class ReadinessCheckView {
                 case 13 -> "Last failover time unavailable or invalid";
                 case 14 -> "Routing table not recognised";
                 case 15 -> "Recovery mode not recognised; failover is refused unless both members report Active Up";
+                case 16 -> virtualSystemsMoved(false,d);
                 default -> "Check evidence unavailable";
             };
         }
@@ -232,8 +234,19 @@ public final class ReadinessCheckView {
                 : "PRIMARY_UP".equals(d.path("recoveryMode").asText())
                     ? "Primary Up: the return step could preempt; failover is refused"
                     : "Recovery mode not Active Up; failover is refused";
+            case 16 -> virtualSystemsMoved(pass,d);
             default -> "Check result unavailable";
         };
+    }
+
+    /** Check 16 of a VSX chassis failover run (PO 2026-11-19): counts and opaque VSIDs only. */
+    private static String virtualSystemsMoved(boolean pass,JsonNode d) {
+        if (!d.path("virtualSystems").isIntegralNumber()) return "Virtual system states unavailable";
+        String counts=d.path("onExpectedMember").asLong()+" of "+d.path("virtualSystems").asLong()+" virtual systems on the expected member";
+        if (pass) return counts;
+        var missing=new java.util.ArrayList<String>();
+        d.path("notOnExpectedMember").forEach(v -> missing.add(v.asText()));
+        return counts+(missing.isEmpty() ? "" : "; not moved: VSID "+String.join(", ",missing));
     }
 
     /**

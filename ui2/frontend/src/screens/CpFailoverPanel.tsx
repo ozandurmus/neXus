@@ -248,8 +248,12 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
   }, [expanded, bound, draft, loaded, active, run, unit.masked, unit.canStart]);
   const idle = loaded && !busy && !active && !(readinessRun && activeStates.includes(readinessRun.state));
   const canOperate = unit.masked !== true && unit.canStart;
-  // The VSX chassis is its own unit with its own pre-checks, but the server never fails it over (failoverRefusal).
+  // A VSX chassis is failed over as its mode allows (contract §17): one chassis run in VSX HA mode, every virtual system in
+  // turn on VSLS; with the mode unknown the server offers nothing (failoverRefusal).
   const failoverOffered = canOperate && !unit.failoverRefusal;
+  const allVirtualSystems = unit.unitKind === "VSX_CHASSIS" && unit.chassisAction === "FAILOVER_ALL_VIRTUAL_SYSTEMS";
+  const startLabel = allVirtualSystems ? "Fail over all virtual systems" : unit.unitKind === "VSX_CHASSIS" ? "Fail over the chassis" : "Start failover";
+  const sequence = unit.sequence;
   const confirm = () => act(async () => {
     const request = draft ?? { requestId: crypto.randomUUID(), from: new Date().toISOString(), until: displayInputToIso(until) ?? new Date(until).toISOString(), reason: reason.trim() };
     remember(request);
@@ -264,17 +268,25 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
     {unit.refusalReason && <Typography color="error">{unit.refusalReason}</Typography>}
     {unit.failoverRefusal && <Typography variant="body2" data-failover-refusal title={unit.failoverRefusal}>
       {readinessReasonLabel(unit.failoverRefusal)}: its pre-checks run here; each Virtual System below is failed over on its own.</Typography>}
+    {unit.unitKind === "VSX_CHASSIS" && unit.chassisAction && <Typography variant="body2" data-chassis-action={unit.chassisAction}>
+      {allVirtualSystems ? "VSLS chassis: every virtual system is failed over in turn, each with its own checks and return."
+        : "VSX HA mode: the chassis fails over in VS0; every virtual system must follow it."}
+      {unit.chassisStartRefusal && <Box component="span" data-chassis-start-refusal title={unit.chassisStartRefusal}> Not now: {readinessReasonLabel(unit.chassisStartRefusal)}.</Box>}</Typography>}
+    {sequence && <Typography variant="body2" role="status" data-sequence-state={sequence.state}>
+      All virtual systems: {sequence.state === "RUNNING" ? `virtual system ${sequence.started} of ${sequence.total} running`
+        : `${readinessReasonLabel(sequence.outcome ?? sequence.state)}${sequence.failedVsId ? ` (VSID ${sequence.failedVsId})` : ""}`}</Typography>}
     {expanded && <Stack spacing={2} sx={{ mt: 1 }}>
       <FailoverIncidentsPanel clusterId={unit.clusterId} onReleased={() => { onRefreshUnits(); void refresh(); }} />
       {pending && <Typography role="status">Awaiting second approval</Typography>}
-      {failoverOffered && <M3Button deviceJob emphasis="filled" disabled={!idle || Boolean(unit.refusalReason) || Boolean(pending)} onClick={() => {
+      {failoverOffered && <M3Button deviceJob emphasis="filled" disabled={!idle || Boolean(unit.refusalReason) || Boolean(pending)
+        || Boolean(unit.chassisStartRefusal) || sequence?.state === "RUNNING"} onClick={() => {
         if (draft?.confirmedRevision && bound?.approved && (!run || run.approvalId !== bound.approvalId)) { void act(() => start(bound)); return; }
         if (draft && (run?.approvalId === draft.requestId || Date.parse(draft.until) <= Date.now()
           || approvals.some(a => a.requestId === draft.requestId && a.revokedAt))) {
           sessionStorage.removeItem(storageKey); setDraft(null);
         }
         setDialog(true);
-      }}>Start failover</M3Button>}
+      }}>{startLabel}</M3Button>}
       {unit.masked !== true && unit.canApprove && !unit.failoverRefusal && pending?.canApprove && <M3Button emphasis="outlined" disabled={!idle}
         onClick={() => void act(() => secondApproveCpFailover(unit, pending.requestId!, pending.revision!))}>Approve request revision {pending.revision}</M3Button>}
       <ReadinessCard checks={readinessRun?.checks.filter(c => c.phase === "pre") ?? []} members={unit.members} cluster={label}
@@ -288,9 +300,11 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
       {run && <ResumeReturn run={run} unit={unit} onChanged={() => { onRefreshUnits(); void refresh(); }} />}
       {error && <Typography role="alert" color="error">{error}</Typography>}
     </Stack>}
-    <Dialog open={dialog} onClose={() => { if (!busy) setDialog(false); }}><DialogTitle>Start manual failover</DialogTitle>
+    <Dialog open={dialog} onClose={() => { if (!busy) setDialog(false); }}><DialogTitle>{allVirtualSystems ? "Fail over all virtual systems" : "Start manual failover"}</DialogTitle>
       <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
         <Typography>Target: {label}</Typography>
+        {allVirtualSystems && <Typography data-sequence-warning>Every virtual system of this chassis is failed over one after another, in VSID order, each in its own run with its own pre-checks, switch, post-checks and return. The sequence stops at the first virtual system that does not succeed.</Typography>}
+        {unit.unitKind === "VSX_CHASSIS" && !allVirtualSystems && <Typography>The chassis fails over in VS0. Afterwards every virtual system must be active on the new active member; if one is not, the run stops and offers the return step.</Typography>}
         <Typography>Intended role swap: current active becomes DOWN/suspended; current standby/passive becomes active. The former active is then returned to standby/passive after successful checks.</Typography>
         <Typography>Traffic may be interrupted. The run may stop with one member DOWN. Intervention may be required.</Typography>
         <Typography>OK / Start confirms this request revision and the complete workflow. No later confirmation is required.</Typography>

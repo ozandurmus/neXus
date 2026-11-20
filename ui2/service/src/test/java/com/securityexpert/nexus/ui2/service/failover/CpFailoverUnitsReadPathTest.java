@@ -176,7 +176,9 @@ class CpFailoverUnitsReadPathTest {
         assertEquals(chassis.path("clusterId").asText(), chassis.path("unitId").asText());
         assertFalse(chassis.has("virtual_system"));
         assertEquals("INSUFFICIENT_EVIDENCE", chassis.path("refusalReason").asText());
-        assertEquals(CpFailoverService.CHASSIS_FAILOVER_NOT_APPROVED, chassis.path("failoverRefusal").asText());
+        // No readiness yet: the chassis mode is unknown, so no chassis action is offered (contract §17).
+        assertEquals(CpFailoverService.CHASSIS_MODE_UNKNOWN, chassis.path("failoverRefusal").asText());
+        assertFalse(chassis.path("canStart").asBoolean());
         List<JsonNode> units = List.of(all.get(1), all.get(2));
         assertEquals(List.of("VS-TEST-APP (VSID 13)", "VS-TEST-DB (VSID 35)"),
             List.of(units.get(0).path("virtual_system").asText(), units.get(1).path("virtual_system").asText()));
@@ -255,7 +257,9 @@ class CpFailoverUnitsReadPathTest {
         clearInvocations(rbac, store);
         read("cp-failover", "units?memberDeviceId=" + VSX + "-a");
         assertEquals(oneUnitEvaluations, mockingDetails(rbac).getInvocations().size());
-        assertEquals(oneUnitStoreReads, mockingDetails(store).getInvocations().size());
+        // One more read for a VSX cluster: its chassis unit's latest "Fail over all virtual systems" sequence (one per
+        // cluster, never per VS unit).
+        assertEquals(oneUnitStoreReads + 1, mockingDetails(store).getInvocations().size());
         assertTrue(oneUnitEvaluations <= 6, "authorization lookups per request: " + oneUnitEvaluations);
     }
 

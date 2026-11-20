@@ -247,6 +247,8 @@ class AuditRedactionPolicyTest {
             "failover_approval.unit_ref", "failover_approval.vendor", "failover_approval.vs_id",
             "failover_approval.warning_confirmed_at", "failover_approval.window_from",
             "failover_approval.window_until",
+            // V256: the chassis approval a sequence's per-VS approval derives from (opaque id)
+            "failover_approval.parent_approval_id",
             // failover_check_result
             "failover_check_result.check_no", "failover_check_result.derived",
             "failover_check_result.member_ref", "failover_check_result.observed_at",
@@ -288,6 +290,15 @@ class AuditRedactionPolicyTest {
             "failover_run.run_id", "failover_run.run_kind", "failover_run.scheduled_for",
             "failover_run.started_at", "failover_run.state", "failover_run.step",
             "failover_run.target_member_ids", "failover_run.vendor", "failover_run.vs_id",
+            // V256: the "Fail over all virtual systems" sequence the VS run belongs to (opaque id)
+            "failover_run.sequence_id",
+            // failover_sequence (V256): opaque references, VSIDs, counts and codes only; no free text
+            "failover_sequence.admission_role", "failover_sequence.approval_id",
+            "failover_sequence.business_hours_ack", "failover_sequence.cluster_ref",
+            "failover_sequence.current_run_id", "failover_sequence.failed_vs_id", "failover_sequence.finished_at",
+            "failover_sequence.initiated_by", "failover_sequence.next_index", "failover_sequence.outcome",
+            "failover_sequence.requested_at", "failover_sequence.sequence_id", "failover_sequence.state",
+            "failover_sequence.target_member_ids", "failover_sequence.vendor", "failover_sequence.vs_ids",
             // gate_registry
             "gate_registry.action_class", "gate_registry.canonical_command_key",
             "gate_registry.created_at", "gate_registry.gate_id", "gate_registry.max_frequency",

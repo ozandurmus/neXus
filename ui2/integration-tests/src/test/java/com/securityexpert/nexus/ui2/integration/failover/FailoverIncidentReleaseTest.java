@@ -219,7 +219,9 @@ class FailoverIncidentReleaseTest {
             var e = executing(fixture, repo, "unit-dispatch", members);
             repo.check(e.run(), "pre", e.member(), null, 15, "FAIL", "{\"recoveryMode\":\"PRIMARY_UP\"}");
             assertEquals(1L, count(fixture, "failover_check_result where check_no=15"));
-            assertThrows(RuntimeException.class, () -> repo.check(e.run(), "pre", e.member(), null, 16, "PASS", "{}"));
+            // V256: check 16 "Virtual systems moved" of a VSX chassis run is storable; 17 is not.
+            repo.check(e.run(), "post", e.member(), null, 16, "PASS", "{\"virtualSystems\":2}");
+            assertThrows(RuntimeException.class, () -> repo.check(e.run(), "pre", e.member(), null, 17, "PASS", "{}"));
         }
     }
 

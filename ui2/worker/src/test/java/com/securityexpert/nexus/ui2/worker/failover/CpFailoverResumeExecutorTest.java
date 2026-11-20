@@ -50,6 +50,10 @@ class CpFailoverResumeExecutorTest {
         String refusedInSend;
         Runnable beforeSend=() -> {};
         final List<Boolean> admissionAtStart=new ArrayList<>();
+        /** Stored inventory contexts; a numeric context on both members makes the stopped run a VSX chassis run. */
+        List<SummaryMember> contexts=List.of();
+        String expectedUpGate="cp_failover_up";
+        @Override public List<SummaryMember> summaryMembers(java.util.Collection<String> ids) { return contexts; }
         Store() { super(new TransactionBoundary() {
             public <T> T inTransaction(java.util.function.Function<org.jooq.DSLContext,T> ignored) {
                 throw new AssertionError("Database access in fake test");
@@ -86,7 +90,7 @@ class CpFailoverResumeExecutorTest {
             return rows;
         }
         @Override public Dispatch prepareResumeDispatch(String id,long epoch,int index,String member,String gate,String actionClass) {
-            assertEquals("cp_failover_up",gate); assertEquals(A,member); assertEquals("operational-state-change",actionClass);
+            assertEquals(expectedUpGate,gate); assertEquals(A,member); assertEquals("operational-state-change",actionClass);
             prepared++;
             return new Dispatch("nonce-1","run-1","job-r",epoch);
         }
@@ -145,7 +149,7 @@ class CpFailoverResumeExecutorTest {
                     String literal=((ExecSpec)args[1]).command();
                     commands.add(literal); targets.add(session);
                     assertTrue(literal.startsWith("bash -lc '") && literal.endsWith("'"),literal);
-                    String cmd=literal.substring("bash -lc '".length(),literal.length()-1);
+                    String cmd=literal.substring("bash -lc '".length(),literal.length()-1).replaceFirst("^vsenv [0-9]+ && ","");
                     boolean first=session.endsWith("11");
                     if (cmd.equals("clusterXL_admin up")) {
                         up=true; upCount++;
@@ -388,5 +392,23 @@ class CpFailoverResumeExecutorTest {
         for (Store stopped:List.of(preempted,timedOut,policy,traffic)) {
             assertEquals("STOPPED",stopped.state); assertEquals(1,stopped.prepared);
         }
+    }
+
+    /** A stopped VSX HA-mode chassis run (option B, PO 2026-11-19): the resumed return writes and reads in VS0 only. */
+    @Test void aChassisResumeReturnsInVs0AndVerifiesTheVirtualSystemsCameBack() {
+        Store store=new Store(); store.expectedUpGate="cp_failover_up_vsenv0";
+        List<JooqCpFailoverRepository.SummaryMember> rows=new ArrayList<>();
+        for(String member:List.of(A,B)) {
+            rows.add(new JooqCpFailoverRepository.SummaryMember(member,true,"ssh_exec",true,"physical",false));
+            rows.add(new JooqCpFailoverRepository.SummaryMember(member,true,"ssh_exec",true,"12",false));
+        }
+        store.contexts=rows;
+        Script script=new Script();
+        run(store,script);
+        assertEquals("DONE",store.state,store.checks.toString()); assertEquals("RETURN_VERIFIED",store.message);
+        assertEquals(List.of("bash -lc 'vsenv 0 && clusterXL_admin up'"),script.writes());
+        assertTrue(script.commands.stream().allMatch(c -> c.startsWith("bash -lc 'vsenv 0 && ")
+            || c.equals("bash -lc 'vsenv 12 && cphaprob stat'")),script.commands.toString());
+        assertEquals(2,store.checks.stream().filter("post_return:16:PASS"::equals).count());
     }
 }

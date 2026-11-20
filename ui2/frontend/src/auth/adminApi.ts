@@ -2497,8 +2497,14 @@ export interface ReadinessMember { device_id: string; hostname: string | null; h
 export interface CpFailoverUnit { maskedName?: string; maskedMembers?: Array<Omit<ReadinessMember, "hostname"> & { maskedLabel: string }>; masked?: boolean; members?: ReadinessMember[]; unitId: string; clusterId: string; cluster_member_ref: string; vendor?: "check_point" | "palo_alto" | "cisco_asa" | "fortinet"; virtual_system?: string;
   /** VSX: the chassis and each Virtual System are separate units; the chassis is listed first (VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md). */
   unitKind?: "CLUSTER" | "VSX_CHASSIS" | "VIRTUAL_SYSTEM";
-  /** Set when the server never fails this unit over (the VSX chassis); approvals and starts are refused with this code. */
-  failoverRefusal?: string | null; canApprove: boolean; canStart: boolean; canSchedule: boolean; mode?: string; recoveryMode?: "ACTIVE_UP" | "PRIMARY_UP" | "UNKNOWN"; refusalReason?: string | null; readinessObservedAt?: string | null;
+  /** Set when the server offers no failover for this unit (a VSX chassis whose mode is unknown); approvals and starts are refused with this code. */
+  failoverRefusal?: string | null;
+  /** VSX chassis (PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md): the VS0 mode of its latest readiness, the action that
+   * mode allows (FAILOVER = one chassis run in VSX HA mode; FAILOVER_ALL_VIRTUAL_SYSTEMS = every VS in turn on VSLS), why a
+   * start would be refused now, and the latest "Fail over all virtual systems" sequence. */
+  chassisMode?: "HA" | "VSLS" | "UNKNOWN"; chassisAction?: "FAILOVER" | "FAILOVER_ALL_VIRTUAL_SYSTEMS" | null;
+  chassisStartRefusal?: string | null; sequence?: CpFailoverSequence;
+  canApprove: boolean; canStart: boolean; canSchedule: boolean; mode?: string; recoveryMode?: "ACTIVE_UP" | "PRIMARY_UP" | "UNKNOWN"; refusalReason?: string | null; readinessObservedAt?: string | null;
   /** Palo Alto units only: the server's config-sync facts (PAN_CONFIG_SYNC_REMEDIATION_2026_10_24.md §6). */
   configSync?: PanConfigSyncFacts }
 export type PanConfigSyncState = "QUEUED" | "READING_STATE" | "SYNCING" | "DONE" | "STOPPED";
@@ -2512,10 +2518,15 @@ export interface PanConfigSyncRecord { syncId: string; state: PanConfigSyncState
  */
 export interface PanConfigSyncFacts { offered: boolean; canRun: boolean; refusal: string | null; sourceRef: string | null; targetRef: string | null;
   readinessObservedAt: string | null; latest: PanConfigSyncRecord | null }
-export interface ReadinessCheck { device_id?: string; checkNo: number; title: string; member: string; result: CpFailoverCheckStatus; summary: string; blocking: boolean }
+export interface ReadinessCheck { device_id?: string; checkNo: number; title: string; member: string; result: CpFailoverCheckStatus; summary: string; blocking: boolean;
+  /** The stored derived evidence (an object from the summary, a JSON string from a run detail) and its observation time. */
+  derived?: unknown; observedAt?: string }
+/** One "Fail over all virtual systems" sequence of a VSLS chassis; opaque references and VSIDs only. */
+export interface CpFailoverSequence { sequenceId: string; state: "RUNNING" | "DONE" | "STOPPED"; outcome: string | null; total: number;
+  started: number; vsIds: string[]; currentRunId: string | null; failedVsId: string | null; requestedAt: string; finishedAt: string | null }
 export interface HaPairViewFacts { vendor: string; state: "HEALTHY" | "DEGRADED" | "UNKNOWN"; reason: string | null;
   sync: "UNKNOWN"; syncReason: string; members: Array<{ device_id: string; role: string }> }
-export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system" | "members" | "masked" | "mode" | "refusalReason" | "readinessObservedAt" | "unitKind" | "failoverRefusal" | "configSync"> {
+export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system" | "members" | "masked" | "mode" | "refusalReason" | "readinessObservedAt" | "unitKind" | "failoverRefusal" | "configSync" | "chassisMode" | "chassisAction"> {
   activeWindow: boolean; lastRunState: string | null; lastRunOutcome: string | null; lastRunAt: string | null; canRunReadiness: boolean;
   /** False for a listed pair whose vendor has no readiness yet (Cisco ASA while its readiness switch is off): shown, never run. */
   readinessAvailable?: boolean;

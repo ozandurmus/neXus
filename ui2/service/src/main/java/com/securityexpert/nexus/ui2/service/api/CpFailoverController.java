@@ -112,9 +112,28 @@ public final class CpFailoverController {
                 return view;
             }).toList());
         if (u.vsId()!=null) m.put("virtual_system",u.label());
-        // The chassis and every VS of a VSX cluster are separate units; the chassis is never offered a failover (§10).
+        // The chassis and every VS of a VSX cluster are separate units; the chassis path follows its mode (contract §17).
         m.put("unitKind",u.vsxChassis() ? "VSX_CHASSIS" : u.vsId()!=null ? "VIRTUAL_SYSTEM" : "CLUSTER");
-        if (u.vsxChassis()) m.put("failoverRefusal",CpFailoverService.CHASSIS_FAILOVER_NOT_APPROVED);
+        return m;
+    }
+    /**
+     * A chassis unit's offer (PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md): {@code chassisAction} FAILOVER (VSX HA
+     * mode) or FAILOVER_ALL_VIRTUAL_SYSTEMS (VSLS), {@code failoverRefusal} when the mode is not known, and
+     * {@code chassisStartRefusal} when a start would be refused now (chassis or a VS not READY). The server re-checks all
+     * of it on every approval and start.
+     */
+    private static void putChassisPlan(Map<String,Object> view,CpFailoverService.ChassisPlan plan) {
+        view.put("chassisMode",plan.mode());
+        view.put("chassisAction",plan.action());
+        view.put("chassisStartRefusal",plan.startRefusal());
+        if (plan.modeRefusal()!=null) view.put("failoverRefusal",plan.modeRefusal());
+    }
+    private static Map<String,Object> sequenceView(JooqCpFailoverRepository.Sequence q) {
+        Map<String,Object> m=new LinkedHashMap<>();
+        m.put("sequenceId",q.id()); m.put("state",q.state()); m.put("outcome",q.outcome());
+        m.put("total",q.vsIds().size()); m.put("started",q.nextIndex());
+        m.put("vsIds",q.vsIds()); m.put("currentRunId",q.currentRunId()); m.put("failedVsId",q.failedVsId());
+        m.put("requestedAt",q.requestedAt()); m.put("finishedAt",q.finishedAt());
         return m;
     }
     /** {@code incidents} memoizes the open-incident lookup per cluster and member pair within one request. */
@@ -207,6 +226,16 @@ public final class CpFailoverController {
                 m.put("canApprove",!asa && canApprove);
                 m.put("canStart",!asa && canStart);
                 m.put("canSchedule",!asa && canStart);
+                if (u.vsxChassis()) {
+                    var plan=CpFailoverService.chassisPlan(u,units,readiness);
+                    putChassisPlan(m,plan);
+                    boolean offered=plan.modeRefusal()==null;
+                    m.put("canApprove",offered && canApprove);
+                    m.put("canStart",offered && canStart);
+                    // "Fail over all virtual systems" is immediate: each VS start follows the previous run's end.
+                    m.put("canSchedule",offered && canStart && CpFailoverService.ACTION_CHASSIS_FAILOVER.equals(plan.action()));
+                    service.latestSequence(u).ifPresent(q -> m.put("sequence",sequenceView(q)));
+                }
                 if (asa) { m.put("canRunReadiness",canStart || service.mayRunReadiness(actor)); m.put("failoverRefusal",CpFailoverService.VENDOR_NOT_AVAILABLE); }
                 eligibility(m,u,readiness.get(u.id()),incidents);
                 putConfigSync(m,u,vendor,readiness.get(u.id()),masked,actor);
@@ -232,6 +261,14 @@ public final class CpFailoverController {
                 .filter(v -> !s.readinessAvailable() && com.securityexpert.nexus.ui2.service.failover.HaPairView.covers(v))
                 .ifPresent(v -> m.put("haView", com.securityexpert.nexus.ui2.service.failover.HaPairView.of(v, s.unit().members()).toMap()));
             eligibility(m,s.unit(),s.readiness(),incidents);
+            if (s.unit().vsxChassis()) {
+                // The fleet list knows the chassis's own readiness: the mode, hence the action, or why none is offered.
+                var plan=CpFailoverService.chassisPlan(s.unit(),List.of(s.unit()),
+                    s.readiness()==null ? Map.of() : Map.of(s.unit().id(),s.readiness()));
+                m.put("chassisMode",plan.mode());
+                m.put("chassisAction",plan.action());
+                if (plan.modeRefusal()!=null) m.put("failoverRefusal",plan.modeRefusal());
+            }
             putConfigSync(m,s.unit(),s.vendor(),s.readiness(),PrivacyMaskingResponseBodyAdvice.isReplayViewer(request),actor(request));
             if (s.readiness() != null) {
                 var readiness = s.readiness();

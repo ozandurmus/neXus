@@ -16,6 +16,7 @@ import type { ReadinessCheck, ReadinessMember } from "../auth/adminApi";
 import { M3Button } from "../shell/M3Widgets";
 import { readinessReasonLabel } from "../shell/presenters";
 import { m3 } from "../theme/m3Theme";
+import { formatStamp, relativeAge } from "../shell/time";
 
 /** Check 10 (traffic and ARP) is read on the active member only. */
 const TRAFFIC_ARP_CHECK = 10;
@@ -31,6 +32,26 @@ export function primaryReportsPeer(vendor: string | undefined, members: Readines
 /** Check 1 PASS means one primary and one secondary, the enrolled unit identified as the primary (identity MATCH). */
 export function primaryRolesConfirmed(checks: ReadinessCheck[]) {
   return checks.some(check => check.checkNo === 1 && check.result === "PASS");
+}
+
+/**
+ * Each member's role in the latest readiness cluster-state check (check 1, its own `role`), with the observation time. The
+ * inventory role (`ha_role`) is older evidence: after a failover it shows the roles before the switch (live 2026-11-19, a
+ * VSX chassis panel showed member 1 ACTIVE / member 2 STANDBY while the readiness showed the reverse).
+ */
+export function observedRoles(checks: ReadinessCheck[]): Map<string, { role: string; at?: string }> {
+  const roles = new Map<string, { role: string; at?: string }>();
+  for (const check of checks) {
+    if (check.checkNo !== 1 || !check.device_id) continue;
+    let derived = check.derived;
+    if (typeof derived === "string") { try { derived = JSON.parse(derived); } catch { derived = null; } }
+    const role = (derived as { role?: unknown } | null | undefined)?.role;
+    if (typeof role !== "string" || !role || role.toUpperCase() === "UNKNOWN") continue;
+    const earlier = roles.get(check.device_id);
+    if (!earlier || (check.observedAt && (!earlier.at || check.observedAt > earlier.at)))
+      roles.set(check.device_id, { role: role.toLowerCase(), at: check.observedAt });
+  }
+  return roles;
 }
 
 function checkRows(checks: ReadinessCheck[], labels: ReadinessMember[] = [], peerFromPrimary = false) {
@@ -52,8 +73,13 @@ export function ReadinessChecksTable({ checks, members = [], compact = false, ro
   rowAction?: (checkNo: number, failed: boolean) => ReactNode; vendor?: string }) {
   const peer = primaryReportsPeer(vendor, members);
   const confirmed = peer && primaryRolesConfirmed(checks);
-  // Order presentation by observed role; retain opaque device IDs for check matching.
-  const ordered = [...members].sort((a, b) => Number(a.ha_role?.toLowerCase() !== "active") - Number(b.ha_role?.toLowerCase() !== "active"));
+  // The column roles come from the latest readiness cluster-state check when it names every member, else from inventory,
+  // labelled as such. Order presentation by that role; retain opaque device IDs for check matching.
+  const observed = observedRoles(checks);
+  const fromReadiness = members.length > 0 && members.every(member => observed.has(member.device_id));
+  const roleOf = (member?: ReadinessMember) => member ? fromReadiness ? observed.get(member.device_id)!.role : member.ha_role?.toLowerCase() : undefined;
+  const roleAt = (member?: ReadinessMember) => member && fromReadiness ? observed.get(member.device_id)!.at : undefined;
+  const ordered = [...members].sort((a, b) => Number(roleOf(a) !== "active") - Number(roleOf(b) !== "active"));
   const memberOrder = [0, 1].map(index => members.length ? members.indexOf(ordered[index]) : index);
   return <Table size="small" aria-label="Readiness results" sx={{ width: "100%", tableLayout: "fixed" }}>
     <TableHead><TableRow>
@@ -63,7 +89,11 @@ export function ReadinessChecksTable({ checks, members = [], compact = false, ro
         <Typography component="span" variant="caption" sx={{ color: m3.onSurfaceVar }}> · {confirmed ? (index === 0 ? "active" : "standby") : "role unknown"} (as the primary reports)</Typography>
       </TableCell>) : [0, 1].map(index => <TableCell key={index}>
         {ordered[index]?.hostname ?? `Member ${index + 1}`}
-        <Typography component="span" variant="caption" sx={{ color: m3.onSurfaceVar }}> · {ordered[index]?.ha_role?.toLowerCase() ?? "role unknown"}</Typography>
+        <Typography component="span" variant="caption" data-role-source={fromReadiness ? "readiness" : "inventory"}
+          title={roleAt(ordered[index]) ? `Readiness cluster-state check, ${formatStamp(roleAt(ordered[index]))}` : fromReadiness ? "Readiness cluster-state check" : "Inventory role (older than the readiness checks)"}
+          sx={{ color: m3.onSurfaceVar }}> · {roleOf(ordered[index]) ?? "role unknown"}{fromReadiness
+            ? ` (readiness${roleAt(ordered[index]) ? `, ${relativeAge(roleAt(ordered[index])!, new Date())}` : ""})`
+            : ordered[index]?.ha_role ? " (inventory)" : ""}</Typography>
       </TableCell>)}
     </TableRow></TableHead>
     <TableBody>{checkRows(checks, members, peer).map(row => {

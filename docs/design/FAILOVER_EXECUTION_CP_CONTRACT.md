@@ -171,3 +171,18 @@ promotes it.
   Persist missing-observer enums and comparison-local numbered address aliases only; no raw address, numeric index
   or interface name is retained in derived data. Aliases preserve equality only within the comparison.
 - All changes reuse existing reads, sessions and command gates. No new command or gate row.
+
+## 17. PO amendment 2026-11-19 -- the VSX chassis is failed over (amends §10)
+Authority: `PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md` (RATIFIED; PO: "A ve B birlikte", and "onaylıyorum"
+to the exact literals). §10's sentence "The VSX chassis itself is not failed over by this feature" stays as the record
+of 2026-09-27 and is superseded from 2026-11-19 as follows; every other rule of §10 is unchanged:
+- **VSX HA mode chassis (VS0 `Cluster Mode: High Availability`).** The chassis is a failover unit. Every read and both
+  writes run in VS0 only: `bash -lc 'vsenv 0 && clusterXL_admin down'` on the active member and
+  `bash -lc 'vsenv 0 && clusterXL_admin up'` on the former active (gate rows `cp_failover_down_vsenv0` /
+  `cp_failover_up_vsenv0`, V255). After the switch and after the return, the per-VS `cphaprob stat` must show every VS
+  of the chassis on the expected member; otherwise the run stops, never reports success, and offers the return step.
+- **VSLS chassis (VS0 `Cluster Mode: Virtual System Load Sharing`).** The VS0 write is refused
+  (`VSX_CHASSIS_MODE_VSLS_USE_SEQUENCE`). The chassis action is "Fail over all virtual systems": the §10 per-VS
+  failover for each VS in turn, each its own run, stopping at the first run that does not succeed.
+- Chassis and VS steps of one cluster still never overlap; the fleet one-mutation fence is unchanged.
+

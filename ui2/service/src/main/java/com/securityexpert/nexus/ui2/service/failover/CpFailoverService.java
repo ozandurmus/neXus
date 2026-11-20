@@ -39,10 +39,28 @@ public final class CpFailoverService {
         }
     }
     /**
-     * FROZEN FAILOVER_EXECUTION_CP_CONTRACT.md §10: the VSX chassis is not failed over by this feature. Its readiness is
-     * evaluated; approvals and runs for it are refused until the PO amends §10 and approves the exact VS0 write.
+     * VSX chassis failover (PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md, RATIFIED; FAILOVER_EXECUTION_CP_CONTRACT.md
+     * §17 amends §10). The chassis mode, from the VS0 check 1 of the chassis unit's latest readiness on both members, picks
+     * the path: VSX HA mode -> one chassis run with the VS0 writes (option B); VSLS -> "Fail over all virtual systems", one
+     * VS run after another (option A). An unknown or split mode is refused.
      */
-    public static final String CHASSIS_FAILOVER_NOT_APPROVED = "VSX_CHASSIS_FAILOVER_NOT_APPROVED";
+    public static final String CHASSIS_MODE_UNKNOWN = "VSX_CHASSIS_MODE_UNKNOWN";
+    /** A VSLS chassis is never failed over by the VS0 writes (option B); its action is the sequence of VS runs. */
+    public static final String CHASSIS_MODE_VSLS = "VSX_CHASSIS_MODE_VSLS_USE_SEQUENCE";
+    /** The approval was requested for the other chassis path than the chassis mode now observed. */
+    public static final String CHASSIS_MODE_CHANGED = "VSX_CHASSIS_MODE_CHANGED";
+    /** Record §4: the chassis unit and every VS unit must be READY at start. */
+    public static final String CHASSIS_READINESS_NOT_READY = "VSX_CHASSIS_READINESS_NOT_READY";
+    public static final String VIRTUAL_SYSTEM_NOT_READY = "VIRTUAL_SYSTEM_NOT_READY";
+    /** "Fail over all virtual systems" is an immediate action: each VS start follows the previous VS run's end. */
+    public static final String SEQUENCE_NOT_SCHEDULABLE = "SEQUENCE_SCHEDULE_NOT_SUPPORTED";
+    public static final String ACTION_CHASSIS_FAILOVER = JooqCpFailoverRepository.OPERATION_FAILOVER;
+    public static final String ACTION_ALL_VIRTUAL_SYSTEMS = JooqCpFailoverRepository.OPERATION_ALL_VIRTUAL_SYSTEMS;
+    /**
+     * What a chassis unit offers: {@code action} (FAILOVER for option B, FAILOVER_ALL_VIRTUAL_SYSTEMS for option A) or
+     * {@code modeRefusal} when the mode is not known; {@code startRefusal} when a start would be refused now (record §4).
+     */
+    public record ChassisPlan(String mode, String action, String modeRefusal, String startRefusal) {}
     public record Summary(Unit unit, String vendor, boolean activeWindow, String lastRunState,
             String lastRunOutcome, Instant lastRunAt, JooqCpFailoverRepository.ReadinessStatus readiness,
             boolean canRunReadiness, boolean readinessAvailable) {
@@ -462,13 +480,23 @@ public final class CpFailoverService {
         // PO 2026-10-20: an approval request sends nothing to a device; an administrator is never refused for the window.
         windows.requireOpenUnlessAdmin(actor);
         Unit u=unit(clusterId,unitId,actor,vendor);
-        if (u.vsxChassis()) throw new Refusal(CHASSIS_FAILOVER_NOT_APPROVED);
+        String operation=JooqCpFailoverRepository.OPERATION_FAILOVER;
+        if (u.vsxChassis()) {
+            // The approval names the path the chassis mode allows now; a start re-checks it (CHASSIS_MODE_CHANGED).
+            ChassisPlan plan=chassisPlan(u,actor,vendor);
+            if (plan.modeRefusal()!=null) throw new Refusal(plan.modeRefusal());
+            operation=plan.action();
+        }
         if (requestId==null || !requestId.equals(UUID.fromString(requestId).toString())) throw new Refusal("REQUEST_ID_REQUIRED");
         if (from==null || until==null || !until.isAfter(from) || !until.isAfter(Instant.now())
                 || reason==null || reason.isBlank() || reason.length()>500) throw new Refusal("INVALID_WINDOW");
+        if (JooqCpFailoverRepository.OPERATION_FAILOVER.equals(operation))
+            return store.createRequestApproval(requestId,u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),
+                u.id(),u.members().stream().map(DeviceSummaryRecord::deviceId).collect(Collectors.toUnmodifiableSet()),
+                from,until,reason,actor,vendor,policy);
         return store.createRequestApproval(requestId,u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),
             u.id(),u.members().stream().map(DeviceSummaryRecord::deviceId).collect(Collectors.toUnmodifiableSet()),
-            from,until,reason,actor,vendor,policy);
+            from,until,reason,actor,vendor,policy,operation);
     }
 
     public JooqCpFailoverRepository.RequestApproval secondApproval(String requestId,long revision,
@@ -476,7 +504,6 @@ public final class CpFailoverService {
         approvalPolicy(actor);
         requireAvailable(vendor);
         Unit u=unit(clusterId,unitId,actor,vendor);
-        if (u.vsxChassis()) throw new Refusal(CHASSIS_FAILOVER_NOT_APPROVED);
         var request=store.requestApproval(requestId).orElseThrow(() -> new Refusal("REQUEST_NOT_FOUND"));
         if (!u.id().equals(request.unitRef()) || !u.members().get(0).clusterMemberRef().orElseThrow()
                 .equals(request.approval().clusterRef())) throw new Refusal("REQUEST_CHANGED");
@@ -514,13 +541,22 @@ public final class CpFailoverService {
         // a scheduled start keeps the window (checked again at its time by the repository and the scheduler).
         if (scheduledFor==null) windows.requireOpenFor(actor); else windows.requireOpenUnlessAdmin(actor);
         Unit u=unit(clusterId,unitId,actor,vendor);
-        if (u.vsxChassis()) throw new Refusal(CHASSIS_FAILOVER_NOT_APPROVED);
         Instant now=Instant.now();
         Instant when=scheduledFor==null ? now : scheduledFor;
         // A completed or in-flight request is replayed by the repository without another job.
         // Readiness is always collected afresh by that job, never by a second UI confirmation.
         if (requestId==null || nonce==null || revision!=1) throw new Refusal("REQUEST_BINDING_REQUIRED");
         if (!warningConfirmed) throw new Refusal("WARNING_CONFIRMATION_REQUIRED");
+        if (u.vsxChassis()) {
+            ChassisPlan plan=chassisPlan(u,actor,vendor);
+            if (plan.modeRefusal()!=null) throw new Refusal(plan.modeRefusal());
+            String operation=store.requestOperation(requestId).orElseThrow(() -> new Refusal("REQUEST_CHANGED"));
+            if (!plan.action().equals(operation)) throw new Refusal(ACTION_ALL_VIRTUAL_SYSTEMS.equals(plan.action())
+                ? CHASSIS_MODE_VSLS : CHASSIS_MODE_CHANGED);
+            if (plan.startRefusal()!=null) throw new Refusal(plan.startRefusal());
+            if (ACTION_ALL_VIRTUAL_SYSTEMS.equals(plan.action()))
+                return requestSequence(u,scheduledFor,actor,requestId,revision,nonce,warningConfirmed,policy);
+        }
         try {
             var decision=store.requestBound(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),
                 when,actor,u.members().get(0).deviceId(),scheduledFor==null,vendor,
@@ -560,6 +596,106 @@ public final class CpFailoverService {
             if ("23505".equals(duplicate.sqlState())) throw new Refusal("RUN_ALREADY_ACTIVE");
             throw duplicate;
         }
+    }
+    /**
+     * The chassis mode from the VS0 check 1 rows of the chassis unit's latest readiness: HA when both members report High
+     * Availability, VSLS when both report Virtual System Load Sharing, otherwise (no readiness, one member, a split or
+     * another mode) UNKNOWN. Never inferred from inventory or a label elsewhere.
+     */
+    public static String chassisMode(JooqCpFailoverRepository.ReadinessStatus readiness) {
+        if (readiness==null || readiness.checks()==null) return "UNKNOWN";
+        java.util.Map<String,String> modes=new java.util.HashMap<>();
+        try {
+            for (var check:new com.fasterxml.jackson.databind.ObjectMapper().readTree(readiness.checks()))
+                if (check.path("checkNo").asInt()==1)
+                    modes.merge(check.path("memberRef").asText(),check.path("derived").path("mode").asText(),
+                        (a,b) -> a.equals(b) ? a : "UNKNOWN");
+        } catch (java.io.IOException invalid) { return "UNKNOWN"; }
+        if (modes.size()!=2) return "UNKNOWN";
+        var distinct=new java.util.HashSet<>(modes.values());
+        if (distinct.size()!=1) return "UNKNOWN";
+        String mode=distinct.iterator().next();
+        return "HA".equals(mode) || "VSLS".equals(mode) ? mode : "UNKNOWN";
+    }
+    /** The plan of a chassis unit from readiness already read for its cluster (unit id -> latest readiness). */
+    public static ChassisPlan chassisPlan(Unit chassis,List<Unit> clusterUnits,
+            Map<String,JooqCpFailoverRepository.ReadinessStatus> readiness) {
+        var own=readiness.get(chassis.id());
+        String mode=chassisMode(own);
+        String action="HA".equals(mode) ? ACTION_CHASSIS_FAILOVER : "VSLS".equals(mode) ? ACTION_ALL_VIRTUAL_SYSTEMS : null;
+        String start=null;
+        if (own==null || !"READY".equals(own.outcome())) start=CHASSIS_READINESS_NOT_READY;
+        else if (clusterUnits.stream().filter(u -> u.vsId()!=null && u.clusterId().equals(chassis.clusterId()))
+                .anyMatch(u -> readiness.get(u.id())==null || !"READY".equals(readiness.get(u.id()).outcome())))
+            start=VIRTUAL_SYSTEM_NOT_READY;
+        return new ChassisPlan(mode,action,action==null ? CHASSIS_MODE_UNKNOWN : null,start);
+    }
+    private ChassisPlan chassisPlan(Unit chassis,String actor,String vendor) {
+        List<Unit> all=units(chassis.clusterId(),actor,vendor);
+        return chassisPlan(chassis,all,unitReadiness(actor,all));
+    }
+    /** Option A: every VS of the chassis in VSID order, each its own run (JooqCpFailoverRepository#requestSequence). */
+    private String requestSequence(Unit chassis,Instant scheduledFor,String actor,String requestId,long revision,String nonce,
+            boolean warningConfirmed,String policy) {
+        if (scheduledFor!=null) throw new Refusal(SEQUENCE_NOT_SCHEDULABLE);
+        String cluster=chassis.members().get(0).clusterMemberRef().orElseThrow();
+        var steps=sequenceSteps(cluster,units(chassis.clusterId(),actor,"check_point").stream()
+            .filter(u -> u.vsId()!=null).map(Unit::vsId).toList());
+        var grant=com.securityexpert.nexus.ui2.platform.ManualAdmission.currentFor(actor);
+        try {
+            var decision=store.requestSequence(cluster,actor,chassis.members().get(0).deviceId(),
+                chassis.members().stream().map(DeviceSummaryRecord::deviceId).collect(Collectors.toUnmodifiableSet()),
+                requestId,revision,nonce,warningConfirmed,policy,steps,
+                grant.map(com.securityexpert.nexus.ui2.platform.ManualAdmission.Grant::role).orElse(null),
+                grant.map(com.securityexpert.nexus.ui2.platform.ManualAdmission.Grant::acknowledged).orElse(false));
+            if (!"ADMITTED".equals(decision.code())) throw new Refusal(decision.code(),decision.dispatchRef());
+            return decision.runId();
+        } catch (org.springframework.dao.DuplicateKeyException duplicate) {
+            throw new Refusal("RUN_ALREADY_ACTIVE");
+        } catch (org.jooq.exception.DataAccessException duplicate) {
+            if ("23505".equals(duplicate.sqlState())) throw new Refusal("RUN_ALREADY_ACTIVE");
+            throw duplicate;
+        }
+    }
+    /** The VS steps of a sequence: the VSIDs in text order (as the VS units are listed) with their opaque unit refs. */
+    private static List<JooqCpFailoverRepository.SequenceStep> sequenceSteps(String cluster,List<String> vsIds) {
+        return vsIds.stream().sorted().map(vs -> new JooqCpFailoverRepository.SequenceStep(vs,opaque(cluster+":"+vs))).toList();
+    }
+    /** The chassis unit's newest sequence, for the screens (reader-checked by the unit lookup that produced the unit). */
+    public Optional<JooqCpFailoverRepository.Sequence> latestSequence(Unit chassis) {
+        if (!chassis.vsxChassis()) return Optional.empty();
+        return store.latestSequence(chassis.members().get(0).clusterMemberRef().orElseThrow());
+    }
+    /**
+     * Advance every running "Fail over all virtual systems" sequence: the next VS run starts only after the previous one
+     * ended SUCCEEDED, under the initiating administrator's recorded manual admission (role and business-hours
+     * acknowledgement of the request, re-established for this start only); any refusal stops the sequence.
+     */
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 10_000, initialDelay = 30_000)
+    public void advanceSequences() {
+        if (!mutationSwitch.enabled()) return;
+        for (var seq:store.runningSequences()) {
+            List<DeviceSummaryRecord> members=devices.findMembersByClusterRef(seq.clusterRef()).stream()
+                .sorted(Comparator.comparing(DeviceSummaryRecord::deviceId)).toList();
+            String target=members.isEmpty() ? null : members.get(0).deviceId();
+            var steps=sequenceSteps(seq.clusterRef(),seq.vsIds());
+            java.util.function.Supplier<String> advance=() -> store.advanceSequence(seq.id(),steps,target);
+            try {
+                if (target!=null) members.forEach(this::requireTrusted);
+                if (seq.admissionRole()==null) advance.get();
+                else com.securityexpert.nexus.ui2.platform.ManualAdmission.under(new com.securityexpert.nexus.ui2.platform
+                    .ManualAdmission.Grant(seq.initiatedBy(),seq.admissionRole(),seq.businessHoursAck()),advance);
+            } catch (Refusal refused) {
+                store.stopSequence(seq.id(),refused.code(),nextVs(seq));
+            } catch (JobWindowPolicy.OutsideWindow outside) {
+                store.stopSequence(seq.id(),JobWindowPolicy.CODE,nextVs(seq));
+            } catch (com.securityexpert.nexus.ui2.platform.ManualAdmission.BusinessHoursConfirmRequired hours) {
+                store.stopSequence(seq.id(),com.securityexpert.nexus.ui2.platform.ManualAdmission.CONFIRM_CODE,nextVs(seq));
+            }
+        }
+    }
+    private static String nextVs(JooqCpFailoverRepository.Sequence seq) {
+        return seq.nextIndex()<seq.vsIds().size() ? seq.vsIds().get(seq.nextIndex()) : null;
     }
     private String observedRole(DeviceSummaryRecord member,String vsId,String vendor) {
         return inventory.findLatestRun(member.deviceId()).stream().flatMap(r -> r.haFacts().stream())

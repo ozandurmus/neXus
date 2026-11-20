@@ -190,7 +190,7 @@ it.each([
   expect(screen.queryByText("Request failed")).toBeNull();
 });
 it("lists the VSX chassis unit first with its own pre-checks and no failover action, then each Virtual System", async () => {
-  const chassis = { ...unit, unitKind: "VSX_CHASSIS" as const, failoverRefusal: "VSX_CHASSIS_FAILOVER_NOT_APPROVED", refusalReason: "VSX_CHASSIS_COMMANDS_NOT_APPROVED" };
+  const chassis = { ...unit, unitKind: "VSX_CHASSIS" as const, failoverRefusal: "VSX_CHASSIS_MODE_UNKNOWN", refusalReason: "VSX_CHASSIS_COMMANDS_NOT_APPROVED" };
   const vs = { ...unit, unitId: "opaque-vs-13", unitKind: "VIRTUAL_SYSTEM" as const, virtual_system: "VS-ROMEO-13" };
   api.units.mockResolvedValue([vs, chassis]);
   api.readiness.mockResolvedValue({ runId: "run-chassis" });
@@ -200,11 +200,46 @@ it("lists the VSX chassis unit first with its own pre-checks and no failover act
   expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(first);
   await waitFor(() => expect(screen.getByRole("button", { name: "Run pre-checks" })).toBeEnabled());
-  expect(screen.queryByRole("button", { name: "Start failover" })).toBeNull();
-  expect(screen.getByText(/VSX chassis failover is not enabled/)).toHaveAttribute("title", "VSX_CHASSIS_FAILOVER_NOT_APPROVED");
+  expect(screen.queryByRole("button", { name: /Fail over|Start failover/ })).toBeNull();
+  expect(screen.getByText(/VSX chassis mode not known/)).toHaveAttribute("title", "VSX_CHASSIS_MODE_UNKNOWN");
   fireEvent.click(screen.getByRole("button", { name: "Run pre-checks" }));
   await waitFor(() => expect(api.readiness).toHaveBeenCalledWith(expect.objectContaining({ unitId: "opaque-cluster" })));
   fireEvent.click(first);
   fireEvent.click(second);
   await waitFor(() => expect(screen.getByRole("button", { name: "Start failover" })).toBeEnabled());
+});
+
+// ---- VSX chassis failover (PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md, RATIFIED) ----
+const chassisUnit = (overrides = {}) => ({ ...unit, maskedName: "CLS-TANGO-04", unitKind: "VSX_CHASSIS" as const, chassisMode: "HA" as const,
+  chassisAction: "FAILOVER" as const, chassisStartRefusal: null, ...overrides });
+it("offers the chassis failover on a VSX HA-mode chassis", async () => {
+  api.units.mockResolvedValue([chassisUnit()]); setup();
+  fireEvent.click(await screen.findByRole("button", { name: "VSX chassis · CLS-TANGO-04" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Fail over the chassis" })).toBeEnabled());
+  expect(screen.getByText(/VSX HA mode: the chassis fails over in VS0/)).toHaveAttribute("data-chassis-action", "FAILOVER");
+  fireEvent.click(screen.getByRole("button", { name: "Fail over the chassis" }));
+  expect(screen.getByText(/every virtual system must be active on the new active member/)).toBeInTheDocument();
+});
+it("offers \"Fail over all virtual systems\" on a VSLS chassis and shows the running sequence", async () => {
+  api.units.mockResolvedValue([chassisUnit({ chassisMode: "VSLS", chassisAction: "FAILOVER_ALL_VIRTUAL_SYSTEMS" })]); setup();
+  fireEvent.click(await screen.findByRole("button", { name: "VSX chassis · CLS-TANGO-04" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Fail over all virtual systems" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Fail over all virtual systems" }));
+  expect(screen.getByText(/stops at the first virtual system that does not succeed/)).toBeInTheDocument();
+});
+it("shows a running sequence and disables a second start", async () => {
+  api.units.mockResolvedValue([chassisUnit({ chassisMode: "VSLS", chassisAction: "FAILOVER_ALL_VIRTUAL_SYSTEMS",
+    sequence: { sequenceId: "seq-opaque", state: "RUNNING", outcome: null, total: 3, started: 2, vsIds: ["1", "2", "3"], currentRunId: "run-opaque",
+      failedVsId: null, requestedAt: "2026-11-19T20:00:00Z", finishedAt: null } })]); setup();
+  expect(await screen.findByText(/virtual system 2 of 3 running/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "VSX chassis · CLS-TANGO-04" }));
+  await waitFor(() => expect(api.runs).toHaveBeenCalled());
+  expect(screen.getByRole("button", { name: "Fail over all virtual systems" })).toBeDisabled();
+});
+it("shows why a chassis start is refused now and keeps the button disabled", async () => {
+  api.units.mockResolvedValue([chassisUnit({ chassisStartRefusal: "VIRTUAL_SYSTEM_NOT_READY" })]); setup();
+  fireEvent.click(await screen.findByRole("button", { name: "VSX chassis · CLS-TANGO-04" }));
+  await waitFor(() => expect(api.runs).toHaveBeenCalled());
+  expect(screen.getByText(/A virtual system of this chassis is not ready/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Fail over the chassis" })).toBeDisabled();
 });

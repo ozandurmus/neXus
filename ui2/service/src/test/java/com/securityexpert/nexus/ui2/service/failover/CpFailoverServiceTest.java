@@ -381,30 +381,134 @@ class CpFailoverServiceTest {
         when(inventory.findLatestRun(A)).thenReturn(Optional.of(runWithVs(A, "13")));
         when(inventory.findLatestRun(B)).thenReturn(Optional.of(runWithVs(B, "13")));
     }
-    @Test void vsxChassisFailoverIsRefusedButItsReadinessIsAdmittedUnderTheClusterIdentity() {
+    // ---- VSX chassis failover (PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md, RATIFIED) ----
+    private static final String VS_UNIT=UUID.nameUUIDFromBytes((CLUSTER+":13").getBytes(StandardCharsets.UTF_8)).toString();
+    /** The chassis unit's latest readiness reports {@code mode} on both members (check 1); the VS unit's is {@code vsOutcome}. */
+    private void chassisReadiness(String mode,String chassisOutcome,String vsOutcome) {
+        when(store.summaryMembers(any(java.util.Collection.class))).thenReturn(List.of(
+            new JooqCpFailoverRepository.SummaryMember(A,true,"ssh_exec",true,"physical",false),
+            new JooqCpFailoverRepository.SummaryMember(A,true,"ssh_exec",true,"13",false),
+            new JooqCpFailoverRepository.SummaryMember(B,true,"ssh_exec",true,"physical",false),
+            new JooqCpFailoverRepository.SummaryMember(B,true,"ssh_exec",true,"13",false)));
+        String checks=mode==null ? "[]" : "[{\"memberRef\":\""+A+"\",\"checkNo\":1,\"status\":\"PASS\",\"derived\":{\"mode\":\""+mode
+            +"\",\"role\":\"ACTIVE\"}},{\"memberRef\":\""+B+"\",\"checkNo\":1,\"status\":\"PASS\",\"derived\":{\"mode\":\""+mode
+            +"\",\"role\":\"STANDBY\"}}]";
+        Instant at=Instant.parse("2026-11-19T20:00:00Z");
+        when(store.readinessStatuses(CLUSTER)).thenReturn(List.of(
+            new JooqCpFailoverRepository.ReadinessStatus(CLUSTER,null,"check_point",chassisOutcome,at,null,checks),
+            new JooqCpFailoverRepository.ReadinessStatus(CLUSTER,"13","check_point",vsOutcome,at,null,"[]")));
+    }
+    @Test void chassisModeIsReadFromBothMembersCheckOne() {
+        var at=Instant.EPOCH;
+        java.util.function.BiFunction<String,String,JooqCpFailoverRepository.ReadinessStatus> status=(ma,mb) ->
+            new JooqCpFailoverRepository.ReadinessStatus(CLUSTER,null,"check_point","READY",at,null,
+                "[{\"memberRef\":\"m1\",\"checkNo\":1,\"derived\":{\"mode\":\""+ma+"\"}},"
+                +"{\"memberRef\":\"m2\",\"checkNo\":1,\"derived\":{\"mode\":\""+mb+"\"}}]");
+        assertEquals("HA",CpFailoverService.chassisMode(status.apply("HA","HA")));
+        assertEquals("VSLS",CpFailoverService.chassisMode(status.apply("VSLS","VSLS")));
+        assertEquals("UNKNOWN",CpFailoverService.chassisMode(status.apply("HA","VSLS")));
+        assertEquals("UNKNOWN",CpFailoverService.chassisMode(status.apply("UNSUPPORTED","UNSUPPORTED")));
+        assertEquals("UNKNOWN",CpFailoverService.chassisMode(null));
+    }
+    @Test void aChassisWithoutAKnownModeIsRefusedButItsReadinessIsAdmitted() {
         vsx();
+        chassisReadiness(null,"UNKNOWN","READY");
         String request=UUID.randomUUID().toString();
         Instant from=Instant.now(), until=from.plusSeconds(600);
-        assertEquals(CpFailoverService.CHASSIS_FAILOVER_NOT_APPROVED, assertThrows(CpFailoverService.Refusal.class,
+        assertEquals(CpFailoverService.CHASSIS_MODE_UNKNOWN, assertThrows(CpFailoverService.Refusal.class,
             () -> service.createApprovalRequest(request,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic","actor-1","check_point")).code());
-        assertEquals(CpFailoverService.CHASSIS_FAILOVER_NOT_APPROVED, assertThrows(CpFailoverService.Refusal.class,
-            () -> service.secondApproval(request,1,CLUSTER_ID,CLUSTER_ID,"actor-1","check_point")).code());
-        assertEquals(CpFailoverService.CHASSIS_FAILOVER_NOT_APPROVED, assertThrows(CpFailoverService.Refusal.class,
+        assertEquals(CpFailoverService.CHASSIS_MODE_UNKNOWN, assertThrows(CpFailoverService.Refusal.class,
             () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point",request,1,"nonce",true)).code());
-        verify(store,never()).createRequestApproval(any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any());
+        verify(store,never()).createRequestApproval(any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any());
         verify(store,never()).requestBound(any(),any(),any(),any(),any(),anyBoolean(),any(),any(),any(),anyLong(),any(),anyBoolean(),any());
         when(store.requestReadiness(CLUSTER,null,"actor-1",A,"check_point"))
             .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED","run-chassis",null));
         assertEquals("run-chassis",service.requestReadiness(CLUSTER_ID,CLUSTER_ID,"actor-1","check_point"));
         // The VS step keeps its own unit and is never refused for the chassis rule.
-        String vsUnit=UUID.nameUUIDFromBytes((CLUSTER+":13").getBytes(StandardCharsets.UTF_8)).toString();
-        when(store.requestReadiness(CLUSTER,"13","actor-1",A,"check_point"))
-            .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED","run-vs",null));
-        assertEquals("run-vs",service.requestReadiness(CLUSTER_ID,vsUnit,"actor-1","check_point"));
         when(store.requestBound(eq(CLUSTER),eq("13"),any(),eq("actor-1"),eq(A),eq(true),eq("check_point"),
             eq(java.util.Set.of(A,B)),eq("request-a"),eq(1L),eq("nonce-a"),eq(true),any()))
             .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED","run-vs-failover",null));
-        assertEquals("run-vs-failover",service.request(CLUSTER_ID,vsUnit,null,"actor-1","check_point","request-a",1,"nonce-a",true));
+        assertEquals("run-vs-failover",service.request(CLUSTER_ID,VS_UNIT,null,"actor-1","check_point","request-a",1,"nonce-a",true));
+    }
+    @Test void aVsxHaModeChassisIsApprovedAndStartedAsOneChassisRun() {
+        vsx();
+        chassisReadiness("HA","READY","READY");
+        String request=UUID.randomUUID().toString();
+        Instant from=Instant.now(), until=from.plusSeconds(600);
+        service.createApprovalRequest(request,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic","actor-1","check_point");
+        // Option B: an ordinary unit approval (operation FAILOVER) on the chassis unit.
+        verify(store).createRequestApproval(eq(request),eq(CLUSTER),isNull(),eq(CLUSTER_ID),eq(java.util.Set.of(A,B)),eq(from),eq(until),
+            eq("Synthetic"),eq("actor-1"),eq("check_point"),eq(JooqCpFailoverRepository.ADMIN_SINGLE));
+        when(store.requestOperation("request-a")).thenReturn(Optional.of(JooqCpFailoverRepository.OPERATION_FAILOVER));
+        when(store.requestBound(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true),eq("check_point"),
+            eq(java.util.Set.of(A,B)),eq("request-a"),eq(1L),eq("nonce-a"),eq(true),eq(JooqCpFailoverRepository.ADMIN_SINGLE)))
+            .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED","run-chassis",null));
+        assertEquals("run-chassis",service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",true));
+        // An approval of the other path (the mode changed since): refused, nothing started.
+        when(store.requestOperation("request-b")).thenReturn(Optional.of(JooqCpFailoverRepository.OPERATION_ALL_VIRTUAL_SYSTEMS));
+        assertEquals(CpFailoverService.CHASSIS_MODE_CHANGED, assertThrows(CpFailoverService.Refusal.class,
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-b",1,"nonce-b",true)).code());
+        verify(store,never()).requestSequence(any(),any(),any(),any(),any(),anyLong(),any(),anyBoolean(),any(),any(),any(),anyBoolean());
+    }
+    @Test void aChassisStartNeedsTheChassisAndEveryVirtualSystemReady() {
+        vsx();
+        when(store.requestOperation("request-a")).thenReturn(Optional.of(JooqCpFailoverRepository.OPERATION_FAILOVER));
+        chassisReadiness("HA","NOT_READY","READY");
+        assertEquals(CpFailoverService.CHASSIS_READINESS_NOT_READY, assertThrows(CpFailoverService.Refusal.class,
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",true)).code());
+        chassisReadiness("HA","READY","NOT_READY");
+        assertEquals(CpFailoverService.VIRTUAL_SYSTEM_NOT_READY, assertThrows(CpFailoverService.Refusal.class,
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",true)).code());
+        verify(store,never()).requestBound(any(),any(),any(),any(),any(),anyBoolean(),any(),any(),any(),anyLong(),any(),anyBoolean(),any());
+    }
+    @Test void aVslsChassisRunsEveryVirtualSystemInSequenceAndNeverTheVs0Write() {
+        vsx();
+        chassisReadiness("VSLS","READY","READY");
+        String request=UUID.randomUUID().toString();
+        Instant from=Instant.now(), until=from.plusSeconds(600);
+        service.createApprovalRequest(request,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic","actor-1","check_point");
+        verify(store).createRequestApproval(eq(request),eq(CLUSTER),isNull(),eq(CLUSTER_ID),any(),any(),any(),any(),any(),any(),any(),
+            eq(JooqCpFailoverRepository.OPERATION_ALL_VIRTUAL_SYSTEMS));
+        // A chassis-run approval on a VSLS chassis: option B is refused with its own code.
+        when(store.requestOperation("request-b")).thenReturn(Optional.of(JooqCpFailoverRepository.OPERATION_FAILOVER));
+        assertEquals(CpFailoverService.CHASSIS_MODE_VSLS, assertThrows(CpFailoverService.Refusal.class,
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-b",1,"nonce-b",true)).code());
+        when(store.requestOperation("request-a")).thenReturn(Optional.of(JooqCpFailoverRepository.OPERATION_ALL_VIRTUAL_SYSTEMS));
+        assertEquals(CpFailoverService.SEQUENCE_NOT_SCHEDULABLE, assertThrows(CpFailoverService.Refusal.class,
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,Instant.now().plusSeconds(60),"actor-1","check_point","request-a",1,"nonce-a",true)).code());
+        when(store.requestSequence(eq(CLUSTER),eq("actor-1"),eq(A),eq(java.util.Set.of(A,B)),eq("request-a"),eq(1L),eq("nonce-a"),
+            eq(true),eq(JooqCpFailoverRepository.ADMIN_SINGLE),
+            eq(List.of(new JooqCpFailoverRepository.SequenceStep("13",VS_UNIT))),any(),anyBoolean()))
+            .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED","run-vs-13",null));
+        assertEquals("run-vs-13",service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",true));
+        verify(store,never()).requestBound(any(),any(),any(),any(),any(),anyBoolean(),any(),any(),any(),anyLong(),any(),anyBoolean(),any());
+        when(store.requestSequence(any(),any(),any(),any(),eq("request-c"),anyLong(),any(),anyBoolean(),any(),any(),any(),anyBoolean()))
+            .thenReturn(new JooqCpFailoverRepository.Decision("FLEET_MUTATION_ACTIVE",null));
+        when(store.requestOperation("request-c")).thenReturn(Optional.of(JooqCpFailoverRepository.OPERATION_ALL_VIRTUAL_SYSTEMS));
+        assertEquals("FLEET_MUTATION_ACTIVE", assertThrows(CpFailoverService.Refusal.class,
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-c",1,"nonce-c",true)).code());
+    }
+    @Test void aRunningSequenceAdvancesUnderTheInitiatorsAdmissionAndStopsOnAWindowRefusal() {
+        vsx();
+        var seq=new JooqCpFailoverRepository.Sequence("seq-1",CLUSTER,"approval-1","actor-1",
+            com.securityexpert.nexus.ui2.platform.ManualAdmission.SECURITY_ADMIN,true,List.of("13","35"),1,"run-13","RUNNING",
+            null,null,Instant.EPOCH,null);
+        when(store.runningSequences()).thenReturn(List.of(seq));
+        var steps=List.of(new JooqCpFailoverRepository.SequenceStep("13",VS_UNIT),
+            new JooqCpFailoverRepository.SequenceStep("35",UUID.nameUUIDFromBytes((CLUSTER+":35").getBytes(StandardCharsets.UTF_8)).toString()));
+        when(store.advanceSequence("seq-1",steps,A)).thenAnswer(call -> {
+            var grant=com.securityexpert.nexus.ui2.platform.ManualAdmission.currentFor("actor-1").orElseThrow();
+            assertEquals(com.securityexpert.nexus.ui2.platform.ManualAdmission.SECURITY_ADMIN,grant.role());
+            assertTrue(grant.acknowledged());
+            return "ADMITTED";
+        });
+        service.advanceSequences();
+        verify(store).advanceSequence("seq-1",steps,A);
+        assertTrue(com.securityexpert.nexus.ui2.platform.ManualAdmission.current().isEmpty(),"the grant is never left on the thread");
+        org.mockito.Mockito.doThrow(new JobWindowPolicy.OutsideWindow(java.time.ZonedDateTime.now()))
+            .when(store).advanceSequence("seq-1",steps,A);
+        service.advanceSequences();
+        verify(store).stopSequence("seq-1",JobWindowPolicy.CODE,"35");
     }
     @Test void stepFenceRefusalsFromTheRepositoryReachTheCaller() {
         vsx();
@@ -430,11 +534,35 @@ class CpFailoverServiceTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$[0].unitId").value(CLUSTER_ID))
             .andExpect(jsonPath("$[0].unitKind").value("VSX_CHASSIS"))
-            .andExpect(jsonPath("$[0].failoverRefusal").value(CpFailoverService.CHASSIS_FAILOVER_NOT_APPROVED))
+            .andExpect(jsonPath("$[0].failoverRefusal").value(CpFailoverService.CHASSIS_MODE_UNKNOWN))
+            .andExpect(jsonPath("$[0].canStart").value(false))
             .andExpect(jsonPath("$[0].virtual_system").doesNotExist())
             .andExpect(jsonPath("$[1].unitKind").value("VIRTUAL_SYSTEM"))
             .andExpect(jsonPath("$[1].canStart").value(true))
             .andExpect(jsonPath("$[1].failoverRefusal").doesNotExist());
+    }
+    @Test void theChassisUnitOffersTheActionItsModeAllows() throws Exception {
+        vsx();
+        var mvc = MockMvcBuilders.standaloneSetup(new CpFailoverController(service)).build();
+        String path = "/api/v2/cp-failover/units";
+        chassisReadiness("HA","READY","READY");
+        mvc.perform(get(path).servletPath(path).param("clusterRef", CLUSTER)
+                .requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "actor-1"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].unitKind").value("VSX_CHASSIS"))
+            .andExpect(jsonPath("$[0].chassisMode").value("HA"))
+            .andExpect(jsonPath("$[0].chassisAction").value(CpFailoverService.ACTION_CHASSIS_FAILOVER))
+            .andExpect(jsonPath("$[0].failoverRefusal").doesNotExist())
+            .andExpect(jsonPath("$[0].canStart").value(true))
+            .andExpect(jsonPath("$[0].canSchedule").value(true));
+        chassisReadiness("VSLS","READY","NOT_READY");
+        mvc.perform(get(path).servletPath(path).param("clusterRef", CLUSTER)
+                .requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "actor-1"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].chassisAction").value(CpFailoverService.ACTION_ALL_VIRTUAL_SYSTEMS))
+            .andExpect(jsonPath("$[0].chassisStartRefusal").value(CpFailoverService.VIRTUAL_SYSTEM_NOT_READY))
+            .andExpect(jsonPath("$[0].canStart").value(true))
+            .andExpect(jsonPath("$[0].canSchedule").value(false));
     }
     private static DeviceSummaryRecord summaryWithVs(String id,String vsNames) {
         return new DeviceSummaryRecord(id,"gateway","check_point",DeviceEnrollmentState.ENROLLED,
