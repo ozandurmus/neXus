@@ -42,10 +42,14 @@ public final class PolicyChangesService {
     }
     /** Shown instead of a name when two or more different administrators edited the rule before one commit; never a guess. */
     public static String ambiguousActor(int administrators) { return "AMBIGUOUS (" + administrators + " administrators before the commit)"; }
+    /** Shown when a Submitted commit entry anchors the window and its completion entry has not yet been seen. */
+    public static String pendingOutcomeActor(String administrator) {
+        return com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeActorRepository.pendingOutcomeActor(administrator);
+    }
     /**
      * Rows without a vendor-supplied actor get the administrator the Panorama config-log join resolved (V208, PO 2026-11-12):
-     * a name for MATCHED, the AMBIGUOUS text for AMBIGUOUS, otherwise the row is unchanged and shows UNKNOWN as before.
-     * The candidate names are never put on a row; authorised roles read them from {@link #actorCandidates}.
+     * a name (or pending-outcome text) for MATCHED, the AMBIGUOUS text for AMBIGUOUS, otherwise the row is unchanged and shows
+     * UNKNOWN as before. The candidate names are never put on a row; authorised roles read them from {@link #actorCandidates}.
      */
     List<Row> enrich(List<Row> batch) {
         if (actors == null || batch.isEmpty()) return batch;
@@ -171,7 +175,9 @@ public final class PolicyChangesService {
                 if (row.initialCapture()) initial++;
                 if (row.initialCapture() && !request.includeInitial()) continue;
                 total++; counts.merge(row.changeType(), 1L, Long::sum); rules.add(List.of(row.policy(), row.ruleKey()));
-                if (row.actor() != null && !row.actor().isBlank() && !"AMBIGUOUS".equals(row.actorState())) actors.add(row.actor());
+                if (row.actor() != null && !row.actor().isBlank() && !"AMBIGUOUS".equals(row.actorState())
+                        && !com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeActorRepository.isPendingOutcomeActor(row.actor()))
+                    actors.add(row.actor());
                 Position position = new Position(Instant.parse(row.time()), row.revision());
                 boolean after = cursor.position() == null || position.time().isBefore(cursor.position().time())
                     || position.time().equals(cursor.position().time()) && position.revision() < cursor.position().revision();

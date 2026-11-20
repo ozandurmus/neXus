@@ -12,11 +12,15 @@ import { attemptWords } from "./backupWords";
 import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
 
 const FULL_PAGE = 25;
-const WORD_INK = { ok: m3.onSurfaceVar, bad: m3.criticalInk, warn: m3.onSurface, neutral: m3.onSurfaceVar } as const;
+const WORD_INK = { ok: m3.onSurfaceVar, bad: m3.criticalInk, warn: m3.warningInk, neutral: m3.onSurfaceVar } as const;
 
 /** One attempt on one line: the stamp (age only when `compact`), the status words, and the transcript entry point. */
-export function AttemptLine({ job, compact = false }: { readonly job: JobEventView; readonly compact?: boolean }) {
-  const words = attemptWords(job.state, job.terminal_reason);
+export function AttemptLine({ job, compact = false, archiveComplete }: {
+  readonly job: JobEventView;
+  readonly compact?: boolean;
+  readonly archiveComplete?: boolean;
+}) {
+  const words = attemptWords(job.state, job.terminal_reason, { archiveComplete });
   return (
     <Stack direction="row" spacing={1} alignItems="center" flexWrap={compact ? "nowrap" : "wrap"} useFlexGap sx={compact ? { whiteSpace: "nowrap" } : undefined}>
       {/* One timestamp component (R15): the fleet cell shows the age with the exact stamp on hover, the device tab the full stamp. */}
@@ -24,6 +28,11 @@ export function AttemptLine({ job, compact = false }: { readonly job: JobEventVi
       <Typography variant="body2" title={words.detail ?? undefined} sx={{ color: WORD_INK[words.tone], fontWeight: words.tone === "bad" ? 600 : 400 }}>
         {words.word}{words.inline ? ` · ${words.inline}` : ""}
       </Typography>
+      {words.link && (
+        <Typography component="a" href={words.link.href} variant="body2" sx={{ color: m3.primary, textDecoration: "underline", whiteSpace: "nowrap" }}>
+          {words.link.label}
+        </Typography>
+      )}
       {words.detail && !compact && <Box component="details" sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>
         <Box component="summary" sx={{ cursor: "pointer" }}>Details</Box>
         <Box sx={{ fontFamily: "monospace", fontSize: 12, wordBreak: "break-word", maxWidth: 560 }}>{words.detail}</Box>
@@ -37,11 +46,11 @@ export function AttemptLine({ job, compact = false }: { readonly job: JobEventVi
 export type LatestAttempt = "loading" | "error" | "none" | JobEventView;
 
 /** The fleet table's LATEST ATTEMPT cell (one compact line), from the value {@link useLatestBackupAttempts} holds. */
-export function LatestAttemptCell({ latest }: { readonly latest: LatestAttempt }) {
+export function LatestAttemptCell({ latest, archiveComplete }: { readonly latest: LatestAttempt; readonly archiveComplete?: boolean }) {
   if (latest === "error") return <Alert severity="warning">Backup attempts could not be loaded.</Alert>;
   if (latest === "loading") return <Typography variant="body2">Loading backup attempts…</Typography>;
   if (latest === "none") return <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>No attempt</Typography>;
-  return <AttemptLine job={latest} compact />;
+  return <AttemptLine job={latest} compact archiveComplete={archiveComplete} />;
 }
 
 /** The time of a latest attempt for ordering the fleet table; unknown until read, and when there is none. */
@@ -104,13 +113,15 @@ export function useLatestBackupAttempts(deviceIds: readonly string[], version = 
  * {@link useLatestBackupAttempts}). `collapseTo` is the device Backup tab: only the newest N attempts until the operator
  * chooses "Show all" (UI review 2026-10-18, F-16).
  */
-export function BackupAttempts({ deviceId, latestOnly = false, version = 0, collapseTo, quietWhenEmpty = false }: {
+export function BackupAttempts({ deviceId, latestOnly = false, version = 0, collapseTo, quietWhenEmpty = false, archiveComplete }: {
   readonly deviceId: string;
   readonly latestOnly?: boolean;
   readonly version?: number;
   readonly collapseTo?: number;
   /** Render nothing when there is no attempt: the caller already shows the one empty state (FortiManager, 3.3). */
   readonly quietWhenEmpty?: boolean;
+  /** Whether the stored archive for this device is complete per the recorded manifest. */
+  readonly archiveComplete?: boolean;
 }) {
   const [page, setPage] = useState(1);
   const [expanded, setExpanded] = useState(false);
@@ -137,7 +148,7 @@ export function BackupAttempts({ deviceId, latestOnly = false, version = 0, coll
   }
 
   return <Stack spacing={latestOnly ? 0 : 1}>
-    {result.items.map((job) => <Box key={job.job_id}><AttemptLine job={job} compact={latestOnly} /></Box>)}
+    {result.items.map((job) => <Box key={job.job_id}><AttemptLine job={job} compact={latestOnly} archiveComplete={archiveComplete} /></Box>)}
     {!latestOnly && collapsed && result.total > pageSize && (
       <Box><Button size="small" onClick={() => setExpanded(true)}>Show all {result.total} attempts</Button></Box>
     )}

@@ -44,12 +44,22 @@ public final class Ui2ConfigurationServer {
     private static final String HEADER_CONTEXT_REF = "X-Nexus-Context-Ref";
 
     private final int port;
+    private final boolean metricsEnabled;
+    private final io.micrometer.prometheusmetrics.PrometheusMeterRegistry metricsRegistry;
     private final Map<String, VendorConfigParser> parsers = new LinkedHashMap<>();
     private final ObjectMapper mapper;
     private HttpServer server;
 
     public Ui2ConfigurationServer(int port) {
+        this(port, com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.isEnabled(),
+                com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.init("configuration"));
+    }
+
+    public Ui2ConfigurationServer(int port, boolean metricsEnabled,
+            io.micrometer.prometheusmetrics.PrometheusMeterRegistry metricsRegistry) {
         this.port = port;
+        this.metricsEnabled = metricsEnabled;
+        this.metricsRegistry = metricsRegistry;
         this.mapper = new ObjectMapper()
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
                 .setSerializationInclusion(JsonInclude.Include.ALWAYS);
@@ -71,6 +81,15 @@ public final class Ui2ConfigurationServer {
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
 
         registerContext(server, "/healthz", new HealthHandler());
+        registerContext(server, "/metrics", exchange -> {
+            try (exchange) {
+                if (!metricsEnabled || metricsRegistry == null || !"/metrics".equals(exchange.getRequestURI().getPath())) {
+                    exchange.sendResponseHeaders(404, -1);
+                    return;
+                }
+                com.securityexpert.nexus.ui2.platform.metrics.MetricsServer.handleMetrics(exchange, metricsRegistry);
+            }
+        });
         registerContext(server, "/api/v1/parse", new ParseHandler());
 
         server.start();

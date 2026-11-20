@@ -25,6 +25,18 @@ import com.securityexpert.nexus.ui2.service.advisorystore.AdvisorySources;
 @Configuration
 public class MachinePortConfiguration {
 
+    private final boolean metricsEnabled;
+
+    public MachinePortConfiguration() {
+        this(false);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public MachinePortConfiguration(
+            @org.springframework.beans.factory.annotation.Value("${ui2.metrics.enabled:false}") boolean metricsEnabled) {
+        this.metricsEnabled = metricsEnabled;
+    }
+
     /** True when the internal port serves this method and path. */
     static boolean internalPortAllows(String method, String uri) {
         if (!"POST".equals(method) || uri == null) return false;
@@ -59,10 +71,16 @@ public class MachinePortConfiguration {
      */
     @Bean
     OncePerRequestFilter machinePortFilter() {
-        return new OrderedMachinePortFilter();
+        return new OrderedMachinePortFilter(metricsEnabled);
     }
 
     private static final class OrderedMachinePortFilter extends OncePerRequestFilter implements Ordered {
+        private final boolean metricsEnabled;
+
+        OrderedMachinePortFilter(boolean metricsEnabled) {
+            this.metricsEnabled = metricsEnabled;
+        }
+
         @Override
         public int getOrder() {
             return Ordered.HIGHEST_PRECEDENCE + 20;
@@ -71,6 +89,23 @@ public class MachinePortConfiguration {
         @Override
         protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                 FilterChain chain) throws ServletException, IOException {
+            if (request.getLocalPort() == 8086 && metricsEnabled && "/metrics".equals(request.getRequestURI())) {
+                String method = request.getMethod();
+                if (!"GET".equals(method) && !"HEAD".equals(method)) {
+                    response.setHeader("Allow", "GET, HEAD");
+                    response.sendError(405);
+                    return;
+                }
+                byte[] body = com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.init("service")
+                        .scrape().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                response.setStatus(200);
+                response.setContentType("text/plain; version=0.0.4; charset=utf-8");
+                response.setContentLength(body.length);
+                if ("GET".equals(method)) {
+                    response.getOutputStream().write(body);
+                }
+                return;
+            }
             boolean internal = request.getRequestURI().equals("/internal")
                     || request.getRequestURI().startsWith("/internal/");
             if (request.getLocalPort() == 8086

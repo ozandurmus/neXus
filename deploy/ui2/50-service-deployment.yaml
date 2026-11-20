@@ -61,6 +61,8 @@ spec:
             - name: metrics
               containerPort: 9404
           env:
+            - name: UI2_METRICS_ENABLED
+              value: "false"
             - name: UI2_METRICS_PORT
               value: "9404"
             # Cisco ASA failover readiness (PO 2026-11-17, Q3: all five pairs at once); readiness only, no execution.

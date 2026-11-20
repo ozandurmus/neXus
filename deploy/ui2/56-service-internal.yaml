@@ -63,3 +63,15 @@ spec:
       ports:
         - protocol: TCP
           port: 8086
+    # Metrics scrape example (docs/operations/METRICS.md): disabled by default (UI2_METRICS_ENABLED=false).
+    # When enabled, an operator may allow an in-cluster Prometheus scraper on internal port 8086 (or port metrics):
+    # - from:
+    #     - namespaceSelector:
+    #         matchLabels:
+    #           kubernetes.io/metadata.name: monitoring
+    #       podSelector:
+    #         matchLabels:
+    #           app.kubernetes.io/name: prometheus
+    #   ports:
+    #     - protocol: TCP
+    #       port: 8086

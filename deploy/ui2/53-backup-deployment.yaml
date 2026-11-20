@@ -51,7 +51,14 @@ spec:
         args:
         - worker
         - backup
+        # Metrics (docs/operations/METRICS.md): disabled by default (UI2_METRICS_ENABLED=false). Example container port:
+        # ports:
+        # - name: metrics
+        #   containerPort: 9404
+        #   protocol: TCP
         env:
+        - name: UI2_METRICS_ENABLED
+          value: "false"
         # PO 2026-11-15: application logs on HOST-A show IP addresses (the code default stays masked).
         # Logs never leave HOST-A raw; aiview, diagnostics and bundles mask separately.
         - name: NEXUS_LOG_RAW_ADDRESSES
@@ -215,6 +222,19 @@ spec:
   policyTypes:
   - Ingress
   - Egress
+  # Metrics scrape note (docs/operations/METRICS.md): ingress stays closed by default. When UI2_METRICS_ENABLED=true,
+  # an operator may allow an in-cluster Prometheus scraper pod on the internal metrics port, for example:
+  # ingress:
+  # - from:
+  #   - namespaceSelector:
+  #       matchLabels:
+  #         kubernetes.io/metadata.name: monitoring
+  #     podSelector:
+  #       matchLabels:
+  #         app.kubernetes.io/name: prometheus
+  #   ports:
+  #   - protocol: TCP
+  #     port: metrics
   ingress: []
   egress:
   - to:

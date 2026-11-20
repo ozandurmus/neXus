@@ -44,12 +44,22 @@ public final class Ui2ComplianceServer {
     private static final String HEADER_DEVICE_ID = "X-Nexus-Device-Id";
 
     private final int port;
+    private final boolean metricsEnabled;
+    private final io.micrometer.prometheusmetrics.PrometheusMeterRegistry metricsRegistry;
     private final ObjectMapper mapper;
     private final CheckPointGaiaConfigParser cpParser;
     private HttpServer server;
 
     public Ui2ComplianceServer(int port) {
+        this(port, com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.isEnabled(),
+                com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.init("compliance"));
+    }
+
+    public Ui2ComplianceServer(int port, boolean metricsEnabled,
+            io.micrometer.prometheusmetrics.PrometheusMeterRegistry metricsRegistry) {
         this.port = port;
+        this.metricsEnabled = metricsEnabled;
+        this.metricsRegistry = metricsRegistry;
         this.mapper = new ObjectMapper()
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
                 .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
@@ -65,6 +75,15 @@ public final class Ui2ComplianceServer {
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
 
         registerContext(server, "/healthz", new HealthHandler());
+        registerContext(server, "/metrics", exchange -> {
+            try (exchange) {
+                if (!metricsEnabled || metricsRegistry == null || !"/metrics".equals(exchange.getRequestURI().getPath())) {
+                    exchange.sendResponseHeaders(404, -1);
+                    return;
+                }
+                com.securityexpert.nexus.ui2.platform.metrics.MetricsServer.handleMetrics(exchange, metricsRegistry);
+            }
+        });
         registerContext(server, "/api/v1/compliance/catalog", new CatalogHandler());
         registerContext(server, "/api/v1/compliance/evaluate", new EvaluateHandler());
 

@@ -73,6 +73,8 @@ spec:
           containerPort: 9404
           protocol: TCP
         env:
+        - name: UI2_METRICS_ENABLED
+          value: "false"
         - name: UI2_METRICS_PORT
           value: "9404"
         # PO 2026-11-15: application logs on HOST-A show IP addresses (the code default stays masked).
@@ -201,6 +203,18 @@ spec:
   policyTypes:
   - Ingress
   - Egress
+  # Metrics scrape example (docs/operations/METRICS.md): closed by default (UI2_METRICS_ENABLED=false).
+  # ingress:
+  # - from:
+  #   - namespaceSelector:
+  #       matchLabels:
+  #         kubernetes.io/metadata.name: monitoring
+  #     podSelector:
+  #       matchLabels:
+  #         app.kubernetes.io/name: prometheus
+  #   ports:
+  #   - protocol: TCP
+  #     port: metrics
   ingress: []
   egress:
   - to:

@@ -117,6 +117,10 @@ public final class PolicyPrivacy {
         if (key.equals("queryService")) return text.matches("any|(?:tcp|udp)/[0-9]{1,5}") ? text : "UNKNOWN";
         if (key.equals("changedBy") && (text.equals(PolicyChangesService.UNKNOWN_ACTOR)
                 || text.matches("AMBIGUOUS \\([0-9]{1,3} administrators before the commit\\)"))) return text;
+        if (key.equals("changedBy") && com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeActorRepository.isPendingOutcomeActor(text))
+            return com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeActorRepository.pendingOutcomeActor(
+                names.maskPolicyName("last-modifier",
+                    com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeActorRepository.extractPendingOutcomeAdmin(text)));
         if (key.equals("actorState")) return Set.of("MATCHED", "AMBIGUOUS").contains(text) ? text : "UNKNOWN";
         if (key.equals("nextCursor")) return text.matches("[A-Za-z0-9_-]{1,1024}") ? text : "";
         if (key.equals("revision")) return text.matches("[0-9]+") ? text : "";

@@ -122,7 +122,9 @@ public class DiskHeadroomAlerts {
             if (event != Event.NONE) {
                 try {
                     sink.send(settings, severity(event), TAG, message(event, reading, policy));
+                    com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend("syslog_disk_headroom", "success");
                 } catch (IOException e) {
+                    com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend("syslog_disk_headroom", "failure");
                     LOG.log(System.Logger.Level.WARNING, "[NOTIFY_SYSLOG_FAILED] disk headroom: {0}", e.getMessage());
                     continue;
                 }

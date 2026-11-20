@@ -59,4 +59,17 @@ class ManagementPortIsolationTest {
             assertFalse(route.contains("/actuator") || route.endsWith(" /metrics"), route);
         }
     }
+
+    @Test
+    void scrapeServerStaysOffWhenUi2MetricsEnabledIsFalseAndStartsWhenEnabled() throws Exception {
+        MetricsConfiguration config = new MetricsConfiguration();
+        try (MetricsConfiguration.ScrapeServer disabled = config.scrapeServer(false, 9404)) {
+            org.junit.jupiter.api.Assertions.assertNull(disabled.server(),
+                    "scrape server must stay off when UI2_METRICS_ENABLED=false");
+        }
+        try (MetricsConfiguration.ScrapeServer enabled = config.scrapeServer(true, 19405)) {
+            org.junit.jupiter.api.Assertions.assertNotNull(enabled.server(),
+                    "scrape server must start when UI2_METRICS_ENABLED=true");
+        }
+    }
 }

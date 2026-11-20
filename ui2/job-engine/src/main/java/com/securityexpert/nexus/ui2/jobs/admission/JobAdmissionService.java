@@ -130,6 +130,7 @@ public final class JobAdmissionService {
                 targetDeviceId, Capability.moreSevere(capability.get().resolvedActionClassOrDeclaredClass(), classFloor).id(),
                 actorFingerprint, actionId);
         if (created.isPresent()) {
+            com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordJobState(capabilityId, "REQUESTED");
             return new AdmissionResult.Admitted(created.get());
         }
         // Lost the idempotency-key race (or a genuine client retry):
@@ -205,6 +206,7 @@ public final class JobAdmissionService {
         Optional<String> created = repository.createRequestedIfAbsentForRun(jobId, idempotencyKey, capabilityId,
                 targetRunId, capability.get().resolvedActionClassOrDeclaredClass().id(), actorFingerprint, actionId);
         if (created.isPresent()) {
+            com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordJobState(capabilityId, "REQUESTED");
             return new AdmissionResult.Admitted(created.get());
         }
         return repository.findByIdempotencyKey(idempotencyKey)

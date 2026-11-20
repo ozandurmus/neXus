@@ -60,6 +60,14 @@ export function ValidationChip({ level, withLevel = false }: { readonly level: s
 // Backup attempts
 // ---------------------------------------------------------------------------------------------------------------
 
+export const CREDENTIALS_HREF = "?screen=administration&tab=registry&section=credentials";
+export const CREDENTIALS_LABEL = "Administration > Credentials";
+
+export interface AttemptLink {
+  readonly label: string;
+  readonly href: string;
+}
+
 export interface AttemptWords {
   /** One status word: `Completed`, `Failed`, `Cancelled`, `Host key mismatch`, `Partial`. */
   readonly word: string;
@@ -68,6 +76,26 @@ export interface AttemptWords {
   readonly inline: string | null;
   /** Everything else, kept one click away. */
   readonly detail: string | null;
+  /** Optional navigation link when the attempt points to a configuration page (for example Administration > Credentials). */
+  readonly link?: AttemptLink | null;
+}
+
+export interface ArchiveManifestCheck {
+  readonly artefactId?: string | null;
+  readonly artefact_id?: string | null;
+  readonly sizeBytes?: number | null;
+  readonly size_bytes?: number | null;
+  readonly validationLevel?: string | null;
+  readonly validation_level?: string | null;
+}
+
+/** Whether a stored archive is complete per its existing manifest (non-empty id, positive size, validated V1-V4). */
+export function isArchiveManifestComplete(manifest: ArchiveManifestCheck | null | undefined): boolean {
+  if (!manifest) return false;
+  const id = (manifest.artefactId ?? manifest.artefact_id ?? "").trim();
+  const size = manifest.sizeBytes ?? manifest.size_bytes ?? 0;
+  const level = (manifest.validationLevel ?? manifest.validation_level ?? "").trim();
+  return id.length > 0 && size > 0 && /^V[1-4]$/i.test(level);
 }
 
 const STATE_WORD: Record<string, string> = {
@@ -88,16 +116,69 @@ function cleanReason(state: string, reason: string | null | undefined): string |
   return text.length > 0 ? text : null;
 }
 
+function credentialSlotWords(detail: string): string {
+  const body = detail.replace(/\s*\(Administration\s*>\s*Credentials\)\s*$/i, "").trim();
+  if (/backup\s+(?:or|credential\s+and)\s+(?:backup\s+)?receiver\s+credential/i.test(body)) {
+    return "Spark backup or backup receiver credential (backup_receiver) is missing";
+  }
+  if (/backup_receiver|receiver\s+credential/i.test(body)) {
+    return "backup receiver credential (backup_receiver) is missing";
+  }
+  if (/export[\s_]+passphrase|passphrase\s+credential/i.test(body)) {
+    return "export passphrase credential (export_passphrase) is missing";
+  }
+  if (/spark\s+backup\s+credential/i.test(body)) {
+    return "Spark backup credential is missing";
+  }
+  if (/backup\s+credential/i.test(body)) {
+    return "backup credential is missing";
+  }
+  if (/login\s+credential|ssh\s+credential/i.test(body)) {
+    return "login credential is missing";
+  }
+  if (/sftp\s+receiver\s+is\s+not\s+configured/i.test(body)) {
+    return "Spark SFTP receiver is not configured (backup_receiver)";
+  }
+  return body.length > 0 && body.length <= INLINE_REASON_MAX ? body : "device credential is missing";
+}
+
+function panRunningConfigPartialInline(detail: string): string | null {
+  if (/^stored without running-config\.(?:set|txt)\b/i.test(detail)) {
+    return /timed?\s*out/i.test(detail) ? "stored without running config (timeout)" : "stored without running config";
+  }
+  return null;
+}
+
 /**
  * One status word per attempt instead of `COMPLETED: COMPLETED` / `CANCELLED: cancelled:`; the long machine lines
  * (`connect_failed: host_key_mismatch ...`, `partial: stored without ...`) shrink to a word with the full line behind a
  * disclosure. Nothing is dropped: the detail text is the original reason.
  */
-export function attemptWords(state: string, reason: string | null | undefined): AttemptWords {
+export function attemptWords(
+  state: string,
+  reason: string | null | undefined,
+  options?: { readonly archiveComplete?: boolean },
+): AttemptWords {
   const cleaned = cleanReason(state, reason);
+  const archiveComplete = options?.archiveComplete ?? true;
   if (cleaned && /host_key_mismatch/i.test(cleaned)) return { word: "Host key mismatch", tone: "bad", inline: null, detail: cleaned };
+  if (cleaned && /^credential_unresolvable\b/i.test(cleaned)) {
+    const detail = cleaned.replace(/^credential_unresolvable[\s:.-]*/i, "").trim();
+    return {
+      word: "Failed",
+      tone: "bad",
+      inline: credentialSlotWords(detail),
+      detail: cleaned,
+      link: { label: CREDENTIALS_LABEL, href: CREDENTIALS_HREF },
+    };
+  }
   if (cleaned && /^partial\b/i.test(cleaned)) {
-    return { word: "Partial", tone: "warn", inline: null, detail: cleaned.replace(/^partial[\s:.-]*/i, "").trim() || cleaned };
+    const detail = cleaned.replace(/^partial[\s:.-]*/i, "").trim() || cleaned;
+    const inline = panRunningConfigPartialInline(detail);
+    if (!archiveComplete) {
+      return { word: "Failed", tone: "bad", inline, detail };
+    }
+    return { word: "Partial", tone: "warn", inline, detail };
   }
   const tone = state === "COMPLETED" ? "ok" : state === "FAILED" || state === "REJECTED" ? "bad" : "neutral";
   if (!cleaned) return { word: stateWord(state), tone, inline: null, detail: null };

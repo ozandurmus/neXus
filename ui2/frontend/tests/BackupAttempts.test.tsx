@@ -160,4 +160,42 @@ describe("backup attempt transcript entry points", () => {
     await within(row2).findByText("Backup attempts could not be loaded.");
     expect(within(row2).queryByText("No attempt")).toBeNull();
   });
+
+  it("renders credential_unresolvable with the missing slot and Administration > Credentials link, and PAN partial as a warning when the manifest is complete", async () => {
+    const devices = [
+      { device_id: "d-spark", hostname: "FW-TANGO-04", role: "gateway", vendor_hint: "check_point", enrollment_state: "ENROLLED", backup_target: true },
+      { device_id: "d-pan-ok", hostname: "MGR-ROMEO-01", role: "management_server", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", backup_target: true },
+      { device_id: "d-pan-no-arch", hostname: "MGR-BRAVO-02", role: "management_server", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", backup_target: true },
+    ];
+    const backups = [
+      { artefact_id: "art-pan-1", device_id: "d-pan-ok", collected_at: "2026-11-20T02:05:00Z", size_bytes: 2097152, digest_prefix: "1234abcd", validation_level: "V1", deviation_state: "changed", vendor: "palo_alto" },
+    ];
+    const items: JobEventView[] = [
+      { job_id: "job-spark", job_type: "cp_spark_sftp_backup", target_device_id: "d-spark", submitted_at: "2026-11-20T02:01:00Z", state: "FAILED", terminal_reason: "credential_unresolvable: Spark backup or receiver credential is missing", has_transcript: false },
+      { job_id: "job-pan-ok", job_type: "pan_device_state_backup", target_device_id: "d-pan-ok", submitted_at: "2026-11-20T02:05:00Z", state: "FAILED", terminal_reason: "partial: stored without running-config.set (show config running: TimedOut)", has_transcript: false },
+      { job_id: "job-pan-missing", job_type: "pan_device_state_backup", target_device_id: "d-pan-no-arch", submitted_at: "2026-11-20T02:06:00Z", state: "FAILED", terminal_reason: "partial: stored without running-config.set (show config running: TimedOut)", has_transcript: false },
+    ];
+    vi.stubGlobal("fetch", vi.fn((input: string) => {
+      const url = String(input);
+      const body = url.startsWith("/api/v2/jobs") ? { items, total: items.length, page: 1, page_size: 500 }
+        : url.endsWith("/backups") || url === "/backups" ? { backups, baselines: {} }
+        : url === "/devices" ? { devices }
+        : {};
+      return Promise.resolve(new Response(JSON.stringify(body)));
+    }));
+
+    render(<BackupScreen />);
+    const sparkRow = (await screen.findByText("FW-TANGO-04")).closest("tr")!;
+    const panOkRow = screen.getByText("MGR-ROMEO-01").closest("tr")!;
+    const panNoArchRow = screen.getByText("MGR-BRAVO-02").closest("tr")!;
+
+    await within(sparkRow).findByText("Failed · Spark backup or backup receiver credential (backup_receiver) is missing");
+    const credLink = within(sparkRow).getByRole("link", { name: "Administration > Credentials" });
+    expect(credLink).toHaveAttribute("href", "?screen=administration&tab=registry&section=credentials");
+
+    await within(panOkRow).findByText("Partial · stored without running config (timeout)");
+    expect(within(panOkRow).queryByText(/^Failed/)).toBeNull();
+
+    await within(panNoArchRow).findByText("Failed · stored without running config (timeout)");
+  });
 });

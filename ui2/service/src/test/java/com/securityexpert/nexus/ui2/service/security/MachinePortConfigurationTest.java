@@ -52,6 +52,33 @@ class MachinePortConfigurationTest {
         assertEquals(200, run(filter, 8080, "GET", "/api/v2/lifecycle/advisories"));
     }
 
+    @Test
+    void metricsAreServedOnInternalPort8086OnlyWhenEnabledAndNeverOnPublicPort8080() throws Exception {
+        var disabledFilter = new MachinePortConfiguration(false).machinePortFilter();
+        assertEquals(404, run(disabledFilter, 8086, "GET", "/metrics"), "disabled by default on 8086");
+
+        var enabledFilter = new MachinePortConfiguration(true).machinePortFilter();
+        var request = new MockHttpServletRequest("GET", "/metrics");
+        request.setLocalPort(8086);
+        var response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+        enabledFilter.doFilter(request, response, chain);
+        assertEquals(200, response.getStatus());
+        org.junit.jupiter.api.Assertions.assertTrue(response.getContentAsString().contains("jvm_memory_used_bytes"));
+        verifyNoInteractions(chain);
+
+        assertEquals(405, run(enabledFilter, 8086, "POST", "/metrics"), "POST /metrics on 8086 is 405");
+
+        // On public port 8080, /metrics is never intercepted or exposed by the internal port filter.
+        var publicRequest = new MockHttpServletRequest("GET", "/metrics");
+        publicRequest.setLocalPort(8080);
+        var publicResponse = new MockHttpServletResponse();
+        FilterChain publicChain = mock(FilterChain.class);
+        enabledFilter.doFilter(publicRequest, publicResponse, publicChain);
+        org.junit.jupiter.api.Assertions.assertTrue(publicResponse.getContentAsString().isEmpty(),
+                "public port 8080 must never receive the metrics body");
+    }
+
     private static int run(org.springframework.web.filter.OncePerRequestFilter filter, int port, String method, String path) throws Exception {
         var request = new MockHttpServletRequest(method, path);
         request.setLocalPort(port);

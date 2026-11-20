@@ -56,11 +56,29 @@ class BackupEmptyStatusTest {
         transport.execOutputs.put(BackupReadPlan.CP_ADD_BACKUP_LOCAL,
                 "Creating backup package. Use the command 'show backup status' to monitor creation progress.");
         var clock = new AtomicReference<>(Instant.parse("2026-01-01T00:00:00Z"));
-        assertInstanceOf(BackupResult.OutcomeUnknown.class,
+        var unknown = assertInstanceOf(BackupResult.OutcomeUnknown.class,
                 executor(transport, dir, clock).collect(request(), "device-1", "job-1"));
+        assertTrue(unknown.reason().contains("stage=poll_backup_status"), unknown.reason());
+        assertTrue(unknown.reason().contains("start_acknowledged=true"), unknown.reason());
+        assertTrue(unknown.reason().contains("transport=completed"), unknown.reason());
+        assertTrue(unknown.reason().contains("last_status=<empty>"), unknown.reason());
         assertTrue(Duration.between(Instant.parse("2026-01-01T00:00:00Z"), clock.get()).toMinutes() > 3);
         assertFalse(transport.commandsIssued.stream().anyMatch(c -> c.contains("delete backup")));
         assertEquals(1, transport.commandsIssued.stream().filter(BackupReadPlan.CP_ADD_BACKUP_LOCAL::equals).count());
+    }
+
+    @Test
+    void channelFailedPollDoesNotMisclassifyAsDeviceFailedAndRecordsTransportStateOnOutcomeUnknown(@TempDir Path dir) {
+        var transport = new ScriptedBackupTransport();
+        transport.execOutputs.put(BackupReadPlan.CP_SHOW_DISKSPACE, "1000000\n");
+        transport.execOutputs.put(BackupReadPlan.CP_ADD_BACKUP_LOCAL,
+                "Creating backup package. Use the command 'show backup status' to monitor creation progress.");
+        transport.statusExecOverride = new com.securityexpert.nexus.ui2.jobs.transport.ExecResult.ChannelFailed("channel open failed");
+        var clock = new AtomicReference<>(Instant.parse("2026-01-01T00:00:00Z"));
+        var unknown = assertInstanceOf(BackupResult.OutcomeUnknown.class,
+                executor(transport, dir, clock).collect(request(), "device-1", "job-1"));
+        assertTrue(unknown.reason().contains("stage=poll_backup_status"), unknown.reason());
+        assertTrue(unknown.reason().contains("transport=channel_failed"), unknown.reason());
     }
 
     @Test

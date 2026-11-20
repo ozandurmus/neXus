@@ -20,14 +20,39 @@ public class PolicyChangeActorRepository {
     public static final String MATCHED = "MATCHED";
     public static final String AMBIGUOUS = "AMBIGUOUS";
     public static final String UNKNOWN = "UNKNOWN";
+    public static final String PENDING_OUTCOME_PREFIX = "submitted by ";
+    public static final String PENDING_OUTCOME_SUFFIX = ", outcome pending";
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    /** A history row without a link. {@code removedChangesJson} is the field diff, read only for a removed rule. */
+    /** Shown when a rule change is anchored only by a Submitted commit whose completion entry has not yet arrived. */
+    public static String pendingOutcomeActor(String adminName) {
+        return PENDING_OUTCOME_PREFIX + adminName + PENDING_OUTCOME_SUFFIX;
+    }
+
+    public static boolean isPendingOutcomeActor(String actor) {
+        return actor != null && actor.startsWith(PENDING_OUTCOME_PREFIX) && actor.endsWith(PENDING_OUTCOME_SUFFIX)
+            && actor.length() > PENDING_OUTCOME_PREFIX.length() + PENDING_OUTCOME_SUFFIX.length();
+    }
+
+    public static String extractPendingOutcomeAdmin(String actor) {
+        return isPendingOutcomeActor(actor)
+            ? actor.substring(PENDING_OUTCOME_PREFIX.length(), actor.length() - PENDING_OUTCOME_SUFFIX.length())
+            : actor;
+    }
+
+    /** A history row without a final link. {@code removedChangesJson} is the field diff, read only for a removed rule. */
     public record Pending(long revisionId, String policyId, String ruleKey, String changeType, Instant collectedAt,
             String containerRef, String removedChangesJson) {}
 
     /** The scope, section and name of a rule as the snapshot stores them (raw; hashed by the caller, never logged). */
     public record RuleIdentity(String scope, String section, String name) {}
+
+    /** One commit config-log entry. {@code time} is {@code yyyy-MM-dd HH:mm:ss}, device-local; {@code jobRef} is {@code path_hmac} when present. */
+    public record Commit(String entryRef, String time, String adminRef, String resultClass, String jobRef) {
+        public Commit(String entryRef, String time, String adminRef, String resultClass) {
+            this(entryRef, time, adminRef, resultClass, null);
+        }
+    }
 
     /** One change-class config-log entry that names a rule. {@code time} is {@code yyyy-MM-dd HH:mm:ss}, device-local. */
     public record Edit(String evidenceId, String ruleRefHmac, String adminRef, String adminName, String commandClass, String time) {}
@@ -41,14 +66,18 @@ public class PolicyChangeActorRepository {
 
     public PolicyChangeActorRepository(TransactionBoundary tx) { this.tx = tx; }
 
-    /** Non-initial history rows of the source's policies, collected since {@code since}, that have no link yet; newest first, so rows deferred for missing evidence cannot starve newer ones. */
+    /**
+     * Non-initial history rows of the source's policies, collected since {@code since}, that have no link yet or whose link is
+     * still pending a Submitted commit's outcome; newest first, so rows deferred for missing evidence cannot starve newer ones.
+     */
     public List<Pending> pending(String sourceId, Instant since, int limit) {
         return tx.inTransaction(db -> db.fetch("select h.revision_id, h.policy_id, h.rule_key, h.change_type, h.collected_at, "
             + "s.metadata->>'containerId' as container, case when h.change_type = 'removed' then h.changes::text end as removed_changes "
             + "from policy_rule_history h join policy_snapshot s on s.policy_id = h.policy_id "
             + "left join policy_change_actor_link l on l.revision_id = h.revision_id "
-            + "where s.metadata->>'sourceId' = {0} and l.revision_id is null and not h.initial_capture "
-            + "and h.collected_at >= {1}::timestamptz order by h.revision_id desc limit {2}", sourceId, since.toString(), limit)
+            + "where s.metadata->>'sourceId' = {0} and (l.revision_id is null or (l.state = 'MATCHED' and l.candidate_names->>0 like 'submitted by %, outcome pending')) "
+            + "and not h.initial_capture and h.collected_at >= {1}::timestamptz order by h.revision_id desc limit {2}",
+            sourceId, since.toString(), limit)
             .map(r -> new Pending(r.get("revision_id", Long.class), r.get("policy_id", String.class), r.get("rule_key", String.class),
                 r.get("change_type", String.class), r.get("collected_at", java.time.OffsetDateTime.class).toInstant(),
                 r.get("container", String.class), r.get("removed_changes", String.class))));
@@ -72,6 +101,16 @@ public class PolicyChangeActorRepository {
         return tx.inTransaction(db -> db.fetch("select max(observed_at) as t from policy_revision where source_id = {0} "
             + "and container_ref = {1} and observed_at < {2}::timestamptz", sourceId, containerRef, before.toString())
             .stream().findFirst().map(r -> r.get("t", java.time.OffsetDateTime.class)).map(java.time.OffsetDateTime::toInstant));
+    }
+
+    /** Commit entries of one source (Submitted, Succeeded, Failed), ordered by device time and entry ref. */
+    public List<Commit> commits(String sourceId) {
+        return tx.inTransaction(db -> db.fetch("select entry_ref, to_char(change_time, 'YYYY-MM-DD HH24:MI:SS') as t, admin_ref, "
+            + "result_class, path_hmac from policy_change_evidence where source_id = {0} and evidence_kind = 'PAN_CONFIG_LOG' "
+            + "and command_class = 'commit' and change_time is not null and result_class in ('Submitted', 'Succeeded', 'Failed') "
+            + "order by change_time, entry_ref", sourceId)
+            .map(r -> new Commit(r.get("entry_ref", String.class), r.get("t", String.class), r.get("admin_ref", String.class),
+                r.get("result_class", String.class), r.get("path_hmac", String.class))));
     }
 
     /** Successful commit entries with device time in {@code (from, to]}, ascending; times are {@code yyyy-MM-dd HH:mm:ss}. */
@@ -118,16 +157,27 @@ public class PolicyChangeActorRepository {
         return links(List.of(revisionId)).getOrDefault(revisionId, new Link(revisionId, UNKNOWN, "NOT_LINKED", List.of())).names();
     }
 
-    /** Stores the results; a history row already linked keeps its link (idempotent). */
+    /** Stores the results; a history row with a final link keeps its link, while a pending-outcome link is updated once the outcome arrives. */
     public int saveLinks(String jobId, List<Link> links) {
         return tx.inTransaction(db -> {
             int stored = 0;
             for (Link l : links)
                 stored += db.execute("insert into policy_change_actor_link(revision_id, state, reason, admin_count, candidate_names, resolved_job_id) "
-                    + "values ({0},{1},{2},{3},{4}::jsonb,{5}) on conflict (revision_id) do nothing",
+                    + "values ({0},{1},{2},{3},{4}::jsonb,{5}) on conflict (revision_id) do update set "
+                    + "state = excluded.state, reason = excluded.reason, admin_count = excluded.admin_count, "
+                    + "candidate_names = excluded.candidate_names, resolved_job_id = excluded.resolved_job_id, resolved_at = now() "
+                    + "where policy_change_actor_link.state = 'MATCHED' and policy_change_actor_link.candidate_names->>0 like 'submitted by %, outcome pending'",
                     l.revisionId(), l.state(), l.reason(), l.names().size(), json(l.names()), jobId);
             return stored;
         });
+    }
+
+    /** Clears pending-outcome links whose Submitted commit later resolved to Failed (leaving the history row deferred). */
+    public int deletePendingOutcomeLinks(List<Long> revisionIds) {
+        if (revisionIds.isEmpty()) return 0;
+        return tx.inTransaction(db -> db.execute("delete from policy_change_actor_link "
+            + "where revision_id in (select jsonb_array_elements_text({0}::jsonb)::bigint) "
+            + "and state = 'MATCHED' and candidate_names->>0 like 'submitted by %, outcome pending'", jsonLongs(revisionIds)));
     }
 
     /**

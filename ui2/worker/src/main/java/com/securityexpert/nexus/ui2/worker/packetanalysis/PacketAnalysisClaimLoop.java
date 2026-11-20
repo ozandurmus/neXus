@@ -87,6 +87,7 @@ public final class PacketAnalysisClaimLoop {
         }, period, period, java.util.concurrent.TimeUnit.SECONDS);
         try (var jobLog = com.securityexpert.nexus.ui2.platform.logging.JobLogContext.open(
                 String.valueOf(claimed.jobId()), PacketAnalysisJob.CAPABILITY)) {
+            long startNanos = System.nanoTime();
             Optional<JobRow> job = jobs.find(claimed.jobId());
             if (job.isEmpty()) return true;
             com.securityexpert.nexus.ui2.platform.logging.JobLogContext.setJobKind(job.get().capabilityId());
@@ -94,14 +95,26 @@ public final class PacketAnalysisClaimLoop {
                     || !PacketAnalysisJob.TARGET_KIND.equals(job.get().targetKind())) {
                 leases.transitionState(claimed.jobId(), claimed.leaseEpoch(), JobState.CLAIMED, JobState.REJECTED,
                         PacketAnalysisJobExecutor.ACTOR, "packet_analysis_rejected", "NOT_A_PACKET_ANALYSIS_JOB");
+                recordMetrics(JobState.REJECTED.name(), startNanos);
                 return true;
             }
             JobState outcome = executor.execute(claimed.jobId(), claimed.leaseEpoch(), job.get().targetRef());
+            recordMetrics(outcome == null ? JobState.OUTCOME_UNKNOWN.name() : outcome.name(), startNanos);
             LOG.log(System.Logger.Level.INFO, "[PACKET_ANALYSIS] job " + claimed.jobId() + " -> "
                     + (outcome == null ? "LEASE_LOST" : outcome.name()));
             return true;
         } finally {
             heartbeat.cancel(false);
+        }
+    }
+
+    private static void recordMetrics(String state, long startNanos) {
+        try {
+            Duration elapsed = Duration.ofNanos(Math.max(0L, System.nanoTime() - startNanos));
+            com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordJobState(PacketAnalysisJob.CAPABILITY, state);
+            com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordJobDuration(PacketAnalysisJob.CAPABILITY, state, elapsed);
+        } catch (RuntimeException ignored) {
+            // metrics never break job execution
         }
     }
 }

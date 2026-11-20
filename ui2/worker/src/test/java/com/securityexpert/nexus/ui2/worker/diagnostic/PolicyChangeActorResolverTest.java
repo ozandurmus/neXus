@@ -179,4 +179,129 @@ class PolicyChangeActorResolverTest {
         assertNull(PolicyChangeActorResolver.fromRemovedChanges("not json"));
         assertNull(PolicyChangeActorResolver.fromRemovedChanges(null));
     }
+
+    // --- Commit job lifecycle from synthetic config-log XML (pan_change_actor_submitted_join_gap) ---
+
+    private static final String RULE_XPATH =
+            "/config/devices/entry[@name='localhost.localdomain']/device-group/entry[@name='DG-EXAMPLE']/pre-rulebase/security/rules/entry[@name='Rule-EXAMPLE']";
+
+    private static String xmlEntry(String receiveTime, String seqno, String admin, String cmd, String result, String path, String jobId) {
+        return "<entry logid=\"7000000000000000002\"><receive_time>" + receiveTime + "</receive_time><seqno>" + seqno + "</seqno>"
+                + "<admin>" + admin + "</admin><cmd>" + cmd + "</cmd><result>" + result + "</result><path>" + path + "</path>"
+                + (jobId == null ? "" : "<jobid>" + jobId + "</jobid>") + "</entry>";
+    }
+
+    private static String xmlEntry(String receiveTime, String seqno, String admin, String cmd, String result, String path) {
+        return xmlEntry(receiveTime, seqno, admin, cmd, result, path, null);
+    }
+
+    private void ingestConfigLogXml(List<String> xmlEntries) throws Exception {
+        String xml = PanSystemLogCollectJobExecutorTest.fin(xmlEntries);
+        PanLogPage page = PanLogPage.parse(xml);
+        PanoramaConfigLogReader reader = new PanoramaConfigLogReader(null, k -> List.of(), null, null,
+                com.securityexpert.nexus.ui2.worker.policy.PolicyCompletenessSettings.OFF,
+                com.securityexpert.nexus.ui2.platform.JobWindowPolicy.SYSTEM, KEY);
+        var evidenceRows = page.entries().stream().map(e -> reader.evidenceOf("src", e)).toList();
+        var commits = evidenceRows.stream()
+                .filter(e -> "commit".equals(e.commandClass()) && e.changeTime() != null)
+                .map(e -> new PolicyChangeActorRepository.Commit(e.entryRef(), e.changeTime(), e.adminRef(), e.resultClass(), e.pathHmac()))
+                .toList();
+        var edits = evidenceRows.stream()
+                .filter(e -> e.ruleRefHmac() != null && e.adminName() != null && "Succeeded".equals(e.resultClass()))
+                .map(e -> new Edit(e.entryRef(), e.ruleRefHmac(), e.adminRef(), e.adminName(), e.commandClass(), e.changeTime()))
+                .toList();
+        when(repository.commits("src")).thenReturn(commits);
+        when(repository.edits(eq("src"), anyString(), anyString())).thenAnswer(call -> {
+            String from = call.getArgument(1);
+            String to = call.getArgument(2);
+            return edits.stream().filter(e -> e.time().compareTo(from) > 0 && e.time().compareTo(to) <= 0).toList();
+        });
+    }
+
+    @Test void submittedThenSucceededInConfigLogXmlAttributesTheActor() throws Exception {
+        ingestConfigLogXml(List.of(
+                xmlEntry("2026/11/11 17:00:00", "10", "admin-a", "commit", "Succeeded", ""),
+                xmlEntry("2026/11/12 10:00:00", "11", "admin-a", "edit", "Succeeded", RULE_XPATH),
+                xmlEntry("2026/11/12 11:50:00", "12", "admin-a", "commit", "Submitted", ""),
+                xmlEntry("2026/11/12 11:50:25", "13", "admin-a", "commit", "Succeeded", "")));
+        Link link = only("modified");
+        assertEquals("MATCHED", link.state());
+        assertEquals(List.of("admin-a"), link.names());
+        assertNull(link.reason());
+    }
+
+    @Test void submittedThenFailedInConfigLogXmlDoesNotAttributeTheActor() throws Exception {
+        ingestConfigLogXml(List.of(
+                xmlEntry("2026/11/11 17:00:00", "10", "admin-a", "commit", "Succeeded", ""),
+                xmlEntry("2026/11/12 10:00:00", "11", "admin-a", "edit", "Succeeded", RULE_XPATH),
+                xmlEntry("2026/11/12 11:50:00", "12", "admin-a", "commit", "Submitted", ""),
+                xmlEntry("2026/11/12 11:50:25", "13", "admin-a", "commit", "Failed", "")));
+        deferred("modified", "NO_COMMIT_SEEN");
+        verify(repository).deletePendingOutcomeLinks(List.of(7L));
+    }
+
+    @Test void submittedWithNoLaterEntryInConfigLogXmlKeepsActorAsSubmittedOutcomePending() throws Exception {
+        ingestConfigLogXml(List.of(
+                xmlEntry("2026/11/11 17:00:00", "10", "admin-a", "commit", "Submitted", ""),
+                xmlEntry("2026/11/12 10:00:00", "11", "admin-a", "edit", "Succeeded", RULE_XPATH),
+                xmlEntry("2026/11/12 11:50:00", "12", "admin-a", "commit", "Submitted", "")));
+        Link link = only("modified");
+        assertEquals("MATCHED", link.state());
+        assertEquals(List.of("submitted by admin-a, outcome pending"), link.names());
+        assertNull(link.reason());
+    }
+
+    @Test void existingSucceededOnlyCommitInConfigLogXmlAttributesTheActor() throws Exception {
+        ingestConfigLogXml(List.of(
+                xmlEntry("2026/11/11 17:00:00", "10", "admin-a", "commit", "Succeeded", ""),
+                xmlEntry("2026/11/12 10:00:00", "11", "admin-a", "edit", "Succeeded", RULE_XPATH),
+                xmlEntry("2026/11/12 11:50:00", "12", "admin-a", "commit", "Succeeded", "")));
+        Link link = only("modified");
+        assertEquals("MATCHED", link.state());
+        assertEquals(List.of("admin-a"), link.names());
+        assertNull(link.reason());
+    }
+
+    @Test void submittedWithNoRuleEditEntryNeverInventsAnActorFromTheCommit() throws Exception {
+        ingestConfigLogXml(List.of(
+                xmlEntry("2026/11/11 17:00:00", "10", "admin-a", "commit", "Succeeded", ""),
+                xmlEntry("2026/11/12 11:50:00", "12", "admin-a", "commit", "Submitted", "")));
+        Link link = only("modified");
+        assertEquals("UNKNOWN", link.state());
+        assertEquals("NO_ENTRY", link.reason());
+        assertTrue(link.names().isEmpty());
+    }
+
+    @Test void overlappingSubmittedCommitsMatchTheirOwnJobIdCompletion() throws Exception {
+        ingestConfigLogXml(List.of(
+                xmlEntry("2026/11/11 17:00:00", "10", "admin-a", "commit", "Succeeded", "", "40"),
+                xmlEntry("2026/11/12 10:00:00", "11", "admin-a", "edit", "Succeeded", RULE_XPATH),
+                xmlEntry("2026/11/12 11:50:00", "12", "admin-a", "commit", "Submitted", "", "41"),
+                xmlEntry("2026/11/12 11:50:05", "13", "admin-a", "commit", "Submitted", "", "42"),
+                xmlEntry("2026/11/12 11:50:10", "14", "admin-a", "commit", "Failed", "", "42"),
+                xmlEntry("2026/11/12 11:50:20", "15", "admin-a", "commit", "Succeeded", "", "41")));
+        Link link = only("modified");
+        assertEquals("MATCHED", link.state());
+        assertEquals(List.of("admin-a"), link.names());
+    }
+
+    @Test void aPendingSubmittedCommitUpgradesToAttributedActorWhenSucceededArrivesOnLaterRead() throws Exception {
+        when(repository.pending(eq("src"), any(), anyInt())).thenReturn(List.of(row("modified")));
+        ingestConfigLogXml(List.of(
+                xmlEntry("2026/11/11 17:00:00", "10", "admin-a", "commit", "Succeeded", ""),
+                xmlEntry("2026/11/12 10:00:00", "11", "admin-a", "edit", "Succeeded", RULE_XPATH),
+                xmlEntry("2026/11/12 11:50:00", "12", "admin-a", "commit", "Submitted", "")));
+        resolver.resolve("src", "job-1", NOW);
+        ingestConfigLogXml(List.of(
+                xmlEntry("2026/11/11 17:00:00", "10", "admin-a", "commit", "Succeeded", ""),
+                xmlEntry("2026/11/12 10:00:00", "11", "admin-a", "edit", "Succeeded", RULE_XPATH),
+                xmlEntry("2026/11/12 11:50:00", "12", "admin-a", "commit", "Submitted", ""),
+                xmlEntry("2026/11/12 11:50:30", "13", "admin-a", "commit", "Succeeded", "")));
+        resolver.resolve("src", "job-2", NOW);
+        @SuppressWarnings("unchecked") ArgumentCaptor<List<Link>> links = ArgumentCaptor.forClass(List.class);
+        verify(repository).saveLinks(eq("job-1"), links.capture());
+        assertEquals(List.of("submitted by admin-a, outcome pending"), links.getValue().get(0).names());
+        verify(repository).saveLinks(eq("job-2"), links.capture());
+        assertEquals(List.of("admin-a"), links.getValue().get(0).names());
+    }
 }

@@ -189,4 +189,18 @@ class PolicyChangesServiceTest {
         assertEquals(List.of("admin-a", "admin-b"), withActors().actorCandidates(5L));
         assertEquals(List.of(), service.actorCandidates(5L), "a service built without the join has none");
     }
+    @Test void aPendingCommitOutcomeShowsSubmittedByAndMasksTheInnerAdministratorInAiview() throws Exception {
+        stub(List.of(row(2, null, true)));
+        when(actorRepository.links(List.of(2L))).thenReturn(Map.of(2L,
+            link(2, "MATCHED", null, PolicyChangesService.pendingOutcomeActor("synthetic-admin"))));
+        var result = withActors().changes(request("", "", "", 100), true);
+        assertEquals("submitted by synthetic-admin, outcome pending",
+            mapper.valueToTree(result.body()).path("rows").get(0).path("changedBy").asText());
+        var masked = mapper.valueToTree(PolicyPrivacy.mask(result.body(), "", names, ips));
+        assertFalse(masked.toString().contains("synthetic-admin"), "aiview sees the pseudonym, not the name");
+        assertEquals("submitted by " + names.maskPolicyName("last-modifier", "synthetic-admin") + ", outcome pending",
+            masked.path("rows").get(0).path("changedBy").asText());
+        var scanned = mapper.valueToTree(withActors().changes(request("", "7", "", 100), false).body());
+        assertEquals(0, scanned.path("summary").path("actors").asInt(), "pending outcome is not counted as a confirmed actor");
+    }
 }

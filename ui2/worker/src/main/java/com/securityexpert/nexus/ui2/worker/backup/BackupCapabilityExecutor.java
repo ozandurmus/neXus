@@ -233,8 +233,12 @@ public final class BackupCapabilityExecutor {
                     + shape.replaceAll("[A-Za-z0-9._-]+\\.tgz", "<archive>"));
         }
         if (status != BackupStatus.SUCCEEDED) {
+            String lastStatus = poll.lastOutput() == null || poll.lastOutput().isBlank()
+                    ? "<empty>" : maskedShape(poll.lastOutput());
             return new BackupResult.OutcomeUnknown("show backup status never reported a terminal state for " + name
-                    + " before the run deadline; the device-side archive is not deleted");
+                    + " before the run deadline (stage=poll_backup_status, start_acknowledged=" + startAcknowledged
+                    + ", polls=" + poll.iterations() + ", transport=" + poll.transportState()
+                    + ", last_status=" + lastStatus + "); the device-side archive is not deleted");
         }
 
         // Entry 5 (BK-3): SFTP fetch, streamed straight into the artefact store.
@@ -357,7 +361,7 @@ public final class BackupCapabilityExecutor {
         LOG.log(System.Logger.Level.INFO, "[BACKUP_STALE_ARCHIVE] pending=" + pending.size() + " deleted=" + deleted + " gone=" + gone);
     }
 
-    private record Poll(BackupStatus status, String lastOutput) {
+    private record Poll(BackupStatus status, String lastOutput, int iterations, String transportState) {
     }
 
     private Poll pollUntilTerminalOrDeadline(RunCommands commands, Instant submittedAt, boolean startAcknowledged) {
@@ -367,17 +371,19 @@ public final class BackupCapabilityExecutor {
         int iterations = 0;
         while (true) {
             ExecOutcome statusOutcome = commands.exec(BackupReadPlan.CP_SHOW_BACKUP_STATUS, POLL_TIMEOUT);
-            BackupStatus status = classifyStatus(statusOutcome.output());
+            BackupStatus status = statusOutcome.completed()
+                    ? classifyStatus(statusOutcome.output()) : BackupStatus.IN_PROGRESS;
             BackupTranscript.note("poll iteration=" + (++iterations) + " status=" + status);
             if (status == BackupStatus.SUCCEEDED || status == BackupStatus.FAILED) {
-                return new Poll(status, statusOutcome.output());
+                return new Poll(status, statusOutcome.output(), iterations, statusOutcome.transportState());
             }
             alwaysEmpty &= statusOutcome.succeeded() && statusOutcome.output().isEmpty();
             if (!startAcknowledged && alwaysEmpty && !now.get().isBefore(noStartDeadline)) {
-                return new Poll(BackupStatus.NOT_STARTED, "");
+                return new Poll(BackupStatus.NOT_STARTED, "", iterations, statusOutcome.transportState());
             }
             if (!now.get().plus(pollInterval).isBefore(deadline)) {
-                return new Poll(BackupStatus.IN_PROGRESS, statusOutcome.output()); // never terminal before the deadline -> OUTCOME_UNKNOWN
+                String lastOutput = statusOutcome.completed() ? statusOutcome.output() : "";
+                return new Poll(BackupStatus.IN_PROGRESS, lastOutput, iterations, statusOutcome.transportState()); // never terminal before the deadline -> OUTCOME_UNKNOWN
             }
             pause.accept(pollInterval);
         }
@@ -432,13 +438,15 @@ public final class BackupCapabilityExecutor {
     private ExecOutcome exec(TransportSession session, String command, Duration timeout) {
         ExecResult result = transport.exec(session, new ExecSpec(command), timeout);
         return switch (result) {
-            case ExecResult.Completed completed -> new ExecOutcome(completed.output(), completed.exitStatus() == 0);
-            case ExecResult.TimedOut ignored -> new ExecOutcome("", false);
-            case ExecResult.ChannelFailed failed -> new ExecOutcome(String.valueOf(failed.reason()), false);
+            case ExecResult.Completed completed -> new ExecOutcome(completed.output(), completed.exitStatus() == 0,
+                    true, completed.exitStatus() == 0 ? "completed" : "completed (exit " + completed.exitStatus() + ")");
+            case ExecResult.TimedOut ignored -> new ExecOutcome("", false, false, "timed_out");
+            case ExecResult.ChannelFailed failed -> new ExecOutcome(String.valueOf(failed.reason()), false, false,
+                    "channel_failed");
         };
     }
 
-    private record ExecOutcome(String output, boolean succeeded) {
+    private record ExecOutcome(String output, boolean succeeded, boolean completed, String transportState) {
     }
 
     /** The same CLI-error vocabulary the interactive shell uses: any of these means the command

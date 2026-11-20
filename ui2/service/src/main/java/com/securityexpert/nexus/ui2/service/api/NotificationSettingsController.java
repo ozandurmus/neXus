@@ -66,9 +66,11 @@ public final class NotificationSettingsController {
         Map<String, Object> body = new LinkedHashMap<>();
         try {
             SyslogSender.send(settings, SyslogSender.Severity.NOTICE, "TEST", "neXus remote logging test message");
+            com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend("syslog_test", "success");
             body.put("sent", true);
             body.put("detail", "sent over " + settings.syslogProtocol().toUpperCase() + " to the configured host");
         } catch (java.io.IOException | RuntimeException e) {
+            com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend("syslog_test", "failure");
             body.put("sent", false);
             body.put("detail", e.getMessage());
         }
@@ -101,8 +103,8 @@ public final class NotificationSettingsController {
                 .filter(r -> type.equals(r.type())).findFirst()
                 .map(r -> r.effectiveRecipients(settings)).orElse(List.of());
         Map<String, Object> body = new LinkedHashMap<>();
+        String renderType = type == null ? "admin_event" : type;
         try {
-            String renderType = type == null ? "admin_event" : type;
             NotificationForwarder live = forwarder == null ? null : forwarder.getIfAvailable();
             java.util.Optional<NotificationMailTemplate.RenderedMail> recent = live == null
                     ? java.util.Optional.empty() : live.recentEventsMail(renderType);
@@ -110,10 +112,12 @@ public final class NotificationSettingsController {
             String subject = type == null ? MailBrand.name() + " notification test"
                     : "[TEST" + (recent.isPresent() ? "" : ", sample data") + "] " + mail.subject();
             SmtpRelaySender.send(settings, recipients, subject, mail.text(), mail.html());
+            com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend(renderType, "success");
             body.put("sent", true);
             body.put("data", recent.isPresent() ? "recent_events" : "sample");
             body.put("detail", "accepted by the relay for " + recipients.size() + " recipient(s)");
         } catch (java.io.IOException | RuntimeException e) {
+            com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend(renderType, "failure");
             body.put("sent", false);
             body.put("detail", e.getMessage());
         }

@@ -228,6 +228,14 @@ public final class FileArtefactStore implements ArtefactStore {
         return measure(null);
     }
 
+    /**
+     * Returns the cached byte total stored under {@link #root}, walking the directory tree at most once per
+     * {@link #USAGE_MEASURE_INTERVAL_NANOS} (30 s) and reflecting bytes committed in between.
+     */
+    public long cachedUsedBytes() {
+        return currentUsedBytes(null);
+    }
+
     private long measure(Path excludedTempFile) {
         long used = usedBytesExcluding(root, excludedTempFile);
         synchronized (usageLock) {

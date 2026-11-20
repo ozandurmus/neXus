@@ -81,6 +81,7 @@ final class NotificationMailRouter {
                     batch = collect(dsl, type, audit, from, identity);
                 } catch (IOException e) {
                     // A collector's own read failure is not a relay failure; say which (no file contents, no values).
+                    com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend(type, "failure");
                     dsl.execute("update notification_routes set last_error = {0} where type = {1}",
                             "event collection failed: " + safeReason(e), type);
                     continue;
@@ -92,6 +93,7 @@ final class NotificationMailRouter {
                 NotificationMailTemplate.RenderedMail mail = NotificationMailTemplate.render(
                         type, batch, MailBrand.name(), baseUrl, environment);
                 mailer.send(settings, recipients, mail.subject(), mail.text(), mail.html());
+                com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend(type, "success");
                 applyState(dsl, batch.state());
                 dsl.execute("update notification_routes set watermark_audit = {0}, watermark_time = {1}, "
                         + "last_sent_at = now(), last_error = null where type = {2}", batch.audit(),
@@ -99,6 +101,7 @@ final class NotificationMailRouter {
             } catch (UnhandledTypeException e) {
                 warnSkippedOnce(type);
             } catch (Exception e) {
+                com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend(type, "failure");
                 dsl.execute("update notification_routes set last_error = {0} where type = {1}",
                         e instanceof IOException ? "SMTP relay rejected or unavailable" : "event collection failed", type);
             }

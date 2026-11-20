@@ -69,16 +69,28 @@ public final class QuantumSparkBackupExecutor {
     private BackupResult collectRecorded(BackupRequest request, Optional<String> receiverCredentialRef, String deviceId, String jobId) {
         if (inbox == null || !Files.isDirectory(inbox) || receiverHost == null || receiverHost.isBlank())
             return new BackupResult.CredentialUnresolvable("Spark SFTP receiver is not configured");
-        if (receiverCredentialRef.isEmpty() || request.credentialRef().isEmpty())
-            return new BackupResult.CredentialUnresolvable("Spark backup or receiver credential is missing");
+        boolean missingBackup = request.credentialRef().isEmpty() || request.credentialRef().get().isBlank();
+        boolean missingReceiver = receiverCredentialRef.isEmpty() || receiverCredentialRef.get().isBlank();
+        if (missingBackup && missingReceiver)
+            return new BackupResult.CredentialUnresolvable(
+                    "Spark backup credential and backup receiver credential (backup_receiver) are missing (Administration > Credentials)");
+        if (missingBackup)
+            return new BackupResult.CredentialUnresolvable(
+                    "Spark backup credential is missing (Administration > Credentials)");
+        if (missingReceiver)
+            return new BackupResult.CredentialUnresolvable(
+                    "Spark backup receiver credential (backup_receiver) is missing (Administration > Credentials)");
         char[] receiverPassword;
         try {
             receiverPassword = passwordOf.apply(receiverCredentialRef.get());
         } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
-            return new BackupResult.CredentialUnresolvable("Spark receiver credential cannot be resolved");
+            return new BackupResult.CredentialUnresolvable(
+                    "Spark backup receiver credential (backup_receiver) cannot be resolved (Administration > Credentials)");
         }
-        if (receiverPassword == null) return new BackupResult.CredentialUnresolvable("Spark receiver credential is empty");
+        if (receiverPassword == null)
+            return new BackupResult.CredentialUnresolvable(
+                    "Spark backup receiver credential (backup_receiver) is empty (Administration > Credentials)");
         try {
             ConnectResult connected = transport.connect(request.connectionTarget(),
                     new ConnectSpec(request.credentialRef().get(), request.trustRuleRef(), Optional.empty()), CONNECT);
@@ -91,7 +103,8 @@ public final class QuantumSparkBackupExecutor {
             }
         } catch (IllegalStateException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
-            return new BackupResult.CredentialUnresolvable("Spark backup credential cannot be resolved");
+            return new BackupResult.CredentialUnresolvable(
+                    "Spark backup credential cannot be resolved (Administration > Credentials)");
         } finally {
             Arrays.fill(receiverPassword, '\0');
         }
