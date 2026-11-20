@@ -183,6 +183,7 @@ public final class NexusMetrics {
                     }
                 })
                 .description("Jobs waiting to be claimed")
+                .strongReference(true)
                 .register(target);
     }
 
@@ -228,6 +229,7 @@ public final class NexusMetrics {
                     }
                 })
                 .description("Bytes stored in the encrypted artefact store")
+                .strongReference(true)
                 .register(target);
     }
 

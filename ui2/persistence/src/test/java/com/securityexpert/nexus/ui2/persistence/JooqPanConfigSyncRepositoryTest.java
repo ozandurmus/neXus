@@ -89,6 +89,10 @@ class JooqPanConfigSyncRepositoryTest {
                 return row(job);
             }
             if (sql.startsWith("select * from pan_config_sync")) return row(sync);
+            // V260: no authority row (a pre-V260 record): the identity-only standing.
+            if (sql.startsWith("select authority,binding_id from failover_actor_authority")) return none();
+            if (sql.startsWith("select ui2_failover_actor_standing"))
+                return row(Map.of("standing", com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.NOT_RECORDED));
             if (sql.startsWith("select job_id from jobs")) return row(Map.of("job_id", "job-1"));
             return new MockResult[]{new MockResult(1)};
         }), SQLDialect.POSTGRES);

@@ -45,6 +45,97 @@ public final class DirectoryAuthorizationRefresh {
         return refresh(actor, now, true);
     }
 
+    public boolean directoryPostureEnabled() {
+        return directory.directoryPostureEnabled();
+    }
+
+    /**
+     * Force a fresh directory group-membership read for {@code actor} before a failover job starts.
+     *
+     * <p>Unlike {@link #refreshStale}, this always queries the directory even when the cached five-minute
+     * {@code actor_authz_state} row has not expired yet, never short-circuits on {@link #failedAt}, and does not
+     * require an active browser session (a scheduled failover or a second approver whose session has closed since
+     * approving still has their encrypted principal proof in {@code actor_authz_state}).</p>
+     */
+    public RbacEvaluator.DirectoryRevalidation revalidateForStart(String actor, Instant now) {
+        if (actor == null || actor.isBlank()) return RbacEvaluator.DirectoryRevalidation.NOT_DIRECTORY_ACTOR;
+        Object lock = inFlight.computeIfAbsent(actor, key -> new Object());
+        try {
+            synchronized (lock) {
+                return revalidateForStartLocked(actor, now);
+            }
+        } finally {
+            inFlight.remove(actor, lock);
+        }
+    }
+
+    private RbacEvaluator.DirectoryRevalidation revalidateForStartLocked(String actor, Instant now) {
+        long started = System.nanoTime();
+        try {
+            Optional<ActorAuthzStateRecord> state = actors.find(actor).filter(ActorAuthzStateRecord::hasDirectoryProof);
+            if (state.isEmpty()) return RbacEvaluator.DirectoryRevalidation.NOT_DIRECTORY_ACTOR;
+            if (SamlSettingsService.PROFILE_ID.equals(state.get().directoryProfileId()))
+                return RbacEvaluator.DirectoryRevalidation.NOT_DIRECTORY_ACTOR;
+            if (!directory.directoryPostureEnabled()) return RbacEvaluator.DirectoryRevalidation.DIRECTORY_UNREACHABLE;
+            var session = sessions.findActiveByActor(actor, now);
+            String principal = cipher.decryptDirectory(state.get().principalReferenceEncrypted(),
+                    state.get().directoryProfileId(), DirectoryBindingKind.DIRECTORY_PRINCIPAL,
+                    state.get().principalReferenceKeyId());
+            Result<DirectoryObservation> result = directory.revalidatePrincipal(principal);
+            RbacEvaluator.DirectoryRevalidation outcome = bindings.directoryMutation(tx -> {
+                Optional<ActorAuthzStateRecord> current = tx.actors().find(actor).filter(ActorAuthzStateRecord::hasDirectoryProof);
+                Instant at = now.plusNanos(System.nanoTime() - started);
+                Instant wall = Instant.now();
+                Instant latest = wall.isAfter(at) ? wall : at;
+                var active = tx.sessions().findActiveByActor(actor).filter(s -> s.isActive(at));
+                boolean sessionConsistent = session.isEmpty()
+                        || (active.isPresent() && active.get().sessionId().equals(session.get().sessionId()));
+                if (current.isEmpty() || !sessionConsistent
+                        || !current.get().directoryProfileId().equals(state.get().directoryProfileId())
+                        || !Arrays.equals(current.get().principalReferenceEncrypted(), state.get().principalReferenceEncrypted())
+                        || new LocalIdentityResolver(tx.locals()).resolve(actor).isPresent()) {
+                    return RbacEvaluator.DirectoryRevalidation.DIRECTORY_UNREACHABLE;
+                }
+                if (result instanceof Result.Err<DirectoryObservation> error) {
+                    if ("access_group_lost".equals(error.code())) {
+                        active.ifPresent(s -> {
+                            try {
+                                tx.sessions().revokeAccessGroupLost(s.sessionId(), "session_access_group_lost");
+                            } catch (UnsupportedOperationException ignored) {
+                            }
+                        });
+                        tx.actors().delete(actor);
+                        return RbacEvaluator.DirectoryRevalidation.MEMBERSHIP_LOST;
+                    }
+                    return RbacEvaluator.DirectoryRevalidation.DIRECTORY_UNREACHABLE;
+                }
+                DirectoryObservation observation = ((Result.Ok<DirectoryObservation>) result).value();
+                if (!current.get().directoryProfileId().equals(observation.profileId())
+                        || !principal.equals(observation.principalReference())
+                        || latest.isBefore(observation.resolvedAt())
+                        || observation.resolvedAt().isBefore(current.get().resolvedAt())
+                        || !at.isBefore(observation.validUntil())) {
+                    return RbacEvaluator.DirectoryRevalidation.DIRECTORY_UNREACHABLE;
+                }
+                boolean published = observation.publication().ifCurrent(() -> tx.actors().upsertDirectory(
+                        new ActorAuthzStateRecord(actor, observation.groupReferences(), observation.resolvedAt(),
+                                observation.validUntil(), observation.profileId(),
+                                cipher.encryptDirectory(principal, observation.profileId(), DirectoryBindingKind.DIRECTORY_PRINCIPAL),
+                                cipher.keyId(), current.get().directoryDisplayName())));
+                return published
+                        ? RbacEvaluator.DirectoryRevalidation.REFRESHED
+                        : RbacEvaluator.DirectoryRevalidation.DIRECTORY_UNREACHABLE;
+            });
+            if (outcome == RbacEvaluator.DirectoryRevalidation.REFRESHED
+                    || outcome == RbacEvaluator.DirectoryRevalidation.MEMBERSHIP_LOST) {
+                failedAt.remove(actor);
+            }
+            return outcome == null ? RbacEvaluator.DirectoryRevalidation.DIRECTORY_UNREACHABLE : outcome;
+        } catch (RuntimeException e) {
+            return RbacEvaluator.DirectoryRevalidation.DIRECTORY_UNREACHABLE;
+        }
+    }
+
     private boolean refresh(String actor, Instant now, boolean onlyIfStale) {
         Object lock = inFlight.computeIfAbsent(actor, key -> new Object());
         try {

@@ -40,10 +40,12 @@ public final class JobMetrics {
             Gauge.builder("nexus.jobs", this, m -> m.count(state.name()))
                     .description("Jobs by state")
                     .tag("state", state.name())
-                    .register(registry);
+                    .strongReference(true)
+                .register(registry);
         }
         Gauge.builder("nexus.jobs.queue.depth", this, m -> m.count(JobState.REQUESTED.name()))
                 .description("Jobs waiting to be claimed")
+                .strongReference(true)
                 .register(registry);
     }
 
