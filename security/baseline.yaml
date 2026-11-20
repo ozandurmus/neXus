@@ -311,6 +311,14 @@
     },
     {
       "tool": "trivy",
+      "rule": "KSV-0056",
+      "location": "ui2/61-script-runner-deployment.yaml",
+      "reason": "Intended: the Script Execution broker (ui2-script-runner) creates and deletes one NetworkPolicy per script run (default deny plus that run's declared egress) and removes it when the run ends. The Role is namespaced to ui2, has no get/list/watch on secrets, no exec, no cluster binding; ScriptRunKubernetes enforces the script-run- name prefix. External reviews 2026-11-20 (docs/design/ARGON_SCRIPT_S2_REVIEW*, final verdict SHIP) covered this Role. Re-check if the broker's verbs change.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
       "rule": "CVE-2026-91403",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: java-21-openjdk-headless",
       "reason": "java-21-openjdk-headless 1:21.0.13.0.9-1.2.el9 in the newest UBI9 openjdk-21-runtime digest sha256:9a074c2ff90b (tag 1.24-3.1794341129, built 2026-11-10, pinned 2026-11-14) (service image and the packet-analysis image built from it). CRITICAL: the flaw is trusting intermediate CAs issued under the eMudhra (emSign) roots. Red Hat marks java-21-openjdk 'Will not fix' because RHEL's OpenJDK reads the system trust store and the remedy belongs in ca-certificates (CVE-2026-114406), so trivy will keep reporting this package version. Exposure in neXus: the image build blocklists every emSign root in the system trust store, from which Java cacerts is generated, and fails if any emSign entry is still trusted in tls-ca-bundle.pem or cacerts (ui2/Containerfile, PO 2026-10-23); device HTTPS/XML API and LDAP clients use that trust store plus the corporate CA, so no chain under those roots is trusted. Remove when Red Hat ships ca-certificates without the emSign roots and the blocklist step goes. Re-time-boxed on 2026-11-14 to 2026-11-28 under the PO base-image rule (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md, 14 days); Red Hat status from the security data API, read 2026-11-14; trivy scan of the new base on HOST-A 2026-11-14.",
