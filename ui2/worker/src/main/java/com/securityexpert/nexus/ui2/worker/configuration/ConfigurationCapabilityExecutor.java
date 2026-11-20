@@ -477,7 +477,7 @@ public final class ConfigurationCapabilityExecutor {
         if (xml == null || xml.isBlank()) {
             return xml;
         }
-        return xml.replaceAll("(?is)<(phash|admin-password|pre-shared-key|private-key|community|passphrase|bind-password|secret|shared-secret|auth-key|priv-key)>.*?</\\1>",
+        return xml.replaceAll("(?is)<(phash|admin-password|pre-shared-key|private-key|community|passphrase|bind-password|secret|shared-secret|auth-key|priv-key|authpwd|privpwd|snmp-community-string)>.*?</\\1>",
                 "<$1>[REDACTED]</$1>");
     }
 

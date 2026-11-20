@@ -112,6 +112,25 @@ public final class CheckPointGaiaComplianceEvaluator {
                 continue;
             }
 
+            // 2b. Controls decided from the kept `add` lines of the sanitized configuration (never from a value)
+            Outcome relation = switch (control.id()) {
+                case MGMT_CLIENTS_ID -> mgmtClients(sanitizedText);
+                case SNMP_V3_ID -> snmpV3(sanitizedText);
+                default -> null;
+            };
+            if (relation != null) {
+                items.add(relation.verdict() == Verdict.UNKNOWN
+                        ? new EvaluationItem(control.id(), control.title(), control.severity(), control.frameworks(),
+                                Verdict.UNKNOWN, ReasonCode.EVIDENCE_MISSING, DisplayStatus.DATA_UNAVAILABLE,
+                                binding.evidenceRequirement().requiredEvidenceId(), gateEntryId, relation.message(), null)
+                        : new EvaluationItem(control.id(), control.title(), control.severity(), control.frameworks(),
+                                relation.verdict(),
+                                relation.verdict() == Verdict.PASS ? ReasonCode.ASSERTION_SATISFIED : ReasonCode.ASSERTION_FAILED,
+                                relation.verdict() == Verdict.PASS ? DisplayStatus.PASS : DisplayStatus.FAIL,
+                                null, null, relation.message(), relation.observed()));
+                continue;
+            }
+
             // 3. Evaluate collected command
             String sectionId = binding.evidenceRequirement().sectionId();
             String settingKey = binding.evidenceRequirement().settingKey();
@@ -261,6 +280,89 @@ public final class CheckPointGaiaComplianceEvaluator {
                 Math.round(assuredCompliance * 10.0) / 10.0,
                 items
         );
+    }
+
+    static final String MGMT_CLIENTS_ID = "gaia_cis_2_5_1_mgmt_trusted_subnets";
+    static final String SNMP_V3_ID = "gaia_cis_2_6_1_snmp_v3_only";
+
+    /** A verdict with the sentence and the observed value shown for it: relationships and counts, never addresses or keys. */
+    record Outcome(Verdict verdict, String message, String observed) {
+    }
+
+    private static final Pattern ALLOWED_CLIENT = Pattern.compile("(?im)^add\\s+allowed-client\\s+(.+?)\\s*$");
+    private static final Pattern USM_USER = Pattern.compile("(?im)^add\\s+snmp\\s+usm\\s+user\\s+(.+?)\\s*$");
+    private static final Pattern AGENT_VERSION = Pattern.compile("(?im)^set\\s+snmp\\s+agent-version\\s+(\\S+)");
+    private static final Pattern AGENT_STATE = Pattern.compile("(?im)^set\\s+snmp\\s+agent\\s+(on|off)\\s*$");
+
+    private static boolean opensToAnyHost(String entry) {
+        String e = entry.toLowerCase(Locale.ROOT);
+        if (e.contains("any-host") || e.contains("any host")) {
+            return true;
+        }
+        // network 0.0.0.0 or mask-length 0 admits every address
+        return e.matches(".*ipv4-address\\s+0\\.0\\.0\\.0(\\s.*)?") || e.matches(".*mask-length\\s+0(\\s.*)?");
+    }
+
+    /** Management access is limited to named clients: PASS needs at least one entry and none that admits any host. */
+    static Outcome mgmtClients(String text) {
+        if (text == null) {
+            return new Outcome(Verdict.UNKNOWN, "No allowed-client entry was collected; the setting cannot be told from a default.", null);
+        }
+        Matcher m = ALLOWED_CLIENT.matcher(text);
+        int total = 0;
+        int open = 0;
+        while (m.find()) {
+            total++;
+            if (opensToAnyHost(m.group(1))) {
+                open++;
+            }
+        }
+        if (total == 0) {
+            return new Outcome(Verdict.UNKNOWN, "No allowed-client entry was collected; the setting cannot be told from a default.", null);
+        }
+        if (open > 0) {
+            return new Outcome(Verdict.FAIL, "Management access is open to any host (" + open + " of " + total + " allowed-client entries).",
+                    "open to any host");
+        }
+        return new Outcome(Verdict.PASS, "Management access is limited to " + total + " named allowed-client entries.",
+                total + " restricted entries");
+    }
+
+    /** SNMP is off, or v3-only with at least one authenticated and encrypted (authPriv) user and no weaker user. */
+    static Outcome snmpV3(String text) {
+        String missing = "SNMP agent version was not collected; the setting cannot be told from a default.";
+        if (text == null) {
+            return new Outcome(Verdict.UNKNOWN, missing, null);
+        }
+        Matcher state = AGENT_STATE.matcher(text);
+        if (state.find() && "off".equalsIgnoreCase(state.group(1))) {
+            return new Outcome(Verdict.PASS, "The SNMP agent is disabled.", "agent off");
+        }
+        Matcher version = AGENT_VERSION.matcher(text);
+        if (!version.find()) {
+            return new Outcome(Verdict.UNKNOWN, missing, null);
+        }
+        if (!"v3-only".equalsIgnoreCase(version.group(1))) {
+            return new Outcome(Verdict.FAIL, "The SNMP agent accepts versions older than v3.", "agent-version " + version.group(1));
+        }
+        int users = 0;
+        int strong = 0;
+        Matcher u = USM_USER.matcher(text);
+        while (u.find()) {
+            users++;
+            if (Pattern.compile("(?i)\\bsecurity-level\\s+authPriv\\b").matcher(u.group(1)).find()) {
+                strong++;
+            }
+        }
+        if (users == 0) {
+            return new Outcome(Verdict.UNKNOWN, "The agent is v3-only but no v3 user was collected.", null);
+        }
+        if (strong < users) {
+            return new Outcome(Verdict.FAIL, (users - strong) + " of " + users + " SNMP v3 users lack authentication or privacy.",
+                    "v3-only, weaker user present");
+        }
+        return new Outcome(Verdict.PASS, "SNMP is v3-only and all " + users + " users use authentication and privacy.",
+                "v3-only, authPriv users");
     }
 
     private static String extractFromSanitizedText(String controlId, String settingKey, String text) {

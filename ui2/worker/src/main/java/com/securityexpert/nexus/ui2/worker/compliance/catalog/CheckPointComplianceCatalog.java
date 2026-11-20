@@ -17,7 +17,7 @@ public final class CheckPointComplianceCatalog {
      * configuration hash and this version (V59, ComplianceService rule-set fingerprint); an unbumped logic change stays
      * invisible until the 6-hour backstop re-evaluates.
      */
-    public static final String CATALOG_VERSION = "2026.10.09.guidance.1";
+    public static final String CATALOG_VERSION = "2026.11.20.cp-add-lines.1";
 
     private CheckPointComplianceCatalog() {
     }
@@ -546,7 +546,7 @@ public final class CheckPointComplianceCatalog {
                     new VendorBinding(
                         "check_point",
                         "gaia",
-                        EvidenceRequirement.of("snmp_v3", "snmp v3 users", "gaia.snmp.v3_users", "CP-GATE-SNMP3-01"),
+                        EvidenceRequirement.of("snmp_v3", "snmp v3 users", "gaia.snmp.v3_users", "cp_configuration_show_configuration"),
                         AssertionRule.present(),
                         ComplianceGuidanceCatalog.forControl("gaia_cis_2_6_1_snmp_v3_only")
                     )
@@ -595,7 +595,7 @@ public final class CheckPointComplianceCatalog {
                     new VendorBinding(
                         "check_point",
                         "gaia",
-                        EvidenceRequirement.of("allowed_clients", "allowed-client subnet", "gaia.mgmt.allowed_clients", "CP-GATE-CLIENTS-01"),
+                        EvidenceRequirement.of("allowed_clients", "allowed-client subnet", "gaia.mgmt.allowed_clients", "cp_configuration_show_configuration"),
                         AssertionRule.present(),
                         ComplianceGuidanceCatalog.forControl("gaia_cis_2_5_1_mgmt_trusted_subnets")
                     )

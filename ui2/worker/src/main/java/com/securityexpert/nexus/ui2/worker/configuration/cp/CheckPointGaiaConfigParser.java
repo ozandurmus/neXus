@@ -141,14 +141,23 @@ public final class CheckPointGaiaConfigParser implements VendorConfigParser {
         int withheld = 0;
 
         for (String line : setLines) {
-            if (isWithheld(line)) {
+            // A USM user line is whitelist-redacted below (its pass-phrase fields do not match the secret filter).
+            if (!USM_USER_LINE_RE.matcher(line).find() && isWithheld(line)) {
                 withheld++;
                 safeLines.add(WITHHELD_LINE_MARKER);
                 continue;
             }
             String display = formatDisplayLine(line);
+            if (USM_USER_LINE_RE.matcher(line).find() && isWithheld(display)) {
+                withheld++;
+                safeLines.add(WITHHELD_LINE_MARKER);
+                continue;
+            }
             safeLines.add(display);
-            safeSetLines.add(display);
+            // Only set lines feed the structured sections; a kept add line is evidence for the compliance rules only.
+            if (display.startsWith("set ")) {
+                safeSetLines.add(display);
+            }
         }
 
         StringBuilder sanitizedText = new StringBuilder();
@@ -221,7 +230,7 @@ public final class CheckPointGaiaConfigParser implements VendorConfigParser {
         List<String> rows = new ArrayList<>();
         for (String line : raw.split("\\R", -1)) {
             String trimmed = line.strip();
-            if (!trimmed.startsWith("set ")) {
+            if (!trimmed.startsWith("set ") && !isKeptAddLine(trimmed)) {
                 continue;
             }
             if (VSX_SELECTOR_RE.matcher(trimmed).matches()) {
@@ -232,6 +241,34 @@ public final class CheckPointGaiaConfigParser implements VendorConfigParser {
         return rows;
     }
 
+    private static final Pattern ALLOWED_CLIENT_LINE_RE = Pattern.compile("(?i)^add\\s+allowed-client\\s+\\S");
+    private static final Pattern USM_USER_LINE_RE = Pattern.compile("(?i)^add\\s+snmp\\s+usm\\s+user\\s+\\S");
+
+    /**
+     * The only {@code add} forms kept besides {@code set} lines: the management allowed-client entries and the SNMP
+     * v3 (USM) users, evidence for the two compliance controls that need them. Any other {@code add} line is dropped.
+     */
+    public static boolean isKeptAddLine(String line) {
+        return ALLOWED_CLIENT_LINE_RE.matcher(line).find() || USM_USER_LINE_RE.matcher(line).find();
+    }
+
+    /**
+     * Rewrites an {@code add snmp usm user} line to a whitelist: the user name, the security level and any
+     * protocol-name field. Pass-phrases, keys and every other field are dropped, whatever their spelling.
+     */
+    static String redactUsmUserLine(String line) {
+        String[] t = line.strip().split("\\s+");
+        StringBuilder out = new StringBuilder("add snmp usm user ").append(t[4]);
+        for (int i = 5; i + 1 < t.length; i++) {
+            String key = t[i].toLowerCase(Locale.ROOT);
+            if (key.equals("security-level") || (key.contains("protocol") && !SECRET_LINE_RE.matcher(key).find())) {
+                out.append(' ').append(t[i]).append(' ').append(t[i + 1]);
+                i++;
+            }
+        }
+        return out.toString();
+    }
+
     public static boolean isWithheld(String line) {
         if (PASSWORD_POLICY_SAFE_RE.matcher(line).find()) {
             return false;
@@ -240,6 +277,9 @@ public final class CheckPointGaiaConfigParser implements VendorConfigParser {
     }
 
     public static String formatDisplayLine(String line) {
+        if (USM_USER_LINE_RE.matcher(line).find()) {
+            return redactUsmUserLine(line);
+        }
         Matcher matcher = MESSAGE_BODY_RE.matcher(line);
         if (matcher.matches()) {
             return matcher.replaceFirst("$1 msgvalue " + WITHHELD_BANNER_MARKER);
