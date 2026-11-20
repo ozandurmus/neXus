@@ -64,6 +64,14 @@ public interface ArtefactStore {
      */
     InputStream retrieve(ArtefactRef ref, byte[] wrappedDataKey, boolean gzip) throws IOException;
 
+    /**
+     * Removes an expired artefact file from the store (retention pruning). Returns {@code true} if a file existed and
+     * was removed, {@code false} if already absent.
+     */
+    default boolean delete(ArtefactRef ref) throws IOException {
+        return false;
+    }
+
     interface ArtefactHandle extends Closeable {
 
         /** Write plaintext bytes here, in any number of calls. */

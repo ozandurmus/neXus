@@ -33,7 +33,7 @@ spec:
             matchExpressions:
               - key: app.kubernetes.io/component
                 operator: In
-                values: [service, worker, backup, policy, packet-analysis, migration]
+                values: [service, worker, backup, policy, packet-analysis, script-runner, migration]
       ports:
         - protocol: TCP
           port: 5432

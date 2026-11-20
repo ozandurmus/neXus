@@ -39,6 +39,7 @@ function stubFetch(devices: unknown[], summary: unknown | null) {
         enabled: true, state: "ON", will_run: true, lock_reason: null, note: null, window_open_now: false, next_window_at: "2026-11-11T00:00:00+03:00",
         last_run_at: null, changed_by: "USR-0a1b2c3d4e", changed_at: "2026-11-10T18:05:00Z", reason: null }] });
     if (url === "/api/v2/system-logs/health") return json(503, { code: "SYSTEM_HEALTH_READ_FAILED", message: "The device health read failed." });
+    if (url === "/api/v2/scripts") return json(200, { scripts: [] });
     return json(200, {});
   }));
 }
@@ -49,6 +50,7 @@ const TABS = [
   { label: "HA and readiness", marker: "No HA pair or cluster enrolled" },
   { label: "Jobs", marker: "All jobs" },
   { label: "Device health", marker: "Device health could not be read" },
+  { label: "Script execution", marker: "No scripts registered yet" },
 ];
 
 describe("OperationsScreen tabs", () => {
@@ -68,12 +70,12 @@ describe("OperationsScreen tabs", () => {
     }
   });
 
-  it("has five tabs, the fleet's live activity only: Scheduled jobs and Platform status are Administration pages (PO 2026-11-13 amendment)", async () => {
+  it("has six tabs, the fleet's live activity only: Scheduled jobs and Platform status are Administration pages (PO 2026-11-13 amendment)", async () => {
     stubFetch([], null);
     render(withTheme(<OperationsScreen />));
     await screen.findByText("No HA pair or cluster enrolled");
     const tablist = screen.getByRole("tablist", { name: "Operations sections" });
-    expect(within(tablist).getAllByRole("tab").map(t => t.textContent)).toEqual(["HA and readiness", "Jobs", "Device health", "Policy installation", "Static routes"]);
+    expect(within(tablist).getAllByRole("tab").map(t => t.textContent)).toEqual(["HA and readiness", "Jobs", "Device health", "Policy installation", "Static routes", "Script execution"]);
     expect(screen.queryByRole("tab", { name: "Scheduled jobs" })).toBeNull();
     expect(screen.queryByRole("tab", { name: "Platform status" })).toBeNull();
   });

@@ -38,3 +38,20 @@ Scripts execute in the dedicated `ui2-script-runner` Deployment (`SCRIPT_EXECUTI
    - Each resolved credential reference is exposed to the child process either as environment variables (`NEXUS_CRED_<ALIAS>_USERNAME` and `NEXUS_CRED_<ALIAS>_SECRET`, where `<ALIAS>` is the uppercased, non-alphanumeric-to-underscore normalized reference ID or ordinal) or as a mode `0600` file inside the run's ephemeral scratch directory, wiped immediately when the run ends.
    - The runner feeds every resolved secret value into the per-run stdout/stderr masker before any output is truncated, stored as `script_output`, or forwarded to notifications, ensuring resolved secret values never appear in captured output.
    - The run record (`script_run`, slice 2) records the exact list of `credential_refs` resolved for that execution.
+
+## 6. Follow-up 2026-11-18 (b) -- independent review and broker/execution split
+
+The independent review of slice 2 (`ops-scripts/reviews/script-s2-review-1118.md`, 2026-11-18, verdict DO NOT SHIP,
+findings 1-13) found that scripts ran under the runner JVM's own uid, so a script could read the runner's database,
+artefact-store and credential-store keys from `/proc/1/environ`; that per-script egress was not enforced; and that runs
+were not isolated from one another. The orchestrator session decided the fix the same day, recorded as
+`SCRIPT_EXECUTION_CONTRACT.md` "Amendment 2026-11-18 (b)":
+
+- §4 above ("dedicated runner pod") now means a dedicated **broker** pod plus one short-lived execution pod per run;
+  the execution pod has no service-account token, no secret in its environment and no key of any store.
+- §5.2's "environment variables or a `0600` scratch file": the declared credentials are delivered as a mode-`0400`
+  scratch file (and the same `NEXUS_CRED_<ALIAS>_*` variables, built by the launcher inside the execution pod from
+  that file), never through a Kubernetes `secretKeyRef`.
+- The decisions of §1-§3 and §5 are unchanged: no refusal for secret findings or device egress (alias collisions are
+  disambiguated and warned, not refused), bodies encrypted and never readable back, only declared refs injected and
+  masked. The one new upload refusal is technical, like `.bat`: `.ps1` until PowerShell 7 is in the execution image.

@@ -37,6 +37,9 @@ final class ScriptCli {
         System.out.println("             [--egress <host:port,...|none>] [--notify <syslog|smtp|both|none>]");
         System.out.println("             [--credential-refs <ref1,ref2,...|none>] [--run-as <actor>]");
         System.out.println("  script-enable <scriptId> | script-disable <scriptId>");
+        System.out.println("  script-run <scriptId>                          trigger an immediate script_run job");
+        System.out.println("  script-runs <scriptId>                         list recent runs for a script");
+        System.out.println("  script-output <runId>                          download audited captured output for a run");
     }
 
     /** @return exit code, or -1 when {@code args[0]} is not a script command */
@@ -73,6 +76,27 @@ final class ScriptCli {
                     throw new IllegalArgumentException("usage: script-disable <scriptId>");
                 }
                 yield NexusSessionCli.print(cli.call("POST", BASE + "/" + opaque(args[1]) + "/disable", "{}"));
+            }
+            case "script-run" -> {
+                need(args, 2, "script-run <scriptId>");
+                if (args.length > 2) {
+                    throw new IllegalArgumentException("usage: script-run <scriptId>");
+                }
+                yield NexusSessionCli.print(cli.call("POST", BASE + "/" + opaque(args[1]) + "/run", "{}"));
+            }
+            case "script-runs" -> {
+                need(args, 2, "script-runs <scriptId>");
+                if (args.length > 2) {
+                    throw new IllegalArgumentException("usage: script-runs <scriptId>");
+                }
+                yield NexusSessionCli.print(cli.call("GET", BASE + "/" + opaque(args[1]) + "/runs", null));
+            }
+            case "script-output" -> {
+                need(args, 2, "script-output <runId>");
+                if (args.length > 2) {
+                    throw new IllegalArgumentException("usage: script-output <runId>");
+                }
+                yield NexusSessionCli.print(cli.call("GET", BASE + "/runs/" + opaque(args[1]) + "/output", null));
             }
             default -> -1;
         };

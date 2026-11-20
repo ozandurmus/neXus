@@ -157,6 +157,14 @@ spec:
                   name: ui2-advisory-fetch-token
                   key: sha256
                   optional: true
+            # Script Execution broker (SCRIPT_EXECUTION_CONTRACT.md Amendment 2026-11-18 (b) item 4): SHA-256 of the broker's
+            # own token. Unset = the three internal script-run routes answer 404.
+            - name: UI2_SCRIPT_RUNNER_TOKEN_SHA256
+              valueFrom:
+                secretKeyRef:
+                  name: ui2-script-runner-token
+                  key: sha256
+                  optional: true
             - name: LOGGING_LEVEL_ROOT
               valueFrom:
                 configMapKeyRef:
@@ -193,6 +201,12 @@ spec:
             # Reports R1: report files, same encrypted store format, on their own volume (37-report-store-pvc.yaml).
             - name: UI2_REPORT_STORE_ROOT
               value: /app/report-store
+            # Script Execution: encrypted script bodies and outputs, on the writable report-store claim (the recovery
+            # volume is read-only here, BK-17). Contract Amendment 2026-11-18 (b) item 4.
+            - name: UI2_SCRIPT_STORE_ROOT
+              value: /app/report-store/script-store
+            - name: UI2_SCRIPT_SCHEDULE_ZONE
+              value: Europe/Istanbul
             # The AIView pseudonymizer's key (25-secret-privacy-hmac-key.yaml):
             # durable, so a pseudonym never moves across pod restarts.
             - name: UI2_PRIVACY_HMAC_KEY_FILE

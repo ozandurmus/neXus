@@ -68,7 +68,7 @@ data:
     BEGIN
         FOREACH r IN ARRAY ARRAY['ui2_service', 'ui2_policy', 'ui2_packet_analysis', 'ui2_backup', 'ui2_inventory',
             'ui2_diagnostics', 'ui2_failover', 'ui2_configuration', 'ui2_compliance', 'ui2_scheduler',
-            'ui2_worker_general'] LOOP
+            'ui2_worker_general', 'ui2_script_runner'] LOOP
             IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
                 EXECUTE format('CREATE ROLE %I NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS', r);
             END IF;
@@ -79,4 +79,7 @@ data:
     psql --set ON_ERROR_STOP=1 -d "${POSTGRESQL_DATABASE:-ui2}" <<'UI2_GRANTS_SQL' || echo "ui2 module role grants not applied; continuing" >&2
     SELECT CASE WHEN to_regprocedure('ui2_apply_module_role_grants(text)') IS NOT NULL
                 THEN ui2_apply_module_role_grants() END;
+    -- V258: the script-runner broker's role (its LOGIN comes from tools/delivery/script_runner_db_login.py).
+    SELECT CASE WHEN to_regprocedure('ui2_apply_script_runner_role_grants(text)') IS NOT NULL
+                THEN ui2_apply_script_runner_role_grants() END;
     UI2_GRANTS_SQL

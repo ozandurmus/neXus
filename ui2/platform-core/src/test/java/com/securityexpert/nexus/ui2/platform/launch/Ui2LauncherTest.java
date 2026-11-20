@@ -75,7 +75,8 @@ class Ui2LauncherTest {
                 "service", "com.securityexpert.nexus.ui2.service.boot.Ui2Application",
                 "worker", "com.securityexpert.nexus.ui2.worker.Ui2WorkerMain",
                 "cli", "com.securityexpert.nexus.ui2.cli.CliEntryPoint",
-                "advisory-fetch", "com.securityexpert.nexus.ui2.platform.advisoryfetch.AdvisoryFetchMain"),
+                "advisory-fetch", "com.securityexpert.nexus.ui2.platform.advisoryfetch.AdvisoryFetchMain",
+                "ui2-script-runner", "com.securityexpert.nexus.ui2.worker.scriptrunner.Ui2ScriptRunnerMain"),
                 Ui2Launcher.MAIN_CLASS_BY_ROLE);
     }
 }

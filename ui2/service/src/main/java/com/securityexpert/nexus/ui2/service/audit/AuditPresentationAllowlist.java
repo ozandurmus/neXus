@@ -359,13 +359,21 @@ public final class AuditPresentationAllowlist {
             Map.entry("topology_link_override", Set.of(
                     "a_device_id", "action", "b_device_id", "created_at", "created_by", "link_kind", "orphaned_at",
                     "override_id", "reason_code", "revoked_at", "revoked_by")),
-            // V251 (Script Execution slice 1): script metadata and append-only version metadata; script.egress, script.credential_refs,
-            // script_version.credential_refs, script_version.secret_findings (tier 2) and script_version.wrapped_data_key
-            // (tier 1) are in audit_redaction_policy and therefore absent here. No plaintext body column exists.
+            // V251 / V258 (Script Execution slices 1 & 2): script metadata, append-only version metadata and run ledger;
+            // script.egress, script.credential_refs, script_version.credential_refs, script_version.secret_findings,
+            // script_run.egress_declared, script_run.output_tail, script_run.credential_refs_used (tier 2) and
+            // script_version.wrapped_data_key, script_run.output_wrapped_data_key (tier 1) are in audit_redaction_policy
+            // and therefore absent here. No plaintext body column exists.
             Map.entry("script", Set.of(
                     "created_at", "created_by_actor_fingerprint", "current_version",
-                    "egress_device_targets", "enabled", "kind", "name", "notify", "run_as", "schedule",
+                    "egress_device_targets", "enabled", "kind", "last_scheduled_slot", "name", "notify", "run_as", "schedule",
                     "script_id", "timeout_s", "updated_at")),
+            Map.entry("script_run", Set.of(
+                    "dispatch_epoch", "duration_ms", "egress_device_targets", "exit_code", "failure_reason",
+                    "finished_at", "job_id", "outcome", "output_artefact_ref", "output_key_id", "output_sha256",
+                    "output_size_bytes", "requested_at", "requested_by", "run_as", "scheduled_slot", "script_id",
+                    "session_id", "started_at", "state", "stderr_bytes", "stderr_truncated", "stdout_bytes",
+                    "stdout_truncated", "trigger_kind", "version")),
             Map.entry("script_version", Set.of(
                     "artefact_ref", "created_at", "created_by", "egress_device_targets",
                     "key_id", "script_id", "sha256", "size_bytes", "version")));

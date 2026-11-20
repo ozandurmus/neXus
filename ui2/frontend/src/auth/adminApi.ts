@@ -265,7 +265,7 @@ function confirmBusinessHours(message: string, scope?: BusinessHoursAckScope): P
   return scope.answer;
 }
 
-async function call<T>(path: string, method: "GET" | "POST" | "PUT", body?: unknown,
+async function call<T>(path: string, method: "GET" | "POST" | "PUT" | "PATCH", body?: unknown,
     scope?: BusinessHoursAckScope, businessHoursAck = false): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (method !== "GET") {
@@ -303,7 +303,7 @@ async function call<T>(path: string, method: "GET" | "POST" | "PUT", body?: unkn
  * The one JSON request path (CSRF token, masking notice, timeouts, `ApiError` on refusal) for an API client kept in its
  * own file beside its screen, so this file does not grow with every feature.
  */
-export function apiCall<T>(path: string, method: "GET" | "POST" | "PUT", body?: unknown): Promise<T> {
+export function apiCall<T>(path: string, method: "GET" | "POST" | "PUT" | "PATCH", body?: unknown): Promise<T> {
   return call<T>(path, method, body);
 }
 
@@ -500,11 +500,13 @@ export const uploadLifecycleVendorPage = (page_form: string, page: string) =>
  * screen from that header alone -- the browser never infers masking from a role token.
  */
 let maskedSeen = false;
+let lastResponseMasked = false;
 export function responsesAreMasked(): boolean {
   return maskedSeen;
 }
 function noteMasking(response: Response) {
-  if (!maskedSeen && response.headers?.get?.("X-Nexus-Masked") === "true") {
+  lastResponseMasked = response.headers?.get?.("X-Nexus-Masked") === "true";
+  if (!maskedSeen && lastResponseMasked) {
     maskedSeen = true;
     if (typeof window !== "undefined") window.dispatchEvent(new Event("nx-masked"));
   }
@@ -5161,4 +5163,227 @@ export function getStaticRoutePreview(previewId: string): Promise<StaticRoutePre
 
 export function submitStaticRoutePreview(input: StaticRoutePreviewInput): Promise<StaticRoutePreviewRecord> {
   return call(STATIC_ROUTE_PREVIEW_BASE, "POST", input);
+}
+
+// ---- Operations > Script execution, slices 1 + reworked slice 2 + slice 4 (SCRIPT_EXECUTION_CONTRACT.md §3.6, FROZEN,
+//      amended by PO_DECISION_RECORD_2026_11_18_SCRIPT_EXECUTION_NO_REFUSALS.md and Amendment 2026-11-18 (b)) ----
+export type ScriptKind = "sh" | "bash" | "py" | "jar" | "js" | "mjs" | "pl" | "rb" | "bin";
+export type ScriptNotifyMode = "syslog" | "smtp" | "both" | "none";
+
+export interface ScriptSecretFindingItem {
+  readonly line: number;
+  readonly pattern_class: string;
+}
+
+export interface ScriptSecretFindings {
+  readonly count: number;
+  readonly line_numbers: readonly number[];
+  readonly findings: readonly ScriptSecretFindingItem[];
+}
+
+export interface ScriptVersionSummary {
+  readonly version: number;
+  readonly sha256: string;
+  readonly size_bytes: number;
+  readonly secret_findings: ScriptSecretFindings;
+  readonly credential_refs: readonly string[];
+  readonly egress_device_targets: readonly string[];
+  readonly created_by: string;
+  readonly created_at: string;
+}
+
+export interface ScriptSummary {
+  readonly script_id: string;
+  readonly name: string;
+  readonly kind: ScriptKind | string;
+  readonly current_version: number;
+  readonly sha256: string | null;
+  readonly size_bytes: number;
+  readonly secret_findings: ScriptSecretFindings;
+  readonly enabled: boolean;
+  readonly schedule: string | null;
+  readonly next_five_fires: readonly string[];
+  readonly timeout_s: number;
+  readonly egress: readonly string[];
+  readonly egress_device_targets: readonly string[];
+  readonly credential_refs: readonly string[];
+  readonly notify: ScriptNotifyMode | string;
+  readonly run_as: string;
+  readonly created_by_actor_fingerprint: string;
+  readonly created_at: string;
+  readonly updated_at: string;
+  readonly warnings: readonly string[];
+  readonly versions?: readonly ScriptVersionSummary[];
+  readonly can_write?: boolean;
+  readonly can_run?: boolean;
+  readonly can_read_output?: boolean;
+  readonly runner_available?: boolean;
+  readonly run_as_options?: readonly string[];
+  readonly schedule_zone?: string;
+}
+
+export interface ScriptListResponse {
+  readonly scripts: readonly ScriptSummary[];
+  readonly masked: boolean;
+  readonly can_write?: boolean;
+  readonly can_run?: boolean;
+  readonly can_read_output?: boolean;
+  readonly runner_available?: boolean;
+  readonly run_as_options?: readonly string[];
+  readonly schedule_zone?: string;
+}
+
+export interface ScriptRunSummary {
+  readonly job_id: string;
+  readonly run_id: string;
+  readonly script_id: string;
+  readonly version: number;
+  readonly state: string;
+  readonly outcome: string | null;
+  readonly trigger_kind: string;
+  readonly scheduled_slot: string | null;
+  readonly run_as: string;
+  readonly requested_by: string;
+  readonly requested_at: string;
+  readonly started_at: string | null;
+  readonly finished_at: string | null;
+  readonly duration_ms: number | null;
+  readonly exit_code: number | null;
+  readonly stdout_bytes: number;
+  readonly stderr_bytes: number;
+  readonly stdout_truncated: boolean;
+  readonly stderr_truncated: boolean;
+  readonly has_output: boolean;
+  readonly output_sha256: string | null;
+  readonly output_size_bytes: number | null;
+  readonly output_tail: string | null;
+  readonly egress: readonly string[];
+  readonly egress_device_targets: readonly string[];
+  readonly credential_refs_used: readonly string[];
+  readonly failure_reason: string | null;
+}
+
+export interface ScriptRunListResponse {
+  readonly script_id: string;
+  readonly runs: readonly ScriptRunSummary[];
+  readonly masked: boolean;
+}
+
+export interface CreateScriptInput {
+  readonly name?: string;
+  readonly file_name?: string;
+  readonly kind?: string;
+  readonly body?: string;
+  readonly content_base64?: string;
+  readonly schedule?: string;
+  readonly enabled?: boolean;
+  readonly timeout_s?: number;
+  readonly egress?: readonly string[];
+  readonly credential_refs?: readonly string[];
+  readonly notify?: ScriptNotifyMode;
+  readonly run_as?: string;
+}
+
+export interface NewScriptVersionInput {
+  readonly file_name?: string;
+  readonly kind?: string;
+  readonly body?: string;
+  readonly content_base64?: string;
+  readonly credential_refs?: readonly string[];
+}
+
+export interface PatchScriptSettingsInput {
+  readonly schedule?: string;
+  readonly clear_schedule?: boolean;
+  readonly enabled?: boolean;
+  readonly timeout_s?: number;
+  readonly egress?: readonly string[];
+  readonly credential_refs?: readonly string[];
+  readonly notify?: ScriptNotifyMode;
+  readonly run_as?: string;
+}
+
+export async function listScripts(): Promise<ScriptListResponse> {
+  const raw = await call<{
+    scripts?: readonly ScriptSummary[];
+    masked?: boolean;
+    can_write?: boolean;
+    can_run?: boolean;
+    can_read_output?: boolean;
+    runner_available?: boolean;
+    run_as_options?: readonly string[];
+    schedule_zone?: string;
+  }>("/api/v2/scripts", "GET");
+  return {
+    scripts: raw.scripts ?? [],
+    masked: lastResponseMasked || raw.masked === true,
+    can_write: raw.can_write,
+    can_run: raw.can_run,
+    can_read_output: raw.can_read_output,
+    runner_available: raw.runner_available,
+    run_as_options: raw.run_as_options,
+    schedule_zone: raw.schedule_zone,
+  };
+}
+
+export function getScript(scriptId: string): Promise<ScriptSummary> {
+  return call(`/api/v2/scripts/${encodeURIComponent(scriptId)}`, "GET");
+}
+
+export function createScript(input: CreateScriptInput): Promise<ScriptSummary> {
+  return call("/api/v2/scripts", "POST", input);
+}
+
+export function addScriptVersion(scriptId: string, input: NewScriptVersionInput): Promise<ScriptSummary> {
+  return call(`/api/v2/scripts/${encodeURIComponent(scriptId)}/versions`, "POST", input);
+}
+
+export function updateScriptSettings(scriptId: string, input: PatchScriptSettingsInput): Promise<ScriptSummary> {
+  return call(`/api/v2/scripts/${encodeURIComponent(scriptId)}`, "PATCH", input);
+}
+
+export function enableScript(scriptId: string): Promise<ScriptSummary> {
+  return call(`/api/v2/scripts/${encodeURIComponent(scriptId)}/enable`, "POST", {});
+}
+
+export function disableScript(scriptId: string): Promise<ScriptSummary> {
+  return call(`/api/v2/scripts/${encodeURIComponent(scriptId)}/disable`, "POST", {});
+}
+
+export function runScriptNow(scriptId: string): Promise<ScriptRunSummary> {
+  return call(`/api/v2/scripts/${encodeURIComponent(scriptId)}/run`, "POST", {});
+}
+
+export async function listScriptRuns(scriptId: string): Promise<ScriptRunListResponse> {
+  const raw = await call<{ script_id?: string; runs?: readonly ScriptRunSummary[] }>(
+    `/api/v2/scripts/${encodeURIComponent(scriptId)}/runs`,
+    "GET",
+  );
+  return {
+    script_id: raw.script_id ?? scriptId,
+    runs: raw.runs ?? [],
+    masked: lastResponseMasked,
+  };
+}
+
+export function getScriptRun(runId: string): Promise<ScriptRunSummary> {
+  return call(`/api/v2/scripts/runs/${encodeURIComponent(runId)}`, "GET");
+}
+
+/**
+ * Operator+ audited output download ({@code GET /api/v2/scripts/runs/{runId}/output}, {@code SCRIPT_EXECUTION_CONTRACT.md}
+ * Amendment 2026-11-18 (b) item 11): records one audit row server-side before returning the masked UTF-8 capture.
+ */
+export async function downloadScriptRunOutput(runId: string): Promise<string> {
+  const response = await fetchWithTimeout(
+    `/api/v2/scripts/runs/${encodeURIComponent(runId)}/output`,
+    { credentials: "include" },
+    60_000,
+  );
+  noteMasking(response);
+  if (!response.ok) {
+    const error: ApiError = { status: response.status, body: await response.json().catch(() => ({})) };
+    throw error;
+  }
+  return withTimeout(response.text(), 60_000);
 }

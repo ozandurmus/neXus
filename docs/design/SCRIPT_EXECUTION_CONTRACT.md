@@ -203,3 +203,86 @@ Ratified in `docs/design/PO_DECISION_RECORD_2026_11_18_SCRIPT_EXECUTION_NO_REFUS
 3. **`.bat`/`.cmd` remain refused** with `"cannot run on the Linux runner; use PowerShell (.ps1)"` (technical impossibility on the Linux runner).
 4. **The runner stays a dedicated pod** (§3.2, slice 2).
 5. **Declared credential-store references (`credential_refs`).** A script version declares `credential_refs` (credential-store reference IDs validated to exist, set by `role:security_admin` via API/CLI). Slice 2's runner resolves only those declared refs at run start (`NEXUS_CRED_<ALIAS>_USERNAME` / `_SECRET` or a `0600` scratch file), masks their values from captured output, and records the refs used on the run.
+
+## Amendment 2026-11-18 (b) -- broker and execution split
+
+Decided by the orchestrator session on 2026-11-18 after the independent review
+`ops-scripts/reviews/script-s2-review-1118.md` (verdict DO NOT SHIP, findings 1-13) of slice 2 (`88d25352`). It
+replaces the single-pod runner of §3.2 and Amendment 2026-11-18 item 4 ("the runner stays a dedicated pod") where they
+differ; recorded as a follow-up in `PO_DECISION_RECORD_2026_11_18_SCRIPT_EXECUTION_NO_REFUSALS.md` §6.
+
+1. **Two workloads.** `ui2-script-runner` is a long-lived **broker** (Java, the service image, one replica). It holds
+   the `script_run` job lease, and for each run it creates one short-lived Kubernetes Job `script-run-<job id>` in the
+   `ui2` namespace that executes the script, then collects, masks and reports the result. No script ever runs inside
+   the broker (review findings 1 and 5).
+2. **Execution pod.** Distinct non-root uid/gid (20185), `automountServiceAccountToken: false`, no `env` from any
+   Secret, no `envFrom`, no database, artefact-store or credential-store mount, read-only root filesystem, all
+   capabilities dropped, `RuntimeDefault` seccomp, one `emptyDir` scratch, `activeDeadlineSeconds = timeout_s`,
+   `backoffLimit: 0`, `restartPolicy: Never`. An init container copies the run's seed (script body, the declared
+   credentials file and the per-run `nexus-cli` session file) from one-time Secrets `script-run-<id>-s<n>` (the body is
+   split over several Secrets when it is larger than one Secret can hold) into the scratch volume with mode `0400`
+   (`0500` for a `bin` body); only the init container mounts the Secrets. The broker deletes the Job, its pod, the
+   Secrets and the run's NetworkPolicy at the end of every run, whatever the outcome. A process a script leaves behind
+   dies with its pod; the next run gets a new pod, a new scratch volume and new Secrets (finding 5).
+3. **Per-run egress (finding 4).** A default-deny NetworkPolicy covers every execution pod; for each run the broker
+   creates `script-run-<id>-e<epoch>` that allows `ui2-service:8080` (for `nexus-cli`, with `ui2-service` injected into
+   `podSpec.hostAliases`) and, when declared `egress` resolves to at least one allowed external target, DNS to
+   `kube-dns` (UDP/TCP 53) and each declared `host:port` of the version as `ipBlock /32` (or `/128`) of the addresses
+   the host resolves to **at run start** (hostnames are re-resolved for every run; cluster pod/service CIDRs, node IPs
+   from `UI2_NODE_IPS` / `status.hostIP`, and resolved `UI2_DB_HOST` addresses are blocked; when `egress = []` or no
+   declared entry resolves to an allowed target, `kube-dns:53` is omitted so the pod has zero DNS egress). This replaces
+   the userspace proxy and interpreter preloads, which are removed.
+4. **Service owns the keys.** The service is the only workload holding the artefact-store and credential-store keys.
+   Over the internal port 8086 (the `MachinePortConfiguration` pattern, authenticated by the broker's own token
+   compared by SHA-256 in constant time, `UI2_SCRIPT_RUNNER_TOKEN_SHA256`), `POST /internal/script-runs/start`
+   releases, once per lease epoch and only for a job that is `EXECUTING` under a `script_runner` lease of that epoch,
+   the decrypted body of the run's version, the version's declared credentials and a freshly minted per-run session;
+   `POST /internal/script-runs/finish` stores the masked output (artefact class `script_output`, encrypted, on the
+   service's writable script store) and closes the run; `POST /internal/script-runs/abort` revokes the session after a
+   lost lease. The broker therefore needs no shared volume (the recovery volume is `ReadWriteOnce` and read-only in the
+   service; script bodies and outputs live under `UI2_SCRIPT_STORE_ROOT` on the report-store claim) and holds no
+   artefact-store or credential-store key. No execution pod ever holds either key.
+5. **Broker privileges.** Its own database login role `ui2_script_runner` (granted by
+   `ui2_apply_script_runner_role_grants()`, V258: job lease, step attempts, its module row, what the shared module
+   heartbeat touches, and the job-trigger side tables listed there until the per-module database roles work makes the
+   `jobs.state` triggers `SECURITY DEFINER` (its planned step 0; V258's comment names them); no script
+   table, credential, session or audit row), never the shared `ui2-db` login. A namespaced Role: create/get/list/watch/
+   delete on `batch/jobs`; get/list/watch on `pods`; get on `pods/log`; create/delete on `secrets` (no get, list or
+   watch: those would expose every Secret of the namespace); create/get/delete on `networkpolicies`. Kubernetes RBAC
+   cannot restrict `create` by object name, so the `script-run-` name prefix is enforced in the broker's code
+   (`ScriptRunKubernetes`), refused for any other name, and covered by a test.
+   **First-ship bootstrap order:** V258 creates `ui2_script_runner` `NOLOGIN` (when the migration role holds
+   `CREATEROLE`, or `10-configmap.yaml` created it on database start) and applies `ui2_apply_script_runner_role_grants()`.
+   `ui2-service` starts without `Secret/ui2-script-runner-token` (`optional: true`) and reports `runner_available: false`
+   until the token digest is configured and the broker heartbeats; `module_deploy.py` applies the broker's
+   `ServiceAccount`s, `Role`, `RoleBinding` and `NetworkPolicy` objects and defers `Deployment/ui2-script-runner` when
+   `Secret/ui2-db-script-runner` or `Secret/ui2-script-runner-token` is absent. Afterwards (or before first ship, since
+   `script_runner_db_login.py` guards `ui2_apply_script_runner_role_grants()` with `to_regprocedure`), the operator runs
+   `python3 tools/delivery/script_runner_db_login.py db-login` and `python3 tools/delivery/script_runner_db_login.py token`,
+   restarts `ui2-service`, and rolls out `script-runner`.
+6. **Output.** The broker reads the pod log (stdout and stderr lines are tagged by the launcher), masks the whole
+   capture **before** truncating each stream to 256 KiB, and drops a partial last line when the log read hit its
+   byte limit. Masked forms of every injected secret value and username: exact, Base64 (with and without a trailing
+   newline), URL-encoded, lower- and upper-case hex, and JSON-escaped; plus the per-run session cookie and CSRF value.
+   Limit stated plainly: a script that transforms a secret any other way (reversal, splitting, encryption) can still
+   print it; masking is a safety net, not a boundary.
+7. **Lease loss kills the run** (finding 9): the broker deletes the Job at once and asks the service to revoke the
+   session; the run is not reported as complete under a lease it no longer holds.
+8. **Images** (finding 3). The execution image `ui2/Containerfile.script-exec` (the service image by digest plus the
+   §7 interpreters) is built in every ship by `tools/delivery/hosta_script_exec_image.py` after the service image,
+   scanned by the same security gate, and handed to the broker as `UI2_SCRIPT_EXEC_IMAGE` by
+   `module_deploy.py --script-exec-image`; a ship that builds no execution image keeps the broker's current value, so
+   the service image never replaces it. The broker runs the service image unchanged (main's `ui2/Containerfile`
+   entrypoint, including `-XX:-UseBASE64Intrinsics`, finding 7). **PowerShell 7 is not in the execution image**: it
+   is not in the UBI/RHEL 9 repositories the build can reach, and no digest-pinned offline package exists in this
+   repository, so `.ps1` is refused at upload with that technical reason until it is added (same footing as
+   `.bat`/`.cmd`).
+9. **run_as** (finding 8) is a role from an allowlist (`role:operator` default, `role:viewer`, `role:replay_viewer`),
+   enforced by a database CHECK and offered as a select in the UI; a user name is no longer accepted and
+   `role:security_admin` never is.
+10. **Credential refs** (finding 10): a run injects exactly the refs of the version it runs. Changing `credential_refs`
+    in settings creates a new version with the same encrypted body and the new refs. Two refs whose display names map
+    to the same `NEXUS_CRED_<ALIAS>` get a numeric suffix (`_2`, `_3`...) and a warning, never a refusal.
+11. **Output download** (finding 11) needs `role:operator` or above and writes one audit row per download
+    (`audit_script_output_download`) before the first byte.
+12. **Schedule zone**: five-field cron is read in `Europe/Istanbul` by default (`UI2_SCRIPT_SCHEDULE_ZONE` overrides).

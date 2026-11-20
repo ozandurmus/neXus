@@ -35,6 +35,29 @@ import java.util.regex.Pattern;
  */
 final class NexusSessionCli {
 
+    static {
+        allowOriginHeader();
+    }
+
+    static void allowOriginHeader() {
+        String prop = System.getProperty("jdk.httpclient.allowRestrictedHeaders", "");
+        if (!prop.toLowerCase(java.util.Locale.ROOT).contains("origin")) {
+            System.setProperty("jdk.httpclient.allowRestrictedHeaders",
+                    prop.isBlank() ? "origin" : prop + ",origin");
+        }
+    }
+
+    static String originOf(String baseUrl) {
+        if (baseUrl == null || baseUrl.isBlank()) {
+            return "";
+        }
+        URI uri = URI.create(baseUrl.strip());
+        if (uri.getScheme() != null && uri.getAuthority() != null) {
+            return uri.getScheme() + "://" + uri.getAuthority();
+        }
+        return baseUrl.strip();
+    }
+
     static final String SESSION_COOKIE = "ui2_session";
     private static final Pattern SET_COOKIE = Pattern.compile("(?:^|;\\s*)" + SESSION_COOKIE + "=([^;]+)");
 
@@ -646,7 +669,9 @@ final class NexusSessionCli {
             extraHeaders.forEach(request::header);
         }
         if (!"GET".equals(method)) {
-            request.header("X-CSRF-Token", session.csrf()).header("Content-Type", "application/json");
+            request.header("X-CSRF-Token", session.csrf())
+                    .header("Origin", originOf(session.baseUrl()))
+                    .header("Content-Type", "application/json");
             if (businessHoursAck) request.header(BUSINESS_HOURS_ACK_HEADER, "true");
             request.method(method, HttpRequest.BodyPublishers.ofString(jsonBody == null ? "" : jsonBody, StandardCharsets.UTF_8));
         } else {
@@ -660,7 +685,9 @@ final class NexusSessionCli {
         Session session = loadSession().orElseThrow(() -> new UsageException("not logged in"));
         HttpRequest request = HttpRequest.newBuilder(URI.create(session.baseUrl() + "/backups/" + args[1] + "/download"))
                 .header("Cookie", SESSION_COOKIE + "=" + session.cookie())
-                .header("X-CSRF-Token", session.csrf()).header("Content-Type", "application/json")
+                .header("X-CSRF-Token", session.csrf())
+                .header("Origin", originOf(session.baseUrl()))
+                .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json(Map.of("reason", args[2])))).build();
         HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
         if (response.statusCode() != 200) {
@@ -751,6 +778,7 @@ final class NexusSessionCli {
         String boundary = "nexus-cli-" + java.util.UUID.randomUUID();
         HttpRequest request = HttpRequest.newBuilder(URI.create(session.baseUrl() + PA + "/cases/" + id(args[1]) + "/captures"))
                 .header("Cookie", SESSION_COOKIE + "=" + session.cookie()).header("X-CSRF-Token", session.csrf())
+                .header("Origin", originOf(session.baseUrl()))
                 .header("Content-Type", "multipart/form-data; boundary=" + boundary)
                 .POST(multipartFile(file, boundary)).build();
         System.err.println("uploading " + Files.size(file) + " bytes");
@@ -771,6 +799,7 @@ final class NexusSessionCli {
         String boundary = "nexus-cli-" + java.util.UUID.randomUUID();
         HttpRequest request = HttpRequest.newBuilder(URI.create(session.baseUrl() + PA + "/cases/" + id(args[1]) + "/telemetry"))
                 .header("Cookie", SESSION_COOKIE + "=" + session.cookie()).header("X-CSRF-Token", session.csrf())
+                .header("Origin", originOf(session.baseUrl()))
                 .header("Content-Type", "multipart/form-data; boundary=" + boundary)
                 .POST(multipartFile(file, boundary)).build();
         System.err.println("uploading " + Files.size(file) + " bytes");

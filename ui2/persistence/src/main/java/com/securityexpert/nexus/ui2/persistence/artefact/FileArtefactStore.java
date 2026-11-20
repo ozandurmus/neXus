@@ -428,6 +428,26 @@ public final class FileArtefactStore implements ArtefactStore {
         return gzip ? new GZIPInputStream(decrypted) : decrypted;
     }
 
+    @Override
+    public boolean delete(ArtefactRef ref) throws IOException {
+        if (ref == null || ref.value() == null || ref.value().isBlank()) {
+            return false;
+        }
+        Path normalizedRoot = root.toAbsolutePath().normalize();
+        Path target = normalizedRoot.resolve(ref.value()).normalize();
+        if (!target.startsWith(normalizedRoot) || target.equals(normalizedRoot)) {
+            throw new IOException("refused artefact path outside store root");
+        }
+        boolean deleted = Files.deleteIfExists(target);
+        if (deleted) {
+            synchronized (usageLock) {
+                measured = false;
+            }
+            storeUsage.clear();
+        }
+        return deleted;
+    }
+
     private Path pathFor(ArtefactRef ref) {
         // ref.value() is "<vendor>/<device_id>/<sha256hex>" -- see FileArtefactHandle.finish().
         return root.resolve(ref.value());

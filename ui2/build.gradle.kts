@@ -64,6 +64,8 @@ subprojects {
             // Collector layer-restart pause (production default 3000 ms) has no purpose in tests; the
             // restart logic and its assertions are unchanged, only the real-time wait is removed.
             systemProperty("ui2.policy.cp.layer-restart-backoff-ms", "0")
+            // Allow java.net.http.HttpClient in nexus-cli tests to send the Origin header required by GateChain.
+            systemProperty("jdk.httpclient.allowRestrictedHeaders", "origin")
         }
 
         repositories {
@@ -112,6 +114,7 @@ subprojects {
                 testClassesDirs = testSourceSet.output.classesDirs
                 classpath = testSourceSet.runtimeClasspath
                 useJUnitPlatform()
+                systemProperty("jdk.httpclient.allowRestrictedHeaders", "origin")
             }
             else -> tasks.register<Test>("unitTest") {
                 group = "verification"
@@ -121,6 +124,7 @@ subprojects {
                 useJUnitPlatform()
                 maxHeapSize = "768m"
                 jvmArgs("-XX:+UseSerialGC", "-Xshare:auto")
+                systemProperty("jdk.httpclient.allowRestrictedHeaders", "origin")
             }
         }
     }

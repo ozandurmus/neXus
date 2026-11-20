@@ -255,7 +255,9 @@ elif name == 'kubectl':
         "NEXUS_DEPLOY_TARGETS": "unknown" if mode == "invalid-targets" else "service worker configuration compliance policy",
         "NEXUS_DEPLOY_APPLY_FILES": "synthetic-manifest.yaml",
         "NEXUS_SKIP_SECURITY_REASON": "synthetic exercise" if mode == "skip" else "",
-        "NEXUS_BUILD_PACKET_ANALYSIS_IMAGE": "0" if mode == "pa-off" else "1"})
+        "NEXUS_BUILD_PACKET_ANALYSIS_IMAGE": "0" if mode == "pa-off" else "1",
+        # The script execution image has the same shape; its order is asserted in test_ui2_deployment_manifests.
+        "NEXUS_BUILD_SCRIPT_EXEC_IMAGE": "0"})
     assert result.returncode == (2 if mode == "invalid-targets" else 1 if mode in ("gate-failure", "pa-failure") else 0), result.stderr
     executed = [json.loads(line) for line in calls.read_text().splitlines()]
     for call in executed:

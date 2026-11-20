@@ -1,4 +1,4 @@
-# route authorization decision table; kinds=18 routes=621 rows=11178
+# route authorization decision table; kinds=18 routes=631 rows=11358
 # columns: kind | METHOD path | PERMIT attributes | REFUSE status content-type body ; then authz rows and machine audits
 anonymous | DELETE /api/v2/cutover/assessments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | DELETE /api/v2/cutover/assessments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
@@ -2574,6 +2574,42 @@ machine-replay-viewer | GET /api/v2/scripts | PERMIT actor=match session=match r
 viewer-no-csrf | GET /api/v2/scripts | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
 viewer-no-origin | GET /api/v2/scripts | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
 must-change | GET /api/v2/scripts | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
+anonymous | GET /api/v2/scripts/runs/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+unknown-cookie | GET /api/v2/scripts/runs/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
+expired | GET /api/v2/scripts/runs/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
+revoked | GET /api/v2/scripts/runs/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_REVOKED","reason":"session is not ACTIVE: REVOKED"}
+no-role | GET /api/v2/scripts/runs/synthetic-ref | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+role-viewer | GET /api/v2/scripts/runs/synthetic-ref | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+role-operator | GET /api/v2/scripts/runs/synthetic-ref | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+role-onboarding_admin | GET /api/v2/scripts/runs/synthetic-ref | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+role-backup_admin | GET /api/v2/scripts/runs/synthetic-ref | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+role-compliance_admin | GET /api/v2/scripts/runs/synthetic-ref | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+role-security_admin | GET /api/v2/scripts/runs/synthetic-ref | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+role-operation_admin | GET /api/v2/scripts/runs/synthetic-ref | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+role-replay_viewer | GET /api/v2/scripts/runs/synthetic-ref | PERMIT actor=match session=match replay-viewer=true | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+root | GET /api/v2/scripts/runs/synthetic-ref | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:PERMITTED]
+machine-replay-viewer | GET /api/v2/scripts/runs/synthetic-ref | PERMIT actor=match session=match replay-viewer=true | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+viewer-no-csrf | GET /api/v2/scripts/runs/synthetic-ref | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+viewer-no-origin | GET /api/v2/scripts/runs/synthetic-ref | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+must-change | GET /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
+anonymous | GET /api/v2/scripts/runs/synthetic-ref/output | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+unknown-cookie | GET /api/v2/scripts/runs/synthetic-ref/output | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
+expired | GET /api/v2/scripts/runs/synthetic-ref/output | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
+revoked | GET /api/v2/scripts/runs/synthetic-ref/output | REFUSE 401 application/json {"error":"SESSION_REVOKED","reason":"session is not ACTIVE: REVOKED"}
+no-role | GET /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"script_output_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[script_output_read:DENIED]
+role-viewer | GET /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"script_output_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[script_output_read:DENIED]
+role-operator | GET /api/v2/scripts/runs/synthetic-ref/output | PERMIT actor=match session=match replay-viewer=- | authz=[script_output_read:PERMITTED]
+role-onboarding_admin | GET /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"script_output_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[script_output_read:DENIED]
+role-backup_admin | GET /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"script_output_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[script_output_read:DENIED]
+role-compliance_admin | GET /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"script_output_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[script_output_read:DENIED]
+role-security_admin | GET /api/v2/scripts/runs/synthetic-ref/output | PERMIT actor=match session=match replay-viewer=- | authz=[script_output_read:PERMITTED]
+role-operation_admin | GET /api/v2/scripts/runs/synthetic-ref/output | PERMIT actor=match session=match replay-viewer=- | authz=[script_output_read:PERMITTED]
+role-replay_viewer | GET /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"script_output_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[script_output_read:DENIED]
+root | GET /api/v2/scripts/runs/synthetic-ref/output | PERMIT actor=match session=match replay-viewer=- | authz=[script_output_read:PERMITTED]
+machine-replay-viewer | GET /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"script_output_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[script_output_read:DENIED]
+viewer-no-csrf | GET /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"script_output_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[script_output_read:DENIED]
+viewer-no-origin | GET /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"script_output_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[script_output_read:DENIED]
+must-change | GET /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
 anonymous | GET /api/v2/scripts/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | GET /api/v2/scripts/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | GET /api/v2/scripts/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -2592,6 +2628,24 @@ machine-replay-viewer | GET /api/v2/scripts/synthetic-ref | PERMIT actor=match s
 viewer-no-csrf | GET /api/v2/scripts/synthetic-ref | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
 viewer-no-origin | GET /api/v2/scripts/synthetic-ref | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
 must-change | GET /api/v2/scripts/synthetic-ref | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
+anonymous | GET /api/v2/scripts/synthetic-ref/runs | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+unknown-cookie | GET /api/v2/scripts/synthetic-ref/runs | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
+expired | GET /api/v2/scripts/synthetic-ref/runs | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
+revoked | GET /api/v2/scripts/synthetic-ref/runs | REFUSE 401 application/json {"error":"SESSION_REVOKED","reason":"session is not ACTIVE: REVOKED"}
+no-role | GET /api/v2/scripts/synthetic-ref/runs | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+role-viewer | GET /api/v2/scripts/synthetic-ref/runs | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+role-operator | GET /api/v2/scripts/synthetic-ref/runs | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+role-onboarding_admin | GET /api/v2/scripts/synthetic-ref/runs | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+role-backup_admin | GET /api/v2/scripts/synthetic-ref/runs | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+role-compliance_admin | GET /api/v2/scripts/synthetic-ref/runs | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+role-security_admin | GET /api/v2/scripts/synthetic-ref/runs | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+role-operation_admin | GET /api/v2/scripts/synthetic-ref/runs | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+role-replay_viewer | GET /api/v2/scripts/synthetic-ref/runs | PERMIT actor=match session=match replay-viewer=true | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+root | GET /api/v2/scripts/synthetic-ref/runs | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:PERMITTED]
+machine-replay-viewer | GET /api/v2/scripts/synthetic-ref/runs | PERMIT actor=match session=match replay-viewer=true | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+viewer-no-csrf | GET /api/v2/scripts/synthetic-ref/runs | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+viewer-no-origin | GET /api/v2/scripts/synthetic-ref/runs | PERMIT actor=match session=match replay-viewer=- | authz=[script_read:NO_APPLICABLE_AUTHORITY]
+must-change | GET /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
 anonymous | GET /api/v2/search | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | GET /api/v2/search | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | GET /api/v2/search | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -6174,6 +6228,42 @@ machine-replay-viewer | HEAD /api/v2/scripts | REFUSE 403 application/json {"err
 viewer-no-csrf | HEAD /api/v2/scripts | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | HEAD /api/v2/scripts | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | HEAD /api/v2/scripts | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+anonymous | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+unknown-cookie | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+expired | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+revoked | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+no-role | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-viewer | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-operator | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-onboarding_admin | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-backup_admin | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-compliance_admin | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-security_admin | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-operation_admin | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-replay_viewer | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+root | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+machine-replay-viewer | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+viewer-no-csrf | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+viewer-no-origin | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+must-change | HEAD /api/v2/scripts/runs/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+anonymous | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+unknown-cookie | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+expired | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+revoked | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+no-role | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-viewer | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-operator | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-onboarding_admin | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-backup_admin | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-compliance_admin | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-security_admin | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-operation_admin | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-replay_viewer | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+root | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+machine-replay-viewer | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+viewer-no-csrf | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+viewer-no-origin | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+must-change | HEAD /api/v2/scripts/runs/synthetic-ref/output | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | HEAD /api/v2/scripts/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | HEAD /api/v2/scripts/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | HEAD /api/v2/scripts/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
@@ -6192,6 +6282,24 @@ machine-replay-viewer | HEAD /api/v2/scripts/synthetic-ref | REFUSE 403 applicat
 viewer-no-csrf | HEAD /api/v2/scripts/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | HEAD /api/v2/scripts/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | HEAD /api/v2/scripts/synthetic-ref | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+anonymous | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+unknown-cookie | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+expired | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+revoked | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+no-role | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-viewer | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-operator | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-onboarding_admin | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-backup_admin | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-compliance_admin | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-security_admin | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-operation_admin | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+role-replay_viewer | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+root | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+machine-replay-viewer | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+viewer-no-csrf | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+viewer-no-origin | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+must-change | HEAD /api/v2/scripts/synthetic-ref/runs | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 anonymous | HEAD /api/v2/search | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | HEAD /api/v2/search | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | HEAD /api/v2/search | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
@@ -8748,6 +8856,24 @@ machine-replay-viewer | POST /api/v2/scripts/synthetic-ref/enable | REFUSE 403 a
 viewer-no-csrf | POST /api/v2/scripts/synthetic-ref/enable | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
 viewer-no-origin | POST /api/v2/scripts/synthetic-ref/enable | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
 must-change | POST /api/v2/scripts/synthetic-ref/enable | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
+anonymous | POST /api/v2/scripts/synthetic-ref/run | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
+unknown-cookie | POST /api/v2/scripts/synthetic-ref/run | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
+expired | POST /api/v2/scripts/synthetic-ref/run | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
+revoked | POST /api/v2/scripts/synthetic-ref/run | REFUSE 401 application/json {"error":"SESSION_REVOKED","reason":"session is not ACTIVE: REVOKED"}
+no-role | POST /api/v2/scripts/synthetic-ref/run | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"script_run","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[script_run:DENIED]
+role-viewer | POST /api/v2/scripts/synthetic-ref/run | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"script_run","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[script_run:DENIED]
+role-operator | POST /api/v2/scripts/synthetic-ref/run | PERMIT actor=match session=match replay-viewer=- | authz=[script_run:PERMITTED]
+role-onboarding_admin | POST /api/v2/scripts/synthetic-ref/run | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"script_run","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[script_run:DENIED]
+role-backup_admin | POST /api/v2/scripts/synthetic-ref/run | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"script_run","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[script_run:DENIED]
+role-compliance_admin | POST /api/v2/scripts/synthetic-ref/run | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"script_run","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[script_run:DENIED]
+role-security_admin | POST /api/v2/scripts/synthetic-ref/run | PERMIT actor=match session=match replay-viewer=- | authz=[script_run:PERMITTED]
+role-operation_admin | POST /api/v2/scripts/synthetic-ref/run | PERMIT actor=match session=match replay-viewer=- | authz=[script_run:PERMITTED]
+role-replay_viewer | POST /api/v2/scripts/synthetic-ref/run | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"script_run","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[script_run:DENIED]
+root | POST /api/v2/scripts/synthetic-ref/run | PERMIT actor=match session=match replay-viewer=- | authz=[script_run:PERMITTED]
+machine-replay-viewer | POST /api/v2/scripts/synthetic-ref/run | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
+viewer-no-csrf | POST /api/v2/scripts/synthetic-ref/run | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"CSRF token missing or mismatched"}
+viewer-no-origin | POST /api/v2/scripts/synthetic-ref/run | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"request origin missing on a state-changing method"}
+must-change | POST /api/v2/scripts/synthetic-ref/run | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
 anonymous | POST /api/v2/scripts/synthetic-ref/versions | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | POST /api/v2/scripts/synthetic-ref/versions | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | POST /api/v2/scripts/synthetic-ref/versions | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -10152,6 +10278,60 @@ machine-replay-viewer | POST /internal/machine-session | REFUSE 403 application/
 viewer-no-csrf | POST /internal/machine-session | PERMIT actor=- session=- replay-viewer=-
 viewer-no-origin | POST /internal/machine-session | PERMIT actor=- session=- replay-viewer=-
 must-change | POST /internal/machine-session | PERMIT actor=- session=- replay-viewer=-
+anonymous | POST /internal/script-runs/abort | PERMIT actor=- session=- replay-viewer=-
+unknown-cookie | POST /internal/script-runs/abort | PERMIT actor=- session=- replay-viewer=-
+expired | POST /internal/script-runs/abort | PERMIT actor=- session=- replay-viewer=-
+revoked | POST /internal/script-runs/abort | PERMIT actor=- session=- replay-viewer=-
+no-role | POST /internal/script-runs/abort | PERMIT actor=- session=- replay-viewer=-
+role-viewer | POST /internal/script-runs/abort | PERMIT actor=- session=- replay-viewer=-
+role-operator | POST /internal/script-runs/abort | PERMIT actor=- session=- replay-viewer=-
+role-onboarding_admin | POST /internal/script-runs/abort | PERMIT actor=- session=- replay-viewer=-
+role-backup_admin | POST /internal/script-runs/abort | PERMIT actor=- session=- replay-viewer=-
+role-compliance_admin | POST /internal/script-runs/abort | PERMIT actor=- session=- replay-viewer=-
+role-security_admin | POST /internal/script-runs/abort | PERMIT actor=- session=- replay-viewer=-
+role-operation_admin | POST /internal/script-runs/abort | PERMIT actor=- session=- replay-viewer=-
+role-replay_viewer | POST /internal/script-runs/abort | PERMIT actor=- session=- replay-viewer=-
+root | POST /internal/script-runs/abort | PERMIT actor=- session=- replay-viewer=-
+machine-replay-viewer | POST /internal/script-runs/abort | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
+viewer-no-csrf | POST /internal/script-runs/abort | PERMIT actor=- session=- replay-viewer=-
+viewer-no-origin | POST /internal/script-runs/abort | PERMIT actor=- session=- replay-viewer=-
+must-change | POST /internal/script-runs/abort | PERMIT actor=- session=- replay-viewer=-
+anonymous | POST /internal/script-runs/finish | PERMIT actor=- session=- replay-viewer=-
+unknown-cookie | POST /internal/script-runs/finish | PERMIT actor=- session=- replay-viewer=-
+expired | POST /internal/script-runs/finish | PERMIT actor=- session=- replay-viewer=-
+revoked | POST /internal/script-runs/finish | PERMIT actor=- session=- replay-viewer=-
+no-role | POST /internal/script-runs/finish | PERMIT actor=- session=- replay-viewer=-
+role-viewer | POST /internal/script-runs/finish | PERMIT actor=- session=- replay-viewer=-
+role-operator | POST /internal/script-runs/finish | PERMIT actor=- session=- replay-viewer=-
+role-onboarding_admin | POST /internal/script-runs/finish | PERMIT actor=- session=- replay-viewer=-
+role-backup_admin | POST /internal/script-runs/finish | PERMIT actor=- session=- replay-viewer=-
+role-compliance_admin | POST /internal/script-runs/finish | PERMIT actor=- session=- replay-viewer=-
+role-security_admin | POST /internal/script-runs/finish | PERMIT actor=- session=- replay-viewer=-
+role-operation_admin | POST /internal/script-runs/finish | PERMIT actor=- session=- replay-viewer=-
+role-replay_viewer | POST /internal/script-runs/finish | PERMIT actor=- session=- replay-viewer=-
+root | POST /internal/script-runs/finish | PERMIT actor=- session=- replay-viewer=-
+machine-replay-viewer | POST /internal/script-runs/finish | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
+viewer-no-csrf | POST /internal/script-runs/finish | PERMIT actor=- session=- replay-viewer=-
+viewer-no-origin | POST /internal/script-runs/finish | PERMIT actor=- session=- replay-viewer=-
+must-change | POST /internal/script-runs/finish | PERMIT actor=- session=- replay-viewer=-
+anonymous | POST /internal/script-runs/start | PERMIT actor=- session=- replay-viewer=-
+unknown-cookie | POST /internal/script-runs/start | PERMIT actor=- session=- replay-viewer=-
+expired | POST /internal/script-runs/start | PERMIT actor=- session=- replay-viewer=-
+revoked | POST /internal/script-runs/start | PERMIT actor=- session=- replay-viewer=-
+no-role | POST /internal/script-runs/start | PERMIT actor=- session=- replay-viewer=-
+role-viewer | POST /internal/script-runs/start | PERMIT actor=- session=- replay-viewer=-
+role-operator | POST /internal/script-runs/start | PERMIT actor=- session=- replay-viewer=-
+role-onboarding_admin | POST /internal/script-runs/start | PERMIT actor=- session=- replay-viewer=-
+role-backup_admin | POST /internal/script-runs/start | PERMIT actor=- session=- replay-viewer=-
+role-compliance_admin | POST /internal/script-runs/start | PERMIT actor=- session=- replay-viewer=-
+role-security_admin | POST /internal/script-runs/start | PERMIT actor=- session=- replay-viewer=-
+role-operation_admin | POST /internal/script-runs/start | PERMIT actor=- session=- replay-viewer=-
+role-replay_viewer | POST /internal/script-runs/start | PERMIT actor=- session=- replay-viewer=-
+root | POST /internal/script-runs/start | PERMIT actor=- session=- replay-viewer=-
+machine-replay-viewer | POST /internal/script-runs/start | REFUSE 403 application/json {"error":"MACHINE_SESSION_READ_ONLY","reason":"machine session attempted a write"} | machine-audits=1
+viewer-no-csrf | POST /internal/script-runs/start | PERMIT actor=- session=- replay-viewer=-
+viewer-no-origin | POST /internal/script-runs/start | PERMIT actor=- session=- replay-viewer=-
+must-change | POST /internal/script-runs/start | PERMIT actor=- session=- replay-viewer=-
 anonymous | POST /local-credentials/change-password | PERMIT actor=- session=- replay-viewer=-
 unknown-cookie | POST /local-credentials/change-password | PERMIT actor=- session=- replay-viewer=-
 expired | POST /local-credentials/change-password | PERMIT actor=- session=- replay-viewer=-

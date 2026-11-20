@@ -127,6 +127,10 @@ public final class Ui2WorkerMain {
             startPacketAnalysis();
             return;
         }
+        if (com.securityexpert.nexus.ui2.platform.ScriptExecutionJob.MODULE.equals(role)) {
+            com.securityexpert.nexus.ui2.worker.scriptrunner.Ui2ScriptRunnerMain.main(new String[0]);
+            return;
+        }
 
         String jdbcUrl = requireEnv("UI2_DB_URL");
         String dbUser = SecretFile.readRequired(Path.of(requireEnv("UI2_DB_APP_USER_FILE")), "worker.db_user");
@@ -706,7 +710,8 @@ public final class Ui2WorkerMain {
             throw new IllegalArgumentException("CONFLICTING_WORKER_ROLE");
         String role = argument != null ? argument : env != null ? env : "general";
         if (!java.util.Set.of("general", "policy", "backup", "configuration", "compliance",
-                com.securityexpert.nexus.ui2.platform.PacketAnalysisJob.MODULE).contains(role))
+                com.securityexpert.nexus.ui2.platform.PacketAnalysisJob.MODULE,
+                com.securityexpert.nexus.ui2.platform.ScriptExecutionJob.MODULE).contains(role))
             throw new IllegalArgumentException("UNKNOWN_WORKER_ROLE");
         return role;
     }

@@ -987,7 +987,8 @@ def preview_claim_insert():
         "submitted_by_actor_fingerprint,submitted_at,idempotency_key,precheck_results,"
         "diagnostic_port,diagnostic_gate_revision) "
         "VALUES('preview-claim-assertion',capability,capability,"
-        "CASE WHEN capability='packet_analysis_run' THEN 'packet_analysis_case' ELSE 'discovery_run' END,"
+        "CASE WHEN capability='packet_analysis_run' THEN 'packet_analysis_case' "
+        "WHEN capability='script_run' THEN 'script' ELSE 'discovery_run' END,"
         "'preview-synthetic-target',"
         "'REQUESTED','read','system:preview','1970-01-01','preview-claim-assertion','[]'::jsonb,"
         "CASE WHEN capability='fmg_interface_detail' THEN 'port1' ELSE NULL END,"
@@ -1034,9 +1035,12 @@ def assert_module_claims(repo, workers):
     source = (repo / "ui2/job-engine/src/main/java/com/securityexpert/nexus/ui2/jobs/lease/ClaimStatementText.java").read_text()
     claim = source.split('"""', 2)[1].strip()
     capabilities = sorted(set(re.findall(r"'([a-z]+_[a-z_]+)'", job_module_mapping(repo))) -
-                          {"policy", "backup", "inventory", "failover", "diagnostics", "configuration", "packet_analysis"})
+                          {"policy", "backup", "inventory", "failover", "diagnostics", "configuration",
+                           "packet_analysis", "script_runner"})
     if "packet_analysis" not in roles:
         capabilities = [c for c in capabilities if c != "packet_analysis_run"]
+    if "script_runner" not in roles:
+        capabilities = [c for c in capabilities if c != "script_run"]
     backup_start = datetime.now(ZoneInfo("Europe/Istanbul")).replace(hour=2, minute=0, second=0, microsecond=0)
     for capability in capabilities:
         # Formatting is limited to repository-owned capability literals; owner identity stays inside SQL.

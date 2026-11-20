@@ -8,6 +8,7 @@ import com.securityexpert.nexus.ui2.platform.DirectoryBindingKind;
 import com.securityexpert.nexus.ui2.platform.AuthzOutcome;
 import com.securityexpert.nexus.ui2.platform.GroupReferenceCipher;
 import com.securityexpert.nexus.ui2.platform.RoleToken;
+import com.securityexpert.nexus.ui2.platform.ScriptExecutionJob;
 import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRecord;
@@ -116,6 +117,24 @@ public final class RbacEvaluator {
     }
 
     public Decision evaluate(String actorFingerprint, Optional<String> requiredToken, Instant now) {
+        if (actorFingerprint != null && actorFingerprint.startsWith(ScriptExecutionJob.SESSION_ACTOR_PREFIX)) {
+            Optional<String> sessionRunAs = ScriptExecutionJob.extractSessionRunAs(actorFingerprint);
+            if (sessionRunAs.isEmpty()) {
+                return Decision.deniedLocalUnbound();
+            }
+            if (requiredToken.isEmpty()) {
+                return Decision.noApplicableAuthority();
+            }
+            if (RoleToken.SECURITY_ADMIN.equals(requiredToken.get())) {
+                return Decision.deniedLocalUnbound();
+            }
+            // A script session acts as exactly its allowlisted role (ScriptExecutionJob.RUN_AS_ALLOWLIST), never as a
+            // user and never inheriting anyone's bindings (SCRIPT_EXECUTION_CONTRACT.md Amendment 2026-11-18 (b) item 9).
+            String runAs = sessionRunAs.get();
+            return requiredToken.get().equals(runAs)
+                    ? Decision.permittedLocal("script_run_as:" + runAs)
+                    : Decision.deniedLocalUnbound();
+        }
         Optional<String> localIdentityId = localIdentityResolver == null ? Optional.empty()
                 : localIdentityResolver.resolve(actorFingerprint).map(record -> record.localIdentityId());
         Optional<ActorAuthzStateRecord> authzState = actorAuthzStateRepository.find(actorFingerprint);

@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.integration.schema;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -11,12 +12,15 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import org.jooq.SQLDialect;
+import org.jooq.impl.DSL;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.securityexpert.nexus.ui2.integration.support.Ui2PostgresFixture;
 import com.securityexpert.nexus.ui2.integration.support.Ui2Rows;
+import com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.script.JooqScriptRepository;
 import com.securityexpert.nexus.ui2.persistence.script.ScriptRecord;
 import com.securityexpert.nexus.ui2.persistence.script.ScriptSecretFinding;
@@ -46,7 +50,8 @@ class ScriptExecutionSchemaTest {
 
     @Test
     void repositoryPersistsScriptsAndAppendOnlyVersionsAndTriggerRefusesUpdateOrDelete() throws SQLException {
-        JooqScriptRepository repo = new JooqScriptRepository(new com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary(org.jooq.impl.DSL.using(fixture.appDataSource(), org.jooq.SQLDialect.POSTGRES)));
+        JooqScriptRepository repo = new JooqScriptRepository(
+                new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES)));
         Instant now = Instant.parse("2026-11-18T10:00:00Z");
         String sha1 = "a".repeat(64);
         String sha2 = "b".repeat(64);
@@ -80,6 +85,52 @@ class ScriptExecutionSchemaTest {
                     "DELETE FROM script_version WHERE script_id = 'script-int-1' AND version = 1"));
             assertTrue(Ui2Rows.countAuditRows(migrate, "script", "script-int-1") >= 2);
             assertTrue(Ui2Rows.countAuditRows(migrate, "script_version", "script-int-1") >= 2);
+        }
+
+        // V258: scheduled slot fence, script_run admission, completion, and audit capture
+        repo.setEnabled("script-int-1", true, Ui2Rows.ACTOR, ActionRegistry.SCRIPT_WRITE);
+        Instant slot = Instant.parse("2026-11-18T02:00:00Z");
+        var run1 = repo.admitRun(
+                "job-script-int-1", "script-int-1", 2, "SCHEDULED", Optional.of(slot),
+                "role:operator", List.of("192.0.2.10:443"), List.of("dev-1"), List.of("cred-ref-1"),
+                now.plusSeconds(120), "system:script_scheduler", "script_run");
+        assertTrue(run1.isPresent());
+        assertEquals(Optional.of(slot), repo.findLastScheduledSlot("script-int-1"));
+
+        // Duplicate claim for the same slot is fenced
+        var dupRun = repo.admitRun(
+                "job-script-int-dup", "script-int-1", 2, "SCHEDULED", Optional.of(slot),
+                "role:operator", List.of("192.0.2.10:443"), List.of("dev-1"), List.of("cred-ref-1"),
+                now.plusSeconds(125), "system:script_scheduler", "script_run");
+        assertTrue(dupRun.isEmpty());
+
+        assertTrue(repo.beginDispatch(
+                "job-script-int-1", 1L, "sess-1", List.of("cred-ref-1"), now.plusSeconds(121), "system:script_runner"));
+        // The same epoch is never dispatched twice (the body is released once per lease epoch).
+        assertFalse(repo.beginDispatch(
+                "job-script-int-1", 1L, "sess-2", List.of("cred-ref-1"), now.plusSeconds(122), "system:script_runner"));
+        assertTrue(repo.completeRun(
+                "job-script-int-1", "COMPLETED", "SUCCESS", now.plusSeconds(124), 3000L, 0,
+                12, 0, false, false,
+                Optional.of("script_output/script-int-1/" + sha2 + ".enc"),
+                Optional.of("key-1"), new byte[32], Optional.of(sha2), Optional.of(12L),
+                Optional.of("ok"), List.of("dev-1"), List.of("cred-ref-1"),
+                Optional.empty(), "system:script_runner"));
+        assertEquals(1, repo.findRunsByScriptId("script-int-1", 10).size());
+
+        // 30-day retention pruner queries and clears expired output columns while keeping the run ledger row
+        assertEquals(0, repo.findRunsWithOutputOlderThan(now.plusSeconds(100), 10).size());
+        var expired = repo.findRunsWithOutputOlderThan(now.plusSeconds(300), 10);
+        assertEquals(1, expired.size());
+        assertEquals("job-script-int-1", expired.get(0).jobId());
+        assertTrue(repo.clearExpiredRunOutput("job-script-int-1", "system:script_retention"));
+        assertEquals(0, repo.findRunsWithOutputOlderThan(now.plusSeconds(300), 10).size());
+        var cleared = repo.findRunByJobId("job-script-int-1").orElseThrow();
+        assertTrue(cleared.outputArtefactRef().isEmpty());
+        assertTrue(cleared.outputTail().isEmpty());
+
+        try (Connection migrate = fixture.migrateConnection()) {
+            assertTrue(Ui2Rows.countAuditRows(migrate, "script_run", "job-script-int-1") >= 2);
         }
     }
 }

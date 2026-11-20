@@ -96,6 +96,7 @@ final class SanitizerCli {
         HttpRequest request = HttpRequest.newBuilder(URI.create(session.baseUrl() + route))
                 .header("Cookie", NexusSessionCli.SESSION_COOKIE + "=" + session.cookie())
                 .header("X-CSRF-Token", session.csrf())
+                .header("Origin", NexusSessionCli.originOf(session.baseUrl()))
                 .header("Content-Type", "multipart/form-data; boundary=" + boundary)
                 .POST(multipart(file, fields, boundary)).build();
         System.err.println("uploading " + Files.size(file) + " bytes");

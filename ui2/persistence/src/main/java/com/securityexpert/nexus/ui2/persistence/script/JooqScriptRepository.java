@@ -18,10 +18,11 @@ import org.jooq.Record;
 
 import com.securityexpert.nexus.ui2.persistence.AuditedTransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
+import com.securityexpert.nexus.ui2.platform.ScriptExecutionJob;
 
 /**
  * jOOQ-backed {@link ScriptRepository}. Every mutation runs inside {@link AuditedTransactionBoundary} so
- * {@code trg_audit_script} and {@code trg_audit_script_version} capture the actor and action.
+ * {@code trg_audit_script}, {@code trg_audit_script_version} and {@code trg_audit_script_run} capture the actor and action.
  */
 public final class JooqScriptRepository implements ScriptRepository {
 
@@ -32,6 +33,12 @@ public final class JooqScriptRepository implements ScriptRepository {
     private static final String VERSION_COLUMNS = "script_id, version, sha256, size_bytes, artefact_ref, key_id, "
             + "wrapped_data_key, secret_findings::text as secret_findings_json, credential_refs, "
             + "egress_device_targets, created_by, created_at";
+
+    private static final String RUN_COLUMNS = "job_id, script_id, version, state, outcome, trigger_kind, "
+            + "scheduled_slot, run_as, requested_by, requested_at, started_at, finished_at, duration_ms, "
+            + "exit_code, stdout_bytes, stderr_bytes, stdout_truncated, stderr_truncated, "
+            + "output_artefact_ref, output_key_id, output_wrapped_data_key, output_sha256, output_size_bytes, "
+            + "output_tail, egress_declared, egress_device_targets, credential_refs_used, session_id, failure_reason";
 
     private static final Pattern FINDING_ITEM = Pattern.compile(
             "\\{\\s*\"line\"\\s*:\\s*(\\d+)\\s*,\\s*\"pattern_class\"\\s*:\\s*\"([^\"]+)\"\\s*}"
@@ -225,6 +232,254 @@ public final class JooqScriptRepository implements ScriptRepository {
         });
     }
 
+    @Override
+    public Optional<Instant> findLastScheduledSlot(String scriptId) {
+        if (scriptId == null || scriptId.isBlank()) {
+            return Optional.empty();
+        }
+        return transactionBoundary.inTransaction(dsl -> dsl
+                .fetch("select last_scheduled_slot from script where script_id = {0}", scriptId.strip())
+                .stream()
+                .findFirst()
+                .flatMap(row -> Optional.ofNullable(row.get("last_scheduled_slot", Timestamp.class))
+                        .map(Timestamp::toInstant)));
+    }
+
+    @Override
+    public Optional<ScriptRunRecord> admitRun(
+            String jobId,
+            String scriptId,
+            int version,
+            String triggerKind,
+            Optional<Instant> scheduledSlot,
+            String runAs,
+            List<String> egressDeclared,
+            List<String> egressDeviceTargets,
+            List<String> credentialRefs,
+            Instant requestedAt,
+            String requestedBy,
+            String actionId) {
+        return auditedTransactionBoundary.inTransaction(requestedBy, actionId, dsl -> {
+            Timestamp nowTs = Timestamp.from(requestedAt);
+            if (scheduledSlot.isPresent()) {
+                Timestamp slotTs = Timestamp.from(scheduledSlot.get());
+                int claimed = dsl.execute(
+                        "update script set last_scheduled_slot = {1}, updated_at = {2} "
+                                + "where script_id = {0} and enabled = true "
+                                + "and (last_scheduled_slot is null or last_scheduled_slot < {1})",
+                        scriptId, slotTs, nowTs);
+                if (claimed == 0) {
+                    return Optional.empty();
+                }
+            }
+            String targetRef = ScriptExecutionJob.formatTargetRef(scriptId, version);
+            String idempotencyKey = scheduledSlot
+                    .map(slot -> "script_schedule:" + scriptId + ":" + slot)
+                    .orElse("script_run:" + jobId);
+            dsl.execute(
+                    "insert into jobs(job_id, job_type, capability_id, target_kind, target_ref, "
+                            + "submitted_by_actor_fingerprint, submitted_at, idempotency_key, action_class, state) "
+                            + "values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, 'read', 'REQUESTED')",
+                    jobId,
+                    ScriptExecutionJob.CAPABILITY,
+                    ScriptExecutionJob.CAPABILITY,
+                    ScriptExecutionJob.TARGET_KIND,
+                    targetRef,
+                    requestedBy,
+                    nowTs,
+                    idempotencyKey);
+            dsl.execute(
+                    "insert into script_run(job_id, script_id, version, state, trigger_kind, scheduled_slot, "
+                            + "run_as, requested_by, requested_at, egress_declared, egress_device_targets, "
+                            + "credential_refs_used) "
+                            + "values ({0}, {1}, {2}, 'REQUESTED', {3}, {4}, {5}, {6}, {7}, {8}::text[], {9}::text[], {10}::text[])",
+                    jobId,
+                    scriptId,
+                    version,
+                    triggerKind,
+                    scheduledSlot.map(Timestamp::from).orElse(null),
+                    runAs,
+                    requestedBy,
+                    nowTs,
+                    (egressDeclared == null ? List.<String>of() : egressDeclared).toArray(String[]::new),
+                    (egressDeviceTargets == null ? List.<String>of() : egressDeviceTargets).toArray(String[]::new),
+                    (credentialRefs == null ? List.<String>of() : credentialRefs).toArray(String[]::new));
+            return fetchRunByJobId(dsl, jobId);
+        });
+    }
+
+    @Override
+    public Optional<ScriptRunRecord> findRunByJobId(String jobId) {
+        if (jobId == null || jobId.isBlank()) {
+            return Optional.empty();
+        }
+        return transactionBoundary.inTransaction(dsl -> fetchRunByJobId(dsl, jobId.strip()));
+    }
+
+    @Override
+    public List<ScriptRunRecord> findRunsByScriptId(String scriptId, int limit) {
+        if (scriptId == null || scriptId.isBlank() || limit <= 0) {
+            return List.of();
+        }
+        int bounded = Math.min(limit, 500);
+        return transactionBoundary.inTransaction(dsl -> dsl
+                .fetch("select " + RUN_COLUMNS + " from script_run where script_id = {0} "
+                        + "order by requested_at desc, job_id desc limit {1}", scriptId.strip(), bounded)
+                .stream()
+                .map(JooqScriptRepository::toRunRecord)
+                .toList());
+    }
+
+    @Override
+    public Optional<RunLease> findRunLease(String jobId) {
+        if (jobId == null || jobId.isBlank()) {
+            return Optional.empty();
+        }
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(
+                        "select j.job_id, j.state as job_state, j.lease_epoch, j.lease_worker_id, r.state as run_state, "
+                                + "r.dispatch_epoch, r.session_id from jobs j join script_run r on r.job_id = j.job_id "
+                                + "where j.job_id = {0} and j.capability_id = {1}",
+                        jobId.strip(), ScriptExecutionJob.CAPABILITY)
+                .stream()
+                .findFirst()
+                .map(row -> new RunLease(
+                        row.get("job_id", String.class),
+                        row.get("job_state", String.class),
+                        row.get("lease_epoch", Long.class) == null ? -1L : row.get("lease_epoch", Long.class),
+                        row.get("lease_worker_id", String.class),
+                        row.get("run_state", String.class),
+                        Optional.ofNullable(row.get("dispatch_epoch", Long.class)),
+                        Optional.ofNullable(row.get("session_id", String.class)))));
+    }
+
+    @Override
+    public boolean beginDispatch(
+            String jobId,
+            long epoch,
+            String sessionId,
+            List<String> credentialRefsUsed,
+            Instant startedAt,
+            String actorFingerprint) {
+        return auditedTransactionBoundary.inTransaction(actorFingerprint, ScriptExecutionJob.CAPABILITY, dsl -> {
+            int updated = dsl.execute(
+                    "update script_run set state = 'RUNNING', session_id = {1}, dispatch_epoch = {2}, "
+                            + "credential_refs_used = {3}::text[], started_at = {4} "
+                            + "where job_id = {0} and state in ('REQUESTED', 'RUNNING') "
+                            + "and (dispatch_epoch is null or dispatch_epoch < {2})",
+                    jobId,
+                    sessionId,
+                    epoch,
+                    (credentialRefsUsed == null ? List.<String>of() : credentialRefsUsed).toArray(String[]::new),
+                    Timestamp.from(startedAt));
+            return updated == 1;
+        });
+    }
+
+    @Override
+    public boolean runnerAvailable() {
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(
+                        "select 1 from module_runtime_control where module = {0} and owner_instance is not null "
+                                + "and owner_heartbeat_at > now() - interval '60 seconds'", ScriptExecutionJob.MODULE)
+                .isNotEmpty());
+    }
+
+    @Override
+    public void auditOutputDownload(String jobId, String actorFingerprint) {
+        auditedTransactionBoundary.inTransaction(actorFingerprint, "script_output_download", jobId,
+                dsl -> dsl.fetch("select audit_script_output_download({0})", jobId));
+    }
+
+    @Override
+    public List<ExpiredRunOutput> findRunsWithOutputOlderThan(Instant cutoff, int limit) {
+        if (cutoff == null || limit <= 0) {
+            return List.of();
+        }
+        int bounded = Math.min(limit, 500);
+        Timestamp cutoffTs = Timestamp.from(cutoff);
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(
+                        "select job_id, output_artefact_ref from script_run "
+                                + "where state in ('COMPLETED', 'FAILED', 'TIMED_OUT', 'CANCELLED') "
+                                + "and coalesce(finished_at, requested_at) < {0} "
+                                + "and (output_artefact_ref is not null or output_tail is not null or output_wrapped_data_key is not null) "
+                                + "order by coalesce(finished_at, requested_at) asc, job_id asc limit {1}",
+                        cutoffTs, bounded)
+                .stream()
+                .map(row -> new ExpiredRunOutput(
+                        row.get("job_id", String.class),
+                        Optional.ofNullable(row.get("output_artefact_ref", String.class))))
+                .toList());
+    }
+
+    @Override
+    public boolean clearExpiredRunOutput(String jobId, String actorFingerprint) {
+        if (jobId == null || jobId.isBlank()) {
+            return false;
+        }
+        return auditedTransactionBoundary.inTransaction(actorFingerprint, "script_output_retention_prune", dsl -> {
+            int updated = dsl.execute(
+                    "update script_run set output_artefact_ref = null, output_key_id = null, "
+                            + "output_wrapped_data_key = null, output_tail = null "
+                            + "where job_id = {0} and (output_artefact_ref is not null or output_tail is not null "
+                            + "or output_wrapped_data_key is not null)",
+                    jobId.strip());
+            return updated == 1;
+        });
+    }
+
+    @Override
+    public boolean completeRun(
+            String jobId,
+            String state,
+            String outcome,
+            Instant finishedAt,
+            long durationMs,
+            Integer exitCode,
+            int stdoutBytes,
+            int stderrBytes,
+            boolean stdoutTruncated,
+            boolean stderrTruncated,
+            Optional<String> outputArtefactRef,
+            Optional<String> outputKeyId,
+            byte[] outputWrappedDataKey,
+            Optional<String> outputSha256,
+            Optional<Long> outputSizeBytes,
+            Optional<String> outputTail,
+            List<String> egressDeviceTargets,
+            List<String> credentialRefsUsed,
+            Optional<String> failureReason,
+            String actorFingerprint) {
+        return auditedTransactionBoundary.inTransaction(actorFingerprint, ScriptExecutionJob.CAPABILITY, dsl -> {
+            int updated = dsl.execute(
+                    "update script_run set state = {1}, outcome = {2}, finished_at = {3}, duration_ms = {4}, "
+                            + "exit_code = {5}, stdout_bytes = {6}, stderr_bytes = {7}, stdout_truncated = {8}, "
+                            + "stderr_truncated = {9}, output_artefact_ref = {10}, output_key_id = {11}, "
+                            + "output_wrapped_data_key = {12}, output_sha256 = {13}, output_size_bytes = {14}, "
+                            + "output_tail = {15}, egress_device_targets = {16}::text[], "
+                            + "credential_refs_used = {17}::text[], failure_reason = {18} "
+                            + "where job_id = {0} and state in ('REQUESTED', 'RUNNING')",
+                    jobId,
+                    state,
+                    outcome,
+                    Timestamp.from(finishedAt),
+                    Math.max(0L, durationMs),
+                    exitCode,
+                    stdoutBytes,
+                    stderrBytes,
+                    stdoutTruncated,
+                    stderrTruncated,
+                    outputArtefactRef.orElse(null),
+                    outputKeyId.orElse(null),
+                    outputWrappedDataKey,
+                    outputSha256.orElse(null),
+                    outputSizeBytes.orElse(null),
+                    outputTail.orElse(null),
+                    (egressDeviceTargets == null ? List.<String>of() : egressDeviceTargets).toArray(String[]::new),
+                    (credentialRefsUsed == null ? List.<String>of() : credentialRefsUsed).toArray(String[]::new),
+                    failureReason.orElse(null));
+            return updated == 1;
+        });
+    }
+
     private static void insertVersionRow(DSLContext dsl, ScriptVersionRecord v) {
         dsl.execute("insert into script_version(script_id, version, sha256, size_bytes, artefact_ref, key_id, "
                 + "wrapped_data_key, secret_findings, credential_refs, egress_device_targets, created_by, created_at) "
@@ -248,6 +503,46 @@ public final class JooqScriptRepository implements ScriptRepository {
                 .stream()
                 .findFirst()
                 .map(JooqScriptRepository::toScriptRecord);
+    }
+
+    private static Optional<ScriptRunRecord> fetchRunByJobId(DSLContext dsl, String jobId) {
+        return dsl.fetch("select " + RUN_COLUMNS + " from script_run where job_id = {0}", jobId)
+                .stream()
+                .findFirst()
+                .map(JooqScriptRepository::toRunRecord);
+    }
+
+    private static ScriptRunRecord toRunRecord(Record row) {
+        return new ScriptRunRecord(
+                row.get("job_id", String.class),
+                row.get("script_id", String.class),
+                row.get("version", Integer.class),
+                row.get("state", String.class),
+                Optional.ofNullable(row.get("outcome", String.class)),
+                row.get("trigger_kind", String.class),
+                Optional.ofNullable(row.get("scheduled_slot", Timestamp.class)).map(Timestamp::toInstant),
+                row.get("run_as", String.class),
+                row.get("requested_by", String.class),
+                row.get("requested_at", Timestamp.class).toInstant(),
+                Optional.ofNullable(row.get("started_at", Timestamp.class)).map(Timestamp::toInstant),
+                Optional.ofNullable(row.get("finished_at", Timestamp.class)).map(Timestamp::toInstant),
+                Optional.ofNullable(row.get("duration_ms", Long.class)),
+                Optional.ofNullable(row.get("exit_code", Integer.class)),
+                row.get("stdout_bytes", Integer.class) == null ? 0 : row.get("stdout_bytes", Integer.class),
+                row.get("stderr_bytes", Integer.class) == null ? 0 : row.get("stderr_bytes", Integer.class),
+                Boolean.TRUE.equals(row.get("stdout_truncated", Boolean.class)),
+                Boolean.TRUE.equals(row.get("stderr_truncated", Boolean.class)),
+                Optional.ofNullable(row.get("output_artefact_ref", String.class)),
+                Optional.ofNullable(row.get("output_key_id", String.class)),
+                row.get("output_wrapped_data_key", byte[].class),
+                Optional.ofNullable(row.get("output_sha256", String.class)),
+                Optional.ofNullable(row.get("output_size_bytes", Long.class)),
+                Optional.ofNullable(row.get("output_tail", String.class)),
+                stringList(row.get("egress_declared", String[].class)),
+                stringList(row.get("egress_device_targets", String[].class)),
+                stringList(row.get("credential_refs_used", String[].class)),
+                Optional.ofNullable(row.get("session_id", String.class)),
+                Optional.ofNullable(row.get("failure_reason", String.class)));
     }
 
     private static ScriptRecord toScriptRecord(Record row) {

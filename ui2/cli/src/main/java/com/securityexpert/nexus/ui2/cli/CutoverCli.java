@@ -123,6 +123,7 @@ final class CutoverCli {
         HttpRequest request = HttpRequest.newBuilder(URI.create(session.baseUrl() + BASE + "/segments/" + segment + "/assessments"))
                 .header("Cookie", NexusSessionCli.SESSION_COOKIE + "=" + session.cookie())
                 .header("X-CSRF-Token", session.csrf())
+                .header("Origin", NexusSessionCli.originOf(session.baseUrl()))
                 .header("Content-Type", "multipart/form-data; boundary=" + boundary)
                 .POST(multipart(Files.readString(spec), files, boundary)).build();
         System.err.println("uploading " + files.size() + " file(s)");

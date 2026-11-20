@@ -445,6 +445,8 @@ def _deploy(skip_security: str | None = None, targets: tuple[str, ...] | None = 
     env = dict(os.environ)
     if not packet_analysis_image:
         env["NEXUS_BUILD_PACKET_ANALYSIS_IMAGE"] = "0"
+        # The frontend fast path rolls out the service only: no script execution image either.
+        env["NEXUS_BUILD_SCRIPT_EXEC_IMAGE"] = "0"
     for _ in range(30):
         with open(log, "w") as out:
             command = ["bash", "tools/delivery/hosta_deploy.sh"]

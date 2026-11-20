@@ -308,7 +308,8 @@ public final class JobLogQueryService {
             + "    ) dc_mgr on d_mgr.device_id is not null "
             + "    where pcr.job_id is not null or dr.run_id is not null limit 1 "
             + ") pol on j.target_kind = 'discovery_run' or j.job_type in ('cp_policy_collect', 'pan_policy_collect') "
-            + "left join packet_analysis_case pac on j.target_kind = 'packet_analysis_case' and pac.case_id = j.target_ref";
+            + "left join packet_analysis_case pac on j.target_kind = 'packet_analysis_case' and pac.case_id = j.target_ref "
+            + "left join script scr on j.target_kind = 'script' and scr.script_id = split_part(j.target_ref, '@', 1)";
     /**
      * The row columns. Read only through {@link #pagedSelect}: the target joins run for the page's job ids alone,
      * never for every filtered row (security review 2026-11-05 M-5).
@@ -323,6 +324,7 @@ public final class JobLogQueryService {
             + "pol.container_name as policy_container_name, "
             + "pol.source_name as policy_source_name, "
             + "nullif(btrim(pac.title), '') as packet_case_title, "
+            + "nullif(btrim(scr.name), '') as script_name, "
             + "j.target_kind as job_target_kind, "
             + "j.target_ref as job_target_ref, "
             + "j.state, j.outcome, CASE WHEN j.ssh_identity_unverified THEN concat_ws('; ', nullif(j.terminal_reason, ''), 'host_key_mismatch_warned: collected under an unverified identity') ELSE j.terminal_reason END AS terminal_reason, j.submitted_at, j.finished_at, "
@@ -575,6 +577,10 @@ public final class JobLogQueryService {
         return v;
     }
 
+    public static JobEvent extractEventForTest(Record row) {
+        return toEvent(row);
+    }
+
     static JobEvent toEvent(Record row) {
         Number durNum = row.get("duration_ms", Number.class);
         Long dur = durNum != null ? durNum.longValue() : null;
@@ -591,6 +597,7 @@ public final class JobLogQueryService {
         String policyContainerName = optionalString(row, "policy_container_name");
         String policySourceName = optionalString(row, "policy_source_name");
         String packetCaseTitle = optionalString(row, "packet_case_title");
+        String scriptName = optionalString(row, "script_name");
         String jobTargetKind = optionalString(row, "job_target_kind");
         String jobTargetRef = optionalString(row, "job_target_ref");
         Number fleetCountNum = row.field("target_device_count") == null ? null : row.get("target_device_count", Number.class);
@@ -628,6 +635,11 @@ public final class JobLogQueryService {
                 && firstNonBlank(packetCaseTitle, rawDeviceName, jobTargetRef, targetDeviceId) != null) {
             resolvedName = firstNonBlank(packetCaseTitle, rawDeviceName, jobTargetRef);
             resolvedKind = "packet_analysis_case";
+            resolvedClusterRef = jobTargetRef;
+        } else if (("script".equals(jobTargetKind) || "script_run".equals(jobType))
+                && firstNonBlank(scriptName, rawDeviceName, jobTargetRef, targetDeviceId) != null) {
+            resolvedName = firstNonBlank(scriptName, rawDeviceName, jobTargetRef);
+            resolvedKind = "script";
             resolvedClusterRef = jobTargetRef;
         } else if ((targetDeviceId != null && !targetDeviceId.isBlank()) || rawDeviceName != null) {
             resolvedName = rawDeviceName;

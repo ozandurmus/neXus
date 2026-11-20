@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.securityexpert.nexus.ui2.persistence.script.ScriptRecord;
+import com.securityexpert.nexus.ui2.persistence.script.ScriptRunRecord;
 import com.securityexpert.nexus.ui2.persistence.script.ScriptSecretFinding;
 import com.securityexpert.nexus.ui2.persistence.script.ScriptVersionRecord;
 import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAdvice;
@@ -35,9 +36,18 @@ import com.securityexpert.nexus.ui2.service.script.ScriptExecutionService;
 import com.securityexpert.nexus.ui2.service.script.ScriptExecutionService.CreateScriptCommand;
 import com.securityexpert.nexus.ui2.service.script.ScriptExecutionService.NewVersionCommand;
 import com.securityexpert.nexus.ui2.service.script.ScriptExecutionService.Outcome;
+import com.securityexpert.nexus.ui2.service.script.ScriptExecutionService.OutputOutcome;
+import com.securityexpert.nexus.ui2.service.script.ScriptExecutionService.RunOutcome;
 import com.securityexpert.nexus.ui2.service.script.ScriptExecutionService.ScriptDetails;
 import com.securityexpert.nexus.ui2.service.script.ScriptExecutionService.UpdateSettingsCommand;
+import com.securityexpert.nexus.ui2.persistence.identity.AuthzDecisionRepository;
+import com.securityexpert.nexus.ui2.platform.AuthzOutcome;
+import com.securityexpert.nexus.ui2.platform.ScriptExecutionJob;
+import com.securityexpert.nexus.ui2.service.device.DeviceWorkspaceAffordanceEvaluator;
+import com.securityexpert.nexus.ui2.service.script.ScriptSchedule;
+import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
+import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
 
 /**
  * Operations › Script Execution REST routes, slice 1 ({@code SCRIPT_EXECUTION_CONTRACT.md} sections 3.1, 3.6, 3.7
@@ -88,13 +98,48 @@ public final class ScriptExecutionController {
     private final ScriptExecutionService service;
     private final TopologyNamePseudonymizer names;
     private final SubnetPreservingIpMasker ipMasker;
+    private DeviceWorkspaceAffordanceEvaluator affordances;
 
     @Autowired
     public ScriptExecutionController(
             ScriptExecutionService service,
             Optional<TopologyNamePseudonymizer> names,
-            Optional<SubnetPreservingIpMasker> ipMasker) {
+            Optional<SubnetPreservingIpMasker> ipMasker,
+            Optional<ActionRegistry> actions,
+            Optional<RbacEvaluator> rbac,
+            Optional<AuthzDecisionRepository> decisions) {
         this(service, names.orElse(null), ipMasker.orElse(null));
+        if (actions.isPresent() && rbac.isPresent() && decisions.isPresent()) {
+            this.affordances = new DeviceWorkspaceAffordanceEvaluator(actions.get(), rbac.get(), decisions.get());
+        }
+    }
+
+    /** Test seam: the affordance evaluator behind {@code can_write} / {@code can_run}. */
+    void useAffordances(DeviceWorkspaceAffordanceEvaluator evaluator) {
+        this.affordances = evaluator;
+    }
+
+    /**
+     * {@code can_write} / {@code can_run} / {@code can_read_output} for the caller, from the same RBAC decision the routes
+     * use (the screen hides what the caller cannot do; the routes still decide). The replay viewer never writes or runs.
+     */
+    private Map<String, Boolean> permissions(HttpServletRequest request) {
+        Map<String, Boolean> out = new LinkedHashMap<>();
+        out.put("can_write", false);
+        out.put("can_run", false);
+        out.put("can_read_output", false);
+        String actor = actor(request);
+        if (affordances == null || actor == null || actor.isBlank() || isReplayViewer(request)) {
+            return out;
+        }
+        var permitted = affordances.evaluate(
+                List.of(ActionRegistry.SCRIPT_WRITE, ActionRegistry.SCRIPT_RUN, ActionRegistry.SCRIPT_OUTPUT_READ),
+                (String) request.getAttribute(GateChainInterceptor.SESSION_ID_ATTRIBUTE), actor, "scripts",
+                java.time.Instant.now());
+        out.put("can_write", permitted.get(ActionRegistry.SCRIPT_WRITE).outcome() == AuthzOutcome.PERMITTED);
+        out.put("can_run", permitted.get(ActionRegistry.SCRIPT_RUN).outcome() == AuthzOutcome.PERMITTED);
+        out.put("can_read_output", permitted.get(ActionRegistry.SCRIPT_OUTPUT_READ).outcome() == AuthzOutcome.PERMITTED);
+        return out;
     }
 
     public ScriptExecutionController(
@@ -109,13 +154,23 @@ public final class ScriptExecutionController {
     @GetMapping("/api/v2/scripts")
     public ResponseEntity<Map<String, Object>> list(HttpServletRequest request) {
         boolean masked = isReplayViewer(request);
+        Map<String, Boolean> permissions = permissions(request);
+        boolean runnerAvailable = service.runnerAvailable();
         List<ScriptDetails> scripts = service.list();
         List<Map<String, Object>> items = new ArrayList<>(scripts.size());
         for (ScriptDetails details : scripts) {
-            items.add(toScriptMap(details, false, masked));
+            Map<String, Object> item = toScriptMap(details, false, masked);
+            item.put("can_run", permissions.get("can_run"));
+            item.put("runner_available", runnerAvailable);
+            items.add(item);
         }
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("scripts", items);
+        response.put("masked", masked);
+        response.putAll(permissions);
+        response.put("runner_available", runnerAvailable);
+        response.put("run_as_options", ScriptExecutionJob.RUN_AS_ALLOWLIST);
+        response.put("schedule_zone", ScriptSchedule.zone().getId());
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
     }
 
@@ -129,7 +184,11 @@ public final class ScriptExecutionController {
         if (found.isEmpty()) {
             return error(404, "SCRIPT_NOT_FOUND", "No script with id '" + id + "'");
         }
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(toScriptMap(found.get(), true, masked));
+        Map<String, Object> item = toScriptMap(found.get(), true, masked);
+        item.putAll(permissions(request));
+        item.put("runner_available", service.runnerAvailable());
+        item.put("run_as_options", ScriptExecutionJob.RUN_AS_ALLOWLIST);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(item);
     }
 
     @PostMapping("/api/v2/scripts")
@@ -231,6 +290,91 @@ public final class ScriptExecutionController {
         return setEnabled(id, false, request);
     }
 
+    @PostMapping("/api/v2/scripts/{id}/run")
+    public ResponseEntity<Map<String, Object>> runNow(@PathVariable("id") String id, HttpServletRequest request) {
+        ResponseEntity<Map<String, Object>> viewerRefusal = refuseReplayViewerOrAnonymous(request);
+        if (viewerRefusal != null) {
+            return viewerRefusal;
+        }
+        if (!isSafeId(id)) {
+            return error(400, "INVALID_SCRIPT_ID", "script_id must be a valid identifier");
+        }
+        RunOutcome outcome = service.runNow(id, actor(request));
+        return switch (outcome) {
+            case RunOutcome.RunSubmitted submitted -> ResponseEntity.status(HttpStatus.ACCEPTED)
+                    .cacheControl(CacheControl.noStore())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(toRunMap(submitted.run(), false, false));
+            case RunOutcome.Refused refused -> error(refused.status(), refused.code(), refused.message());
+        };
+    }
+
+    @GetMapping("/api/v2/scripts/{id}/runs")
+    public ResponseEntity<Map<String, Object>> listRuns(@PathVariable("id") String id, HttpServletRequest request) {
+        if (!isSafeId(id)) {
+            return error(400, "INVALID_SCRIPT_ID", "script_id must be a valid identifier");
+        }
+        boolean masked = isReplayViewer(request);
+        if (service.findById(id).isEmpty()) {
+            return error(404, "SCRIPT_NOT_FOUND", "No script with id '" + id + "'");
+        }
+        List<ScriptRunRecord> runs = service.listRuns(id, 100);
+        List<Map<String, Object>> items = new ArrayList<>(runs.size());
+        for (ScriptRunRecord r : runs) {
+            items.add(toRunMap(r, masked, false));
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("script_id", id);
+        out.put("runs", items);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(out);
+    }
+
+    @GetMapping("/api/v2/scripts/runs/{runId}")
+    public ResponseEntity<Map<String, Object>> getRun(@PathVariable("runId") String runId, HttpServletRequest request) {
+        if (!isSafeId(runId)) {
+            return error(400, "INVALID_RUN_ID", "run_id must be a valid identifier");
+        }
+        boolean masked = isReplayViewer(request);
+        Optional<ScriptRunRecord> found = service.findRun(runId);
+        if (found.isEmpty()) {
+            return error(404, "SCRIPT_RUN_NOT_FOUND", "No script run with id '" + runId + "'");
+        }
+        ScriptRunRecord run = found.get();
+        boolean canReadOutput = canReadOutputForRun(request, masked);
+        if (canReadOutput && run.outputTail().isPresent()) {
+            if (!service.auditOutputRead(run.jobId(), actor(request))) {
+                return error(500, "SCRIPT_OUTPUT_AUDIT_FAILED", "Could not record the output read audit row");
+            }
+        }
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(toRunMap(run, masked, canReadOutput));
+    }
+
+    @GetMapping("/api/v2/scripts/runs/{runId}/output")
+    public ResponseEntity<?> downloadRunOutput(@PathVariable("runId") String runId, HttpServletRequest request) {
+        if (!isSafeId(runId)) {
+            return error(400, "INVALID_RUN_ID", "run_id must be a valid identifier");
+        }
+        String actor = actor(request);
+        if (actor == null || actor.isBlank()) {
+            return error(403, "AUTHENTICATION_REQUIRED", "An authenticated session is required");
+        }
+        boolean masked = isReplayViewer(request);
+        if (masked) {
+            return error(403, "FORBIDDEN_FOR_VIEWER", "Script output download is not permitted for the replay viewer");
+        }
+        OutputOutcome outcome = service.downloadRunOutput(runId, actor);
+        return switch (outcome) {
+            case OutputOutcome.OutputReady ready -> {
+                String text = new String(ready.plaintextBytes(), StandardCharsets.UTF_8);
+                yield ResponseEntity.ok()
+                        .cacheControl(CacheControl.noStore())
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .body(text);
+            }
+            case OutputOutcome.Refused refused -> error(refused.status(), refused.code(), refused.message());
+        };
+    }
+
     private ResponseEntity<Map<String, Object>> setEnabled(String id, boolean enabled, HttpServletRequest request) {
         ResponseEntity<Map<String, Object>> viewerRefusal = refuseReplayViewerOrAnonymous(request);
         if (viewerRefusal != null) {
@@ -315,6 +459,50 @@ public final class ScriptExecutionController {
             }
             out.put("versions", versionList);
         }
+        return out;
+    }
+
+    private boolean canReadOutputForRun(HttpServletRequest request, boolean masked) {
+        if (masked || affordances == null) {
+            return false;
+        }
+        String actor = actor(request);
+        if (actor == null || actor.isBlank()) {
+            return false;
+        }
+        return Boolean.TRUE.equals(permissions(request).get("can_read_output"));
+    }
+
+    private Map<String, Object> toRunMap(ScriptRunRecord r, boolean masked, boolean includeOutputTail) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("job_id", r.jobId());
+        out.put("run_id", r.jobId());
+        out.put("script_id", r.scriptId());
+        out.put("version", r.version());
+        out.put("state", r.state());
+        out.put("outcome", r.outcome().orElse(null));
+        out.put("trigger_kind", r.triggerKind());
+        out.put("scheduled_slot", r.scheduledSlot().map(Instant::toString).orElse(null));
+        out.put("run_as", maskRunAs(r.runAs(), masked));
+        out.put("requested_by", maskActor(r.requestedBy(), masked));
+        out.put("requested_at", r.requestedAt().toString());
+        out.put("started_at", r.startedAt().map(Instant::toString).orElse(null));
+        out.put("finished_at", r.finishedAt().map(Instant::toString).orElse(null));
+        out.put("duration_ms", r.durationMs().orElse(null));
+        out.put("exit_code", r.exitCode().orElse(null));
+        out.put("stdout_bytes", r.stdoutBytes());
+        out.put("stderr_bytes", r.stderrBytes());
+        out.put("stdout_truncated", r.stdoutTruncated());
+        out.put("stderr_truncated", r.stderrTruncated());
+        out.put("has_output", r.outputArtefactRef().isPresent());
+        out.put("output_sha256", r.outputSha256().orElse(null));
+        out.put("output_size_bytes", r.outputSizeBytes().orElse(null));
+        String tail = (!masked && includeOutputTail) ? r.outputTail().orElse(null) : null;
+        out.put("output_tail", tail);
+        out.put("egress", masked ? maskEgressList(r.egressDeclared()) : r.egressDeclared());
+        out.put("egress_device_targets", r.egressDeviceTargets());
+        out.put("credential_refs_used", r.credentialRefsUsed());
+        out.put("failure_reason", r.failureReason().orElse(null));
         return out;
     }
 
