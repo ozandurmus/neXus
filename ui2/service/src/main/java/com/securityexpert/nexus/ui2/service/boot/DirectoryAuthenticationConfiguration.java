@@ -172,7 +172,7 @@ public class DirectoryAuthenticationConfiguration {
             SessionRepository sessions, RbacEvaluator rbacEvaluator) {
         DirectoryAuthorizationRefresh refresh = new DirectoryAuthorizationRefresh(provider, bindings,
                 groupReferenceCipher, actors, sessions);
-        rbacEvaluator.useDirectoryRefresh(refresh::refreshStale);
+        rbacEvaluator.useDirectoryRefresh(refresh);
         return refresh;
     }
 }

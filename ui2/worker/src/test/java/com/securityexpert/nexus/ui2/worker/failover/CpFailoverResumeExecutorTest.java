@@ -332,6 +332,19 @@ class CpFailoverResumeExecutorTest {
         }
     }
 
+    /** V257: the resume's requester or approver lost the role, or both are one person: refused at start, no contact. */
+    @Test void actorAuthorityRefusalsAtStartSendNothing() {
+        for (String code:List.of(com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.INITIATOR_NOT_AUTHORIZED,
+            com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.APPROVER_NOT_AUTHORIZED,
+            com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.APPROVER_IS_INITIATOR,
+            com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.DIRECTORY_AUTHORITY_STALE)) {
+            Store atStart=new Store(); atStart.admissions=new ArrayList<>(List.of(code));
+            Script none=new Script(); run(atStart,none);
+            assertEquals(code,atStart.outcome); assertEquals(0,none.connectCount); assertTrue(none.commands.isEmpty());
+            assertEquals(List.of(true),atStart.admissionAtStart);
+        }
+    }
+
     @Test void switchOffMissingBaselineOrChangedMembershipStopsBeforeAnyContact() {
         Store off=new Store(); Script script=new Script();
         run(off,script,new FailoverMutationSwitch(false),List.of(A,B));

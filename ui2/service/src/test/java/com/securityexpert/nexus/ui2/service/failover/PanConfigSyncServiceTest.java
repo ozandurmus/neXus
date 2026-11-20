@@ -51,12 +51,16 @@ class PanConfigSyncServiceTest {
         return new JooqCpFailoverRepository.ReadinessStatus(CLUSTER, null, "palo_alto", "NOT_READY", at, "Configuration sync",
             checks(sync, roleA, roleB));
     }
+    private static final com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.Grant SA_GRANT =
+        new com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.Grant(RbacEvaluator.LOCAL_AUTHORITY,
+            "binding-" + RoleToken.SECURITY_ADMIN, RoleToken.SECURITY_ADMIN);
     private static RbacEvaluator rbac(Set<String> roles) {
         var rbac = mock(RbacEvaluator.class);
         when(rbac.evaluate(eq(ACTOR), any(), any(Instant.class))).thenAnswer(call -> {
             Optional<String> role = call.getArgument(1);
-            return new RbacEvaluator.Decision(role.filter(roles::contains).isPresent() ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED,
-                Optional.of("test"), Optional.empty(), Optional.empty());
+            boolean held = role.filter(roles::contains).isPresent();
+            return new RbacEvaluator.Decision(held ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED,
+                Optional.of(RbacEvaluator.LOCAL_AUTHORITY), Optional.empty(), held ? role.map(r -> "binding-" + r) : Optional.empty());
         });
         return rbac;
     }
@@ -158,12 +162,30 @@ class PanConfigSyncServiceTest {
             assertEquals("MEMBER_SET_CHANGED", assertThrows(CpFailoverService.Refusal.class, () -> ManualAdmission.under(grant,
                 () -> s.request("cluster-a", "unit-a", pair[0], pair[1], ACTOR, "palo_alto"))).code());
         }
-        verify(store, never()).request(anyString(), anyString(), anyString(), anyString());
-        when(store.request(CLUSTER, A, B, ACTOR)).thenReturn(new JooqCpFailoverRepository.Decision("ROLES_CHANGED", null));
+        verify(store, never()).request(anyString(), anyString(), anyString(), anyString(), any());
+        when(store.request(CLUSTER, A, B, ACTOR, SA_GRANT)).thenReturn(new JooqCpFailoverRepository.Decision("ROLES_CHANGED", null));
         assertEquals("ROLES_CHANGED", assertThrows(CpFailoverService.Refusal.class, () -> ManualAdmission.under(grant,
             () -> s.request("cluster-a", "unit-a", A, B, ACTOR, "palo_alto"))).code());
-        when(store.request(CLUSTER, A, B, ACTOR)).thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED", "sync-a"));
+        when(store.request(CLUSTER, A, B, ACTOR, SA_GRANT)).thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED", "sync-a"));
         when(store.find("sync-a")).thenReturn(Optional.of(record("QUEUED")));
         assertEquals("sync-a", ManualAdmission.under(grant, () -> s.request("cluster-a", "unit-a", A, B, ACTOR, "palo_alto")).id());
+    }
+
+    @Test void directoryUnreachableOrRemovedAtConfigSyncStartIsRefusedBeforeTheStore() {
+        var store = mock(JooqPanConfigSyncRepository.class);
+        var units = mock(CpFailoverService.class);
+        var rbac = mock(RbacEvaluator.class);
+        var s = new PanConfigSyncService(store, units, rbac, new FailoverMutationSwitch(true));
+        when(rbac.revalidateDirectoryActor(eq(ACTOR), any()))
+            .thenReturn(RbacEvaluator.DirectoryRevalidation.DIRECTORY_UNREACHABLE);
+        assertEquals(com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.DIRECTORY_UNREACHABLE,
+            assertThrows(CpFailoverService.Refusal.class,
+                () -> s.request("cluster-a", "unit-a", A, B, ACTOR, "palo_alto")).code());
+        when(rbac.revalidateDirectoryActor(eq(ACTOR), any()))
+            .thenReturn(RbacEvaluator.DirectoryRevalidation.MEMBERSHIP_LOST);
+        assertEquals(com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.INITIATOR_NOT_AUTHORIZED,
+            assertThrows(CpFailoverService.Refusal.class,
+                () -> s.request("cluster-a", "unit-a", A, B, ACTOR, "palo_alto")).code());
+        verifyNoInteractions(store, units);
     }
 }

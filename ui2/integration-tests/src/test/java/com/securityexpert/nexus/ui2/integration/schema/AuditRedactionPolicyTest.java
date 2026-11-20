@@ -249,6 +249,12 @@ class AuditRedactionPolicyTest {
             "failover_approval.window_until",
             // V256: the chassis approval a sequence's per-VS approval derives from (opaque id)
             "failover_approval.parent_approval_id",
+            // failover_actor_authority (V257): opaque record/binding ids, actor fingerprints, closed words, timestamps
+            "failover_actor_authority.actor", "failover_actor_authority.authority",
+            "failover_actor_authority.authority_id", "failover_actor_authority.binding_id",
+            "failover_actor_authority.party", "failover_actor_authority.record_id",
+            "failover_actor_authority.record_kind", "failover_actor_authority.recorded_at",
+            "failover_actor_authority.role_name",
             // failover_check_result
             "failover_check_result.check_no", "failover_check_result.derived",
             "failover_check_result.member_ref", "failover_check_result.observed_at",

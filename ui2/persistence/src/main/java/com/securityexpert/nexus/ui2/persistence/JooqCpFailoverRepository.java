@@ -291,6 +291,16 @@ public class JooqCpFailoverRepository {
     public RequestApproval createRequestApproval(String id,String cluster,String vsId,String unitRef,
             Set<String> members,Instant from,Instant until,String reason,String actor,String vendor,String policy,
             String operation) {
+        return createRequestApproval(id,cluster,vsId,unitRef,members,from,until,reason,actor,vendor,policy,operation,null);
+    }
+    /**
+     * {@code grant}: the authority that admitted the initiator (V257); recorded with the request, and for
+     * {@link #ADMIN_SINGLE} also as the approver's (the initiator approves its own request). The worker rechecks it before
+     * any device contact ({@link FailoverActorAuthority}).
+     */
+    public RequestApproval createRequestApproval(String id,String cluster,String vsId,String unitRef,
+            Set<String> members,Instant from,Instant until,String reason,String actor,String vendor,String policy,
+            String operation,FailoverActorAuthority.Grant grant) {
         if (!Set.of(ADMIN_SINGLE,TWO_PERSON).contains(policy)) throw new IllegalArgumentException("INVALID_POLICY");
         if (!Set.of(OPERATION_FAILOVER,OPERATION_ALL_VIRTUAL_SYSTEMS).contains(operation)
                 || OPERATION_ALL_VIRTUAL_SYSTEMS.equals(operation) && vsId!=null) throw new IllegalArgumentException("INVALID_OPERATION");
@@ -316,6 +326,9 @@ public class JooqCpFailoverRepository {
                         || !operation.equals(existing.get("operation",String.class))) throw new IllegalArgumentException("REQUEST_CHANGED");
                 return requestApproval(existing);
             }
+            FailoverActorAuthority.record(dsl,FailoverActorAuthority.KIND_APPROVAL,id,FailoverActorAuthority.INITIATOR,actor,grant);
+            if (ADMIN_SINGLE.equals(policy))
+                FailoverActorAuthority.record(dsl,FailoverActorAuthority.KIND_APPROVAL,id,FailoverActorAuthority.APPROVER,actor,grant);
             return requestApproval(dsl.fetchOne("insert into failover_approval(approval_id,cluster_ref,vs_id,"
                 + "window_from,window_until,reason,approved_by,approved_at,vendor,request_revision,unit_ref,"
                 + "member_set_revision,target_member_ids,operation,policy,policy_version,initiated_by,execution_nonce) "
@@ -328,6 +341,11 @@ public class JooqCpFailoverRepository {
     }
 
     public String approveRequest(String id,long revision,String actor,String vendor,Set<String> members) {
+        return approveRequest(id,revision,actor,vendor,members,null);
+    }
+    /** {@code grant}: the authority that admitted the second approver (V257), recorded with the approval. */
+    public String approveRequest(String id,long revision,String actor,String vendor,Set<String> members,
+            FailoverActorAuthority.Grant grant) {
         return audited.inTransaction(actor,"failover_request_second_approval",dsl -> {
             lockAdmission(dsl);
             Record a=dsl.fetchOne("select * from failover_approval where approval_id={0} for update",id);
@@ -342,8 +360,46 @@ public class JooqCpFailoverRepository {
             if (refusal!=null) return refusal;
             if (a.get("approved_by")!=null) return actor.equals(a.get("approved_by"))?"APPROVED":"ALREADY_APPROVED";
             dsl.execute("update failover_approval set approved_by={1},approved_at=clock_timestamp() where approval_id={0}",id,actor);
+            FailoverActorAuthority.record(dsl,FailoverActorAuthority.KIND_APPROVAL,id,FailoverActorAuthority.APPROVER,actor,grant);
             return "APPROVED";
         });
+    }
+
+    /**
+     * V257: the initiator and the approver of a request-bound approval still hold their roles and are enabled, and a
+     * two-person approval still has two people. A sequence's per-VS approval is checked against its chassis approval
+     * (the one the administrators made). Null when the approval may still be acted on.
+     */
+    static String actorAuthorityRefusal(DSLContext dsl,Record a) {
+        if (a==null) return null;
+        String parent=a.get("parent_approval_id",String.class);
+        String record=parent!=null?parent:a.get("approval_id",String.class);
+        return FailoverActorAuthority.refusal(dsl,FailoverActorAuthority.KIND_APPROVAL,record,
+            a.get("initiated_by",String.class),a.get("approved_by",String.class),TWO_PERSON.equals(a.get("policy",String.class)));
+    }
+
+    /**
+     * V257: record a refreshed authority grant (or a revoked directory standing) for one party of an approval or resume,
+     * in an audited transaction under lock 136. Insert-only: each refresh appends a row with {@code clock_timestamp()},
+     * and {@link FailoverActorAuthority#standing} reads the latest row for that party.
+     */
+    public void recordActorAuthority(String kind,String recordId,String party,String actor,
+            FailoverActorAuthority.Grant grant) {
+        if (grant==null || kind==null || recordId==null || party==null || actor==null) return;
+        audited.inTransaction(actor,"failover_actor_authority_refresh",recordId,dsl -> {
+            lockAdmission(dsl);
+            FailoverActorAuthority.record(dsl,kind,recordId,party,actor,grant);
+            return null;
+        });
+    }
+
+    /** The authority kind ({@code ui2_local}, {@code ui2_ldap}, {@code ui2_root}) last recorded for one party, if any. */
+    public Optional<String> recordedActorAuthority(String kind,String recordId,String party,String actor) {
+        if (kind==null || recordId==null || party==null || actor==null) return Optional.empty();
+        return boundary.inTransaction(dsl -> Optional.ofNullable(dsl.fetchOne(
+            "select authority from failover_actor_authority where record_kind={0} and record_id={1} "
+                + "and party={2} and actor={3} order by recorded_at desc,authority_id desc limit 1",
+            kind,recordId,party,actor)).map(r -> r.get("authority",String.class)));
     }
 
     private static String approvalRefusal(DSLContext dsl,Record a,boolean requireApproval) {
@@ -628,8 +684,10 @@ public class JooqCpFailoverRepository {
             String vs=seq.vsIds().get(seq.nextIndex());
             SequenceStep step=steps.stream().filter(st -> vs.equals(st.vsId())).findFirst().orElse(null);
             String refusal=!mutationEnabled?"FAILOVER_MUTATION_DISABLED":step==null?"VSX_CONTEXT_INCOMPLETE":null;
-            if (refusal==null) refusal=approvalRefusal(dsl,dsl.fetchOne("select * from failover_approval where approval_id={0} for update",
-                seq.approvalId()),true);
+            Record chassisApproval=dsl.fetchOne("select * from failover_approval where approval_id={0} for update",seq.approvalId());
+            if (refusal==null) refusal=approvalRefusal(dsl,chassisApproval,true);
+            // V257: the next VS starts only while its administrators still hold their roles (the VS run rechecks it too).
+            if (refusal==null) refusal=actorAuthorityRefusal(dsl,chassisApproval);
             List<String> members=JooqDeviceRepository.enrolledFailoverMembers(dsl,seq.clusterRef(),"check_point");
             if (refusal==null && (members.size()!=2 || !members.contains(targetDeviceId) || !Boolean.TRUE.equals(dsl.fetchOne(
                     "select target_member_ids=jsonb_build_array({1}::text,{2}::text) as same from failover_sequence where sequence_id={0}",
@@ -764,6 +822,7 @@ public class JooqCpFailoverRepository {
             }
             Record approval=dsl.fetchOne("select * from failover_approval where approval_id={0} for update",r.get("approval_id"));
             String authority=approvalRefusal(dsl,approval,true);
+            if (authority==null) authority=actorAuthorityRefusal(dsl,approval);
             if (authority!=null || approval.get("warning_confirmed_at")==null) {
                 String code=authority==null?"REQUEST_BINDING_REQUIRED":authority;
                 dsl.execute("update failover_run set state='STOPPED',outcome={1},message={1},finished_at=clock_timestamp() "
@@ -950,6 +1009,11 @@ public class JooqCpFailoverRepository {
             if (!Boolean.TRUE.equals(r.get("mutation_possible", Boolean.class))) {
                 String businessHours=businessHoursRefusal(dsl,jobId);
                 if (businessHours!=null) return businessHours;
+                // V257: the initiator and approver still hold their roles, are enabled and (four eyes) distinct. Like the
+                // business-hours recheck it guards the run's first write and the pre-contact admission, never the return
+                // write: a demotion between the two writes must not strand the former active member down.
+                String actors=actorAuthorityRefusal(dsl,a);
+                if (actors!=null) return actors;
             }
             List<String> members = JooqDeviceRepository.enrolledFailoverMembers(dsl, cluster, vendor);
             if (!Set.copyOf(members).equals(expectedMembers)) return "MEMBER_SET_CHANGED";
@@ -1490,6 +1554,16 @@ public class JooqCpFailoverRepository {
      */
     public Decision requestResume(String runId, String actor, String role, String policy, String reason,
             String expectedIncident, boolean businessHoursAck) {
+        return requestResumeRecorded(runId,actor,role,policy,reason,expectedIncident,businessHoursAck,null);
+    }
+    /** {@code grant}: the authority that admitted the requester (V257; for {@link #ADMIN_SINGLE} also the approver's). */
+    public Decision requestResume(String runId, String actor, String role, String policy, String reason,
+            String expectedIncident, boolean businessHoursAck, FailoverActorAuthority.Grant grant) {
+        return requestResumeRecorded(runId,actor,role,policy,reason,expectedIncident,businessHoursAck,grant);
+    }
+    // One body for both overloads, so the resume fence sees only the service as the caller of requestResume.
+    private Decision requestResumeRecorded(String runId, String actor, String role, String policy, String reason,
+            String expectedIncident, boolean businessHoursAck, FailoverActorAuthority.Grant grant) {
         if (!Set.of(ADMIN_SINGLE,TWO_PERSON).contains(policy)) throw new IllegalArgumentException("INVALID_POLICY");
         if (!mutationEnabled) return new Decision("FAILOVER_MUTATION_DISABLED",null);
         return audited.inTransaction(actor,"failover_resume_request",runId,dsl -> {
@@ -1514,12 +1588,23 @@ public class JooqCpFailoverRepository {
                 memberSetRevision(Set.copyOf(target.members())),runId,policy,actor,reason,
                 (double)RESUME_REQUEST_LIFETIME.toSeconds(),inside,inside?actor:null,UUID.randomUUID().toString(),
                 single?actor:null,job,single?"QUEUED":RESUME_PENDING));
+            FailoverActorAuthority.record(dsl,FailoverActorAuthority.KIND_RESUME,id,FailoverActorAuthority.INITIATOR,actor,grant);
+            if (single) FailoverActorAuthority.record(dsl,FailoverActorAuthority.KIND_RESUME,id,FailoverActorAuthority.APPROVER,actor,grant);
             return new Decision(single?RESUME_ADMITTED:RESUME_PENDING,id);
         });
     }
 
     /** Contract §5.1: the second, distinct administrator's approval of a two-person request admits its job. */
     public Decision approveResume(String runId, String resumeId, String actor, String role, boolean businessHoursAck) {
+        return approveResumeRecorded(runId,resumeId,actor,role,businessHoursAck,null);
+    }
+    /** {@code grant}: the authority that admitted the second approver (V257), recorded with the approval. */
+    public Decision approveResume(String runId, String resumeId, String actor, String role, boolean businessHoursAck,
+            FailoverActorAuthority.Grant grant) {
+        return approveResumeRecorded(runId,resumeId,actor,role,businessHoursAck,grant);
+    }
+    private Decision approveResumeRecorded(String runId, String resumeId, String actor, String role, boolean businessHoursAck,
+            FailoverActorAuthority.Grant grant) {
         if (!mutationEnabled) return new Decision("FAILOVER_MUTATION_DISABLED",null);
         return audited.inTransaction(actor,"failover_resume_second_approval",runId,dsl -> {
             lockAdmission(dsl);
@@ -1545,6 +1630,7 @@ public class JooqCpFailoverRepository {
                 + "approved_in_business_hours={2},approval_ack_by={3},approval_ack_at=case when {2} then clock_timestamp() end,"
                 + "job_id={4},state='QUEUED',step='QUEUED' where resume_id={0} and state='PENDING_APPROVAL'",
                 resumeId,actor,inside,inside?actor:null,job));
+            FailoverActorAuthority.record(dsl,FailoverActorAuthority.KIND_RESUME,resumeId,FailoverActorAuthority.APPROVER,actor,grant);
             return new Decision(RESUME_ADMITTED,resumeId);
         });
     }
@@ -1614,6 +1700,13 @@ public class JooqCpFailoverRepository {
             }
             String refusal=boundRefusal(dsl,resume,jobId);
             if (refusal!=null) return refusal;
+            // V257, at worker start (before any contact): requester and approver still hold their roles, are enabled
+            // and, under four eyes, distinct. The resumed UP itself is a return write and is not refused for it later.
+            if (atStart) {
+                refusal=FailoverActorAuthority.refusal(dsl,FailoverActorAuthority.KIND_RESUME,resumeId,resume.initiatedBy(),
+                    resume.approvedBy(),TWO_PERSON.equals(resume.policy()));
+                if (refusal!=null) return refusal;
+            }
             if (atStart) dsl.execute("update failover_resume set started_at=clock_timestamp() where resume_id={0} "
                 + "and started_at is null",resumeId);
             return "ADMITTED";

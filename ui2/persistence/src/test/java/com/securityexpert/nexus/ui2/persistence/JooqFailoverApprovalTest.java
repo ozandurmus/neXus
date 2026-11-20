@@ -28,6 +28,8 @@ class JooqFailoverApprovalTest {
         boolean owner=true,expiredAtBoundary;
         int insertedRuns,insertedJobs,writes;
         Instant clock=NOW;
+        /** V257: what ui2_failover_actor_standing answers for every actor. */
+        String standing=FailoverActorAuthority.NOT_RECORDED;
         Database() {
             this(new com.securityexpert.nexus.ui2.platform.JobWindowPolicy(java.time.Clock.fixed(NOW, java.time.ZoneOffset.UTC), 60));
         }
@@ -100,6 +102,12 @@ class JooqFailoverApprovalTest {
             if (query.startsWith("select 1 from failover_resume")) return none();
             // V178: no open config sync holds the unit in these fixtures.
             if (query.startsWith("select 1 from pan_config_sync")) return none();
+            // V257: no authority row in these fixtures (a pre-V257 record): the identity-only standing.
+            if (query.startsWith("select authority,binding_id from failover_actor_authority")
+                    || query.startsWith("select 1 from failover_actor_authority")) return none();
+            if (query.startsWith("select ui2_failover_actor_standing")) return row(Map.of("standing",standing));
+            if (query.startsWith("select ui2_failover_same_person")) return row(Map.of("same",false));
+            if (query.startsWith("insert into failover_actor_authority")) return new MockResult[]{new MockResult(1)};
             if (query.startsWith("insert into failover_run")) { insertedRuns++; consumed=(String)ctx.bindings()[0]; }
             else if (query.startsWith("insert into jobs")) insertedJobs++;
             else if (query.startsWith("update failover_approval set approved_by")) approval.put("approved_by",ctx.bindings()[0]);
@@ -180,6 +188,23 @@ class JooqFailoverApprovalTest {
             db.approval.put("approved_by","principal-b");
             assertEquals("ADMITTED",db.dispatch());
         }
+    }
+    /** V257: an actor who lost the role or was disabled refuses the first write; the return write is never refused for it. */
+    @Test void actorAuthorityGuardsTheFirstWriteButNeverTheReturnWrite() {
+        for (String standing:List.of("IDENTITY_DISABLED","ROLE_NOT_HELD","IDENTITY_UNKNOWN")) {
+            Database db=new Database(); db.standing=standing;
+            assertEquals(FailoverActorAuthority.INITIATOR_NOT_AUTHORIZED,db.dispatch(),standing);
+            assertEquals(0,db.writes,standing);
+            db.run.put("mutation_possible",true);
+            assertEquals("ADMITTED",db.dispatch(),standing+": the return write restores the cluster");
+        }
+        Database stale=new Database(); stale.standing=FailoverActorAuthority.DIRECTORY_STALE;
+        assertEquals(FailoverActorAuthority.DIRECTORY_AUTHORITY_STALE,stale.dispatch());
+        assertEquals(0,stale.writes);
+        stale.run.put("mutation_possible",true);
+        assertEquals("ADMITTED",stale.dispatch(),"a stale directory timestamp never blocks the return write");
+        Database kept=new Database(); kept.standing=FailoverActorAuthority.HELD;
+        assertEquals("ADMITTED",kept.dispatch());
     }
     @Test void workerRefusesAWindowOnlyApprovalWithoutRequestBinding() {
         Database db=new Database(); db.approval.put("request_revision",null);

@@ -108,11 +108,59 @@ public final class RbacEvaluator {
                 Optional.of(REASON_DIRECTORY_BINDING_NOT_EVALUABLE), Optional.empty());
     }
 
+    /**
+     * Outcome of a forced directory group-membership refresh before a failover job is created or started:
+     * {@link #NOT_DIRECTORY_ACTOR} for local, root or SAML actors; {@link #REFRESHED} when the directory published a
+     * fresh group set; {@link #MEMBERSHIP_LOST} when the directory reported the principal gone, disabled or in no group;
+     * {@link #DIRECTORY_UNREACHABLE} when the directory could not be reached.
+     */
+    public enum DirectoryRevalidation { NOT_DIRECTORY_ACTOR, REFRESHED, MEMBERSHIP_LOST, DIRECTORY_UNREACHABLE }
+
     private volatile java.util.function.BiPredicate<String, Instant> directoryRefresh;
+    private volatile java.util.function.BiFunction<String, Instant, DirectoryRevalidation> directoryRevalidator;
+    private volatile java.util.function.BooleanSupplier directoryPosture;
 
     /** Wires the on-demand directory refresh (service-bind model); without it a stale set stays not evaluated. */
     public void useDirectoryRefresh(java.util.function.BiPredicate<String, Instant> refresh) {
         this.directoryRefresh = refresh;
+    }
+
+    /** Wires both on-demand stale refresh and explicit failover-start directory revalidation. */
+    public void useDirectoryRefresh(DirectoryAuthorizationRefresh refresh) {
+        if (refresh == null) {
+            this.directoryRefresh = null;
+            this.directoryRevalidator = null;
+            this.directoryPosture = null;
+        } else {
+            this.directoryRefresh = refresh::refreshStale;
+            this.directoryRevalidator = refresh::revalidateForStart;
+            this.directoryPosture = refresh::directoryPostureEnabled;
+        }
+    }
+
+    public boolean hasDirectoryRevalidator() {
+        return directoryRevalidator != null || directoryRefresh != null;
+    }
+
+    public boolean directoryPostureEnabled() {
+        var posture = this.directoryPosture;
+        return posture == null || posture.getAsBoolean();
+    }
+
+    /** Forces a fresh directory group-membership read when {@code actorFingerprint} is an LDAP directory principal. */
+    public DirectoryRevalidation revalidateDirectoryActor(String actorFingerprint, Instant now) {
+        var revalidator = this.directoryRevalidator;
+        if (revalidator != null) return revalidator.apply(actorFingerprint, now);
+        if (actorFingerprint == null || actorAuthzStateRepository == null)
+            return DirectoryRevalidation.NOT_DIRECTORY_ACTOR;
+        Optional<ActorAuthzStateRecord> state = actorAuthzStateRepository.find(actorFingerprint)
+                .filter(ActorAuthzStateRecord::hasDirectoryProof);
+        if (state.isEmpty() || SamlSettingsService.PROFILE_ID.equals(state.get().directoryProfileId()))
+            return DirectoryRevalidation.NOT_DIRECTORY_ACTOR;
+        var refresh = this.directoryRefresh;
+        if (refresh == null) return DirectoryRevalidation.NOT_DIRECTORY_ACTOR;
+        return refresh.test(actorFingerprint, now)
+                ? DirectoryRevalidation.REFRESHED : DirectoryRevalidation.DIRECTORY_UNREACHABLE;
     }
 
     public Decision evaluate(String actorFingerprint, Optional<String> requiredToken, Instant now) {

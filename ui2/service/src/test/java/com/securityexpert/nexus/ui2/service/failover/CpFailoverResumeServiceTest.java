@@ -41,11 +41,19 @@ class CpFailoverResumeServiceTest {
         return new CpFailoverService(devices, mock(DeviceInventoryRepository.class), store, rbac, trust,
             new FailoverMutationSwitch(mutation), JobWindowPolicy.SYSTEM);
     }
+    /** V257: the grant RbacEvaluator's (mocked) local binding gives each administrator role. */
+    private static final com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.Grant SA_GRANT =
+        new com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.Grant(RbacEvaluator.LOCAL_AUTHORITY,
+            "binding-" + RoleToken.SECURITY_ADMIN, RoleToken.SECURITY_ADMIN);
+    private static final com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.Grant OP_GRANT =
+        new com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.Grant(RbacEvaluator.LOCAL_AUTHORITY,
+            "binding-" + RoleToken.OPERATION_ADMIN, RoleToken.OPERATION_ADMIN);
     private void roles(String actor, Set<String> roles) {
         when(rbac.evaluate(eq(actor), any(), any())).thenAnswer(call -> {
             Optional<String> role = call.getArgument(1);
-            return new RbacEvaluator.Decision(role.filter(roles::contains).isPresent()
-                ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED, Optional.of("synthetic-authority"), Optional.empty(), Optional.empty());
+            boolean held = role.filter(roles::contains).isPresent();
+            return new RbacEvaluator.Decision(held ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED,
+                Optional.of(RbacEvaluator.LOCAL_AUTHORITY), Optional.empty(), held ? role.map(r -> "binding-" + r) : Optional.empty());
         });
     }
     private void stoppedRun(boolean trusted) {
@@ -70,11 +78,11 @@ class CpFailoverResumeServiceTest {
         roles("synthetic-admin", Set.of(RoleToken.SECURITY_ADMIN));
         when(store.resumeEligibility(RUN)).thenReturn(null);
         when(store.requestResume(RUN, "synthetic-admin", "security_admin", JooqCpFailoverRepository.ADMIN_SINGLE,
-            "Return to standby", RUN, true)).thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED", "resume-a"));
+            "Return to standby", RUN, true, SA_GRANT)).thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED", "resume-a"));
         var decision = service.resumeReturn(RUN, RUN, "  Return to standby  ", true, "synthetic-admin");
         assertEquals("ADMITTED", decision.code()); assertEquals("resume-a", decision.runId());
         verify(store).requestResume(RUN, "synthetic-admin", "security_admin", JooqCpFailoverRepository.ADMIN_SINGLE,
-            "Return to standby", RUN, true);
+            "Return to standby", RUN, true, SA_GRANT);
         assertTrue(service.mayResume("synthetic-admin"));
     }
 
@@ -83,17 +91,17 @@ class CpFailoverResumeServiceTest {
         roles("synthetic-op-a", Set.of(RoleToken.OPERATION_ADMIN)); roles("synthetic-op-b", Set.of(RoleToken.OPERATION_ADMIN));
         when(store.resumeEligibility(RUN)).thenReturn(null);
         when(store.requestResume(eq(RUN), eq("synthetic-op-a"), eq("operation_admin"), eq(JooqCpFailoverRepository.TWO_PERSON),
-            anyString(), eq(RUN), anyBoolean())).thenReturn(new JooqCpFailoverRepository.Decision("PENDING_APPROVAL", "resume-a"));
+            anyString(), eq(RUN), anyBoolean(), any())).thenReturn(new JooqCpFailoverRepository.Decision("PENDING_APPROVAL", "resume-a"));
         assertEquals("PENDING_APPROVAL", service.resumeReturn(RUN, RUN, "Return", false, "synthetic-op-a").code());
-        when(store.approveResume(RUN, "resume-a", "synthetic-op-a", "operation_admin", false))
+        when(store.approveResume(RUN, "resume-a", "synthetic-op-a", "operation_admin", false, OP_GRANT))
             .thenReturn(new JooqCpFailoverRepository.Decision("SELF_APPROVAL", null));
         assertEquals("SELF_APPROVAL", refusal(() -> service.approveResume(RUN, "resume-a", false, "synthetic-op-a")));
-        when(store.approveResume(RUN, "resume-a", "synthetic-op-b", "operation_admin", true))
+        when(store.approveResume(RUN, "resume-a", "synthetic-op-b", "operation_admin", true, OP_GRANT))
             .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED", "resume-a"));
         assertEquals("ADMITTED", service.approveResume(RUN, "resume-a", true, "synthetic-op-b").code());
         for (String code : List.of("RESUME_REQUEST_EXPIRED", "RESUME_NOT_PENDING", "BUSINESS_HOURS_ACK_REQUIRED",
                 "INCIDENT_NOT_OPEN", "FLEET_MUTATION_ACTIVE", "MEMBERSHIP_CHANGED", "WRONG_POLICY")) {
-            when(store.approveResume(RUN, "resume-" + code, "synthetic-op-b", "operation_admin", false))
+            when(store.approveResume(RUN, "resume-" + code, "synthetic-op-b", "operation_admin", false, OP_GRANT))
                 .thenReturn(new JooqCpFailoverRepository.Decision(code, null));
             assertEquals(code, refusal(() -> service.approveResume(RUN, "resume-" + code, false, "synthetic-op-b")));
         }
@@ -132,11 +140,11 @@ class CpFailoverResumeServiceTest {
         assertEquals("INCIDENT_MISMATCH", refusal(() -> service.resumeReturn(RUN, "run-other", "Return", true, "synthetic-admin")));
         stoppedRun(false);
         assertEquals("TRUSTED_HOST_KEY_REQUIRED", refusal(() -> service.resumeReturn(RUN, RUN, "Return", true, "synthetic-admin")));
-        verify(store, never()).requestResume(any(), any(), any(), any(), any(), any(), anyBoolean());
+        verify(store, never()).requestResume(any(), any(), any(), any(), any(), any(), anyBoolean(), any());
         stoppedRun(true);
         for (String code : List.of("BUSINESS_HOURS_ACK_REQUIRED", "RESUME_ALREADY_USED", "INCIDENT_MISMATCH")) {
             when(store.requestResume(RUN, "synthetic-admin", "security_admin", JooqCpFailoverRepository.ADMIN_SINGLE,
-                "Return " + code, RUN, false)).thenReturn(new JooqCpFailoverRepository.Decision(code, null));
+                "Return " + code, RUN, false, SA_GRANT)).thenReturn(new JooqCpFailoverRepository.Decision(code, null));
             assertEquals(code, refusal(() -> service.resumeReturn(RUN, RUN, "Return " + code, false, "synthetic-admin")));
         }
     }
@@ -152,7 +160,7 @@ class CpFailoverResumeServiceTest {
         assertEquals("TRUSTED_HOST_KEY_REQUIRED", service.resumeEligibility(RUN, "synthetic-viewer"),
             "the run view does not offer a resume the request would refuse");
         assertEquals("TRUSTED_HOST_KEY_REQUIRED", refusal(() -> service.approveResume(RUN, "resume-a", false, "synthetic-op-b")));
-        verify(store, never()).approveResume(any(), any(), any(), any(), anyBoolean());
+        verify(store, never()).approveResume(any(), any(), any(), any(), anyBoolean(), any());
         // The store's own refusal still comes first, and trust that cannot be evaluated is not trusted.
         when(store.resumeEligibility(RUN)).thenReturn("RESUME_REQUEST_EXPIRED");
         assertEquals("RESUME_REQUEST_EXPIRED", service.resumeEligibility(RUN, "synthetic-viewer"));
@@ -160,7 +168,7 @@ class CpFailoverResumeServiceTest {
         when(trust.findActiveAlgorithms(anyString(), anyInt())).thenThrow(new IllegalStateException("synthetic outage"));
         assertEquals("TRUST_NOT_EVALUABLE", service.resumeEligibility(RUN, "synthetic-viewer"));
         assertEquals("TRUST_NOT_EVALUABLE", refusal(() -> service.approveResume(RUN, "resume-a", false, "synthetic-op-b")));
-        verify(store, never()).approveResume(any(), any(), any(), any(), anyBoolean());
+        verify(store, never()).approveResume(any(), any(), any(), any(), anyBoolean(), any());
     }
 
     @Test void businessHoursAreEightToTwentyEuropeIstanbulStartInclusiveEndExclusive() {

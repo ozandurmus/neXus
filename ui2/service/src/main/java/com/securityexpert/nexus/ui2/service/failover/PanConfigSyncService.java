@@ -136,6 +136,13 @@ public final class PanConfigSyncService {
     public JooqPanConfigSyncRepository.ConfigSync request(String clusterId, String unitId, String sourceDeviceId,
             String targetDeviceId, String actor, String vendor) {
         if (!"palo_alto".equals(vendor)) throw new CpFailoverService.Refusal(NOT_SUPPORTED);
+        if (mutationSwitch.enabled()) {
+            var revalidation = CpFailoverService.refreshDirectoryCaller(rbac, actor);
+            if (revalidation == RbacEvaluator.DirectoryRevalidation.MEMBERSHIP_LOST
+                    || (revalidation == RbacEvaluator.DirectoryRevalidation.REFRESHED && !mayRun(actor)))
+                throw new CpFailoverService.Refusal(
+                    com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.INITIATOR_NOT_AUTHORIZED);
+        }
         if (!mayRun(actor)) throw new CpFailoverService.Refusal("WRONG_ROLE");
         if (!mutationSwitch.enabled()) throw new CpFailoverService.Refusal(FailoverMutationSwitch.DISABLED);
         windows.requireOpenFor(actor);
@@ -146,7 +153,7 @@ public final class PanConfigSyncService {
                 || !ids.contains(sourceDeviceId) || !ids.contains(targetDeviceId))
             throw new CpFailoverService.Refusal("MEMBER_SET_CHANGED");
         var decision = store.request(unit.members().get(0).clusterMemberRef().orElseThrow(), sourceDeviceId,
-            targetDeviceId, actor);
+            targetDeviceId, actor, CpFailoverService.adminGrant(rbac, actor));
         if (!JooqPanConfigSyncRepository.ADMITTED.equals(decision.code())) throw new CpFailoverService.Refusal(decision.code());
         return store.find(decision.runId()).orElseThrow(() -> new CpFailoverService.Refusal("CONFIG_SYNC_NOT_FOUND"));
     }

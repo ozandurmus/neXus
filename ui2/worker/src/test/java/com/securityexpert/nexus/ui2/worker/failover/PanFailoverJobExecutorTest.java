@@ -337,6 +337,19 @@ class PanFailoverJobExecutorTest {
             assertEquals(code,result.outcome()); assertEquals(0,script.callCount);
         }
     }
+    /** V257: initiator disabled, approver demoted or one person on both sides -- refused before any call or write. */
+    @Test void actorAuthorityRefusalsStopBeforeAnyCallOrWrite() {
+        for (String code:List.of(com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.INITIATOR_NOT_AUTHORIZED,
+            com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.APPROVER_NOT_AUTHORIZED,
+            com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.APPROVER_IS_INITIATOR,
+            com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.DIRECTORY_AUTHORITY_STALE)) {
+            Script start=new Script(); start.admission=code;
+            assertEquals(code,run(start).outcome()); assertEquals(0,start.callCount);
+            Script beforeWrite=new Script(); beforeWrite.writeAdmission=code;
+            assertEquals(code,run(beforeWrite).outcome());
+            assertEquals(0,beforeWrite.suspendCount); assertEquals(0,beforeWrite.functionalCount);
+        }
+    }
     @Test void admissionIsRecheckedAfterReadinessBeforeTheWrite() {
         Script script=new Script(); script.writeAdmission="OPEN_INCIDENT";
         Result result=run(script);

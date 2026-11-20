@@ -215,6 +215,11 @@ const REASON_LABELS: Readonly<Record<string, string>> = {
   VS_RUN_ACTIVE: "A virtual system failover is open on this cluster",
   CHASSIS_RUN_ACTIVE: "A chassis run is open on this cluster",
   WRONG_ROLE: "Member holds the wrong role",
+  INITIATOR_NOT_AUTHORIZED_AT_START: "Stopped before contact: the requesting administrator no longer holds the role or is disabled",
+  APPROVER_NOT_AUTHORIZED_AT_START: "Stopped before contact: the approving administrator no longer holds the role or is disabled",
+  APPROVER_IS_INITIATOR_AT_START: "Stopped before contact: the approver and the requester are the same person",
+  DIRECTORY_AUTHORITY_STALE_AT_START: "Stopped before contact: directory group membership was not refreshed in time",
+  DIRECTORY_UNREACHABLE_AT_START: "Not started: the directory could not be reached to refresh group membership — retry",
 };
 
 /** `READ_SIZE_BELOW_OFFSET` as plain words, `read size below offset`; only for codes a prefix already names. */

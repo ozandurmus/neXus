@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
+import com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority;
 import com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
@@ -130,7 +131,7 @@ public final class CpFailoverService {
         this(devices, inventory, store, rbac, trust, mutationSwitch, JobWindowPolicy.SYSTEM, asaReadiness, fgtReadiness);
     }
 
-    CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
+    public CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
             JooqCpFailoverRepository store, RbacEvaluator rbac, ManagementEndpointSshTrustRepository trust,
             FailoverMutationSwitch mutationSwitch, JobWindowPolicy windows) {
         this(devices, inventory, store, rbac, trust, mutationSwitch, windows, AsaFailoverReadinessSwitch.OFF);
@@ -168,6 +169,131 @@ public final class CpFailoverService {
         var decision=rbac.evaluate(actor,Optional.of(RoleToken.REPLAY_VIEWER),Instant.now());
         return decision.outcome()==AuthzOutcome.PERMITTED
             && !decision.authority().filter(RbacEvaluator.ROOT_AUTHORITY::equals).isPresent();
+    }
+    /**
+     * V257: the authority that admits {@code actor} as a failover administrator now -- security_admin first, then
+     * operation_admin, the same order as {@link #approvalPolicy} -- with the role binding it matched. Recorded with the
+     * request or approval so the worker can recheck, before any device contact, that this binding is still active and
+     * the identity still enabled. An admission that names no recordable authority is refused (fail closed).
+     */
+    FailoverActorAuthority.Grant adminGrant(String actor) {
+        return adminGrant(rbac,actor);
+    }
+    static FailoverActorAuthority.Grant adminGrant(RbacEvaluator rbac,String actor) {
+        if (actor==null) throw new Refusal("WRONG_ROLE");
+        for (String token:List.of(RoleToken.SECURITY_ADMIN,RoleToken.OPERATION_ADMIN)) {
+            var decision=rbac.evaluate(actor,Optional.of(token),Instant.now());
+            if (decision.outcome()!=AuthzOutcome.PERMITTED) continue;
+            String authority=decision.authority().orElse(null);
+            if (RbacEvaluator.ROOT_AUTHORITY.equals(authority))
+                return new FailoverActorAuthority.Grant(FailoverActorAuthority.ROOT,null,token);
+            if ((RbacEvaluator.LOCAL_AUTHORITY.equals(authority) || RbacEvaluator.AUTHORITY.equals(authority))
+                    && decision.bindingId().isPresent())
+                return new FailoverActorAuthority.Grant(authority,decision.bindingId().get(),token);
+            throw new Refusal("WRONG_ROLE");
+        }
+        throw new Refusal("WRONG_ROLE");
+    }
+    private static String partyRefusal(String party) {
+        return FailoverActorAuthority.APPROVER.equals(party)
+            ? FailoverActorAuthority.APPROVER_NOT_AUTHORIZED
+            : FailoverActorAuthority.INITIATOR_NOT_AUTHORIZED;
+    }
+    /**
+     * Force a fresh directory group-membership read for the calling actor before a failover job is created. Local, root,
+     * SAML and unconfigured evaluators return {@code NOT_DIRECTORY_ACTOR} and fall through to {@link #approvalPolicy}.
+     */
+    static RbacEvaluator.DirectoryRevalidation refreshDirectoryCaller(RbacEvaluator rbac,String actor) {
+        var revalidation=actor==null ? null : rbac.revalidateDirectoryActor(actor,Instant.now());
+        if (revalidation==null) return RbacEvaluator.DirectoryRevalidation.NOT_DIRECTORY_ACTOR;
+        if (revalidation==RbacEvaluator.DirectoryRevalidation.DIRECTORY_UNREACHABLE)
+            throw new Refusal(FailoverActorAuthority.DIRECTORY_UNREACHABLE);
+        return revalidation;
+    }
+    private void refreshCallerBeforeStart(String kind,String recordId,String party,String actor) {
+        var revalidation=refreshDirectoryCaller(rbac,actor);
+        if (revalidation==RbacEvaluator.DirectoryRevalidation.MEMBERSHIP_LOST) {
+            store.recordActorAuthority(kind,recordId,party,actor,FailoverActorAuthority.revokedDirectoryGrant());
+            throw new Refusal(partyRefusal(party));
+        }
+        if (revalidation==RbacEvaluator.DirectoryRevalidation.REFRESHED) {
+            if (!mayApprove(actor)) {
+                store.recordActorAuthority(kind,recordId,party,actor,FailoverActorAuthority.revokedDirectoryGrant());
+                throw new Refusal(partyRefusal(party));
+            }
+            var grant=adminGrant(actor);
+            if (FailoverActorAuthority.LDAP.equals(grant.authority()))
+                store.recordActorAuthority(kind,recordId,party,actor,grant);
+            return;
+        }
+        if (rbac.hasDirectoryRevalidator() && kind!=null && recordId!=null && !mayApprove(actor)
+                && store.recordedActorAuthority(kind,recordId,party,actor).filter(FailoverActorAuthority.LDAP::equals).isPresent()) {
+            if (!rbac.directoryPostureEnabled()) throw new Refusal(FailoverActorAuthority.DIRECTORY_UNREACHABLE);
+            store.recordActorAuthority(kind,recordId,party,actor,FailoverActorAuthority.revokedDirectoryGrant());
+            throw new Refusal(partyRefusal(party));
+        }
+    }
+    /**
+     * Refresh one party's directory group membership and record the refreshed authority in {@code failover_actor_authority}
+     * before a job is created or a queued/sequence run starts.
+     */
+    private FailoverActorAuthority.Grant refreshPartyGrant(String kind,String recordId,String party,String actor) {
+        if (actor==null) throw new Refusal(partyRefusal(party));
+        var revalidation=refreshDirectoryCaller(rbac,actor);
+        if (revalidation==RbacEvaluator.DirectoryRevalidation.MEMBERSHIP_LOST) {
+            store.recordActorAuthority(kind,recordId,party,actor,FailoverActorAuthority.revokedDirectoryGrant());
+            throw new Refusal(partyRefusal(party));
+        }
+        boolean recordedLdap=rbac.hasDirectoryRevalidator() && kind!=null && recordId!=null
+            && store.recordedActorAuthority(kind,recordId,party,actor).filter(FailoverActorAuthority.LDAP::equals).isPresent();
+        if (revalidation==RbacEvaluator.DirectoryRevalidation.NOT_DIRECTORY_ACTOR && recordedLdap && !rbac.directoryPostureEnabled())
+            throw new Refusal(FailoverActorAuthority.DIRECTORY_UNREACHABLE);
+        boolean directoryActor=revalidation==RbacEvaluator.DirectoryRevalidation.REFRESHED || recordedLdap;
+        if (!mayApprove(actor)) {
+            if (directoryActor)
+                store.recordActorAuthority(kind,recordId,party,actor,FailoverActorAuthority.revokedDirectoryGrant());
+            throw new Refusal(partyRefusal(party));
+        }
+        var grant=adminGrant(actor);
+        if (FailoverActorAuthority.LDAP.equals(grant.authority()))
+            store.recordActorAuthority(kind,recordId,party,actor,grant);
+        return grant;
+    }
+    /**
+     * Refresh both the initiator and the approver of {@code approvalId} when creating a failover job or starting a due /
+     * sequence run. {@code callerAlreadyRefreshed} names the interactive caller already revalidated at request entry.
+     */
+    private void refreshApprovalAuthority(String approvalId,String callerAlreadyRefreshed) {
+        if (approvalId==null) return;
+        var found=store.requestApproval(approvalId);
+        if (found.isEmpty()) {
+            if (callerAlreadyRefreshed!=null && mayApprove(callerAlreadyRefreshed)) {
+                var grant=adminGrant(callerAlreadyRefreshed);
+                if (FailoverActorAuthority.LDAP.equals(grant.authority())
+                        && JooqCpFailoverRepository.ADMIN_SINGLE.equals(approvalPolicy(callerAlreadyRefreshed)))
+                    store.recordActorAuthority(FailoverActorAuthority.KIND_APPROVAL,approvalId,
+                        FailoverActorAuthority.APPROVER,callerAlreadyRefreshed,grant);
+            }
+            return;
+        }
+        var req=found.get();
+        String initiator=req.initiatedBy();
+        FailoverActorAuthority.Grant initiatorGrant=initiator!=null && initiator.equals(callerAlreadyRefreshed)
+            ? adminGrant(initiator)
+            : refreshPartyGrant(FailoverActorAuthority.KIND_APPROVAL,approvalId,FailoverActorAuthority.INITIATOR,initiator);
+        if (initiator!=null && initiator.equals(callerAlreadyRefreshed) && FailoverActorAuthority.LDAP.equals(initiatorGrant.authority()))
+            store.recordActorAuthority(FailoverActorAuthority.KIND_APPROVAL,approvalId,FailoverActorAuthority.INITIATOR,
+                initiator,initiatorGrant);
+        String approver=req.approval().approvedBy();
+        if (approver!=null) {
+            if (approver.equals(initiator)) {
+                if (FailoverActorAuthority.LDAP.equals(initiatorGrant.authority()))
+                    store.recordActorAuthority(FailoverActorAuthority.KIND_APPROVAL,approvalId,
+                        FailoverActorAuthority.APPROVER,approver,initiatorGrant);
+            } else {
+                refreshPartyGrant(FailoverActorAuthority.KIND_APPROVAL,approvalId,FailoverActorAuthority.APPROVER,approver);
+            }
+        }
     }
     /** security_admin (including the root administrator) explicitly selects the admin policy. */
     private String approvalPolicy(String actor) {
@@ -490,13 +616,9 @@ public final class CpFailoverService {
         if (requestId==null || !requestId.equals(UUID.fromString(requestId).toString())) throw new Refusal("REQUEST_ID_REQUIRED");
         if (from==null || until==null || !until.isAfter(from) || !until.isAfter(Instant.now())
                 || reason==null || reason.isBlank() || reason.length()>500) throw new Refusal("INVALID_WINDOW");
-        if (JooqCpFailoverRepository.OPERATION_FAILOVER.equals(operation))
-            return store.createRequestApproval(requestId,u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),
-                u.id(),u.members().stream().map(DeviceSummaryRecord::deviceId).collect(Collectors.toUnmodifiableSet()),
-                from,until,reason,actor,vendor,policy);
         return store.createRequestApproval(requestId,u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),
             u.id(),u.members().stream().map(DeviceSummaryRecord::deviceId).collect(Collectors.toUnmodifiableSet()),
-            from,until,reason,actor,vendor,policy,operation);
+            from,until,reason,actor,vendor,policy,operation,adminGrant(actor));
     }
 
     public JooqCpFailoverRepository.RequestApproval secondApproval(String requestId,long revision,
@@ -508,7 +630,7 @@ public final class CpFailoverService {
         if (!u.id().equals(request.unitRef()) || !u.members().get(0).clusterMemberRef().orElseThrow()
                 .equals(request.approval().clusterRef())) throw new Refusal("REQUEST_CHANGED");
         String result=store.approveRequest(requestId,revision,actor,vendor,
-            u.members().stream().map(DeviceSummaryRecord::deviceId).collect(Collectors.toUnmodifiableSet()));
+            u.members().stream().map(DeviceSummaryRecord::deviceId).collect(Collectors.toUnmodifiableSet()),adminGrant(actor));
         if (!"APPROVED".equals(result)) throw new Refusal(result);
         return store.requestApproval(requestId).orElseThrow(() -> new Refusal("REQUEST_NOT_FOUND"));
     }
@@ -534,6 +656,8 @@ public final class CpFailoverService {
     }
     public String request(String clusterId,String unitId,Instant scheduledFor,String actor,String vendor,
             String requestId,long revision,String nonce,boolean warningConfirmed) {
+        if (mutationSwitch.enabled() && requestId!=null && nonce!=null && revision==1 && warningConfirmed)
+            refreshCallerBeforeStart(FailoverActorAuthority.KIND_APPROVAL,requestId,FailoverActorAuthority.INITIATOR,actor);
         String policy=approvalPolicy(actor);
         requireAvailable(vendor);
         if (!mutationSwitch.enabled()) throw new Refusal(FailoverMutationSwitch.DISABLED);
@@ -547,6 +671,7 @@ public final class CpFailoverService {
         // Readiness is always collected afresh by that job, never by a second UI confirmation.
         if (requestId==null || nonce==null || revision!=1) throw new Refusal("REQUEST_BINDING_REQUIRED");
         if (!warningConfirmed) throw new Refusal("WARNING_CONFIRMATION_REQUIRED");
+        refreshApprovalAuthority(requestId,actor);
         if (u.vsxChassis()) {
             ChassisPlan plan=chassisPlan(u,actor,vendor);
             if (plan.modeRefusal()!=null) throw new Refusal(plan.modeRefusal());
@@ -682,6 +807,7 @@ public final class CpFailoverService {
             java.util.function.Supplier<String> advance=() -> store.advanceSequence(seq.id(),steps,target);
             try {
                 if (target!=null) members.forEach(this::requireTrusted);
+                if (sequenceReadyForNextStep(seq)) refreshApprovalAuthority(seq.approvalId(),null);
                 if (seq.admissionRole()==null) advance.get();
                 else com.securityexpert.nexus.ui2.platform.ManualAdmission.under(new com.securityexpert.nexus.ui2.platform
                     .ManualAdmission.Grant(seq.initiatedBy(),seq.admissionRole(),seq.businessHoursAck()),advance);
@@ -693,6 +819,13 @@ public final class CpFailoverService {
                 store.stopSequence(seq.id(),com.securityexpert.nexus.ui2.platform.ManualAdmission.CONFIRM_CODE,nextVs(seq));
             }
         }
+    }
+    private boolean sequenceReadyForNextStep(JooqCpFailoverRepository.Sequence seq) {
+        if (seq.nextIndex()>=seq.vsIds().size()) return false;
+        if (seq.currentRunId()==null) return true;
+        var current=store.detail(seq.currentRunId()).map(JooqCpFailoverRepository.Detail::run);
+        return current.isEmpty()
+            || ("DONE".equals(current.get().state()) && "SUCCEEDED".equals(current.get().outcome()));
     }
     private static String nextVs(JooqCpFailoverRepository.Sequence seq) {
         return seq.nextIndex()<seq.vsIds().size() ? seq.vsIds().get(seq.nextIndex()) : null;
@@ -818,6 +951,10 @@ public final class CpFailoverService {
      */
     public JooqCpFailoverRepository.Decision resumeReturn(String runId, String expectedIncidentId, String reason,
             boolean businessHoursAck, String actor) {
+        if (mutationSwitch.enabled() && reason!=null && !reason.strip().isEmpty()
+                && reason.strip().length()<=JooqCpFailoverRepository.RESUME_REASON_MAX
+                && runId!=null && !runId.isBlank() && expectedIncidentId!=null && !expectedIncidentId.isBlank())
+            refreshCallerBeforeStart(null,null,FailoverActorAuthority.INITIATOR,actor);
         String role=resumeRole(actor);
         String policy=com.securityexpert.nexus.ui2.platform.ManualAdmission.SECURITY_ADMIN.equals(role)
             ? JooqCpFailoverRepository.ADMIN_SINGLE : JooqCpFailoverRepository.TWO_PERSON;
@@ -831,7 +968,7 @@ public final class CpFailoverService {
         if (!expectedIncidentId.equals(runId)) throw new Refusal("INCIDENT_MISMATCH");
         // The single-use resume is not spent on a member whose host key is not trusted (the worker refuses it anyway).
         requireResumeMembersTrusted(runId);
-        var decision=store.requestResume(runId,actor,role,policy,text,expectedIncidentId,businessHoursAck);
+        var decision=store.requestResume(runId,actor,role,policy,text,expectedIncidentId,businessHoursAck,adminGrant(actor));
         if (!JooqCpFailoverRepository.RESUME_ADMITTED.equals(decision.code())
                 && !JooqCpFailoverRepository.RESUME_PENDING.equals(decision.code())) throw new Refusal(decision.code());
         return decision;
@@ -840,12 +977,20 @@ public final class CpFailoverService {
     /** Contract §5.1: the second administrator's approval; never the initiator (SELF_APPROVAL). */
     public JooqCpFailoverRepository.Decision approveResume(String runId, String resumeId, boolean businessHoursAck,
             String actor) {
+        if (mutationSwitch.enabled() && runId!=null && resumeId!=null && !resumeId.isBlank())
+            refreshCallerBeforeStart(FailoverActorAuthority.KIND_RESUME,resumeId,FailoverActorAuthority.APPROVER,actor);
         String role=resumeRole(actor);
         if (!mutationSwitch.enabled()) throw new Refusal(FailoverMutationSwitch.DISABLED);
         if (runId==null || resumeId==null || resumeId.isBlank()) throw new Refusal("RESUME_NOT_FOUND");
         // A key revoked while the request waited: refused before the approval admits the single-use job.
         requireResumeMembersTrusted(runId);
-        var decision=store.approveResume(runId,resumeId,actor,role,businessHoursAck);
+        if (rbac.hasDirectoryRevalidator()) {
+            store.resumeForRun(runId)
+                .filter(r -> resumeId.equals(r.id()) && r.initiatedBy()!=null && !r.initiatedBy().equals(actor))
+                .ifPresent(r -> refreshPartyGrant(FailoverActorAuthority.KIND_RESUME,resumeId,
+                    FailoverActorAuthority.INITIATOR,r.initiatedBy()));
+        }
+        var decision=store.approveResume(runId,resumeId,actor,role,businessHoursAck,adminGrant(actor));
         if (!JooqCpFailoverRepository.RESUME_ADMITTED.equals(decision.code())) throw new Refusal(decision.code());
         return decision;
     }
@@ -866,8 +1011,10 @@ public final class CpFailoverService {
                 store.stopPlanned(run.id(),"CLUSTER_STATE_NOT_READY");
                 continue;
             }
-            try { if (sshTrusted(vendor)) members.forEach(this::requireTrusted); }
-            catch (Refusal refused) {
+            try {
+                if (sshTrusted(vendor)) members.forEach(this::requireTrusted);
+                refreshApprovalAuthority(run.approvalId(),null);
+            } catch (Refusal refused) {
                 store.stopPlanned(run.id(),refused.code());
                 continue;
             }

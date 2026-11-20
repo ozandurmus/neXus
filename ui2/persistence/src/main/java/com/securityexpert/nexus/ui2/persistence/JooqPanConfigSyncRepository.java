@@ -160,6 +160,12 @@ public class JooqPanConfigSyncRepository {
      * service interceptor), never from a request field. Without a grant for {@code actor} nothing is created.
      */
     public JooqCpFailoverRepository.Decision request(String cluster, String source, String target, String actor) {
+        return request(cluster, source, target, actor, null);
+    }
+
+    /** {@code authority}: the authority that admitted the requester (V257); the worker rechecks it before any contact. */
+    public JooqCpFailoverRepository.Decision request(String cluster, String source, String target, String actor,
+            FailoverActorAuthority.Grant authority) {
         if (!mutationEnabled) return new JooqCpFailoverRepository.Decision("FAILOVER_MUTATION_DISABLED", null);
         var grant = ManualAdmission.currentFor(actor);
         if (grant.isEmpty()) return new JooqCpFailoverRepository.Decision("WRONG_ROLE", null);
@@ -199,6 +205,8 @@ public class JooqPanConfigSyncRepository {
                 syncId, cluster, source, target, JooqCpFailoverRepository.memberSetRevision(Set.of(source, target)),
                 evidence.get("run_id", String.class), actor, grant.get().role(), job.get("inside", Boolean.class),
                 acknowledged, jobId));
+            FailoverActorAuthority.record(dsl, FailoverActorAuthority.KIND_CONFIG_SYNC, syncId,
+                FailoverActorAuthority.INITIATOR, actor, authority);
             return new JooqCpFailoverRepository.Decision(ADMITTED, syncId);
         });
     }
@@ -217,6 +225,10 @@ public class JooqPanConfigSyncRepository {
         if (jobId == null || !jobId.equals(sync.jobId()) || !jobOwned(dsl, jobId, epoch)) return "OWNERSHIP_LOST";
         String unit = unitRefusal(dsl, sync.clusterRef(), sync.sourceRef(), sync.targetRef(), sync.id());
         if (unit != null) return unit;
+        // V257: the requester still holds the role that allowed the request and is enabled (start and before the write).
+        String actor = FailoverActorAuthority.refusal(dsl, FailoverActorAuthority.KIND_CONFIG_SYNC, sync.id(),
+            sync.initiatedBy(), null, false);
+        if (actor != null) return actor;
         // Design §3.2 W4 against the record's own acknowledgement (Argon P1-4), not the job row's.
         return windows.insideBusinessHours() && !sync.businessHoursAcknowledged() ? ManualAdmission.CONFIRM_CODE : null;
     }

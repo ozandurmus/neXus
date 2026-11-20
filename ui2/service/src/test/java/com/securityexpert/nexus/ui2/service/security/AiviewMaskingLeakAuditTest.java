@@ -215,6 +215,7 @@ class AiviewMaskingLeakAuditTest {
             Map.entry("ended_by_actor_fingerprint", "session administration, security_admin"),
             Map.entry("host", "upload destination catalogue: fixed vendor host constants, null for the generic server"),
             Map.entry("support_bundle_upload_host_key", "audit presentation allowlist table name, not a response key"),
+            Map.entry("failover_actor_authority", "audit presentation allowlist table name (V257), not a response key"),
             Map.entry("host_key_changed", "boolean flag on an upload row"),
             Map.entry("host_key_fingerprint", "SupportBundleUploadController omits it for the replay viewer (with remote_user, reason, case_ref)"),
             Map.entry("hop_label", "PacketDeviceEventsService self-masks"),
