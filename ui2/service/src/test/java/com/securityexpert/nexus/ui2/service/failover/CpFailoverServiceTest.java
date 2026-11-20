@@ -164,7 +164,8 @@ class CpFailoverServiceTest {
         asRequest("principal-b", false, () -> outsideInHours.createApprovalRequest(id,CLUSTER_ID,CLUSTER_ID,from,until,
             "Synthetic request","principal-b","check_point"));
         verify(store).createRequestApproval(id,CLUSTER,null,CLUSTER_ID,java.util.Set.of(A,B),from,until,
-            "Synthetic request","principal-b","check_point",JooqCpFailoverRepository.TWO_PERSON);
+            "Synthetic request","principal-b","check_point",JooqCpFailoverRepository.TWO_PERSON,
+            JooqCpFailoverRepository.OPERATION_FAILOVER,grant(com.securityexpert.nexus.ui2.platform.RoleToken.OPERATION_ADMIN));
         // The same request without the administrator's grant (no session role named it) keeps the window refusal.
         assertThrows(JobWindowPolicy.OutsideWindow.class, () -> outsideInHours.createApprovalRequest(id,CLUSTER_ID,CLUSTER_ID,
             from,until,"Synthetic request","principal-b","check_point"));
@@ -198,12 +199,37 @@ class CpFailoverServiceTest {
         assertEquals("OPEN_INCIDENT".equals(code)?"dispatch-a":null,refusal.dispatchRef());
     }
 
+    private static com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.Grant grant(String role) {
+        return new com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.Grant(RbacEvaluator.LOCAL_AUTHORITY,
+            "binding-"+role,role);
+    }
     private void roles(String actor,java.util.Set<String> roles) {
         when(rbac.evaluate(eq(actor),any(),any())).thenAnswer(call -> {
             Optional<String> role=call.getArgument(1);
-            return new RbacEvaluator.Decision(role.filter(roles::contains).isPresent()?AuthzOutcome.PERMITTED:AuthzOutcome.DENIED,
-                Optional.of("synthetic-authority"),Optional.empty(),Optional.empty());
+            boolean held=role.filter(roles::contains).isPresent();
+            return new RbacEvaluator.Decision(held?AuthzOutcome.PERMITTED:AuthzOutcome.DENIED,
+                Optional.of(RbacEvaluator.LOCAL_AUTHORITY),Optional.empty(),held?role.map(r -> "binding-"+r):Optional.empty());
         });
+    }
+    /** V260: the authority that admitted the administrator is what the worker rechecks; one that cannot be recorded is refused. */
+    @Test void theAdmittingAuthorityIsRecordedAndAnUnrecordableOneIsRefused() {
+        var root=mock(RbacEvaluator.class);
+        when(root.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(
+            AuthzOutcome.PERMITTED,Optional.of(RbacEvaluator.ROOT_AUTHORITY),Optional.empty(),Optional.empty()));
+        assertEquals(new com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.Grant("ui2_root",null,
+            com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN),CpFailoverService.adminGrant(root,"synthetic-root"));
+        roles("principal-d",java.util.Set.of(com.securityexpert.nexus.ui2.platform.RoleToken.OPERATION_ADMIN));
+        assertEquals(grant(com.securityexpert.nexus.ui2.platform.RoleToken.OPERATION_ADMIN),CpFailoverService.adminGrant(rbac,"principal-d"));
+        for (var decision:List.of(
+                new RbacEvaluator.Decision(AuthzOutcome.PERMITTED,Optional.of("synthetic-authority"),Optional.empty(),Optional.of("binding-x")),
+                new RbacEvaluator.Decision(AuthzOutcome.PERMITTED,Optional.of(RbacEvaluator.LOCAL_AUTHORITY),Optional.empty(),Optional.empty()),
+                new RbacEvaluator.Decision(AuthzOutcome.DENIED,Optional.empty(),Optional.empty(),Optional.empty()))) {
+            var other=mock(RbacEvaluator.class);
+            when(other.evaluate(anyString(),any(),any())).thenReturn(decision);
+            assertEquals("WRONG_ROLE",assertThrows(CpFailoverService.Refusal.class,
+                () -> CpFailoverService.adminGrant(other,"synthetic-actor")).code());
+        }
+        verifyNoInteractions(store);
     }
     @Test void serverRolesSelectAdminAndTwoPersonPolicyAndReplayViewerIsDenied() {
         ready("ACTIVE","STANDBY");
@@ -212,11 +238,13 @@ class CpFailoverServiceTest {
         roles("principal-a",java.util.Set.of(com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN));
         service.createApprovalRequest(id,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic request","principal-a","check_point");
         verify(store).createRequestApproval(id,CLUSTER,null,CLUSTER_ID,java.util.Set.of(A,B),from,until,
-            "Synthetic request","principal-a","check_point",JooqCpFailoverRepository.ADMIN_SINGLE);
+            "Synthetic request","principal-a","check_point",JooqCpFailoverRepository.ADMIN_SINGLE,
+            JooqCpFailoverRepository.OPERATION_FAILOVER,grant(com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN));
         roles("principal-b",java.util.Set.of(com.securityexpert.nexus.ui2.platform.RoleToken.OPERATION_ADMIN));
         service.createApprovalRequest(id,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic request","principal-b","check_point");
         verify(store).createRequestApproval(id,CLUSTER,null,CLUSTER_ID,java.util.Set.of(A,B),from,until,
-            "Synthetic request","principal-b","check_point",JooqCpFailoverRepository.TWO_PERSON);
+            "Synthetic request","principal-b","check_point",JooqCpFailoverRepository.TWO_PERSON,
+            JooqCpFailoverRepository.OPERATION_FAILOVER,grant(com.securityexpert.nexus.ui2.platform.RoleToken.OPERATION_ADMIN));
         for (String role:List.of(com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER,
                 com.securityexpert.nexus.ui2.platform.RoleToken.OPERATOR)) {
             roles("principal-c",java.util.Set.of(role));
@@ -419,7 +447,7 @@ class CpFailoverServiceTest {
             () -> service.createApprovalRequest(request,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic","actor-1","check_point")).code());
         assertEquals(CpFailoverService.CHASSIS_MODE_UNKNOWN, assertThrows(CpFailoverService.Refusal.class,
             () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point",request,1,"nonce",true)).code());
-        verify(store,never()).createRequestApproval(any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any());
+        verify(store,never()).createRequestApproval(any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any());
         verify(store,never()).requestBound(any(),any(),any(),any(),any(),anyBoolean(),any(),any(),any(),anyLong(),any(),anyBoolean(),any());
         when(store.requestReadiness(CLUSTER,null,"actor-1",A,"check_point"))
             .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED","run-chassis",null));
@@ -438,7 +466,8 @@ class CpFailoverServiceTest {
         service.createApprovalRequest(request,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic","actor-1","check_point");
         // Option B: an ordinary unit approval (operation FAILOVER) on the chassis unit.
         verify(store).createRequestApproval(eq(request),eq(CLUSTER),isNull(),eq(CLUSTER_ID),eq(java.util.Set.of(A,B)),eq(from),eq(until),
-            eq("Synthetic"),eq("actor-1"),eq("check_point"),eq(JooqCpFailoverRepository.ADMIN_SINGLE));
+            eq("Synthetic"),eq("actor-1"),eq("check_point"),eq(JooqCpFailoverRepository.ADMIN_SINGLE),
+            eq(JooqCpFailoverRepository.OPERATION_FAILOVER),any());
         when(store.requestOperation("request-a")).thenReturn(Optional.of(JooqCpFailoverRepository.OPERATION_FAILOVER));
         when(store.requestBound(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true),eq("check_point"),
             eq(java.util.Set.of(A,B)),eq("request-a"),eq(1L),eq("nonce-a"),eq(true),eq(JooqCpFailoverRepository.ADMIN_SINGLE)))
@@ -468,7 +497,7 @@ class CpFailoverServiceTest {
         Instant from=Instant.now(), until=from.plusSeconds(600);
         service.createApprovalRequest(request,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic","actor-1","check_point");
         verify(store).createRequestApproval(eq(request),eq(CLUSTER),isNull(),eq(CLUSTER_ID),any(),any(),any(),any(),any(),any(),any(),
-            eq(JooqCpFailoverRepository.OPERATION_ALL_VIRTUAL_SYSTEMS));
+            eq(JooqCpFailoverRepository.OPERATION_ALL_VIRTUAL_SYSTEMS),any());
         // A chassis-run approval on a VSLS chassis: option B is refused with its own code.
         when(store.requestOperation("request-b")).thenReturn(Optional.of(JooqCpFailoverRepository.OPERATION_FAILOVER));
         assertEquals(CpFailoverService.CHASSIS_MODE_VSLS, assertThrows(CpFailoverService.Refusal.class,
@@ -840,6 +869,155 @@ class CpFailoverServiceTest {
         assertEquals("WRONG_ROLE", assertThrows(CpFailoverService.Refusal.class,
             () -> service.summary("actor-1")).code());
         verifyNoInteractions(store, devices, inventory, trust);
+    }
+
+    /** Fake directory harness for service-side LDAP refresh at immediate start, due scheduled start and sequence advance. */
+    private static final class FakeDirectory {
+        static final String PROFILE = "synthetic-ad-profile", GROUP = "CN=FailoverAdmins,DC=example,DC=invalid";
+        static final String BINDING = "binding-ldap-op-admin";
+        final com.securityexpert.nexus.ui2.platform.GroupReferenceCipher cipher;
+        final java.util.Map<String, com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRecord> actors = new java.util.HashMap<>();
+        final java.util.Map<String, java.util.Set<String>> members = new java.util.HashMap<>();
+        boolean reachable = true;
+
+        FakeDirectory() {
+            byte[] key = new byte[32];
+            new java.security.SecureRandom().nextBytes(key);
+            cipher = com.securityexpert.nexus.ui2.platform.GroupReferenceCipher.fromBase64Key(
+                java.util.Base64.getEncoder().encodeToString(key), "synthetic-key");
+        }
+
+        void enroll(String actor, String principal, boolean inGroup) {
+            Instant now = Instant.now();
+            actors.put(actor, new com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRecord(
+                actor, java.util.Set.of(GROUP), now.minusSeconds(60), now.plusSeconds(240), PROFILE,
+                cipher.encryptDirectory(principal, PROFILE, com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_PRINCIPAL),
+                cipher.keyId()));
+            members.put(principal, inGroup ? java.util.Set.of(GROUP) : java.util.Set.of());
+        }
+
+        RbacEvaluator evaluator() {
+            var bindingRow = new com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRecord(
+                BINDING, com.securityexpert.nexus.ui2.platform.RoleToken.OPERATION_ADMIN,
+                cipher.encryptDirectory(GROUP, PROFILE, com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP),
+                cipher.keyId(), "actor-setup", Instant.now(), Optional.empty(), Optional.empty(),
+                com.securityexpert.nexus.ui2.platform.DirectoryBindingKind.DIRECTORY_GROUP, PROFILE);
+            var actorRepo = mock(com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRepository.class);
+            when(actorRepo.find(anyString())).thenAnswer(c -> Optional.ofNullable(actors.get(c.getArgument(0))));
+            doAnswer(c -> {
+                var r = (com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRecord) c.getArgument(0);
+                actors.put(r.actorFingerprint(), r);
+                return null;
+            }).when(actorRepo).upsertDirectory(any());
+            doAnswer(c -> {
+                actors.remove(c.getArgument(0));
+                return null;
+            }).when(actorRepo).delete(anyString());
+            var sessionRepo = mock(com.securityexpert.nexus.ui2.persistence.identity.SessionRepository.class);
+            when(sessionRepo.findActiveByActor(anyString(), any())).thenReturn(Optional.empty());
+            when(sessionRepo.findActiveByActor(anyString())).thenReturn(Optional.empty());
+            var localRepo = mock(com.securityexpert.nexus.ui2.persistence.identity.LocalCredentialsRepository.class);
+            when(localRepo.findAll()).thenReturn(List.of());
+            var bindingRepo = mock(com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository.class);
+            when(bindingRepo.findActiveByToken(com.securityexpert.nexus.ui2.platform.RoleToken.OPERATION_ADMIN))
+                .thenReturn(List.of(bindingRow));
+            when(bindingRepo.findActiveByToken(com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN))
+                .thenReturn(List.of());
+            when(bindingRepo.findActiveByToken(com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER))
+                .thenReturn(List.of());
+            when(bindingRepo.directoryMutation(any())).thenAnswer(c -> {
+                @SuppressWarnings("unchecked")
+                var work = (java.util.function.Function<com.securityexpert.nexus.ui2.persistence.identity.DirectoryMutationRepositories, Object>) c.getArgument(0);
+                return work.apply(new com.securityexpert.nexus.ui2.persistence.identity.DirectoryMutationRepositories(
+                    bindingRepo, actorRepo, sessionRepo, localRepo));
+            });
+            var port = new com.securityexpert.nexus.ui2.platform.LdapRevalidationPort() {
+                @Override public boolean directoryPostureEnabled() { return true; }
+                @Override public com.securityexpert.nexus.ui2.platform.Result<java.util.Set<String>> revalidate(String a, String b) {
+                    return com.securityexpert.nexus.ui2.platform.Result.err("directory_identity_not_proven", "typed");
+                }
+                @Override public com.securityexpert.nexus.ui2.platform.Result<com.securityexpert.nexus.ui2.platform.DirectoryObservation> revalidatePrincipal(String principal) {
+                    if (!reachable) return com.securityexpert.nexus.ui2.platform.Result.err("directory_unavailable", "connect_failed");
+                    var groups = members.getOrDefault(principal, java.util.Set.of());
+                    if (groups.isEmpty()) return com.securityexpert.nexus.ui2.platform.Result.err("access_group_lost", "not_in_group");
+                    return com.securityexpert.nexus.ui2.platform.Result.ok(
+                        new com.securityexpert.nexus.ui2.platform.DirectoryObservation(PROFILE, principal, groups, r -> { r.run(); return true; }));
+                }
+            };
+            var refresh = new com.securityexpert.nexus.ui2.service.security.DirectoryAuthorizationRefresh(
+                port, bindingRepo, cipher, actorRepo, sessionRepo);
+            var eval = new RbacEvaluator(bindingRepo, actorRepo, cipher);
+            eval.useDirectoryRefresh(refresh);
+            return eval;
+        }
+    }
+
+    @Test void directoryRefreshAtStartRefusesWhenRemovedOrUnreachableAndRunsWhenMember() {
+        ready("ACTIVE", "STANDBY");
+        var dir = new FakeDirectory();
+        var directoryService = new CpFailoverService(devices, inventory, store, dir.evaluator(), trust,
+            new FailoverMutationSwitch(true), WINDOWS);
+        String reqId = UUID.randomUUID().toString();
+        var approval = new JooqCpFailoverRepository.Approval(reqId, CLUSTER, null,
+            Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600), "Synthetic drill", "dir-approver", null);
+        when(store.requestApproval(reqId)).thenReturn(Optional.of(new JooqCpFailoverRepository.RequestApproval(
+            approval, 1L, CLUSTER_ID, "rev-1", JooqCpFailoverRepository.TWO_PERSON, 1, "dir-initiator", "nonce-a")));
+        when(store.requestBound(eq(CLUSTER), isNull(), any(), eq("dir-initiator"), eq(A), eq(true), eq("check_point"),
+            eq(java.util.Set.of(A, B)), eq(reqId), eq(1L), eq("nonce-a"), eq(true), eq(JooqCpFailoverRepository.TWO_PERSON)))
+            .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED", "run-ldap-ok"));
+
+        // 1. Directory down at start -> DIRECTORY_UNREACHABLE_AT_START.
+        dir.enroll("dir-initiator", "uid=init,dc=example", true);
+        dir.enroll("dir-approver", "uid=appr,dc=example", true);
+        dir.reachable = false;
+        assertEquals(com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.DIRECTORY_UNREACHABLE,
+            assertThrows(CpFailoverService.Refusal.class, () -> directoryService.request(
+                CLUSTER_ID, CLUSTER_ID, null, "dir-initiator", "check_point", reqId, 1, "nonce-a", true)).code());
+        verify(store, never()).requestBound(any(), any(), any(), any(), any(), anyBoolean(), any(), any(), any(), anyLong(), any(), anyBoolean(), any());
+
+        // 2. Directory up, initiator removed from AD group -> INITIATOR_NOT_AUTHORIZED_AT_START.
+        dir.reachable = true;
+        dir.enroll("dir-initiator", "uid=init,dc=example", false);
+        dir.enroll("dir-approver", "uid=appr,dc=example", true);
+        assertEquals(com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.INITIATOR_NOT_AUTHORIZED,
+            assertThrows(CpFailoverService.Refusal.class, () -> directoryService.request(
+                CLUSTER_ID, CLUSTER_ID, null, "dir-initiator", "check_point", reqId, 1, "nonce-a", true)).code());
+
+        // 3. Initiator in group, second approver removed from AD group -> APPROVER_NOT_AUTHORIZED_AT_START.
+        dir.enroll("dir-initiator", "uid=init,dc=example", true);
+        dir.enroll("dir-approver", "uid=appr,dc=example", false);
+        assertEquals(com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.APPROVER_NOT_AUTHORIZED,
+            assertThrows(CpFailoverService.Refusal.class, () -> directoryService.request(
+                CLUSTER_ID, CLUSTER_ID, null, "dir-initiator", "check_point", reqId, 1, "nonce-a", true)).code());
+
+        // 4. Both in AD group -> refreshed authority recorded, run starts.
+        dir.enroll("dir-initiator", "uid=init,dc=example", true);
+        dir.enroll("dir-approver", "uid=appr,dc=example", true);
+        assertEquals("run-ldap-ok", directoryService.request(
+            CLUSTER_ID, CLUSTER_ID, null, "dir-initiator", "check_point", reqId, 1, "nonce-a", true));
+        var expectedGrant = new com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.Grant(
+            "ui2_ldap", FakeDirectory.BINDING, com.securityexpert.nexus.ui2.platform.RoleToken.OPERATION_ADMIN);
+        verify(store, atLeastOnce()).recordActorAuthority(
+            com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.KIND_APPROVAL, reqId,
+            com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.INITIATOR, "dir-initiator", expectedGrant);
+        verify(store, atLeastOnce()).recordActorAuthority(
+            com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.KIND_APPROVAL, reqId,
+            com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.APPROVER, "dir-approver", expectedGrant);
+
+        // 5. Scheduled start (startDue) and sequence advance (advanceSequences) refresh directory membership too.
+        var dueRun = new JooqCpFailoverRepository.Run("run-due", CLUSTER, null, reqId, "dir-initiator",
+            Instant.now(), null, "PLANNED", "PLANNED", null, null, null, "check_point", "FAILOVER");
+        when(store.due()).thenReturn(List.of(dueRun));
+        dir.reachable = false;
+        directoryService.startDue();
+        verify(store).stopPlanned("run-due", com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.DIRECTORY_UNREACHABLE);
+        dir.reachable = true;
+        dir.enroll("dir-approver", "uid=appr,dc=example", false);
+        directoryService.startDue();
+        verify(store).stopPlanned("run-due", com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.APPROVER_NOT_AUTHORIZED);
+        dir.enroll("dir-approver", "uid=appr,dc=example", true);
+        directoryService.startDue();
+        verify(store).startDue("run-due", A);
     }
     public static void main(String[] args) {
         new CpFailoverServiceTest().wrongRoleRefusedBeforeAdmission();

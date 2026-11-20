@@ -213,6 +213,18 @@ class PanConfigSyncJobExecutorTest {
         }
     }
 
+    /** V260: a requester who lost the role, was disabled or has stale directory authority ends the record before contact. */
+    @Test void aRequesterWhoNoLongerHoldsTheRoleEndsTheRecordBeforeContact() {
+        for (String code : List.of(com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.INITIATOR_NOT_AUTHORIZED,
+                com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.DIRECTORY_AUTHORITY_STALE)) {
+            var script = new Script();
+            var result = run(script, new FailoverMutationSwitch(true), code);
+            assertTrue(script.calls.isEmpty());
+            verify(result.store()).finish(SYNC_ID, JOB, 1L, code);
+            verify(result.store(), never()).followUp(anyString());
+        }
+    }
+
     @Test void aSynchronizedOrUnknownOrInProgressPairIsNeverSent() {
         for (String[] sync : new String[][]{{"synchronized", "CONFIG_ALREADY_SYNCHRONIZED"},
                 {"", "CONFIG_SYNC_STATE_UNKNOWN"}, {"synchronization in progress", "CONFIG_SYNC_IN_PROGRESS"}}) {

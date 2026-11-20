@@ -148,6 +148,10 @@ public final class AuditPresentationAllowlist {
                     "admission_role", "approval_id", "business_hours_ack", "cluster_ref", "current_run_id",
                     "failed_vs_id", "finished_at", "initiated_by", "next_index", "outcome", "requested_at",
                     "sequence_id", "state", "target_member_ids", "vendor", "vs_ids")),
+            // failover_actor_authority (V260): opaque record/binding ids, actor fingerprints, closed words, timestamps.
+            Map.entry("failover_actor_authority", Set.of(
+                    "actor", "authority", "authority_id", "binding_id", "party", "record_id", "record_kind",
+                    "recorded_at", "role_name")),
             // pan_config_sync (V178): opaque references, codes, booleans and timestamps only; no free text.
             Map.entry("pan_config_sync", Set.of(
                     "business_hours_ack_at", "cluster_ref", "device_status", "finished_at",

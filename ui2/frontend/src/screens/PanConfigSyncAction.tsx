@@ -45,6 +45,9 @@ const words: Record<string, string> = {
   JOB_ENDED_WITHOUT_RESULT: "The job ended before the write. Nothing was sent.",
   FOLLOW_UP_UNAVAILABLE: "the re-run could not be started",
   CONFIG_SYNC_NOT_SUPPORTED: "Configuration sync is offered for Palo Alto HA pairs only.",
+  INITIATOR_NOT_AUTHORIZED_AT_START: "Stopped before contact: the requesting administrator no longer holds the role or is disabled. Nothing was sent.",
+  DIRECTORY_AUTHORITY_STALE_AT_START: "Stopped before contact: directory group membership was not refreshed in time. Nothing was sent.",
+  DIRECTORY_UNREACHABLE_AT_START: "The directory could not be reached to refresh group membership. Nothing was sent; retry when the directory is reachable.",
 };
 export const configSyncText = (code?: string | null) => code ? words[code] ?? code : "";
 const stageText: Record<string, string> = { QUEUED: "Queued", READING_STATE: "Reading the HA state of both members",

@@ -39,8 +39,11 @@ export const errorText = (error: unknown) => {
   const body = failure?.body;
   if (body?.code === "BUSINESS_HOURS_CONFIRM_REQUIRED") return body.message ?? "Not started: business hours were not confirmed.";
   if (body?.code === "OUTSIDE_JOB_WINDOW") return body.message ?? "Device jobs are outside the scheduled window.";
+  if (body?.code === "DIRECTORY_UNREACHABLE_AT_START") return body.message ?? "Directory unreachable (DIRECTORY_UNREACHABLE_AT_START): directory group membership could not be refreshed. Retry when the directory is reachable.";
   return requestFailure(failure);
 };
+export const isDirectoryUnreachable = (error: unknown) =>
+  (error as { body?: { code?: string } } | null | undefined)?.body?.code === "DIRECTORY_UNREACHABLE_AT_START";
 type Draft = { requestId: string; from: string; until: string; reason: string; confirmedRevision?: number };
 /** Workers write "post_return" after the return step; "final" is the older name. Both are the final post-checks. */
 const FINAL_PHASES: ReadonlyArray<string> = ["post_return", "final"];
@@ -120,6 +123,11 @@ const resumeWords: Record<string, string> = {
   OUTCOME_UNCERTAIN: "The return command's outcome is uncertain. It is not resent.",
   OUTCOME_UNKNOWN: "The return command's outcome is uncertain. It is not resent.",
   RETURN_VERIFIED: "Return verified.",
+  INITIATOR_NOT_AUTHORIZED_AT_START: "Stopped before contact: the requesting administrator no longer holds the role or is disabled. Nothing was sent.",
+  APPROVER_NOT_AUTHORIZED_AT_START: "Stopped before contact: the approving administrator no longer holds the role or is disabled. Nothing was sent.",
+  APPROVER_IS_INITIATOR_AT_START: "Stopped before contact: the approver and the requester are the same person. Nothing was sent.",
+  DIRECTORY_AUTHORITY_STALE_AT_START: "Stopped before contact: directory group membership was not refreshed in time. Nothing was sent.",
+  DIRECTORY_UNREACHABLE_AT_START: "The directory could not be reached to refresh group membership. Nothing was sent; retry when the directory is reachable.",
 };
 export const resumeText = (code?: string | null) => code ? resumeWords[code] ?? code : "";
 export function ResumeReturn({ run, unit, onChanged }: { run: CpFailoverRunDetail; unit: CpFailoverUnit; onChanged: () => void }) {
@@ -192,8 +200,11 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
   const [readinessRun, setReadinessRun] = useState<CpFailoverRunDetail | null>(null);
   const [dialog, setDialog] = useState(false), [until, setUntil] = useState("");
   const [reason, setReason] = useState("Manual failover verification"), [error, setError] = useState<string | null>(null);
+  const [canRetry, setCanRetry] = useState(false);
   const [busy, setBusy] = useState(false), [loaded, setLoaded] = useState(false);
   const lock = useRef(false), attempted = useRef<string | null>(null);
+  const lastAction = useRef<(() => Promise<unknown>) | null>(null);
+  const approvedDraft = useRef<CpFailoverApproval | null>(null);
   const lastReadiness = useRef<string | null>(null);
   const shown = useRef(unit.readinessObservedAt);
   shown.current = unit.readinessObservedAt;
@@ -229,9 +240,10 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
   }, [expanded, active, pending, readinessActive, resuming, refresh]);
   const act = async (action: () => Promise<unknown>) => {
     if (lock.current) return;
-    lock.current = true; setBusy(true); setError(null);
+    lastAction.current = action;
+    lock.current = true; setBusy(true); setError(null); setCanRetry(false);
     try { await action(); setDialog(false); await refresh(); }
-    catch (e) { setError(errorText(e)); }
+    catch (e) { setError(errorText(e)); setCanRetry(isDirectoryUnreachable(e)); }
     finally { lock.current = false; setBusy(false); }
   };
   const start = async (approval: CpFailoverApproval) => {
@@ -257,8 +269,10 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
   const confirm = () => act(async () => {
     const request = draft ?? { requestId: crypto.randomUUID(), from: new Date().toISOString(), until: displayInputToIso(until) ?? new Date(until).toISOString(), reason: reason.trim() };
     remember(request);
-    const approval = bound ?? await approveCpFailover(unit, request.from, request.until, request.reason, request.requestId);
+    const currentBound = bound ?? (approvedDraft.current?.requestId === request.requestId ? approvedDraft.current : undefined);
+    const approval = currentBound ?? await approveCpFailover(unit, request.from, request.until, request.reason, request.requestId);
     if (!approval.requestId || !approval.revision) throw new Error("Missing request revision");
+    approvedDraft.current = approval;
     remember({ ...request, confirmedRevision: approval.revision });
     if (approval.approved) { attempted.current = approval.requestId; await start(approval); }
   });
@@ -298,7 +312,8 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
           ? <PanConfigSyncAction unit={unit} onDone={() => { onRefreshUnits(); void refresh(); }} /> : null} />
       {run && <FailoverRun run={run} unit={unit} />}
       {run && <ResumeReturn run={run} unit={unit} onChanged={() => { onRefreshUnits(); void refresh(); }} />}
-      {error && <Typography role="alert" color="error">{error}</Typography>}
+      {error && <Stack direction="row" spacing={1} alignItems="center"><Typography role="alert" color="error">{error}</Typography>
+        {canRetry && !dialog && <M3Button emphasis="outlined" disabled={busy} onClick={() => { if (lastAction.current) void act(lastAction.current); }}>Retry</M3Button>}</Stack>}
     </Stack>}
     <Dialog open={dialog} onClose={() => { if (!busy) setDialog(false); }}><DialogTitle>{allVirtualSystems ? "Fail over all virtual systems" : "Start manual failover"}</DialogTitle>
       <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
@@ -310,7 +325,8 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
         <Typography>OK / Start confirms this request revision and the complete workflow. No later confirmation is required.</Typography>
         <TextField label="Window ends" helperText={`Turkey time (${DISPLAY_TZ_LABEL})`} type="datetime-local" InputLabelProps={{ shrink: true }} value={draft ? isoToDisplayInput(draft.until) : until} disabled={Boolean(draft)} onChange={e => setUntil(e.target.value)} />
         <TextField label="Reason" value={draft?.reason ?? reason} disabled={Boolean(draft)} onChange={e => setReason(e.target.value)} />
-        {error && <Typography role="alert" color="error">{error}</Typography>}
+        {error && <Stack direction="row" spacing={1} alignItems="center"><Typography role="alert" color="error">{error}</Typography>
+          {canRetry && <M3Button emphasis="outlined" disabled={busy} onClick={() => { if (lastAction.current) void act(lastAction.current); }}>Retry</M3Button>}</Stack>}
       </Stack></DialogContent>
       <DialogActions><M3Button emphasis="text" disabled={busy} onClick={() => setDialog(false)}>Cancel</M3Button>
         <M3Button deviceJob emphasis="filled" disabled={busy || !reason.trim() || (!draft && (!displayInputToIso(until) || Date.parse(displayInputToIso(until)!) <= Date.now()))} onClick={() => void confirm()}>OK / Start</M3Button></DialogActions>

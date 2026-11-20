@@ -48,6 +48,11 @@ describe("readiness reasons", () => {
     ["COMMAND_UNAVAILABLE", "Command not available on device (login environment)"],
     ["TRUSTED_CONNECTION_REQUIRED", "Trusted connection required"], ["UNSUPPORTED_MODE", "Cluster mode not supported"],
     ["OPEN_INCIDENT", "Open failover incident"],
+    ["INITIATOR_NOT_AUTHORIZED_AT_START", "Stopped before contact: the requesting administrator no longer holds the role or is disabled"],
+    ["APPROVER_NOT_AUTHORIZED_AT_START", "Stopped before contact: the approving administrator no longer holds the role or is disabled"],
+    ["APPROVER_IS_INITIATOR_AT_START", "Stopped before contact: the approver and the requester are the same person"],
+    ["DIRECTORY_AUTHORITY_STALE_AT_START", "Stopped before contact: directory group membership was not refreshed in time"],
+    ["DIRECTORY_UNREACHABLE_AT_START", "Not started: the directory could not be reached to refresh group membership — retry"],
   ])("says %s in words", (code, words) => expect(readinessReasonLabel(code)).toBe(words));
 
   it("passes a sentence the server wrote, or an unknown code, through unchanged", () => {

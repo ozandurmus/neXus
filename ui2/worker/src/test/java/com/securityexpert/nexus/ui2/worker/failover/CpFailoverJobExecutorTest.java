@@ -109,6 +109,35 @@ class CpFailoverJobExecutorTest {
         }
     }
 
+    /**
+     * V260 (failover_approver_role_recheck_at_worker): the durable admission rechecks the initiator's and approver's
+     * standing. Role kept: the run goes on (every other test here). Initiator disabled, approver demoted, or the same
+     * person on both sides: refused with its code before any contact, at the start of a plain unit, a VS unit (a
+     * sequence step) and a VSX HA chassis run; refused again before the first write if it changed during the reads.
+     */
+    @Test void actorAuthorityRefusalsStopEveryRunKindBeforeContact() {
+        for (String code:List.of(com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.INITIATOR_NOT_AUTHORIZED,
+            com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.APPROVER_NOT_AUTHORIZED,
+            com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.APPROVER_IS_INITIATOR,
+            com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.DIRECTORY_AUTHORITY_STALE)) {
+            for (String vs:java.util.Arrays.asList(null,"12")) {
+                Store store=new Store(); store.vsId=vs; store.admission=code;
+                Script script=new Script(); run(store,script);
+                assertEquals("STOPPED",store.state,code); assertEquals(code,store.outcome,code);
+                assertEquals(0,script.connectCount,code); assertEquals(0,script.downCount+script.upCount,code);
+                check(store.checks.isEmpty() && store.prepared==0);
+            }
+            Store chassis=chassisStore(); chassis.admission=code;
+            Script none=new Script(); run(chassis,none,devices(true,VSX_NAMES),gates());
+            assertEquals(code,chassis.outcome,code); assertEquals(0,none.connectCount,code);
+            Store beforeWrite=new Store(); beforeWrite.writeAdmission=code;
+            Script reads=new Script(); run(beforeWrite,reads);
+            assertEquals(code,beforeWrite.outcome,code);
+            assertEquals(0,reads.downCount,code); assertEquals(0,reads.upCount,code); check(beforeWrite.prepared==0);
+        }
+        Store kept=new Store(); Script runs=new Script(); run(kept,runs);
+        assertEquals("SUCCEEDED",kept.outcome); assertEquals(1,runs.downCount); assertEquals(1,runs.upCount);
+    }
     @Test void admissionIsRecheckedAfterReadinessBeforeTheWrite() {
         Store store=new Store(); store.writeAdmission="MEMBER_SET_CHANGED";
         Script script=new Script(); run(store,script);

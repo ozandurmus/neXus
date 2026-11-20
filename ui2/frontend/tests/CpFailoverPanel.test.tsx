@@ -243,3 +243,16 @@ it("shows why a chassis start is refused now and keeps the button disabled", asy
   expect(screen.getByText(/A virtual system of this chassis is not ready/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Fail over the chassis" })).toBeDisabled();
 });
+it("warns when the directory is unreachable at start and retries the same approval when Retry is clicked", async () => {
+  api.start.mockRejectedValueOnce({ status: 409, body: { code: "DIRECTORY_UNREACHABLE_AT_START" } }).mockResolvedValue({ runId: "run-opaque" });
+  await open(); await warning();
+  fireEvent.click(screen.getByRole("button", { name: "OK / Start" }));
+  expect((await screen.findAllByText(/DIRECTORY_UNREACHABLE_AT_START/)).length).toBeGreaterThan(0);
+  const retryButtons = screen.getAllByRole("button", { name: "Retry" });
+  expect(retryButtons.length).toBeGreaterThan(0);
+  fireEvent.click(retryButtons[0]);
+  await waitFor(() => expect(api.start).toHaveBeenCalledTimes(2));
+  expect(api.approve).toHaveBeenCalledTimes(1);
+  expect(api.start.mock.calls[1]).toEqual(api.start.mock.calls[0]);
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+});
