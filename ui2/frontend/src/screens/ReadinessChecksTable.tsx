@@ -34,22 +34,67 @@ export function primaryRolesConfirmed(checks: ReadinessCheck[]) {
   return checks.some(check => check.checkNo === 1 && check.result === "PASS");
 }
 
+function parseDerived(raw: unknown): Record<string, unknown> | null {
+  if (!raw) return null;
+  if (typeof raw === "string") {
+    try { return JSON.parse(raw) as Record<string, unknown>; } catch { return null; }
+  }
+  return typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+}
+
+export function isActiveRole(role: string | null | undefined): boolean {
+  const r = (role ?? "").toLowerCase();
+  return r === "active" || r === "primary";
+}
+
+export function isStandbyRole(role: string | null | undefined): boolean {
+  const r = (role ?? "").toLowerCase();
+  return r === "standby" || r === "passive" || r === "secondary";
+}
+
 /**
  * Each member's role in the latest readiness cluster-state check (check 1, its own `role`), with the observation time. The
  * inventory role (`ha_role`) is older evidence: after a failover it shows the roles before the switch (live 2026-11-19, a
  * VSX chassis panel showed member 1 ACTIVE / member 2 STANDBY while the readiness showed the reverse).
  */
-export function observedRoles(checks: ReadinessCheck[]): Map<string, { role: string; at?: string }> {
+export function observedRoles(checks: ReadinessCheck[], members: ReadonlyArray<{ device_id: string }> = [],
+    fallbackAt?: string | null, vendor?: string): Map<string, { role: string; at?: string }> {
   const roles = new Map<string, { role: string; at?: string }>();
   for (const check of checks) {
-    if (check.checkNo !== 1 || !check.device_id) continue;
-    let derived = check.derived;
-    if (typeof derived === "string") { try { derived = JSON.parse(derived); } catch { derived = null; } }
-    const role = (derived as { role?: unknown } | null | undefined)?.role;
+    if (check.checkNo !== 1) continue;
+    const deviceId = check.device_id
+      ?? (check.member === "Member 1" ? members[0]?.device_id : check.member === "Member 2" ? members[1]?.device_id : undefined);
+    if (!deviceId) continue;
+    const derived = parseDerived(check.derived);
+    const role = derived?.role;
     if (typeof role !== "string" || !role || role.toUpperCase() === "UNKNOWN") continue;
-    const earlier = roles.get(check.device_id);
-    if (!earlier || (check.observedAt && (!earlier.at || check.observedAt > earlier.at)))
-      roles.set(check.device_id, { role: role.toLowerCase(), at: check.observedAt });
+    const at = check.observedAt ?? (fallbackAt || undefined);
+    const earlier = roles.get(deviceId);
+    if (!earlier || (at && (!earlier.at || at > earlier.at)))
+      roles.set(deviceId, { role: role.toLowerCase(), at });
+  }
+  // Cisco ASA readiness runs whose stored check-1 JSON omitted `role` identify the standby member on check 10 (NOT_ACTIVE_MEMBER).
+  if (roles.size === 0 && members.length === 2) {
+    const check1 = checks.filter(c => c.checkNo === 1);
+    const check1Passed = check1.length > 0 && check1.every(c => c.result === "PASS" || parseDerived(c.derived)?.oneActiveOneStandbyReady === true);
+    const standbyCheck10 = checks.find(c => c.checkNo === TRAFFIC_ARP_CHECK
+      && (parseDerived(c.derived)?.reason === "NOT_ACTIVE_MEMBER" || c.summary === SECONDARY_NOT_ACTIVE));
+    const standbyId = standbyCheck10?.device_id
+      ?? (standbyCheck10?.member === "Member 1" ? members[0]?.device_id : standbyCheck10?.member === "Member 2" ? members[1]?.device_id : undefined);
+    if (check1Passed && standbyId && members.some(m => m.device_id === standbyId)) {
+      const at = check1.map(c => c.observedAt).filter((t): t is string => Boolean(t)).sort().at(-1) ?? (fallbackAt || undefined);
+      for (const m of members) roles.set(m.device_id, { role: m.device_id === standbyId ? "standby" : "active", at });
+    }
+  }
+  // FortiGate pair where the primary's check 1 PASS confirms one primary (active) and one secondary (standby).
+  if (vendor === "fortinet" && members.length === 2 && roles.size < 2 && primaryRolesConfirmed(checks)) {
+    const check1 = checks.find(c => c.checkNo === 1 && c.result === "PASS");
+    const primaryId = check1?.device_id ?? (roles.size === 1 ? [...roles.keys()][0] : members[0]?.device_id);
+    const at = check1?.observedAt ?? (roles.size === 1 ? [...roles.values()][0].at : undefined) ?? (fallbackAt || undefined);
+    if (primaryId && members.some(m => m.device_id === primaryId)) {
+      for (const m of members) if (!roles.has(m.device_id))
+        roles.set(m.device_id, { role: m.device_id === primaryId ? "active" : "standby", at });
+    }
   }
   return roles;
 }
@@ -69,17 +114,19 @@ function checkRows(checks: ReadinessCheck[], labels: ReadinessMember[] = [], pee
 }
 
 /** `rowAction`: an action the server offers for one check row (the PAN config sync on check 4), rendered under its title. */
-export function ReadinessChecksTable({ checks, members = [], compact = false, rowAction, vendor }: { checks: ReadinessCheck[]; members?: ReadinessMember[]; compact?: boolean;
-  rowAction?: (checkNo: number, failed: boolean) => ReactNode; vendor?: string }) {
+export function ReadinessChecksTable({ checks, members = [], compact = false, rowAction, vendor, observedAt }: { checks: ReadinessCheck[]; members?: ReadinessMember[]; compact?: boolean;
+  rowAction?: (checkNo: number, failed: boolean) => ReactNode; vendor?: string; observedAt?: string | null }) {
   const peer = primaryReportsPeer(vendor, members);
+  const singleObserverFgt = !peer && vendor === "fortinet" && members.length === 2
+    && new Set(checks.map(c => c.device_id ?? c.member).filter(Boolean)).size === 1;
   const confirmed = peer && primaryRolesConfirmed(checks);
   // The column roles come from the latest readiness cluster-state check when it names every member, else from inventory,
   // labelled as such. Order presentation by that role; retain opaque device IDs for check matching.
-  const observed = observedRoles(checks);
+  const observed = observedRoles(checks, members, observedAt, vendor);
   const fromReadiness = members.length > 0 && members.every(member => observed.has(member.device_id));
   const roleOf = (member?: ReadinessMember) => member ? fromReadiness ? observed.get(member.device_id)!.role : member.ha_role?.toLowerCase() : undefined;
   const roleAt = (member?: ReadinessMember) => member && fromReadiness ? observed.get(member.device_id)!.at : undefined;
-  const ordered = [...members].sort((a, b) => Number(roleOf(a) !== "active") - Number(roleOf(b) !== "active"));
+  const ordered = [...members].sort((a, b) => Number(!isActiveRole(roleOf(a))) - Number(!isActiveRole(roleOf(b))));
   const memberOrder = [0, 1].map(index => members.length ? members.indexOf(ordered[index]) : index);
   return <Table size="small" aria-label="Readiness results" sx={{ width: "100%", tableLayout: "fixed" }}>
     <TableHead><TableRow>
@@ -96,7 +143,7 @@ export function ReadinessChecksTable({ checks, members = [], compact = false, ro
             : ordered[index]?.ha_role ? " (inventory)" : ""}</Typography>
       </TableCell>)}
     </TableRow></TableHead>
-    <TableBody>{checkRows(checks, members, peer).map(row => {
+    <TableBody>{checkRows(checks, members, peer || singleObserverFgt).map(row => {
       const icon = row.failed ? "x-circle" : row.passed ? "check-circle" : "info";
       const result = row.failed ? "Blocking" : row.passed ? "Passed" : !row.blocking ? "Info" : "Unknown";
       return <TableRow key={row.no} sx={{ bgcolor: row.failed ? m3.errorContainer : undefined }}>
@@ -109,7 +156,7 @@ export function ReadinessChecksTable({ checks, members = [], compact = false, ro
           {rowAction?.(row.no, row.failed)}
         </TableCell>
         {memberOrder.map((memberIndex, index) => <TableCell key={index} sx={{ py: compact ? 0.5 : 1.5, whiteSpace: "normal", overflowWrap: "anywhere" }}>
-          <CheckMessage text={peer ? (index === 1 && row.no === TRAFFIC_ARP_CHECK ? SECONDARY_NOT_ACTIVE : row.members[0]?.summary ?? "Not collected")
+          <CheckMessage text={(peer || singleObserverFgt) ? (index === 1 && row.no === TRAFFIC_ARP_CHECK ? SECONDARY_NOT_ACTIVE : row.members[0]?.summary ?? "Not collected")
             : row.members[memberIndex]?.summary ?? "Not collected"} /></TableCell>)}
       </TableRow>;
     })}</TableBody>
@@ -175,7 +222,7 @@ export function ReadinessCard({ checks, members, status, cluster, vendor, observ
     </Box>
     {!running && readinessStopReason(stopCode) && <Typography variant="body2" sx={{ mb: 1 }}>{readinessStopReason(stopCode)}</Typography>}
     {error && <Typography role="alert" variant="body2" sx={{ color: m3.criticalInk, mb: 1 }}>{error}</Typography>}
-    <TableContainer><ReadinessChecksTable checks={checks} members={members} rowAction={rowAction} vendor={vendor} /></TableContainer>
+    <TableContainer><ReadinessChecksTable checks={checks} members={members} rowAction={rowAction} vendor={vendor} observedAt={observedAt} /></TableContainer>
     {!checks.length && <Typography variant="body2" sx={{ color: m3.onSurfaceVar, py: 2 }}>No observations yet</Typography>}
     <Typography variant="caption" sx={{ display: "block", color: m3.onSurfaceVar, mt: 2 }}>Failover runs re-check everything at start.</Typography>
   </Card>;

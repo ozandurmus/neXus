@@ -398,8 +398,7 @@ public final class CpFailoverService {
                 || descriptor.requiredTransportKind().filter(k -> !k.equalsIgnoreCase(rows.get(0).transportKind())).isPresent()
                 || (descriptor == FailoverVendor.PALO_ALTO && !rows.get(0).panSupported());
         })) return java.util.stream.Stream.<Summary>empty();
-        // A FortiGate pair of two enrolled members is listed only for now: its per-member readiness is a later step (Q2).
-        if (!readinessOn(descriptor) || descriptor == FailoverVendor.FORTINET && !singleFortigate) {
+        if (!readinessOn(descriptor)) {
             // Listed only: one unit per pair, no virtual systems, no readiness, no actions.
             Unit only = new Unit(opaque(clusterRef), opaque(clusterRef), clusterRef, null, pair);
             var status = statuses.get(new StatusKey(clusterRef, null, vendor));

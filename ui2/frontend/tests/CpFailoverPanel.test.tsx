@@ -256,3 +256,21 @@ it("warns when the directory is unreachable at start and retries the same approv
   expect(api.start.mock.calls[1]).toEqual(api.start.mock.calls[0]);
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 });
+
+it.each([
+  ["cisco_asa", "Cisco ASA"],
+  ["fortinet", "FortiGate"],
+] as const)("shows 'Failover execution not enabled for %s' instead of an execution button, skips approvals and offers Run pre-checks", async (vendor, label) => {
+  api.units.mockResolvedValue([{ ...unit, vendor, canApprove: false, canStart: false, canSchedule: false, canRunReadiness: true,
+    failoverRefusal: "FAILOVER_VENDOR_NOT_AVAILABLE" }]);
+  api.readiness.mockResolvedValue({ runId: "run-readiness" });
+  render(<ThemeProvider theme={m3Theme}><CpFailoverPanel memberDeviceId="opaque-1" vendor={vendor} /></ThemeProvider>);
+  expect(await screen.findByLabelText(`${label} failover`)).toBeInTheDocument();
+  expect(screen.getByText(`Failover execution not enabled for ${label}`)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "CLS-ROMEO-01" }));
+  await waitFor(() => expect(api.runs).toHaveBeenCalled());
+  expect(api.approvals).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: /Start failover|Fail over/ })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Run pre-checks" }));
+  await waitFor(() => expect(api.readiness).toHaveBeenCalledWith(expect.objectContaining({ unitId: unit.unitId, vendor })));
+});

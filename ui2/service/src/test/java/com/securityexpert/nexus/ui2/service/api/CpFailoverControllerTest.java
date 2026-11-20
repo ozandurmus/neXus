@@ -96,4 +96,58 @@ class CpFailoverControllerTest {
         request.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE,"synthetic-actor");
         assertFalse(((Map<?,?>)((java.util.List<?>)new CpFailoverController(service).summary(request).getBody()).get(0)).containsKey("haView"));
     }
+
+    /** ASA and FortiGate summary and run-detail responses carry read-only check-1 roles, mode and failoverRefusal. */
+    @org.junit.jupiter.api.Test
+    void asaAndFortigateSummaryAndDetailProjectObservedRolesModeAndFailoverRefusal() {
+        var service=mock(CpFailoverService.class);
+        var asaUnit=new CpFailoverService.Unit("opaque-asa","opaque-asa","CLS-ROMEO-02",null,java.util.List.of(
+            pairMember("opaque-1","cisco_asa","active"),pairMember("opaque-2","cisco_asa","standby")));
+        String asaChecks="[{\"memberRef\":\"opaque-1\",\"checkNo\":1,\"status\":\"PASS\",\"derived\":{\"reason\":\"ROLES_OK\",\"failoverOn\":true,\"oneActiveOneStandbyReady\":true}},"
+            +"{\"memberRef\":\"opaque-2\",\"checkNo\":1,\"status\":\"PASS\",\"derived\":{\"reason\":\"ROLES_OK\",\"failoverOn\":true,\"oneActiveOneStandbyReady\":true}},"
+            +"{\"memberRef\":\"opaque-1\",\"checkNo\":10,\"status\":\"NOT_EVALUATED\",\"derived\":{\"reason\":\"NOT_ACTIVE_MEMBER\"}},"
+            +"{\"memberRef\":\"opaque-2\",\"checkNo\":10,\"status\":\"PASS\",\"derived\":{\"trafficBytesPerSecond\":1000,\"arpEntries\":12}}]";
+        var asaReadiness=new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository.ReadinessStatus(
+            "CLS-ROMEO-02",null,"cisco_asa","READY",java.time.Instant.EPOCH,null,asaChecks,"ALL_CHECKS_PASSED");
+        var fgtUnit=new CpFailoverService.Unit("opaque-fgt","opaque-fgt","CLS-ROMEO-03",null,java.util.List.of(
+            pairMember("fgt-1","fortinet","primary"),pairMember("fgt-2","fortinet","secondary")));
+        String fgtChecks="[{\"memberRef\":\"fgt-1\",\"checkNo\":1,\"status\":\"PASS\",\"derived\":{\"reason\":\"HA_OK\",\"mode\":\"A-P\"}}]";
+        var fgtReadiness=new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository.ReadinessStatus(
+            "CLS-ROMEO-03",null,"fortinet","READY",java.time.Instant.EPOCH,null,fgtChecks,"ALL_CHECKS_PASSED");
+        when(service.summary("synthetic-actor")).thenReturn(java.util.List.of(
+            new CpFailoverService.Summary(asaUnit,"cisco_asa",false,null,null,null,asaReadiness,true,true),
+            new CpFailoverService.Summary(fgtUnit,"fortinet",false,null,null,null,fgtReadiness,true,true)));
+        var request=new MockHttpServletRequest();
+        request.setServletPath("/api/v2/cp-failover/summary");
+        request.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE,"synthetic-actor");
+        var rows=(java.util.List<?>)new CpFailoverController(service).summary(request).getBody();
+        var asaRow=(Map<?,?>)rows.get(0);
+        assertEquals("active-passive",asaRow.get("mode"));
+        assertEquals("FAILOVER_VENDOR_NOT_AVAILABLE",asaRow.get("failoverRefusal"));
+        assertNotNull(asaRow.get("haView"));
+        var asaCheckRows=(java.util.List<?>)((Map<?,?>)asaRow.get("readiness")).get("checks");
+        assertEquals("STANDBY",((Map<?,?>)((Map<?,?>)asaCheckRows.get(0)).get("derived")).get("role"));
+        assertEquals("ACTIVE",((Map<?,?>)((Map<?,?>)asaCheckRows.get(1)).get("derived")).get("role"));
+        var fgtRow=(Map<?,?>)rows.get(1);
+        assertEquals("active-passive",fgtRow.get("mode"));
+        assertEquals("FAILOVER_VENDOR_NOT_AVAILABLE",fgtRow.get("failoverRefusal"));
+        var fgtCheckRows=(java.util.List<?>)((Map<?,?>)fgtRow.get("readiness")).get("checks");
+        assertEquals(null,((Map<?,?>)((Map<?,?>)fgtCheckRows.get(0)).get("derived")).get("role"), "no role is inferred for FortiGate");
+
+        var run=new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository.Run("run-asa","CLS-ROMEO-02",null,
+            null,"synthetic-actor",java.time.Instant.EPOCH,"job-asa","DONE","DONE","READY",null,"ALL_CHECKS_PASSED","cisco_asa","READINESS");
+        when(service.detail("run-asa","synthetic-actor")).thenReturn(java.util.Optional.of(
+            new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository.Detail(run,java.util.List.of(
+                new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository.Check("pre","opaque-1",null,1,"PASS",
+                    "{\"reason\":\"ROLES_OK\",\"failoverOn\":true,\"oneActiveOneStandbyReady\":true}",java.time.Instant.EPOCH),
+                new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository.Check("pre","opaque-2",null,1,"PASS",
+                    "{\"reason\":\"ROLES_OK\",\"failoverOn\":true,\"oneActiveOneStandbyReady\":true}",java.time.Instant.EPOCH),
+                new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository.Check("pre","opaque-1",null,10,"NOT_EVALUATED",
+                    "{\"reason\":\"NOT_ACTIVE_MEMBER\"}",java.time.Instant.EPOCH)))));
+        var detailReq=new MockHttpServletRequest();
+        detailReq.setServletPath("/api/v2/asa-failover/runs/run-asa");
+        detailReq.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE,"synthetic-actor");
+        var detail=(Map<?,?>)new CpFailoverController(service).detail("run-asa",detailReq).getBody();
+        assertEquals(Map.of("opaque-1","STANDBY","opaque-2","ACTIVE"),detail.get("lastConfirmedRoles"));
+    }
 }
