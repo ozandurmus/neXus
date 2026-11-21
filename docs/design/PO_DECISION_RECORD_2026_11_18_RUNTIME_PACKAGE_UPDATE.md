@@ -99,3 +99,14 @@ The build proxy returned intermittent HTTP 503 for the Red Hat UBI CDN during th
 the UBI baseos repository, so the security gate blocked the deploy. The update step now tries `microdnf update` three
 times, 30 s apart, before falling back; the fallback and the ratified decision are unchanged. The script-execution
 image install step retries the same way and still fails the build if all three attempts fail.
+
+## Root cause correction (2026-11-21)
+
+The 503s were not intermittent proxy failures. Kaniko does not pass the build pod's HTTP_PROXY, HTTPS_PROXY and
+NO_PROXY environment to RUN steps, so microdnf inside the image build never used the proxy: a probe RUN step saw no
+proxy variables and could not reach the CDN, while the same image and env in a plain pod reached it every time. With
+`--build-arg=HTTP_PROXY`, `--build-arg=HTTPS_PROXY` and `--build-arg=NO_PROXY` (valueless predefined build args taken
+from the pod env) the same RUN step reached the CDN and microdnf built its metadata cache. The service build template
+and the script-execution image builder now pass them; the rendered `~/build-job-proxy.yaml` on the build host carries
+the same three lines. The update step has most likely never applied an update in the in-cluster build before this
+fix.

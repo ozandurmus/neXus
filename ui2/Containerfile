@@ -107,8 +107,8 @@ RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
 # Hat fixes land without waiting for a new base-image digest. Resilient: if the
 # repositories are unreachable through the proxy, log PACKAGE_UPDATE_SKIPPED
 # and continue with the pinned base packages. The update is tried 3 times, 30 s
-# apart, because the build proxy returns intermittent 503s for the Red Hat CDN
-# (2026-11-21: one skipped update kept 4 fixed curl CVEs in the image).
+# apart. The build job passes the proxy as predefined build args: kaniko does
+# not hand the pod's proxy env to RUN steps (2026-11-21).
 # PACKAGE_UPDATE_DATE busts the layer cache daily even when nothing else changes.
 ARG PACKAGE_UPDATE_DATE=2026-11-21
 RUN rpm -qa --qf '%{NEVRA}\n' | sort > /tmp/rpm-before.txt \
