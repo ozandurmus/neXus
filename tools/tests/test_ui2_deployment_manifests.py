@@ -788,16 +788,141 @@ def test_the_containerfile_is_two_stages_pinned_by_digest():
         assert "@sha256:" in line, f"§3.1: base image is not pinned by digest: {line}"
 
 
+RUNTIME_PACKAGE_UPDATE = (
+    "RUN rpm -qa --qf '%{NEVRA}\\n' | sort > /tmp/rpm-before.txt \\\n"
+    " && if timeout 180 microdnf -y update --setopt=install_weak_deps=0; then \\\n"
+    "      rpm -qa --qf '%{NEVRA}\\n' | sort > /tmp/rpm-after.txt \\\n"
+    "      && comm -13 /tmp/rpm-before.txt /tmp/rpm-after.txt | tee /app/build-info/package-update.txt; \\\n"
+    "    else \\\n"
+    "      rc=$?; \\\n"
+    "      printf 'PACKAGE_UPDATE_SKIPPED: microdnf update failed (exit %s, date=%s); continuing with pinned base packages\\n' \"$rc\" \"${PACKAGE_UPDATE_DATE}\" \\\n"
+    "        | tee /app/build-info/package-update.txt >&2; \\\n"
+    "    fi \\\n"
+    " && (microdnf clean all || true) \\\n"
+    " && rm -rf /var/cache/yum /var/cache/dnf /tmp/rpm-before.txt /tmp/rpm-after.txt \\\n"
+    " && test -f /app/build-info/package-update.txt"
+)
+
+
 def test_the_runtime_removes_all_python_rpms_offline_and_verifies_in_the_same_run():
     text = CONTAINERFILE.read_text(encoding="utf-8")
     runtime = text.rsplit("\nFROM ", 1)[1]
     removal = "RUN rpm -e --nodeps $(rpm -qa --qf '%{NAME}\\n' 'python3*')"
     verification = ' && test -z "$(rpm -qa \'python3*\')"'
+    assert runtime.count(RUNTIME_PACKAGE_UPDATE) == 1
     assert removal + " \\\n" + verification in runtime
-    assert runtime.index("USER 0\n") < runtime.index(removal) < runtime.index("USER 185\n")
-    assert not re.search(r"\b(?:dnf|microdnf|yum)\b", runtime)
+    assert (
+        runtime.index("USER 0\n")
+        < runtime.index(RUNTIME_PACKAGE_UPDATE)
+        < runtime.index(removal)
+        < runtime.index("USER 185\n")
+    )
+    assert not re.search(r"\b(?:dnf|microdnf|yum)\b", runtime.replace(RUNTIME_PACKAGE_UPDATE, "", 1))
     entries = yaml.safe_load((REPO_ROOT / "security/baseline.yaml").read_text())["accepted"]
     assert not {"CVE-2026-19553", "CVE-2026-57585"} & {entry["rule"] for entry in entries}
+
+
+def test_the_runtime_updates_installed_packages_resiliently_and_derived_image_inherits_it(tmp_path):
+    """PO decision 2026-11-18 ('Evet, ekle', PO_DECISION_RECORD_2026_11_18_RUNTIME_PACKAGE_UPDATE.md):
+    one resilient microdnf update step in the runtime stage before python removal, with daily cache-buster ARG,
+    recording updated NEVRAs to /app/build-info/package-update.txt and continuing with PACKAGE_UPDATE_SKIPPED
+    when the Red Hat repos are unreachable through the proxy."""
+    import os
+    import subprocess
+
+    text = CONTAINERFILE.read_text(encoding="utf-8")
+    runtime = text.rsplit("\nFROM ", 1)[1]
+    removal = "RUN rpm -e --nodeps $(rpm -qa --qf '%{NAME}\\n' 'python3*')"
+    arg_match = re.search(r"^ARG PACKAGE_UPDATE_DATE=(\d{4}-\d{2}-\d{2})$", runtime, flags=re.MULTILINE)
+    assert arg_match is not None, "daily cache-buster ARG PACKAGE_UPDATE_DATE=YYYY-MM-DD is required"
+    date.fromisoformat(arg_match.group(1))
+    assert (
+        runtime.index("USER 0\n")
+        < runtime.index("mkdir -p /app /app/tmp /app/home /app/build-info")
+        < runtime.index("update-ca-trust")
+        < runtime.index(arg_match.group(0))
+        < runtime.index(RUNTIME_PACKAGE_UPDATE)
+        < runtime.index(removal)
+        < runtime.index("chown -R 0:0 /app")
+        < runtime.index("USER 185\n")
+    )
+    assert '"-XX:-UseBASE64Intrinsics"' in runtime
+
+    # Packet-analysis derived image inherits the updated runtime stage via FROM ${SERVICE_IMAGE} without duplicating it.
+    pa_final = (REPO_ROOT / "ui2/Containerfile.packet-analysis").read_text(encoding="utf-8").rsplit("\nFROM ", 1)[1]
+    assert pa_final.startswith("${SERVICE_IMAGE}\n")
+    assert not re.search(r"\b(?:dnf|microdnf|yum)\b", pa_final)
+    assert "package-update.txt" not in pa_final
+
+    # Decision record and successor index link.
+    record = (REPO_ROOT / "docs/design/PO_DECISION_RECORD_2026_11_18_RUNTIME_PACKAGE_UPDATE.md").read_text(encoding="utf-8")
+    assert "RATIFIED" in record and "Evet, ekle" in record
+    assert "PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md" in record
+
+    # Execute the shell body of RUNTIME_PACKAGE_UPDATE against local stubs for both success and proxy-failure fallback.
+    shell_body = RUNTIME_PACKAGE_UPDATE.removeprefix("RUN ").replace("\\\n", " ")
+    for path_token in ("/app/build-info", "/tmp/rpm-before.txt", "/tmp/rpm-after.txt", "/var/cache/yum", "/var/cache/dnf"):
+        shell_body = shell_body.replace(path_token, str(tmp_path) + path_token)
+    (tmp_path / "app/build-info").mkdir(parents=True)
+    (tmp_path / "tmp").mkdir(parents=True)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    rpm_stub = bin_dir / "rpm"
+    rpm_stub.write_text(
+        '#!/bin/sh\n'
+        'if [ -f "$TEST_UPDATED" ]; then\n'
+        '  printf "bash-5.1.8-9.el9.x86_64\\ncurl-minimal-7.76.1-42.el9_9.x86_64\\nglibc-2.34-290.el9_9.x86_64\\n"\n'
+        'else\n'
+        '  printf "bash-5.1.8-9.el9.x86_64\\ncurl-minimal-7.76.1-40.el9_8.9.x86_64\\nglibc-2.34-284.el9_8.4.x86_64\\n"\n'
+        'fi\n'
+    )
+    timeout_stub = bin_dir / "timeout"
+    timeout_stub.write_text('#!/bin/sh\nshift\nexec "$@"\n')
+    microdnf_stub = bin_dir / "microdnf"
+    microdnf_stub.write_text(
+        '#!/bin/sh\n'
+        'if [ "$1" = "clean" ]; then exit "$TEST_CLEAN_RC"; fi\n'
+        'if [ "$TEST_UPDATE_RC" = "0" ]; then touch "$TEST_UPDATED"; fi\n'
+        'exit "$TEST_UPDATE_RC"\n'
+    )
+    for stub in (rpm_stub, timeout_stub, microdnf_stub):
+        stub.chmod(0o755)
+
+    base_env = {
+        **os.environ,
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "PACKAGE_UPDATE_DATE": "2026-11-18",
+        "TEST_UPDATED": str(tmp_path / "updated.flag"),
+        "TEST_CLEAN_RC": "0",
+    }
+    report_file = tmp_path / "app/build-info/package-update.txt"
+
+    # 1. Success: updated NEVRAs are written to /app/build-info/package-update.txt and stdout; caches/temps are cleaned.
+    for cache_dir in (tmp_path / "var/cache/yum", tmp_path / "var/cache/dnf"):
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        (cache_dir / "repomd.xml").write_text("cached")
+    ok = subprocess.run(["sh", "-c", shell_body], env={**base_env, "TEST_UPDATE_RC": "0"}, capture_output=True, text=True)
+    assert ok.returncode == 0, ok.stderr
+    expected_nevras = "curl-minimal-7.76.1-42.el9_9.x86_64\nglibc-2.34-290.el9_9.x86_64\n"
+    assert ok.stdout == expected_nevras
+    assert report_file.read_text() == expected_nevras
+    assert "PACKAGE_UPDATE_SKIPPED" not in ok.stdout + ok.stderr + report_file.read_text()
+    assert not (tmp_path / "var/cache/yum").exists() and not (tmp_path / "var/cache/dnf").exists()
+    assert not (tmp_path / "tmp/rpm-before.txt").exists() and not (tmp_path / "tmp/rpm-after.txt").exists()
+
+    # 2. Proxy/repo failure: logs PACKAGE_UPDATE_SKIPPED, writes it to package-update.txt, cleans caches, and exits 0.
+    (tmp_path / "updated.flag").unlink()
+    (tmp_path / "var/cache/yum").mkdir(parents=True, exist_ok=True)
+    fallback = subprocess.run(
+        ["sh", "-c", shell_body],
+        env={**base_env, "TEST_UPDATE_RC": "124", "TEST_CLEAN_RC": "1"},
+        capture_output=True,
+        text=True,
+    )
+    assert fallback.returncode == 0
+    assert "PACKAGE_UPDATE_SKIPPED: microdnf update failed (exit 124, date=2026-11-18)" in fallback.stderr
+    assert report_file.read_text() == fallback.stderr
+    assert not (tmp_path / "var/cache/yum").exists()
 
 
 def test_the_containerfile_final_account_is_numeric():
