@@ -322,6 +322,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /api/v2/config/notifications/test-mail", ActionRegistry.NOTIFICATION_CONFIG_WRITE),
             Map.entry("GET /api/v2/system/pods", ActionRegistry.SYSTEM_STATUS_READ),
             Map.entry("GET /api/v2/overview", ActionRegistry.SYSTEM_STATUS_READ),
+            Map.entry("GET /api/v2/estate/as-of", ActionRegistry.DEVICE_READ),
             Map.entry("GET /api/v2/search", ActionRegistry.GLOBAL_SEARCH_READ),
             Map.entry("GET /api/v2/system/storage", ActionRegistry.SYSTEM_STATUS_READ),
             Map.entry("GET /api/v2/security/scan-summary/latest", ActionRegistry.SECURITY_SCAN_SUMMARY_READ),
