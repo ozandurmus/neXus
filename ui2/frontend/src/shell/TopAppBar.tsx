@@ -19,6 +19,7 @@ import { listNotifications, getProjectPlan, responsesAreMasked } from "../auth/a
 import { primaryRoleLabel, roleTokenLabel } from "./roleLabel";
 import { PlatformHealthIndicator } from "./PlatformHealthIndicator";
 import { useLocationSearch } from "./urlParams";
+import { ViewModeControl } from "./ViewModeControl";
 
 /**
  * The minimal notification badge NXS-LOCAL-0165 adds (WORKER.md
@@ -168,7 +169,8 @@ function DisplayControls() {
     return `?${p.toString()}`;
   })();
   return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
+    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+      <ViewModeControl variant="m3" />
       <Tooltip title={mode === "dark" ? "Light mode" : "Dark mode"}>
         <IconButton aria-label={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"} size="small"
           onClick={() => setMode(mode === "dark" ? "light" : "dark")} sx={{ color: m3.onSurfaceVar }}>

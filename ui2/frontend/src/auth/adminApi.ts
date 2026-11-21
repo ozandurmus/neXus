@@ -5413,3 +5413,35 @@ export async function downloadScriptRunOutput(runId: string): Promise<string> {
   }
   return withTimeout(response.text(), 60_000);
 }
+/** `GET /api/v2/estate/as-of?at=<ISO>`: stored evidence as of a moment (Estate Rewind). Read-only; names masked server-side for aiview. */
+export interface EstateAsOfFigure {
+  readonly state?: string;
+  readonly verdict?: string;
+  readonly reason?: string | null;
+  readonly evidence_at?: string | null;
+  readonly age_seconds?: number | null;
+  readonly pass_count?: number | null;
+  readonly fail_count?: number | null;
+  readonly no_evidence_count?: number | null;
+  readonly critical_fail_count?: number | null;
+}
+export interface EstateAsOfUnit {
+  readonly device_id: string;
+  readonly hostname?: string | null;
+  readonly vendor?: string | null;
+  readonly role?: string | null;
+  readonly cluster_member_ref?: string | null;
+  readonly enrolled_at_moment?: boolean;
+  readonly failover?: EstateAsOfFigure;
+  readonly backup?: EstateAsOfFigure;
+  readonly compliance?: EstateAsOfFigure;
+}
+export interface EstateAsOfView {
+  readonly as_of: string;
+  readonly generated_at: string;
+  readonly masked?: boolean;
+  readonly warnings?: ReadonlyArray<{ readonly code?: string; readonly message?: string }>;
+  readonly units: readonly EstateAsOfUnit[];
+}
+export const getEstateAsOf = (at: string) =>
+  call<EstateAsOfView>(`/api/v2/estate/as-of?at=${encodeURIComponent(at)}`, "GET");
