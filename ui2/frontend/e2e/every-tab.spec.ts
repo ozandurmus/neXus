@@ -11,7 +11,18 @@ async function content(page: Page, region: Locator = page.getByRole("main")) {
 }
 
 // Only role=tab navigation is traversed. Action buttons inside panels are never clicked.
-async function nestedTabs(page: Page, root: Locator, checkpoint: () => Promise<void>, depth = 0) {
+// A failure names where it happened with static navigation labels only (registered tab-list and tab labels, the entity
+// ordinal and kind); context tabs carry masked VS names, so their label is withheld. Never a value from the page.
+async function located(where: string, step: () => Promise<void>) {
+  try {
+    await step();
+  } catch (error) {
+    if (error instanceof Error) error.message = `${error.message} [at: ${where}]`;
+    throw error;
+  }
+}
+
+async function nestedTabs(page: Page, root: Locator, checkpoint: () => Promise<void>, depth = 0, where = "") {
   expect(depth < 8, "Unexpected tab nesting").toBe(true);
   const rootPanelId = await root.getAttribute("role") === "tabpanel" ? await root.getAttribute("id") : null;
   const listNames = await root.getByRole("tablist").evaluateAll((lists, panelId) => lists
@@ -27,14 +38,16 @@ async function nestedTabs(page: Page, root: Locator, checkpoint: () => Promise<v
     const tabCount = await tabs.count();
     for (let j = 0; j < tabCount; j++) {
       const tab = tabs.nth(j);
-      if (definition) expect(definition.labels.includes((await tab.innerText()).trim()), "Unregistered tab (label withheld)").toBe(true);
+      const tabLabel = (await tab.innerText()).trim();
+      if (definition) expect(definition.labels.includes(tabLabel), "Unregistered tab (label withheld)").toBe(true);
+      const here = `${where} > ${definition ? `${label} / ${tabLabel}` : `Inventory context / tab ${j + 1}`}`;
       await tab.click();
-      await checkpoint();
+      await located(here, checkpoint);
       const panelId = await tab.getAttribute("aria-controls");
       expect(Boolean(panelId), "Tab must name its panel").toBe(true);
       const panel = page.locator(`[id=${JSON.stringify(panelId)}]`);
       await content(page, panel);
-      await nestedTabs(page, panel, checkpoint, depth + 1);
+      await nestedTabs(page, panel, checkpoint, depth + 1, here);
     }
   }
 }
@@ -107,18 +120,21 @@ test("full: every listed inventory entity and its nested tabs", async ({ page, s
   expect(response.status).toBe(200);
   expect(response.body.devices.length > 0, "Inventory coverage requires stored devices").toBe(true);
   const seen = new Set<string>();
+  let ordinal = 0;
   for (const device of response.body.devices) {
     const key = device.cluster_member_ref ?? device.device_id;
     if (seen.has(key)) continue;
     seen.add(key);
+    ordinal += 1;
+    const entity = `entity #${ordinal} (${device.cluster_member_ref ? "cluster" : "device"}, ${device.vendor_hint || "vendor unknown"})`;
     // Query identifiers stay inside the browser; test names and failures contain none.
     const query = device.cluster_member_ref ? `cluster_ref=${encodeURIComponent(key)}` : `device_id=${encodeURIComponent(key)}`;
     await visit(page, `screen=inventory&${query}`, "Devices");
-    await safety.checkpoint();
+    await located(entity, safety.checkpoint);
     const name = device.cluster_member_ref ? "Cluster detail" : "Device detail";
     const list = page.getByRole("tablist", { name, exact: true });
     expect(await list.count() > 0, "Inventory entity detail did not open").toBe(true);
-    await nestedTabs(page, page.getByRole("main"), safety.checkpoint);
+    await nestedTabs(page, page.getByRole("main"), safety.checkpoint, 0, entity);
     await content(page);
   }
 });
