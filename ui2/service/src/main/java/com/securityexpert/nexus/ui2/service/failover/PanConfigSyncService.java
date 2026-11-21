@@ -31,10 +31,19 @@ public final class PanConfigSyncService {
     /**
      * What the screens show for one unit. {@code offered}: the newest readiness recorded check 4 FAIL. {@code canRun}:
      * offered, an administrator, not the masked view (the button). {@code refusal}: the server's reason it would refuse
-     * now (the button is then shown disabled with it); null when a request may be made. Opaque member ids only.
+     * now (the button is then shown disabled with it); null when a request may be made. {@code readinessOutcome}: check
+     * 4's outcome in the newest readiness ({@code PASS}, {@code FAIL}, {@code IN_PROGRESS}, {@code UNKNOWN}).
+     * {@code settling}: a sync was requested and its follow-up readiness has not finished yet or still sees
+     * "synchronization in progress". Opaque member ids only.
      */
     public record View(boolean offered, boolean canRun, String refusal, String sourceRef, String targetRef,
-            Instant readinessObservedAt, JooqPanConfigSyncRepository.ConfigSync latest) {}
+            Instant readinessObservedAt, String readinessOutcome, boolean settling,
+            JooqPanConfigSyncRepository.ConfigSync latest) {
+        public View(boolean offered, boolean canRun, String refusal, String sourceRef, String targetRef,
+                Instant readinessObservedAt, JooqPanConfigSyncRepository.ConfigSync latest) {
+            this(offered, canRun, refusal, sourceRef, targetRef, readinessObservedAt, null, false, latest);
+        }
+    }
 
     private final JooqPanConfigSyncRepository store;
     private final CpFailoverService units;
@@ -93,23 +102,56 @@ public final class PanConfigSyncService {
         return view(unit, vendor, readiness, unitRefusal, () -> null, masked, mayRun, latest);
     }
 
+    public static boolean syncInProgress(com.fasterxml.jackson.databind.JsonNode derived) {
+        if (derived == null || derived.isMissingNode() || derived.isNull()) return false;
+        for (String key : List.of("first", "second", "active", "passive"))
+            if (inProgressWord(derived.path(key).path("running-sync").asText())) return true;
+        return inProgressWord(derived.path("running-sync").asText())
+            || inProgressWord(derived.path("runningSync").asText())
+            || inProgressWord(derived.path("reason").asText());
+    }
+    private static boolean inProgressWord(String value) {
+        return "synchronization in progress".equalsIgnoreCase(value)
+            || "CONFIG_SYNC_IN_PROGRESS".equalsIgnoreCase(value)
+            || "IN_PROGRESS".equalsIgnoreCase(value);
+    }
+    private static boolean isSettling(JooqPanConfigSyncRepository.ConfigSync s, Instant observedAt, boolean inProgress) {
+        if (s == null) return false;
+        if (s.open()) return true;
+        boolean accepted = "DONE".equals(s.state()) || JooqPanConfigSyncRepository.REQUESTED.equals(s.outcome())
+            || "success".equals(s.deviceStatus());
+        if (!accepted || s.followupRefusal() != null) return false;
+        if (inProgress || observedAt == null) return true;
+        if (s.finishedAt() != null) return observedAt.isBefore(s.finishedAt());
+        return s.requestedAt() != null && !observedAt.isAfter(s.requestedAt());
+    }
+
     /** {@code busy}: {@link #busy} for the unit; read only when check 4 failed (the summary stays one read per unit). */
     public View view(CpFailoverService.Unit unit, String vendor, JooqCpFailoverRepository.ReadinessStatus readiness,
             String unitRefusal, java.util.function.Supplier<String> busy, boolean masked, boolean mayRun,
             Optional<JooqPanConfigSyncRepository.ConfigSync> latest) {
         if (!"palo_alto".equals(vendor) || unit.vsId() != null) return null;
-        boolean failed = false;
+        boolean failed = false, inProgress = false;
+        String checkStatus = null;
         Map<String, String> roles = new LinkedHashMap<>();
         if (readiness != null && readiness.checks() != null) try {
             for (var check : JSON.readTree(readiness.checks())) {
                 int no = check.path("checkNo").asInt();
-                if (no == 4 && "FAIL".equals(check.path("status").asText())
-                        && !"CONFIG_SYNC_DISABLED".equals(check.path("derived").path("reason").asText())) failed = true;
+                if (no == 4) {
+                    String status = check.path("status").asText();
+                    var derived = check.path("derived");
+                    if (syncInProgress(derived)) inProgress = true;
+                    if ("FAIL".equals(status) && !"CONFIG_SYNC_DISABLED".equals(derived.path("reason").asText())) failed = true;
+                    if ("FAIL".equals(status) || checkStatus == null || "PASS".equals(checkStatus)) checkStatus = status;
+                }
                 // Argon P1-1: a role counts only from a check 1 row that passed.
                 if (no == 1 && "PASS".equals(check.path("status").asText()))
                     roles.put(check.path("memberRef").asText(), check.path("derived").path("role").asText());
             }
-        } catch (java.io.IOException invalid) { failed = false; }
+        } catch (java.io.IOException invalid) { failed = false; inProgress = false; checkStatus = null; }
+        String readinessOutcome = inProgress ? "IN_PROGRESS" : checkStatus;
+        Instant observedAt = readiness == null ? null : readiness.observedAt();
+        boolean settling = inProgress || isSettling(latest.orElse(null), observedAt, false);
         List<String> ids = unit.members().stream().map(DeviceSummaryRecord::deviceId).toList();
         String source = ids.stream().filter(id -> "active".equals(roles.get(id))).findFirst().orElse(null);
         String target = ids.stream().filter(id -> "passive".equals(roles.get(id))).findFirst().orElse(null);
@@ -118,14 +160,15 @@ public final class PanConfigSyncService {
         if (!failed) refusal = "CONFIG_SYNC_NOT_FAILED";
         else if (!mutationSwitch.enabled()) refusal = FailoverMutationSwitch.DISABLED;
         else if (open.isPresent()) refusal = "CONFIG_SYNC_ALREADY_ACTIVE";
+        else if (inProgress) refusal = "CONFIG_SYNC_IN_PROGRESS";
         else if ((refusal = busy.get()) != null) { /* RUN_ALREADY_ACTIVE or UNRESOLVED_DISPATCH */ }
         else if ("OPEN_INCIDENT".equals(unitRefusal)) refusal = "OPEN_INCIDENT";
-        else if (readiness.observedAt() == null
-                || readiness.observedAt().isBefore(Instant.now().minus(JooqPanConfigSyncRepository.READINESS_MAX_AGE)))
+        else if (observedAt == null
+                || observedAt.isBefore(Instant.now().minus(JooqPanConfigSyncRepository.READINESS_MAX_AGE)))
             refusal = "READINESS_NOT_FRESH";
         else if (source == null || target == null || source.equals(target)) refusal = "ROLES_CHANGED";
         return new View(failed, failed && mayRun && !masked, refusal, source, target,
-            readiness == null ? null : readiness.observedAt(), latest.orElse(null));
+            observedAt, readinessOutcome, settling, latest.orElse(null));
     }
 
     /**

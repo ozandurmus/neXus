@@ -32,7 +32,7 @@ import { FRESH_UNDER_MS, isPastFresh } from "../shell/freshness";
 import { urlParam } from "../shell/urlParams";
 import { m3 } from "../theme/m3Theme";
 import { ReadinessChecksTable, isActiveRole, isStandbyRole, observedRoles, primaryReportsPeer, primaryRolesConfirmed, readinessStopReason } from "./ReadinessChecksTable";
-import { PanConfigSyncAction } from "./PanConfigSyncAction";
+import { PanConfigSyncAction, configSyncSettlingText, panConfigSyncPhase } from "./PanConfigSyncAction";
 import { HaPairLine } from "./HaPairLine";
 
 type Cluster = { ref: string; title: string; members: DeviceSummary[] };
@@ -147,6 +147,11 @@ function leadCheckReason(row: CpFailoverSummary): string | null {
 
 function primaryReason(row?: CpFailoverSummary) {
   if (!row) return "INSUFFICIENT_EVIDENCE";
+  const sync = panConfigSyncPhase(row);
+  if (sync.phase === "SETTLING") return configSyncSettlingText(sync.requestedAt);
+  const checks = row.readiness?.checks ?? [];
+  const blocking = checks.find(c => c.blocking && c.result === "FAIL") ?? checks.find(c => c.blocking && c.result === "UNKNOWN");
+  if (sync.phase === "STILL_FAILS" && (!blocking || blocking.checkNo === 4)) return "Configuration sync still fails";
   const lead = leadCheckReason(row);
   if (lead && (!row.refusalReason || row.refusalReason === "CHECK_NOT_READY" || row.refusalReason === "READINESS_NOT_READY"
       || readinessReasonLabel(row.refusalReason) === row.refusalReason)) return lead;

@@ -8,9 +8,10 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { M3Button } from "../shell/M3Widgets";
 import { PRODUCT_NAME } from "../brand/product";
+import { formatStamp } from "../shell/time";
 import { m3 } from "../theme/m3Theme";
 import { getCpFailoverRun, getPanConfigSync, requestPanConfigSync,
-  type CpFailoverUnit, type PanConfigSyncRecord, type ReadinessMember } from "../auth/adminApi";
+  type CpFailoverSummary, type CpFailoverUnit, type PanConfigSyncRecord, type ReadinessMember } from "../auth/adminApi";
 
 /**
  * Palo Alto HA: "Sync configuration to passive" for a failed readiness check 4 (docs/design/PAN_CONFIG_SYNC_REMEDIATION_2026_10_24.md,
@@ -50,33 +51,98 @@ const words: Record<string, string> = {
   DIRECTORY_UNREACHABLE_AT_START: "The directory could not be reached to refresh group membership. Nothing was sent; retry when the directory is reachable.",
 };
 export const configSyncText = (code?: string | null) => code ? words[code] ?? code : "";
+export const CONFIG_SYNC_SETTLING = "Sync requested -- the passive member applies it; readiness re-runs in about a minute";
+export const configSyncSettlingText = (requestedAt?: string | null) =>
+  requestedAt ? `${CONFIG_SYNC_SETTLING} (${formatStamp(requestedAt)})` : CONFIG_SYNC_SETTLING;
 const stageText: Record<string, string> = { QUEUED: "Queued", READING_STATE: "Reading the HA state of both members",
   SYNCING: "Sending the sync command to the active member" };
 const open = (state?: string) => state === "QUEUED" || state === "READING_STATE" || state === "SYNCING";
+const isAccepted = (r?: PanConfigSyncRecord | null) =>
+  Boolean(r && (r.state === "DONE" || r.outcome === "CONFIG_SYNC_REQUESTED" || r.deviceStatus === "success"));
 
-type Unit = Pick<CpFailoverUnit, "clusterId" | "unitId" | "vendor" | "masked" | "members" | "configSync">;
+export function isConfigSyncInProgress(check?: { checkNo?: number; derived?: unknown; summary?: string | null } | null): boolean {
+  if (!check || (check.checkNo !== undefined && check.checkNo !== 4)) return false;
+  if (typeof check.summary === "string" && check.summary.toLowerCase().includes("synchronization in progress")) return true;
+  const d = check.derived;
+  if (!d) return false;
+  const text = (typeof d === "string" ? d : JSON.stringify(d)).toLowerCase();
+  return text.includes("synchronization in progress") || text.includes("config_sync_in_progress") || text.includes('"in_progress"');
+}
+
+type Unit = Pick<CpFailoverUnit, "clusterId" | "unitId" | "vendor" | "masked" | "members" | "configSync"> & {
+  readiness?: CpFailoverSummary["readiness"];
+};
+
+export function panConfigSyncPhase(unit?: Unit | null, overrideRecord?: PanConfigSyncRecord | null): {
+  phase: "NONE" | "SETTLING" | "STILL_FAILS" | "PASSES";
+  requestedAt: string | null;
+} {
+  if (!unit || (unit.vendor && unit.vendor !== "palo_alto")) return { phase: "NONE", requestedAt: null };
+  const facts = unit.configSync;
+  const latest = overrideRecord ?? facts?.latest ?? null;
+  const checks = unit.readiness?.checks?.filter(c => c.checkNo === 4) ?? [];
+  const inProgress = facts?.readinessOutcome === "IN_PROGRESS" || checks.some(isConfigSyncInProgress);
+  const observedAt = facts?.readinessObservedAt ?? unit.readiness?.observedAt ?? null;
+  const requestedAt = latest?.requestedAt ?? observedAt;
+  if (!latest) return { phase: inProgress || facts?.settling ? "SETTLING" : "NONE", requestedAt };
+  if (open(latest.state)) return { phase: "SETTLING", requestedAt: latest.requestedAt };
+  if (!isAccepted(latest)) {
+    return { phase: latest.outcome === "OUTCOME_UNKNOWN" && inProgress ? "SETTLING" : "NONE", requestedAt: latest.requestedAt };
+  }
+  if (latest.readinessRefusal) return { phase: "NONE", requestedAt: latest.requestedAt };
+  if (inProgress || facts?.settling === true) return { phase: "SETTLING", requestedAt: latest.requestedAt };
+  const observedMs = observedAt ? Date.parse(observedAt) : NaN;
+  const finishedMs = latest.finishedAt ? Date.parse(latest.finishedAt) : NaN;
+  const requestedMs = latest.requestedAt ? Date.parse(latest.requestedAt) : NaN;
+  const followUpFinished = facts?.settling === false
+    || (Number.isFinite(observedMs) && (Number.isFinite(finishedMs) ? observedMs >= finishedMs : Number.isFinite(requestedMs) && observedMs > requestedMs));
+  if (!followUpFinished) return { phase: "SETTLING", requestedAt: latest.requestedAt };
+  const failed = facts?.readinessOutcome === "FAIL"
+    || (checks.length > 0 ? checks.some(c => (c.status ?? c.result) === "FAIL")
+      : facts?.offered === true || (unit.readiness?.status === "NOT_READY" && unit.readiness?.failedCheck === "Configuration sync"));
+  if (failed) return { phase: "STILL_FAILS", requestedAt: latest.requestedAt };
+  const passed = facts?.readinessOutcome === "PASS" || (checks.length > 0 && checks.every(c => (c.status ?? c.result) === "PASS"));
+  return { phase: passed ? "PASSES" : "NONE", requestedAt: latest.requestedAt };
+}
+
+function adoptableRecord(unit: Unit): PanConfigSyncRecord | null {
+  const latest = unit.configSync?.latest ?? null;
+  if (!latest) return null;
+  if (open(latest.state)) return latest;
+  const { phase } = panConfigSyncPhase(unit, latest);
+  return phase === "SETTLING" || phase === "STILL_FAILS" ? latest : null;
+}
+
 export function PanConfigSyncAction({ unit, members, onDone, pollMs = 3000 }: {
   unit: Unit; members?: ReadinessMember[]; onDone?: () => void; pollMs?: number;
 }) {
   const facts = unit.configSync;
   const [dialog, setDialog] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Argon P2-1: a sync already open when the page loads is shown and followed; a new unit starts clean.
-  const [record, setRecord] = useState<PanConfigSyncRecord | null>(open(facts?.latest?.state) ? facts!.latest! : null);
+  // Argon P2-1: a sync already open or settling when the page loads is shown and followed; a new unit starts clean.
+  const [record, setRecord] = useState<PanConfigSyncRecord | null>(() => adoptableRecord(unit));
   const [readiness, setReadiness] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const lock = useRef(false), alive = useRef(true), following = useRef<string | null>(null);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  const latestOpen = open(facts?.latest?.state) ? facts!.latest! : null;
+  const latestAdopted = adoptableRecord(unit);
+  const latestToFollow = latestAdopted && (open(latestAdopted.state)
+    || (latestAdopted.state === "DONE" && Boolean(latestAdopted.readinessRunId) && panConfigSyncPhase(unit, latestAdopted).phase === "SETTLING"
+      && facts?.readinessOutcome !== "IN_PROGRESS" && !(unit.readiness?.checks ?? []).some(isConfigSyncInProgress))) ? latestAdopted : null;
   const shownUnit = useRef(unit.unitId);
+  const propPhase = panConfigSyncPhase(unit, latestAdopted).phase;
   useEffect(() => {
-    // Another unit: start clean. The same unit: adopt a sync opened elsewhere (another tab, the CLI) and follow it;
+    // Another unit: start clean. The same unit: adopt a sync opened or settling elsewhere (another tab, the CLI) and follow it;
     // a result already on screen stays when the refreshed facts no longer carry an open sync.
-    if (shownUnit.current !== unit.unitId) { shownUnit.current = unit.unitId; setRecord(latestOpen); setReadiness(null); setError(null); }
-    else if (latestOpen) setRecord(current => current?.syncId === latestOpen.syncId ? current : latestOpen);
-    if (latestOpen) void follow(latestOpen);
+    if (shownUnit.current !== unit.unitId) {
+      shownUnit.current = unit.unitId; setRecord(latestAdopted); setReadiness(null); setError(null);
+    } else if (latestAdopted && !following.current) {
+      setRecord(latestAdopted);
+      setReadiness(null);
+    }
+    if (latestToFollow) void follow(latestToFollow);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unit.unitId, latestOpen?.syncId]);
+  }, [unit.unitId, latestAdopted?.syncId, latestAdopted?.state, latestAdopted?.deviceStatus, propPhase, facts?.readinessObservedAt, facts?.readinessOutcome, facts?.settling, unit.readiness?.observedAt]);
   const roster = members ?? unit.members ?? [];
   const name = (id: string | null | undefined, fallback: string) => roster.find(m => m.device_id === id)?.hostname ?? fallback;
   const source = name(facts?.sourceRef, "the active member"), target = name(facts?.targetRef, "the passive member");
@@ -93,21 +159,29 @@ export function PanConfigSyncAction({ unit, members, onDone, pollMs = 3000 }: {
         catch { misses++; }
       }
       if (open(current.state)) {
-        if (alive.current) setReadiness("The sync status could not be read just now; it is shown again when the page is refreshed.");
+        if (misses >= 5 && alive.current) setReadiness("The sync status could not be read just now; it is shown again when the page is refreshed.");
         return;
       }
       if (current.readinessRunId) {
-        if (alive.current) setReadiness("Re-running the pre-checks");
+        if (!isAccepted(current) && alive.current) setReadiness("Re-running the pre-checks");
         for (let i = 0, failed = 0; i < 60 && alive.current && failed < 5; i++) {
           try {
             const run = await getCpFailoverRun(current.readinessRunId, "palo_alto");
+            if (!run) break;
             failed = 0;
             if (run.state === "DONE" || run.state === "STOPPED") {
-              const sync = run.checks.filter(c => c.checkNo === 4 && c.phase === "pre").map(c => c.status);
-              const verdict = sync.length && sync.every(s => s === "PASS") ? "Configuration sync passes"
-                : sync.includes("FAIL") ? "Configuration sync still fails" : "Configuration sync is unknown";
-              if (alive.current) setReadiness(`Pre-checks finished: ${verdict}.`);
+              const syncChecks = (run.checks ?? []).filter(c => c.checkNo === 4 && c.phase === "pre");
+              if (syncChecks.some(isConfigSyncInProgress)) {
+                if (alive.current) setReadiness(configSyncSettlingText(current.requestedAt));
+              } else {
+                const sync = syncChecks.map(c => c.status ?? c.result);
+                const verdict = sync.length && sync.every(s => s === "PASS") ? "Configuration sync passes"
+                  : sync.includes("FAIL") ? "Configuration sync still fails" : "Configuration sync is unknown";
+                if (alive.current) setReadiness(`Pre-checks finished: ${verdict}.`);
+              }
               break;
+            } else if (isAccepted(current) && alive.current) {
+              setReadiness(configSyncSettlingText(current.requestedAt));
             }
           } catch { failed++; }
           await wait();
@@ -120,7 +194,8 @@ export function PanConfigSyncAction({ unit, members, onDone, pollMs = 3000 }: {
       if (alive.current) onDone?.();
     }
   }
-  if (unit.vendor !== "palo_alto" || !facts || (!facts.canRun && !record)) return null;
+  const syncPhase = panConfigSyncPhase(unit, record);
+  if (unit.vendor !== "palo_alto" || !facts || (!facts.canRun && !record && syncPhase.phase === "NONE")) return null;
   const submit = async () => {
     if (lock.current || !facts.sourceRef || !facts.targetRef) return;
     lock.current = true; setBusy(true); setError(null);
@@ -136,13 +211,18 @@ export function PanConfigSyncAction({ unit, members, onDone, pollMs = 3000 }: {
     if (created) await follow(created);
   };
   const running = open(record?.state);
+  const accepted = isAccepted(record);
+  const readinessLine = readiness
+    ?? (syncPhase.phase === "SETTLING" ? configSyncSettlingText(syncPhase.requestedAt)
+      : syncPhase.phase === "STILL_FAILS" ? "Pre-checks finished: Configuration sync still fails." : null);
+  const isSettling = readinessLine ? readinessLine.startsWith(CONFIG_SYNC_SETTLING) : false;
   return <Box data-config-sync sx={{ mt: 0.5 }} onClick={event => event.stopPropagation()}>
-    {facts.canRun && !running && <M3Button deviceJob emphasis="tonal" disabled={busy || Boolean(facts.refusal)}
+    {facts.canRun && !running && !isSettling && <M3Button deviceJob emphasis="tonal" disabled={busy || Boolean(facts.refusal)}
       onClick={() => { setError(null); setDialog(true); }}>Sync configuration to passive</M3Button>}
-    {facts.canRun && facts.refusal && !record && <Typography variant="caption" component="div" sx={{ color: m3.onSurfaceVar }}>{configSyncText(facts.refusal)}</Typography>}
-    {record && <Typography role="status" variant="body2">{running ? stageText[record.state] ?? record.state
-      : record.state === "DONE" ? configSyncText("CONFIG_SYNC_REQUESTED") : configSyncText(record.outcome)}</Typography>}
-    {readiness && <Typography role="status" variant="body2">{readiness}</Typography>}
+    {facts.canRun && facts.refusal && !record && !isSettling && <Typography variant="caption" component="div" sx={{ color: m3.onSurfaceVar }}>{configSyncText(facts.refusal)}</Typography>}
+    {record && <Typography role="status" variant="body2">{running && record.deviceStatus !== "success" ? stageText[record.state] ?? record.state
+      : accepted ? configSyncText("CONFIG_SYNC_REQUESTED") : configSyncText(record.outcome)}</Typography>}
+    {readinessLine && <Typography role="status" variant="body2">{readinessLine}</Typography>}
     {error && !dialog && <Typography role="alert" variant="body2" color="error">{error}</Typography>}
     <Dialog open={dialog} onClose={() => { if (!busy) setDialog(false); }}>
       <DialogTitle>Sync the configuration to the passive member?</DialogTitle>

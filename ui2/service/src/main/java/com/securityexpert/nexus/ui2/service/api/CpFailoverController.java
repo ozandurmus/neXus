@@ -397,6 +397,8 @@ public final class CpFailoverController {
         m.put("offered",v.offered()); m.put("canRun",v.canRun()); m.put("refusal",v.refusal());
         m.put("sourceRef",v.sourceRef()); m.put("targetRef",v.targetRef());
         m.put("readinessObservedAt",v.readinessObservedAt());
+        m.put("readinessOutcome",v.readinessOutcome());
+        m.put("settling",v.settling());
         m.put("latest",v.latest()==null ? null : syncRecord(v.latest()));
         return m;
     }
