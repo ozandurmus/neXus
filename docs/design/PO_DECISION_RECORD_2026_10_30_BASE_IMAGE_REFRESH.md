@@ -161,3 +161,11 @@ images reports the removed pcre2, expat and ca-certificates findings as unaccept
   RHSA-2026:99715; util-linux CVE-2026-53615 x5, RHSA-2026:98519; openssl CVE-2026-75804, RHSA-2026:98484); no
   Red Hat fix (sqlite x4, json-glib, expat x2, gnutls x2, gnupg2); CVE-2026-91403 (CRITICAL, Will not fix for
   java-21-openjdk; covered by the emSign blocklist step).
+
+## Amendment of 2026-11-18 (PO: "Evet, ekle")
+
+Amended by `docs/design/PO_DECISION_RECORD_2026_11_18_RUNTIME_PACKAGE_UPDATE.md` (RATIFIED): the digest-pinned
+`ubi9/openjdk-21-runtime` base stays the floor, and a resilient `microdnf -y update --setopt=install_weak_deps=0`
+step runs in the runtime stage before the offline `python3*` removal step (recording updated NEVRAs to
+`/app/build-info/package-update.txt` and logging `PACKAGE_UPDATE_SKIPPED: <reason>` if the Red Hat repositories are
+unreachable through the build proxy).

@@ -77,7 +77,8 @@ RUN ./gradlew --no-daemon --console=plain -PfrontendPrebuilt=true :service:bootJ
 # ---------------------------------------------------------------------------
 # Version 1.24 release 5 (built 2026-11-19), the digest `latest` resolved to on 2026-11-21: the 2026-11-21 gate reported
 # four new fixed curl-minimal/libcurl-minimal HIGHs (CVE-2026-8286, -8458, -8927, -9547) on the 2026-11-10 base.
-# Refresh rule: PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md.
+# Refresh rule: PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md,
+# amended by PO_DECISION_RECORD_2026_11_18_RUNTIME_PACKAGE_UPDATE.md.
 FROM registry.access.redhat.com/ubi9/openjdk-21-runtime@sha256:80663340693d8863d518116b9382f758364c5394a41cf549eef6240ebd9e67af
 
 # Ownership is by group 0, never by a uid: the uid this process runs as is
@@ -88,19 +89,43 @@ FROM registry.access.redhat.com/ubi9/openjdk-21-runtime@sha256:80663340693d8863d
 # directory) and /app/home (the declared HOME). Nothing else in this image is
 # writable, and both are supplied as emptyDir mounts at runtime (FS-4).
 USER 0
-# The JVM entrypoint bypasses the base's run-java.sh.
-# Erase unused scripting-runtime RPMs offline and fail if any remain.
-RUN rpm -e --nodeps $(rpm -qa --qf '%{NAME}\n' 'python3*') \
- && test -z "$(rpm -qa 'python3*')"
-RUN mkdir -p /app /app/tmp /app/home
+RUN mkdir -p /app /app/tmp /app/home /app/build-info
 
 # Install the same optional corporate anchors into the runtime system trust
-# store. Red Hat's OpenJDK reads the extracted Java store populated here.
+# store before the OS package update step so the updater trusts a corporate
+# TLS-intercepting proxy, and so Red Hat's OpenJDK reads the extracted Java
+# store populated here.
 COPY ui2/.ca/ /tmp/corp-ca/
 RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
       cp /tmp/corp-ca/*.pem /etc/pki/ca-trust/source/anchors/ && update-ca-trust; \
     fi \
  && rm -rf /tmp/corp-ca
+
+# PO_DECISION_RECORD_2026_11_18_RUNTIME_PACKAGE_UPDATE.md (amends 2026-10-30):
+# update all installed OS packages from Red Hat's UBI 9 repositories through
+# the build proxy before removing the scripting-runtime RPMs, so published Red
+# Hat fixes land without waiting for a new base-image digest. Resilient: if the
+# repositories are unreachable through the proxy, log PACKAGE_UPDATE_SKIPPED
+# and continue with the pinned base packages. PACKAGE_UPDATE_DATE busts the
+# layer cache daily even when nothing else changes.
+ARG PACKAGE_UPDATE_DATE=2026-11-21
+RUN rpm -qa --qf '%{NEVRA}\n' | sort > /tmp/rpm-before.txt \
+ && if timeout 180 microdnf -y update --setopt=install_weak_deps=0; then \
+      rpm -qa --qf '%{NEVRA}\n' | sort > /tmp/rpm-after.txt \
+      && comm -13 /tmp/rpm-before.txt /tmp/rpm-after.txt | tee /app/build-info/package-update.txt; \
+    else \
+      rc=$?; \
+      printf 'PACKAGE_UPDATE_SKIPPED: microdnf update failed (exit %s, date=%s); continuing with pinned base packages\n' "$rc" "${PACKAGE_UPDATE_DATE}" \
+        | tee /app/build-info/package-update.txt >&2; \
+    fi \
+ && (microdnf clean all || true) \
+ && rm -rf /var/cache/yum /var/cache/dnf /tmp/rpm-before.txt /tmp/rpm-after.txt \
+ && test -f /app/build-info/package-update.txt
+
+# The JVM entrypoint bypasses the base's run-java.sh.
+# Erase unused scripting-runtime RPMs offline and fail if any remain.
+RUN rpm -e --nodeps $(rpm -qa --qf '%{NAME}\n' 'python3*') \
+ && test -z "$(rpm -qa 'python3*')"
 
 # CVE-2026-114406: the base still trusts the eMudhra (emSign) roots that signed
 # weak intermediates (PO decision 2026-10-23). Blocklist every emSign root in the
