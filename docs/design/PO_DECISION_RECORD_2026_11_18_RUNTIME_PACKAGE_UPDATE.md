@@ -133,3 +133,11 @@ few changed edge cases); npm 11 replaces npm 10; `url.parse()` now emits a runti
 more long-deprecated APIs are removed or throw (for example legacy `util.is*` helpers, `tls.createSecurePair`);
 `AsyncLocalStorage` uses a new implementation. Scripts relying on deprecated APIs may print warnings or fail; the
 Script Execution result shows stderr and the exit code as before.
+
+### Reverted the same day (2026-11-21)
+
+The first scan of the nodejs:24 image (deploy gate of batch g1) reported five HIGH CVEs without a released fix that do
+not affect stream 22: CVE-2026-116592, CVE-2026-123863, CVE-2026-123874, CVE-2026-126051 and CVE-2026-9496 (nodejs and
+nodejs-libs). Stream 24 therefore carries nine unfixed HIGH CVEs, the same count as stream 22, plus the Node 22 to 24
+behaviour changes for operator scripts. The image is back on nodejs:22 and its ten acceptances are restored with the
+same review date (2026-11-28). Revisit when Red Hat ships fixes for either stream.

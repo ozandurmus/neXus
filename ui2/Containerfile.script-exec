@@ -28,7 +28,7 @@ RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
 # Tried 3 times, 30 s apart; the builder passes the proxy as predefined build args (kaniko RUN steps do not see the
 # pod proxy env, 2026-11-21). pip is removed after the pinned packages are installed (CVE-2026-57585 and pip MEDIUMs).
 RUN for attempt in 1 2 3; do \
-      microdnf module enable -y nodejs:24 \
+      microdnf module enable -y nodejs:22 \
       && microdnf install -y --nodocs --setopt=install_weak_deps=0 \
         python3.12 \
         python3.12-pip \
