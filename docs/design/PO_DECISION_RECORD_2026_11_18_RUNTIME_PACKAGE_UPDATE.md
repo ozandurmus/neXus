@@ -91,3 +91,11 @@ the runtime-stage update step and its tests without saying so. Nothing in that b
 2026-11-21 security gate then blocked a deploy on four fixed curl HIGHs (CVE-2026-8286, -8458, -8927, -9547) that this
 step exists to pick up. `4c1a034a` is restored unchanged, on top of the 2026-11-19 base digest, with
 `PACKAGE_UPDATE_DATE=2026-11-21`.
+
+## Retry note (2026-11-21)
+
+The build proxy returned intermittent HTTP 503 for the Red Hat UBI CDN during the 2026-11-21 deploys. One build hit a
+503, logged PACKAGE_UPDATE_SKIPPED, and the image kept four curl CVEs whose fix (curl 7.76.1-44.el9_9.1) was already in
+the UBI baseos repository, so the security gate blocked the deploy. The update step now tries `microdnf update` three
+times, 30 s apart, before falling back; the fallback and the ratified decision are unchanged. The script-execution
+image install step retries the same way and still fails the build if all three attempts fail.

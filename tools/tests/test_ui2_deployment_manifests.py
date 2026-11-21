@@ -790,12 +790,18 @@ def test_the_containerfile_is_two_stages_pinned_by_digest():
 
 RUNTIME_PACKAGE_UPDATE = (
     "RUN rpm -qa --qf '%{NEVRA}\\n' | sort > /tmp/rpm-before.txt \\\n"
-    " && if timeout 180 microdnf -y update --setopt=install_weak_deps=0; then \\\n"
+    " && ok=0 rc=0 \\\n"
+    " && for attempt in 1 2 3; do \\\n"
+    "      timeout 180 microdnf -y update --setopt=install_weak_deps=0 && { ok=1; break; }; \\\n"
+    "      rc=$?; \\\n"
+    "      printf 'PACKAGE_UPDATE_RETRY: attempt %s failed (exit %s)\\n' \"$attempt\" \"$rc\" >&2; \\\n"
+    "      [ \"$attempt\" = 3 ] || sleep \"${PACKAGE_UPDATE_RETRY_SLEEP:-30}\"; \\\n"
+    "    done \\\n"
+    " && if [ \"$ok\" = 1 ]; then \\\n"
     "      rpm -qa --qf '%{NEVRA}\\n' | sort > /tmp/rpm-after.txt \\\n"
     "      && comm -13 /tmp/rpm-before.txt /tmp/rpm-after.txt | tee /app/build-info/package-update.txt; \\\n"
     "    else \\\n"
-    "      rc=$?; \\\n"
-    "      printf 'PACKAGE_UPDATE_SKIPPED: microdnf update failed (exit %s, date=%s); continuing with pinned base packages\\n' \"$rc\" \"${PACKAGE_UPDATE_DATE}\" \\\n"
+    "      printf 'PACKAGE_UPDATE_SKIPPED: microdnf update failed after 3 attempts (exit %s, date=%s); continuing with pinned base packages\\n' \"$rc\" \"${PACKAGE_UPDATE_DATE}\" \\\n"
     "        | tee /app/build-info/package-update.txt >&2; \\\n"
     "    fi \\\n"
     " && (microdnf clean all || true) \\\n"
@@ -882,6 +888,8 @@ def test_the_runtime_updates_installed_packages_resiliently_and_derived_image_in
     microdnf_stub.write_text(
         '#!/bin/sh\n'
         'if [ "$1" = "clean" ]; then exit "$TEST_CLEAN_RC"; fi\n'
+        'echo x >> "$TEST_ATTEMPTS"\n'
+        'if [ "$(wc -l < "$TEST_ATTEMPTS")" -le "${TEST_FAIL_FIRST:-0}" ]; then exit 124; fi\n'
         'if [ "$TEST_UPDATE_RC" = "0" ]; then touch "$TEST_UPDATED"; fi\n'
         'exit "$TEST_UPDATE_RC"\n'
     )
@@ -894,6 +902,8 @@ def test_the_runtime_updates_installed_packages_resiliently_and_derived_image_in
         "PACKAGE_UPDATE_DATE": "2026-11-18",
         "TEST_UPDATED": str(tmp_path / "updated.flag"),
         "TEST_CLEAN_RC": "0",
+        "TEST_ATTEMPTS": str(tmp_path / "attempts.log"),
+        "PACKAGE_UPDATE_RETRY_SLEEP": "0",
     }
     report_file = tmp_path / "app/build-info/package-update.txt"
 
@@ -920,9 +930,24 @@ def test_the_runtime_updates_installed_packages_resiliently_and_derived_image_in
         text=True,
     )
     assert fallback.returncode == 0
-    assert "PACKAGE_UPDATE_SKIPPED: microdnf update failed (exit 124, date=2026-11-18)" in fallback.stderr
-    assert report_file.read_text() == fallback.stderr
+    skipped = "PACKAGE_UPDATE_SKIPPED: microdnf update failed after 3 attempts (exit 124, date=2026-11-18)"
+    assert skipped in fallback.stderr
+    assert fallback.stderr.count("PACKAGE_UPDATE_RETRY: attempt") == 3
+    assert report_file.read_text().startswith(skipped) and "PACKAGE_UPDATE_RETRY" not in report_file.read_text()
     assert not (tmp_path / "var/cache/yum").exists()
+
+    # 3. Intermittent proxy 503 (2026-11-21): the first attempt fails, the second updates; no SKIPPED is recorded.
+    (tmp_path / "attempts.log").unlink()
+    retried = subprocess.run(
+        ["sh", "-c", shell_body],
+        env={**base_env, "TEST_UPDATE_RC": "0", "TEST_FAIL_FIRST": "1"},
+        capture_output=True,
+        text=True,
+    )
+    assert retried.returncode == 0, retried.stderr
+    assert "PACKAGE_UPDATE_RETRY: attempt 1 failed (exit 124)" in retried.stderr
+    assert "attempt 2" not in retried.stderr and "PACKAGE_UPDATE_SKIPPED" not in retried.stderr
+    assert report_file.read_text() == expected_nevras
 
 
 def test_the_containerfile_final_account_is_numeric():

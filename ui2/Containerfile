@@ -106,16 +106,24 @@ RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
 # the build proxy before removing the scripting-runtime RPMs, so published Red
 # Hat fixes land without waiting for a new base-image digest. Resilient: if the
 # repositories are unreachable through the proxy, log PACKAGE_UPDATE_SKIPPED
-# and continue with the pinned base packages. PACKAGE_UPDATE_DATE busts the
-# layer cache daily even when nothing else changes.
+# and continue with the pinned base packages. The update is tried 3 times, 30 s
+# apart, because the build proxy returns intermittent 503s for the Red Hat CDN
+# (2026-11-21: one skipped update kept 4 fixed curl CVEs in the image).
+# PACKAGE_UPDATE_DATE busts the layer cache daily even when nothing else changes.
 ARG PACKAGE_UPDATE_DATE=2026-11-21
 RUN rpm -qa --qf '%{NEVRA}\n' | sort > /tmp/rpm-before.txt \
- && if timeout 180 microdnf -y update --setopt=install_weak_deps=0; then \
+ && ok=0 rc=0 \
+ && for attempt in 1 2 3; do \
+      timeout 180 microdnf -y update --setopt=install_weak_deps=0 && { ok=1; break; }; \
+      rc=$?; \
+      printf 'PACKAGE_UPDATE_RETRY: attempt %s failed (exit %s)\n' "$attempt" "$rc" >&2; \
+      [ "$attempt" = 3 ] || sleep "${PACKAGE_UPDATE_RETRY_SLEEP:-30}"; \
+    done \
+ && if [ "$ok" = 1 ]; then \
       rpm -qa --qf '%{NEVRA}\n' | sort > /tmp/rpm-after.txt \
       && comm -13 /tmp/rpm-before.txt /tmp/rpm-after.txt | tee /app/build-info/package-update.txt; \
     else \
-      rc=$?; \
-      printf 'PACKAGE_UPDATE_SKIPPED: microdnf update failed (exit %s, date=%s); continuing with pinned base packages\n' "$rc" "${PACKAGE_UPDATE_DATE}" \
+      printf 'PACKAGE_UPDATE_SKIPPED: microdnf update failed after 3 attempts (exit %s, date=%s); continuing with pinned base packages\n' "$rc" "${PACKAGE_UPDATE_DATE}" \
         | tee /app/build-info/package-update.txt >&2; \
     fi \
  && (microdnf clean all || true) \
