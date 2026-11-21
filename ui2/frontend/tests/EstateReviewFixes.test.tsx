@@ -5,6 +5,7 @@ import { resetSharedApiCache } from "../src/auth/adminApi";
 import { UnitTile } from "../src/estate/EstatePrimitives";
 import type { EstateUnit } from "../src/estate/estateModel";
 import { buildRewindUnit } from "../src/estate/estateRewindModel";
+import { dossierHref, resolveEstateRoute, rewindHref } from "../src/estate/estateRouting";
 
 const headers = { "X-Nexus-Masked": "true" };
 
@@ -148,5 +149,47 @@ describe("Estate view review fixes", () => {
     expect(mk(3)).toMatchObject({ state: "ok", word: "Stored" });
     expect(mk(3).detail).toMatch(/3 d old/);
     expect(mk(8)).toMatchObject({ state: "watch", word: "Stale" });
+  });
+});
+
+describe("Estate view follow-ups (q-45)", () => {
+  it("dossier marks links that leave the Estate view as standard view", async () => {
+    window.history.replaceState(null, "", "/?screen=inventory&device_id=dev-tango-04");
+    vi.stubGlobal("fetch", stubFetch({}));
+    stubViewport(1280);
+    render(<App />);
+    const dossier = await screen.findByTestId("estate-dossier-screen");
+    expect(await within(dossier).findByText(/Support bundle \(standard view\)/)).toBeInTheDocument();
+    expect(within(dossier).getByText(/Run a diagnostic \(standard view\)/)).toBeInTheDocument();
+    expect(within(dossier).getByText(/Static routes \(standard view\)/)).toBeInTheDocument();
+    for (const a of within(dossier).queryAllByText(/^Open( \(standard view\))? →$/)) {
+      const href = a.getAttribute("href") ?? "";
+      const leaves = /screen=(inventory&view=lifecycle|policy|diagnostics|support_bundles)/.test(href);
+      expect(a.textContent).toBe(leaves ? "Open (standard view) →" : "Open →");
+    }
+  });
+
+  it("rewind -> dossier carries the moment and the dossier says it is live with a link back", async () => {
+    const at = "2026-11-20T12:00:00.000Z";
+    const href = dossierHref("dev-tango-04", { at, compare: null });
+    expect(resolveEstateRoute("inventory", "/", href)).toEqual({
+      kind: "dossier", deviceId: "dev-tango-04", fromRewind: { at, compare: null },
+    });
+    window.history.replaceState(null, "", `/${href}`);
+    vi.stubGlobal("fetch", stubFetch({}));
+    stubViewport(1280);
+    render(<App />);
+    const banner = await screen.findByTestId("dossier-rewind-banner");
+    expect(banner).toHaveTextContent(/Live view; you came from Rewind at/);
+    expect(within(banner).getByRole("link")).toHaveAttribute("href", rewindHref(at, null));
+  });
+
+  it("rewind failover 'Ready, stale' names the server's 24 h rule", () => {
+    const unit = buildRewindUnit(
+      { device_id: "dev-tango-04", hostname: "FW-TANGO-04", failover: { verdict: "STALE", evidence_at: "2026-11-20T10:00:00Z" } } as never,
+      "2026-11-20T12:00:00Z",
+    );
+    expect(unit.lenses.failover.word).toBe("Ready, stale");
+    expect(unit.lenses.failover.detail ?? "").toMatch(/Server rule.*24 h/);
   });
 });

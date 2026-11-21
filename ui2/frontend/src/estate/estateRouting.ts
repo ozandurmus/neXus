@@ -22,10 +22,22 @@ export function parseEstateLens(value: string | null | undefined): EstateLens {
   return isEstateLens(value) ? value : "worst";
 }
 
+/** The Rewind moment(s) a dossier visit started from; the dossier itself always shows live data. */
+export interface RewindOrigin {
+  readonly at: string;
+  readonly compare: string | null;
+}
+
+function rewindOriginFrom(params: URLSearchParams): { fromRewind: RewindOrigin } | Record<string, never> {
+  const at = params.get("rewind_at")?.trim();
+  if (!at) return {};
+  return { fromRewind: { at, compare: params.get("rewind_compare")?.trim() || null } };
+}
+
 export type EstateRoute =
   | { readonly kind: "brief" }
   | { readonly kind: "wall"; readonly lens: EstateLens; readonly clusterRef: string | null }
-  | { readonly kind: "dossier"; readonly deviceId: string }
+  | { readonly kind: "dossier"; readonly deviceId: string; readonly fromRewind?: RewindOrigin }
   | { readonly kind: "failover"; readonly clusterRef: string | null }
   | { readonly kind: "changes"; readonly deviceId: string | null; readonly vendor: string | null }
   | { readonly kind: "compliance"; readonly deviceId: string | null; readonly family: string | null }
@@ -46,7 +58,7 @@ export function resolveEstateRoute(screen: ScreenId, pathname: string, search: s
   }
   if (pathname.startsWith("/devices/")) {
     const id = decodeURIComponent(pathname.substring("/devices/".length)).trim();
-    if (id) return { kind: "dossier", deviceId: id };
+    if (id) return { kind: "dossier", deviceId: id, ...rewindOriginFrom(params) };
   }
   if (screen === "overview") {
     return { kind: "brief" };
@@ -57,7 +69,7 @@ export function resolveEstateRoute(screen: ScreenId, pathname: string, search: s
     }
     const dossierId = params.get("device_id")?.trim();
     if (dossierId) {
-      return { kind: "dossier", deviceId: dossierId };
+      return { kind: "dossier", deviceId: dossierId, ...rewindOriginFrom(params) };
     }
     return {
       kind: "wall",
@@ -150,8 +162,17 @@ export function wallHref(lens?: EstateLens): string {
   return `?screen=inventory&lens=${encodeURIComponent(lens)}`;
 }
 
-export function dossierHref(deviceId: string): string {
-  return `?screen=inventory&device_id=${encodeURIComponent(deviceId)}`;
+export function dossierHref(deviceId: string, fromRewind?: RewindOrigin | null): string {
+  const base = `?screen=inventory&device_id=${encodeURIComponent(deviceId)}`;
+  if (!fromRewind?.at) return base;
+  const extra = `&rewind_at=${encodeURIComponent(fromRewind.at)}`;
+  return fromRewind.compare ? `${base}${extra}&rewind_compare=${encodeURIComponent(fromRewind.compare)}` : `${base}${extra}`;
+}
+
+/** True when the address renders outside the Estate view (a standard screen). */
+export function leavesEstateView(href: string): boolean {
+  const search = href.startsWith("?") ? href : `?${href}`;
+  return resolveEstateRoute(screenIdFromLocation("/", search), "/", search) === null;
 }
 
 export function failoverHref(clusterRef?: string | null): string {

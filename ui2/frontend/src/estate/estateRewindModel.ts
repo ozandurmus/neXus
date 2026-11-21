@@ -51,7 +51,7 @@ function failoverAnswer(f: EstateAsOfFigure | undefined): RewindAnswer {
   const at = f?.evidence_at ?? null;
   switch (f?.verdict) {
     case "READY": return { state: "ok", word: "Ready", detail: null, evidenceAt: at };
-    case "STALE": return { state: "watch", word: "Ready, stale", detail: "Readiness older than 24 h at that moment", evidenceAt: at };
+    case "STALE": return { state: "watch", word: "Ready, stale", detail: "Server rule: readiness older than 24 h at that moment (not the live view's rule)", evidenceAt: at };
     case "NOT_READY": return { state: "act", word: "Not ready", detail: f.reason ? humanReason(f.reason) : null, evidenceAt: at };
     case "NOT_APPLICABLE": return { state: "na", word: "Not applicable", detail: null, evidenceAt: null };
     default: return unknownAnswer(f?.reason);

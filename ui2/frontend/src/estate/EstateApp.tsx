@@ -26,7 +26,7 @@ export function EstateApp({ route }: { readonly route: EstateRoute }) {
           </PanelErrorBoundary>
         ) : route.kind === "dossier" ? (
           <PanelErrorBoundary label="estate dossier" resetKey={`dossier:${route.deviceId}`}>
-            <EstateDossierScreen deviceId={route.deviceId} />
+            <EstateDossierScreen deviceId={route.deviceId} fromRewind={route.fromRewind ?? null} />
           </PanelErrorBoundary>
         ) : route.kind === "failover" ? (
           <PanelErrorBoundary label="estate failover" resetKey={`failover:${route.clusterRef ?? "all"}`}>

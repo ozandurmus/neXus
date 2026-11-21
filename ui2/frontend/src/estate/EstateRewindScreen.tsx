@@ -104,6 +104,7 @@ export function EstateRewindScreen({
   const shown = diff ? diff.filter((t) => t.lens === lens) : null;
   const changedIds = new Set(shown?.map((t) => t.unit.id) ?? []);
   const asOfNow = (iso: string) => new Date(iso);
+  const origin = momentA ? { at: momentA, compare: compare ? momentB : null } : null;
 
   return (
     <Box data-testid="estate-rewind" sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -205,8 +206,8 @@ export function EstateRewindScreen({
                   <Box
                     key={u.id}
                     component="a"
-                    href={dossierHref(u.id)}
-                    title="Opens the live dossier (not the rewound moment)"
+                    href={dossierHref(u.id, origin)}
+                    title="Opens the live dossier (not the rewound moment); the dossier keeps a link back here"
                     sx={{ textDecoration: "none", display: "inline-flex" }}
                   >
                     <TileSwatch state={a.state} size={22} label={`${u.name}: ${a.word}${a.detail ? `, ${a.detail}` : ""}; evidence ${a.evidenceAt ? formatUtc(a.evidenceAt, false) : "UNKNOWN"}`} />
@@ -230,7 +231,7 @@ export function EstateRewindScreen({
             <tbody>
               {shown.map((t) => (
                 <tr key={`${t.unit.id}:${t.lens}`}>
-                  <td><Box component="a" href={dossierHref(t.unit.id)} sx={{ color: ev.accent, textDecoration: "none" }}>{t.unit.name}</Box></td>
+                  <td><Box component="a" href={dossierHref(t.unit.id, origin)} sx={{ color: ev.accent, textDecoration: "none" }}>{t.unit.name}</Box></td>
                   <td><StateBadge state={t.then.state} word={t.then.word} dense /></td>
                   <td><StateBadge state={t.now.state} word={t.now.word} dense /></td>
                   <td>{t.direction === "worse" ? "got worse" : t.direction === "better" ? "got better" : "changed"}</td>

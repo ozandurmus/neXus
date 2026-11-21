@@ -23,7 +23,7 @@ import { formatBytes } from "../shell/bytes";
 import { enrollmentStateLabel } from "../shell/deviceCopy";
 import { statusWord, vendorLabel } from "../shell/presenters";
 import { isRestricted } from "../shell/States";
-import { DISPLAY_TZ, formatStamp } from "../shell/time";
+import { DISPLAY_TZ, formatStamp, formatUtc } from "../shell/time";
 import { backupDisplayWord } from "../screens/backupWords";
 import { changedSections, complianceCounts } from "../screens/HeaderStatePills";
 import { licenseState, type SourceRead } from "../screens/overview/attentionRules";
@@ -48,6 +48,9 @@ import {
   standardBackupsHref,
   standardComplianceHref,
   wallHref,
+  leavesEstateView,
+  rewindHref,
+  type RewindOrigin,
 } from "./estateRouting";
 import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
 import { useEstateData } from "./useEstateData";
@@ -80,7 +83,7 @@ interface AnswerCardSpec {
   readonly href: string | null;
 }
 
-export function EstateDossierScreen({ deviceId }: { readonly deviceId: string }) {
+export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly deviceId: string; readonly fromRewind?: RewindOrigin | null }) {
   const { loading: estateLoading, overview, model } = useEstateData();
   const [watchlist, setWatchlist] = useState<string[]>(() => readEstateWatchlist());
   const [tab, setTab] = useState<DossierTab>("interfaces");
@@ -222,6 +225,20 @@ export function EstateDossierScreen({ deviceId }: { readonly deviceId: string })
           <span style={{ color: ev.ink3 }}>/</span>{" "}
           <span style={{ fontFamily: ESTATE_MONO }}>{deviceId}</span>
         </Box>
+
+      {fromRewind ? (
+        <Box
+          data-testid="dossier-rewind-banner"
+          role="note"
+          sx={{ mb: "12px", p: "10px 14px", borderRadius: "8px", border: `1px solid ${ev.line}`, bgcolor: ev.surface2, fontSize: "13px", color: ev.ink2 }}
+        >
+          Live view; you came from Rewind at {formatUtc(fromRewind.at, false)}
+          {fromRewind.compare ? ` (compared with ${formatUtc(fromRewind.compare, false)})` : ""}. Nothing on this page is historical.{" "}
+          <Box component="a" href={rewindHref(fromRewind.at, fromRewind.compare)} sx={{ color: ev.accent }}>
+            Back to Rewind →
+          </Box>
+        </Box>
+      ) : null}
         <EstateCard sx={{ p: 3 }}>
           <Typography sx={{ fontSize: "11px", letterSpacing: "0.09em", textTransform: "uppercase", color: ev.ink3, fontWeight: 650 }}>
             Dossier
@@ -549,6 +566,20 @@ export function EstateDossierScreen({ deviceId }: { readonly deviceId: string })
         <span style={{ fontFamily: ESTATE_MONO, fontWeight: 600 }}>{unit.name}</span>
       </Box>
 
+      {fromRewind ? (
+        <Box
+          data-testid="dossier-rewind-banner"
+          role="note"
+          sx={{ mb: "12px", p: "10px 14px", borderRadius: "8px", border: `1px solid ${ev.line}`, bgcolor: ev.surface2, fontSize: "13px", color: ev.ink2 }}
+        >
+          Live view; you came from Rewind at {formatUtc(fromRewind.at, false)}
+          {fromRewind.compare ? ` (compared with ${formatUtc(fromRewind.compare, false)})` : ""}. Nothing on this page is historical.{" "}
+          <Box component="a" href={rewindHref(fromRewind.at, fromRewind.compare)} sx={{ color: ev.accent }}>
+            Back to Rewind →
+          </Box>
+        </Box>
+      ) : null}
+
       {/* Header + Pair + Identity Strip */}
       <EstateCard>
         <Box
@@ -637,7 +668,7 @@ export function EstateDossierScreen({ deviceId }: { readonly deviceId: string })
                 "&:hover": { borderColor: ev.ink2, textDecoration: "none" },
               }}
             >
-              Run a diagnostic
+              Run a diagnostic (standard view)
               <Box
                 component="span"
                 sx={{
@@ -673,7 +704,7 @@ export function EstateDossierScreen({ deviceId }: { readonly deviceId: string })
                 "&:hover": { borderColor: ev.ink2, textDecoration: "none" },
               }}
             >
-              Support bundle
+              Support bundle (standard view)
               <Box
                 component="span"
                 sx={{
@@ -710,7 +741,7 @@ export function EstateDossierScreen({ deviceId }: { readonly deviceId: string })
                   "&:hover": { bgcolor: ev.actBg, textDecoration: "none" },
                 }}
               >
-                Static routes
+                Static routes (standard view)
                 <Box
                   component="span"
                   sx={{
@@ -899,7 +930,7 @@ export function EstateDossierScreen({ deviceId }: { readonly deviceId: string })
                     href={ans.href}
                     sx={{ fontSize: "12px", color: ev.accent, textDecoration: "none", "&:hover": { textDecoration: "underline" } }}
                   >
-                    Open →
+                    {leavesEstateView(ans.href) ? "Open (standard view) →" : "Open →"}
                   </Box>
                 ) : null}
               </Box>
