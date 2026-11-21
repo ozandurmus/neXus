@@ -34,7 +34,7 @@ it("keeps the time-zone note and the build stamp out of the bar and in the accou
 
 it("carries no logo and no SX badge: search and account controls only (brand area 2026-11-13)", () => {
   const { container } = mountBar();
-  expect(screen.queryByRole("img", { name: "neXus" })).toBeNull();
+  expect(screen.queryByRole("img", { name: "Overwatch" })).toBeNull();
   expect(container.querySelector("[data-brand]")).toBeNull();
   expect(screen.queryByText("SX")).toBeNull();
   expect(screen.getByRole("textbox", { name: "Search devices, settings and evidence" })).toBeInTheDocument();

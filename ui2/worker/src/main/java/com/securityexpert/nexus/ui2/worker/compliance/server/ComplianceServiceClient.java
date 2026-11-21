@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.compliance.server;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.io.ByteArrayInputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -46,7 +48,7 @@ public final class ComplianceServiceClient {
     }
 
     public static ComplianceServiceClient fromEnvironment() {
-        return new ComplianceServiceClient(System.getenv("UI2_COMPLIANCE_SERVICE_URL"));
+        return new ComplianceServiceClient(OverwatchEnv.get("UI2_COMPLIANCE_SERVICE_URL"));
     }
 
     public EvaluationResult evaluateCheckPoint(String deviceId, String rawOrSanitizedConfig) {

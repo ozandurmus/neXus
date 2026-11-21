@@ -62,7 +62,7 @@ public final class HttpsPutTransfer implements UploadTransfer {
                     || e instanceof java.net.SocketTimeoutException && String.valueOf(e.getMessage()).toLowerCase(java.util.Locale.ROOT).contains("connect");
             if (connect) {
                 throw new UploadException("CONNECTION_FAILED", "Could not reach " + where + " (" + e.getClass().getSimpleName()
-                        + "). The bank firewall may need an opening for this destination from the neXus host.", true);
+                        + "). The bank firewall may need an opening for this destination from the Overwatch host.", true);
             }
             throw new UploadException("WRITE_FAILED", "The HTTPS transfer to " + where + " failed (" + e.getClass().getSimpleName() + ").", false);
         } finally {

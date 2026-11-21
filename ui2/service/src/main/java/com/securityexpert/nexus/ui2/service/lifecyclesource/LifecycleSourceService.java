@@ -184,7 +184,7 @@ public final class LifecycleSourceService {
         }
         if (!parsed.recognised() || parsed.entries().isEmpty()) {
             return UploadResult.refused("PAGE_NOT_RECOGNISED", "The file is not a copy of the chosen vendor page, or the page "
-                    + "no longer has the table neXus reads; nothing was stored");
+                    + "no longer has the table Overwatch reads; nothing was stored");
         }
         String uploadId = "up-" + HexFormat.of().formatHex(randomBytes());
         String sha = sha256(bytes);

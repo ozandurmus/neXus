@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.jobs.pan;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.util.Locale;
 import java.util.Map;
 import java.util.OptionalInt;
@@ -94,7 +96,7 @@ public record PanFirewallCommandSwitches(Mode showInterfaceAll, Mode showSession
             new PanFirewallCommandSwitches(Mode.ALWAYS, Mode.ALWAYS);
 
     public static PanFirewallCommandSwitches fromEnvironment() {
-        return from(System::getenv);
+        return from(OverwatchEnv::get);
     }
 
     public static PanFirewallCommandSwitches from(Map<String, String> values) {

@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.system;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -354,7 +356,7 @@ public class SystemStatusService {
 
     /** Stored artefacts only: a pruned artefact keeps its manifest row, so every backup_artefact read here is live-filtered. */
     Map<String, Object> readStorage() {
-        String root = System.getenv().getOrDefault("UI2_ARTEFACT_STORE_ROOT", "");
+        String root = OverwatchEnv.getOrDefault("UI2_ARTEFACT_STORE_ROOT", "");
         Path rootPath = root.isBlank() ? null : Path.of(root);
         return storage(rootPath, null);
     }

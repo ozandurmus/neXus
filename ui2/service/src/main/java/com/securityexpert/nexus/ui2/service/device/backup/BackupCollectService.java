@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.device.backup;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Objects;
@@ -208,7 +210,7 @@ public final class BackupCollectService {
 
     /** Off unless UI2_CP_MANAGEMENT_GAIA_BACKUP=enabled (PO 2026-10-16: "şimdilik kapalı"). */
     static boolean gaiaBackupOnManagementEnabled() {
-        return "enabled".equals(System.getenv("UI2_CP_MANAGEMENT_GAIA_BACKUP"));
+        return "enabled".equals(OverwatchEnv.get("UI2_CP_MANAGEMENT_GAIA_BACKUP"));
     }
 
     /** Counts only, so a bulk request does not return a fleet's opaque device identifiers. */

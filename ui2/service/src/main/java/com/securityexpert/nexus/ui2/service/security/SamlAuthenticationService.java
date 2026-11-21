@@ -420,15 +420,15 @@ public final class SamlAuthenticationService {
     static String message(String code) {
         return switch (code) {
             case "SAML_SIGNATURE_INVALID" -> "The sign-in response from ADFS is not signed by the configured ADFS certificate.";
-            case "SAML_ASSERTION_EXPIRED" -> "The sign-in response from ADFS has expired. Check that the clocks of ADFS and neXus agree, then sign in again.";
-            case "SAML_ASSERTION_NOT_YET_VALID" -> "The sign-in response from ADFS is not valid yet. Check that the clocks of ADFS and neXus agree.";
+            case "SAML_ASSERTION_EXPIRED" -> "The sign-in response from ADFS has expired. Check that the clocks of ADFS and Overwatch agree, then sign in again.";
+            case "SAML_ASSERTION_NOT_YET_VALID" -> "The sign-in response from ADFS is not valid yet. Check that the clocks of ADFS and Overwatch agree.";
             case "SAML_WRONG_AUDIENCE" -> "The sign-in response from ADFS was issued for a different service provider (audience mismatch).";
             case "SAML_WRONG_RECIPIENT" -> "The sign-in response from ADFS was addressed to a different address than this service.";
             case "SAML_WRONG_ISSUER" -> "The sign-in response came from an identity provider that is not the configured ADFS.";
             case "SAML_NO_SUBJECT" -> "The sign-in response from ADFS does not identify a user.";
             case "SAML_UNSOLICITED_OR_REPLAYED" -> "This sign-in response does not answer a sign-in started here, or it was already used. Start the sign-in again.";
             case "SAML_DECRYPTION_FAILED" -> "The sign-in response from ADFS could not be decrypted with the service provider key.";
-            case "SAML_NO_AUTHORIZED_GROUP" -> "You signed in to ADFS, but your account is in none of the groups neXus maps to a role, so you have no access. Ask a security administrator to add you to one.";
+            case "SAML_NO_AUTHORIZED_GROUP" -> "You signed in to ADFS, but your account is in none of the groups Overwatch maps to a role, so you have no access. Ask a security administrator to add you to one.";
             default -> "The sign-in response from ADFS was not accepted.";
         };
     }

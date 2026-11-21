@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.policy;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -450,7 +452,7 @@ final class CpPolicyParallelCollection {
 
     static Duration configuredCheckpointInterval() {
         Duration interval = Duration.ofSeconds(Long.parseLong(System.getProperty("ui2.policy.cp.checkpoint-interval",
-            System.getenv().getOrDefault("UI2_POLICY_CP_CHECKPOINT_INTERVAL", "60"))));
+            OverwatchEnv.getOrDefault("UI2_POLICY_CP_CHECKPOINT_INTERVAL", "60"))));
         if (interval.isZero() || interval.isNegative()) throw new IllegalArgumentException("POLICY_CHECKPOINT_INTERVAL_MUST_BE_POSITIVE");
         return interval;
     }

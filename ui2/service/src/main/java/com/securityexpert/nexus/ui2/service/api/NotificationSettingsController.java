@@ -65,7 +65,7 @@ public final class NotificationSettingsController {
         NotificationSettings settings = store.read();
         Map<String, Object> body = new LinkedHashMap<>();
         try {
-            SyslogSender.send(settings, SyslogSender.Severity.NOTICE, "TEST", "neXus remote logging test message");
+            SyslogSender.send(settings, SyslogSender.Severity.NOTICE, "TEST", "Overwatch remote logging test message");
             com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.recordNotificationSend("syslog_test", "success");
             body.put("sent", true);
             body.put("detail", "sent over " + settings.syslogProtocol().toUpperCase() + " to the configured host");

@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.discovery.cp;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.HashMap;
@@ -92,7 +94,7 @@ public final class DiscoveryRunnerMain {
     }
 
     private static String requireEnv(String name) {
-        String value = System.getenv(name);
+        String value = OverwatchEnv.get(name);
         if (value == null || value.isBlank()) {
             throw new IllegalStateException(name + " is not set");
         }

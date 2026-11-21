@@ -306,7 +306,7 @@ public final class PulseSecureExecutor {
             try {
                 try (com.securityexpert.nexus.ui2.persistence.artefact.content.TarWriter tar =
                         new com.securityexpert.nexus.ui2.persistence.artefact.content.TarWriter(new java.util.zip.GZIPOutputStream(handle.sink()))) {
-                    StringBuilder manifest = new StringBuilder("# Pulse Secure / Ivanti backup (neXus): four exports\n");
+                    StringBuilder manifest = new StringBuilder("# Pulse Secure / Ivanti backup (Overwatch): four exports\n");
                     for (var e : files.entrySet()) {
                         long size = java.nio.file.Files.size(e.getValue());
                         manifest.append(e.getKey()).append('\t').append(size).append(" bytes\n");

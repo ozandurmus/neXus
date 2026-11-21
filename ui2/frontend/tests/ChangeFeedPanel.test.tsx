@@ -18,7 +18,7 @@ const page: ChangeFeedPage = {
       diff: [{ op: "-", text: "<action>deny</action>" }, { op: "+", text: "<action>allow</action>" }],
       links: { device: "?screen=inventory&device_id=d-pan&tab=logs", policy_id: null, rule_id: null, job_id: null, job_type: null } },
     { key: "jobs:cp_system_log_collect:1760659200", kind: "NEXUS_JOB", source: "jobs", time: "2026-10-16T21:00:00Z", time_basis: "UTC", device_time: null,
-      vendor: "check_point", device_id: null, device_name: null, actor: "neXus", what: "47 jobs · 47 devices · 47 completed", detail: "job type cp_system_log_collect",
+      vendor: "check_point", device_id: null, device_name: null, actor: "Overwatch", what: "47 jobs · 47 devices · 47 completed", detail: "job type cp_system_log_collect",
       tone: "OK", diff: [], links: { device: null, policy_id: null, rule_id: null, job_id: null, job_type: "cp_system_log_collect" } },
     { key: "policy:3", kind: "USER", source: "policy_rule_history", time: "2026-10-16T15:30:00Z", time_basis: "UTC", device_time: null,
       vendor: "check_point", device_id: "d-cp", device_name: "FW-TANGO-04", actor: "USR-abcdef0123", what: "modified rule 7 · RULE-BRAVO-02 · policy POL-ALPHA-01",
@@ -73,7 +73,7 @@ describe("ChangeFeedPanel", () => {
     // kind pills from the role table: user = brand, neXus job = neutral/ok, device event = its state
     expect(within(items[1]).getByText("User").closest("[data-pill]")).toHaveAttribute("data-pill", "brand");
     expect(within(items[0]).getByText("Device event").closest("[data-pill]")).toHaveAttribute("data-pill", "bad");
-    expect(within(items[2]).getByText("neXus job").closest("[data-pill]")).toHaveAttribute("data-pill", "neutral");
+    expect(within(items[2]).getByText("Overwatch job").closest("[data-pill]")).toHaveAttribute("data-pill", "neutral");
     // the folded jobs line names the job type in words and links to the jobs of that type
     expect(within(items[2]).getByText(/Check Point log collection · 47 jobs/)).toBeInTheDocument();
     expect(within(items[2]).getByRole("link", { name: "Jobs of this type" })).toHaveAttribute("href", "?screen=operations&tab=jobs&job_type=cp_system_log_collect");
@@ -110,7 +110,7 @@ describe("ChangeFeedPanel", () => {
     expect(pill("policy_change_evidence").textContent).toBe("Reader off · Policy change evidence");
     expect(pill("cp_cpwd_elg").textContent).toBe("Not permitted · Check Point cpwd");
     expect(pill("jobs")).toHaveAttribute("data-pill", "unknown");
-    expect(pill("jobs").textContent).toBe("UNKNOWN · neXus jobs");
+    expect(pill("jobs").textContent).toBe("UNKNOWN · Overwatch jobs");
     expect(within(coverage).getByText(/ordered as Europe\/Istanbul/)).toBeInTheDocument();
   });
 
@@ -123,7 +123,7 @@ describe("ChangeFeedPanel", () => {
     expect(first).toContain("limit=50");
     expect(first).toMatch(/from=\d{4}-/);
     fireEvent.click(screen.getByRole("button", { name: "7 d" }));
-    fireEvent.click(screen.getByRole("button", { name: "neXus job" })); // off
+    fireEvent.click(screen.getByRole("button", { name: "Overwatch job" })); // off
     fireEvent.mouseDown(screen.getByLabelText("Vendor"));
     fireEvent.click(await screen.findByRole("option", { name: "Palo Alto" }));
     fireEvent.click(screen.getByRole("button", { name: "Apply feed filters" }));

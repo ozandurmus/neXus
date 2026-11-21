@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.persistence;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
 
 import java.sql.Timestamp;
@@ -90,7 +92,7 @@ public class JooqCpFailoverRepository {
     private final AuditedTransactionBoundary audited;
 
     public JooqCpFailoverRepository(TransactionBoundary boundary) {
-        this(boundary, "true".equalsIgnoreCase(System.getenv("NEXUS_FAILOVER_MUTATION_ENABLED")));
+        this(boundary, "true".equalsIgnoreCase(OverwatchEnv.get("NEXUS_FAILOVER_MUTATION_ENABLED")));
     }
 
     public JooqCpFailoverRepository(TransactionBoundary boundary, boolean mutationEnabled) {

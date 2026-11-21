@@ -33,7 +33,7 @@ it("offers the button to an allowed role and confirms with the contract text, re
   expect(screen.getByText("Resume the return step of this failover run?")).toBeInTheDocument();
   expect(screen.getByText(/Run run-opaque on CLS-ROMEO-01 stopped after clusterXL_admin down \(TRAFFIC_BELOW_TOLERANCE\)\. FW-ROMEO-01 is down by admin and FW-ROMEO-02 carries the traffic\./)).toBeInTheDocument();
   expect(screen.getByText(/Only if FW-ROMEO-02 is Active, FW-ROMEO-01 is Down and the cluster is in Active Up mode, it sends clusterXL_admin up once to FW-ROMEO-01\. Then it waits up to 60 s/)).toBeInTheDocument();
-  expect(screen.getByText("Nothing is retried. If anything does not match, neXus stops and the incident stays open.")).toBeInTheDocument();
+  expect(screen.getByText("Nothing is retried. If anything does not match, Overwatch stops and the incident stays open.")).toBeInTheDocument();
   // Outside business hours: no acknowledgement is shown.
   expect(screen.queryByRole("checkbox")).toBeNull();
   const confirm = screen.getAllByRole("button", { name: "Resume return step" }).at(-1)!;
@@ -66,7 +66,7 @@ it("operator and aiview see state only; a refusal is shown in plain words", () =
   expect(screen.queryByRole("button")).toBeNull();
   document.body.innerHTML = "";
   show(run({ ...eligible, eligible: false, canResume: false, refusal: "RESUME_DOWN_NOT_CONFIRMED" }));
-  expect(screen.getByText("Resume is not available: neXus did not confirm that this run took the member down.")).toBeInTheDocument();
+  expect(screen.getByText("Resume is not available: Overwatch did not confirm that this run took the member down.")).toBeInTheDocument();
   expect(screen.queryByRole("button")).toBeNull();
 });
 

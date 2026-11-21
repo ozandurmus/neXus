@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.jobs.failover;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 /** Process configuration shared by service and worker; changes require a restart. */
 public record FailoverMutationSwitch(boolean enabled) {
     public static final String ENVIRONMENT_VARIABLE = "NEXUS_FAILOVER_MUTATION_ENABLED";
@@ -7,7 +9,7 @@ public record FailoverMutationSwitch(boolean enabled) {
     public static final String GENERIC_DISABLED = "GENERIC_FAILOVER_EXECUTION_DISABLED";
 
     public static FailoverMutationSwitch fromEnvironment() {
-        return fromValue(System.getenv(ENVIRONMENT_VARIABLE));
+        return fromValue(OverwatchEnv.get(ENVIRONMENT_VARIABLE));
     }
 
     public static FailoverMutationSwitch fromValue(String value) {

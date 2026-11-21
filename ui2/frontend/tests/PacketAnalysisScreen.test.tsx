@@ -975,7 +975,7 @@ describe("Packet Analysis screen", () => {
     await screen.findByLabelText("Case investigation workspace");
 
     fireEvent.click(screen.getByRole("tab", { name: "Topology" }));
-    const corrCard = await screen.findByLabelText("neXus hop & policy correlation");
+    const corrCard = await screen.findByLabelText("Overwatch hop & policy correlation");
     expect(within(corrCard).getByText(/The capture proves observed frames/)).toBeInTheDocument();
 
     const hop1 = within(corrCard).getByLabelText("Hop correlation p1");
@@ -998,10 +998,10 @@ describe("Packet Analysis screen", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Flows & Ladder" }));
     const convTable = await screen.findByRole("table", { name: "Conversations table" });
-    expect(within(convTable).getByText("neXus: Match")).toBeInTheDocument();
+    expect(within(convTable).getByText("Overwatch: Match")).toBeInTheDocument();
     fireEvent.click(within(convTable).getByText('["tcp","192.0.2.10",50000,"198.51.100.20",443]'));
 
-    const flowCorrCard = await screen.findByLabelText("Flow neXus correlation");
+    const flowCorrCard = await screen.findByLabelText("Flow Overwatch correlation");
     expect(within(within(flowCorrCard).getByLabelText("Selected flow capture proves")).getByText(/Pre-NAT 5-tuple: 192\.0\.2\.10:50000/)).toBeInTheDocument();
     expect(within(within(flowCorrCard).getByLabelText("Selected flow configured policy says")).getByText(/#20 Allow-Web-Post-NAT/)).toBeInTheDocument();
   });

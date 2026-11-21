@@ -1052,7 +1052,7 @@ public final class ScriptExecutionService {
         if (!script.egressDeviceTargets().isEmpty()) {
             warnings.add("Declared egress targets enrolled device management address(es) "
                     + script.egressDeviceTargets()
-                    + "; this is a direct path outside neXus command gates and will be recorded on each run.");
+                    + "; this is a direct path outside Overwatch command gates and will be recorded on each run.");
         }
         ScriptCredentialSource source = credentialSource;
         if (latest != null && source != null && latest.credentialRefs().size() > 1) {

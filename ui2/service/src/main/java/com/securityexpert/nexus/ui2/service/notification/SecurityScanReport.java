@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.notification;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,7 +33,7 @@ public class SecurityScanReport {
     }
 
     public Map<String, Object> latest() {
-        Path directory = Path.of(System.getenv().getOrDefault("UI2_SECURITY_SUMMARY_DIR", "/var/lib/nexus-security/notifications"));
+        Path directory = Path.of(OverwatchEnv.getOrDefault("UI2_SECURITY_SUMMARY_DIR", "/var/lib/nexus-security/notifications"));
         return latest(directory, Instant.now(), settingsStore.read());
     }
 

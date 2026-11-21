@@ -126,7 +126,7 @@ describe("DirectorySettingsPanel", () => {
     mockApi();
     render(<DirectorySettingsPanel />);
     fireEvent.click(await screen.findByLabelText("Trust any certificate"));
-    expect(screen.getByText(/neXus will accept any certificate, including one from a machine impersonating the directory/)).toBeInTheDocument();
+    expect(screen.getByText(/Overwatch will accept any certificate, including one from a machine impersonating the directory/)).toBeInTheDocument();
     expect(screen.getByText(/this risk was accepted by the Product Owner/)).toBeInTheDocument();
     expect(screen.queryByLabelText("Certificate (PEM)")).toBeNull();
   });

@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.notification;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.net.URI;
 import java.util.List;
 
@@ -8,8 +10,8 @@ import org.jooq.Record;
 
 /**
  * The product name shown in notification mail (From display name, subject prefix, test digests). Read from
- * {@code UI2_MAIL_PRODUCT_NAME}; defaults to "neXus". PO 2026-11-18: mail goes out as "Overwatch" ahead of the
- * product rename. Control characters are stripped so the value can never inject a header line.
+ * {@code UI2_MAIL_PRODUCT_NAME}; defaults to "Overwatch". Control characters are stripped so the value can never
+ * inject a header line.
  */
 public final class MailBrand {
     private static final List<String> PUBLIC_URL_ENVS = List.of(
@@ -20,13 +22,13 @@ public final class MailBrand {
     private MailBrand() {}
 
     public static String name() {
-        return cleanLabel(System.getenv("UI2_MAIL_PRODUCT_NAME"), "neXus");
+        return cleanLabel(OverwatchEnv.get("UI2_MAIL_PRODUCT_NAME"), "Overwatch");
     }
 
     /** The deployment environment label shown in the notification mail footer; defaults to "production". */
     public static String environment() {
         for (String env : ENVIRONMENT_ENVS) {
-            String value = System.getenv(env);
+            String value = OverwatchEnv.get(env);
             if (value != null && !value.isBlank()) {
                 return cleanLabel(value, "production");
             }
@@ -37,7 +39,7 @@ public final class MailBrand {
     /** The public base URL (without trailing slash) for links in notification mail, or {@code null} when unset. */
     public static String publicBaseUrl() {
         for (String env : PUBLIC_URL_ENVS) {
-            String normalized = normalizeBaseUrl(System.getenv(env));
+            String normalized = normalizeBaseUrl(OverwatchEnv.get(env));
             if (normalized != null) {
                 return normalized;
             }

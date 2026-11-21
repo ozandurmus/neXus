@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.persistence.artefact;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -310,7 +312,7 @@ public final class FileArtefactStore implements ArtefactStore {
      * the pod at start-up (fail closed) rather than silently falling back to the default.
      */
     public static Optional<Long> resolveConfiguredQuotaBytes(Map<String, String> env) {
-        String raw = env == null ? null : env.get(QUOTA_ENV_VAR);
+        String raw = env == null ? null : OverwatchEnv.get(env::get, QUOTA_ENV_VAR);
         if (raw == null || raw.isBlank()) {
             return Optional.empty();
         }

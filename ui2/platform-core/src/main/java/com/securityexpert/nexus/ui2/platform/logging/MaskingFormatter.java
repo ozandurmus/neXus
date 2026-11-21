@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.platform.logging;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Formatter;
 import java.util.logging.Handler;
@@ -21,7 +23,7 @@ public final class MaskingFormatter extends Formatter {
     private final boolean rawAddresses;
 
     public MaskingFormatter(Formatter delegate) {
-        this(delegate, LogAddressMasker.rawAddressesEnabled(System::getenv));
+        this(delegate, LogAddressMasker.rawAddressesEnabled(OverwatchEnv::get));
     }
 
     MaskingFormatter(Formatter delegate, boolean rawAddresses) {
@@ -67,7 +69,7 @@ public final class MaskingFormatter extends Formatter {
     }
 
     private static String lookupFormatProperty(String key) {
-        String value = System.getenv(key);
+        String value = OverwatchEnv.get(key);
         if (value == null || value.isBlank()) {
             value = System.getProperty(key);
         }

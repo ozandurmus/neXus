@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.policy;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.regex.Pattern;
@@ -38,7 +40,7 @@ public record PolicyCompletenessSettings(Optional<String> panConfigLogTrialSourc
     }
 
     public static PolicyCompletenessSettings fromEnvironment() {
-        return from(System::getProperty, System::getenv);
+        return from(System::getProperty, OverwatchEnv::get);
     }
 
     static PolicyCompletenessSettings from(Function<String, String> properties, Function<String, String> environment) {

@@ -87,8 +87,8 @@ public final class XlsxReportRenderer implements ReportRenderer {
             var props = wb.getProperties().getCoreProperties();
             props.setCreated(Optional.of(java.util.Date.from(FIXED_TIME)));
             props.setModified(Optional.of(java.util.Date.from(FIXED_TIME)));
-            props.setCreator("neXus Reports");
-            props.setLastModifiedByUser("neXus Reports");
+            props.setCreator("Overwatch Reports");
+            props.setLastModifiedByUser("Overwatch Reports");
             props.setTitle(d.templateId() + " " + d.title());
             ByteArrayOutputStream raw = new ByteArrayOutputStream();
             wb.write(raw);

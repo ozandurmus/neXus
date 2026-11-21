@@ -16,7 +16,7 @@ const matrixFixture: ZoneMatrixView = {
   default_statement: "ALLOW_LISTED",
   default_severity: "MEDIUM",
   unassigned_to_unassigned: "DENY_ALL",
-  template_origin: { name: "neXus segmentation template (proposal)", revision: "2026-11-13.2" },
+  template_origin: { name: "Overwatch segmentation template (proposal)", revision: "2026-11-13.2" },
   service_sets: [
     {
       name: "web-tls",
@@ -116,9 +116,9 @@ const draftVersion: ZoneVersionDetail = {
 };
 
 const templateFixture = {
-  name: "neXus segmentation template (proposal)",
+  name: "Overwatch segmentation template (proposal)",
   revision: "2026-11-13.2",
-  basis: "neXus proposal based on general segmentation practice, not on a BDDK clause",
+  basis: "Overwatch proposal based on general segmentation practice, not on a BDDK clause",
   roles: ["DMZ", "APPLICATION", "DATABASE"],
   can: { view_blocks: true, edit: true, publish: true, confirm_reference: true },
   rows: [
@@ -225,7 +225,7 @@ describe("Zone matrix step 2: Matrix tab and Versions additions", () => {
     render(<ZoneMatrixScreen />);
     const header = await screen.findByTestId("matrix-header");
     expect(within(header).getByText(/1 of 3 cells confirmed by compliance/)).toBeInTheDocument();
-    expect(within(header).getByTestId("template-origin")).toHaveTextContent("neXus segmentation template (proposal) (2026-11-13.2)");
+    expect(within(header).getByTestId("template-origin")).toHaveTextContent("Overwatch segmentation template (proposal) (2026-11-13.2)");
 
     const allowListedCell = screen.getByTestId("matrix-cell-z1-z2");
     expect(allowListedCell).toHaveAttribute("data-statement", "ALLOW_LISTED");
@@ -416,7 +416,7 @@ describe("Zone matrix step 2: Matrix tab and Versions additions", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Segmentation template" }));
     const dialog = await screen.findByRole("dialog");
     expect(await within(dialog).findByTestId("template-basis")).toHaveTextContent(
-      "neXus proposal based on general segmentation practice, not on a BDDK clause",
+      "Overwatch proposal based on general segmentation practice, not on a BDDK clause",
     );
     expect(within(dialog).getByText("DMZ -> APPLICATION")).toBeInTheDocument();
 

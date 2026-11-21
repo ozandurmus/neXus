@@ -41,7 +41,7 @@ final class ComplianceFacts {
      * The statement that goes wherever the Financial baseline is described (PO decision 2026-11-13). The set is a neXus
      * baseline; its identifiers (FB-AREA-NN) are not clauses of any regulation.
      */
-    static final String FINANCIAL_BASELINE_NOTICE = "Financial baseline: neXus baseline for financial institutions; "
+    static final String FINANCIAL_BASELINE_NOTICE = "Financial baseline: Overwatch baseline for financial institutions; "
             + "not a mapping to any regulation. Regulatory mapping is the bank compliance team's input.";
 
     /**

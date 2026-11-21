@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.backup;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
@@ -52,7 +54,7 @@ public final class BackupCapabilityExecutor {
     /** A generous safety bound on the SFTP fetch (entry 5's own timeout column) -- never a vendor-stated archive size limit. */
     // 2026-09-24: 5 GB -> 50 GB (UI2_BACKUP_MAX_ARCHIVE_BYTES): a Multi-Domain Server's Gaia backup carries every domain.
     private static final long MAX_ARCHIVE_BYTES = Long.parseLong(
-            System.getenv().getOrDefault("UI2_BACKUP_MAX_ARCHIVE_BYTES", String.valueOf(50L * 1024 * 1024 * 1024)));
+            OverwatchEnv.getOrDefault("UI2_BACKUP_MAX_ARCHIVE_BYTES", String.valueOf(50L * 1024 * 1024 * 1024)));
 
     private static final Pattern ARCHIVE_NAME = Pattern.compile("([\\w][\\w.\\-]*\\.tgz)");
     private static final Pattern FIRST_INTEGER = Pattern.compile("(\\d+)");

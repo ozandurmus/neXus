@@ -2,8 +2,8 @@
  * Single source of truth for the product's user-visible display name.
  * Change `PRODUCT_NAME` and `PRODUCT_SHORT` here to rename the product across the UI.
  */
-export const PRODUCT_NAME = "neXus";
-export const PRODUCT_SHORT = "neXus";
+export const PRODUCT_NAME = "Overwatch";
+export const PRODUCT_SHORT = "Overwatch";
 
 /**
  * True when `name` matches the five-letter "neXus" spelling that the bespoke

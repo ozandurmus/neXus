@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.platform.logging;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.Map;
@@ -33,7 +35,7 @@ public final class JsonLogFormatter extends Formatter {
     private final JsonLogFields fields;
 
     public JsonLogFormatter() {
-        this(LogAddressMasker.rawAddressesEnabled(System::getenv), JsonLogFields.fromEnvironment());
+        this(LogAddressMasker.rawAddressesEnabled(OverwatchEnv::get), JsonLogFields.fromEnvironment());
     }
 
     JsonLogFormatter(boolean rawAddresses) {

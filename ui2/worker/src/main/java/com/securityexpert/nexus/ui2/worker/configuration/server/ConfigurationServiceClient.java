@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.configuration.server;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -42,7 +44,7 @@ public final class ConfigurationServiceClient {
     }
 
     public static ConfigurationServiceClient fromEnvironment() {
-        return new ConfigurationServiceClient(System.getenv("UI2_CONFIG_SERVICE_URL"));
+        return new ConfigurationServiceClient(OverwatchEnv.get("UI2_CONFIG_SERVICE_URL"));
     }
 
     public CheckPointGaiaConfigProcessor.Processed parseCheckPoint(String deviceId, String rawConfig) {

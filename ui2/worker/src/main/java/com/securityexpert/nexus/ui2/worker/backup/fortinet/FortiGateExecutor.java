@@ -442,7 +442,7 @@ public final class FortiGateExecutor {
         } finally {
             ssh.disconnect(shell.session());
         }
-        StringBuilder manifest = new StringBuilder("# FortiGate configuration backup (neXus, read-only CLI: show)\n");
+        StringBuilder manifest = new StringBuilder("# FortiGate configuration backup (Overwatch, read-only CLI: show)\n");
         members.forEach((n, b) -> manifest.append(n).append('\t').append(b.length).append(" bytes\n"));
         ArtefactStore.ArtefactHandle handle;
         try {

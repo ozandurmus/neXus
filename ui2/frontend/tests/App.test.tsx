@@ -51,7 +51,7 @@ describe("the UI 2.0 shell navigation", () => {
   });
   it("shows the logo exactly once, in the sidebar header, and no SX badge anywhere (brand area 2026-11-13)", () => {
     const { container } = render(<App />);
-    const logos = screen.getAllByRole("img", { name: "neXus" });
+    const logos = screen.getAllByRole("img", { name: "Overwatch" });
     expect(logos).toHaveLength(1);
     expect(logos[0]).toHaveAttribute("data-brand", "wordmark");
     expect(screen.getByRole("navigation", { name: "Primary" })).toContainElement(logos[0]);
@@ -92,7 +92,7 @@ describe("the UI 2.0 shell navigation", () => {
     narrow();
     render(<App />);
     const rail = screen.getByRole("navigation", { name: "Primary" });
-    expect(within(rail).getByRole("img", { name: "neXus" })).toHaveAttribute("data-brand", "mark");
+    expect(within(rail).getByRole("img", { name: "Overwatch" })).toHaveAttribute("data-brand", "mark");
     fireEvent.click(within(rail).getByRole("button", { name: "Open navigation" }));
 
     const drawer = screen.getByRole("navigation", { name: "Primary navigation drawer" });
@@ -152,8 +152,8 @@ describe("the six product screens", () => {
     // PO 2026-11-13 amendment: Scheduled jobs and Platform status are Administration pages, from every address they had.
     ["?screen=administration&tab=platform&section=scheduled-jobs", "administration", "The scheduled jobs list is unavailable"],
     ["?screen=operations&tab=schedules", "administration", "The scheduled jobs list is unavailable"],
-    ["?screen=operations&tab=platform-status", "administration", "neXus itself: what the evidence takes"],
-    ["?screen=administration&tab=system", "administration", "neXus itself: what the evidence takes"],
+    ["?screen=operations&tab=platform-status", "administration", "Overwatch itself: what the evidence takes"],
+    ["?screen=administration&tab=system", "administration", "Overwatch itself: what the evidence takes"],
   ])("lands %s on its new screen", async (search, screenId, marker) => {
     const { unmount } = render(<App search={search} />);
     expect(await screen.findByText(new RegExp(marker))).toBeInTheDocument();

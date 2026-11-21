@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.policy;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.time.*;
 import java.util.*;
 import java.util.function.*;
@@ -37,7 +39,7 @@ public final class CheckPointPolicyCollector {
 
     public CheckPointPolicyCollector(DeviceTransport transport, GateRegistryPort gates, PolicyCollectionRepository repository) {
         this(transport, gates, repository, Duration.ofSeconds(Long.parseLong(
-            System.getenv().getOrDefault("UI2_POLICY_RUN_DEADLINE_SECONDS", "7200"))));
+            OverwatchEnv.getOrDefault("UI2_POLICY_RUN_DEADLINE_SECONDS", "7200"))));
     }
     public CheckPointPolicyCollector(DeviceTransport transport, GateRegistryPort gates, PolicyCollectionRepository repository, Duration jobTimeout) {
         this(transport, gates, repository, jobTimeout, configuredMaxSessions(), System::nanoTime);
@@ -63,7 +65,7 @@ public final class CheckPointPolicyCollector {
     /** Pause before a layer restart, in milliseconds; bounded so a restart can never stall a run. */
     static Duration configuredRestartBackoff() {
         Duration backoff = Duration.ofMillis(Long.parseLong(System.getProperty("ui2.policy.cp.layer-restart-backoff-ms",
-            System.getenv().getOrDefault("UI2_POLICY_CP_LAYER_RESTART_BACKOFF_MS", "3000"))));
+            OverwatchEnv.getOrDefault("UI2_POLICY_CP_LAYER_RESTART_BACKOFF_MS", "3000"))));
         if (backoff.isNegative() || backoff.toMillis() > 60_000)
             throw new IllegalArgumentException("POLICY_LAYER_RESTART_BACKOFF_OUT_OF_RANGE");
         return backoff;
@@ -134,7 +136,7 @@ public final class CheckPointPolicyCollector {
     /** Per-command policy read budget, in seconds. */
     static Duration configuredReadTimeout() {
         Duration timeout = Duration.ofSeconds(Long.parseLong(System.getProperty("ui2.policy.cp.read-timeout",
-            System.getenv().getOrDefault("UI2_POLICY_CP_READ_TIMEOUT", "300"))));
+            OverwatchEnv.getOrDefault("UI2_POLICY_CP_READ_TIMEOUT", "300"))));
         if (timeout.isZero() || timeout.isNegative() || timeout.toMillis() > Integer.MAX_VALUE)
             throw new IllegalArgumentException("POLICY_READ_TIMEOUT_OUT_OF_RANGE");
         return timeout;
@@ -157,7 +159,7 @@ public final class CheckPointPolicyCollector {
 
     static int configuredMaxSessions() {
         return Integer.parseInt(System.getProperty("ui2.policy.cp.max-sessions",
-            System.getenv().getOrDefault("UI2_POLICY_CP_MAX_SESSIONS", "4")));
+            OverwatchEnv.getOrDefault("UI2_POLICY_CP_MAX_SESSIONS", "4")));
     }
 
     public List<PolicySnapshot> collect(DiscoveryRun run, PolicyCollectionRepository.Request request, BooleanSupplier lease) {
@@ -390,13 +392,13 @@ public final class CheckPointPolicyCollector {
 
     static boolean collectObjectsEnabled() {
         return Boolean.parseBoolean(System.getProperty("ui2.policy.cp.collect-objects",
-            System.getenv().getOrDefault("UI2_POLICY_CP_COLLECT_OBJECTS", "true")));
+            OverwatchEnv.getOrDefault("UI2_POLICY_CP_COLLECT_OBJECTS", "true")));
     }
 
     /** Seconds between domain/type inventory attempts; reuse preserves the original timestamp and gaps. */
     static Duration configuredObjectsEvery() {
         Duration interval = Duration.ofSeconds(Long.parseLong(System.getProperty("ui2.policy.cp.objects-every",
-            System.getenv().getOrDefault("UI2_POLICY_CP_OBJECTS_EVERY", "86400"))));
+            OverwatchEnv.getOrDefault("UI2_POLICY_CP_OBJECTS_EVERY", "86400"))));
         if (interval.isNegative()) throw new IllegalArgumentException("POLICY_OBJECTS_EVERY_MUST_BE_NON_NEGATIVE");
         return interval;
     }

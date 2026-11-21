@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.policy;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -59,7 +61,7 @@ final class CpInventoryObjects {
     /** Whether resolution from the inventory is on; an operator can turn it off without a code change. */
     static boolean enabled() {
         return Boolean.parseBoolean(System.getProperty("ui2.policy.cp.resolve-from-inventory",
-            System.getenv().getOrDefault("UI2_POLICY_CP_RESOLVE_FROM_INVENTORY", "true")));
+            OverwatchEnv.getOrDefault("UI2_POLICY_CP_RESOLVE_FROM_INVENTORY", "true")));
     }
 
     /**

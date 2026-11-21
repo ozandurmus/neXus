@@ -299,7 +299,7 @@ public final class PacketAnalysisCorrelationService {
         out.put("inventory_status", hasInventory ? "AVAILABLE" : STATUS_NOT_EVALUABLE);
         out.put("inventory_reason", hasInventory
                 ? null
-                : "No device inventory data collected in neXus");
+                : "No device inventory data collected in Overwatch");
         out.put("policy_snapshot_count", snapshots.size());
         out.put("evidence_separation_note",
                 "Capture observations prove only what frames were seen at each capture point. "
@@ -400,7 +400,7 @@ public final class PacketAnalysisCorrelationService {
 
         if (!hasInventory) {
             result.put("status", STATUS_NOT_EVALUABLE);
-            result.put("reason", "No device inventory data collected in neXus");
+            result.put("reason", "No device inventory data collected in Overwatch");
             result.put("evidence", List.of());
             result.put("configured_inventory_says", null);
             result.put("candidates", List.of());
@@ -512,7 +512,7 @@ public final class PacketAnalysisCorrelationService {
         if (candidateMatches.isEmpty()) {
             String noMatchReason = sawOuiOnlySimilarity
                     ? "OUI-only MAC prefix similarity is insufficient evidence; full 6-octet MAC or interface address/subnet equality is required"
-                    : "No neXus inventory interface matched the hop's observed MACs or addresses/subnets";
+                    : "No Overwatch inventory interface matched the hop's observed MACs or addresses/subnets";
             result.put("status", STATUS_NO_MATCH);
             result.put("reason", noMatchReason);
             result.put("evidence", List.of());
@@ -679,7 +679,7 @@ public final class PacketAnalysisCorrelationService {
 
         if (!hasInventory && snapshots.isEmpty()) {
             out.put("status", STATUS_NOT_EVALUABLE);
-            out.put("reason", "No device inventory or policy snapshots collected in neXus");
+            out.put("reason", "No device inventory or policy snapshots collected in Overwatch");
             out.put("evidence", List.of());
             out.put("configured_policy_says", null);
             out.put("firewall_matches", List.of());

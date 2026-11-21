@@ -193,7 +193,7 @@ class PacketDeviceEventsServiceTest {
             hops.add(h);
         }
         Map<String, Object> p3 = new LinkedHashMap<>();
-        p3.put("point_id", "p3"); p3.put("status", "NO_MATCH"); p3.put("reason", "No neXus inventory interface matched the hop's observed MACs or addresses/subnets");
+        p3.put("point_id", "p3"); p3.put("status", "NO_MATCH"); p3.put("reason", "No Overwatch inventory interface matched the hop's observed MACs or addresses/subnets");
         hops.add(p3);
         Map<String, Object> p4 = new LinkedHashMap<>();
         p4.put("point_id", "p4"); p4.put("status", "AMBIGUOUS"); p4.put("reason", "2 candidate inventory interfaces matched with equal evidence");
@@ -425,7 +425,7 @@ class PacketDeviceEventsServiceTest {
         assertEquals("log not collected: management_server of vendor check_point is not a managed firewall", edge.get("result_reason"));
         when(devices.listAll()).thenReturn(List.of());
         edge = rows(service().deviceEvents(new Request(CASE, "", 0), false, new Permissions(true)).body()).get(0);
-        assertEquals("log not collected: the matched device is not in the neXus inventory", edge.get("result_reason"));
+        assertEquals("log not collected: the matched device is not in the Overwatch inventory", edge.get("result_reason"));
     }
 
     @Test

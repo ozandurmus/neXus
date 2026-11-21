@@ -467,7 +467,7 @@ public final class CiscoAsaExecutor {
                         java.nio.file.Files.copy(temp, o);
                     }
                 }
-                StringBuilder text = new StringBuilder("# Cisco ASA backup (neXus): configuration text, then the ASA archive\n");
+                StringBuilder text = new StringBuilder("# Cisco ASA backup (Overwatch): configuration text, then the ASA archive\n");
                 members.forEach((name, bytes) -> text.append(name).append('\t').append(bytes.length).append(" bytes\n"));
                 text.append("asa-backup.tar.gz\t").append(archiveProblem.isEmpty() ? archiveBytes + " bytes" : "MISSING: " + archiveProblem.get()).append('\n');
                 manifest.forEach(line -> text.append("# ").append(line).append('\n'));

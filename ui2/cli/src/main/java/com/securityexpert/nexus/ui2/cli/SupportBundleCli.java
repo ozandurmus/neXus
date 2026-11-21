@@ -203,7 +203,7 @@ final class SupportBundleCli {
         }
         System.out.println("downloaded " + Files.size(dest) + " bytes to " + dest);
         System.out.println("WARNING: the archive carries secret-bearing files and cannot be masked; the copy is yours to protect.");
-        System.out.println("The bundle is still stored in neXus. Delete it now with: support-bundle-delete " + args[1] + " <reason>");
+        System.out.println("The bundle is still stored in Overwatch. Delete it now with: support-bundle-delete " + args[1] + " <reason>");
         return 0;
     }
 

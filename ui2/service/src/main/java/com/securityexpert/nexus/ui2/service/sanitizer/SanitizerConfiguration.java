@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.sanitizer;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.HashMap;
@@ -55,7 +57,7 @@ public class SanitizerConfiguration {
             @Value("${ui2.sanitizer.vault-retention-days:90}") int retentionDays,
             @Value("${ui2.sanitizer.output-ttl-minutes:60}") long outputTtlMinutes,
             @Value("${ui2.sanitizer.concurrent-jobs:2}") int concurrentJobs) {
-        String keyFile = System.getenv().getOrDefault("UI2_ARTEFACT_STORE_KEY_FILE", "");
+        String keyFile = OverwatchEnv.getOrDefault("UI2_ARTEFACT_STORE_KEY_FILE", "");
         VaultCrypto crypto = keyFile.isBlank() ? null : new VaultCrypto(keys.getSecretKey(),
                 ArtefactStoreCipher.fromBase64Key(SecretFile.readRequired(Path.of(keyFile), "artefact_store_key")));
         ExecutorService executor = new ThreadPoolExecutor(concurrentJobs, concurrentJobs, 60, TimeUnit.SECONDS,

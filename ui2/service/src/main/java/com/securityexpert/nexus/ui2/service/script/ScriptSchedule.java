@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.script;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -22,7 +24,7 @@ public final class ScriptSchedule {
 
     /** {@code UI2_SCRIPT_SCHEDULE_ZONE} when it is a valid zone id, else {@link #DEFAULT_ZONE}. */
     public static ZoneId zone() {
-        return zoneOf(System.getenv("UI2_SCRIPT_SCHEDULE_ZONE"));
+        return zoneOf(OverwatchEnv.get("UI2_SCRIPT_SCHEDULE_ZONE"));
     }
 
     static ZoneId zoneOf(String configured) {

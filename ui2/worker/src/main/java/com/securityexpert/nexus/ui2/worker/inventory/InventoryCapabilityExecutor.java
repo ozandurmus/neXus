@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.inventory;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -99,14 +101,14 @@ public final class InventoryCapabilityExecutor {
     /** V196 one-off: true only while the worker runs with {@code UI2_CP_MDS_FINGERPRINT_ACCEPT_ONCE=1}. */
     static boolean acceptFingerprintOnce() {
         return "1".equals(System.getProperty("ui2.cp.mds.fingerprint.accept-once",
-                System.getenv().getOrDefault("UI2_CP_MDS_FINGERPRINT_ACCEPT_ONCE", "0")));
+                OverwatchEnv.getOrDefault("UI2_CP_MDS_FINGERPRINT_ACCEPT_ONCE", "0")));
     }
 
     /** V246: the install-history read is on by default; {@code UI2_CP_INSTALL_HISTORY_READ=0} (property
      *  {@code ui2.cp.install-history.read}) turns it off. */
     static boolean installHistoryReadEnabled() {
         return !"0".equals(System.getProperty("ui2.cp.install-history.read",
-                System.getenv().getOrDefault("UI2_CP_INSTALL_HISTORY_READ", "1")).trim());
+                OverwatchEnv.getOrDefault("UI2_CP_INSTALL_HISTORY_READ", "1")).trim());
     }
 
     /** Why the install-history read is not sent for this run, or empty when it applies (Check Point gateway context only). */

@@ -9,27 +9,27 @@ const paints = (root: Element) => [...root.querySelectorAll<SVGElement>("[style]
   .flatMap((el) => [el.style.getPropertyValue("stroke"), el.style.getPropertyValue("fill")]).filter((v) => v !== "");
 
 describe("NexusWordmark", () => {
-  it("draws the approved wordmark in place, named neXus, with no image file and no box behind it", () => {
+  it("draws the approved wordmark in place, named Overwatch, with no image file and no box behind it", () => {
     const { container } = render(<NexusWordmark />);
-    const logo = screen.getByRole("img", { name: "neXus" });
+    const logo = screen.getByRole("img", { name: "Overwatch" });
     expect(logo.tagName.toLowerCase()).toBe("svg");
     expect(logo).toHaveAttribute("data-brand", "wordmark");
-    expect(logo).toHaveAttribute("viewBox", "-2 -2 200 44");
+    expect(logo).toHaveAttribute("viewBox", "-2 -2 260 44");
     expect(container.querySelector("img")).toBeNull();
     expect(logo.style.backgroundColor).toBe("");
   });
 
   it("paints with the three brand tokens only, so it follows the theme", () => {
     render(<NexusWordmark />);
-    expect(new Set(paints(screen.getByRole("img", { name: "neXus" })))).toEqual(new Set([m3.brandInk, m3.brandTeal, m3.brandBlue]));
+    expect(new Set(paints(screen.getByRole("img", { name: "Overwatch" })))).toEqual(new Set([m3.brandInk, m3.brandTeal, m3.brandBlue]));
   });
 
   it("keeps the height interface and the artwork's proportions", () => {
     for (const height of [22, 44, 200]) {
       const { unmount } = render(<NexusWordmark height={height} />);
-      const logo = screen.getByRole("img", { name: "neXus" });
+      const logo = screen.getByRole("img", { name: "Overwatch" });
       expect(logo).toHaveAttribute("height", String(height));
-      expect(Number(logo.getAttribute("width"))).toBeCloseTo(height * 200 / 44, 1);
+      expect(Number(logo.getAttribute("width"))).toBeCloseTo(height * 260 / 44, 1);
       unmount();
     }
   });
@@ -52,9 +52,9 @@ describe("NexusWordmark", () => {
 });
 
 describe("NexusMark", () => {
-  it("draws the X, its nodes and hub without the navy tile, named neXus", () => {
+  it("draws the X, its nodes and hub without the navy tile, named Overwatch", () => {
     const { container } = render(<NexusMark />);
-    const logo = screen.getByRole("img", { name: "neXus" });
+    const logo = screen.getByRole("img", { name: "Overwatch" });
     expect(logo.tagName.toLowerCase()).toBe("svg");
     expect(logo).toHaveAttribute("data-brand", "mark");
     expect(container.querySelector("img")).toBeNull();
@@ -66,7 +66,7 @@ describe("NexusMark", () => {
   it("keeps the size interface", () => {
     for (const size of [20, 200]) {
       const { unmount } = render(<NexusMark size={size} />);
-      const logo = screen.getByRole("img", { name: "neXus" });
+      const logo = screen.getByRole("img", { name: "Overwatch" });
       expect(logo).toHaveAttribute("width", String(size));
       expect(logo).toHaveAttribute("height", String(size));
       unmount();

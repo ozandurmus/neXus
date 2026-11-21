@@ -23,7 +23,7 @@ import java.util.function.Predicate;
  * </ul>
  */
 public final class ZoneMatrixTemplate {
-    public static final String NAME = "neXus segmentation template (proposal)";
+    public static final String NAME = "Overwatch segmentation template (proposal)";
     /** Bumped whenever the rows change, so a version's template origin names the rows it was seeded from. */
     public static final String REVISION = "2026-11-13.2";
 

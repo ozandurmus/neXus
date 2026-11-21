@@ -15,7 +15,7 @@ public final class BusinessHours {
     public static final LocalTime DEFAULT_START = LocalTime.of(8, 0);
     public static final LocalTime DEFAULT_END = LocalTime.of(20, 0);
     public static final String ENVIRONMENT = "UI2_BUSINESS_HOURS";
-    public static final BusinessHours SYSTEM = parse(System.getenv(ENVIRONMENT));
+    public static final BusinessHours SYSTEM = parse(OverwatchEnv.get(ENVIRONMENT));
 
     private final LocalTime start;
     private final LocalTime end;

@@ -84,8 +84,8 @@ describe("the one state", () => {
   });
 
   it("is down when the read fails, and nothing at all when the session may not read it", () => {
-    expect(platformHealth({ error: { status: 503, body: {} } })).toEqual({ state: "down", reason: "neXus could not read its own status (status 503)." });
-    expect(platformHealth({ error: new TypeError("Failed to fetch") })).toEqual({ state: "down", reason: "neXus did not answer its status read." });
+    expect(platformHealth({ error: { status: 503, body: {} } })).toEqual({ state: "down", reason: "Overwatch could not read its own status (status 503)." });
+    expect(platformHealth({ error: new TypeError("Failed to fetch") })).toEqual({ state: "down", reason: "Overwatch did not answer its status read." });
     expect(platformHealth({ error: { status: 401, body: {} } })).toBeNull();
     expect(platformHealth({ error: { status: 403, body: {} } })).toBeNull();
   });
@@ -157,16 +157,16 @@ describe("the indicator", () => {
     badge({ state: "ok", reason: "All 3 service pods running and ready." });
     const el = document.querySelector("[data-platform-health]") as HTMLElement;
     expect(el).toHaveAttribute("data-platform-health", "ok");
-    expect(el).toHaveTextContent(/^neXus$/);
-    expect(el).toHaveAccessibleName("neXus status: OK. All 3 service pods running and ready.");
+    expect(el).toHaveTextContent(/^Overwatch$/);
+    expect(el).toHaveAccessibleName("Overwatch status: OK. All 3 service pods running and ready.");
     expect(el).toHaveStyle({ backgroundColor: "rgba(0, 0, 0, 0)" });
   });
 
-  it.each<[PlatformHealth["state"], string]>([["degraded", "neXus degraded"], ["down", "neXus down"]])("says %s in words when it is not OK", (state, words) => {
+  it.each<[PlatformHealth["state"], string]>([["degraded", "Overwatch degraded"], ["down", "Overwatch down"]])("says %s in words when it is not OK", (state, words) => {
     badge({ state, reason: "Synthetic reason." });
     const el = document.querySelector("[data-platform-health]") as HTMLElement;
     expect(el).toHaveTextContent(words);
-    expect(el).toHaveAccessibleName(`neXus status: ${state}. Synthetic reason.`);
+    expect(el).toHaveAccessibleName(`Overwatch status: ${state}. Synthetic reason.`);
   });
 
   it("links to Administration > Platform status only where the session may open it", () => {
@@ -175,7 +175,7 @@ describe("the indicator", () => {
     unmount();
     badge({ state: "degraded", reason: "Synthetic reason." }, false);
     expect(screen.queryByRole("link")).toBeNull();
-    expect(screen.getByRole("status")).toHaveAccessibleName("neXus status: degraded. Synthetic reason.");
+    expect(screen.getByRole("status")).toHaveAccessibleName("Overwatch status: degraded. Synthetic reason.");
   });
 
   it("follows the menu's own checks for the Platform status entry: every signed-in session may open it, no session may not", () => {
@@ -206,14 +206,14 @@ describe("in the top app bar", () => {
   it("shows every signed-in user the state, linked to Platform status", async () => {
     stub({ status: 200, body: HEALTHY });
     bar(true);
-    const link = await screen.findByRole("link", { name: /^neXus status: OK\./ });
+    const link = await screen.findByRole("link", { name: /^Overwatch status: OK\./ });
     expect(link).toHaveAttribute("href", "?screen=administration&tab=platform-status");
   });
 
   it("shows down when the read fails", async () => {
     stub({ status: 502, body: {} });
     bar(true);
-    expect(await screen.findByRole("link", { name: /^neXus status: down\./ })).toHaveTextContent("neXus down");
+    expect(await screen.findByRole("link", { name: /^Overwatch status: down\./ })).toHaveTextContent("Overwatch down");
   });
 
   it("shows nothing when the server refuses the read, and nothing without a session", async () => {
@@ -246,6 +246,6 @@ describe("a page opened in the background", () => {
     expect(fetch.mock.calls.some(([url]) => String(url) === "/api/v2/system/pods")).toBe(false);
     visibility.mockReturnValue("visible");
     document.dispatchEvent(new Event("visibilitychange"));
-    expect(await screen.findByRole("link", { name: /^neXus status: OK\./ })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: /^Overwatch status: OK\./ })).toBeInTheDocument();
   });
 });

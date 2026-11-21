@@ -79,7 +79,7 @@ public final class CliEntryPoint {
     }
 
     private static void printUsage() {
-        System.out.println("usage: cli <command>");
+        System.out.println("usage: overwatch-cli <command> (nexus-cli is an alias)");
         System.out.println("session commands (the screen's buttons, over the same routes and role gates):");
         NexusSessionCli.printUsage();
         System.out.println("bootstrap and store commands (direct database access, deployment-time):");

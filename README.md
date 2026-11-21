@@ -1,6 +1,6 @@
-# neXus
+# Overwatch
 
-neXus is a firewall governance platform for an enterprise estate of firewalls and
+Overwatch (formerly neXus) is a firewall governance platform for an enterprise estate of firewalls and
 their management servers. It collects evidence read-only from the devices, keeps
 encrypted backups, shows configuration, compliance, policy and HA state, and runs a
 small set of controlled, approved operations (backup recovery, cluster failover).
@@ -29,7 +29,7 @@ intent, never proof of what a gateway enforces.
 - **Inventory and configuration**: identity-verified collection, per-member HA
   facts, cluster member differences, configuration sections and change state.
 - **Compliance**: CIS and NIST controls per vendor, plus a financial-sector
-  baseline that cites neXus identifiers; evidence coverage shown beside the score.
+  baseline that cites Overwatch identifiers; evidence coverage shown beside the score.
 - **Backups**: encrypted artefacts with retention, size and deviation alerts,
   credential canary, and transcripts of every attempt. Restore from the UI stays off.
 - **Operations**: jobs, scheduled job families with audited switches, device

@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.failover;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Set;
@@ -36,7 +38,7 @@ public record CpFailoverShellMode(boolean oneShell, Set<String> clusters, Durati
     }
 
     public static CpFailoverShellMode fromEnvironment() {
-        return fromValues(System.getenv(SWITCH), System.getenv(CLUSTERS), System.getenv(PAUSE));
+        return fromValues(OverwatchEnv.get(SWITCH), OverwatchEnv.get(CLUSTERS), OverwatchEnv.get(PAUSE));
     }
 
     public static CpFailoverShellMode fromValues(String switchValue, String clusterList, String pauseMs) {

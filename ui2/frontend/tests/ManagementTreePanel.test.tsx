@@ -27,13 +27,13 @@ const tree: ManagementTree = {
   ],
 };
 
-it("lists domains with clusters, members' own HA roles, management servers apart, and warns about gateways not in neXus", async () => {
+it("lists domains with clusters, members' own HA roles, management servers apart, and warns about gateways not in Overwatch", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(tree))));
   const openDevice = vi.fn();
   const openCluster = vi.fn();
   render(<ManagementTreePanel deviceId="mds-1" onOpenDevice={openDevice} onOpenCluster={openCluster} />);
   await waitFor(() => expect(screen.getByText("DOM-TANGO-04")).toBeTruthy());
-  expect(screen.getAllByText("1 not in neXus").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("1 not in Overwatch").length).toBeGreaterThan(0);
   expect(screen.getByText("ACTIVE")).toBeTruthy();
   expect(screen.getByText("STANDBY")).toBeTruthy();
   // one row type for a management / log server -- never "Gateway" beside a second pill (UI review 2026-10-18, P0-5B)
@@ -45,10 +45,10 @@ it("lists domains with clusters, members' own HA roles, management servers apart
   fireEvent.click(screen.getByText("FW-ROMEO-01-M1"));
   expect(openDevice).toHaveBeenCalledWith("dev-1");
   fireEvent.click(screen.getByText("DOM-BRAVO-02"));
-  expect(screen.getByText("Not in neXus")).toBeTruthy();
+  expect(screen.getByText("Not in Overwatch")).toBeTruthy();
 });
 
-it("offers select-to-import and Not an issue with a reason on a gateway not in neXus", async () => {
+it("offers select-to-import and Not an issue with a reason on a gateway not in Overwatch", async () => {
   const calls: Array<{ url: string; body: unknown }> = [];
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     calls.push({ url: String(input), body: init?.body ? JSON.parse(String(init.body)) : null });

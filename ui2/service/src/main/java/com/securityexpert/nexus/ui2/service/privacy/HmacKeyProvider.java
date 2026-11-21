@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.privacy;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -37,11 +39,11 @@ public class HmacKeyProvider {
     }
 
     private static byte[] resolveKey() {
-        String keyFile = System.getenv("UI2_PRIVACY_HMAC_KEY_FILE");
+        String keyFile = OverwatchEnv.get("UI2_PRIVACY_HMAC_KEY_FILE");
         if (keyFile != null && !keyFile.isBlank()) {
             return readKeyFile(Path.of(keyFile.trim()));
         }
-        String envKey = System.getenv("NEXUS_PRIVACY_HMAC_KEY");
+        String envKey = OverwatchEnv.get("NEXUS_PRIVACY_HMAC_KEY");
         if (envKey != null && !envKey.isBlank()) {
             try {
                 return Base64.getDecoder().decode(envKey.trim());
