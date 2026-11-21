@@ -117,6 +117,9 @@ class AiviewMaskingLeakAuditTest {
             // advice special cases that project themselves and refuse an unmasked body for aiview
             "IpSearchResponse", "ChangeFeedResponse", "PacketDeviceEventsResponse", "ReportResponse", "PolicyResponse",
             "JobPage",
+            // Estate Rewind as-of (reviewed 2026-11-21): hostnames and cluster refs projected to FW-/CLS- pseudonyms in
+            // EstateAsOfService, cluster_id opaque, reasons are closed stop codes; the advice refuses an unmasked body
+            "EstateAsOfResponse",
             // counts and closed vocabularies only (no names, addresses, serials or users)
             "Stats", "Facets", "TranscriptHealth");
 

@@ -77,6 +77,15 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             }
             return changes.body();
         }
+        if (body instanceof com.securityexpert.nexus.ui2.service.estate.EstateAsOfResponse estateAsOf) {
+            // Estate Rewind projects device and cluster pseudonyms once inside EstateAsOfService; re-running maskMap on
+            // already-masked FW-* labels would hash them into a second pseudonym, and an unmasked body never reaches aiview.
+            if (Boolean.TRUE.equals(isReplayViewer)) {
+                if (!estateAsOf.masked()) throw new IllegalStateException("estate as-of projection required");
+                if (response != null) response.getHeaders().set(MASKED_HEADER, "true");
+            }
+            return estateAsOf.body();
+        }
         if (body instanceof com.securityexpert.nexus.ui2.service.packetanalysis.PacketDeviceEventsResponse deviceEvents) {
             // Packet Analysis > Device events masks itself the same way (device pseudonyms, label pseudonyms, log masking
             // rules on cpwd text); the body passes through and an unmasked body never reaches aiview.
