@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.packetanalysis;
 
 import com.securityexpert.nexus.ui2.packetanalysis.store.MemoryPlan;
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
 import com.securityexpert.nexus.ui2.packetanalysis.store.SpillGuard;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -46,7 +47,7 @@ public final class PacketAnalysisResources {
     public static Map<String, String> apply(Map<String, String> env, Properties properties) {
         Map<String, String> applied = new LinkedHashMap<>();
         for (Map.Entry<String, String> e : MAPPING.entrySet()) {
-            String value = env.get(e.getKey());
+            String value = OverwatchEnv.get(env::get, e.getKey());
             if (value == null || value.isBlank() || properties.getProperty(e.getValue()) != null) {
                 continue;
             }

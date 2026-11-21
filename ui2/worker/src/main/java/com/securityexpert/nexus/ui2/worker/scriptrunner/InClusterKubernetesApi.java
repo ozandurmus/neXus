@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.worker.scriptrunner;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -51,8 +52,8 @@ public final class InClusterKubernetesApi implements KubernetesApi {
 
     /** From {@code KUBERNETES_SERVICE_HOST} / {@code KUBERNETES_SERVICE_PORT} and the projected service-account files. */
     public static InClusterKubernetesApi fromEnvironment(Map<String, String> env) throws IOException {
-        String host = env.get("KUBERNETES_SERVICE_HOST");
-        String port = env.getOrDefault("KUBERNETES_SERVICE_PORT", "443");
+        String host = OverwatchEnv.get(env::get, "KUBERNETES_SERVICE_HOST");
+        String port = OverwatchEnv.getOrDefault(env::get, "KUBERNETES_SERVICE_PORT", "443");
         if (host == null || host.isBlank()) {
             throw new IllegalStateException("KUBERNETES_SERVICE_HOST is not set; the broker must run in the cluster");
         }
