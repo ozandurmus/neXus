@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.inventory;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.Locale;
@@ -118,7 +120,7 @@ public final class LifecycleReadSwitch {
 
     /** From the worker's environment. */
     public static LifecycleReadSwitch fromEnvironment() {
-        return from(System::getenv);
+        return from(OverwatchEnv::get);
     }
 
     /** From any source of settings (a test drives it with a map's {@code get}). */

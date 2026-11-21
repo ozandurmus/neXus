@@ -357,7 +357,7 @@ public final class ZoneMatrixService {
         rows.add(Map.of("row", u.text(), "statement", u.statement(), "severity", u.severity()));
         rows.add(Map.of("row", "any other pair (version default)", "statement", "DENY_ALL", "severity", "MEDIUM"));
         out.put("rows", rows);
-        out.put("basis", "neXus proposal based on general segmentation practice, not on a BDDK clause");
+        out.put("basis", "Overwatch proposal based on general segmentation practice, not on a BDDK clause");
         out.put("roles", ZoneMatrixContent.ROLES.stream().sorted().toList());
         return out;
     }

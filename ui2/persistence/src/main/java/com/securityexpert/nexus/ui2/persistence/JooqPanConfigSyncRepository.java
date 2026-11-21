@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.persistence;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -61,7 +63,7 @@ public class JooqPanConfigSyncRepository {
     private final JooqCpFailoverRepository failover;
 
     public JooqPanConfigSyncRepository(TransactionBoundary boundary) {
-        this(boundary, "true".equalsIgnoreCase(System.getenv("NEXUS_FAILOVER_MUTATION_ENABLED")), JobWindowPolicy.SYSTEM);
+        this(boundary, "true".equalsIgnoreCase(OverwatchEnv.get("NEXUS_FAILOVER_MUTATION_ENABLED")), JobWindowPolicy.SYSTEM);
     }
 
     public JooqPanConfigSyncRepository(TransactionBoundary boundary, boolean mutationEnabled, JobWindowPolicy windows) {

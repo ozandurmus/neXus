@@ -427,7 +427,7 @@ public final class PacketDeviceEventsService {
         String deviceId = matched.iterator().next();
         DeviceSummaryRecord d = inventory.get(deviceId);
         if (d == null) {
-            return new Link("NOT_LINKED", "log not collected: the matched device is not in the neXus inventory", null, null, null, "MATCH");
+            return new Link("NOT_LINKED", "log not collected: the matched device is not in the Overwatch inventory", null, null, null, "MATCH");
         }
         if (!MANAGED_VENDORS.contains(d.vendorHint()) || !"gateway".equals(d.role())) {
             return new Link("NOT_LINKED", "log not collected: " + d.role() + " of vendor " + d.vendorHint() + " is not a managed firewall",

@@ -97,8 +97,8 @@ final class ExpertWorkbook {
         wb.setActiveSheet(0);
         wb.getProperties().getCoreProperties().setCreated(Optional.of(java.util.Date.from(FIXED_TIME)));
         wb.getProperties().getCoreProperties().setModified(Optional.of(java.util.Date.from(FIXED_TIME)));
-        wb.getProperties().getCoreProperties().setCreator("neXus Packet Analysis");
-        wb.getProperties().getCoreProperties().setLastModifiedByUser("neXus Packet Analysis");
+        wb.getProperties().getCoreProperties().setCreator("Overwatch Packet Analysis");
+        wb.getProperties().getCoreProperties().setLastModifiedByUser("Overwatch Packet Analysis");
         wb.getProperties().getCoreProperties().setTitle("Packet Analysis uzman raporu");
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try {

@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.cli;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -84,7 +86,7 @@ final class NexusSessionCli {
     }
 
     static Path defaultHome() {
-        String env = System.getenv("NEXUS_CLI_HOME");
+        String env = OverwatchEnv.get("NEXUS_CLI_HOME");
         return env != null && !env.isBlank() ? Path.of(env) : Path.of(System.getProperty("user.home"), ".nexus-cli");
     }
 
@@ -161,7 +163,7 @@ final class NexusSessionCli {
         System.out.println("  pa-topology-overlay <caseId> [k=v...] | pa-topology-inspect <caseId> [k=v...]");
         System.out.println("  pa-topology-save <caseId> <jsonBody|@file>");
         System.out.println("  pa-findings <caseId> [k=v...] | pa-events <caseId> [k=v...] | pa-dns <caseId> [k=v...]");
-        System.out.println("  pa-correlation <caseId>                        neXus inventory & policy correlation");
+        System.out.println("  pa-correlation <caseId>                        Overwatch inventory & policy correlation");
         System.out.println("  pa-device-events <caseId> [finding=<id>] [window_seconds=<5..600>]");
         System.out.println("                                                 stored system-log facts of the path firewalls around a finding (default +-30 s; masked for aiview)");
         System.out.println("  pa-field-diff <caseId> [k=v...]                security_admin; ledgered");
@@ -611,7 +613,7 @@ final class NexusSessionCli {
     }
 
     private static char[] readPassword() {
-        String env = System.getenv("NEXUS_CLI_PASSWORD");
+        String env = OverwatchEnv.get("NEXUS_CLI_PASSWORD");
         if (env != null && !env.isEmpty()) {
             return env.toCharArray();
         }
@@ -849,7 +851,7 @@ final class NexusSessionCli {
             Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
         }
         System.out.println("downloaded " + Files.size(dest) + " bytes to " + dest);
-        System.out.println("WARNING: a capture is raw evidence (7-day retention in neXus); the copy is yours to protect.");
+        System.out.println("WARNING: a capture is raw evidence (7-day retention in Overwatch); the copy is yours to protect.");
         return 0;
     }
 

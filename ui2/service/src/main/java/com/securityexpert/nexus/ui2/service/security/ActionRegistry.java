@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.security;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -363,7 +365,7 @@ public final class ActionRegistry {
             SYSTEM_LOG_SETTINGS_READ, LOCAL_PASSWORD_POLICY_READ, LOCAL_AUTH_MODE_READ);
 
     public ActionRegistry() {
-        this("true".equalsIgnoreCase(System.getenv().getOrDefault(AIVIEW_READONLY_ADMIN_ENV, "false").strip()));
+        this("true".equalsIgnoreCase(OverwatchEnv.getOrDefault(AIVIEW_READONLY_ADMIN_ENV, "false").strip()));
     }
 
     public ActionRegistry(boolean aiviewReadonlyAdmin) {

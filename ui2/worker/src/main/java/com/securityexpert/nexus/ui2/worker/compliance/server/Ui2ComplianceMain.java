@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.compliance.server;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.io.IOException;
 
 /**
@@ -26,7 +28,7 @@ public final class Ui2ComplianceMain {
     }
 
     private static int resolvePort() {
-        String env = System.getenv("NEXUS_COMPLIANCE_PORT");
+        String env = OverwatchEnv.get("NEXUS_COMPLIANCE_PORT");
         if (env != null && !env.isBlank()) {
             try {
                 return Integer.parseInt(env.trim());

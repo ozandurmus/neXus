@@ -56,7 +56,7 @@ public final class PdfReportRenderer implements ReportRenderer {
             writer.setCompressionLevel(PdfStream.NO_COMPRESSION);
             writer.setPageEvent(new Footer(d.templateId() + " " + d.title() + " | " + ReportRenderer.projectionLabel(d)));
             doc.addTitle(d.templateId() + " " + d.title());
-            doc.addCreator("neXus Reports");
+            doc.addCreator("Overwatch Reports");
             doc.open();
             doc.add(new Paragraph(d.templateId() + "  " + d.title(), TITLE));
             doc.add(new Paragraph(d.question(), BODY));

@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.platform.metrics;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
@@ -93,7 +95,7 @@ public final class NexusMetrics {
 
     public static boolean isEnabled(Map<String, String> env) {
         if (env == null) return false;
-        String raw = env.get(ENABLED_ENV);
+        String raw = OverwatchEnv.get(env::get, ENABLED_ENV);
         if (raw == null || raw.isBlank()) return false;
         String trimmed = raw.trim();
         return "true".equalsIgnoreCase(trimmed) || "1".equals(trimmed) || "on".equalsIgnoreCase(trimmed);
@@ -102,7 +104,7 @@ public final class NexusMetrics {
     /** Resolves {@link #PORT_ENV} (defaults to {@link #DEFAULT_PORT} when unset; 0 or out-of-range disables the port). */
     public static int resolvePort(Map<String, String> env) {
         if (env == null) return 0;
-        String raw = env.get(PORT_ENV);
+        String raw = OverwatchEnv.get(env::get, PORT_ENV);
         if (raw == null || raw.isBlank()) return DEFAULT_PORT;
         try {
             int port = Integer.parseInt(raw.trim());

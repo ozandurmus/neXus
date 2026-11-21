@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.backup.asa;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -84,7 +86,7 @@ public final class AsaFailoverMeasure {
     }
 
     public static AsaFailoverMeasure fromEnvironment() {
-        return parse(System.getenv(VARIABLE));
+        return parse(OverwatchEnv.get(VARIABLE));
     }
 
     /** A malformed, open-ended or over-long setting measures nothing (logged once, without its value). */

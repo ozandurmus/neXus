@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Optional;
@@ -94,7 +96,7 @@ public final class Ui2WorkerMain {
         // Last-line masking of IPv4/IPv6 literals in java.util.logging output (NEXUS_LOG_RAW_ADDRESSES=1 is set by the live manifests, PO 2026-11-15).
         com.securityexpert.nexus.ui2.platform.logging.MaskingFormatter.install();
         com.securityexpert.nexus.ui2.platform.JobWindowPolicy.SYSTEM.logPolicy();
-        String role = resolveRole(args, System.getenv("NEXUS_WORKLOAD_ROLE"));
+        String role = resolveRole(args, OverwatchEnv.get("NEXUS_WORKLOAD_ROLE"));
         // Metrics (docs/operations/METRICS.md): the scrape server starts only when UI2_METRICS_PORT is set.
         com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.startFromEnvironment(role);
         boolean policyFallback = Boolean.parseBoolean(System.getProperty("ui2.worker.claim-policy-fallback", "false"));
@@ -139,15 +141,15 @@ public final class Ui2WorkerMain {
                 SecretFile.readRequired(Path.of(requireEnv("UI2_CREDENTIAL_STORE_KEY_FILE")), "credential_store_key");
         String artefactStoreKeyBase64 =
                 SecretFile.readRequired(Path.of(requireEnv("UI2_ARTEFACT_STORE_KEY_FILE")), "artefact_store_key");
-        Path artefactStoreRoot = Path.of(System.getenv().getOrDefault("UI2_ARTEFACT_STORE_ROOT", "/var/lib/ui2/artefacts"));
+        Path artefactStoreRoot = Path.of(OverwatchEnv.getOrDefault("UI2_ARTEFACT_STORE_ROOT", "/var/lib/ui2/artefacts"));
         // Every role, the policy pod included (PO decision 2026-10-18), needs the product fingerprint key: a missing
         // variable, file or empty value stops the pod at start (fail closed). The policy change evidence stores
         // admin identities as HMACs under this key, never as a masked length.
         String hostnameFingerprintKeyBase64 = SecretFile.readRequired(
                 Path.of(requireEnv("UI2_HOSTNAME_FINGERPRINT_KEY_FILE")), "hostname_fingerprint_key");
-        String checkPointTrustRuleRef = System.getenv().getOrDefault("UI2_CP_TRUST_RULE_REF", "utils.cp_ssh_trust");
+        String checkPointTrustRuleRef = OverwatchEnv.getOrDefault("UI2_CP_TRUST_RULE_REF", "utils.cp_ssh_trust");
         String paloAltoTrustRuleRef =
-                System.getenv().getOrDefault("UI2_PAN_TRUST_RULE_REF", "utils.pan_xml_api_trust");
+                OverwatchEnv.getOrDefault("UI2_PAN_TRUST_RULE_REF", "utils.pan_xml_api_trust");
 
         if ("policy".equals(role)) System.setProperty("ui2.db.pool.maximum-pool-size", "6");
         if ("backup".equals(role)) {
@@ -170,9 +172,9 @@ public final class Ui2WorkerMain {
         PersistenceDeviceEnrollmentReadPort deviceEnrollmentReadPort = new PersistenceDeviceEnrollmentReadPort(deviceRepository);
 
         TrustRuleResolver enrolledDeviceTrustRuleResolver = trustRuleRef -> Optional.ofNullable(
-                System.getenv("UI2_" + trustRuleRef.toUpperCase(java.util.Locale.ROOT).replace('.', '_')
+                OverwatchEnv.get("UI2_" + trustRuleRef.toUpperCase(java.util.Locale.ROOT).replace('.', '_')
                         + "_FINGERPRINT"));
-        boolean allowTofu = !"false".equalsIgnoreCase(System.getenv("UI2_SSH_ALLOW_TOFU"));
+        boolean allowTofu = !"false".equalsIgnoreCase(OverwatchEnv.get("UI2_SSH_ALLOW_TOFU"));
         TrustRuleResolver trustRuleResolver = new com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver(
                 new com.securityexpert.nexus.ui2.persistence.discovery.JooqManagementEndpointSshTrustRepository(transactionBoundary),
                 enrolledDeviceTrustRuleResolver, allowTofu);
@@ -300,13 +302,13 @@ public final class Ui2WorkerMain {
         // fails closed before any device contact, and BackupCollectService
         // (service module) refuses admission for the same reason.
         Optional<String> backupCredentialRef =
-                Optional.ofNullable(System.getenv("UI2_CP_BACKUP_CREDENTIAL_REF")).filter(value -> !value.isBlank());
+                Optional.ofNullable(OverwatchEnv.get("UI2_CP_BACKUP_CREDENTIAL_REF")).filter(value -> !value.isBlank());
         long backupFreeSpaceThresholdBytes = Long.parseLong(
-                System.getenv().getOrDefault("UI2_BACKUP_FREE_SPACE_THRESHOLD_BYTES", "104857600"));
+                OverwatchEnv.getOrDefault("UI2_BACKUP_FREE_SPACE_THRESHOLD_BYTES", "104857600"));
         Duration backupPollInterval = Duration.ofSeconds(
-                Long.parseLong(System.getenv().getOrDefault("UI2_BACKUP_POLL_INTERVAL_SECONDS", "10")));
+                Long.parseLong(OverwatchEnv.getOrDefault("UI2_BACKUP_POLL_INTERVAL_SECONDS", "10")));
         Duration backupRunDeadline = Duration.ofSeconds(
-                Long.parseLong(System.getenv().getOrDefault("UI2_BACKUP_RUN_DEADLINE_SECONDS", "1800")));
+                Long.parseLong(OverwatchEnv.getOrDefault("UI2_BACKUP_RUN_DEADLINE_SECONDS", "1800")));
         BackupEndpointEligibilityRepository backupEndpointEligibilityRepository =
                 new JooqBackupEndpointEligibilityRepository(transactionBoundary);
         BackupCapabilityExecutor backupCapabilityExecutor = new BackupCapabilityExecutor(compositeTransport,
@@ -376,25 +378,25 @@ public final class Ui2WorkerMain {
                                 new com.securityexpert.nexus.ui2.persistence.device.JooqHaPairIdentityRepository(transactionBoundary));
         // V69: a Radware Cyber Controller's own configuration backup, pushed to HOST-A's chrooted SFTP receiver, whose
         // upload directory is mounted here (UI2_CC_INBOX_DIR) and whose address the Cyber Controller dials (UI2_CC_RECEIVER_HOST).
-        String ccInbox = System.getenv("UI2_CC_INBOX_DIR");
+        String ccInbox = OverwatchEnv.get("UI2_CC_INBOX_DIR");
         backupJobExecutor.withCyberControllerBackupExecutor(new com.securityexpert.nexus.ui2.worker.backup.radware.CyberControllerBackupExecutor(
                 compositeTransport, artefactStore, ccInbox == null || ccInbox.isBlank() ? null : java.nio.file.Path.of(ccInbox),
-                System.getenv("UI2_CC_RECEIVER_HOST"), ref -> panCredentialResolver.resolve(ref).password()));
+                OverwatchEnv.get("UI2_CC_RECEIVER_HOST"), ref -> panCredentialResolver.resolve(ref).password()));
         backupJobExecutor.withQuantumSparkBackupExecutor(new com.securityexpert.nexus.ui2.worker.backup.cp.QuantumSparkBackupExecutor(
                 compositeTransport, artefactStore, ccInbox == null || ccInbox.isBlank() ? null : java.nio.file.Path.of(ccInbox),
-                System.getenv("UI2_CC_RECEIVER_HOST"), ref -> panCredentialResolver.resolve(ref).password()));
+                OverwatchEnv.get("UI2_CC_RECEIVER_HOST"), ref -> panCredentialResolver.resolve(ref).password()));
         // V61: MDS export -- mds_backup of the whole server. The wait for its exit code is capped at 45 min (PO
         // 2026-11-11, MDS fork storm fix contract C.1: five times the usual 8-9 min, 1.6 times the longest measured 28 min);
         // bundling, digest and fetch keep their own timeouts. UI2_MDS_EXPORT_RUN_DEADLINE_SECONDS overrides it.
         backupJobExecutor.withMdsExportExecutor(new com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportExecutor(compositeTransport,
                 artefactStore,
-                Long.parseLong(System.getenv().getOrDefault("UI2_MDS_EXPORT_MIN_FREE_BYTES", String.valueOf(20L * 1024 * 1024 * 1024))),
-                Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_MDS_EXPORT_POLL_INTERVAL_SECONDS", "30"))),
-                Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_MDS_EXPORT_RUN_DEADLINE_SECONDS", "2700")))));
+                Long.parseLong(OverwatchEnv.getOrDefault("UI2_MDS_EXPORT_MIN_FREE_BYTES", String.valueOf(20L * 1024 * 1024 * 1024))),
+                Duration.ofSeconds(Long.parseLong(OverwatchEnv.getOrDefault("UI2_MDS_EXPORT_POLL_INTERVAL_SECONDS", "30"))),
+                Duration.ofSeconds(Long.parseLong(OverwatchEnv.getOrDefault("UI2_MDS_EXPORT_RUN_DEADLINE_SECONDS", "2700")))));
 
         DiscoveryRunRepository discoveryRunRepository = new JooqDiscoveryRunRepository(transactionBoundary);
         var policyCollectionRepository = new com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository(transactionBoundary);
-        var policyDeadline = Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_POLICY_RUN_DEADLINE_SECONDS", "7200")));
+        var policyDeadline = Duration.ofSeconds(Long.parseLong(OverwatchEnv.getOrDefault("UI2_POLICY_RUN_DEADLINE_SECONDS", "7200")));
         var policyCollector = new com.securityexpert.nexus.ui2.worker.policy.CheckPointPolicyCollector(strictFailoverSsh, gateRegistry, policyCollectionRepository, policyDeadline);
         var completenessSettings = com.securityexpert.nexus.ui2.worker.policy.PolicyCompletenessSettings.fromEnvironment();
         var completenessEvidence = new com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeEvidenceRepository(transactionBoundary);
@@ -488,7 +490,7 @@ public final class Ui2WorkerMain {
         var cpShellMode = com.securityexpert.nexus.ui2.worker.failover.CpFailoverShellMode.fromEnvironment();
         // The exec path keeps its own pause; NEXUS_CP_FAILOVER_COMMAND_PAUSE_MS only affects shell-path runs (review P1-6).
         Duration cpCommandPause = Duration.ofSeconds(Long.parseLong(
-                System.getenv().getOrDefault("UI2_FAILOVER_COMMAND_PAUSE_SECONDS", "2")));
+                OverwatchEnv.getOrDefault("UI2_FAILOVER_COMMAND_PAUSE_SECONDS", "2")));
         System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.INFO,
                 "[CP_FAILOVER] " + cpShellMode.toString() + " execPauseMs=" + cpCommandPause.toMillis());
         // Cisco ASA failover readiness (PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS.md): off unless
@@ -510,7 +512,7 @@ public final class Ui2WorkerMain {
                     new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary),
                     deviceRepository, leaseRepository, attemptRepository, panTransport, panCredentialResolver, gateRegistry,
                     d -> Thread.sleep(d.toMillis()), Duration.ofSeconds(Long.parseLong(
-                        System.getenv().getOrDefault("UI2_FAILOVER_COMMAND_PAUSE_SECONDS", "2"))));
+                        OverwatchEnv.getOrDefault("UI2_FAILOVER_COMMAND_PAUSE_SECONDS", "2"))));
             var asaFailoverExecutor = new com.securityexpert.nexus.ui2.worker.failover.AsaFailoverJobExecutor(
                     new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary),
                     deviceRepository, leaseRepository, attemptRepository, strictFailoverSsh, gateRegistry,
@@ -530,7 +532,7 @@ public final class Ui2WorkerMain {
                         deviceRepository, leaseRepository, attemptRepository, strictFailoverSsh, gateRegistry,
                         new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePlatformFactsRepository(transactionBoundary),
                         fgtReadinessSwitch, Duration.ofSeconds(Long.parseLong(
-                            System.getenv().getOrDefault("UI2_FAILOVER_COMMAND_PAUSE_SECONDS", "2")))))
+                            OverwatchEnv.getOrDefault("UI2_FAILOVER_COMMAND_PAUSE_SECONDS", "2")))))
                     .withPanConfigSync(new com.securityexpert.nexus.ui2.worker.failover.PanConfigSyncJobExecutor(
                         new com.securityexpert.nexus.ui2.persistence.JooqPanConfigSyncRepository(transactionBoundary),
                         deviceRepository, leaseRepository, attemptRepository, panTransport, panCredentialResolver, gateRegistry))
@@ -584,7 +586,7 @@ public final class Ui2WorkerMain {
         // is 900). Measured live 2026-09-22: without this, a rollout mid fleet-backup left jobs
         // EXECUTING on a dead lease until the reconciler requeued them and failed others with a
         // closed SSH session.
-        long drainSeconds = Long.parseLong(System.getenv().getOrDefault("UI2_WORKER_DRAIN_SECONDS", "840"));
+        long drainSeconds = Long.parseLong(OverwatchEnv.getOrDefault("UI2_WORKER_DRAIN_SECONDS", "840"));
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.Logger log = System.getLogger(Ui2WorkerMain.class.getName());
             log.log(System.Logger.Level.INFO, "[WORKER_DRAIN] stop requested; finishing in-flight jobs (up to "
@@ -680,7 +682,7 @@ public final class Ui2WorkerMain {
                 new com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogCollectionRepository(transactionBoundary)::settings,
                 artefactStoreRoot, java.time.Clock.systemUTC(),
                 com.securityexpert.nexus.ui2.worker.diagnostic.SystemLogRetentionPruner.parseSpikeCapOverride(
-                        System.getenv(com.securityexpert.nexus.ui2.worker.diagnostic.SystemLogRetentionPruner.SPIKE_CAP_ENV)));
+                        OverwatchEnv.get(com.securityexpert.nexus.ui2.worker.diagnostic.SystemLogRetentionPruner.SPIKE_CAP_ENV)));
         reconcilerExecutor.scheduleWithFixedDelay(() -> {
             try {
                 moduleRuntime.runTask(role, instance, "SystemLogRetentionPruner.runIfDue", systemLogPruner::runIfDue);
@@ -763,7 +765,7 @@ public final class Ui2WorkerMain {
         var gates = new PersistenceGateRegistryPort(new JooqGateRegistryDao(boundary));
         var runs = new JooqDiscoveryRunRepository(boundary);
         var policies = new com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository(boundary);
-        var deadline = Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_POLICY_RUN_DEADLINE_SECONDS", "7200")));
+        var deadline = Duration.ofSeconds(Long.parseLong(OverwatchEnv.getOrDefault("UI2_POLICY_RUN_DEADLINE_SECONDS", "7200")));
         var store = new FileArtefactStore(root, ArtefactStoreCipher.fromBase64Key(key))
                 .withStoreQuotas(new com.securityexpert.nexus.ui2.persistence.artefact.JooqArtefactStoreQuotaRepository(boundary)::findAll)
                 .withRefusalRecorder(new com.securityexpert.nexus.ui2.persistence.artefact.JooqArtefactStoreRefusalRecorder(
@@ -825,10 +827,10 @@ public final class Ui2WorkerMain {
         var store = new FileArtefactStore(root, ArtefactStoreCipher.fromBase64Key(key));
         com.securityexpert.nexus.ui2.platform.metrics.NexusMetrics.registerArtefactStoreBytes(store::cachedUsedBytes);
         var platformFacts = new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePlatformFactsRepository(boundary);
-        var backupCredentialRef = Optional.ofNullable(System.getenv("UI2_CP_BACKUP_CREDENTIAL_REF")).filter(v -> !v.isBlank());
-        long freeSpaceThreshold = Long.parseLong(System.getenv().getOrDefault("UI2_BACKUP_FREE_SPACE_THRESHOLD_BYTES", "104857600"));
-        var pollInterval = Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_BACKUP_POLL_INTERVAL_SECONDS", "10")));
-        var runDeadline = Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_BACKUP_RUN_DEADLINE_SECONDS", "1800")));
+        var backupCredentialRef = Optional.ofNullable(OverwatchEnv.get("UI2_CP_BACKUP_CREDENTIAL_REF")).filter(v -> !v.isBlank());
+        long freeSpaceThreshold = Long.parseLong(OverwatchEnv.getOrDefault("UI2_BACKUP_FREE_SPACE_THRESHOLD_BYTES", "104857600"));
+        var pollInterval = Duration.ofSeconds(Long.parseLong(OverwatchEnv.getOrDefault("UI2_BACKUP_POLL_INTERVAL_SECONDS", "10")));
+        var runDeadline = Duration.ofSeconds(Long.parseLong(OverwatchEnv.getOrDefault("UI2_BACKUP_RUN_DEADLINE_SECONDS", "1800")));
         var capabilityExecutor = new BackupCapabilityExecutor(transport, store, freeSpaceThreshold, pollInterval, runDeadline,
                 new com.securityexpert.nexus.ui2.persistence.artefact.JooqDeviceArchiveLedger(boundary));
         var snapshotExecutor = new com.securityexpert.nexus.ui2.worker.backup.cp.CheckPointSnapshotExecutor(
@@ -860,16 +862,16 @@ public final class Ui2WorkerMain {
         httpsVendor.withCiscoAsa(new com.securityexpert.nexus.ui2.worker.backup.asa.CiscoAsaExecutor(ssh, store, ssh::scpFetch));
         backup.withHttpsVendorExecutor(httpsVendor,
                 new com.securityexpert.nexus.ui2.persistence.device.JooqDeviceSecretReferenceRepository(boundary));
-        String ccInbox = System.getenv("UI2_CC_INBOX_DIR");
+        String ccInbox = OverwatchEnv.get("UI2_CC_INBOX_DIR");
         Path inboxPath = ccInbox == null || ccInbox.isBlank() ? null : Path.of(ccInbox);
         backup.withCyberControllerBackupExecutor(new com.securityexpert.nexus.ui2.worker.backup.radware.CyberControllerBackupExecutor(
-                transport, store, inboxPath, System.getenv("UI2_CC_RECEIVER_HOST"), ref -> credentials.resolve(ref).password()));
+                transport, store, inboxPath, OverwatchEnv.get("UI2_CC_RECEIVER_HOST"), ref -> credentials.resolve(ref).password()));
         backup.withQuantumSparkBackupExecutor(new com.securityexpert.nexus.ui2.worker.backup.cp.QuantumSparkBackupExecutor(
-                transport, store, inboxPath, System.getenv("UI2_CC_RECEIVER_HOST"), ref -> credentials.resolve(ref).password()));
+                transport, store, inboxPath, OverwatchEnv.get("UI2_CC_RECEIVER_HOST"), ref -> credentials.resolve(ref).password()));
         backup.withMdsExportExecutor(new com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportExecutor(transport, store,
-                Long.parseLong(System.getenv().getOrDefault("UI2_MDS_EXPORT_MIN_FREE_BYTES", String.valueOf(20L * 1024 * 1024 * 1024))),
-                Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_MDS_EXPORT_POLL_INTERVAL_SECONDS", "30"))),
-                Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_MDS_EXPORT_RUN_DEADLINE_SECONDS", "2700")))));
+                Long.parseLong(OverwatchEnv.getOrDefault("UI2_MDS_EXPORT_MIN_FREE_BYTES", String.valueOf(20L * 1024 * 1024 * 1024))),
+                Duration.ofSeconds(Long.parseLong(OverwatchEnv.getOrDefault("UI2_MDS_EXPORT_POLL_INTERVAL_SECONDS", "30"))),
+                Duration.ofSeconds(Long.parseLong(OverwatchEnv.getOrDefault("UI2_MDS_EXPORT_RUN_DEADLINE_SECONDS", "2700")))));
         var jobs = new JooqJobRecordDao(boundary);
         backup.withTranscript(store, jobs);
         var canary = new com.securityexpert.nexus.ui2.worker.backup.CredentialCanaryJobExecutor(
@@ -944,7 +946,7 @@ public final class Ui2WorkerMain {
                 System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.WARNING, "MODULE_HEARTBEAT_UNAVAILABLE");
             }
         }, 10, 10, java.util.concurrent.TimeUnit.SECONDS);
-        long drainSeconds = Long.parseLong(System.getenv().getOrDefault("UI2_WORKER_DRAIN_SECONDS", "840"));
+        long drainSeconds = Long.parseLong(OverwatchEnv.getOrDefault("UI2_WORKER_DRAIN_SECONDS", "840"));
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             loops.forEach(WorkerClaimLoop::requestStop);
             executor.shutdown();
@@ -971,8 +973,8 @@ public final class Ui2WorkerMain {
         String role = com.securityexpert.nexus.ui2.platform.PacketAnalysisJob.MODULE;
         String dbUser = SecretFile.readRequired(Path.of(requireEnv("UI2_DB_APP_USER_FILE")), "worker.db_user");
         String dbPassword = SecretFile.readRequired(Path.of(requireEnv("UI2_DB_APP_PASSWORD_FILE")), "worker.db_password");
-        Path root = Path.of(System.getenv().getOrDefault("UI2_PACKET_ANALYSIS_ROOT", "/app/packet-analysis"));
-        long pruneSeconds = Long.parseLong(System.getenv().getOrDefault("UI2_PACKET_ANALYSIS_PRUNE_INTERVAL_SECONDS", "3600"));
+        Path root = Path.of(OverwatchEnv.getOrDefault("UI2_PACKET_ANALYSIS_ROOT", "/app/packet-analysis"));
+        long pruneSeconds = Long.parseLong(OverwatchEnv.getOrDefault("UI2_PACKET_ANALYSIS_PRUNE_INTERVAL_SECONDS", "3600"));
         System.setProperty("ui2.db.pool.maximum-pool-size", System.getProperty("ui2.db.pool.maximum-pool-size", "4"));
         // Memory plan: container = JVM heap (JAVA_TOOL_OPTIONS) + DuckDB limit + reserve; a DuckDB limit that does not fit is lowered.
         com.securityexpert.nexus.ui2.worker.packetanalysis.PacketAnalysisResources.apply(System.getenv(), System.getProperties());
@@ -1019,7 +1021,7 @@ public final class Ui2WorkerMain {
                         "Packet analysis retention error: " + t.getClass().getSimpleName());
             }
         }, 60, pruneSeconds, java.util.concurrent.TimeUnit.SECONDS);
-        long drainSeconds = Long.parseLong(System.getenv().getOrDefault("UI2_WORKER_DRAIN_SECONDS", "840"));
+        long drainSeconds = Long.parseLong(OverwatchEnv.getOrDefault("UI2_WORKER_DRAIN_SECONDS", "840"));
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             loop.requestStop();
             claims.shutdown();
@@ -1034,7 +1036,7 @@ public final class Ui2WorkerMain {
     }
 
     private static String requireEnv(String name) {
-        String value = System.getenv(name);
+        String value = OverwatchEnv.get(name);
         if (value == null || value.isBlank()) {
             throw new IllegalStateException(name + " is not set");
         }
@@ -1043,7 +1045,7 @@ public final class Ui2WorkerMain {
 
     /** Reports R1: the report files' own volume (UI2_REPORT_STORE_ROOT); unset means they share the store root. */
     static Path reportStoreRootOrNull() {
-        String root = System.getenv().getOrDefault("UI2_REPORT_STORE_ROOT", "");
+        String root = OverwatchEnv.getOrDefault("UI2_REPORT_STORE_ROOT", "");
         return root.isBlank() ? null : Path.of(root);
     }
 }

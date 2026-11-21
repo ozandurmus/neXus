@@ -62,7 +62,7 @@ describe("Data Sanitizer screen", () => {
     expect(download).toHaveAttribute("href", `/api/v2/sanitize/jobs/${JOB}/download`);
     download.addEventListener("click", event => event.preventDefault()); // jsdom has no navigation
     fireEvent.click(download);
-    expect(await within(result).findByText(/neXus kept no copy/)).toBeInTheDocument();
+    expect(await within(result).findByText(/Overwatch kept no copy/)).toBeInTheDocument();
   });
 
   it("reverts against one named job and shows the failure reason a job ended with", async () => {

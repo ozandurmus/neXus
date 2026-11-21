@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.boot;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.Optional;
@@ -76,7 +78,7 @@ public class ScriptExecutionConfiguration {
         service.useCredentialSource(scriptCredentialSource);
         service.useRunnerTokenConfigured(() -> ScriptRunnerInternalController.isValidTokenDigest(runnerTokenDigest)
                 || ScriptRunnerInternalController.isValidTokenDigest(
-                        System.getenv().getOrDefault("UI2_SCRIPT_RUNNER_TOKEN_SHA256", "")));
+                        OverwatchEnv.getOrDefault("UI2_SCRIPT_RUNNER_TOKEN_SHA256", "")));
         return service;
     }
 
@@ -110,8 +112,8 @@ public class ScriptExecutionConfiguration {
     static ArtefactStore scriptArtefactStore(
             DeviceCompositionConfiguration.ArtefactStoreAccess artefactStoreAccess,
             TransactionBoundary transactionBoundary) {
-        String root = System.getenv().getOrDefault("UI2_SCRIPT_STORE_ROOT", "");
-        String keyFile = System.getenv().getOrDefault("UI2_ARTEFACT_STORE_KEY_FILE", "");
+        String root = OverwatchEnv.getOrDefault("UI2_SCRIPT_STORE_ROOT", "");
+        String keyFile = OverwatchEnv.getOrDefault("UI2_ARTEFACT_STORE_KEY_FILE", "");
         if (root.isBlank() || keyFile.isBlank()) {
             var fallback = artefactStoreAccess == null ? null : artefactStoreAccess.storeOrNull();
             return fallback instanceof FileArtefactStore file

@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.boot;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
 import java.util.List;
 import java.util.Optional;
@@ -774,7 +776,7 @@ public class DeviceCompositionConfiguration {
         // PO 2026-11-18: the scheduled MDS export; UI2_CP_MDS_EXPORT_SCHEDULE=true turns it on (code default off).
         return new com.securityexpert.nexus.ui2.service.device.backup.BackupScheduler(policyRepository, collectService, switches)
                 .withMdsExport(mdsExportEligibility,
-                        () -> "true".equalsIgnoreCase(System.getenv().getOrDefault("UI2_CP_MDS_EXPORT_SCHEDULE", "false")));
+                        () -> "true".equalsIgnoreCase(OverwatchEnv.getOrDefault("UI2_CP_MDS_EXPORT_SCHEDULE", "false")));
     }
 
     @Bean
@@ -826,8 +828,8 @@ public class DeviceCompositionConfiguration {
 
     @Bean
     public ArtefactStoreAccess artefactStoreAccess() {
-        String keyFile = System.getenv().getOrDefault("UI2_ARTEFACT_STORE_KEY_FILE", "");
-        String root = System.getenv().getOrDefault("UI2_ARTEFACT_STORE_ROOT", "");
+        String keyFile = OverwatchEnv.getOrDefault("UI2_ARTEFACT_STORE_KEY_FILE", "");
+        String root = OverwatchEnv.getOrDefault("UI2_ARTEFACT_STORE_ROOT", "");
         if (keyFile.isBlank() || root.isBlank()) {
             return new ArtefactStoreAccess(null);
         }
@@ -878,16 +880,16 @@ public class DeviceCompositionConfiguration {
             com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts,
             TransactionBoundary transactionBoundary) {
         java.util.Set<String> allowlist = parseCsvEnv("UI2_BACKUP_PILOT_DEVICE_IDS");
-        boolean backupCredentialConfigured = !System.getenv().getOrDefault("UI2_CP_BACKUP_CREDENTIAL_REF", "").isBlank();
+        boolean backupCredentialConfigured = !OverwatchEnv.getOrDefault("UI2_CP_BACKUP_CREDENTIAL_REF", "").isBlank();
         return new BackupCollectService(deviceRepository, jobAdmissionService, allowlist, backupCredentialConfigured)
                 .withPlatformFacts(platformFacts)
                 // V207: scheduled backups skip a credential with an open authentication-failure alert; the canary tests it.
                 .withCredentialAlerts(new com.securityexpert.nexus.ui2.persistence.artefact.JooqCredentialFailureAlertRepository(
-                        transactionBoundary), java.util.Optional.ofNullable(System.getenv("UI2_CP_BACKUP_CREDENTIAL_REF")));
+                        transactionBoundary), java.util.Optional.ofNullable(OverwatchEnv.get("UI2_CP_BACKUP_CREDENTIAL_REF")));
     }
 
     private static java.util.Set<String> parseCsvEnv(String name) {
-        String raw = System.getenv().getOrDefault(name, "");
+        String raw = OverwatchEnv.getOrDefault(name, "");
         java.util.Set<String> values = new java.util.LinkedHashSet<>();
         for (String value : raw.split(",")) {
             String trimmed = value.strip();

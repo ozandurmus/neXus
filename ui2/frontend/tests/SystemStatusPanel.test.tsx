@@ -48,7 +48,7 @@ it("explains the top-bar light and lists one-off jobs and older scheduled runs w
   });
   render(<SystemStatusPanel />);
   const summary = await screen.findByTestId("platform-health-summary");
-  expect(summary).toHaveTextContent("neXus OK");
+  expect(summary).toHaveTextContent("Overwatch OK");
   expect(summary).toHaveTextContent("All 1 service pod running and ready.");
   expect(summary).toHaveTextContent("1 one-off job pod is listed below; one-off jobs and older scheduled runs do not change the status.");
   // No error alert for a status that is fine (the e2e safety check fails closed on warning and error alerts).

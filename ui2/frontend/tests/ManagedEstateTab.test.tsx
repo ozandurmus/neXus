@@ -60,7 +60,7 @@ describe("Managed estate is a tab under the device header", () => {
     expect(within(card).getByRole("button", { name: /DOM-TANGO-04/ })).toHaveAttribute("aria-expanded", "true");
     expect(within(card).getByText("FW-ROMEO-01-M1")).toBeInTheDocument();
     expect(within(card).getByText("ACTIVE")).toBeInTheDocument();
-    expect(within(card).getAllByText("1 not in neXus").length).toBeGreaterThan(0);
+    expect(within(card).getAllByText("1 not in Overwatch").length).toBeGreaterThan(0);
     expect(within(card).getByText(/read /)).toBeInTheDocument();
     // one row type for the management / log server
     expect(within(card).getByText("Management / log server · Smart-1")).toBeInTheDocument();

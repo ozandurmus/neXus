@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.backup.pan;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
@@ -58,7 +60,7 @@ public final class PanSetConfigReader {
 
     public PanSetConfigReader(DeviceTransport transport) {
         this(transport, Duration.ofSeconds(Long.parseLong(
-                System.getenv().getOrDefault("UI2_PAN_BACKUP_RUNNING_CONFIG_TIMEOUT_SECONDS", "300"))));
+                OverwatchEnv.getOrDefault("UI2_PAN_BACKUP_RUNNING_CONFIG_TIMEOUT_SECONDS", "300"))));
     }
 
     PanSetConfigReader(DeviceTransport transport, Duration showTimeout) {

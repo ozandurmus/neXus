@@ -23,18 +23,18 @@ describe("LoginScreen", () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).mechanism_id).toBe(mechanism);
     if (mechanism === "ldap") expect(screen.getByLabelText("Password")).toHaveValue("");
   });
-  it("shows the neXus hub wordmark and the accessible sign-in form", () => {
+  it("shows the Overwatch hub wordmark and the accessible sign-in form", () => {
     render(
       <ThemeProvider theme={m3Theme}>
         <LoginScreen onAuthenticated={() => {}} />
       </ThemeProvider>,
     );
-    expect(document.title).toBe("neXus");
-    expect(screen.getByAltText("neXus").getAttribute("src")).toContain("wordmark-light-on-dark.svg");
+    expect(document.title).toBe("Overwatch");
+    expect(screen.getByRole("img", { name: "Overwatch" })).toHaveTextContent("Overwatch");
     expect(screen.getByRole("group", { name: "Authentication" })).toBeInTheDocument();
     expect(screen.getByLabelText("Username")).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
-    expect(screen.getByText("neXus · on-premises")).toBeInTheDocument();
+    expect(screen.getByText("Overwatch · on-premises")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(screen.queryByText(/Every firewall/)).toBeNull();

@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.discovery.pan;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
@@ -69,7 +71,7 @@ public final class PanDiscoveryRunnerMain {
     }
 
     private static String requireEnv(String name) {
-        String value = System.getenv(name);
+        String value = OverwatchEnv.get(name);
         if (value == null || value.isBlank()) {
             throw new IllegalStateException(name + " is not set");
         }

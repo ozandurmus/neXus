@@ -52,12 +52,12 @@ RUN for attempt in 1 2 3; do \
  && (rpm -e --nodeps microdnf libdnf dnf-data librepo libsolv 2>/dev/null || true) \
  && test ! -e /usr/bin/microdnf && test ! -e /usr/bin/dnf && test ! -e /usr/bin/yum
 
-# The execution pod runs as uid/gid 20185, neither owner nor group of /app: the jar and nexus-cli become world-readable
+# The execution pod runs as uid/gid 20185, neither owner nor group of /app: the jar and overwatch-cli/nexus-cli become world-readable
 # (they carry no secret), the directory traversable. Nothing under /app is writable; the pod's root filesystem is
 # read-only and /scratch and /app/tmp are emptyDir mounts.
 RUN chmod 0755 /app \
  && chmod 0644 /app/service.jar \
- && chmod 0755 /app/nexus-cli \
+ && chmod 0755 /app/overwatch-cli /app/nexus-cli \
  && mkdir -p /scratch \
  && chmod 0755 /scratch
 

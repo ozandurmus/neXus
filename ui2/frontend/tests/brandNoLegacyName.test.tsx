@@ -174,9 +174,9 @@ describe("legacy product name removal", () => {
 });
 
 describe("single product display-name setting (src/brand/product.ts)", () => {
-  it("exports PRODUCT_NAME and PRODUCT_SHORT with the current value 'neXus'", () => {
-    expect(PRODUCT_NAME).toBe("neXus");
-    expect(PRODUCT_SHORT).toBe("neXus");
+  it("exports PRODUCT_NAME and PRODUCT_SHORT with the current value 'Overwatch'", () => {
+    expect(PRODUCT_NAME).toBe("Overwatch");
+    expect(PRODUCT_SHORT).toBe("Overwatch");
     expect(srcModules[BRAND_MODULE_PATH]).toBeDefined();
   });
 

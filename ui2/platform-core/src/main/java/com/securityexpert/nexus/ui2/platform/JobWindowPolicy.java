@@ -32,7 +32,7 @@ public final class JobWindowPolicy {
         return !capabilityIds.isEmpty() && STORED_DATA_JOB_TYPES.containsAll(capabilityIds);
     }
     public static final JobWindowPolicy SYSTEM = new JobWindowPolicy(Clock.systemUTC(),
-            Integer.parseInt(System.getenv().getOrDefault("UI2_JOB_WINDOW_MINUTES", "60")));
+            Integer.parseInt(OverwatchEnv.getOrDefault("UI2_JOB_WINDOW_MINUTES", "60")));
 
     private final Clock clock;
     private final int windowMinutes;

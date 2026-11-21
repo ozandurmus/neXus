@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.policy;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.time.Duration;
 import java.util.*;
 
@@ -29,9 +31,9 @@ final class CpChangedOnlyDomains {
 
     static CpChangedOnlyDomains configured() {
         return parse(System.getProperty("ui2.policy.cp.changed-only-domains",
-                System.getenv().getOrDefault("UI2_POLICY_CP_CHANGED_ONLY_DOMAINS", TRIAL_DOMAIN)),
+                OverwatchEnv.getOrDefault("UI2_POLICY_CP_CHANGED_ONLY_DOMAINS", TRIAL_DOMAIN)),
             System.getProperty("ui2.policy.cp.changed-only-max-age-hours",
-                System.getenv().getOrDefault("UI2_POLICY_CP_CHANGED_ONLY_MAX_AGE_HOURS", "24")));
+                OverwatchEnv.getOrDefault("UI2_POLICY_CP_CHANGED_ONLY_MAX_AGE_HOURS", "24")));
     }
 
     /** Fails closed at construction: an unreadable value is a configuration error, never a silent widening. */

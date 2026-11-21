@@ -230,9 +230,9 @@ public final class SamlSettingsService {
         boolean enabled = Boolean.TRUE.equals(request.enabled());
         String baseUrl = strip(request.spBaseUrl());
         if (!validUrl(baseUrl, true) || baseUrl.contains("?") || baseUrl.contains("#")) {
-            problems.add(new Problem("spBaseUrl", "Enter the address users reach neXus at (https://host[:port]), without a path."));
+            problems.add(new Problem("spBaseUrl", "Enter the address users reach Overwatch at (https://host[:port]), without a path."));
         } else if (URI.create(stripTrailingSlash(baseUrl)).getPath() != null && !URI.create(stripTrailingSlash(baseUrl)).getPath().isEmpty()) {
-            problems.add(new Problem("spBaseUrl", "Enter the address users reach neXus at (https://host[:port]), without a path."));
+            problems.add(new Problem("spBaseUrl", "Enter the address users reach Overwatch at (https://host[:port]), without a path."));
         }
         String entityId = strip(request.spEntityId());
         if (entityId == null || entityId.isEmpty()) {

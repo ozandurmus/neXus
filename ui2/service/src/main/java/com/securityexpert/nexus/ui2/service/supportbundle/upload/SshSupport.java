@@ -62,14 +62,14 @@ final class SshSupport {
     /** A connection failure says plainly where it stopped; the egress hint is deliberate, the firewall opening is the likely cause. */
     static UploadException classify(Throwable e, UploadTarget target) {
         String where = target.host() + ":" + target.port();
-        String hint = " The bank firewall may need an opening for this destination from the neXus host.";
+        String hint = " The bank firewall may need an opening for this destination from the Overwatch host.";
         Throwable cause = e.getCause() == null ? e : e.getCause();
         String message = String.valueOf(e.getMessage()).toLowerCase(java.util.Locale.ROOT);
         if (message.contains("auth fail") || message.contains("auth cancel") || message.contains("userauth")) {
             return new UploadException("AUTH_FAILED", "The destination " + where + " refused the credential.", false);
         }
         if (cause instanceof UnknownHostException) {
-            return new UploadException("HOST_NOT_FOUND", "The name " + target.host() + " does not resolve from the neXus host.", true);
+            return new UploadException("HOST_NOT_FOUND", "The name " + target.host() + " does not resolve from the Overwatch host.", true);
         }
         if (cause instanceof ConnectException || cause instanceof NoRouteToHostException) {
             return new UploadException("CONNECTION_FAILED", "Could not reach " + where + " (" + cause.getClass().getSimpleName() + ")." + hint, true);

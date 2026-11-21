@@ -89,7 +89,7 @@ public final class JooqSupportBundleUploadStore {
     public int reapStale(long staleAfterSeconds) {
         return audited.inTransaction(SYSTEM_ACTOR, ACTION_UPLOAD, "support_bundle_upload_reap", dsl -> dsl.execute(
                 "update support_bundle_upload set state = 'INTERRUPTED', finished_at = now(), error_code = 'SERVICE_INTERRUPTED', "
-                        + "error_detail = 'The neXus service stopped while the upload was running; the remote copy may be partial' "
+                        + "error_detail = 'The Overwatch service stopped while the upload was running; the remote copy may be partial' "
                         + "where state = 'RUNNING' and heartbeat_at < now() - make_interval(secs => {0})", staleAfterSeconds));
     }
 

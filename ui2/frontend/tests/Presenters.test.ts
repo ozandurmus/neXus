@@ -146,7 +146,7 @@ describe("RESULT words and actors (post-release review 2026-10-18, 2.4 / R8)", (
     expect(resultWords({ state: "FAILED", outcome: null, terminal_reason: "partial:READ_SIZE_BELOW_OFFSET" })).toEqual({ outcome: null, reason: "partial:READ_SIZE_BELOW_OFFSET" });
   });
   it("names a service actor, keeps a masked session token beside its label and never rewrites a user", () => {
-    expect(actorLabel("system:cp-failover-worker")).toEqual({ label: "service \u00b7 neXus cp failover worker", raw: "system:cp-failover-worker", known: true });
+    expect(actorLabel("system:cp-failover-worker")).toEqual({ label: "service \u00b7 Overwatch cp failover worker", raw: "system:cp-failover-worker", known: true });
     expect(actorLabel("SN-2D0959634B")).toEqual({ label: "Masked actor", raw: "SN-2D0959634B", known: true });
     expect(actorLabel("ACTOR-01")).toEqual({ label: "ACTOR-01", raw: null, known: false });
     expect(actorLabel("")).toEqual({ label: "UNKNOWN", raw: null, known: false });

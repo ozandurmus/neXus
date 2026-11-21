@@ -153,7 +153,7 @@ public final class NotificationMailTemplate {
     public static RenderedMail render(String type, NotificationMailRouter.Batch batch, String productName,
             String baseUrl, String environment) {
         TypeTemplateSpec spec = spec(type);
-        String brand = MailBrand.cleanLabel(productName, "neXus");
+        String brand = MailBrand.cleanLabel(productName, "Overwatch");
         String env = MailBrand.cleanLabel(environment, "production");
         String normalizedBaseUrl = MailBrand.normalizeBaseUrl(baseUrl);
         int eventCount = batch.lines().size();

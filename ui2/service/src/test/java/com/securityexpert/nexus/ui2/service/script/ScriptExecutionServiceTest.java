@@ -294,7 +294,7 @@ class ScriptExecutionServiceTest {
         assertEquals(1, detailsV1.script().currentVersion());
         assertEquals(List.of("dev-tango-04"), detailsV1.script().egressDeviceTargets(),
                 "Egress matching an enrolled device's management IP must record its opaque device_id");
-        assertTrue(detailsV1.warnings().stream().anyMatch(w -> w.contains("dev-tango-04") && w.contains("outside neXus command gates")));
+        assertTrue(detailsV1.warnings().stream().anyMatch(w -> w.contains("dev-tango-04") && w.contains("outside Overwatch command gates")));
         // Five-field cron is read in Europe/Istanbul (UTC+3): 02:00 local is 23:00Z the day before.
         assertEquals(List.of(
                 Instant.parse("2026-11-18T23:00:00Z"),

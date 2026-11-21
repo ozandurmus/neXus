@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.scriptrunner;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -59,8 +61,8 @@ public final class Ui2ScriptRunnerMain {
         if (!execImage.matches(".+@sha256:[a-f0-9]{64}")) {
             throw new IllegalStateException("UI2_SCRIPT_EXEC_IMAGE must be an image by digest");
         }
-        String internalUrl = env.getOrDefault("UI2_SCRIPT_RUNNER_SERVICE_URL", DEFAULT_INTERNAL_URL);
-        String cliServiceUrl = env.getOrDefault("UI2_SERVICE_URL", ScriptRunJobExecutor.DEFAULT_SERVICE_URL);
+        String internalUrl = OverwatchEnv.getOrDefault(env::get, "UI2_SCRIPT_RUNNER_SERVICE_URL", DEFAULT_INTERNAL_URL);
+        String cliServiceUrl = OverwatchEnv.getOrDefault(env::get, "UI2_SERVICE_URL", ScriptRunJobExecutor.DEFAULT_SERVICE_URL);
 
         DataSource dataSource = TransactionBoundaryFactory.jdbcDataSource(dbUrl, dbUsername, dbPassword);
         TransactionBoundary boundary = TransactionBoundaryFactory.fromDataSource(dataSource);
@@ -112,7 +114,7 @@ public final class Ui2ScriptRunnerMain {
             }
         }, 10, 10, TimeUnit.SECONDS);
 
-        long drainSeconds = Long.parseLong(env.getOrDefault("UI2_WORKER_DRAIN_SECONDS", "840"));
+        long drainSeconds = Long.parseLong(OverwatchEnv.getOrDefault(env::get, "UI2_WORKER_DRAIN_SECONDS", "840"));
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             draining[0] = true;
             loop.requestStop();
@@ -150,11 +152,11 @@ public final class Ui2ScriptRunnerMain {
     }
 
     static String secretFromEnvOrFile(Map<String, String> env, String directVar, String fileVar) {
-        String direct = env.get(directVar);
+        String direct = OverwatchEnv.get(env::get, directVar);
         if (direct != null && !direct.isBlank()) {
             return direct.strip();
         }
-        String file = env.get(fileVar);
+        String file = OverwatchEnv.get(env::get, fileVar);
         if (file != null && !file.isBlank()) {
             try {
                 String value = Files.readString(Path.of(file.strip()), StandardCharsets.UTF_8).strip();
@@ -169,7 +171,7 @@ public final class Ui2ScriptRunnerMain {
     }
 
     private static String requiredEnv(Map<String, String> env, String name) {
-        String value = env.get(name);
+        String value = OverwatchEnv.get(env::get, name);
         if (value == null || value.isBlank()) {
             throw new IllegalStateException("missing required environment variable: " + name);
         }

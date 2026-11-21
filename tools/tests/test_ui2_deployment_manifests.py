@@ -1652,3 +1652,14 @@ def test_the_service_build_passes_the_build_proxy_to_kaniko_run_steps():
     for name in ("HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"):
         assert "--build-arg=" + name in container["args"], name
         assert name in {e["name"] for e in container["env"]}, name
+
+
+def test_containerfile_ships_overwatch_cli_with_a_working_nexus_cli_alias():
+    """R1b: /app/overwatch-cli is the entry; /app/nexus-cli stays as an alias that execs it, both executable."""
+    text = CONTAINERFILE.read_text(encoding="utf-8")
+    assert "-jar /app/service.jar cli \"$@\"" in text
+    assert "> /app/overwatch-cli" in text
+    assert "exec /app/overwatch-cli \"$@\"" in text and "> /app/nexus-cli" in text
+    assert "chmod 0755 /app/overwatch-cli /app/nexus-cli" in text
+    script_exec = (REPO_ROOT / "ui2" / "Containerfile.script-exec").read_text(encoding="utf-8")
+    assert "chmod 0755 /app/overwatch-cli /app/nexus-cli" in script_exec

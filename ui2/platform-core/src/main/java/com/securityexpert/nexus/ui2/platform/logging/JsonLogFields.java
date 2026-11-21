@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.platform.logging;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -113,7 +115,7 @@ public final class JsonLogFields {
     /** Reads optional field renames/includes/excludes from environment variables or system properties. */
     public static JsonLogFields fromEnvironment() {
         return fromEnvironment(key -> {
-            String value = System.getenv(key);
+            String value = OverwatchEnv.get(key);
             if (value == null || value.isBlank()) {
                 value = System.getProperty(key);
             }

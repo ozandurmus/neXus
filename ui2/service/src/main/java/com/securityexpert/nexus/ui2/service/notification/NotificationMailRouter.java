@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.notification;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.io.IOException;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -158,7 +160,7 @@ final class NotificationMailRouter {
         List<Record> rows;
         switch (type) {
             case "security_scan" -> {
-                return SecurityScanSummary.collect(java.nio.file.Path.of(System.getenv().getOrDefault(
+                return SecurityScanSummary.collect(java.nio.file.Path.of(OverwatchEnv.getOrDefault(
                         "UI2_SECURITY_SUMMARY_DIR", "/var/lib/nexus-security/notifications")), from);
             }
             case "admin_event", "login_security" -> {

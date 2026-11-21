@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.platform.logging;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -37,7 +39,7 @@ public final class LogAddressMasker {
     private static final Pattern HEXTET = Pattern.compile("[0-9A-Fa-f]{1,4}");
     private static final Pattern STRICT_IPV4 = Pattern.compile(OCTET + "(?:\\." + OCTET + "){3}");
 
-    private static final boolean RAW_FROM_ENV = rawAddressesEnabled(System::getenv);
+    private static final boolean RAW_FROM_ENV = rawAddressesEnabled(OverwatchEnv::get);
 
     private LogAddressMasker() {
     }

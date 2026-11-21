@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.compliance;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -154,7 +156,7 @@ public final class ComplianceService {
     }
 
     private static String resolveUrl() {
-        String env = System.getenv("UI2_COMPLIANCE_SERVICE_URL");
+        String env = OverwatchEnv.get("UI2_COMPLIANCE_SERVICE_URL");
         if (env != null && !env.isBlank()) {
             return env.trim();
         }

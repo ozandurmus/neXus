@@ -518,7 +518,7 @@ public final class ChangeFeedService {
             }
         }
         return SourceResult.of("jobs", Kind.NEXUS_JOB, events, capped,
-                "neXus's own runs (collections, backups, readiness, failover); " + FOLD_FROM + " or more identical jobs in one hour fold into one line");
+                "Overwatch's own runs (collections, backups, readiness, failover); " + FOLD_FROM + " or more identical jobs in one hour fold into one line");
     }
 
     private static ChangeEvent folded(List<JobRow> group, DefaultProjection p) {
@@ -540,7 +540,7 @@ public final class ChangeFeedService {
         Tone tone = failed > 0 ? Tone.WARN : unknown > 0 ? Tone.UNKNOWN : running > 0 ? Tone.NEUTRAL : Tone.OK;
         String type = group.get(0).jobType();
         return new ChangeEvent("jobs:" + type + ":" + first.getEpochSecond(), Kind.NEXUS_JOB, "jobs", first, "UTC", null,
-                vendorOf(group, p), null, null, "neXus", what.toString(), "job type " + type, tone, List.of(),
+                vendorOf(group, p), null, null, "Overwatch", what.toString(), "job type " + type, tone, List.of(),
                 new Links(null, null, null, null, type));
     }
 
@@ -569,7 +569,7 @@ public final class ChangeFeedService {
         String detail = row.terminalReason() == null || row.terminalReason().isBlank() ? null : p.text(row.terminalReason());
         String deviceName = row.targetDeviceId() == null ? (row.targetRef() == null ? null : row.targetKind() + " target") : p.device(row.targetDeviceId());
         return new ChangeEvent("job:" + row.jobId(), Kind.NEXUS_JOB, "jobs", row.submittedAt(), "UTC", null,
-                p.vendor(row.targetDeviceId()), row.targetDeviceId(), deviceName, "neXus", what, detail, tone, List.of(),
+                p.vendor(row.targetDeviceId()), row.targetDeviceId(), deviceName, "Overwatch", what, detail, tone, List.of(),
                 new Links(row.targetDeviceId() == null ? null : PanConfigEvents.deviceLink(row.targetDeviceId()), null, null, row.jobId(), null));
     }
 

@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.system;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.io.IOException;
 import java.nio.file.FileStore;
 import java.nio.file.Files;
@@ -93,7 +95,7 @@ public class DiskHeadroomService {
     private static Map<String, Path> defaultVolumes() {
         Map<String, Path> volumes = new LinkedHashMap<>();
         volumes.put(ROOT, Path.of("/"));
-        String artefactRoot = System.getenv().getOrDefault("UI2_ARTEFACT_STORE_ROOT", "");
+        String artefactRoot = OverwatchEnv.getOrDefault("UI2_ARTEFACT_STORE_ROOT", "");
         if (!artefactRoot.isBlank()) {
             volumes.put(ARTEFACT_STORE, Path.of(artefactRoot));
         }

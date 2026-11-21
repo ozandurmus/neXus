@@ -421,7 +421,7 @@ describe("the logo (brand area 2026-11-13)", () => {
     viewport(1440);
     rail("overview");
     expect(nav()).toHaveAttribute("data-nav-layout", "expanded");
-    expect(within(nav()).getAllByRole("img", { name: "neXus" })).toHaveLength(1);
+    expect(within(nav()).getAllByRole("img", { name: "Overwatch" })).toHaveLength(1);
     expect(brands()).toEqual(["wordmark"]);
     expect(document.querySelector("img")).toBeNull();
   });
@@ -431,7 +431,7 @@ describe("the logo (brand area 2026-11-13)", () => {
     rail("overview");
     fireEvent.click(within(nav()).getByRole("button", { name: "Collapse menu" }));
     expect(nav()).toHaveAttribute("data-nav-layout", "folded");
-    expect(within(nav()).getAllByRole("img", { name: "neXus" })).toHaveLength(1);
+    expect(within(nav()).getAllByRole("img", { name: "Overwatch" })).toHaveLength(1);
     expect(brands()).toEqual(["mark"]);
   });
 
@@ -442,7 +442,7 @@ describe("the logo (brand area 2026-11-13)", () => {
     expect(brands()).toEqual(["mark"]);
     fireEvent.click(within(nav()).getByRole("button", { name: "Open navigation" }));
     const drawer = screen.getByRole("navigation", { name: "Primary navigation drawer" });
-    expect(within(drawer).getAllByRole("img", { name: "neXus" })).toHaveLength(1);
+    expect(within(drawer).getAllByRole("img", { name: "Overwatch" })).toHaveLength(1);
     expect(brands(drawer)).toEqual(["wordmark"]);
     // The open drawer hides the strip behind it from the accessibility tree; the strip itself still holds the one mark.
     expect(brands(document.querySelector('[data-nav-layout="narrow"]')!)).toEqual(["mark"]);

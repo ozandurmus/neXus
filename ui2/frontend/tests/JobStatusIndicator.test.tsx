@@ -31,7 +31,7 @@ describe("the job indicator", () => {
 
   it("states what Live rests on, never identity, and appends the latest job", () => {
     const basis = liveBasis(latestJobSentence("COMPLETED", "asa_inventory_collect"));
-    expect(basis).toMatch(/^Live means neXus confirmed this device and has read evidence from it/);
+    expect(basis).toMatch(/^Live means Overwatch confirmed this device and has read evidence from it/);
     expect(basis).toContain("It is not an identity check; the identity badge says that.");
     expect(basis).toMatch(/Latest job: Cisco ASA inventory read completed\.$/);
     expect(basis).not.toMatch(/verified/i);

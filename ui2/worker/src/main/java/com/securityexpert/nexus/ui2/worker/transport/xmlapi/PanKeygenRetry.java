@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.transport.xmlapi;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.time.Duration;
 import java.util.function.Function;
 import java.util.function.LongConsumer;
@@ -43,7 +45,7 @@ public final class PanKeygenRetry {
 
         private static long number(String name, long fallback) {
             try {
-                String v = System.getenv(name);
+                String v = OverwatchEnv.get(name);
                 return v == null || v.isBlank() ? fallback : Long.parseLong(v.trim());
             } catch (RuntimeException e) {
                 return fallback;

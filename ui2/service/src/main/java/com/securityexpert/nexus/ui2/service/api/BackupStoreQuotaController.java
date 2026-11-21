@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.api;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -52,8 +54,8 @@ public final class BackupStoreQuotaController {
 
     @Autowired
     public BackupStoreQuotaController(ArtefactStoreQuotaRepository repository) {
-        this(repository, System.getenv().getOrDefault("UI2_ARTEFACT_STORE_ROOT", "").isBlank()
-                ? null : Path.of(System.getenv("UI2_ARTEFACT_STORE_ROOT")));
+        this(repository, OverwatchEnv.getOrDefault("UI2_ARTEFACT_STORE_ROOT", "").isBlank()
+                ? null : Path.of(OverwatchEnv.get("UI2_ARTEFACT_STORE_ROOT")));
     }
 
     BackupStoreQuotaController(ArtefactStoreQuotaRepository repository, Path root) {

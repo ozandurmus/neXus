@@ -1,18 +1,18 @@
-# AGENTS.md — neXus Agent Constitution
+# AGENTS.md — Overwatch (formerly neXus) Agent Constitution
 
 > Product Owner assistant sessions start from `PO.md` (a short brief that
 > points back here); this file remains the authority it names.
 
 Durable, model/vendor-neutral engineering and security law. Rules here change
-rarely and apply to any coding/reasoning agent working in this repository —
+rarely and apply to any coding/reasoning agent in this repository —
 any AI coding tool, or a human. Never phrase a rule here as "the tool
 should..."; use "the agent MUST...". Vendor-specific
 files (`CLAUDE.md`, `.github/copilot-instructions.md`,
 `.github/instructions/*.instructions.md`) may translate a rule into a
-product's own tool names or model tiers, but must not restate the rule itself
+product's tool names or model tiers, but must not restate the rule itself
 — point back here.
 
-neXus product principle: `SEE → VERIFY → TRACE → RECOVER → OPERATE`.
+Overwatch product principle: `SEE → VERIFY → TRACE → RECOVER → OPERATE`.
 
 ## Authority hierarchy
 
@@ -478,12 +478,12 @@ extension of a command already issued (same command/session/timeout/
 frequency) is not a command addition and needs no new gate entry.
 
 **PO Amendment (2026-09-26, ad hoc parser diagnostics).** A one-off or
-incremental device command sent through neXus to measure output for a parser
+incremental device command sent through Overwatch to measure output for a parser
 requires the Product Owner to review the exact code, command, target scope,
 and sanitized output projection and approve that command before execution.
 Approval of one command does not approve the next. Verification and
 troubleshooting must not change a device's configuration or operational state.
-The agent may continue neXus code, infrastructure, and host troubleshooting
+The agent may continue Overwatch code, infrastructure, and host troubleshooting
 without this device-command approval; HOST-A is never used as a jump host or
 as a path for manual device SSH or browser access.
 
@@ -509,15 +509,15 @@ Per Product Owner directive on 2026-09-19, the ceiling for `HOST-A` in
 sessions across all authorized environments and tools are explicitly
 authorized to execute SSH operations on `HOST-A` for:
 1. Workspace build and rollout via `bash ~/run_build.sh`.
-2. NeXus namespace operations via `kubectl -n ui2 ...` and `kubectl -n ui2-build ...`.
+2. Overwatch namespace operations via `kubectl -n ui2 ...` and `kubectl -n ui2-build ...`.
 3. Non-mutating network reachability diagnostic probes (`ping`, `traceroute`,
    `nc`, `curl`, SSH banner test) to investigate connectivity to managed targets.
 Agents MUST NOT invoke `sudo`, modify system packages/configurations under `/etc`,
 or access incumbent workloads (`HOST_X`).
 
-**PO Amendment (2026-09-24, HOST-A owned by neXus).** Per
+**PO Amendment (2026-09-24, HOST-A owned by Overwatch).** Per
 `docs/design/PO_DECISION_RECORD_2026_09_24_HOST_A_OWNED_BY_NEXUS_AGENT_SUDO.md` (RATIFIED), once HOST-A is
-reinstalled for neXus alone, the agent works there through a dedicated account with logged `sudo`; it asks the
+reinstalled for Overwatch alone, the agent works there through a dedicated account with logged `sudo`; it asks the
 Product Owner first for any deleting or irreversible command and never uses HOST-A as a jump server. The
 2026-09-19 limits applied until that reinstall; the reinstall was done on 2026-09-25, so this amendment is in effect.
 

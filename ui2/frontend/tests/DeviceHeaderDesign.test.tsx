@@ -305,7 +305,7 @@ describe("the header card", () => {
     expect(within(header).queryByText("✓")).toBeNull();
     // the latest job and what Live rests on are on the Live chip's hover, with no word of identity verification
     const live = within(header).getByText("Live").closest("[title]") as HTMLElement;
-    expect(live.title).toMatch(/^Live means neXus confirmed this device and has read evidence from it/);
+    expect(live.title).toMatch(/^Live means Overwatch confirmed this device and has read evidence from it/);
     expect(live.title).toContain("Latest job: Check Point inventory read completed.");
     expect(live.title).not.toMatch(/verified/i);
   });

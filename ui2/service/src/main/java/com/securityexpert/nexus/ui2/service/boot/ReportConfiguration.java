@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.boot;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.time.Clock;
 import java.util.logging.Logger;
 
@@ -70,8 +72,8 @@ public class ReportConfiguration {
      */
     static com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore reportStore(
             DeviceCompositionConfiguration.ArtefactStoreAccess artefactStoreAccess, TransactionBoundary transactionBoundary) {
-        String root = System.getenv().getOrDefault("UI2_REPORT_STORE_ROOT", "");
-        String keyFile = System.getenv().getOrDefault("UI2_ARTEFACT_STORE_KEY_FILE", "");
+        String root = OverwatchEnv.getOrDefault("UI2_REPORT_STORE_ROOT", "");
+        String keyFile = OverwatchEnv.getOrDefault("UI2_ARTEFACT_STORE_KEY_FILE", "");
         if (root.isBlank() || keyFile.isBlank()) {
             var fallback = artefactStoreAccess.storeOrNull();
             return fallback instanceof com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore file

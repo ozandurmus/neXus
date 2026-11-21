@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.policy;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
+
 import java.io.*;
 import java.time.*;
 import java.util.*;
@@ -51,7 +53,7 @@ public final class PanoramaPolicyCollector {
     public PanoramaPolicyCollector(DeviceTransport transport, GateRegistryPort gates,
             PanCredentialResolver credentials, PolicyCollectionRepository repository) {
         this(transport, gates, credentials, repository, Duration.ofSeconds(Long.parseLong(
-                System.getenv().getOrDefault("UI2_POLICY_RUN_DEADLINE_SECONDS", "7200"))));
+                OverwatchEnv.getOrDefault("UI2_POLICY_RUN_DEADLINE_SECONDS", "7200"))));
     }
 
     public PanoramaPolicyCollector(DeviceTransport transport, GateRegistryPort gates, PanCredentialResolver credentials,
