@@ -2538,7 +2538,7 @@ export interface PanConfigSyncRecord { syncId: string; state: PanConfigSyncState
  * button. `refusal`: why the server would refuse now (the button is then disabled with it). The UI decides nothing itself.
  */
 export interface PanConfigSyncFacts { offered: boolean; canRun: boolean; refusal: string | null; sourceRef: string | null; targetRef: string | null;
-  readinessObservedAt: string | null; latest: PanConfigSyncRecord | null }
+  readinessObservedAt: string | null; readinessOutcome?: "PASS" | "FAIL" | "IN_PROGRESS" | "UNKNOWN" | null; settling?: boolean; latest: PanConfigSyncRecord | null }
 export interface ReadinessCheck { device_id?: string; checkNo: number; title: string; member: string; result: CpFailoverCheckStatus; summary: string; blocking: boolean;
   /** The stored derived evidence (an object from the summary, a JSON string from a run detail) and its observation time. */
   derived?: unknown; observedAt?: string }

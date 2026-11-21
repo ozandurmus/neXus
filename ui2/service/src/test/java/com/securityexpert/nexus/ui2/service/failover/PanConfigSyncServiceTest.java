@@ -40,12 +40,15 @@ class PanConfigSyncServiceTest {
     }
     private static final CpFailoverService.Unit UNIT = new CpFailoverService.Unit("unit-a", "cluster-a", CLUSTER, null,
         List.of(member(A), member(B)));
-    private static String checks(String sync, String roleA, String roleB) { return checks(sync, roleA, roleB, "PASS"); }
+    private static String checks(String sync, String roleA, String roleB) { return checks(sync, roleA, roleB, "PASS", "{}"); }
     private static String checks(String sync, String roleA, String roleB, String check1) {
+        return checks(sync, roleA, roleB, check1, "{}");
+    }
+    private static String checks(String sync, String roleA, String roleB, String check1, String syncDerived) {
         return "[{\"memberRef\":\"" + A + "\",\"checkNo\":1,\"status\":\"" + check1 + "\",\"derived\":{\"role\":\"" + roleA + "\"}},"
             + "{\"memberRef\":\"" + B + "\",\"checkNo\":1,\"status\":\"" + check1 + "\",\"derived\":{\"role\":\"" + roleB + "\"}},"
-            + "{\"memberRef\":\"" + A + "\",\"checkNo\":4,\"status\":\"" + sync + "\",\"derived\":{}},"
-            + "{\"memberRef\":\"" + B + "\",\"checkNo\":4,\"status\":\"" + sync + "\",\"derived\":{}}]";
+            + "{\"memberRef\":\"" + A + "\",\"checkNo\":4,\"status\":\"" + sync + "\",\"derived\":" + syncDerived + "},"
+            + "{\"memberRef\":\"" + B + "\",\"checkNo\":4,\"status\":\"" + sync + "\",\"derived\":" + syncDerived + "}]";
     }
     private static JooqCpFailoverRepository.ReadinessStatus readiness(String sync, Instant at, String roleA, String roleB) {
         return new JooqCpFailoverRepository.ReadinessStatus(CLUSTER, null, "palo_alto", "NOT_READY", at, "Configuration sync",
@@ -54,6 +57,10 @@ class PanConfigSyncServiceTest {
     private static final com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.Grant SA_GRANT =
         new com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.Grant(RbacEvaluator.LOCAL_AUTHORITY,
             "binding-" + RoleToken.SECURITY_ADMIN, RoleToken.SECURITY_ADMIN);
+    private static JooqCpFailoverRepository.ReadinessStatus readinessWithDerived(String sync, Instant at, String syncDerived) {
+        return new JooqCpFailoverRepository.ReadinessStatus(CLUSTER, null, "palo_alto", "NOT_READY", at, "Configuration sync",
+            checks(sync, "active", "passive", "PASS", syncDerived));
+    }
     private static RbacEvaluator rbac(Set<String> roles) {
         var rbac = mock(RbacEvaluator.class);
         when(rbac.evaluate(eq(ACTOR), any(), any(Instant.class))).thenAnswer(call -> {
@@ -187,5 +194,57 @@ class PanConfigSyncServiceTest {
             assertThrows(CpFailoverService.Refusal.class,
                 () -> s.request("cluster-a", "unit-a", A, B, ACTOR, "palo_alto")).code());
         verifyNoInteractions(store, units);
+    }
+
+    @Test void viewMarksSyncSettlingDuringTheWaitAndWhenFollowUpReadinessStillSeesInProgress() {
+        var s = service(mock(JooqPanConfigSyncRepository.class), mock(CpFailoverService.class), Set.of(RoleToken.SECURITY_ADMIN), true);
+        Instant preSyncAt = Instant.now().minusSeconds(120);
+        Instant requestedAt = preSyncAt.plusSeconds(30);
+        Instant finishedAt = requestedAt.plusSeconds(60);
+        Instant followUpAt = finishedAt.plusSeconds(10);
+
+        // Before any request: check 4 failed, not settling.
+        var initial = s.view(UNIT, "palo_alto", readiness("FAIL", preSyncAt, "active", "passive"), null, false, true, Optional.empty());
+        assertEquals("FAIL", initial.readinessOutcome());
+        assertFalse(initial.settling());
+
+        // While the sync job is open (waiting 60 s after the reply) or DONE before follow-up readiness finishes: settling.
+        var syncing = new JooqPanConfigSyncRepository.ConfigSync("sync-a", CLUSTER, A, B, "run-0", ACTOR, "security_admin",
+            requestedAt, false, false, "job-a", "SYNCING", null, "success", true, null, null, requestedAt, null);
+        var duringWait = s.view(UNIT, "palo_alto", readiness("FAIL", preSyncAt, "active", "passive"), null, false, true, Optional.of(syncing));
+        assertTrue(duringWait.settling());
+        assertEquals("CONFIG_SYNC_ALREADY_ACTIVE", duringWait.refusal());
+
+        var doneAwaitingFollowUp = new JooqPanConfigSyncRepository.ConfigSync("sync-a", CLUSTER, A, B, "run-0", ACTOR, "security_admin",
+            requestedAt, false, false, "job-a", "DONE", JooqPanConfigSyncRepository.REQUESTED, "success", true, "run-1", null,
+            requestedAt, finishedAt);
+        var awaitingReRun = s.view(UNIT, "palo_alto", readiness("FAIL", preSyncAt, "active", "passive"), null, false, true,
+            Optional.of(doneAwaitingFollowUp));
+        assertTrue(awaitingReRun.settling());
+
+        // Follow-up readiness finished, but still sees "synchronization in progress": still settling, outcome IN_PROGRESS.
+        String inProgressDerived = "{\"first\":{\"running-sync\":\"synchronization in progress\",\"peer-reachable\":true,\"running-sync-enabled\":\"yes\"},"
+            + "\"second\":{\"running-sync\":\"synchronization in progress\",\"peer-reachable\":true,\"running-sync-enabled\":\"yes\"}}";
+        var stillInProgress = s.view(UNIT, "palo_alto", readinessWithDerived("FAIL", followUpAt, inProgressDerived), null, false, true,
+            Optional.of(doneAwaitingFollowUp));
+        assertEquals("IN_PROGRESS", stillInProgress.readinessOutcome());
+        assertTrue(stillInProgress.settling());
+        assertEquals("CONFIG_SYNC_IN_PROGRESS", stillInProgress.refusal());
+
+        // Follow-up readiness finished with a FAIL that is not "in progress": no longer settling.
+        String notSyncedDerived = "{\"first\":{\"running-sync\":\"not synchronized\",\"peer-reachable\":true,\"running-sync-enabled\":\"yes\"},"
+            + "\"second\":{\"running-sync\":\"not synchronized\",\"peer-reachable\":true,\"running-sync-enabled\":\"yes\"}}";
+        var stillFails = s.view(UNIT, "palo_alto", readinessWithDerived("FAIL", followUpAt, notSyncedDerived), null, false, true,
+            Optional.of(doneAwaitingFollowUp));
+        assertEquals("FAIL", stillFails.readinessOutcome());
+        assertFalse(stillFails.settling());
+        assertNull(stillFails.refusal());
+
+        // Follow-up readiness finished with PASS: not settling, not offered.
+        var passed = s.view(UNIT, "palo_alto", readiness("PASS", followUpAt, "active", "passive"), null, false, true,
+            Optional.of(doneAwaitingFollowUp));
+        assertEquals("PASS", passed.readinessOutcome());
+        assertFalse(passed.settling());
+        assertFalse(passed.offered());
     }
 }
