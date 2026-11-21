@@ -46,6 +46,8 @@ def builder_args(template_args, commit, base):
         "--dockerfile=" + CONTAINERFILE,
         "--destination=" + REPOSITORY + ":" + commit[:12] + TAG_SUFFIX,
         "--build-arg=SERVICE_IMAGE=" + base,
+        # Kaniko RUN steps see the build proxy only through the predefined proxy build args (2026-11-21).
+        "--build-arg=HTTP_PROXY", "--build-arg=HTTPS_PROXY", "--build-arg=NO_PROXY",
         "--insecure-registry=" + REGISTRY,
         "--skip-tls-verify-registry=" + REGISTRY,
         "--cache=true",

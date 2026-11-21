@@ -41,6 +41,11 @@ spec:
         - --snapshot-mode=redo
         - --log-format=text
         - --verbosity=info
+        # Kaniko does not hand the pod's proxy env to RUN steps; the predefined proxy build args do (2026-11-21:
+        # without them every microdnf call in the image build failed and the package update was always skipped).
+        - --build-arg=HTTP_PROXY
+        - --build-arg=HTTPS_PROXY
+        - --build-arg=NO_PROXY
         env:
         - name: UI2_IMAGE_TAG
           valueFrom:

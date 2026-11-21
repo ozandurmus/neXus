@@ -1582,6 +1582,8 @@ def test_script_exec_containerfile_and_image_builder():
     assert "--dockerfile=/workspace/ui2/Containerfile.script-exec" in args and "--dockerfile=/x" not in args
     assert "--build-arg=SERVICE_IMAGE=" + base in args
     assert "--destination=" + sx.REPOSITORY + ":" + commit[:12] + "-sx" in args
+    # Kaniko RUN steps reach the Red Hat repositories only through the predefined proxy build args (2026-11-21).
+    assert {"--build-arg=HTTP_PROXY", "--build-arg=HTTPS_PROXY", "--build-arg=NO_PROXY"} <= set(args)
     with pytest.raises(ValueError):
         sx.service_image(sx.REPOSITORY + ":latest")
 
@@ -1638,3 +1640,15 @@ def test_no_worker_deployment_mounts_or_references_migrate_credentials():
             ], f"{owner}: db-credentials volume must project only app-user and app-password via items"
     assert seen == worker_deployments
 
+
+
+def test_the_service_build_passes_the_build_proxy_to_kaniko_run_steps():
+    """2026-11-21: kaniko does not hand the pod's proxy env to RUN steps, so microdnf could never reach the Red Hat
+    repositories and the runtime package update was always skipped. Valueless predefined build args take the pod env."""
+    tpl = yaml.safe_load(
+        (REPO_ROOT / "deploy/ui2-image-build/31-build-job-proxy.yaml.template").read_text(encoding="utf-8")
+    )
+    container = tpl["spec"]["template"]["spec"]["containers"][0]
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"):
+        assert "--build-arg=" + name in container["args"], name
+        assert name in {e["name"] for e in container["env"]}, name
