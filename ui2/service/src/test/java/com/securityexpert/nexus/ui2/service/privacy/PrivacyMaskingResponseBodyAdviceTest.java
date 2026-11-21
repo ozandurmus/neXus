@@ -572,4 +572,36 @@ class PrivacyMaskingResponseBodyAdviceTest {
         assertThat(((Map<String, Object>) masked.get("member_zones")).get("opaque-member")).isEqualTo(zone);
         assertThat(PrivacyMaskingResponseBodyAdvice.maskMac("garbage")).isEqualTo("[REDACTED_MAC]");
     }
+    @Test
+    @SuppressWarnings("unchecked")
+    void masksTheElementsAMemberDifferenceNamesButKeepsCountsAndProductFacts() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        Map<String, Object> routes = new LinkedHashMap<>();
+        routes.put("key", "routes");
+        routes.put("label", "Routes");
+        routes.put("note", "Routes by context, destination, next hop and interface.");
+        routes.put("status", "DIFFERS");
+        routes.put("values", Map.of("dev-a", "2 routes", "dev-b", "1 route"));
+        routes.put("detail", List.of("synthetic-ctx|192.0.2.0/24|198.51.100.7|outside-synthetic", "and 3 more"));
+        Map<String, Object> interfaces = new LinkedHashMap<>(routes);
+        interfaces.put("key", "interfaces");
+        interfaces.put("detail", List.of("synthetic-ctx/inside-synthetic"));
+        Map<String, Object> version = new LinkedHashMap<>(routes);
+        version.put("key", "software_version");
+        version.put("values", Map.of("dev-a", "9.18.4", "dev-b", "9.18.3"));
+        version.put("detail", List.of());
+        Map<String, Object> body = Map.of("cluster_member_ref", "opaque-cluster", "fields", List.of(routes, interfaces, version));
+
+        var masked = (Map<String, Object>) advice.beforeBodyWrite(body, null, null, null, serverRequest, null);
+        var fields = (List<Map<String, Object>>) masked.get("fields");
+        String text = fields.toString();
+        assertThat(text).doesNotContain("synthetic-ctx", "192.0.2.0", "198.51.100.7", "outside-synthetic", "inside-synthetic");
+        List<String> routeDetail = (List<String>) fields.get(0).get("detail");
+        assertThat(routeDetail.get(0).split("\\|", -1)).hasSize(4);
+        assertThat(routeDetail.get(1)).isEqualTo("and 3 more");
+        assertThat(fields.get(0).get("values")).isEqualTo(Map.of("dev-a", "2 routes", "dev-b", "1 route"));
+        assertThat(fields.get(0).get("note")).isEqualTo("Routes by context, destination, next hop and interface.");
+        assertThat(((List<String>) fields.get(1).get("detail")).get(0)).contains("/");
+        assertThat(fields.get(2).get("values")).isEqualTo(Map.of("dev-a", "9.18.4", "dev-b", "9.18.3"));
+    }
 }
