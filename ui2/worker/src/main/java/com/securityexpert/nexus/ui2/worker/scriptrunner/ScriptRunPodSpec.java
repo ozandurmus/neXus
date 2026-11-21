@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.worker.scriptrunner;
 
+import com.securityexpert.nexus.ui2.platform.OverwatchEnv;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
@@ -147,7 +148,7 @@ public final class ScriptRunPodSpec {
         }
         if (env != null) {
             for (String key : List.of("UI2_DB_HOST", "KUBERNETES_SERVICE_HOST")) {
-                String val = env.get(key);
+                String val = OverwatchEnv.get(env::get, key);
                 if (val != null && !val.isBlank() && lower.equalsIgnoreCase(val.strip())) {
                     return true;
                 }
@@ -183,7 +184,7 @@ public final class ScriptRunPodSpec {
         }
         if (env != null) {
             for (String key : List.of("KUBERNETES_SERVICE_HOST", "UI2_DB_HOST", "UI2_NODE_IPS", "UI2_PROTECTED_EGRESS_IPS")) {
-                String raw = env.get(key);
+                String raw = OverwatchEnv.get(env::get, key);
                 if (raw == null || raw.isBlank()) {
                     continue;
                 }
@@ -316,7 +317,7 @@ public final class ScriptRunPodSpec {
         }
         if (env != null) {
             for (String key : List.of("KUBERNETES_SERVICE_HOST", "UI2_DB_HOST", "UI2_NODE_IPS", "UI2_PROTECTED_EGRESS_IPS")) {
-                String raw = env.get(key);
+                String raw = OverwatchEnv.get(env::get, key);
                 if (raw == null || raw.isBlank()) {
                     continue;
                 }

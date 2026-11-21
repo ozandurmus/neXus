@@ -30,6 +30,14 @@ class PacketAnalysisResourcesTest {
         assertEquals("0", p.getProperty("packetanalysis.window.max_seconds"));
     }
 
+    @Test void anOverwatchNameIsReadFirst() {
+        Properties p = new Properties();
+        Map<String, String> env = new java.util.HashMap<>(POD);
+        env.put("OVERWATCH_PACKET_ANALYSIS_DUCKDB_THREADS", "8");
+        PacketAnalysisResources.apply(env, p);
+        assertEquals("8", p.getProperty("packetanalysis.duckdb.threads"));
+    }
+
     @Test void aPropertyGivenOnTheCommandLineWins() {
         Properties p = new Properties();
         p.setProperty("packetanalysis.duckdb.memory_limit_mb", "2048");

@@ -56,6 +56,21 @@ public final class AdvisoryFetchMain {
         return clean ? 0 : 1;
     }
 
+    /**
+     * Overwatch rename R1b, JDK-only (this package may not import {@code OverwatchEnv}): {@code OVERWATCH_<X>} is read
+     * before the {@code UI2_<X>} name; a blank value counts as unset.
+     */
+    static String overwatchFirst(Function<String, String> source, String name) {
+        if (name.startsWith("UI2_") && name.length() > 4) {
+            String preferred = source.apply("OVERWATCH_" + name.substring(4));
+            if (preferred != null && !preferred.isBlank()) {
+                return preferred;
+            }
+        }
+        String value = source.apply(name);
+        return value == null || value.isBlank() ? null : value;
+    }
+
     static String runId() {
         byte[] bytes = new byte[12];
         new SecureRandom().nextBytes(bytes);
@@ -66,7 +81,8 @@ public final class AdvisoryFetchMain {
     record Settings(String proxyHost, int proxyPort, URI ingest, String token, List<AdvisorySources.Source> sources, int ciscoDays,
             String problem) {
 
-        static Settings from(Function<String, String> env) {
+        static Settings from(Function<String, String> rawEnv) {
+            Function<String, String> env = name -> overwatchFirst(rawEnv, name);
             String proxy = strip(env.apply(PROXY_VARIABLE));
             if (proxy == null) {
                 return stop(PROXY_VARIABLE + " is not set");
