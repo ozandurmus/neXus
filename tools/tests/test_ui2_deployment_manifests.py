@@ -1571,7 +1571,7 @@ def test_script_exec_containerfile_and_image_builder():
     import hosta_script_exec_image as sx
 
     cf = (REPO_ROOT / "ui2" / "Containerfile.script-exec").read_text(encoding="utf-8")
-    for token in ("ARG SERVICE_IMAGE", "FROM ${SERVICE_IMAGE}", "nodejs:22", "python3.12", "requests==", "paramiko==",
+    for token in ("ARG SERVICE_IMAGE", "FROM ${SERVICE_IMAGE}", "nodejs:24", "python3.12", "requests==", "paramiko==",
                   "pyyaml==", "perl-interpreter", "ruby", "USER 20185", "chmod 0644 /app/service.jar"):
         assert token in cf, token
     assert "pwsh" not in cf.replace("PowerShell 7 is NOT installed", "").split("# Built by")[1]
