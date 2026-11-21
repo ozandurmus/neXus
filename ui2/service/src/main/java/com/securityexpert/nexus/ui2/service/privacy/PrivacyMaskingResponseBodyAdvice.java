@@ -230,6 +230,9 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             detectedClusterRef = s;
         }
         final String clusterRef = detectedClusterRef;
+        if (isMemberDiffField(map)) {
+            return maskMemberDiffField(map, clusterRef);
+        }
         // A device row's own hostname is masked with its device ID, so two devices with the same name (an ASA
         // failover pair) never share a pseudonym (UI review 2026-10-18, F-1).
         final String rowDeviceId = map.get("device_id") instanceof String id && !id.isBlank() ? id : null;
@@ -514,6 +517,87 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
     /** {@code aa:bb:cc:dd:ee:ff} to {@code aa:bb:cc:**:**:**}; anything else is withheld entirely. */
     static String maskMac(String mac) {
         return mac.matches("(?i)[0-9a-f]{2}(:[0-9a-f]{2}){5}") ? mac.substring(0, 8).toLowerCase(java.util.Locale.ROOT) + ":**:**:**" : "[REDACTED_MAC]";
+    }
+
+    /** A field row of {@code GET /clusters/{ref}/member-diff} (ClusterMemberDiff.Field#toMap). */
+    private static boolean isMemberDiffField(Map<?, ?> map) {
+        return map.size() == 6 && map.get("key") instanceof String && map.containsKey("label") && map.containsKey("note")
+                && map.containsKey("status") && map.containsKey("values") && map.containsKey("detail");
+    }
+
+    /**
+     * Member differences (2026-11-21, nightly full e2e privacy canary on an ASA pair): a differing set-like field lists the
+     * raw elements not every member has: context and interface names, route destinations and next hops, policy and
+     * virtual system names. Each part is masked by its kind, as on the Interfaces and Routes tabs; counts, statuses,
+     * product facts and the short configuration hash stay readable.
+     */
+    private Map<String, Object> maskMemberDiffField(Map<?, ?> map, String clusterRef) {
+        String fieldKey = (String) map.get("key");
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("key", fieldKey);
+        result.put("label", map.get("label"));
+        result.put("note", map.get("note"));
+        result.put("status", map.get("status"));
+        Map<String, Object> values = new LinkedHashMap<>();
+        if (map.get("values") instanceof Map<?, ?> raw) {
+            for (Map.Entry<?, ?> e : raw.entrySet()) {
+                Object v = e.getValue();
+                Object masked = switch (fieldKey) {
+                    // Product facts and the short hash: never identities.
+                    case "software_version", "model", "ha_cluster_mode", "policy_installed_at", "configuration_hash" -> v;
+                    // Set-like fields show a count ("12 routes", "3 sections, 40 entries"); anything else is masked.
+                    case "interfaces", "routes", "virtual_systems", "configuration_sections" ->
+                        v instanceof String text && text.matches("\\d+ [a-z ]+(, \\d+ entries)?") ? v : maskObject(v, clusterRef);
+                    case "policy_installed" -> v instanceof String name ? topologyPseudonymizer.maskPolicyName("rule", name) : v;
+                    default -> maskObject(v, clusterRef);
+                };
+                values.put(String.valueOf(e.getKey()), masked);
+            }
+        }
+        result.put("values", values);
+        List<Object> detail = new ArrayList<>();
+        if (map.get("detail") instanceof List<?> items) {
+            for (Object item : items) {
+                detail.add(item instanceof String text ? maskMemberDiffElement(fieldKey, text, clusterRef) : maskObject(item, clusterRef));
+            }
+        }
+        result.put("detail", detail);
+        return result;
+    }
+
+    private String maskMemberDiffElement(String fieldKey, String element, String clusterRef) {
+        if (element.matches("and \\d+ more")) return element;
+        switch (fieldKey) {
+            case "interfaces", "configuration_sections" -> {
+                int slash = element.indexOf('/');
+                String context = slash < 0 ? "" : element.substring(0, slash);
+                String rest = slash < 0 ? element : element.substring(slash + 1);
+                String maskedRest = "interfaces".equals(fieldKey)
+                        ? topologyPseudonymizer.maskPolicyName("interface", rest) : String.valueOf(maskObject(rest, clusterRef));
+                return (slash < 0 ? "" : maskContext(context) + "/") + maskedRest;
+            }
+            case "routes" -> {
+                String[] parts = element.split("\\|", -1);
+                if (parts.length != 4) return "[REDACTED_ROUTE]";
+                return maskContext(parts[0]) + "|" + maskAddressValue(parts[1], clusterRef) + "|"
+                        + ("-".equals(parts[2]) ? "-" : maskAddressValue(parts[2], clusterRef)) + "|"
+                        + ("-".equals(parts[3]) ? "-" : topologyPseudonymizer.maskPolicyName("interface", parts[3]));
+            }
+            case "virtual_systems" -> {
+                return topologyPseudonymizer.maskVirtualSystem(element, clusterRef);
+            }
+            case "policy_installed" -> {
+                return topologyPseudonymizer.maskPolicyName("rule", element);
+            }
+            default -> {
+                return String.valueOf(maskObject(element, clusterRef));
+            }
+        }
+    }
+
+    /** A routing/VS context name of an inventory read: a stable pseudonym that registers nothing for later free text. */
+    private String maskContext(String context) {
+        return context == null || context.isBlank() ? context : topologyPseudonymizer.maskPolicyName("context", context);
     }
 
     private Object maskAddressValue(Object value, String parentContextRef) {
