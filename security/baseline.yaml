@@ -1272,54 +1272,6 @@
     },
     {
       "tool": "trivy",
-      "rule": "CVE-2026-119373",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs",
-      "reason": "nodejs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-119373",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs-libs",
-      "reason": "nodejs-libs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-119374",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs",
-      "reason": "nodejs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-119374",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs-libs",
-      "reason": "nodejs-libs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-119379",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs",
-      "reason": "nodejs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-119379",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs-libs",
-      "reason": "nodejs-libs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
       "rule": "CVE-2026-123864",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs",
       "reason": "nodejs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
@@ -1384,33 +1336,25 @@
     },
     {
       "tool": "trivy",
-      "rule": "CVE-2026-84961",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs",
-      "reason": "nodejs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "rule": "CVE-2026-132825",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: ruby",
+      "reason": "ruby in the script-execution image (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8): heap overflow via string case conversion, Red Hat Critical, all RHEL 9 ruby streams Affected, no fix released (checked 2026-11-21). Reachable only through operator-authored Ruby scripts run by Script Execution; the image already live since 2026-11-21 09:40 carries it. Re-evaluated daily; remove as soon as a fix appears, or drop ruby from the image if none by the review date.",
       "owner": "PO",
       "review_date": "2026-11-28"
     },
     {
       "tool": "trivy",
-      "rule": "CVE-2026-84961",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs-libs",
-      "reason": "nodejs-libs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "rule": "CVE-2026-132825",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: ruby-libs",
+      "reason": "ruby in the script-execution image (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8): heap overflow via string case conversion, Red Hat Critical, all RHEL 9 ruby streams Affected, no fix released (checked 2026-11-21). Reachable only through operator-authored Ruby scripts run by Script Execution; the image already live since 2026-11-21 09:40 carries it. Re-evaluated daily; remove as soon as a fix appears, or drop ruby from the image if none by the review date.",
       "owner": "PO",
       "review_date": "2026-11-28"
     },
     {
       "tool": "trivy",
-      "rule": "CVE-2026-85152",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs",
-      "reason": "nodejs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
-      "owner": "PO",
-      "review_date": "2026-11-28"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-85152",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: nodejs-libs",
-      "reason": "nodejs-libs in the script-execution image interpreters (Containerfile.script-exec, PO amendment 2026-11-18 (b) item 8), first built 2026-11-21 once kaniko received the build proxy. No fix released by Red Hat; re-evaluated daily, and an acceptance must be removed as soon as a fix appears.",
+      "rule": "CVE-2026-129483",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: cyrus-sasl-lib",
+      "reason": "cyrus-sasl-lib in the Red Hat UBI9 openjdk-21-runtime base (service image and the images built from it): SRP authentication bypass in a SASL plugin, Red Hat Important, RHEL 9 Affected, no fix released (checked 2026-11-21). The service does not use SASL SRP. Re-evaluated daily; remove as soon as a fix appears.",
       "owner": "PO",
       "review_date": "2026-11-28"
     }

@@ -110,3 +110,26 @@ from the pod env) the same RUN step reached the CDN and microdnf built its metad
 and the script-execution image builder now pass them; the rendered `~/build-job-proxy.yaml` on the build host carries
 the same three lines. The update step has most likely never applied an update in the in-cluster build before this
 fix.
+
+## Script-execution image: nodejs module stream 22 to 24 (2026-11-21)
+
+Evidence is public Red Hat data only: `access.redhat.com/hydra/rest/securitydata/cve/<CVE>.json` and the public UBI 9
+appstream repodata. UBI 9 appstream carries nodejs streams 18, 20, 22 and 24 (no 26). Stream 22 is at
+`22.23.4-2.module+el9.8.0+25286+62e50b69`; stream 24 is at module version `9080020261105135730` with
+`nodejs-1:24.22.1-5.module+el9.8.0+25292+33251f3b` and the same NEVRA for `nodejs-libs`.
+
+| CVE | Stream 22 | Stream 24 (fix) |
+|---|---|---|
+| CVE-2026-119373, -119374, -119379 | Affected | fixed, RHSA-2026:96226 (module build `9080020261105135730`, equal to the UBI stream 24 build) |
+| CVE-2026-84961, CVE-2026-85152 | Will not fix | fixed, RHSA-2026:73838 (earlier build `9080020260921144317`, contained in the later 24.22.1-5 build) |
+| CVE-2026-123864, -123865, -123866, -123872 | Affected | Affected (no fix on any UBI 9 stream) |
+
+`Containerfile.script-exec` now enables `nodejs:24`. The 10 acceptances (5 CVEs x `nodejs`, `nodejs-libs`) for the first
+two rows are removed from `security/baseline.yaml`; the 8 acceptances for the last row stay, review date 2026-11-28.
+Not checked here: CVEs that affect stream 24 but not 22; the next scan of the built digest shows them.
+
+Operator-script impact (Node 22 to 24, from Node release notes, not tested here): V8 moves to 13.x (new JS features, a
+few changed edge cases); npm 11 replaces npm 10; `url.parse()` now emits a runtime deprecation warning on stderr;
+more long-deprecated APIs are removed or throw (for example legacy `util.is*` helpers, `tls.createSecurePair`);
+`AsyncLocalStorage` uses a new implementation. Scripts relying on deprecated APIs may print warnings or fail; the
+Script Execution result shows stderr and the exit code as before.
