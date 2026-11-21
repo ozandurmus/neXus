@@ -12,9 +12,17 @@ import java.util.*;
 public final class PolicyController {
     private final PolicyQueryService policies;
     private final PolicyBulkhead heavy;
+    private final PolicyHygieneFleetSummary fleetSummary;
     public PolicyController(PolicyQueryService policies) { this(policies, new PolicyBulkhead()); }
+    public PolicyController(PolicyQueryService policies, PolicyBulkhead heavy) { this(policies, heavy, new PolicyHygieneFleetSummary(policies)); }
     @org.springframework.beans.factory.annotation.Autowired
-    public PolicyController(PolicyQueryService policies, PolicyBulkhead heavy) { this.policies = policies; this.heavy = heavy; }
+    public PolicyController(PolicyQueryService policies, PolicyBulkhead heavy, PolicyHygieneFleetSummary fleetSummary) {
+        this.policies = policies; this.heavy = heavy; this.fleetSummary = fleetSummary;
+    }
+
+    /** The cached fleet summary; never computes on the request path (the background pass fills it). */
+    @GetMapping("/api/v2/policy/hygiene-summary")
+    public ResponseEntity<?> hygieneSummary() { return ok(new PolicyResponse(fleetSummary.view())); }
 
     @GetMapping("/api/v2/policy/policies/{id}/hygiene")
     public ResponseEntity<?> hygiene(@PathVariable String id, @RequestParam(defaultValue = "0") int page,

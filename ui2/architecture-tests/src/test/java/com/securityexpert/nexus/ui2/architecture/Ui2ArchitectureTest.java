@@ -237,7 +237,9 @@ class Ui2ArchitectureTest {
         }
         if (path.equals(ui2Root().resolve("Containerfile.script-exec"))) {
             // SCRIPT_EXECUTION_CONTRACT.md section 7: only the per-run script execution image installs python3.12.
-            return Pattern.compile("^\\s*(?:python3\\.12|&& python3\\.12 -m pip install|&& ln -sf /usr/bin/python3\\.12).*$",
+            // The pip removal after install (2026-11-21, CVE-2026-57585) names the two pip RPMs it erases and verifies.
+            return Pattern.compile("^\\s*(?:python3\\.12|&& python3\\.12 -m pip install|&& ln -sf /usr/bin/python3\\.12"
+                    + "|&& \\(rpm -e --nodeps python3\\.12-pip python3\\.12-pip-wheel |&& ! rpm -q python3\\.12-pip python3\\.12-pip-wheel ).*$",
                     Pattern.MULTILINE).matcher(content).replaceAll("");
         }
         return content;
