@@ -39,7 +39,9 @@ const BackupPreview = lazyNamed(() => import("./preview/BackupPreview"), "Backup
 const OperationsPreview = lazyNamed(() => import("./preview/OperationsPreview"), "OperationsPreview");
 const AdministrationPreview = lazyNamed(() => import("./preview/AdministrationPreview"), "AdministrationPreview");
 const PathAnalysisPreview = lazyNamed(() => import("./preview/PathAnalysisPreview"), "PathAnalysisPreview");
-import { DisplayModeProvider, isWall } from "./shell/displayMode";
+const EstateApp = lazyNamed(() => import("./estate/EstateApp"), "EstateApp");
+import { resolveEstateRoute } from "./estate/estateRouting";
+import { DisplayModeProvider, isWall, useDisplayMode } from "./shell/displayMode";
 import { isScreenId, type ScreenId } from "./shell/types";
 import { rewriteLegacyRoute } from "./shell/legacyRoutes";
 import { URL_CHANGE_EVENT, handleInAppLinkClick, useLocationPathname, useLocationSearch } from "./shell/urlParams";
@@ -207,31 +209,89 @@ export function App({
 
   return (
     <DisplayModeProvider search={search}>
+      <AppViewport
+        search={search}
+        pathname={pathname}
+        screen={screen}
+        preview={preview}
+        isDeviceWorkspace={isDeviceWorkspace}
+        deviceId={deviceId}
+        Product={Product}
+        Preview={Preview}
+      />
+    </DisplayModeProvider>
+  );
+}
+
+function AppViewport({
+  search,
+  pathname,
+  screen,
+  preview,
+  isDeviceWorkspace,
+  deviceId,
+  Product,
+  Preview,
+}: {
+  readonly search: string;
+  readonly pathname: string;
+  readonly screen: ScreenId;
+  readonly preview: boolean;
+  readonly isDeviceWorkspace: boolean;
+  readonly deviceId: string;
+  readonly Product: ComponentType;
+  readonly Preview: ComponentType;
+}) {
+  const { view } = useDisplayMode();
+  const estateRoute = view === "estate" && !preview && !isWall(search)
+    ? resolveEstateRoute(screen, pathname, search)
+    : null;
+
+  if (estateRoute !== null) {
+    return (
       <Box
         sx={{ display: "flex", minHeight: "100vh" }}
         onClick={(e) => {
           handleInAppLinkClick(e);
         }}
       >
-        {!isDeviceWorkspace && isWall(search) ? null : <NavigationRail active={screen} />}
-        <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-          <TopAppBar />
-          {!isDeviceWorkspace && preview && <PreviewBanner />}
-          <Box component="main" sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            {isDeviceWorkspace ? (
-              <PanelErrorBoundary label="device workspace" resetKey={deviceId}>
-                <Suspense fallback={<ScreenFallback />}>
-                  <DeviceWorkspaceScreen deviceId={deviceId} />
-                </Suspense>
-              </PanelErrorBoundary>
-            ) : (
-              <PanelErrorBoundary label={`screen ${screen}`} resetKey={`${screen}:${preview ? "preview" : "product"}`}>
-                <Suspense fallback={<ScreenFallback />}>{preview ? <Preview /> : <Product />}</Suspense>
-              </PanelErrorBoundary>
-            )}
-          </Box>
+        <PanelErrorBoundary
+          label={`estate ${estateRoute.kind}`}
+          resetKey={estateRoute.kind === "dossier" ? `dossier:${estateRoute.deviceId}` : estateRoute.kind}
+        >
+          <Suspense fallback={<ScreenFallback />}>
+            <EstateApp route={estateRoute} />
+          </Suspense>
+        </PanelErrorBoundary>
+      </Box>
+    );
+  }
+
+  return (
+    <Box
+      sx={{ display: "flex", minHeight: "100vh" }}
+      onClick={(e) => {
+        handleInAppLinkClick(e);
+      }}
+    >
+      {!isDeviceWorkspace && isWall(search) ? null : <NavigationRail active={screen} />}
+      <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+        <TopAppBar />
+        {!isDeviceWorkspace && preview && <PreviewBanner />}
+        <Box component="main" sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          {isDeviceWorkspace ? (
+            <PanelErrorBoundary label="device workspace" resetKey={deviceId}>
+              <Suspense fallback={<ScreenFallback />}>
+                <DeviceWorkspaceScreen deviceId={deviceId} />
+              </Suspense>
+            </PanelErrorBoundary>
+          ) : (
+            <PanelErrorBoundary label={`screen ${screen}`} resetKey={`${screen}:${preview ? "preview" : "product"}`}>
+              <Suspense fallback={<ScreenFallback />}>{preview ? <Preview /> : <Product />}</Suspense>
+            </PanelErrorBoundary>
+          )}
         </Box>
       </Box>
-    </DisplayModeProvider>
+    </Box>
   );
 }

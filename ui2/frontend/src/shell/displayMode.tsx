@@ -16,15 +16,19 @@ import { SCREEN_DENSITY, type ScreenType } from "../theme/tokens";
  * -- comfortable for summary, object and tool pages, compact for list screens -- and the context only reports which
  * mode the current scope is in.
  */
+export type ViewMode = "standard" | "estate";
+
 export interface DisplayMode {
   readonly mode: ColorMode;
   readonly density: Density;
   readonly wall: boolean;
+  readonly view: ViewMode;
   readonly setMode: (m: ColorMode) => void;
+  readonly setView: (v: ViewMode) => void;
 }
 
 const DisplayModeContext = createContext<DisplayMode>({
-  mode: "light", density: "comfortable", wall: false, setMode: () => {},
+  mode: "light", density: "comfortable", wall: false, view: "standard", setMode: () => {}, setView: () => {},
 });
 
 export const useDisplayMode = () => useContext(DisplayModeContext);
@@ -52,13 +56,22 @@ export function isWall(search: string): boolean {
 export function DisplayModeProvider({ search, children }: { readonly search: string; readonly children: ReactNode }) {
   const wall = isWall(search);
   const [mode, setModeState] = useState<ColorMode>(() => (read("nx.mode") === "dark" ? "dark" : "light"));
+  const [view, setViewState] = useState<ViewMode>(() => (read("nx.view") === "estate" ? "estate" : "standard"));
   const effectiveMode: ColorMode = wall ? "dark" : mode;
+  const effectiveView: ViewMode = wall ? "standard" : view;
   const setMode = useCallback((m: ColorMode) => { setModeState(m); write("nx.mode", m); }, []);
+  const setView = useCallback((v: ViewMode) => { setViewState(v); write("nx.view", v); }, []);
   useEffect(() => {
-    if (typeof document !== "undefined") document.documentElement.dataset.theme = effectiveMode;
-  }, [effectiveMode]);
+    if (typeof document !== "undefined") {
+      document.documentElement.dataset.theme = effectiveMode;
+      document.documentElement.dataset.view = effectiveView;
+    }
+  }, [effectiveMode, effectiveView]);
   const theme = useMemo(() => m3ThemeFor(effectiveMode, "comfortable"), [effectiveMode]);
-  const value = useMemo(() => ({ mode: effectiveMode, density: "comfortable" as const, wall, setMode }), [effectiveMode, wall, setMode]);
+  const value = useMemo(
+    () => ({ mode: effectiveMode, density: "comfortable" as const, wall, view: effectiveView, setMode, setView }),
+    [effectiveMode, wall, effectiveView, setMode, setView],
+  );
   return (
     <DisplayModeContext.Provider value={value}>
       <ThemeProvider theme={theme}>
