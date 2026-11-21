@@ -25,14 +25,20 @@ RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
     fi
 
 # Interpreters at image build time only; nothing is installed at run time. The package managers are removed afterwards.
-RUN microdnf module enable -y nodejs:22 \
- && microdnf install -y --nodocs --setopt=install_weak_deps=0 \
+# Tried 3 times, 30 s apart: the build proxy returns intermittent 503s for the Red Hat CDN (2026-11-21).
+RUN for attempt in 1 2 3; do \
+      microdnf module enable -y nodejs:22 \
+      && microdnf install -y --nodocs --setopt=install_weak_deps=0 \
         python3.12 \
         python3.12-pip \
         nodejs \
         perl-interpreter \
         ruby \
         sed \
+      && break; \
+      [ "$attempt" = 3 ] && exit 1; \
+      echo "SCRIPT_EXEC_INSTALL_RETRY: attempt $attempt failed" >&2; sleep 30; \
+    done \
  && python3.12 -m pip install --no-cache-dir \
         requests==2.32.3 \
         paramiko==3.5.0 \
