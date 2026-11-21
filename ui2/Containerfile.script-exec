@@ -25,7 +25,8 @@ RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
     fi
 
 # Interpreters at image build time only; nothing is installed at run time. The package managers are removed afterwards.
-# Tried 3 times, 30 s apart: the build proxy returns intermittent 503s for the Red Hat CDN (2026-11-21).
+# Tried 3 times, 30 s apart; the builder passes the proxy as predefined build args (kaniko RUN steps do not see the
+# pod proxy env, 2026-11-21). pip is removed after the pinned packages are installed (CVE-2026-57585 and pip MEDIUMs).
 RUN for attempt in 1 2 3; do \
       microdnf module enable -y nodejs:22 \
       && microdnf install -y --nodocs --setopt=install_weak_deps=0 \
@@ -40,10 +41,12 @@ RUN for attempt in 1 2 3; do \
       echo "SCRIPT_EXEC_INSTALL_RETRY: attempt $attempt failed" >&2; sleep 30; \
     done \
  && python3.12 -m pip install --no-cache-dir \
-        requests==2.32.3 \
+        requests==2.34.2 \
         paramiko==3.5.0 \
         pyyaml==6.0.2 \
  && ln -sf /usr/bin/python3.12 /usr/local/bin/python3 \
+ && (rpm -e --nodeps python3.12-pip python3.12-pip-wheel 2>/dev/null || true) \
+ && ! rpm -q python3.12-pip python3.12-pip-wheel >/dev/null 2>&1 \
  && microdnf clean all \
  && rm -rf /var/cache/dnf /var/cache/yum /var/lib/dnf /var/log/* /root/.cache /tmp/corp-ca \
  && (rpm -e --nodeps microdnf libdnf dnf-data librepo libsolv 2>/dev/null || true) \
