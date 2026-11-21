@@ -11,6 +11,7 @@ const outputRoot = process.env.NEXUS_E2E_OUTPUT_DIR ?? frontendRoot;
 export default defineConfig({
   testDir: "./e2e",
   testMatch: fullMode() ? "**/*.spec.ts" : ["**/screens.spec.ts", "**/key-views.spec.ts"],
+  testIgnore: "**/chassis-failover.spec.ts", // offline synthetic proof: run with playwright.chassis-local.config.ts
   globalSetup: "./e2e/global-setup.ts",
   fullyParallel: false,
   workers: 1,

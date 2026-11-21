@@ -2573,7 +2573,7 @@ export interface CpFailoverResume {
   businessHoursAcknowledged?: boolean; approved?: boolean; formerActiveRef?: string; peerRef?: string; canApprove?: boolean;
 }
 /** Workers write "post_return" for the checks after the return step; "final" is the older name, still accepted. */
-export interface CpFailoverCheck extends ReadinessCheck { phase: "pre" | "post" | "post_return" | "final"; device_id: string; hostname: string | null; cluster_member_ref: string; checkNo: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15; status: CpFailoverCheckStatus; derived: string; observedAt: string }
+export interface CpFailoverCheck extends ReadinessCheck { phase: "pre" | "post" | "post_return" | "final"; device_id: string; hostname: string | null; cluster_member_ref: string; checkNo: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16; status: CpFailoverCheckStatus; derived: string; observedAt: string }
 export interface CpFailoverRunDetail extends CpFailoverRun { checks: CpFailoverCheck[] }
 
 /** Cisco ASA has the read endpoints and the readiness request only (PO_DECISION_REQUEST_2026_11_13_ASA_FAILOVER_READINESS.md). */
@@ -2704,6 +2704,13 @@ export interface PolicyRuleDetail { metadata: PolicyMetadata; rule: PolicyRule; 
 const hygieneParams = (findingClass: string, severity: string, days: number) => new URLSearchParams({ findingClass, severity, days: String(days) });
 export const getPolicyHygiene = (id: string, page = 0, findingClass = "", severity = "", days = 90) =>
   call<PolicyHygienePage>(`/api/v2/policy/policies/${encodeURIComponent(id)}/hygiene?page=${page}&${hygieneParams(findingClass, severity, days)}`, "GET");
+/** The fleet hygiene summary (counts of rules carrying a finding of the class, per stored container); PENDING rows have no counts. */
+export interface PolicyHygieneSummaryRow {
+  sourceId: string; sourceName: string; vendor: string; containerId: string; containerName: string;
+  snapshotAt: string; state: "READY" | "PENDING"; rules?: number; counts?: Record<string, number>;
+}
+export interface PolicyHygieneSummary { containers: PolicyHygieneSummaryRow[]; totals: Record<string, number>; rules: number; pending: number; days: number }
+export const getPolicyHygieneSummary = () => call<PolicyHygieneSummary>("/api/v2/policy/hygiene-summary", "GET");
 export const getPolicyRule = (id: string, rule: string, days = 90) =>
   call<PolicyRuleDetail>(`/api/v2/policy/policies/${encodeURIComponent(id)}/rules?ruleId=${encodeURIComponent(rule)}&days=${days}`, "GET");
 export async function downloadPolicyHygiene(id: string, findingClass: string, severity: string, days: number) {

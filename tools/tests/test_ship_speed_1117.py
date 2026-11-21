@@ -147,6 +147,15 @@ def test_scope_frontend_only():
     assert v["scope"] == "scoped" and v["frontend"] is True
 
 
+def test_scope_frontend_only_and_docs_only_run_no_java_module_tests():
+    """Pinned by the 2026-11-20 ship-speed measurement: only the structural architecture task is selected."""
+    front = scope.scope_for(["ui2/frontend/src/App.tsx", "ui2/frontend/tests/a.test.tsx"])
+    assert front["gradle_tasks"] == [":architecture-tests:test"] and front["frontend"] is True
+    docs = scope.scope_for(["docs/design/X.md", "CURRENT_STATE.md"])
+    assert docs["scope"] == "scoped" and docs["gradle_tasks"] == [":architecture-tests:test"]
+    assert docs["frontend"] is False
+
+
 @pytest.mark.parametrize("path", [
     "ui2/build.gradle.kts", "ui2/settings-gradle.lockfile", "ui2/gradle/libs.versions.toml", "ui2/frontend/package.json",
     "tools/delivery/x.py", "deploy/ui2/50-service-deployment.yaml", "scripts/x.py", "unknown.txt", "../etc/passwd",

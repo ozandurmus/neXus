@@ -816,7 +816,8 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
           ? <PolicyHygieneTab key={`${selected}:${revision}:${hygieneClass}`} policy={selected} initialClass={hygieneClass} openRule={(id, days) => void openRuleId(id, days)} openObject={openObject} />
           : <>
             {/* No container open: the fleet first (C2), then the containers to open. */}
-            {!loadingTree && !error && <PolicyHygieneFleet rows={policyRows} now={now} />}
+            {!loadingTree && !error && <PolicyHygieneFleet rows={policyRows} now={now}
+              open={(containerId, sourceId) => { const row = policyRows.find(r => r.containerId === containerId && r.sourceId === sourceId); if (row) openContainer(row); }} />}
             <PolicyContainerPrompt tab="Hygiene" now={now} open={openContainer} rows={policyRows} />
           </>)}
         <Box role="tabpanel" aria-label="Rules & Containers" hidden={tab !== "Rules & Containers"} sx={{ display: tab === "Rules & Containers" ? "contents" : "none" }}>
