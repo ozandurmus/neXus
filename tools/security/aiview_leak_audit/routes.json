@@ -32,6 +32,7 @@
   "/api/v2/diagnostics/synthetic-ref",
   "/api/v2/diagnostics/system-log-measurements",
   "/api/v2/diagnostics/targets",
+  "/api/v2/estate/as-of",
   "/api/v2/fgt-failover/runs",
   "/api/v2/fgt-failover/runs/synthetic-ref",
   "/api/v2/fgt-failover/summary",
