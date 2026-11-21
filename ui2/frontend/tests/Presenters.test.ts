@@ -53,6 +53,10 @@ describe("readiness reasons", () => {
     ["APPROVER_IS_INITIATOR_AT_START", "Stopped before contact: the approver and the requester are the same person"],
     ["DIRECTORY_AUTHORITY_STALE_AT_START", "Stopped before contact: directory group membership was not refreshed in time"],
     ["DIRECTORY_UNREACHABLE_AT_START", "Not started: the directory could not be reached to refresh group membership — retry"],
+    ["VSX_VIRTUAL_SYSTEM_NOT_MOVED", "Stopped: a virtual system did not move with the chassis"],
+    ["VSX_VIRTUAL_SYSTEM_NOT_RETURNED", "Stopped: a virtual system did not settle after the return"],
+    ["VSX_CHASSIS_MODE_CHANGED", "The chassis mode changed since the approval: request a new one"],
+    ["ALL_VIRTUAL_SYSTEMS_FAILED_OVER", "All virtual systems failed over"],
   ])("says %s in words", (code, words) => expect(readinessReasonLabel(code)).toBe(words));
 
   it("passes a sentence the server wrote, or an unknown code, through unchanged", () => {

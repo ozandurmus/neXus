@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { CpFailoverPanel, FailoverRun, runStep } from "../src/screens/CpFailoverPanel";
+import { CpFailoverPanel, FailoverRun, errorText, runStep } from "../src/screens/CpFailoverPanel";
 import type { CpFailoverRunDetail } from "../src/auth/adminApi";
 const api = vi.hoisted(() => ({ units: vi.fn(), approvals: vi.fn(), runs: vi.fn(), detail: vi.fn(), readiness: vi.fn(), approve: vi.fn(), second: vi.fn(), start: vi.fn(),
   incidents: vi.fn(), release: vi.fn(), resume: vi.fn(), approveResume: vi.fn() }));
@@ -273,4 +273,42 @@ it.each([
   expect(screen.queryByRole("button", { name: /Start failover|Fail over/ })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Run pre-checks" }));
   await waitFor(() => expect(api.readiness).toHaveBeenCalledWith(expect.objectContaining({ unitId: unit.unitId, vendor })));
+});
+
+// ---- VSX chassis refusal and stop codes in plain words (the code stays on hover or beside the words) ----
+it.each([
+  ["VSX_CHASSIS_MODE_CHANGED", "The chassis mode changed since the approval: request a new one"],
+  ["VSX_CHASSIS_MODE_VSLS_USE_SEQUENCE", "VSLS chassis: fail over all virtual systems instead"],
+  ["VIRTUAL_SYSTEM_NOT_READY", "A virtual system of this chassis is not ready"],
+  ["SEQUENCE_ALREADY_RUNNING", "All virtual systems are already being failed over"],
+  ["SEQUENCE_SCHEDULE_NOT_SUPPORTED", "Failing over all virtual systems cannot be scheduled"],
+  ["VS_RUN_ACTIVE", "A virtual system failover is open on this cluster"],
+  ["CHASSIS_RUN_ACTIVE", "A chassis run is open on this cluster"],
+])("a refused chassis request %s reads in words and keeps the code and status", (code, words) => {
+  expect(errorText({ status: 409, body: { code } })).toBe(`${words} (${code} (HTTP 409))`);
+});
+it("a non-chassis refusal keeps the bare code and status", () => {
+  expect(errorText({ status: 409, body: { code: "OPEN_INCIDENT" } })).toBe("OPEN_INCIDENT (HTTP 409)");
+});
+it.each([
+  ["VSX_VIRTUAL_SYSTEM_NOT_MOVED", "Stopped: a virtual system did not move with the chassis"],
+  ["VSX_VIRTUAL_SYSTEM_NOT_RETURNED", "Stopped: a virtual system did not settle after the return"],
+  ["VSX_VIRTUAL_SYSTEM_NOT_ON_ACTIVE_MEMBER", "Stopped before the switch: a virtual system is not on the chassis's active member"],
+])("a stopped chassis run %s shows its stop in words with the code on hover, never as verified", (message, words) => {
+  render(<FailoverRun unit={unit} run={run({ state: "STOPPED", step: "POSTCHECK", mutationPossible: true, message, incidentRef: "incident-opaque" })} />);
+  expect(screen.getByText(words)).toHaveAttribute("title", message);
+  expect(screen.queryByText(message)).toBeNull();
+  expect(screen.getByRole("status")).not.toHaveTextContent(/^Failover verified$/);
+  expect(screen.queryByText(/Evidence coverage/)).toBeNull();
+});
+it("a run stopped by an unknown code shows the code as sent", () => {
+  render(<FailoverRun unit={unit} run={run({ state: "STOPPED", step: "POSTCHECK", mutationPossible: false, message: "SOME_FUTURE_CODE" })} />);
+  expect(screen.getByText("SOME_FUTURE_CODE")).toBeInTheDocument();
+});
+it("shows the stopped sequence with its failed VSID in words", async () => {
+  api.units.mockResolvedValue([chassisUnit({ chassisMode: "VSLS", chassisAction: "FAILOVER_ALL_VIRTUAL_SYSTEMS",
+    sequence: { sequenceId: "seq-opaque", state: "STOPPED", outcome: "VIRTUAL_SYSTEM_RUN_NOT_SUCCEEDED", total: 3, started: 2, vsIds: ["1", "2", "3"], currentRunId: null,
+      failedVsId: "2", requestedAt: "2026-11-19T20:00:00Z", finishedAt: "2026-11-19T20:10:00Z" } })]); setup();
+  expect(await screen.findByText(/Stopped: a virtual system run did not succeed \(VSID 2\)/)).toHaveAttribute("data-sequence-state", "STOPPED");
+  expect(screen.queryByText(/virtual system 3 of 3/)).toBeNull();
 });

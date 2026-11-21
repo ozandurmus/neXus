@@ -41,8 +41,12 @@ export const errorText = (error: unknown) => {
   if (body?.code === "BUSINESS_HOURS_CONFIRM_REQUIRED") return body.message ?? "Not started: business hours were not confirmed.";
   if (body?.code === "OUTSIDE_JOB_WINDOW") return body.message ?? "Device jobs are outside the scheduled window.";
   if (body?.code === "DIRECTORY_UNREACHABLE_AT_START") return body.message ?? "Directory unreachable (DIRECTORY_UNREACHABLE_AT_START): directory group membership could not be refreshed. Retry when the directory is reachable.";
+  // A VSX chassis refusal (mode, sequence, per-VS readiness) is read in words first; the code and HTTP status stay beside it.
+  const code = body?.code ?? body?.error;
+  if (code && CHASSIS_CODE.test(code)) return `${readinessReasonLabel(code)} (${requestFailure(failure)})`;
   return requestFailure(failure);
 };
+const CHASSIS_CODE = /^(VSX_|VIRTUAL_SYSTEM_|SEQUENCE_|VS_RUN_|CHASSIS_RUN_)/;
 export const isDirectoryUnreachable = (error: unknown) =>
   (error as { body?: { code?: string } } | null | undefined)?.body?.code === "DIRECTORY_UNREACHABLE_AT_START";
 type Draft = { requestId: string; from: string; until: string; reason: string; confirmedRevision?: number };
@@ -75,7 +79,7 @@ export function FailoverRun({ run, unit }: { run: CpFailoverRunDetail; unit: CpF
     <Typography variant="body2">Last confirmed roles: {roles.length ? roles.map(([id, role]) =>
       `${unit.members?.find(m => m.device_id === id)?.hostname ?? "Member"}: ${role}`).join(" · ") : "Not evaluated"}</Typography>
     {stopped && <><Typography>Failed/unknown check: {failed.map(c => `${c.title} · ${statusWord(c.status)}`).join("; ") || run.failedCheck || "Not evaluated"}</Typography>
-      <Typography>Refusal: {run.message || "Unknown"} · Incident reference: {run.incidentRef ?? "Not recorded"}</Typography></>}
+      <Typography>Refusal: {run.message ? <span title={run.message}>{readinessReasonLabel(run.message)}</span> : "Unknown"} · Incident reference: {run.incidentRef ?? "Not recorded"}</Typography></>}
     {run.state === "DONE" && <Typography>Evidence coverage: {run.checks.filter(c => c.blocking && c.status === "PASS").length} / {run.checks.filter(c => c.blocking).length} recorded required results passed. Final post-checks: {run.checks.some(c => FINAL_PHASES.includes(c.phase)) ? "Recorded" : "Not evaluated"}.</Typography>}
   </Stack>;
 }

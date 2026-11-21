@@ -131,6 +131,13 @@ subprojects {
 }
 
 project(":architecture-tests").tasks.withType<Test>().configureEach {
+    // The fence tests also read repository files that are not on the test classpath (frontend sources, Containerfiles,
+    // build files, SQL migrations, application.yml). Declared as inputs so a build-cache hit can never replay a result
+    // computed for different file contents.
+    inputs.files(fileTree(rootDir) {
+        include("frontend/src/**", "frontend/tests/**", "**/Containerfile*", "build.gradle.kts", "settings.gradle.kts",
+            "*/build.gradle.kts", "service/src/main/resources/**", "worker/src/main/java/**", "service/src/main/java/**")
+    }).withPropertyName("repositoryFilesRead").withPathSensitivity(PathSensitivity.RELATIVE)
     // On a 7 GB GitHub runner (`unitTest architectureTest` with `org.gradle.parallel=true` and a 1.5 GB Gradle daemon),
     // keep the 2 GB ArchUnit worker JVM from overlapping parallel unitTest worker JVMs when both are scheduled.
     mustRunAfter(subprojects.filter { it.name in javaProjects && it.name != "architecture-tests" }.map { "${it.path}:test" })
@@ -181,7 +188,12 @@ val frontendBuild = tasks.register<Exec>("frontendBuild") {
     inputs.file(frontendDir.file("package-lock.json"))
     inputs.file(frontendDir.file("tsconfig.json"))
     inputs.file(frontendDir.file("vite.config.ts"))
+    inputs.dir(frontendDir.dir("public"))
     outputs.dir(frontendDir.dir("dist"))
+    // Ship speed: every pre-ship test run starts in a fresh worktree with no `dist`. All build inputs are declared
+    // above (tsc and vite read only these), so the output is restored from the build cache (about 17 s saved)
+    // instead of rebuilt; the cache key changes with any input, so a changed screen still rebuilds.
+    outputs.cacheIf { true }
 }
 
 // Container builds (ui2/Containerfile) compile the frontend in a dedicated

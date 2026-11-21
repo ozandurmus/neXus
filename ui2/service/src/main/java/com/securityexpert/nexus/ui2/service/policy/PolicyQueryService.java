@@ -712,8 +712,7 @@ public final class PolicyQueryService {
         if (compute) {
             hygieneSlots.acquireUninterruptibly();
             try {
-                entry.result().complete(PolicyHygiene.analyze(snapshot, days, now, PolicyHygiene.TOTAL_WORK, breadthObjects(snapshot, inventoryIndex(snapshot)),
-                    zoneUniverse(snapshot, now)));
+                entry.result().complete(compute(snapshot, days, now));
             } catch (RuntimeException | Error failed) {
                 entry.result().completeExceptionally(failed);
                 synchronized (hygieneCache) { hygieneCache.remove(id, entry); }
@@ -725,6 +724,24 @@ public final class PolicyQueryService {
             if (failed.getCause() instanceof Error cause) throw cause;
             throw failed;
         }
+    }
+    private PolicyHygiene.Result compute(PolicySnapshot snapshot, int days, java.time.Instant now) {
+        return PolicyHygiene.analyze(snapshot, days, now, PolicyHygiene.TOTAL_WORK, breadthObjects(snapshot, inventoryIndex(snapshot)), zoneUniverse(snapshot, now));
+    }
+    /**
+     * The per-class rule counts of one snapshot for the fleet summary: the same analysis the hygiene page runs, but computed
+     * outside the four-entry interactive cache (a background pass must not evict what an operator is looking at) and counted
+     * the way {@link #hygiene} counts ("rules carrying at least one finding of the class"). Takes one analysis slot, so it
+     * never runs beside more than one interactive analysis.
+     */
+    Map<String, Integer> hygieneCounts(PolicySnapshot snapshot, int days) {
+        hygieneSlots.acquireUninterruptibly();
+        PolicyHygiene.Result result;
+        try { result = compute(snapshot, days, java.time.Instant.now()); }
+        finally { hygieneSlots.release(); }
+        Map<String, Integer> counts = new TreeMap<>(); PolicyHygiene.CLASSES.forEach(c -> counts.put(c, 0));
+        result.rules().values().forEach(a -> a.findings().stream().map(PolicyHygiene.Finding::findingClass).distinct().forEach(c -> counts.merge(c, 1, Integer::sum)));
+        return counts;
     }
     private Map<String, Object> ruleView(Rule r, PolicySnapshot snapshot, PolicyHygiene.Result analysis) {
         var rule = map(r); rule.put("identityFallback", r.uuid() == null || r.uuid().isEmpty());

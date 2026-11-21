@@ -91,6 +91,28 @@ describe("Hygiene: the fleet summary while no container is open (C2)", () => {
     expect(card("Findings")).not.toHaveTextContent(/\b0\b/);
   });
 
+  it("shows the fleet summary table from the background summary: per container counts, snapshot time, UNKNOWN separate, pending not zero", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      days: 90, rules: 30, pending: 1,
+      totals: { shadowed: 2, conflict: 1, disabled: 3, unused: 4, expired: 0, broad: 5, unknown: 6 },
+      containers: [
+        { sourceId: "s1", sourceName: "MGR-ALPHA-01", vendor: "PAN", containerId: "c1", containerName: "DG-ALPHA-01", snapshotAt: "2026-10-18T03:00:00Z", state: "READY", rules: 30,
+          counts: { shadowed: 2, conflict: 1, disabled: 3, unused: 4, expired: 0, broad: 5, unknown: 6 } },
+        { sourceId: "s1", sourceName: "MGR-ALPHA-01", vendor: "PAN", containerId: "c2", containerName: "DG-ALPHA-02", snapshotAt: "2026-10-18T03:00:00Z", state: "PENDING" },
+      ],
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+    render(themed(<PolicyHygieneFleet now={new Date("2026-10-18T04:00:00Z")} rows={[container(1), container(2)]} />));
+    const table = await screen.findByRole("table", { name: "Hygiene findings per container" });
+    const first = within(table).getByText("DG-ALPHA-01").closest("tr") as HTMLElement;
+    expect(within(first).getAllByRole("cell").map(c => c.textContent)).toEqual(expect.arrayContaining(["30", "2", "3", "4", "5", "6"]));
+    expect(within(table).getByRole("columnheader", { name: "UNKNOWN" })).toBeInTheDocument();
+    expect(within(table).getByText("DG-ALPHA-02").closest("tr")).toHaveTextContent("Not analysed yet");
+    const total = within(table).getAllByRole("row").find(r => r.getAttribute("aria-label") === "Total") as HTMLElement;
+    expect(total).toHaveTextContent("30");
+    expect(screen.getByRole("status")).toHaveTextContent("1 container not analysed yet");
+    expect(screen.getByRole("region", { name: "Hygiene fleet summary" }).querySelector('[data-kpi="Findings"]')).toHaveTextContent("15");
+  });
+
   it("renders nothing when no container is stored", () => {
     const { container: dom } = render(themed(<PolicyHygieneFleet now={new Date()} rows={[]} />));
     expect(dom).toBeEmptyDOMElement();
