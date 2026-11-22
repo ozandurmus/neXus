@@ -605,4 +605,59 @@ describe("buildComplianceLensModel & buildBackupsLensModel", () => {
     const sierraRow = bm.rows.find((r) => r.unit.name === "FW-SIERRA-01")!;
     expect(sierraRow.nights[13].state).toBe("unknown");
   });
+
+  it("a row whose only signal is a night OUTCOME_UNKNOWN is UNKNOWN, never Fine", () => {
+    // FW-SIERRA-01 (dev-sierra-01): archive on 2026-11-19 only; OUTCOME_UNKNOWN attempt on 2026-11-18,
+    // submitted before the newest archive, so the newest-attempt rule does not fire.
+    const backups: readonly BackupArtefact[] = [
+      {
+        artefact_id: "art-s1-curr",
+        device_id: "dev-sierra-01",
+        collected_at: "2026-11-19T02:00:00Z",
+        size_bytes: 100 * 1024 * 1024,
+        digest_prefix: "55556666",
+        validation_level: "V3",
+        deviation_state: "unchanged",
+      },
+    ];
+    const deviations: BackupDeviations = {
+      active_major_deviations: [],
+      total_deviations_checked: 0,
+      size_anomalies: [],
+    };
+    const estateModel = buildEstateModel({
+      now: NOW,
+      devices: { state: "ok", value: SYNTHETIC_DEVICES },
+      overview: { state: "ok", value: SYNTHETIC_OVERVIEW },
+      failover: { state: "ok", value: [] },
+      backups: { state: "ok", value: { backups, deviations } },
+      lifecycle: { state: "skipped" },
+    });
+    const jobs: readonly JobEventView[] = [
+      {
+        job_id: "job-unk-night",
+        job_type: "backup",
+        state: "OUTCOME_UNKNOWN",
+        target_device_id: "dev-sierra-01",
+        submitted_at: "2026-11-18T02:10:00Z",
+        finished_at: "2026-11-18T02:15:00Z",
+        terminal_reason: "worker restarted mid-transfer",
+        has_transcript: false,
+      } as unknown as JobEventView,
+    ];
+    const bm = buildBackupsLensModel({
+      now: NOW,
+      estateUnits: estateModel.units,
+      backupsRead: { state: "ok", value: { backups, deviations } },
+      policy: { state: "failed" },
+      quotas: { state: "failed" },
+      backupJobs: { state: "ok", value: jobs },
+      backupEvidenceAt: "2026-11-19T02:00:00Z",
+    });
+    const row = bm.rows.find((r) => r.unit.name === "FW-SIERRA-01")!;
+    expect(row.nights.filter((n) => n.state === "unknown")).toHaveLength(1);
+    expect(row.badgeWord).toBe("UNKNOWN");
+    expect(row.state).toBe("unk");
+    expect(row.why).toMatch(/1 night with attempt outcome UNKNOWN/);
+  });
 });

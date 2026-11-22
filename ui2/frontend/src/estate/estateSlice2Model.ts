@@ -1796,6 +1796,8 @@ export function buildBackupsLensModel(inputs: {
       (newestJob.state ?? "").toUpperCase() === "OUTCOME_UNKNOWN" &&
       (!lastArchiveAt || (parseTimeMs(newestJob.submitted_at) ?? 0) > (parseTimeMs(lastArchiveAt) ?? 0));
 
+    const unknownNightCount = nights.filter((n) => n.state === "unknown").length;
+
     const archiveAgeStale =
       lastArchiveAt !== null &&
       parseTimeMs(lastArchiveAt) !== null &&
@@ -1823,6 +1825,10 @@ export function buildBackupsLensModel(inputs: {
       state = "unk";
       badgeWord = "UNKNOWN";
       why = "Latest backup attempt ended with OUTCOME_UNKNOWN";
+    } else if (unknownNightCount > 0) {
+      state = "unk";
+      badgeWord = "UNKNOWN";
+      why = `${unknownNightCount} ${unknownNightCount === 1 ? "night" : "nights"} with attempt outcome UNKNOWN in the window`;
     } else if (u.sizeAnomaly) {
       state = "watch";
       badgeWord = "Review";

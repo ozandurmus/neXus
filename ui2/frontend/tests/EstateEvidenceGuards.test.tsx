@@ -716,15 +716,7 @@ describe("Estate evidence-stamp and UNKNOWN-never-OK guards", () => {
       }
     };
 
-    if (c.lens === "Backups") {
-      // KNOWN OPEN FINDING (test-only lane, screen not changed): FW-SIERRA-02 row in the Backups
-      // lens (src/estate/EstateBackupsScreen.tsx, night strip + row state badge) shows "Fine"
-      // next to a night cell whose attempt outcome is UNKNOWN. Expected to fail until the screen
-      // is fixed; flip to `it` once it is.
-      it.fails(`${c.lens} lens: no OK/Fine on a row holding an UNKNOWN mark (guard B, known open finding)`, noOkOnUnknownRow);
-    } else {
-      it(`${c.lens} lens: no OK/Fine on a row holding an UNKNOWN mark (guard B)`, noOkOnUnknownRow);
-    }
+    it(`${c.lens} lens: no OK/Fine on a row holding an UNKNOWN mark (guard B)`, noOkOnUnknownRow);
   }
 });
 

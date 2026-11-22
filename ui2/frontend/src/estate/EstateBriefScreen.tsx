@@ -528,10 +528,10 @@ export function EstateBriefScreen() {
 
   const domainStamps: ReadonlyArray<[string, string | null | undefined, string]> = [
     ["Inventory", overview?.evidence?.inventory?.at ?? model.newestEvidenceAt, wallHref("age")],
-    ["Configuration (standard view)", overview?.evidence?.configuration?.at ?? null, "?screen=inventory"],
+    ["Configuration (standard view)", overview?.evidence?.configuration?.at ?? null, "?screen=inventory&standard=1"],
     ["Compliance", overview?.evidence?.compliance?.at ?? null, complianceHref()],
     ["Backups", overview?.evidence?.backup?.at ?? null, backupsHref()],
-    ["Jobs (standard view)", overview?.evidence?.jobs?.at ?? null, "?screen=operations&tab=jobs"],
+    ["Jobs (standard view)", overview?.evidence?.jobs?.at ?? null, "?screen=operations&tab=jobs&standard=1"],
   ];
 
   return (

@@ -60,6 +60,7 @@ import {
   wallHref,
   leavesEstateView,
   rewindHref,
+  standardPolicyHref,
   type RewindOrigin,
 } from "./estateRouting";
 import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
@@ -558,7 +559,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
         detail: instDetail,
         evidenceAt: ownLensEvidenceAt(instAns.evidenceAt, instAns.evidenceSource, unit.lastReadAt),
         evidenceSource: instAns.evidenceSource,
-        href: unit.role === "gateway" ? `?screen=policy&device_id=${encodeURIComponent(unit.deviceId)}` : null,
+        href: unit.role === "gateway" ? standardPolicyHref(unit.deviceId) : null,
       },
       {
         key: "config",

@@ -4,7 +4,7 @@ import Typography from "@mui/material/Typography";
 import { getLifecycleAdvisories, type LifecycleAdvisory } from "../auth/adminApi";
 import { isRestricted } from "../shell/States";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
-import { EstateCard, EvidenceStamp, StateBadge } from "./EstatePrimitives";
+import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
 import { standardLifecycleHref } from "./estateRouting";
 import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
 
@@ -154,7 +154,6 @@ export function EstateLifecycleScreen() {
   }
 
   const shown = rows.slice(0, LIFECYCLE_ADVISORY_CAP);
-  const more = rows.length - shown.length;
 
   return (
     <Box data-testid="estate-lifecycle-screen"><EstateCard sx={{ overflow: "hidden" }}>
@@ -166,9 +165,10 @@ export function EstateLifecycleScreen() {
           {shown.map((row) => (
             <AdvisoryRowView key={row.advisoryId} row={row} />
           ))}
-          {more > 0 ? (
+          {rows.length > LIFECYCLE_ADVISORY_CAP ? (
             <Typography component="li" sx={{ listStyle: "none", px: 2, py: 1.25, color: ev.ink2, borderTop: `1px solid ${ev.line}` }}>
-              +{more} more advisories (open the standard view to see all)
+              <MoreFooter shown={shown.length} total={rows.length} noun="advisories" />
+              <Box component="span" sx={{ display: "block" }}>open the standard view to see all</Box>
             </Typography>
           ) : null}
         </Box>
