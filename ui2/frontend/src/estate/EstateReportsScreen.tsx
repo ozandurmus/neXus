@@ -9,7 +9,7 @@ import {
 } from "../auth/adminApi";
 import { reportError } from "../screens/ReportsScreen";
 import { formatStamp } from "../shell/time";
-import { EstateCard } from "./EstatePrimitives";
+import { EstateCard, MoreFooter } from "./EstatePrimitives";
 import {
   buildRunRows,
   buildTemplateRows,
@@ -95,7 +95,10 @@ function HistoryTable({ rows, retentionDays }: { readonly rows: readonly RunRow[
         </tbody>
       </Box>
       {capped.more > 0 && (
-        <Box sx={{ fontSize: 12, color: ev.ink3, mt: 1 }}>+{capped.more} more runs not shown; the standard Reports screen lists all of them.</Box>
+        <Box sx={{ fontSize: 12, color: ev.ink3, mt: 1 }}>
+          <MoreFooter shown={capped.shown.length} total={rows.length} noun="runs" />
+          <Box sx={{ display: "block" }}>not shown; the standard Reports screen lists all of them.</Box>
+        </Box>
       )}
     </Box>
   );

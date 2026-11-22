@@ -6,7 +6,7 @@ import {
   type PacketCase,
   type SupportBundleRequest,
 } from "../auth/adminApi";
-import { EstateCard, StateBadge } from "./EstatePrimitives";
+import { EstateCard, MoreFooter, StateBadge } from "./EstatePrimitives";
 import { CASE_ACTION_HREFS, buildCasesModel, type CaseRow, type CasesModel } from "./estateCasesModel";
 import { ESTATE_MONO, ev } from "./estateTokens";
 
@@ -150,7 +150,10 @@ export function EstateCasesScreen() {
             load.model.rows.map((row) => <CaseCard key={row.caseId} row={row} bundlesKnown={load.model.bundlesKnown} />)
           )}
           {load.model.rowsMore > 0 ? (
-            <Box sx={{ fontSize: 13, color: ev.ink3 }}>+{load.model.rowsMore} more cases in the standard view</Box>
+            <Box sx={{ fontSize: 13, color: ev.ink3 }}>
+              <MoreFooter shown={load.model.rows.length} total={load.model.caseCount} noun="cases" />
+              <Box sx={{ display: "block" }}>in the standard view</Box>
+            </Box>
           ) : null}
         </>
       ) : null}

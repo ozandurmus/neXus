@@ -5,7 +5,7 @@ import Typography from "@mui/material/Typography";
 import { getPolicyInstallStatus, type PolicyInstallStatusResponse } from "../auth/adminApi";
 import { StatusPill } from "../shell/StatusPill";
 import { formatStamp } from "../shell/time";
-import { EstateCard } from "./EstatePrimitives";
+import { EstateCard, MoreFooter } from "./EstatePrimitives";
 import { buildPolicyInstallsModel, policyInstallsHref } from "./estatePolicyInstallsModel";
 import { ESTATE_MONO, ev } from "./estateTokens";
 
@@ -107,7 +107,8 @@ export function EstatePolicyInstalls() {
       {model && model.moreCount > 0 ? (
         <Box sx={{ px: "18px", py: "10px", borderTop: `1px solid ${ev.line}`, fontSize: "12px", color: ev.ink3 }}>
           <Box component="a" href={href} sx={{ color: ev.ink3 }}>
-            {`+${model.moreCount} more in the standard view`}
+            <MoreFooter shown={model.lines.length} total={model.totalCount} noun="policy installs" />
+            <Box sx={{ display: "block" }}>in the standard view</Box>
           </Box>
         </Box>
       ) : null}

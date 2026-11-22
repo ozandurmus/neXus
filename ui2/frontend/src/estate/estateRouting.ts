@@ -283,6 +283,11 @@ export function rewindHref(at?: string | null, compare?: string | null): string 
   return `?${params.toString()}`;
 }
 
+/** The standard policy screen for one device. `standard=1` keeps it out of the Estate shell (the Estate view has no policy screen). */
+export function standardPolicyHref(deviceId: string): string {
+  return `?screen=policy&device_id=${encodeURIComponent(deviceId)}&standard=1`;
+}
+
 /** The Estate System screen (enrolment, what runs, platform, audit). Bare `?screen=administration` stays standard. */
 export function systemHref(): string {
   return "?screen=administration&view=system";

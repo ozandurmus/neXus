@@ -81,6 +81,24 @@ describe("Estate Dossier link marks (review fix 9, Dossier part)", () => {
     expect(policy.textContent).toContain("(standard view)");
   });
 
+  it("opens the policy row link on the standard view (standard=1), never inside the Estate shell", async () => {
+    render(<EstateDossierScreen deviceId={DEVICE_ID} />);
+    await waitFor(() => expect(screen.getByText("FW-TANGO-04", { selector: "h1" })).toBeTruthy());
+
+    const policy = await waitFor(() => {
+      const anchors = Array.from(document.querySelectorAll("a")).filter((a) =>
+        (a.getAttribute("href") ?? "").includes("screen=policy"),
+      );
+      expect(anchors.length).toBeGreaterThan(0);
+      return anchors[0];
+    });
+    const href = policy.getAttribute("href") ?? "";
+    const params = new URLSearchParams(href.startsWith("?") ? href.slice(1) : href);
+    expect(params.get("screen")).toBe("policy");
+    expect(params.get("device_id")).toBe(DEVICE_ID);
+    expect(params.get("standard")).toBe("1");
+  });
+
   it("does not mark the lifecycle row link, which stays inside the Estate view", async () => {
     render(<EstateDossierScreen deviceId={DEVICE_ID} />);
     await waitFor(() => expect(screen.getByText("FW-TANGO-04", { selector: "h1" })).toBeTruthy());
