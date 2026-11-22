@@ -1,19 +1,25 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import {
   getReportCatalogue,
   listReportRuns,
+  previewReport,
   reportDownloadHref,
   type ReportCatalogue,
+  type ReportDocumentView,
   type ReportRunView,
+  type ReportTemplateCard,
 } from "../auth/adminApi";
 import { reportError } from "../screens/ReportsScreen";
+import { ReportDocumentPanel } from "../screens/ReportDocumentPanel";
 import { formatStamp } from "../shell/time";
 import { EstateCard, EvidenceStamp, MoreFooter } from "./EstatePrimitives";
 import {
   buildRunRows,
   buildTemplateRows,
   capList,
+  newestPlaneEvidence,
+  previewRequestFor,
   summariseRuns,
   standardReportsHref,
   type RunRow,
@@ -44,7 +50,14 @@ const toneColour = (tone: RunRow["tone"]) => (tone === "ok" ? ev.tOk : tone === 
 const cellSx = { px: "10px", py: "8px", borderBottom: `1px solid ${ev.line}`, fontSize: 13, verticalAlign: "top" } as const;
 const headSx = { ...cellSx, fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: ev.ink3, fontWeight: 700 } as const;
 
-function TemplateCard({ row }: { readonly row: TemplateRow }) {
+/** The last preview asked for. A failed preview is shown as failed; no document is kept for it. */
+type Preview =
+  | { readonly state: "idle" }
+  | { readonly state: "loading"; readonly templateId: string }
+  | { readonly state: "failed"; readonly templateId: string; readonly message: string }
+  | { readonly state: "ok"; readonly templateId: string; readonly doc: ReportDocumentView };
+
+function TemplateCard({ row, onPreview }: { readonly row: TemplateRow; readonly onPreview: (templateId: string) => void }) {
   return (
     <Box data-report-template={row.templateId} sx={{ border: `1px solid ${ev.line}`, borderRadius: "10px", p: "12px 14px", bgcolor: ev.surface2 }}>
       <Box sx={{ fontFamily: ESTATE_MONO, fontSize: 12, color: ev.ink3 }}>{row.templateId} · {row.audience}</Box>
@@ -54,10 +67,39 @@ function TemplateCard({ row }: { readonly row: TemplateRow }) {
         {row.statusText} · formats {row.formats.join(", ") || "UNKNOWN"}
       </Box>
       {row.status === "AVAILABLE" && (
-        <Box component="a" href={standardReportsHref()} sx={{ display: "inline-block", mt: 1, fontSize: 13, color: ev.accent }}>
-          Generate in standard Reports
+        <Box sx={{ display: "flex", gap: 1.5, alignItems: "baseline", flexWrap: "wrap", mt: 1 }}>
+          <Box component="button" type="button" aria-label={`Preview ${row.title}`} onClick={() => onPreview(row.templateId)}
+            sx={{ p: 0, border: 0, bgcolor: "transparent", cursor: "pointer", fontSize: 13, color: ev.accent, font: "inherit" }}>
+            Preview
+          </Box>
+          <Box component="a" href={standardReportsHref()} sx={{ fontSize: 13, color: ev.accent }}>
+            Generate in standard Reports
+          </Box>
         </Box>
       )}
+    </Box>
+  );
+}
+
+function PreviewCard({ preview }: { readonly preview: Preview }) {
+  if (preview.state === "idle") return null;
+  if (preview.state === "loading") return <Box sx={{ color: ev.ink3 }}>Building the preview for {preview.templateId}…</Box>;
+  if (preview.state === "failed") {
+    return (
+      <Box role="alert" data-preview-state="failed" sx={{ color: ev.act }}>
+        The preview for {preview.templateId} failed: {preview.message} No document is shown.
+      </Box>
+    );
+  }
+  const { doc } = preview;
+  return (
+    <Box data-preview-state="ok" sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+      <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap", fontSize: 12, color: ev.ink2 }}>
+        Evidence age <EvidenceStamp at={newestPlaneEvidence(doc.data_as_of)} source="preview" />
+        <Box component="span" sx={{ color: ev.ink3 }}>· built {formatStamp(doc.generated_at)} · preview only, nothing saved</Box>
+      </Box>
+      <ReportDocumentPanel doc={doc} />
+      <Box component="a" href={standardReportsHref()} sx={{ fontSize: 13, color: ev.accent }}>Open in standard view</Box>
     </Box>
   );
 }
@@ -108,6 +150,19 @@ function HistoryTable({ rows, retentionDays }: { readonly rows: readonly RunRow[
 export function EstateReportsScreen() {
   const load = useReportsData();
   const [now] = useState(() => new Date());
+  const [preview, setPreview] = useState<Preview>({ state: "idle" });
+  const latest = useRef(0);
+  const runPreview = (templateId: string) => {
+    if (load.state !== "ok") return;
+    const card: ReportTemplateCard | undefined = load.catalogue.templates.find(t => t.template_id === templateId);
+    if (!card) return;
+    const attempt = ++latest.current;
+    setPreview({ state: "loading", templateId });
+    previewReport(previewRequestFor(card, new Date())).then(
+      doc => { if (latest.current === attempt) setPreview({ state: "ok", templateId, doc }); },
+      (e: unknown) => { if (latest.current === attempt) setPreview({ state: "failed", templateId, message: reportError(e) }); },
+    );
+  };
   const view = useMemo(() => {
     if (load.state !== "ok") return null;
     return {
@@ -142,9 +197,19 @@ export function EstateReportsScreen() {
               <EvidenceStamp at={view.readAt.toISOString()} source="report catalogue read" />
             </Box>
             <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 1.5 }}>
-              {view.templates.map(t => <TemplateCard key={t.templateId} row={t} />)}
+              {view.templates.map(t => <TemplateCard key={t.templateId} row={t} onPreview={runPreview} />)}
             </Box>
           </EstateCard>
+
+          {preview.state !== "idle" && (
+            <EstateCard sx={{ p: 2.5 }}>
+              <Box component="h2" sx={{ m: 0, fontSize: 16, fontWeight: 650 }}>Preview</Box>
+              <Box sx={{ fontSize: 12, color: ev.ink3, mb: 1.5 }}>
+                Read-only: the document is built from stored evidence. Nothing is saved, generated or downloaded.
+              </Box>
+              <PreviewCard preview={preview} />
+            </EstateCard>
+          )}
 
           <EstateCard sx={{ p: 2.5 }}>
             <Box component="h2" sx={{ m: 0, fontSize: 16, fontWeight: 650 }}>History</Box>

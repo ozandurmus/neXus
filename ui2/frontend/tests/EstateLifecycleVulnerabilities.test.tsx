@@ -86,6 +86,17 @@ describe("Estate lifecycle device vulnerability cell", () => {
     expect(within(cleanRow!).getByTestId("estate-device-vulnerability-cell").textContent).toBe("None affected");
   });
 
+  it("renders an EVALUATED record without an affected count as UNKNOWN, not as a clean evaluated state", async () => {
+    const { affected: _omitted, ...withoutCount } = EVALUATED_CLEAN;
+    setFleet([device("dev-syn-7", "CLS-ROMEO-01", withoutCount as LifecycleVulnerabilities)]);
+    render(<EstateLifecycleScreen />);
+    const row = await screen.findByTestId("estate-device-vulnerability-row");
+    expect(row.getAttribute("data-state")).toBe("unknown");
+    const cell = within(row).getByTestId("estate-device-vulnerability-cell").textContent ?? "";
+    expect(cell).toBe("UNKNOWN · affected count not reported");
+    expect(cell).not.toMatch(/None affected|\b0\b/);
+  });
+
   it("renders a missing or unevaluated device as UNKNOWN, never a zero count or OK", async () => {
     setFleet([
       device("dev-syn-3", "FW-BRAVO-02", null),

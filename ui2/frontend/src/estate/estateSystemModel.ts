@@ -19,6 +19,7 @@ import type {
 import type { SourceRead } from "../screens/overview/attentionRules";
 import { enrollmentStateLabel } from "../shell/deviceCopy";
 import { formatUtc } from "../shell/time";
+import { plural } from "../shell/plural";
 import type { BadgeState } from "./estateModel";
 import { BADGE_WORD_DEFAULT } from "./estateModel";
 
@@ -110,7 +111,7 @@ function unreadableSection(
 /** Counts per label, largest first, capped; the rest is named in `more` with its own count. */
 function capCounts(counts: ReadonlyMap<string, number>, cap: number): { lines: SystemLine[]; more: string | null } {
   const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  const shown = sorted.slice(0, cap).map(([label, n]) => ({ label, value: countOf(n, "device", "devices") }));
+  const shown = sorted.slice(0, cap).map(([label, n]) => ({ label, value: plural(n, "device", "devices") }));
   const rest = sorted.slice(cap);
   const restTotal = rest.reduce((sum, [, n]) => sum + n, 0);
   return { lines: shown, more: rest.length > 0 ? `+${rest.length} more kinds (${restTotal} devices)` : null };
@@ -149,9 +150,9 @@ export function summariseRuns(
 
   const lines: SystemLine[] = [
     { label: "Job families that will run", value: `${willRun} of ${families.length} job families` },
-    { label: "Switched on but idle", value: countOf(idle, "job family", "job families") },
-    { label: "Switched off", value: countOf(off, "job family", "job families") },
-    { label: "Locked by a deployment switch", value: countOf(locked, "job family", "job families") },
+    { label: "Switched on but idle", value: plural(idle, "job family", "job families") },
+    { label: "Switched off", value: plural(off, "job family", "job families") },
+    { label: "Locked by a deployment switch", value: plural(locked, "job family", "job families") },
     { label: "Next window opens (earliest ON family)", value: nextWindows.length > 0 ? formatUtc(nextWindows[0], false) : "none ON" },
   ];
 
@@ -161,7 +162,7 @@ export function summariseRuns(
   } else {
     const list = (devices.read as { state: "ok"; value: readonly DeviceSummary[] }).value;
     const inFlight = list.filter((d) => IN_FLIGHT_JOB_STATES.includes(d.latest_job_state?.toUpperCase() ?? "")).length;
-    lines.push({ label: "Devices with a job in flight (latest job EXECUTING, CLAIMED or REQUESTED)", value: countOf(inFlight, "device", "devices") });
+    lines.push({ label: "Devices with a job in flight (latest job EXECUTING, CLAIMED or REQUESTED)", value: plural(inFlight, "device", "devices") });
   }
 
   const deploymentStop = !view.master_enabled;
@@ -177,10 +178,6 @@ export function summariseRuns(
     standardHref,
     standardLabel,
   };
-}
-
-function countOf(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
 }
 
 function scheduleStateOf(s: ScriptSummary): string {
@@ -221,7 +218,7 @@ export function summariseScriptRunRow(row: ScriptRunRead): SystemLine {
   const lastState = last.outcome ?? last.state;
   return {
     label,
-    value: `${schedule} · last ${lastState} ${formatUtc(last.requested_at, false)} · ${countOf(runs.length, "run", "runs")} in the list as read`,
+    value: `${schedule} · last ${lastState} ${formatUtc(last.requested_at, false)} · ${plural(runs.length, "run", "runs")} in the list as read`,
   };
 }
 
@@ -248,7 +245,7 @@ export function scriptRunLines(input: ScriptRunsInput | undefined): { lines: Sys
   ].filter((p): p is string => p !== null);
   return {
     lines: [
-      { label: "Scripts in the list (as read)", value: countOf(total, "script", "scripts") },
+      { label: "Scripts in the list (as read)", value: plural(total, "script", "scripts") },
       { label: "Script list read at", value: scripts.readAt ? formatUtc(scripts.readAt, false) : "not read" },
       ...rows,
     ],
@@ -285,10 +282,10 @@ export function summariseAccess(
     const enabled = list.filter((i) => i.enabled === true).length;
     const mustChange = list.filter((i) => i.must_change_password === true).length;
     lines.push(
-      { label: "Local identities in total", value: countOf(list.length, "local identity", "local identities") },
-      { label: "Local identities enabled", value: countOf(enabled, "local identity", "local identities") },
-      { label: "Local identities disabled", value: countOf(list.length - enabled, "local identity", "local identities") },
-      { label: "Local identities that must change their password", value: countOf(mustChange, "local identity", "local identities") },
+      { label: "Local identities in total", value: plural(list.length, "local identity", "local identities") },
+      { label: "Local identities enabled", value: plural(enabled, "local identity", "local identities") },
+      { label: "Local identities disabled", value: plural(list.length - enabled, "local identity", "local identities") },
+      { label: "Local identities that must change their password", value: plural(mustChange, "local identity", "local identities") },
     );
   }
 
@@ -299,7 +296,7 @@ export function summariseAccess(
     });
   } else {
     const list = (sessions.read as { state: "ok"; value: readonly SessionView[] }).value;
-    lines.push({ label: "Sessions (total as read)", value: countOf(list.length, "session", "sessions") });
+    lines.push({ label: "Sessions (total as read)", value: plural(list.length, "session", "sessions") });
   }
 
   return {
@@ -329,7 +326,7 @@ export function summariseEnrolment(devices: TimedRead<readonly DeviceSummary[]>)
   return {
     id: "enrolment", title: "Enrolment",
     badge: "na", word: "Counted",
-    lines: [{ label: "Devices in the registry", value: countOf(list.length, "device", "devices") }, ...capped.lines],
+    lines: [{ label: "Devices in the registry", value: plural(list.length, "device", "devices") }, ...capped.lines],
     more: capped.more,
     evidenceAt: devices.readAt,
     source,
@@ -365,7 +362,7 @@ export function summarisePlatform(health: TimedRead<SystemHealth>): SystemSectio
     };
   }
   const k = snap.kpis;
-  const figure = (n: number | null | undefined) => (typeof n === "number" ? countOf(n, "device", "devices") : "UNKNOWN");
+  const figure = (n: number | null | undefined) => (typeof n === "number" ? plural(n, "device", "devices") : "UNKNOWN");
   const lines: SystemLine[] = [
     { label: "Monitored devices", value: figure(k.monitored?.devices) },
     { label: "Devices with a crash or dump alert", value: figure(k.crash_alerts?.devices) },
@@ -400,7 +397,7 @@ export function summariseAudit(audit: TimedRead<readonly AuditEventView[]>): Sys
   const newest = [...events].sort((a, b) => eventTime(b) - eventTime(a));
   const shown = newest.slice(0, AUDIT_PREVIEW_CAP);
   const lines: SystemLine[] = [
-    { label: "Events in the trail", value: countOf(events.length, "event", "events") },
+    { label: "Events in the trail", value: plural(events.length, "event", "events") },
     ...shown.map((e) => ({
       label: formatUtc(e.occurred_at, false),
       value: `${e.actor} · ${e.action} · ${e.outcome}`,

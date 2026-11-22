@@ -256,6 +256,18 @@ describe("Estate System summary: Access", () => {
     expect(s.badge).toBe("unk");
   });
 
+  it("uses the singular noun for exactly one local identity and the plural for two", () => {
+    const one = summariseAccess(ok([identity("FW-TANGO-04-admin", true, false)]), ok([]));
+    const two = summariseAccess(
+      ok([identity("FW-TANGO-04-admin", true, false), identity("FW-TANGO-04-ops", true, false)]),
+      ok([]),
+    );
+    const oneBy = Object.fromEntries(one.lines.map((l) => [l.label, l.value]));
+    const twoBy = Object.fromEntries(two.lines.map((l) => [l.label, l.value]));
+    expect(oneBy["Local identities in total"]).toBe("1 local identity");
+    expect(twoBy["Local identities in total"]).toBe("2 local identities");
+  });
+
   it("renders '0 local identities' for an empty identities list, not an empty section", () => {
     const s = summariseAccess(ok([]), ok([]));
     const byLabel = Object.fromEntries(s.lines.map((l) => [l.label, l.value]));

@@ -48,6 +48,41 @@ describe("severity counts", () => {
     expect(severityCountLine(openSeverityCounts(view())!)).toBe("HIGH 2 · MEDIUM 5");
   });
 
+  it("shows an unrecognised severity key as UNKNOWN, never dropped", () => {
+    const counts = openSeverityCounts(
+      view({ counts: { semgrep: { HIGH: { new: 1, existing: 0, accepted: 0, fixed: 0 }, SEVERE: { new: 2, existing: 1, accepted: 0, fixed: 0 } } } }),
+    );
+    expect(counts).toEqual([
+      { severity: "HIGH", open: 1 },
+      { severity: "UNKNOWN", open: 3 },
+    ]);
+    expect(severityCountLine(counts!)).toBe("HIGH 1 · UNKNOWN 3");
+  });
+
+  it("a cell with a missing existing count yields UNKNOWN n/a, never NaN", () => {
+    const cell = { new: 2, accepted: 0, fixed: 0 } as never;
+    const counts = openSeverityCounts(view({ counts: { semgrep: { MEDIUM: cell } } }));
+    expect(counts).toEqual([
+      { severity: "MEDIUM", open: 2 },
+      { severity: "UNKNOWN", open: null },
+    ]);
+    const line = severityCountLine(counts!);
+    expect(line).toBe("MEDIUM 2 · UNKNOWN n/a");
+    expect(line).not.toContain("NaN");
+  });
+
+  it("a non-numeric count in a cell is UNKNOWN, never NaN", () => {
+    const counts = openSeverityCounts(
+      view({ counts: { trivy: { LOW: { new: "3" as unknown as number, existing: 1, accepted: 0, fixed: 0 } } } }),
+    );
+    expect(severityCountLine(counts!)).toBe("LOW 1 · UNKNOWN n/a");
+  });
+
+  it("keeps the known-severity sums unchanged when every cell is readable", () => {
+    expect(severityCountLine(openSeverityCounts(view())!)).toBe("HIGH 2 · MEDIUM 5");
+    expect(openSeverityCounts(view())).not.toContainEqual(expect.objectContaining({ severity: "UNKNOWN" }));
+  });
+
   it("returns null when the summary carries no counts (UNKNOWN, not zero)", () => {
     expect(openSeverityCounts(view({ counts: undefined }))).toBeNull();
   });

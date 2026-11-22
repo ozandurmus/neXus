@@ -114,7 +114,10 @@ export interface DeviceVulnerabilityCell {
 export function deviceVulnerabilityCell(v: LifecycleVulnerabilities | null | undefined): DeviceVulnerabilityCell {
   const evidenceAt = v?.compared?.loaded_at ?? null;
   if (v?.state === "EVALUATED") {
-    const affected = (v.affected ?? 0) > 0;
+    // Without a numeric affected count there is no judgement of "nothing affected": fail closed to UNKNOWN, and do not
+    // reuse vulnerabilitySummary here, since it would read the missing count as "None affected".
+    if (typeof v.affected !== "number") return { state: "unknown", text: "UNKNOWN · affected count not reported", evidenceAt, sortRank: 3 };
+    const affected = v.affected > 0;
     const rank = !affected ? 4 : (v.affected_exploited ?? 0) > 0 ? 0 : (v.affected_critical_high ?? 0) > 0 ? 1 : 2;
     return { state: "evaluated", text: vulnerabilitySummary(v), evidenceAt, sortRank: rank };
   }
