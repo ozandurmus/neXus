@@ -31,6 +31,7 @@ import {
   standardChangesHref,
   standardComplianceHref,
   standardHaHref,
+  standardJobsHref,
   wallHref,
   type EstateLens,
 } from "./estateRouting";
@@ -47,7 +48,7 @@ const DATE_FMT = new Intl.DateTimeFormat("en-GB", {
   year: "numeric",
 });
 
-function rowCategory(key: AttentionRow["key"]): {
+export function rowCategory(key: AttentionRow["key"]): {
   readonly kicker: string;
   readonly primaryHref: string | null;
   readonly primaryButtonLabel: string | null;
@@ -92,7 +93,12 @@ function rowCategory(key: AttentionRow["key"]): {
     case "read-ageing":
       return { kicker: "Evidence", primaryHref: wallHref("age"), primaryButtonLabel: "Open age lens" };
     case "failed-jobs":
-      return { kicker: "Jobs", primaryHref: null, primaryButtonLabel: null };
+      return {
+        kicker: "Jobs",
+        primaryHref: null,
+        primaryButtonLabel: "Open failed jobs (standard view)",
+        standardHrefOverride: standardJobsHref(),
+      };
     case "change-unknown-actor":
     case "unknown-changes":
       return {
@@ -104,6 +110,20 @@ function rowCategory(key: AttentionRow["key"]): {
     default:
       return { kicker: "Estate", primaryHref: wallHref("worst"), primaryButtonLabel: "Open estate wall" };
   }
+}
+
+/**
+ * Primary destination of a Brief row. A category without its own `primaryHref` (failed jobs) opens its
+ * `standardHrefOverride` (an explicit standard view), then the attention rule's href; the label always names where it goes.
+ */
+export function briefRowPrimary(
+  cat: ReturnType<typeof rowCategory>,
+  row: Pick<AttentionRow, "href" | "linkLabel">,
+): { readonly href: string; readonly label: string } {
+  return {
+    href: cat.primaryHref ?? cat.standardHrefOverride ?? row.href,
+    label: cat.primaryButtonLabel ?? `${row.linkLabel} (standard view)`,
+  };
 }
 
 function affectedScopeFor(
@@ -223,8 +243,7 @@ function BriefItemRow({
   const shownUnits = scope.units?.slice(0, maxTiles) ?? [];
   const extraUnits = Math.max(0, (scope.units?.length ?? 0) - shownUnits.length);
 
-  const primaryHref = cat.primaryHref ?? row.href;
-  const primaryLabel = cat.primaryButtonLabel ?? `${row.linkLabel} (standard view)`;
+  const { href: primaryHref, label: primaryLabel } = briefRowPrimary(cat, row);
   const standardHref = cat.standardHrefOverride ?? row.href;
 
   return (

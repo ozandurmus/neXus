@@ -426,3 +426,23 @@ export function requestFailure(failure: { status?: number; body?: { code?: strin
   if (status) return `Request failed (${status})`;
   return failure instanceof Error && failure.message ? failure.message : "Request failed";
 }
+
+/**
+ * A device-log gap kind in the words an operator reads (UI review 2026-10-18, F-8): "Sequence gap suspected", and
+ * "First collection: older content not fetched" for the normal first run rather than the jargon "initial baseline".
+ * Moved here from `DeviceLogsPanel.tsx` (presenter lane); an unknown kind is humanised, never dropped.
+ */
+export function gapKindLabel(kind: string): string {
+  switch (kind) {
+    case "SEQ_GAP_SUSPECTED": return "Sequence gap suspected";
+    case "INITIAL_BASELINE": return "First collection: older content not fetched";
+    case "ROTATED_AWAY": return "Rotated away on the device";
+    case "TRUNCATED": return "File truncated on the device";
+    case "ANCHOR_MISMATCH": return "Saved position no longer matched";
+    case "BACKLOG": return "Backlog on the device";
+    case "COLLECTION_FAILED": return "Collection failed";
+    case "PAGE_STALL": return "Paging stalled";
+    case "RETENTION_SHORTENED_BY_CAP": return "Retention shortened by the storage cap";
+    default: return kind.replace(/_/g, " ").toLowerCase().replace(/^./, (c) => c.toUpperCase());
+  }
+}
