@@ -49,11 +49,14 @@ describe("EstateDossierCertificateBlock", () => {
   it("renders the active state word and no action buttons", async () => {
     mockedRead.mockResolvedValue(activeView());
 
-    render(<EstateDossierCertificateBlock deviceId={DEVICE} />);
+    const { container } = render(<EstateDossierCertificateBlock deviceId={DEVICE} />);
 
     expect(await screen.findByTestId("dossier-certificate-state")).toBeTruthy();
+    expect(container.textContent ?? "").not.toContain(FINGERPRINT);
     expect(mockedRead).toHaveBeenCalledWith(DEVICE);
     expect(screen.getByText(/Certificate expires in \d+ d/)).toBeTruthy();
+    expect(screen.getByTestId("dossier-certificate-pinned").textContent).toBe("A certificate is pinned for this unit.");
+    expect(screen.getByText("A certificate is pinned for this unit.")).toBeTruthy();
     expect(screen.queryAllByRole("button")).toHaveLength(0);
     expect(screen.getByRole("link", { name: "Open in standard view" }).getAttribute("href")).toBe(
       `/devices/${DEVICE}?standard=1`,
