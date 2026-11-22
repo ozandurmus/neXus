@@ -11,6 +11,7 @@ import {
   type JobEventView,
 } from "../auth/adminApi";
 import { sizeAnomalyWord } from "../screens/BackupDeviationCard";
+import { LatestAttemptCell, useLatestBackupAttempts } from "../screens/BackupAttempts";
 import type { SourceRead } from "../screens/overview/attentionRules";
 import { formatBytes } from "../shell/bytes";
 import { isRestricted } from "../shell/States";
@@ -18,6 +19,7 @@ import { formatStamp } from "../shell/time";
 import {
   EstateCard,
   EvidenceStamp,
+  MoreFooter,
   StateBadge,
 } from "./EstatePrimitives";
 import { dossierHref, standardBackupsHref } from "./estateRouting";
@@ -198,6 +200,72 @@ function SizeSparkline({ row }: { readonly row: EstateBackupRow }) {
 
 type BackupFilterMode = "all" | "attention" | "deviations" | "off";
 
+const FAILED_ATTEMPT_CAP = 12;
+
+/**
+ * Units whose latest attempt is FAILED, named with that attempt (standard Backups parity, via the batched latest-attempt
+ * read). Read-only; the rows come from the lens model, so the count matches "failed their latest attempt".
+ */
+function LatestFailedAttempts({ rows }: { readonly rows: readonly EstateBackupRow[] }) {
+  const deviceIds = useMemo(() => rows.map((r) => r.unit.deviceId), [rows]);
+  const attempts = useLatestBackupAttempts(deviceIds);
+  if (rows.length === 0) return null;
+
+  const shown = rows.slice(0, FAILED_ATTEMPT_CAP);
+  const states = deviceIds.map((id) => attempts.get(id));
+  const loading = states.some((v) => v === undefined || v === "loading");
+  const failedRead = states.some((v) => v === "error");
+
+  return (
+    <Box data-testid="latest-failed-attempts" sx={{ mt: "16px" }}>
+    <EstateCard>
+      <Box sx={{ px: "18px", pt: "14px", pb: "10px" }}>
+        <Typography component="h2" sx={{ fontSize: "17px", fontWeight: 650 }}>
+          Latest attempt failed
+        </Typography>
+        <Typography sx={{ fontSize: "12.5px", color: ev.ink2, mt: "2px" }}>
+          {rows.length} {rows.length === 1 ? "unit" : "units"} whose latest backup attempt is FAILED (same count as above).
+        </Typography>
+        {loading && !failedRead ? (
+          <Typography sx={{ fontSize: "12.5px", color: ev.ink2, mt: "6px" }}>Loading latest attempts…</Typography>
+        ) : null}
+        {failedRead ? (
+          <Box sx={{ mt: "6px" }}>
+            <StateBadge state="unk" word="UNKNOWN" dense />{" "}
+            <Typography component="span" sx={{ fontSize: "12.5px", color: ev.ink2 }}>
+              the latest attempts could not be read
+            </Typography>
+          </Box>
+        ) : null}
+      </Box>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: "6px", px: "18px", pb: "14px" }}>
+        {shown.map((r) => (
+          <Box
+            key={r.unit.deviceId}
+            data-failed-attempt-row={r.unit.name}
+            sx={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", fontSize: "12.5px" }}
+          >
+            <Box
+              component="a"
+              href={dossierHref(r.unit.deviceId)}
+              sx={{ fontFamily: ESTATE_MONO, fontWeight: 650, color: ev.accent, textDecoration: "none", minWidth: "140px" }}
+            >
+              {r.unit.name}
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <LatestAttemptCell latest={attempts.get(r.unit.deviceId) ?? "loading"} />
+            </Box>
+          </Box>
+        ))}
+        <Box>
+          <MoreFooter shown={shown.length} total={rows.length} noun="failed units" testId="failed-attempts-more" />
+        </Box>
+      </Box>
+    </EstateCard>
+    </Box>
+  );
+}
+
 export function EstateBackupsScreen({
   initialQuery = "",
 }: {
@@ -264,6 +332,11 @@ export function EstateBackupsScreen({
         backupEvidenceAt,
       }),
     [now, model?.units, backups, policy, quotas, backupJobs, backupEvidenceAt],
+  );
+
+  const failedAttemptRows = useMemo(
+    () => lensModel.rows.filter((r) => r.lastArchiveAt !== null && r.state === "act"),
+    [lensModel.rows],
   );
 
   const attentionCount = useMemo(
@@ -594,6 +667,8 @@ export function EstateBackupsScreen({
           </Box>
         </EstateCard>
       ) : null}
+
+      <LatestFailedAttempts rows={failedAttemptRows} />
 
       {/* Main 14-Night Table Card */}
       <EstateCard sx={{ mt: "16px" }}>

@@ -47,6 +47,7 @@ import {
   EvidenceStamp,
   HaPairTiles,
   HonestBar,
+  MoreFooter,
   StateBadge,
 } from "./EstatePrimitives";
 import {
@@ -581,6 +582,9 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
   ];
 
   const cmpCounts = cmpData ? complianceCounts(cmpData) : null;
+  const cmpOpenItems = cmpData
+    ? cmpData.items.filter((i) => String(i.displayStatus ?? "").toUpperCase() !== "PASS" && String(i.displayStatus ?? "").toUpperCase() !== "NOT_APPLICABLE")
+    : [];
 
   return (
     <Box data-testid="estate-dossier-screen">
@@ -1109,6 +1113,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
                 <EvidenceStamp at={invData?.collected_at} source="inventory" now={now} missingLabel="never read" />
               </Box>
             ) : (
+              <>
               <Box
                 component="table"
                 aria-label="Unit interfaces"
@@ -1173,6 +1178,8 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
                   })}
                 </tbody>
               </Box>
+              <MoreFooter shown={60} total={allInterfaces.length} noun="interfaces" testId="interfaces-more" />
+            </>
             )
           ) : null}
 
@@ -1190,6 +1197,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
                 <EvidenceStamp at={invData?.collected_at} source="inventory" now={now} missingLabel="never read" />
               </Box>
             ) : (
+              <>
               <Box
                 component="table"
                 aria-label="Unit routes"
@@ -1236,6 +1244,8 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
                   ))}
                 </tbody>
               </Box>
+              <MoreFooter shown={80} total={allRoutes.length} noun="routes" testId="routes-more" />
+            </>
             )
           ) : null}
 
@@ -1283,7 +1293,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
                       Backups lens →
                     </Box>
                     <Box component="a" href={standardBackupsHref(unit.name)} sx={{ color: ev.accent }}>
-                      Open in standard Backups →
+                      Backups (standard view) →
                     </Box>
                   </Box>
                 </Box>
@@ -1291,6 +1301,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
                 {(bkList ?? []).length === 0 ? (
                   <Typography sx={{ color: ev.ink2 }}>No stored archives for this unit.</Typography>
                 ) : (
+                  <>
                   <Box
                     component="table"
                     aria-label="Stored backup archives"
@@ -1335,6 +1346,8 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
                       ))}
                     </tbody>
                   </Box>
+                  <MoreFooter shown={14} total={(bkList ?? []).length} noun="artefacts" testId="backups-more" />
+                </>
                 )}
               </Box>
             )
@@ -1366,7 +1379,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
                       Controls lens →
                     </Box>
                     <Box component="a" href={standardComplianceHref({ deviceId: unit.deviceId })} sx={{ color: ev.accent }}>
-                      Open in standard Compliance →
+                      Compliance (standard view) →
                     </Box>
                   </Box>
                 </Box>
@@ -1380,8 +1393,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
                   ]}
                 />
                 <Box sx={{ mt: "12px" }}>
-                  {cmpData.items
-                    .filter((i) => String(i.displayStatus ?? "").toUpperCase() !== "PASS" && String(i.displayStatus ?? "").toUpperCase() !== "NOT_APPLICABLE")
+                  {cmpOpenItems
                     .slice(0, 15)
                     .map((item, idx) => {
                       const st = String(item.displayStatus ?? "").toUpperCase();
@@ -1408,6 +1420,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
                       );
                     })}
                 </Box>
+                <MoreFooter shown={15} total={cmpOpenItems.length} noun="control checks" testId="compare-more" />
               </Box>
             )
           ) : null}
