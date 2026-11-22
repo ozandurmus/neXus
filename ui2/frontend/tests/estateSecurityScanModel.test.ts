@@ -63,11 +63,11 @@ describe("severity counts", () => {
     const cell = { new: 2, accepted: 0, fixed: 0 } as never;
     const counts = openSeverityCounts(view({ counts: { semgrep: { MEDIUM: cell } } }));
     expect(counts).toEqual([
-      { severity: "MEDIUM", open: 2 },
+      { severity: "MEDIUM", open: null },
       { severity: "UNKNOWN", open: null },
     ]);
     const line = severityCountLine(counts!);
-    expect(line).toBe("MEDIUM 2 · UNKNOWN n/a");
+    expect(line).toBe("MEDIUM n/a · UNKNOWN n/a");
     expect(line).not.toContain("NaN");
   });
 
@@ -75,7 +75,35 @@ describe("severity counts", () => {
     const counts = openSeverityCounts(
       view({ counts: { trivy: { LOW: { new: "3" as unknown as number, existing: 1, accepted: 0, fixed: 0 } } } }),
     );
-    expect(severityCountLine(counts!)).toBe("LOW 1 · UNKNOWN n/a");
+    expect(severityCountLine(counts!)).toBe("LOW n/a · UNKNOWN n/a");
+  });
+
+  it("an unreadable cell marks its recognised severity n/a, never a partial sum", () => {
+    const counts = openSeverityCounts(
+      view({
+        counts: {
+          toolA: { HIGH: { new: "x" as unknown as number, existing: 2, accepted: 0, fixed: 0 }, LOW: { new: 1, existing: 0, accepted: 0, fixed: 0 } },
+        },
+      }),
+    );
+    expect(counts).toEqual([
+      { severity: "HIGH", open: null },
+      { severity: "LOW", open: 1 },
+      { severity: "UNKNOWN", open: null },
+    ]);
+    expect(severityCountLine(counts!)).toBe("HIGH n/a · LOW 1 · UNKNOWN n/a");
+  });
+
+  it("a null cell for a recognised severity is n/a, not omitted", () => {
+    const counts = openSeverityCounts(
+      view({ counts: { toolA: { HIGH: null as never, LOW: { new: 1, existing: 0, accepted: 0, fixed: 0 } } } }),
+    );
+    expect(counts).toEqual([
+      { severity: "HIGH", open: null },
+      { severity: "LOW", open: 1 },
+      { severity: "UNKNOWN", open: null },
+    ]);
+    expect(severityCountLine(counts!)).toBe("HIGH n/a · LOW 1 · UNKNOWN n/a");
   });
 
   it("keeps the known-severity sums unchanged when every cell is readable", () => {

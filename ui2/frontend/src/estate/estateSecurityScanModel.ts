@@ -45,14 +45,17 @@ export function scanAgeBucket(view: SecurityScanSummaryView, now: Date): AgeBuck
  * Open counts per severity, summed over the tools in the summary. Returns null when the summary carries no
  * counts at all (the card then says the counts are UNKNOWN). Severities the summary does not carry are omitted.
  *
- * Only finite numeric `new` and `existing` values are summed. A severity key this brief does not recognise, or a
- * cell whose `new`/`existing` is missing or non-numeric, is never dropped: it makes a trailing UNKNOWN entry.
- * That entry is "n/a" when any cell is unreadable, because its figure cannot be stated.
+ * Only finite numeric `new` and `existing` values are summed. A recognised severity with any unreadable cell (a
+ * non-finite `new`/`existing`, or a null/non-object cell) is shown with open null ("n/a"), never as a partial sum.
+ * A severity key this brief does not recognise is never dropped: it makes a trailing UNKNOWN entry, which is "n/a"
+ * when any cell is unreadable, because its figure cannot be stated.
  */
 export function openSeverityCounts(view: SecurityScanSummaryView): ScanSeverityCount[] | null {
   if (!view.counts) return null;
   const known: readonly string[] = SCAN_SEVERITY_ORDER.filter((s) => s !== "UNKNOWN");
   const totals = new Map<string, number>();
+  /** Recognised severities with at least one unreadable cell: their open figure cannot be stated (shown n/a). */
+  const unreadableKnown = new Set<string>();
   let unrecognisedSeen = false;
   let unrecognisedOpen = 0;
   let unreadable = false;
@@ -62,15 +65,22 @@ export function openSeverityCounts(view: SecurityScanSummaryView): ScanSeverityC
       continue;
     }
     for (const [severity, cell] of Object.entries(tool)) {
+      const isKnown = known.includes(severity);
       if (cell === null || typeof cell !== "object") {
         unreadable = true;
-        if (!known.includes(severity)) unrecognisedSeen = true;
+        if (isKnown) unreadableKnown.add(severity);
+        else unrecognisedSeen = true;
         continue;
       }
-      const newOpen = Number.isFinite(cell.new) ? cell.new : 0;
-      const existingOpen = Number.isFinite(cell.existing) ? cell.existing : 0;
-      if (!Number.isFinite(cell.new) || !Number.isFinite(cell.existing)) unreadable = true;
-      if (known.includes(severity)) {
+      const newReadable = Number.isFinite(cell.new);
+      const existingReadable = Number.isFinite(cell.existing);
+      const newOpen = newReadable ? cell.new : 0;
+      const existingOpen = existingReadable ? cell.existing : 0;
+      if (!newReadable || !existingReadable) {
+        unreadable = true;
+        if (isKnown) unreadableKnown.add(severity);
+      }
+      if (isKnown) {
         totals.set(severity, (totals.get(severity) ?? 0) + newOpen + existingOpen);
       } else {
         unrecognisedSeen = true;
@@ -78,10 +88,9 @@ export function openSeverityCounts(view: SecurityScanSummaryView): ScanSeverityC
       }
     }
   }
-  const counts: ScanSeverityCount[] = SCAN_SEVERITY_ORDER.filter((s) => totals.has(s)).map((severity) => ({
-    severity,
-    open: totals.get(severity) ?? 0,
-  }));
+  const counts: ScanSeverityCount[] = SCAN_SEVERITY_ORDER.filter((s) => totals.has(s) || unreadableKnown.has(s)).map(
+    (severity) => ({ severity, open: unreadableKnown.has(severity) ? null : (totals.get(severity) ?? 0) }),
+  );
   if (unrecognisedSeen || unreadable) {
     counts.push({ severity: "UNKNOWN", open: unreadable ? null : unrecognisedOpen });
   }

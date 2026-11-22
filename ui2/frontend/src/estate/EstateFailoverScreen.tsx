@@ -12,6 +12,7 @@ import {
   VendorTag,
 } from "./EstatePrimitives";
 import { EstateFailoverIncidents } from "./EstateFailoverIncidents";
+import { readinessStopReason } from "../screens/ReadinessChecksTable";
 import { dossierHref, standardHaHref } from "./estateRouting";
 import {
   buildFailoverBoardModel,
@@ -159,6 +160,12 @@ function BoardUnitCard({
       </Box>
 
       <Typography sx={{ fontSize: "12.5px", color: ev.ink, mt: "6px" }}>{unit.reason}</Typography>
+
+      {readinessStopReason(unit.stopCode) ? (
+        <Typography sx={{ fontSize: "12px", color: ev.ink2, mt: "3px" }}>
+          {readinessStopReason(unit.stopCode)}
+        </Typography>
+      ) : null}
 
       {unit.unitKind === "VSX_CHASSIS" ? (
         <Typography sx={{ fontSize: "11.5px", color: ev.ink3, mt: "3px" }}>

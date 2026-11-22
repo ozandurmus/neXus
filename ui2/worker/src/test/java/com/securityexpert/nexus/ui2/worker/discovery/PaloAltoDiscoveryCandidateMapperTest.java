@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.Optional;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import com.securityexpert.nexus.ui2.discovery.pan.CandidateRow;
@@ -155,11 +154,22 @@ class PaloAltoDiscoveryCandidateMapperTest {
     }
 
     @Test
-    @Disabled("OPEN ISSUE (identity law): a device with a blank stable identifier is mapped with importable=true, "
-            + "only a placeholder id is substituted. Needs a PO decision; production code not changed in this test-only lane.")
     void deviceWithoutStableIdentityIsNotImportable() {
         DiscoveryCandidateRecord r = PaloAltoDiscoveryCandidateMapper.map("run-9",
                 List.of(device("", "FW-BRAVO-03"))).get(0);
         assertFalse(r.importable());
+    }
+
+    @Test
+    void virtualSystemWithoutStableIdentityIsNotImportableEvenWhenItsHostIsLinked() {
+        List<DiscoveryCandidateRecord> out = PaloAltoDiscoveryCandidateMapper.map("run-9", List.of(
+                device("SYN-HOST-0002", "FW-TANGO-15"),
+                device("", "VSYS-SYN-3", Optional.empty(), Optional.empty(),
+                        Optional.of(new HostLink(Serial.of("SYN-HOST-0002"))),
+                        new PairingOutcome.NotEvaluable(PairingOutcome.Reason.NO_PEER_SERIAL))));
+        DiscoveryCandidateRecord vs = out.get(1);
+        assertEquals(out.get(0).candidateId(), vs.parentCandidateId().orElseThrow());
+        assertFalse(vs.importable());
+        assertEquals("VSYS-SYN-3", vs.displayName());
     }
 }

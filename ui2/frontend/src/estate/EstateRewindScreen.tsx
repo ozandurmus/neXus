@@ -153,7 +153,15 @@ export function EstateRewindScreen({
           />
           <Box sx={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: ev.ink3 }}>
             <span>{points.length > 0 ? formatUtc(points[0], false) : `${REWIND_WINDOW_DAYS} days ago`}</span>
-            <span>{points.length} stored evidence times</span>
+            <Box component="span" sx={{ display: "inline-flex", gap: 1, alignItems: "center" }}>
+              <span>{points.length} stored evidence times</span>
+              <EvidenceStamp
+                at={points.length > 0 ? points[points.length - 1] : null}
+                now={liveAt}
+                source="stored evidence timeline"
+                missingLabel="no stored evidence time"
+              />
+            </Box>
             <span>now</span>
           </Box>
         </Box>
