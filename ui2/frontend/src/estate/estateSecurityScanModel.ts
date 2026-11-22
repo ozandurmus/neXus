@@ -28,8 +28,12 @@ export interface ScanCardStatus {
 
 export interface ScanSeverityCount {
   readonly severity: ScanSeverity;
-  /** Open findings for this severity: `new` + `existing` summed over the tools. Accepted and fixed are not open. */
-  readonly open: number;
+  /**
+   * Open findings for this severity: `new` + `existing` summed over the tools. Accepted and fixed are not open.
+   * For UNKNOWN, the open findings under severities this brief does not recognise; null (shown as "n/a") when
+   * any count in the summary is unreadable, so the figure cannot be stated.
+   */
+  readonly open: number | null;
 }
 
 /** Age bucket of the scan evidence; "never" when the summary has no scan date. */
@@ -40,29 +44,58 @@ export function scanAgeBucket(view: SecurityScanSummaryView, now: Date): AgeBuck
 /**
  * Open counts per severity, summed over the tools in the summary. Returns null when the summary carries no
  * counts at all (the card then says the counts are UNKNOWN). Severities the summary does not carry are omitted.
+ *
+ * Only finite numeric `new` and `existing` values are summed. A severity key this brief does not recognise, or a
+ * cell whose `new`/`existing` is missing or non-numeric, is never dropped: it makes a trailing UNKNOWN entry.
+ * That entry is "n/a" when any cell is unreadable, because its figure cannot be stated.
  */
 export function openSeverityCounts(view: SecurityScanSummaryView): ScanSeverityCount[] | null {
   if (!view.counts) return null;
+  const known: readonly string[] = SCAN_SEVERITY_ORDER.filter((s) => s !== "UNKNOWN");
   const totals = new Map<string, number>();
+  let unrecognisedSeen = false;
+  let unrecognisedOpen = 0;
+  let unreadable = false;
   for (const tool of Object.values(view.counts)) {
-    for (const [severity, cell] of Object.entries(tool ?? {})) {
-      if (!cell) continue;
-      totals.set(severity, (totals.get(severity) ?? 0) + cell.new + cell.existing);
+    if (tool === null || typeof tool !== "object") {
+      unreadable = true;
+      continue;
+    }
+    for (const [severity, cell] of Object.entries(tool)) {
+      if (cell === null || typeof cell !== "object") {
+        unreadable = true;
+        if (!known.includes(severity)) unrecognisedSeen = true;
+        continue;
+      }
+      const newOpen = Number.isFinite(cell.new) ? cell.new : 0;
+      const existingOpen = Number.isFinite(cell.existing) ? cell.existing : 0;
+      if (!Number.isFinite(cell.new) || !Number.isFinite(cell.existing)) unreadable = true;
+      if (known.includes(severity)) {
+        totals.set(severity, (totals.get(severity) ?? 0) + newOpen + existingOpen);
+      } else {
+        unrecognisedSeen = true;
+        unrecognisedOpen += newOpen + existingOpen;
+      }
     }
   }
-  return SCAN_SEVERITY_ORDER.filter((s) => totals.has(s)).map((severity) => ({
+  const counts: ScanSeverityCount[] = SCAN_SEVERITY_ORDER.filter((s) => totals.has(s)).map((severity) => ({
     severity,
     open: totals.get(severity) ?? 0,
   }));
+  if (unrecognisedSeen || unreadable) {
+    counts.push({ severity: "UNKNOWN", open: unreadable ? null : unrecognisedOpen });
+  }
+  return counts;
 }
 
 /**
- * The count line, e.g. "HIGH 2 · MEDIUM 5". Every entry names its severity; the caption says what the figure counts.
- * An empty list means the summary carries counts with no open findings in them.
+ * The count line, e.g. "HIGH 2 · MEDIUM 5"; an unreadable UNKNOWN entry reads "UNKNOWN n/a". Every entry names its
+ * severity; the caption says what the figure counts. An empty list means the summary carries counts with no open
+ * findings in them.
  */
 export function severityCountLine(counts: readonly ScanSeverityCount[]): string {
   if (counts.length === 0) return "no open findings in the summary";
-  return counts.map((c) => `${c.severity} ${c.open}`).join(" · ");
+  return counts.map((c) => `${c.severity} ${c.open ?? "n/a"}`).join(" · ");
 }
 
 export const SCAN_COUNT_CAPTION = "open findings per severity (new + existing; accepted and fixed not counted)";
