@@ -619,13 +619,16 @@ def test_copy_is_pod_to_pod_read_only_and_filters_only_the_two_requested_tables(
         calls.append((source, target))
     monkeypatch.setattr(preview, "database_stream", stream)
     preview.copy_database()
-    assert order == ["network", "snapshot", "copy", "copy", "copy", "rollback", "teardown"]
+    assert order == ["network", "snapshot", "copy", "copy", "copy", "copy", "rollback", "teardown"]
     assert "--format=custom" in calls[0][0]
     assert "--snapshot=00000001-00000002-1" in calls[0][0]
-    assert calls[0][0].count("--exclude-table-data=") == 2
+    assert calls[0][0].count("--exclude-table-data=") == 3
+    assert "--exclude-table-data=public.cp_policy_json_chunk" in calls[0][0]
     assert "--exit-on-error --no-owner" in calls[0][1]
     assert preview.AUDIT_SELECT in shlex.split(calls[1][0])[-1]
     assert preview.ENTRY_SELECT in shlex.split(calls[2][0])[-1]
+    assert preview.CHUNK_SELECT in shlex.split(calls[3][0])[-1]
+    assert "COPY public.cp_policy_json_chunk FROM STDIN" in calls[3][1]
     assert all("SET TRANSACTION SNAPSHOT '00000001-00000002-1'" in shlex.split(s)[-1] for s, _ in calls[1:])
     for source, target in calls:
         assert "kubectl" not in source + target

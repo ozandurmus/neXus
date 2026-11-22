@@ -1171,7 +1171,7 @@ def _ship(args: argparse.Namespace) -> int:
     _git("fetch", "-q", "origin")
     _git("merge", "-q", "--ff-only", "origin/main")
     _git("push", "-q", "--receive-pack=" + HOST_RECEIVE_PACK, _host_mirror_url(), "main")
-    print(json.dumps({"pr": url, "merged": _git("rev-parse", "--short", "HEAD")}))
+    print(json.dumps({"pr": url, "merged": _git("rev-parse", "--short", "HEAD")}), flush=True)
     if fast_path:
         print(json.dumps({"fast_path": "docs_only", "deployed": False, "pr": url}), flush=True)
         subprocess.run(["gh", "pr", "comment", url, "--body",

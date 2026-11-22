@@ -14,7 +14,8 @@ export interface SshTrustRow {
   readonly observationId: string;
   readonly badge: BadgeState;
   readonly word: string;
-  readonly seenCount: number;
+  /** The reported seen count, or null when the observation did not report one (never shown as 0). */
+  readonly seenCount: number | null;
   /** The observation's own last-seen time: the evidence age for this row. */
   readonly lastSeen: string | null;
 }
@@ -41,7 +42,7 @@ export interface SshTrustModel {
 const RANK: Readonly<Record<string, number>> = { OPEN: 0, REJECTED: 1, ACCEPTED: 2 };
 
 function rowOf(o: SshHostKeyObservation): SshTrustRow {
-  const seen = Number.isFinite(o.seen_count) ? o.seen_count : 0;
+  const seen = typeof o.seen_count === "number" && Number.isFinite(o.seen_count) ? o.seen_count : null;
   const lastSeen = typeof o.last_seen === "string" && o.last_seen !== "" ? o.last_seen : null;
   if (o.status === "OPEN") return { observationId: o.observation_id, badge: "watch", word: "OPEN", seenCount: seen, lastSeen };
   if (o.status === "REJECTED") return { observationId: o.observation_id, badge: "act", word: "REJECTED", seenCount: seen, lastSeen };
@@ -63,7 +64,9 @@ function newestFirst(a: SshTrustRow, b: SshTrustRow): number {
  * words only; no fingerprint, key material, address or hostname reaches this model.
  */
 export function buildSshTrustModel(read: SshTrustRead): SshTrustModel {
-  if (!read.ok) {
+  // A failed read, or a view without an observations array (malformed), is the same UNKNOWN model.
+  const view = read.ok && Array.isArray(read.view.observations) ? read.view : null;
+  if (view === null) {
     return {
       badge: "unk",
       badgeWord: "UNKNOWN",
@@ -74,7 +77,6 @@ export function buildSshTrustModel(read: SshTrustRead): SshTrustModel {
       hiddenCount: 0,
     };
   }
-  const { view } = read;
   const mode = view.mode === "STRICT" ? "STRICT" : view.mode === "WARN" ? "WARN" : null;
   const all = view.observations.map(rowOf);
   const sorted = [...all].sort((a, b) => {

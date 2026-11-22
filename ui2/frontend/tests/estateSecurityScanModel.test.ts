@@ -106,6 +106,17 @@ describe("severity counts", () => {
     expect(severityCountLine(counts!)).toBe("HIGH n/a · LOW 1 · UNKNOWN n/a");
   });
 
+  it("an unreadable whole tool entry makes every recognised severity n/a, not a partial sum", () => {
+    const counts = openSeverityCounts(
+      view({ counts: { "tool-a": { HIGH: { new: 1, existing: 1, accepted: 0, fixed: 0 } }, "tool-b": null as never } }),
+    );
+    expect(counts).toEqual([
+      { severity: "HIGH", open: null },
+      { severity: "UNKNOWN", open: null },
+    ]);
+    expect(severityCountLine(counts!)).toContain("HIGH n/a");
+  });
+
   it("keeps the known-severity sums unchanged when every cell is readable", () => {
     expect(severityCountLine(openSeverityCounts(view())!)).toBe("HIGH 2 · MEDIUM 5");
     expect(openSeverityCounts(view())).not.toContainEqual(expect.objectContaining({ severity: "UNKNOWN" }));

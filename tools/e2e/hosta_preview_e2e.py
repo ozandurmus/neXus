@@ -43,6 +43,11 @@ AUDIT_SELECT = "SELECT * FROM public.audit_log WHERE occurred_at >= now() - inte
 ENTRY_SELECT = """SELECT e.* FROM public.backup_artefact_entry e
 JOIN (SELECT DISTINCT ON (device_id) artefact_id FROM public.backup_artefact
       ORDER BY device_id, created_at DESC, artefact_id DESC) latest USING (artefact_id)"""
+# Check Point policy JSON chunks: only the generations a current manifest names (inventory or domain run). Replaced
+# generations are never read; on 2026-11-22 they were 84% of a 14 GB table and most of the preview copy time.
+CHUNK_SELECT = """SELECT c.* FROM public.cp_policy_json_chunk c
+WHERE c.generation IN (SELECT chunk_generation FROM public.cp_policy_object_inventory WHERE chunk_generation IS NOT NULL
+                       UNION SELECT chunk_generation FROM public.cp_policy_domain_run WHERE chunk_generation IS NOT NULL)"""
 # Values stay in the pod's environment, never in argv or logs. Source commands are read-only.
 PG_ENV = 'unset PGPASSWORD; export PGUSER="${POSTGRESQL_USER:-${POSTGRES_USER:-ui2_migrate}}"; export PGDATABASE="${POSTGRESQL_DATABASE:-${POSTGRES_DB:-ui2}}"; '
 
@@ -819,10 +824,12 @@ def copy_database():
     restore_options = PG_ENV + 'export PGOPTIONS="-c statement_timeout=' + str(seconds * 1000) + '"; '
     with database_network_access(), exported_snapshot(source) as snapshot:
         database_stream(read_only + "exec " + source_auth + "pg_dump --format=custom --compress=0 --snapshot=" + snapshot
-                        + " --exclude-table-data=public.audit_log --exclude-table-data=public.backup_artefact_entry",
+                        + " --exclude-table-data=public.audit_log --exclude-table-data=public.backup_artefact_entry"
+                        + " --exclude-table-data=public.cp_policy_json_chunk",
                         restore_options + "exec pg_restore --exit-on-error --no-owner --dbname=ui2",
                         timeout=4 * seconds)
-        for table, query in (("audit_log", AUDIT_SELECT), ("backup_artefact_entry", ENTRY_SELECT)):
+        for table, query in (("audit_log", AUDIT_SELECT), ("backup_artefact_entry", ENTRY_SELECT),
+                             ("cp_policy_json_chunk", CHUNK_SELECT)):
             sql = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SET TRANSACTION SNAPSHOT '" + snapshot + "'; COPY (" + query + ") TO STDOUT; COMMIT"
             database_stream(read_only + 'exec ' + source_auth + 'psql -Xq --set=ON_ERROR_STOP=1 -c ' + shlex.quote(sql),
                             restore_options + 'exec psql -Xq --set=ON_ERROR_STOP=1 -c "COPY public.' + table + ' FROM STDIN"',
