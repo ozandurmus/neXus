@@ -9,6 +9,11 @@ vi.mock("../src/auth/adminApi", async (importOriginal) => ({
   getLifecycleAdvisories: vi.fn(),
 }));
 
+// The device vulnerability card reads the lifecycle fleet the Estate provider already loads; no provider here.
+vi.mock("../src/estate/useEstateData", () => ({
+  useEstateData: () => ({ lifecycle: { state: "failed" } }),
+}));
+
 const AS_OF = "2026-11-21T08:00:00.000Z";
 
 function advisory(overrides: Partial<LifecycleAdvisory> & { title: string; advisory_id: string }): LifecycleAdvisory {

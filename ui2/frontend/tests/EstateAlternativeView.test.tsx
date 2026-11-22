@@ -643,14 +643,14 @@ describe("Alternative Estate view, slice 1", () => {
     expect(await screen.findByRole("navigation", { name: "Primary" })).toBeInTheDocument();
   });
 
-  it("renders the Shift brief with sentence headline, affected pair/unit tiles, hatched UNKNOWN badges, evidence stamps, and standard links for Ask/Rewind/Cases", async () => {
+  it("renders the Shift brief with sentence headline, affected pair/unit tiles, hatched UNKNOWN badges, evidence stamps, Ask inside the Estate view, and standard links for Rewind/Cases", async () => {
     window.localStorage.setItem("nx.view", "estate");
     vi.stubGlobal("fetch", stubEstateApiFetch());
     stubViewport(1280);
     render(<App />);
 
     const brief = await screen.findByTestId("estate-brief-screen");
-    expect(within(brief).getByTestId("brief-headline")).toHaveTextContent(/\d+ items? on \d+ units?: \d+ act now/i);
+    expect(within(brief).getByTestId("brief-headline")).toHaveTextContent(/\d+ items? on \d+ units?(, \d+ with no unit)?: \d+ act now/i);
 
     // Hatched UNKNOWN badge is present and never folded into fine
     const unkBadges = brief.querySelectorAll('[data-state-badge="unk"][data-hatched="true"]');
@@ -666,10 +666,13 @@ describe("Alternative Estate view, slice 1", () => {
     // Mask chip surfaces automatically from X-Nexus-Masked response header
     expect(await screen.findByText("aiview · names masked")).toBeInTheDocument();
 
-    // Out-of-scope nav items link to standard screens (Ask -> workbench, Cases -> Packet analysis); Rewind has its own view
+    // Rewind has its own Estate view; Cases leaves for the standard Packet analysis screen.
+    // Ask is an Estate screen (EstateAskScreen), so its link stays inside the Estate view: no standard=1 marker.
     expect(screen.getByTestId("estate-rewind-link")).toHaveAttribute("href", "?screen=inventory&view=rewind");
     const estateNav = screen.getByRole("navigation", { name: "Estate navigation" });
-    expect(within(estateNav).getByRole("link", { name: "Ask" })).toHaveAttribute("href", "?screen=trace");
+    const askLink = within(estateNav).getByRole("link", { name: "Ask" });
+    expect(askLink.getAttribute("href")).not.toContain("standard=1");
+    expect(askLink).not.toHaveTextContent(/standard view/i);
     expect(within(estateNav).getByRole("link", { name: "Cases" })).toHaveAttribute("href", "?screen=packet_analysis");
 
     // Clicking Ask opens the Estate Ask workbench (the standard Trace screen stays one link away)

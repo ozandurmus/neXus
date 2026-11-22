@@ -64,8 +64,20 @@ export function EstatePolicyInstalls() {
         </Box>
       ) : null}
 
-      {model && model.totalCount === 0 ? (
+      {model && model.totalKnown && model.totalCount === 0 ? (
         <Box sx={{ px: "18px", pb: "14px", fontSize: "13px", color: ev.ink3 }}>No policy install rows.</Box>
+      ) : null}
+
+      {model && !model.totalKnown && model.lines.length === 0 ? (
+        <Box sx={{ px: "18px", pb: "14px", fontSize: "13px", color: ev.ink3 }}>
+          No policy install rows returned; total not reported.
+        </Box>
+      ) : null}
+
+      {model && model.lines.length > 0 && !model.totalKnown ? (
+        <Box sx={{ px: "18px", pt: "10px", fontSize: "12px", color: ev.ink3 }}>
+          {`Showing ${model.lines.length} policy install${model.lines.length === 1 ? "" : "s"}; total not reported.`}
+        </Box>
       ) : null}
 
       {model && model.lines.length > 0 ? (
@@ -104,7 +116,7 @@ export function EstatePolicyInstalls() {
         </Box>
       ) : null}
 
-      {model && model.moreCount > 0 ? (
+      {model && model.totalKnown && model.totalCount !== null && model.moreCount > 0 ? (
         <Box sx={{ px: "18px", py: "10px", borderTop: `1px solid ${ev.line}`, fontSize: "12px", color: ev.ink3 }}>
           <Box component="a" href={href} sx={{ color: ev.ink3 }}>
             <MoreFooter shown={model.lines.length} total={model.totalCount} noun="policy installs" />

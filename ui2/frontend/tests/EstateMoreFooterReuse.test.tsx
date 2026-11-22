@@ -27,6 +27,10 @@ vi.mock("../src/auth/adminApi", async (importOriginal) => ({
   getPolicyInstallStatus: vi.fn(),
 }));
 
+vi.mock("../src/estate/useEstateData", () => ({
+  useEstateData: () => ({ lifecycle: { state: "failed" } }),
+}));
+
 const AS_OF = "2026-11-21T08:00:00.000Z";
 const NOW_ISO = new Date(Date.now() - 3_600_000).toISOString();
 
@@ -144,5 +148,36 @@ describe("Estate screens reuse MoreFooter at cap+1", () => {
     render(<EstatePolicyInstalls />);
 
     expect(await screen.findByText("+1 more policy installs")).toBeInTheDocument();
+  });
+
+  it("Policy installs with no server total: 2 rows say total not reported and print no +N more", async () => {
+    const rows = Array.from({ length: 2 }, (_, i) => ({
+      row_id: `row-${i}`,
+      device_id: null,
+      hostname: `FW-SYN-${i}`,
+      context: "synthetic",
+      vendor: "paloalto",
+      container_id: "c",
+      container_name: "Synthetic container",
+      package_id: "p",
+      package_name: "Synthetic package",
+      state: "INSTALLED",
+      ha_parity: null,
+      policy_name: null,
+      installed_at: null,
+      last_change_at: null,
+    })) as unknown as PolicyInstallStatusRow[];
+    vi.mocked(getPolicyInstallStatus).mockResolvedValue({
+      counts: {},
+      page: 1,
+      page_size: 2,
+      masked: true,
+      contract_ref: "synthetic",
+      rows,
+    } as never);
+    render(<EstatePolicyInstalls />);
+
+    expect(await screen.findByText("Showing 2 policy installs; total not reported.")).toBeInTheDocument();
+    expect(screen.queryByText(/more policy installs/)).toBeNull();
   });
 });

@@ -10,6 +10,11 @@ vi.mock("../src/auth/adminApi", async (importOriginal) => ({
   getLifecycleCatalog: vi.fn(),
 }));
 
+// The device vulnerability card reads the lifecycle fleet the Estate provider already loads; no provider here.
+vi.mock("../src/estate/useEstateData", () => ({
+  useEstateData: () => ({ lifecycle: { state: "failed" } }),
+}));
+
 const NOW = new Date("2026-11-22T08:00:00.000Z");
 const DAY = 24 * 60 * 60 * 1000;
 const daysAgo = (days: number) => new Date(NOW.getTime() - days * DAY).toISOString();

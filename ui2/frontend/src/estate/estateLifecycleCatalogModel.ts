@@ -1,4 +1,5 @@
-import type { LifecycleCatalogEntry } from "../auth/adminApi";
+import type { LifecycleCatalogEntry, LifecycleDevice, LifecycleVulnerabilities } from "../auth/adminApi";
+import { vulnerabilitySummary } from "../screens/LifecycleVulnerabilitiesPanel";
 
 /** Catalog rows shown before "+N more" (the same cap the standard Lifecycle view applies to its catalog table). */
 export const LIFECYCLE_CATALOG_CAP = 50;
@@ -90,4 +91,52 @@ export function lifecycleCatalogCountText(total: number, shown: number): string 
   return more > 0
     ? `${shown} of ${total} catalog rows shown (+${more} more)`
     : `${total} catalog ${total === 1 ? "row" : "rows"}`;
+}
+
+/** Device vulnerability rows shown before "+N more" (the same cap the advisory and catalog lists use). */
+export const LIFECYCLE_DEVICE_CAP = 50;
+
+export interface DeviceVulnerabilityCell {
+  /** "evaluated" only when the server judged the device; every other case reads UNKNOWN, never OK or a zero count. */
+  readonly state: "evaluated" | "unknown";
+  /** The cell as one line: the same words as the standard view's Vulnerabilities cell (vulnerabilitySummary). */
+  readonly text: string;
+  /** Age of the advisory data the judgement used (its load stamp); null when not reported. */
+  readonly evidenceAt: string | null;
+  /** Sort key: affected and exploited first, then UNKNOWN, then evaluated with nothing affected. */
+  readonly sortRank: number;
+}
+
+/**
+ * The Vulnerabilities cell of one device. Reuses vulnerabilitySummary from the standard Lifecycle view. A missing record
+ * or a device that was not judged is UNKNOWN: fail closed, never a zero count or OK.
+ */
+export function deviceVulnerabilityCell(v: LifecycleVulnerabilities | null | undefined): DeviceVulnerabilityCell {
+  const evidenceAt = v?.compared?.loaded_at ?? null;
+  if (v?.state === "EVALUATED") {
+    const affected = (v.affected ?? 0) > 0;
+    const rank = !affected ? 4 : (v.affected_exploited ?? 0) > 0 ? 0 : (v.affected_critical_high ?? 0) > 0 ? 1 : 2;
+    return { state: "evaluated", text: vulnerabilitySummary(v), evidenceAt, sortRank: rank };
+  }
+  return { state: "unknown", text: `UNKNOWN · ${vulnerabilitySummary(v)}`, evidenceAt, sortRank: 3 };
+}
+
+export interface LifecycleDeviceVulnerabilityRow {
+  readonly deviceId: string;
+  readonly label: string;
+  readonly cell: DeviceVulnerabilityCell;
+}
+
+/** Device rows for the vulnerability card: sorted by rank then label, so the capped list is stable across reloads. */
+export function lifecycleDeviceVulnerabilityRows(devices: readonly LifecycleDevice[]): LifecycleDeviceVulnerabilityRow[] {
+  return devices
+    .map((d) => ({ deviceId: d.device_id, label: d.hostname ?? d.device_id, cell: deviceVulnerabilityCell(d.vulnerabilities) }))
+    .sort((x, y) => x.cell.sortRank - y.cell.sortRank || x.label.localeCompare(y.label) || x.deviceId.localeCompare(y.deviceId));
+}
+
+/** The count line for the device card: says what it counts. */
+export function lifecycleDeviceCountText(total: number, shown: number): string {
+  if (total === 0) return "No devices in the lifecycle read";
+  const more = total - shown;
+  return more > 0 ? `${shown} of ${total} devices shown (+${more} more)` : `${total} ${total === 1 ? "device" : "devices"}`;
 }
