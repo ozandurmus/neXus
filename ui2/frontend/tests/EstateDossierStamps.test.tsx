@@ -27,13 +27,14 @@ vi.mock("../src/estate/EstateDossierLogsBlock", () => ({
 }));
 
 const backupsMock = vi.hoisted(() => ({ list: vi.fn() }));
+const inventoryMock = vi.hoisted(() => ({ read: vi.fn() }));
 
 vi.mock("../src/auth/adminApi", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/auth/adminApi")>();
   const failed = () => Promise.reject(new Error("synthetic read failure"));
   return {
     ...actual,
-    getDeviceInventory: failed,
+    getDeviceInventory: inventoryMock.read,
     getDeviceCompliance: failed,
     getDeviceConfiguration: failed,
     getDeviceLifecycle: failed,
@@ -95,6 +96,8 @@ describe("EstateDossierScreen evidence stamps (no inventory age under non-invent
   beforeEach(() => {
     backupsMock.list.mockReset();
     backupsMock.list.mockRejectedValue(new Error("synthetic backups failure"));
+    inventoryMock.read.mockReset();
+    inventoryMock.read.mockRejectedValue(new Error("synthetic inventory failure"));
   });
 
   it("inventory read 3 min old, no lens evidence: events and lens stamps say unknown, not the inventory age", async () => {
@@ -148,5 +151,23 @@ describe("EstateDossierScreen evidence stamps (no inventory age under non-invent
     await waitFor(() => expect(eventsStamp?.textContent ?? "").toMatch(/6 d/));
     expect(eventsStamp?.textContent ?? "").not.toMatch(/3 min/);
     expect(eventsStamp?.textContent ?? "").not.toContain("evidence time unknown");
+  });
+
+  it("device inventory read 3 min old is the only dated item: events stamp says unknown, never the inventory age", async () => {
+    const inventoryReadAt = new Date(Date.now() - 3 * MINUTE_MS).toISOString();
+    fixture.model = modelWithInventoryReadAt(inventoryReadAt);
+    inventoryMock.read.mockResolvedValue({
+      device_id: DEVICE_ID,
+      collected_at: inventoryReadAt,
+      job: null,
+      contexts: [],
+    });
+
+    render(<EstateDossierScreen deviceId={DEVICE_ID} />);
+
+    const eventsStamp = (await screen.findByText("newest stored event")).closest("[data-evidence-stamp]");
+    await waitFor(() => expect(inventoryMock.read).toHaveBeenCalled());
+    await waitFor(() => expect(eventsStamp?.textContent ?? "").toContain("evidence time unknown"));
+    expect(eventsStamp?.textContent ?? "").not.toMatch(/3 min/);
   });
 });

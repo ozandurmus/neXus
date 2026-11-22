@@ -69,6 +69,7 @@ import { useEstateData } from "./useEstateData";
 import { EstateDossierLogsBlock, loadDeviceLogsReads } from "./EstateDossierLogsBlock";
 import { EstateDossierMemberDiffBlock } from "./EstateDossierMemberDiffBlock";
 import { EstateDossierCertificateBlock } from "./EstateDossierCertificateBlock";
+import { EstateDossierAsaSavedBlock } from "./EstateDossierAsaSavedBlock";
 import type { DeviceLogsReads } from "./estateDeviceLogsSummary";
 
 type DossierTab = "interfaces" | "routes" | "backups" | "controls" | "prechecks";
@@ -334,7 +335,6 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
       ...(swData?.stretches ?? []).map((st) => st.first_seen_at),
       ...(swData?.installEvents ?? []).map((evItem) => evItem.first_observed_at),
       cluster?.observedAt,
-      invData?.collected_at,
       cfgData?.collected_at,
       unit.policyReadAt,
       unit.platformFactsAt,
@@ -806,6 +806,8 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
           clusterRef={unit.clusterRef}
           labels={Object.fromEntries((cluster?.members ?? []).map((m) => [m.deviceId, m.name]))}
         />
+
+        <EstateDossierAsaSavedBlock deviceId={unit.deviceId} vendor={unit.vendor} />
 
         {/* Identity & relationship strip */}
         <Box
