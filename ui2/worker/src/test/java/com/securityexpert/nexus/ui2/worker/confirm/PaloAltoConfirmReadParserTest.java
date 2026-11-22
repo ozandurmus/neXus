@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Optional;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -107,8 +106,6 @@ class PaloAltoConfirmReadParserTest {
     }
 
     @Test
-    @Disabled("Defect (open issue): haRole(\"\") and haRole(null) return STANDALONE, because an absent "
-            + "<enabled> tag is read as HA disabled. Empty or missing output must be UNKNOWN (Optional.empty()).")
     void emptyOrMissingHaReadIsUnknownNotStandalone() {
         assertTrue(parser.haRole("").isEmpty());
         assertTrue(parser.haRole(null).isEmpty());

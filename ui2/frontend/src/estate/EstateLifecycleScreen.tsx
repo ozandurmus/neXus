@@ -51,8 +51,12 @@ export function lifecycleAdvisoryRow(a: LifecycleAdvisory): LifecycleAdvisoryRow
   if (!devices || typeof devices.affected !== "number") {
     return { ...base, state: "unk", word: "UNKNOWN", affected: null, notEvaluable: null };
   }
-  const pending = devices.pending ?? 0;
   const counts = { affected: devices.affected, notEvaluable: devices.not_evaluable };
+  // A missing pending tally means the evaluation count is unknown, never zero.
+  if (typeof devices.pending !== "number") {
+    return { ...base, ...counts, state: "unk", word: "UNKNOWN" };
+  }
+  const pending = devices.pending;
   if (a.parse_state !== "PARSED" || a.severity === "UNKNOWN") {
     return { ...base, ...counts, state: "unk", word: "UNKNOWN" };
   }
