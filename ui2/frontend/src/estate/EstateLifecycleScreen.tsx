@@ -5,6 +5,7 @@ import { getLifecycleAdvisories, getLifecycleCatalog, type LifecycleAdvisory } f
 import { isRestricted } from "../shell/States";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
+import { EstateLifecycleSources } from "./EstateLifecycleSources";
 import { standardLifecycleHref } from "./estateRouting";
 import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
 import {
@@ -179,7 +180,9 @@ function LifecycleAdvisoryCard() {
           ) : null}
         </Box>
       )}
-    </EstateCard></Box>
+    </EstateCard>
+    <EstateLifecycleSources />
+    </Box>
   );
 }
 

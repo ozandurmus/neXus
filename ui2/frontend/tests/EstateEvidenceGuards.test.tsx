@@ -639,7 +639,8 @@ function stubSlice2ApiFetch() {
 //  B. UNKNOWN is never shown as OK
 // Fixture = the slice-2 fixture above: each lens has at least one UNKNOWN unit
 // (failover: CLS-SIERRA-02 readiness UNKNOWN; compliance: DEV-JULIET-06 not assessed;
-// backups: FW-SIERRA-02 OUTCOME_UNKNOWN night cell).
+// backups: FW-SIERRA-02 OUTCOME_UNKNOWN night cell). Brief and Changes are guarded by guard A only
+// unless the fixture shows an UNKNOWN row there (guard B then applies as for the other lenses).
 
 // A section "has a count" when its text carries a percentage or a number followed by a word.
 const COUNT_RE = /\d+\s*%|\b\d+\s+[A-Za-z]/;
@@ -649,7 +650,11 @@ const SCREEN_CASES = [
   { lens: "Failover", search: "/?screen=operations", testId: "estate-failover-screen" },
   { lens: "Compliance", search: "/?screen=compliance", testId: "estate-compliance-screen" },
   { lens: "Backups", search: "/?screen=backups", testId: "estate-backups-screen" },
-] as const;
+  { lens: "Brief", search: "/?screen=brief", testId: "estate-brief-screen" },
+  // Changes: the only UNKNOWN mark in the fixture is a source-coverage badge ("Change feed: UNKNOWN") in a
+  // strip whose other badges are other sources. Guard B scopes that mark to its own badge (guardBScope).
+  { lens: "Changes", search: "/?screen=changes", testId: "estate-changes-screen", guardBScope: "badge" },
+] as Array<{ lens: string; search: string; testId: string; guardBScope?: "badge" }>;
 
 describe("Estate evidence-stamp and UNKNOWN-never-OK guards", () => {
   beforeEach(() => {
@@ -710,7 +715,9 @@ describe("Estate evidence-stamp and UNKNOWN-never-OK guards", () => {
         // The unit row = nearest ancestor that holds exactly one unit state badge.
         let row: Element | null = mark.parentElement;
         while (row && row !== root && row.querySelectorAll("[data-state-badge]").length !== 1) row = row.parentElement;
-        const scope = (row && row !== root ? row : (mark.parentElement ?? root)) as HTMLElement;
+        const scope = (c.guardBScope === "badge"
+          ? mark
+          : row && row !== root ? row : (mark.parentElement ?? root)) as HTMLElement;
         expect(scope.querySelector('[data-state-badge="ok"]'), `${c.lens}: state badge OK on a row holding an UNKNOWN mark`).toBeNull();
         expect(within(scope).queryAllByText(/^(OK|Fine)$/), `${c.lens}: OK/Fine on a row holding an UNKNOWN mark`).toHaveLength(0);
       }
