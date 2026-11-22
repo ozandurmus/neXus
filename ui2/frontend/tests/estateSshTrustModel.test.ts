@@ -103,6 +103,24 @@ describe("buildSshTrustModel", () => {
     expect(m.counts.observations).toBe(SSH_TRUST_ROW_CAP + 3);
   });
 
+  it("a missing seen_count is null, never 0", () => {
+    const { seen_count: _omitted, ...rest } = obs("a", "OPEN", "2026-11-20T00:00:00Z");
+    const m = buildSshTrustModel({ ok: true, view: VIEW([rest as SshHostKeyObservation]) });
+    expect(m.rows[0].seenCount).toBeNull();
+    expect(m.rows[0].seenCount).not.toBe(0);
+  });
+
+  it("a view without an observations array is a failed read: UNKNOWN, no throw", () => {
+    let m: ReturnType<typeof buildSshTrustModel> | undefined;
+    expect(() => {
+      m = buildSshTrustModel({ ok: true, view: { mode: "WARN" } as unknown as SshHostKeyView });
+    }).not.toThrow();
+    expect(m?.badge).toBe("unk");
+    expect(m?.badgeWord).toBe("UNKNOWN");
+    expect(m?.mode).toBeNull();
+    expect(m?.rows).toEqual([]);
+  });
+
   it("never carries the fingerprint or addresses into the model", () => {
     const m = buildSshTrustModel({ ok: true, view: VIEW([obs("a", "OPEN", "2026-11-20T00:00:00Z")]) });
     expect(JSON.stringify(m)).not.toContain(FP);

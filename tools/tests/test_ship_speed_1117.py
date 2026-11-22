@@ -126,6 +126,37 @@ def test_each_keeps_every_e2e(monkeypatch, capsys):
     assert ("worker", False) in calls and ("group-e2e",) in calls
 
 
+def run_rollback(monkeypatch, extra=()):
+    calls = []
+    monkeypatch.setattr(deploy, "validate_targets", lambda v: v.split())
+    monkeypatch.setattr("release_snapshot.load_snapshot", lambda d: {"runtime": {"compatible_runtime": True}},
+                        raising=False)
+    monkeypatch.setattr(deploy, "prepare_policy_public_trust", lambda: None)
+    monkeypatch.setattr(deploy, "rollback_image", lambda manifest, target: "old-" + target)
+
+    def replace(target, image, snapshot, limit=0, commit=None, authorization=None, rollback=False, defer_e2e=False):
+        calls.append((target, image, rollback, defer_e2e))
+        return {"module": target, "e2e": "PASS"}
+    monkeypatch.setattr(deploy, "replace", replace)
+    monkeypatch.setattr(sys, "argv", ["m", "--targets", "service worker policy", "--rollback",
+                                      "--snapshot", str(ROOT / "tools"), *extra])
+    deploy.main()
+    return calls
+
+
+def test_rollback_keeps_every_e2e_by_default(monkeypatch):
+    calls = run_rollback(monkeypatch)
+    assert [c[3] for c in calls] == [False, False, False]
+    assert all(c[2] and c[1] == "old-" + c[0] for c in calls)
+
+
+def test_rollback_edges_skips_the_middle_e2e_only_when_asked(monkeypatch):
+    # PO 2026-11-22: rollback within 5 minutes; the forward --module-e2e mode never changes a rollback's cadence.
+    calls = run_rollback(monkeypatch, ("--rollback-e2e", "edges"))
+    assert [(c[0], c[3]) for c in calls] == [("service", False), ("worker", True), ("policy", False)]
+    assert [c[3] for c in run_rollback(monkeypatch, ("--module-e2e", "edges"))] == [False, False, False]
+
+
 # ---------------------------------------------------------------------------------------------- pretest scope
 
 def test_scope_leaf_module_and_dependents():

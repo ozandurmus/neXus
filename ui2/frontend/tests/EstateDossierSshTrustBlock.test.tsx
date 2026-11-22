@@ -114,6 +114,15 @@ describe("EstateDossierSshTrustBlock", () => {
     expect(block.textContent).not.toContain("FW-TANGO-04");
   });
 
+  it("an unreported seen count reads 'seen count not reported', never 'seen 0'", async () => {
+    const { seen_count: _omitted, ...noCount } = VIEW.observations[0];
+    mockedView.mockResolvedValue({ mode: "WARN", observations: [noCount as SshHostKeyView["observations"][number]] });
+    render(<EstateDossierSshTrustBlock deviceId={DEVICE_ID} />);
+    const block = await waitFor(() => screen.getByTestId("dossier-ssh-trust-block"));
+    expect(block.textContent).toContain("seen count not reported");
+    expect(block.textContent).not.toContain("seen 0");
+  });
+
   it("carries no accept, reject or save button", async () => {
     mockedView.mockResolvedValue(VIEW);
     render(<EstateDossierSshTrustBlock deviceId={DEVICE_ID} />);

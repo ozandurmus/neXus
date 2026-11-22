@@ -98,7 +98,9 @@ export function EstateDossierSshTrustBlock({ deviceId }: { readonly deviceId: st
               </Typography>
               <StateBadge state={row.badge} word={row.word} dense />
               <Typography sx={{ fontSize: "12.5px", color: ev.ink2 }}>
-                seen {row.seenCount} {row.seenCount === 1 ? "time" : "times"}
+                {row.seenCount === null
+                  ? "seen count not reported"
+                  : `seen ${row.seenCount} ${row.seenCount === 1 ? "time" : "times"}`}
               </Typography>
               <Box sx={{ ml: "auto" }}>
                 <EvidenceStamp at={row.lastSeen} source="last seen" />

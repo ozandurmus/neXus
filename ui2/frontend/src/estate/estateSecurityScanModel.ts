@@ -48,7 +48,8 @@ export function scanAgeBucket(view: SecurityScanSummaryView, now: Date): AgeBuck
  * Only finite numeric `new` and `existing` values are summed. A recognised severity with any unreadable cell (a
  * non-finite `new`/`existing`, or a null/non-object cell) is shown with open null ("n/a"), never as a partial sum.
  * A severity key this brief does not recognise is never dropped: it makes a trailing UNKNOWN entry, which is "n/a"
- * when any cell is unreadable, because its figure cannot be stated.
+ * when any cell is unreadable, because its figure cannot be stated. A whole tool entry that is null or not an object
+ * makes every recognised severity n/a too, since the severities that tool carried are unknown.
  */
 export function openSeverityCounts(view: SecurityScanSummaryView): ScanSeverityCount[] | null {
   if (!view.counts) return null;
@@ -59,9 +60,12 @@ export function openSeverityCounts(view: SecurityScanSummaryView): ScanSeverityC
   let unrecognisedSeen = false;
   let unrecognisedOpen = 0;
   let unreadable = false;
+  /** A whole tool entry is unreadable: the severities it carried are unknown, so every recognised figure is n/a. */
+  let unreadableTool = false;
   for (const tool of Object.values(view.counts)) {
     if (tool === null || typeof tool !== "object") {
       unreadable = true;
+      unreadableTool = true;
       continue;
     }
     for (const [severity, cell] of Object.entries(tool)) {
@@ -89,7 +93,10 @@ export function openSeverityCounts(view: SecurityScanSummaryView): ScanSeverityC
     }
   }
   const counts: ScanSeverityCount[] = SCAN_SEVERITY_ORDER.filter((s) => totals.has(s) || unreadableKnown.has(s)).map(
-    (severity) => ({ severity, open: unreadableKnown.has(severity) ? null : (totals.get(severity) ?? 0) }),
+    (severity) => ({
+      severity,
+      open: unreadableTool || unreadableKnown.has(severity) ? null : (totals.get(severity) ?? 0),
+    }),
   );
   if (unrecognisedSeen || unreadable) {
     counts.push({ severity: "UNKNOWN", open: unreadable ? null : unrecognisedOpen });

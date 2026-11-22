@@ -856,6 +856,9 @@ def main():
                         "omitted, the broker keeps its live value")
     parser.add_argument("--commit")
     parser.add_argument("--rollback", action="store_true")
+    # Rollback e2e cadence (PO 2026-11-22: rollback within 5 minutes). "each" (default, unchanged) verifies every restored
+    # module; "edges" verifies after the first and the last step only, as a forward release may (about 70 s per e2e).
+    parser.add_argument("--rollback-e2e", choices=MODULE_E2E_MODES, default="each")
     parser.add_argument("--no-concurrent", dest="concurrent_safe", action="store_false",
                         help="roll the barrier-free modules (configuration, compliance) one after another")
     parser.add_argument("--module-e2e", choices=MODULE_E2E_MODES,
@@ -924,8 +927,8 @@ def main():
 
         stopped = False
         steps = rollout_steps(targets, args.concurrent_safe and not args.rollback)
-        # A rollback keeps the e2e after every step: it is the recovery path and must verify each restored module.
-        e2e_mode = "each" if args.rollback or returning else args.module_e2e
+        # A rollback keeps the e2e after every step by default (--rollback-e2e each): it is the recovery path.
+        e2e_mode = args.rollback_e2e if args.rollback else "each" if returning else args.module_e2e
         for index, step in enumerate(steps):
             if stopped:
                 break
