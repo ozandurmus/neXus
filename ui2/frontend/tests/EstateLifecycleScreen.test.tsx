@@ -102,6 +102,26 @@ describe("EstateLifecycleScreen", () => {
     expect(lifecycleAdvisoryRow(SYNTHETIC[2]).state).toBe("ok");
   });
 
+  it("treats a missing pending-evaluation count as UNKNOWN, and a pending count of 0 as OK", () => {
+    const clean = { affected: 0, not_affected: 1, not_evaluable: 0, fixed: 0 };
+    const withoutPending = advisory({ advisory_id: "FW-TANGO-04:pending-missing", title: "Synthetic pending-missing advisory", devices: clean as never });
+    const row = lifecycleAdvisoryRow(withoutPending);
+    expect(row.state).toBe("unk");
+    expect(row.word).toBe("UNKNOWN");
+    expect(row.word).not.toBe("OK");
+    // The counts are kept as given, not replaced.
+    expect(row.affected).toBe(0);
+    expect(row.notEvaluable).toBe(0);
+
+    const withZeroPending = advisory({
+      advisory_id: "FW-TANGO-04:pending-zero",
+      title: "Synthetic pending-zero advisory",
+      devices: { ...clean, pending: 0 },
+    });
+    expect(lifecycleAdvisoryRow(withZeroPending).state).toBe("ok");
+    expect(lifecycleAdvisoryRow(withZeroPending).word).toBe("OK");
+  });
+
   it("links each row to the standard view with standard=1", async () => {
     vi.mocked(getLifecycleAdvisories).mockResolvedValue({ as_of: AS_OF, advisories: SYNTHETIC.slice(0, 1) });
     render(<EstateLifecycleScreen />);

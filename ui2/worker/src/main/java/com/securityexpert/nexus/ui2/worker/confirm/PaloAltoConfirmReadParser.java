@@ -67,13 +67,19 @@ final class PaloAltoConfirmReadParser implements ConfirmReadParser {
 
     @Override
     public Optional<String> haRole(String haPeerReadOutput) {
-        if (haPeerReadOutput == null) {
+        if (haPeerReadOutput == null || haPeerReadOutput.isBlank()) {
+            // A missing read is absence of evidence: UNKNOWN, never a STANDALONE claim.
+            return Optional.empty();
+        }
+        Optional<String> enabled = firstMatch(HA_ENABLED, haPeerReadOutput);
+        if (enabled.isEmpty()) {
+            return Optional.empty();
+        }
+        if (enabled.get().equalsIgnoreCase("no")) {
             return Optional.of("STANDALONE");
         }
-        boolean enabled = firstMatch(HA_ENABLED, haPeerReadOutput).map(value -> value.equalsIgnoreCase("yes"))
-                .orElse(false);
-        if (!enabled) {
-            return Optional.of("STANDALONE");
+        if (!enabled.get().equalsIgnoreCase("yes")) {
+            return Optional.empty();
         }
         return firstMatch(LOCAL_STATE, haPeerReadOutput);
     }

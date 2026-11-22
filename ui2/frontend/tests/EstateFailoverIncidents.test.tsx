@@ -100,6 +100,21 @@ describe("EstateFailoverIncidents", () => {
     }
   });
 
+  it("pluralises the listed count: 1 incident, 2 incidents", async () => {
+    listMock.mockResolvedValueOnce(payload([incident(1, { maskedName: "FW-TANGO-04" })]));
+    const { unmount } = render(<EstateFailoverIncidents units={[]} />);
+    expect(await screen.findByText(/^1 incident listed:/)).toBeInTheDocument();
+    unmount();
+    listMock.mockResolvedValueOnce(
+      payload([
+        incident(1, { maskedName: "FW-TANGO-04" }),
+        incident(2, { maskedName: "FW-JULIET-06" }),
+      ]),
+    );
+    render(<EstateFailoverIncidents units={[]} />);
+    expect(await screen.findByText(/^2 incidents listed:/)).toBeInTheDocument();
+  });
+
   it("caps at 10 rows and prints +N more", async () => {
     listMock.mockResolvedValueOnce(payload(Array.from({ length: 12 }, (_, i) => incident(i + 1))));
     render(<EstateFailoverIncidents units={[]} />);

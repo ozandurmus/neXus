@@ -6,6 +6,7 @@ import type { FailoverBoardUnit } from "./estateSlice2Model";
 import { buildFailoverIncidentsModel, type FailoverIncidentsModel } from "./estateFailoverIncidentsModel";
 import { standardHaHref } from "./estateRouting";
 import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
+import { plural } from "../shell/plural";
 
 type ReadState =
   | { readonly phase: "idle" }
@@ -19,7 +20,6 @@ function labelFor(incident: FailoverIncident, units: readonly FailoverBoardUnit[
   return unit?.label ?? incident.maskedName ?? "Unlabelled unit";
 }
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * Read-only "Incidents" section of the Failover lens: open failover incidents and unresolved
