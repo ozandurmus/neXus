@@ -38,3 +38,60 @@ describe("EstateRewindScreen", () => {
     expect(screen.getByTestId("rewind-slider")).toBeInTheDocument();
   });
 });
+
+describe("EstateRewindScreen rings", () => {
+  beforeEach(() => resetSharedApiCache());
+  afterEach(() => vi.unstubAllGlobals());
+
+  function unitOf(id: string, name: string, verdict: string, at: string) {
+    return {
+      device_id: id,
+      hostname: name,
+      failover: { verdict, evidence_at: at, reason: null },
+      backup: { verdict: "OK", evidence_at: at },
+      compliance: { state: "EVIDENCED", pass_count: 2, fail_count: 0, critical_fail_count: 0, evidence_at: at },
+    };
+  }
+
+  function stubTwoUnits() {
+    const evidence = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const at = new URL(String(input), "http://x").searchParams.get("at") ?? "";
+      const old = Date.parse(at) < Date.now() - 86_400_000;
+      const units = old
+        ? [unitOf("dev-1", "FW-TANGO-04", "UNKNOWN", null as unknown as string), unitOf("dev-2", "FW-TANGO-02", "READY", evidence)]
+        : [unitOf("dev-1", "FW-TANGO-04", "NOT_READY", evidence), unitOf("dev-2", "FW-TANGO-02", "READY", evidence)];
+      const body = { as_of: at, generated_at: at, warnings: [], units };
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    }));
+  }
+
+  it("in compare mode shows every unit of the lens, rings the worse one and fades the unchanged one", async () => {
+    stubTwoUnits();
+    render(<EstateRewindScreen initialAt={new Date(Date.now() - 10 * 86_400_000).toISOString()} initialCompare={null} />);
+    await waitFor(() => expect(screen.getByTestId("rewind-counts")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Compare two moments" }));
+    const wall = await screen.findByTestId("rewind-wall");
+    await waitFor(() => expect(wall.querySelectorAll("a")).toHaveLength(2));
+
+    const worse = screen.getByRole("img", { name: /^FW-TANGO-04: UNKNOWN, .*; worse; evidence/ }).closest("a");
+    expect(worse).toHaveAttribute("data-rewind-ring", "worse");
+    expect(worse).not.toHaveAttribute("data-rewind-faded");
+    expect(worse?.getAttribute("title")).toContain("worse");
+
+    const unchanged = screen.getByRole("img", { name: /^FW-TANGO-02: .*unchanged;/ }).closest("a");
+    expect(unchanged).toHaveAttribute("data-rewind-faded", "true");
+    expect(unchanged).toHaveAttribute("data-rewind-ring", "unchanged");
+  });
+
+  it("in one-moment mode there are no rings and no fading", async () => {
+    stubTwoUnits();
+    render(<EstateRewindScreen initialAt={new Date(Date.now() - 10 * 86_400_000).toISOString()} initialCompare={null} />);
+    await waitFor(() => expect(screen.getByTestId("rewind-counts")).toBeInTheDocument());
+    const wall = screen.getByTestId("rewind-wall");
+    expect(wall.querySelectorAll("a")).toHaveLength(2);
+    expect(wall.querySelectorAll("[data-rewind-ring]")).toHaveLength(0);
+    expect(wall.querySelectorAll("[data-rewind-faded]")).toHaveLength(0);
+    expect(screen.getByRole("img", { name: /^FW-TANGO-04: .*; evidence/ })).not.toHaveAccessibleName(/worse|unchanged/);
+  });
+});

@@ -1072,24 +1072,29 @@ export function lensProblemCount(units: readonly EstateUnit[], lens: EstateLens)
   }).length;
 }
 
+/** Wall search rule: case-insensitive substring match on name, cluster, model, version or vendor name. Empty query matches all. */
+export function unitMatchesWallQuery(unit: EstateUnit, query: string): boolean {
+  const q = query.trim().toUpperCase();
+  if (!q) return true;
+  return (
+    unit.name.toUpperCase().includes(q) ||
+    (unit.clusterRef ?? "").toUpperCase().includes(q) ||
+    (unit.model ?? "").toUpperCase().includes(q) ||
+    (unit.version ?? "").toUpperCase().includes(q) ||
+    unit.vendorName.toUpperCase().includes(q)
+  );
+}
+
 export function sortUnitsForLens(
   units: readonly EstateUnit[],
   lens: EstateLens,
   options: { readonly onlyAttention: boolean; readonly query: string; readonly vendor: string },
 ): EstateUnit[] {
-  const q = options.query.trim().toUpperCase();
   return units
     .filter((u) => {
       if (options.vendor && u.vendor !== options.vendor) return false;
       if (options.onlyAttention && !needsAttentionOnLens(u.lenses[lens].tileState)) return false;
-      if (!q) return true;
-      return (
-        u.name.toUpperCase().includes(q) ||
-        (u.clusterRef ?? "").toUpperCase().includes(q) ||
-        (u.model ?? "").toUpperCase().includes(q) ||
-        (u.version ?? "").toUpperCase().includes(q) ||
-        u.vendorName.toUpperCase().includes(q)
-      );
+      return unitMatchesWallQuery(u, options.query);
     })
     .sort(
       (a, b) =>

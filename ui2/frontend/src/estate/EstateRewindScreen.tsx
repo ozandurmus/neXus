@@ -11,6 +11,7 @@ import {
   countLens,
   diffSnapshots,
   nearestSnap,
+  rewindRingFor,
   snapPoints,
   type RewindLens,
   type RewindSnapshot,
@@ -103,6 +104,7 @@ export function EstateRewindScreen({
   );
   const shown = diff ? diff.filter((t) => t.lens === lens) : null;
   const changedIds = new Set(shown?.map((t) => t.unit.id) ?? []);
+  const movedById = new Map((shown ?? []).map((t) => [t.unit.id, t.direction] as const));
   const asOfNow = (iso: string) => new Date(iso);
   const origin = momentA ? { at: momentA, compare: compare ? momentB : null } : null;
 
@@ -198,19 +200,33 @@ export function EstateRewindScreen({
             Backups use the live 7-day stale rule; each tile states the archive age at that moment. Unit links open the live dossier.
           </Box>
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: "5px" }} data-testid="rewind-wall">
-            {loadA.snap.units
-              .filter((u) => !compare || changedIds.has(u.id))
-              .map((u) => {
+            {loadA.snap.units.map((u) => {
                 const a = u.lenses[lens];
+                // Compare mode (diff ready): every unit of the lens is shown; moved units get a ring, unchanged ones fade.
+                const ring = diff ? rewindRingFor(movedById.get(u.id) ?? null) : null;
+                const faded = ring !== null && ring.color === null;
+                const dossierTitle = "Opens the live dossier (not the rewound moment); the dossier keeps a link back here";
                 return (
                   <Box
                     key={u.id}
                     component="a"
                     href={dossierHref(u.id, origin)}
-                    title="Opens the live dossier (not the rewound moment); the dossier keeps a link back here"
-                    sx={{ textDecoration: "none", display: "inline-flex" }}
+                    title={ring ? `${ring.word} between the two moments. ${dossierTitle}` : dossierTitle}
+                    data-rewind-ring={ring ? ring.word : undefined}
+                    data-rewind-faded={faded ? "true" : undefined}
+                    sx={{
+                      textDecoration: "none",
+                      display: "inline-flex",
+                      borderRadius: "4px",
+                      ...(ring?.color ? { outline: `2px ${ring.dashed ? "dashed" : "solid"} ${ev[ring.color]}`, outlineOffset: "2px" } : {}),
+                      ...(faded ? { opacity: 0.4 } : {}),
+                    }}
                   >
-                    <TileSwatch state={a.state} size={22} label={`${u.name}: ${a.word}${a.detail ? `, ${a.detail}` : ""}; evidence ${a.evidenceAt ? formatUtc(a.evidenceAt, false) : "UNKNOWN"}`} />
+                    <TileSwatch
+                      state={a.state}
+                      size={22}
+                      label={`${u.name}: ${a.word}${a.detail ? `, ${a.detail}` : ""}${ring ? `; ${ring.word}` : ""}; evidence ${a.evidenceAt ? formatUtc(a.evidenceAt, false) : "UNKNOWN"}`}
+                    />
                   </Box>
                 );
               })}

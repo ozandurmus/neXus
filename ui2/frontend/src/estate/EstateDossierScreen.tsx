@@ -10,6 +10,8 @@ import {
   getDeviceSoftwareHistory,
   getDeviceWorkspace,
   listDeviceBackups,
+  listFmgDiagnosticTargets,
+  listStaticRoutePreviews,
   type BackupArtefact,
   type CpInstallEvent,
   type DeviceComplianceResult,
@@ -27,6 +29,11 @@ import { DISPLAY_TZ, formatStamp, formatUtc } from "../shell/time";
 import { backupDisplayWord } from "../screens/backupWords";
 import { changedSections, complianceCounts } from "../screens/HeaderStatePills";
 import { licenseState, type SourceRead } from "../screens/overview/attentionRules";
+import {
+  unitEstateActions,
+  type EstateActionReads,
+  type EstateActionSpec,
+} from "./estateActionModel";
 import {
   parseTimeMs,
   readEstateWatchlist,
@@ -97,6 +104,23 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
     SourceRead<{ stretches: readonly SoftwareStretch[]; installEvents: readonly CpInstallEvent[] }> | "loading"
   >("loading");
   const [workspaceFallback, setWorkspaceFallback] = useState<SourceRead<DeviceWorkspaceView> | null>(null);
+  const [actionReads, setActionReads] = useState<EstateActionReads>({ staticRouteTargets: null, diagnosticTargets: null });
+
+  useEffect(() => {
+    let active = true;
+    setActionReads({ staticRouteTargets: null, diagnosticTargets: null });
+    settle(listStaticRoutePreviews().then((r) => r.targets ?? [])).then((staticRouteTargets) => {
+      if (active) setActionReads((prev) => ({ ...prev, staticRouteTargets }));
+    });
+    settle(listFmgDiagnosticTargets().then((r) => ({ targets: r.targets ?? [], canExecute: r.canExecute === true }))).then(
+      (diagnosticTargets) => {
+        if (active) setActionReads((prev) => ({ ...prev, diagnosticTargets }));
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [deviceId]);
 
   useEffect(() => {
     let active = true;
@@ -649,116 +673,6 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
             >
               {isWatched ? "Watching" : "Watch unit"}
             </Box>
-            <Box
-              component="a"
-              href={`?screen=diagnostics&device_id=${encodeURIComponent(unit.deviceId)}`}
-              sx={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                height: "34px",
-                px: "12px",
-                borderRadius: "8px",
-                border: `1px solid ${ev.lineStrong}`,
-                bgcolor: ev.surface,
-                color: ev.ink,
-                fontWeight: 580,
-                fontSize: "13px",
-                textDecoration: "none",
-                "&:hover": { borderColor: ev.ink2, textDecoration: "none" },
-              }}
-            >
-              Run a diagnostic (standard view)
-              <Box
-                component="span"
-                sx={{
-                  fontFamily: ESTATE_MONO,
-                  fontSize: "10px",
-                  fontWeight: 600,
-                  px: "5px",
-                  py: "1px",
-                  borderRadius: "4px",
-                  bgcolor: ev.surface2,
-                  color: ev.ink2,
-                }}
-              >
-                READ
-              </Box>
-            </Box>
-            <Box
-              component="a"
-              href={`?screen=support_bundles&device_id=${encodeURIComponent(unit.deviceId)}`}
-              sx={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                height: "34px",
-                px: "12px",
-                borderRadius: "8px",
-                border: `1px solid ${ev.lineStrong}`,
-                bgcolor: ev.surface,
-                color: ev.ink,
-                fontWeight: 580,
-                fontSize: "13px",
-                textDecoration: "none",
-                "&:hover": { borderColor: ev.ink2, textDecoration: "none" },
-              }}
-            >
-              Support bundle (standard view)
-              <Box
-                component="span"
-                sx={{
-                  fontFamily: ESTATE_MONO,
-                  fontSize: "10px",
-                  fontWeight: 600,
-                  px: "5px",
-                  py: "1px",
-                  borderRadius: "4px",
-                  bgcolor: ev.surface2,
-                  color: ev.ink2,
-                }}
-              >
-                READ
-              </Box>
-            </Box>
-            {unit.role === "gateway" ? (
-              <Box
-                component="a"
-                href="?screen=operations&tab=routes"
-                sx={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  height: "34px",
-                  px: "12px",
-                  borderRadius: "8px",
-                  border: `1px solid ${ev.act}`,
-                  bgcolor: ev.surface,
-                  color: ev.act,
-                  fontWeight: 600,
-                  fontSize: "13px",
-                  textDecoration: "none",
-                  "&:hover": { bgcolor: ev.actBg, textDecoration: "none" },
-                }}
-              >
-                Static routes (standard view)
-                <Box
-                  component="span"
-                  sx={{
-                    fontFamily: ESTATE_MONO,
-                    fontSize: "10px",
-                    fontWeight: 700,
-                    px: "5px",
-                    py: "1px",
-                    borderRadius: "4px",
-                    bgcolor: ev.actBg,
-                    color: ev.act,
-                  }}
-                >
-                  WRITES
-                </Box>
-              </Box>
-            ) : null}
           </Box>
         </Box>
 
@@ -1078,6 +992,17 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
             })}
           </Box>
         </Box>
+      </EstateCard>
+
+      {/* Gated actions: links to the standard view for this unit; nothing runs from here */}
+      <EstateCard sx={{ mt: "16px" }}>
+        <DossierActions
+          unitId={unit.deviceId}
+          actions={unitEstateActions(
+            { deviceId: unit.deviceId, vendor: unit.vendor, role: unit.role },
+            actionReads,
+          )}
+        />
       </EstateCard>
 
       {/* Detail Tabs */}
@@ -1524,6 +1449,76 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
           ) : null}
         </Box>
       </EstateCard>
+    </Box>
+  );
+}
+
+/** The unit's gated actions. Each available one is a link to the standard view for this unit; none runs from the Estate view. */
+function DossierActions({ unitId, actions }: { readonly unitId: string; readonly actions: readonly EstateActionSpec[] }) {
+  const wordFor: Record<EstateActionSpec["availability"], string> = {
+    available: "AVAILABLE",
+    unavailable: "UNAVAILABLE",
+    unknown: "UNKNOWN",
+    checking: "CHECKING",
+  };
+  return (
+    <Box data-testid="dossier-actions" aria-label={`Gated actions for ${unitId}`} role="group" sx={{ p: "18px" }}>
+      <Typography sx={{ fontWeight: 650, fontSize: "15px" }}>Actions</Typography>
+      <Typography sx={{ color: ev.ink2, fontSize: "13px", mt: "2px" }}>
+        Each action opens the standard view for this unit. Nothing runs from the Estate view.
+      </Typography>
+      <Box sx={{ display: "grid", gap: "8px", mt: "12px" }}>
+        {actions.map((a) => (
+          <Box
+            key={a.key}
+            data-testid={`dossier-action-${a.key}`}
+            data-availability={a.availability}
+            sx={{
+              display: "grid",
+              gridTemplateColumns: "minmax(140px, 200px) 1fr auto",
+              alignItems: "center",
+              gap: "12px",
+              px: "12px",
+              py: "10px",
+              border: `1px solid ${ev.line}`,
+              borderRadius: "10px",
+            }}
+          >
+            <Box>
+              <Typography sx={{ fontWeight: 600, fontSize: "13px" }}>{a.label}</Typography>
+              <Box component="span" sx={{ fontFamily: ESTATE_MONO, fontSize: "10px", fontWeight: 700, color: ev.ink2 }}>
+                {wordFor[a.availability]}
+              </Box>
+            </Box>
+            <Typography sx={{ color: ev.ink2, fontSize: "12.5px" }}>{a.reason}</Typography>
+            {a.href ? (
+              <Box
+                component="a"
+                href={a.href}
+                sx={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  height: "32px",
+                  px: "10px",
+                  borderRadius: "8px",
+                  border: `1px solid ${ev.lineStrong}`,
+                  color: ev.ink,
+                  fontWeight: 600,
+                  fontSize: "13px",
+                  textDecoration: "none",
+                  whiteSpace: "nowrap",
+                  "&:hover": { borderColor: ev.ink2, textDecoration: "none" },
+                }}
+              >
+                {a.linkLabel} →
+              </Box>
+            ) : null}
+          </Box>
+        ))}
+      </Box>
+      <Typography sx={{ color: ev.ink3, fontSize: "11.5px", mt: "8px" }}>
+        Availability comes from the standard views’ own reads. UNKNOWN means that read failed; the standard view makes the decision.
+      </Typography>
     </Box>
   );
 }

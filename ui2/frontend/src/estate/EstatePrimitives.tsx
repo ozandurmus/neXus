@@ -414,6 +414,7 @@ export function UnitTile({
         data-unit-tile={unit.name}
         data-unit-id={unit.deviceId}
         data-tile-state={answer.tileState}
+        data-dimmed={dimmed ? "true" : "false"}
         data-hatched={answer.tileState === "unk" ? "true" : undefined}
         onMouseEnter={onHover ? () => onHover(unit) : undefined}
         onFocus={onHover ? () => onHover(unit) : undefined}
@@ -444,6 +445,7 @@ export function HaPairTiles({
   lens,
   size = 22,
   selectedId = null,
+  dimmedIds,
   now = new Date(),
   onSelect,
   onHover,
@@ -452,6 +454,7 @@ export function HaPairTiles({
   readonly lens: EstateLens;
   readonly size?: number;
   readonly selectedId?: string | null;
+  readonly dimmedIds?: ReadonlySet<string>;
   readonly now?: Date;
   readonly onSelect?: (unit: EstateUnit, e: MouseEvent<HTMLElement>) => void;
   readonly onHover?: (unit: EstateUnit) => void;
@@ -495,6 +498,7 @@ export function HaPairTiles({
             lens={lens}
             size={size}
             selected={selectedId === member.deviceId}
+            dimmed={dimmedIds?.has(member.deviceId) ?? false}
             now={now}
             onSelect={onSelect}
             onHover={onHover}
