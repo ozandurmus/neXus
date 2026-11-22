@@ -218,6 +218,7 @@ export function EstateRewindScreen({
                       textDecoration: "none",
                       display: "inline-flex",
                       borderRadius: "4px",
+                      "&:focus-visible": { outline: `2px solid ${ev.accent}`, outlineOffset: "2px" },
                       ...(ring?.color ? { outline: `2px ${ring.dashed ? "dashed" : "solid"} ${ev[ring.color]}`, outlineOffset: "2px" } : {}),
                       ...(faded ? { opacity: 0.4 } : {}),
                     }}
@@ -247,7 +248,7 @@ export function EstateRewindScreen({
             <tbody>
               {shown.map((t) => (
                 <tr key={`${t.unit.id}:${t.lens}`}>
-                  <td><Box component="a" href={dossierHref(t.unit.id, origin)} sx={{ color: ev.accent, textDecoration: "none" }}>{t.unit.name}</Box></td>
+                  <td><Box component="a" href={dossierHref(t.unit.id, origin)} aria-label={`${t.unit.name}: open dossier at this moment`} sx={{ color: ev.accent, textDecoration: "none", borderRadius: "3px", "&:focus-visible": { outline: `2px solid ${ev.accent}`, outlineOffset: "2px" } }}>{t.unit.name}</Box></td>
                   <td><StateBadge state={t.then.state} word={t.then.word} dense /></td>
                   <td><StateBadge state={t.now.state} word={t.now.word} dense /></td>
                   <td>{t.direction === "worse" ? "got worse" : t.direction === "better" ? "got better" : "changed"}</td>

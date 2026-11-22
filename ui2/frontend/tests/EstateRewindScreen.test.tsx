@@ -2,6 +2,7 @@ import { render, screen, waitFor, within, fireEvent } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EstateRewindScreen } from "../src/estate/EstateRewindScreen";
 import { resetSharedApiCache } from "../src/auth/adminApi";
+import { dossierHref } from "../src/estate/estateRouting";
 
 function unit(verdict: string, at: string | null) {
   return {
@@ -93,5 +94,44 @@ describe("EstateRewindScreen rings", () => {
     expect(wall.querySelectorAll("[data-rewind-ring]")).toHaveLength(0);
     expect(wall.querySelectorAll("[data-rewind-faded]")).toHaveLength(0);
     expect(screen.getByRole("img", { name: /^FW-TANGO-04: .*; evidence/ })).not.toHaveAccessibleName(/worse|unchanged/);
+  });
+});
+
+describe("EstateRewindScreen drill-down links", () => {
+  beforeEach(() => resetSharedApiCache());
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("unit swatch and diff row link to the dossier for that unit at the rewound moment", async () => {
+    const evidence = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    const at = new Date(Date.now() - 10 * 86_400_000).toISOString();
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const requested = new URL(String(input), "http://x").searchParams.get("at") ?? "";
+      const old = Date.parse(requested) < Date.now() - 86_400_000;
+      const unit = {
+        device_id: "dev-tango-04",
+        hostname: "FW-TANGO-04",
+        failover: { verdict: old ? "UNKNOWN" : "NOT_READY", evidence_at: old ? null : evidence, reason: old ? "NO_RUN_AT_MOMENT" : null },
+        backup: { verdict: "OK", evidence_at: evidence },
+        compliance: { state: "EVIDENCED", pass_count: 2, fail_count: 0, critical_fail_count: 0, evidence_at: evidence },
+      };
+      return new Response(JSON.stringify({ as_of: requested, generated_at: requested, warnings: [], units: [unit] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }));
+    render(<EstateRewindScreen initialAt={at} initialCompare={null} />);
+    await waitFor(() => expect(screen.getByTestId("rewind-counts")).toBeInTheDocument());
+
+    const swatch = screen.getByRole("img", { name: /^FW-TANGO-04: / }).closest("a");
+    expect(swatch).not.toBeNull();
+    const expected = dossierHref("dev-tango-04", { at: new Date(at).toISOString(), compare: null });
+    expect(swatch).toHaveAttribute("href", expected);
+    expect(swatch?.getAttribute("href")).toContain("device_id=dev-tango-04");
+    expect(swatch?.getAttribute("href")).toContain("rewind_at=");
+
+    fireEvent.click(screen.getByRole("button", { name: "Compare two moments" }));
+    const table = await screen.findByTestId("rewind-transitions");
+    const rowLink = within(table).getByRole("link", { name: /^FW-TANGO-04: open dossier at this moment$/ });
+    const rowHref = rowLink.getAttribute("href") ?? "";
+    expect(rowHref.startsWith(`${expected}&rewind_compare=`)).toBe(true);
+    rowLink.focus();
+    expect(rowLink).toHaveFocus();
   });
 });

@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
 import { resetSharedApiCache } from "../src/auth/adminApi";
@@ -130,5 +130,98 @@ describe("Estate capped lists print the remainder", () => {
     render(<App />);
     const changes = await screen.findByTestId("estate-changes-screen");
     expect(await within(changes).findByText(/\+5 more change sets/)).toBeInTheDocument();
+  });
+});
+
+describe("Estate Compliance capped lists print the exact remainder", () => {
+  const pad = (i: number) => String(i).padStart(2, "0");
+  const gateways = (count: number) =>
+    Array.from({ length: count }, (_, i) => ({
+      device_id: `dev-tango-${pad(i + 1)}`, vendor_hint: "check_point", role: "gateway", enrollment_state: "ENROLLED",
+      hostname: `FW-TANGO-${pad(i + 1)}`, management_ip: `192.0.2.${i + 1}`, backup_target: true,
+      inventory_collected_at: new Date(Date.now() - 3 * 60_000).toISOString(),
+    }));
+  const overview = {
+    total_firewalls: 26, evaluated_firewalls: 0, assured_compliance_pct: 0, evidence_coverage_pct: 0,
+    observed_compliance_pct: 0, critical_deficiencies: 0, data_gaps: 0, control_checks: 0, frameworks: [],
+  };
+
+  /** Serves a given device roster; the per-control detail route is the /api/v2 path the screen reads. */
+  function stubRoster(devices: readonly unknown[], routes: Record<string, () => unknown>, detail?: unknown) {
+    const base = stubFetch(routes);
+    return vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/devices") return jsonResponse(200, { devices });
+      if (detail !== undefined && url.startsWith("/api/v2/compliance/controls/")) return jsonResponse(200, detail);
+      return base(input);
+    });
+  }
+
+  it("un-assessed firewalls: 13 gateways list the first 12 and print +1 more firewalls", async () => {
+    window.history.replaceState(null, "", "/?screen=compliance");
+    vi.stubGlobal(
+      "fetch",
+      stubRoster(gateways(13), {
+        "/compliance/controls": () => ({ total_controls: 0, controls: [] }),
+        "/compliance/overview": () => overview,
+      }),
+    );
+    stubViewport(1280);
+    render(<App />);
+    const comp = await screen.findByTestId("estate-compliance-screen");
+    expect(await within(comp).findByTestId("unassessed-more")).toHaveTextContent("+1 more firewalls");
+    expect(within(comp).getAllByText("FW-TANGO-01").length).toBeGreaterThan(0);
+    expect(within(comp).getAllByText("FW-TANGO-12").length).toBeGreaterThan(0);
+    expect(within(comp).queryAllByText("FW-TANGO-13")).toHaveLength(0);
+  });
+
+  it("remediation rows, affected units and per-unit verdicts print their remainders", async () => {
+    window.history.replaceState(null, "", "/?screen=compliance");
+    const devices = gateways(25);
+    const affectedAll = devices.map((d) => d.hostname);
+    const controls = Array.from({ length: 26 }, (_, i) => ({
+      control_id: `CIS-7.${i}`, title: `Control ${i}`, description: "", family: "IA", severity: "CRITICAL", category: "Authentication",
+      frameworks: [{ framework: "CIS Benchmark", reference: `7.${i}` }], status: "FAIL", compliance_pct: 0,
+      target_device_count: 25, pass_count: 0, fail_count: 1, data_unavailable_count: 0,
+      affected_devices: i === 0 ? affectedAll : [affectedAll[0]], vendors: ["check_point"],
+    }));
+    // 21 non-PASS verdicts on the first control: the screen shows 20 and prints +1 more.
+    const verdictDevices = devices.slice(0, 21).map((d) => ({
+      device_id: d.device_id, hostname: d.hostname, vendor: "check_point", status: "FAIL",
+      observed_value: "synthetic-observed", message: null,
+    }));
+    vi.stubGlobal(
+      "fetch",
+      stubRoster(
+        devices,
+        {
+          "/compliance/controls": () => ({ total_controls: 26, controls }),
+          "/compliance/overview": () => ({ ...overview, evaluated_firewalls: 25, control_checks: 26, critical_deficiencies: 26 }),
+        },
+        {
+          control_id: "CIS-7.0", title: "Control 0", severity: "CRITICAL", status: "FAIL", rationale: null,
+          frameworks: [], expected: [], devices: verdictDevices,
+        },
+      ),
+    );
+    stubViewport(1280);
+    render(<App />);
+    const comp = await screen.findByTestId("estate-compliance-screen");
+
+    // Remediation: 26 rows, first 25 render, +1 more controls.
+    expect(await within(comp).findByTestId("remediation-more")).toHaveTextContent("+1 more controls");
+    expect(comp.querySelectorAll("[data-remediation-row]")).toHaveLength(25);
+
+    const row = comp.querySelector('[data-remediation-row="CIS-7.0"]') as HTMLElement;
+    expect(row).not.toBeNull();
+    // Affected units: 25 units, first 24 render, +1 more units.
+    expect(await within(row).findByTestId("affected-more")).toHaveTextContent("+1 more units");
+
+    // Verdicts: expand the row; 21 non-PASS, 20 shown, +1 more units.
+    fireEvent.click(within(row).getByRole("button", { name: /^Show/ }));
+    expect(await within(row).findByTestId("verdicts-more")).toHaveTextContent("+1 more units");
+    expect(within(row).getAllByText("FW-TANGO-01").length).toBeGreaterThan(0);
+    expect(within(row).getAllByText("FW-TANGO-20").length).toBeGreaterThan(0);
+    expect(within(row).queryAllByText("FW-TANGO-21")).toHaveLength(0);
   });
 });

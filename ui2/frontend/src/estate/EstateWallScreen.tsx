@@ -209,8 +209,9 @@ export function EstateWallScreen({
           ["na", "Not applicable"],
         ];
 
-  // Newest and oldest evidence time of the lens answers on screen; never falls back to the inventory read age
-  // under a Backups/Controls/Exposure/Failover/Policy heading.
+  // Oldest and newest evidence time of the lens answers on screen, read only from each unit's own lens evidenceAt.
+  // Units without a lens evidence time count as "no evidence time" (UNKNOWN); the inventory read age is never used
+  // as a fallback under a lens heading.
   const lensStamp = (() => {
     const src =
       lens === "failover"
@@ -229,18 +230,18 @@ export function EstateWallScreen({
     const ats = model.units
       .map((u) => u.lenses[lens]?.evidenceAt)
       .filter((x): x is string => Boolean(x))
-      .sort();
-    const fleetAt =
-      lens === "backups"
-        ? overview?.evidence?.backup?.at ?? null
-        : lens === "compliance"
-          ? overview?.evidence?.compliance?.at ?? null
-          : null;
-    const newest = ats.at(-1) ?? fleetAt;
-    const oldest = ats.length > 1 && ats[0] !== ats.at(-1) ? ats[0] : null;
-    return { at: newest, oldest, src };
+      .sort((a, b) => Date.parse(a) - Date.parse(b));
+    const total = model.units.length;
+    const withEvidence = ats.length;
+    return {
+      src,
+      total,
+      withEvidence,
+      noEvidence: total - withEvidence,
+      newest: ats.at(-1) ?? null,
+      oldest: ats[0] ?? null,
+    };
   })();
-  const lensSourceStamp = { at: lensStamp.at, src: lensStamp.src };
 
   const distinctVendors = [...new Map(model.units.map((u) => [u.vendor, u.vendorName] as const)).entries()].sort(
     (a, b) => a[1].localeCompare(b[1]),
@@ -438,10 +439,32 @@ export function EstateWallScreen({
                 <b style={{ fontFamily: ESTATE_MONO, color: ev.ink }}>{badOrUnknownCount}</b>{" "}
                 {badOrUnknownCount === 1 ? "unit needs" : "units need"} action or {badOrUnknownCount === 1 ? "is" : "are"} UNKNOWN on this lens
               </Typography>
-              <EvidenceStamp at={lensSourceStamp.at} source={`${lensSourceStamp.src} (newest)`} now={model.now} />
-              {lensStamp.oldest ? (
-                <EvidenceStamp at={lensStamp.oldest} source={`${lensStamp.src} (oldest)`} now={model.now} />
-              ) : null}
+              <Box
+                data-testid="estate-lens-evidence-stamp"
+                sx={{ display: "inline-flex", alignItems: "center", gap: "8px", flexWrap: "wrap", fontSize: "12px", color: ev.ink2 }}
+              >
+                {lensStamp.withEvidence === 0 ? (
+                  <EvidenceStamp at={null} source={`${lensStamp.src} (no evidence time)`} now={model.now} />
+                ) : (
+                  <>
+                    <EvidenceStamp at={lensStamp.oldest} source={`${lensStamp.src} (oldest)`} now={model.now} />
+                    {lensStamp.withEvidence > 1 ? <span>to</span> : null}
+                    {lensStamp.withEvidence > 1 ? (
+                      <EvidenceStamp at={lensStamp.newest} source={`${lensStamp.src} (newest)`} now={model.now} />
+                    ) : null}
+                    <span>
+                      {lensStamp.withEvidence === 1 ? "on" : "across"} {lensStamp.withEvidence} of {lensStamp.total}{" "}
+                      {lensStamp.total === 1 ? "unit" : "units"} with {lensStamp.src} evidence
+                    </span>
+                  </>
+                )}
+                {lensStamp.noEvidence > 0 ? (
+                  <span>
+                    {lensStamp.noEvidence} {lensStamp.noEvidence === 1 ? "unit has" : "units have"} no {lensStamp.src}{" "}
+                    evidence time (UNKNOWN)
+                  </span>
+                ) : null}
+              </Box>
               {lens === "failover" || lens === "backups" || lens === "compliance" ? (
                 <Box
                   component="a"

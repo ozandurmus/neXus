@@ -197,3 +197,61 @@ describe("Estate wall search: Filter and Dim modes", () => {
     expect(within(screen.getByRole("table", { name: "Estate units" })).queryByText("FW-TANGO-04")).toBeNull();
   });
 });
+
+describe("Estate wall lens source stamp under Backups", () => {
+  it("shows the oldest and newest archive evidence and counts units with no archive evidence time", () => {
+    // Synthetic: two archives of different ages and one backup target with no archive at all.
+    const archivesDevices: readonly DeviceSummary[] = [DEVICES[0], DEVICES[2], DEVICES[3]].map((d) => ({
+      ...d,
+      backup_target: true,
+    }));
+    fixture.model = buildEstateModel({
+      now: NOW,
+      devices: { state: "ok", value: archivesDevices },
+      overview: { state: "failed" },
+      failover: { state: "failed" },
+      backups: {
+        state: "ok",
+        value: {
+          backups: [
+            {
+              artefact_id: "art-tango-04",
+              device_id: "dev-tango-04",
+              collected_at: "2026-11-16T12:00:00Z",
+              size_bytes: 1024,
+              digest_prefix: "00000000",
+              validation_level: "VALIDATED",
+              deviation_state: "unchanged",
+            },
+            {
+              artefact_id: "art-sierra-01",
+              device_id: "dev-sierra-01",
+              collected_at: "2026-11-22T11:57:00Z",
+              size_bytes: 1024,
+              digest_prefix: "11111111",
+              validation_level: "VALIDATED",
+              deviation_state: "unchanged",
+            },
+          ],
+          deviations: null,
+        },
+      },
+      lifecycle: { state: "failed" },
+    });
+    render(<EstateWallScreen />);
+    window.history.replaceState({}, "", "/?lens=backups");
+    fireEvent(window, new PopStateEvent("popstate"));
+
+    const stamp = screen.getByTestId("estate-lens-evidence-stamp");
+    // Oldest (6 d) and newest (3 min) are both shown, never only the newest.
+    expect(stamp).toHaveTextContent(/6 d/);
+    expect(stamp).toHaveTextContent(/3 min/);
+    expect(stamp).toHaveTextContent("to");
+    expect(stamp).toHaveTextContent("across 2 of 3 units with backup evidence");
+    // The unit with no archive counts as no evidence time (UNKNOWN), not as inventory age (inventory read 2 h ago).
+    expect(stamp).toHaveTextContent("1 unit has no backup evidence time (UNKNOWN)");
+    expect(stamp).not.toHaveTextContent("2 h");
+
+    window.history.replaceState({}, "", "/");
+  });
+});

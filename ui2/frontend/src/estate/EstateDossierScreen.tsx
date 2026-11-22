@@ -65,6 +65,7 @@ import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
 import { managedThroughOf } from "./estateManagedThrough";
 import { useEstateData } from "./useEstateData";
 import { EstateDossierLogsBlock, loadDeviceLogsReads } from "./EstateDossierLogsBlock";
+import { EstateDossierMemberDiffBlock } from "./EstateDossierMemberDiffBlock";
 import type { DeviceLogsReads } from "./estateDeviceLogsSummary";
 
 type DossierTab = "interfaces" | "routes" | "backups" | "controls" | "prechecks";
@@ -756,6 +757,11 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
             </Box>
           </Box>
         ) : null}
+
+        <EstateDossierMemberDiffBlock
+          clusterRef={unit.clusterRef}
+          labels={Object.fromEntries((cluster?.members ?? []).map((m) => [m.deviceId, m.name]))}
+        />
 
         {/* Identity & relationship strip */}
         <Box

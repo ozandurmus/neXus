@@ -568,19 +568,24 @@ export function EstateBriefScreen() {
         {overviewUnreadable ? (
           <>
             The overview read failed, so what needs action is UNKNOWN. Nothing here is counted as fine.
+            {unknownCount > 0 || unknownEvidenceCount > 0 ? ` ${unknownHeadlineText}` : ""}
           </>
         ) : actCount > 0 || reviewCount > 0 ? (
           <>
             <Box component="em" sx={{ fontStyle: "normal", color: actCount > 0 ? ev.act : ev.ink }}>
-              {actCount} {actCount === 1 ? "item needs action" : "items need action"}
-            </Box>{" "}
-            and{" "}
-            <Box component="span" sx={{ color: reviewCount > 0 ? ev.watch : ev.ink2 }}>
-              {reviewCount} {reviewCount === 1 ? "needs review" : "need review"}
+              {actCount + reviewCount} {actCount + reviewCount === 1 ? "item" : "items"}
             </Box>
             {affectedUnitIds.size > 0
-              ? `, on ${affectedUnitIds.size} ${affectedUnitIds.size === 1 ? "unit" : "units"}`
+              ? ` on ${affectedUnitIds.size} ${affectedUnitIds.size === 1 ? "unit" : "units"}`
               : ""}
+            :{" "}
+            <Box component="span" sx={{ color: actCount > 0 ? ev.act : ev.ink2 }}>
+              {actCount} act now
+            </Box>
+            {", "}
+            <Box component="span" sx={{ color: reviewCount > 0 ? ev.watch : ev.ink2 }}>
+              {reviewCount} to review
+            </Box>
             .{unknownCount > 0 || unknownEvidenceCount > 0 ? ` ${unknownHeadlineText}` : ""}
             {deltaLine ? ` ${deltaLine}` : ""}
           </>
