@@ -84,8 +84,8 @@ function CertificateLoader({ deviceId }: { readonly deviceId: string }) {
             <Typography sx={{ fontSize: "12.5px", color: ev.ink3 }}>Certificate unchanged since trust was recorded.</Typography>
           ) : null}
           {pinned ? (
-            <Typography sx={{ fontSize: "12px", color: ev.ink3, overflowWrap: "anywhere" }}>
-              Pinned SHA-256: {pinned.fingerprint_sha256}
+            <Typography data-testid="dossier-certificate-pinned" sx={{ fontSize: "12px", color: ev.ink3 }}>
+              A certificate is pinned for this unit.
             </Typography>
           ) : null}
           {pendingCount > 0 ? (

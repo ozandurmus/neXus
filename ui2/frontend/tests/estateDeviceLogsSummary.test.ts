@@ -156,7 +156,7 @@ describe("EstateDossierLogsBlock", () => {
     expect(block.textContent).toContain("First collection: older content not fetched");
     expect(block.querySelectorAll("[data-logs-figure]")).toHaveLength(3);
 
-    const link = screen.getByRole("link", { name: "Open full logs" });
+    const link = screen.getByRole("link", { name: "Open full logs (standard view) →" });
     expect(new URLSearchParams(link.getAttribute("href")!.slice(1)).get("standard")).toBe("1");
 
     // No log lines or text: the block shows counts and labels only.

@@ -64,7 +64,7 @@ export function EstateDossierLogsBlock({
       href={standardDeviceLogsHref(deviceId)}
       sx={{ fontSize: "12.5px", color: ev.accent, textDecoration: "none", "&:hover": { textDecoration: "underline" } }}
     >
-      Open full logs
+      Open full logs (standard view) →
     </Box>
   );
 
