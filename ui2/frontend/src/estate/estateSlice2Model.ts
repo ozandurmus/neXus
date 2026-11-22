@@ -31,6 +31,7 @@ import { withFirewallNames } from "../screens/policyFirewalls";
 import { primaryReportsPeer, primaryRolesConfirmed, readinessStopReason } from "../screens/ReadinessChecksTable";
 import {
   newestIso,
+  oldestIso,
   parseTimeMs,
   type BadgeState,
   type EstateCluster,
@@ -1528,6 +1529,7 @@ export interface BackupsLensModel {
   readonly sizeDeviationCount: number;
   readonly nonTargetCount: number;
   readonly lastFleetRunAt: string | null;
+  readonly oldestArchiveAt: string | null;
   readonly retentionDays: number | null;
   readonly storeUsage: {
     readonly known: boolean;
@@ -1926,6 +1928,7 @@ export function buildBackupsLensModel(inputs: {
 
   const lastScheduled = policy.state === "ok" ? (policy.value.last_scheduled_run_at ?? null) : null;
   const newestStoredAt = newestIso(sortedRows.map((r) => r.lastArchiveAt));
+  const oldestStoredAt = oldestIso(sortedRows.map((r) => r.lastArchiveAt));
 
   return {
     rows: sortedRows,
@@ -1937,6 +1940,7 @@ export function buildBackupsLensModel(inputs: {
     sizeDeviationCount: targetRows.filter((r) => r.hasSizeDeviation).length,
     nonTargetCount: nonTargetRows.length,
     lastFleetRunAt: lastScheduled ?? newestStoredAt ?? backupEvidenceAt,
+    oldestArchiveAt: oldestStoredAt,
     retentionDays,
     storeUsage,
   };

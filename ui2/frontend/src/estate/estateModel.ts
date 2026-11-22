@@ -317,7 +317,7 @@ export function newestIso(isos: ReadonlyArray<string | null | undefined>): strin
   return best;
 }
 
-function oldestIso(isos: ReadonlyArray<string | null | undefined>): string | null {
+export function oldestIso(isos: ReadonlyArray<string | null | undefined>): string | null {
   let worst: string | null = null;
   let worstMs = Infinity;
   for (const iso of isos) {

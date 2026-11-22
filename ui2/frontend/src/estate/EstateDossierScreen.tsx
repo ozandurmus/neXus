@@ -73,6 +73,7 @@ import { EstateDossierAsaSavedBlock } from "./EstateDossierAsaSavedBlock";
 import { EstateDossierSshTrustBlock } from "./EstateDossierSshTrustBlock";
 import { EstateDossierGridBlock } from "./EstateDossierGridBlock";
 import { EstateDossierJobsBlock } from "./EstateDossierJobsBlock";
+import { EstateDossierHygieneBlock } from "./EstateDossierHygieneBlock";
 import type { DeviceLogsReads } from "./estateDeviceLogsSummary";
 
 type DossierTab = "interfaces" | "routes" | "backups" | "controls" | "prechecks";
@@ -927,6 +928,8 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
       <EstateDossierSshTrustBlock deviceId={unit.deviceId} />
 
       <EstateDossierGridBlock deviceId={unit.deviceId} inventory={inventory} now={now} />
+
+      <EstateDossierHygieneBlock deviceId={unit.deviceId} />
 
       {/* Managed through: management-plane intent from the management tree, never device runtime truth */}
       {(() => {
