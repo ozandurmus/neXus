@@ -1,0 +1,153 @@
+import type { ReportCatalogue, ReportRunView, ReportTemplateCard } from "../auth/adminApi";
+import { ageBucketOf, parseTimeMs, type AgeBucket } from "./estateModel";
+
+/**
+ * Estate Reports list model (Opus bold concept, row 20: "Reports · evidence packs, templates, history").
+ * Pure functions only: the screen fetches the catalogue and the run history through the standard Reports clients and
+ * passes them here. Nothing in this model reads a device or creates a report; generation stays on the standard screen.
+ */
+
+export const REPORT_LIST_CAP = 8;
+
+/** A list cut to `cap` rows, with the count of rows left out so the screen can print "+N more". */
+export interface CappedList<T> {
+  readonly shown: readonly T[];
+  readonly more: number;
+}
+
+export function capList<T>(items: readonly T[], cap: number = REPORT_LIST_CAP): CappedList<T> {
+  const limit = Math.max(0, cap);
+  return { shown: items.slice(0, limit), more: Math.max(0, items.length - limit) };
+}
+
+/** Age of a piece of evidence as a short label; a missing or unreadable timestamp is UNKNOWN, never "0 h". */
+export function evidenceAgeLabel(iso: string | null | undefined, now: Date): string {
+  const t = parseTimeMs(iso);
+  if (t === null) return "UNKNOWN";
+  const ms = Math.max(0, now.getTime() - t);
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(ms / 3_600_000);
+  if (hours < 48) return `${hours} h`;
+  return `${Math.floor(hours / 24)} d`;
+}
+
+/** The newest evidence timestamp across a run's data planes; null when the run carries no plane evidence. */
+export function newestEvidenceAt(run: ReportRunView): string | null {
+  let newest: { readonly iso: string; readonly ms: number } | null = null;
+  for (const plane of run.data_as_of.planes ?? []) {
+    const ms = parseTimeMs(plane.newest);
+    if (ms === null || plane.newest === null) continue;
+    if (newest === null || ms > newest.ms) newest = { iso: plane.newest, ms };
+  }
+  return newest?.iso ?? null;
+}
+
+export type TemplateStatus = "AVAILABLE" | "REFUSED";
+
+export interface TemplateRow {
+  readonly templateId: string;
+  readonly title: string;
+  readonly audience: string;
+  readonly question: string;
+  readonly formats: readonly string[];
+  readonly status: TemplateStatus;
+  /** Plain statement of the status; a refused template names the reads the session lacks. */
+  readonly statusText: string;
+  readonly missingReads: readonly string[];
+}
+
+export function buildTemplateRows(catalogue: ReportCatalogue): readonly TemplateRow[] {
+  return catalogue.templates.map((t: ReportTemplateCard): TemplateRow => {
+    const refused = t.missing_reads.length > 0;
+    return {
+      templateId: t.template_id,
+      title: t.title,
+      audience: t.audience,
+      question: t.question,
+      formats: [...t.formats],
+      status: refused ? "REFUSED" : "AVAILABLE",
+      statusText: refused
+        ? `Refused: needs read access to ${t.missing_reads.join(", ")}`
+        : "Available for this session",
+      missingReads: [...t.missing_reads],
+    };
+  });
+}
+
+export type RunTone = "ok" | "review" | "act";
+
+export interface RunRow {
+  readonly runId: string;
+  readonly templateId: string;
+  readonly title: string;
+  readonly format: string;
+  readonly projection: string;
+  readonly state: ReportRunView["state"];
+  readonly tone: RunTone;
+  readonly requestedAt: string;
+  /** Age of the stored evidence the run was built from (newest plane timestamp), not the age of the request. */
+  readonly evidenceAt: string | null;
+  readonly evidenceAgeLabel: string;
+  readonly evidenceBucket: AgeBucket;
+  readonly expiresAt: string;
+  readonly downloadable: boolean;
+  readonly errorCode: string | null;
+}
+
+function toneOfState(state: ReportRunView["state"]): RunTone {
+  if (state === "SUCCEEDED") return "ok";
+  if (state === "FAILED") return "act";
+  return "review";
+}
+
+export function buildRunRows(runs: readonly ReportRunView[], now: Date): readonly RunRow[] {
+  return [...runs]
+    .sort((a, b) => (parseTimeMs(b.requested_at) ?? 0) - (parseTimeMs(a.requested_at) ?? 0))
+    .map((r): RunRow => {
+      const evidenceAt = newestEvidenceAt(r);
+      return {
+        runId: r.run_id,
+        templateId: r.template_id,
+        title: r.title,
+        format: r.format,
+        projection: r.projection,
+        state: r.state,
+        tone: toneOfState(r.state),
+        requestedAt: r.requested_at,
+        evidenceAt,
+        evidenceAgeLabel: evidenceAgeLabel(evidenceAt, now),
+        evidenceBucket: ageBucketOf(evidenceAt, now),
+        expiresAt: r.expires_at,
+        downloadable: r.downloadable,
+        errorCode: r.error_code,
+      };
+    });
+}
+
+/** Counts of runs by state. Each label says what it counts: runs, not reports or evidence packs. */
+export interface RunSummary {
+  readonly total: number;
+  readonly succeeded: number;
+  readonly failed: number;
+  readonly inProgress: number;
+  readonly sentence: string;
+}
+
+export function summariseRuns(runs: readonly ReportRunView[]): RunSummary {
+  const succeeded = runs.filter(r => r.state === "SUCCEEDED").length;
+  const failed = runs.filter(r => r.state === "FAILED").length;
+  const inProgress = runs.length - succeeded - failed;
+  return {
+    total: runs.length,
+    succeeded,
+    failed,
+    inProgress,
+    sentence: `${runs.length} report runs listed: ${succeeded} succeeded, ${failed} failed, ${inProgress} in progress.`,
+  };
+}
+
+/** The standard Reports screen, which the Estate screen links to for generation (never generates here). */
+export function standardReportsHref(): string {
+  return "?screen=reports&standard=1";
+}
