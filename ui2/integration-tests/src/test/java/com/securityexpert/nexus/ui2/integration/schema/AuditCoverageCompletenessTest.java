@@ -62,18 +62,21 @@ class AuditCoverageCompletenessTest {
      * event-specific capture instead of {@code trg_audit_<table>}. Each named
      * trigger must exist on its table ({@link #everyNamedAuditTriggerExists()}).
      */
-    static final Map<String, Set<String>> AUDITED_BY_NAMED_TRIGGER = Map.of(
-            "ldap_settings", Set.of("tr_audit_ldap_settings"),                         // V204
-            "saml_settings", Set.of("tr_audit_saml_settings"),                         // V241
-            "module_runtime_control", Set.of("module_runtime_control_audit"),          // V128
-            "endpoint_admission", Set.of("endpoint_quarantine_release_audit"),         // V131
-            "runtime_task_lease", Set.of("task_quarantine_release_audit"),             // V131
-            "failover_dispatch_intent", Set.of("failover_dispatch_audit"),             // V138
-            "notification_settings", Set.of("trg_audit_notification_settings_config"), // V100
-            "notification_routes", Set.of("trg_audit_notification_routes_config",      // V100
-                    "trg_audit_notification_routes_row"),
-            "zone_matrix_revision", Set.of("tr_audit_zone_matrix_revision"),           // V216
-            "zone_matrix_access_log", Set.of("tr_audit_zone_matrix_access_log"));      // V216
+    static final Map<String, Set<String>> AUDITED_BY_NAMED_TRIGGER = Map.ofEntries(
+            Map.entry("ldap_settings", Set.of("tr_audit_ldap_settings")),                         // V204
+            Map.entry("saml_settings", Set.of("tr_audit_saml_settings")),                         // V241
+            // V262: governance changes only; worker liveness/pool telemetry skipped (V128 trigger disabled)
+            Map.entry("module_runtime_control", Set.of("module_runtime_control_audit_governance")),
+            // V262: every INSERT/DELETE and every UPDATE except a lease-only heartbeat (V1 trg_audit_jobs disabled)
+            Map.entry("jobs", Set.of("trg_audit_jobs_insert_delete", "trg_audit_jobs_update")),
+            Map.entry("endpoint_admission", Set.of("endpoint_quarantine_release_audit")),             // V131
+            Map.entry("runtime_task_lease", Set.of("task_quarantine_release_audit")),                 // V131
+            Map.entry("failover_dispatch_intent", Set.of("failover_dispatch_audit")),                 // V138
+            Map.entry("notification_settings", Set.of("trg_audit_notification_settings_config")),     // V100
+            Map.entry("notification_routes", Set.of("trg_audit_notification_routes_config",          // V100
+                    "trg_audit_notification_routes_row")),
+            Map.entry("zone_matrix_revision", Set.of("tr_audit_zone_matrix_revision")),               // V216
+            Map.entry("zone_matrix_access_log", Set.of("tr_audit_zone_matrix_access_log")));          // V216
 
     /**
      * Tables that are not operator- or configuration-mutation-bearing, each
@@ -239,7 +242,7 @@ class AuditCoverageCompletenessTest {
                 for (String trigger : entry.getValue()) {
                     try (PreparedStatement statement = migrate.prepareStatement(
                             "SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid "
-                                    + "WHERE c.relname = ? AND t.tgname = ? AND NOT t.tgisinternal")) {
+                                    + "WHERE c.relname = ? AND t.tgname = ? AND NOT t.tgisinternal AND t.tgenabled <> 'D'")) {
                         statement.setString(1, entry.getKey());
                         statement.setString(2, trigger);
                         try (ResultSet rows = statement.executeQuery()) {
@@ -280,7 +283,7 @@ class AuditCoverageCompletenessTest {
     }
 
     /**
-     * Every table carrying a trigger named exactly {@code trg_audit_<table>}.
+     * Every table carrying an enabled trigger named exactly {@code trg_audit_<table>} (a disabled one audits nothing).
      * The name is matched against the table it is attached to, so a trigger
      * wired to the wrong table cannot satisfy this test.
      */
@@ -288,9 +291,10 @@ class AuditCoverageCompletenessTest {
         Set<String> tables = new LinkedHashSet<>();
         try (Statement statement = connection.createStatement();
                 ResultSet rows = statement.executeQuery(
-                        "SELECT DISTINCT event_object_table FROM information_schema.triggers "
-                                + "WHERE trigger_schema = 'public' "
-                                + "AND trigger_name = 'trg_audit_' || event_object_table")) {
+                        "SELECT DISTINCT c.relname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid "
+                                + "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                                + "WHERE n.nspname = 'public' AND NOT t.tgisinternal AND t.tgenabled <> 'D' "
+                                + "AND t.tgname = 'trg_audit_' || c.relname")) {
             while (rows.next()) {
                 tables.add(rows.getString(1));
             }

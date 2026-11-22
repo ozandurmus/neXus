@@ -691,6 +691,38 @@ public final class Ui2WorkerMain {
                         .log(System.Logger.Level.WARNING, "System-log retention error: " + t.getClass().getSimpleName());
             }
         }, 300, 3600, java.util.concurrent.TimeUnit.SECONDS);
+
+        // V262 (PO 2026-11-23): unreferenced policy chunk generations, hourly, outside the job windows, on its own
+        // thread so its paced batches never hold back the job reconciler. UI2_POLICY_CHUNK_GC=off stops it.
+        if (!"off".equalsIgnoreCase(OverwatchEnv.getOrDefault("UI2_POLICY_CHUNK_GC", "on"))) {
+            var chunkGc = new com.securityexpert.nexus.ui2.persistence.policy.PolicyChunkGarbageCollector(transactionBoundary,
+                    policyChunkGcSettings());
+            var chunkGcExecutor = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "policy-chunk-gc");
+                t.setDaemon(true);
+                return t;
+            });
+            chunkGcExecutor.scheduleWithFixedDelay(() -> {
+                try {
+                    if (com.securityexpert.nexus.ui2.platform.JobWindowPolicy.SYSTEM.isOpen()) return;
+                    moduleRuntime.runTask(role, instance, "PolicyChunkGarbageCollector.runOnce", chunkGc::runOnce);
+                } catch (Throwable t) {
+                    System.getLogger(Ui2WorkerMain.class.getName())
+                            .log(System.Logger.Level.WARNING, "Policy chunk collection error: " + t.getClass().getSimpleName());
+                }
+            }, 900, 3600, java.util.concurrent.TimeUnit.SECONDS);
+        }
+    }
+
+    /** Batch size and count are tunable for the first pass; the 24 h safety age can only be raised. */
+    static com.securityexpert.nexus.ui2.persistence.policy.PolicyChunkGarbageCollector.Settings policyChunkGcSettings() {
+        var defaults = com.securityexpert.nexus.ui2.persistence.policy.PolicyChunkGarbageCollector.Settings.defaults();
+        return new com.securityexpert.nexus.ui2.persistence.policy.PolicyChunkGarbageCollector.Settings(
+                Duration.ofHours(Long.parseLong(OverwatchEnv.getOrDefault("UI2_POLICY_CHUNK_GC_SAFETY_HOURS",
+                        String.valueOf(defaults.safetyAge().toHours())))),
+                Integer.parseInt(OverwatchEnv.getOrDefault("UI2_POLICY_CHUNK_GC_BATCH_ROWS", String.valueOf(defaults.batchRows()))),
+                Integer.parseInt(OverwatchEnv.getOrDefault("UI2_POLICY_CHUNK_GC_MAX_BATCHES", String.valueOf(defaults.maxBatches()))),
+                defaults.pause(), defaults.statementTimeout());
     }
 
     private static com.securityexpert.nexus.ui2.worker.backup.asa.AsaConfigRelationSink asaRelationSink(TransactionBoundary tx) {
