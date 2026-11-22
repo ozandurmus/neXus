@@ -11,6 +11,8 @@ import type {
   DeviceSummary,
   LocalIdentityView,
   ScheduledJobsView,
+  ScriptRunSummary,
+  ScriptSummary,
   SessionView,
   SystemHealth,
 } from "../auth/adminApi";
@@ -35,6 +37,8 @@ export interface SystemSummaryInputs {
   readonly audit: TimedRead<readonly AuditEventView[]>;
   readonly identities: TimedRead<readonly LocalIdentityView[]>;
   readonly sessions: TimedRead<readonly SessionView[]>;
+  /** Script Execution: the script list and one runs read per script (first SCRIPT_RUNS_READ_CAP scripts). */
+  readonly scripts?: ScriptRunsInput;
   /** The instant this page loaded; the Access section states it as the read time (not as evidence age). */
   readonly pageAt: string;
 }
@@ -60,9 +64,25 @@ export interface SystemSection {
   /** The standard screen the section links to (always with `standard=1`). */
   readonly standardHref: string;
   readonly standardLabel: string;
+  /** Further standard-screen links the section offers (each with `standard=1`); read-only sections use none. */
+  readonly extraLinks?: readonly { readonly href: string; readonly label: string }[];
+}
+
+/** One runs read for one script; `read` is the source read of that script's run list. */
+export interface ScriptRunRead extends TimedRead<readonly ScriptRunSummary[]> {
+  readonly script: ScriptSummary;
+}
+
+export interface ScriptRunsInput {
+  /** The script list read; its total is what "+N more scripts not read" is counted from. */
+  readonly scripts: TimedRead<readonly ScriptSummary[]>;
+  /** One entry per script whose runs were read (at most SCRIPT_RUNS_READ_CAP, in list order). */
+  readonly runs: readonly ScriptRunRead[];
 }
 
 export const SYSTEM_LIST_CAP = 4;
+/** How many scripts the System screen reads runs for; the script list response carries no last run. */
+export const SCRIPT_RUNS_READ_CAP = 20;
 export const AUDIT_PREVIEW_CAP = 5;
 /** Device latest-job states that mean a job is in flight now. */
 export const IN_FLIGHT_JOB_STATES: readonly string[] = ["EXECUTING", "CLAIMED", "REQUESTED"];
@@ -100,14 +120,25 @@ function capCounts(counts: ReadonlyMap<string, number>, cap: number): { lines: S
   return { lines: shown, more: rest.length > 0 ? `+${rest.length} more kinds (${restTotal} devices)` : null };
 }
 
+/** The standard Script Execution tab: run-now, output and script edit stay there; this section never offers them. */
+const SCRIPT_EXECUTION_LINKS: readonly { readonly href: string; readonly label: string }[] = [
+  { href: "?screen=operations&tab=script-execution&standard=1", label: "Open script execution (standard)" },
+];
+
 /** What runs: which scheduled job families run, and how many devices have a job in flight right now. */
-export function summariseRuns(jobs: TimedRead<ScheduledJobsView>, devices: TimedRead<readonly DeviceSummary[]>): SystemSection {
+export function summariseRuns(
+  jobs: TimedRead<ScheduledJobsView>,
+  devices: TimedRead<readonly DeviceSummary[]>,
+  scripts?: ScriptRunsInput,
+): SystemSection {
   const standardHref = "?screen=administration&tab=scheduled-jobs&standard=1";
   const standardLabel = "Open scheduled jobs (standard)";
   const source = "scheduled jobs list; device latest job state";
+  const scriptPart = scriptRunLines(scripts);
   const jobsKind = unreadable(jobs.read);
   if (jobsKind) {
-    return unreadableSection("runs", "What runs", jobsKind, source, jobs.readAt, standardHref, standardLabel);
+    const base = unreadableSection("runs", "What runs", jobsKind, source, jobs.readAt, standardHref, standardLabel);
+    return { ...base, lines: [...base.lines, ...scriptPart.lines], more: scriptPart.more, extraLinks: SCRIPT_EXECUTION_LINKS };
   }
   const view = (jobs.read as { state: "ok"; value: ScheduledJobsView }).value;
   const families = view.families;
@@ -142,8 +173,9 @@ export function summariseRuns(jobs: TimedRead<ScheduledJobsView>, devices: Timed
     id: "runs", title: "What runs",
     badge: deploymentStop ? "watch" : "na",
     word: deploymentStop ? BADGE_WORD_DEFAULT.watch : "Counted",
-    lines,
-    more: null,
+    lines: [...lines, ...scriptPart.lines],
+    more: scriptPart.more,
+    extraLinks: SCRIPT_EXECUTION_LINKS,
     evidenceAt: jobs.readAt,
     source,
     standardHref,
@@ -153,6 +185,79 @@ export function summariseRuns(jobs: TimedRead<ScheduledJobsView>, devices: Timed
 
 function countOf(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
+}
+
+function scheduleStateOf(s: ScriptSummary): string {
+  if (!s.enabled) return "Off";
+  return s.schedule ? "On schedule" : "On, no schedule";
+}
+
+/** The newest run by request time; an unparseable time sorts last. */
+function latestRunOf(runs: readonly ScriptRunSummary[]): ScriptRunSummary | null {
+  let best: ScriptRunSummary | null = null;
+  let bestTime = Number.NEGATIVE_INFINITY;
+  for (const r of runs) {
+    const t = Date.parse(r.requested_at);
+    const time = Number.isNaN(t) ? Number.NEGATIVE_INFINITY : t;
+    if (best === null || time > bestTime) {
+      best = r;
+      bestTime = time;
+    }
+  }
+  return best;
+}
+
+/**
+ * One script row: the script name as the label; the value carries the schedule state, the last run (outcome or
+ * state, and its request time) and the run count over the listed runs. A failed read is UNKNOWN, a refusal is
+ * Restricted; a script with no listed run says "No runs", never zero-run OK.
+ */
+export function summariseScriptRunRow(row: ScriptRunRead): SystemLine {
+  const label = row.script.name;
+  const schedule = scheduleStateOf(row.script);
+  const kind = unreadable(row.read);
+  if (row.read.state === "skipped") return { label, value: `${schedule} · runs being read` };
+  if (kind === "restricted") return { label, value: `${schedule} · Restricted for this account` };
+  if (kind === "unknown") return { label, value: `${schedule} · UNKNOWN: runs not read` };
+  const runs = (row.read as { state: "ok"; value: readonly ScriptRunSummary[] }).value;
+  const last = latestRunOf(runs);
+  if (last === null) return { label, value: `${schedule} · No runs (0 in the list as read)` };
+  const lastState = last.outcome ?? last.state;
+  return {
+    label,
+    value: `${schedule} · last ${lastState} ${formatUtc(last.requested_at, false)} · ${countOf(runs.length, "run", "runs")} in the list as read`,
+  };
+}
+
+/**
+ * Script runs lines for the What runs card: the script count and the read instant of the script list, one row per
+ * script (capped at SYSTEM_LIST_CAP), and "+N more" for capped rows and "+N more scripts not read" for scripts past
+ * the runs read cap. An unreadable script list is UNKNOWN (or Restricted), never zero scripts.
+ */
+export function scriptRunLines(input: ScriptRunsInput | undefined): { lines: SystemLine[]; more: string | null } {
+  if (!input) return { lines: [], more: null };
+  const scripts = input.scripts;
+  const kind = unreadable(scripts.read);
+  if (kind) {
+    const value = kind === "restricted" ? "Restricted for this account" : "UNKNOWN: script list not read";
+    return { lines: [{ label: "Script runs", value }], more: null };
+  }
+  const total = (scripts.read as { state: "ok"; value: readonly ScriptSummary[] }).value.length;
+  const rows = input.runs.slice(0, SYSTEM_LIST_CAP).map(summariseScriptRunRow);
+  const cappedRows = input.runs.length - rows.length;
+  const notRead = Math.max(0, total - input.runs.length);
+  const moreParts = [
+    cappedRows > 0 ? `+${cappedRows} more scripts` : null,
+    notRead > 0 ? `+${notRead} more scripts not read (runs are read for the first ${SCRIPT_RUNS_READ_CAP} scripts only)` : null,
+  ].filter((p): p is string => p !== null);
+  return {
+    lines: [
+      { label: "Scripts in the list (as read)", value: String(total) },
+      { label: "Script list read at", value: scripts.readAt ? formatUtc(scripts.readAt, false) : "not read" },
+      ...rows,
+    ],
+    more: moreParts.length > 0 ? moreParts.join("; ") : null,
+  };
 }
 
 /**
@@ -321,7 +426,7 @@ export function summariseAudit(audit: TimedRead<readonly AuditEventView[]>): Sys
 /** The five System sections in screen order. */
 export function buildSystemSummary(inputs: SystemSummaryInputs): readonly SystemSection[] {
   return [
-    summariseRuns(inputs.jobs, inputs.devices),
+    summariseRuns(inputs.jobs, inputs.devices, inputs.scripts),
     summariseEnrolment(inputs.devices),
     summariseAccess(inputs.identities, inputs.sessions, inputs.pageAt),
     summarisePlatform(inputs.health),

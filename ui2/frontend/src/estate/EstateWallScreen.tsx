@@ -983,7 +983,7 @@ export function EstateWallScreen({
                 <th>Backups</th>
                 <th>Controls</th>
                 <th>Exposure</th>
-                <th>Evidence</th>
+                <th>Inventory read</th>
               </tr>
             </thead>
             <tbody>
@@ -1054,7 +1054,7 @@ export function EstateWallScreen({
                         <StateBadge state={u.lenses.exposure.badgeState} word={u.lenses.exposure.badgeWord} dense />
                       </td>
                       <td>
-                        <EvidenceStamp at={u.lastReadAt} now={model.now} missingLabel="never read" />
+                        <EvidenceStamp at={u.lastReadAt} source="inventory read" now={model.now} missingLabel="never read" />
                       </td>
                     </tr>
                   );
