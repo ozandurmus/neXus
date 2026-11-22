@@ -1328,8 +1328,8 @@ def jobs_ddl_database():
                 name = operation.split()[2]
                 declarations = [d for d in declarations if not d.startswith('CONSTRAINT ' + name + ' ')
                                 and not d.startswith('CONSTRAINT ' + name + '\n')]
-            elif operation.startswith('VALIDATE CONSTRAINT'):
-                continue
+            elif operation.startswith(('VALIDATE CONSTRAINT', 'DISABLE TRIGGER', 'ENABLE TRIGGER')):
+                continue  # no column or constraint change (V262 disables the V1 audit trigger)
             elif operation.startswith('ADD COLUMN'):
                 declarations.extend(re.sub(r'^ADD COLUMN\s+(?:IF NOT EXISTS\s+)?', '', part.strip())
                                     for part in re.split(r',\s*(?=ADD COLUMN)', operation))
