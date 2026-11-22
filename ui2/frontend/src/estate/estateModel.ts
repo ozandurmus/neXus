@@ -304,7 +304,7 @@ function normalizeRole(device: Pick<DeviceSummary, "role" | "vendor_hint">): "ga
   return FIREWALL_VENDORS.has(device.vendor_hint) ? "gateway" : "appliance";
 }
 
-function newestIso(isos: ReadonlyArray<string | null | undefined>): string | null {
+export function newestIso(isos: ReadonlyArray<string | null | undefined>): string | null {
   let best: string | null = null;
   let bestMs = -Infinity;
   for (const iso of isos) {

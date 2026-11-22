@@ -12,9 +12,10 @@ export function standardConfigurationHref(deviceId: string): string {
 
 /**
  * Dossier block: the ASA saved-versus-running note for this device, read-only. It reuses the standard Configuration
- * tab's note and relation read. Only a MISMATCH row (running differs from startup) is shown; MATCH, NOT_EVALUABLE and
- * a missing row render nothing. An empty read on a Cisco ASA says the comparison is unavailable; on other vendors it
- * renders nothing. A still-loading read renders nothing.
+ * tab's note and relation read. Only a MISMATCH row (running differs from startup) is shown; MATCH renders nothing.
+ * On a Cisco ASA, an empty read, a missing row for this device, or a NOT_EVALUABLE row says the comparison is
+ * unavailable (UNKNOWN is never silent). On other vendors those cases render nothing. A still-loading read renders
+ * nothing.
  */
 export function EstateDossierAsaSavedBlock({
   deviceId,
@@ -26,17 +27,21 @@ export function EstateDossierAsaSavedBlock({
   const relations = useAsaConfigRelations(true);
   if (relations === null) return null;
 
+  const unavailable = (
+    <Box data-testid="dossier-asa-saved-unavailable" sx={{ px: "18px", py: "10px" }}>
+      <Typography sx={{ fontSize: "13px", color: ev.ink2 }}>{ASA_SAVED_UNAVAILABLE_TEXT}</Typography>
+    </Box>
+  );
+
   if (relations.length === 0) {
-    if (vendor !== "cisco_asa") return null;
-    return (
-      <Box data-testid="dossier-asa-saved-unavailable" sx={{ px: "18px", py: "10px" }}>
-        <Typography sx={{ fontSize: "13px", color: ev.ink2 }}>{ASA_SAVED_UNAVAILABLE_TEXT}</Typography>
-      </Box>
-    );
+    return vendor === "cisco_asa" ? unavailable : null;
   }
 
   const relation = relations.find((r) => r.device_id === deviceId) ?? null;
-  if (!relation || relation.relation !== "MISMATCH") return null;
+  if (!relation || relation.relation === "NOT_EVALUABLE") {
+    return vendor === "cisco_asa" ? unavailable : null;
+  }
+  if (relation.relation !== "MISMATCH") return null;
 
   return (
     <Box data-testid="dossier-asa-saved" sx={{ px: "18px", py: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>

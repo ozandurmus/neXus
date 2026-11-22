@@ -1,6 +1,6 @@
 import type { PacketCase, SupportBundleRequest } from "../auth/adminApi";
 import { relativeAge } from "../shell/time";
-import type { BadgeState } from "./estateModel";
+import { parseTimeMs, type BadgeState } from "./estateModel";
 
 /** Support bundles listed under one case before the row prints "+N more". */
 export const CASES_BUNDLES_PER_CASE = 3;
@@ -76,9 +76,9 @@ export interface CasesModel {
   readonly bundlesReferenceHidden: number;
 }
 
+/** Sort key: a missing or unparseable timestamp sorts last (oldest). */
 function timeOf(iso: string | null | undefined): number {
-  const t = iso ? Date.parse(iso) : Number.NaN;
-  return Number.isNaN(t) ? Number.NEGATIVE_INFINITY : t;
+  return parseTimeMs(iso) ?? Number.NEGATIVE_INFINITY;
 }
 
 function bundleLine(b: SupportBundleRequest, now: Date): CaseBundleLine {

@@ -1,6 +1,7 @@
 // Pure grouping and counting for the Estate "Software changes" section (Changes screen).
 // Input is the same read the standard Recent upgrades panel uses (getSoftwareChanges(90)); no DOM, no fetch here.
 import type { CpInstallEventWithDevice, SoftwareChange } from "../auth/adminApi";
+import { plural } from "../shell/plural";
 
 export const SOFTWARE_CHANGE_WINDOW_DAYS = 90;
 export const SOFTWARE_CHANGE_ROW_CAP = 10;
@@ -70,10 +71,6 @@ function newerFirst(a: string | null, b: string | null): number {
   const ta = a ? new Date(a).getTime() : Number.NEGATIVE_INFINITY;
   const tb = b ? new Date(b).getTime() : Number.NEGATIVE_INFINITY;
   return (Number.isNaN(tb) ? Number.NEGATIVE_INFINITY : tb) - (Number.isNaN(ta) ? Number.NEGATIVE_INFINITY : ta);
-}
-
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
 export function buildEstateSoftwareModel(read: SoftwareChangesRead, unitsById: UnitLookup): EstateSoftwareChangesModel {

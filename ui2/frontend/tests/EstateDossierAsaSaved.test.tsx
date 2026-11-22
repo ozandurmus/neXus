@@ -57,18 +57,27 @@ describe("EstateDossierAsaSavedBlock", () => {
     expect(screen.queryByTestId("dossier-asa-saved")).toBeNull();
   });
 
-  it("a NOT_EVALUABLE row renders nothing and does not say differs", async () => {
+  it("a NOT_EVALUABLE row for an ASA says the comparison is unavailable and does not say differs", async () => {
     mockedRead.mockResolvedValue(deviations([rel({ relation: "NOT_EVALUABLE", lines_differing: 0, differing_keywords: {} })]));
-    const { container } = render(<EstateDossierAsaSavedBlock deviceId={DEVICE} vendor="cisco_asa" />);
-    await waitFor(() => expect(mockedRead).toHaveBeenCalled());
-    await new Promise((r) => setTimeout(r, 0));
-    expect(container.textContent).not.toContain("differs");
-    expect(container.textContent).toBe("");
+    render(<EstateDossierAsaSavedBlock deviceId={DEVICE} vendor="cisco_asa" />);
+    expect(await screen.findByTestId("dossier-asa-saved-unavailable")).toBeTruthy();
+    expect(screen.getByText(ASA_SAVED_UNAVAILABLE_TEXT)).toBeTruthy();
+    expect(screen.queryByText(/differs/)).toBeNull();
+    expect(screen.queryByTestId("dossier-asa-saved")).toBeNull();
   });
 
-  it("a MISMATCH row for a different device renders nothing", async () => {
+  it("an ASA whose read holds rows for other devices only says the comparison is unavailable", async () => {
     mockedRead.mockResolvedValue(deviations([rel({ device_id: OTHER, hostname: "FW-TANGO-09" })]));
-    const { container } = render(<EstateDossierAsaSavedBlock deviceId={DEVICE} vendor="cisco_asa" />);
+    render(<EstateDossierAsaSavedBlock deviceId={DEVICE} vendor="cisco_asa" />);
+    expect(await screen.findByTestId("dossier-asa-saved-unavailable")).toBeTruthy();
+    expect(screen.getByText(ASA_SAVED_UNAVAILABLE_TEXT)).toBeTruthy();
+    expect(screen.queryByText(/differs/)).toBeNull();
+    expect(screen.queryByTestId("dossier-asa-saved")).toBeNull();
+  });
+
+  it("a non-ASA vendor with a read holding rows for other devices only renders nothing", async () => {
+    mockedRead.mockResolvedValue(deviations([rel({ device_id: OTHER, hostname: "FW-TANGO-09" })]));
+    const { container } = render(<EstateDossierAsaSavedBlock deviceId={DEVICE} vendor="fortigate" />);
     await waitFor(() => expect(mockedRead).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 0));
     expect(container.textContent).toBe("");
