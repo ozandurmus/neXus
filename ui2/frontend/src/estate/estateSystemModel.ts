@@ -6,14 +6,21 @@
  * Rules: a failed or unreadable source is UNKNOWN (never OK); a restricted source says so; every count names what it
  * counts; capped lists print "+N more"; every section carries the age of the evidence it was built from.
  */
-import type { AuditEventView, DeviceSummary, ScheduledJobsView, SystemHealth } from "../auth/adminApi";
+import type {
+  AuditEventView,
+  DeviceSummary,
+  LocalIdentityView,
+  ScheduledJobsView,
+  SessionView,
+  SystemHealth,
+} from "../auth/adminApi";
 import type { SourceRead } from "../screens/overview/attentionRules";
 import { enrollmentStateLabel } from "../shell/deviceCopy";
 import { formatUtc } from "../shell/time";
 import type { BadgeState } from "./estateModel";
 import { BADGE_WORD_DEFAULT } from "./estateModel";
 
-export type SystemSectionId = "runs" | "enrolment" | "platform" | "audit";
+export type SystemSectionId = "runs" | "enrolment" | "access" | "platform" | "audit";
 
 /** One source read plus the instant the console read it (the age of the evidence it carries); null when never read. */
 export interface TimedRead<T> {
@@ -26,6 +33,10 @@ export interface SystemSummaryInputs {
   readonly devices: TimedRead<readonly DeviceSummary[]>;
   readonly health: TimedRead<SystemHealth>;
   readonly audit: TimedRead<readonly AuditEventView[]>;
+  readonly identities: TimedRead<readonly LocalIdentityView[]>;
+  readonly sessions: TimedRead<readonly SessionView[]>;
+  /** The instant this page loaded; the Access section states it as the read time (not as evidence age). */
+  readonly pageAt: string;
 }
 
 export interface SystemLine {
@@ -43,6 +54,8 @@ export interface SystemSection {
   readonly more: string | null;
   /** The read instant of the evidence; the screen draws the age from it. */
   readonly evidenceAt: string | null;
+  /** Shown in place of the evidence-age stamp when the read has no observation time (the Access section). */
+  readonly evidenceNote?: string;
   readonly source: string;
   /** The standard screen the section links to (always with `standard=1`). */
   readonly standardHref: string;
@@ -135,6 +148,64 @@ export function summariseRuns(jobs: TimedRead<ScheduledJobsView>, devices: Timed
     source,
     standardHref,
     standardLabel,
+  };
+}
+
+function countOf(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/**
+ * Access: counts of local identities (total, enabled, disabled, must change password) and of sessions as read.
+ * Counts only: no identity name, username or session id is read into the section. The reads carry no observation
+ * time, so the section states the page's own load time instead of an evidence age.
+ */
+export function summariseAccess(
+  identities: TimedRead<readonly LocalIdentityView[]>,
+  sessions: TimedRead<readonly SessionView[]>,
+  pageAt: string,
+): SystemSection {
+  const standardHref = "?screen=administration&tab=access&standard=1";
+  const standardLabel = "Open access and identity (standard)";
+  const source = "local identities list; sessions list";
+  const evidenceNote = `Read at the time this page loaded (${formatUtc(pageAt, false)})`;
+  const idKind = unreadable(identities.read);
+  const sessKind = unreadable(sessions.read);
+  const refusal = (what: string) => `Your role cannot read ${what}.`;
+  const lines: SystemLine[] = [];
+
+  if (idKind) {
+    lines.push({
+      label: "Local identities",
+      value: idKind === "restricted" ? refusal("local identities") : "UNKNOWN: could not be read.",
+    });
+  } else {
+    const list = (identities.read as { state: "ok"; value: readonly LocalIdentityView[] }).value;
+    const enabled = list.filter((i) => i.enabled === true).length;
+    const mustChange = list.filter((i) => i.must_change_password === true).length;
+    lines.push(
+      { label: "Local identities in total", value: countOf(list.length, "local identity", "local identities") },
+      { label: "Local identities enabled", value: countOf(enabled, "local identity", "local identities") },
+      { label: "Local identities disabled", value: countOf(list.length - enabled, "local identity", "local identities") },
+      { label: "Local identities that must change their password", value: countOf(mustChange, "local identity", "local identities") },
+    );
+  }
+
+  if (sessKind) {
+    lines.push({
+      label: "Sessions",
+      value: sessKind === "restricted" ? refusal("sessions") : "UNKNOWN: could not be read.",
+    });
+  } else {
+    const list = (sessions.read as { state: "ok"; value: readonly SessionView[] }).value;
+    lines.push({ label: "Sessions (total as read)", value: countOf(list.length, "session", "sessions") });
+  }
+
+  return {
+    id: "access", title: "Access",
+    badge: idKind || sessKind ? "unk" : "na",
+    word: idKind || sessKind ? BADGE_WORD_DEFAULT.unk : "Counted",
+    lines, more: null, evidenceAt: null, evidenceNote, source, standardHref, standardLabel,
   };
 }
 
@@ -247,11 +318,12 @@ export function summariseAudit(audit: TimedRead<readonly AuditEventView[]>): Sys
   };
 }
 
-/** The four System sections in screen order. */
+/** The five System sections in screen order. */
 export function buildSystemSummary(inputs: SystemSummaryInputs): readonly SystemSection[] {
   return [
     summariseRuns(inputs.jobs, inputs.devices),
     summariseEnrolment(inputs.devices),
+    summariseAccess(inputs.identities, inputs.sessions, inputs.pageAt),
     summarisePlatform(inputs.health),
     summariseAudit(inputs.audit),
   ];

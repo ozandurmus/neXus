@@ -993,7 +993,13 @@ export function EstateBriefScreen() {
                     </Box>
                     <Box sx={{ display: "inline-flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
                       <StateBadge state={u.lenses.worst.badgeState} word={u.lenses.worst.badgeWord} dense />
-                      <EvidenceStamp at={u.lastReadAt} now={model.now} />
+                      {/* The stamp is the evidence time of the lens answer that produced the badge, never the inventory read. */}
+                      <EvidenceStamp
+                        at={u.lenses.worst.evidenceAt}
+                        source={u.lenses.worst.evidenceSource}
+                        missingLabel="evidence time unknown"
+                        now={model.now}
+                      />
                     </Box>
                   </Box>
                 ))

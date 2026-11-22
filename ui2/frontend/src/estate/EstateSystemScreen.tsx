@@ -5,9 +5,13 @@ import {
   getSystemHealth,
   listAuditEvents,
   listDevices,
+  listLocalIdentities,
+  listSessions,
   type AuditEventView,
   type DeviceSummary,
+  type LocalIdentityView,
   type ScheduledJobsView,
+  type SessionView,
   type SystemHealth,
 } from "../auth/adminApi";
 import { isRestricted } from "../shell/States";
@@ -36,6 +40,8 @@ function useSystemReads() {
   const [devices, setDevices] = useState<Settled<readonly DeviceSummary[]>>(SKIPPED);
   const [health, setHealth] = useState<Settled<SystemHealth>>(SKIPPED);
   const [audit, setAudit] = useState<Settled<readonly AuditEventView[]>>(SKIPPED);
+  const [identities, setIdentities] = useState<Settled<readonly LocalIdentityView[]>>(SKIPPED);
+  const [sessions, setSessions] = useState<Settled<readonly SessionView[]>>(SKIPPED);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -46,10 +52,14 @@ function useSystemReads() {
     void settle(getSystemHealth()).then((r) => { if (active) setHealth(r); });
     void settle(listAuditEvents().then((r) => (Array.isArray(r?.events) ? r.events : Promise.reject(new Error("malformed")))))
       .then((r) => { if (active) setAudit(r); });
+    void settle(listLocalIdentities().then((r) => (Array.isArray(r?.identities) ? r.identities : Promise.reject(new Error("malformed")))))
+      .then((r) => { if (active) setIdentities(r); });
+    void settle(listSessions().then((r) => (Array.isArray(r?.sessions) ? r.sessions : Promise.reject(new Error("malformed")))))
+      .then((r) => { if (active) setSessions(r); });
     return () => { active = false; };
   }, [tick]);
 
-  return { jobs, devices, health, audit, refresh: () => setTick((n) => n + 1) };
+  return { jobs, devices, health, audit, identities, sessions, refresh: () => setTick((n) => n + 1) };
 }
 
 const LINE_LABEL_SX = { color: ev.ink2, fontSize: 12.5, lineHeight: 1.35 } as const;
@@ -71,7 +81,9 @@ function SectionCard({ section, now }: { readonly section: SystemSection; readon
         ))}
       </Box>
       {section.more ? <Box sx={{ fontSize: 12, color: ev.ink3 }}>{section.more}</Box> : null}
-      <EvidenceStamp at={section.evidenceAt} source={section.source} now={now} />
+      {section.evidenceNote
+        ? <Box sx={{ fontSize: 12, color: ev.ink3 }}>{section.evidenceNote}</Box>
+        : <EvidenceStamp at={section.evidenceAt} source={section.source} now={now} />}
       <Box component="a" href={section.standardHref} sx={{ mt: "auto", fontSize: 13, color: ev.accent, fontWeight: 600 }}>
         {section.standardLabel} →
       </Box>
@@ -88,6 +100,9 @@ export function EstateSystemScreen() {
     devices: reads.devices,
     health: reads.health,
     audit: reads.audit,
+    identities: reads.identities,
+    sessions: reads.sessions,
+    pageAt: now.toISOString(),
   });
 
   return (
@@ -96,7 +111,7 @@ export function EstateSystemScreen() {
         <Box>
           <Box component="h1" sx={{ m: 0, fontSize: 24, fontWeight: 700, color: ev.ink }}>System</Box>
           <Box sx={{ fontSize: 13, color: ev.ink3 }}>
-            Enrolment, what runs, platform health and the audit trail. Read-only; changes happen in the standard screens.
+            Enrolment, access counts, what runs, platform health and the audit trail. Read-only; changes happen in the standard screens.
           </Box>
         </Box>
         <Box component="button" type="button" onClick={reads.refresh}
