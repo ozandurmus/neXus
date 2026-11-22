@@ -263,9 +263,21 @@ class LocalMechanismTest {
         }
         assertTrue(repo.row(id).lockedUntil().isPresent());
 
-        long knownWrongPasswordNanos = elapsedNanos(() -> mechanism.attempt("claudeadmin", "x".toCharArray()));
-        long unknownIdentityNanos = elapsedNanos(() -> mechanism.attempt("no-such-user", "x".toCharArray()));
-        long lockedIdentityNanos = elapsedNanos(() -> mechanism.attempt("nexusadmin", REAL_PASSWORD));
+        // The minimum of several samples per path: a busy build host can only
+        // stretch a sample, never shrink it, so the minimum is the load-robust
+        // estimate of each path's real cost (single samples failed under a
+        // parallel pretest, 2026-11-22). Interleaved so load hits all paths alike.
+        long knownWrongPasswordNanos = Long.MAX_VALUE;
+        long unknownIdentityNanos = Long.MAX_VALUE;
+        long lockedIdentityNanos = Long.MAX_VALUE;
+        for (int sample = 0; sample < TIMING_SAMPLES; sample++) {
+            knownWrongPasswordNanos = Math.min(knownWrongPasswordNanos,
+                    elapsedNanos(() -> mechanism.attempt("claudeadmin", "x".toCharArray())));
+            unknownIdentityNanos = Math.min(unknownIdentityNanos,
+                    elapsedNanos(() -> mechanism.attempt("no-such-user", "x".toCharArray())));
+            lockedIdentityNanos = Math.min(lockedIdentityNanos,
+                    elapsedNanos(() -> mechanism.attempt("nexusadmin", REAL_PASSWORD)));
+        }
 
         // §5.3/§11 U-4: not an exact constant-time guarantee, but no refusal
         // path may be a different order of magnitude cheaper than another --
@@ -292,6 +304,8 @@ class LocalMechanismTest {
 
         assertTrue(outcome instanceof AttemptOutcome.Refused, "a disabled identity must not be able to authenticate");
     }
+
+    private static final int TIMING_SAMPLES = 5;
 
     private static long elapsedNanos(Runnable work) {
         long start = System.nanoTime();

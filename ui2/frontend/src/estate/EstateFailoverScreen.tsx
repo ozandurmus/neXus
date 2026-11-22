@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import Box from "@mui/material/Box";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
@@ -11,11 +11,15 @@ import {
   TileSwatch,
   VendorTag,
 } from "./EstatePrimitives";
+import { EstateFailoverCellDrawer, PER_UNIT_PRECHECK_NOTE, type FailoverCellTarget } from "./EstateFailoverCellDrawer";
 import { EstateFailoverIncidents } from "./EstateFailoverIncidents";
+import { readinessStopReason } from "../screens/ReadinessChecksTable";
 import { dossierHref, standardHaHref } from "./estateRouting";
 import {
   buildFailoverBoardModel,
   type FailoverBoardUnit,
+  type FailoverCheckColumn,
+  type FailoverMatrixCell,
   type FailoverMemberRef,
 } from "./estateSlice2Model";
 import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
@@ -160,9 +164,15 @@ function BoardUnitCard({
 
       <Typography sx={{ fontSize: "12.5px", color: ev.ink, mt: "6px" }}>{unit.reason}</Typography>
 
+      {readinessStopReason(unit.stopCode) ? (
+        <Typography sx={{ fontSize: "12px", color: ev.ink2, mt: "3px" }}>
+          {readinessStopReason(unit.stopCode)}
+        </Typography>
+      ) : null}
+
       {unit.unitKind === "VSX_CHASSIS" ? (
         <Typography sx={{ fontSize: "11.5px", color: ev.ink3, mt: "3px" }}>
-          Chassis pre-checks apply to the physical pair; each Virtual System is evaluated separately.
+          {PER_UNIT_PRECHECK_NOTE}
         </Typography>
       ) : null}
 
@@ -203,6 +213,25 @@ function BoardUnitCard({
   );
 }
 
+/** The matrix column header names the pre-check a cell belongs to; the cell name stays short. */
+function checkHeaderId(colIdx: number): string {
+  return `fo-check-col-${colIdx}`;
+}
+
+function toCellTarget(open: {
+  readonly unit: FailoverBoardUnit;
+  readonly col: FailoverCheckColumn;
+  readonly cell: FailoverMatrixCell;
+}): FailoverCellTarget {
+  return {
+    unitLabel: open.unit.label,
+    unitKind: open.unit.unitKind,
+    checkTitle: open.col.title,
+    cell: open.cell,
+    standardHref: standardHaHref(open.unit.clusterRef),
+  };
+}
+
 export function EstateFailoverScreen({
   initialClusterRef = null,
 }: {
@@ -212,6 +241,11 @@ export function EstateFailoverScreen({
   const [matrixFilter, setMatrixFilter] = useState<"all" | "attention">("all");
   const [vendorFilter, setVendorFilter] = useState<string>("");
   const [focusedRef, setFocusedRef] = useState<string | null>(initialClusterRef);
+  const [openCell, setOpenCell] = useState<{
+    readonly unit: FailoverBoardUnit;
+    readonly col: FailoverCheckColumn;
+    readonly cell: FailoverMatrixCell;
+  } | null>(null);
 
   useEffect(() => {
     setFocusedRef(initialClusterRef);
@@ -725,9 +759,10 @@ export function EstateFailoverScreen({
                 <th>Cluster / VS unit</th>
                 <th>Status</th>
                 <th>Members (active ↔ standby)</th>
-                {board.checkColumns.map((col) => (
+                {board.checkColumns.map((col, colIdx) => (
                   <th
                     key={col.key}
+                    id={checkHeaderId(colIdx)}
                     style={{
                       textAlign: "center",
                       minWidth: "74px",
@@ -781,13 +816,20 @@ export function EstateFailoverScreen({
                           mode={u.mode}
                         />
                       </td>
-                      {board.checkColumns.map((col) => {
+                      {board.checkColumns.map((col, colIdx) => {
                         const cell = rowCells?.get(col.key) ?? {
                           state: "unk" as const,
                           word: "UNKNOWN",
                           summary: "Not evaluated",
                         };
                         const tipText = `${u.label} · ${col.title}: ${cell.word} — ${cell.summary}`;
+                        const openDetail = () => setOpenCell({ unit: u, col, cell });
+                        const onCellKeyDown = (e: KeyboardEvent<HTMLSpanElement>) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openDetail();
+                          }
+                        };
                         return (
                           <td
                             key={col.key}
@@ -796,7 +838,16 @@ export function EstateFailoverScreen({
                             style={{ textAlign: "center", padding: "6px 6px" }}
                           >
                             <Tooltip title={tipText} describeChild>
-                              <Box component="span" sx={{ display: "inline-flex" }}>
+                              <Box
+                                component="span"
+                                role="button"
+                                tabIndex={0}
+                                aria-label={`${u.label}: ${cell.word}`}
+                                aria-describedby={checkHeaderId(colIdx)}
+                                onClick={openDetail}
+                                onKeyDown={onCellKeyDown}
+                                sx={{ display: "inline-flex", cursor: "pointer", borderRadius: "3px", "&:focus-visible": { outline: `2px solid ${ev.accent}`, outlineOffset: "2px" } }}
+                              >
                                 <TileSwatch state={cell.state} size={20} label={tipText} />
                               </Box>
                             </Tooltip>
@@ -873,6 +924,11 @@ export function EstateFailoverScreen({
           </Box>
         </EstateCard>
       ) : null}
+
+      <EstateFailoverCellDrawer
+        target={openCell ? toCellTarget(openCell) : null}
+        onClose={() => setOpenCell(null)}
+      />
     </Box>
   );
 }

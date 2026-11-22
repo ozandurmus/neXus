@@ -737,9 +737,7 @@ const SCREEN_CASES: readonly MoreCase[] = [
     search: `/?screen=inventory&view=rewind&at=${encodeURIComponent(NOW_ISO)}`,
     testId: "estate-rewind",
     fixtureHasUnknown: true,
-    // UI gap (not fixed in this lane): the top "One moment" section of Rewind renders a count ("4 stored evidence")
-    // without an [data-evidence-stamp]. Queue as a Rewind UI fix.
-    skipGuardA: "Rewind: the top 'One moment' section renders a count without an EvidenceStamp (UI gap, queued)",
+    // The "One moment" count carries an EvidenceStamp (stored evidence timeline, newest point); guard A runs.
   },
   {
     screen: "Ask",

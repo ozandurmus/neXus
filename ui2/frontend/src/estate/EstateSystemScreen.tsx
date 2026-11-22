@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import {
+  getJobStats,
   getScheduledJobs,
   getSystemHealth,
   getSystemPods,
@@ -13,6 +14,7 @@ import {
   listSessions,
   type AuditEventView,
   type DeviceSummary,
+  type JobStatsView,
   type LocalIdentityView,
   type PodsView,
   type ScheduledJobsView,
@@ -24,6 +26,9 @@ import {
 import { isRestricted } from "../shell/States";
 import type { SourceRead } from "../screens/overview/attentionRules";
 import { EstateCard, EvidenceStamp, StateBadge } from "./EstatePrimitives";
+import { mapJobQueue, JOB_QUEUE_NOT_REPORTED } from "./estateJobQueueModel";
+import { BADGE_WORD_DEFAULT } from "./estateModel";
+import { standardJobsHref } from "./estateRouting";
 import {
   buildSystemSummary,
   SCRIPT_RUNS_READ_CAP,
@@ -61,11 +66,13 @@ function useSystemReads() {
   const [scriptRuns, setScriptRuns] = useState<readonly ScriptRunRead[] | null>(null);
   const [pods, setPods] = useState<Settled<PodsView>>(SKIPPED);
   const [storage, setStorage] = useState<Settled<StorageView>>(SKIPPED);
+  const [jobStats, setJobStats] = useState<Settled<JobStatsView>>(SKIPPED);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let active = true;
     void settle(getScheduledJobs()).then((r) => { if (active) setJobs(r); });
+    void settle(getJobStats()).then((r) => { if (active) setJobStats(r); });
     void settle(listDevices().then((r) => (Array.isArray(r?.devices) ? r.devices : Promise.reject(new Error("malformed")))))
       .then((r) => { if (active) setDevices(r); });
     void settle(getSystemHealth()).then((r) => { if (active) setHealth(r); });
@@ -96,7 +103,7 @@ function useSystemReads() {
   }, [scripts]);
 
   return {
-    jobs, devices, health, audit, identities, sessions, pods, storage,
+    jobs, jobStats, devices, health, audit, identities, sessions, pods, storage,
     scripts, scriptRuns,
     refresh: () => setTick((n) => n + 1),
   };
@@ -146,6 +153,49 @@ function scriptsInput(scripts: Settled<readonly ScriptSummary[]>, runs: readonly
   return { scripts, runs: pending };
 }
 
+/** Job queue: four read-only figures from one job-statistics read; each figure carries that read's own age. */
+function JobQueueCard({ jobs, now }: { readonly jobs: Settled<JobStatsView>; readonly now: Date }) {
+  const section = mapJobQueue(jobs);
+  const readAt = jobs.readAt;
+  const stamp = <EvidenceStamp at={readAt} source="job statistics read" now={now} />;
+  return (
+    <EstateCard sx={{ p: "16px 18px", display: "flex", flexDirection: "column", gap: "10px", minWidth: 0 }}>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+        <Box component="h2" sx={{ m: 0, fontSize: 16, fontWeight: 700 }}>Job queue</Box>
+        {section.kind === "ok"
+          ? <StateBadge state={section.badge} word={section.word} dense />
+          : <StateBadge state="unk" word={BADGE_WORD_DEFAULT.unk} dense />}
+      </Box>
+      {section.kind === "unreadable" ? (
+        <>
+          <Box sx={{ fontSize: 13.5, fontWeight: 600, color: ev.ink }}>{section.text}</Box>
+          {stamp}
+        </>
+      ) : (
+        <Box component="dl" sx={{ m: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", rowGap: "8px", columnGap: "12px" }}>
+          {section.figures.map((f) => (
+            <Box key={f.id} sx={{ display: "contents" }}>
+              <Box component="dt" sx={{ ...LINE_LABEL_SX, m: 0 }}>
+                {f.label}
+                <Box sx={{ mt: "2px" }}>{stamp}</Box>
+              </Box>
+              <Box component="dd" sx={{
+                ...LINE_VALUE_SX, m: 0, textAlign: "right",
+                ...(f.value === null ? { color: ev.ink3, fontWeight: 500, fontFamily: "inherit" } : {}),
+              }}>
+                {f.value ?? JOB_QUEUE_NOT_REPORTED}
+              </Box>
+            </Box>
+          ))}
+        </Box>
+      )}
+      <Box component="a" href={standardJobsHref()} sx={{ mt: "auto", fontSize: 13, color: ev.accent, fontWeight: 600 }}>
+        Open failed jobs (standard view) →
+      </Box>
+    </EstateCard>
+  );
+}
+
 /** Estate System screen: four compact read-only sections; every action opens the standard screen with `standard=1`. */
 export function EstateSystemScreen() {
   const reads = useSystemReads();
@@ -175,7 +225,9 @@ export function EstateSystemScreen() {
         </Box>
       </Box>
       <Box sx={{ display: "grid", gap: "14px", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" }}>
-        {sections.map((s) => <SectionCard key={s.id} section={s} now={now} />)}
+        {sections.slice(0, 1).map((s) => <SectionCard key={s.id} section={s} now={now} />)}
+        <JobQueueCard jobs={reads.jobStats} now={now} />
+        {sections.slice(1).map((s) => <SectionCard key={s.id} section={s} now={now} />)}
         <EstateSystemPodsStorage pods={reads.pods} storage={reads.storage} now={now} />
       </Box>
     </Box>
