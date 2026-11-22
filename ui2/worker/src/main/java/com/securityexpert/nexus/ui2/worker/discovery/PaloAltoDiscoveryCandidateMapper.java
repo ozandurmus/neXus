@@ -58,6 +58,9 @@ public final class PaloAltoDiscoveryCandidateMapper {
                     : null;
             String clusterReference = !isVirtualSystem ? pairedClusterReference(row) : null;
 
+            // Identity law (fail-closed): a blank stable identifier is never importable, device or virtual system.
+            // The placeholder below is only the internal/display key; it never makes the row importable.
+            boolean hasStableIdentity = !row.stableIdentifier().value().orElse("").isBlank();
             String stableIdentifier = resolveStableIdentifier(row, candidateId, assignedStableIdentifiers);
             assignedStableIdentifiers.add(stableIdentifier);
 
@@ -76,7 +79,7 @@ public final class PaloAltoDiscoveryCandidateMapper {
                     Optional.empty(),
                     Optional.empty(),
                     row.connectionState(),
-                    isVirtualSystem ? parentCandidateId != null : true,
+                    hasStableIdentity && (isVirtualSystem ? parentCandidateId != null : true),
                     Optional.empty()));
         }
         return out;

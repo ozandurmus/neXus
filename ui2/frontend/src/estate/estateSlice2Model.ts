@@ -28,7 +28,7 @@ import { familyOf } from "../screens/ComplianceScreen";
 import { orderMembers } from "../screens/DeviceShared";
 import { groupClusters, haReadinessItems, primaryReasonWord } from "../screens/HaReadinessList";
 import { withFirewallNames } from "../screens/policyFirewalls";
-import { primaryReportsPeer, primaryRolesConfirmed } from "../screens/ReadinessChecksTable";
+import { primaryReportsPeer, primaryRolesConfirmed, readinessStopReason } from "../screens/ReadinessChecksTable";
 import {
   newestIso,
   parseTimeMs,
@@ -109,6 +109,8 @@ export interface FailoverBoardUnit {
   readonly badgeWord: string;
   readonly reason: string;
   readonly observedAt: string | null;
+  /** Readiness read stop code (e.g. COMMAND_UNAVAILABLE); null when the read did not stop. */
+  readonly stopCode?: string | null;
   readonly stale: boolean;
   readonly activeMembers: readonly FailoverMemberRef[];
   readonly standbyMembers: readonly FailoverMemberRef[];
@@ -159,6 +161,15 @@ export interface FailoverBoardModel {
     readonly vsUnits: number;
   };
   readonly newestEvaluatedAt: string | null;
+}
+
+/**
+ * A readiness read that stopped on a known command gap has no evaluated result: every check it
+ * carries is UNKNOWN (never OK). Columns are kept so the matrix still shows what was not read.
+ */
+function checksForReadStop(checks: readonly ReadinessCheck[], stopCode: string | null | undefined): readonly ReadinessCheck[] {
+  if (!readinessStopReason(stopCode)) return checks;
+  return checks.map((c) => ({ ...c, result: "UNKNOWN" as const, summary: "Readiness read stopped; not evaluated" }));
 }
 
 function normalizeCheckKey(title: string, checkNo: number): string {
@@ -475,12 +486,13 @@ export function buildFailoverBoardModel(inputs: {
       badgeWord: baseClass.badgeWord,
       reason: baseReason,
       observedAt: baseObsAt,
+      stopCode: baseRow?.readiness?.stopCode ?? null,
       stale: baseClass.stale,
       activeMembers: baseMemberRefs.activeMembers,
       standbyMembers: baseMemberRefs.standbyMembers,
       allMembers: baseMemberRefs.allMembers,
       estateCluster: estateClusters.get(cluster.ref) ?? null,
-      checks: baseChecks,
+      checks: checksForReadStop(baseChecks, baseRow?.readiness?.stopCode),
     });
 
     for (const vsRow of childRows) {
@@ -510,12 +522,13 @@ export function buildFailoverBoardModel(inputs: {
         badgeWord: vsClass.badgeWord,
         reason: primaryReasonWord(vsRow),
         observedAt: vsObsAt,
+        stopCode: vsRow.readiness?.stopCode ?? null,
         stale: vsClass.stale,
         activeMembers: vsMemberRefs.activeMembers,
         standbyMembers: vsMemberRefs.standbyMembers,
         allMembers: vsMemberRefs.allMembers,
         estateCluster: estateClusters.get(cluster.ref) ?? null,
-        checks: vsChecks,
+        checks: checksForReadStop(vsChecks, vsRow.readiness?.stopCode),
       });
     }
   }
