@@ -4,12 +4,14 @@ import {
   getScheduledJobs,
   getSystemHealth,
   listAuditEvents,
+  listCredentials,
   listDevices,
   listLocalIdentities,
   listScriptRuns,
   listScripts,
   listSessions,
   type AuditEventView,
+  type CredentialView,
   type DeviceSummary,
   type LocalIdentityView,
   type ScheduledJobsView,
@@ -51,6 +53,7 @@ function useSystemReads() {
   const [audit, setAudit] = useState<Settled<readonly AuditEventView[]>>(SKIPPED);
   const [identities, setIdentities] = useState<Settled<readonly LocalIdentityView[]>>(SKIPPED);
   const [sessions, setSessions] = useState<Settled<readonly SessionView[]>>(SKIPPED);
+  const [credentials, setCredentials] = useState<Settled<readonly CredentialView[]>>(SKIPPED);
   const [scripts, setScripts] = useState<Settled<readonly ScriptSummary[]>>(SKIPPED);
   /** Runs per script for the first SCRIPT_RUNS_READ_CAP scripts; null while the runs are being read. */
   const [scriptRuns, setScriptRuns] = useState<readonly ScriptRunRead[] | null>(null);
@@ -68,6 +71,8 @@ function useSystemReads() {
       .then((r) => { if (active) setIdentities(r); });
     void settle(listSessions().then((r) => (Array.isArray(r?.sessions) ? r.sessions : Promise.reject(new Error("malformed")))))
       .then((r) => { if (active) setSessions(r); });
+    void settle(listCredentials().then((r) => (Array.isArray(r?.credentials) ? r.credentials : Promise.reject(new Error("malformed")))))
+      .then((r) => { if (active) setCredentials(r); });
     void settle(listScripts().then((r) => (Array.isArray(r?.scripts) ? r.scripts : Promise.reject(new Error("malformed")))))
       .then((r) => { if (active) setScripts(r); });
     return () => { active = false; };
@@ -87,7 +92,7 @@ function useSystemReads() {
   }, [scripts]);
 
   return {
-    jobs, devices, health, audit, identities, sessions,
+    jobs, devices, health, audit, identities, sessions, credentials,
     scripts, scriptRuns,
     refresh: () => setTick((n) => n + 1),
   };
@@ -150,6 +155,7 @@ export function EstateSystemScreen() {
     audit: reads.audit,
     identities: reads.identities,
     sessions: reads.sessions,
+    credentials: reads.credentials,
     scripts: scriptsInput(reads.scripts, reads.scriptRuns),
     pageAt: now.toISOString(),
   });

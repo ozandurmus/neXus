@@ -8,6 +8,7 @@
  */
 import type {
   AuditEventView,
+  CredentialView,
   DeviceSummary,
   LocalIdentityView,
   ScheduledJobsView,
@@ -37,6 +38,8 @@ export interface SystemSummaryInputs {
   readonly audit: TimedRead<readonly AuditEventView[]>;
   readonly identities: TimedRead<readonly LocalIdentityView[]>;
   readonly sessions: TimedRead<readonly SessionView[]>;
+  /** Credential references (counts only; the username and display name are never read into the section). */
+  readonly credentials?: TimedRead<readonly CredentialView[]>;
   /** Script Execution: the script list and one runs read per script (first SCRIPT_RUNS_READ_CAP scripts). */
   readonly scripts?: ScriptRunsInput;
   /** The instant this page loaded; the Access section states it as the read time (not as evidence age). */
@@ -260,22 +263,60 @@ export function scriptRunLines(input: ScriptRunsInput | undefined): { lines: Sys
   };
 }
 
+/** The standard Credentials section (Device registry page); the Access section links there, read-only. */
+const CREDENTIALS_STANDARD_LINKS: readonly { readonly href: string; readonly label: string }[] = [
+  { href: "?screen=administration&tab=registry&section=credentials&standard=1", label: "Open credentials (standard)" },
+];
+
 /**
- * Access: counts of local identities (total, enabled, disabled, must change password) and of sessions as read.
- * Counts only: no identity name, username or session id is read into the section. The reads carry no observation
- * time, so the section states the page's own load time instead of an evidence age.
+ * Credentials lines for the Access section: the total of credential references as read, one line per kind (largest
+ * first, capped at SYSTEM_LIST_CAP, "+N more" for the rest), the count with a secret set, and the read instant that
+ * the evidence age is taken from. Counts only; no username or display name is read. Unreadable is UNKNOWN, a refusal
+ * is Restricted, never zero.
+ */
+export function credentialLines(read: TimedRead<readonly CredentialView[]>): { lines: SystemLine[]; more: string | null } {
+  const kind = unreadable(read.read);
+  if (kind) {
+    const value = kind === "restricted" ? "Your role cannot read credentials." : "UNKNOWN: could not be read.";
+    return { lines: [{ label: "Credentials", value }], more: null };
+  }
+  const list = (read.read as { state: "ok"; value: readonly CredentialView[] }).value;
+  const counts = new Map<string, number>();
+  for (const c of list) counts.set(c.kind, (counts.get(c.kind) ?? 0) + 1);
+  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const rest = sorted.slice(SYSTEM_LIST_CAP);
+  const restTotal = rest.reduce((sum, [, n]) => sum + n, 0);
+  const withSecret = list.filter((c) => c.auth_secret === "set" || c.priv_secret === "set").length;
+  return {
+    lines: [
+      { label: "Credentials (total as read)", value: countOf(list.length, "credential", "credentials") },
+      ...sorted.slice(0, SYSTEM_LIST_CAP).map(([k, n]) => ({ label: `Credentials of kind ${k}`, value: String(n) })),
+      { label: "Credentials with a secret set", value: countOf(withSecret, "credential", "credentials") },
+      { label: "Credential list read at", value: read.readAt ? formatUtc(read.readAt, false) : "not read" },
+    ],
+    more: rest.length > 0 ? `+${rest.length} more kinds (${restTotal} credentials)` : null,
+  };
+}
+
+/**
+ * Access: counts of local identities (total, enabled, disabled, must change password), of sessions as read and,
+ * when the credentials read is passed, of credential references. Counts only: no identity name, username, display
+ * name or session id is read into the section. The identity and session reads carry no observation time, so the
+ * section states the page's own load time instead of an evidence age; the credential list is dated by its read time.
  */
 export function summariseAccess(
   identities: TimedRead<readonly LocalIdentityView[]>,
   sessions: TimedRead<readonly SessionView[]>,
   pageAt: string,
+  credentials?: TimedRead<readonly CredentialView[]>,
 ): SystemSection {
   const standardHref = "?screen=administration&tab=access&standard=1";
   const standardLabel = "Open access and identity (standard)";
-  const source = "local identities list; sessions list";
+  const source = credentials ? "local identities list; sessions list; credential list" : "local identities list; sessions list";
   const evidenceNote = `Read at the time this page loaded (${formatUtc(pageAt, false)})`;
   const idKind = unreadable(identities.read);
   const sessKind = unreadable(sessions.read);
+  const credKind = credentials ? unreadable(credentials.read) : null;
   const refusal = (what: string) => `Your role cannot read ${what}.`;
   const lines: SystemLine[] = [];
 
@@ -306,11 +347,16 @@ export function summariseAccess(
     lines.push({ label: "Sessions (total as read)", value: countOf(list.length, "session", "sessions") });
   }
 
+  const credPart = credentials ? credentialLines(credentials) : { lines: [], more: null };
+  lines.push(...credPart.lines);
+
+  const unknown = Boolean(idKind || sessKind || credKind);
   return {
     id: "access", title: "Access",
-    badge: idKind || sessKind ? "unk" : "na",
-    word: idKind || sessKind ? BADGE_WORD_DEFAULT.unk : "Counted",
-    lines, more: null, evidenceAt: null, evidenceNote, source, standardHref, standardLabel,
+    badge: unknown ? "unk" : "na",
+    word: unknown ? BADGE_WORD_DEFAULT.unk : "Counted",
+    lines, more: credPart.more, evidenceAt: null, evidenceNote, source, standardHref, standardLabel,
+    extraLinks: credentials ? CREDENTIALS_STANDARD_LINKS : undefined,
   };
 }
 
@@ -428,7 +474,7 @@ export function buildSystemSummary(inputs: SystemSummaryInputs): readonly System
   return [
     summariseRuns(inputs.jobs, inputs.devices, inputs.scripts),
     summariseEnrolment(inputs.devices),
-    summariseAccess(inputs.identities, inputs.sessions, inputs.pageAt),
+    summariseAccess(inputs.identities, inputs.sessions, inputs.pageAt, inputs.credentials),
     summarisePlatform(inputs.health),
     summariseAudit(inputs.audit),
   ];

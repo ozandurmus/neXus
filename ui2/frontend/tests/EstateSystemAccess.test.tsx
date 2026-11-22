@@ -4,6 +4,7 @@ import {
   getScheduledJobs,
   getSystemHealth,
   listAuditEvents,
+  listCredentials,
   listDevices,
   listLocalIdentities,
   listSessions,
@@ -17,6 +18,7 @@ vi.mock("../src/auth/adminApi", async (importOriginal) => {
     getScheduledJobs: vi.fn(),
     getSystemHealth: vi.fn(),
     listAuditEvents: vi.fn(),
+    listCredentials: vi.fn(),
     listDevices: vi.fn(),
     listLocalIdentities: vi.fn(),
     listSessions: vi.fn(),
@@ -60,6 +62,7 @@ function mockOtherReads() {
   vi.mocked(listDevices).mockResolvedValue({ devices: [] } as never);
   vi.mocked(getSystemHealth).mockRejectedValue(new Error("synthetic"));
   vi.mocked(listAuditEvents).mockResolvedValue({ events: [] } as never);
+  vi.mocked(listCredentials).mockResolvedValue({ credentials: [] } as never);
 }
 
 describe("Estate System screen: Access section", () => {
@@ -88,6 +91,61 @@ describe("Estate System screen: Access section", () => {
     expect(text).not.toContain(SESSION_ID);
     const link = screen.getByRole("link", { name: /Open access and identity \(standard\)/ });
     expect(link.getAttribute("href")).toBe("?screen=administration&tab=access&standard=1");
+  });
+
+  it("renders credential counts by kind and no username or display name", async () => {
+    const CRED_USER = "FW-TANGO-04-svc-user";
+    const CRED_NAME = "FW-TANGO-04 display label";
+    vi.mocked(listLocalIdentities).mockResolvedValue({ identities: [] });
+    vi.mocked(listSessions).mockResolvedValue({
+      sessions: [], identity_labels: {}, idle_timeout_seconds: 900, absolute_lifetime_seconds: 3600,
+    });
+    vi.mocked(listCredentials).mockResolvedValue({
+      credentials: [
+        { credential_id: "c1", credential_reference_id: "r1", display_name: CRED_NAME, kind: "ssh_password", username: CRED_USER, auth_secret: "set", allows_check_point: true, allows_palo_alto: false, created_at: AT } as never,
+        { credential_id: "c2", credential_reference_id: "r2", display_name: CRED_NAME, kind: "snmp_v3", username: CRED_USER, auth_secret: "not set", priv_secret: "set", allows_check_point: false, allows_palo_alto: true, created_at: AT } as never,
+      ],
+    });
+
+    const { container } = render(<EstateSystemScreen />);
+
+    expect(await screen.findByText("Credentials (total as read)")).toBeTruthy();
+    // The total and the with-secret count are both 2 in this fixture.
+    expect(screen.getAllByText("2 credentials")).toHaveLength(2);
+    expect(screen.getByText("Credentials with a secret set")).toBeTruthy();
+    expect(screen.getByText("Credentials of kind ssh_password")).toBeTruthy();
+    expect(screen.getByText("Credential list read at")).toBeTruthy();
+    const text = container.textContent ?? "";
+    expect(text).not.toContain(CRED_USER);
+    expect(text).not.toContain(CRED_NAME);
+    const link = screen.getByRole("link", { name: /Open credentials \(standard\)/ });
+    expect(link.getAttribute("href")).toBe("?screen=administration&tab=registry&section=credentials&standard=1");
+  });
+
+  it("renders the credential refusal line, not 0, when the credential list is refused with a 403", async () => {
+    vi.mocked(listLocalIdentities).mockResolvedValue({ identities: [] });
+    vi.mocked(listSessions).mockResolvedValue({
+      sessions: [], identity_labels: {}, idle_timeout_seconds: 900, absolute_lifetime_seconds: 3600,
+    });
+    vi.mocked(listCredentials).mockRejectedValue(forbidden());
+
+    render(<EstateSystemScreen />);
+
+    expect(await screen.findByText("Your role cannot read credentials.")).toBeTruthy();
+    expect(screen.queryByText("0 credentials")).toBeNull();
+  });
+
+  it("renders UNKNOWN for credentials when the credential read fails, never OK", async () => {
+    vi.mocked(listLocalIdentities).mockResolvedValue({ identities: [] });
+    vi.mocked(listSessions).mockResolvedValue({
+      sessions: [], identity_labels: {}, idle_timeout_seconds: 900, absolute_lifetime_seconds: 3600,
+    });
+    vi.mocked(listCredentials).mockRejectedValue(new Error("synthetic"));
+
+    render(<EstateSystemScreen />);
+
+    expect(await screen.findByText("UNKNOWN: could not be read.")).toBeTruthy();
+    expect(screen.queryByText("0 credentials")).toBeNull();
   });
 
   it("renders the restriction text, not 0, when identities are refused with a 403", async () => {

@@ -1,4 +1,4 @@
-import type { ReportCatalogue, ReportRunView, ReportTemplateCard } from "../auth/adminApi";
+import type { ReportCatalogue, ReportPlaneAsOf, ReportRequest, ReportRunView, ReportTemplateCard } from "../auth/adminApi";
 import { ageBucketOf, parseTimeMs, type AgeBucket } from "./estateModel";
 
 /**
@@ -32,15 +32,37 @@ export function evidenceAgeLabel(iso: string | null | undefined, now: Date): str
   return `${Math.floor(hours / 24)} d`;
 }
 
-/** The newest evidence timestamp across a run's data planes; null when the run carries no plane evidence. */
-export function newestEvidenceAt(run: ReportRunView): string | null {
+/** The newest evidence timestamp across data planes; null when no plane carries evidence. */
+export function newestPlaneEvidence(planes: readonly ReportPlaneAsOf[]): string | null {
   let newest: { readonly iso: string; readonly ms: number } | null = null;
-  for (const plane of run.data_as_of.planes ?? []) {
+  for (const plane of planes) {
     const ms = parseTimeMs(plane.newest);
     if (ms === null || plane.newest === null) continue;
     if (newest === null || ms > newest.ms) newest = { iso: plane.newest, ms };
   }
   return newest?.iso ?? null;
+}
+
+/** The newest evidence timestamp across a run's data planes; null when the run carries no plane evidence. */
+export function newestEvidenceAt(run: ReportRunView): string | null {
+  return newestPlaneEvidence(run.data_as_of.planes ?? []);
+}
+
+const DAY_MS = 86_400_000;
+const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/**
+ * The request the Estate preview sends: the same window and projection the standard Reports screen uses by default
+ * (last 7 days, MASKED, framework ALL where the template takes one). Preview only; no run is created.
+ */
+export function previewRequestFor(card: ReportTemplateCard, now: Date): ReportRequest {
+  return {
+    template_id: card.template_id,
+    from: isoDay(now.getTime() - 6 * DAY_MS),
+    to: isoDay(now.getTime()),
+    projection: "MASKED",
+    ...(card.framework_parameter ? { framework: "ALL" } : {}),
+  };
 }
 
 export type TemplateStatus = "AVAILABLE" | "REFUSED";

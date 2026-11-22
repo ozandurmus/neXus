@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type {
   AuditEventView,
+  CredentialView,
   DeviceSummary,
   LocalIdentityView,
   ScheduledJobFamily,
@@ -226,6 +227,82 @@ function session(id: string): SessionView {
     superseded_by_session_id: null,
   };
 }
+
+// Synthetic credential fixtures: the username and display name must never reach the section (counts only).
+const CRED_USER = "FW-TANGO-04-svc-user";
+const CRED_NAME = "FW-TANGO-04 display label";
+function credential(kind: CredentialView["kind"], over: Partial<CredentialView> = {}): CredentialView {
+  return {
+    credential_id: `cred-${kind}-${Math.random().toString(36).slice(2, 8)}`,
+    credential_reference_id: "ref-synthetic",
+    display_name: CRED_NAME,
+    kind,
+    username: CRED_USER,
+    allows_check_point: true,
+    allows_palo_alto: false,
+    created_at: AT,
+    ...over,
+  } as CredentialView;
+}
+
+describe("Estate System summary: Access credentials", () => {
+  it("counts credential references in total and per kind, and those with a secret set", () => {
+    const s = summariseAccess(
+      ok([]),
+      ok([]),
+      PAGE_AT,
+      ok([
+        credential("ssh_password", { auth_secret: "set" }),
+        credential("ssh_password", { auth_secret: "not set" }),
+        credential("snmp_v3", { auth_secret: "not set", priv_secret: "set" }),
+        credential("api_password", {}),
+      ]),
+    );
+    const byLabel = Object.fromEntries(s.lines.map((l) => [l.label, l.value]));
+    expect(byLabel["Credentials (total as read)"]).toBe("4 credentials");
+    expect(byLabel["Credentials of kind ssh_password"]).toBe("2");
+    expect(byLabel["Credentials of kind snmp_v3"]).toBe("1");
+    expect(byLabel["Credentials of kind api_password"]).toBe("1");
+    expect(byLabel["Credentials with a secret set"]).toBe("2 credentials");
+    expect(byLabel["Credential list read at"]).toBeTruthy();
+    expect(s.source).toContain("credential list");
+    expect(s.extraLinks?.[0].href).toBe("?screen=administration&tab=registry&section=credentials&standard=1");
+    expect(s.badge).toBe("na");
+  });
+
+  it("caps kinds at the list cap with +N more and keeps the total exact", () => {
+    const kinds: CredentialView["kind"][] = ["ssh_password", "ssh_private_key", "api_password", "snmp_v1_v2c", "snmp_v3"];
+    const list = kinds.map((k) => credential(k));
+    const s = summariseAccess(ok([]), ok([]), PAGE_AT, ok(list));
+    const kindLines = s.lines.filter((l) => l.label.startsWith("Credentials of kind"));
+    expect(kindLines).toHaveLength(4);
+    expect(s.more).toBe("+1 more kinds (1 credentials)");
+    expect(s.lines.find((l) => l.label === "Credentials (total as read)")?.value).toBe("5 credentials");
+  });
+
+  it("renders UNKNOWN, never zero or OK, when the credential read fails", () => {
+    const s = summariseAccess(ok([]), ok([]), PAGE_AT, failed());
+    const line = s.lines.find((l) => l.label === "Credentials");
+    expect(line?.value).toBe("UNKNOWN: could not be read.");
+    expect(s.badge).toBe("unk");
+    expect(s.word).not.toBe("OK");
+    expect(s.lines.some((l) => l.value === "0 credentials")).toBe(false);
+  });
+
+  it("renders the refusal line when the credential read is restricted", () => {
+    const s = summariseAccess(ok([]), ok([]), PAGE_AT, restricted());
+    const line = s.lines.find((l) => l.label === "Credentials");
+    expect(line?.value).toBe("Your role cannot read credentials.");
+    expect(s.badge).toBe("unk");
+  });
+
+  it("never carries a username or display name into the section", () => {
+    const s = summariseAccess(ok([]), ok([]), PAGE_AT, ok([credential("ssh_password", { auth_secret: "set" })]));
+    const json = JSON.stringify(s);
+    expect(json).not.toContain(CRED_USER);
+    expect(json).not.toContain(CRED_NAME);
+  });
+});
 
 describe("Estate System summary: Access", () => {
   it("counts identities (total, enabled, disabled, must change password) and sessions exactly", () => {
