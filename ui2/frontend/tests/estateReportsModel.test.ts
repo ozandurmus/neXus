@@ -108,3 +108,36 @@ describe("estate reports list model", () => {
     expect(standardReportsHref()).toBe("?screen=reports&standard=1");
   });
 });
+
+import {
+  REPORT_SECTION_CAP,
+  runDocument,
+  runStateLabel,
+  runStateTone,
+  sectionCountLabel,
+} from "../src/estate/estateReportsModel";
+
+describe("estate report run detail helpers", () => {
+  it("names the section count and what it counts", () => {
+    expect(sectionCountLabel(1)).toBe("1 section");
+    expect(sectionCountLabel(0)).toBe("0 sections");
+    expect(sectionCountLabel(REPORT_SECTION_CAP + 2)).toBe("14 sections");
+  });
+
+  it("never reports an unknown state as OK", () => {
+    const unknown = "WEIRD" as ReportRunView["state"];
+    expect(runStateLabel(unknown)).toBe("UNKNOWN");
+    expect(runStateLabel(null)).toBe("UNKNOWN");
+    expect(runStateTone(unknown)).not.toBe("ok");
+    expect(runStateTone(undefined)).not.toBe("ok");
+    expect(runStateTone("SUCCEEDED")).toBe("ok");
+  });
+
+  it("treats a malformed document as unavailable, not as an empty OK document", () => {
+    expect(runDocument(run("r1", 1, "SUCCEEDED", 1)).available).toBe(false);
+    const malformed = { ...run("r2", 1, "SUCCEEDED", 1), document: { sections: "nope" } } as unknown as ReportRunView;
+    expect(runDocument(malformed).available).toBe(false);
+    const good = { ...run("r3", 1, "SUCCEEDED", 1), document: { sections: [{ id: "a", title: "A", notes: ["n"] }] } } as unknown as ReportRunView;
+    expect(runDocument(good)).toEqual({ available: true, sections: [{ id: "a", title: "A", notes: ["n"] }] });
+  });
+});

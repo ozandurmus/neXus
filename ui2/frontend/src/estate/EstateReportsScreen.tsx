@@ -14,6 +14,7 @@ import { reportError } from "../screens/ReportsScreen";
 import { ReportDocumentPanel } from "../screens/ReportDocumentPanel";
 import { formatStamp } from "../shell/time";
 import { EstateCard, EvidenceStamp, MoreFooter } from "./EstatePrimitives";
+import { EstateReportRunDetail } from "./EstateReportRunDetail";
 import {
   buildRunRows,
   buildTemplateRows,
@@ -104,7 +105,12 @@ function PreviewCard({ preview }: { readonly preview: Preview }) {
   );
 }
 
-function HistoryTable({ rows, retentionDays }: { readonly rows: readonly RunRow[]; readonly retentionDays: number }) {
+function HistoryTable({ rows, retentionDays, openRunId, onOpen }: {
+  readonly rows: readonly RunRow[];
+  readonly retentionDays: number;
+  readonly openRunId: string | null;
+  readonly onOpen: (runId: string) => void;
+}) {
   const capped = capList(rows);
   return (
     <Box>
@@ -112,7 +118,7 @@ function HistoryTable({ rows, retentionDays }: { readonly rows: readonly RunRow[
       <Box component="table" sx={{ width: "100%", borderCollapse: "collapse", fontFamily: ESTATE_SANS }}>
         <thead>
           <tr>
-            {["Requested", "Report", "Format", "State", "Evidence age", "Expires", "File"].map(h => <Box component="th" key={h} sx={{ ...headSx, textAlign: "left" }}>{h}</Box>)}
+            {["Requested", "Report", "Format", "State", "Evidence age", "Expires", "File", "Open"].map(h => <Box component="th" key={h} sx={{ ...headSx, textAlign: "left" }}>{h}</Box>)}
           </tr>
         </thead>
         <tbody>
@@ -132,9 +138,15 @@ function HistoryTable({ rows, retentionDays }: { readonly rows: readonly RunRow[
                 {r.downloadable ? <Box component="a" href={reportDownloadHref(r.runId)} sx={{ color: ev.accent }}>Download</Box>
                   : r.state === "SUCCEEDED" ? "Expired" : "No file"}
               </Box>
+              <Box component="td" sx={cellSx}>
+                <Box component="button" type="button" aria-pressed={openRunId === r.runId} onClick={() => onOpen(r.runId)}
+                  sx={{ font: "inherit", fontSize: 13, color: ev.accent, background: "none", border: 0, p: 0, cursor: "pointer" }}>
+                  {openRunId === r.runId ? "Showing" : "Open"}
+                </Box>
+              </Box>
             </tr>
           ))}
-          {rows.length === 0 && <tr><Box component="td" colSpan={7} sx={cellSx}>No report has been generated yet.</Box></tr>}
+          {rows.length === 0 && <tr><Box component="td" colSpan={8} sx={cellSx}>No report has been generated yet.</Box></tr>}
         </tbody>
       </Box>
       {capped.more > 0 && (
@@ -143,6 +155,7 @@ function HistoryTable({ rows, retentionDays }: { readonly rows: readonly RunRow[
           <Box sx={{ display: "block" }}>not shown; the standard Reports screen lists all of them.</Box>
         </Box>
       )}
+      {openRunId && <Box sx={{ mt: 2 }}><EstateReportRunDetail key={openRunId} runId={openRunId} /></Box>}
     </Box>
   );
 }
@@ -163,6 +176,7 @@ export function EstateReportsScreen() {
       (e: unknown) => { if (latest.current === attempt) setPreview({ state: "failed", templateId, message: reportError(e) }); },
     );
   };
+  const [openRunId, setOpenRunId] = useState<string | null>(null);
   const view = useMemo(() => {
     if (load.state !== "ok") return null;
     return {
@@ -217,7 +231,11 @@ export function EstateReportsScreen() {
               {view.summary.sentence}{" "}
               <EvidenceStamp at={view.readAt.toISOString()} source="report history read" />
             </Box>
-            <HistoryTable rows={view.runs} retentionDays={view.retention} />
+            <Box sx={{ mb: 1 }}>
+              <Box component="a" href={standardReportsHref()} sx={{ fontSize: 13, color: ev.accent }}>Open history in standard view</Box>
+            </Box>
+            <HistoryTable rows={view.runs} retentionDays={view.retention} openRunId={openRunId}
+              onOpen={id => setOpenRunId(prev => (prev === id ? null : id))} />
           </EstateCard>
         </>
       )}

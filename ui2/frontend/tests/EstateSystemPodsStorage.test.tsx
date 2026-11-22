@@ -122,6 +122,34 @@ describe("Estate System: Pods and storage section", () => {
     expect(screen.queryByText("Artefact volume, used of total")).toBeNull();
   });
 
+  it("keeps a readable storage read visible when the pods read is restricted", () => {
+    render(<EstateSystemPodsStorage pods={restricted<PodsView>()} storage={ok(storageView())} now={NOW} />);
+    expect(screen.getByText("Artefact volume, used of total")).toBeTruthy();
+    expect(screen.getByText(`${formatBytes(2 * GIB)} of ${formatBytes(10 * GIB)}`)).toBeTruthy();
+    expect(screen.getByText("Your role cannot read pods.")).toBeTruthy();
+    expect(screen.queryByText("Your role cannot read pods and storage.")).toBeNull();
+    expect(screen.queryByText("Your role cannot read storage.")).toBeNull();
+    expect(screen.queryAllByTestId("estate-system-pod-row")).toHaveLength(0);
+  });
+
+  it("keeps readable pod rows visible when the storage read is restricted", () => {
+    render(
+      <EstateSystemPodsStorage
+        pods={ok(podsView([pod("pod-tango-01", "Running", 0), pod("pod-tango-02", "Pending", 1)]))}
+        storage={restricted<StorageView>()}
+        now={NOW}
+      />,
+    );
+    expect(screen.getAllByTestId("estate-system-pod-row")).toHaveLength(2);
+    expect(screen.getByText("Pods listed")).toBeTruthy();
+    expect(screen.getByText("Your role cannot read storage.")).toBeTruthy();
+    expect(screen.queryByText("Your role cannot read pods and storage.")).toBeNull();
+    expect(screen.queryByText("Artefact volume, used of total")).toBeNull();
+    // One read is refused, so the section is not "Restricted" and not "Counted": it is UNKNOWN.
+    expect(screen.getByText("UNKNOWN")).toBeTruthy();
+    expect(screen.queryByText("Restricted")).toBeNull();
+  });
+
   it("links to the standard System view with standard=1 and states it is read-only", () => {
     render(<EstateSystemPodsStorage pods={ok(podsView([]))} storage={ok(storageView())} now={NOW} />);
     expect(screen.getByText("Read-only. Changes happen in the standard view.")).toBeTruthy();
