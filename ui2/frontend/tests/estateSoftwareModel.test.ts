@@ -22,7 +22,7 @@ function change(deviceId: string, daysAgo: number, to = "R81.20", from: string |
     window_start: null,
     window_end: at,
     source: "inventory",
-    hostname: "FW-TANGO-04.raw.example",
+    hostname: "FW-ZULU-99",
     from_version: from,
     from_hotfix_level: null,
     to_version: to,
@@ -102,7 +102,7 @@ describe("buildEstateSoftwareModel", () => {
   it("shows the Estate label, never the raw hostname, and a fallback for units not on the wall", () => {
     const m = buildEstateSoftwareModel(ok([change("dev-unknown", 3)]), UNITS);
     expect(m.rows[0].unitName).toBe("Unit not on this Estate wall");
-    expect(JSON.stringify(m)).not.toContain("raw.example");
+    expect(JSON.stringify(m)).not.toContain("FW-ZULU-99");
   });
 
   it("formats the change summary with UNKNOWN for a missing previous version", () => {

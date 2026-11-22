@@ -19,7 +19,7 @@ function change(deviceId: string, daysAgo: number): SoftwareChange {
   return {
     device_id: deviceId, vendor: "check_point", software_version: "R81.20", hotfix_level: null,
     first_seen_at: at, last_seen_at: at, previous_software_version: "R81.10", previous_hotfix_level: null,
-    window_start: null, window_end: at, source: "inventory", hostname: "FW-TANGO-04.raw.example",
+    window_start: null, window_end: at, source: "inventory", hostname: "FW-ZULU-99",
     from_version: "R81.10", from_hotfix_level: null, to_version: "R81.20", to_hotfix_level: null,
   };
 }
@@ -69,7 +69,7 @@ describe("EstateSoftwareChanges", () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]).toHaveTextContent("FW-TANGO-04");
     expect(rows[0]).toHaveTextContent("R81.10 to R81.20");
-    expect(list.textContent).not.toContain("raw.example");
+    expect(list.textContent).not.toContain("FW-ZULU-99");
 
     // Total + 2 rows + 2 per-unit counts: five figures, five evidence stamps.
     expect(container.querySelectorAll("[data-evidence-stamp]")).toHaveLength(5);

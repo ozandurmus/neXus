@@ -84,7 +84,7 @@ describe("EstateFailoverIncidents", () => {
       ]),
     );
     const units = [
-      { unitId: "UNIT-1", clusterRef: "CLS-1", label: "CLS-ROMEO-01" },
+      { unitId: "UNIT-1", clusterRef: "CLS-ZULU-01", label: "CLS-ROMEO-01" },
     ] as unknown as Parameters<typeof EstateFailoverIncidents>[0]["units"];
     render(<EstateFailoverIncidents units={units} />);
     const rows = await screen.findAllByTestId("failover-incident-row");

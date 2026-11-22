@@ -107,7 +107,7 @@ describe("EstateDossierSshTrustBlock", () => {
     expect(block.textContent).toContain("ACCEPTED");
     expect(block.textContent).toContain("2 observations · 1 open · 0 rejected · 1 accepted");
     expect(block.querySelectorAll("[data-evidence-stamp]")).toHaveLength(2);
-    const link = within(block).getByText("Manage SSH trust in the standard view").closest("a");
+    const link = within(block).getByText("Manage SSH trust (standard view) →").closest("a");
     expect(link?.getAttribute("href")).toBe("?screen=administration&tab=ssh-trust&standard=1");
     // Sensitive identity law: no fingerprint or hostname reaches the page.
     expect(block.textContent).not.toContain(FP);
