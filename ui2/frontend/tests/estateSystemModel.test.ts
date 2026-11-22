@@ -11,6 +11,7 @@ import type {
 import {
   AUDIT_PREVIEW_CAP,
   buildSystemSummary,
+  podStateWord,
   summariseAccess,
   summariseAudit,
   summariseEnrolment,
@@ -332,5 +333,16 @@ describe("System route", () => {
     expect(resolveEstateRoute("administration", "/", systemHref())).toEqual({ kind: "system" });
     expect(resolveEstateRoute("administration", "/", "?screen=administration")).toBeNull();
     expect(resolveEstateRoute("administration", "/", "?screen=administration&view=system&standard=1")).toBeNull();
+  });
+});
+
+describe("podStateWord", () => {
+  it("returns a listed state word and UNKNOWN for anything else", () => {
+    expect(podStateWord("Running")).toBe("Running");
+    expect(podStateWord("CrashLoopBackOff")).toBe("CrashLoopBackOff");
+    expect(podStateWord("Ready")).toBe("UNKNOWN");
+    expect(podStateWord("")).toBe("UNKNOWN");
+    expect(podStateWord(undefined)).toBe("UNKNOWN");
+    expect(podStateWord(null)).toBe("UNKNOWN");
   });
 });

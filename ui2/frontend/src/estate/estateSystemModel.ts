@@ -426,3 +426,13 @@ export function buildSystemSummary(inputs: SystemSummaryInputs): readonly System
     summariseAudit(inputs.audit),
   ];
 }
+
+/** The pod state words the Estate System view will name. Any other value (missing, empty, or unlisted) is UNKNOWN. */
+export const POD_STATE_WORDS: readonly string[] = [
+  "Running", "Pending", "Waiting", "Succeeded", "Failed", "Terminating", "CrashLoopBackOff", "Completed",
+];
+
+/** The word a pod row shows for its state: the state itself when it is a listed word, otherwise UNKNOWN (never Running). */
+export function podStateWord(state: unknown): string {
+  return typeof state === "string" && POD_STATE_WORDS.includes(state) ? state : "UNKNOWN";
+}

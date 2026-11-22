@@ -71,6 +71,7 @@ import { EstateDossierMemberDiffBlock } from "./EstateDossierMemberDiffBlock";
 import { EstateDossierCertificateBlock } from "./EstateDossierCertificateBlock";
 import { EstateDossierAsaSavedBlock } from "./EstateDossierAsaSavedBlock";
 import { EstateDossierSshTrustBlock } from "./EstateDossierSshTrustBlock";
+import { EstateDossierGridBlock } from "./EstateDossierGridBlock";
 import type { DeviceLogsReads } from "./estateDeviceLogsSummary";
 
 type DossierTab = "interfaces" | "routes" | "backups" | "controls" | "prechecks";
@@ -923,6 +924,8 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
       <EstateDossierLogsBlock deviceId={unit.deviceId} logs={logs} now={now} />
 
       <EstateDossierSshTrustBlock deviceId={unit.deviceId} />
+
+      <EstateDossierGridBlock deviceId={unit.deviceId} inventory={inventory} now={now} />
 
       {/* Managed through: management-plane intent from the management tree, never device runtime truth */}
       {(() => {
