@@ -23,7 +23,7 @@ import { useJobWindow } from "../shell/JobWindow";
 import type { Tone } from "../shell/tone";
 import { formatStamp, formatTime, relativeAge } from "../shell/time";
 import { lineDeviceTime, lineSeverity, windowWords, type LineSeverity } from "./logLineTime";
-import { jobStateWord, statusWord } from "../shell/presenters";
+import { gapKindLabel, jobStateWord, statusWord } from "../shell/presenters";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { MONO, m3 } from "../theme/m3Theme";
 
@@ -101,25 +101,8 @@ export function gapWords(g: SystemLogGap): string {
   }
 }
 
-/**
- * A gap kind in the words an operator reads (UI review 2026-10-18, F-8): "Sequence gap suspected", and
- * "First collection: older content not fetched" for the normal first run rather than the jargon "initial baseline".
- * Local to this panel; the product-wide label map belongs to the presenter lane (TODO: D2's presenter helper).
- */
-export function gapKindLabel(kind: string): string {
-  switch (kind) {
-    case "SEQ_GAP_SUSPECTED": return "Sequence gap suspected";
-    case "INITIAL_BASELINE": return "First collection: older content not fetched";
-    case "ROTATED_AWAY": return "Rotated away on the device";
-    case "TRUNCATED": return "File truncated on the device";
-    case "ANCHOR_MISMATCH": return "Saved position no longer matched";
-    case "BACKLOG": return "Backlog on the device";
-    case "COLLECTION_FAILED": return "Collection failed";
-    case "PAGE_STALL": return "Paging stalled";
-    case "RETENTION_SHORTENED_BY_CAP": return "Retention shortened by the storage cap";
-    default: return kind.replace(/_/g, " ").toLowerCase().replace(/^./, (c) => c.toUpperCase());
-  }
-}
+/** The gap-kind label now lives in `src/shell/presenters.ts` (`gapKindLabel`); re-exported here for existing importers. */
+export { gapKindLabel };
 
 /** Grey for what is informational, amber for a suspected gap or a backlog, red-tinted only for bytes known to be lost. */
 export function gapTone(kind: string): Tone {

@@ -17,6 +17,7 @@ import { formatStamp } from "../shell/time";
 import {
   EstateCard,
   EvidenceStamp,
+  MoreFooter,
   StateBadge,
   TileSwatch,
   UnitTile,
@@ -299,6 +300,7 @@ function ChangeSetBlock({
                     ))}
                   </tbody>
                 </Box>
+                <MoreFooter shown={25} total={changeSet.diffs.length} noun="diffs" />
               </Box>
             ) : null}
           </Box>
@@ -341,9 +343,7 @@ function ChangeSetBlock({
             {resolvedUnits.slice(0, 8).map((u) => (
               <UnitTile key={u.deviceId} unit={u} lens="worst" size={18} now={now} />
             ))}
-            {resolvedUnits.length > 8 ? (
-              <span style={{ fontSize: "11.5px", color: ev.ink3 }}>+{resolvedUnits.length - 8}</span>
-            ) : null}
+            <MoreFooter shown={8} total={resolvedUnits.length} noun="units" />
           </Box>
         ) : changeSet.unitNames.length > 0 ? (
           <Box sx={{ display: "flex", gap: "4px", flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -364,6 +364,7 @@ function ChangeSetBlock({
                 </span>
               );
             })}
+            <MoreFooter shown={3} total={changeSet.unitNames.length} noun="units" />
           </Box>
         ) : null}
       </Box>
@@ -1136,6 +1137,7 @@ export function EstateChangesScreen({
                         </Box>
                       );
                     })}
+                    <MoreFooter shown={10} total={changesModel.personLanes.length} noun="actors" />
                   </Box>
                 )}
               </Box>
@@ -1271,6 +1273,7 @@ export function EstateChangesScreen({
                       unitsByName={unitsByName}
                     />
                   ))}
+                  <MoreFooter shown={15} total={grp.sets.length} noun="change sets" />
                 </Box>
               ))
             ) : (
@@ -1286,6 +1289,11 @@ export function EstateChangesScreen({
                 />
               ))
             )}
+            {changesModel.changeSets.length > 40 ? (
+              <Box sx={{ px: "18px", py: "8px" }}>
+                <MoreFooter shown={40} total={changesModel.changeSets.length} noun="change sets" />
+              </Box>
+            ) : null}
 
             {changesModel.orderingNote ? (
               <Box sx={{ px: "18px", py: "10px", borderTop: `1px solid ${ev.line}`, fontSize: "12px", color: ev.ink3 }}>

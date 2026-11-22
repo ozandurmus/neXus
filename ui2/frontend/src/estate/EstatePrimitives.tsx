@@ -650,3 +650,26 @@ export function EstateCard({
     </Box>
   );
 }
+
+/**
+ * "+N more" footer for a capped list. `total` is the true count (not the page
+ * size); renders nothing when nothing is hidden.
+ */
+export function MoreFooter({
+  shown,
+  total,
+  noun,
+  testId,
+}: {
+  readonly shown: number;
+  readonly total: number;
+  readonly noun: string;
+  readonly testId?: string;
+}) {
+  if (total <= shown) return null;
+  return (
+    <Box component="span" data-testid={testId} sx={{ fontSize: "12px", color: ev.ink3, ml: "4px" }}>
+      {`+${total - shown} more ${noun}`}
+    </Box>
+  );
+}

@@ -201,6 +201,11 @@ export function changesHref(deviceId?: string | null): string {
   return "?screen=changes";
 }
 
+/** Standard Operations jobs list, failed jobs in the last 24 h (the attention rule's query, opened explicitly as standard). */
+export function standardJobsHref(): string {
+  return "?screen=operations&tab=jobs&state=FAILED&since_hours=24&standard=1";
+}
+
 export function standardChangesHref(view?: "feed" | "policy"): string {
   if (view) {
     return `?screen=changes&view=${encodeURIComponent(view)}&standard=1`;

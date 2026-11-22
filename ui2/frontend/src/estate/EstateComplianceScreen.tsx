@@ -21,6 +21,7 @@ import {
   EstateCard,
   EvidenceStamp,
   HonestBar,
+  MoreFooter,
   StateBadge,
   TileSwatch,
   UnitTile,
@@ -859,11 +860,7 @@ export function EstateComplianceScreen({
                             {u.name}
                           </Box>
                         ))}
-                        {lensModel.unassessedFirewalls.length > 12 ? (
-                          <Box component="span" data-testid="unassessed-more" sx={{ fontSize: "12px", color: ev.ink3 }}>
-                            +{lensModel.unassessedFirewalls.length - 12} more
-                          </Box>
-                        ) : null}
+                        <MoreFooter shown={12} total={lensModel.unassessedFirewalls.length} noun="firewalls" testId="unassessed-more" />
                       </Box>
                     </Box>
                   ) : null}
@@ -958,11 +955,7 @@ export function EstateComplianceScreen({
                           {row.affectedUnits.slice(0, 24).map((u) => (
                             <UnitTile key={u.deviceId} unit={u} lens="compliance" size={13} now={now} />
                           ))}
-                          {row.affectedUnits.length > 24 ? (
-                            <Box component="span" data-testid="affected-more" sx={{ fontSize: "12px", color: ev.ink3, ml: "4px" }}>
-                              +{row.affectedUnits.length - 24} more
-                            </Box>
-                          ) : null}
+                          <MoreFooter shown={24} total={row.affectedUnits.length} noun="units" testId="affected-more" />
                           {row.affectedUnits.length === 0 && (c.fail_count ?? 0) > 0
                             ? Array.from({ length: Math.min(20, c.fail_count) }).map((_, i) => (
                                 <TileSwatch key={`f-${i}`} state="act" size={11} />
@@ -1056,11 +1049,12 @@ export function EstateComplianceScreen({
                                     </Box>
                                   );
                                 })}
-                              {detailState.value.devices.filter((d) => d.status !== "PASS").length > 20 ? (
-                                <Typography data-testid="verdicts-more" sx={{ fontSize: "12.5px", color: ev.ink3 }}>
-                                  +{detailState.value.devices.filter((d) => d.status !== "PASS").length - 20} more units not shown
-                                </Typography>
-                              ) : null}
+                              <MoreFooter
+                                shown={20}
+                                total={detailState.value.devices.filter((d) => d.status !== "PASS").length}
+                                noun="units"
+                                testId="verdicts-more"
+                              />
                             </Box>
                           ) : row.affectedUnits.length > 0 || row.unmatchedAffectedNames.length > 0 ? (
                             <Box sx={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -1089,11 +1083,9 @@ export function EstateComplianceScreen({
                   );
                 })
               )}
-              {lensModel.remediationRows.length > 25 ? (
-                <Typography data-testid="remediation-more" sx={{ fontSize: "12.5px", color: ev.ink3, pt: "10px" }}>
-                  +{lensModel.remediationRows.length - 25} more controls not shown
-                </Typography>
-              ) : null}
+              <Box sx={{ pt: "10px" }}>
+                <MoreFooter shown={25} total={lensModel.remediationRows.length} noun="controls" testId="remediation-more" />
+              </Box>
             </Box>
           </EstateCard>
         </>
