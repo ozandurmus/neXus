@@ -226,8 +226,9 @@ type ScreenCase = {
   /** Count text the screen must print (guard C). */
   readonly expectedCountText: RegExp;
   /**
-   * KNOWN OPEN FINDINGS (test-only lane, screen not changed). Each listed guard is registered with
-   * it.fails and must be flipped to it once the screen is fixed. Keys: "A", "B", "C".
+   * KNOWN OPEN FINDINGS. Each listed guard is registered with it.fails. A guard is flipped to plain `it` once its
+   * screen passes; the flipped entries were the Cases, Reports and System stamp and unit gaps (guard A and C).
+   * Keys: "A", "B", "C".
    */
   readonly knownOpen: Partial<Record<"A" | "B" | "C", string>>;
 };
@@ -238,28 +239,24 @@ const SCREEN_CASES: readonly ScreenCase[] = [
     render: () => render(<EstateCasesScreen />),
     mockReads: mockCasesReads,
     expectedCountText: /2 cases listed/,
-    // Figures "N capture(s) · size" and "N name this case" per case card carry no EvidenceStamp.
-    knownOpen: { A: "every case card: the captures figure and the support-bundle count carry no EvidenceStamp" },
+    // Captures and support-bundle figures per case card, and the counts line, carry the packet read's own time.
+    knownOpen: {},
   },
   {
     screen: "Reports",
     render: () => render(<EstateReportsScreen />),
     mockReads: mockReportsReads,
     expectedCountText: /2 templates listed/,
-    // "N templates listed" and "N report runs listed" have no EvidenceStamp; the History evidence age is text only.
-    knownOpen: { A: "Templates count and History count (\"N report runs listed\") carry no EvidenceStamp" },
+    // "N templates listed" and "N report runs listed" carry the report reads' own time.
+    knownOpen: {},
   },
   {
     screen: "System",
     render: () => render(<EstateSystemScreen />),
     mockReads: mockSystemReads,
     expectedCountText: /2 local identities/,
-    // Access card shows counts with a "Read at the time this page loaded" note, not an EvidenceStamp;
-    // the dl values are bare numbers ("0") whose unit lives only in the label.
-    knownOpen: {
-      A: "Access card (identities and sessions counts) carries a read-time note, not an EvidenceStamp",
-      C: "dl values are bare numbers (\"0\") with the unit only in the label",
-    },
+    // Access counts carry the identity and session reads' own time; every dl value names its unit.
+    knownOpen: {},
   },
 ];
 

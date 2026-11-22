@@ -66,7 +66,11 @@ final class CheckPointConfirmReadParser implements ConfirmReadParser {
 
     @Override
     public Optional<String> haRole(String haPeerReadOutput) {
-        if (haPeerReadOutput == null || NOT_A_MEMBER.matcher(haPeerReadOutput).find()) {
+        if (haPeerReadOutput == null || haPeerReadOutput.isBlank()) {
+            // A missing read is absence of evidence: UNKNOWN, never a STANDALONE claim.
+            return Optional.empty();
+        }
+        if (NOT_A_MEMBER.matcher(haPeerReadOutput).find()) {
             return Optional.of("STANDALONE");
         }
         Matcher matcher = MEMBER_LINE.matcher(haPeerReadOutput);

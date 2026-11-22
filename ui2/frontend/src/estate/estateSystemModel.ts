@@ -39,8 +39,6 @@ export interface SystemSummaryInputs {
   readonly sessions: TimedRead<readonly SessionView[]>;
   /** Script Execution: the script list and one runs read per script (first SCRIPT_RUNS_READ_CAP scripts). */
   readonly scripts?: ScriptRunsInput;
-  /** The instant this page loaded; the Access section states it as the read time (not as evidence age). */
-  readonly pageAt: string;
 }
 
 export interface SystemLine {
@@ -58,8 +56,6 @@ export interface SystemSection {
   readonly more: string | null;
   /** The read instant of the evidence; the screen draws the age from it. */
   readonly evidenceAt: string | null;
-  /** Shown in place of the evidence-age stamp when the read has no observation time (the Access section). */
-  readonly evidenceNote?: string;
   readonly source: string;
   /** The standard screen the section links to (always with `standard=1`). */
   readonly standardHref: string;
@@ -114,7 +110,7 @@ function unreadableSection(
 /** Counts per label, largest first, capped; the rest is named in `more` with its own count. */
 function capCounts(counts: ReadonlyMap<string, number>, cap: number): { lines: SystemLine[]; more: string | null } {
   const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  const shown = sorted.slice(0, cap).map(([label, n]) => ({ label, value: String(n) }));
+  const shown = sorted.slice(0, cap).map(([label, n]) => ({ label, value: countOf(n, "device", "devices") }));
   const rest = sorted.slice(cap);
   const restTotal = rest.reduce((sum, [, n]) => sum + n, 0);
   return { lines: shown, more: rest.length > 0 ? `+${rest.length} more kinds (${restTotal} devices)` : null };
@@ -152,10 +148,10 @@ export function summariseRuns(
     .sort((a, b) => Date.parse(a) - Date.parse(b));
 
   const lines: SystemLine[] = [
-    { label: "Job families that will run", value: `${willRun} of ${families.length}` },
-    { label: "Switched on but idle", value: String(idle) },
-    { label: "Switched off", value: String(off) },
-    { label: "Locked by a deployment switch", value: String(locked) },
+    { label: "Job families that will run", value: `${willRun} of ${families.length} job families` },
+    { label: "Switched on but idle", value: countOf(idle, "job family", "job families") },
+    { label: "Switched off", value: countOf(off, "job family", "job families") },
+    { label: "Locked by a deployment switch", value: countOf(locked, "job family", "job families") },
     { label: "Next window opens (earliest ON family)", value: nextWindows.length > 0 ? formatUtc(nextWindows[0], false) : "none ON" },
   ];
 
@@ -165,7 +161,7 @@ export function summariseRuns(
   } else {
     const list = (devices.read as { state: "ok"; value: readonly DeviceSummary[] }).value;
     const inFlight = list.filter((d) => IN_FLIGHT_JOB_STATES.includes(d.latest_job_state?.toUpperCase() ?? "")).length;
-    lines.push({ label: "Devices with a job in flight (latest job EXECUTING, CLAIMED or REQUESTED)", value: String(inFlight) });
+    lines.push({ label: "Devices with a job in flight (latest job EXECUTING, CLAIMED or REQUESTED)", value: countOf(inFlight, "device", "devices") });
   }
 
   const deploymentStop = !view.master_enabled;
@@ -252,7 +248,7 @@ export function scriptRunLines(input: ScriptRunsInput | undefined): { lines: Sys
   ].filter((p): p is string => p !== null);
   return {
     lines: [
-      { label: "Scripts in the list (as read)", value: String(total) },
+      { label: "Scripts in the list (as read)", value: countOf(total, "script", "scripts") },
       { label: "Script list read at", value: scripts.readAt ? formatUtc(scripts.readAt, false) : "not read" },
       ...rows,
     ],
@@ -262,18 +258,18 @@ export function scriptRunLines(input: ScriptRunsInput | undefined): { lines: Sys
 
 /**
  * Access: counts of local identities (total, enabled, disabled, must change password) and of sessions as read.
- * Counts only: no identity name, username or session id is read into the section. The reads carry no observation
- * time, so the section states the page's own load time instead of an evidence age.
+ * Counts only: no identity name, username or session id is read into the section. The list responses carry no
+ * observation time, so the stamp is the read's own time (the older of the two reads that were made), never a fake age.
  */
 export function summariseAccess(
   identities: TimedRead<readonly LocalIdentityView[]>,
   sessions: TimedRead<readonly SessionView[]>,
-  pageAt: string,
 ): SystemSection {
   const standardHref = "?screen=administration&tab=access&standard=1";
   const standardLabel = "Open access and identity (standard)";
-  const source = "local identities list; sessions list";
-  const evidenceNote = `Read at the time this page loaded (${formatUtc(pageAt, false)})`;
+  const source = "local identities list read time; sessions list read time";
+  const readTimes = [identities.readAt, sessions.readAt].filter((t): t is string => t !== null && !Number.isNaN(Date.parse(t)));
+  const evidenceAt = readTimes.length > 0 ? readTimes.reduce((a, b) => (Date.parse(a) <= Date.parse(b) ? a : b)) : null;
   const idKind = unreadable(identities.read);
   const sessKind = unreadable(sessions.read);
   const refusal = (what: string) => `Your role cannot read ${what}.`;
@@ -310,7 +306,7 @@ export function summariseAccess(
     id: "access", title: "Access",
     badge: idKind || sessKind ? "unk" : "na",
     word: idKind || sessKind ? BADGE_WORD_DEFAULT.unk : "Counted",
-    lines, more: null, evidenceAt: null, evidenceNote, source, standardHref, standardLabel,
+    lines, more: null, evidenceAt, source, standardHref, standardLabel,
   };
 }
 
@@ -333,7 +329,7 @@ export function summariseEnrolment(devices: TimedRead<readonly DeviceSummary[]>)
   return {
     id: "enrolment", title: "Enrolment",
     badge: "na", word: "Counted",
-    lines: [{ label: "Devices in the registry", value: String(list.length) }, ...capped.lines],
+    lines: [{ label: "Devices in the registry", value: countOf(list.length, "device", "devices") }, ...capped.lines],
     more: capped.more,
     evidenceAt: devices.readAt,
     source,
@@ -369,7 +365,7 @@ export function summarisePlatform(health: TimedRead<SystemHealth>): SystemSectio
     };
   }
   const k = snap.kpis;
-  const figure = (n: number | null | undefined) => (typeof n === "number" ? String(n) : "UNKNOWN");
+  const figure = (n: number | null | undefined) => (typeof n === "number" ? countOf(n, "device", "devices") : "UNKNOWN");
   const lines: SystemLine[] = [
     { label: "Monitored devices", value: figure(k.monitored?.devices) },
     { label: "Devices with a crash or dump alert", value: figure(k.crash_alerts?.devices) },
@@ -404,7 +400,7 @@ export function summariseAudit(audit: TimedRead<readonly AuditEventView[]>): Sys
   const newest = [...events].sort((a, b) => eventTime(b) - eventTime(a));
   const shown = newest.slice(0, AUDIT_PREVIEW_CAP);
   const lines: SystemLine[] = [
-    { label: "Events in the trail", value: String(events.length) },
+    { label: "Events in the trail", value: countOf(events.length, "event", "events") },
     ...shown.map((e) => ({
       label: formatUtc(e.occurred_at, false),
       value: `${e.actor} · ${e.action} · ${e.outcome}`,
@@ -428,7 +424,7 @@ export function buildSystemSummary(inputs: SystemSummaryInputs): readonly System
   return [
     summariseRuns(inputs.jobs, inputs.devices, inputs.scripts),
     summariseEnrolment(inputs.devices),
-    summariseAccess(inputs.identities, inputs.sessions, inputs.pageAt),
+    summariseAccess(inputs.identities, inputs.sessions),
     summarisePlatform(inputs.health),
     summariseAudit(inputs.audit),
   ];

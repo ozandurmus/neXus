@@ -6,6 +6,7 @@ import { lifecycleSourceName } from "../screens/LifecycleSourcesPanel";
 import { isRestricted } from "../shell/States";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
+import { newestIso } from "./estateModel";
 import { standardLifecycleHref } from "./estateRouting";
 import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
 
@@ -23,22 +24,6 @@ export function lifecycleFeedAge(feed: LifecycleCatalogFeed): { state: BadgeStat
   if (feed.age_days == null) return { state: "unk", word: "UNKNOWN" };
   const state: BadgeState = feed.age_state === "RED" ? "act" : feed.age_state === "AMBER" ? "watch" : "ok";
   return { state, word: `${feed.age_days} days` };
-}
-
-/** The newest last-good-load time among the feeds, or null when no feed has loaded. */
-export function newestLastGoodLoad(feeds: readonly LifecycleCatalogFeed[]): string | null {
-  let newest: string | null = null;
-  let newestMs = -Infinity;
-  for (const feed of feeds) {
-    if (!feed.last_good_at) continue;
-    const ms = Date.parse(feed.last_good_at);
-    if (Number.isNaN(ms)) continue;
-    if (ms > newestMs) {
-      newestMs = ms;
-      newest = feed.last_good_at;
-    }
-  }
-  return newest;
 }
 
 function lastRunText(feed: LifecycleCatalogFeed): string {
@@ -109,7 +94,7 @@ function SourcesBody({ data }: { readonly data: LifecycleCatalogSources }) {
   return (
     <>
       <Box sx={{ p: 2 }}>
-        <EvidenceStamp at={newestLastGoodLoad(data.feeds)} source="vendor sources" />
+        <EvidenceStamp at={newestIso(data.feeds.map((f) => f.last_good_at))} source="vendor sources" />
       </Box>
       {data.feeds.length === 0 ? (
         <Typography sx={{ px: 2, pb: 2, color: ev.ink2 }}>No online sources are configured. This is not a clean result on its own.</Typography>

@@ -93,7 +93,7 @@ describe("What runs: script section", () => {
 
   it("states the script list read instant as the evidence stamp of the script rows", () => {
     const s = summariseRuns(jobsOk, devicesOk, { scripts: ok([script("FW-TANGO-04-a")]), runs: [rowOk(script("FW-TANGO-04-a"), [])] });
-    expect(lineFor(s, "Scripts in the list (as read)")).toBe("1");
+    expect(lineFor(s, "Scripts in the list (as read)")).toBe("1 script");
     expect(lineFor(s, "Script list read at")).toBeTruthy();
   });
 
