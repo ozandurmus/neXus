@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Box from "@mui/material/Box";
 import {
   getJobStats,
@@ -7,12 +7,14 @@ import {
   getSystemPods,
   getSystemStorage,
   listAuditEvents,
+  listCredentials,
   listDevices,
   listLocalIdentities,
   listScriptRuns,
   listScripts,
   listSessions,
   type AuditEventView,
+  type CredentialView,
   type DeviceSummary,
   type JobStatsView,
   type LocalIdentityView,
@@ -29,9 +31,12 @@ import { EstateCard, EvidenceStamp, StateBadge } from "./EstatePrimitives";
 import { mapJobQueue, JOB_QUEUE_NOT_REPORTED } from "./estateJobQueueModel";
 import { BADGE_WORD_DEFAULT } from "./estateModel";
 import { standardJobsHref } from "./estateRouting";
+import { EstateJobTranscriptDrawer } from "./EstateJobTranscript";
+import { latestTranscriptJobRows, moreRowsLabel, type TranscriptJobRow } from "./estateJobTranscriptModel";
 import {
   buildSystemSummary,
   SCRIPT_RUNS_READ_CAP,
+  SYSTEM_LIST_CAP,
   type ScriptRunRead,
   type SystemSection,
   type TimedRead,
@@ -61,6 +66,7 @@ function useSystemReads() {
   const [audit, setAudit] = useState<Settled<readonly AuditEventView[]>>(SKIPPED);
   const [identities, setIdentities] = useState<Settled<readonly LocalIdentityView[]>>(SKIPPED);
   const [sessions, setSessions] = useState<Settled<readonly SessionView[]>>(SKIPPED);
+  const [credentials, setCredentials] = useState<Settled<readonly CredentialView[]>>(SKIPPED);
   const [scripts, setScripts] = useState<Settled<readonly ScriptSummary[]>>(SKIPPED);
   /** Runs per script for the first SCRIPT_RUNS_READ_CAP scripts; null while the runs are being read. */
   const [scriptRuns, setScriptRuns] = useState<readonly ScriptRunRead[] | null>(null);
@@ -82,6 +88,8 @@ function useSystemReads() {
       .then((r) => { if (active) setIdentities(r); });
     void settle(listSessions().then((r) => (Array.isArray(r?.sessions) ? r.sessions : Promise.reject(new Error("malformed")))))
       .then((r) => { if (active) setSessions(r); });
+    void settle(listCredentials().then((r) => (Array.isArray(r?.credentials) ? r.credentials : Promise.reject(new Error("malformed")))))
+      .then((r) => { if (active) setCredentials(r); });
     void settle(listScripts().then((r) => (Array.isArray(r?.scripts) ? r.scripts : Promise.reject(new Error("malformed")))))
       .then((r) => { if (active) setScripts(r); });
     void settle(getSystemPods()).then((r) => { if (active) setPods(r); });
@@ -103,7 +111,7 @@ function useSystemReads() {
   }, [scripts]);
 
   return {
-    jobs, jobStats, devices, health, audit, identities, sessions, pods, storage,
+    jobs, jobStats, devices, health, audit, identities, sessions, pods, storage, credentials,
     scripts, scriptRuns,
     refresh: () => setTick((n) => n + 1),
   };
@@ -112,7 +120,7 @@ function useSystemReads() {
 const LINE_LABEL_SX = { color: ev.ink2, fontSize: 12.5, lineHeight: 1.35 } as const;
 const LINE_VALUE_SX = { fontFamily: ESTATE_MONO, fontSize: 13.5, fontWeight: 600, color: ev.ink, wordBreak: "break-word" } as const;
 
-function SectionCard({ section, now }: { readonly section: SystemSection; readonly now: Date }) {
+function SectionCard({ section, now, footer }: { readonly section: SystemSection; readonly now: Date; readonly footer?: ReactNode }) {
   return (
     <EstateCard sx={{ p: "16px 18px", display: "flex", flexDirection: "column", gap: "10px", minWidth: 0 }}>
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
@@ -127,6 +135,7 @@ function SectionCard({ section, now }: { readonly section: SystemSection; readon
           </Box>
         ))}
       </Box>
+      {footer}
       {section.more ? <Box sx={{ fontSize: 12, color: ev.ink3 }}>{section.more}</Box> : null}
       <EvidenceStamp at={section.evidenceAt} source={section.source} now={now} />
       <Box sx={{ mt: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -151,6 +160,26 @@ function scriptsInput(scripts: Settled<readonly ScriptSummary[]>, runs: readonly
     script, read: { state: "skipped" }, readAt: null,
   }));
   return { scripts, runs: pending };
+}
+
+/** The What runs job rows: one Transcript button per script's newest job, capped like the card's other lists. */
+function RunTranscriptRows({ rows, onOpen }: { readonly rows: readonly TranscriptJobRow[]; readonly onOpen: (row: TranscriptJobRow) => void }) {
+  const shown = rows.slice(0, SYSTEM_LIST_CAP);
+  const more = moreRowsLabel(rows.length - shown.length);
+  return (
+    <Box component="ul" aria-label="Job transcripts" sx={{ m: 0, p: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "6px" }}>
+      {shown.map((row) => (
+        <Box component="li" key={row.jobId} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, fontSize: 12.5, color: ev.ink2 }}>
+          <Box component="span" sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.scriptName}</Box>
+          <Box component="button" type="button" onClick={() => onOpen(row)}
+            sx={{ border: `1px solid ${ev.line}`, bgcolor: ev.surface, color: ev.ink, borderRadius: "999px", px: "10px", py: "2px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+            Transcript
+          </Box>
+        </Box>
+      ))}
+      {more ? <Box component="li" sx={{ fontSize: 12, color: ev.ink3 }}>{more}</Box> : null}
+    </Box>
+  );
 }
 
 /** Job queue: four read-only figures from one job-statistics read; each figure carries that read's own age. */
@@ -200,6 +229,7 @@ function JobQueueCard({ jobs, now }: { readonly jobs: Settled<JobStatsView>; rea
 export function EstateSystemScreen() {
   const reads = useSystemReads();
   const [now] = useState(() => new Date());
+  const [transcriptJob, setTranscriptJob] = useState<TranscriptJobRow | null>(null);
   const sections = buildSystemSummary({
     jobs: reads.jobs,
     devices: reads.devices,
@@ -207,8 +237,14 @@ export function EstateSystemScreen() {
     audit: reads.audit,
     identities: reads.identities,
     sessions: reads.sessions,
+    credentials: reads.credentials,
     scripts: scriptsInput(reads.scripts, reads.scriptRuns),
   });
+
+  const renderSection = (s: SystemSection) => s.id === "runs"
+    ? <SectionCard key={s.id} section={s} now={now}
+        footer={<RunTranscriptRows rows={latestTranscriptJobRows(reads.scriptRuns ?? [])} onOpen={setTranscriptJob} />} />
+    : <SectionCard key={s.id} section={s} now={now} />;
 
   return (
     <Box component="main" aria-label="Estate system" sx={{ p: "20px 24px", display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -225,11 +261,15 @@ export function EstateSystemScreen() {
         </Box>
       </Box>
       <Box sx={{ display: "grid", gap: "14px", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" }}>
-        {sections.slice(0, 1).map((s) => <SectionCard key={s.id} section={s} now={now} />)}
+        {sections.slice(0, 1).map(renderSection)}
         <JobQueueCard jobs={reads.jobStats} now={now} />
-        {sections.slice(1).map((s) => <SectionCard key={s.id} section={s} now={now} />)}
+        {sections.slice(1).map(renderSection)}
         <EstateSystemPodsStorage pods={reads.pods} storage={reads.storage} now={now} />
       </Box>
+      {transcriptJob ? (
+        <EstateJobTranscriptDrawer jobId={transcriptJob.jobId} scriptName={transcriptJob.scriptName}
+          onClose={() => setTranscriptJob(null)} />
+      ) : null}
     </Box>
   );
 }

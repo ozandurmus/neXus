@@ -50,7 +50,7 @@ export function EstateDossierSshTrustBlock({ deviceId }: { readonly deviceId: st
       href={SSH_TRUST_STANDARD_HREF}
       sx={{ fontSize: "12.5px", color: ev.accent, textDecoration: "none", "&:hover": { textDecoration: "underline" } }}
     >
-      Manage SSH trust in the standard view
+      Manage SSH trust (standard view) →
     </Box>
   );
 

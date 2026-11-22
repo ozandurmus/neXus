@@ -16,7 +16,7 @@ const DEVICE_B = "dev-tango-05";
 const LABELS = { [DEVICE_A]: "FW-TANGO-04", [DEVICE_B]: "FW-TANGO-05" };
 
 const DIFF: ClusterMemberDiff = {
-  cluster_member_ref: "cls-synthetic-1",
+  cluster_member_ref: "CLS-TANGO-01",
   members: [{ device_id: DEVICE_A }, { device_id: DEVICE_B }],
   comparable: true,
   reason: null,
@@ -49,11 +49,11 @@ describe("EstateDossierMemberDiffBlock", () => {
   it("renders the member rows from the mocked diff for a cluster unit", async () => {
     mockedRead.mockResolvedValue(DIFF);
 
-    render(<EstateDossierMemberDiffBlock clusterRef="cls-synthetic-1" labels={LABELS} />);
+    render(<EstateDossierMemberDiffBlock clusterRef="CLS-TANGO-01" labels={LABELS} />);
 
     expect(screen.getByText("Loading member differences…")).toBeTruthy();
     const table = await screen.findByRole("table", { name: "Member differences" });
-    expect(mockedRead).toHaveBeenCalledWith("cls-synthetic-1");
+    expect(mockedRead).toHaveBeenCalledWith("CLS-TANGO-01");
     expect(within(table).getByText("Management address")).toBeTruthy();
     expect(within(table).getByText("Software version")).toBeTruthy();
     expect(within(table).getByText("192.0.2.10")).toBeTruthy();
@@ -65,7 +65,7 @@ describe("EstateDossierMemberDiffBlock", () => {
   it("shows the UNKNOWN text and no OK word when the read fails", async () => {
     mockedRead.mockRejectedValue(new Error("synthetic failure"));
 
-    const { container } = render(<EstateDossierMemberDiffBlock clusterRef="cls-synthetic-1" labels={LABELS} />);
+    const { container } = render(<EstateDossierMemberDiffBlock clusterRef="CLS-TANGO-01" labels={LABELS} />);
 
     const unknown = await screen.findByText(MEMBER_DIFF_UNKNOWN_TEXT);
     expect(unknown).toBeTruthy();

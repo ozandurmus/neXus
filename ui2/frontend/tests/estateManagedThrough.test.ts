@@ -33,7 +33,7 @@ const TREE_UNDER_NODE: ManagementTree = {
           kind: "management",
           device_id: "mgmt-tango",
           category: "management_appliance",
-          hostname: "PANORAMA-TANGO-01",
+          hostname: "MGR-TANGO-01",
           children: [node({ device_id: "unit-fw-07", hostname: "FW-ROMEO-07" })],
         }),
       ],
@@ -44,15 +44,15 @@ const TREE_UNDER_NODE: ManagementTree = {
 
 const TREE_WITHOUT_UNIT: ManagementTree = {
   ...TREE_UNDER_NODE,
-  domains: [{ domain: null, nodes: [node({ device_id: "other", hostname: "FW-OTHER" })] }],
+  domains: [{ domain: null, nodes: [node({ device_id: "other", hostname: "FW-ZULU-99" })] }],
 };
 
 describe("managedThroughOf", () => {
   it("returns MANAGED with the masked node label when the unit sits under a node", () => {
     const r = managedThroughOf("unit-fw-07", { state: "ok", value: TREE_UNDER_NODE });
     expect(r.state).toBe("MANAGED");
-    expect(r.nodeLabel).toBe("PANORAMA-TANGO-01");
-    expect(r.headline).toContain("PANORAMA-TANGO-01");
+    expect(r.nodeLabel).toBe("MGR-TANGO-01");
+    expect(r.headline).toContain("MGR-TANGO-01");
     expect(r.badgeState).toBe("ok");
     expect(r.evidenceAt).toBe("2026-11-21T10:00:00Z");
     expect(r.evidenceSource).toBe("management tree");
@@ -112,9 +112,9 @@ describe("managedThroughOf", () => {
   it("never shows a raw address or serial as the node label", () => {
     const withRaw: ManagementTree = {
       ...TREE_UNDER_NODE,
-      domains: [{ domain: null, nodes: [node({ device_id: "m", hostname: "PANORAMA-TANGO-01", cluster_member_ref: undefined, children: [node({ device_id: "unit-fw-07" })] })] }],
+      domains: [{ domain: null, nodes: [node({ device_id: "m", hostname: "MGR-TANGO-01", cluster_member_ref: undefined, children: [node({ device_id: "unit-fw-07" })] })] }],
     };
     const r = managedThroughOf("unit-fw-07", { state: "ok", value: withRaw });
-    expect(r.nodeLabel).toBe("PANORAMA-TANGO-01");
+    expect(r.nodeLabel).toBe("MGR-TANGO-01");
   });
 });
