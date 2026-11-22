@@ -7,7 +7,7 @@ import {
   type PacketCase,
   type SupportBundleRequest,
 } from "../auth/adminApi";
-import { EstateCard, MoreFooter, StateBadge } from "./EstatePrimitives";
+import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
 import { CASE_ACTION_HREFS, buildCasesModel, type CaseRow, type CasesModel } from "./estateCasesModel";
 import {
   CUTOVER_STANDARD_HREF,
@@ -20,7 +20,8 @@ import { ESTATE_MONO, ev } from "./estateTokens";
 type Load =
   | { readonly state: "loading" }
   | { readonly state: "failed"; readonly message: string }
-  | { readonly state: "ok"; readonly model: CasesModel };
+  /** `readAt` is the instant both reads settled: the evidence time of every figure on the page (the list responses carry none). */
+  | { readonly state: "ok"; readonly model: CasesModel; readonly readAt: Date };
 
 type CutoverRead =
   | { readonly ok: true; readonly readAt: Date; readonly segments: Parameters<typeof buildCutoverSegmentsModel>[0] }
@@ -125,7 +126,8 @@ function useCases(): Load {
       const cases: readonly PacketCase[] = casesRes.value.cases;
       const bundles: readonly SupportBundleRequest[] | null =
         bundlesRes.status === "fulfilled" ? bundlesRes.value.support_bundles : null;
-      setLoad({ state: "ok", model: buildCasesModel(cases, bundles, new Date()) });
+      const readAt = new Date();
+      setLoad({ state: "ok", model: buildCasesModel(cases, bundles, readAt), readAt });
     });
     return () => {
       active = false;
@@ -155,7 +157,7 @@ function caseBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function CaseCard({ row, bundlesKnown }: { readonly row: CaseRow; readonly bundlesKnown: boolean }) {
+function CaseCard({ row, bundlesKnown, readAt }: { readonly row: CaseRow; readonly bundlesKnown: boolean; readonly readAt: Date }) {
   const bundleLine = (text: string) => <Box sx={{ fontSize: 12.5, color: ev.ink2 }}>{text}</Box>;
   return (
     <Box data-testid="case-row" data-case={row.caseId}>
@@ -169,6 +171,7 @@ function CaseCard({ row, bundlesKnown }: { readonly row: CaseRow; readonly bundl
         <Box>
           <Box sx={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".08em", fontWeight: 700, color: ev.ink3 }}>Captures</Box>
           {bundleLine(`${row.captureCount} capture${row.captureCount === 1 ? "" : "s"} · ${caseBytes(row.totalBytes)}`)}
+          <EvidenceStamp at={readAt.toISOString()} source="packet case list read" />
           <Box sx={{ fontSize: 12, color: ev.ink3 }}>Created {row.createdAge}</Box>
         </Box>
         <Box>
@@ -184,6 +187,7 @@ function CaseCard({ row, bundlesKnown }: { readonly row: CaseRow; readonly bundl
         <Box>
           <Box sx={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".08em", fontWeight: 700, color: ev.ink3 }}>Support bundles</Box>
           {!bundlesKnown ? <StateBadge state="unk" word="UNKNOWN" dense /> : bundleLine(`${row.bundleCount} name this case`)}
+          {bundlesKnown ? <EvidenceStamp at={readAt.toISOString()} source="support bundle list read" /> : null}
           {bundlesKnown ? row.bundles.map((b) => (
             <Box key={b.id} sx={{ fontSize: 12, color: ev.ink2 }}>
               {b.vendor} · {b.stateWord} · requested {b.requestedAge}
@@ -236,7 +240,8 @@ export function EstateCasesScreen() {
               : "support bundles could not be read, so their link to each case is UNKNOWN"}
             {load.model.bundlesKnown && load.model.bundlesReferenceHidden > 0
               ? ` · ${load.model.bundlesReferenceHidden} with the case reference hidden for this role`
-              : ""}
+              : ""}{" "}
+            <EvidenceStamp at={load.readAt.toISOString()} source="packet case and support bundle list read" />
           </Box>
           <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
             <Box component="a" href={CASE_ACTION_HREFS.newCapture} sx={linkSx}>New case and capture (standard view)</Box>
@@ -244,7 +249,7 @@ export function EstateCasesScreen() {
           {load.model.rows.length === 0 ? (
             <Box sx={{ color: ev.ink3 }}>No packet analysis cases yet.</Box>
           ) : (
-            load.model.rows.map((row) => <CaseCard key={row.caseId} row={row} bundlesKnown={load.model.bundlesKnown} />)
+            load.model.rows.map((row) => <CaseCard key={row.caseId} row={row} bundlesKnown={load.model.bundlesKnown} readAt={load.readAt} />)
           )}
           {load.model.rowsMore > 0 ? (
             <Box sx={{ fontSize: 13, color: ev.ink3 }}>

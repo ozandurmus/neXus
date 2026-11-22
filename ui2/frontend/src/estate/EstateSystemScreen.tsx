@@ -112,9 +112,7 @@ function SectionCard({ section, now }: { readonly section: SystemSection; readon
         ))}
       </Box>
       {section.more ? <Box sx={{ fontSize: 12, color: ev.ink3 }}>{section.more}</Box> : null}
-      {section.evidenceNote
-        ? <Box sx={{ fontSize: 12, color: ev.ink3 }}>{section.evidenceNote}</Box>
-        : <EvidenceStamp at={section.evidenceAt} source={section.source} now={now} />}
+      <EvidenceStamp at={section.evidenceAt} source={section.source} now={now} />
       <Box sx={{ mt: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
         {(section.extraLinks ?? []).map((link) => (
           <Box key={link.href} component="a" href={link.href} sx={{ fontSize: 13, color: ev.accent, fontWeight: 600 }}>
@@ -151,7 +149,6 @@ export function EstateSystemScreen() {
     identities: reads.identities,
     sessions: reads.sessions,
     scripts: scriptsInput(reads.scripts, reads.scriptRuns),
-    pageAt: now.toISOString(),
   });
 
   return (

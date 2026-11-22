@@ -9,7 +9,7 @@ import {
 } from "../auth/adminApi";
 import { reportError } from "../screens/ReportsScreen";
 import { formatStamp } from "../shell/time";
-import { EstateCard, MoreFooter } from "./EstatePrimitives";
+import { EstateCard, EvidenceStamp, MoreFooter } from "./EstatePrimitives";
 import {
   buildRunRows,
   buildTemplateRows,
@@ -24,14 +24,15 @@ import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
 type Load =
   | { readonly state: "loading" }
   | { readonly state: "failed"; readonly message: string }
-  | { readonly state: "ok"; readonly catalogue: ReportCatalogue; readonly runs: readonly ReportRunView[] };
+  /** `readAt`: the instant both reads settled; the list responses carry no evidence time, so the counts are stamped with it. */
+  | { readonly state: "ok"; readonly catalogue: ReportCatalogue; readonly runs: readonly ReportRunView[]; readonly readAt: Date };
 
 function useReportsData(): Load {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   useEffect(() => {
     let active = true;
     Promise.all([getReportCatalogue(), listReportRuns()]).then(
-      ([catalogue, history]) => { if (active) setLoad({ state: "ok", catalogue, runs: history.runs }); },
+      ([catalogue, history]) => { if (active) setLoad({ state: "ok", catalogue, runs: history.runs, readAt: new Date() }); },
       (e: unknown) => { if (active) setLoad({ state: "failed", message: reportError(e) }); },
     );
     return () => { active = false; };
@@ -114,6 +115,7 @@ export function EstateReportsScreen() {
       runs: buildRunRows(load.runs, now),
       summary: summariseRuns(load.runs),
       retention: load.catalogue.retention_days,
+      readAt: load.readAt,
     };
   }, [load, now]);
 
@@ -136,7 +138,8 @@ export function EstateReportsScreen() {
             <Box component="h2" sx={{ m: 0, fontSize: 16, fontWeight: 650 }}>Templates</Box>
             <Box sx={{ fontSize: 12, color: ev.ink3, mb: 1.5 }}>
               {view.templates.length} templates listed: {view.templates.filter(t => t.status === "AVAILABLE").length} available to this session,
-              {" "}{view.templates.filter(t => t.status === "REFUSED").length} refused for missing read access.
+              {" "}{view.templates.filter(t => t.status === "REFUSED").length} refused for missing read access.{" "}
+              <EvidenceStamp at={view.readAt.toISOString()} source="report catalogue read" />
             </Box>
             <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 1.5 }}>
               {view.templates.map(t => <TemplateCard key={t.templateId} row={t} />)}
@@ -145,7 +148,10 @@ export function EstateReportsScreen() {
 
           <EstateCard sx={{ p: 2.5 }}>
             <Box component="h2" sx={{ m: 0, fontSize: 16, fontWeight: 650 }}>History</Box>
-            <Box sx={{ fontSize: 12, color: ev.ink3, mb: 1.5 }}>{view.summary.sentence}</Box>
+            <Box sx={{ fontSize: 12, color: ev.ink3, mb: 1.5 }}>
+              {view.summary.sentence}{" "}
+              <EvidenceStamp at={view.readAt.toISOString()} source="report history read" />
+            </Box>
             <HistoryTable rows={view.runs} retentionDays={view.retention} />
           </EstateCard>
         </>

@@ -114,11 +114,11 @@ describe("Estate System summary: What runs", () => {
       ok([device("1", "ENROLLED", "EXECUTING"), device("2", "ENROLLED", "requested"), device("3", "ENROLLED", "SUCCEEDED")]),
     );
     const byLabel = Object.fromEntries(s.lines.map((l) => [l.label, l.value]));
-    expect(byLabel["Job families that will run"]).toBe("1 of 4");
-    expect(byLabel["Switched on but idle"]).toBe("1");
-    expect(byLabel["Switched off"]).toBe("1");
-    expect(byLabel["Locked by a deployment switch"]).toBe("1");
-    expect(byLabel["Devices with a job in flight (latest job EXECUTING, CLAIMED or REQUESTED)"]).toBe("2");
+    expect(byLabel["Job families that will run"]).toBe("1 of 4 job families");
+    expect(byLabel["Switched on but idle"]).toBe("1 job family");
+    expect(byLabel["Switched off"]).toBe("1 job family");
+    expect(byLabel["Locked by a deployment switch"]).toBe("1 job family");
+    expect(byLabel["Devices with a job in flight (latest job EXECUTING, CLAIMED or REQUESTED)"]).toBe("2 devices");
     expect(s.badge).toBe("na");
     expect(s.standardHref).toBe("?screen=administration&tab=scheduled-jobs&standard=1");
   });
@@ -150,7 +150,7 @@ describe("Estate System summary: Enrolment", () => {
   it("counts the registry and caps the state list with +N more naming the rest", () => {
     const states = ["ENROLLED", "ENROLLED", "PENDING", "PENDING", "PENDING", "REVOKED", "NEW_ONE", "OTHER_ONE", "THIRD_ONE"];
     const s = summariseEnrolment(ok(states.map((st, i) => device(String(i), st))));
-    expect(s.lines[0]).toEqual({ label: "Devices in the registry", value: String(states.length) });
+    expect(s.lines[0]).toEqual({ label: "Devices in the registry", value: `${states.length} devices` });
     expect(s.lines.length).toBe(1 + 4);
     expect(s.more).toMatch(/^\+\d+ more kinds \(\d+ devices\)$/);
     expect(s.badge).toBe("na");
@@ -198,7 +198,6 @@ describe("Estate System summary: Platform", () => {
   });
 });
 
-const PAGE_AT = "2026-11-22T09:15:00.000Z";
 
 // Synthetic identity and session fixtures: the section must never show these values.
 function identity(name: string, enabled: boolean, mustChange: boolean): LocalIdentityView {
@@ -236,7 +235,6 @@ describe("Estate System summary: Access", () => {
         identity("FW-TANGO-04-old", false, true),
       ]),
       ok([session("SES-SYNTH-1"), session("SES-SYNTH-2")]),
-      PAGE_AT,
     );
     const byLabel = Object.fromEntries(s.lines.map((l) => [l.label, l.value]));
     expect(byLabel["Local identities in total"]).toBe("3 local identities");
@@ -251,7 +249,7 @@ describe("Estate System summary: Access", () => {
   });
 
   it("marks only the identities row UNKNOWN when the identities read fails; the sessions row keeps its count", () => {
-    const s = summariseAccess(failed(), ok([session("SES-SYNTH-1")]), PAGE_AT);
+    const s = summariseAccess(failed(), ok([session("SES-SYNTH-1")]));
     expect(s.lines).toHaveLength(2);
     expect(s.lines[0].value).toBe("UNKNOWN: could not be read.");
     expect(s.lines[1].value).toBe("1 session");
@@ -259,7 +257,7 @@ describe("Estate System summary: Access", () => {
   });
 
   it("renders '0 local identities' for an empty identities list, not an empty section", () => {
-    const s = summariseAccess(ok([]), ok([]), PAGE_AT);
+    const s = summariseAccess(ok([]), ok([]));
     const byLabel = Object.fromEntries(s.lines.map((l) => [l.label, l.value]));
     expect(byLabel["Local identities in total"]).toBe("0 local identities");
     expect(byLabel["Sessions (total as read)"]).toBe("0 sessions");
@@ -267,16 +265,16 @@ describe("Estate System summary: Access", () => {
   });
 
   it("says the role cannot read identities when refused, never a count of 0", () => {
-    const s = summariseAccess(restricted(), ok([]), PAGE_AT);
+    const s = summariseAccess(restricted(), ok([]));
     expect(s.lines[0]).toEqual({ label: "Local identities", value: "Your role cannot read local identities." });
     expect(s.lines.length).toBe(2);
     expect(s.lines[0].value).not.toMatch(/^\d/);
   });
 
-  it("states the page load time as the read time, not as an evidence age", () => {
-    const s = summariseAccess(ok([]), ok([]), PAGE_AT);
-    expect(s.evidenceAt).toBeNull();
-    expect(s.evidenceNote).toMatch(/^Read at the time this page loaded/);
+  it("stamps the Access counts with the older read's own time, never a fake age", () => {
+    const s = summariseAccess(ok([]), ok([]));
+    expect(s.evidenceAt).toBe(AT);
+    expect(summariseAccess(failed(), failed()).evidenceAt).toBeNull();
     expect(s.standardHref).toBe("?screen=administration&tab=access&standard=1");
   });
 });
@@ -284,7 +282,7 @@ describe("Estate System summary: Access", () => {
 describe("Estate System summary: Audit", () => {
   it("shows the newest entries first, capped, with +N more", () => {
     const s = summariseAudit(ok(audit(AUDIT_PREVIEW_CAP + 3)));
-    expect(s.lines[0].value).toBe(String(AUDIT_PREVIEW_CAP + 3));
+    expect(s.lines[0].value).toBe(`${AUDIT_PREVIEW_CAP + 3} events`);
     expect(s.lines.length).toBe(1 + AUDIT_PREVIEW_CAP);
     expect(s.lines[1].value).toContain("ACTION_0");
     expect(s.more).toBe("+3 more");
@@ -308,7 +306,6 @@ describe("buildSystemSummary", () => {
       audit: ok(audit(1)),
       identities: ok([identity("FW-TANGO-04-admin", true, false)]),
       sessions: ok([]),
-      pageAt: PAGE_AT,
     });
     expect(all.map((s) => s.id)).toEqual(["runs", "enrolment", "access", "platform", "audit"]);
     for (const s of all) {

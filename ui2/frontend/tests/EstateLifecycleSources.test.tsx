@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getLifecycleCatalogSources, type LifecycleCatalogSources } from "../src/auth/adminApi";
 import { EstateLifecycleSources } from "../src/estate/EstateLifecycleSources";
+import { EvidenceStamp } from "../src/estate/EstatePrimitives";
 
 vi.mock("../src/auth/adminApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/auth/adminApi")>()),
@@ -107,6 +108,25 @@ describe("EstateLifecycleSources", () => {
 
     await screen.findAllByTestId("estate-lifecycle-source-row");
     expect(container.querySelector("[data-evidence-stamp]")).not.toBeNull();
+  });
+
+  it("stamps the newest last-good load across three feeds with one null", async () => {
+    const newest = "2026-11-21T06:00:00.000Z";
+    mocked.mockResolvedValue({
+      ...SOURCES,
+      feeds: [
+        { ...SOURCES.feeds[0], last_good_at: "2026-11-19T06:00:00.000Z" },
+        { ...SOURCES.feeds[1], last_good_at: null },
+        { ...SOURCES.feeds[0], source: "synthetic_feed_c", last_good_at: newest },
+      ],
+    });
+    const { container } = render(<EstateLifecycleSources />);
+    await screen.findAllByTestId("estate-lifecycle-source-row");
+
+    const expected = render(<EvidenceStamp at={newest} source="vendor sources" />).container;
+    const stamp = container.querySelector("[data-evidence-stamp]");
+    expect(stamp?.textContent).toBe(expected.querySelector("[data-evidence-stamp]")?.textContent);
+    expect(stamp?.textContent).not.toBe("UNKNOWN");
   });
 
   it("renders no upload or file input", async () => {

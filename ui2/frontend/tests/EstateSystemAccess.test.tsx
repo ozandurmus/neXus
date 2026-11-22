@@ -81,7 +81,7 @@ describe("Estate System screen: Access section", () => {
     expect(await screen.findByText("2 local identities")).toBeTruthy();
     expect(screen.getByText("Local identities disabled")).toBeTruthy();
     expect(screen.getByText("1 session")).toBeTruthy();
-    expect(screen.getByText("Read at the time this page loaded", { exact: false })).toBeTruthy();
+    expect(container.querySelector("[data-evidence-stamp]")).not.toBeNull();
     const text = container.textContent ?? "";
     expect(text).not.toContain(IDENTITY_NAME);
     expect(text).not.toContain("FW-TANGO-04-ops");

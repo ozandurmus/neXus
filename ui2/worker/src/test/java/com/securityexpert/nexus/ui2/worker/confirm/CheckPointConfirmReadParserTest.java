@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Optional;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -97,9 +96,9 @@ class CheckPointConfirmReadParserTest {
     }
 
     @Test
-    @Disabled("Defect (open issue): haRole(null) returns STANDALONE, a claim about the device, "
-            + "for a missing read. The class contract says a non-match is Optional.empty() (UNKNOWN).")
     void missingHaReadIsUnknownNotStandalone() {
         assertTrue(parser.haRole(null).isEmpty());
+        assertTrue(parser.haRole("").isEmpty());
+        assertTrue(parser.haRole("   \n").isEmpty());
     }
 }
