@@ -19,8 +19,11 @@ import { isRestricted } from "../shell/States";
 import { writeUrlParams } from "../shell/urlParams";
 import {
   evaluateZoneMatrixPolicy,
+  getZoneVersion,
   listZoneMatrixPolicies,
+  listZoneVersions,
   type ZoneMatrixPolicyItem,
+  type ZoneVersionDetail,
 } from "../screens/zonematrix/zoneMatrixApi";
 import {
   ASK_MODES,
@@ -38,6 +41,7 @@ import {
   type AskMode,
 } from "./estateAskModel";
 import { EstateCard, EvidenceStamp, StateBadge } from "./EstatePrimitives";
+import { EstateZoneMatrixGrid } from "./EstateZoneMatrixGrid";
 import { standardTraceHref } from "./estateRouting";
 import { ESTATE_MONO, ESTATE_UNKNOWN_HATCH, ev } from "./estateTokens";
 
@@ -88,6 +92,13 @@ interface RecentQuestion {
   readonly verdictWord: string;
   readonly state: AskAnswer["state"];
   readonly at: Date;
+}
+
+/** The active zone version (read-only, no blocks). Resolves to `null` when none is ACTIVE. */
+async function loadActiveZoneVersion(): Promise<ZoneVersionDetail | null> {
+  const list = await listZoneVersions();
+  const active = list.versions.find((v) => v.state === "ACTIVE");
+  return active ? getZoneVersion(active.version_id, false) : null;
 }
 
 function useLoaded<T>(loader: () => Promise<T>, enabled: boolean): { readonly value: T | null; readonly failure: unknown; readonly loading: boolean } {
@@ -198,6 +209,7 @@ export function EstateAskScreen({ initialMode }: { readonly initialMode: AskMode
   const policies = useLoaded(listPolicies, needsPolicies);
   const segments = useLoaded(listCutoverSegments, mode === "cutover");
   const zonePolicies = useLoaded(listZoneMatrixPolicies, mode === "zones");
+  const zoneGrid = useLoaded(loadActiveZoneVersion, mode === "zones");
   const policyList: readonly PolicyMetadata[] = policies.value?.policies ?? [];
   const analyses = useLoaded(
     useCallback(() => (policyId ? listOfflineAnalyses(policyId) : Promise.resolve({ analyses: [] as OfflineAnalysisSummary[], canManage: false })), [policyId]),
@@ -340,6 +352,9 @@ export function EstateAskScreen({ initialMode }: { readonly initialMode: AskMode
         </EstateCard>
       ) : null}
       {answer ? <AnswerView answer={answer} now={now} /> : null}
+      {mode === "zones" ? (
+        <EstateZoneMatrixGrid version={zoneGrid.value} loading={zoneGrid.loading} failed={zoneGrid.failure !== null} />
+      ) : null}
       {!answer && !failure && !busy ? (
         <Typography data-testid="ask-empty" sx={{ mt: "16px", fontSize: "14px", color: ev.ink3 }}>No question asked yet. Pick a question above and ask.</Typography>
       ) : null}

@@ -341,11 +341,13 @@ export function UnitTile({
   const answer = unit.lenses[lens];
   const glyph = tileGlyph(answer.tileState);
   // Age of THIS lens's evidence (e.g. the stored archive on Backups), never the inventory read age.
+  // "never read" is an inventory statement, so it appears only under the inventory (age) lens; any other lens without
+  // its own evidence time says unknown and never borrows the inventory read age or its absence.
   const ageText = answer.evidenceAt
     ? `${answer.evidenceSource} evidence ${relativeAge(answer.evidenceAt, now)}`
-    : unit.lastReadAt
-      ? `${answer.evidenceSource} evidence time unknown`
-      : "never read";
+    : lens === "age"
+      ? "never read"
+      : `${answer.evidenceSource} evidence time unknown`;
   const roleDesc = unit.clusterRef
     ? `${unit.clusterRef}${unit.haRole ? ` · ${unit.haRole.toLowerCase()}` : ""}`
     : unit.role.replace("_", " ");

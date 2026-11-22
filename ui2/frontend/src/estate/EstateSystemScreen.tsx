@@ -3,6 +3,8 @@ import Box from "@mui/material/Box";
 import {
   getScheduledJobs,
   getSystemHealth,
+  getSystemPods,
+  getSystemStorage,
   listAuditEvents,
   listDevices,
   listLocalIdentities,
@@ -12,9 +14,11 @@ import {
   type AuditEventView,
   type DeviceSummary,
   type LocalIdentityView,
+  type PodsView,
   type ScheduledJobsView,
   type ScriptSummary,
   type SessionView,
+  type StorageView,
   type SystemHealth,
 } from "../auth/adminApi";
 import { isRestricted } from "../shell/States";
@@ -27,6 +31,7 @@ import {
   type SystemSection,
   type TimedRead,
 } from "./estateSystemModel";
+import { EstateSystemPodsStorage } from "./EstateSystemPodsStorage";
 import { ESTATE_MONO, ev } from "./estateTokens";
 
 type Settled<T> = TimedRead<T>;
@@ -54,6 +59,8 @@ function useSystemReads() {
   const [scripts, setScripts] = useState<Settled<readonly ScriptSummary[]>>(SKIPPED);
   /** Runs per script for the first SCRIPT_RUNS_READ_CAP scripts; null while the runs are being read. */
   const [scriptRuns, setScriptRuns] = useState<readonly ScriptRunRead[] | null>(null);
+  const [pods, setPods] = useState<Settled<PodsView>>(SKIPPED);
+  const [storage, setStorage] = useState<Settled<StorageView>>(SKIPPED);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -70,6 +77,8 @@ function useSystemReads() {
       .then((r) => { if (active) setSessions(r); });
     void settle(listScripts().then((r) => (Array.isArray(r?.scripts) ? r.scripts : Promise.reject(new Error("malformed")))))
       .then((r) => { if (active) setScripts(r); });
+    void settle(getSystemPods()).then((r) => { if (active) setPods(r); });
+    void settle(getSystemStorage()).then((r) => { if (active) setStorage(r); });
     return () => { active = false; };
   }, [tick]);
 
@@ -87,7 +96,7 @@ function useSystemReads() {
   }, [scripts]);
 
   return {
-    jobs, devices, health, audit, identities, sessions,
+    jobs, devices, health, audit, identities, sessions, pods, storage,
     scripts, scriptRuns,
     refresh: () => setTick((n) => n + 1),
   };
@@ -167,6 +176,7 @@ export function EstateSystemScreen() {
       </Box>
       <Box sx={{ display: "grid", gap: "14px", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" }}>
         {sections.map((s) => <SectionCard key={s.id} section={s} now={now} />)}
+        <EstateSystemPodsStorage pods={reads.pods} storage={reads.storage} now={now} />
       </Box>
     </Box>
   );
