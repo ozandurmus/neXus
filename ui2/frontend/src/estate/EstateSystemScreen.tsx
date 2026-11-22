@@ -6,18 +6,27 @@ import {
   listAuditEvents,
   listDevices,
   listLocalIdentities,
+  listScriptRuns,
+  listScripts,
   listSessions,
   type AuditEventView,
   type DeviceSummary,
   type LocalIdentityView,
   type ScheduledJobsView,
+  type ScriptSummary,
   type SessionView,
   type SystemHealth,
 } from "../auth/adminApi";
 import { isRestricted } from "../shell/States";
 import type { SourceRead } from "../screens/overview/attentionRules";
 import { EstateCard, EvidenceStamp, StateBadge } from "./EstatePrimitives";
-import { buildSystemSummary, type SystemSection, type TimedRead } from "./estateSystemModel";
+import {
+  buildSystemSummary,
+  SCRIPT_RUNS_READ_CAP,
+  type ScriptRunRead,
+  type SystemSection,
+  type TimedRead,
+} from "./estateSystemModel";
 import { ESTATE_MONO, ev } from "./estateTokens";
 
 type Settled<T> = TimedRead<T>;
@@ -42,6 +51,9 @@ function useSystemReads() {
   const [audit, setAudit] = useState<Settled<readonly AuditEventView[]>>(SKIPPED);
   const [identities, setIdentities] = useState<Settled<readonly LocalIdentityView[]>>(SKIPPED);
   const [sessions, setSessions] = useState<Settled<readonly SessionView[]>>(SKIPPED);
+  const [scripts, setScripts] = useState<Settled<readonly ScriptSummary[]>>(SKIPPED);
+  /** Runs per script for the first SCRIPT_RUNS_READ_CAP scripts; null while the runs are being read. */
+  const [scriptRuns, setScriptRuns] = useState<readonly ScriptRunRead[] | null>(null);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -56,10 +68,29 @@ function useSystemReads() {
       .then((r) => { if (active) setIdentities(r); });
     void settle(listSessions().then((r) => (Array.isArray(r?.sessions) ? r.sessions : Promise.reject(new Error("malformed")))))
       .then((r) => { if (active) setSessions(r); });
+    void settle(listScripts().then((r) => (Array.isArray(r?.scripts) ? r.scripts : Promise.reject(new Error("malformed")))))
+      .then((r) => { if (active) setScripts(r); });
     return () => { active = false; };
   }, [tick]);
 
-  return { jobs, devices, health, audit, identities, sessions, refresh: () => setTick((n) => n + 1) };
+  // The script list carries no last run, so runs are read per script, for the first SCRIPT_RUNS_READ_CAP scripts.
+  useEffect(() => {
+    if (scripts.read.state !== "ok") return;
+    let active = true;
+    setScriptRuns(null);
+    const first = scripts.read.value.slice(0, SCRIPT_RUNS_READ_CAP);
+    void Promise.all(first.map((script) =>
+      settle(listScriptRuns(script.script_id).then((r) => (Array.isArray(r?.runs) ? r.runs : Promise.reject(new Error("malformed")))))
+        .then((r): ScriptRunRead => ({ ...r, script })),
+    )).then((rows) => { if (active) setScriptRuns(rows); });
+    return () => { active = false; };
+  }, [scripts]);
+
+  return {
+    jobs, devices, health, audit, identities, sessions,
+    scripts, scriptRuns,
+    refresh: () => setTick((n) => n + 1),
+  };
 }
 
 const LINE_LABEL_SX = { color: ev.ink2, fontSize: 12.5, lineHeight: 1.35 } as const;
@@ -84,11 +115,28 @@ function SectionCard({ section, now }: { readonly section: SystemSection; readon
       {section.evidenceNote
         ? <Box sx={{ fontSize: 12, color: ev.ink3 }}>{section.evidenceNote}</Box>
         : <EvidenceStamp at={section.evidenceAt} source={section.source} now={now} />}
-      <Box component="a" href={section.standardHref} sx={{ mt: "auto", fontSize: 13, color: ev.accent, fontWeight: 600 }}>
-        {section.standardLabel} →
+      <Box sx={{ mt: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
+        {(section.extraLinks ?? []).map((link) => (
+          <Box key={link.href} component="a" href={link.href} sx={{ fontSize: 13, color: ev.accent, fontWeight: 600 }}>
+            {link.label} →
+          </Box>
+        ))}
+        <Box component="a" href={section.standardHref} sx={{ fontSize: 13, color: ev.accent, fontWeight: 600 }}>
+          {section.standardLabel} →
+        </Box>
       </Box>
     </EstateCard>
   );
+}
+
+/** The script list read plus its runs; while the runs are in flight each listed script is shown as not yet read (UNKNOWN). */
+function scriptsInput(scripts: Settled<readonly ScriptSummary[]>, runs: readonly ScriptRunRead[] | null) {
+  if (scripts.read.state !== "ok") return { scripts, runs: [] };
+  if (runs !== null) return { scripts, runs };
+  const pending = scripts.read.value.slice(0, SCRIPT_RUNS_READ_CAP).map((script): ScriptRunRead => ({
+    script, read: { state: "skipped" }, readAt: null,
+  }));
+  return { scripts, runs: pending };
 }
 
 /** Estate System screen: four compact read-only sections; every action opens the standard screen with `standard=1`. */
@@ -102,6 +150,7 @@ export function EstateSystemScreen() {
     audit: reads.audit,
     identities: reads.identities,
     sessions: reads.sessions,
+    scripts: scriptsInput(reads.scripts, reads.scriptRuns),
     pageAt: now.toISOString(),
   });
 

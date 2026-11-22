@@ -26,6 +26,7 @@ import {
   TileSwatch,
   UnitTile,
 } from "./EstatePrimitives";
+import { EstateComplianceGuidance } from "./EstateComplianceGuidance";
 import { dossierHref, standardComplianceHref } from "./estateRouting";
 import { buildComplianceLensModel } from "./estateSlice2Model";
 import { ESTATE_MONO, ESTATE_SANS, ESTATE_UNKNOWN_HATCH, ev } from "./estateTokens";
@@ -1046,6 +1047,7 @@ export function EstateComplianceScreen({
                                       <span style={{ color: ev.ink2 }}>
                                         {d.observed_value ?? d.message ?? "No observed value"}
                                       </span>
+                                      <EstateComplianceGuidance guidance={d.guidance} status={d.status} />
                                     </Box>
                                   );
                                 })}
