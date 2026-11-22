@@ -650,7 +650,7 @@ describe("Alternative Estate view, slice 1", () => {
     render(<App />);
 
     const brief = await screen.findByTestId("estate-brief-screen");
-    expect(within(brief).getByTestId("brief-headline")).toHaveTextContent(/items need action/i);
+    expect(within(brief).getByTestId("brief-headline")).toHaveTextContent(/\d+ items? on \d+ units?: \d+ act now/i);
 
     // Hatched UNKNOWN badge is present and never folded into fine
     const unkBadges = brief.querySelectorAll('[data-state-badge="unk"][data-hatched="true"]');
