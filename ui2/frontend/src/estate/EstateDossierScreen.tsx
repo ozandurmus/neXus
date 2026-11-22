@@ -61,6 +61,8 @@ import {
 } from "./estateRouting";
 import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
 import { useEstateData } from "./useEstateData";
+import { EstateDossierLogsBlock, loadDeviceLogsReads } from "./EstateDossierLogsBlock";
+import type { DeviceLogsReads } from "./estateDeviceLogsSummary";
 
 type DossierTab = "interfaces" | "routes" | "backups" | "controls" | "prechecks";
 
@@ -103,6 +105,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
   const [swHistory, setSwHistory] = useState<
     SourceRead<{ stretches: readonly SoftwareStretch[]; installEvents: readonly CpInstallEvent[] }> | "loading"
   >("loading");
+  const [logs, setLogs] = useState<SourceRead<DeviceLogsReads> | "loading">("loading");
   const [workspaceFallback, setWorkspaceFallback] = useState<SourceRead<DeviceWorkspaceView> | null>(null);
   const [actionReads, setActionReads] = useState<EstateActionReads>({ staticRouteTargets: null, diagnosticTargets: null });
 
@@ -130,6 +133,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
     setConfiguration("loading");
     setLifecycleDetail("loading");
     setSwHistory("loading");
+    setLogs("loading");
     setWorkspaceFallback(null);
 
     Promise.all([
@@ -144,7 +148,8 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
           installEvents: Array.isArray(r?.install_events) ? r.install_events : [],
         })),
       ),
-    ]).then(([inv, bk, cmp, cfg, lc, sw]) => {
+      settle(loadDeviceLogsReads(deviceId)),
+    ]).then(([inv, bk, cmp, cfg, lc, sw, lg]) => {
       if (!active) return;
       setInventory(inv);
       setBackups(bk);
@@ -152,6 +157,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
       setConfiguration(cfg);
       setLifecycleDetail(lc);
       setSwHistory(sw);
+      setLogs(lg);
     });
 
     return () => {
@@ -852,6 +858,8 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
           ))}
         </Box>
       </EstateCard>
+
+      <EstateDossierLogsBlock deviceId={unit.deviceId} logs={logs} now={now} />
 
       {/* 30-day stored evidence timeline */}
       <EstateCard sx={{ mt: "16px" }}>

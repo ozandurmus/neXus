@@ -45,12 +45,13 @@ export type EstateRoute =
   | { readonly kind: "backups"; readonly query: string }
   | { readonly kind: "ask"; readonly mode: AskMode }
   | { readonly kind: "rewind"; readonly at: string | null; readonly compare: string | null }
-  | { readonly kind: "cases" };
+  | { readonly kind: "cases" }
+  | { readonly kind: "reports" };
 
 /**
  * Resolves whether the current address renders inside the Estate view shell (Slice 1 + Slice 2: Brief, Estate wall,
- * Unit dossier, Failover board, Changes, Compliance lens, Backups lens, Ask workbench) or falls through to the standard screen
- * (Cases -> Packet analysis / Diagnostics / Support bundles, Reports, System -> Administration, Jobs,
+ * Unit dossier, Failover board, Changes, Compliance lens, Backups lens, Ask workbench, Reports) or falls through to the standard screen
+ * (Cases -> Packet analysis / Diagnostics / Support bundles, System -> Administration, Jobs,
  * Static routes, or any link carrying `standard=1` to open the standard view explicitly for device/admin actions).
  */
 export function resolveEstateRoute(screen: ScreenId, pathname: string, search: string): EstateRoute | null {
@@ -115,6 +116,9 @@ export function resolveEstateRoute(screen: ScreenId, pathname: string, search: s
   }
   if (screen === "packet_analysis") {
     return { kind: "cases" };
+  }
+  if (screen === "reports") {
+    return { kind: "reports" };
   }
   return null;
 }
