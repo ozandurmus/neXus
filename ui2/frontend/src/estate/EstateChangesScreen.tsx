@@ -21,6 +21,7 @@ import {
   TileSwatch,
   UnitTile,
 } from "./EstatePrimitives";
+import { EstatePolicyBrowser } from "./EstatePolicyBrowser";
 import { dossierHref, standardChangesHref } from "./estateRouting";
 import {
   buildEstateChangesModel,
@@ -1294,6 +1295,7 @@ export function EstateChangesScreen({
           </EstateCard>
         </>
       )}
+      <EstatePolicyBrowser now={now} />
     </Box>
   );
 }

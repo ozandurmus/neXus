@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import Box from "@mui/material/Box";
 import GlobalStyles from "@mui/material/GlobalStyles";
 import IconButton from "@mui/material/IconButton";
@@ -18,6 +18,8 @@ import { roleTokenLabel } from "../shell/roleLabel";
 import { DISPLAY_TZ_LABEL, formatUtc, relativeAge } from "../shell/time";
 import { ViewModeControl } from "../shell/ViewModeControl";
 import { ESTATE_LENSES, LENS_META, lensProblemCount } from "./estateModel";
+import { EstateFindPalette } from "./EstateFindPalette";
+import { useEstateFindShortcut } from "./estateFind";
 import { EvidenceStamp, StateBadge } from "./EstatePrimitives";
 import {
   askHref,
@@ -289,6 +291,10 @@ export function EstateShell({
   const session = useSession();
   const { model } = useEstateData();
   const permissions = session?.permissions;
+  const [findOpen, setFindOpen] = useState(false);
+  const toggleFind = useCallback(() => setFindOpen((open) => !open), []);
+  const closeFind = useCallback(() => setFindOpen(false), []);
+  useEstateFindShortcut(toggleFind);
   const casesHref = planeGranted(permissions, "PacketAnalysis") ? "?screen=packet_analysis" : "?screen=diagnostics";
 
   const inEstateSection =
@@ -427,6 +433,29 @@ export function EstateShell({
           <GlobalSearch />
         </Box>
 
+        <Tooltip title="Find a unit, cluster or screen (Ctrl+K or Cmd+K)">
+          <IconButton
+            aria-label="Find in the estate (Ctrl+K or Cmd+K)"
+            aria-haspopup="dialog"
+            aria-expanded={findOpen}
+            onClick={toggleFind}
+            data-testid="estate-find-button"
+            size="small"
+            sx={{
+              width: 32,
+              height: 32,
+              borderRadius: "8px",
+              border: `1px solid ${ev.line}`,
+              bgcolor: ev.surface,
+              color: ev.ink2,
+              flexShrink: 0,
+              "&:hover": { bgcolor: ev.surface2, color: ev.ink },
+            }}
+          >
+            <Icon name="search" size={17} />
+          </IconButton>
+        </Tooltip>
+
         <Box sx={{ display: { xs: "none", md: "inline-flex" }, flexShrink: 0 }}>
           <EstateClock newestAt={model?.newestEvidenceAt ?? null} oldestAt={model?.oldestEvidenceAt ?? null} />
         </Box>
@@ -458,6 +487,8 @@ export function EstateShell({
 
         <EstateAccountButton />
       </Box>
+
+      <EstateFindPalette open={findOpen} onClose={closeFind} units={model?.units ?? []} clusters={model?.clusters ?? []} />
 
       {showLensBar ? <EstateLensBar activeLens={activeLens} /> : null}
 
