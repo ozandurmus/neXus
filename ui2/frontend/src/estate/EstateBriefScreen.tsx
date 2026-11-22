@@ -39,6 +39,7 @@ import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
 import { useEstateData } from "./useEstateData";
 import { usePlatformFindings } from "./estatePlatformFindings";
 import { EstatePlatformCard } from "./EstatePlatformCard";
+import { EstateSecurityScanCard } from "./EstateSecurityScanCard";
 
 const DATE_FMT = new Intl.DateTimeFormat("en-GB", {
   timeZone: DISPLAY_TZ,
@@ -710,7 +711,13 @@ export function EstateBriefScreen() {
             )}
           </EstateCard>
 
-          <EstatePlatformCard platform={platform} now={model.now} />
+          <Box
+            data-testid="estate-brief-platform-row"
+            sx={{ display: "grid", gap: "12px", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 2fr) minmax(0, 1fr)" }, alignItems: "start" }}
+          >
+            <EstatePlatformCard platform={platform} now={model.now} />
+            <EstateSecurityScanCard now={model.now} />
+          </Box>
 
           <EstateCard>
             <Box sx={{ display: "flex", alignItems: "baseline", gap: "12px", px: "18px", pt: "14px", pb: "8px", flexWrap: "wrap" }}>

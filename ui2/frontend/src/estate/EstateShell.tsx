@@ -26,6 +26,7 @@ import {
   backupsHref,
   briefHref,
   rewindHref,
+  systemHref,
   changesHref,
   complianceHref,
   failoverHref,
@@ -318,7 +319,7 @@ export function EstateShell({
     { id: "ask", label: "Ask", href: askHref(), current: route.kind === "ask" },
     { id: "cases", label: "Cases", href: casesHref, current: route.kind === "cases", standardHint: "Opens standard Cases / Tools screen" },
     { id: "reports", label: "Reports", href: "?screen=reports", current: route.kind === "reports" },
-    { id: "system", label: "System", href: "?screen=administration", current: false, standardHint: "Opens standard Administration screen" },
+    { id: "system", label: "System", href: systemHref(), current: route.kind === "system", standardHint: "Opens standard Administration screen" },
   ];
 
   const showLensBar = inEstateSection;

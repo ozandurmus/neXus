@@ -112,7 +112,8 @@ describe("estateRouting", () => {
     expect(resolveEstateRoute("operations", "/", "?screen=operations&tab=jobs")).toBeNull();
     expect(resolveEstateRoute("packet_analysis", "/", "?screen=packet_analysis")).toEqual({ kind: "cases" });
     expect(resolveEstateRoute("packet_analysis", "/", "?screen=packet_analysis&standard=1")).toBeNull();
-    expect(resolveEstateRoute("inventory", "/", "?screen=inventory&view=lifecycle")).toBeNull();
+    expect(resolveEstateRoute("inventory", "/", "?screen=inventory&view=lifecycle")).toEqual({ kind: "lifecycle" });
+    expect(resolveEstateRoute("inventory", "/", "?screen=inventory&view=lifecycle&standard=1")).toBeNull();
   });
 
   it("maps standard screens to matching Estate screens or lenses when switching View to Estate", () => {
@@ -125,8 +126,9 @@ describe("estateRouting", () => {
     expect(estateEntryHrefFor("operations", "/", "?screen=operations&cluster_ref=CLS-ROMEO-01&standard=1")).toBe(
       "?screen=operations&cluster_ref=CLS-ROMEO-01",
     );
-    expect(estateEntryHrefFor("inventory", "/", "?screen=inventory&view=lifecycle")).toBe(
-      "?screen=inventory&lens=exposure",
+    expect(estateEntryHrefFor("inventory", "/", "?screen=inventory&view=lifecycle")).toBeNull();
+    expect(estateEntryHrefFor("inventory", "/", "?screen=inventory&view=lifecycle&standard=1")).toBe(
+      "?screen=inventory&view=lifecycle",
     );
     expect(estateEntryHrefFor("trace", "/", "?screen=trace")).toBeNull();
     expect(estateEntryHrefFor("trace", "/", "?screen=trace&mode=lookup&standard=1")).toBe("?screen=trace&mode=lookup");
