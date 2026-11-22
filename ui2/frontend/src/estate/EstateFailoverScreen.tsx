@@ -11,6 +11,7 @@ import {
   TileSwatch,
   VendorTag,
 } from "./EstatePrimitives";
+import { EstateFailoverIncidents } from "./EstateFailoverIncidents";
 import { dossierHref, standardHaHref } from "./estateRouting";
 import {
   buildFailoverBoardModel,
@@ -566,6 +567,9 @@ export function EstateFailoverScreen({
           )}
         </Box>
       </Box>
+
+      {/* Incidents (read-only; release lives in the standard HA view) */}
+      <EstateFailoverIncidents units={board.units} />
 
       {/* Pre-check Matrix */}
       <EstateCard sx={{ mt: "20px" }}>
