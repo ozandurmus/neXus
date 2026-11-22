@@ -23,6 +23,7 @@ import {
   UnitTile,
 } from "./EstatePrimitives";
 import { EstatePolicyBrowser } from "./EstatePolicyBrowser";
+import { EstateSoftwareChanges } from "./EstateSoftwareChanges";
 import { dossierHref, standardChangesHref } from "./estateRouting";
 import {
   buildEstateChangesModel,
@@ -1303,6 +1304,7 @@ export function EstateChangesScreen({
           </EstateCard>
         </>
       )}
+      <EstateSoftwareChanges now={now} unitsById={unitsById} />
       <EstatePolicyBrowser now={now} />
     </Box>
   );
