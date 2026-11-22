@@ -5,6 +5,7 @@ import {
   countLens,
   diffSnapshots,
   nearestSnap,
+  rewindRingFor,
   snapPoints,
 } from "../src/estate/estateRewindModel";
 import { resolveEstateRoute, rewindHref } from "../src/estate/estateRouting";
@@ -62,5 +63,17 @@ describe("estate rewind model", () => {
     const r = resolveEstateRoute("inventory", "/", "?screen=inventory&view=rewind&at=2026-11-12T02:00:00Z");
     expect(r).toEqual({ kind: "rewind", at: "2026-11-12T02:00:00Z", compare: null });
     expect(rewindHref("2026-11-12T02:00:00.000Z", "2026-11-19T00:00:00.000Z")).toContain("compare=");
+  });
+});
+
+describe("rewindRingFor", () => {
+  it("maps worse to act, better to ok and a same-rank change to a dashed ink3 ring", () => {
+    expect(rewindRingFor("worse")).toEqual({ color: "act", word: "worse", dashed: false });
+    expect(rewindRingFor("better")).toEqual({ color: "ok", word: "better", dashed: false });
+    expect(rewindRingFor("changed")).toEqual({ color: "ink3", word: "unchanged", dashed: true });
+  });
+
+  it("gives no ring and no dash when the unit did not move", () => {
+    expect(rewindRingFor(null)).toEqual({ color: null, word: "unchanged", dashed: false });
   });
 });

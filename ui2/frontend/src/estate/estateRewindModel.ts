@@ -149,6 +149,21 @@ export function diffSnapshots(a: RewindSnapshot, b: RewindSnapshot): readonly Re
   return out;
 }
 
+/** Tile ring for a unit that moved (or did not) between the two moments. Token names only; the screen maps them to ev.*. */
+export interface RewindRing {
+  readonly color: "act" | "ok" | "ink3" | null;
+  readonly word: string;
+  readonly dashed: boolean;
+}
+
+/** worse = act, better = ok, same rank but changed = dashed ink3, no transition = no ring (shown faded). */
+export function rewindRingFor(direction: "worse" | "better" | "changed" | null): RewindRing {
+  if (direction === "worse") return { color: "act", word: "worse", dashed: false };
+  if (direction === "better") return { color: "ok", word: "better", dashed: false };
+  if (direction === "changed") return { color: "ink3", word: "unchanged", dashed: true };
+  return { color: null, word: "unchanged", dashed: false };
+}
+
 export interface LensCount {
   readonly act: number;
   readonly watch: number;

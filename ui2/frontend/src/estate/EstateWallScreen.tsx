@@ -10,6 +10,7 @@ import {
   readEstateWatchlist,
   sortUnitsForLens,
   toggleEstateWatchlist,
+  unitMatchesWallQuery,
   type EstateUnit,
   type TileState,
 } from "./estateModel";
@@ -35,6 +36,10 @@ import {
 import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
 import { useEstateData } from "./useEstateData";
 
+type WallSearchMode = "filter" | "dim";
+
+const NO_DIMMED_IDS: ReadonlySet<string> = new Set<string>();
+
 export function EstateWallScreen({
   initialLens = "worst",
   initialClusterRef = null,
@@ -49,6 +54,7 @@ export function EstateWallScreen({
   const [onlyAttention, setOnlyAttention] = useState<boolean>(false);
   const [vendorFilter, setVendorFilter] = useState<string>("");
   const [query, setQuery] = useState<string>("");
+  const [searchMode, setSearchMode] = useState<WallSearchMode>("filter");
   const [watchlist, setWatchlist] = useState<string[]>(() => readEstateWatchlist());
 
   useEffect(() => {
@@ -102,9 +108,39 @@ export function EstateWallScreen({
     [pinnedId],
   );
 
+  const dimMode = searchMode === "dim";
+  const queryActive = query.trim() !== "";
+
+  // Filter mode drops non-matching list rows; Dim mode keeps every row and dims the non-matching ones.
   const sortedRows = useMemo(
-    () => (model ? sortUnitsForLens(model.units, lens, { onlyAttention, query, vendor: vendorFilter }) : []),
-    [model, lens, onlyAttention, query, vendorFilter],
+    () =>
+      model
+        ? sortUnitsForLens(model.units, lens, { onlyAttention, query: dimMode ? "" : query, vendor: vendorFilter })
+        : [],
+    [model, lens, onlyAttention, query, vendorFilter, dimMode],
+  );
+
+  // Units in the current lens after the vendor and attention filters: the M in "N of M units match".
+  const lensScopeCount = useMemo(
+    () => (model ? sortUnitsForLens(model.units, lens, { onlyAttention, query: "", vendor: vendorFilter }).length : 0),
+    [model, lens, onlyAttention, vendorFilter],
+  );
+  const matchCount = useMemo(
+    () =>
+      model && queryActive
+        ? sortUnitsForLens(model.units, lens, { onlyAttention, query: "", vendor: vendorFilter }).filter((u) =>
+            unitMatchesWallQuery(u, query),
+          ).length
+        : 0,
+    [model, lens, onlyAttention, vendorFilter, query, queryActive],
+  );
+  // Dim mode only: tiles and list rows whose unit does not match the query. Empty set otherwise.
+  const dimmedIds = useMemo<ReadonlySet<string>>(
+    () =>
+      model && dimMode && queryActive
+        ? new Set(model.units.filter((u) => !unitMatchesWallQuery(u, query)).map((u) => u.deviceId))
+        : NO_DIMMED_IDS,
+    [model, dimMode, queryActive, query],
   );
 
   if (fatalError) {
@@ -513,6 +549,7 @@ export function EstateWallScreen({
                             cluster={cl}
                             lens={lens}
                             selectedId={activeUnit?.deviceId ?? null}
+                            dimmedIds={dimmedIds}
                             now={model.now}
                             onSelect={handleTileSelect}
                             onHover={handleTileHover}
@@ -541,6 +578,7 @@ export function EstateWallScreen({
                             unit={u}
                             lens={lens}
                             selected={activeUnit?.deviceId === u.deviceId}
+                            dimmed={dimmedIds.has(u.deviceId)}
                             now={model.now}
                             onSelect={handleTileSelect}
                             onHover={handleTileHover}
@@ -569,6 +607,7 @@ export function EstateWallScreen({
                             unit={u}
                             lens={lens}
                             selected={activeUnit?.deviceId === u.deviceId}
+                            dimmed={dimmedIds.has(u.deviceId)}
                             now={model.now}
                             onSelect={handleTileSelect}
                             onHover={handleTileHover}
@@ -600,6 +639,7 @@ export function EstateWallScreen({
                             unit={u}
                             lens={lens}
                             selected={activeUnit?.deviceId === u.deviceId}
+                            dimmed={dimmedIds.has(u.deviceId)}
                             now={model.now}
                             onSelect={handleTileSelect}
                             onHover={handleTileHover}
@@ -815,6 +855,39 @@ export function EstateWallScreen({
                 </option>
               ))}
             </Box>
+            <Box sx={{ display: "inline-flex", gap: "6px", alignItems: "center" }} role="group" aria-label="Search mode">
+              {(
+                [
+                  { mode: "filter", label: "Filter" },
+                  { mode: "dim", label: "Dim" },
+                ] as const
+              ).map((opt) => {
+                const pressed = searchMode === opt.mode;
+                return (
+                  <Box
+                    key={opt.mode}
+                    component="button"
+                    type="button"
+                    aria-pressed={pressed}
+                    onClick={() => setSearchMode(opt.mode)}
+                    sx={{
+                      height: "28px",
+                      px: "11px",
+                      borderRadius: "999px",
+                      border: `1px solid ${pressed ? ev.ink : ev.line}`,
+                      bgcolor: ev.surface,
+                      color: pressed ? ev.ink : ev.ink2,
+                      fontWeight: pressed ? 650 : 500,
+                      fontSize: "12.5px",
+                      boxShadow: pressed ? `inset 0 0 0 1px ${ev.ink}` : "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {opt.label}
+                  </Box>
+                );
+              })}
+            </Box>
             <Box
               component="input"
               aria-label="Filter units by name or cluster"
@@ -833,6 +906,14 @@ export function EstateWallScreen({
                 minWidth: "170px",
               }}
             />
+            <Typography
+              data-testid="estate-wall-match-count"
+              sx={{ fontFamily: ESTATE_MONO, fontSize: "12px", color: ev.ink3, whiteSpace: "nowrap" }}
+            >
+              {queryActive
+                ? `${matchCount} of ${lensScopeCount} units match`
+                : `no query · ${lensScopeCount} ${lensScopeCount === 1 ? "unit" : "units"} in lens`}
+            </Typography>
           </Box>
         </Box>
 
@@ -892,8 +973,14 @@ export function EstateWallScreen({
               ) : (
                 sortedRows.map((u) => {
                   const lensAns = u.lenses[lens];
+                  const dimmed = dimmedIds.has(u.deviceId);
                   return (
-                    <tr key={u.deviceId} data-unit-row={u.name}>
+                    <tr
+                      key={u.deviceId}
+                      data-unit-row={u.name}
+                      data-dimmed={dimmed ? "true" : "false"}
+                      style={dimmed ? { opacity: 0.25 } : undefined}
+                    >
                       <td>
                         <Box
                           component="a"

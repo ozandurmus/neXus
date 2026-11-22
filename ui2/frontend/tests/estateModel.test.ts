@@ -12,6 +12,7 @@ import {
   lensProblemCount,
   sortUnitsForLens,
   TILE_STATE_RANK,
+  unitMatchesWallQuery,
 } from "../src/estate/estateModel";
 import { estateEntryHrefFor, resolveEstateRoute } from "../src/estate/estateRouting";
 import { ESTATE_DARK, ESTATE_LIGHT } from "../src/estate/estateTokens";
@@ -452,5 +453,43 @@ describe("buildEstateModel", () => {
     expect(ageBucketOf("2026-11-19T01:00:00Z", NOW)).toBe("day");
     expect(ageBucketOf("2026-11-17T12:00:00Z", NOW)).toBe("old");
     expect(ageBucketOf("2026-11-14T12:00:00Z", NOW)).toBe("stale");
+  });
+});
+
+describe("unitMatchesWallQuery (wall search rule)", () => {
+  const model = buildEstateModel({
+    now: NOW,
+    devices: { state: "ok", value: SYNTHETIC_DEVICES },
+    overview: { state: "ok", value: SYNTHETIC_OVERVIEW },
+    failover: { state: "ok", value: SYNTHETIC_FAILOVER },
+    backups: { state: "ok", value: { backups: SYNTHETIC_BACKUPS } },
+    lifecycle: { state: "ok", value: SYNTHETIC_LIFECYCLE },
+  });
+  const tango = model.units.find((u) => u.name === "FW-TANGO-04");
+  if (!tango) throw new Error("fixture missing FW-TANGO-04");
+
+  it("matches on name, case-insensitively", () => {
+    expect(unitMatchesWallQuery(tango, "tango-04")).toBe(true);
+    expect(unitMatchesWallQuery(tango, "FW-TANGO")).toBe(true);
+    expect(unitMatchesWallQuery(tango, "juliet")).toBe(false);
+  });
+
+  it("matches on cluster ref", () => {
+    expect(tango.clusterRef).toBeTruthy();
+    expect(unitMatchesWallQuery(tango, String(tango.clusterRef).toLowerCase())).toBe(true);
+  });
+
+  it("matches everything for an empty or whitespace-only query", () => {
+    for (const u of model.units) {
+      expect(unitMatchesWallQuery(u, "")).toBe(true);
+      expect(unitMatchesWallQuery(u, "   ")).toBe(true);
+    }
+  });
+
+  it("keeps sortUnitsForLens query behaviour: drops non-matching units and trims the query", () => {
+    const rows = sortUnitsForLens(model.units, "worst", { onlyAttention: false, query: "  tango ", vendor: "" });
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((u) => unitMatchesWallQuery(u, "tango"))).toBe(true);
+    expect(rows.map((u) => u.name)).not.toContain("DEV-BRAVO-02");
   });
 });

@@ -36,6 +36,8 @@ import {
 } from "./estateRouting";
 import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
 import { useEstateData } from "./useEstateData";
+import { usePlatformFindings } from "./estatePlatformFindings";
+import { EstatePlatformCard } from "./EstatePlatformCard";
 
 const DATE_FMT = new Intl.DateTimeFormat("en-GB", {
   timeZone: DISPLAY_TZ,
@@ -372,6 +374,7 @@ export function EstateBriefScreen() {
   const { loading, fatalError, overview, changes, model, refresh } = useEstateData();
   const session = useSession();
   const [watchlistIds, setWatchlistIds] = useState<string[]>(() => readEstateWatchlist());
+  const platform = usePlatformFindings();
 
   useEffect(() => {
     setWatchlistIds(readEstateWatchlist());
@@ -451,6 +454,13 @@ export function EstateBriefScreen() {
   const actRows = rows.filter((r) => r.severity === "critical");
   const reviewRows = rows.filter((r) => r.severity === "serious" || r.severity === "warning");
   const unknownRows = rows.filter((r) => r.severity === "unknown");
+  // Platform findings (device health, daily security scan) count in the same act / review / UNKNOWN totals.
+  const platformAct = platform.items.filter((i) => i.severity === "critical").length;
+  const platformReview = platform.items.filter((i) => i.severity === "serious").length;
+  const platformUnknown = platform.items.filter((i) => i.severity === "unknown").length;
+  const actCount = actRows.length + platformAct;
+  const reviewCount = reviewRows.length + platformReview;
+  const unknownCount = unknownRows.length + platformUnknown;
 
   const deltaLine = deltaSentenceParts(overview);
   const haUnknown = model.haCounts?.unknown ?? 0;
@@ -468,8 +478,8 @@ export function EstateBriefScreen() {
   const unknownEvidenceCount = haUnknown + neverRead;
   const unknownHeadlineText = (() => {
     const parts: string[] = [];
-    if (unknownRows.length > 0)
-      parts.push(`${unknownRows.length} ${unknownRows.length === 1 ? "source is" : "sources are"} UNKNOWN`);
+    if (unknownCount > 0)
+      parts.push(`${unknownCount} ${unknownCount === 1 ? "source is" : "sources are"} UNKNOWN`);
     if (haUnknown > 0) parts.push(`${haUnknown} ${haUnknown === 1 ? "cluster is" : "clusters are"} UNKNOWN`);
     if (neverRead > 0) parts.push(`${neverRead} ${neverRead === 1 ? "unit was" : "units were"} never read`);
     return `${parts.join(", ")}.`;
@@ -539,22 +549,22 @@ export function EstateBriefScreen() {
           <>
             The overview read failed, so what needs action is UNKNOWN. Nothing here is counted as fine.
           </>
-        ) : actRows.length > 0 || reviewRows.length > 0 ? (
+        ) : actCount > 0 || reviewCount > 0 ? (
           <>
-            <Box component="em" sx={{ fontStyle: "normal", color: actRows.length > 0 ? ev.act : ev.ink }}>
-              {actRows.length} {actRows.length === 1 ? "item needs action" : "items need action"}
+            <Box component="em" sx={{ fontStyle: "normal", color: actCount > 0 ? ev.act : ev.ink }}>
+              {actCount} {actCount === 1 ? "item needs action" : "items need action"}
             </Box>{" "}
             and{" "}
-            <Box component="span" sx={{ color: reviewRows.length > 0 ? ev.watch : ev.ink2 }}>
-              {reviewRows.length} {reviewRows.length === 1 ? "needs review" : "need review"}
+            <Box component="span" sx={{ color: reviewCount > 0 ? ev.watch : ev.ink2 }}>
+              {reviewCount} {reviewCount === 1 ? "needs review" : "need review"}
             </Box>
             {affectedUnitIds.size > 0
               ? `, on ${affectedUnitIds.size} ${affectedUnitIds.size === 1 ? "unit" : "units"}`
               : ""}
-            .{unknownRows.length > 0 || unknownEvidenceCount > 0 ? ` ${unknownHeadlineText}` : ""}
+            .{unknownCount > 0 || unknownEvidenceCount > 0 ? ` ${unknownHeadlineText}` : ""}
             {deltaLine ? ` ${deltaLine}` : ""}
           </>
-        ) : unknownRows.length > 0 || unknownEvidenceCount > 0 ? (
+        ) : unknownCount > 0 || unknownEvidenceCount > 0 ? (
           <>
             Nothing is proven to need action, but {unknownHeadlineText.charAt(0).toLowerCase()}
             {unknownHeadlineText.slice(1)}
@@ -680,6 +690,8 @@ export function EstateBriefScreen() {
               </>
             )}
           </EstateCard>
+
+          <EstatePlatformCard platform={platform} now={model.now} />
 
           <EstateCard>
             <Box sx={{ display: "flex", alignItems: "baseline", gap: "12px", px: "18px", pt: "14px", pb: "8px", flexWrap: "wrap" }}>
