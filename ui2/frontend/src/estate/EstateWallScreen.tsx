@@ -187,7 +187,9 @@ export function EstateWallScreen({
               ? "lifecycle"
               : lens === "install"
                 ? "policy read"
-                : "inventory";
+                : lens === "health"
+                  ? "device health"
+                  : "inventory";
     const ats = model.units
       .map((u) => u.lenses[lens]?.evidenceAt)
       .filter((x): x is string => Boolean(x))

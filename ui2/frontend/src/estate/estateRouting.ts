@@ -9,6 +9,7 @@ export const ESTATE_LENSES = [
   "compliance",
   "exposure",
   "install",
+  "health",
   "age",
 ] as const;
 
@@ -43,7 +44,8 @@ export type EstateRoute =
   | { readonly kind: "compliance"; readonly deviceId: string | null; readonly family: string | null }
   | { readonly kind: "backups"; readonly query: string }
   | { readonly kind: "ask"; readonly mode: AskMode }
-  | { readonly kind: "rewind"; readonly at: string | null; readonly compare: string | null };
+  | { readonly kind: "rewind"; readonly at: string | null; readonly compare: string | null }
+  | { readonly kind: "cases" };
 
 /**
  * Resolves whether the current address renders inside the Estate view shell (Slice 1 + Slice 2: Brief, Estate wall,
@@ -110,6 +112,9 @@ export function resolveEstateRoute(screen: ScreenId, pathname: string, search: s
   }
   if (screen === "trace") {
     return { kind: "ask", mode: parseAskMode(params.get("mode")) };
+  }
+  if (screen === "packet_analysis") {
+    return { kind: "cases" };
   }
   return null;
 }
