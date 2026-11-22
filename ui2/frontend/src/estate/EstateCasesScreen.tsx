@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import {
+  listCutoverSegments,
   listPacketCases,
   listSupportBundles,
   type PacketCase,
@@ -8,12 +9,107 @@ import {
 } from "../auth/adminApi";
 import { EstateCard, MoreFooter, StateBadge } from "./EstatePrimitives";
 import { CASE_ACTION_HREFS, buildCasesModel, type CaseRow, type CasesModel } from "./estateCasesModel";
+import {
+  CUTOVER_STANDARD_HREF,
+  buildCutoverSegmentsModel,
+  buildFailedCutoverSegmentsModel,
+  type CutoverSegmentsModel,
+} from "./estateCutoverSegmentsModel";
 import { ESTATE_MONO, ev } from "./estateTokens";
 
 type Load =
   | { readonly state: "loading" }
   | { readonly state: "failed"; readonly message: string }
   | { readonly state: "ok"; readonly model: CasesModel };
+
+type CutoverRead =
+  | { readonly ok: true; readonly readAt: Date; readonly segments: Parameters<typeof buildCutoverSegmentsModel>[0] }
+  | { readonly ok: false; readonly readAt: Date };
+
+/** Reads the cutover segment list once; a failed read is UNKNOWN with its own attempt time, never an empty list. */
+function useCutoverRead(): CutoverRead | null {
+  const [read, setRead] = useState<CutoverRead | null>(null);
+  useEffect(() => {
+    let active = true;
+    listCutoverSegments().then(
+      (res) => {
+        // A response without a segment array is not an empty list: it is a failed read.
+        if (!active) return;
+        setRead(Array.isArray(res?.segments)
+          ? { ok: true, readAt: new Date(), segments: res.segments }
+          : { ok: false, readAt: new Date() });
+      },
+      () => {
+        if (active) setRead({ ok: false, readAt: new Date() });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, []);
+  return read;
+}
+
+/** Age stamps are computed at render from the read's own time, so they keep moving while the page stays open. */
+function cutoverModelOf(read: CutoverRead, now: Date): CutoverSegmentsModel {
+  return read.ok
+    ? buildCutoverSegmentsModel(read.segments, read.readAt, now)
+    : buildFailedCutoverSegmentsModel(read.readAt, now);
+}
+
+function CutoverSegmentsSection({ read }: { readonly read: CutoverRead | null }) {
+  return (
+    <Box data-testid="cutover-segments-section" sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}>
+      <Box component="h2" sx={{ m: 0, fontSize: 17, fontWeight: 650 }}>Cutover segments</Box>
+      <Box sx={{ color: ev.ink2, fontSize: 13, maxWidth: 780 }}>
+        Read-only list of the segments the standard Cutover screen holds. Counts are the list response&apos;s own fields;
+        a field it does not carry reads &quot;not reported&quot;.
+      </Box>
+      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+        <Box component="a" href={CUTOVER_STANDARD_HREF} sx={linkSx}>Open cutover (standard view)</Box>
+      </Box>
+      {read === null ? <Box sx={{ color: ev.ink3 }}>Reading cutover segments…</Box> : null}
+      {read !== null ? (() => {
+        const model = cutoverModelOf(read, new Date());
+        if (model.state === "failed") {
+          return (
+            <EstateCard sx={{ p: 2 }}>
+              <StateBadge state="unk" word="UNKNOWN" />
+              <Box data-testid="cutover-segments-failed" sx={{ mt: 1 }}>{model.text} · {model.stamp}</Box>
+            </EstateCard>
+          );
+        }
+        if (model.total === 0) return <Box sx={{ color: ev.ink3 }}>No cutover segments are stored.</Box>;
+        return (
+          <>
+            <Box data-testid="cutover-segments-counts" sx={{ fontSize: 13, color: ev.ink2 }}>
+              {model.total} segment{model.total === 1 ? "" : "s"} listed · {model.stamp}
+            </Box>
+            {model.rows.map((row) => (
+              <EstateCard key={row.segmentId} sx={{ p: 2 }}>
+                <Box data-testid="cutover-segment-row" data-segment={row.segmentId} sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "baseline" }}>
+                  <Box sx={{ fontWeight: 650 }}>{row.name}</Box>
+                  {row.fields.map((f) => (
+                    <Box key={f.label} sx={{ fontSize: 12.5, color: ev.ink2 }}>
+                      {f.label}: {f.value}
+                      {f.value === "not reported" ? null : <Box component="span" sx={{ color: ev.ink3 }}> ({f.stamp})</Box>}
+                    </Box>
+                  ))}
+                </Box>
+              </EstateCard>
+            ))}
+            {model.rowsMore > 0 ? (
+              <Box sx={{ fontSize: 13, color: ev.ink3 }}>
+                <MoreFooter shown={model.rows.length} total={model.total} noun="segments" testId="cutover-segments-more" />
+                <Box sx={{ display: "block" }}>in the standard view</Box>
+              </Box>
+            ) : null}
+          </>
+        );
+      })() : null}
+    </Box>
+  );
+}
 
 /** Reads the packet case list and the bundle list; a failed bundle read makes the bundle link UNKNOWN, not empty. */
 function useCases(): Load {
@@ -109,6 +205,7 @@ function CaseCard({ row, bundlesKnown }: { readonly row: CaseRow; readonly bundl
 
 export function EstateCasesScreen() {
   const load = useCases();
+  const cutoverRead = useCutoverRead();
   return (
     <Box data-testid="estate-cases" sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <Box>
@@ -157,6 +254,8 @@ export function EstateCasesScreen() {
           ) : null}
         </>
       ) : null}
+
+      <CutoverSegmentsSection read={cutoverRead} />
     </Box>
   );
 }

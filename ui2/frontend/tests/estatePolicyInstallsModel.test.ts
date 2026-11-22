@@ -115,6 +115,23 @@ describe("buildPolicyInstallsModel", () => {
     expect(buildPolicyInstallsModel(Array.from({ length: 13 }, (_, i) => row(String(i))), 13, NOW).moreCount).toBe(1);
   });
 
+  it("an unknown total (undefined or null) is never the row count: totalKnown false, no remainder", () => {
+    for (const total of [undefined, null] as const) {
+      const model = buildPolicyInstallsModel([row("1"), row("2")], total, NOW);
+      expect(model.totalKnown).toBe(false);
+      expect(model.totalCount).toBeNull();
+      expect(model.moreCount).toBe(0);
+      expect(model.lines).toHaveLength(2);
+    }
+  });
+
+  it("a known total keeps totalKnown true and the count it always had", () => {
+    const model = buildPolicyInstallsModel([row("1"), row("2")], 2, NOW);
+    expect(model.totalKnown).toBe(true);
+    expect(model.totalCount).toBe(2);
+    expect(model.moreCount).toBe(0);
+  });
+
   it("links to the standard install panel with standard=1", () => {
     const href = policyInstallsHref();
     expect(href).toContain("screen=operations");

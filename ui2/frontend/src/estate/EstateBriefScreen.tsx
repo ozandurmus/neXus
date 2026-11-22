@@ -504,13 +504,20 @@ export function EstateBriefScreen() {
     if (neverRead > 0) parts.push(`${neverRead} ${neverRead === 1 ? "unit was" : "units were"} never read`);
     return `${parts.join(", ")}.`;
   })();
-  // Units affected by the act/review rows (rows without a unit scope, such as failed jobs, add no unit).
+  // Distinct units referenced by the act/review rows. A row with no unit reference (failed jobs, licences,
+  // platform findings) still counts as an item, but adds no unit and is said so in the headline.
   const affectedUnitIds = new Set<string>();
+  let itemsWithUnit = 0;
   for (const r of [...actRows, ...reviewRows]) {
     const sc = affectedScopeFor(r.key, model);
-    for (const u of sc.units ?? []) affectedUnitIds.add(u.deviceId);
-    for (const c of sc.clusters ?? []) for (const m of c.members) affectedUnitIds.add(m.deviceId);
+    const rowUnitIds = new Set<string>();
+    for (const u of sc.units ?? []) rowUnitIds.add(u.deviceId);
+    for (const c of sc.clusters ?? []) for (const m of c.members) rowUnitIds.add(m.deviceId);
+    for (const id of rowUnitIds) affectedUnitIds.add(id);
+    if (rowUnitIds.size > 0) itemsWithUnit += 1;
   }
+  const itemCount = actCount + reviewCount;
+  const itemsWithoutUnit = itemCount - itemsWithUnit;
 
   const unknownChangeCount =
     changes.state === "ok"
@@ -573,10 +580,13 @@ export function EstateBriefScreen() {
         ) : actCount > 0 || reviewCount > 0 ? (
           <>
             <Box component="em" sx={{ fontStyle: "normal", color: actCount > 0 ? ev.act : ev.ink }}>
-              {actCount + reviewCount} {actCount + reviewCount === 1 ? "item" : "items"}
+              {itemCount} {itemCount === 1 ? "item" : "items"}
             </Box>
             {affectedUnitIds.size > 0
               ? ` on ${affectedUnitIds.size} ${affectedUnitIds.size === 1 ? "unit" : "units"}`
+              : " with no unit"}
+            {affectedUnitIds.size > 0 && itemsWithoutUnit > 0
+              ? `, ${itemsWithoutUnit} with no unit`
               : ""}
             :{" "}
             <Box component="span" sx={{ color: actCount > 0 ? ev.act : ev.ink2 }}>

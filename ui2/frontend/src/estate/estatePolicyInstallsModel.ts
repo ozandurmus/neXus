@@ -35,9 +35,12 @@ export interface PolicyInstallLine {
 
 export interface PolicyInstallsModel {
   readonly lines: readonly PolicyInstallLine[];
-  /** Rows the server reports beyond the ones shown here; never negative. */
+  /** Rows the server reports beyond the ones shown here; never negative. Always 0 when the total is not known. */
   readonly moreCount: number;
-  readonly totalCount: number;
+  /** The server total, or null when the read carried no finite total. Never inferred from the row count. */
+  readonly totalCount: number | null;
+  /** False when the read carried no finite total: the list is shown as "total not reported", never as complete. */
+  readonly totalKnown: boolean;
   /** Rows whose state is PENDING or UNKNOWN: not evaluated, so never counted as OK or zero. */
   readonly notEvaluatedCount: number;
 }
@@ -88,15 +91,17 @@ export function buildPolicyInstallsModel(
       installedAge: row.installed_at ? relativeAge(row.installed_at, now) : null,
     };
   });
-  const totalCount = Math.max(total ?? 0, rows.length);
+  const totalKnown = typeof total === "number" && Number.isFinite(total);
+  const totalCount = totalKnown ? Math.max(total, rows.length) : null;
   const notEvaluatedCount = rows.filter((r) => {
     const w = policyInstallWord(r.state);
     return w === POLICY_INSTALL_PENDING || w === "UNKNOWN";
   }).length;
   return {
     lines: shown,
-    moreCount: Math.max(0, totalCount - shown.length),
+    moreCount: totalCount === null ? 0 : Math.max(0, totalCount - shown.length),
     totalCount,
+    totalKnown,
     notEvaluatedCount,
   };
 }

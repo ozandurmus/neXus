@@ -6,13 +6,18 @@ import { isRestricted } from "../shell/States";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
 import { EstateLifecycleSources } from "./EstateLifecycleSources";
+import { useEstateData } from "./useEstateData";
 import { standardLifecycleHref } from "./estateRouting";
 import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
 import {
   LIFECYCLE_CATALOG_CAP,
+  LIFECYCLE_DEVICE_CAP,
   lifecycleCatalogCountText,
   lifecycleCatalogRows,
+  lifecycleDeviceCountText,
+  lifecycleDeviceVulnerabilityRows,
   type LifecycleCatalogRow,
+  type LifecycleDeviceVulnerabilityRow,
 } from "./estateLifecycleCatalogModel";
 
 /** Advisory rows shown before "+N more" (the same cap the standard Lifecycle view uses). */
@@ -186,6 +191,115 @@ function LifecycleAdvisoryCard() {
   );
 }
 
+/** Badge of a device cell by its sort rank. UNKNOWN (rank 3) is never shown as OK; OK needs an evaluated device. */
+function deviceCellBadge(rank: number): { readonly state: BadgeState; readonly word: string } {
+  if (rank === 0) return { state: "act", word: "Affected · exploited" };
+  if (rank <= 2) return { state: "watch", word: "Affected" };
+  if (rank === 4) return { state: "ok", word: "None affected" };
+  return { state: "unk", word: "UNKNOWN" };
+}
+
+function DeviceVulnerabilityRowView({ row }: { readonly row: LifecycleDeviceVulnerabilityRow }) {
+  return (
+    <Box
+      component="li"
+      data-testid="estate-device-vulnerability-row"
+      data-state={row.cell.state}
+      sx={{
+        display: "grid",
+        gridTemplateColumns: "minmax(0, 1fr) auto",
+        gap: "6px 16px",
+        alignItems: "center",
+        py: 1.25,
+        px: 2,
+        borderTop: `1px solid ${ev.line}`,
+        listStyle: "none",
+      }}
+    >
+      <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 600, color: ev.ink, overflowWrap: "anywhere" }}>{row.label}</Typography>
+        <Typography data-testid="estate-device-vulnerability-cell" sx={{ fontFamily: ESTATE_MONO, fontSize: "12px", color: ev.ink2 }}>
+          {row.cell.text}
+        </Typography>
+        <Box sx={{ mt: 0.5 }}>
+          <EvidenceStamp at={row.cell.evidenceAt} source="advisory data" />
+        </Box>
+      </Box>
+      <Box sx={{ display: "grid", justifyItems: "end", gap: "6px" }}>
+        <StateBadge {...deviceCellBadge(row.cell.sortRank)} />
+        <Box
+          component="a"
+          href={standardLifecycleHref()}
+          sx={{ fontSize: "12.5px", color: ev.ink2, textDecoration: "underline" }}
+        >
+          Open in standard view
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
+/**
+ * Read-only per-device vulnerability cell (the Estate counterpart of the standard Lifecycle fleet's Vulnerabilities
+ * column). Reads the lifecycle fleet already loaded by the Estate data provider: no new fetch.
+ */
+function DeviceVulnerabilityCard() {
+  const { lifecycle } = useEstateData();
+
+  const header = (
+    <Box sx={{ p: 2, borderBottom: `1px solid ${ev.line}` }}>
+      <Typography component="h2" sx={{ fontFamily: ESTATE_SANS, fontSize: "18px", fontWeight: 650, color: ev.ink }}>
+        Device vulnerabilities
+      </Typography>
+      <Typography sx={{ color: ev.ink2, fontSize: "13px", mt: 0.5 }}>
+        Read-only. Affected means affected by version; exposure depends on configuration. A device that was not judged is UNKNOWN, not clean.
+      </Typography>
+      <Box sx={{ mt: 1 }}>
+        <EvidenceStamp at={lifecycle.state === "ok" ? lifecycle.value.as_of : null} source="lifecycle read" />
+      </Box>
+    </Box>
+  );
+
+  let body: ReactNode;
+  if (lifecycle.state === "restricted") {
+    body = <Typography sx={{ p: 2, color: ev.ink2 }}>Your role cannot read the lifecycle fleet. Device vulnerabilities are UNKNOWN here.</Typography>;
+  } else if (lifecycle.state === "failed") {
+    body = <Typography sx={{ p: 2, color: ev.ink2 }}>Device vulnerabilities could not be loaded: UNKNOWN.</Typography>;
+  } else if (lifecycle.state === "skipped") {
+    body = <Typography sx={{ p: 2, color: ev.ink2 }}>Device vulnerabilities were not loaded for this session: UNKNOWN.</Typography>;
+  } else {
+    const rows = lifecycleDeviceVulnerabilityRows(lifecycle.value.devices);
+    const shown = rows.slice(0, LIFECYCLE_DEVICE_CAP);
+    body = (
+      <>
+        <Typography data-testid="estate-device-vulnerability-count" sx={{ px: 2, pt: 1.25, fontFamily: ESTATE_MONO, fontSize: "12px", color: ev.ink2 }}>
+          {lifecycleDeviceCountText(rows.length, shown.length)}
+        </Typography>
+        <Box component="ul" sx={{ m: 0, p: 0 }}>
+          {shown.map((row) => (
+            <DeviceVulnerabilityRowView key={row.deviceId} row={row} />
+          ))}
+          {rows.length > shown.length ? (
+            <Typography component="li" sx={{ listStyle: "none", px: 2, py: 1.25, color: ev.ink2, borderTop: `1px solid ${ev.line}` }}>
+              <MoreFooter shown={shown.length} total={rows.length} noun="devices" testId="estate-device-vulnerability-more" />
+              <Box component="span" sx={{ display: "block" }}>open the standard view to see all</Box>
+            </Typography>
+          ) : null}
+        </Box>
+      </>
+    );
+  }
+
+  return (
+    <Box data-testid="estate-device-vulnerability-section" sx={{ mt: 2 }}>
+      <EstateCard sx={{ overflow: "hidden" }}>
+        {header}
+        {body}
+      </EstateCard>
+    </Box>
+  );
+}
+
 function CatalogRowView({ row }: { readonly row: LifecycleCatalogRow }) {
   return (
     <Box
@@ -294,11 +408,12 @@ function OperatorCatalogSection() {
   );
 }
 
-/** Estate lifecycle screen: the advisory list, then the read-only operator catalog. */
+/** Estate lifecycle screen: the advisory list, the device vulnerability cells, then the read-only operator catalog. */
 export function EstateLifecycleScreen() {
   return (
     <>
       <LifecycleAdvisoryCard />
+      <DeviceVulnerabilityCard />
       <OperatorCatalogSection />
     </>
   );
