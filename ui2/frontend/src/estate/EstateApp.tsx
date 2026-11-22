@@ -2,6 +2,7 @@ import { PanelErrorBoundary } from "../shell/PanelErrorBoundary";
 import { EstateAskScreen } from "./EstateAskScreen";
 import { EstateBackupsScreen } from "./EstateBackupsScreen";
 import { EstateBriefScreen } from "./EstateBriefScreen";
+import { EstateCasesScreen } from "./EstateCasesScreen";
 import { EstateChangesScreen } from "./EstateChangesScreen";
 import { EstateComplianceScreen } from "./EstateComplianceScreen";
 import { EstateDossierScreen } from "./EstateDossierScreen";
@@ -47,6 +48,10 @@ export function EstateApp({ route }: { readonly route: EstateRoute }) {
         ) : route.kind === "rewind" ? (
           <PanelErrorBoundary label="estate rewind" resetKey={`rewind:${route.at ?? ""}:${route.compare ?? ""}`}>
             <EstateRewindScreen initialAt={route.at} initialCompare={route.compare} />
+          </PanelErrorBoundary>
+        ) : route.kind === "cases" ? (
+          <PanelErrorBoundary label="estate cases" resetKey="cases">
+            <EstateCasesScreen />
           </PanelErrorBoundary>
         ) : (
           <PanelErrorBoundary label="estate backups" resetKey={`backups:${route.query}`}>

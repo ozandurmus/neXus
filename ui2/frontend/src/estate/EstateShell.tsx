@@ -310,7 +310,7 @@ export function EstateShell({
     { id: "estate", label: "Estate", href: wallHref(), current: inEstateSection },
     { id: "changes", label: "Changes", href: changesHref(), current: route.kind === "changes" },
     { id: "ask", label: "Ask", href: askHref(), current: route.kind === "ask" },
-    { id: "cases", label: "Cases", href: casesHref, current: false, standardHint: "Opens standard Cases / Tools screen" },
+    { id: "cases", label: "Cases", href: casesHref, current: route.kind === "cases", standardHint: "Opens standard Cases / Tools screen" },
     { id: "reports", label: "Reports", href: "?screen=reports", current: false, standardHint: "Opens standard Reports screen" },
     { id: "system", label: "System", href: "?screen=administration", current: false, standardHint: "Opens standard Administration screen" },
   ];

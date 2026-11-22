@@ -109,7 +109,8 @@ describe("estateRouting", () => {
     expect(resolveEstateRoute("trace", "/", "?screen=trace&mode=zones")).toEqual({ kind: "ask", mode: "zones" });
     expect(resolveEstateRoute("trace", "/", "?screen=trace&mode=path&standard=1")).toBeNull();
     expect(resolveEstateRoute("operations", "/", "?screen=operations&tab=jobs")).toBeNull();
-    expect(resolveEstateRoute("packet_analysis", "/", "?screen=packet_analysis")).toBeNull();
+    expect(resolveEstateRoute("packet_analysis", "/", "?screen=packet_analysis")).toEqual({ kind: "cases" });
+    expect(resolveEstateRoute("packet_analysis", "/", "?screen=packet_analysis&standard=1")).toBeNull();
     expect(resolveEstateRoute("inventory", "/", "?screen=inventory&view=lifecycle")).toBeNull();
   });
 

@@ -5,6 +5,7 @@ import {
   getComplianceControls,
   getLifecycle,
   getOverview,
+  getSystemHealth,
   listCpFailoverSummary,
   listDevices,
   listFleetBackups,
@@ -16,11 +17,13 @@ import {
   type DeviceSummary,
   type LifecycleFleet,
   type OverviewView,
+  type SystemHealth,
 } from "../auth/adminApi";
 import { useSession } from "../auth/SessionContext";
 import { planeGranted } from "../shell/actionAccess";
 import { isRestricted } from "../shell/States";
 import { CHANGE_WINDOW_DAYS, sourceWanted, type SourceRead } from "../screens/overview/attentionRules";
+import { isSystemHealth } from "../screens/SystemHealthPanel";
 import { buildEstateModel, type EstateModel } from "./estateModel";
 
 export interface EstateDataState {
@@ -33,6 +36,7 @@ export interface EstateDataState {
   readonly lifecycle: SourceRead<LifecycleFleet>;
   readonly controls: SourceRead<readonly ComplianceControlItem[]>;
   readonly changes: SourceRead<ChangeFeedPage>;
+  readonly health: SourceRead<SystemHealth>;
   readonly model: EstateModel | null;
   readonly refresh: () => void;
 }
@@ -61,6 +65,7 @@ export function useProvideEstateData(): EstateDataState {
   const [lifecycle, setLifecycle] = useState<SourceRead<LifecycleFleet>>({ state: "skipped" });
   const [controls, setControls] = useState<SourceRead<readonly ComplianceControlItem[]>>({ state: "skipped" });
   const [changes, setChanges] = useState<SourceRead<ChangeFeedPage>>({ state: "skipped" });
+  const [health, setHealth] = useState<SourceRead<SystemHealth>>({ state: "skipped" });
   const [reloadTick, setReloadTick] = useState(0);
 
   const refresh = useCallback(() => {
@@ -112,8 +117,11 @@ export function useProvideEstateData(): EstateDataState {
         )
       : Promise.resolve({ state: "skipped" });
 
-    Promise.all([devicesP, overviewP, failoverP, backupsP, lifecycleP, controlsP, changesP]).then(
-      ([dv, ov, fo, bk, lc, ct, ch]) => {
+    // Device health is the standard Operations read; a session without the system-log permission gets "restricted".
+    const healthP = settle(getSystemHealth(), isSystemHealth);
+
+    Promise.all([devicesP, overviewP, failoverP, backupsP, lifecycleP, controlsP, changesP, healthP]).then(
+      ([dv, ov, fo, bk, lc, ct, ch, hl]) => {
         if (!active) return;
         setNow(new Date());
         setDevices(dv);
@@ -122,6 +130,7 @@ export function useProvideEstateData(): EstateDataState {
         setLifecycle(lc);
         setControls(ct);
         setChanges(ch);
+        setHealth(hl);
         if (ov.ok && ov.value && typeof ov.value === "object") {
           setOverview({ state: "ok", value: ov.value });
           setFatalError(null);
@@ -165,9 +174,10 @@ export function useProvideEstateData(): EstateDataState {
       lifecycle,
       controls,
       changes,
+      health,
       permissions,
     });
-  }, [loading, fatalError, now, devices, overview, failover, backups, lifecycle, controls, changes, permissions]);
+  }, [loading, fatalError, now, devices, overview, failover, backups, lifecycle, controls, changes, health, permissions]);
 
   return useMemo(
     () => ({
@@ -180,10 +190,11 @@ export function useProvideEstateData(): EstateDataState {
       lifecycle,
       controls,
       changes,
+      health,
       model,
       refresh,
     }),
-    [loading, fatalError, overview, devices, failover, backups, lifecycle, controls, changes, model, refresh],
+    [loading, fatalError, overview, devices, failover, backups, lifecycle, controls, changes, health, model, refresh],
   );
 }
 

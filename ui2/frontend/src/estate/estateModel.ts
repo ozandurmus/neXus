@@ -1,4 +1,6 @@
 import type {
+  SystemHealth,
+  SystemHealthDevice,
   BackupArtefact,
   BackupDeviations,
   BackupSizeAnomaly,
@@ -54,6 +56,7 @@ export const LENS_META: Readonly<Record<EstateLens, LensMeta>> = {
   compliance: { key: "compliance", label: "Controls", question: "Do its critical controls pass?" },
   exposure: { key: "exposure", label: "Exposure", question: "Is its software or support exposed?" },
   install: { key: "install", label: "Policy installed", question: "Does the gateway report an installed policy?" },
+  health: { key: "health", label: "Health", question: "Is each unit's device health normal?" },
   age: { key: "age", label: "Evidence age", question: "How old is what we know?" },
 };
 
@@ -236,7 +239,60 @@ export interface EstateInputs {
   readonly lifecycle: SourceRead<LifecycleFleet>;
   readonly controls?: SourceRead<readonly ComplianceControlItem[]>;
   readonly changes?: SourceRead<ChangeFeedPage>;
+  /** Device health snapshot (`/api/v2/system-logs/health`); absent or not read means UNKNOWN on the Health lens. */
+  readonly health?: SourceRead<SystemHealth>;
   readonly permissions?: readonly string[];
+}
+
+/**
+ * Health lens answer for one unit. Fail-closed: a missing, failed, restricted, uncomputed or stale snapshot never
+ * reads as NORMAL; a NORMAL verdict needs a current snapshot and a collection that finished OK.
+ * Evidence age is the age of the snapshot the verdict was computed in.
+ */
+export function healthLensAnswer(input: {
+  readonly source: SourceRead<SystemHealth> | undefined;
+  readonly device: SystemHealthDevice | null;
+  readonly now: Date;
+}): LensAnswer {
+  const { source, device, now } = input;
+  const src = "device health";
+  if (!source || source.state === "skipped") {
+    return makeAnswer("unk", "Device health not read", null, src);
+  }
+  if (source.state === "restricted") {
+    return makeAnswer("unk", "Device health restricted for this account", null, src);
+  }
+  if (source.state !== "ok") {
+    return makeAnswer("unk", "Device health UNKNOWN (read failed)", null, src);
+  }
+  const computation = source.value.computation;
+  const computedAt = computation.computed_at ?? null;
+  if (computation.state === "FAILED") {
+    return makeAnswer("unk", "Device health computation failed", computedAt, src);
+  }
+  if (computation.state === "COMPUTING" || !computedAt) {
+    return makeAnswer("unk", "Device health not computed yet", null, src);
+  }
+  if (!device) {
+    return makeAnswer("unk", "No device health row for this unit", computedAt, src);
+  }
+  const rel = relativeAge(computedAt, now);
+  if (device.state === "CRITICAL") {
+    return makeAnswer("act", `Critical at snapshot ${rel}`, computedAt, src, { detail: device.state_reason });
+  }
+  if (device.state === "ATTENTION") {
+    return makeAnswer("watch", `Attention at snapshot ${rel}`, computedAt, src, { detail: device.state_reason });
+  }
+  if (device.state !== "NORMAL") {
+    return makeAnswer("unk", `Health UNKNOWN at snapshot ${rel}`, computedAt, src, { detail: device.state_reason });
+  }
+  if (ageBucketOf(computedAt, now) === "stale") {
+    return makeAnswer("unk", `Normal at snapshot ${rel}: stale (> 72 h), not shown as normal`, computedAt, src);
+  }
+  if (device.collection.state !== "OK") {
+    return makeAnswer("unk", `Normal not proven: collection ${device.collection.state.toLowerCase()}`, computedAt, src);
+  }
+  return makeAnswer("ok", `Normal at snapshot ${rel}`, computedAt, src);
 }
 
 const FIREWALL_VENDORS = new Set(["check_point", "palo_alto", "cisco_asa", "fortinet"]);
@@ -384,6 +440,10 @@ export function buildEstateModel(inputs: EstateInputs): EstateModel {
 
   const complianceAt = overview?.evidence?.compliance?.at ?? null;
   const backupEvidenceAt = overview?.evidence?.backup?.at ?? null;
+
+  const healthByDevice = new Map<string, SystemHealthDevice>(
+    inputs.health?.state === "ok" ? inputs.health.value.devices.map((h) => [h.device_id, h] as const) : [],
+  );
 
   // Build every operational unit and evaluate its lenses
   const units: EstateUnit[] = activeDevices.map((d) => {
@@ -645,6 +705,9 @@ export function buildEstateModel(inputs: EstateInputs): EstateModel {
       return makeAnswer("unk", "Installed policy UNKNOWN (not read yet)", polAt, "policy read");
     })();
 
+    // Lens: Device health (snapshot verdict; not part of Worst of all)
+    const healthAnswer = healthLensAnswer({ source: inputs.health, device: healthByDevice.get(d.device_id) ?? null, now });
+
     // Lens 6: Evidence age
     const ageAnswer: LensAnswer = (() => {
       if (ageBucket === "never" || !lastReadAt) {
@@ -755,6 +818,7 @@ export function buildEstateModel(inputs: EstateInputs): EstateModel {
         compliance: complianceAnswer,
         exposure: exposureAnswer,
         install: installAnswer,
+        health: healthAnswer,
         age: ageAnswer,
       },
     };
