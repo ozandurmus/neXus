@@ -9,10 +9,12 @@ import {
   getDeviceLifecycle,
   getDeviceSoftwareHistory,
   getDeviceWorkspace,
+  getManagementTree,
   listDeviceBackups,
   listFmgDiagnosticTargets,
   listStaticRoutePreviews,
   type BackupArtefact,
+  type ManagementTree,
   type CpInstallEvent,
   type DeviceComplianceResult,
   type DeviceConfiguration,
@@ -60,6 +62,7 @@ import {
   type RewindOrigin,
 } from "./estateRouting";
 import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
+import { managedThroughOf } from "./estateManagedThrough";
 import { useEstateData } from "./useEstateData";
 import { EstateDossierLogsBlock, loadDeviceLogsReads } from "./EstateDossierLogsBlock";
 import type { DeviceLogsReads } from "./estateDeviceLogsSummary";
@@ -124,6 +127,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
       active = false;
     };
   }, [deviceId]);
+  const [managementTree, setManagementTree] = useState<SourceRead<ManagementTree> | "loading">("loading");
 
   useEffect(() => {
     let active = true;
@@ -135,6 +139,10 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
     setSwHistory("loading");
     setLogs("loading");
     setWorkspaceFallback(null);
+    setManagementTree("loading");
+    settle(getManagementTree(deviceId)).then((mt) => {
+      if (active) setManagementTree(mt);
+    });
 
     Promise.all([
       settle(getDeviceInventory(deviceId)),
@@ -860,6 +868,24 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
       </EstateCard>
 
       <EstateDossierLogsBlock deviceId={unit.deviceId} logs={logs} now={now} />
+
+      {/* Managed through: management-plane intent from the management tree, never device runtime truth */}
+      {(() => {
+        const mt = managedThroughOf(deviceId, managementTree);
+        return (
+          <EstateCard sx={{ mt: "16px", p: "14px 18px" }}>
+            <Box data-testid="dossier-managed-through" data-managed-through={mt.state} sx={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <Typography sx={{ fontSize: "12px", color: ev.ink3, fontWeight: 600 }}>Managed through</Typography>
+              <Box>
+                <StateBadge state={mt.badgeState} word={mt.badgeWord} dense />
+              </Box>
+              <Typography sx={{ fontSize: "14.5px", fontWeight: 650, lineHeight: 1.3 }}>{mt.headline}</Typography>
+              <Typography sx={{ fontSize: "12.5px", color: ev.ink2, lineHeight: 1.4 }}>{mt.detail}</Typography>
+              <EvidenceStamp at={mt.evidenceAt} source={mt.evidenceSource} now={now} />
+            </Box>
+          </EstateCard>
+        );
+      })()}
 
       {/* 30-day stored evidence timeline */}
       <EstateCard sx={{ mt: "16px" }}>

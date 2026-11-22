@@ -43,10 +43,12 @@ export type EstateRoute =
   | { readonly kind: "changes"; readonly deviceId: string | null; readonly vendor: string | null }
   | { readonly kind: "compliance"; readonly deviceId: string | null; readonly family: string | null }
   | { readonly kind: "backups"; readonly query: string }
+  | { readonly kind: "lifecycle" }
   | { readonly kind: "ask"; readonly mode: AskMode }
   | { readonly kind: "rewind"; readonly at: string | null; readonly compare: string | null }
   | { readonly kind: "cases" }
-  | { readonly kind: "reports" };
+  | { readonly kind: "reports" }
+  | { readonly kind: "system" };
 
 /**
  * Resolves whether the current address renders inside the Estate view shell (Slice 1 + Slice 2: Brief, Estate wall,
@@ -66,7 +68,10 @@ export function resolveEstateRoute(screen: ScreenId, pathname: string, search: s
   if (screen === "overview") {
     return { kind: "brief" };
   }
-  if (screen === "inventory" && params.get("view") !== "lifecycle") {
+  if (screen === "inventory" && params.get("view") === "lifecycle") {
+    return { kind: "lifecycle" };
+  }
+  if (screen === "inventory") {
     if (params.get("view") === "rewind") {
       return { kind: "rewind", at: params.get("at")?.trim() || null, compare: params.get("compare")?.trim() || null };
     }
@@ -120,6 +125,9 @@ export function resolveEstateRoute(screen: ScreenId, pathname: string, search: s
   if (screen === "reports") {
     return { kind: "reports" };
   }
+  if (screen === "administration" && params.get("view") === "system") {
+    return { kind: "system" };
+  }
   return null;
 }
 
@@ -140,11 +148,11 @@ export function estateEntryHrefFor(screen: ScreenId, pathname: string, search: s
   if (resolveEstateRoute(screen, pathname, search) !== null) {
     return null;
   }
-  if (screen === "inventory" && params.get("view") === "lifecycle") {
-    return "?screen=inventory&lens=exposure";
-  }
   if (screen === "operations" && params.get("tab") === "policy-install") {
     return "?screen=inventory&lens=install";
+  }
+  if (screen === "administration") {
+    return systemHref();
   }
   return "?screen=overview";
 }
@@ -249,6 +257,15 @@ export function standardBackupsHref(query?: string | null): string {
   return `?${params.toString()}`;
 }
 
+/** Estate lifecycle screen: the advisory list (read-only); `standardLifecycleHref` opens the standard Lifecycle view. */
+export function lifecycleHref(): string {
+  return "?screen=inventory&view=lifecycle";
+}
+
+export function standardLifecycleHref(): string {
+  return "?screen=inventory&view=lifecycle&standard=1";
+}
+
 export function askHref(mode?: AskMode): string {
   if (!mode || mode === "path") return "?screen=trace";
   return `?screen=trace&mode=${encodeURIComponent(mode)}`;
@@ -264,4 +281,9 @@ export function rewindHref(at?: string | null, compare?: string | null): string 
   if (at) params.set("at", at);
   if (compare) params.set("compare", compare);
   return `?${params.toString()}`;
+}
+
+/** The Estate System screen (enrolment, what runs, platform, audit). Bare `?screen=administration` stays standard. */
+export function systemHref(): string {
+  return "?screen=administration&view=system";
 }

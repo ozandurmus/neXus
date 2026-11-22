@@ -7,10 +7,12 @@ import { EstateChangesScreen } from "./EstateChangesScreen";
 import { EstateComplianceScreen } from "./EstateComplianceScreen";
 import { EstateDossierScreen } from "./EstateDossierScreen";
 import { EstateFailoverScreen } from "./EstateFailoverScreen";
+import { EstateLifecycleScreen } from "./EstateLifecycleScreen";
 import type { EstateRoute } from "./estateRouting";
 import { EstateReportsScreen } from "./EstateReportsScreen";
 import { EstateRewindScreen } from "./EstateRewindScreen";
 import { EstateShell } from "./EstateShell";
+import { EstateSystemScreen } from "./EstateSystemScreen";
 import { EstateWallScreen } from "./EstateWallScreen";
 import { EstateDataProvider } from "./useEstateData";
 
@@ -54,9 +56,17 @@ export function EstateApp({ route }: { readonly route: EstateRoute }) {
           <PanelErrorBoundary label="estate cases" resetKey="cases">
             <EstateCasesScreen />
           </PanelErrorBoundary>
+        ) : route.kind === "lifecycle" ? (
+          <PanelErrorBoundary label="estate lifecycle" resetKey="lifecycle">
+            <EstateLifecycleScreen />
+          </PanelErrorBoundary>
         ) : route.kind === "reports" ? (
           <PanelErrorBoundary label="estate reports" resetKey="reports">
             <EstateReportsScreen />
+          </PanelErrorBoundary>
+        ) : route.kind === "system" ? (
+          <PanelErrorBoundary label="estate system" resetKey="system">
+            <EstateSystemScreen />
           </PanelErrorBoundary>
         ) : (
           <PanelErrorBoundary label="estate backups" resetKey={`backups:${route.query}`}>

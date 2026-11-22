@@ -164,7 +164,7 @@ describe("Estate view follow-ups (q-45)", () => {
     expect(within(dossier).getByText(/Static routes \(standard view\)/)).toBeInTheDocument();
     for (const a of within(dossier).queryAllByText(/^Open( \(standard view\))? →$/)) {
       const href = a.getAttribute("href") ?? "";
-      const leaves = /screen=(inventory&view=lifecycle|policy|diagnostics|support_bundles)/.test(href);
+      const leaves = /screen=(policy|diagnostics|support_bundles)/.test(href);
       expect(a.textContent).toBe(leaves ? "Open (standard view) →" : "Open →");
     }
   });

@@ -32,6 +32,7 @@ import {
   type EstateChangeSet,
 } from "./estateSlice2Model";
 import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
+import { EstatePolicyInstalls } from "./EstatePolicyInstalls";
 import { useEstateData } from "./useEstateData";
 
 type WindowDays = 1 | 7 | 30;
@@ -1306,6 +1307,8 @@ export function EstateChangesScreen({
       )}
       <EstateSoftwareChanges now={now} unitsById={unitsById} />
       <EstatePolicyBrowser now={now} />
+
+      <EstatePolicyInstalls />
     </Box>
   );
 }
