@@ -117,7 +117,7 @@ export interface RunRow {
   readonly errorCode: string | null;
 }
 
-function toneOfState(state: ReportRunView["state"]): RunTone {
+function toneOfState(state: ReportRunView["state"] | null | undefined): RunTone {
   if (state === "SUCCEEDED") return "ok";
   if (state === "FAILED") return "act";
   return "review";
@@ -172,4 +172,57 @@ export function summariseRuns(runs: readonly ReportRunView[]): RunSummary {
 /** The standard Reports screen, which the Estate screen links to for generation (never generates here). */
 export function standardReportsHref(): string {
   return "?screen=reports&standard=1";
+}
+
+export const REPORT_SECTION_CAP = 12;
+
+/** "N sections", "1 section": names what the count counts (document sections, not runs or files). */
+export function sectionCountLabel(n: number): string {
+  return n === 1 ? "1 section" : `${n} sections`;
+}
+
+/** Plain state wording; an unrecognised state is named as-is and is never reported as OK. */
+export function runStateLabel(state: string | null | undefined): string {
+  if (state === "SUCCEEDED" || state === "FAILED" || state === "QUEUED" || state === "RUNNING") return state;
+  return "UNKNOWN";
+}
+
+/** Tone of a run state: an unknown or missing state is "review", never "ok". */
+export function runStateTone(state: string | null | undefined): RunTone {
+  return toneOfState(state as ReportRunView["state"]);
+}
+
+export interface DetailSection {
+  readonly id: string;
+  readonly title: string;
+  readonly notes: readonly string[];
+}
+
+export type RunDocument =
+  | { readonly available: true; readonly sections: readonly DetailSection[] }
+  | { readonly available: false };
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * The run's document sections, read defensively: a missing, non-array or malformed document is
+ * "not available" (never OK), and a section without a string id and title makes the whole document unavailable.
+ */
+export function runDocument(run: ReportRunView): RunDocument {
+  const doc = (run as unknown as { readonly document?: unknown }).document;
+  if (!isRecord(doc) || !Array.isArray(doc.sections)) return { available: false };
+  const sections: DetailSection[] = [];
+  for (const s of doc.sections as unknown[]) {
+    if (!isRecord(s) || typeof s.id !== "string" || typeof s.title !== "string") return { available: false };
+    const notes = Array.isArray(s.notes) ? s.notes.filter((n): n is string => typeof n === "string") : [];
+    sections.push({ id: s.id, title: s.title, notes });
+  }
+  return { available: true, sections };
+}
+
+/** Evidence age of a run, from the newest plane timestamp (UNKNOWN when the run carries none). */
+export function runEvidenceAgeLabel(run: ReportRunView, now: Date): string {
+  return evidenceAgeLabel(newestEvidenceAt(run), now);
 }

@@ -71,6 +71,10 @@ class PacketAnalysisServicePathTest {
         @Override public void flush() { }
         @Override public void close() { }
     };
+    // A strong reference: java.util.logging keeps loggers only weakly, so a GC between
+    // addHandler and the executor's first log call could drop the handler and leave the
+    // captured log empty (auto ship 2026-11-22 22:40 failed this way under load).
+    private static final Logger EXECUTOR_LOGGER = Logger.getLogger(PacketAnalysisJobExecutor.class.getName());
     private static String tshark;
 
     @BeforeEach
@@ -80,7 +84,7 @@ class PacketAnalysisServicePathTest {
         } catch (IllegalArgumentException missing) {
             tshark = null;
         }
-        Logger.getLogger(PacketAnalysisJobExecutor.class.getName()).addHandler(capture);
+        EXECUTOR_LOGGER.addHandler(capture);
         when(repository.runForJob(JOB)).thenReturn(Optional.of(new RunRow(JOB, CASE, "REQUESTED", "synthetic-operator", NOW,
                 null, null, null, null, null)));
         when(leases.transitionState(anyString(), anyLong(), any(), any(), anyString(), anyString())).thenReturn(true);
@@ -101,7 +105,7 @@ class PacketAnalysisServicePathTest {
 
     @AfterEach
     void tearDown() {
-        Logger.getLogger(PacketAnalysisJobExecutor.class.getName()).removeHandler(capture);
+        EXECUTOR_LOGGER.removeHandler(capture);
     }
 
     @Test void aMultiCaptureCaseUploadedThroughTheServiceCompletesAndStoresItsRun() throws Exception {

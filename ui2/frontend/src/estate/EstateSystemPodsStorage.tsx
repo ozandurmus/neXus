@@ -15,6 +15,8 @@ export const PODS_STORAGE_STANDARD_HREF = `${systemHref()}&standard=1`;
 
 const SOURCE = "pods and storage";
 const RESTRICTED_SENTENCE = "Your role cannot read pods and storage.";
+const RESTRICTED_PODS_SENTENCE = "Your role cannot read pods.";
+const RESTRICTED_STORAGE_SENTENCE = "Your role cannot read storage.";
 
 type BadgeFor = (state: string) => BadgeState;
 
@@ -96,12 +98,14 @@ export interface EstateSystemPodsStorageProps {
 export function EstateSystemPodsStorage({ pods, storage, now }: EstateSystemPodsStorageProps) {
   const podsRead = pods.read;
   const storageRead = storage.read;
-  const restricted = podsRead.state === "restricted" || storageRead.state === "restricted";
+  // Each read keeps its own state: a refused pods read does not hide a readable storage read, and vice versa.
+  // The section is "Restricted" (and names both reads) only when both reads are refused.
+  const bothRestricted = podsRead.state === "restricted" && storageRead.state === "restricted";
   const podsOk = podsRead.state === "ok" ? podsRead.value : null;
   const storageOk = storageRead.state === "ok" ? storageRead.value : null;
 
-  const badge: BadgeState = restricted ? "na" : podsOk && storageOk && podsOk.available ? "na" : "unk";
-  const word = restricted ? "Restricted" : badge === "na" ? "Counted" : "UNKNOWN";
+  const badge: BadgeState = podsOk && storageOk && podsOk.available ? "na" : "unk";
+  const word = bothRestricted ? "Restricted" : badge === "na" ? "Counted" : "UNKNOWN";
 
   const podList = podsOk && podsOk.available ? podsOk.pods : [];
   const shown = podList.slice(0, PODS_ROW_CAP);
@@ -115,11 +119,13 @@ export function EstateSystemPodsStorage({ pods, storage, now }: EstateSystemPods
       </Box>
       <Box sx={{ fontSize: 12, color: ev.ink3 }}>Read-only. Changes happen in the standard view.</Box>
 
-      {restricted ? (
+      {bothRestricted ? (
         <Box sx={{ fontSize: 13, color: ev.ink2 }}>{RESTRICTED_SENTENCE}</Box>
       ) : (
         <>
-          {podsRead.state !== "ok" ? (
+          {podsRead.state === "restricted" ? (
+            <Box sx={{ fontSize: 13, color: ev.ink2 }}>{RESTRICTED_PODS_SENTENCE}</Box>
+          ) : podsRead.state !== "ok" ? (
             <Box role="alert" sx={{ fontSize: 13, color: ev.ink2 }}>Pods could not be read: UNKNOWN. This is not a clean state.</Box>
           ) : !podsOk || !podsOk.available ? (
             <Box role="alert" sx={{ fontSize: 13, color: ev.ink2 }}>
@@ -145,7 +151,9 @@ export function EstateSystemPodsStorage({ pods, storage, now }: EstateSystemPods
             </Box>
           ) : null}
 
-          {storageRead.state !== "ok" ? (
+          {storageRead.state === "restricted" ? (
+            <Box sx={{ fontSize: 13, color: ev.ink2 }}>{RESTRICTED_STORAGE_SENTENCE}</Box>
+          ) : storageRead.state !== "ok" ? (
             <Box role="alert" sx={{ fontSize: 13, color: ev.ink2 }}>Storage could not be read: UNKNOWN. This is not a clean state.</Box>
           ) : (
             <Box component="dl" aria-label="Storage" sx={{ m: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", rowGap: "6px", columnGap: "12px" }}>
