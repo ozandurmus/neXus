@@ -42,6 +42,7 @@ import {
   type TimedRead,
 } from "./estateSystemModel";
 import { EstateSystemPodsStorage } from "./EstateSystemPodsStorage";
+import { EstateSystemRoles } from "./EstateSystemRoles";
 import { ESTATE_MONO, ev } from "./estateTokens";
 
 type Settled<T> = TimedRead<T>;
@@ -138,6 +139,7 @@ function SectionCard({ section, now, footer }: { readonly section: SystemSection
       {footer}
       {section.more ? <Box sx={{ fontSize: 12, color: ev.ink3 }}>{section.more}</Box> : null}
       <EvidenceStamp at={section.evidenceAt} source={section.source} now={now} />
+      {section.id === "access" ? <EstateSystemRoles now={now} /> : null}
       <Box sx={{ mt: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
         {(section.extraLinks ?? []).map((link) => (
           <Box key={link.href} component="a" href={link.href} sx={{ fontSize: 13, color: ev.accent, fontWeight: 600 }}>

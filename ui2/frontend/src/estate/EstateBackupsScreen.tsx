@@ -23,6 +23,7 @@ import {
   StateBadge,
 } from "./EstatePrimitives";
 import { dossierHref, standardBackupsHref } from "./estateRouting";
+import { EstateBackupsAttemptsDrawer, type AttemptsUnit } from "./EstateBackupsAttemptsDrawer";
 import {
   buildBackupsLensModel,
   type BackupNightCell,
@@ -274,6 +275,7 @@ export function EstateBackupsScreen({
   const { loading, fatalError, overview, backups, model, refresh } = useEstateData();
   const [filterMode, setFilterMode] = useState<BackupFilterMode>("all");
   const [query, setQuery] = useState<string>(initialQuery);
+  const [attemptsUnit, setAttemptsUnit] = useState<AttemptsUnit | null>(null);
   const [policy, setPolicy] = useState<SourceRead<BackupPolicy>>({ state: "skipped" });
   const [quotas, setQuotas] = useState<SourceRead<BackupStoreQuotas>>({ state: "skipped" });
   const [backupJobs, setBackupJobs] = useState<SourceRead<readonly JobEventView[]>>({ state: "skipped" });
@@ -441,7 +443,7 @@ export function EstateBackupsScreen({
               at={lensModel.lastFleetRunAt}
               source="backup"
               now={now}
-              missingLabel="UNKNOWN"
+              missingLabel="evidence time unknown"
             />
           </Box>
           <Typography component="h1" sx={{ fontSize: "26px", fontWeight: 680, lineHeight: 1.2, mt: "2px" }}>
@@ -534,7 +536,13 @@ export function EstateBackupsScreen({
               <span style={{ fontSize: "12px", color: ev.ink2 }}>
                 {lensModel.lastFleetRunAt ? formatStamp(lensModel.lastFleetRunAt).slice(0, 10) : "not recorded"}
               </span>
-              <EvidenceStamp at={lensModel.lastFleetRunAt} now={now} missingLabel="UNKNOWN" />
+              <EvidenceStamp at={lensModel.lastFleetRunAt} now={now} missingLabel="evidence time unknown" />
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", mt: "4px" }}>
+              <span style={{ fontSize: "12px", color: ev.ink2 }}>
+                oldest archive {lensModel.oldestArchiveAt ? formatStamp(lensModel.oldestArchiveAt).slice(0, 10) : "not recorded"}
+              </span>
+              <EvidenceStamp at={lensModel.oldestArchiveAt} source="oldest archive" now={now} missingLabel="evidence time unknown" />
             </Box>
           </Box>
 
@@ -551,7 +559,7 @@ export function EstateBackupsScreen({
               ) : (
                 <StateBadge state="unk" word="UNKNOWN" dense />
               )}
-              <EvidenceStamp at={backupEvidenceAt ?? lensModel.lastFleetRunAt} now={now} missingLabel="UNKNOWN" />
+              <EvidenceStamp at={backupEvidenceAt ?? lensModel.lastFleetRunAt} now={now} missingLabel="evidence time unknown" />
             </Box>
             <Typography sx={{ fontSize: "12px", color: ev.ink2 }}>
               archive opened and manifest checked
@@ -574,7 +582,7 @@ export function EstateBackupsScreen({
               <EvidenceStamp
                 at={policy.state === "ok" ? (policy.value.updated_at ?? lensModel.lastFleetRunAt) : null}
                 now={now}
-                missingLabel="policy"
+                missingLabel="evidence time unknown"
               />
             </Box>
             <Typography sx={{ fontSize: "12px", color: ev.ink2 }}>
@@ -597,7 +605,7 @@ export function EstateBackupsScreen({
               ) : (
                 <StateBadge state="unk" word="UNKNOWN" dense />
               )}
-              <EvidenceStamp at={backupEvidenceAt ?? lensModel.lastFleetRunAt} now={now} missingLabel="UNKNOWN" />
+              <EvidenceStamp at={backupEvidenceAt ?? lensModel.lastFleetRunAt} now={now} missingLabel="evidence time unknown" />
             </Box>
             <Typography sx={{ fontSize: "12px", color: ev.ink2 }}>
               {lensModel.storeUsage.known && lensModel.storeUsage.usedBytes !== null
@@ -617,7 +625,7 @@ export function EstateBackupsScreen({
               <Typography sx={{ fontFamily: ESTATE_MONO, fontSize: "20px", fontWeight: 700 }}>
                 {lensModel.nonTargetCount}
               </Typography>
-              <EvidenceStamp at={backupEvidenceAt ?? lensModel.lastFleetRunAt} now={now} missingLabel="UNKNOWN" />
+              <EvidenceStamp at={backupEvidenceAt ?? lensModel.lastFleetRunAt} now={now} missingLabel="evidence time unknown" />
             </Box>
             <Typography sx={{ fontSize: "12px", color: ev.ink2 }}>
               switched off as backup targets, listed via filter
@@ -669,6 +677,7 @@ export function EstateBackupsScreen({
       ) : null}
 
       <LatestFailedAttempts rows={failedAttemptRows} />
+      <EstateBackupsAttemptsDrawer unit={attemptsUnit} onClose={() => setAttemptsUnit(null)} />
 
       {/* Main 14-Night Table Card */}
       <EstateCard sx={{ mt: "16px" }}>
@@ -810,7 +819,7 @@ export function EstateBackupsScreen({
                 <th style={{ textAlign: "right" }}>Last size</th>
                 <th>Last archive</th>
                 <th>Why</th>
-                <th>Standard</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -875,6 +884,27 @@ export function EstateBackupsScreen({
                     </td>
                     <td style={{ fontSize: "12.5px", color: ev.ink2, maxWidth: "280px" }}>{r.why}</td>
                     <td>
+                      <Box
+                        component="button"
+                        type="button"
+                        data-testid="backup-attempts-open"
+                        onClick={() => setAttemptsUnit({ deviceId: r.unit.deviceId, name: r.unit.name })}
+                        sx={{
+                          fontFamily: "inherit",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          color: ev.accent,
+                          bgcolor: "transparent",
+                          border: 0,
+                          p: 0,
+                          mr: "12px",
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                          "&:hover": { textDecoration: "underline" },
+                        }}
+                      >
+                        Attempts
+                      </Box>
                       <Box
                         component="a"
                         href={standardBackupsHref(r.unit.name)}

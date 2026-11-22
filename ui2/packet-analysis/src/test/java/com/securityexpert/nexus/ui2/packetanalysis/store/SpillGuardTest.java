@@ -82,7 +82,11 @@ class SpillGuardTest {
                         spill.resolve("duckdb_temp_storage_DEFAULT-0.tmp").toFile(), "rw")) {
                     f.setLength(600L * 1024 * 1024); // sparse: 600 MiB of apparent size
                 }
-                Thread.sleep(400);
+                // Bounded wait for the watchdog to trip (poll interval is 20 ms here); returns early on a trip.
+                long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+                while (!SpillGuard.tripped() && System.nanoTime() < deadline) {
+                    Thread.sleep(20);
+                }
             } catch (Exception ex) {
                 throw new IllegalStateException(ex);
             }
