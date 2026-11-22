@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest";
 import type {
   AuditEventView,
   DeviceSummary,
+  LocalIdentityView,
   ScheduledJobFamily,
   ScheduledJobsView,
+  SessionView,
   SystemHealth,
 } from "../src/auth/adminApi";
 import {
   AUDIT_PREVIEW_CAP,
   buildSystemSummary,
+  summariseAccess,
   summariseAudit,
   summariseEnrolment,
   summarisePlatform,
@@ -195,6 +198,89 @@ describe("Estate System summary: Platform", () => {
   });
 });
 
+const PAGE_AT = "2026-11-22T09:15:00.000Z";
+
+// Synthetic identity and session fixtures: the section must never show these values.
+function identity(name: string, enabled: boolean, mustChange: boolean): LocalIdentityView {
+  return {
+    local_identity_id: `id-${name}`,
+    local_identity_name: name,
+    enabled,
+    must_change_password: mustChange,
+    created_at: AT,
+    password_set_at: AT,
+  };
+}
+
+function session(id: string): SessionView {
+  return {
+    session_id: id,
+    actor_fingerprint: "fp-synthetic",
+    created_at: AT,
+    last_seen_at: AT,
+    idle_deadline_at: AT,
+    absolute_expires_at: AT,
+    state: "ACTIVE",
+    end_reason: null,
+    ended_by_actor_fingerprint: null,
+    superseded_by_session_id: null,
+  };
+}
+
+describe("Estate System summary: Access", () => {
+  it("counts identities (total, enabled, disabled, must change password) and sessions exactly", () => {
+    const s = summariseAccess(
+      ok([
+        identity("FW-TANGO-04-admin", true, false),
+        identity("FW-TANGO-04-ops", true, true),
+        identity("FW-TANGO-04-old", false, true),
+      ]),
+      ok([session("SES-SYNTH-1"), session("SES-SYNTH-2")]),
+      PAGE_AT,
+    );
+    const byLabel = Object.fromEntries(s.lines.map((l) => [l.label, l.value]));
+    expect(byLabel["Local identities in total"]).toBe("3 local identities");
+    expect(byLabel["Local identities enabled"]).toBe("2 local identities");
+    expect(byLabel["Local identities disabled"]).toBe("1 local identity");
+    expect(byLabel["Local identities that must change their password"]).toBe("2 local identities");
+    expect(byLabel["Sessions (total as read)"]).toBe("2 sessions");
+    expect(s.id).toBe("access");
+    expect(s.title).toBe("Access");
+    expect(s.badge).toBe("na");
+    expect(s.word).toBe("Counted");
+  });
+
+  it("marks only the identities row UNKNOWN when the identities read fails; the sessions row keeps its count", () => {
+    const s = summariseAccess(failed(), ok([session("SES-SYNTH-1")]), PAGE_AT);
+    expect(s.lines).toHaveLength(2);
+    expect(s.lines[0].value).toBe("UNKNOWN: could not be read.");
+    expect(s.lines[1].value).toBe("1 session");
+    expect(s.badge).toBe("unk");
+  });
+
+  it("renders '0 local identities' for an empty identities list, not an empty section", () => {
+    const s = summariseAccess(ok([]), ok([]), PAGE_AT);
+    const byLabel = Object.fromEntries(s.lines.map((l) => [l.label, l.value]));
+    expect(byLabel["Local identities in total"]).toBe("0 local identities");
+    expect(byLabel["Sessions (total as read)"]).toBe("0 sessions");
+    expect(s.lines.length).toBeGreaterThan(0);
+  });
+
+  it("says the role cannot read identities when refused, never a count of 0", () => {
+    const s = summariseAccess(restricted(), ok([]), PAGE_AT);
+    expect(s.lines[0]).toEqual({ label: "Local identities", value: "Your role cannot read local identities." });
+    expect(s.lines.length).toBe(2);
+    expect(s.lines[0].value).not.toMatch(/^\d/);
+  });
+
+  it("states the page load time as the read time, not as an evidence age", () => {
+    const s = summariseAccess(ok([]), ok([]), PAGE_AT);
+    expect(s.evidenceAt).toBeNull();
+    expect(s.evidenceNote).toMatch(/^Read at the time this page loaded/);
+    expect(s.standardHref).toBe("?screen=administration&tab=access&standard=1");
+  });
+});
+
 describe("Estate System summary: Audit", () => {
   it("shows the newest entries first, capped, with +N more", () => {
     const s = summariseAudit(ok(audit(AUDIT_PREVIEW_CAP + 3)));
@@ -214,14 +300,17 @@ describe("Estate System summary: Audit", () => {
 });
 
 describe("buildSystemSummary", () => {
-  it("returns the four sections in screen order, each linking to a standard screen with standard=1", () => {
+  it("returns the five sections in screen order, each linking to a standard screen with standard=1", () => {
     const all = buildSystemSummary({
       jobs: ok(jobsView([family({ family: "a" })])),
       devices: ok([device("1", "ENROLLED")]),
       health: ok(health("READY")),
       audit: ok(audit(1)),
+      identities: ok([identity("FW-TANGO-04-admin", true, false)]),
+      sessions: ok([]),
+      pageAt: PAGE_AT,
     });
-    expect(all.map((s) => s.id)).toEqual(["runs", "enrolment", "platform", "audit"]);
+    expect(all.map((s) => s.id)).toEqual(["runs", "enrolment", "access", "platform", "audit"]);
     for (const s of all) {
       expect(s.standardHref).toContain("standard=1");
       expect(s.standardHref.startsWith("?screen=")).toBe(true);

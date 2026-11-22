@@ -67,6 +67,7 @@ import { managedThroughOf } from "./estateManagedThrough";
 import { useEstateData } from "./useEstateData";
 import { EstateDossierLogsBlock, loadDeviceLogsReads } from "./EstateDossierLogsBlock";
 import { EstateDossierMemberDiffBlock } from "./EstateDossierMemberDiffBlock";
+import { EstateDossierCertificateBlock } from "./EstateDossierCertificateBlock";
 import type { DeviceLogsReads } from "./estateDeviceLogsSummary";
 
 type DossierTab = "interfaces" | "routes" | "backups" | "controls" | "prechecks";
@@ -95,6 +96,21 @@ interface AnswerCardSpec {
   readonly evidenceAt: string | null;
   readonly evidenceSource: string;
   readonly href: string | null;
+}
+
+/**
+ * A lens row may only show its own evidence time. The model's lens answers can fall back to the
+ * inventory read (unit.lastReadAt); that timestamp is not evidence for a non-inventory lens, so it
+ * is dropped here and the stamp renders "evidence time unknown" instead of the inventory age.
+ */
+function ownLensEvidenceAt(
+  at: string | null | undefined,
+  source: string,
+  inventoryReadAt: string | null,
+): string | null {
+  if (!at) return null;
+  if (source !== "inventory" && inventoryReadAt !== null && at === inventoryReadAt) return null;
+  return at;
 }
 
 export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly deviceId: string; readonly fromRewind?: RewindOrigin | null }) {
@@ -308,6 +324,29 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
 
   const isWatched = watchlist.includes(unit.deviceId);
 
+  // Newest stored event time the events timeline actually plots (backups, software, install events,
+  // readiness, and the config/policy/platform reads). The inventory read (unit.lastReadAt) is not an
+  // event in this section and is deliberately excluded.
+  const eventsNewestAt = (() => {
+    const candidates: Array<string | null | undefined> = [
+      ...(bkList ?? []).map((art) => art.collected_at),
+      ...(swData?.stretches ?? []).map((st) => st.first_seen_at),
+      ...(swData?.installEvents ?? []).map((evItem) => evItem.first_observed_at),
+      cluster?.observedAt,
+      invData?.collected_at,
+      cfgData?.collected_at,
+      unit.policyReadAt,
+      unit.platformFactsAt,
+    ];
+    let best: { readonly ms: number; readonly iso: string } | null = null;
+    for (const iso of candidates) {
+      const ms = parseTimeMs(iso);
+      if (ms === null || !iso) continue;
+      if (best === null || ms > best.ms) best = { ms, iso };
+    }
+    return best?.iso ?? null;
+  })();
+
   // Build the 8 answers with explicit state badges (shape + word, hatched UNKNOWN) and evidence age stamps
   const answers: readonly AnswerCardSpec[] = (() => {
     // 1. Failover
@@ -400,7 +439,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
       ld?.hardware.catalog?.imported_at ??
       ld?.software.catalog?.imported_at ??
       overview?.generated_at ??
-      unit.lastReadAt;
+      null;
 
     // 6. Policy installed
     const instAns = unit.lenses.install;
@@ -462,7 +501,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
         badgeWord: foAns.badgeWord,
         headline: foAns.summary,
         detail: foDetail,
-        evidenceAt: foAns.evidenceAt,
+        evidenceAt: ownLensEvidenceAt(foAns.evidenceAt, foAns.evidenceSource, unit.lastReadAt),
         evidenceSource: foAns.evidenceSource,
         href: cluster ? `?screen=operations&cluster_ref=${encodeURIComponent(cluster.ref)}` : null,
       },
@@ -473,7 +512,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
         badgeWord: bkAns.badgeWord,
         headline: bkAns.summary,
         detail: bkDetail,
-        evidenceAt: newestBk?.collected_at ?? bkAns.evidenceAt,
+        evidenceAt: ownLensEvidenceAt(newestBk?.collected_at ?? bkAns.evidenceAt, "backup", unit.lastReadAt),
         evidenceSource: "backup",
         href: `?screen=backups&q=${encodeURIComponent(unit.name)}`,
       },
@@ -484,7 +523,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
         badgeWord: cmpState === "unk" ? "UNKNOWN" : cmpState === "na" ? "Not applicable" : cmpState === "act" ? "Act" : cmpState === "watch" ? "Review" : "Fine",
         headline: cmpHeadline,
         detail: cmpDetail,
-        evidenceAt: overview?.evidence?.compliance?.at ?? null,
+        evidenceAt: ownLensEvidenceAt(overview?.evidence?.compliance?.at ?? null, "compliance", unit.lastReadAt),
         evidenceSource: "compliance",
         href: `?screen=compliance&device=${encodeURIComponent(unit.deviceId)}`,
       },
@@ -495,7 +534,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
         badgeWord: expAns.badgeWord,
         headline: expAns.summary,
         detail: expDetail,
-        evidenceAt: expAns.evidenceAt,
+        evidenceAt: ownLensEvidenceAt(expAns.evidenceAt, expAns.evidenceSource, unit.lastReadAt),
         evidenceSource: expAns.evidenceSource,
         href: "?screen=inventory&view=lifecycle",
       },
@@ -506,7 +545,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
         badgeWord: eosState === "unk" ? "UNKNOWN" : eosState === "act" ? "Act" : eosState === "watch" ? "Review" : "Fine",
         headline: eosHeadline,
         detail: eosDetail,
-        evidenceAt: eosAt,
+        evidenceAt: ownLensEvidenceAt(eosAt, "lifecycle", unit.lastReadAt),
         evidenceSource: "lifecycle",
         href: "?screen=inventory&view=lifecycle",
       },
@@ -517,7 +556,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
         badgeWord: instAns.badgeWord,
         headline: instAns.summary,
         detail: instDetail,
-        evidenceAt: instAns.evidenceAt,
+        evidenceAt: ownLensEvidenceAt(instAns.evidenceAt, instAns.evidenceSource, unit.lastReadAt),
         evidenceSource: instAns.evidenceSource,
         href: unit.role === "gateway" ? `?screen=policy&device_id=${encodeURIComponent(unit.deviceId)}` : null,
       },
@@ -861,7 +900,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
                   flexWrap: "wrap",
                 }}
               >
-                <EvidenceStamp at={ans.evidenceAt} source={ans.evidenceSource} now={now} />
+                <EvidenceStamp at={ans.evidenceAt} source={ans.evidenceSource} now={now} missingLabel="evidence time unknown" />
                 {ans.href ? (
                   <Box
                     component="a"
@@ -891,7 +930,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
               </Box>
               <Typography sx={{ fontSize: "14.5px", fontWeight: 650, lineHeight: 1.3 }}>{mt.headline}</Typography>
               <Typography sx={{ fontSize: "12.5px", color: ev.ink2, lineHeight: 1.4 }}>{mt.detail}</Typography>
-              <EvidenceStamp at={mt.evidenceAt} source={mt.evidenceSource} now={now} />
+              <EvidenceStamp at={mt.evidenceAt} source={mt.evidenceSource} now={now} missingLabel="evidence time unknown" />
             </Box>
           </EstateCard>
         );
@@ -907,7 +946,7 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
             orders stored timestamps only — never infers causation
           </Typography>
           <Box sx={{ ml: "auto" }}>
-            <EvidenceStamp at={unit.lastReadAt} source="newest read" now={now} missingLabel="never read" />
+            <EvidenceStamp at={eventsNewestAt} source="newest stored event" now={now} missingLabel="evidence time unknown" />
           </Box>
         </Box>
         <Box sx={{ px: "18px", pb: "14px" }}>
@@ -1037,6 +1076,8 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
           </Box>
         </Box>
       </EstateCard>
+
+      <EstateDossierCertificateBlock deviceId={unit.deviceId} />
 
       {/* Gated actions: links to the standard view for this unit; nothing runs from here */}
       <EstateCard sx={{ mt: "16px" }}>
