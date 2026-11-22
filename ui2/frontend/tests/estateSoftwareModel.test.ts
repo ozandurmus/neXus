@@ -59,6 +59,13 @@ describe("buildEstateSoftwareModel", () => {
     expect(m.headline).toBe("1 version change in 90 days");
   });
 
+  it("pluralises the noun for any count other than exactly one (shared plural helper)", () => {
+    const one = buildEstateSoftwareModel(ok([change("dev-bravo-02", 5)]), UNITS);
+    const many = buildEstateSoftwareModel(ok([change("dev-bravo-02", 5), change("dev-bravo-02", 6)]), UNITS);
+    expect(one.headline).toBe("1 version change in 90 days");
+    expect(many.headline).toBe("2 version changes in 90 days");
+  });
+
   it("caps rows at 10 and reports the exact number hidden", () => {
     const changes = Array.from({ length: 14 }, (_, i) => change("dev-tango-04", i + 1));
     const m = buildEstateSoftwareModel(ok(changes), UNITS);

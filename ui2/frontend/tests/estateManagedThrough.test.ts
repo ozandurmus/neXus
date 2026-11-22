@@ -77,13 +77,36 @@ describe("managedThroughOf", () => {
     expect(managedThroughOf("unit-fw-07", "loading").badgeState).not.toBe("ok");
   });
 
-  it("returns not-under-any-node for a readable tree without the unit", () => {
+  it("returns UNKNOWN, never NOT UNDER A NODE, when a readable tree does not list the unit", () => {
     const r = managedThroughOf("unit-fw-07", { state: "ok", value: TREE_WITHOUT_UNIT });
+    expect(r.state).toBe("UNKNOWN");
+    expect(r.badgeWord).toBe("UNKNOWN");
+    expect(r.badgeWord).not.toBe("NOT UNDER A NODE");
+    expect(r.headline).toBe("Unit not listed in the management tree");
+    expect(r.nodeLabel).toBeNull();
+    expect(r.badgeState).toBe("unk");
+  });
+
+  it("returns UNKNOWN when domains is malformed (not an array), never NOT UNDER A NODE", () => {
+    const malformed = { ...TREE_UNDER_NODE, domains: "not-a-list" } as unknown as ManagementTree;
+    const r = managedThroughOf("unit-fw-07", { state: "ok", value: malformed });
+    expect(r.state).toBe("UNKNOWN");
+    expect(r.badgeWord).toBe("UNKNOWN");
+    expect(r.badgeWord).not.toBe("NOT UNDER A NODE");
+    expect(r.headline).toBe("Management tree could not be read");
+    expect(r.badgeState).toBe("unk");
+  });
+
+  it("keeps NOT_UNDER_ANY_NODE for a unit positively listed at the top level", () => {
+    const topLevel: ManagementTree = {
+      ...TREE_UNDER_NODE,
+      domains: [{ domain: null, nodes: [node({ device_id: "unit-fw-07", hostname: "FW-ROMEO-07" })] }],
+    };
+    const r = managedThroughOf("unit-fw-07", { state: "ok", value: topLevel });
     expect(r.state).toBe("NOT_UNDER_ANY_NODE");
+    expect(r.badgeWord).toBe("NOT UNDER A NODE");
     expect(r.headline).toBe("Not under any management node");
     expect(r.nodeLabel).toBeNull();
-    expect(r.badgeState).not.toBe("ok");
-    expect(r.badgeState).not.toBe("unk");
   });
 
   it("never shows a raw address or serial as the node label", () => {

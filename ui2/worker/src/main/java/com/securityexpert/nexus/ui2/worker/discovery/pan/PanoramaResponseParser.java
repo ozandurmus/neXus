@@ -91,14 +91,14 @@ final class PanoramaResponseParser {
         return List.copyOf(result);
     }
 
+    /**
+     * A VS identity is only its own uniqid child. The {@code name} attribute of a vsys entry is a
+     * presentation name (e.g. "vsys1"), never an identity key, so it is not used as a fallback.
+     */
     private static Optional<String> vsSerialOf(Element vsEntry) {
         Optional<String> text = vsRelativeText(vsEntry, Role.VIRTUAL_SYSTEM_STABLE_IDENTIFIER);
         if (text.isPresent() && !text.get().isBlank()) {
             return text;
-        }
-        String nameAttr = vsEntry.getAttribute("name");
-        if (nameAttr != null && !nameAttr.isBlank()) {
-            return Optional.of(nameAttr.trim());
         }
         return Optional.empty();
     }

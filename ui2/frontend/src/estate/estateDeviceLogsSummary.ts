@@ -1,5 +1,5 @@
 import type { SystemLogCrashFiles, SystemLogGap, SystemLogSources } from "../auth/adminApi";
-import type { BadgeState } from "./estateModel";
+import { newestIso, parseTimeMs, type BadgeState } from "./estateModel";
 
 /**
  * Estate unit dossier, "Logs" block (read-only summary). Pure model: it counts and dates what the three system-log
@@ -43,21 +43,6 @@ export interface DeviceLogsSummary {
   readonly gapsEvidenceAt: string | null;
   readonly crashEvidenceAt: string | null;
   readonly failedFigures: readonly LogsFigure[];
-}
-
-function timeOf(iso: string | null | undefined): number | null {
-  if (!iso) return null;
-  const t = Date.parse(iso);
-  return Number.isNaN(t) ? null : t;
-}
-
-function newestIso(values: readonly (string | null | undefined)[]): string | null {
-  let best: { t: number; iso: string } | null = null;
-  for (const iso of values) {
-    const t = timeOf(iso);
-    if (t !== null && (best === null || t > best.t)) best = { t, iso: iso as string };
-  }
-  return best?.iso ?? null;
 }
 
 /** Gaps grouped by kind, most frequent first, ties by kind name so the order is stable. */

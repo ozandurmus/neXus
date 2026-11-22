@@ -160,7 +160,7 @@ export interface RewindRing {
 export function rewindRingFor(direction: "worse" | "better" | "changed" | null): RewindRing {
   if (direction === "worse") return { color: "act", word: "worse", dashed: false };
   if (direction === "better") return { color: "ok", word: "better", dashed: false };
-  if (direction === "changed") return { color: "ink3", word: "unchanged", dashed: true };
+  if (direction === "changed") return { color: "ink3", word: "changed", dashed: true };
   return { color: null, word: "unchanged", dashed: false };
 }
 

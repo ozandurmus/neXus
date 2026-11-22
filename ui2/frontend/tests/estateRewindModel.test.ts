@@ -70,10 +70,28 @@ describe("rewindRingFor", () => {
   it("maps worse to act, better to ok and a same-rank change to a dashed ink3 ring", () => {
     expect(rewindRingFor("worse")).toEqual({ color: "act", word: "worse", dashed: false });
     expect(rewindRingFor("better")).toEqual({ color: "ok", word: "better", dashed: false });
-    expect(rewindRingFor("changed")).toEqual({ color: "ink3", word: "unchanged", dashed: true });
+    expect(rewindRingFor("changed")).toEqual({ color: "ink3", word: "changed", dashed: true });
   });
 
   it("gives no ring and no dash when the unit did not move", () => {
     expect(rewindRingFor(null)).toEqual({ color: null, word: "unchanged", dashed: false });
+  });
+
+  it("names a same-rank change as changed, never unchanged, in the tile label", () => {
+    const answer = (word: string) => ({ state: "ok", word, detail: null, evidenceAt: null });
+    const unit = { id: "dev-x", name: "FW-TANGO-04", vendor: null, clusterRef: null, enrolled: true,
+      lenses: { failover: answer("READY"), backups: answer("OK"), compliance: answer("OK") } };
+    const unitChanged = { ...unit, lenses: { ...unit.lenses, failover: answer("READY (re-read)") } };
+    const transitions = diffSnapshots(
+      { asOf: "2026-11-12T02:00:00.000Z", warnings: [], units: [unit] } as never,
+      { asOf: "2026-11-19T00:00:00.000Z", warnings: [], units: [unitChanged] } as never,
+    );
+    expect(transitions).toHaveLength(1);
+    expect(transitions[0].direction).toBe("changed");
+    const ring = rewindRingFor(transitions[0].direction);
+    const label = `FW-TANGO-04: READY; ${ring.word}; evidence UNKNOWN`;
+    expect(label).toContain("changed");
+    expect(label).not.toContain("unchanged");
+    expect(ring.word).not.toBe("unchanged");
   });
 });

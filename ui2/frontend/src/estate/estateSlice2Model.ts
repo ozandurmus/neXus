@@ -30,6 +30,7 @@ import { groupClusters, haReadinessItems, primaryReasonWord } from "../screens/H
 import { withFirewallNames } from "../screens/policyFirewalls";
 import { primaryReportsPeer, primaryRolesConfirmed } from "../screens/ReadinessChecksTable";
 import {
+  newestIso,
   parseTimeMs,
   type BadgeState,
   type EstateCluster,
@@ -75,19 +76,6 @@ export function buildCalendarDays(now: Date, count: number): ReadonlyArray<{
     out.push({ key, label, shortDay: label.split(" ")[0] ?? label });
   }
   return out;
-}
-
-function newestIso(isos: ReadonlyArray<string | null | undefined>): string | null {
-  let best: string | null = null;
-  let bestMs = -Infinity;
-  for (const iso of isos) {
-    const ms = parseTimeMs(iso);
-    if (ms !== null && ms > bestMs) {
-      bestMs = ms;
-      best = iso!;
-    }
-  }
-  return best;
 }
 
 // ============================================================================

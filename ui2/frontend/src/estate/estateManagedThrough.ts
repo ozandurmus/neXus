@@ -76,16 +76,30 @@ export function managedThroughOf(
   }
 
   const evidenceAt = tree.value.discovered_at ?? null;
-  const roots = Array.isArray(tree.value.domains) ? tree.value.domains.flatMap((d) => (Array.isArray(d?.nodes) ? d.nodes : [])) : [];
+  if (!Array.isArray(tree.value.domains)) {
+    // Malformed tree: unreadable, so never a negative "not under any node" claim.
+    return {
+      state: "UNKNOWN",
+      badgeState: "unk",
+      badgeWord: "UNKNOWN",
+      nodeLabel: null,
+      headline: "Management tree could not be read",
+      detail: `Unreadable is not the same as not managed. ${BOUNDARY}`,
+      evidenceAt: null,
+      evidenceSource: "management tree",
+    };
+  }
+  const roots = tree.value.domains.flatMap((d) => (Array.isArray(d?.nodes) ? d.nodes : []));
   const trail = ancestorsOf(roots, deviceId);
   if (trail === null) {
+    // Absent from a tree that did parse: absence of evidence is not evidence of absence.
     return {
-      state: "NOT_UNDER_ANY_NODE",
-      badgeState: "na",
-      badgeWord: "NOT UNDER A NODE",
+      state: "UNKNOWN",
+      badgeState: "unk",
+      badgeWord: "UNKNOWN",
       nodeLabel: null,
-      headline: "Not under any management node",
-      detail: `The tree was read and lists no management node above this unit. ${BOUNDARY}`,
+      headline: "Unit not listed in the management tree",
+      detail: `Unreadable is not the same as not managed. ${BOUNDARY}`,
       evidenceAt,
       evidenceSource: "management tree",
     };
