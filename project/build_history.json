@@ -3,6 +3,17 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0400",
+      "status": "automated_validated",
+      "title": "Overview null-device fix, Estate UNKNOWN count fixes and golden refresh vacuum step",
+      "summary": "A failed job without a target device no longer crashes the Overview screen (9a24f1bf), and Estate device logs, dossier Configuration, diagnostic runs and policy hygiene show any unreported count or stamp as UNKNOWN instead of OK or zero (1e09e4c4, 4733506a). The preview golden refresh runs vacuum without parallel workers and skips it instead of blocking a valid copy (4733506a).",
+      "started": "2026-11-23",
+      "completed": "2026-11-23",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0400.md"
+    },
+    {
       "build": "NXS-LOCAL-0399",
       "status": "automated_validated",
       "title": "Failover one-action dialog, PAN config-sync member, preview golden database and Estate UNKNOWN fixes",
