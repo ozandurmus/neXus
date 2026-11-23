@@ -218,7 +218,11 @@ export function buildDeviceLogsSummary(reads: DeviceLogsReads): DeviceLogsSummar
     };
   }
 
-  if (sourcesRead.collection_state === "NO_COLLECTION_YET" || chunkCount === 0) {
+  // Any source missing its stored chunk, line or byte count makes the totals UNKNOWN: the block is never OK.
+  const countsUnknown = chunkCount === null || lineCount === null || byteCount === null;
+
+  // Zero chunks reads as "not yet" only when lines and bytes were reported too (a real zero, not a gap).
+  if (sourcesRead.collection_state === "NO_COLLECTION_YET" || (chunkCount === 0 && !countsUnknown)) {
     return {
       ...base,
       state: "no_logs_yet",
@@ -231,8 +235,6 @@ export function buildDeviceLogsSummary(reads: DeviceLogsReads): DeviceLogsSummar
   const attentionStatus = (sourcesRead?.sources ?? []).some((src) =>
     src.status === "BACKLOG" || src.status === "TOO_LARGE" || src.status === "GAP" || src.status === "STORAGE_REFUSED");
   const attention = attentionStatus || (gapCount ?? 0) > 0 || (crashFileCount ?? 0) > 0 || failedFigures.length > 0;
-  // A source without its stored counts makes the chunk, line and byte totals UNKNOWN: the block is not OK.
-  const countsUnknown = chunkCount === null;
   const unknown = failedFigures.length > 0 || countsUnknown;
   return {
     ...base,
@@ -240,7 +242,7 @@ export function buildDeviceLogsSummary(reads: DeviceLogsReads): DeviceLogsSummar
     badge: unknown ? "unk" : attention ? "watch" : "ok",
     badgeWord: unknown ? "UNKNOWN" : attention ? "Review" : "OK",
     headline: countsUnknown
-      ? `${sourceCount} ${sourceCount === 1 ? "source" : "sources"} · stored counts UNKNOWN for a source`
+      ? `${sourceCount} ${sourceCount === 1 ? "source" : "sources"} · stored chunk, line or byte counts UNKNOWN for a source`
       : `${sourceCount} ${sourceCount === 1 ? "source" : "sources"} · ${chunkCount} ${chunkCount === 1 ? "chunk" : "chunks"} collected`,
   };
 }
