@@ -112,6 +112,48 @@ public final class CutoverRepository {
             + "and kind = {1} and ({2}::text is null or decision = {2})", id, kind, decision).get(0).get("n", Long.class));
     }
 
+    // ---- flow retention (PO decision record 2026-11-14, Q7: 90 days for flows; verdicts kept with their segment) ----
+
+    /**
+     * Assessments created more than {@code days} days ago (database clock) that still hold flow or missing-rule rows,
+     * oldest first, at most {@code limit}. Ids only. The flow probe uses the flow table's primary-key prefix.
+     */
+    public List<String> expiredAssessmentsWithFlows(int days, int limit) {
+        return transactions.inTransaction(db -> db.fetch("select a.assessment_id from cutover_assessment a "
+            + "where a.created_at < now() - make_interval(days => {0}) "
+            + "and exists (select 1 from cutover_assessment_flow f where f.assessment_id = a.assessment_id) "
+            + "order by a.created_at, a.assessment_id limit {1}", days, limit).map(row -> row.get("assessment_id", String.class)));
+    }
+
+    /**
+     * Removes every flow and missing-rule row of one assessment, in one short transaction, and only while that
+     * assessment is still older than {@code days} days (re-checked inside the delete, so a wrong id never touches a
+     * fresh assessment). The assessment row, its verdict and its summary counts are never touched. A lock held
+     * elsewhere fails this transaction after a short wait instead of queueing behind it.
+     *
+     * @return the number of rows removed
+     */
+    public int deleteExpiredFlows(String id, int days, String actor) {
+        return new AuditedTransactionBoundary(transactions).inTransaction(actor, ACTION, db -> {
+            db.execute("set local lock_timeout = '5s'");
+            return db.execute("delete from cutover_assessment_flow f using cutover_assessment a where f.assessment_id = a.assessment_id "
+                + "and a.assessment_id = {0} and a.created_at < now() - make_interval(days => {1})", id, days);
+        });
+    }
+
+    /**
+     * True when the assessment is older than {@code days} days, holds no flow or missing-rule row, and its stored
+     * counts do not positively say it never had any (unreadable counts read as "removed", never as "no flows").
+     */
+    public boolean flowsExpired(String id, int days) {
+        return transactions.inTransaction(db -> db.fetch("select (a.created_at < now() - make_interval(days => {1}) "
+            + "and not exists (select 1 from cutover_assessment_flow f where f.assessment_id = a.assessment_id) "
+            + "and not (coalesce(a.summary->'counts'->'tuples', 'null'::jsonb) = '0'::jsonb "
+            + "and coalesce(a.summary->'counts'->'missingRuleGroups', '0'::jsonb) = '0'::jsonb)) as expired "
+            + "from cutover_assessment a where a.assessment_id = {0}", id, days)
+            .stream().findFirst().map(row -> Boolean.TRUE.equals(row.get("expired", Boolean.class))).orElse(false));
+    }
+
     public boolean deleteAssessment(String id, String actor) {
         return new AuditedTransactionBoundary(transactions).inTransaction(actor, ACTION, db ->
             db.execute("delete from cutover_assessment where assessment_id = {0}", id) > 0);

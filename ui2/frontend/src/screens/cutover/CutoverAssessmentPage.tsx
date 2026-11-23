@@ -3,7 +3,7 @@ import { Alert, Box, Button, Link, Stack, Tab, Table, TableBody, TableCell, Tabl
 
 import {
   deleteCutoverAssessment, getCutoverAssessment, getCutoverFlows, getCutoverSegment, listDevices,
-  type CutoverAssessmentView, type CutoverFlowItem, type CutoverMissingRuleItem, type DeviceSummary,
+  type CutoverAssessmentView, type CutoverFlowItem, type CutoverFlowPage, type CutoverMissingRuleItem, type DeviceSummary,
 } from "../../auth/adminApi";
 import { RestrictedPanel, StatePanel, isRestricted } from "../../shell/States";
 import { StatusPill } from "../../shell/StatusPill";
@@ -128,7 +128,7 @@ function Fact({ label, value }: { readonly label: string; readonly value: ReactN
 
 function ResultList({ assessmentId, tab, deviceName }: { readonly assessmentId: string; readonly tab: ResultTab; readonly deviceName: (id: string) => string }) {
   const [page, setPage] = useState(0);
-  const [data, setData] = useState<{ total: number; items: (CutoverFlowItem | CutoverMissingRuleItem)[] } | null>(null);
+  const [data, setData] = useState<CutoverFlowPage<CutoverFlowItem | CutoverMissingRuleItem> | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
     let active = true; setData(null); setError("");
@@ -143,6 +143,9 @@ function ResultList({ assessmentId, tab, deviceName }: { readonly assessmentId: 
     <Typography variant="body2">{number(page * PAGE + 1)}–{number(Math.min((page + 1) * PAGE, data.total))} of {number(data.total)}</Typography>
     <Button disabled={(page + 1) * PAGE >= data.total} onClick={() => setPage((p) => p + 1)}>Next</Button>
   </Stack>;
+  // Q7 retention: an expired assessment never reads as "no flows".
+  if (data.flowsExpired && data.items.length === 0) return <Alert severity="info" sx={{ mt: 1.5 }} data-fact="flows-expired">
+    Flow rows were removed after {number(data.retentionDays)} days (retention); the verdict and counts above are kept.</Alert>;
   if (data.items.length === 0) return <Typography sx={{ mt: 1.5 }} data-fact="no-rows">{tab.kind === "MISSING_RULE" ? "No missing-rule group in this assessment." : `No flow is ${tab.label.toLowerCase()} in this assessment.`}</Typography>;
   if (tab.kind === "MISSING_RULE") return <Box sx={{ mt: 1 }}>
     <Typography variant="body2" sx={{ my: 1 }}>Flows the target would drop or leaves undecided while the old path allows them (or has no old-path reference), grouped by destination and service: candidates for rules to add, to review, not to apply as they are.</Typography>

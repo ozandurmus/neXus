@@ -1,27 +1,49 @@
 # Rule recertification and cleanup campaigns - contract
 
-**Status: DRAFT - 2026-11-14, revision 2.** Revision 1 (2026-11-13) was written by an engineering session at the PO
+**Status: DRAFT - 2026-11-23, revision 2.1 (factual refresh before the council; no semantic change).** Revision 1 (2026-11-13) was written by an engineering session at the PO
 session's request, after the PO chose, following the zone matrix, to plan rule recertification and cleanup campaigns.
 Revision 2 folds in the PO's product answers of 2026-11-14 (Q1, Q4, Q13 as PO decisions; Q5, Q10, Q11, Q12, Q15, Q17
 as PO session recommendations the PO saw and did not object to), recorded in
 [PO_DECISION_RECORD_2026_11_14_RULE_RECERTIFICATION_PRODUCT_ANSWERS.md](PO_DECISION_RECORD_2026_11_14_RULE_RECERTIFICATION_PRODUCT_ANSWERS.md);
 section 14.1 lists them. Not implementation authority. It goes next to the three-seat decision council (identity and
 authorization, compliance and evidence semantics, security and adversarial) convened by the PO session for the eight
-open questions of section 14.3 and the new Q20 (definition of internet-facing), then to the PO for freezing. Two points wait for bank input (section 14.2). Examples are
+open questions of section 14.3, the new Q20 (definition of internet-facing) and the new Q21 (Cisco ASA and FortiGate
+scope), then to the PO for freezing. Two points wait for bank input (section 14.2). Examples are
 synthetic only (`FW-TANGO-04`, documentation address ranges, invented team names, the UUID
 `00000000-0000-4000-8000-000000000001`).
+
+**Revision 2.1 change note (2026-11-23).** A factual refresh so the council reads the draft against `main` as it is
+today (checked against `origin/main` at `fb373545`). No rule, decision, state, question or wording rule changed, no
+question was answered, and the status stays DRAFT. Corrections:
+
+- The zone matrix contract is no longer a draft on a branch: it is `ZONE_MATRIX_CONTRACT.md`, FROZEN 2026-11-13
+  revision 2, with delivery steps 1-3 on `main` (V216, V220, V228; commits `5bfd6fd1`, `31babb26`, `addc3ff2`). The
+  cross-references to its sections 5.9 and 8.6 still point at the right clauses. Steps 4-7 are not built, so the
+  conditions this contract puts on "after zone matrix delivery step 4" and on the exception record stay as written.
+- The hygiene legacy mode is on `main` (commit `2ea30808`, no longer "on a branch, not merged") but is not wired to
+  any screen or summary. Details in "Builds on".
+- Cisco ASA and FortiGate have stored policy snapshots on `main`, which section 5.2 did not mention. Section 5.2 now
+  says it lists Check Point and Palo Alto only, and the new question Q21 (section 14.3) asks the council whether ASA
+  and FortiGate are in scope.
+- The scale figures of section 3.2 come from a measurement note that is not on `main`; the text now says so.
 
 Builds on, without changing them:
 
 - [PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md](PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md) (hygiene classes; "writing
   rules to devices" rejected);
 - `ui2/service/.../policy/PolicyHygiene.java` (classes `shadowed`, `conflict`, `disabled`, `unused`, `expired`,
-  `broad`, `unknown`; sound mode on `main`, legacy mode on branch `feat/hygiene-legacy-resolution-1113`, not merged);
+  `broad`, `unknown`; the sound mode is what the Policy screen, the fleet summary and the zone matrix bridge call
+  (`PolicyQueryService`, `ZoneMatrixPolicyBridge`); the legacy mode (`PolicyHygiene.analyzeLegacy`, `PolicyLegacyView`,
+  commit `2ea30808`) is on `main` but called only by tests, so no screen or summary shows legacy results yet, which
+  is why section 3.2 keeps them out of every count; hygiene also runs on stored ASA and FortiGate snapshots, see
+  section 5.2);
 - [RULE_OBJECT_USAGE_CONTRACT.md](RULE_OBJECT_USAGE_CONTRACT.md) (FROZEN; per-object `USED` / `NOT_SEEN` from an
   uploaded log period);
 - `policy_rule_history` (V120, V150) and the change actor (V208, `policy_change_actor_link`; Check Point
   last-modifier, Palo Alto config-log match);
-- the zone matrix contract (DRAFT, branch `docs/zone-matrix-contract-1113`, not on `main`), sections 5.9 and 8.6;
+- [ZONE_MATRIX_CONTRACT.md](ZONE_MATRIX_CONTRACT.md) (FROZEN 2026-11-13, revision 2; delivery steps 1-3 on `main`,
+  step 4 durable runs and findings not built), section 5.9 (finding identity) and section 8.6 (exceptions: not built,
+  part of delivery step 7);
 - [REPORTS_R1_CONTRACT.md](REPORTS_R1_CONTRACT.md) (FROZEN) and
   [NOTIFICATION_ROUTING_CONTRACT.md](NOTIFICATION_ROUTING_CONTRACT.md) (FROZEN), both of which need a small amendment
   (sections 9 and 10);
@@ -131,7 +153,8 @@ the threshold.", "Zero hits contradict a recorded last hit.", "Zero collected hi
 "Last-hit time was not collected.", "Schedule evidence is
 incomplete.", and zone matrix `NOT_EVALUABLE` / `UNKNOWN`. The scale matters: on the ten largest stored policies the
 sound-mode shadowing analysis decided about 7,200 rules and left about 47,400 undecided (counts from the hygiene legacy
-phase 2 measurement, 2026-11-13); a cleanup campaign must show that the undecided part exists, not only the
+phase 2 measurement, 2026-11-13; the measurement note is not on `main` and the counts were not re-derived in
+revision 2.1); a cleanup campaign must show that the undecided part exists, not only the
 candidates.
 
 Legacy-mode hygiene results (upper bound: time, user and other narrowing constraints dropped) never enrol a rule as
@@ -229,6 +252,9 @@ before and after owner ids.
   as in Rule object usage.
 
 ### 5.2 Rule version
+
+This section lists fields for Check Point and Palo Alto rules only. Stored Cisco ASA and FortiGate rules exist on
+`main`; whether they are in scope, and which of their fields form the rule version, is open question Q21.
 
 A decision is bound to the exact rule it was made on. The rule version is two SHA-256 hashes, computed from the stored
 snapshot at enrolment and again at decision time:
@@ -653,3 +679,34 @@ New in revision 2, for the council together with Q3:
 - `Q20` "Internet-facing" (3.3): is "source or destination is `any` or contains an address outside the declared
   internal ranges" the right test, and which internal ranges apply before a zone matrix version is active (private
   ranges plus a bank-confirmed list, as drafted)?
+
+New in revision 2.1, for the council:
+
+- `Q21` Are Cisco ASA and FortiGate rules in recertification scope, and which fields form their rule version?
+  Evidence (stored snapshots on `main`: `AsaPolicyMapper`, `FortiGatePolicyMapper`, `LocalFirewallPolicyService`,
+  `PolicyLookup`, hygiene; design `ASA_FORTIGATE_POLICY_DESIGN_2026_11_14.md`, section 5.2 for ASA, 5.3 for FortiGate):
+  - Cisco ASA, one section per access-group binding. Rule key: derived from the snapshot id, the binding, the ACL
+    name and the ACE position; no per-rule uid is stored (`uuid` is empty), so inserting or removing an ACE changes
+    the key of every later ACE of that ACL. Stored fields: enabled (inactive ACE = disabled), action
+    (`permit`/`deny`, `UNKNOWN` for an ACE the parser did not understand), source, destination and service cells (by
+    object id, no negation flag), no application, log, comment (preceding remark lines), and `extras`: `from`, `to`,
+    `asa-direction`, `asa-acl`, `time` (time-range), `user`, `security-group`, `asa-unparsed`. Hit counts: the mapper
+    sets none.
+  - FortiGate, one snapshot per VDOM. Rule key: derived from the device, the VDOM and the `policyid`, with the
+    position appended when a `policyid` repeats; `uuid` is the printed `set uuid` when present. Stored fields:
+    enabled (`status`), action (`accept`/`deny`, raw value kept in `fgt-action` when unusual), source, destination and
+    service cells (with negation flags per design 5.3), no application, log (`logtraffic`), comment (`comments`),
+    and `extras`: `from`, `to` (interfaces or zones), `vpn`, `time` (schedule), `user`, `fgt-application`,
+    `source-translation-type`, `translated-source`, `fgt-match-vip`, `fgt-match-vip-only`, `fgt-vip`,
+    `fgt-unparsed`, `fgt-missing-default`. Hit counts: the mapper sets none.
+  - UNKNOWN, not established here: whether the rule history (V120, V150) and the change actor (V208) capture ASA and
+    FortiGate rules (the change feed documents rule history for Check Point and Palo Alto only); whether any hit counts
+    are collected for these vendors, which the 180-day `unused` source (3.2) needs. The ASA and FortiGate objects
+    behind the cells are not covered by the Rule object usage contract.
+  - Options. **(1, recommended) Out of scope until a later revision:** ASA and FortiGate rules are not enrolled in any
+    campaign in this contract; revision 3 (or the freeze) states the field lists once Q9 has settled which fields
+    invalidate for Check Point and Palo Alto and once the ASA rule key question above is decided. Reason: the ASA
+    key is positional, so every ACE insertion would orphan the decisions of the later ACEs, and the open questions
+    Q8 and Q9 would be decided twice. **(2) In scope now:** the rule version for ASA and FortiGate is the stored
+    fields listed above, minus whatever Q9 excludes, with an `IDENTITY_FALLBACK`-style flag on ASA rules (5.1); the
+    council would also have to say how a positional ASA key survives an ACE insertion.

@@ -3,6 +3,27 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0404",
+      "status": "automated_validated",
+      "title": "ASA ACL_NOT_BOUND unknown reason, ASA A0 conformance tests and debt cleanups",
+      "summary": "An ASA ACL named by an unparsed feature is UNKNOWN, not unused (PO 2026-11-23, 65430d84); each A0-ASA entry has a conformance test. Debt: snapshot test made deterministic, dead adminApi exports removed, address math extracted.",
+      "started": "2026-11-23",
+      "completed": "2026-11-23",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0404.md"
+    },
+    {
+      "build": "NXS-LOCAL-0403",
+      "status": "automated_validated",
+      "title": "Script Execution slice 3: run-end syslog and mail notifications (V266)",
+      "summary": "A finished script run sends its requested syslog and mail notification, best effort, with the outcome stored per channel (V266, 8420aaf1). Adds the per-script mail-on-failure-only option.",
+      "started": "2026-11-23",
+      "completed": "2026-11-23",
+      "movement": "IMPLEMENTATION",
+      "docs": {}
+    },
+    {
       "build": "NXS-LOCAL-0402",
       "status": "automated_validated",
       "title": "Estate dossier Management tree scope and malformed-payload hardening",
@@ -138,15 +159,15 @@
       "build": "STATE-SYNC-2026-11-22 estate-batches-evening",
       "status": "automated_validated",
       "completed": "2026-11-22",
-      "title": "Estate view: Cases cutover, dossier cert/SSH/ASA/jobs blocks, System, Reports run detail, UNKNOWN fixes (cb8277c3, f79356af, 6d1e84e5, 1b233bad, cf05b88d, 264841da, 49c82903, c4eb2fc0)",
+      "title": "Estate view: Cases cutover, dossier cert/SSH/ASA/jobs blocks, System, Reports run detail, UNKNOWN fixes",
       "movement": "UI",
-      "summary": "Batches auto-1122-1954 to 2314 add read-only Estate Reports run detail, System Pods/storage/Job queue/Script runs, Failover cell drawer and stop reason, Ask zone grid, dossier grid members and recent jobs. Missing counts, unreadable severities and blank PAN HA output are UNKNOWN, never OK; PAN discovery with a blank stable id is not importable; two flaky tests hardened."
+      "summary": "Batches auto-1122-1954 to 2314 add read-only Estate Reports run detail, System, Failover cell drawer and Ask zone grid. Missing counts, unreadable severities and blank PAN HA output are UNKNOWN, never OK."
     },
     {
       "build": "STATE-SYNC-2026-11-22 estate-batches-midday",
       "status": "automated_validated",
       "completed": "2026-11-22",
-      "title": "Estate view: dossier SSH trust, HTTPS certificate, ASA saved-versus-running, managed-through, member differences; lifecycle sources and catalog (276f8032, 6088a99b, f8e68293, fb60bcc9, 3ddae587, 89752473, 3c9997fe)",
+      "title": "Estate view: dossier SSH trust, HTTPS certificate, ASA saved-versus-running, managed-through, member differences; lifecycle sources and catalog",
       "movement": "UI",
       "summary": "Batches auto-1122-1531 to 1926 add read-only dossier blocks, lifecycle vendor sources and operator catalog, compliance guidance and evidence-stamp guards on most screens. Review fixes: unknown backup outcome, managed-through and ASA rows are UNKNOWN."
     },
@@ -154,15 +175,15 @@
       "build": "STATE-SYNC-2026-11-22 estate-batches-morning",
       "status": "automated_validated",
       "completed": "2026-11-22",
-      "title": "Estate view: find palette, Cases, Health lens, Policy browser, Reports list, System hub, Lifecycle advisories, actions block (48c371ba to 2934a3a5, ee86f302)",
+      "title": "Estate view: find palette, Cases, Health lens, Policy browser, Reports list, System hub, Lifecycle advisories, actions block",
       "movement": "UI",
-      "summary": "Batches auto-1122-1300 to 1511 add the read-only Cases screen, Ctrl/Cmd+K find, Health lens, Policy browser with offline analyses, Reports list, System and Lifecycle advisories screens and dossier actions that link to the standard view. Tests added for the as-of controller, HA readiness report and MDS export eligibility."
+      "summary": "Batches auto-1122-1300 to 1511 add read-only Cases, Ctrl/Cmd+K find, Health lens, Policy browser, Reports list, System and Lifecycle advisories screens and dossier actions linking to the standard view."
     },
     {
       "build": "NXS-LOCAL-0392 estate-view",
       "status": "automated_validated",
       "completed": "2026-11-21",
-      "title": "Alternative Estate view slices 1-2, Ask workbench, Rewind; as-of API (3820e187, f880cf8f, 2dc740dc)",
+      "title": "Alternative Estate view slices 1-2, Ask workbench, Rewind; as-of API",
       "movement": "UI",
       "summary": "The PO-chosen Estate view ships beside the unchanged Standard view: Brief, Wall, dossier, Failover, Changes, Compliance, Backups, Ask and Rewind on GET /api/v2/estate/as-of. Rewind rests on a draft evidence audit."
     },
@@ -170,7 +191,7 @@
       "build": "NXS-LOCAL-0393 overwatch-rename-r1",
       "status": "automated_validated",
       "completed": "2026-11-21",
-      "title": "Overwatch rename R1 (user-visible text) and R1b (CLI name, OVERWATCH_* env dual-read) (d0134f0c, 3621381c)",
+      "title": "Overwatch rename R1 (user-visible text) and R1b (CLI name, OVERWATCH_* env dual-read)",
       "movement": "IMPLEMENTATION",
       "summary": "Screens, mail, CLI help and report headers say Overwatch; identifiers, paths and manifests are unchanged and the CLI keeps a nexus alias. OverwatchEnv reads OVERWATCH_* first and falls back to the old names."
     },
@@ -178,7 +199,7 @@
       "build": "STATE-SYNC-2026-11-21 ship-and-policy",
       "status": "automated_validated",
       "completed": "2026-11-21",
-      "title": "Batch r1: ship-speed pretest, policy hygiene fleet summary, VSX chassis e2e specs; ASA keyword diff, PAN settle status, cluster mask (024ab2d6, 61f0ef78, 3aaedb64, 90c23593, a1e8be58, 8cfae551)",
+      "title": "Batch r1: ship-speed pretest, policy hygiene fleet summary, VSX chassis e2e specs; ASA keyword diff, PAN settle status, cluster mask",
       "movement": "IMPLEMENTATION",
       "summary": "Policy hygiene fleet summary is computed in the background and served from cache; ASA saved-versus-running shows which keywords differ; cluster member differences are masked for aiview. Compliance wires CP add lines and PAN SNMPv3/interface/DDNS evidence; lifecycle rows carry a reason."
     },
@@ -186,7 +207,7 @@
       "build": "STATE-SYNC-2026-11-21 base-image-and-cves",
       "status": "complete",
       "completed": "2026-11-21",
-      "title": "Script-execution image on nodejs:22 after trying 24; UBI runtime refresh; build proxy retries; CVE acceptances (04de29c1, ea732041, 486ff7f9, 23db34ce, 3e3bd9d7, 82e7d021, 6e5dc8ea)",
+      "title": "Script-execution image on nodejs:22 after trying 24; UBI runtime refresh; build proxy retries; CVE acceptances",
       "movement": "IMPLEMENTATION",
       "summary": "The nodejs:24 stream brought five new unfixed HIGH CVEs, so the image returned to nodejs:22 with time-boxed acceptances. The runtime package update is restored and retried through the build proxy."
     },
@@ -194,7 +215,7 @@
       "build": "NXS-LOCAL-0394 script-execution-slice-2",
       "status": "automated_validated",
       "completed": "2026-11-20",
-      "title": "Script Execution slice 2: per-run pod, broker role, credential reference, masked audited output (V258) (084c89d7)",
+      "title": "Script Execution slice 2: per-run pod, broker role, credential reference, masked audited output (V258)",
       "movement": "IMPLEMENTATION",
       "summary": "Each run gets its own pod and NetworkPolicy under a broker role, a credential reference and masked audited output. Not real-environment validated."
     },
@@ -202,7 +223,7 @@
       "build": "STATE-SYNC-2026-11-20 failover-vsx-ha",
       "status": "automated_validated",
       "completed": "2026-11-20",
-      "title": "VSX chassis failover (V255, V256); worker rechecks initiator and approver authority (V260); ASA and FortiGate pairs in HA rows (2bdb6008, 4501dff4, c84f5d7d)",
+      "title": "VSX chassis failover (V255, V256); worker rechecks initiator and approver authority (V260); ASA and FortiGate pairs in HA rows",
       "movement": "IMPLEMENTATION",
       "summary": "VSX chassis switch and VSLS all-VS sequence are built under the 2026-11-19 decision; the worker rechecks both authorities at start with a directory membership refresh. ASA and FortiGate pairs render like CP/PAN; execution stays off."
     },
@@ -210,15 +231,15 @@
       "build": "STATE-SYNC-2026-11-20 security-and-aiview",
       "status": "automated_validated",
       "completed": "2026-11-20",
-      "title": "Least-privilege DB roles step 0 (V261); aiview masked read-only admin slice 1; CP per-VS cpstat gate (V254); batches b56a and b56b (594c811e, 26330958, 3ad90651, 8938f843, 42ad066e, b1960e2a, ca04997f)",
+      "title": "Least-privilege DB roles step 0 (V261); aiview masked read-only admin slice 1; CP per-VS cpstat gate (V254); batches b56a and b56b",
       "movement": "IMPLEMENTATION",
-      "summary": "SECURITY DEFINER triggers, views and worker secret items prepare the database roles; UI2_AIVIEW_READONLY_ADMIN (default off) grants three masked settings reads. Also JSON logs, metrics (off), Panorama change-actor commit-job pairing, PAN config sync settle 60 s and backup failure reasons."
+      "summary": "SECURITY DEFINER triggers, views and worker secret items prepare the database roles; UI2_AIVIEW_READONLY_ADMIN (default off) grants three masked settings reads. Also JSON logs, metrics (off) and backup failure reasons."
     },
     {
       "build": "STATE-SYNC-2026-11-19 mail-and-asa",
       "status": "automated_validated",
       "completed": "2026-11-19",
-      "title": "ASA saved-state relation keyed by manifest artefact (V253); notification mail templates, product name, config-change digest (6daff272, ffb75894, d658fbe8, 444fe3ac, 5ef81650)",
+      "title": "ASA saved-state relation keyed by manifest artefact (V253); notification mail templates, product name, config-change digest",
       "movement": "IMPLEMENTATION",
       "summary": "The ASA relation uses a Myers diff with differing-keyword counts and replaces the positional V250 rows. Mail goes out as Overwatch with one HTML and plain-text template per type."
     },
@@ -226,7 +247,7 @@
       "build": "STATE-SYNC-2026-11-19 static-route-r0",
       "status": "automated_validated",
       "completed": "2026-11-19",
-      "title": "Static route phase R0: approved reads, pre-checks, command-plan preview, zero writes (V252) (4ff5206b, dad16ebb, 226df08b)",
+      "title": "Static route phase R0: approved reads, pre-checks, command-plan preview, zero writes (V252)",
       "movement": "IMPLEMENTATION",
       "summary": "R0 stores approved read evidence and a plan preview only; the route write carve-out is ratified and ASA failover answers recorded. Writes need the later phases."
     },
@@ -234,7 +255,7 @@
       "build": "STATE-SYNC-2026-11-18 script-execution-slice-1",
       "status": "automated_validated",
       "completed": "2026-11-18",
-      "title": "Script Execution slice 1: encrypted write-only script versions, secret scan warnings, routes, CLI (V251) (f141bb2b)",
+      "title": "Script Execution slice 1: encrypted write-only script versions, secret scan warnings, routes, CLI (V251)",
       "movement": "IMPLEMENTATION",
       "summary": "Versions are write-only and encrypted; secret-shaped text only warns, per the no-refusals decision."
     },
@@ -242,7 +263,7 @@
       "build": "STATE-SYNC-2026-11-18 asa-saved-state-mds",
       "status": "automated_validated",
       "completed": "2026-11-18",
-      "title": "ASA saved state relation (V250) and UNKNOWN on differently formed digests; MDS export nightly 02:30; policy install schema fix (1fa4e9f1, 8799a2ec, 68abde9e, b86b93ae, 642eb4ce)",
+      "title": "ASA saved state relation (V250) and UNKNOWN on differently formed digests; MDS export nightly 02:30; policy install schema fix",
       "movement": "IMPLEMENTATION",
       "summary": "The running-versus-startup verdict and counts are stored by the backup; a digest difference between differently formed reads is UNKNOWN. MDS export returns to the nightly schedule and refusals show their reason."
     },
@@ -250,7 +271,7 @@
       "build": "STATE-SYNC-2026-11-18 security-batch",
       "status": "complete",
       "completed": "2026-11-18",
-      "title": "CodeQL and dependency remediation, daily scan report, aiview leak audit; Base64 intrinsic off in Java pods (9b3f35e0, ab88e264, 4c1a034a)",
+      "title": "CodeQL and dependency remediation, daily scan report, aiview leak audit; Base64 intrinsic off in Java pods",
       "movement": "IMPLEMENTATION",
       "summary": "Security remediation batch with a daily HIGH/MEDIUM scan report and an aiview leak audit tool. Every Java pod switches off the Base64 intrinsic."
     },
