@@ -40,6 +40,7 @@ import { changesHref, lookupInPolicyHref } from "../shell/legacyRoutes";
 import { useUrlParamSync, writeUrlParams } from "../shell/urlParams";
 import { statusWord } from "../shell/presenters";
 import { csvCell } from "./offlineCsv";
+import { plural } from "../shell/plural";
 
 // The policy page API returns a fixed 200 rules per page (PolicyQueryService.page); the client does not choose it.
 const RULE_PAGE_SIZE = 200;
@@ -115,7 +116,6 @@ function FailureDetails({ reason, allowed, job }: { reason: string; allowed: boo
     {job && <JobTranscriptDrawer jobId={job.jobId} jobType="policy-collection" submittedAt={job.startedAt ?? job.collectedAt} hasTranscript={job.hasTranscript === true} title="Policy collection transcript" />}
   </Box> : null;
 }
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 /** One compact line for the source card: domain outcome counts and unit failures, never the per-domain dump. */
 export function collectionSummaryLine(job: PolicyCollectionStatus, partial: boolean) {
   const parts: string[] = [];

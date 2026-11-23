@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0397 · Track: PCP.x · Generated: 2026-11-23T04:19:40Z
+Build: NXS-LOCAL-0397 · Track: PCP.x · Generated: 2026-11-23T05:11:52Z
 
 ## Now
 - NXS-LOCAL-0397 — Policy chunk garbage collection (V262), narrowed telemetry audit, Flyway expand/contract fence (automated_validated)
@@ -45,6 +45,7 @@ Build: NXS-LOCAL-0397 · Track: PCP.x · Generated: 2026-11-23T04:19:40Z
 - P2/planned ubi_base_glibc_fix_pending
 - P2/planned zone_matrix_steps_3_plus
 - P3/planned CP-SHELL-M2-LAB-READ
+- P3/planned add_device_discovery_failure_class_visible
 - P3/planned advisory_fetch_cisa_kev_ingest_refused_during_deploy_overlap
 - P3/planned backup_claim_time_authorization_recheck
 - P3/planned corporate_inspection_ca_verify_with_it

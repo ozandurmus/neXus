@@ -385,17 +385,12 @@ export function buildFailoverBoardModel(inputs: {
         ? observedRoles(resolvedChecks, rawMembers, obsAt ?? null, vendor)
         : new Map<string, { role: string; at?: string }>();
 
+    // Inventory ha_role is configuration intent, never observed runtime role.
+    // Without a readiness observation for this member the role is UNKNOWN.
     const roleFor = (m: { device_id: string; ha_role: string | null }): string => {
       const obsRole = observed.get(m.device_id)?.role;
       if (obsRole) return obsRole.toLowerCase();
-      const invRole = (m.ha_role ?? "unknown").toLowerCase();
-      if (observed.size > 0) {
-        const hasObservedActive = [...observed.values()].some((v) => isActiveRole(v.role));
-        const hasObservedStandby = [...observed.values()].some((v) => isStandbyRole(v.role));
-        if (hasObservedActive && isActiveRole(invRole)) return "unknown";
-        if (hasObservedStandby && isStandbyRole(invRole)) return "unknown";
-      }
-      return invRole;
+      return "unknown";
     };
 
     const ordered = [...rawMembers].sort(

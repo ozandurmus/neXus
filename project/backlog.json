@@ -558,6 +558,15 @@
       "priority": "P3",
       "target": "docs/reviews/ESTATE_VIEW_EFFECTIVENESS_REVIEW_2026_11_21.md",
       "note": ""
+    },
+    {
+      "id": "add_device_discovery_failure_class_visible",
+      "category": "UI",
+      "title": "Add device dialog: show the safe discovery failure class (closed PR 384)",
+      "status": "planned",
+      "priority": "P3",
+      "target": "PR 384 closed 2026-11-23; worker already writes failure_reason_class:<CLASS>; dialog shows only SSH trust copy",
+      "note": ""
     }
   ]
 }
