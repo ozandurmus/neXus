@@ -20,8 +20,8 @@ import { formatStamp, relativeAge } from "../shell/time";
 import { readyWord } from "./readinessWarnings";
 
 /** Check 10 (traffic and ARP) is read on the active member only. */
-const TRAFFIC_ARP_CHECK = 10;
-const SECONDARY_NOT_ACTIVE = "Read on the active member only";
+export const TRAFFIC_ARP_CHECK = 10;
+export const SECONDARY_NOT_ACTIVE = "Read on the active member only";
 
 /**
  * A single-address FortiGate cluster has one enrolled device: the secondary has no address, device record or checks of its
@@ -100,7 +100,7 @@ export function observedRoles(checks: ReadinessCheck[], members: ReadonlyArray<{
   return roles;
 }
 
-function checkRows(checks: ReadinessCheck[], labels: ReadinessMember[] = [], peerFromPrimary = false) {
+export function checkRows(checks: ReadinessCheck[], labels: ReadinessMember[] = [], peerFromPrimary = false) {
   return [...new Set(checks.map(check => check.checkNo))].sort((a, b) => a - b).map(no => {
     const members = ["Member 1", "Member 2"].map((member, index) => {
       if (peerFromPrimary) return checks.find(check => check.checkNo === no && (!check.device_id || check.device_id === labels[0]?.device_id));

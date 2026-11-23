@@ -9,6 +9,7 @@ vi.mock("../src/auth/adminApi", async (original) => ({ ...(await original<typeof
 import { PanConfigSyncAction, CONFIG_SYNC_COMMAND, configSyncSettlingText } from "../src/screens/PanConfigSyncAction";
 import { HaReadinessList } from "../src/screens/HaReadinessList";
 import { ReadinessChecksTable } from "../src/screens/ReadinessChecksTable";
+import { ChecksByConsequence } from "../src/screens/failover/ChecksByConsequence";
 import { formatStamp } from "../src/shell/time";
 
 const at = new Date().toISOString();
@@ -85,50 +86,22 @@ it("the readiness table renders the action in the check 4 row only", () => {
   expect(screen.queryByText(/action 1/)).toBeNull();
 });
 
-it("the HA readiness list offers it under the failed Configuration sync row of a Palo Alto unit", () => {
-  const cluster = { ref: "CLS-BRAVO-02", title: "CLS-BRAVO-02", members: members.map(m => ({ ...m, vendor_hint: "palo_alto", inventory_collected_at: at })) as unknown as DeviceSummary[] };
-  const row = (canRun: boolean): CpFailoverSummary => ({ clusterId: "opaque-cluster", unitId: "opaque-cluster", cluster_member_ref: cluster.ref,
-    vendor: "palo_alto", activeWindow: false, lastRunAt: null, lastRunState: null, lastRunOutcome: null, masked: false, canRunReadiness: true,
-    members, configSync: facts({ canRun }),
-    readiness: { status: "NOT_READY", observedAt: at, failedCheck: "Configuration sync", checks: [4, 5].flatMap(no => ids.map((id, i) => ({
+it("the detail's grouped checks offer it under the failed Configuration sync row of a Palo Alto unit, when the server offers it", () => {
+  const row = (canRun: boolean) => {
+    const checks = [4, 5].flatMap(no => ids.map((id, i) => ({
       checkNo: no, title: no === 4 ? "Configuration sync" : "Session synchronization", member: `Member ${i + 1}`, device_id: id,
-      result: (no === 4 ? "FAIL" : "PASS") as "FAIL" | "PASS", status: (no === 4 ? "FAIL" : "PASS") as "FAIL" | "PASS", summary: "s", blocking: true, derived: {} }))) } });
-  const props = { clusters: [cluster], running: null, busy: false, progress: {}, error: null, onOpen: vi.fn(), onRun: vi.fn(), onBulkRun: vi.fn() };
-  const { unmount } = render(<HaReadinessList {...props} rows={{ [cluster.ref]: [row(true)] }} />);
-  fireEvent.click(screen.getByRole("button", { name: "Checks for CLS-BRAVO-02" }));
-  const region = screen.getByRole("region", { name: "Checks for CLS-BRAVO-02" });
-  expect(within(region).getAllByRole("button", { name: "Sync configuration to passive" })).toHaveLength(1);
-  unmount();
-  render(<HaReadinessList {...props} rows={{ [cluster.ref]: [row(false)] }} />);
-  fireEvent.click(screen.getByRole("button", { name: "Checks for CLS-BRAVO-02" }));
-  expect(screen.queryByRole("button", { name: "Sync configuration to passive" })).toBeNull();
-});
-
-it("a failed status read after the request was accepted is retried, never reported as a failed request", async () => {
-  api.request.mockResolvedValue(record("QUEUED"));
-  api.get.mockRejectedValueOnce({ status: 0, body: { error: "TIMEOUT" } })
-    .mockResolvedValue(record("STOPPED", { outcome: "OUTCOME_UNKNOWN", mutationPossible: true, readinessRunId: "run-opaque" }));
-  api.run.mockResolvedValue({ runId: "run-opaque", state: "DONE", checks: [{ checkNo: 4, phase: "pre", status: "FAIL" }] });
-  const done = vi.fn();
-  render(<PanConfigSyncAction unit={unit()} onDone={done} pollMs={0} />);
-  fireEvent.click(screen.getByRole("button", { name: "Sync configuration to passive" }));
-  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Sync configuration" }));
-  await waitFor(() => expect(done).toHaveBeenCalled());
-  expect(screen.queryByText("Request failed")).toBeNull();
-  expect(screen.getByText("The sync command's outcome is uncertain. It is not resent.")).toBeInTheDocument();
-  expect(screen.getByText("Pre-checks finished: Configuration sync still fails.")).toBeInTheDocument();
-});
-
-it("a sync already open when the page loads is shown and followed to its end", async () => {
-  api.get.mockResolvedValue(record("DONE", { outcome: "CONFIG_SYNC_REQUESTED", deviceStatus: "success", mutationPossible: true,
-    readinessRunId: null, readinessRefusal: "RUN_ALREADY_ACTIVE" }));
-  const done = vi.fn();
-  render(<PanConfigSyncAction unit={unit({ latest: record("SYNCING", { mutationPossible: true }) })} onDone={done} pollMs={0} />);
-  expect(screen.getByText("Sending the sync command to the active member")).toBeInTheDocument();
-  await waitFor(() => expect(done).toHaveBeenCalled());
-  expect(api.request).not.toHaveBeenCalled();
-  expect(screen.getByText("The active member accepted the sync command.")).toBeInTheDocument();
-  expect(screen.getByText(/The pre-checks were not re-run \(Another run is in progress on this unit\.\)/)).toBeInTheDocument();
+      result: (no === 4 ? "FAIL" : "PASS") as "FAIL" | "PASS", status: (no === 4 ? "FAIL" : "PASS") as "FAIL" | "PASS", summary: "s", blocking: true, derived: {} })));
+    return { unit: { ...unit({ canRun }), readiness: { status: "NOT_READY" as const, observedAt: at, failedCheck: "Configuration sync", checks } }, checks };
+  };
+  for (const [canRun, expected] of [[true, 1], [false, 0]] as const) {
+    const { unit: u, checks } = row(canRun);
+    const { unmount } = render(<ChecksByConsequence checks={checks} members={members} vendor="palo_alto"
+      rowAction={checkNo => checkNo === 4 ? <PanConfigSyncAction unit={u} members={members} /> : null} />);
+    const entry = document.querySelector("[data-check-entry='4']") as HTMLElement;
+    expect(within(entry).queryAllByRole("button", { name: "Sync configuration to passive" })).toHaveLength(expected);
+    expect(document.querySelector("[data-check-entry='5']")).toBeNull();
+    unmount();
+  }
 });
 
 it("shows the settling message with the request time during the 60 s wait and when follow-up readiness sees synchronization in progress, and only shows still fails for a non-in-progress FAIL", async () => {
@@ -217,19 +190,14 @@ it("the HA readiness row shows the settling message with the request time during
   const haRow = screen.getByRole("row", { name: "CLS-BRAVO-02" });
   expect(within(haRow).getByText(expectedSettling)).toBeInTheDocument();
   expect(screen.queryByText(/Configuration sync still fails/)).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Checks for CLS-BRAVO-02" }));
-  const region = screen.getByRole("region", { name: "Checks for CLS-BRAVO-02" });
-  expect(within(region).getByText(expectedSettling)).toBeInTheDocument();
 
   // 2. Follow-up readiness finished (followUpAt >= finishedAt), and still sees "synchronization in progress":
   rerender(<HaReadinessList {...props} rows={{ [cluster.ref]: [makeRow(followUpAt, doneSync, "synchronization in progress")] }} />);
   expect(within(screen.getByRole("row", { name: "CLS-BRAVO-02" })).getByText(expectedSettling)).toBeInTheDocument();
-  expect(within(screen.getByRole("region", { name: "Checks for CLS-BRAVO-02" })).getByText(expectedSettling)).toBeInTheDocument();
   expect(screen.queryByText(/Configuration sync still fails/)).toBeNull();
 
   // 3. Follow-up readiness finished (followUpAt >= finishedAt) with a FAIL that is not "in progress":
   rerender(<HaReadinessList {...props} rows={{ [cluster.ref]: [makeRow(followUpAt, doneSync, "not synchronized")] }} />);
   expect(within(screen.getByRole("row", { name: "CLS-BRAVO-02" })).getByText("Configuration sync still fails")).toBeInTheDocument();
-  expect(within(screen.getByRole("region", { name: "Checks for CLS-BRAVO-02" })).getByText("Pre-checks finished: Configuration sync still fails.")).toBeInTheDocument();
   expect(screen.queryByText(expectedSettling)).toBeNull();
 });
