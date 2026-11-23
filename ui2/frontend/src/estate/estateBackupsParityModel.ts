@@ -82,8 +82,9 @@ export interface ProjectedSizeAnomaly {
   readonly median_bytes: number;
   readonly baseline_bytes: number;
   readonly current_bytes: number;
-  readonly ratio: number;
-  readonly ratio_percent: number;
+  /** null = UNKNOWN: no numeric ratio supplied and no baseline > 0 to compute one from. */
+  readonly ratio: number | null;
+  readonly ratio_percent: number | null;
   readonly summary: string;
   readonly detected_at: string;
   readonly open_copies: number;
@@ -209,16 +210,20 @@ function buildMajorDeviationGroups(
 function normalizeSizeAnomaly(s: BackupSizeAnomalyItem): ProjectedSizeAnomaly {
   const baseline = s.baseline_bytes ?? s.median_bytes ?? 0;
   const current = s.current_bytes ?? s.plaintext_bytes ?? 0;
-  const ratio =
+  // No numeric ratio supplied and no baseline > 0: the ratio is UNKNOWN (null), never a fabricated 1 / 100%.
+  const suppliedRatio =
     typeof s.ratio === "number"
       ? s.ratio
       : typeof s.ratio_percent === "number"
         ? s.ratio_percent / 100
-        : baseline > 0
-          ? current / baseline
-          : 1;
+        : null;
+  const ratio = suppliedRatio ?? (baseline > 0 ? current / baseline : null);
   const ratioPercent =
-    typeof s.ratio_percent === "number" ? s.ratio_percent : Math.round(ratio * 100);
+    typeof s.ratio_percent === "number"
+      ? s.ratio_percent
+      : ratio === null
+        ? null
+        : Math.round(ratio * 100);
 
   return {
     device_id: s.device_id,

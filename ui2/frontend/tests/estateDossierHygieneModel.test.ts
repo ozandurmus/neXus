@@ -235,3 +235,16 @@ describe("dossier policy hygiene: not applicable", () => {
     expect(m.badgeWord).toBe("Not applicable");
   });
 });
+
+describe("dossier policy hygiene: block evidence age", () => {
+  it("a container with an unparseable snapshot time nulls the block stamp, not the age of the other containers", () => {
+    const badRow = { ...ready("c-2", 4, {}), snapshotAt: "not-a-time" };
+    const m = buildDossierHygieneModel({
+      deviceId: UNIT,
+      policies: { ok: true, value: [policy("c-1", [UNIT]), policy("c-2", [UNIT])] },
+      summary: { ok: true, value: summary([ready("c-1", 4, {}), badRow]) },
+    });
+    expect(m.rows.find((r) => r.key.includes("c-2"))?.snapshotAt).toBeNull();
+    expect(m.evidenceAt).toBeNull();
+  });
+});

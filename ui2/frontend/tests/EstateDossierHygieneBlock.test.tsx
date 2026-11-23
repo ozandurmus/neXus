@@ -150,3 +150,16 @@ describe("EstateDossierHygieneBlock", () => {
     expect(href).toContain(`device_id=${DEVICE_ID}`);
   });
 });
+
+describe("EstateDossierHygieneBlock block evidence age", () => {
+  it("header stamp reads UNKNOWN when one READY container has an unparseable snapshot time", async () => {
+    const badRow = { ...readyRow("c-2", 4, {}), snapshotAt: "not-a-time" };
+    mockedListPolicies.mockResolvedValue({ policies: [policy("c-1"), policy("c-2")], devices: [] });
+    mockedGetSummary.mockResolvedValue(summary([readyRow("c-1", 4, {}), badRow]));
+
+    render(<EstateDossierHygieneBlock deviceId={DEVICE_ID} />);
+    const block = await waitFor(() => screen.getByTestId("dossier-policy-hygiene-block"));
+    const headerStamp = block.querySelector("[data-evidence-stamp]");
+    expect(headerStamp?.textContent).toContain("UNKNOWN");
+  });
+});

@@ -111,9 +111,14 @@ function backupAnswer(f: EstateAsOfFigure | undefined, asOf: string | null): Rew
 function complianceAnswer(f: EstateAsOfFigure | undefined): RewindAnswer {
   const at = f?.evidence_at ?? null;
   if (f?.state === "EVIDENCED") {
-    const fail = f.fail_count ?? 0;
-    const crit = f.critical_fail_count ?? 0;
-    const pass = f.pass_count ?? 0;
+    // A missing count is not a zero count: absent fail/critical/pass figures must not read as "All pass".
+    const counts = [f.fail_count, f.critical_fail_count, f.pass_count];
+    if (!counts.every((c) => typeof c === "number" && Number.isFinite(c))) {
+      return { state: "unk", word: "UNKNOWN", detail: "Compliance counts not reported", evidenceAt: null };
+    }
+    const fail = f.fail_count as number;
+    const crit = f.critical_fail_count as number;
+    const pass = f.pass_count as number;
     if (crit > 0) return { state: "act", word: `${fail} fail`, detail: `${crit} critical`, evidenceAt: at };
     if (fail > 0) return { state: "watch", word: `${fail} fail`, detail: null, evidenceAt: at };
     if (pass === 0) return { state: "unk", word: "UNKNOWN", detail: "No check passed or failed", evidenceAt: at };

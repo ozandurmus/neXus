@@ -3,6 +3,7 @@ import type {
 } from "../../auth/adminApi";
 import { planeGranted } from "../../shell/actionAccess";
 import { AGEING_UNTIL_MS, FRESH_UNDER_MS } from "../../shell/freshness";
+import { plural } from "../../shell/plural";
 import { groupClusters, haReadinessItems } from "../HaReadinessList";
 
 /**
@@ -136,7 +137,6 @@ export interface AttentionResult {
   readonly evaluatedAt: string;
 }
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const time = (iso: string | null | undefined): number | null => {
   if (!iso) return null;
   const t = new Date(iso).getTime();
