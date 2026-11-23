@@ -125,6 +125,9 @@ function ClusterView({
     body = (
       <Typography data-testid="dossier-cluster-empty" sx={{ px: "18px", pb: "14px", fontSize: "13px", color: ev.ink2 }}>
         The cluster read lists no contexts.
+        <Box sx={{ mt: "4px" }}>
+          <EvidenceStamp at={model.collectedAt} source="cluster inventory" now={now} missingLabel="evidence time UNKNOWN" />
+        </Box>
       </Typography>
     );
   } else {

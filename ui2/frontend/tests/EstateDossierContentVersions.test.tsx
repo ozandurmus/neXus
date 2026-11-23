@@ -16,11 +16,14 @@ vi.mock("../src/estate/useEstateData", () => ({
   useEstateData: () => mockState.model,
 }));
 
-function buildFixture(contentVersions: Readonly<Record<string, string>> | null | undefined): EstateDataState {
+function buildFixture(
+  contentVersions: Readonly<Record<string, string>> | null | undefined,
+  vendorHint: string = "palo_alto",
+): EstateDataState {
   const device: Record<string, unknown> = {
     device_id: DEVICE_ID,
     role: "gateway",
-    vendor_hint: "palo_alto",
+    vendor_hint: vendorHint,
     enrollment_state: "ENROLLED",
     hostname: "FW-TANGO-04",
     model: "SYNTH-PA-1",
@@ -106,5 +109,25 @@ describe("Estate Dossier content versions row", () => {
     expect(link?.getAttribute("href")).toContain("standard=1");
     expect(link?.getAttribute("href")).toContain(`device_id=${DEVICE_ID}`);
     expect(link?.textContent).toContain("(standard view)");
+  });
+
+  it("does not render the Content versions row for a Check Point device (Palo Alto packs only)", async () => {
+    mockState.model = buildFixture(null, "check_point");
+    render(<EstateDossierScreen deviceId={DEVICE_ID} />);
+    await waitFor(() => expect(screen.getByText("FW-TANGO-04", { selector: "h1" })).toBeTruthy());
+    expect(screen.queryByText("Content versions", { selector: "span" })).toBeNull();
+    expect(screen.queryByText(/Content versions \(standard view\)/)).toBeNull();
+    expect(screen.queryByText(/UNKNOWN · Not collected: no content version/)).toBeNull();
+  });
+
+  it("does not render the Content versions row for Cisco ASA or FortiGate devices", async () => {
+    for (const vendor of ["cisco_asa", "fortinet"]) {
+      mockState.model = buildFixture(undefined, vendor);
+      const { unmount } = render(<EstateDossierScreen deviceId={DEVICE_ID} />);
+      await waitFor(() => expect(screen.getByText("FW-TANGO-04", { selector: "h1" })).toBeTruthy());
+      expect(screen.queryByText("Content versions", { selector: "span" })).toBeNull();
+      expect(screen.queryByText(/UNKNOWN · Not collected: no content version/)).toBeNull();
+      unmount();
+    }
   });
 });
