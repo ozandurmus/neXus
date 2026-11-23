@@ -87,6 +87,7 @@ table's current population (#VALS) and peak (#PEAK), not a new-connection rate, 
 The first release runs checks 1-6 and 8; check 7 is added when the PO names the command that reports CPS.
 
 ## 10. Amendment 2026-09-27 -- VSX: every Virtual System is its own failover unit (PO)
+> **Amended by §17 and §18 (PO 2026-11-23):** VS0 is also its own failover unit; VS0 and every VS are never dependent.
 The PO: "Biz VSLS kullanmıyoruz. VSX'ler kendileri failover oluyor, şasi bağımsız. ... önce vsenv ile içine
 giriyorum, her bir kontrolü spesifik olarak VSX için yapıyorum ve clusterXL_admin down ile failover yapıyorum."
 This replaces every "VSX at chassis level" statement above:
@@ -173,6 +174,7 @@ promotes it.
 - All changes reuse existing reads, sessions and command gates. No new command or gate row.
 
 ## 17. PO amendment 2026-11-19 -- the VSX chassis is failed over (amends §10)
+> **Amended by §18 (PO 2026-11-23):** VS0 is failed over in HA and VSLS mode, verified on VS0 alone; no VS dependency.
 Authority: `PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md` (RATIFIED; PO: "A ve B birlikte", and "onaylıyorum"
 to the exact literals). §10's sentence "The VSX chassis itself is not failed over by this feature" stays as the record
 of 2026-09-27 and is superseded from 2026-11-19 as follows; every other rule of §10 is unchanged:
@@ -185,4 +187,20 @@ of 2026-09-27 and is superseded from 2026-11-19 as follows; every other rule of 
   (`VSX_CHASSIS_MODE_VSLS_USE_SEQUENCE`). The chassis action is "Fail over all virtual systems": the §10 per-VS
   failover for each VS in turn, each its own run, stopping at the first run that does not succeed.
 - Chassis and VS steps of one cluster still never overlap; the fleet one-mutation fence is unchanged.
+
+## 18. PO amendment 2026-11-23 -- VS0 is a unit; every VS is a unit; no dependency (amends §10 and §17)
+Authority: `PO_DECISION_RECORD_2026_11_23_VSX_VS0_INDEPENDENT.md` (RATIFIED; PO: "VSID 0 ayrı failover edilecek, vsid 1
+ayrı edilebilecek birbiriyle bağımlı asla değiller"). It outranks §10 and §17 where they conflict:
+- **Units.** On a VSX chassis, **VS0** is one failover unit (the chassis unit) and **each VS** is its own unit (§10).
+  They are never dependent: no run of one checks, waits for or requires anything of another.
+- **Both VSX modes.** The VS0 run is allowed in VSX HA mode and in VSLS mode alike (both members report the same mode in
+  VS0 check 1); an unknown or split mode is refused (`VSX_CHASSIS_MODE_UNKNOWN`). §17's VSLS refusal is withdrawn.
+- **VS0 run.** Every read and both writes in VS0 only (`cp_failover_down_vsenv0` / `cp_failover_up_vsenv0`); pre-checks,
+  switch confirmation and return on the VS0 `cphaprob stat` roles. No per-VS read; §17's "every VS on the expected
+  member" condition and check 16 are removed. Precondition: the chassis unit's own readiness READY; never a VS's.
+- **VS runs.** Unchanged (§10); never conditioned on VS0.
+- **Optional "Fail over all virtual systems".** The existing sequence of ordinary VS runs, in VSID order, one after
+  another (the fleet one-mutation fence forbids parallel writes); needs every VS READY; independent of VS0. The approval
+  names its operation (`FAILOVER` = VS0 run, `FAILOVER_ALL_VIRTUAL_SYSTEMS` = the sequence).
+- Steps of one cluster still never overlap (the step fence); the fleet one-mutation fence is unchanged.
 

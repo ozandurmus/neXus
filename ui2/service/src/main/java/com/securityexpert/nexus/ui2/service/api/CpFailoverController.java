@@ -27,7 +27,13 @@ import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAd
 @RequestMapping({"/api/v2/cp-failover", "/api/v2/pan-failover", "/api/v2/asa-failover", "/api/v2/fgt-failover"})
 public final class CpFailoverController {
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
-    public record ApprovalRequest(String clusterId, String unitId, Instant windowFrom, Instant windowUntil, String reason, String requestId) {}
+    /** {@code operation}: absent or FAILOVER (the unit's own failover; a VSX chassis's VS0 run), or FAILOVER_ALL_VIRTUAL_SYSTEMS. */
+    public record ApprovalRequest(String clusterId, String unitId, Instant windowFrom, Instant windowUntil, String reason, String requestId,
+            String operation) {
+        public ApprovalRequest(String clusterId, String unitId, Instant windowFrom, Instant windowUntil, String reason, String requestId) {
+            this(clusterId,unitId,windowFrom,windowUntil,reason,requestId,null);
+        }
+    }
     public record RunRequest(String clusterId, String unitId, Instant scheduledFor, String requestId, long revision, String executionNonce, boolean warningConfirmed) {}
     public record ReadinessRequest(String clusterId, String unitId) {}
     private final CpFailoverService service;
@@ -112,20 +118,23 @@ public final class CpFailoverController {
                 return view;
             }).toList());
         if (u.vsId()!=null) m.put("virtual_system",u.label());
-        // The chassis and every VS of a VSX cluster are separate units; the chassis path follows its mode (contract §17).
+        // The chassis (VS0) and every VS of a VSX cluster are separate, independent units (contract §17).
         m.put("unitKind",u.vsxChassis() ? "VSX_CHASSIS" : u.vsId()!=null ? "VIRTUAL_SYSTEM" : "CLUSTER");
         return m;
     }
     /**
-     * A chassis unit's offer (PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md): {@code chassisAction} FAILOVER (VSX HA
-     * mode) or FAILOVER_ALL_VIRTUAL_SYSTEMS (VSLS), {@code failoverRefusal} when the mode is not known, and
-     * {@code chassisStartRefusal} when a start would be refused now (chassis or a VS not READY). The server re-checks all
-     * of it on every approval and start.
+     * A chassis unit's offer (PO_DECISION_RECORD_2026_11_23_VSX_VS0_INDEPENDENT.md): {@code chassisAction} FAILOVER (the VS0
+     * run, VSX HA or VSLS mode) or null with {@code failoverRefusal} when the mode is not known; {@code chassisStartRefusal}
+     * when a VS0 start would be refused now (the chassis's own readiness); {@code sequenceAction}
+     * FAILOVER_ALL_VIRTUAL_SYSTEMS, the optional "Fail over all virtual systems", with {@code sequenceStartRefusal} when it
+     * would be refused now (a VS not READY). The two are independent. The server re-checks all of it on every approval and start.
      */
     private static void putChassisPlan(Map<String,Object> view,CpFailoverService.ChassisPlan plan) {
         view.put("chassisMode",plan.mode());
         view.put("chassisAction",plan.action());
         view.put("chassisStartRefusal",plan.startRefusal());
+        view.put("sequenceAction",CpFailoverService.ACTION_ALL_VIRTUAL_SYSTEMS);
+        view.put("sequenceStartRefusal",plan.sequenceStartRefusal());
         if (plan.modeRefusal()!=null) view.put("failoverRefusal",plan.modeRefusal());
     }
     private static Map<String,Object> sequenceView(JooqCpFailoverRepository.Sequence q) {
@@ -233,11 +242,9 @@ public final class CpFailoverController {
                 if (u.vsxChassis()) {
                     var plan=CpFailoverService.chassisPlan(u,units,readiness);
                     putChassisPlan(m,plan);
-                    boolean offered=plan.modeRefusal()==null;
-                    m.put("canApprove",offered && canApprove);
-                    m.put("canStart",offered && canStart);
-                    // "Fail over all virtual systems" is immediate: each VS start follows the previous run's end.
-                    m.put("canSchedule",offered && canStart && CpFailoverService.ACTION_CHASSIS_FAILOVER.equals(plan.action()));
+                    // canApprove/canStart are role facts: "Fail over all virtual systems" stays offered whatever the VS0
+                    // mode. Only the VS0 run can be scheduled; the sequence is immediate (each VS start follows the previous end).
+                    m.put("canSchedule",canStart && plan.modeRefusal()==null);
                     service.latestSequence(u).ifPresent(q -> m.put("sequence",sequenceView(q)));
                 }
                 if (asa) { m.put("canRunReadiness",canStart || service.mayRunReadiness(actor)); m.put("failoverRefusal",CpFailoverService.VENDOR_NOT_AVAILABLE); }
@@ -269,11 +276,12 @@ public final class CpFailoverController {
             if ("cisco_asa".equals(s.vendor()) || "fortinet".equals(s.vendor()))
                 m.put("failoverRefusal", CpFailoverService.VENDOR_NOT_AVAILABLE);
             if (s.unit().vsxChassis()) {
-                // The fleet list knows the chassis's own readiness: the mode, hence the action, or why none is offered.
+                // The fleet list knows the chassis's own readiness: the mode, hence the VS0 action, or why it is not offered.
                 var plan=CpFailoverService.chassisPlan(s.unit(),List.of(s.unit()),
                     s.readiness()==null ? Map.of() : Map.of(s.unit().id(),s.readiness()));
                 m.put("chassisMode",plan.mode());
                 m.put("chassisAction",plan.action());
+                m.put("sequenceAction",CpFailoverService.ACTION_ALL_VIRTUAL_SYSTEMS);
                 if (plan.modeRefusal()!=null) m.put("failoverRefusal",plan.modeRefusal());
             }
             putConfigSync(m,s.unit(),s.vendor(),s.readiness(),PrivacyMaskingResponseBodyAdvice.isReplayViewer(request),actor(request));
@@ -350,8 +358,11 @@ public final class CpFailoverController {
     }
     @PostMapping("/approvals")
     public ResponseEntity<?> approve(@RequestBody ApprovalRequest body,HttpServletRequest request) {
-        return result(() -> requestView(service.createApprovalRequest(body.requestId(),body.clusterId(),body.unitId(),body.windowFrom(),
-            body.windowUntil(),body.reason(),actor(request),vendor(request)),request));
+        return result(() -> requestView(body.operation()==null
+            ? service.createApprovalRequest(body.requestId(),body.clusterId(),body.unitId(),body.windowFrom(),
+                body.windowUntil(),body.reason(),actor(request),vendor(request))
+            : service.createApprovalRequest(body.requestId(),body.clusterId(),body.unitId(),body.windowFrom(),
+                body.windowUntil(),body.reason(),actor(request),vendor(request),body.operation()),request));
     }
     public record SecondApprovalRequest(String clusterId,String unitId,long revision) {}
     @PostMapping("/approvals/{requestId}/approve")

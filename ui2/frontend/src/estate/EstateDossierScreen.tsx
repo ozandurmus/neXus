@@ -79,6 +79,7 @@ import { EstateDossierHygieneBlock } from "./EstateDossierHygieneBlock";
 import { EstateDossierManagementTreeBlock } from "./EstateDossierManagementTreeBlock";
 import { EstateDossierConfigurationBlock } from "./EstateDossierConfigurationBlock";
 import type { DeviceLogsReads } from "./estateDeviceLogsSummary";
+import { readinessWarningChecks, readyWord } from "../screens/readinessWarnings";
 
 type DossierTab = "interfaces" | "routes" | "backups" | "controls" | "prechecks";
 
@@ -817,9 +818,8 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
                       ? "UNKNOWN"
                       : cluster.failoverStatus === "UNSUPPORTED"
                         ? "Not supported"
-                        : cluster.stale
-                          ? "Ready (stale)"
-                          : "Ready"
+                        : readyWord(readinessWarningChecks(cluster.checks).length,
+                            cluster.stale ? "Ready (stale)" : "Ready")
                 }
               />
               <EvidenceStamp at={cluster.observedAt} source="readiness" now={now} />

@@ -113,7 +113,7 @@ class CpFailoverJobExecutorTest {
      * V260 (failover_approver_role_recheck_at_worker): the durable admission rechecks the initiator's and approver's
      * standing. Role kept: the run goes on (every other test here). Initiator disabled, approver demoted, or the same
      * person on both sides: refused with its code before any contact, at the start of a plain unit, a VS unit (a
-     * sequence step) and a VSX HA chassis run; refused again before the first write if it changed during the reads.
+     * sequence step) and a VS0 run of a VSX chassis; refused again before the first write if it changed during the reads.
      */
     @Test void actorAuthorityRefusalsStopEveryRunKindBeforeContact() {
         for (String code:List.of(com.securityexpert.nexus.ui2.persistence.FailoverActorAuthority.INITIATOR_NOT_AUTHORIZED,
@@ -167,7 +167,9 @@ class CpFailoverJobExecutorTest {
         boolean extraTableRows,reverseActive,observerLocalIndices;
         boolean wrongIdentity,missingIdentity,opposedPeer,sameObserver,swapLocalIdsAfterDown;
         String reportedMode, recoverySuffix;
-        /** VSX chassis option B: these VSIDs keep their pre-switch roles whatever the chassis does. */
+        /** The second member's VS0 mode label only (a split mode). */
+        String peerReportedMode;
+        /** These VSIDs keep their pre-switch roles whatever VS0 does. */
         java.util.Set<String> stuckVs=java.util.Set.of();
         String peerPolicyTime;
         /** The second member's fw stat install date and time (replaces the whole stamp; synthetic). */
@@ -217,6 +219,8 @@ class CpFailoverJobExecutorTest {
                         .replace("% Active","% TEMP").replace("% Standby","% Active").replace("% TEMP","% Standby");
                     if(literal.endsWith("cphaprob stat'")) {
                         if(reportedMode!=null) output=output.replace("High Availability",reportedMode);
+                        if(peerReportedMode!=null && !((TransportSession)args[0]).sessionId().endsWith("11"))
+                            output=output.replace("High Availability",peerReportedMode);
                         if(recoverySuffix!=null) output=output.replace("(Active Up)",recoverySuffix);
                         if(swapLocalIdsAfterDown && down) output=output.replaceAll("(?m)^1 ","TEMP ").replaceAll("(?m)^2 ","1 ").replaceAll("(?m)^TEMP ","2 ");
                         if(opposedPeer && !((TransportSession)args[0]).sessionId().endsWith("11"))
@@ -713,7 +717,7 @@ class CpFailoverJobExecutorTest {
         assertFalse(CpFailoverChecks.chassisState("Context is set to Virtual Device VS-SYNTHETIC (ID 12).\n"+output).supportedMode());
         assertTrue(CpFailoverChecks.chassisState("Context is set to Virtual Device VSX-SYNTHETIC (ID 0).\n"+output).supportedMode());
     }
-    // ---- VSX chassis failover, option B (PO_DECISION_RECORD_2026_11_19_VSX_CHASSIS_FAILOVER.md, RATIFIED) ----
+    // ---- VS0 failover of a VSX chassis (PO_DECISION_RECORD_2026_11_23_VSX_VS0_INDEPENDENT.md, RATIFIED) ----
     private static final List<String> CHASSIS_VS=List.of("12","13");
     private static Store chassisStore() {
         Store store=new Store();
@@ -725,55 +729,50 @@ class CpFailoverJobExecutorTest {
         store.contexts=rows;
         return store;
     }
-    private static final String VS_STAT=java.util.regex.Pattern.quote("bash -lc 'vsenv ")+"(12|13)"+java.util.regex.Pattern.quote(" && cphaprob stat'");
-    @Test void vsxHaChassisFailsOverWithTheVs0WritesAndVerifiesEveryVirtualSystem() {
-        Store store=chassisStore(); Script script=new Script();
+    /**
+     * PO 2026-11-23 (PO_DECISION_RECORD_2026_11_23_VSX_VS0_INDEPENDENT.md): VS0 is its own failover unit in VSX HA and VSLS
+     * mode alike. The run reads and writes in VS0 only and is verified on the VS0 roles; no VS is read.
+     */
+    @Test void vs0RunFailsOverInHaAndVslsModeAndReadsNoVirtualSystem() {
+        for(String mode:java.util.Arrays.asList(null,"Virtual System Load Sharing")) {
+            Store store=chassisStore(); Script script=new Script(); script.reportedMode=mode;
+            run(store,script,devices(true,VSX_NAMES),gates());
+            assertEquals("DONE",store.state,mode+" "+store.stopCode);
+            assertEquals("SUCCEEDED",store.outcome,String.valueOf(mode));
+            assertEquals(List.of("bash -lc 'vsenv 0 && clusterXL_admin down'","bash -lc 'vsenv 0 && clusterXL_admin up'"),
+                script.commands.stream().filter(c -> c.contains("clusterXL_admin")).toList());
+            assertTrue(script.commands.stream().allMatch(c -> c.startsWith("bash -lc 'vsenv 0 && ")),script.commands.toString());
+            assertTrue(store.checks.stream().noneMatch(c -> c.contains(":16:")),"no 'Virtual systems moved' check");
+            assertEquals(1,script.downCount); assertEquals(1,script.upCount);
+        }
+    }
+    /** A VS that keeps its roles (it never follows VS0) does not stop, fail or delay a VS0 run: they are never dependent. */
+    @Test void vs0RunSucceedsWhenNoVirtualSystemMoves() {
+        Store store=chassisStore(); Script script=new Script(); script.stuckVs=java.util.Set.of("12","13");
         run(store,script,devices(true,VSX_NAMES),gates());
         assertEquals("DONE",store.state,store.stopCode);
         assertEquals("SUCCEEDED",store.outcome);
-        assertEquals(List.of("bash -lc 'vsenv 0 && clusterXL_admin down'","bash -lc 'vsenv 0 && clusterXL_admin up'"),
-            script.commands.stream().filter(c -> c.contains("clusterXL_admin")).toList());
-        // Every other command is a VS0 read, or the per-VS state read of the verification; never a bare or other write.
-        assertTrue(script.commands.stream().allMatch(c -> c.startsWith("bash -lc 'vsenv 0 && ") || c.matches(VS_STAT)),
-            script.commands.toString());
-        assertTrue(script.commands.stream().filter(c -> c.matches(VS_STAT)).allMatch(c -> c.endsWith("cphaprob stat'")));
-        for(String phase:List.of("pre","post","post_return"))
-            assertEquals(2,store.checks.stream().filter((phase+":16:PASS")::equals).count(),phase);
-        assertEquals(1,script.downCount); assertEquals(1,script.upCount);
-        // pre, post, post_return: one read per VS per member each.
-        assertEquals(3*2*CHASSIS_VS.size(),script.commands.stream().filter(c -> c.matches(VS_STAT)).count());
+        assertTrue(script.commands.stream().noneMatch(c -> c.matches(".*vsenv [1-9][0-9]*.*")),script.commands.toString());
     }
-    @Test void aVirtualSystemThatDidNotMoveStopsTheChassisRunAndOffersTheReturn() throws Exception {
-        Store store=chassisStore(); Script script=new Script(); script.stuckVs=java.util.Set.of("13");
+    @Test void vs0RunWithASplitOrUnrecognisedModeIsRefusedBeforeAnyWrite() {
+        Store store=chassisStore(); Script script=new Script(); script.peerReportedMode="Virtual System Load Sharing";
         run(store,script,devices(true,VSX_NAMES),gates());
         assertEquals("STOPPED",store.state);
-        assertEquals(CpFailoverJobExecutor.VS_NOT_MOVED,store.outcome);
-        assertEquals(1,script.downCount);
-        assertEquals(0,script.upCount,"no automatic return: the operator resumes the return step");
-        assertTrue(store.incidentRequired,"a stop after the write opens the incident the resume needs");
-        assertEquals(2,store.checks.stream().filter("post:16:FAIL"::equals).count());
-        assertFalse(store.checks.stream().anyMatch(c -> c.startsWith("post_return:")));
-        // VS 12 moved at once and is not re-read; VS 13 is re-read every round up to the bound.
-        long reads13=script.commands.stream().filter("bash -lc 'vsenv 13 && cphaprob stat'"::equals).count();
-        assertEquals(2+2*CpFailoverJobExecutor.VS_MAX_ROUNDS,reads13);
-        var derived=new com.fasterxml.jackson.databind.ObjectMapper().readTree(store.derivedValues.get(store.checks.indexOf("post:16:FAIL")));
-        assertEquals(2,derived.get("virtualSystems").asInt());
-        assertEquals("13",derived.get("notOnExpectedMember").get(0).asText());
-    }
-    @Test void aVslsChassisIsRefusedBeforeAnyWrite() {
-        Store store=chassisStore(); Script script=new Script(); script.reportedMode="Virtual System Load Sharing";
-        run(store,script,devices(true,VSX_NAMES),gates());
-        assertEquals("STOPPED",store.state);
-        assertEquals(CpFailoverJobExecutor.CHASSIS_MODE_VSLS,store.outcome);
+        assertEquals(CpFailoverJobExecutor.CHASSIS_MODE_UNKNOWN,store.outcome);
         assertEquals(0,script.downCount); assertEquals(0,script.upCount);
         assertFalse(store.incidentRequired);
+        Store unknown=chassisStore(); Script other=new Script(); other.reportedMode="Load Sharing Multicast";
+        run(unknown,other,devices(true,VSX_NAMES),gates());
+        assertEquals("STOPPED",unknown.state);
+        assertEquals(0,other.downCount); assertEquals(0,other.upCount);
     }
-    @Test void aChassisWithoutCommonVirtualSystemsOrWithoutItsWriteRowSendsNothing() {
+    @Test void vs0RunNeedsOnlyItsOwnRowsAndNoVirtualSystemContext() {
+        // No stored VS context and no per-VS state row: the VS0 run does not depend on any VS.
         Store noContexts=new Store(); Script first=new Script();
-        run(noContexts,first,devices(true,VSX_NAMES),gates());
-        assertEquals(CpFailoverJobExecutor.CHASSIS_CONTEXT_INCOMPLETE,noContexts.outcome);
-        assertEquals(0,first.connectCount);
-        for(String gate:List.of("cp_failover_down_vsenv0","cp_failover_up_vsenv0","cp_inventory_vsid_cphaprob_stat")) {
+        run(noContexts,first,devices(true,VSX_NAMES),gatesWithout("cp_inventory_vsid_cphaprob_stat"));
+        assertEquals("DONE",noContexts.state,noContexts.stopCode);
+        assertEquals("SUCCEEDED",noContexts.outcome);
+        for(String gate:List.of("cp_failover_down_vsenv0","cp_failover_up_vsenv0")) {
             Store store=chassisStore(); Script script=new Script();
             run(store,script,devices(true,VSX_NAMES),gatesWithout(gate));
             assertEquals("STOPPED",store.state,gate);

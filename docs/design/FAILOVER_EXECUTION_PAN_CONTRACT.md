@@ -111,3 +111,9 @@ unchanged.
 - **Evidence.** `{"count":N,"source":"session meter"}` on 12+; below 12 `{"count":N}` as before.
 - **Evidence limit.** The meter's XML element names and its equivalence to the device's active-session count are
   unmeasured on the estate (alternatives document §3.6, M5); a member whose answer does not parse reads UNKNOWN.
+
+## 11. Amendment 2026-11-23 -- check 5 on an idle pair is a warning (PO decision, option 1 of 3)
+Check 5 is WARN (never PASS) when the active member's sync is enabled, HA2 is up on both members (check 3), 0 sessions
+were counted on both members (check 6, same phase), and the only failing condition is a zero `sent`/`recv` counter. A
+check 5 WARN does not block a readiness outcome or an execution; every other non-PASS result still does. Rule, reason
+and rejected options: `PO_DECISION_RECORD_2026_11_23_PAN_IDLE_SESSION_SYNC.md`.

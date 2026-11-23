@@ -28,6 +28,7 @@ import { familyOf } from "../screens/ComplianceScreen";
 import { orderMembers } from "../screens/DeviceShared";
 import { groupClusters, haReadinessItems, primaryReasonWord } from "../screens/HaReadinessList";
 import { withFirewallNames } from "../screens/policyFirewalls";
+import { readinessWarningChecks, readyWord } from "../screens/readinessWarnings";
 import {
   isActiveRole,
   isStandbyRole,
@@ -117,6 +118,8 @@ export interface FailoverBoardUnit {
   readonly boardColumn: FailoverBoardColumn;
   readonly badgeState: BadgeState;
   readonly badgeWord: string;
+  /** Blocking checks that warned (PO 2026-11-23): a READY unit with warnings never shows a bare "Ready". */
+  readonly warnings: number;
   readonly reason: string;
   readonly observedAt: string | null;
   /** Readiness read stop code (e.g. COMMAND_UNAVAILABLE); null when the read did not stop. */
@@ -452,6 +455,7 @@ export function buildFailoverBoardModel(inputs: {
     const classifyUnit = (
       rawStatus: "READY" | "NOT_READY" | "UNKNOWN",
       obsAt: string | null,
+      warnings = 0,
     ): {
       status: "READY" | "NOT_READY" | "UNKNOWN";
       col: FailoverBoardColumn;
@@ -492,15 +496,15 @@ export function buildFailoverBoardModel(inputs: {
           status: "READY",
           col: "ready_stale",
           badgeState: "watch",
-          badgeWord: "Ready (> 24 h)",
+          badgeWord: readyWord(warnings, "Ready (> 24 h)"),
           stale: true,
         };
       }
       return {
         status: "READY",
         col: "ready_fresh",
-        badgeState: "ok",
-        badgeWord: "Ready",
+        badgeState: warnings > 0 ? "watch" : "ok",
+        badgeWord: readyWord(warnings),
         stale: false,
       };
     };
@@ -508,7 +512,8 @@ export function buildFailoverBoardModel(inputs: {
     const baseObsAt = baseRow?.readiness?.observedAt ?? baseRow?.readinessObservedAt ?? null;
     const baseRawStatus: "READY" | "NOT_READY" | "UNKNOWN" =
       item.status === "READY" || item.status === "NOT_READY" ? item.status : "UNKNOWN";
-    const baseClass = classifyUnit(baseRawStatus, baseObsAt);
+    const baseWarnings = readinessWarningChecks(baseRow?.readiness?.checks).length;
+    const baseClass = classifyUnit(baseRawStatus, baseObsAt, baseWarnings);
 
     if (baseClass.col === "not_ready") clusterNotReady++;
     else if (baseClass.col === "unknown") clusterUnknown++;
@@ -543,6 +548,7 @@ export function buildFailoverBoardModel(inputs: {
       boardColumn: baseClass.col,
       badgeState: baseClass.badgeState,
       badgeWord: baseClass.badgeWord,
+      warnings: baseClass.status === "READY" ? baseWarnings : 0,
       reason: baseReason,
       observedAt: baseObsAt,
       stopCode: baseRow?.readiness?.stopCode ?? null,
@@ -558,7 +564,8 @@ export function buildFailoverBoardModel(inputs: {
       vsUnitsCount++;
       const vsObsAt = vsRow.readiness?.observedAt ?? vsRow.readinessObservedAt ?? null;
       const vsRawStatus: "READY" | "NOT_READY" | "UNKNOWN" = vsRow.readiness?.status ?? "UNKNOWN";
-      const vsClass = classifyUnit(vsRawStatus, vsObsAt);
+      const vsWarnings = readinessWarningChecks(vsRow.readiness?.checks).length;
+      const vsClass = classifyUnit(vsRawStatus, vsObsAt, vsWarnings);
       const vsChecks = vsRow.readiness?.checks ?? [];
       const vsMembers = mergeMembers(vsRow.members);
       const vsMemberRefs = buildMemberRefs(vsRow.vendor ?? vendor, vsMembers, vsChecks, vsObsAt);
@@ -579,6 +586,7 @@ export function buildFailoverBoardModel(inputs: {
         boardColumn: vsClass.col,
         badgeState: vsClass.badgeState,
         badgeWord: vsClass.badgeWord,
+        warnings: vsClass.status === "READY" ? vsWarnings : 0,
         reason: primaryReasonWord(vsRow),
         observedAt: vsObsAt,
         stopCode: vsRow.readiness?.stopCode ?? null,

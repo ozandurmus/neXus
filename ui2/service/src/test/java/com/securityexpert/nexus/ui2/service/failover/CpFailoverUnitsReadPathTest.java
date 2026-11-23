@@ -176,9 +176,13 @@ class CpFailoverUnitsReadPathTest {
         assertEquals(chassis.path("clusterId").asText(), chassis.path("unitId").asText());
         assertFalse(chassis.has("virtual_system"));
         assertEquals("INSUFFICIENT_EVIDENCE", chassis.path("refusalReason").asText());
-        // No readiness yet: the chassis mode is unknown, so no chassis action is offered (contract §17).
+        // No readiness yet: the VS0 mode is unknown, so no VS0 run is offered (contract §18); the optional
+        // "Fail over all virtual systems" stays offered, refused now because no VS is READY.
         assertEquals(CpFailoverService.CHASSIS_MODE_UNKNOWN, chassis.path("failoverRefusal").asText());
-        assertFalse(chassis.path("canStart").asBoolean());
+        assertTrue(chassis.path("chassisAction").isNull() || chassis.path("chassisAction").isMissingNode());
+        assertEquals(CpFailoverService.ACTION_ALL_VIRTUAL_SYSTEMS, chassis.path("sequenceAction").asText());
+        assertEquals(CpFailoverService.VIRTUAL_SYSTEM_NOT_READY, chassis.path("sequenceStartRefusal").asText());
+        assertFalse(chassis.path("canSchedule").asBoolean());
         List<JsonNode> units = List.of(all.get(1), all.get(2));
         assertEquals(List.of("VS-TEST-APP (VSID 13)", "VS-TEST-DB (VSID 35)"),
             List.of(units.get(0).path("virtual_system").asText(), units.get(1).path("virtual_system").asText()));

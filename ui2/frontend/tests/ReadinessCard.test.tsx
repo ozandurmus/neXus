@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ReadinessCard } from "../src/screens/ReadinessChecksTable";
 import type { ReadinessCheck } from "../src/auth/adminApi";
+import { m3 } from "../src/theme/m3Theme";
 
 const members = [
   { device_id: "opaque-1", hostname: "FW-ROMEO-01-M1", ha_role: "ACTIVE" },
@@ -100,6 +101,38 @@ describe("Readiness card", () => {
     const row = screen.getByText("Installed policy parity").closest("tr")!;
     expect(row.getAttribute("data-row-tone")).toBe("blocking");
     expect(screen.getByLabelText("Blocking: 1")).toBeInTheDocument();
+  });
+
+  it("shows a Palo Alto idle-pair session sync warning amber, not red, and the badge names it (PO 2026-11-23)", () => {
+    const warning = "No sessions to synchronize (0 active sessions on both members); the session sync path is not proven by traffic.";
+    const panChecks: ReadinessCheck[] = [
+      ...members.map((member, i) => ({ checkNo: 1, title: "HA mode and roles", member: `Member ${i + 1}`, device_id: member.device_id,
+        result: "PASS" as const, summary: i ? "Passive" : "Active", blocking: true })),
+      ...members.map((member, i) => ({ checkNo: 5, title: "Session synchronization", member: `Member ${i + 1}`, device_id: member.device_id,
+        result: "WARN" as const, summary: warning, blocking: true })),
+    ];
+    render(<ReadinessCard {...props} vendor="palo_alto" status="READY" checks={panChecks} />);
+    expect(screen.queryByText("Ready")).toBeNull();
+    expect(screen.getByText("Ready · 1 warning")).toBeInTheDocument();
+    for (const label of ["Passed: 1", "Blocking: 0", "Info: 0"]) expect(screen.getByLabelText(label)).toBeInTheDocument();
+    const row = screen.getByText("Session synchronization").closest("tr")!;
+    expect(row).toHaveAttribute("data-row-tone", "warning");
+    expect(row).toHaveStyle({ backgroundColor: m3.warningContainer });
+    expect(row).not.toHaveStyle({ backgroundColor: m3.errorContainer });
+    expect(within(row).getByRole("img", { name: "Warning" })).toBeInTheDocument();
+    expect(screen.queryAllByRole("img", { name: "Blocking" })).toHaveLength(0);
+    expect(within(row).getAllByText(warning)).toHaveLength(2);
+    expect(screen.getByText("HA mode and roles").closest("tr")).not.toHaveAttribute("data-row-tone");
+  });
+
+  it("keeps a warning row red when the other member's session sync failed", () => {
+    const mixed: ReadinessCheck[] = members.map((member, i) => ({ checkNo: 5, title: "Session synchronization", member: `Member ${i + 1}`,
+      device_id: member.device_id, result: i ? "FAIL" as const : "WARN" as const, summary: "x", blocking: true }));
+    render(<ReadinessCard {...props} vendor="palo_alto" status="NOT_READY" checks={mixed} />);
+    expect(screen.getByText("Not ready · 1 blocker")).toBeInTheDocument();
+    expect(screen.getByText("Session synchronization").closest("tr")).toHaveAttribute("data-row-tone", "blocking");
+    expect(screen.getByText("Session synchronization").closest("tr")).toHaveStyle({ backgroundColor: m3.errorContainer });
+    expect(screen.queryByLabelText(/^Warnings/)).toBeNull();
   });
 
   it("keeps unknown evidence unknown and does not shift a missing member's result", () => {

@@ -224,6 +224,49 @@ class PanFailoverChecksTest {
         assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(active,passive.replace("session update","other")));
         assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(active,result("<session-sync>in-sync</session-sync>")));
     }
+    /** PO_DECISION_RECORD_2026_11_23_PAN_IDLE_SESSION_SYNC.md: an idle pair's zero counters are WARN, never PASS. */
+    @Test void idlePairZeroCountersAreAWarningNeverAPass() throws Exception {
+        var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        var up=PanFailoverChecks.parse(xml("active","passive","0011","0022","up","up","synchronized"));
+        var peerUp=PanFailoverChecks.parse(xml("passive","active","0022","0011","up","up","synchronized"));
+        var ha2Down=PanFailoverChecks.parse(xml("passive","active","0022","0011","up","down","synchronized"));
+        String active=syncXml("yes","0","0"),passive=syncXml("no (device not in active state)","0","0");
+        assertTrue(PanFailoverChecks.idlePair(up,peerUp,0L,0L,"PASS"));
+        var idle=PanFailoverChecks.sessionSyncEvidence(active,passive,true);
+        assertEquals("WARN",idle.status());
+        assertEquals(PanFailoverChecks.IDLE_SESSION_SYNC_REASON,json.readTree(idle.derived()).path("reason").asText());
+        assertEquals(0,json.readTree(idle.derived()).path("active").path("messages").path("session setup").path("sent").asLong(-1));
+        // Only the active sent counter, or only the passive recv counter, at zero: still the idle warning.
+        assertEquals("WARN",PanFailoverChecks.sessionSync(active,syncXml("no","0","20"),true));
+        assertEquals("WARN",PanFailoverChecks.sessionSync(syncXml("yes","20","0"),passive,true));
+        // Non-zero counters on an idle pair stay PASS; the warning never becomes a PASS of zero counters.
+        assertEquals("PASS",PanFailoverChecks.sessionSync(syncXml("yes","20","0"),syncXml("no","0","20"),true));
+        assertEquals("FAIL",PanFailoverChecks.sessionSync(active,passive));
+        // HA2 down on either member: not idle, FAIL.
+        assertEquals(false,PanFailoverChecks.idlePair(up,ha2Down,0L,0L,"PASS"));
+        assertEquals(false,PanFailoverChecks.idlePair(ha2Down,up,0L,0L,"PASS"));
+        assertEquals(false,PanFailoverChecks.idlePair(up,PanFailoverChecks.parse(result("<group/>")),0L,0L,"PASS"));
+        // Sessions above zero on either member, a session count unknown, or counts not comparable: not idle, FAIL.
+        assertEquals(false,PanFailoverChecks.idlePair(up,peerUp,0L,5L,"PASS"));
+        assertEquals(false,PanFailoverChecks.idlePair(up,peerUp,5L,0L,"PASS"));
+        assertEquals(false,PanFailoverChecks.idlePair(up,peerUp,null,0L,"UNKNOWN"));
+        assertEquals(false,PanFailoverChecks.idlePair(up,peerUp,0L,0L,"UNKNOWN"));
+        assertEquals("FAIL",PanFailoverChecks.sessionSync(active,passive,false));
+        // Active sync disabled, or a message type disabled on the active member: FAIL even on an idle pair.
+        assertEquals("FAIL",PanFailoverChecks.sessionSync(syncXml("no","0","0"),passive,true));
+        assertEquals("FAIL",PanFailoverChecks.sessionSync(active.replace("<enable>yes","<enable>no"),passive,true));
+        // A missing or unrecognised counter or field: UNKNOWN even on an idle pair.
+        assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(active.replaceAll("<sent>[^<]*</sent>",""),passive,true));
+        assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(active,passive.replaceAll("<recv>[^<]*</recv>",""),true));
+        assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(syncXml("pending","0","0"),passive,true));
+        assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(active,result(""),true));
+        // The gate: WARN on check 5 does not block; WARN on any other check, FAIL and UNKNOWN do.
+        assertEquals(false,PanFailoverChecks.blocks(5,"WARN"));
+        assertEquals(false,PanFailoverChecks.blocks(5,"PASS"));
+        assertEquals(true,PanFailoverChecks.blocks(5,"FAIL"));
+        assertEquals(true,PanFailoverChecks.blocks(5,"UNKNOWN"));
+        for(int check=1;check<=7;check++) if(check!=5) assertEquals(true,PanFailoverChecks.blocks(check,"WARN"));
+    }
     @Test void sessionSyncEvidenceIsFailClosedAndRetainsBothMembers() throws Exception {
         var json=new com.fasterxml.jackson.databind.ObjectMapper();
         String active=syncXml("Enabled","1,234","0"),passive=syncXml("Disabled","0","1,234");

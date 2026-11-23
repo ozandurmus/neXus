@@ -119,17 +119,48 @@ public final class PanFailoverChecks {
     public static String sessionSync(String activeXml,String passiveXml) {
         return sessionSyncEvidence(activeXml,passiveXml).status();
     }
+    public static String sessionSync(String activeXml,String passiveXml,boolean idle) {
+        return sessionSyncEvidence(activeXml,passiveXml,idle).status();
+    }
 
     public static SessionSync sessionSyncEvidence(String activeXml,String passiveXml) {
+        return sessionSyncEvidence(activeXml,passiveXml,false);
+    }
+
+    /** Check 5 WARN's derived reason (PO_DECISION_RECORD_2026_11_23_PAN_IDLE_SESSION_SYNC.md); the view words it. */
+    public static final String IDLE_SESSION_SYNC_REASON="NO_SESSIONS_TO_SYNCHRONIZE";
+
+    /**
+     * The facts check 5 may use from checks 3 and 6 of the same phase (PO 2026-11-23): the HA2 link up on both
+     * members (check 3 evidence) and 0 active sessions counted on both members by comparable reads (check 6).
+     */
+    public static boolean idlePair(State a,State b,Long sessionsA,Long sessionsB,String carried) {
+        return "up".equals(a.ha2()) && "up".equals(b.ha2())
+            && Long.valueOf(0).equals(sessionsA) && Long.valueOf(0).equals(sessionsB) && !"UNKNOWN".equals(carried);
+    }
+
+    /** A check 5 WARN is a warning that does not block (PO 2026-11-23); every other non-PASS status blocks. */
+    public static boolean blocks(int check,String status) {
+        return !"PASS".equals(status) && !(check==5 && "WARN".equals(status));
+    }
+
+    /**
+     * {@code idle}: {@link #idlePair}. When it holds, the active member's sync is enabled and the only failing
+     * condition is a zero counter (active sent and/or passive recv), check 5 is WARN, never PASS. Any other failure,
+     * and any missing or unrecognised field, keeps FAIL or UNKNOWN.
+     */
+    public static SessionSync sessionSyncEvidence(String activeXml,String passiveXml,boolean idle) {
         ObjectNode derived=JsonNodeFactory.instance.objectNode();
         ArrayNode missing=derived.putArray("missing"),unrecognised=derived.putArray("unrecognised");
-        boolean failed=false;
+        boolean failed=false,zeroCounter=false;
+        Boolean activeEnabled=null;
         String[] xml={activeXml,passiveXml};
         String[] members={"active","passive"};
         for(int i=0;i<members.length;i++) {
             Element member=result(xml[i]);
             ObjectNode facts=derived.putObject(members[i]);
             Boolean enabled=syncBoolean(member,"enabled",members[i]+".enabled",facts,missing,unrecognised);
+            if(i==0) activeEnabled=enabled;
             if(i==0 && Boolean.FALSE.equals(enabled)) failed=true;
             ObjectNode messages=facts.putObject("messages");
             if(child(member,"messages")==null) missing.add(members[i]+".messages");
@@ -141,11 +172,14 @@ public final class PanFailoverChecks {
                 Boolean enable=syncBoolean(entry,"enable",path+".enable",counters,missing,unrecognised);
                 Long sent=syncCount(entry,"sent",path+".sent",counters,missing,unrecognised);
                 Long recv=syncCount(entry,"recv",path+".recv",counters,missing,unrecognised);
-                if((i==0 && (Boolean.FALSE.equals(enable) || Long.valueOf(0).equals(sent)))
-                        || (i==1 && Long.valueOf(0).equals(recv))) failed=true;
+                if(i==0 && Boolean.FALSE.equals(enable)) failed=true;
+                if((i==0 && Long.valueOf(0).equals(sent)) || (i==1 && Long.valueOf(0).equals(recv))) zeroCounter=true;
             }
         }
-        String status=!missing.isEmpty() || !unrecognised.isEmpty()?"UNKNOWN":failed?"FAIL":"PASS";
+        boolean warn=idle && zeroCounter && !failed && Boolean.TRUE.equals(activeEnabled);
+        String status=!missing.isEmpty() || !unrecognised.isEmpty()?"UNKNOWN"
+            :warn?"WARN":failed || zeroCounter?"FAIL":"PASS";
+        if("WARN".equals(status)) derived.put("reason",IDLE_SESSION_SYNC_REASON);
         return new SessionSync(status,derived.toString());
     }
 

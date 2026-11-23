@@ -449,8 +449,10 @@ public final class PanFailoverJobExecutor {
             :(oldActive==first?sessionsB:sessionsA);
         String carried=sessionsA==null || sessionsB==null || mixedA!=null?"UNKNOWN"
             :oldActive==null?"PASS":PanFailoverChecks.carried(before,active);
-        var sessionSync="active".equals(a.role())?PanFailoverChecks.sessionSyncEvidence(syncA,syncB)
-            :"active".equals(b.role())?PanFailoverChecks.sessionSyncEvidence(syncB,syncA)
+        // PO 2026-11-23: an idle pair (HA2 up on both, 0 sessions on both, this phase) turns zero counters into WARN.
+        boolean idle=PanFailoverChecks.idlePair(a,b,sessionsA,sessionsB,carried);
+        var sessionSync="active".equals(a.role())?PanFailoverChecks.sessionSyncEvidence(syncA,syncB,idle)
+            :"active".equals(b.role())?PanFailoverChecks.sessionSyncEvidence(syncB,syncA,idle)
                 :new PanFailoverChecks.SessionSync("UNKNOWN","{\"missing\":[\"active role\"]}");
         var links=PanFailoverChecks.linksEvidence(a,b);
         var configurationSync=PanFailoverChecks.syncEvidence(a,b);
@@ -479,7 +481,7 @@ public final class PanFailoverJobExecutor {
             if (no==4) derived=PanFailoverChecks.syncEvidenceForMember(derived,"second");
             store.check(runId,phase,second.id(),null,no,statuses[i],derived);
         }
-        for (int i=0;i<statuses.length;i++) if (!"PASS".equals(statuses[i])) {
+        for (int i=0;i<statuses.length;i++) if (PanFailoverChecks.blocks(i+1,statuses[i])) {
             if (!readiness) throw new Stop("CHECK_NOT_READY",i+1,statuses[i]);
             if (readinessFailure==null || !"FAIL".equals(readinessFailure.status) && "FAIL".equals(statuses[i]))
                 readinessFailure=new Stop("CHECK_NOT_READY",i+1,statuses[i]);

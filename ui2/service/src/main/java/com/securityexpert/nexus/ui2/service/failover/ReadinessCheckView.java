@@ -328,10 +328,16 @@ public final class ReadinessCheckView {
         return names.isEmpty()?"field not recognised":String.join(", ",names);
     }
 
+    /** PAN check 5 WARN: an idle pair's zero session sync counters (the worker's text, repeated for the view). */
+    static final String IDLE_SESSION_SYNC_WARNING="No sessions to synchronize (0 active sessions on both members); "
+        +"the session sync path is not proven by traffic.";
+
     private static String sessionSyncSummary(String status,JsonNode d) {
         String summary="UNKNOWN".equals(status)
             ?"Session sync fields missing or not recognised: /response/result/enabled and messages/entry fields enable, sent, recv and desc"
-            :"PASS".equals(status)?"Sessions synchronized on both members":"Session synchronization failed or disabled";
+            :"PASS".equals(status)?"Sessions synchronized on both members"
+            // PO 2026-11-23 (PO_DECISION_RECORD_2026_11_23_PAN_IDLE_SESSION_SYNC.md): an idle pair warns, never passes.
+            :"WARN".equals(status)?IDLE_SESSION_SYNC_WARNING:"Session synchronization failed or disabled";
         if(d.path("missing").isArray() && !d.path("missing").isEmpty())
             summary+="; missing fields: "+d.path("missing").size();
         if(d.path("unrecognised").isArray() && !d.path("unrecognised").isEmpty())

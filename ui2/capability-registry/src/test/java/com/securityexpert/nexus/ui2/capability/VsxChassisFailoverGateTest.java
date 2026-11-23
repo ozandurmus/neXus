@@ -68,8 +68,60 @@ class VsxChassisFailoverGateTest {
         var rows = fixture();
         assertTrue(rows.stream().filter(r -> r.gateId().equals("cp_inventory_vsid_cphaprob_stat")).findFirst().orElseThrow()
                 .maxFrequency().contains("VS-moved verification of a VSX HA-mode chassis"));
+        // V265 rewrote the HA-only purpose clause of cp_inventory_cphaprob_stat_vsenv0 to the VS0 run in HA or VSLS mode.
         assertTrue(rows.stream().filter(r -> r.gateId().equals("cp_inventory_cphaprob_stat_vsenv0")).findFirst().orElseThrow()
-                .maxFrequency().contains("failover run of a VSX HA-mode chassis"));
+                .maxFrequency().contains(GateRow.CP_VS0_RUN_READ_PURPOSE));
+    }
+
+    /** The VS0 reads of a VS0 failover run (V177 rows, the two inventory VS0 rows); V265 widens each one's purpose clause. */
+    private static final List<String> VS0_RUN_READS = List.of("cp_inventory_cphaprob_stat_vsenv0",
+            "cp_inventory_cphaprob_a_if_vsenv0", "cp_failover_tablestat_vsenv0", "cp_failover_arp_vsenv0",
+            "cp_failover_traffic_vsenv0", "cp_failover_syncstat_vsenv0", "cp_failover_fw_stat_vsenv0",
+            "cp_failover_pnotes_vsenv0", "cp_failover_bonds_vsenv0", "cp_failover_bond_members_vsenv0",
+            "cp_failover_last_event_vsenv0", "cp_failover_routing_vsenv0", "cp_policy_install_cpstat_vsenv0");
+
+    /** PO 2026-11-23 (PO_DECISION_RECORD_2026_11_23_VSX_VS0_INDEPENDENT.md): VS0 is its own unit in HA and VSLS mode. */
+    @Test
+    void fixtureCarriesTheWidenedVs0RunTextAndNoHaOnlyClause() {
+        var rows = fixture();
+        assertEquals(GateRow.CP_CHASSIS_DOWN_MAX_FREQUENCY, rows.stream()
+                .filter(r -> r.gateId().equals(GateRow.CP_CHASSIS_DOWN_GATE)).findFirst().orElseThrow().maxFrequency());
+        assertEquals(GateRow.CP_CHASSIS_UP_MAX_FREQUENCY, rows.stream()
+                .filter(r -> r.gateId().equals(GateRow.CP_CHASSIS_UP_GATE)).findFirst().orElseThrow().maxFrequency());
+        for (String id : VS0_RUN_READS) {
+            var row = rows.stream().filter(r -> r.gateId().equals(id)).findFirst().orElseThrow();
+            assertEquals(1, row.maxFrequency().split(java.util.regex.Pattern.quote(GateRow.CP_VS0_RUN_READ_PURPOSE), -1).length - 1, id);
+            assertFalse(row.maxFrequency().contains("VSX HA-mode chassis"), id);
+            assertTrue(row.canonicalCommandKey().startsWith("bash -lc 'vsenv 0 && "), id);
+        }
+        for (String id : List.of(GateRow.CP_CHASSIS_DOWN_GATE, GateRow.CP_CHASSIS_UP_GATE))
+            assertFalse(rows.stream().filter(r -> r.gateId().equals(id)).findFirst().orElseThrow().maxFrequency()
+                    .contains("never on a VSLS chassis"), id);
+    }
+
+    @Test
+    void v265WidensOnlyTheFrequencyTextOfExactlyTheVs0RowsAndIsGuarded() throws IOException {
+        String sql = Files.readString(Path.of(
+                "../service/src/main/resources/db/migration/V265__vsx_vs0_independent_failover_gates.sql"));
+        String body = sql.replaceAll("(?m)^--.*$", "");
+        assertTrue(body.contains("'" + GateRow.CP_CHASSIS_DOWN_MAX_FREQUENCY + "'"));
+        assertTrue(body.contains("'" + GateRow.CP_CHASSIS_UP_MAX_FREQUENCY + "'"));
+        assertTrue(body.contains("'" + GateRow.CP_VS0_RUN_READ_PURPOSE + "'"));
+        // Only max_frequency is set; no insert, delete or other column, and every update is guarded.
+        assertFalse(body.toUpperCase(java.util.Locale.ROOT).contains("INSERT"));
+        assertFalse(body.toUpperCase(java.util.Locale.ROOT).contains("DELETE"));
+        assertEquals(3, body.split("SET max_frequency").length - 1);
+        assertEquals(3, body.split("UPDATE gate_registry").length - 1);
+        assertEquals(2, body.split("NOT LIKE").length - 1);
+        assertTrue(body.contains("LIKE '%failover run of a VSX HA-mode chassis (PO 2026-11-19)%'"));
+        // Every row is matched by its exact fixture command as well as its id: no command changes.
+        var rows = fixture();
+        for (String id : new java.util.ArrayList<String>() {{ addAll(VS0_RUN_READS);
+                add(GateRow.CP_CHASSIS_DOWN_GATE); add(GateRow.CP_CHASSIS_UP_GATE); }}) {
+            String command = rows.stream().filter(r -> r.gateId().equals(id)).findFirst().orElseThrow().canonicalCommandKey();
+            assertTrue(body.contains("'" + command.replace("'", "''") + "'"), id + " matched by its exact command");
+        }
+        assertFalse(body.contains("cp_inventory_vsid_cphaprob_stat"), "per-VS rows are untouched");
     }
 
     private static GateRow row(String gateId, String command) {

@@ -97,6 +97,42 @@ class CpFailoverControllerTest {
         assertFalse(((Map<?,?>)((java.util.List<?>)new CpFailoverController(service).summary(request).getBody()).get(0)).containsKey("haView"));
     }
 
+    /**
+     * PO_DECISION_RECORD_2026_11_23_PAN_IDLE_SESSION_SYNC.md: a READY Palo Alto unit whose check 5 is WARN (idle pair) is
+     * offered (no refusal); the row keeps WARN and the warning text. A NOT_READY unit stays refused.
+     */
+    @org.junit.jupiter.api.Test
+    void panIdleSessionSyncWarningDoesNotBlockTheStartOffer() {
+        var service=mock(CpFailoverService.class);
+        var unit=new CpFailoverService.Unit("opaque-pan","opaque-pan","CLS-ROMEO-02",null,java.util.List.of(
+            pairMember("pan-1","palo_alto","active"),pairMember("pan-2","palo_alto","passive")));
+        String facts="{\"reason\":\"NO_SESSIONS_TO_SYNCHRONIZE\",\"missing\":[],\"unrecognised\":[],"
+            +"\"active\":{\"enabled\":true,\"messages\":{\"session setup\":{\"enable\":true,\"sent\":0,\"recv\":0}}}}";
+        String checks="[{\"memberRef\":\"pan-1\",\"checkNo\":5,\"status\":\"WARN\",\"derived\":"+facts+"},"
+            +"{\"memberRef\":\"pan-2\",\"checkNo\":5,\"status\":\"WARN\",\"derived\":"+facts+"}]";
+        var ready=new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository.ReadinessStatus(
+            "CLS-ROMEO-02",null,"palo_alto","READY",java.time.Instant.EPOCH,null,checks,"READY");
+        var notReady=new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository.ReadinessStatus(
+            "CLS-ROMEO-02",null,"palo_alto","NOT_READY",java.time.Instant.EPOCH,"Session synchronization",
+            checks.replace("WARN","FAIL"),"CHECK_NOT_READY");
+        when(service.summary("synthetic-actor")).thenReturn(java.util.List.of(
+            new CpFailoverService.Summary(unit,"palo_alto",false,null,null,null,ready,true,true),
+            new CpFailoverService.Summary(unit,"palo_alto",false,null,null,null,notReady,true,true)));
+        var request=new MockHttpServletRequest();
+        request.setServletPath("/api/v2/pan-failover/summary");
+        request.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE,"synthetic-actor");
+        var rows=(java.util.List<?>)new CpFailoverController(service).summary(request).getBody();
+        var warned=(Map<?,?>)rows.get(0);
+        assertNull(warned.get("refusalReason"),"a check 5 warning does not block the start");
+        var readiness=(Map<?,?>)warned.get("readiness");
+        assertEquals("READY",readiness.get("status"));
+        var row=(Map<?,?>)((java.util.List<?>)readiness.get("checks")).get(0);
+        assertEquals("WARN",row.get("result"));
+        assertEquals(true,row.get("blocking"));
+        assertTrue(row.get("summary").toString().startsWith("No sessions to synchronize (0 active sessions on both members)"));
+        assertEquals("CHECK_NOT_READY",((Map<?,?>)rows.get(1)).get("refusalReason"));
+    }
+
     /** ASA and FortiGate summary and run-detail responses carry read-only check-1 roles, mode and failoverRefusal. */
     @org.junit.jupiter.api.Test
     void asaAndFortigateSummaryAndDetailProjectObservedRolesModeAndFailoverRefusal() {

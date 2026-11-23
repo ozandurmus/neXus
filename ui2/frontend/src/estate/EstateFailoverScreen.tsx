@@ -611,8 +611,9 @@ export function EstateFailoverScreen({
                   {u.estateCluster && u.unitKind !== "VIRTUAL_SYSTEM" ? (
                     <HaPairTiles cluster={u.estateCluster} lens="failover" size={14} now={now} />
                   ) : (
-                    <TileSwatch state="ok" size={14} label={`${u.label}: Ready`} />
+                    <TileSwatch state={u.badgeState} size={14} label={`${u.label}: ${u.badgeWord}`} />
                   )}
+                  {u.warnings > 0 ? <StateBadge state="watch" word={u.badgeWord} dense /> : null}
                   <span style={{ fontFamily: ESTATE_MONO, fontWeight: 600, fontSize: "12px" }}>{u.clusterTitle}</span>
                   <UnitKindTag kind={u.unitKind} vsName={u.virtualSystemName} />
                   <EvidenceStamp at={u.observedAt} now={now} />
