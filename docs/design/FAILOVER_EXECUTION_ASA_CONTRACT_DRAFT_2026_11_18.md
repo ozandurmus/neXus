@@ -1,6 +1,9 @@
 # Cisco ASA Failover Execution Contract (Switchover of the Active Unit)
 
-**Status: DRAFT -- DO NOT IMPLEMENT**
+**Status: DRAFT -- DO NOT IMPLEMENT.** PO answers recorded in §11: Q1, Q2, Q5 (2026-11-18); Q4, Q6 approved and Q3
+approved in principle (2026-11-23). The contract stays DRAFT until the Q3 decision council and code review
+(`ASA_FAILOVER_Q3_COUNCIL_PACKET_2026_11_23.md`) are complete and the PO freezes it. Q7 (pilot pair) is not a freeze
+blocker, only a first-production-run blocker.
 
 > **Authority & Governance Notice (`AGENTS.md`):** This document is a **DRAFT** design contract (`CONTRACT` movement). A Cisco ASA failover switchover is a network-device **WRITE** (`ActionClass.CLASS_2_OPERATIONAL_STATE_CHANGE`). Per `AGENTS.md` ("Authority hierarchy", "Network action taxonomy", "Mandatory build lifecycle", and PO Amendment 2026-09-26), **no product code, database migration, or command-gate row may be implemented or signed off** until:
 > 1. The decision council and code-review gates for the session-dropping write boundary are completed (`PO_DECISION_RECORD_2026_11_13_FAILOVER_ASA_FORTIGATE_PHASE0.md` item 6),
@@ -138,7 +141,7 @@ Checked atomically in `CpFailoverService.request` and `JooqCpFailoverRepository.
 3. **Business-hours confirmation / job window:** Inside `08:00–20:00 Europe/Istanbul`, `X-Nexus-Business-Hours-Ack: true` is present (`BUSINESS_HOURS_CONFIRM_REQUIRED`); for a scheduled run, `scheduledFor` falls inside a 6-hour job window.
 4. **Two eligible, SSH-trusted members & unchanged member set:** Exactly two enrolled `cisco_asa` members share `cluster_ref`, match the approval's `member_set_revision` (`MEMBER_SET_CHANGED`), have completed inventory (`INVENTORY_REQUIRED`), and both endpoints have active SSH host-key trust (`TRUSTED_HOST_KEY_REQUIRED`).
 5. **No active run, incident, or unresolved dispatch:** No open run on the unit (`RUN_ALREADY_ACTIVE`), no active `failover_quarantine` incident on the cluster or either member (`OPEN_INCIDENT`), no estate-wide unresolved dispatch (`UNRESOLVED_DISPATCH`), and no other fleet failover/resume in flight (`FLEET_MUTATION_ACTIVE`).
-6. **Latest readiness run `READY` and fresh (subject to PO decision Q4):**
+6. **Latest readiness run `READY` and fresh (PO decision Q4, approved 2026-11-23, §11):**
    - Mirroring `PAN_CONFIG_SYNC_REMEDIATION_2026_10_24.md` §3.1 R8, the unit's most recent finished `READINESS` run must have `outcome = 'READY'`, all blocking checks `1..8` `PASS`, and `finished_at` within the last **60 minutes** (refused with `READINESS_REQUIRED` if no readiness run exists, `READINESS_NOT_READY` if `NOT_READY` or `UNKNOWN`, or `READINESS_NOT_FRESH` if `finished_at < now - 60 min`).
    - *Invariant (`AGENTS.md`, `FAILOVER_EXECUTION_CP_CONTRACT.md` §13):* A fresh, `READY` standalone readiness run is a request-admission gate only; it **never** substitutes for the execution job's own fresh `PRECHECK` pass below.
 
@@ -185,7 +188,7 @@ Once the switch-confirmation poll loop (§4.3) confirms the role swap and calls 
 | Gap between sample 1 and sample 2 of `show failover` | `5 s` | `AsaFailoverJobExecutor.SAMPLE_GAP` |
 | Read timeouts (`show failover`, `state`, `conn count`, `traffic`, `arp` / `history`) | `30 s` / `60 s` | `V212`, `V248` |
 | Write timeout (`no failover active`) | `30 s` | Proposed gate `asa_failover_inactive_switch` |
-| Switch-confirmation poll interval and maximum budget | Every `3 s`, up to `40` polls (`120 s` max) | `FAILOVER_FORTIGATE_ASA_DESIGN_DRAFT.md` §5.1, §10 item 5 |
+| Switch-confirmation poll interval and maximum budget | Every `3 s`, up to `40` polls (`120 s` max) | `FAILOVER_FORTIGATE_ASA_DESIGN_DRAFT.md` §5.1, §10 item 5; PO decision Q6 (approved 2026-11-23, §11) |
 
 ### 6.3 Classification of `SUCCEEDED` / `FAILED` / `UNKNOWN`
 | Scenario | `failover_run.state` | `failover_run.outcome` & `message` | `jobs.state` | `failover_quarantine` Incident? |
@@ -282,3 +285,29 @@ Per `AGENTS.md` ("Automated validation and real-environment validation are separ
 - Still open: Q3 (session-dropping dispatch state, needs the decision council and code review per the 2026-11-13 phase-0 record), Q4
   (request-time readiness freshness bound), Q6 (120 s poll budget), Q7 (pilot pair and window). The contract stays DRAFT until those are
   answered.
+
+## 11.1 PO answers (chat 2026-11-23, "Üçü de öneri gibi")
+
+The PO accepted the recommendation on all three remaining questions in one answer. The 2026-11-18 "still open" line
+above is superseded by this section for Q3, Q4 and Q6.
+
+- **Q3 approved in principle:** add the delivery state `SESSION_DROPPED_AFTER_SEND` to `failover_dispatch_intent` for a
+  `no failover active` write whose SSH session drops after the command bytes were written (§4.2 item 4). Such a write
+  is confirmed **only** by the two-sided, serial-verified `show failover` polling of §4.3 (both observers answer from
+  the two distinct physical units of `ha_pair_identity`, the unit with `preStandbySerial` is `Active` and the unit with
+  `preActiveSerial` is `Standby Ready`, in the same poll pass); if the poll budget ends without that, the run stops
+  `OUTCOME_UNKNOWN` with an incident exactly as today. This is **not** an implementation authorization: per
+  `PO_DECISION_RECORD_2026_11_13_FAILOVER_ASA_FORTIGATE_PHASE0.md` item 6 the session-drop dispatch state still goes
+  through the decision council and the code-review plugin before it is built or this contract is frozen. Council input:
+  `ASA_FAILOVER_Q3_COUNCIL_PACKET_2026_11_23.md`. No code, migration or gate row is written until then.
+- **Q4 approved:** `POST /api/v2/asa-failover/runs` requires the unit's latest finished standalone readiness run to be
+  `READY` and finished at most **60 minutes** before the request (refused `READINESS_REQUIRED` when none exists,
+  `READINESS_NOT_READY` when `NOT_READY` / `UNKNOWN`, `READINESS_NOT_FRESH` when older), as written in §5.1 item 6. This
+  is **in addition to** the execution worker's own fresh `PRECHECK` battery (§5.2), never a substitute for it.
+- **Q6 approved:** the switch-confirmation poll budget is **120 s**: `show failover` on both endpoints every `3 s`, at
+  most `40` polls per member, each poll over a new trusted SSH session (§4.3, §6.2). Budget exhausted ->
+  `FAILOVER_TIMEOUT` -> `STOPPED` / `OUTCOME_UNKNOWN` + incident (§6.3).
+- **Q7:** the pilot pair (and its maintenance window) is chosen by the PO later. It is **not** a freeze blocker; it
+  blocks only the first production run (§9). `FW-FOXTROT-07` / `CLS-TANGO-01` in §9 stays a recommendation, not a
+  decision.
+- **Remaining before freeze:** the Q3 decision council and code review, then the PO freeze of this contract.
