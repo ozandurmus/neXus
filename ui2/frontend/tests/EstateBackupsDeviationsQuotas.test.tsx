@@ -233,6 +233,72 @@ describe("EstateBackupsDeviationsQuotas & estateBackupsParityModel", () => {
     );
   });
 
+  it("shows ratio UNKNOWN, never 100%, for a size anomaly with no baseline and no ratio, and keeps the computed percent when a baseline > 0 exists", () => {
+    const deviations: BackupDeviationOverview = {
+      active_major_deviations: [],
+      size_anomalies: [
+        {
+          device_id: "dev-kilo-01",
+          hostname: "FW-KILO-01",
+          deviation_id: "anom-k1",
+          artefact_id: "art-curr-k1",
+          last_good_artefact_id: "art-prev-k1",
+          direction: "growth",
+          plaintext_bytes: 300_000,
+          current_bytes: 300_000,
+          summary: "Size anomaly without baseline",
+          detected_at: DETECTED_AT,
+          open_copies: 1,
+          status: "OPEN",
+        },
+        {
+          device_id: "dev-kilo-02",
+          hostname: "FW-KILO-02",
+          deviation_id: "anom-k2",
+          artefact_id: "art-curr-k2",
+          last_good_artefact_id: "art-prev-k2",
+          direction: "growth",
+          plaintext_bytes: 300_000,
+          median_bytes: 100_000,
+          baseline_bytes: 100_000,
+          current_bytes: 300_000,
+          summary: "Size anomaly with baseline",
+          detected_at: DETECTED_AT,
+          open_copies: 1,
+          status: "OPEN",
+        },
+      ],
+      total_deviations_checked: 2,
+      devices_known: 2,
+      window_days: 7,
+    };
+
+    render(
+      <EstateBackupsDeviationsQuotas
+        deviations={deviations}
+        backupsState="ok"
+        quotas={{ state: "ok", value: { store_mounted: true, stores: [] } }}
+        backupEvidenceAt={EVIDENCE_AT}
+        now={NOW}
+      />,
+    );
+
+    const devCard = screen.getByTestId("estate-backups-deviations-card");
+    const unknownRow = devCard.querySelector('[data-size-anomaly-row="dev-kilo-01"]') as HTMLElement;
+    expect(within(unknownRow).getByText("Changed, ratio UNKNOWN")).toBeInTheDocument();
+    expect(
+      within(unknownRow).getByText(/^ratio UNKNOWN \(no baseline recorded\) · 300,000 B current/),
+    ).toBeInTheDocument();
+    expect(unknownRow.textContent).not.toMatch(/100%/);
+    expect(unknownRow.textContent).not.toMatch(/0 B baseline/);
+
+    const knownRow = devCard.querySelector('[data-size-anomaly-row="dev-kilo-02"]') as HTMLElement;
+    expect(
+      within(knownRow).getByText("300% of 100,000 B baseline (300,000 B) · 1 anomalous backup"),
+    ).toBeInTheDocument();
+    expect(knownRow.textContent).not.toMatch(/ratio UNKNOWN/);
+  });
+
   it("renders per-store quota rows (Within quota, Near limit, Over quota, No quota, and UNKNOWN when used_bytes === null or store_mounted === false), summary counts with unit words, EvidenceStamp, and MoreFooter when stores exceed BACKUP_STORE_QUOTA_CAP (8)", () => {
     const stores = [
       {

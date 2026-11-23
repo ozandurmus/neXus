@@ -37,6 +37,15 @@ describe("estate rewind model", () => {
     expect(s.units[0].lenses.compliance.state).toBe("ok");
   });
 
+  it("does not read an EVIDENCED figure with a missing fail count as All pass", () => {
+    const v = view("2026-11-12T02:00:00Z", "READY", "2026-11-12T01:00:00Z");
+    const unit = v.units[0] as unknown as { compliance: Record<string, unknown> };
+    unit.compliance = { state: "EVIDENCED", pass_count: 5, critical_fail_count: 0, evidence_at: "2026-11-12T01:00:00Z" };
+    const s = buildRewindSnapshot(v);
+    expect(s.units[0].lenses.compliance).toMatchObject({ state: "unk", word: "UNKNOWN", evidenceAt: null });
+    expect(s.units[0].lenses.compliance.state).not.toBe("ok");
+  });
+
   it("lists only differences and states direction", () => {
     const a = buildRewindSnapshot(view("2026-11-12T02:00:00Z", "READY", "2026-11-12T01:00:00Z"));
     const b = buildRewindSnapshot(view("2026-11-19T02:00:00Z", "NOT_READY", "2026-11-18T01:00:00Z"));

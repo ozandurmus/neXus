@@ -221,10 +221,20 @@ export function EstateBackupsDeviationsQuotas({
                       {anom.hostname ?? anom.device_id}
                     </Box>
                     <Box component="span">
-                      <StateBadge state="watch" word={sizeAnomalyWord(anom)} dense />
+                      <StateBadge
+                        state="watch"
+                        word={
+                          anom.ratio === null
+                            ? `${anom.direction === "shrink" ? "Shrank" : "Changed"}, ratio UNKNOWN`
+                            : sizeAnomalyWord({ direction: anom.direction, ratio: anom.ratio })
+                        }
+                        dense
+                      />
                     </Box>
                     <Box component="span" sx={{ color: ev.ink2 }}>
-                      {`${anom.ratio_percent}% of ${anom.baseline_bytes.toLocaleString("en-US")} B baseline (${anom.current_bytes.toLocaleString("en-US")} B) · ${plural(anom.open_copies, "anomalous backup", "anomalous backups")}`}
+                      {anom.ratio === null || anom.ratio_percent === null
+                        ? `ratio UNKNOWN (no baseline recorded) · ${anom.current_bytes.toLocaleString("en-US")} B current · ${plural(anom.open_copies, "anomalous backup", "anomalous backups")}`
+                        : `${anom.ratio_percent}% of ${anom.baseline_bytes.toLocaleString("en-US")} B baseline (${anom.current_bytes.toLocaleString("en-US")} B) · ${plural(anom.open_copies, "anomalous backup", "anomalous backups")}`}
                     </Box>
                     <EvidenceStamp at={anom.detected_at} source="detected" now={now} />
                     <Box

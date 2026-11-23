@@ -33,9 +33,10 @@ export interface DeviceLogSourceSummaryRow {
   readonly label: string;
   readonly statusWord: string;
   readonly badgeState: BadgeState;
-  readonly chunks: number;
-  readonly lines: number;
-  readonly bytesText: string;
+  /** Null when the source's stored counts are missing: rendered as UNKNOWN, never 0. */
+  readonly chunks: number | null;
+  readonly lines: number | null;
+  readonly bytesText: string | null;
   /** Age of the evidence: the newest stored chunk, else the source's last run. */
   readonly evidenceAt: string | null;
 }
@@ -59,8 +60,9 @@ export interface DeviceLogsSummary {
   readonly headline: string;
   /** Null when the figure's read failed: rendered as UNKNOWN. */
   readonly sourceCount: number | null;
+  /** Total stored chunks; null when the sources read failed or any source did not report its stored count. */
   readonly chunkCount: number | null;
-  /** Total stored lines and bytes across the sources; null when the sources read failed. */
+  /** Total stored lines and bytes across the sources; null when the sources read failed or any source's count is missing. */
   readonly lineCount: number | null;
   readonly byteCount: number | null;
   readonly bytesText: string | null;
@@ -81,6 +83,21 @@ export interface DeviceLogsSummary {
   readonly gapsEvidenceAt: string | null;
   readonly crashEvidenceAt: string | null;
   readonly failedFigures: readonly LogsFigure[];
+}
+
+/** A stored count the source reported as a finite number, else null (UNKNOWN). */
+function finiteCount(n: number | null | undefined): number | null {
+  return typeof n === "number" && Number.isFinite(n) ? n : null;
+}
+
+/** Sum of per-source counts; null when any source did not report the count (a partial total is not a total). */
+function sumCounts(values: readonly (number | null)[]): number | null {
+  let total = 0;
+  for (const v of values) {
+    if (v === null) return null;
+    total += v;
+  }
+  return total;
 }
 
 function sourceBadgeState(status: string): BadgeState {
@@ -112,20 +129,29 @@ export function buildDeviceLogsSummary(reads: DeviceLogsReads): DeviceLogsSummar
 
   // Sources: the count of collected sources; chunks and the newest chunk time come from the same read.
   const sourceCount = sourcesRead ? sourcesRead.sources.length : null;
-  const chunkCount = sourcesRead ? sourcesRead.sources.reduce((n, s) => n + s.stored.chunks, 0) : null;
-  const newestChunkAt = sourcesRead ? newestIso(sourcesRead.sources.map((s) => s.stored.newest_chunk_at)) : null;
-  const lineCount = sourcesRead ? sourcesRead.sources.reduce((n, s) => n + (s.stored?.lines ?? 0), 0) : null;
-  const byteCount = sourcesRead ? sourcesRead.sources.reduce((n, s) => n + (s.stored?.bytes ?? 0), 0) : null;
+  const chunkCount = sourcesRead
+    ? sumCounts((sourcesRead.sources ?? []).map((s) => finiteCount(s.stored?.chunks)))
+    : null;
+  const newestChunkAt = sourcesRead ? newestIso(sourcesRead.sources.map((s) => s.stored?.newest_chunk_at ?? null)) : null;
+  const lineCount = sourcesRead
+    ? sumCounts((sourcesRead.sources ?? []).map((s) => finiteCount(s.stored?.lines)))
+    : null;
+  const byteCount = sourcesRead
+    ? sumCounts((sourcesRead.sources ?? []).map((s) => finiteCount(s.stored?.bytes)))
+    : null;
   const bytesText = byteCount !== null ? formatBytes(byteCount) : null;
-  const sourceRows: DeviceLogSourceSummaryRow[] = (sourcesRead?.sources ?? []).slice(0, LOG_SOURCES_CAP).map((s) => ({
-    label: sourceLabel(s.source_key),
-    statusWord: sourceStatusWord(s.status),
-    badgeState: sourceBadgeState(s.status),
-    chunks: s.stored?.chunks ?? 0,
-    lines: s.stored?.lines ?? 0,
-    bytesText: formatBytes(s.stored?.bytes ?? 0),
-    evidenceAt: s.stored?.newest_chunk_at ?? s.last_run_at ?? null,
-  }));
+  const sourceRows: DeviceLogSourceSummaryRow[] = (sourcesRead?.sources ?? []).slice(0, LOG_SOURCES_CAP).map((s) => {
+    const bytes = finiteCount(s.stored?.bytes);
+    return {
+      label: sourceLabel(s.source_key),
+      statusWord: sourceStatusWord(s.status),
+      badgeState: sourceBadgeState(s.status),
+      chunks: finiteCount(s.stored?.chunks),
+      lines: finiteCount(s.stored?.lines),
+      bytesText: bytes === null ? null : formatBytes(bytes),
+      evidenceAt: s.stored?.newest_chunk_at ?? s.last_run_at ?? null,
+    };
+  });
 
   // Gaps.
   const gaps = gapsRead?.gaps ?? [];
@@ -205,12 +231,17 @@ export function buildDeviceLogsSummary(reads: DeviceLogsReads): DeviceLogsSummar
   const attentionStatus = (sourcesRead?.sources ?? []).some((src) =>
     src.status === "BACKLOG" || src.status === "TOO_LARGE" || src.status === "GAP" || src.status === "STORAGE_REFUSED");
   const attention = attentionStatus || (gapCount ?? 0) > 0 || (crashFileCount ?? 0) > 0 || failedFigures.length > 0;
+  // A source without its stored counts makes the chunk, line and byte totals UNKNOWN: the block is not OK.
+  const countsUnknown = chunkCount === null;
+  const unknown = failedFigures.length > 0 || countsUnknown;
   return {
     ...base,
-    state: failedFigures.length > 0 ? "unknown" : "collected",
-    badge: failedFigures.length > 0 ? "unk" : attention ? "watch" : "ok",
-    badgeWord: failedFigures.length > 0 ? "UNKNOWN" : attention ? "Review" : "OK",
-    headline: `${sourceCount} ${sourceCount === 1 ? "source" : "sources"} · ${chunkCount} ${chunkCount === 1 ? "chunk" : "chunks"} collected`,
+    state: unknown ? "unknown" : "collected",
+    badge: unknown ? "unk" : attention ? "watch" : "ok",
+    badgeWord: unknown ? "UNKNOWN" : attention ? "Review" : "OK",
+    headline: countsUnknown
+      ? `${sourceCount} ${sourceCount === 1 ? "source" : "sources"} · stored counts UNKNOWN for a source`
+      : `${sourceCount} ${sourceCount === 1 ? "source" : "sources"} · ${chunkCount} ${chunkCount === 1 ? "chunk" : "chunks"} collected`,
   };
 }
 

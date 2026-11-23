@@ -8,6 +8,7 @@ import { DataTable, type DataColumn } from "../../shell/DataTable";
 import { M3Button, StatusChip } from "../../shell/M3Widgets";
 import { StatePanel, Ts } from "../../shell/States";
 import { actorLabel } from "../../shell/presenters";
+import { plural } from "../../shell/plural";
 import type { Tone } from "../../shell/tone";
 import { m3 } from "../../theme/m3Theme";
 import type { ZoneNotice, ZoneTabProps } from "./ZoneMatrixScreen";
@@ -90,8 +91,6 @@ const sizeChange = (before: string | undefined, after: string | undefined) =>
   before === after ? addressCount(after) : `${addressCount(before)} to ${addressCount(after)}`;
 
 const sizesText = (sizes: FamilySizes | undefined) => `IPv4 ${addressCount(sizes?.IPV4)}, IPv6 ${addressCount(sizes?.IPV6)}`;
-
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * The Versions tab: first the draft for review (its changes, the publish panel, discard, its revisions) for the people

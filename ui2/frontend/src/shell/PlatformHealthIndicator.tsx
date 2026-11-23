@@ -5,6 +5,7 @@ import { m3 } from "../theme/m3Theme";
 import { getSystemPods, type PodStatusView, type PodsView } from "../auth/adminApi";
 import { PRODUCT_NAME, PRODUCT_SHORT } from "../brand/product";
 import { NAV_LEAVES, leafLocked, leafShown, type NavSessionGrants } from "./navModel";
+import { plural } from "./plural";
 
 /**
  * neXus' own health in the top bar (PO 2026-11-13 amendment of navigation decisions F1/F2). Platform status became an
@@ -32,8 +33,6 @@ const statusOf = (error: unknown): number | null => {
   const status = (error as { status?: unknown } | null)?.status;
   return typeof status === "number" ? status : null;
 };
-
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** A Job the CronJob controller started on its schedule. */
 export interface CronRun { readonly cronJob: string; readonly job: string; readonly scheduledAt: number }

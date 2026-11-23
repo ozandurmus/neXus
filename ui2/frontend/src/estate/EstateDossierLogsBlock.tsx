@@ -104,7 +104,7 @@ export function EstateDossierLogsBlock({
 
   const sourcesDetail = s.sourceCount === null ? null : (
     <Typography sx={{ fontSize: "12.5px", color: ev.ink2 }}>
-      {`${plural(s.chunkCount ?? 0, "chunk", "chunks")} · ${plural(s.lineCount ?? 0, "line", "lines")} · ${s.bytesText ?? "0 B"} stored`}
+      {`${s.chunkCount === null ? "chunks UNKNOWN" : plural(s.chunkCount, "chunk", "chunks")} · ${s.lineCount === null ? "lines UNKNOWN" : plural(s.lineCount, "line", "lines")} · ${s.bytesText === null ? "UNKNOWN" : s.bytesText} stored`}
     </Typography>
   );
   const gapsDetail = s.gapCount === null ? null : (
@@ -150,7 +150,7 @@ export function EstateDossierLogsBlock({
                 <Typography sx={{ fontSize: "12.5px", fontWeight: 600, minWidth: "130px" }}>{row.label}</Typography>
                 <StateBadge state={row.badgeState} word={row.statusWord} dense />
                 <Typography sx={{ fontSize: "12.5px", color: ev.ink2 }}>
-                  {`${plural(row.chunks, "chunk", "chunks")} · ${plural(row.lines, "line", "lines")} · ${row.bytesText}`}
+                  {`${row.chunks === null ? "chunks UNKNOWN" : plural(row.chunks, "chunk", "chunks")} · ${row.lines === null ? "lines UNKNOWN" : plural(row.lines, "line", "lines")} · ${row.bytesText === null ? "UNKNOWN" : row.bytesText}`}
                 </Typography>
                 <Box sx={{ ml: "auto" }}>
                   <EvidenceStamp at={row.evidenceAt} source="chunk" now={now} missingLabel="no chunk yet" />

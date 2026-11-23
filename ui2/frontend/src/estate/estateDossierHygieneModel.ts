@@ -212,7 +212,12 @@ export function buildDossierHygieneModel(input: {
     totals,
     rows: capped.shown,
     totalContainers: all.length,
-    evidenceAt: unknown > 0 ? null : oldestIso(all.map((r) => r.snapshotAt)),
+    // A container without a valid snapshot time is UNKNOWN; the block stamp must not
+    // present the age of the remaining containers as the age of the whole block.
+    evidenceAt:
+      unknown > 0 || all.some((r) => r.snapshotAt === null)
+        ? null
+        : oldestIso(all.map((r) => r.snapshotAt)),
     moreLabel: capped.moreLabel,
     notApplicable: false,
   };

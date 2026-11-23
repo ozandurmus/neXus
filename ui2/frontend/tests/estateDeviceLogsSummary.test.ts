@@ -126,6 +126,26 @@ describe("buildDeviceLogsSummary", () => {
     expect(s.newestChunkAt).toBeNull();
   });
 
+  it("never sums a source's missing stored counts as 0: totals are UNKNOWN and its row is UNKNOWN", () => {
+    const unreported = { ...source("cp_fwd_elg", 2, 5 * HOUR), stored: undefined } as unknown as SystemLogSource;
+    const reads: DeviceLogsReads = { ...FIXTURE, sources: { ok: true, value: sourcesOf([source("cp_messages", 3, 2 * HOUR), unreported]) } };
+    const s = buildDeviceLogsSummary(reads);
+    expect(s.chunkCount).toBeNull();
+    expect(s.lineCount).toBeNull();
+    expect(s.byteCount).toBeNull();
+    expect(s.bytesText).toBeNull();
+    expect(s.badge).toBe("unk");
+    expect(s.badgeWord).toBe("UNKNOWN");
+    expect(s.headline).not.toContain("null");
+    const [known, missing] = s.sourceRows;
+    expect(known?.chunks).toBe(3);
+    expect(known?.lines).toBe(30);
+    expect(missing?.chunks).toBeNull();
+    expect(missing?.lines).toBeNull();
+    expect(missing?.bytesText).toBeNull();
+    expect(missing?.evidenceAt).toBe(iso(HOUR)); // falls back to the source's last run, not a count
+  });
+
   it("builds the standard-view link with standard=1 for this device", () => {
     const href = standardDeviceLogsHref(DEVICE);
     const params = new URLSearchParams(href.slice(1));
