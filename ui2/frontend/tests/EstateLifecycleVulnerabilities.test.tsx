@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LifecycleDevice, LifecycleVulnerabilities } from "../src/auth/adminApi";
 import { EstateLifecycleScreen } from "../src/estate/EstateLifecycleScreen";
-import { LIFECYCLE_DEVICE_CAP } from "../src/estate/estateLifecycleCatalogModel";
+import { LIFECYCLE_DEVICE_CAP, lifecycleFleetSummaryLines } from "../src/estate/estateLifecycleCatalogModel";
 import { standardLifecycleHref } from "../src/estate/estateRouting";
 import { vulnerabilitySummary } from "../src/screens/LifecycleVulnerabilitiesPanel";
 
@@ -139,5 +139,65 @@ describe("Estate lifecycle device vulnerability cell", () => {
     expect(standardLifecycleHref()).toBe("?screen=inventory&view=lifecycle&standard=1");
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
+  });
+});
+
+describe("Estate lifecycle fleet summary and per-device support line", () => {
+  it("states each fleet counter with what it counts, and UNKNOWN (never 0) for a missing or null counter", async () => {
+    fleetState.value = {
+      state: "ok",
+      value: {
+        as_of: AS_OF,
+        devices: [device("dev-syn-10", "FW-TANGO-04", EVALUATED_CLEAN)],
+        summary: { past_end_of_support: 3, within_180_days: 1, within_365_days: null, license_problems: 0 },
+      },
+    };
+    render(<EstateLifecycleScreen />);
+    const block = await screen.findByTestId("estate-lifecycle-fleet-summary");
+    const text = block.textContent ?? "";
+    expect(text).toContain("3 devices · Past end of support");
+    expect(text).toContain("1 device · Within 180 days");
+    expect(text).toContain("0 devices · License problems");
+    expect(text).toContain("UNKNOWN · Within 365 days");
+    expect(text).toContain("UNKNOWN · No lifecycle data");
+    expect(text).not.toMatch(/0 devices · (No lifecycle|Within 365)/);
+    expect(within(block).getByText(/lifecycle summary/)).toBeDefined();
+  });
+
+  it("maps every summary key to a line, with UNKNOWN for non-numeric values", () => {
+    const lines = lifecycleFleetSummaryLines({ past_end_of_support: "x" as unknown as number, live_patch_missing: 1 });
+    expect(lines).toHaveLength(10);
+    expect(lines.find((l) => l.key === "past_end_of_support")?.text).toBe("UNKNOWN");
+    expect(lines.find((l) => l.key === "live_patch_missing")?.text).toBe("1 device");
+    expect(lines.every((l) => l.text === "UNKNOWN" || /^\d+ devices?$/.test(l.text))).toBe(true);
+    expect(lifecycleFleetSummaryLines(null).every((l) => l.text === "UNKNOWN")).toBe(true);
+  });
+
+  it("renders hardware and software end of support, license state and Live Patch in each device's meta line", async () => {
+    const dated = {
+      ...device("dev-syn-11", "FW-JULIET-06", EVALUATED_CLEAN),
+      hardware: { status: "MATCHED", catalog: { end_of_support: "2028-06-30", month_only: [] } },
+      software: { status: "MATCHED", catalog: { end_of_support: "2027-01-31", month_only: ["end_of_support"] } },
+      nearest_license: { expiry: "2027-03-01" },
+      live_patch: { missing: false, read_outcome: "COLLECTED", package_take: "T5", armed: 2, ready: 0, idle: 0, jumbofix: 0, other: 0, jumbo: null, items: [] },
+    } as unknown as LifecycleDevice;
+    fleetState.value = { state: "ok", value: { as_of: AS_OF, devices: [dated], summary: {} } };
+    render(<EstateLifecycleScreen />);
+    const meta = await screen.findByTestId("estate-device-lifecycle-meta");
+    expect(meta.textContent).toBe("HW EOS: 2028-06-30 · SW EOS: 2027-01 · Licenses: 2027-03-01 · Live Patch: take T5 · 2 armed");
+  });
+
+  it("shows UNKNOWN for missing support dates and unknown license status, never OK or Fine", async () => {
+    const bare = {
+      ...device("dev-syn-12", "CLS-ROMEO-01", EVALUATED_CLEAN),
+      license_status: "UNKNOWN",
+      live_patch: null,
+    } as unknown as LifecycleDevice;
+    fleetState.value = { state: "ok", value: { as_of: AS_OF, devices: [bare], summary: {} } };
+    render(<EstateLifecycleScreen />);
+    const meta = (await screen.findByTestId("estate-device-lifecycle-meta")).textContent ?? "";
+    expect(meta).toBe("HW EOS: UNKNOWN · SW EOS: UNKNOWN · Licenses: UNKNOWN");
+    expect(meta).not.toMatch(/\bOK\b|Fine/);
+    expect(meta).not.toContain("Live Patch");
   });
 });

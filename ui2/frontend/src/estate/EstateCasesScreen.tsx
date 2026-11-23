@@ -15,6 +15,7 @@ import {
   buildFailedCutoverSegmentsModel,
   type CutoverSegmentsModel,
 } from "./estateCutoverSegmentsModel";
+import { EstateDiagnosticRuns } from "./EstateDiagnosticRuns";
 import { ESTATE_MONO, ev } from "./estateTokens";
 
 type Load =
@@ -261,6 +262,7 @@ export function EstateCasesScreen() {
       ) : null}
 
       <CutoverSegmentsSection read={cutoverRead} />
+      <EstateDiagnosticRuns />
     </Box>
   );
 }

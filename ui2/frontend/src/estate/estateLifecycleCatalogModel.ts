@@ -1,5 +1,6 @@
 import type { LifecycleCatalogEntry, LifecycleDevice, LifecycleVulnerabilities } from "../auth/adminApi";
 import { vulnerabilitySummary } from "../screens/LifecycleVulnerabilitiesPanel";
+import { licensesCell, livePatchCell, supportText } from "../screens/LifecycleScreen";
 
 /** Catalog rows shown before "+N more" (the same cap the standard Lifecycle view applies to its catalog table). */
 export const LIFECYCLE_CATALOG_CAP = 50;
@@ -128,12 +129,55 @@ export interface LifecycleDeviceVulnerabilityRow {
   readonly deviceId: string;
   readonly label: string;
   readonly cell: DeviceVulnerabilityCell;
+  /** HW/SW end of support, licenses and (when the device has a Live Patch record) Live Patch, as one line. */
+  readonly supportLine: string;
+}
+
+/** Fleet summary counters, in the order the standard Lifecycle view shows them after its vulnerability cards. */
+export const LIFECYCLE_FLEET_SUMMARY: readonly (readonly [key: string, label: string])[] = [
+  ["past_end_of_support", "Past end of support"],
+  ["within_180_days", "Within 180 days"],
+  ["within_365_days", "Within 365 days"],
+  ["no_lifecycle_data", "No lifecycle data"],
+  ["lifecycle_not_evaluated", "Lifecycle not evaluated"],
+  ["lifecycle_needs_review", "Lifecycle needs review"],
+  ["licenses_within_60_days", "Licenses within 60 days"],
+  ["license_problems", "License problems"],
+  ["live_patch_not_active", "Live Patch not active"],
+  ["live_patch_missing", "No Live Patch package"],
+];
+
+export interface LifecycleFleetSummaryLine {
+  readonly key: string;
+  readonly label: string;
+  /** "N devices" / "1 device" when the counter is a finite number; "UNKNOWN" when it is missing, null or non-numeric. */
+  readonly text: string;
+}
+
+/** The ten fleet counters. A missing counter is UNKNOWN, never 0. */
+export function lifecycleFleetSummaryLines(summary: Record<string, number | null> | null | undefined): LifecycleFleetSummaryLine[] {
+  return LIFECYCLE_FLEET_SUMMARY.map(([key, label]) => {
+    const value = summary?.[key];
+    const text = typeof value === "number" && Number.isFinite(value) ? `${value} ${value === 1 ? "device" : "devices"}` : "UNKNOWN";
+    return { key, label, text };
+  });
+}
+
+/** A table word as the Estate view states it: "Unknown" and "Not collected" become UNKNOWN / NOT_COLLECTED, never hidden. */
+function unknownWords(text: string): string {
+  return text.replace(/\bUnknown\b/g, "UNKNOWN").replace(/\bNot collected\b/g, "NOT_COLLECTED");
+}
+
+/** The support, license and Live Patch line of one device, with the standard view's words (normalised for unknown evidence). */
+export function lifecycleDeviceSupportLine(d: LifecycleDevice): string {
+  const base = `HW EOS: ${supportText(d.hardware)} · SW EOS: ${supportText(d.software)} · Licenses: ${licensesCell(d)}`;
+  return unknownWords(d.live_patch ? `${base} · Live Patch: ${livePatchCell(d)}` : base);
 }
 
 /** Device rows for the vulnerability card: sorted by rank then label, so the capped list is stable across reloads. */
 export function lifecycleDeviceVulnerabilityRows(devices: readonly LifecycleDevice[]): LifecycleDeviceVulnerabilityRow[] {
   return devices
-    .map((d) => ({ deviceId: d.device_id, label: d.hostname ?? d.device_id, cell: deviceVulnerabilityCell(d.vulnerabilities) }))
+    .map((d) => ({ deviceId: d.device_id, label: d.hostname ?? d.device_id, cell: deviceVulnerabilityCell(d.vulnerabilities), supportLine: lifecycleDeviceSupportLine(d) }))
     .sort((x, y) => x.cell.sortRank - y.cell.sortRank || x.label.localeCompare(y.label) || x.deviceId.localeCompare(y.deviceId));
 }
 

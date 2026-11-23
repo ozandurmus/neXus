@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-19T20:59:12Z
+Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-22T21:39:24Z
 
 ## Now
 - NXS-LOCAL-0391 — Release queue: ASA readiness, integration gate, CP advisories, zone matrix, ACI step 1, API latency, Backups batch (in_progress)
@@ -45,6 +45,7 @@ Build: NXS-LOCAL-0391 · Track: PCP.x · Generated: 2026-11-19T20:59:12Z
 - P2/planned ubi_base_glibc_fix_pending
 - P2/planned zone_matrix_steps_3_plus
 - P3/planned CP-SHELL-M2-LAB-READ
+- P3/planned add_device_discovery_failure_class_visible
 - P3/planned advisory_fetch_cisa_kev_ingest_refused_during_deploy_overlap
 - P3/planned corporate_inspection_ca_verify_with_it
 - P3/planned cp_policy_chunked_hits_acceptance

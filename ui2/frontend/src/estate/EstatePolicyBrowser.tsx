@@ -11,6 +11,7 @@ import {
 } from "../auth/adminApi";
 import { EstateCard, EvidenceStamp } from "./EstatePrimitives";
 import { EstateOfflineAnalyses } from "./EstateOfflineAnalyses";
+import { EstatePolicyHygiene } from "./EstatePolicyHygiene";
 import { standardChangesHref } from "./estateRouting";
 import {
   POLICY_BROWSER_OBJECT_CAP,
@@ -38,7 +39,7 @@ export function EstatePolicyBrowser({ now = new Date() }: { readonly now?: Date 
   const [text, setText] = useState<string>("");
   const [query, setQuery] = useState<string>("");
   const [page, setPage] = useState<Read<PolicyPage>>({ state: "loading" });
-  const [tab, setTab] = useState<"rules" | "offline">("rules");
+  const [tab, setTab] = useState<"rules" | "offline" | "hygiene">("rules");
 
   useEffect(() => {
     let active = true;
@@ -119,7 +120,7 @@ export function EstatePolicyBrowser({ now = new Date() }: { readonly now?: Date 
       </Box>
 
       <Box role="tablist" aria-label="Policy browser views" sx={{ px: "18px", pb: "10px", display: "flex", gap: "6px" }}>
-        {([["rules", "Rules and objects"], ["offline", "Offline analyses"]] as const).map(([key, label]) => (
+        {([["rules", "Rules and objects"], ["offline", "Offline analyses"], ["hygiene", "Hygiene"]] as const).map(([key, label]) => (
           <button key={key} role="tab" type="button" aria-selected={tab === key} onClick={() => setTab(key)}
             style={{ fontFamily: ESTATE_SANS, fontSize: "12.5px", padding: "3px 10px", border: `1px solid ${ev.line}`,
               borderRadius: "6px", background: tab === key ? ev.accent : "transparent", color: tab === key ? "#fff" : ev.ink2, cursor: "pointer" }}>
@@ -131,6 +132,10 @@ export function EstatePolicyBrowser({ now = new Date() }: { readonly now?: Date 
       {tab === "offline" ? (
         <Box sx={{ px: "18px", pb: "12px" }}>
           <EstateOfflineAnalyses policy={selected} now={now} />
+        </Box>
+      ) : tab === "hygiene" ? (
+        <Box sx={{ px: "18px", pb: "12px" }}>
+          <EstatePolicyHygiene policy={selected} collectedAt={selectedMeta?.collectedAt ?? null} now={now} />
         </Box>
       ) : (<>
       {selectedMeta && (

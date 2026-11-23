@@ -1,12 +1,12 @@
 # neXus — Current State
 
-Hot checkpoint reconciled on 2026-11-18 against `origin/main` at `1fa4e9f1`; the 2026-11-17 and 2026-11-18 ships are merged (live deploy not re-verified here).
+Hot checkpoint reconciled on 2026-11-23 against `origin/main` at `cb8277c3`; ships through 2026-11-22 are merged (live deploy not re-verified here).
 `project/QUEUE.md` and its tool-managed data own delivery state; repository
 source proves implementation, not the current deployment or device health.
 
 ## Product today
 
-UI2 is the maintained Java/React product; repository schema is **V250** (live V242 at the last check).
+UI2 is the maintained Java/React product; repository schema is **V261** (live V242 at the last check).
 Inventory, configuration, compliance, encrypted backups, Operations, Policy,
 lifecycle and security checks, Packet Analysis and device system logs use
 masked `aiview` projections. Restore from the UI remains disabled. Sign-in uses
@@ -24,11 +24,12 @@ an audited switch (V203). Cisco ASA and FortiGate have identity, HA facts and fa
 release queue below, one PR per lane after a live migration dry run.
 `NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory
 sign-in, JSON logs, metrics, CodeQL and Spring Security steps 1-5 landed; SAML stays off until ADFS metadata exists.
-Next: `recovery_offhost_key_custody` (script S1 installed and run; off-host target and key custody open).
 
 Shipped through batch 14 (2026-11-16, live to V242; detail in `project/build_history.json`): ASA readiness, zone matrix 1-3, ACI step 1, lifecycle catalog, JSON logs, per-store quota, support bundles, Spring Security steps 1-3, vendor upload, SAML off by default, authorization map, database roles. Applied by hand 2026-11-16: database ingress NetworkPolicy, platform backup script S1.
 
-Since 2026-11-17: FortiGate FGCP readiness, ASA readiness on for all five pairs (all READY 2026-11-18), Traffic and ARP check signed off (V249), batch b37, MDS export back on the nightly 02:30 schedule (first run 2026-11-19, unverified), Panorama change-actor trial on (commits logged Submitted are not joined), Policy installation P1 read-only monitoring FROZEN and live, ASA saved-state relation (V250, awaits the first nightly backup). Drafts only: static route change, policy installation P2-P4, ASA failover execution.
+Since 2026-11-17: FortiGate FGCP readiness, ASA readiness on for all five pairs (all READY 2026-11-18), Traffic and ARP check signed off (V249), batch b37, MDS export back on the nightly 02:30 schedule (first run 2026-11-19, unverified), Panorama change-actor trial on (commits logged Submitted are not joined), Policy installation P1 read-only monitoring FROZEN and live, ASA saved-state relation (V250, keyed by artefact V253). Drafts only: policy installation P2-P4, ASA failover execution.
+
+Since 2026-11-18, on main and not live-verified: Script Execution slices 1-2 (V251, V258), static route R0 reads only (V252), VSX chassis failover (V255/V256), worker authority recheck (V260), database roles step 0 (V261), aiview read-only admin slice 1 (off), Overwatch rename R1, and the read-only alternative Estate view beside Standard.
 
 Open PO decisions: product name; narrowing the ASA identity ACEs; the off-host recovery target; ADFS metadata; the deploy scan parallelism.
 
@@ -91,7 +92,6 @@ Authority: [contract](docs/design/DATA_SANITIZER_CONTRACT.md).
 - NSPM wave 2 and 3 and per-device job serialization are not merged here.
 - Support bundles: all vendors built; vendor upload untested against real vendor hosts; PO-attended pilot open.
 - Database roles: V242 roles exist, no workload switched. Module pods: backup pod at 0 replicas, cutover not done.
-- Verify on 2026-11-19: the first scheduled MDS export and the first ASA saved-state relations.
 - Fleet facts (2026-11-16): 136 devices, 40 clusters with daily failover readiness checks, about 1,450 automated jobs a day.
 - Open follow-ups: nightly e2e fails on a legitimate Platform status warning; cisa_kev fetch refused during a deploy; Trivy cache claim; failover four-eyes check before the SCC handover.
 - Masking residual gaps are closed in rules by logmask-v7/v8 (queued), not yet

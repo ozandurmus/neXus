@@ -173,6 +173,7 @@
     "NXS-LOCAL-0158"
   ],
   "backlog_classifications": {
+    "add_device_discovery_failure_class_visible": "java_feature",
     "CP-SHELL-M2-LAB-READ": "java_debt",
     "ubi_base_glibc_fix_pending": "java_debt",
     "hosta_apparmor_stacked_label_override": "java_debt",
@@ -376,7 +377,6 @@
     "deploy_scan_parallelism": "agent_operations",
     "failover_four_eyes_enforcement_verify_before_scc_handover": "java_debt",
     "device_software_version_history": "java_feature",
-    "failover_approver_role_recheck_at_worker": "java_debt",
     "cyberark_archive_key_custody": "java_feature",
     "cyberark_device_credentials": "java_feature",
     "platform_backup_step1_host_roll": "agent_operations",
@@ -387,7 +387,10 @@
     "static_route_add_delete": "java_feature",
     "asa_failover_execution": "java_feature",
     "fortigate_route_changes_via_fortimanager": "java_feature",
-    "pan_change_actor_submitted_join_gap": "java_debt"
+    "pan_change_actor_submitted_join_gap": "java_debt",
+    "estate_view_review_findings": "java_debt",
+    "script_run_launcher_stdout_race": "java_debt",
+    "script_exec_image_cve_acceptances_2026_11_28": "java_debt"
   },
   "converted_lessons": [
     {
