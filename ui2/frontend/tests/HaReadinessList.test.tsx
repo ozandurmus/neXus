@@ -1,323 +1,366 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import type { CpFailoverSummary, DeviceSummary } from "../src/auth/adminApi";
+import type { CpFailoverSummary, DeviceSummary, FailoverIncident, ReadinessCheck } from "../src/auth/adminApi";
 import { HaReadinessList, primaryReasonWord } from "../src/screens/HaReadinessList";
 import { JobWindowContext } from "../src/shell/JobWindow";
+
 const at = "2026-10-02T09:00:00Z";
 const cluster = (title: string, vendor = "check_point") => ({ ref: title, title, members: [
   { device_id: `${title}-m1`, hostname: `FW-${title}-M1`, vendor_hint: vendor, ha_role: "active", inventory_collected_at: at },
   { device_id: `${title}-m2`, hostname: `FW-${title}-M2`, vendor_hint: vendor, ha_role: "standby", inventory_collected_at: at },
 ] as DeviceSummary[] });
 const clusters = [cluster("CLS-ALPHA-01"), cluster("CLS-BRAVO-02", "palo_alto"), cluster("CLS-CHARLIE-03"), cluster("CLS-DELTA-04", "cisco_asa")];
-const summary = (ref: string, status: "READY" | "NOT_READY"): CpFailoverSummary => ({
+type Status = "READY" | "NOT_READY" | "UNKNOWN";
+const summary = (ref: string, status: Status | null, extra: Partial<CpFailoverSummary> = {}): CpFailoverSummary => ({
   clusterId: ref, unitId: ref, cluster_member_ref: ref, activeWindow: false, lastRunAt: null, lastRunState: null,
   lastRunOutcome: null, masked: false, canRunReadiness: true,
-  readiness: { status, observedAt: at, failedCheck: status === "NOT_READY" ? "Installed policy parity" : "", checks: [] },
+  readiness: status ? { status, observedAt: at, failedCheck: status === "NOT_READY" ? "Installed policy parity" : "", checks: [] } : null, ...extra,
 });
 const rows = { "CLS-ALPHA-01": [summary("CLS-ALPHA-01", "READY")], "CLS-BRAVO-02": [summary("CLS-BRAVO-02", "NOT_READY")] };
-function setup(extra = {}) {
-  const onOpen = vi.fn(), onRun = vi.fn(), onBulkRun = vi.fn();
-  const view = render(<HaReadinessList clusters={clusters} rows={rows} running={null} busy={false} progress={{}} error={null} onOpen={onOpen} onRun={onRun} onBulkRun={onBulkRun} {...extra} />);
-  return { onOpen, onRun, onBulkRun, ...view };
+function setup(extra: Record<string, unknown> = {}) {
+  const onOpen = vi.fn(), onRun = vi.fn(), onBulkRun = vi.fn(), onFailover = vi.fn();
+  const view = render(<HaReadinessList clusters={clusters} rows={rows} running={null} busy={false} progress={{}} error={null}
+    onOpen={onOpen} onRun={onRun} onBulkRun={onBulkRun} onFailover={onFailover} {...extra} />);
+  return { onOpen, onRun, onBulkRun, onFailover, ...view };
 }
 const table = () => screen.getByRole("table", { name: "HA clusters" });
 const row = (name: string) => within(table()).getByRole("row", { name });
-afterEach(() => vi.useRealTimers());
-it("keeps cluster and VS expansion through summary arrival, refresh and reordering", () => {
-  const vs = { ...summary(clusters[0].ref, "NOT_READY"), unitId: "opaque-vs", virtual_system: "VS-ALPHA-07" };
-  const props = { clusters, rows: {}, running: null, busy: false, progress: {}, error: null,
-    onOpen: vi.fn(), onRun: vi.fn(), onBulkRun: vi.fn() };
-  const { rerender } = render(<HaReadinessList {...props} />);
-  const expand = (title: string) => within(row(title)).getByRole("button", { name: `Checks for ${title}` });
-  fireEvent.click(expand(clusters[0].title));
-  expect(row(clusters[0].title)).toHaveAttribute("aria-expanded", "true");
-  const refreshed: Record<string, CpFailoverSummary[]> = { ...rows, [clusters[0].ref]: [{ ...summary(clusters[0].ref, "NOT_READY"), clusterId: "opaque-cluster", unitId: "opaque-cluster" }, vs] };
-  rerender(<HaReadinessList {...props} rows={refreshed} />);
-  expect(row(clusters[0].title)).toHaveAttribute("aria-expanded", "true");
-  expect(expand(clusters[0].title)).toHaveAttribute("aria-expanded", "true");
-  expect(screen.getByRole("region", { name: `Checks for ${clusters[0].title}` })).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: `Virtual systems in ${clusters[0].title}` }));
-  fireEvent.click(expand("Virtual System VS-ALPHA-07"));
-  const updated = { ...refreshed, [clusters[0].ref]: refreshed[clusters[0].ref].map(unit => ({ ...unit, readiness: { ...unit.readiness!, status: "READY" as const } })) };
-  rerender(<HaReadinessList {...props} clusters={[...clusters].reverse()} rows={updated} />);
-  expect(row(clusters[0].title)).toHaveAttribute("aria-expanded", "true");
-  expect(row("Virtual System VS-ALPHA-07")).toHaveAttribute("aria-expanded", "true");
-  fireEvent.click(expand(clusters[0].title));
-  expect(row(clusters[0].title)).toHaveAttribute("aria-expanded", "false");
-  expect(row("Virtual System VS-ALPHA-07")).toHaveAttribute("aria-expanded", "true");
-  rerender(<HaReadinessList {...props} rows={{}} />);
-  expect(row(clusters[0].title)).toHaveAttribute("aria-expanded", "false");
+const rowNames = () => within(table()).getAllByRole("row").slice(1).map(e => e.getAttribute("aria-label"));
+const segment = (label: string, n: number) => screen.getByRole("button", { name: `${label}: ${n} clusters` });
+const all = () => fireEvent.click(screen.getByRole("button", { name: /^All: \d+ clusters$/ }));
+const check = (no: number, title: string, device: string, result: ReadinessCheck["result"], text: string, blocking = true, derived: unknown = {}) => ({
+  checkNo: no, title, member: device.endsWith("m1") ? "Member 1" : "Member 2", device_id: device, result, status: result, summary: text, blocking, derived, observedAt: at });
+afterEach(() => { cleanup(); vi.useRealTimers(); window.history.replaceState(null, "", "/"); });
+
+it("draws no segment and no row until the reads have settled, then opens on its segment and keeps it through a later refresh", () => {
+  const props = { clusters, rows: {}, running: null, busy: false, progress: {}, error: null, onOpen: vi.fn(), onRun: vi.fn(), onBulkRun: vi.fn() };
+  const { rerender } = render(<HaReadinessList {...props} settled={false} />);
+  expect(screen.getByText("Reading readiness and open incidents…")).toBeInTheDocument();
+  expect(screen.queryByRole("group", { name: "Readiness segments" })).toBeNull();
+  expect(screen.queryByRole("table", { name: "HA clusters" })).toBeNull();
+  rerender(<HaReadinessList {...props} rows={rows} settled />);
+  expect(segment("Can fail over now", 1)).toHaveAttribute("aria-pressed", "true");
+  // A re-check that turns the only ready cluster blocked does not move the reader to another segment.
+  rerender(<HaReadinessList {...props} rows={{ ...rows, "CLS-ALPHA-01": [summary("CLS-ALPHA-01", "NOT_READY")] }} settled />);
+  expect(segment("Can fail over now", 0)).toHaveAttribute("aria-pressed", "true");
 });
-it("uses full width, compact rows and cluster counts, sorting not ready, unknown, ready", () => {
-  setup();
-  const layout = table().closest(".ha-readiness-full-width")!;
-  expect(layout).toHaveStyle({ width: "100%", minWidth: "0" });
-  expect(getComputedStyle(layout).maxWidth).toBe("");
-  for (const name of ["Ready", "Not ready", "UNKNOWN", "Not supported"]) expect(screen.getByRole("button", { name: `${name}: 1 clusters` })).toHaveAttribute("aria-pressed", "false");
-  expect(within(table()).getAllByRole("row").slice(1).map(e => e.getAttribute("aria-label"))).toEqual(["CLS-BRAVO-02", "CLS-CHARLIE-03", "CLS-ALPHA-01"]);
-  expect(row("CLS-ALPHA-01")).toHaveStyle({ height: "48px" });
-  expect(within(table()).getAllByRole("columnheader")).toHaveLength(7);
-  expect(screen.queryByText("NOT_READY")).toBeNull();
+it("a Ready cluster whose blocking check warns says so in its pill, never a bare Ready (PO 2026-11-23)", () => {
+  const warned = summary("CLS-ALPHA-01", "READY", { readiness: { status: "READY", observedAt: at, failedCheck: "", checks: [
+    check(5, "Session synchronization", "CLS-ALPHA-01-m1", "WARN", "No sessions to synchronize"), check(5, "Session synchronization", "CLS-ALPHA-01-m2", "WARN", "No sessions to synchronize")] as never } });
+  setup({ rows: { ...rows, "CLS-ALPHA-01": [warned] } });
+  expect(row("CLS-ALPHA-01")).toHaveTextContent("Ready · 1 warning");
+  expect(within(row("CLS-ALPHA-01")).getByRole("button", { name: "Fail over CLS-ALPHA-01" })).toBeInTheDocument();
 });
-it("keeps the complete status label visible", () => {
+
+it("opens on 'Can fail over now' when something can be failed over, and counts each cluster once per segment", () => {
   setup();
-  const label = within(row("CLS-BRAVO-02")).getByText("Not ready");
-  expect(label).toHaveTextContent("Not ready");
-  expect(within(table()).getByRole("columnheader", { name: "Status" })).toHaveStyle({ width: "140px" });
-  expect(label.parentElement).toHaveStyle({ minWidth: "min-content" });
+  expect(rowNames()).toEqual(["CLS-ALPHA-01"]);
+  expect(segment("Can fail over now", 1)).toHaveAttribute("aria-pressed", "true");
+  expect(segment("Blocked", 1)).toHaveAttribute("aria-pressed", "false");
+  expect(segment("Unknown", 1)).toBeInTheDocument();
+  expect(segment("Readiness only", 0)).toBeInTheDocument();
+  expect(segment("All", 4)).toBeInTheDocument();
+  expect(within(table()).getAllByRole("columnheader").map(h => h.textContent)).toEqual(["Status", "Cluster", "Roles", "Reason", "Checked", "Action"]);
 });
-it("combines summary filters with cluster/member search and vendor filter", () => {
+
+it("opens on All when nothing can be failed over, and sorts All by state (blocked, unknown, can fail over, readiness only)", () => {
+  const asa = { ...summary("CLS-DELTA-04", "READY"), vendor: "cisco_asa", readinessAvailable: true };
+  setup({ rows: { ...rows, "CLS-ALPHA-01": [summary("CLS-ALPHA-01", "NOT_READY")], "CLS-DELTA-04": [asa] } });
+  expect(segment("All", 4)).toHaveAttribute("aria-pressed", "true");
+  expect(rowNames()).toEqual(["CLS-ALPHA-01", "CLS-BRAVO-02", "CLS-CHARLIE-03", "CLS-DELTA-04"]);
+  cleanup();
+  setup({ rows: { ...rows, "CLS-DELTA-04": [asa] } });
+  all();
+  expect(rowNames()).toEqual(["CLS-BRAVO-02", "CLS-CHARLIE-03", "CLS-ALPHA-01", "CLS-DELTA-04"]);
+});
+
+it("a segment filters its own clusters; search and vendor narrow it further", () => {
   setup();
-  for (const [label, name] of [["Ready", "CLS-ALPHA-01"], ["Not ready", "CLS-BRAVO-02"], ["UNKNOWN", "CLS-CHARLIE-03"]]) {
-    const tile = screen.getByRole("button", { name: `${label}: 1 clusters` });
-    fireEvent.click(tile);
-    expect(tile).toHaveAttribute("aria-pressed", "true");
-    expect(within(table()).getAllByRole("row")).toHaveLength(2);
-    expect(row(name)).toBeInTheDocument();
-    fireEvent.click(tile);
-  }
+  fireEvent.click(segment("Blocked", 1)); expect(rowNames()).toEqual(["CLS-BRAVO-02"]);
+  fireEvent.click(segment("Unknown", 1)); expect(rowNames()).toEqual(["CLS-CHARLIE-03"]);
+  all();
   fireEvent.change(screen.getByRole("textbox", { name: "Search cluster or member" }), { target: { value: " fw-cls-alpha-01-m2 " } });
-  expect(row("CLS-ALPHA-01")).toBeInTheDocument();
-  expect(screen.queryByRole("row", { name: "CLS-BRAVO-02" })).toBeNull();
-  fireEvent.mouseDown(screen.getByRole("combobox", { name: "Vendor" }));
-  fireEvent.click(screen.getByRole("option", { name: "Palo Alto" }));
-  expect(screen.getByText("No clusters match these filters")).toBeInTheDocument();
-});
-it("collapses unsupported vendors with no run actions and opens them via their filter", () => {
-  setup();
-  const group = screen.getByText("Not supported · 1 clusters").closest("details")!;
-  expect(group).not.toHaveAttribute("open");
-  expect(within(group).queryByRole("button", { name: "Run pre-checks" })).toBeNull();
-  expect(within(group).getByText(/Readiness pre-checks are not supported/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Not supported: 1 clusters" }));
-  expect(group).toHaveAttribute("open");
-  expect(within(group).getByText("CLS-DELTA-04")).toBeInTheDocument();
-});
-it("keeps an unobserved vendor unknown", () => {
-  setup({ clusters: [cluster("CLS-ECHO-05", "")] });
-  expect(screen.getByRole("button", { name: "UNKNOWN: 1 clusters" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Not supported: 0 clusters" })).toBeInTheDocument();
-});
-it("collapses nested VS rows, selects only visible units, and opens independent inline details", () => {
-  const vs = { ...summary("CLS-ALPHA-01", "NOT_READY"), unitId: "opaque-vs", virtual_system: "VS-ALPHA-07", members: clusters[0].members.map((member, index) => ({ ...member, ha_role: index ? "active" : "standby" })) };
-  const { onOpen, onRun, onBulkRun } = setup({ rows: { ...rows, "CLS-ALPHA-01": [...rows["CLS-ALPHA-01"], vs] } });
-  expect(screen.queryByRole("row", { name: "Virtual System VS-ALPHA-07" })).toBeNull();
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible" }));
-  expect(screen.getByRole("button", { name: "Run pre-checks (2)" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Virtual systems in CLS-ALPHA-01" }));
-  const vsRow = row("Virtual System VS-ALPHA-07");
-  expect(within(vsRow).getByText(/Active: FW-CLS-ALPHA-01-M2/)).toHaveTextContent("Standby: FW-CLS-ALPHA-01-M1");
-  fireEvent.click(within(vsRow).getByRole("button", { name: "Run pre-checks" }));
-  expect(onRun).toHaveBeenCalledWith(vs);
-  expect(vsRow).toHaveAttribute("aria-expanded", "false");
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible" }));
-  fireEvent.click(screen.getByRole("button", { name: "Run pre-checks (3)" }));
-  expect(onBulkRun).toHaveBeenCalledWith([rows["CLS-ALPHA-01"][0], vs, rows["CLS-BRAVO-02"][0]]);
-  fireEvent.click(vsRow);
-  expect(onOpen).not.toHaveBeenCalled();
-  fireEvent.click(within(screen.getByRole("region", { name: "Checks for Virtual System VS-ALPHA-07" })).getByRole("button", { name: "Open full detail" }));
-  expect(onOpen).toHaveBeenCalledWith("CLS-ALPHA-01", "opaque-vs");
-  expect(screen.getByRole("button", { name: "Ready: 1 clusters" })).toBeInTheDocument();
-});
-it("shows relative time and hover-only absolute and roles-observed times", () => {
-  vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-02T09:35:00Z")); setup();
-  const item = row("CLS-BRAVO-02");
-  expect(within(item).getByText("35 min ago")).toHaveAttribute("datetime", at);
-  expect(within(item).getByText("35 min ago")).toHaveAttribute("title", expect.stringContaining(at));
-  expect(item.querySelector('[title^="Roles observed:"]')).toHaveAttribute("title", "Roles observed: 2026-10-02 12:00 GMT+3");
-  act(() => vi.advanceTimersByTime(60_000));
-  expect(within(item).getByText("36 min ago")).toBeInTheDocument();
-});
-it("supports Enter to expand and Space to select, without expanding on checkbox click", () => {
-  const { onOpen } = setup();
-  const item = row("CLS-ALPHA-01");
-  fireEvent.keyDown(item, { key: "Enter" });
-  expect(item).toHaveAttribute("aria-expanded", "true");
-  expect(screen.getByRole("region", { name: "Checks for CLS-ALPHA-01" })).toBeInTheDocument();
-  expect(onOpen).not.toHaveBeenCalled();
-  fireEvent.keyDown(item, { key: "Enter" });
-  fireEvent.keyDown(item, { key: " " });
-  expect(screen.getByRole("checkbox", { name: "Select CLS-ALPHA-01" })).toBeChecked();
-  expect(screen.getByRole("toolbar", { name: "Bulk readiness actions" })).toHaveStyle({ position: "sticky" });
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select CLS-BRAVO-02" }));
-  expect(row("CLS-BRAVO-02")).toHaveAttribute("aria-expanded", "false");
-  fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
-  expect(screen.queryByRole("toolbar", { name: "Bulk readiness actions" })).toBeNull();
-});
-it("selects and deselects only filtered visible authorized rows, retaining other selection", () => {
-  setup();
-  const selectAll = screen.getByRole("checkbox", { name: "Select all visible" });
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select CLS-ALPHA-01" }));
-  expect(selectAll).toHaveAttribute("data-indeterminate", "true");
-  fireEvent.click(screen.getByRole("button", { name: "Not ready: 1 clusters" }));
-  fireEvent.click(selectAll);
-  expect(selectAll).toBeChecked();
-  expect(screen.getByRole("button", { name: "Run pre-checks (2)" })).toBeInTheDocument();
-  fireEvent.click(selectAll);
-  expect(screen.getByRole("button", { name: "Run pre-checks (1)" })).toBeInTheDocument();
-});
-it("offers run actions to aiview when the server grants them, and hides them when it refuses", () => {
-  const { rerender } = setup();
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible" }));
-  const aiviewRows = Object.fromEntries(Object.entries(rows).map(([ref, units]) => [ref, units.map(unit => ({ ...unit, masked: true, canRunReadiness: true }))]));
-  rerender(<HaReadinessList clusters={clusters} rows={aiviewRows} running={null} busy={false} progress={{}} error={null} onOpen={vi.fn()} onRun={vi.fn()} onBulkRun={vi.fn()} />);
-  expect(screen.getAllByRole("button", { name: "Run pre-checks" }).length).toBeGreaterThan(0);
-  expect(screen.getByRole("checkbox", { name: "Select all visible" })).toBeEnabled();
-  const refused = Object.fromEntries(Object.entries(rows).map(([ref, units]) => [ref, units.map(unit => ({ ...unit, masked: true, canRunReadiness: false }))]));
-  rerender(<HaReadinessList clusters={clusters} rows={refused} running={null} busy={false} progress={{}} error={null} onOpen={vi.fn()} onRun={vi.fn()} onBulkRun={vi.fn()} />);
-  expect(screen.queryByRole("toolbar", { name: "Bulk readiness actions" })).toBeNull();
-  expect(screen.queryByRole("button", { name: "Run pre-checks" })).toBeNull();
-  expect(within(table()).queryByRole("columnheader", { name: "Actions" })).toBeNull();
-  expect(within(table()).getAllByRole("columnheader")).toHaveLength(6);
-  expect(screen.getByRole("checkbox", { name: "Select all visible" })).toBeDisabled();
-  fireEvent.keyDown(row("CLS-ALPHA-01"), { key: " " });
-  expect(screen.queryByRole("toolbar", { name: "Bulk readiness actions" })).toBeNull();
+  expect(rowNames()).toEqual(["CLS-ALPHA-01"]);
 });
 
-it("shows both observed members in inline details and wraps long messages", () => {
-  const cluster = clusters[0];
-  const checks = cluster.members.map((member, index) => ({ checkNo: 2, title: "Cluster IP table", device_id: member.device_id,
-    member: `Member ${index + 1}`, result: "FAIL" as const, status: "FAIL" as const, blocking: true, derived: {}, summary: "Tables differ; " + "missing entry on observer; ".repeat(30) }));
-  setup({ rows: { [cluster.ref]: [{ ...summary(cluster.ref, "NOT_READY"), masked: true, members: [...cluster.members].reverse(), readiness: { status: "NOT_READY", observedAt: at, failedCheck: "Cluster IP table", checks } }] } });
-  fireEvent.click(row(cluster.title));
-  const detail = screen.getByRole("region", { name: `Checks for ${cluster.title}` });
-  expect(within(detail).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Check", "FW-CLS-ALPHA-01-M1 · active (inventory)", "FW-CLS-ALPHA-01-M2 · standby (inventory)"]);
-  expect(detail.querySelectorAll(".readiness-message")).toHaveLength(2);
-  for (const message of detail.querySelectorAll(".readiness-message")) {
-    expect(message.parentElement?.parentElement).toHaveStyle({ whiteSpace: "normal", overflowWrap: "anywhere" });
-    expect(message).toHaveStyle({ WebkitLineClamp: "2" });
+it("a READY row has a Fail over button that calls onFailover with the cluster and unit, and the row is not opened", () => {
+  const { onFailover, onOpen } = setup();
+  fireEvent.click(within(row("CLS-ALPHA-01")).getByRole("button", { name: "Fail over CLS-ALPHA-01" }));
+  expect(onFailover).toHaveBeenCalledWith("CLS-ALPHA-01", "CLS-ALPHA-01");
+  expect(onOpen).not.toHaveBeenCalled();
+});
+
+it("has no failover button for a masked (aiview) row", () => {
+  setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...rows["CLS-ALPHA-01"][0], masked: true }] } });
+  expect(within(row("CLS-ALPHA-01")).queryByRole("button", { name: /Fail over/ })).toBeNull();
+});
+
+it("a READY Cisco ASA pair says 'Readiness only' with an outline pill and no failover control", () => {
+  const asa = { ...summary("CLS-DELTA-04", "READY"), vendor: "cisco_asa", readinessAvailable: true };
+  setup({ rows: { ...rows, "CLS-DELTA-04": [asa] } });
+  expect(rowNames()).toEqual(["CLS-ALPHA-01"]);
+  expect(segment("Can fail over now", 1)).toBeInTheDocument();
+  fireEvent.click(segment("Readiness only", 1));
+  const asaRow = row("CLS-DELTA-04");
+  expect(within(asaRow).getByText("Readiness only")).toBeInTheDocument();
+  expect(asaRow.querySelector("[data-failover-execution-disabled]")).toHaveAttribute("title", expect.stringContaining("FAILOVER_VENDOR_NOT_AVAILABLE"));
+  expect(asaRow.querySelector("[data-pill-outline='true']")).toHaveTextContent("Ready");
+  expect(within(asaRow).queryByRole("button", { name: /Fail over/ })).toBeNull();
+});
+
+it("a NOT_READY chassis is blocked, is not 'Can fail over' for its READY virtual system, and has no chassis action", () => {
+  const base = { ...summary("CLS-ALPHA-01", "NOT_READY"), unitKind: "VSX_CHASSIS" as const, chassisMode: "VSLS" as const, chassisAction: "FAILOVER_ALL_VIRTUAL_SYSTEMS" as const };
+  const vs = { ...summary("CLS-ALPHA-01", "READY"), unitId: "opaque-vs-13", unitKind: "VIRTUAL_SYSTEM" as const, virtual_system: "VS-ALPHA-13" };
+  setup({ rows: { ...rows, "CLS-ALPHA-01": [base, vs], "CLS-CHARLIE-03": [summary("CLS-CHARLIE-03", "READY")] } });
+  expect(rowNames()).toEqual(["CLS-CHARLIE-03"]);
+  fireEvent.click(segment("Blocked", 2));
+  const chassis = row("CLS-ALPHA-01");
+  expect(chassis).toHaveTextContent("1 virtual system: 1 ready, 0 not ready");
+  expect(within(chassis).queryByRole("button", { name: /Fail over/ })).toBeNull();
+  expect(within(chassis).getByRole("button", { name: "See blockers CLS-ALPHA-01" })).toBeInTheDocument();
+  // The nested virtual-system row keeps its own state and action, under one chevron.
+  fireEvent.click(within(chassis).getByRole("button", { name: "Virtual systems in CLS-ALPHA-01" }));
+  expect(within(row("Virtual System VS-ALPHA-13")).getByRole("button", { name: "Fail over VS Virtual System VS-ALPHA-13" })).toBeInTheDocument();
+});
+
+it("a READY chassis offers Fail over VS0 in either mode and, apart from it, Fail over all VS; VS0 and the sequence are independent (PO 2026-11-23)", () => {
+  const vs = (n: number) => ({ ...summary("CLS-ALPHA-01", "READY"), unitId: `opaque-vs-${n}`, unitKind: "VIRTUAL_SYSTEM" as const, virtual_system: `VS-ALPHA-${n}` });
+  const base = { ...summary("CLS-ALPHA-01", "READY"), unitKind: "VSX_CHASSIS" as const, sequenceAction: "FAILOVER_ALL_VIRTUAL_SYSTEMS" as const };
+  for (const chassisMode of ["HA", "VSLS"] as const) {
+    const { onFailover, unmount } = setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...base, chassisMode, chassisAction: "FAILOVER" as const }, vs(1), vs(2)] } });
+    fireEvent.click(within(row("CLS-ALPHA-01")).getByRole("button", { name: "Fail over VS0 CLS-ALPHA-01" }));
+    expect(onFailover).toHaveBeenCalledWith("CLS-ALPHA-01", base.unitId);
+    const all = within(row("CLS-ALPHA-01")).getByRole("button", { name: "Fail over all VS (2) CLS-ALPHA-01" });
+    expect(all).toHaveAttribute("title", expect.stringContaining("one after another"));
+    fireEvent.click(all);
+    expect(onFailover).toHaveBeenCalledTimes(2);
+    unmount();
   }
-  expect(table()).not.toHaveStyle({ minWidth: "1100px" });
-  expect(within(table()).getByRole("columnheader", { name: "Last evaluated" })).toHaveStyle({ width: "145px" });
-});
-it("shows per-row progress and disables actions during a batch", () => {
-  setup({ running: "CLS-ALPHA-01", busy: true, progress: { "CLS-ALPHA-01": "Running", "CLS-BRAVO-02": "Queued" } });
-  const button = within(row("CLS-ALPHA-01")).getByRole("button", { name: "Run pre-checks" });
-  expect(button).toBeDisabled(); expect(button).toHaveAttribute("aria-busy", "true");
-  expect(within(button).getByRole("progressbar")).toBeInTheDocument();
-  expect(within(row("CLS-ALPHA-01")).getByRole("status")).toHaveTextContent("Running");
-  expect(within(row("CLS-BRAVO-02")).getByRole("status")).toHaveTextContent("Queued");
-  expect(screen.getByRole("checkbox", { name: "Select all visible" })).toBeDisabled();
-});
-
-it("shows the stored login-environment stop reason for unknown base and virtual units", () => {
-  const base = { ...summary(clusters[0].ref, "READY"), readiness: {
-    status: "UNKNOWN" as const, observedAt: at, failedCheck: "", stopCode: "COMMAND_UNAVAILABLE", checks: [],
-  } };
-  const vs = { ...base, unitId: "opaque-vs", virtual_system: "VS-ALPHA-07" };
-  setup({ rows: { [clusters[0].ref]: [base, vs] } });
-  expect(within(row(clusters[0].title)).getByText("Command not available on device (login environment)")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: `Virtual systems in ${clusters[0].title}` }));
-  expect(within(row("Virtual System VS-ALPHA-07")).getByText("Command not available on device (login environment)")).toBeInTheDocument();
+  // Without the sequence the row offers VS0 alone.
+  setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...base, sequenceAction: undefined, chassisAction: "FAILOVER" as const }, vs(1)] } });
+  expect(within(row("CLS-ALPHA-01")).getByRole("button", { name: "Fail over VS0 CLS-ALPHA-01" })).toBeInTheDocument();
+  expect(within(row("CLS-ALPHA-01")).queryByRole("button", { name: /Fail over all VS/ })).toBeNull();
+  cleanup();
+  // A VS0 mode the server cannot establish offers no VS0 run and says why; the sequence stays.
+  setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...base, failoverRefusal: "VSX_CHASSIS_MODE_UNKNOWN" }, vs(1)] } });
+  expect(row("CLS-ALPHA-01")).toHaveTextContent("VSX_CHASSIS_MODE_UNKNOWN");
+  expect(within(row("CLS-ALPHA-01")).queryByRole("button", { name: /Fail over VS0/ })).toBeNull();
+  expect(within(row("CLS-ALPHA-01")).getByRole("button", { name: "Fail over all VS (1) CLS-ALPHA-01" })).toBeInTheDocument();
+  cleanup();
+  // Neither offered: the chassis is not claimed failover-able.
+  setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...base, sequenceAction: undefined, failoverRefusal: "VSX_CHASSIS_MODE_UNKNOWN" }, vs(1)] } });
+  expect(segment("Can fail over now", 0)).toBeInTheDocument();
+  fireEvent.click(segment("Blocked", 2));
+  expect(within(row("CLS-ALPHA-01")).queryByRole("button", { name: /Fail over/ })).toBeNull();
 });
 
-it.each([["UNSUPPORTED_MODE", "Cluster mode not supported"], ["IDENTITY_NOT_RECORDED", "Device identity not recorded"], ["OPEN_INCIDENT", "Open failover incident"]])("shows the failover refusal %s in words, the code on hover, with mode", (refusalReason, words) => {
-  setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...rows["CLS-ALPHA-01"][0], refusalReason, mode: "HA" }] } });
-  expect(within(row("CLS-ALPHA-01")).getByText(words)).toHaveAttribute("data-raw", refusalReason);
-  expect(within(row("CLS-ALPHA-01")).getByText("Mode: High availability")).toBeInTheDocument();
+it("a row click and Enter open the detail; there is no inline expansion, no selection and no 'Open full detail'", () => {
+  const { onOpen } = setup();
+  fireEvent.click(row("CLS-ALPHA-01"));
+  expect(onOpen).toHaveBeenLastCalledWith("CLS-ALPHA-01", "CLS-ALPHA-01");
+  fireEvent.keyDown(row("CLS-ALPHA-01"), { key: "Enter" });
+  expect(onOpen).toHaveBeenCalledTimes(2);
+  expect(screen.queryByRole("button", { name: "Open full detail" })).toBeNull();
+  expect(screen.queryByRole("checkbox")).toBeNull();
+  expect(screen.queryByRole("region", { name: /Checks for/ })).toBeNull();
+  expect(screen.queryByText(/Readiness records/)).toBeNull();
+  expect(document.querySelector("[data-readiness-rule]")).toBeNull();
 });
-it("writes the Unknown-versus-Not-ready rule on screen and drops a mode line that says nothing", () => {
-  setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...rows["CLS-ALPHA-01"][0], mode: "UNKNOWN" }] } });
-  expect(document.querySelector("[data-readiness-rule]")).toHaveTextContent(/Not ready: a pre-check found a blocking condition · UNKNOWN: readiness could not be established/);
-  expect(within(row("CLS-ALPHA-01")).queryByText(/^Mode:/)).toBeNull();
+
+it("a blocked row names the check, its headline and the member, and 'See blockers' opens the detail once", () => {
+  const checks = [check(1, "Cluster state", "CLS-BRAVO-02-m1", "PASS", "Active", true, { role: "ACTIVE" }), check(1, "Cluster state", "CLS-BRAVO-02-m2", "PASS", "Standby", true, { role: "STANDBY" }),
+    check(9, "State synchronization", "CLS-BRAVO-02-m1", "PASS", "Sync OK"), check(9, "State synchronization", "CLS-BRAVO-02-m2", "FAIL", "Sync status: Lost; +3 lost updates"),
+    check(7, "Versions", "CLS-BRAVO-02-m1", "FAIL", "Differ"), check(7, "Versions", "CLS-BRAVO-02-m2", "FAIL", "Differ")];
+  const blocked = { ...summary("CLS-BRAVO-02", "NOT_READY"), readiness: { status: "NOT_READY" as const, observedAt: at, failedCheck: "State synchronization", checks: checks as never } };
+  const { onOpen } = setup({ rows: { ...rows, "CLS-BRAVO-02": [blocked] } });
+  fireEvent.click(segment("Blocked", 1));
+  const reason = row("CLS-BRAVO-02").querySelector("[data-reason-line]")!;
+  expect(reason).toHaveTextContent("State synchronization – Sync status: Lost – on FW-CLS-BRAVO-02-M2 (standby)");
+  expect(reason).toHaveTextContent("+1 more");
+  expect(reason).not.toHaveTextContent("+3 lost updates");
+  fireEvent.click(within(row("CLS-BRAVO-02")).getByRole("button", { name: "See blockers CLS-BRAVO-02" }));
+  expect(onOpen).toHaveBeenCalledTimes(1);
 });
-it("puts Run readiness check on the toolbar and the staleness notice, asking once before a multi-cluster run", () => {
+
+it("keeps the chassis' virtual-system rows open through a refresh that changes statuses", () => {
+  const vs = { ...summary("CLS-ALPHA-01", "READY"), unitId: "opaque-vs", unitKind: "VIRTUAL_SYSTEM" as const, virtual_system: "VS-ALPHA-07" };
+  const base = { ...summary("CLS-ALPHA-01", "NOT_READY"), unitKind: "VSX_CHASSIS" as const, chassisAction: "FAILOVER" as const };
+  const props = { clusters, running: null, busy: false, progress: {}, error: null, onOpen: vi.fn(), onRun: vi.fn(), onBulkRun: vi.fn() };
+  const { rerender } = render(<HaReadinessList {...props} rows={{ ...rows, "CLS-ALPHA-01": [base, vs] }} />);
+  all();
+  fireEvent.click(screen.getByRole("button", { name: "Virtual systems in CLS-ALPHA-01" }));
+  expect(row("Virtual System VS-ALPHA-07")).toBeInTheDocument();
+  rerender(<HaReadinessList {...props} clusters={[...clusters].reverse()} rows={{ ...rows, "CLS-ALPHA-01": [{ ...base, readiness: { ...base.readiness!, status: "READY" } }, { ...vs, readiness: { ...vs.readiness!, status: "NOT_READY" } }] }} />);
+  expect(screen.getByRole("button", { name: "Virtual systems in CLS-ALPHA-01" })).toHaveAttribute("aria-expanded", "true");
+  expect(row("Virtual System VS-ALPHA-07")).toBeInTheDocument();
+});
+
+it("a pair-level check with identical texts says the member is not identified", () => {
+  const text = "Config sync is disabled on 1 member(s): the running configurations are not kept equal";
+  const checks = [check(4, "Configuration sync", "CLS-BRAVO-02-m1", "FAIL", text), check(4, "Configuration sync", "CLS-BRAVO-02-m2", "FAIL", text)];
+  setup({ rows: { ...rows, "CLS-BRAVO-02": [{ ...summary("CLS-BRAVO-02", "NOT_READY"), readiness: { status: "NOT_READY" as const, observedAt: at, failedCheck: "Configuration sync", checks: checks as never } }] } });
+  fireEvent.click(segment("Blocked", 1));
+  expect(row("CLS-BRAVO-02").querySelector("[data-reason-where]")).toHaveAttribute("data-reason-where", "unidentified");
+  expect(row("CLS-BRAVO-02")).toHaveTextContent("member not identified by this check");
+});
+
+it("an unknown cluster with no unit row says 'Never checked'", () => {
+  setup();
+  fireEvent.click(segment("Unknown", 1));
+  const unknown = row("CLS-CHARLIE-03");
+  expect(unknown.querySelector("[data-reason-line]")).toHaveTextContent("Never checked");
+  expect(within(unknown).getByText("UNKNOWN")).toBeInTheDocument();
+  // No unit row came back for this cluster: there is nothing the server could run, so no button is drawn.
+  expect(within(unknown).queryByRole("button", { name: /Run pre-checks/ })).toBeNull();
+});
+
+it("Run pre-checks on an unknown unit calls onRun", () => {
+  const unknown = summary("CLS-CHARLIE-03", null);
+  const { onRun } = setup({ rows: { ...rows, "CLS-CHARLIE-03": [unknown] } });
+  fireEvent.click(segment("Unknown", 1));
+  fireEvent.click(within(row("CLS-CHARLIE-03")).getByRole("button", { name: "Run pre-checks CLS-CHARLIE-03" }));
+  expect(onRun).toHaveBeenCalledWith(unknown);
+});
+
+it("a failed summary read makes every row unknown, says so, and offers no failover", () => {
+  setup({ summaryFailed: true });
+  expect(segment("Can fail over now", 0)).toBeInTheDocument();
+  expect(segment("Unknown", 4)).toBeInTheDocument();
+  all();
+  expect(screen.queryByRole("button", { name: /^Fail over/ })).toBeNull();
+  expect(within(table()).getAllByText("Readiness could not be read").length).toBe(4);
+});
+
+it("unreadable incidents show a would-be Ready row as Unknown with the reason, and offer no failover", () => {
+  setup({ incidentsFailed: true });
+  expect(segment("Can fail over now", 0)).toBeInTheDocument();
+  all();
+  expect(screen.queryByRole("button", { name: /^Fail over/ })).toBeNull();
+  const ready = row("CLS-ALPHA-01");
+  expect(ready).toHaveAttribute("data-row-state", "UNKNOWN");
+  expect(within(ready).queryByText("Ready")).toBeNull();
+  expect(within(ready).getByText(/incidents could not be read/)).toBeInTheDocument();
+  expect(within(ready).queryByRole("button", { name: /Run pre-checks/ })).toBeNull();
+  // A row that is not ready keeps its own verdict.
+  expect(row("CLS-BRAVO-02")).toHaveAttribute("data-row-state", "BLOCKED");
+});
+
+it("an open incident marks the cluster's row and its action opens the incident", () => {
+  const incident: FailoverIncident = { incidentRef: "inc-1", clusterId: "CLS-ALPHA-01", unitId: "CLS-ALPHA-01", cluster_member_ref: "CLS-ALPHA-01", reason: "r", openedAt: at,
+    incidentActive: true, blocksEstate: false, unresolvedSends: 0, members: [] };
+  const { onOpen } = setup({ incidents: [incident] });
+  fireEvent.click(segment("Blocked", 2));
+  expect(within(row("CLS-ALPHA-01")).getByText("Incident open")).toBeInTheDocument();
+  fireEvent.click(within(row("CLS-ALPHA-01")).getByRole("button", { name: "Open incident CLS-ALPHA-01" }));
+  expect(onOpen).toHaveBeenCalledTimes(1);
+});
+
+it("opens on the segment named by ?readiness= (the Overview's needs-attention line)", () => {
+  window.history.replaceState(null, "", "/?screen=operations&readiness=NOT_READY");
+  setup();
+  expect(segment("Blocked", 1)).toHaveAttribute("aria-pressed", "true");
+  expect(rowNames()).toEqual(["CLS-BRAVO-02"]);
+});
+
+it("a stale READY stays in 'Can fail over now' with a Stale chip and a notice", () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-17T12:00:00Z"));
-  const stale = new Date("2026-10-09T12:00:00Z").toISOString();
-  const staleRows = { "CLS-ALPHA-01": [{ ...summary("CLS-ALPHA-01", "READY"), readiness: { status: "READY" as const, observedAt: stale, failedCheck: "", checks: [] } }],
-    "CLS-BRAVO-02": [{ ...summary("CLS-BRAVO-02", "NOT_READY"), readiness: { status: "NOT_READY" as const, observedAt: stale, failedCheck: "", checks: [] } }] };
-  const { onBulkRun } = setup({ rows: staleRows });
-  expect(screen.getByTestId("toolbar-run-readiness")).toHaveTextContent("Run readiness check (2 clusters)");
-  expect(within(screen.getByRole("status")).getByTestId("stale-run-readiness")).toBeInTheDocument();
-  fireEvent.click(screen.getByTestId("stale-run-readiness"));
-  expect(onBulkRun).not.toHaveBeenCalled();
-  expect(screen.getByRole("dialog", { name: "Run readiness check on 2 clusters?" })).toBeInTheDocument();
-  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Run readiness check" }));
-  expect(onBulkRun).toHaveBeenCalledWith([staleRows["CLS-BRAVO-02"][0], staleRows["CLS-ALPHA-01"][0]]);
+  setup();
+  expect(rowNames()).toEqual(["CLS-ALPHA-01"]);
+  expect(row("CLS-ALPHA-01").querySelector("[data-stale-evaluation]")).toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("a failover repeats every pre-check");
 });
-it("locks the toolbar button with the role reason when the server grants nobody a run", () => {
+
+it("'Re-check shown (n)' re-checks the visible rows and asks once before several", () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-17T12:00:00Z"));
+  const { onBulkRun } = setup();
+  all();
+  expect(screen.getByTestId("toolbar-run-readiness")).toHaveTextContent("Re-check shown (2)");
+  fireEvent.click(screen.getByTestId("toolbar-run-readiness"));
+  expect(onBulkRun).not.toHaveBeenCalled();
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Re-check" }));
+  expect(onBulkRun).toHaveBeenCalledTimes(1);
+  expect(onBulkRun.mock.calls[0][0].map((r: CpFailoverSummary) => r.unitId).sort()).toEqual(["CLS-ALPHA-01", "CLS-BRAVO-02"]);
+});
+
+it("locks the Re-check button with the role reason when the server grants nobody a run", () => {
   const refused = Object.fromEntries(Object.entries(rows).map(([ref, units]) => [ref, units.map(unit => ({ ...unit, canRunReadiness: false }))]));
   setup({ rows: refused });
   expect(screen.getByTestId("toolbar-run-readiness")).toBeDisabled();
-  expect(screen.getByTestId("toolbar-run-readiness")).toHaveTextContent("Run readiness check · Role: not permitted");
+  expect(screen.getByTestId("toolbar-run-readiness")).toHaveTextContent("Re-check shown · Role: not permitted");
 });
 
-
-const NOW = new Date("2026-10-17T12:00:00Z");
-const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3600_000).toISOString();
-const evaluated = (ref: string, status: "READY" | "NOT_READY", observedAt: string): CpFailoverSummary => ({
-  ...summary(ref, status), readiness: { status, observedAt, failedCheck: "", checks: [] },
-});
-const withNow = () => { vi.useFakeTimers(); vi.setSystemTime(NOW); };
-
-it("flags a stale evaluation per row and warns above the list, without changing Ready", () => {
-  withNow();
-  const stale = hoursAgo(8 * 24);
-  setup({ rows: { "CLS-ALPHA-01": [evaluated("CLS-ALPHA-01", "READY", stale)], "CLS-BRAVO-02": [evaluated("CLS-BRAVO-02", "NOT_READY", stale)] } });
-  expect(screen.getByText("Readiness was last evaluated 8 d ago; run a readiness check before relying on Ready.")).toBeInTheDocument();
-  // The e2e safety fixture reads any non-info/success Alert as a loading error; the notice is a status, not an alert.
-  expect(screen.queryByRole("alert")).toBeNull();
-  expect(screen.getByRole("status")).toHaveTextContent("run a readiness check before relying on Ready");
-  expect(within(row("CLS-ALPHA-01")).getByText("Stale")).toBeInTheDocument();
-  expect(within(row("CLS-ALPHA-01")).getByText("8 d ago")).toBeInTheDocument();
-  expect(within(row("CLS-ALPHA-01")).getByText("Ready")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Ready: 1 clusters" })).toBeInTheDocument();
-});
-
-it("shows no staleness signal when evaluations are recent", () => {
-  withNow();
-  setup({ rows: { "CLS-ALPHA-01": [evaluated("CLS-ALPHA-01", "READY", hoursAgo(23))], "CLS-BRAVO-02": [evaluated("CLS-BRAVO-02", "NOT_READY", hoursAgo(2))] } });
-  expect(screen.queryByText("Stale")).toBeNull();
-  expect(screen.queryByText(/run a readiness check before relying on Ready/)).toBeNull();
-});
-
-it("flags only the old row and states the share when most, not all, evaluations are stale", () => {
-  withNow();
-  const third = { ...evaluated("CLS-CHARLIE-03", "READY", hoursAgo(50)) };
-  setup({ rows: { "CLS-ALPHA-01": [evaluated("CLS-ALPHA-01", "READY", hoursAgo(30))], "CLS-BRAVO-02": [evaluated("CLS-BRAVO-02", "NOT_READY", hoursAgo(1))], "CLS-CHARLIE-03": [third] } });
-  expect(screen.getByText(/2 of 3 readiness evaluations are older than 24 h .*run a readiness check before relying on Ready\./)).toBeInTheDocument();
-  expect(within(row("CLS-ALPHA-01")).getByText("Stale")).toBeInTheDocument();
-  expect(within(row("CLS-BRAVO-02")).queryByText("Stale")).toBeNull();
-});
-
-it("does not warn when only a minority of evaluations is stale", () => {
-  withNow();
-  setup({ rows: { "CLS-ALPHA-01": [evaluated("CLS-ALPHA-01", "READY", hoursAgo(30))], "CLS-BRAVO-02": [evaluated("CLS-BRAVO-02", "NOT_READY", hoursAgo(1))], "CLS-CHARLIE-03": [evaluated("CLS-CHARLIE-03", "READY", hoursAgo(2))] } });
-  expect(screen.queryByText(/run a readiness check before relying on Ready/)).toBeNull();
-  expect(within(row("CLS-ALPHA-01")).getByText("Stale")).toBeInTheDocument();
-});
-
-it("an administrator outside the job window keeps the row actions and an enabled header button (PO 2026-10-20)", () => {
+it("shows no per-row re-check outside the job window; the header button carries the window, an administrator keeps both", () => {
+  const closed = render(<JobWindowContext.Provider value={{ open: false, label: "Next window: 18:00" }}>
+    <HaReadinessList clusters={clusters} rows={rows} running={null} busy={false} progress={{}} error={null} onOpen={vi.fn()} onRun={vi.fn()} onBulkRun={vi.fn()} />
+  </JobWindowContext.Provider>);
+  expect(screen.queryByRole("button", { name: /^Re-check CLS/ })).toBeNull();
+  expect(screen.getByTestId("toolbar-run-readiness")).toHaveTextContent("Re-check shown (1) · Next window: 18:00");
+  expect(screen.getByTestId("toolbar-run-readiness")).toBeDisabled();
+  closed.unmount();
   render(<JobWindowContext.Provider value={{ open: false, label: "Next window: 18:00", adminBypass: true }}>
     <HaReadinessList clusters={clusters} rows={rows} running={null} busy={false} progress={{}} error={null} onOpen={vi.fn()} onRun={vi.fn()} onBulkRun={vi.fn()} />
   </JobWindowContext.Provider>);
-  expect(within(table()).getByRole("columnheader", { name: "Actions" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Re-check CLS-ALPHA-01" })).toBeEnabled();
   expect(screen.getByTestId("toolbar-run-readiness")).toBeEnabled();
-  expect(screen.getByTestId("toolbar-run-readiness")).not.toHaveTextContent("Next window");
 });
 
-it("keeps the mode on its own line without splitting its words", () => {
-  setup({ rows: { "CLS-ALPHA-01": [{ ...rows["CLS-ALPHA-01"][0], mode: "active-passive" }] } });
-  const mode = within(row("CLS-ALPHA-01")).getByText("Mode: Active/passive");
-  expect(mode.tagName).toBe("DIV");
-  expect(mode).toHaveStyle({ whiteSpace: "nowrap" });
+it("shows per-row progress and disables the row while it runs", () => {
+  setup({ running: "CLS-ALPHA-01", busy: true, progress: { "CLS-ALPHA-01": "Running" } });
+  expect(within(row("CLS-ALPHA-01")).getAllByRole("status").map(s => s.textContent).join(" ")).toMatch(/checking[\s\S]*Running|Running/);
+  expect(within(row("CLS-ALPHA-01")).getByRole("button", { name: "Fail over CLS-ALPHA-01" })).toBeDisabled();
 });
 
-it("shows no row action and no Actions column outside the job window; the header button carries the window (R6)", () => {
-  const onRun = vi.fn();
-  render(<JobWindowContext.Provider value={{ open: false, label: "Next window: 18:00" }}>
-    <HaReadinessList clusters={clusters} rows={rows} running={null} busy={false} progress={{}} error={null} onOpen={vi.fn()} onRun={onRun} onBulkRun={vi.fn()} />
-  </JobWindowContext.Provider>);
-  expect(within(table()).queryByRole("columnheader", { name: "Actions" })).toBeNull();
-  expect(screen.queryByRole("button", { name: "Run pre-checks" })).toBeNull();
-  expect(screen.getByTestId("toolbar-run-readiness")).toHaveTextContent("Run readiness check (2 clusters) · Next window: 18:00");
-  expect(screen.getByTestId("toolbar-run-readiness")).toBeDisabled();
-  // the legend is one line: the four counts and the rule sit in the same row
-  const rule = document.querySelector("[data-readiness-rule]")!;
-  expect(rule.parentElement).toContainElement(screen.getByLabelText("Readiness summary"));
+it("a declined business-hours question is a neutral notice on its own row; any other failure is an error there", () => {
+  setup({ error: { unitId: "CLS-ALPHA-01", cancelled: true, text: "Not started: business hours were not confirmed." } });
+  const notice = row("CLS-ALPHA-01").querySelector("[data-run-notice]")!;
+  expect(notice).toHaveAttribute("data-run-notice", "neutral");
+  expect(notice).toHaveAttribute("role", "status");
+  expect(notice).toHaveTextContent("Pre-checks not started. Not started: business hours were not confirmed.");
+  expect(screen.queryByRole("alert")).toBeNull();
+  cleanup();
+  setup({ error: { unitId: "CLS-ALPHA-01", cancelled: false, text: "Could not start or refresh the readiness run." } });
+  expect(row("CLS-ALPHA-01").querySelector("[data-run-notice]")).toHaveAttribute("role", "alert");
 });
 
-// Post-release review 2026-10-20 (L1): the primary reason goes through the label map; a bare outcome token reads as the pill.
+it("collapses unsupported vendors under All, with no run action", () => {
+  setup({ clusters: [...clusters.slice(0, 2), cluster("CLS-ECHO-05", "juniper")] });
+  all();
+  const group = screen.getByText("Not supported · 1 clusters").closest("details")!;
+  expect(group).not.toHaveAttribute("open");
+  expect(within(group).queryByRole("button", { name: /Run pre-checks/ })).toBeNull();
+  expect(within(group).getByText("CLS-ECHO-05")).toBeInTheDocument();
+});
+
+it("lists a Cisco ASA pair without readiness as listed only", () => {
+  const asa: CpFailoverSummary = { ...summary("CLS-DELTA-04", "READY"), readiness: null, canRunReadiness: false, readinessAvailable: false };
+  setup({ rows: { ...rows, "CLS-DELTA-04": [asa] } });
+  all();
+  const item = screen.getByText("CLS-DELTA-04").closest("li")!;
+  expect(within(item).getByText("Readiness not available yet")).toBeInTheDocument();
+  expect(within(item).queryByRole("button")).toBeNull();
+});
+
+it("evaluates a FortiGate pair as readiness only, with the primary's roles", () => {
+  const fgt = { ...summary("CLS-DELTA-04", "READY"), vendor: "fortinet", readinessAvailable: true,
+    readiness: { status: "READY" as const, observedAt: at, failedCheck: "", checks: [check(1, "Cluster state", "CLS-DELTA-04-m1", "PASS", "Primary", true, { role: "PRIMARY" })] as never } };
+  setup({ clusters: [...clusters.slice(0, 3), cluster("CLS-DELTA-04", "fortinet")], rows: { ...rows, "CLS-DELTA-04": [fgt] } });
+  fireEvent.click(segment("Readiness only", 1));
+  expect(within(row("CLS-DELTA-04")).getByText("Readiness only")).toBeInTheDocument();
+  expect(within(row("CLS-DELTA-04")).queryByRole("button", { name: /Fail over/ })).toBeNull();
+});
+
+it("shows roles from the readiness read when it names every member, else the inventory roles, labelled as such", () => {
+  const checks = [check(1, "Cluster state", "CLS-ALPHA-01-m1", "PASS", "Standby", true, { role: "STANDBY" }), check(1, "Cluster state", "CLS-ALPHA-01-m2", "PASS", "Active", true, { role: "ACTIVE" })];
+  setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...summary("CLS-ALPHA-01", "READY"), readiness: { status: "READY" as const, observedAt: at, failedCheck: "", checks: checks as never } }] } });
+  expect(row("CLS-ALPHA-01")).toHaveTextContent("Active: FW-CLS-ALPHA-01-M2 → Standby: FW-CLS-ALPHA-01-M1");
+  expect(row("CLS-ALPHA-01").querySelector("[data-role-source='readiness']")).toBeInTheDocument();
+  cleanup();
+  setup();
+  expect(row("CLS-ALPHA-01")).toHaveTextContent("Active: FW-CLS-ALPHA-01-M1 → Standby: FW-CLS-ALPHA-01-M2");
+  expect(row("CLS-ALPHA-01").querySelector("[data-role-source='inventory']")).toBeInTheDocument();
+});
+
+// Post-release review 2026-10-20 (L1): the shared primary reason (the Overview and the Estate view use it) goes through the label map.
 it("words a bare READY reason as Ready and keeps check names and sentences as they came", () => {
   const ready = summary("CLS-ALPHA-01", "READY");
   expect(primaryReasonWord({ ...ready, refusalReason: "CHECK_NOT_READY", readiness: { ...ready.readiness!, status: "NOT_READY", checks: [
@@ -327,292 +370,4 @@ it("words a bare READY reason as Ready and keeps check names and sentences as th
   expect(primaryReasonWord({ ...ready, refusalReason: "NOT_READY" })).toBe("Not ready");
   expect(primaryReasonWord(ready)).toBe("No blocking conditions observed");
   expect(primaryReasonWord(summary("CLS-BRAVO-02", "NOT_READY"))).toBe("Installed policy parity");
-  setup({ rows: { "CLS-ALPHA-01": [{ ...ready, refusalReason: "READY" }] } });
-  const cells = within(within(table()).getByRole("row", { name: /CLS-ALPHA-01/ })).getAllByRole("cell");
-  expect(cells.some((cell) => cell.textContent === "Ready")).toBe(true);
-  expect(within(table()).queryByText("READY")).toBeNull();
-});
-it("gives the VSX parent row the chassis unit's own status, reason, age, checkbox and run button, and counts every unit", () => {
-  const chassis: CpFailoverSummary = { ...summary("CLS-ALPHA-01", "NOT_READY"), unitKind: "VSX_CHASSIS",
-    refusalReason: "VSX_CHASSIS_COMMANDS_NOT_APPROVED", readiness: { status: "UNKNOWN", observedAt: at, failedCheck: "", stopCode: "VSX_CHASSIS_COMMANDS_NOT_APPROVED", checks: [] } };
-  const vs: CpFailoverSummary = { ...summary("CLS-ALPHA-01", "READY"), unitId: "opaque-vs-13", unitKind: "VIRTUAL_SYSTEM", virtual_system: "VS-ALPHA-13" };
-  const vs2: CpFailoverSummary = { ...summary("CLS-ALPHA-01", "READY"), unitId: "opaque-vs-35", unitKind: "VIRTUAL_SYSTEM", virtual_system: "VS-ALPHA-35" };
-  const { onRun, onBulkRun } = setup({ rows: { ...rows, "CLS-ALPHA-01": [chassis, vs, vs2] } });
-  const parent = row("CLS-ALPHA-01");
-  expect(within(parent).getByText("UNKNOWN")).toBeInTheDocument();
-  expect(within(parent).getByText("VSX chassis")).toBeInTheDocument();
-  expect(within(parent).getByText("VSX chassis reads await command approval")).toBeInTheDocument();
-  expect(within(parent).queryByText("Not evaluated")).toBeNull();
-  expect(within(parent).getByRole("checkbox", { name: "Select CLS-ALPHA-01" })).toBeEnabled();
-  fireEvent.click(within(parent).getByRole("button", { name: "Run pre-checks" }));
-  expect(onRun).toHaveBeenCalledWith(chassis);
-  // R-13: By default the chips count clusters, matching the heading; switching to Readiness records counts each VS separately.
-  expect(screen.getByRole("button", { name: "Ready: 0 clusters" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "UNKNOWN: 2 clusters" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Not ready: 1 clusters" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Readiness records (6)" }));
-  expect(screen.getByText("4 clusters enrolled · showing 6 readiness records")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Ready: 2 readiness records" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "UNKNOWN: 2 readiness records" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Not ready: 1 readiness records" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Virtual systems in CLS-ALPHA-01" }));
-  for (const name of ["VS-ALPHA-13", "VS-ALPHA-35"]) {
-    const nested = row(`Virtual System ${name}`);
-    expect(within(nested).getByText("Ready")).toBeInTheDocument();
-    expect(within(nested).getByRole("checkbox", { name: `Select Virtual System ${name}` })).toBeEnabled();
-  }
-  fireEvent.click(within(row("Virtual System VS-ALPHA-35")).getByRole("button", { name: "Run pre-checks" }));
-  expect(onRun).toHaveBeenLastCalledWith(vs2);
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select CLS-ALPHA-01" }));
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select Virtual System VS-ALPHA-13" }));
-  fireEvent.click(screen.getByRole("button", { name: "Run pre-checks (2)" }));
-  expect(onBulkRun).toHaveBeenCalledWith([chassis, vs]);
-});
-it("says in the chip tooltip whether clusters or readiness records are counted", async () => {
-  setup();
-  fireEvent.mouseOver(screen.getByRole("button", { name: "Ready: 1 clusters" }));
-  expect(await screen.findByRole("tooltip")).toHaveTextContent("Counts enrolled clusters: each cluster counts once.");
-  fireEvent.click(screen.getByRole("button", { name: "Readiness records (4)" }));
-  fireEvent.mouseOver(screen.getByRole("button", { name: "Ready: 1 readiness records" }));
-  expect(await screen.findByRole("tooltip")).toHaveTextContent("each VSX chassis and each of its Virtual Systems count separately");
-});
-
-it("opens on the status named by ?readiness= (the Overview's needs-attention line, UI review 2026-11-05 C1)", () => {
-  window.history.replaceState(null, "", "/?screen=operations&readiness=NOT_READY");
-  try {
-    setup();
-    expect(within(table()).queryByRole("row", { name: "CLS-ALPHA-01" })).toBeNull();
-    expect(row("CLS-BRAVO-02")).toBeInTheDocument();
-  } finally {
-    window.history.replaceState(null, "", "/");
-  }
-});
-it("lists a Cisco ASA pair as 'Readiness not available yet' with its vendor name and no run action", () => {
-  const asa: CpFailoverSummary = { ...summary("CLS-DELTA-04", "READY"), readiness: null, canRunReadiness: false, readinessAvailable: false };
-  setup({ rows: { ...rows, "CLS-DELTA-04": [asa] } });
-  const item = screen.getByText("CLS-DELTA-04").closest("li")!;
-  expect(within(item).getByText("Cisco ASA")).toBeInTheDocument();
-  expect(within(item).getByText("Readiness not available yet")).toBeInTheDocument();
-  expect(within(item).queryByRole("button")).toBeNull();
-});
-it("evaluates a Cisco ASA pair in the main list when its readiness is available, with the same run action", () => {
-  const asa: CpFailoverSummary = { ...summary("CLS-DELTA-04", "READY"), vendor: "cisco_asa", readinessAvailable: true, canRunReadiness: true };
-  const { onRun } = setup({ rows: { ...rows, "CLS-DELTA-04": [asa] } });
-  expect(row("CLS-DELTA-04")).toBeInTheDocument();
-  expect(screen.queryByText("Readiness not available yet")).toBeNull();
-  expect(screen.queryByText(/Readiness pre-checks are not supported for these vendors/)).toBeNull();
-  fireEvent.click(within(row("CLS-DELTA-04")).getByRole("button", { name: "Run pre-checks" }));
-  expect(onRun).toHaveBeenCalledWith(asa);
-  // Readiness only: no failover, approval or resume control is offered for the pair.
-  expect(screen.queryByText(/Start failover|Resume return step/)).toBeNull();
-});
-it("keeps a Cisco ASA pair with readinessAvailable false in the listed-only block, without a run action", () => {
-  const asa: CpFailoverSummary = { ...summary("CLS-DELTA-04", "READY"), vendor: "cisco_asa", readiness: null, canRunReadiness: false, readinessAvailable: false };
-  setup({ rows: { ...rows, "CLS-DELTA-04": [asa] } });
-  expect(within(table()).queryByRole("row", { name: "CLS-DELTA-04" })).toBeNull();
-  const item = screen.getByText("CLS-DELTA-04").closest("li")!;
-  expect(within(item).getByText("Readiness not available yet")).toBeInTheDocument();
-  expect(within(item).queryByRole("button")).toBeNull();
-});
-const pairRow = (ref: string, vendor: string, roles: [string | null, string | null], state: "HEALTHY" | "DEGRADED" | "UNKNOWN", reason: string | null): CpFailoverSummary => ({
-  ...summary(ref, "READY"), readiness: null, canRunReadiness: false, readinessAvailable: false,
-  members: [{ device_id: `${ref}-m1`, hostname: `FW-${ref}-M1`, ha_role: roles[0] }, { device_id: `${ref}-m2`, hostname: `FW-${ref}-M2`, ha_role: roles[1] }],
-  haView: { vendor, state, reason, sync: "UNKNOWN", syncReason: "NOT_COLLECTED",
-    members: [{ device_id: `${ref}-m1`, role: roles[0] ?? "unknown" }, { device_id: `${ref}-m2`, role: roles[1] ?? "unknown" }] },
-});
-it.each([
-  ["cisco_asa", ["active", "standby"], "HEALTHY", null, "Pair healthy", ["Active", "Standby"]],
-  ["cisco_asa", ["active", "failed"], "DEGRADED", "MEMBER_FAILED", "Pair degraded", ["Active", "Failed"]],
-  ["fortinet", ["primary", "secondary"], "HEALTHY", null, "Pair healthy", ["Primary", "Secondary"]],
-  ["fortinet", ["primary", null], "UNKNOWN", "ROLE_NOT_OBSERVED", "Pair state unknown", ["Primary", "Unknown"]],
-] as const)("shows %s pair members, roles, pair state and sync as unknown", (vendor, roles, state, reason, stateWord, words) => {
-  const ref = vendor === "cisco_asa" ? "CLS-DELTA-04" : "CLS-ECHO-05";
-  const members = cluster(ref, vendor).members;
-  setup({ clusters: [cluster("CLS-ALPHA-01"), { ref, title: ref, members }], rows: { ...rows, [ref]: [pairRow(ref, vendor, [roles[0], roles[1]], state, reason)] } });
-  const item = screen.getByText(ref).closest("li")!;
-  expect(within(item).getByText(stateWord)).toBeInTheDocument();
-  expect(within(item).getByText(`FW-${ref}-M1: ${words[0]}`)).toBeInTheDocument();
-  expect(within(item).getByText(`FW-${ref}-M2: ${words[1]}`)).toBeInTheDocument();
-  expect(within(item).getByText("Sync: Unknown (not collected)")).toBeInTheDocument();
-  expect(within(item).queryByRole("button")).toBeNull();
-});
-it("evaluates a single-address FortiGate cluster in the main list when its readiness is available, with the same run action", () => {
-  const fgt: CpFailoverSummary = { ...summary("CLS-DELTA-04", "READY"), vendor: "fortinet", readinessAvailable: true, canRunReadiness: true };
-  const { onRun } = setup({ rows: { ...rows, "CLS-DELTA-04": [fgt] } });
-  expect(row("CLS-DELTA-04")).toBeInTheDocument();
-  expect(screen.queryByText("Readiness not available yet")).toBeNull();
-  fireEvent.click(within(row("CLS-DELTA-04")).getByRole("button", { name: "Run pre-checks" }));
-  expect(onRun).toHaveBeenCalledWith(fgt);
-  expect(screen.queryByText(/Start failover|Resume return step/)).toBeNull();
-});
-it("shows the single FortiGate's roles from check 1 (primary active, secondary standby, as the primary reports) and none without it", () => {
-  const single = { ref: "CLS-TANGO-05", title: "CLS-TANGO-05", members: [
-    { device_id: "fgt-m1", hostname: "FW-TANGO-05", vendor_hint: "fortinet", ha_role: null, inventory_collected_at: at }] as DeviceSummary[] };
-  const check = (result: "PASS" | "UNKNOWN") => ({ checkNo: 1, title: "HA mode and members", member: "Member 1", device_id: "fgt-m1", result,
-    summary: "x", blocking: true, status: result, derived: {} });
-  const unit = (result: "PASS" | "UNKNOWN"): CpFailoverSummary => ({ ...summary("CLS-TANGO-05", "READY"), vendor: "fortinet", readinessAvailable: true,
-    members: single.members.map(m => ({ device_id: m.device_id, hostname: m.hostname, ha_role: null })),
-    readiness: { status: "READY", observedAt: at, failedCheck: "", checks: [check(result)] } });
-  const view = (result: "PASS" | "UNKNOWN") => render(<HaReadinessList clusters={[single]} rows={{ "CLS-TANGO-05": [unit(result)] }} running={null} busy={false}
-    progress={{}} error={null} onOpen={vi.fn()} onRun={vi.fn()} onBulkRun={vi.fn()} />);
-  const first = view("PASS");
-  expect(within(row("CLS-TANGO-05")).getByText(/Active: FW-TANGO-05/).textContent).toContain("Standby: Secondary (as the primary reports)");
-  first.unmount();
-  view("UNKNOWN");
-  expect(within(row("CLS-TANGO-05")).getByText(/Active:/).textContent).toBe("Active: Not observed ↔ Standby: Not observed");
-});
-it("offers Fail over VS0 in either mode and Fail over all virtual systems on the VSX parent row; VS rows keep their own", () => {
-  const base: CpFailoverSummary = { ...summary("CLS-ALPHA-01", "READY"), unitKind: "VSX_CHASSIS", sequenceAction: "FAILOVER_ALL_VIRTUAL_SYSTEMS" };
-  const vs: CpFailoverSummary = { ...summary("CLS-ALPHA-01", "READY"), unitId: "opaque-vs-13", unitKind: "VIRTUAL_SYSTEM", virtual_system: "VS-ALPHA-13" };
-  for (const chassisMode of ["HA", "VSLS"] as const) {
-    const { onOpen, unmount } = setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...base, chassisMode, chassisAction: "FAILOVER" }, vs] } });
-    fireEvent.click(within(row("CLS-ALPHA-01")).getByRole("button", { name: "Fail over VS0" }));
-    expect(onOpen).toHaveBeenCalledWith("CLS-ALPHA-01", base.unitId);
-    const all = within(row("CLS-ALPHA-01")).getByRole("button", { name: "Fail over all virtual systems" });
-    expect(all).toHaveAttribute("title", expect.stringContaining("one after another"));
-    fireEvent.click(all);
-    expect(onOpen).toHaveBeenCalledTimes(2);
-    unmount();
-  }
-  setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...base, failoverRefusal: "VSX_CHASSIS_MODE_UNKNOWN" }, vs] } });
-  expect(within(row("CLS-ALPHA-01")).getByText(/VSX chassis mode not known/)).toHaveAttribute("title", "VSX_CHASSIS_MODE_UNKNOWN");
-  expect(within(row("CLS-ALPHA-01")).queryByRole("button", { name: "Fail over VS0" })).toBeNull();
-  expect(within(row("CLS-ALPHA-01")).getByRole("button", { name: "Fail over all virtual systems" })).toBeInTheDocument();
-});
-it("renders Cisco ASA and FortiGate pairs as first-class rows with readiness roles, inventory fallback, check table, vendor filter, single chip counts and execution-disabled notice", () => {
-  withNow();
-  const observedAt = hoursAgo(1);
-  const asaCluster = { ref: "CLS-DELTA-04", title: "CLS-DELTA-04", members: [
-    { device_id: "asa-m1", hostname: "FW-DELTA-04-M1", vendor_hint: "cisco_asa", ha_role: "active", inventory_collected_at: at },
-    { device_id: "asa-m2", hostname: "FW-DELTA-04-M2", vendor_hint: "cisco_asa", ha_role: "standby", inventory_collected_at: at },
-  ] as DeviceSummary[] };
-  const fgtCluster = { ref: "CLS-ECHO-05", title: "CLS-ECHO-05", members: [
-    { device_id: "fgt-m1", hostname: "FW-ECHO-05-M1", vendor_hint: "fortinet", ha_role: "primary", inventory_collected_at: at },
-    { device_id: "fgt-m2", hostname: "FW-ECHO-05-M2", vendor_hint: "fortinet", ha_role: "secondary", inventory_collected_at: at },
-  ] as DeviceSummary[] };
-  // ASA readiness check 1 observed roles swapped after failover (M2 active, M1 standby); check 5 failed with internal reason SYNC_NOT_DONE.
-  const asaRow: CpFailoverSummary = {
-    ...summary("CLS-DELTA-04", "NOT_READY"), vendor: "cisco_asa", readinessAvailable: true, canRunReadiness: true,
-    refusalReason: "SYNC_NOT_DONE", failoverRefusal: "FAILOVER_VENDOR_NOT_AVAILABLE",
-    members: asaCluster.members.map(m => ({ device_id: m.device_id, hostname: m.hostname, ha_role: m.ha_role })),
-    readiness: {
-      status: "NOT_READY", observedAt, failedCheck: "Configuration sync", stopCode: "SYNC_NOT_DONE",
-      checks: [
-        { checkNo: 1, title: "Failover state and roles", member: "Member 1", device_id: "asa-m1", result: "PASS", status: "PASS",
-          summary: "One Active and one Standby Ready; both views agree", blocking: true, observedAt, derived: { role: "STANDBY" } },
-        { checkNo: 1, title: "Failover state and roles", member: "Member 2", device_id: "asa-m2", result: "PASS", status: "PASS",
-          summary: "One Active and one Standby Ready; both views agree", blocking: true, observedAt, derived: { role: "ACTIVE" } },
-        { checkNo: 5, title: "Configuration sync", member: "Member 1", device_id: "asa-m1", result: "FAIL", status: "FAIL",
-          summary: "Configuration not synchronised", blocking: true, observedAt, derived: { reason: "SYNC_NOT_DONE" } },
-        { checkNo: 5, title: "Configuration sync", member: "Member 2", device_id: "asa-m2", result: "FAIL", status: "FAIL",
-          summary: "Configuration not synchronised", blocking: true, observedAt, derived: { reason: "SYNC_NOT_DONE" } },
-      ],
-    },
-  };
-  // FortiGate pair without check-1 roles yet falls back to inventory roles (primary/secondary) labelled "(inventory)".
-  const fgtRow: CpFailoverSummary = {
-    ...summary("CLS-ECHO-05", "READY"), vendor: "fortinet", readinessAvailable: true, canRunReadiness: true,
-    refusalReason: null, failoverRefusal: "FAILOVER_VENDOR_NOT_AVAILABLE",
-    members: fgtCluster.members.map(m => ({ device_id: m.device_id, hostname: m.hostname, ha_role: m.ha_role })),
-    readiness: {
-      status: "READY", observedAt, failedCheck: "",
-      checks: [
-        { checkNo: 4, title: "Configuration sync", member: "Member 1", device_id: "fgt-m1", result: "PASS", status: "PASS",
-          summary: "Both members in sync and the cluster checksums equal", blocking: true, observedAt, derived: {} },
-      ],
-    },
-  };
-  const allClusters = [clusters[0], clusters[1], asaCluster, fgtCluster];
-  const allRows = { ...rows, "CLS-DELTA-04": [asaRow], "CLS-ECHO-05": [fgtRow] };
-  const { onRun } = setup({ clusters: allClusters, rows: allRows });
-
-  // Fleet chips count each pair once in both Clusters and Readiness records views; none in Not supported.
-  expect(screen.getByRole("button", { name: "Ready: 2 clusters" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Not ready: 2 clusters" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Not supported: 0 clusters" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Clusters (4)" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Readiness records (4)" })).toBeInTheDocument();
-
-  // ASA row: status, primary reason from lead blocking check, readiness-observed roles with time, execution-disabled notice, Run pre-checks.
-  const asa = row("CLS-DELTA-04");
-  expect(within(asa).getByText("Not ready")).toBeInTheDocument();
-  expect(within(asa).getByText("Configuration sync: Configuration not synchronised")).toBeInTheDocument();
-  expect(within(asa).getByText(/Active: FW-DELTA-04-M2/)).toHaveTextContent("Standby: FW-DELTA-04-M1 (1 h ago)");
-  expect(asa.querySelector('[data-role-source="readiness"]')).toHaveTextContent("(1 h ago)");
-  expect(within(asa).getByText("Failover execution not enabled for Cisco ASA")).toBeInTheDocument();
-  fireEvent.click(within(asa).getByRole("button", { name: "Run pre-checks" }));
-  expect(onRun).toHaveBeenCalledWith(asaRow);
-
-  // Expand ASA row: same ReadinessChecksTable component ordered active-first with readiness roles and time.
-  fireEvent.click(within(asa).getByRole("button", { name: "Checks for CLS-DELTA-04" }));
-  const asaDetail = screen.getByRole("region", { name: "Checks for CLS-DELTA-04" });
-  expect(within(asaDetail).getAllByRole("columnheader").map(c => c.textContent)).toEqual([
-    "Check", "FW-DELTA-04-M2 · active (readiness, 1 h ago)", "FW-DELTA-04-M1 · standby (readiness, 1 h ago)",
-  ]);
-
-  // FortiGate row: status, primary reason, inventory fallback roles labelled "(inventory)", execution-disabled notice, check table on expand.
-  const fgt = row("CLS-ECHO-05");
-  expect(within(fgt).getByText("Ready")).toBeInTheDocument();
-  expect(within(fgt).getByText("No blocking conditions observed")).toBeInTheDocument();
-  expect(within(fgt).getByText(/Active: FW-ECHO-05-M1/)).toHaveTextContent("Standby: FW-ECHO-05-M2 (inventory)");
-  expect(fgt.querySelector('[data-role-source="inventory"]')).toHaveTextContent("(inventory)");
-  expect(within(fgt).getByText("Failover execution not enabled for FortiGate")).toBeInTheDocument();
-  fireEvent.click(within(fgt).getByRole("button", { name: "Checks for CLS-ECHO-05" }));
-  const fgtDetail = screen.getByRole("region", { name: "Checks for CLS-ECHO-05" });
-  expect(within(fgtDetail).getAllByRole("columnheader").map(c => c.textContent)).toEqual([
-    "Check", "FW-ECHO-05-M1 · primary (inventory)", "FW-ECHO-05-M2 · secondary (inventory)",
-  ]);
-
-  // Vendor filter narrows to Cisco ASA and Fortinet rows respectively.
-  fireEvent.mouseDown(screen.getByRole("combobox", { name: "Vendor" }));
-  fireEvent.click(screen.getByRole("option", { name: "Cisco ASA" }));
-  expect(row("CLS-DELTA-04")).toBeInTheDocument();
-  expect(screen.queryByRole("row", { name: "CLS-ECHO-05" })).toBeNull();
-  fireEvent.mouseDown(screen.getByRole("combobox", { name: "Vendor" }));
-  fireEvent.click(screen.getByRole("option", { name: "Fortinet" }));
-  expect(row("CLS-ECHO-05")).toBeInTheDocument();
-  expect(screen.queryByRole("row", { name: "CLS-DELTA-04" })).toBeNull();
-});
-it("derives readiness roles for an ASA pair from check 10 standby marker and for a two-member FortiGate pair from the primary check-1 PASS", () => {
-  withNow();
-  const observedAt = hoursAgo(2);
-  const asaCluster = { ref: "CLS-DELTA-04", title: "CLS-DELTA-04", members: [
-    { device_id: "asa-m1", hostname: "FW-DELTA-04-M1", vendor_hint: "cisco_asa", ha_role: "active", inventory_collected_at: at },
-    { device_id: "asa-m2", hostname: "FW-DELTA-04-M2", vendor_hint: "cisco_asa", ha_role: "standby", inventory_collected_at: at },
-  ] as DeviceSummary[] };
-  const fgtCluster = { ref: "CLS-ECHO-05", title: "CLS-ECHO-05", members: [
-    { device_id: "fgt-m1", hostname: "FW-ECHO-05-M1", vendor_hint: "fortinet", ha_role: "secondary", inventory_collected_at: at },
-    { device_id: "fgt-m2", hostname: "FW-ECHO-05-M2", vendor_hint: "fortinet", ha_role: "primary", inventory_collected_at: at },
-  ] as DeviceSummary[] };
-  const asaRow: CpFailoverSummary = {
-    ...summary("CLS-DELTA-04", "READY"), vendor: "cisco_asa", readinessAvailable: true, canRunReadiness: true,
-    members: asaCluster.members.map(m => ({ device_id: m.device_id, hostname: m.hostname, ha_role: m.ha_role })),
-    readiness: {
-      status: "READY", observedAt, failedCheck: "",
-      checks: [
-        { checkNo: 1, title: "Failover state and roles", member: "Member 1", device_id: "asa-m1", result: "PASS", status: "PASS",
-          summary: "One Active and one Standby Ready; both views agree", blocking: true, observedAt, derived: { oneActiveOneStandbyReady: true } },
-        { checkNo: 1, title: "Failover state and roles", member: "Member 2", device_id: "asa-m2", result: "PASS", status: "PASS",
-          summary: "One Active and one Standby Ready; both views agree", blocking: true, observedAt, derived: { oneActiveOneStandbyReady: true } },
-        { checkNo: 10, title: "Traffic and ARP (information)", member: "Member 1", device_id: "asa-m1", result: "NOT_EVALUATED", status: "NOT_EVALUATED",
-          summary: "Read on the active member only", blocking: false, observedAt, derived: { reason: "NOT_ACTIVE_MEMBER" } },
-        { checkNo: 10, title: "Traffic and ARP (information)", member: "Member 2", device_id: "asa-m2", result: "PASS", status: "PASS",
-          summary: "2 KB/s, 8 ARP entries", blocking: false, observedAt, derived: {} },
-      ],
-    },
-  };
-  const fgtRow: CpFailoverSummary = {
-    ...summary("CLS-ECHO-05", "READY"), vendor: "fortinet", readinessAvailable: true, canRunReadiness: true,
-    members: fgtCluster.members.map(m => ({ device_id: m.device_id, hostname: m.hostname, ha_role: m.ha_role })),
-    readiness: {
-      status: "READY", observedAt, failedCheck: "",
-      checks: [
-        { checkNo: 1, title: "HA mode and members", member: "Member 1", device_id: "fgt-m2", result: "PASS", status: "PASS",
-          summary: "Active-passive, one primary and one secondary, health OK, identity matches (as the primary reports)", blocking: true, observedAt, derived: {} },
-      ],
-    },
-  };
-  setup({ clusters: [asaCluster, fgtCluster], rows: { "CLS-DELTA-04": [asaRow], "CLS-ECHO-05": [fgtRow] } });
-  expect(within(row("CLS-DELTA-04")).getByText(/Active: FW-DELTA-04-M2/)).toHaveTextContent("Standby: FW-DELTA-04-M1 (2 h ago)");
-  expect(within(row("CLS-ECHO-05")).getByText(/Active: FW-ECHO-05-M2/)).toHaveTextContent("Standby: FW-ECHO-05-M1 (2 h ago)");
 });
