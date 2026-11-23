@@ -5,14 +5,19 @@ import {
   type OfflineAnalysisResult,
   type OfflineAnalysisSummary,
 } from "../auth/adminApi";
-import { EstateCard, EvidenceStamp } from "./EstatePrimitives";
+import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
 import { standardChangesHref } from "./estateRouting";
 import {
+  OFFLINE_RULE_CAP,
+  offlineComparisonLine,
   offlineListRequest,
   offlineModeLabel,
   offlinePager,
+  offlinePeriodLine,
   offlineRuleCounts,
+  offlineRuleRow,
   offlineSampleLine,
+  offlineStatLines,
 } from "./estateOfflineModel";
 import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
 
@@ -54,6 +59,22 @@ export function EstateOfflineAnalyses({ policy, now = new Date() }: { readonly p
   const pager = offlinePager(page, list.state === "ok" ? list.analyses.length : 0);
   const counts = useMemo(
     () => (detail.state === "ok" ? offlineRuleCounts(detail.value.rules ?? []) : null),
+    [detail],
+  );
+
+  const comparison = detail.state === "ok" ? offlineComparisonLine(detail.value) : null;
+  const shownRules = useMemo(
+    () => (detail.state === "ok" ? (detail.value.rules ?? []).slice(0, OFFLINE_RULE_CAP).map(offlineRuleRow) : []),
+    [detail],
+  );
+  const statGroups = useMemo(
+    () => (detail.state === "ok"
+      ? [
+          { label: "Parse stats", lines: offlineStatLines(detail.value.parseStats) },
+          { label: "UNKNOWN stats", lines: offlineStatLines(detail.value.unknownStats) },
+          { label: "Verdict stats", lines: offlineStatLines(detail.value.verdictStats) },
+        ].filter((g) => g.lines.length > 0)
+      : []),
     [detail],
   );
 
@@ -114,12 +135,44 @@ export function EstateOfflineAnalyses({ policy, now = new Date() }: { readonly p
             <EvidenceStamp at={detail.value.collectedAt ?? null} source="policy snapshot" now={now} />
             <EvidenceStamp at={detail.value.createdAt} source="analysed" now={now} />
           </div>
+          <div style={{ color: ev.ink2 }}>{offlinePeriodLine(detail.value)}</div>
+          {detail.value.attributionNote && <p style={note}>{detail.value.attributionNote}</p>}
+          {detail.value.limitations && <p style={note}>Limitations: {detail.value.limitations}</p>}
+          {detail.value.caution && <p style={note}>Caution: {detail.value.caution}</p>}
+          {comparison !== null && <div style={{ color: ev.ink2 }}>{comparison}</div>}
+          {statGroups.length > 0 && (
+            <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginTop: "6px", fontFamily: ESTATE_MONO, fontSize: "12px", color: ev.ink2 }}>
+              {statGroups.map((g) => (
+                <div key={g.label}>
+                  <div style={{ color: ev.ink, fontWeight: 650 }}>{g.label}</div>
+                  <ul style={listStyle} aria-label={g.label}>
+                    {g.lines.map((line) => <li key={line}>{line}</li>)}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
           <ul style={listStyle} aria-label="Analysis rule counts">
             <li>Rules in this analysis: {counts.rules}</li>
             <li>Zero-traffic rules (zero attributed flows in this sample; not proof of an unused rule): {counts.zeroTraffic}</li>
             <li>Rules with unseen members (or member status UNKNOWN): {counts.unseenMembers}</li>
             <li>Rules with a narrowing suggestion status: {counts.narrowing}</li>
           </ul>
+          <div style={{ marginTop: "8px" }} aria-label="Per-rule findings">
+            {shownRules.map((r) => (
+              <div key={r.key} style={{ padding: "4px 0", borderBottom: `1px solid ${ev.line}` }}>
+                <div style={{ fontWeight: 650 }}>{r.title}</div>
+                <div style={{ color: ev.ink2, fontFamily: ESTATE_MONO, fontSize: "12px" }}>{r.meta}</div>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", fontSize: "12px" }}>
+                  <StateBadge state={r.memberBadge.state} word={r.memberBadge.word} dense />
+                  {r.zeroTrafficNote && <span style={{ color: ev.ink3 }}>{r.zeroTrafficNote}</span>}
+                  {r.memberNote && <span style={{ color: ev.ink3 }}>{r.memberNote}</span>}
+                  {r.narrowingNote && <span style={{ color: ev.ink3 }}>{r.narrowingNote}</span>}
+                </div>
+              </div>
+            ))}
+            <MoreFooter shown={shownRules.length} total={detail.value.rules.length} noun="rules" testId="offline-rules-more" />
+          </div>
         </div>
       )}
     </Section>

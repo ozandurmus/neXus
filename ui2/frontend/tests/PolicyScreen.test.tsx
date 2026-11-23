@@ -668,6 +668,11 @@ it("maps outcomes independently of generic reasons and bounds every progress for
   expect(progress(-1, 60)).toBe("step 0 of 60");
   expect(progress(NaN, 0)).toBe("0 steps");
   expect(csvCell(' ="synthetic"')).toBe('"\' =""synthetic"""');
+  expect(csvCell(null)).toBe('""');
+  expect(csvCell(undefined)).toBe('""');
+  expect(csvCell(42)).toBe('"42"');
+  expect(csvCell(-1)).toBe('"\'-1"');
+  expect(csvCell("\t+cmd")).toBe('"\'\t+cmd"');
 });
 
 it("reaches all 54 catalog containers even when the collection source is ineligible and searches descendants", async () => {

@@ -158,4 +158,87 @@ describe("Estate Ask workbench", () => {
     expect(await screen.findByRole("navigation", { name: "Primary" })).toBeInTheDocument();
     expect(screen.queryByTestId("estate-ask-screen")).toBeNull();
   });
+
+  it("updates ask-standard-link when switching between path, lookup, usage, cutover, and zones", async () => {
+    window.localStorage.setItem("nx.view", "estate");
+    window.history.replaceState(null, "", "/?screen=trace");
+    vi.stubGlobal("fetch", stubFetch("ALLOWED", []));
+    stubViewport(1280);
+    render(<App />);
+
+    const ask = await screen.findByTestId("estate-ask-screen");
+    const link = within(ask).getByTestId("ask-standard-link");
+    expect(link).toHaveAttribute("href", "?screen=trace&mode=path&standard=1");
+    expect(link).toHaveTextContent("Open the standard Trace screen →");
+
+    fireEvent.click(within(ask).getByRole("tab", { name: /Which rule decides\?/ }));
+    expect(link).toHaveAttribute("href", "?screen=trace&mode=lookup&standard=1");
+    expect(link).toHaveTextContent("Open the standard Trace screen →");
+
+    fireEvent.click(within(ask).getByRole("tab", { name: /Are this rule’s objects used\?/ }));
+    expect(link).toHaveAttribute("href", "?screen=rule_usage&standard=1");
+    expect(link).toHaveTextContent("Open the standard Rule object usage screen →");
+
+    fireEvent.click(within(ask).getByRole("tab", { name: /What breaks at cutover\?/ }));
+    expect(link).toHaveAttribute("href", "?screen=cutover&standard=1");
+    expect(link).toHaveTextContent("Open the standard Cutover impact screen →");
+
+    fireEvent.click(within(ask).getByRole("tab", { name: /Zone matrix/ }));
+    expect(link).toHaveAttribute("href", "?screen=zone_matrix&standard=1");
+    expect(link).toHaveTextContent("Open the standard Zone matrix screen →");
+  });
+
+  it("caps rendered evidence rows at ASK_EVIDENCE_ROW_CAP (25) and prints +N more rows via MoreFooter", async () => {
+    window.localStorage.setItem("nx.view", "estate");
+    window.history.replaceState(null, "", "/?screen=trace&mode=zones");
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/v2/zone-matrix/policies") {
+        return jsonResponse(200, {
+          policies: [{ id: "p1", name: "POL-22", vendor: "PAN", source_id: null, source_name: null, container_id: null, container_name: null, collected_at: null, rule_count: 30, target_count: 1 }],
+          not_evaluated: [],
+          can: { view_blocks: false, edit: false, publish: false, evaluate: true },
+        });
+      }
+      if (url === "/api/v2/zone-matrix/evaluate") {
+        const rules = Array.from({ length: 28 }, (_, i) => ({
+          rule_id: `r-${i + 1}`,
+          rule_uid: `u-${i + 1}`,
+          rule_number: i + 1,
+          rule_name: `rule-${i + 1}`,
+          section_name: "Core",
+          outcome: "VIOLATION",
+          reason: null,
+          highest_severity: "HIGH",
+          violated_cells: [],
+          undecided_parts: [],
+        }));
+        return jsonResponse(200, {
+          evaluated: true,
+          coverage: "COMPLETE",
+          outcome_counts: { VIOLATION: 28 },
+          version_number: 3,
+          collected_at: new Date().toISOString(),
+          rules,
+          zone_definition_gaps: [],
+          coverage_items: [],
+          headline: { distinct_violating_rules: 28, violated_zone_pairs: 1, unknown_rules: 0, not_evaluable_rules: 0 },
+        });
+      }
+      return jsonResponse(200, {});
+    }));
+    stubViewport(1280);
+    render(<App />);
+
+    const ask = await screen.findByTestId("estate-ask-screen");
+    const select = await within(ask).findByRole("combobox", { name: /Policy to evaluate/ });
+    await waitFor(() => expect(within(select).getByRole("option", { name: /POL-22/ })).toBeInTheDocument());
+    fireEvent.change(select, { target: { value: "p1" } });
+    fireEvent.click(within(ask).getByTestId("ask-submit"));
+
+    const answer = await within(ask).findByTestId("ask-answer");
+    expect(answer.querySelectorAll("[data-ask-hop]")).toHaveLength(25);
+    const more = within(answer).getByTestId("ask-rows-more");
+    expect(more).toHaveTextContent("+3 more rows");
+  });
 });

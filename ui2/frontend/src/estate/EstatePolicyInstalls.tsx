@@ -3,15 +3,13 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 
 import { getPolicyInstallStatus, type PolicyInstallStatusResponse } from "../auth/adminApi";
-import { StatusPill } from "../shell/StatusPill";
-import { formatStamp } from "../shell/time";
-import { EstateCard, MoreFooter } from "./EstatePrimitives";
+import { EstateCard, EvidenceStamp, MoreFooter, StateBadge, VendorTag } from "./EstatePrimitives";
 import { buildPolicyInstallsModel, policyInstallsHref } from "./estatePolicyInstallsModel";
 import { ESTATE_MONO, ev } from "./estateTokens";
 
 type ReadState =
   | { readonly status: "loading" }
-  | { readonly status: "ready"; readonly res: PolicyInstallStatusResponse }
+  | { readonly status: "ready"; readonly res: PolicyInstallStatusResponse; readonly readAt: string }
   | { readonly status: "failed" };
 
 /**
@@ -26,7 +24,13 @@ export function EstatePolicyInstalls() {
     getPolicyInstallStatus({})
       .then((res) => {
         // A response without a rows array is not a readable status: it is UNKNOWN, never an empty OK list.
-        if (!cancelled) setRead(Array.isArray(res?.rows) ? { status: "ready", res } : { status: "failed" });
+        if (!cancelled) {
+          setRead(
+            Array.isArray(res?.rows)
+              ? { status: "ready", res, readAt: new Date().toISOString() }
+              : { status: "failed" },
+          );
+        }
       })
       .catch(() => {
         if (!cancelled) setRead({ status: "failed" });
@@ -37,10 +41,13 @@ export function EstatePolicyInstalls() {
   }, []);
 
   const model = useMemo(
-    () => (read.status === "ready" ? buildPolicyInstallsModel(read.res.rows, read.res.total) : null),
+    () =>
+      read.status === "ready"
+        ? buildPolicyInstallsModel(read.res.rows, read.res.total, new Date(read.readAt), read.res.counts)
+        : null,
     [read],
   );
-  const now = new Date();
+  const now = read.status === "ready" ? new Date(read.readAt) : new Date();
   const href = policyInstallsHref();
 
   return (
@@ -59,8 +66,62 @@ export function EstatePolicyInstalls() {
       ) : null}
 
       {read.status === "failed" ? (
-        <Box sx={{ px: "18px", pb: "14px", fontSize: "13px", color: ev.ink3 }}>
-          Policy install status could not be read: UNKNOWN.
+        <Box
+          sx={{
+            px: "18px",
+            pb: "14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            flexWrap: "wrap",
+            fontSize: "13px",
+            color: ev.ink3,
+          }}
+        >
+          <StateBadge state="unk" word="UNKNOWN" dense />
+          <span>Policy install status could not be read: UNKNOWN.</span>
+        </Box>
+      ) : null}
+
+      {read.status === "ready" && model ? (
+        <Box
+          data-testid="policy-installs-state-counts"
+          sx={{
+            px: "18px",
+            pb: "10px",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "8px",
+            alignItems: "center",
+            fontSize: "12.5px",
+            color: ev.ink2,
+          }}
+        >
+          {model.stateCountsKnown ? (
+            model.stateCounts.some((c) => c.count > 0) ? (
+              model.stateCounts
+                .filter((c) => c.count > 0)
+                .map((c) => (
+                  <Box component="span" key={c.state} data-state-count={c.state}>
+                    <StateBadge state={c.badgeState} word={c.label} dense />
+                  </Box>
+                ))
+            ) : (
+              <Box component="span" sx={{ color: ev.ink3 }}>
+                0 policy installs counted
+              </Box>
+            )
+          ) : (
+            <Box component="span" sx={{ color: ev.ink3 }}>
+              state counts not reported
+            </Box>
+          )}
+          <EvidenceStamp
+            at={model.newestEvidenceAt ?? read.readAt}
+            source="policy install status"
+            now={now}
+            missingLabel="UNKNOWN"
+          />
         </Box>
       ) : null}
 
@@ -99,15 +160,38 @@ export function EstatePolicyInstalls() {
             >
               <Box component="span" sx={{ fontFamily: ESTATE_MONO, minWidth: 0, flex: "1 1 200px", overflowWrap: "anywhere" }}>
                 {line.hostname}
+                {line.contextLabel ? (
+                  <Box component="span" sx={{ color: ev.ink2, ml: "6px" }}>
+                    {line.contextLabel}
+                  </Box>
+                ) : null}
                 {line.target ? <Box component="span" sx={{ color: ev.ink3 }}>{`  ${line.target}`}</Box> : null}
               </Box>
-              <StatusPill tone={line.tone} word={line.word} dense now={now} />
-              {line.haWord && line.haTone ? <StatusPill tone={line.haTone} word={line.haWord} dense now={now} /> : null}
-              <Box component="span" sx={{ color: ev.ink3, fontSize: "12px" }}>
-                {line.installedAt
-                  ? `installed ${formatStamp(line.installedAt)}${line.installedAge ? ` · ${line.installedAge}` : ""}`
-                  : "install time UNKNOWN"}
+              <VendorTag label={line.vendorLabel} />
+              <Box component="span">
+                <StateBadge state={line.badgeState} word={line.word} dense />
               </Box>
+              {line.haWord && line.haBadgeState ? (
+                <Box component="span">
+                  <StateBadge state={line.haBadgeState} word={line.haWord} dense />
+                </Box>
+              ) : null}
+              {line.policyName ? (
+                <Box component="span" sx={{ fontFamily: ESTATE_MONO, fontSize: "12px", color: ev.ink2 }}>
+                  {line.policyName}
+                </Box>
+              ) : null}
+              {line.reason ? (
+                <Box component="span" sx={{ color: ev.ink3, fontSize: "12px" }}>
+                  {line.reason}
+                </Box>
+              ) : null}
+              <EvidenceStamp
+                at={line.installedAt}
+                source="installed"
+                now={now}
+                missingLabel="install time UNKNOWN"
+              />
               <Box component="a" href={href} sx={{ color: ev.accent, fontSize: "12px" }}>
                 Open in standard view
               </Box>

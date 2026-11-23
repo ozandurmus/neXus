@@ -39,6 +39,7 @@ import { PolicyObjectSearch } from "./PolicyObjectSearch";
 import { changesHref, lookupInPolicyHref } from "../shell/legacyRoutes";
 import { useUrlParamSync, writeUrlParams } from "../shell/urlParams";
 import { statusWord } from "../shell/presenters";
+import { csvCell } from "./offlineCsv";
 
 // The policy page API returns a fixed 200 rules per page (PolicyQueryService.page); the client does not choose it.
 const RULE_PAGE_SIZE = 200;
@@ -87,11 +88,7 @@ export function runningLabel(job: PolicyCollectionStatus, now: Date) {
   const denominator = total === 0 && !job.domainsTotal ? "?" : `${discovering ? "at least " : ""}${total}`;
   return `Running${elapsed === undefined ? "" : ` for ${elapsed} min`} · ${job.packagesDone ?? 0}/${denominator} packages · ${(job.rulesFetched ?? 0).toLocaleString("en-US")} rules · last activity ${seconds === undefined ? "unknown" : `${seconds} s ago`}`;
 }
-// Spreadsheet formula characters must remain text, including after leading whitespace.
-export function csvCell(value: unknown) {
-  const text = String(value ?? "");
-  return `"${(/^[\s]*[=+@-]/.test(text) ? "'" : "") + text.replace(/"/g, '""')}"`;
-}
+export { csvCell };
 function failureSentence(reason: string, step?: number, total?: number) {
   const scope = step === undefined ? "" : ` at collection ${progress(step, total ?? 0)}`;
   const problem = /TIMEOUT|TimedOut|JOB_DEADLINE/.test(reason) ? "the time limit was reached"

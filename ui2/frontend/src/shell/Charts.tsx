@@ -31,20 +31,6 @@ export interface Slice {
   readonly href?: string;
 }
 
-/** At most {@code max} named slices; the rest fold into "Other"; UNKNOWN (null label) always last. */
-export function foldSlices(slices: readonly Slice[], max = 5, otherHref?: string): Array<Slice & { color: string; display: string }> {
-  const known = slices.filter((s) => s.label !== null && s.count > 0);
-  const unknown = slices.filter((s) => s.label === null && s.count > 0);
-  const head = known.slice(0, max);
-  const rest = known.slice(max);
-  const out: Array<Slice & { color: string; display: string }> = head.map((s, i) => ({ ...s, color: SERIES[i % SERIES.length], display: s.label as string }));
-  if (rest.length > 0) {
-    out.push({ label: "Other", count: rest.reduce((n, s) => n + s.count, 0), href: otherHref, color: OTHER, display: `Other (${rest.length})` });
-  }
-  for (const u of unknown) out.push({ ...u, color: UNKNOWN_COLOR, display: "UNKNOWN" });
-  return out;
-}
-
 function arc(cx: number, cy: number, r: number, start: number, end: number): string {
   const large = end - start > Math.PI ? 1 : 0;
   const x1 = cx + r * Math.sin(start);

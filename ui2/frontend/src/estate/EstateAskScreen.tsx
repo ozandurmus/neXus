@@ -26,9 +26,11 @@ import {
   type ZoneVersionDetail,
 } from "../screens/zonematrix/zoneMatrixApi";
 import {
+  ASK_EVIDENCE_ROW_CAP,
   ASK_MODES,
   ASK_MODE_META,
   CANNOT_PROVE,
+  askStandardHref,
   buildCutoverAnswer,
   buildLookupAnswer,
   buildPathAnswer,
@@ -40,9 +42,8 @@ import {
   type AskEvidenceRow,
   type AskMode,
 } from "./estateAskModel";
-import { EstateCard, EvidenceStamp, StateBadge } from "./EstatePrimitives";
+import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
 import { EstateZoneMatrixGrid } from "./EstateZoneMatrixGrid";
-import { standardTraceHref } from "./estateRouting";
 import { ESTATE_MONO, ESTATE_UNKNOWN_HATCH, ev } from "./estateTokens";
 
 type Failure = { readonly title: string; readonly body: string; readonly restricted: boolean };
@@ -121,6 +122,7 @@ function useLoaded<T>(loader: () => Promise<T>, enabled: boolean): { readonly va
 }
 
 function AnswerView({ answer, now }: { readonly answer: AskAnswer; readonly now: Date }) {
+  const shown = answer.rows.slice(0, ASK_EVIDENCE_ROW_CAP);
   return (
     <EstateCard sx={{ p: "18px", mt: "16px" }}>
       <Box data-testid="ask-answer" data-ask-state={answer.state} data-ask-unprovable={answer.unprovable ? "true" : "false"}>
@@ -138,10 +140,17 @@ function AnswerView({ answer, now }: { readonly answer: AskAnswer; readonly now:
         ) : null}
         <Typography component="h2" sx={{ fontSize: "20px", fontWeight: 680, mt: "10px", lineHeight: 1.3 }}>{answer.headline}</Typography>
         {answer.detail ? <Typography sx={{ fontSize: "13.5px", color: ev.ink2, mt: "4px" }}>{answer.detail}</Typography> : null}
-        {answer.rows.length > 0 ? (
-          <Box component="ol" aria-label="Evidence" sx={{ listStyle: "none", m: "14px 0 0", p: 0, display: "grid", gap: "8px" }}>
-            {answer.rows.map((row) => <EvidenceRow key={row.key} row={row} now={now} />)}
-          </Box>
+        {shown.length > 0 ? (
+          <>
+            <Box component="ol" aria-label="Evidence" sx={{ listStyle: "none", m: "14px 0 0", p: 0, display: "grid", gap: "8px" }}>
+              {shown.map((row) => <EvidenceRow key={row.key} row={row} now={now} />)}
+            </Box>
+            {answer.rows.length > ASK_EVIDENCE_ROW_CAP ? (
+              <Box sx={{ mt: "8px" }}>
+                <MoreFooter shown={shown.length} total={answer.rows.length} noun="rows" testId="ask-rows-more" />
+              </Box>
+            ) : null}
+          </>
         ) : null}
         {answer.limitations ? (
           <Typography sx={{ fontSize: "12px", color: ev.ink3, mt: "12px" }}>{answer.limitations}</Typography>
@@ -374,7 +383,7 @@ export function EstateAskScreen({ initialMode }: { readonly initialMode: AskMode
       ) : null}
 
       <Typography sx={{ mt: "16px", fontSize: "12.5px", color: ev.ink3 }}>
-        Need the full tool? <Box component="a" href={standardTraceHref(mode === "lookup" ? "lookup" : "path")} data-testid="ask-standard-link" sx={{ color: ev.accent }}>Open the standard Trace screen →</Box>
+        Need the full tool? <Box component="a" href={askStandardHref(mode).href} data-testid="ask-standard-link" sx={{ color: ev.accent }}>{askStandardHref(mode).label}</Box>
       </Typography>
     </Box>
   );

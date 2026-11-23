@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { CutoverAssessmentView, OfflineAnalysisResult, PathResult, PolicyLookupResult } from "../src/auth/adminApi";
 import {
+  ASK_EVIDENCE_ROW_CAP,
+  askStandardHref,
   buildCutoverAnswer,
   buildLookupAnswer,
   buildPathAnswer,
@@ -9,6 +11,7 @@ import {
   parseAskMode,
   parseFlowQuestion,
 } from "../src/estate/estateAskModel";
+import { NOT_SEEN_WORDING } from "../src/screens/RuleUsageResult";
 
 describe("parseFlowQuestion", () => {
   it("reads an arrow, a word form and a port-first form", () => {
@@ -108,5 +111,282 @@ describe("answers", () => {
     expect(zones({ outcome_counts: { VIOLATION: 2 } }).state).toBe("act");
     expect(zones({ coverage: "INCOMPLETE" }).state).toBe("watch");
     expect(zones({ evaluated: false, not_evaluated_reason: "No matrix published" }).unprovable).toBe(true);
+  });
+
+  it("buildUsageAnswer labels NOT_AUDITABLE, uses usageReason without flow count on unjudged objects, and appends NOT_SEEN_WORDING", () => {
+    const usage = buildUsageAnswer({
+      flowCount: 42,
+      invalidRows: 1,
+      periodStart: "2026-11-01",
+      periodEnd: "2026-11-18",
+      collectedAt: "2026-11-19T10:00:00Z",
+      limitations: "Export covers TCP/UDP.",
+      rules: [{
+        objectUsage: [
+          { dimension: "source", objectId: "o1", name: "NET-USED", parentId: null, depth: 0, state: "USED", flowCount: 42 },
+          { dimension: "destination", objectId: "o2", name: "NET-UNSEEN", parentId: null, depth: 0, state: "NOT_SEEN", flowCount: 0 },
+          { dimension: "source", objectId: "o3", name: "DYN-OBJ", parentId: null, depth: 0, state: "NOT_AUDITABLE", flowCount: 0, reason: "Dynamic object cannot be expanded offline." },
+          { dimension: "service", objectId: "o4", name: "SVC-UNK", parentId: null, depth: 0, state: "UNKNOWN", flowCount: 99, reason: "   " },
+        ],
+      }],
+    } as unknown as OfflineAnalysisResult);
+
+    expect(usage.rows[0]).toMatchObject({ state: "ok", stateWord: "Used", lines: ["42 flows"] });
+    expect(usage.rows[1]).toMatchObject({ state: "watch", stateWord: "Not seen", lines: ["0 flows"] });
+    expect(usage.rows[2]).toMatchObject({
+      state: "unk",
+      stateWord: "Not auditable",
+      lines: ["Dynamic object cannot be expanded offline."],
+    });
+    expect(usage.rows[2]?.lines.join(" ")).not.toContain("flows");
+    expect(usage.rows[3]).toMatchObject({
+      state: "unk",
+      stateWord: "UNKNOWN",
+      lines: ["No reason was given by the server."],
+    });
+    expect(usage.rows[3]?.lines.join(" ")).not.toContain("flows");
+    expect(usage.limitations).toContain("Export covers TCP/UDP.");
+    expect(usage.limitations).toContain(NOT_SEEN_WORDING);
+
+    const allUsed = buildUsageAnswer({
+      flowCount: 5,
+      invalidRows: 0,
+      periodStart: "2026-11-01",
+      periodEnd: "2026-11-18",
+      limitations: "",
+      rules: [{
+        objectUsage: [{ dimension: "source", objectId: "o1", name: "NET-USED", parentId: null, depth: 0, state: "USED", flowCount: 5 }],
+      }],
+    } as unknown as OfflineAnalysisResult);
+    expect(allUsed.limitations).toBeNull();
+  });
+
+  it("buildCutoverAnswer formats coverage with coverageText, emits incomplete row when empty, and includes counts, targetSourceLabel, and STALE_REASON", () => {
+    const emptyCov = buildCutoverAnswer({
+      readiness: "NO_BLOCKERS_IN_EVALUATED_FLOWS",
+      status: "INCOMPLETE",
+      headline: "Evaluated with gaps",
+      targetSource: "OPERATOR_OVERRIDE",
+      stale: true,
+      staleReasons: ["TARGET_POLICY_CHANGED", "SEGMENT_CHANGED"],
+      counts: {
+        tuples: 120,
+        flows: 850,
+        WOULD_DROP: 4,
+        NOT_DECIDED: 2,
+        NOT_EVALUABLE: 1,
+        WOULD_ALLOW: 113,
+        alreadyDroppedTuples: 7,
+        missingRuleGroups: 3,
+      },
+      coverage: [],
+      createdAt: "2026-11-19T10:00:00Z",
+    } as unknown as CutoverAssessmentView);
+
+    expect(emptyCov.rows).toEqual([
+      {
+        key: "cov-none",
+        title: "NONE",
+        state: "unk",
+        stateWord: "Incomplete",
+        lines: ["The server returned no coverage list: read this verdict as incomplete."],
+        source: "assessment coverage",
+      },
+    ]);
+    expect(emptyCov.detail).toContain("120 distinct flows");
+    expect(emptyCov.detail).toContain("850 logged connections");
+    expect(emptyCov.detail).toContain("4 would drop");
+    expect(emptyCov.detail).toContain("2 not decided");
+    expect(emptyCov.detail).toContain("1 not evaluable");
+    expect(emptyCov.detail).toContain("113 would allow");
+    expect(emptyCov.detail).toContain("7 already dropped today");
+    expect(emptyCov.detail).toContain("3 missing-rule groups");
+    expect(emptyCov.detail).toContain("Target: OPERATOR OVERRIDE");
+    expect(emptyCov.detail).toContain("a newer snapshot of the target policy is stored; the segment was edited after this assessment");
+
+    const withCov = buildCutoverAnswer({
+      readiness: "BLOCKERS_FOUND",
+      status: "COMPLETE",
+      headline: "Blockers found",
+      targetSource: "PATH",
+      counts: { WOULD_DROP: 1 },
+      coverage: [
+        { code: "LOG_PERIOD", periodStart: "2026-11-01", periodEnd: "2026-11-15" },
+        { code: "IPV6_FLOWS_SET_ASIDE", count: 14 },
+      ],
+      createdAt: "2026-11-19T10:00:00Z",
+    } as unknown as CutoverAssessmentView);
+
+    expect(withCov.rows).toHaveLength(2);
+    expect(withCov.rows[0]?.lines).toEqual(["Log period 2026-11-01 – 2026-11-15. Only flows logged in this period are assessed."]);
+    expect(withCov.rows[1]?.lines).toEqual(["14 IPv6 rows set aside; this step assesses IPv4 only."]);
+    expect(withCov.detail).toContain("Target: computed path");
+  });
+
+  it("buildZonesAnswer maps violating, not-evaluable, and outcome-unknown rules and zone_definition_gaps ahead of coverage_items", () => {
+    const answer = buildZonesAnswer({
+      evaluated: true,
+      coverage: "INCOMPLETE",
+      version_number: 4,
+      collected_at: "2026-11-19T10:00:00Z",
+      outcome_counts: { VIOLATION: 1, COMPLIANT: 12, NOT_EVALUABLE: 2, UNKNOWN: 3 },
+      not_applicable: {
+        disabled: 1,
+        deny_type: 2,
+        outside_security_rulebase: 0,
+        apply_layer_decided_by_inline: 0,
+        schedule_ended: 0,
+        total: 3,
+        ended_schedules: [],
+      },
+      headline: { distinct_violating_rules: 1, violated_zone_pairs: 1, unknown_rules: 3, not_evaluable_rules: 2 },
+      rules: [
+        {
+          rule_id: "r-ok",
+          rule_uid: "u-ok",
+          rule_number: 1,
+          rule_name: "allow-dns",
+          section_name: "Core",
+          outcome: "COMPLIANT",
+          reason: null,
+          highest_severity: null,
+          violated_cells: [],
+          undecided_parts: [],
+        },
+        {
+          rule_id: "r-viol",
+          rule_uid: "u-viol",
+          rule_number: 12,
+          rule_name: "broad-db",
+          section_name: "Access",
+          outcome: "VIOLATION",
+          reason: null,
+          highest_severity: "CRITICAL",
+          violated_cells: [
+            {
+              source: "z1",
+              destination: "z2",
+              source_name: "DMZ",
+              destination_name: "Database",
+              statement: "DENY_ALL",
+              severity: "CRITICAL",
+              not_allowed_services: ["tcp/5432"],
+              nat_view: "PRE_NAT",
+              witness: null,
+            },
+          ],
+          undecided_parts: [],
+        },
+        {
+          rule_id: "r-ne",
+          rule_uid: "u-ne",
+          rule_number: 15,
+          rule_name: "app-rule",
+          section_name: "Apps",
+          outcome: "NOT_EVALUABLE",
+          reason: "Application constraint cannot be evaluated against port sets.",
+          highest_severity: "HIGH",
+          violated_cells: [],
+          undecided_parts: [],
+        },
+        {
+          rule_id: "r-unk",
+          rule_uid: "u-unk",
+          rule_number: 19,
+          rule_name: "",
+          section_name: "Edge",
+          outcome: "UNKNOWN",
+          reason: null,
+          highest_severity: null,
+          violated_cells: [],
+          undecided_parts: ["source dynamic object", "service group unresolved"],
+        },
+      ],
+      zone_definition_gaps: [
+        {
+          rule_id: "g-1",
+          rule_number: 22,
+          rule_name: "legacy-net",
+          section_name: "Branch",
+          range_count: 2,
+          unassigned_private_ranges: null,
+        },
+      ],
+      coverage_items: [
+        { code: "NAT_PARTIAL", description: "Dynamic NAT rules were not expanded." },
+      ],
+    } as never);
+
+    expect(answer.detail).toContain("Matrix v4");
+    expect(answer.detail).toContain("1 violation");
+    expect(answer.detail).toContain("12 compliant");
+    expect(answer.detail).toContain("2 not evaluable");
+    expect(answer.detail).toContain("3 UNKNOWN");
+    expect(answer.detail).toContain("3 not applicable");
+
+    expect(answer.rows.map((r) => r.key)).toEqual([
+      "rule-r-viol",
+      "rule-r-ne",
+      "rule-r-unk",
+      "gap-g-1",
+      "cov-NAT_PARTIAL",
+    ]);
+    expect(answer.rows[0]).toMatchObject({
+      title: "Rule #12 broad-db",
+      state: "act",
+      stateWord: "Violation",
+      lines: ["Access · Critical", "DMZ -> Database (PRE_NAT): Deny all"],
+    });
+    expect(answer.rows[1]).toMatchObject({
+      title: "Rule #15 app-rule",
+      state: "unk",
+      stateWord: "Not evaluable",
+      lines: ["Apps · High", "Application constraint cannot be evaluated against port sets."],
+    });
+    expect(answer.rows[2]).toMatchObject({
+      title: "Rule #19 u-unk",
+      state: "unk",
+      stateWord: "Outcome unknown",
+      lines: ["Edge", "source dynamic object; service group unresolved"],
+    });
+    expect(answer.rows[3]).toMatchObject({
+      title: "Rule #22 legacy-net",
+      state: "unk",
+      stateWord: "Zone gap",
+      lines: ["Branch · 2 unassigned private ranges"],
+    });
+    expect(answer.rows[4]).toMatchObject({
+      title: "NAT_PARTIAL",
+      state: "unk",
+      stateWord: "Coverage",
+      lines: ["Dynamic NAT rules were not expanded."],
+    });
+    for (const row of answer.rows) {
+      expect(row.state).not.toBe("ok");
+    }
+  });
+
+  it("askStandardHref returns the mode-specific standard-view href with standard=1 for all 5 modes", () => {
+    expect(ASK_EVIDENCE_ROW_CAP).toBe(25);
+    expect(askStandardHref("path")).toEqual({
+      href: "?screen=trace&mode=path&standard=1",
+      label: "Open the standard Trace screen →",
+    });
+    expect(askStandardHref("lookup")).toEqual({
+      href: "?screen=trace&mode=lookup&standard=1",
+      label: "Open the standard Trace screen →",
+    });
+    expect(askStandardHref("usage")).toEqual({
+      href: "?screen=rule_usage&standard=1",
+      label: "Open the standard Rule object usage screen →",
+    });
+    expect(askStandardHref("cutover")).toEqual({
+      href: "?screen=cutover&standard=1",
+      label: "Open the standard Cutover impact screen →",
+    });
+    expect(askStandardHref("zones")).toEqual({
+      href: "?screen=zone_matrix&standard=1",
+      label: "Open the standard Zone matrix screen →",
+    });
   });
 });
