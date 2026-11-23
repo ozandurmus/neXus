@@ -88,6 +88,9 @@ public final class ScriptExecutionService {
             "sh", "bash", "py", "js", "mjs", "pl", "rb", "ps1");
     public static final Set<String> BINARY_KINDS = Set.of("jar", "bin");
     public static final Set<String> NOTIFY_MODES = Set.of("syslog", "smtp", "both", "none");
+    /** Warned, not refused (PO 2026-11-18): the option only narrows the run-end mail (contract section 3.5). */
+    public static final String MAIL_ON_FAILURE_ONLY_WITHOUT_MAIL_WARNING = "\"Mail on failure only\" is set but this "
+            + "script sends no mail (notify is neither smtp nor both), so it was not stored; choose smtp or both to use it.";
 
     public record ScriptDetails(
             ScriptRecord script,
@@ -107,7 +110,16 @@ public final class ScriptExecutionService {
             List<String> egress,
             List<String> credentialRefs,
             String notifyMode,
-            String runAs) {
+            String runAs,
+            Boolean notifyMailOnFailureOnly) {
+
+        /** Without the V266 "mail on failure only" option (false). */
+        public CreateScriptCommand(String name, String fileName, String kind, byte[] body, String schedule,
+                Boolean enabled, Integer timeoutSeconds, List<String> egress, List<String> credentialRefs,
+                String notifyMode, String runAs) {
+            this(name, fileName, kind, body, schedule, enabled, timeoutSeconds, egress, credentialRefs, notifyMode,
+                    runAs, null);
+        }
     }
 
     public record NewVersionCommand(
@@ -125,7 +137,20 @@ public final class ScriptExecutionService {
             Optional<List<String>> egress,
             Optional<List<String>> credentialRefs,
             Optional<String> notifyMode,
-            Optional<String> runAs) {
+            Optional<String> runAs,
+            Optional<Boolean> notifyMailOnFailureOnly) {
+
+        public UpdateSettingsCommand {
+            notifyMailOnFailureOnly = notifyMailOnFailureOnly == null ? Optional.empty() : notifyMailOnFailureOnly;
+        }
+
+        /** Without the V266 "mail on failure only" option (left unchanged). */
+        public UpdateSettingsCommand(Optional<String> schedule, boolean clearSchedule, Optional<Boolean> enabled,
+                Optional<Integer> timeoutSeconds, Optional<List<String>> egress,
+                Optional<List<String>> credentialRefs, Optional<String> notifyMode, Optional<String> runAs) {
+            this(schedule, clearSchedule, enabled, timeoutSeconds, egress, credentialRefs, notifyMode, runAs,
+                    Optional.empty());
+        }
     }
 
     public sealed interface Outcome {
@@ -326,7 +351,9 @@ public final class ScriptExecutionService {
                 runAs,
                 actorFingerprint,
                 now,
-                now);
+                now,
+                Boolean.TRUE.equals(command.notifyMailOnFailureOnly())
+                        && ("smtp".equals(notifyMode) || "both".equals(notifyMode)));
         ScriptVersionRecord initialVersion = new ScriptVersionRecord(
                 scriptId,
                 1,
@@ -342,7 +369,8 @@ public final class ScriptExecutionService {
                 now);
         ScriptRecord saved = scriptRepository.create(script, initialVersion, actorFingerprint, ActionRegistry.SCRIPT_WRITE);
         List<ScriptVersionRecord> versions = scriptRepository.findVersions(scriptId);
-        return new Outcome.Ok(toDetails(saved, versions, now));
+        return new Outcome.Ok(withMailOnFailureWarning(toDetails(saved, versions, now),
+                Boolean.TRUE.equals(command.notifyMailOnFailureOnly()), notifyMode));
     }
 
     public Outcome addVersion(String scriptId, NewVersionCommand command, String actorFingerprint) {
@@ -505,6 +533,7 @@ public final class ScriptExecutionService {
                 egressDeviceTargets,
                 credentialRefs,
                 notifyMode,
+                command.notifyMailOnFailureOnly().orElse(existing.notifyMailOnFailureOnly()),
                 runAs,
                 actorFingerprint,
                 ActionRegistry.SCRIPT_WRITE);
@@ -536,7 +565,8 @@ public final class ScriptExecutionService {
                     ActionRegistry.SCRIPT_WRITE);
         }
         List<ScriptVersionRecord> versions = scriptRepository.findVersions(existing.scriptId());
-        return new Outcome.Ok(toDetails(current, versions, clock.instant()));
+        return new Outcome.Ok(withMailOnFailureWarning(toDetails(current, versions, clock.instant()),
+                command.notifyMailOnFailureOnly().orElse(false), notifyMode));
     }
 
     public Outcome setEnabled(String scriptId, boolean enabled, String actorFingerprint) {
@@ -1035,6 +1065,19 @@ public final class ScriptExecutionService {
             normalized.add(trimmed);
         }
         return new CredentialRefsValidation(List.copyOf(normalized), null);
+    }
+
+    /**
+     * "Mail on failure only" narrows the run-end mail (contract section 3.5); asked for with a channel that sends no mail
+     * it is not stored, and the save is warned, never refused (PO 2026-11-18).
+     */
+    private static ScriptDetails withMailOnFailureWarning(ScriptDetails details, boolean requested, String notifyMode) {
+        if (!requested || "smtp".equals(notifyMode) || "both".equals(notifyMode)) {
+            return details;
+        }
+        List<String> warnings = new ArrayList<>(details.warnings());
+        warnings.add(MAIL_ON_FAILURE_ONLY_WITHOUT_MAIL_WARNING);
+        return new ScriptDetails(details.script(), details.versions(), details.nextFiveFires(), List.copyOf(warnings));
     }
 
     private ScriptDetails toDetails(ScriptRecord script, List<ScriptVersionRecord> versions, Instant now) {
