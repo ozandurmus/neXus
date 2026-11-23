@@ -135,9 +135,10 @@ export function screenFromSearch(search: string): { readonly screen: ScreenId; r
   const screen = params.get("screen");
   // One device screen (PO 2026-09-25): Configuration is a tab of Devices. An old link lands there, its device,
   // cluster and filters kept, with the Configuration tab open.
-  if (screen === "configuration" && typeof window !== "undefined") {
+  // "devices" is the menu's own word for the inventory screen (2026-11-23: a typed ?screen=devices fell to Overview).
+  if ((screen === "configuration" || screen === "devices") && typeof window !== "undefined") {
     params.set("screen", "inventory");
-    if (params.get("device_id") || params.get("cluster_ref")) params.set("tab", "configuration");
+    if (screen === "configuration" && (params.get("device_id") || params.get("cluster_ref"))) params.set("tab", "configuration");
     window.history.replaceState(null, "", `?${params.toString()}`);
     return { screen: "inventory", preview: false };
   }
