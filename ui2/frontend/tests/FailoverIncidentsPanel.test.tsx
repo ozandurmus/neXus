@@ -83,3 +83,20 @@ it("a code-less refusal shows the server's error and the HTTP status", async () 
   fireEvent.click(screen.getByRole("button", { name: "Release" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("ACTION_MAPPING_REQUIRED (HTTP 403)");
 });
+it("words the opening time in display time and labels the reference as the incident, not a run", async () => {
+  api.incidents.mockResolvedValue({ canRelease: false, roleNote: NOTE, incidents: [incident] });
+  view();
+  const line = await screen.findByText(/Reason: MUTATION_STOPPED/);
+  expect(line).toHaveTextContent("Opened: 2026-10-20 13:00 GMT+3 · Incident: run-opaque");
+  expect(line.textContent).not.toMatch(/2026-10-20T10:00:00Z|Run:/);
+});
+it("uses the screen's one read when it is handed in, and asks it to reload after a release", async () => {
+  const reload = vi.fn(), onReleased = vi.fn();
+  render(<ThemeProvider theme={m3Theme}><FailoverIncidentsPanel onReleased={onReleased} shared={{ data: { canRelease: true, roleNote: null, incidents: [incident] }, reload }} /></ThemeProvider>);
+  fireEvent.click(await screen.findByRole("button", { name: "Release incident" }));
+  fireEvent.change(screen.getByLabelText(/Reason/), { target: { value: "Verified out of band" } });
+  fireEvent.click(screen.getByRole("button", { name: "Release" }));
+  await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+  expect(api.incidents).not.toHaveBeenCalled();
+  expect(onReleased).toHaveBeenCalled();
+});

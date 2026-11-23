@@ -4,7 +4,7 @@ import { test, expect, type Page, type Route } from "@playwright/test";
 // service, session, device or credential is involved (the live suite's fixtures need a booted service and never click an
 // action). Names are masked pseudonyms; addresses are never shown. Run:
 //   node_modules/.bin/playwright test --config playwright.chassis-local.config.ts
-// (Operations > HA and readiness > open the chassis > its Failover panel; a session that may start failovers.)
+// (Operations > HA and failover > open the chassis > its Failover panel; a session that may start failovers.)
 
 type Json = Record<string, unknown>;
 const CLUSTER = "CLS-TANGO-04", CHASSIS_ID = "chassis-opaque", MEMBERS = [
@@ -68,19 +68,18 @@ async function serve(page: Page, unitOver: Json = {}) {
   return state;
 }
 
-/** `expand: false` leaves the unit closed: its failover action is on the row and needs no expand step first. */
-async function openChassis(page: Page, label = "VSX chassis · CLS-TANGO-04", expand = true) {
+/** The detail is one surface: the chassis is shown as soon as its unit is read, no expand step. */
+async function openChassis(page: Page, label = "VSX chassis · CLS-TANGO-04") {
   await page.goto(`/?screen=operations&cluster_ref=${CLUSTER}`);
   const detail = page.getByRole("dialog", { name: "HA readiness detail" });
-  if (expand) await detail.getByRole("button", { name: label }).click();
-  else await expect(detail.getByRole("button", { name: label })).toBeVisible();
+  await expect(detail.getByRole("heading", { name: label })).toBeVisible();
   return detail;
 }
 const NOTE = "change CHG-123 planned failover";
 /** PO 2026-11-23: one dialog for an administrator -- no date field, a work log note, then the start. */
-async function startFailover(page: Page, button: string) {
+async function startFailover(page: Page, button: string, title = button) {
   await page.getByRole("button", { name: button, exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: button });
+  const dialog = page.getByRole("dialog", { name: title });
   await expect(dialog.getByText("Valid for 60 minutes.")).toBeVisible();
   await expect(dialog.locator("input[type='datetime-local']")).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "Fail over now" })).toBeDisabled();
@@ -91,39 +90,43 @@ async function startFailover(page: Page, button: string) {
 
 test("HA-mode chassis: approve, start, the virtual systems follow, the return completes and only then it is verified", async ({ page }) => {
   const mock = await serve(page);
-  const detail = await openChassis(page, undefined, false);
+  const detail = await openChassis(page);
   await expect(detail.getByText(/VSX HA mode: the chassis fails over in VS0/)).toBeVisible();
-  await startFailover(page, "Fail over the chassis");
+  await startFailover(page, "Fail over chassis", "Fail over the chassis");
   expect(mock.posts.map(p => p.path)).toEqual(["/api/v2/cp-failover/approvals", "/api/v2/cp-failover/runs"]);
   const sent = mock.posts[0].body as { windowFrom: string; windowUntil: string; reason: string };
   expect(sent.reason).toBe(NOTE);
   expect(Date.parse(sent.windowUntil) - Date.parse(sent.windowFrom)).toBe(60 * 60_000);
   expect(mock.posts[1].body).toMatchObject({ unitId: CHASSIS_ID, requestId: expect.any(String), revision: 1, executionNonce: "nonce-opaque", warningConfirmed: true });
-  await expect(detail.getByRole("status").filter({ hasText: "Checking readiness" })).toBeVisible();
+  await expect(detail.getByRole("status").filter({ hasText: "Failing over - running the pre-checks" })).toBeVisible();
   mock.runDetail = run({ state: "POSTCHECK", step: "POSTCHECK", checks: [...checks("pre", null), ...checks("post", "PASS")] });
-  await expect(detail.getByRole("status").filter({ hasText: "Checking traffic and cluster after switch" })).toBeVisible();
-  await expect(detail.getByText("Virtual systems moved")).toBeVisible();
+  await expect(detail.getByRole("status").filter({ hasText: "Failing over - checking traffic and cluster after the switch" })).toBeVisible();
+  // The run's check groups are collapsed to one line each (REDESIGN section 6); open the post-switch checks, then their passed list.
+  await detail.getByText("Post-switch checks", { exact: false }).first().click();
+  await expect(detail.getByText(/Passed \(2\): Cluster state, Virtual systems moved/)).toBeVisible();
+  await detail.getByText(/Passed \(2\): Cluster state, Virtual systems moved/).click();
   await expect(detail.getByText("All 3 virtual systems follow the chassis").first()).toBeVisible();
-  await expect(detail.getByText("Failover verified", { exact: true })).toHaveCount(1); // the stepper label only, not the status line
+  await expect(detail.getByText("Failover verified", { exact: true })).toHaveCount(0); // only a DONE run is verified
   mock.runDetail = run({ state: "RETURNING", step: "RETURNING", checks: [...checks("pre", null), ...checks("post", "PASS")] });
-  await expect(detail.getByRole("status").filter({ hasText: "Returning former active to standby" })).toBeVisible();
+  await expect(detail.getByRole("status").filter({ hasText: "Failing over - returning the former active to standby" })).toBeVisible();
   mock.runDetail = run({ state: "DONE", step: "DONE", outcome: "SUCCEEDED", checks: [...checks("pre", null), ...checks("post", "PASS"), ...checks("post_return", "PASS")] });
   await expect(detail.getByRole("status").filter({ hasText: "Failover verified" })).toBeVisible();
-  await expect(detail.getByText(/Final post-checks: Recorded/)).toBeVisible();
+  await expect(detail.getByText(/required checks passed/)).toBeVisible();
   expect(mock.unknown).toEqual([]);
 });
 
 test("a virtual system that did not move stops the run: never 'Failover verified', the return is offered", async ({ page }) => {
   const mock = await serve(page);
   const detail = await openChassis(page);
-  await startFailover(page, "Fail over the chassis");
+  await startFailover(page, "Fail over chassis", "Fail over the chassis");
   mock.runDetail = run({ state: "STOPPED", step: "POSTCHECK", outcome: "STOPPED", message: "VSX_VIRTUAL_SYSTEM_NOT_MOVED", failedCheck: "16", mutationPossible: true,
     incidentRef: "incident-opaque", lastConfirmedRoles: { "member-1": "DOWN", "member-2": "ACTIVE" }, checks: [...checks("pre", null), ...checks("post", "FAIL")],
     resume: resume() });
-  const status = detail.getByRole("status").filter({ hasText: "Stopped after mutation" });
+  const status = detail.getByRole("status").filter({ hasText: "Stopped after the switch" });
   await expect(status).toBeVisible();
+  await detail.getByText("Post-switch checks", { exact: false }).first().click();
   await expect(detail.getByText("1 of 3 virtual systems did not move").first()).toBeVisible();
-  await expect(detail.getByText(/Refusal: Stopped: a virtual system did not move with the chassis/)).toBeVisible();
+  await expect(detail.getByText(/Reason: Stopped: a virtual system did not move with the chassis/)).toBeVisible();
   await expect(detail.getByText("VSX_VIRTUAL_SYSTEM_NOT_MOVED", { exact: true })).toHaveCount(0);
   await expect(detail.getByRole("status").filter({ hasText: /^Failover verified$/ })).toHaveCount(0);
   await expect(detail.getByText(/Evidence coverage/)).toHaveCount(0);
@@ -145,7 +148,7 @@ test("VSLS chassis: 'Fail over all virtual systems' shows the sequence and stops
   const mock = await serve(page, { chassisMode: "VSLS", chassisAction: "FAILOVER_ALL_VIRTUAL_SYSTEMS", mode: "VSLS" });
   const detail = await openChassis(page);
   await expect(detail.getByText(/VSLS chassis: every virtual system is failed over in turn/)).toBeVisible();
-  await page.getByRole("button", { name: "Fail over all virtual systems", exact: true }).click();
+  await page.getByRole("button", { name: /^Fail over all VS \(\d+\)$/ }).click();
   const dialog = page.getByRole("dialog", { name: "Fail over all virtual systems" });
   await expect(dialog.getByText(/stops at the first virtual system that does not succeed/)).toBeVisible();
   await dialog.getByLabel("Work log note").fill(NOTE);
@@ -154,24 +157,24 @@ test("VSLS chassis: 'Fail over all virtual systems' shows the sequence and stops
   // The server now reports the running sequence on the unit; the panel re-reads it (the unit list refreshes with the run).
   mock.unit = { ...mock.unit, sequence: sequence() };
   await page.reload();
-  await page.getByRole("dialog", { name: "HA readiness detail" }).getByRole("button", { name: "VSX chassis · CLS-TANGO-04" }).click();
+  await expect(page.getByRole("dialog", { name: "HA readiness detail" }).getByRole("heading", { name: "VSX chassis · CLS-TANGO-04" })).toBeVisible();
   const running = page.getByRole("status").filter({ hasText: "virtual system 1 of 3 running" });
   await expect(running).toHaveAttribute("data-sequence-state", "RUNNING");
-  await expect(page.getByRole("button", { name: "Fail over all virtual systems", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^Fail over all VS \(\d+\)$/ })).toBeDisabled();
   mock.unit = { ...mock.unit, sequence: sequence({ started: 2, state: "RUNNING" }) };
   await page.reload();
-  await page.getByRole("dialog", { name: "HA readiness detail" }).getByRole("button", { name: "VSX chassis · CLS-TANGO-04" }).click();
+  await expect(page.getByRole("dialog", { name: "HA readiness detail" }).getByRole("heading", { name: "VSX chassis · CLS-TANGO-04" })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "virtual system 2 of 3 running" })).toBeVisible();
   // The second virtual system fails: the sequence ends there and names it; the third is never started and the button is back
   // (each virtual system's run belongs to its own unit, so the chassis unit lists none).
   mock.runDetail = null; mock.approvals = []; // the spent approval is gone, so the remembered draft starts nothing on reload
   mock.unit = { ...mock.unit, sequence: sequence({ started: 2, state: "STOPPED", outcome: "VIRTUAL_SYSTEM_RUN_NOT_SUCCEEDED", failedVsId: "2", finishedAt: iso() }) };
   await page.reload();
-  await page.getByRole("dialog", { name: "HA readiness detail" }).getByRole("button", { name: "VSX chassis · CLS-TANGO-04" }).click();
+  await expect(page.getByRole("dialog", { name: "HA readiness detail" }).getByRole("heading", { name: "VSX chassis · CLS-TANGO-04" })).toBeVisible();
   const stopped = page.getByRole("status").filter({ hasText: "Stopped: a virtual system run did not succeed (VSID 2)" });
   await expect(stopped).toHaveAttribute("data-sequence-state", "STOPPED");
   await expect(page.getByText(/virtual system 3 of 3/)).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Fail over all virtual systems", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /^Fail over all VS \(\d+\)$/ })).toBeEnabled();
   expect(mock.posts.filter(p => p.path.endsWith("/cp-failover/runs"))).toHaveLength(1);
 });
 
@@ -181,12 +184,12 @@ test("refusal codes are shown in plain words, with the code kept on hover or bes
   let detail = await openChassis(page);
   await expect(detail.getByText(/Not now: A virtual system of this chassis is not ready/)).toBeVisible();
   await expect(detail.locator("[data-chassis-start-refusal]")).toHaveAttribute("title", "VIRTUAL_SYSTEM_NOT_READY");
-  await expect(detail.getByRole("button", { name: "Fail over the chassis", exact: true })).toBeDisabled();
+  await expect(detail.getByRole("button", { name: "Fail over chassis", exact: true })).toBeDisabled();
   // A mode the server cannot establish offers no failover and says why.
   mock.unit = { ...mock.unit, chassisStartRefusal: null, chassisMode: "UNKNOWN", chassisAction: null, failoverRefusal: "VSX_CHASSIS_MODE_UNKNOWN" };
   await page.reload();
   detail = page.getByRole("dialog", { name: "HA readiness detail" });
-  await detail.getByRole("button", { name: "VSX chassis · CLS-TANGO-04" }).click();
+  await expect(detail.getByRole("heading", { name: "VSX chassis · CLS-TANGO-04" })).toBeVisible();
   await expect(detail.getByText(/VSX chassis mode not known: run the chassis pre-checks/)).toBeVisible();
   await expect(detail.locator("[data-failover-refusal]")).toHaveAttribute("title", "VSX_CHASSIS_MODE_UNKNOWN");
   await expect(detail.getByRole("button", { name: /Fail over|Start failover/ })).toHaveCount(0);
@@ -195,8 +198,8 @@ test("refusal codes are shown in plain words, with the code kept on hover or bes
   mock.refuse = { path: /\/approvals$/, status: 409, body: { code: "VSX_CHASSIS_MODE_CHANGED" } };
   await page.reload();
   detail = page.getByRole("dialog", { name: "HA readiness detail" });
-  await detail.getByRole("button", { name: "VSX chassis · CLS-TANGO-04" }).click();
-  await page.getByRole("button", { name: "Fail over the chassis", exact: true }).click();
+  await expect(detail.getByRole("heading", { name: "VSX chassis · CLS-TANGO-04" })).toBeVisible();
+  await page.getByRole("button", { name: "Fail over chassis", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Fail over the chassis" });
   await dialog.getByLabel("Work log note").fill(NOTE);
   await dialog.getByRole("button", { name: "Fail over now" }).click();

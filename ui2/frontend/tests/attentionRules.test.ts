@@ -12,7 +12,7 @@ const NOW = new Date("2026-11-13T09:00:00Z");
 const ago = (h: number) => new Date(NOW.getTime() - h * 3_600_000).toISOString();
 const days = (d: number) => ago(d * 24);
 
-type EstateDevice = NonNullable<OverviewView["estate"]>["devices"][number];
+type EstateDevice = NonNullable<NonNullable<OverviewView["estate"]>["devices"]>[number];
 const dev = (n: number, extra: Partial<EstateDevice> = {}): EstateDevice => ({
   device_id: `d${n}`, hostname: `FW-TANGO-${String(n).padStart(2, "0")}`, vendor: "check_point", model: null, condition: "clear",
   no_archive: false, critical_fail: 0, last_read_at: ago(1), backup_target: true, last_backup_at: ago(10), ...extra,

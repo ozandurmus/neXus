@@ -16,10 +16,10 @@ const checks: ReadinessCheck[] = [
 const props = { checks, members, cluster: "CLS-ROMEO-01", vendor: "check_point", observedAt: new Date(Date.now() - 120_000).toISOString(), canRun: true, onRun: vi.fn() };
 
 describe("Readiness card", () => {
-  it("shows ready, three counts and one secondary action, with a single row per check", () => {
+  it("shows ready, four counts and one secondary action, with a single row per check", () => {
     render(<ReadinessCard {...props} status="READY" masked />);
     expect(screen.getByText("Ready")).toBeInTheDocument();
-    for (const label of ["Passed: 1", "Blocking: 0", "Info: 2"]) expect(screen.getByLabelText(label)).toBeInTheDocument();
+    for (const label of ["Passed: 1", "Blocking: 0", "Warning: 0", "Info: 2"]) expect(screen.getByLabelText(label)).toBeInTheDocument();
     const table = screen.getByRole("table");
     expect(within(table).getAllByRole("row")).toHaveLength(4);
     expect(within(table).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Check", "FW-ROMEO-01-M1 · active (inventory)", "FW-ROMEO-01-M2 · standby (inventory)"]);
@@ -30,6 +30,37 @@ describe("Readiness card", () => {
     expect(screen.getAllByRole("button")).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Run pre-checks" }));
     expect(props.onRun).toHaveBeenCalledOnce();
+  });
+
+  it("shows a sync WARN as an amber warning row, counted once, neither passed nor blocking", () => {
+    const warned: ReadinessCheck[] = [...checks, ...members.map((member, i) => ({ checkNo: 9, title: "State synchronization", member: `Member ${i + 1}`,
+      device_id: member.device_id, result: i ? "PASS" as const : "WARN" as const, blocking: true,
+      summary: i ? "Sync OK, no lost-counter increase" : "Sync OK; +35 lost updates in 6 h (below 10 per hour)" }))];
+    render(<ReadinessCard {...props} status="READY" checks={warned} />);
+    expect(screen.getByLabelText("Warning: 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Passed: 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Blocking: 0")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Warning" })).toBeInTheDocument();
+    expect(screen.getByText("warning")).toBeInTheDocument();
+    expect(screen.getByText("Sync OK; +35 lost updates in 6 h (below 10 per hour)")).toBeInTheDocument();
+    expect(screen.getByText("State synchronization").closest("tr")).toHaveAttribute("data-row-tone", "warning");
+  });
+
+  it("keeps a WARN plus UNKNOWN or missing member as Unknown, and a non-blocking WARN on every member as a warning", () => {
+    const sync = (results: Array<"WARN" | "UNKNOWN" | undefined>, blocking = true): ReadinessCheck[] => results.flatMap((result, i) => result
+      ? [{ checkNo: 9, title: "State synchronization", member: `Member ${i + 1}`, device_id: members[i].device_id, result, blocking, summary: "s" }] : []);
+    const { unmount } = render(<ReadinessCard {...props} status="NOT_READY" checks={sync(["WARN", "UNKNOWN"])} />);
+    expect(screen.getByLabelText("Warning: 0")).toBeInTheDocument();
+    expect(screen.queryByText("warning")).toBeNull();
+    expect(screen.getByRole("img", { name: "Unknown" })).toBeInTheDocument();
+    unmount();
+    const second = render(<ReadinessCard {...props} status="NOT_READY" checks={sync(["WARN", undefined])} />);
+    expect(screen.getByLabelText("Warning: 0")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Unknown" })).toBeInTheDocument();
+    second.unmount();
+    render(<ReadinessCard {...props} status="READY" checks={sync(["WARN", "WARN"], false)} />);
+    expect(screen.getByLabelText("Warning: 1")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Warning" })).toBeInTheDocument();
   });
 
   it("counts a failed check once even when both members fail and tints only its row", () => {

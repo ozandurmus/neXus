@@ -2261,30 +2261,36 @@ export interface EvidenceChip { readonly at: string | null; readonly state: Evid
 export interface CountTile { readonly count: number; readonly of?: number; readonly unknown?: number; readonly terminal_24h?: number; readonly other_terminal_24h?: number; readonly last_at?: string | null; readonly previous?: number | null; readonly state: EvidenceState }
 export interface FailureReason { readonly reason: string; readonly count: number; readonly devices: number; readonly job_types: readonly string[]; readonly last_at: string | null }
 export interface VersionSlice { readonly label: string | null; readonly count: number }
+/**
+ * Every section of the overview body except `denominators` is built on its own: a section that threw arrives as
+ * `{ state: "READ_FAILED", reason }` with none of its other fields (OverviewService.section), and `attention` and
+ * `exceptions` fail together. So every field below a section is optional, and a missing field is UNKNOWN, never 0.
+ */
 export interface OverviewView {
   readonly generated_at: string;
   readonly masked: boolean;
   readonly denominators: { active_devices: number; enrolled_devices?: number; gateways: number; clusters: number; clusters_enrolled?: number; backup_targets: number };
-  readonly evidence: Record<"inventory" | "configuration" | "compliance" | "backup" | "jobs" | "platform_facts", EvidenceChip> & { state?: EvidenceState };
+  readonly evidence: Partial<Record<"inventory" | "configuration" | "compliance" | "backup" | "jobs" | "platform_facts", EvidenceChip>> & { state?: EvidenceState };
   readonly attention: {
-    failed_jobs_24h: CountTile; stale_inventory: CountTile; cluster_diff: CountTile; config_changed: CountTile; backup_missing: CountTile; managed_not_enrolled?: CountTile;
+    failed_jobs_24h?: CountTile; stale_inventory?: CountTile; cluster_diff?: CountTile; config_changed?: CountTile; backup_missing?: CountTile; managed_not_enrolled?: CountTile;
     state?: EvidenceState;
   };
   readonly exceptions: {
-    failed_jobs: { total: number; rows: Array<{ job_id: string; job_type: string; device_id: string | null; label: string | null; cluster?: string | null; terminal_reason: string | null; finished_at: string }>; reasons?: FailureReason[] };
-    config_changes: { total: number; rows: Array<{ device_id: string; label: string | null; cluster?: string | null; run_id: string; sections_latest: number; collected_at: string }> };
-    cluster_diff: { total: number; unknown: number; all_refs: string[]; rows: Array<{ cluster_ref: string; diff_section_count: number; diff_setting_count: number; diff_sections: string[]; computed_at: string }> };
+    /** `device_id` is null for a job without a target device (a cluster-level collection); `label` is null for an unknown device. */
+    failed_jobs?: { total: number; rows: Array<{ job_id: string; job_type: string; device_id: string | null; label: string | null; cluster?: string | null; terminal_reason: string | null; finished_at: string }>; reasons?: FailureReason[] };
+    config_changes?: { total: number; rows: Array<{ device_id: string; label: string | null; cluster?: string | null; run_id: string; sections_latest: number; collected_at: string }> };
+    cluster_diff?: { total: number; unknown: number; all_refs: string[]; rows: Array<{ cluster_ref: string; diff_section_count: number; diff_setting_count: number; diff_sections: string[]; computed_at: string }> };
     state?: EvidenceState;
   };
-  readonly inventory_age: { lt24h: number; h24_72: number; gt72h: number; never: number; of: number; state?: EvidenceState };
+  readonly inventory_age: { lt24h?: number; h24_72?: number; gt72h?: number; never?: number; of?: number; state?: EvidenceState };
   readonly compliance: {
     state: EvidenceState; reason?: string | null; evaluated?: number; of_firewalls?: number; observed_pct?: number; assured_pct?: number;
     coverage_pct?: number; critical_deficiencies?: number; data_gaps?: number; pending_reevaluation?: number;
     frameworks?: Array<{ name: string; pass: number; fail: number; unavailable: number; total: number; score_pct: number }>;
   };
   readonly platform: {
-    devices: number; check_point: number; palo_alto: number; clusters: number;
-    hotfix_levels: Array<{ level: string | null; count: number }>; evidence_at: string | null; state?: EvidenceState;
+    devices?: number; check_point?: number; palo_alto?: number; clusters?: number;
+    hotfix_levels?: Array<{ level: string | null; count: number }>; evidence_at?: string | null; state?: EvidenceState;
     /** Per vendor: major (CP software version / PAN x.y) and minor (CP jumbo take / PAN full version); null label = UNKNOWN. */
     versions?: Record<"check_point" | "palo_alto", { major: VersionSlice[]; minor: VersionSlice[]; model?: VersionSlice[] }>;
   };
@@ -2293,7 +2299,7 @@ export interface OverviewView {
     readonly days_2_7?: number; readonly older?: number; readonly unknown?: number;
     readonly oldest_at?: string | null; readonly newest_at?: string | null; readonly last_read_at?: string | null;
   };
-  readonly nexus: { completed_24h: number; running: number; oldest_running_submitted_at: string | null; last_inventory: { check_point: string | null; palo_alto: string | null }; state?: EvidenceState };
+  readonly nexus: { completed_24h?: number; running?: number; oldest_running_submitted_at?: string | null; last_inventory?: { check_point: string | null; palo_alto: string | null }; state?: EvidenceState };
   /** Executive estate map (EXEC_OVERVIEW_DESIGN_2026_09_25_FABLE.md): every active device and its worst evidenced condition. */
   readonly estate?: EstateView;
 }
@@ -2302,19 +2308,28 @@ export type EstateCondition = "critical" | "ageing" | "partly_assessed" | "not_a
 /** Why a cell is not assessed (OverviewService.estateConditionReason); absent from older payloads. */
 export type EstateConditionReason = "not_evaluated" | "no_evidence" | "no_critical_control";
 export interface EstateView {
-  readonly devices: ReadonlyArray<{ device_id: string; hostname: string | null; vendor: string; model: string | null;
+  /** Absent, with `counts`, `no_archive`, `compliance_state` and `facts`, when the section failed (state READ_FAILED). */
+  readonly state?: EvidenceState;
+  readonly devices?: ReadonlyArray<{ device_id: string; hostname: string | null; vendor: string; model: string | null;
     condition: EstateCondition; condition_reason?: EstateConditionReason | null; no_archive: boolean; critical_fail: number | null;
     last_read_at: string | null;
     /** The newest live backup archive and whether the device is a backup target (absent on an older backend). */
     backup_target?: boolean; last_backup_at?: string | null }>;
-  readonly counts: Readonly<Record<EstateCondition, number>>;
-  readonly no_archive: number;
-  readonly compliance_state: EvidenceState;
-  readonly facts: {
+  readonly counts?: Readonly<Record<EstateCondition, number>>;
+  readonly no_archive?: number;
+  readonly compliance_state?: EvidenceState;
+  readonly facts?: {
     readonly critical: { k?: number; n?: number; state?: string };
     readonly backups: { a: number; b: number };
     readonly evidence: { r: number; d: number; never: number };
   };
+}
+
+/** The estate section when the server built it (devices, counts and facts all present); null when it failed or an older backend sent none. */
+export type EstateViewRead = Required<Omit<EstateView, "state">> & Pick<EstateView, "state">;
+export function readableEstate(estate: EstateView | null | undefined): EstateViewRead | null {
+  return estate && Array.isArray(estate.devices) && estate.counts && estate.facts && typeof estate.no_archive === "number" && estate.compliance_state
+    ? (estate as EstateViewRead) : null;
 }
 
 export function getOverview(): Promise<OverviewView> {
