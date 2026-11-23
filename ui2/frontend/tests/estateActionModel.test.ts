@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { unitEstateActions, type EstateActionReads, type EstateActionSpec } from "../src/estate/estateActionModel";
+import {
+  ESTATE_ACTION_LABELS,
+  unitEstateActions,
+  type EstateActionKey,
+  type EstateActionReads,
+  type EstateActionSpec,
+} from "../src/estate/estateActionModel";
 
 const GATEWAY = { deviceId: "dev-tango-04", vendor: "check_point", role: "gateway" };
 const ok = <T,>(value: T) => ({ state: "ok" as const, value });
@@ -108,5 +114,74 @@ describe("unitEstateActions", () => {
 
     const unknownVendor = unitEstateActions({ deviceId: "dev-tango-07", vendor: "acme_unknown", role: "appliance" }, ALL_OK);
     expect(byKey(unknownVendor, "support_bundle").availability).toBe("unavailable");
+  });
+});
+
+describe("unitEstateActions: label, availability and link contract", () => {
+  const SCENARIOS: Record<string, EstateActionReads> = {
+    all_ok: ALL_OK,
+    all_checking: { staticRouteTargets: null, diagnosticTargets: null },
+    all_failed: { staticRouteTargets: { state: "failed" }, diagnosticTargets: { state: "failed" } },
+    all_restricted: { staticRouteTargets: { state: "restricted" }, diagnosticTargets: { state: "restricted" } },
+    not_listed: {
+      staticRouteTargets: ok([{ device_id: "dev-other-01" }]),
+      diagnosticTargets: ok({ targets: [], canExecute: false }),
+    },
+  };
+
+  it("every action key returns a spec whose label comes from ESTATE_ACTION_LABELS", () => {
+    for (const reads of Object.values(SCENARIOS)) {
+      for (const spec of unitEstateActions(GATEWAY, reads)) {
+        expect(spec.label).toBe(ESTATE_ACTION_LABELS[spec.key]);
+      }
+    }
+    expect(unitEstateActions(GATEWAY, ALL_OK).map((a) => a.key).sort()).toEqual(
+      (Object.keys(ESTATE_ACTION_LABELS) as EstateActionKey[]).sort(),
+    );
+  });
+
+  it("checking and unknown never render as available, in any scenario", () => {
+    for (const reads of Object.values(SCENARIOS)) {
+      for (const spec of unitEstateActions(GATEWAY, reads)) {
+        if (spec.availability === "checking" || spec.availability === "unknown") {
+          expect(spec.availability).not.toBe("available");
+        }
+      }
+    }
+    // Checking and unknown are the in-flight and failed-read cases: they must not be available.
+    expect(byKey(unitEstateActions(GATEWAY, SCENARIOS.all_checking), "diagnostics").availability).toBe("checking");
+    expect(byKey(unitEstateActions(GATEWAY, SCENARIOS.all_failed), "static_routes").availability).toBe("unknown");
+  });
+
+  it("an unavailable spec never has an href and always carries a reason", () => {
+    for (const reads of Object.values(SCENARIOS)) {
+      for (const spec of unitEstateActions(GATEWAY, reads)) {
+        if (spec.availability === "unavailable" || spec.availability === "checking") {
+          expect(spec.href).toBeNull();
+        }
+        expect(spec.reason.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("every non-null href is a standard-view link with standard=1 and no action verb in its query", () => {
+    for (const reads of Object.values(SCENARIOS)) {
+      for (const spec of unitEstateActions(GATEWAY, reads)) {
+        if (spec.href === null) continue;
+        expect(spec.href.startsWith("?screen=")).toBe(true);
+        expect(spec.href).toContain("&standard=1");
+        expect(spec.href).not.toMatch(/(^|[&?])(action|execute|run|submit)=/);
+        expect(spec.href).not.toMatch(/(^|[&?])(method|job_type)=/);
+      }
+    }
+  });
+
+  it("returns the same list for the same input across repeated calls", () => {
+    const first = unitEstateActions(GATEWAY, ALL_OK);
+    const second = unitEstateActions(GATEWAY, ALL_OK);
+    expect(second).toEqual(first);
+    expect(JSON.stringify(unitEstateActions(GATEWAY, SCENARIOS.not_listed))).toBe(
+      JSON.stringify(unitEstateActions(GATEWAY, SCENARIOS.not_listed)),
+    );
   });
 });

@@ -6,6 +6,7 @@ import { lifecycleSourceName } from "../screens/LifecycleSourcesPanel";
 import { isRestricted } from "../shell/States";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
+import { describeError } from "./estateErrorText";
 import { newestIso } from "./estateModel";
 import { standardLifecycleHref } from "./estateRouting";
 import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
@@ -14,10 +15,6 @@ import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
 export const LIFECYCLE_SOURCE_CAP = 10;
 
 type BadgeState = "act" | "watch" | "ok" | "unk";
-
-function describeError(err: unknown): string {
-  return String((err as { message?: string } | null)?.message ?? err);
-}
 
 /** The age cell of one feed. A null age is UNKNOWN and never a number or OK, whatever the recorded age state. */
 export function lifecycleFeedAge(feed: LifecycleCatalogFeed): { state: BadgeState; word: string } {
