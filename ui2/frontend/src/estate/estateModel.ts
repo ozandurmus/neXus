@@ -128,6 +128,8 @@ export interface EstateUnit {
   readonly model: string | null;
   readonly version: string | null;
   readonly hotfix: string | null;
+  /** Palo Alto content versions as the device reported them; null = not collected (never zero). */
+  readonly contentVersions: Readonly<Record<string, string>> | null;
   readonly role: "gateway" | "management_server" | "appliance";
   readonly haRole: string | null;
   readonly clusterRef: string | null;
@@ -784,6 +786,7 @@ export function buildEstateModel(inputs: EstateInputs): EstateModel {
       model: d.model ?? est?.model ?? d.platform_family ?? null,
       version: d.software_version ?? null,
       hotfix: d.hotfix_level ?? null,
+      contentVersions: d.content_versions ?? null,
       role,
       haRole,
       clusterRef: d.cluster_member_ref ?? null,

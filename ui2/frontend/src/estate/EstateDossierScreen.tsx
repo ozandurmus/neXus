@@ -64,6 +64,7 @@ import {
   type RewindOrigin,
 } from "./estateRouting";
 import { ESTATE_MONO, ESTATE_SANS, ev } from "./estateTokens";
+import { ContentVersions, contentVersionText } from "../screens/DeviceShared";
 import { managedThroughOf } from "./estateManagedThrough";
 import { useEstateData } from "./useEstateData";
 import { EstateDossierLogsBlock, loadDeviceLogsReads } from "./EstateDossierLogsBlock";
@@ -716,6 +717,21 @@ export function EstateDossierScreen({ deviceId, fromRewind = null }: { readonly 
                 ? ` · ${unit.haRole ? `${unit.haRole.toLowerCase()} member of ` : "member of "}${cluster.title}`
                 : ` · ${unit.role.replace("_", " ")}`}
             </Typography>
+            <Box
+              title={contentVersionText(unit.contentVersions) ?? "Content versions not collected"}
+              sx={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", columnGap: "10px", rowGap: "2px", color: ev.ink2, fontSize: "13px", mt: "2px" }}
+            >
+              <Box component="span" sx={{ color: ev.ink3 }}>Content versions</Box>
+              {contentVersionText(unit.contentVersions) === null ? (
+                <Box component="span" sx={{ color: ev.ink3 }}>UNKNOWN · Not collected: no content version has been read from this device yet</Box>
+              ) : (
+                <ContentVersions versions={unit.contentVersions} />
+              )}
+              <EvidenceStamp at={unit.platformFactsAt} source="platform facts" now={now} missingLabel="never read" />
+              <Box component="a" href={`${dossierHref(unit.deviceId)}&standard=1`} sx={{ color: ev.accent }}>
+                Content versions (standard view) →
+              </Box>
+            </Box>
           </Box>
 
           <Box sx={{ ml: "auto", display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
