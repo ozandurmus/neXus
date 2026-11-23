@@ -5,6 +5,7 @@ import { ThemeProvider } from "@mui/material/styles";
 
 import { DARK, LIGHT, cssVariables, m3ThemeFor, type ColorMode, type Density } from "../theme/m3Theme";
 import { SCREEN_DENSITY, type ScreenType } from "../theme/tokens";
+import { readPreference, writePreference } from "./preference";
 
 /**
  * Per-viewer display preferences (review §5–§6): colour mode and the NOC wall mode. Preferences only -- nothing here
@@ -33,34 +34,18 @@ const DisplayModeContext = createContext<DisplayMode>({
 
 export const useDisplayMode = () => useContext(DisplayModeContext);
 
-function read(key: string): string | null {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function write(key: string, value: string) {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // preference only
-  }
-}
-
 export function isWall(search: string): boolean {
   return new URLSearchParams(search).get("wall") === "1";
 }
 
 export function DisplayModeProvider({ search, children }: { readonly search: string; readonly children: ReactNode }) {
   const wall = isWall(search);
-  const [mode, setModeState] = useState<ColorMode>(() => (read("nx.mode") === "dark" ? "dark" : "light"));
-  const [view, setViewState] = useState<ViewMode>(() => (read("nx.view") === "estate" ? "estate" : "standard"));
+  const [mode, setModeState] = useState<ColorMode>(() => (readPreference("nx.mode") === "dark" ? "dark" : "light"));
+  const [view, setViewState] = useState<ViewMode>(() => (readPreference("nx.view") === "estate" ? "estate" : "standard"));
   const effectiveMode: ColorMode = wall ? "dark" : mode;
   const effectiveView: ViewMode = wall ? "standard" : view;
-  const setMode = useCallback((m: ColorMode) => { setModeState(m); write("nx.mode", m); }, []);
-  const setView = useCallback((v: ViewMode) => { setViewState(v); write("nx.view", v); }, []);
+  const setMode = useCallback((m: ColorMode) => { setModeState(m); writePreference("nx.mode", m); }, []);
+  const setView = useCallback((v: ViewMode) => { setViewState(v); writePreference("nx.view", v); }, []);
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.dataset.theme = effectiveMode;
