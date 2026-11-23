@@ -1,7 +1,6 @@
 # Backup module cutover (general fallback -> ui2-backup)
 
-Status: PREPARED, NOT PERFORMED. Deploy-freeze Phase 1 (PO approval 2026-11-23). The cutover itself needs a
-separate PO authorization reference and runs only through `tools/delivery/module_deploy.py`.
+Status: PERFORMED 2026-11-23. Deploy-freeze Phase 1 (PO approval 2026-11-23). The cutover ran only through `tools/delivery/module_deploy.py`.
 Authority: `docs/design/MODULE_POD_RUNTIME_CONTRACT.md` (FROZEN) §1 (fallback flag, audited compare-and-set
 generation change), §3 (drain barrier), §6 step 2 (backup acceptance).
 
@@ -109,6 +108,9 @@ Requires a live general owner without `-Dui2.worker.claim-backup-fallback=false`
 backup job, permit or task lease is active or uncertain). Verify with query 1 above: `general|t|<g+2>|f`.
 
 ## Follow-ups after a successful cutover
+
+- Done 2026-11-23: `replicas: 1` committed. The 42 historic OUTCOME_UNKNOWN backup jobs (2026-09-22..2026-11-19) were
+  left as they are for a person to review; the tool barrier counts only CLAIMED/EXECUTING jobs and live permits.
 
 - Commit `replicas: 1` in `deploy/ui2/53-backup-deployment.yaml` (and update its header comment) so a hand apply of
   the committed manifest can never stop the backup owner; the tool already keeps the live count.

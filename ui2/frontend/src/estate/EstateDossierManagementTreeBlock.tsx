@@ -5,6 +5,7 @@ import type { SourceRead } from "../screens/overview/attentionRules";
 import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
 import { ESTATE_MONO, ev } from "./estateTokens";
 import { standardManagementTreeHref } from "./estateRouting";
+import { PRODUCT_NAME } from "../brand/product";
 import { buildManagementTreeBlockModel, MANAGEMENT_TREE_BOUNDARY } from "./estateDossierManagementTreeModel";
 
 /**
@@ -45,7 +46,7 @@ export function EstateDossierManagementTreeBlock({
           <Typography sx={{ fontSize: "12.5px", color: ev.ink2, lineHeight: 1.4 }}>{m.detail}</Typography>
           {m.notImportedTotal !== null ? (
             <Typography data-testid="dossier-management-tree-not-imported" sx={{ fontSize: "12.5px", color: ev.ink2 }}>
-              {`${m.notImportedTotal} ${m.notImportedTotal === 1 ? "node" : "nodes"} not imported into neXus and not acknowledged (all domains)`}
+              {`${m.notImportedTotal} ${m.notImportedTotal === 1 ? "node" : "nodes"} not imported into ${PRODUCT_NAME} and not acknowledged (all domains)`}
             </Typography>
           ) : null}
         </Box>
