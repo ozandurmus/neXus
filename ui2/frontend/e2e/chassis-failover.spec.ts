@@ -55,7 +55,8 @@ async function serve(page: Page, unitOver: Json = {}) {
     else if (path === "/api/v2/cp-failover/approvals") await json(state.approvals);
     else if (path === "/api/v2/cp-failover/runs") await json(state.runDetail ? [{ runId: "run-opaque", state: state.runDetail.state, kind: "FAILOVER" }] : []);
     else if (path.startsWith("/api/v2/cp-failover/runs/")) await json(state.runDetail ?? {});
-    else if (path === "/api/v2/cp-failover/incidents") await json({ canRelease: false, roleNote: null, incidents: [] });
+    // A session that approves and starts alone (ADMIN_SINGLE) is the one the server offers the incident release.
+    else if (path === "/api/v2/cp-failover/incidents") await json({ canRelease: true, roleNote: null, incidents: [] });
     else if (path === "/api/v2/job-window") await json({ open: true, server_time: iso(), window_end: iso(3_600_000), next_window_start: iso(86_400_000), admin_window_bypass: true,
       business_hours: { start: "08:00", end: "18:00", inside: false } });
     else if (path === "/api/v2/jobs/stats") await json({ total_24h: 0, completed_24h: 0, failed_24h: 0, running: 0 });
@@ -67,26 +68,36 @@ async function serve(page: Page, unitOver: Json = {}) {
   return state;
 }
 
-async function openChassis(page: Page, label = "VSX chassis · CLS-TANGO-04") {
+/** `expand: false` leaves the unit closed: its failover action is on the row and needs no expand step first. */
+async function openChassis(page: Page, label = "VSX chassis · CLS-TANGO-04", expand = true) {
   await page.goto(`/?screen=operations&cluster_ref=${CLUSTER}`);
   const detail = page.getByRole("dialog", { name: "HA readiness detail" });
-  await detail.getByRole("button", { name: label }).click();
+  if (expand) await detail.getByRole("button", { name: label }).click();
+  else await expect(detail.getByRole("button", { name: label })).toBeVisible();
   return detail;
 }
+const NOTE = "change CHG-123 planned failover";
+/** PO 2026-11-23: one dialog for an administrator -- no date field, a work log note, then the start. */
 async function startFailover(page: Page, button: string) {
   await page.getByRole("button", { name: button, exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Start manual failover" });
-  await dialog.getByLabel("Window ends").fill("2099-10-06T12:00");
-  await dialog.getByRole("button", { name: "OK / Start" }).click();
+  const dialog = page.getByRole("dialog", { name: button });
+  await expect(dialog.getByText("Valid for 60 minutes.")).toBeVisible();
+  await expect(dialog.locator("input[type='datetime-local']")).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Fail over now" })).toBeDisabled();
+  await dialog.getByLabel("Work log note").fill(NOTE);
+  await dialog.getByRole("button", { name: "Fail over now" }).click();
   await expect(dialog).toBeHidden();
 }
 
 test("HA-mode chassis: approve, start, the virtual systems follow, the return completes and only then it is verified", async ({ page }) => {
   const mock = await serve(page);
-  const detail = await openChassis(page);
+  const detail = await openChassis(page, undefined, false);
   await expect(detail.getByText(/VSX HA mode: the chassis fails over in VS0/)).toBeVisible();
   await startFailover(page, "Fail over the chassis");
   expect(mock.posts.map(p => p.path)).toEqual(["/api/v2/cp-failover/approvals", "/api/v2/cp-failover/runs"]);
+  const sent = mock.posts[0].body as { windowFrom: string; windowUntil: string; reason: string };
+  expect(sent.reason).toBe(NOTE);
+  expect(Date.parse(sent.windowUntil) - Date.parse(sent.windowFrom)).toBe(60 * 60_000);
   expect(mock.posts[1].body).toMatchObject({ unitId: CHASSIS_ID, requestId: expect.any(String), revision: 1, executionNonce: "nonce-opaque", warningConfirmed: true });
   await expect(detail.getByRole("status").filter({ hasText: "Checking readiness" })).toBeVisible();
   mock.runDetail = run({ state: "POSTCHECK", step: "POSTCHECK", checks: [...checks("pre", null), ...checks("post", "PASS")] });
@@ -122,7 +133,7 @@ test("a virtual system that did not move stops the run: never 'Failover verified
   expect(mock.posts.filter(p => p.path.endsWith("/resume-return"))).toHaveLength(0);
   await offer.click();
   const dialog = page.getByRole("dialog", { name: "Resume the return step of this failover run?" });
-  await dialog.getByLabel("Reason").fill("Return the former active");
+  await dialog.getByLabel("Work log note").fill("Return the former active");
   await dialog.getByRole("button", { name: "Resume return step" }).click();
   await expect.poll(() => mock.posts.filter(p => p.path.endsWith("/resume-return")).length).toBe(1);
   expect(mock.posts.find(p => p.path.endsWith("/resume-return"))!.body).toMatchObject({ expectedIncidentId: "incident-opaque", reason: "Return the former active" });
@@ -137,8 +148,8 @@ test("VSLS chassis: 'Fail over all virtual systems' shows the sequence and stops
   await page.getByRole("button", { name: "Fail over all virtual systems", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Fail over all virtual systems" });
   await expect(dialog.getByText(/stops at the first virtual system that does not succeed/)).toBeVisible();
-  await dialog.getByLabel("Window ends").fill("2099-10-06T12:00");
-  await dialog.getByRole("button", { name: "OK / Start" }).click();
+  await dialog.getByLabel("Work log note").fill(NOTE);
+  await dialog.getByRole("button", { name: "Fail over now" }).click();
   await expect(dialog).toBeHidden();
   // The server now reports the running sequence on the unit; the panel re-reads it (the unit list refreshes with the run).
   mock.unit = { ...mock.unit, sequence: sequence() };
@@ -186,9 +197,9 @@ test("refusal codes are shown in plain words, with the code kept on hover or bes
   detail = page.getByRole("dialog", { name: "HA readiness detail" });
   await detail.getByRole("button", { name: "VSX chassis · CLS-TANGO-04" }).click();
   await page.getByRole("button", { name: "Fail over the chassis", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Start manual failover" });
-  await dialog.getByLabel("Window ends").fill("2099-10-06T12:00");
-  await dialog.getByRole("button", { name: "OK / Start" }).click();
+  const dialog = page.getByRole("dialog", { name: "Fail over the chassis" });
+  await dialog.getByLabel("Work log note").fill(NOTE);
+  await dialog.getByRole("button", { name: "Fail over now" }).click();
   await expect(dialog.getByRole("alert")).toHaveText("The chassis mode changed since the approval: request a new one (VSX_CHASSIS_MODE_CHANGED (HTTP 409))");
   expect(mock.posts.filter(p => p.path.endsWith("/cp-failover/runs"))).toHaveLength(0);
 });

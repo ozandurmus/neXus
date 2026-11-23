@@ -17,6 +17,7 @@ import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
+import { describeApiError } from "../shell/apiErrorText";
 import { PaginationFooter } from "../shell/DataTable";
 import { SortHeaderCell, useTableSort, type SortColumn } from "../shell/tableSort";
 import { CapabilityMenu, M3Button, StatusChip } from "../shell/M3Widgets";
@@ -29,13 +30,6 @@ import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { deleteDevice, listDevices, type ApiError, type BackupDisposition, type DeviceSummary } from "../auth/adminApi";
 import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone, missingHostnameReason, onboardingChip } from "../shell/deviceCopy";
-
-function describeApiError(err: unknown): string {
-  const apiErr = err as Partial<ApiError>;
-  const serverError = typeof apiErr.body?.error === "string" ? (apiErr.body.error as string) : undefined;
-  if (serverError) return serverError;
-  return `request failed${apiErr.status ? ` (status ${apiErr.status})` : ""}`;
-}
 
 function requiredBackupDisposition(err: unknown): number | null {
   const apiErr = err as Partial<ApiError>;

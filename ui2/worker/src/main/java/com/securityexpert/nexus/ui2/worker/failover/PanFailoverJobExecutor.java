@@ -470,11 +470,13 @@ public final class PanFailoverJobExecutor {
             if (no==6 && mixedA!=null) reason=mixedA;
             if (no==6 && notCollectedA!=null) reason=notCollectedA;
             String derived=no==1?PanFailoverChecks.stateEvidence(a,b,switchMirroredRoles):reason;
+            if (no==4) derived=PanFailoverChecks.syncEvidenceForMember(derived,"first");
             store.check(runId,phase,first.id(),null,no,statuses[i],derived);
             if (no==6 && !"UNKNOWN".equals(statuses[i])) reason=PanFailoverChecks.sessionsCounted(sessionsB,sourceB);
             if (no==6 && mixedB!=null) reason=mixedB;
             if (no==6 && notCollectedB!=null) reason=notCollectedB;
             derived=no==1?PanFailoverChecks.stateEvidence(b,a,switchMirroredRoles):reason;
+            if (no==4) derived=PanFailoverChecks.syncEvidenceForMember(derived,"second");
             store.check(runId,phase,second.id(),null,no,statuses[i],derived);
         }
         for (int i=0;i<statuses.length;i++) if (!"PASS".equals(statuses[i])) {

@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { CpFailoverPanel, FailoverRun, errorText, runStep } from "../src/screens/CpFailoverPanel";
+import { CpFailoverPanel, FailoverRun, errorText, failoverReadinessVerdict, runStep } from "../src/screens/CpFailoverPanel";
 import type { CpFailoverRunDetail } from "../src/auth/adminApi";
 const api = vi.hoisted(() => ({ units: vi.fn(), approvals: vi.fn(), runs: vi.fn(), detail: vi.fn(), readiness: vi.fn(), approve: vi.fn(), second: vi.fn(), start: vi.fn(),
   incidents: vi.fn(), release: vi.fn(), resume: vi.fn(), approveResume: vi.fn() }));
@@ -19,11 +19,16 @@ const approval = { approvalId: "00000000-0000-4000-8000-000000000001", requestId
 const run = (overrides = {}): CpFailoverRunDetail => ({ runId: "run-opaque", approvalId: "00000000-0000-4000-8000-000000000001", scheduledFor: "", state: "PRECHECK", step: "PRECHECK",
   outcome: null, failedCheck: null, message: null, steps: [], checks: [], mutationPossible: false, ...overrides });
 function setup() { return render(<ThemeProvider theme={m3Theme}><CpFailoverPanel memberDeviceId="opaque-1" /></ThemeProvider>); }
-async function open() { setup(); fireEvent.click(await screen.findByRole("button", { name: "CLS-ROMEO-01" })); await waitFor(() => expect(screen.getByRole("button", { name: "Start failover" })).toBeEnabled()); }
-async function warning() {
+/** The row's action is there without expanding the unit (PO 2026-11-23). */
+async function open() { setup(); await waitFor(() => expect(screen.getByRole("button", { name: "Start failover" })).toBeEnabled()); }
+/** One click on the row opens the dialog; the work log note is the only thing typed. */
+async function warning(note = "change CHG-123 planned failover") {
   fireEvent.click(screen.getByRole("button", { name: "Start failover" }));
-  fireEvent.change(screen.getByLabelText("Window ends"), { target: { value: "2099-10-06T12:00" } });
+  fireEvent.change(await screen.findByLabelText(/Work log note/), { target: { value: note } });
 }
+/** The session that approves and starts alone (ADMIN_SINGLE): the server offers it the incident release. */
+const asAdmin = () => api.incidents.mockResolvedValue({ canRelease: true, roleNote: null, incidents: [] });
+const HOUR = 3_600_000;
 beforeEach(() => {
   vi.resetAllMocks(); vi.spyOn(crypto, "randomUUID").mockReturnValue("00000000-0000-4000-8000-000000000001"); sessionStorage.clear(); api.units.mockResolvedValue([unit]); api.approvals.mockResolvedValue([]); api.runs.mockResolvedValue([]);
   api.approve.mockResolvedValue(approval); api.start.mockResolvedValue({ runId: "run-opaque" }); api.detail.mockResolvedValue(run());
@@ -60,21 +65,106 @@ it("aiview remains read-only even with inconsistent server permission flags", as
   await waitFor(() => expect(api.runs).toHaveBeenCalled());
   expect(screen.queryByRole("button", { name: /Start|Approve|Run pre-checks/ })).toBeNull();
 });
-it("one warning starts an admin request with its revision and nonce, and ignores duplicate clicks", async () => {
-  await open(); await warning(); expect(screen.getByText(/Traffic may be interrupted/)).toBeInTheDocument();
-  const ok = screen.getByRole("button", { name: "OK / Start" }); fireEvent.click(ok); fireEvent.click(ok);
+// ---- PO 2026-11-23: an administrator fails over with one action and a work log note ----
+it("an administrator starts from the row with one dialog: no date field, a required note, valid for 60 minutes", async () => {
+  asAdmin(); await open();
+  api.start.mockImplementation(async () => { api.runs.mockResolvedValue([{ runId: "run-opaque", kind: "FAILOVER", state: "PRECHECK" }]); return { runId: "run-opaque" }; });
+  // The unit was never expanded: nothing of it is read until the action is used.
+  expect(api.runs).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Start failover" }));
+  const dialog = await screen.findByRole("dialog");
+  expect(dialog.querySelector("[data-failover-policy]")).toHaveAttribute("data-failover-policy", "single");
+  expect(within(dialog).getByText("Target: CLS-ROMEO-01")).toBeInTheDocument();
+  expect(within(dialog).getByText(/Traffic may be interrupted/)).toBeInTheDocument();
+  expect(within(dialog).getByText("Valid for 60 minutes.")).toBeInTheDocument();
+  expect(within(dialog).queryByLabelText(/Window ends/)).toBeNull();
+  expect(dialog.querySelector("input[type='datetime-local']")).toBeNull();
+  expect(within(dialog).queryByRole("radio")).toBeNull();
+  expect(dialog).not.toHaveTextContent(/approv|revision/i);
+  const ok = within(dialog).getByRole("button", { name: "Fail over now" });
+  expect(ok).toBeDisabled();
+  fireEvent.change(within(dialog).getByLabelText(/Work log note/), { target: { value: "   " } });
+  expect(ok).toBeDisabled();
+  fireEvent.change(within(dialog).getByLabelText(/Work log note/), { target: { value: "  change CHG-123 planned failover  " } });
+  const before = Date.now(); fireEvent.click(ok); fireEvent.click(ok);
   await waitFor(() => expect(api.start).toHaveBeenCalledTimes(1)); expect(api.approve).toHaveBeenCalledTimes(1);
+  const [target, from, until, reason, requestId] = api.approve.mock.calls[0];
+  expect(target).toEqual(expect.objectContaining({ unitId: unit.unitId }));
+  expect(Date.parse(until) - Date.parse(from)).toBe(HOUR);
+  expect(Date.parse(from)).toBeGreaterThanOrEqual(before); expect(Date.parse(from)).toBeLessThanOrEqual(Date.now());
+  expect(reason).toBe("change CHG-123 planned failover"); expect(requestId).toBe(approval.requestId);
   expect(api.start).toHaveBeenCalledWith(expect.objectContaining({ unitId: unit.unitId }), { requestId: approval.requestId, revision: 1, executionNonce: approval.executionNonce, warningConfirmed: true });
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull()); expect(screen.queryByText("Awaiting second approval")).toBeNull();
+  // The unit opened with the action, so the run is on screen without another click.
+  expect(await screen.findByText(/Run: run-opaque/)).toBeInTheDocument();
+});
+it("Enter in the note field confirms an administrator's failover", async () => {
+  asAdmin(); await open(); await warning("change CHG-124");
+  fireEvent.keyDown(screen.getByLabelText(/Work log note/), { key: "Enter" });
+  await waitFor(() => expect(api.start).toHaveBeenCalledTimes(1));
+  expect(api.approve.mock.calls[0][3]).toBe("change CHG-124");
+});
+it("the row action on a unit with a run in progress opens the unit and asks nothing", async () => {
+  asAdmin(); api.runs.mockResolvedValue([run()]); await open();
+  fireEvent.click(screen.getByRole("button", { name: "Start failover" }));
+  expect(await screen.findByText(/Run: run-opaque/)).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start failover" })).toBeDisabled());
+  expect(screen.queryByRole("dialog")).toBeNull(); expect(api.approve).not.toHaveBeenCalled(); expect(api.start).not.toHaveBeenCalled();
+});
+it.each([
+  ["a READY run", { outcome: "READY" }, "ready", "Readiness: Ready"],
+  ["a READY run with a warning", { outcome: "READY", warn: true }, "warning", "Readiness: Ready with 1 warning · Traffic rate"],
+  ["a run with no verdict", { outcome: "UNKNOWN" }, "unknown", "Readiness: Unknown: the last readiness run recorded no verdict"],
+  ["a run still in progress", { outcome: "READY", state: "PRECHECK" }, "unknown", "Readiness: Unknown: pre-checks are still running"],
+  ["no readiness run", null, "unknown", "Readiness: Unknown: no readiness result on record"],
+] as const)("the dialog words the readiness of %s and never shows UNKNOWN as ready", async (_name, readiness, tone, text) => {
+  asAdmin();
+  if (readiness) {
+    const state = "state" in readiness ? readiness.state : "DONE";
+    api.runs.mockResolvedValue([{ runId: "readiness-opaque", kind: "READINESS", state }]);
+    api.detail.mockResolvedValue(run({ runId: "readiness-opaque", kind: "READINESS", state, step: state, outcome: readiness.outcome, checks: [
+      { phase: "pre", checkNo: 1, title: "Cluster", member: "Member 1", status: "PASS", result: "PASS", summary: "Active", blocking: true, observedAt: "2026-10-06T09:00:00Z" },
+      ...("warn" in readiness ? [{ phase: "pre", checkNo: 8, title: "Traffic rate", member: "Member 1", status: "WARN", result: "WARN", summary: "Low", blocking: false, observedAt: "2026-10-06T09:00:00Z" }] : [])] }));
+  }
+  // A unit read while its pre-checks run offers no failover: the verdict wording is checked on the helper for that case.
+  if (readiness && "state" in readiness) {
+    expect(failoverReadinessVerdict(unit, await api.detail())).toEqual({ tone, text: text.replace("Readiness: ", "") });
+    return;
+  }
+  await open(); fireEvent.click(screen.getByRole("button", { name: "Start failover" }));
+  const dialog = await screen.findByRole("dialog");
+  const verdict = dialog.querySelector("[data-readiness-verdict]")!;
+  expect(verdict).toHaveAttribute("data-readiness-verdict", tone);
+  expect(within(dialog).getByText(text)).toBeInTheDocument();
+  if (tone === "unknown") expect(verdict).not.toHaveTextContent(/Readiness: Ready/);
+  expect(verdict).toHaveTextContent(/The run repeats every pre-check before it switches/);
+});
+it("a server refusal is worded as sent and never as ready, whatever the readiness run says", () => {
+  const ready = run({ kind: "READINESS", state: "DONE", step: "DONE", outcome: "READY" });
+  expect(failoverReadinessVerdict({ ...unit, refusalReason: "OPEN_INCIDENT" }, ready)).toEqual({ tone: "blocked", text: "Refused: OPEN_INCIDENT" });
+  expect(failoverReadinessVerdict(unit, run({ kind: "READINESS", state: "DONE", step: "DONE", outcome: "NOT_READY", message: "CLUSTER_NOT_HEALTHY",
+    checks: [{ phase: "pre", checkNo: 1, title: "Cluster", member: "Member 1", status: "FAIL", result: "FAIL", summary: "Down", blocking: true }] as never })))
+    .toEqual({ tone: "blocked", text: "Not ready · 1 blocker", detail: "CLUSTER_NOT_HEALTHY" });
 });
 it("dialog cancellation sends no request", async () => {
-  await open(); await warning(); fireEvent.click(screen.getByRole("button", { name: "Cancel" })); expect(api.approve).not.toHaveBeenCalled(); expect(api.start).not.toHaveBeenCalled();
+  asAdmin(); await open(); await warning(); fireEvent.click(screen.getByRole("button", { name: "Cancel" })); expect(api.approve).not.toHaveBeenCalled(); expect(api.start).not.toHaveBeenCalled();
 });
-it("operation admin waits for distinct approval and starts without another warning", async () => {
+it("operation admin picks 30 / 60 / 120 minutes, waits for distinct approval and starts without another warning", async () => {
   const pending = { ...approval, policy: "OPERATION_ADMIN_TWO_PERSON", approved: false };
   api.approve.mockResolvedValue(pending); api.approvals.mockResolvedValueOnce([]).mockResolvedValue([pending]);
-  await open(); await warning(); fireEvent.click(screen.getByRole("button", { name: "OK / Start" }));
+  await open(); await warning("change CHG-200 planned failover");
+  const dialog = screen.getByRole("dialog");
+  expect(dialog.querySelector("[data-failover-policy]")).toHaveAttribute("data-failover-policy", "two-person");
+  expect(within(dialog).queryByLabelText(/Window ends/)).toBeNull(); expect(dialog.querySelector("input[type='datetime-local']")).toBeNull();
+  expect(within(dialog).getAllByRole("radio").map(r => (r as HTMLInputElement).value)).toEqual(["30", "60", "120"]);
+  expect(within(dialog).getByRole("radio", { name: "60 minutes" })).toBeChecked();
+  expect(within(dialog).getByText(/A second administrator must agree before anything is sent/)).toBeInTheDocument();
+  expect(within(dialog).queryByText(/Valid for 60 minutes/)).toBeNull();
+  fireEvent.click(within(dialog).getByRole("radio", { name: "120 minutes" }));
+  fireEvent.click(screen.getByRole("button", { name: "Request failover" }));
   expect(await screen.findByText("Awaiting second approval")).toBeInTheDocument(); expect(api.start).not.toHaveBeenCalled();
+  expect(Date.parse(api.approve.mock.calls[0][2]) - Date.parse(api.approve.mock.calls[0][1])).toBe(2 * HOUR);
+  expect(api.approve.mock.calls[0][3]).toBe("change CHG-200 planned failover");
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   api.approvals.mockResolvedValue([{ ...pending, approved: true }]);
   fireEvent.click(screen.getByRole("button", { name: "CLS-ROMEO-01" })); fireEvent.click(screen.getByRole("button", { name: "CLS-ROMEO-01" }));
@@ -98,7 +188,7 @@ it("displays all recorded phases and explicit evidence coverage", () => {
 it("an uncertain HTTP result retries the same revision without another warning", async () => {
   api.start.mockRejectedValueOnce({ body: { code: "NETWORK_UNCERTAIN" } }).mockResolvedValue({ runId: "run-opaque" });
   api.approvals.mockResolvedValueOnce([]).mockResolvedValue([approval]);
-  await open(); await warning(); fireEvent.click(screen.getByRole("button", { name: "OK / Start" }));
+  asAdmin(); await open(); await warning(); fireEvent.click(screen.getByRole("button", { name: "Fail over now" }));
   expect(await screen.findAllByText("NETWORK_UNCERTAIN")).toHaveLength(2);
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -158,23 +248,56 @@ it("a stopped run with a confirmed DOWN offers Resume return step on the unit pa
   api.resume.mockResolvedValue({ runId: "run-opaque", resumeId: "resume-opaque", state: "QUEUED" });
   setup(); fireEvent.click(await screen.findByRole("button", { name: "CLS-ROMEO-01" }));
   fireEvent.click(await screen.findByRole("button", { name: "Resume return step" }));
-  fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Return the former active" } });
+  fireEvent.change(screen.getByLabelText(/Work log note/), { target: { value: "Return the former active" } });
   fireEvent.click(screen.getAllByRole("button", { name: "Resume return step" }).at(-1)!);
   await waitFor(() => expect(api.resume).toHaveBeenCalledWith("run-opaque", "run-opaque", "Return the former active", false));
 });
-it("the window end is typed and shown in Turkey time and sent as the UTC instant", async () => {
-  await open(); await warning();
-  fireEvent.change(screen.getByLabelText(/Reason/), { target: { value: "Pilot" } });
-  fireEvent.click(screen.getByRole("button", { name: "OK / Start" }));
-  await waitFor(() => expect(api.approve).toHaveBeenCalledTimes(1));
-  expect(api.approve.mock.calls[0][2]).toBe("2099-10-06T09:00:00.000Z");
+it("a session whose policy is not known is told both outcomes, and the server's answer decides", async () => {
+  api.incidents.mockRejectedValue({ status: 500, body: {} });
+  await open(); await warning("change CHG-300");
+  const dialog = screen.getByRole("dialog");
+  expect(dialog.querySelector("[data-failover-policy]")).toHaveAttribute("data-failover-policy", "unknown");
+  expect(within(dialog).getByText(/unless your role needs a second administrator to agree first/)).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Request failover" }));
+  // The server answered ADMIN_SINGLE and approved: the run starts as it always did.
+  await waitFor(() => expect(api.start).toHaveBeenCalledTimes(1));
+  expect(Date.parse(api.approve.mock.calls[0][2]) - Date.parse(api.approve.mock.calls[0][1])).toBe(HOUR);
 });
-it("a remembered draft shows its window end in Turkey time, not its UTC digits", async () => {
+it("a request the dialog said needs a second administrator never starts on the first confirm, even if the server needed none", async () => {
+  await open(); await warning("change CHG-400");
+  const dialog = screen.getByRole("dialog");
+  expect(within(dialog).getByText(/A second administrator must agree before anything is sent/)).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Request failover" }));
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("No second administrator was needed for this request, so it is already approved on the server. The failover has not been started. Confirm again to start it now.");
+  expect(api.start).not.toHaveBeenCalled();
+  await new Promise(resolve => setTimeout(resolve, 50)); expect(api.start).not.toHaveBeenCalled();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Request failover" }));
+  await waitFor(() => expect(api.start).toHaveBeenCalledTimes(1)); expect(api.approve).toHaveBeenCalledTimes(1);
+});
+it("cancelling after an unneeded second-administrator warning leaves no confirmation: the next row click shows the dialog and starts nothing", async () => {
+  await open(); await warning("change CHG-401");
+  const dialog = screen.getByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Request failover" }));
+  expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+  expect(JSON.parse(sessionStorage.getItem("failover-request:check_point:opaque-cluster")!).confirmedRevision).toBeUndefined();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  // The server now lists the approved request, as the next read would.
+  api.approvals.mockResolvedValue([approval]);
+  fireEvent.click(screen.getByRole("button", { name: "Start failover" }));
+  expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  await new Promise(resolve => setTimeout(resolve, 50)); expect(api.start).not.toHaveBeenCalled();
+});
+it("a remembered request shows its note and its end in Turkey time, and is sent again unchanged", async () => {
   sessionStorage.setItem("failover-request:check_point:opaque-cluster", JSON.stringify({ requestId: "00000000-0000-4000-8000-000000000009",
     from: "2099-10-06T08:00:00.000Z", until: "2099-10-06T09:30:00.000Z", reason: "Pilot" }));
-  await open(); fireEvent.click(screen.getByRole("button", { name: "Start failover" }));
-  expect(screen.getByLabelText("Window ends")).toHaveValue("2099-10-06T12:30");
-  expect(screen.getByText("Turkey time (GMT+3)")).toBeInTheDocument();
+  asAdmin(); await open(); fireEvent.click(screen.getByRole("button", { name: "Start failover" }));
+  const note = await screen.findByLabelText(/Work log note/);
+  expect(note).toHaveValue("Pilot"); expect(note).toBeDisabled();
+  expect(screen.getByText("This request was already made. Valid until 2099-10-06 12:30 GMT+3.")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Fail over now" }));
+  await waitFor(() => expect(api.approve).toHaveBeenCalledTimes(1));
+  expect(api.approve.mock.calls[0].slice(1)).toEqual(["2099-10-06T08:00:00.000Z", "2099-10-06T09:30:00.000Z", "Pilot", "00000000-0000-4000-8000-000000000009"]);
 });
 it.each([
   [{ status: 403, body: { error: "ACTION_MAPPING_REQUIRED" } }, "ACTION_MAPPING_REQUIRED (HTTP 403)"],
@@ -183,11 +306,12 @@ it.each([
   [{ status: 500, body: {} }, "Request failed (HTTP 500)"],
 ])("a refused start names the server's reason and HTTP status (%#)", async (failure, text) => {
   api.approve.mockRejectedValue(failure);
-  await open(); await warning();
-  fireEvent.change(screen.getByLabelText(/Reason/), { target: { value: "Pilot" } });
-  fireEvent.click(screen.getByRole("button", { name: "OK / Start" }));
+  asAdmin(); await open(); await warning("Pilot");
+  fireEvent.click(screen.getByRole("button", { name: "Fail over now" }));
   expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
-  expect(screen.queryByText("Request failed")).toBeNull();
+  // The refusal stays in the dialog, word for word, and nothing was started.
+  expect(within(screen.getByRole("dialog")).getByRole("alert")).toHaveTextContent(text);
+  expect(screen.queryByText("Request failed")).toBeNull(); expect(api.start).not.toHaveBeenCalled();
 });
 it("lists the VSX chassis unit first with its own pre-checks and no failover action, then each Virtual System", async () => {
   const chassis = { ...unit, unitKind: "VSX_CHASSIS" as const, failoverRefusal: "VSX_CHASSIS_MODE_UNKNOWN", refusalReason: "VSX_CHASSIS_COMMANDS_NOT_APPROVED" };
@@ -200,7 +324,10 @@ it("lists the VSX chassis unit first with its own pre-checks and no failover act
   expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(first);
   await waitFor(() => expect(screen.getByRole("button", { name: "Run pre-checks" })).toBeEnabled());
-  expect(screen.queryByRole("button", { name: /Fail over|Start failover/ })).toBeNull();
+  // The chassis offers no failover; its Virtual System carries the action on its own row, without being opened.
+  const chassisCard = first.closest("[data-unit-kind='VSX_CHASSIS']") as HTMLElement, vsCard = second.closest("[data-unit-kind='VIRTUAL_SYSTEM']") as HTMLElement;
+  expect(within(chassisCard).queryByRole("button", { name: /Fail over|Start failover/ })).toBeNull();
+  expect(within(vsCard).getByRole("button", { name: "Start failover" })).toBeEnabled();
   expect(screen.getByText(/VSX chassis mode not known/)).toHaveAttribute("title", "VSX_CHASSIS_MODE_UNKNOWN");
   fireEvent.click(screen.getByRole("button", { name: "Run pre-checks" }));
   await waitFor(() => expect(api.readiness).toHaveBeenCalledWith(expect.objectContaining({ unitId: "opaque-cluster" })));
@@ -218,14 +345,14 @@ it("offers the chassis failover on a VSX HA-mode chassis", async () => {
   await waitFor(() => expect(screen.getByRole("button", { name: "Fail over the chassis" })).toBeEnabled());
   expect(screen.getByText(/VSX HA mode: the chassis fails over in VS0/)).toHaveAttribute("data-chassis-action", "FAILOVER");
   fireEvent.click(screen.getByRole("button", { name: "Fail over the chassis" }));
-  expect(screen.getByText(/every virtual system must be active on the new active member/)).toBeInTheDocument();
+  expect(await screen.findByText(/every virtual system must be active on the new active member/)).toBeInTheDocument();
 });
 it("offers \"Fail over all virtual systems\" on a VSLS chassis and shows the running sequence", async () => {
   api.units.mockResolvedValue([chassisUnit({ chassisMode: "VSLS", chassisAction: "FAILOVER_ALL_VIRTUAL_SYSTEMS" })]); setup();
   fireEvent.click(await screen.findByRole("button", { name: "VSX chassis · CLS-TANGO-04" }));
   await waitFor(() => expect(screen.getByRole("button", { name: "Fail over all virtual systems" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Fail over all virtual systems" }));
-  expect(screen.getByText(/stops at the first virtual system that does not succeed/)).toBeInTheDocument();
+  expect(await screen.findByText(/stops at the first virtual system that does not succeed/)).toBeInTheDocument();
 });
 it("shows a running sequence and disables a second start", async () => {
   api.units.mockResolvedValue([chassisUnit({ chassisMode: "VSLS", chassisAction: "FAILOVER_ALL_VIRTUAL_SYSTEMS",
@@ -245,8 +372,8 @@ it("shows why a chassis start is refused now and keeps the button disabled", asy
 });
 it("warns when the directory is unreachable at start and retries the same approval when Retry is clicked", async () => {
   api.start.mockRejectedValueOnce({ status: 409, body: { code: "DIRECTORY_UNREACHABLE_AT_START" } }).mockResolvedValue({ runId: "run-opaque" });
-  await open(); await warning();
-  fireEvent.click(screen.getByRole("button", { name: "OK / Start" }));
+  asAdmin(); await open(); await warning();
+  fireEvent.click(screen.getByRole("button", { name: "Fail over now" }));
   expect((await screen.findAllByText(/DIRECTORY_UNREACHABLE_AT_START/)).length).toBeGreaterThan(0);
   const retryButtons = screen.getAllByRole("button", { name: "Retry" });
   expect(retryButtons.length).toBeGreaterThan(0);

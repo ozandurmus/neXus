@@ -109,7 +109,9 @@ function checkRows(checks: ReadinessCheck[], labels: ReadinessMember[] = [], pee
     const blocking = checks.some(check => check.checkNo === no && check.blocking);
     const failed = blocking && members.some(check => check?.result === "FAIL");
     const passed = blocking && members.every(check => check?.result === "PASS");
-    return { no, title: first.title, members, blocking, failed, passed };
+    // Palo Alto config sync off on one member: the row is still blocking, but only that member's own cell is red.
+    const perMember = failed && members.some(check => check?.memberSync !== undefined);
+    return { no, title: first.title, members, blocking, failed, passed, perMember };
   });
 }
 
@@ -146,7 +148,7 @@ export function ReadinessChecksTable({ checks, members = [], compact = false, ro
     <TableBody>{checkRows(checks, members, peer || singleObserverFgt).map(row => {
       const icon = row.failed ? "x-circle" : row.passed ? "check-circle" : "info";
       const result = row.failed ? "Blocking" : row.passed ? "Passed" : !row.blocking ? "Info" : "Unknown";
-      return <TableRow key={row.no} sx={{ bgcolor: row.failed ? m3.errorContainer : undefined }}>
+      return <TableRow key={row.no} sx={{ bgcolor: row.failed && !row.perMember ? m3.errorContainer : undefined }}>
         <TableCell component="th" scope="row" sx={{ py: compact ? 0.5 : 1.5, overflowWrap: "anywhere" }}>
           <Stack direction="row" spacing={1} alignItems="center">
             <Box component="span" role="img" aria-label={result} sx={{ display: "flex", color: row.failed ? m3.onErrorContainer : row.passed ? m3.goodInk : m3.onSurfaceVar }}><Icon name={icon} /></Box>
@@ -155,7 +157,9 @@ export function ReadinessChecksTable({ checks, members = [], compact = false, ro
           </Stack>
           {rowAction?.(row.no, row.failed)}
         </TableCell>
-        {memberOrder.map((memberIndex, index) => <TableCell key={index} sx={{ py: compact ? 0.5 : 1.5, whiteSpace: "normal", overflowWrap: "anywhere" }}>
+        {memberOrder.map((memberIndex, index) => <TableCell key={index} data-member-sync={row.perMember ? row.members[memberIndex]?.memberSync ?? "unknown" : undefined}
+          sx={{ py: compact ? 0.5 : 1.5, whiteSpace: "normal", overflowWrap: "anywhere",
+            ...(row.perMember && row.members[memberIndex]?.memberSync === "off" ? { bgcolor: m3.errorContainer, color: m3.onErrorContainer } : {}) }}>
           <CheckMessage text={(peer || singleObserverFgt) ? (index === 1 && row.no === TRAFFIC_ARP_CHECK ? SECONDARY_NOT_ACTIVE : row.members[0]?.summary ?? "Not collected")
             : row.members[memberIndex]?.summary ?? "Not collected"} /></TableCell>)}
       </TableRow>;

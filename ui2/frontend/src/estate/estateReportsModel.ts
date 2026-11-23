@@ -1,6 +1,7 @@
 import type { ReportCatalogue, ReportPlaneAsOf, ReportRunView, ReportTemplateCard } from "../auth/adminApi";
 import { ageBucketOf, newestIso, parseTimeMs, type AgeBucket, type BadgeState } from "./estateModel";
 import { plural } from "../shell/plural";
+import { isRecord } from "../shell/malformedResponse";
 
 /**
  * Estate Reports list model (Opus bold concept, row 20: "Reports · evidence packs, templates, history").
@@ -190,10 +191,6 @@ export type RunDocument =
   | { readonly available: true; readonly sections: readonly DetailSection[] }
   /** `malformed` is true only when the run carries a non-null `document` that could not be read (UNKNOWN). */
   | { readonly available: false; readonly malformed: boolean };
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
 
 /**
  * The run's document sections, read defensively: a missing, non-array or malformed document is

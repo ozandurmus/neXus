@@ -2350,7 +2350,9 @@ export interface PanConfigSyncFacts { offered: boolean; canRun: boolean; refusal
   readinessObservedAt: string | null; readinessOutcome?: "PASS" | "FAIL" | "IN_PROGRESS" | "UNKNOWN" | null; settling?: boolean; latest: PanConfigSyncRecord | null }
 export interface ReadinessCheck { device_id?: string; checkNo: number; title: string; member: string; result: CpFailoverCheckStatus; summary: string; blocking: boolean;
   /** The stored derived evidence (an object from the summary, a JSON string from a run detail) and its observation time. */
-  derived?: unknown; observedAt?: string }
+  derived?: unknown; observedAt?: string;
+  /** Palo Alto check 4 with config sync off on a member: this row's own member state; absent on older evidence. */
+  memberSync?: "off" | "on" | "unknown" }
 /** One "Fail over all virtual systems" sequence of a VSLS chassis; opaque references and VSIDs only. */
 export interface CpFailoverSequence { sequenceId: string; state: "RUNNING" | "DONE" | "STOPPED"; outcome: string | null; total: number;
   started: number; vsIds: string[]; currentRunId: string | null; failedVsId: string | null; requestedAt: string; finishedAt: string | null }

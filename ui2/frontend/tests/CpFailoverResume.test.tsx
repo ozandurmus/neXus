@@ -38,7 +38,7 @@ it("offers the button to an allowed role and confirms with the contract text, re
   expect(screen.queryByRole("checkbox")).toBeNull();
   const confirm = screen.getAllByRole("button", { name: "Resume return step" }).at(-1)!;
   expect(confirm).toBeDisabled();
-  fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "  Return the former active  " } });
+  fireEvent.change(screen.getByLabelText(/Work log note/), { target: { value: "  Return the former active  " } });
   fireEvent.click(confirm); fireEvent.click(confirm);
   await waitFor(() => expect(api.resume).toHaveBeenCalledTimes(1));
   expect(api.resume).toHaveBeenCalledWith("run-opaque", "run-opaque", "Return the former active", false);
@@ -48,7 +48,7 @@ it("offers the button to an allowed role and confirms with the contract text, re
 it("inside business hours the request needs its own acknowledgement", async () => {
   show(run({ ...eligible, businessHoursInside: true }));
   fireEvent.click(screen.getByRole("button", { name: "Resume return step" }));
-  fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Return" } });
+  fireEvent.change(screen.getByLabelText(/Work log note/), { target: { value: "Return" } });
   const confirm = screen.getAllByRole("button", { name: "Resume return step" }).at(-1)!;
   expect(confirm).toBeDisabled();
   fireEvent.click(screen.getByRole("checkbox", { name: /I acknowledge this runs during business hours \(08:00–20:00 Europe\/Istanbul\)/ }));
@@ -74,7 +74,7 @@ it("a server refusal on confirm is shown in plain words and nothing else is requ
   api.resume.mockRejectedValue({ body: { code: "INCIDENT_MISMATCH" } });
   show(run(eligible));
   fireEvent.click(screen.getByRole("button", { name: "Resume return step" }));
-  fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Return" } });
+  fireEvent.change(screen.getByLabelText(/Work log note/), { target: { value: "Return" } });
   fireEvent.click(screen.getAllByRole("button", { name: "Resume return step" }).at(-1)!);
   expect(await screen.findByText(/the incident changed since this page was loaded/)).toBeInTheDocument();
   expect(api.resume).toHaveBeenCalledTimes(1);
@@ -87,7 +87,7 @@ it("a second administrator approves a pending two-person resume with the same te
   expect(screen.getByRole("status")).toHaveTextContent("Resume awaiting second approval");
   fireEvent.click(screen.getByRole("button", { name: "Approve resume" }));
   expect(screen.getByText(/FW-ROMEO-01 is down by admin and FW-ROMEO-02 carries the traffic/)).toBeInTheDocument();
-  expect(screen.queryByLabelText("Reason")).toBeNull();
+  expect(screen.queryByLabelText(/Work log note/)).toBeNull();
   fireEvent.click(screen.getByRole("checkbox"));
   fireEvent.click(screen.getAllByRole("button", { name: "Approve resume" }).at(-1)!);
   await waitFor(() => expect(api.approve).toHaveBeenCalledWith("run-opaque", "resume-opaque", true));

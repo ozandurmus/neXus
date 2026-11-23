@@ -16,7 +16,7 @@ import {
   TileSwatch,
   VendorTag,
 } from "./EstatePrimitives";
-import { EstateFailoverCellDrawer, PER_UNIT_PRECHECK_NOTE, type FailoverCellTarget } from "./EstateFailoverCellDrawer";
+import { EstateFailoverCellDrawer, FAILOVER_START_NOTE, PER_UNIT_PRECHECK_NOTE, type FailoverCellTarget } from "./EstateFailoverCellDrawer";
 import { EstateFailoverIncidents } from "./EstateFailoverIncidents";
 import { dossierHref, standardHaHref } from "./estateRouting";
 import {
@@ -466,7 +466,7 @@ export function EstateFailoverScreen({
           >
             standard HA & readiness
           </Box>{" "}
-          to run pre-checks, sync configuration, or manage failover approvals.
+          to run pre-checks, sync configuration, or fail a unit over. {FAILOVER_START_NOTE}
         </span>
         <Box sx={{ ml: "auto" }}>
           <EvidenceStamp

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import { PRODUCT_PLANES, type Role } from "../screens/CustomRolesPanel";
 import { plural } from "../shell/plural";
+import { isRecord } from "../shell/malformedResponse";
 import { EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
 import { ESTATE_MONO, ev } from "./estateTokens";
 
@@ -19,10 +20,6 @@ type RolesRead =
   | { readonly state: "restricted" }
   | { readonly state: "failed" }
   | { readonly state: "ok"; readonly roles: readonly Role[]; readonly readAt: string };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 /** The custom (non-system) roles, in the order the server sent them. A non-array body or malformed item is a failed read, never an empty list. */
 export function customRolesOf(body: unknown): readonly Role[] | null {

@@ -482,6 +482,7 @@ public final class PanFailoverChecks {
         int disabled=0;
         State[] states={a,b};
         String[] members={"first","second"};
+        String[] syncEnabled={"unknown","unknown"};
         for(int i=0;i<states.length;i++) {
             State state=states[i];
             ObjectNode facts=derived.putObject(members[i]);
@@ -502,6 +503,7 @@ public final class PanFailoverChecks {
             else unrecognised.add(members[i]+".peer-connection:"+ReadinessShapeLog.valueShape(state.peerConnection()));
             if(java.util.Set.of("yes","no").contains(state.runningSyncEnabled())) {
                 facts.put("running-sync-enabled",state.runningSyncEnabled());
+                syncEnabled[i]=state.runningSyncEnabled();
                 if("no".equals(state.runningSyncEnabled())) disabled++;
             }
             else if(state.runningSyncEnabled().isEmpty()) missing.add(members[i]+".running-sync-enabled");
@@ -512,8 +514,26 @@ public final class PanFailoverChecks {
         if(disabled>0) {
             derived.put("reason","CONFIG_SYNC_DISABLED");
             derived.put("membersDisabled",disabled);
+            // Per member, so the readiness table can name the member that has config sync off (PO 2026-11-23). Keys are
+            // the evidence's own member keys; a member whose setting was missing or not recognised stays "unknown".
+            ObjectNode byMember=derived.putObject("syncEnabledByMember");
+            for(int i=0;i<members.length;i++) byMember.put(members[i],syncEnabled[i]);
             return new SessionSync("FAIL",derived.toString());
         }
         return new SessionSync(unknown?"UNKNOWN":failed?"FAIL":"PASS",derived.toString());
+    }
+
+    /**
+     * The sync evidence for one member's own check row: the same evidence plus {@code self}, the member key ("first" or
+     * "second") the row belongs to, so a reader can pick that member out of {@code syncEnabledByMember}. Evidence that
+     * is not a config-sync-disabled failure is returned unchanged.
+     */
+    public static String syncEvidenceForMember(String derived,String member) {
+        try {
+            var node=new com.fasterxml.jackson.databind.ObjectMapper().readTree(derived);
+            if(!(node instanceof ObjectNode object) || !"CONFIG_SYNC_DISABLED".equals(object.path("reason").asText())) return derived;
+            object.put("self",member);
+            return object.toString();
+        } catch(com.fasterxml.jackson.core.JsonProcessingException invalid) { return derived; }
     }
 }
