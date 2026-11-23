@@ -11,14 +11,15 @@
 # TODO(packet-analysis image split): this runs the shared ui2 service image for now. The analysis image (UBI9 glibc
 # base + JRE 21 + tshark, the only dissector; DuckDB JDBC natives need glibc) replaces it when the engine port lands
 # (PACKET_ANALYSIS_PORT_CONTRACT.md §2, "image build (tshark packaging on UBI9)").
+# A copy of deploy/ui2/01-priority-classes.yaml's ui2-low (identical; tests assert it), so this file applies on its own.
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
 metadata:
   name: ui2-low
   labels:
     app.kubernetes.io/part-of: nexus-ui2
-# Below the default priority (0) and far below system-cluster-critical, which every other neXus pod uses: under
-# pressure, analysis is evicted or waits first. It never preempts anything.
+# Below the default priority (0) and every other neXus pod: under pressure, analysis and previews are evicted or wait
+# first. They never preempt anything.
 value: -100
 globalDefault: false
 preemptionPolicy: Never
@@ -72,9 +73,15 @@ spec:
         - name: metrics
           containerPort: 9404
           protocol: TCP
+        # Kubelet probes only (WorkerHealthServer): no Service, Ingress or NetworkPolicy entry.
+        - name: health
+          containerPort: 9405
+          protocol: TCP
         env:
         - name: UI2_METRICS_ENABLED
           value: "false"
+        - name: UI2_HEALTH_PORT
+          value: "9405"
         - name: UI2_METRICS_PORT
           value: "9404"
         # PO 2026-11-15: application logs on HOST-A show IP addresses (the code default stays masked).
@@ -153,6 +160,33 @@ spec:
             - ALL
           seccompProfile:
             type: RuntimeDefault
+        # Pod hygiene (2026-11-23): kubelet probes on the worker's own probe port (UI2_HEALTH_PORT, WorkerHealthServer),
+        # independent of UI2_METRICS_ENABLED. /livez reads in-process claim-loop timestamps only (no database call): it fails
+        # when an idle claim loop has not iterated for 120 s (UI2_HEALTH_STALL_SECONDS), so a stalled pod restarts after
+        # about 2-3 minutes. A loop running a job, a database outage and a draining pod (SIGTERM drain or module ownership
+        # lost) never fail it. /readyz: loops started and the last module heartbeat reached the database within 60 s.
+        # The kubelet probes from the pod's own node; node-local traffic is not subject to NetworkPolicy here (k3s).
+        startupProbe:
+          httpGet:
+            path: /livez
+            port: health
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: health
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: health
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
         resources:
           requests:
             cpu: 250m

@@ -1,4 +1,4 @@
-# route authorization decision table; kinds=18 routes=635 rows=11430
+# route authorization decision table; kinds=18 routes=639 rows=11502
 # columns: kind | METHOD path | PERMIT attributes | REFUSE status content-type body ; then authz rows and machine audits
 anonymous | DELETE /api/v2/cutover/assessments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | DELETE /api/v2/cutover/assessments/synthetic-ref | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
@@ -3654,6 +3654,24 @@ machine-replay-viewer | GET /jobs/synthetic-ref/transcript | REFUSE 403 applicat
 viewer-no-csrf | GET /jobs/synthetic-ref/transcript | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"job_transcript_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[job_transcript_read:DENIED]
 viewer-no-origin | GET /jobs/synthetic-ref/transcript | REFUSE 403 application/json {"error":"ACTION_REFUSED","action_id":"job_transcript_read","outcome":"DENIED","authority":"ui2_local","reason_code":"actor_not_in_required_group","decision_id":1} | authz=[job_transcript_read:DENIED]
 must-change | GET /jobs/synthetic-ref/transcript | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
+anonymous | GET /livez | PERMIT actor=- session=- replay-viewer=-
+unknown-cookie | GET /livez | PERMIT actor=- session=- replay-viewer=-
+expired | GET /livez | PERMIT actor=- session=- replay-viewer=-
+revoked | GET /livez | PERMIT actor=- session=- replay-viewer=-
+no-role | GET /livez | PERMIT actor=- session=- replay-viewer=-
+role-viewer | GET /livez | PERMIT actor=- session=- replay-viewer=-
+role-operator | GET /livez | PERMIT actor=- session=- replay-viewer=-
+role-onboarding_admin | GET /livez | PERMIT actor=- session=- replay-viewer=-
+role-backup_admin | GET /livez | PERMIT actor=- session=- replay-viewer=-
+role-compliance_admin | GET /livez | PERMIT actor=- session=- replay-viewer=-
+role-security_admin | GET /livez | PERMIT actor=- session=- replay-viewer=-
+role-operation_admin | GET /livez | PERMIT actor=- session=- replay-viewer=-
+role-replay_viewer | GET /livez | PERMIT actor=- session=- replay-viewer=-
+root | GET /livez | PERMIT actor=- session=- replay-viewer=-
+machine-replay-viewer | GET /livez | PERMIT actor=- session=- replay-viewer=-
+viewer-no-csrf | GET /livez | PERMIT actor=- session=- replay-viewer=-
+viewer-no-origin | GET /livez | PERMIT actor=- session=- replay-viewer=-
+must-change | GET /livez | PERMIT actor=- session=- replay-viewer=-
 anonymous | GET /local-identities | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | GET /local-identities | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | GET /local-identities | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -3708,6 +3726,24 @@ machine-replay-viewer | GET /project-plan | PERMIT actor=match session=match rep
 viewer-no-csrf | GET /project-plan | PERMIT actor=match session=match replay-viewer=- | authz=[project_plan_read:NO_APPLICABLE_AUTHORITY]
 viewer-no-origin | GET /project-plan | PERMIT actor=match session=match replay-viewer=- | authz=[project_plan_read:NO_APPLICABLE_AUTHORITY]
 must-change | GET /project-plan | REFUSE 403 application/json {"error":"PASSWORD_CHANGE_REQUIRED"}
+anonymous | GET /readyz | PERMIT actor=- session=- replay-viewer=-
+unknown-cookie | GET /readyz | PERMIT actor=- session=- replay-viewer=-
+expired | GET /readyz | PERMIT actor=- session=- replay-viewer=-
+revoked | GET /readyz | PERMIT actor=- session=- replay-viewer=-
+no-role | GET /readyz | PERMIT actor=- session=- replay-viewer=-
+role-viewer | GET /readyz | PERMIT actor=- session=- replay-viewer=-
+role-operator | GET /readyz | PERMIT actor=- session=- replay-viewer=-
+role-onboarding_admin | GET /readyz | PERMIT actor=- session=- replay-viewer=-
+role-backup_admin | GET /readyz | PERMIT actor=- session=- replay-viewer=-
+role-compliance_admin | GET /readyz | PERMIT actor=- session=- replay-viewer=-
+role-security_admin | GET /readyz | PERMIT actor=- session=- replay-viewer=-
+role-operation_admin | GET /readyz | PERMIT actor=- session=- replay-viewer=-
+role-replay_viewer | GET /readyz | PERMIT actor=- session=- replay-viewer=-
+root | GET /readyz | PERMIT actor=- session=- replay-viewer=-
+machine-replay-viewer | GET /readyz | PERMIT actor=- session=- replay-viewer=-
+viewer-no-csrf | GET /readyz | PERMIT actor=- session=- replay-viewer=-
+viewer-no-origin | GET /readyz | PERMIT actor=- session=- replay-viewer=-
+must-change | GET /readyz | PERMIT actor=- session=- replay-viewer=-
 anonymous | GET /role-bindings | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no session cookie presented"}
 unknown-cookie | GET /role-bindings | REFUSE 401 application/json {"error":"SESSION_INVALID","reason":"no matching session row"}
 expired | GET /role-bindings | REFUSE 401 application/json {"error":"SESSION_EXPIRED","reason":"idle_deadline_at elapsed"}
@@ -7326,6 +7362,24 @@ machine-replay-viewer | HEAD /jobs/synthetic-ref/transcript | REFUSE 403 applica
 viewer-no-csrf | HEAD /jobs/synthetic-ref/transcript | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | HEAD /jobs/synthetic-ref/transcript | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | HEAD /jobs/synthetic-ref/transcript | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+anonymous | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
+unknown-cookie | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
+expired | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
+revoked | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
+no-role | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
+role-viewer | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
+role-operator | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
+role-onboarding_admin | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
+role-backup_admin | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
+role-compliance_admin | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
+role-security_admin | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
+role-operation_admin | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
+role-replay_viewer | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
+root | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
+machine-replay-viewer | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
+viewer-no-csrf | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
+viewer-no-origin | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
+must-change | HEAD /livez | PERMIT actor=- session=- replay-viewer=-
 anonymous | HEAD /local-identities | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | HEAD /local-identities | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | HEAD /local-identities | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
@@ -7380,6 +7434,24 @@ machine-replay-viewer | HEAD /project-plan | REFUSE 403 application/json {"error
 viewer-no-csrf | HEAD /project-plan | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 viewer-no-origin | HEAD /project-plan | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 must-change | HEAD /project-plan | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
+anonymous | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
+unknown-cookie | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
+expired | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
+revoked | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
+no-role | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
+role-viewer | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
+role-operator | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
+role-onboarding_admin | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
+role-backup_admin | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
+role-compliance_admin | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
+role-security_admin | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
+role-operation_admin | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
+role-replay_viewer | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
+root | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
+machine-replay-viewer | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
+viewer-no-csrf | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
+viewer-no-origin | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
+must-change | HEAD /readyz | PERMIT actor=- session=- replay-viewer=-
 anonymous | HEAD /role-bindings | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 unknown-cookie | HEAD /role-bindings | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}
 expired | HEAD /role-bindings | REFUSE 403 application/json {"error":"ACTION_MAPPING_REQUIRED"}

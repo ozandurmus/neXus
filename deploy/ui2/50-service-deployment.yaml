@@ -5,6 +5,18 @@
 # `replicas: 1` at stages 1 and 2 (§6.4): at one replica the start-up
 # migration is safe without a concurrent-migration guard, and RESET-3 makes
 # the restart after a reset meaningful.
+# A copy of deploy/ui2/01-priority-classes.yaml's ui2-core (identical; tests assert it), so this file applies on its own.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ui2-core
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+value: 900000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "neXus service and its HTTP microservices: below the database, above the workers."
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -34,7 +46,7 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
-      priorityClassName: system-cluster-critical
+      priorityClassName: ui2-core
       tolerations:
         - key: "node.kubernetes.io/disk-pressure"
           operator: "Exists"
@@ -237,22 +249,25 @@ spec:
             limits:
               cpu: "4"
               memory: 8Gi
+          # Pod hygiene (2026-11-23): /livez is shallow (the process answers; never the database, so a database outage
+          # never restarts the service), /readyz checks the database with a 2-second bound (HealthController). /healthz
+          # stays for other callers.
           startupProbe:
             httpGet:
-              path: /healthz
+              path: /livez
               port: http
             periodSeconds: 5
             failureThreshold: 60
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /readyz
               port: http
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
           livenessProbe:
             httpGet:
-              path: /healthz
+              path: /livez
               port: http
             periodSeconds: 20
             timeoutSeconds: 3

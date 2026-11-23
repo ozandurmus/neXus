@@ -165,8 +165,10 @@
   "/devices/synthetic-ref/management-tree",
   "/devices/synthetic-ref/software-history",
   "/discovery/runs/synthetic-ref",
+  "/livez",
   "/notifications",
   "/project-plan",
+  "/readyz",
   "/session/status"
  ]
 }

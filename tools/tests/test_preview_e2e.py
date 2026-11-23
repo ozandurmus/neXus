@@ -11,6 +11,7 @@ import shlex
 from pathlib import Path
 import subprocess
 import sys
+import threading
 
 import pytest
 import yaml
@@ -29,7 +30,8 @@ ENDPOINTS = {"ui2-compliance": "http://192.0.2.30:8085",
 
 def template(path, kind=None):
     docs = list(yaml.safe_load_all((ROOT / path).read_text()))
-    return next(d for d in docs if kind is None or d["kind"] == kind)
+    # The cluster-scoped PriorityClass copy a manifest carries first (deploy/ui2/01-priority-classes.yaml) is not a template.
+    return next(d for d in docs if (kind is None and d["kind"] != "PriorityClass") or d["kind"] == kind)
 
 
 def local_load(repo, path):
@@ -383,7 +385,8 @@ def test_source_credentials_are_separate_secret_env_refs_and_never_logged(monkey
 
 
 
-def test_build_uses_pinned_kaniko_new_tag_emptydir_and_corporate_ca():
+def test_build_uses_pinned_kaniko_new_tag_emptydir_and_corporate_ca(monkeypatch):
+    monkeypatch.setenv("NEXUS_PREVIEW_KANIKO_CACHE", "0")
     original = template("deploy/ui2-image-build/30-build-job.yaml")
     loader = template("deploy/ui2-image-build/20-context-loader.yaml")
     before = copy.deepcopy(original)
@@ -405,6 +408,42 @@ def test_build_uses_pinned_kaniko_new_tag_emptydir_and_corporate_ca():
     assert original == before
 
 
+@pytest.mark.parametrize("setting", [None, "1", " 1 ", "yes"])
+def test_preview_build_caches_layers_in_the_cluster_registry_by_default(monkeypatch, setting):
+    if setting is None:
+        monkeypatch.delenv("NEXUS_PREVIEW_KANIKO_CACHE", raising=False)
+    else:
+        monkeypatch.setenv("NEXUS_PREVIEW_KANIKO_CACHE", setting)
+    original = template("deploy/ui2-image-build/31-build-job-proxy.yaml.template")
+    original["spec"]["template"]["spec"]["containers"][0]["args"] += ["--cache-ttl=999h", "--cache-repo=other.invalid/x"]
+    loader = template("deploy/ui2-image-build/20-context-loader.yaml")
+    for dockerfile in ("ui2/Containerfile", "ui2/frontend/Dockerfile.e2e"):
+        args = preview.build_manifest(original, loader, "synthetic-build", COMMIT, "synthetic-owner", dockerfile,
+                                      "registry.example.invalid/x:preview-" + COMMIT[:12])["spec"]["template"][
+                                          "spec"]["containers"][0]["args"]
+        assert "--cache=true" in args and "--cache=false" not in args
+        assert [a for a in args if a.startswith("--cache-repo=")] == [
+            "--cache-repo=" + preview.REGISTRY + "nexus-ui2-build-cache"]
+        assert [a for a in args if a.startswith("--cache-ttl=")] == ["--cache-ttl=12h"]
+        assert sum(a.startswith("--cache=") for a in args) == 1
+        assert sum(a.startswith("--image-download-retry=") for a in args) == 1
+        # The template's proxy build args stay: kaniko RUN steps see the proxy only through them.
+        assert {"--build-arg=HTTP_PROXY", "--build-arg=HTTPS_PROXY", "--build-arg=NO_PROXY"} <= set(args)
+
+
+@pytest.mark.parametrize("setting", ["0", " 0"])
+def test_preview_build_cache_switch_restores_uncached_builds(monkeypatch, setting):
+    monkeypatch.setenv("NEXUS_PREVIEW_KANIKO_CACHE", setting)
+    original = template("deploy/ui2-image-build/31-build-job-proxy.yaml.template")
+    args = preview.build_manifest(original, template("deploy/ui2-image-build/20-context-loader.yaml"),
+                                  "synthetic-build", COMMIT, "synthetic-owner", "ui2/Containerfile",
+                                  "registry.example.invalid/x:preview-" + COMMIT[:12])["spec"]["template"]["spec"][
+                                      "containers"][0]["args"]
+    assert "--cache=false" in args and "--cache=true" not in args
+    assert not any(a.startswith(("--cache-repo=", "--cache-ttl=")) for a in args)
+    assert args[args.index("--cache=false") + 1] == "--image-download-retry=5"
+
+
 @pytest.mark.parametrize("failed", ["namespace", "policy", "build", "database", "configuration", "compliance", "worker", "service", "job", "wait", None])
 def test_every_orchestration_failure_tears_down(monkeypatch, failed, capsys):
     calls = []
@@ -415,7 +454,8 @@ def test_every_orchestration_failure_tears_down(monkeypatch, failed, capsys):
         return result
     monkeypatch.setattr(preview, "k", lambda *a, **kw: "")
     monkeypatch.setattr(preview, "create", lambda ns, obj: phase(
-        "namespace" if obj["kind"] == "Namespace" else "policy" if obj["kind"] == "NetworkPolicy" else "job"))
+        "namespace" if obj["kind"] == "Namespace" else "policy" if obj["kind"] == "NetworkPolicy"
+        else "limits" if obj["kind"] in ("LimitRange", "ResourceQuota") else "job"))
     monkeypatch.setattr(preview, "build_images", lambda *a: phase("build", [IMAGE, IMAGE]))
     monkeypatch.setattr(preview, "setup_database", lambda *a: phase("database", "192.0.2.10"))
     def workload(template, image, db_ip, endpoints):
@@ -875,7 +915,7 @@ def test_build_pipeline_binds_candidate_to_owner_and_digest(monkeypatch, fault):
     def create(ns, obj):
         created.append(obj)
     def wait(ns, name):
-        job = copy.deepcopy(created[-1])
+        job = copy.deepcopy(next(obj for obj in created if obj["metadata"]["name"] == name))
         job["metadata"]["uid"] = "synthetic-job"
         if fault == "replaced": job["metadata"]["annotations"]["nexus/commit"] = "c" * 40
         return job
@@ -900,6 +940,114 @@ def test_build_pipeline_binds_candidate_to_owner_and_digest(monkeypatch, fault):
                 source["spec"]["template"]["spec"]["containers"][0]["env"] +
                 [dict(name="UI2_IMAGE_TAG", value=COMMIT[:12])])
         assert all(target[-1] == preview.LOAD_CONTEXT for _, target in streamed)
+
+
+@pytest.mark.parametrize("failing", [None, "service", "e2e"])
+def test_service_and_e2e_images_build_concurrently_and_any_failure_fails_the_phase(monkeypatch, capsys, failing):
+    monkeypatch.setenv("NEXUS_PREVIEW_KANIKO_CACHE", "0")  # the cache-free retry has its own test below
+    monkeypatch.setattr(preview, "prepare_build_context", lambda *a: None)
+    source = template("deploy/ui2-image-build/30-build-job.yaml")
+    digest = {"service": "c" * 64, "e2e": "d" * 64}
+    both_waiting = threading.Barrier(2, timeout=10)
+    created, streamed, lock = {}, [], threading.Lock()
+
+    def role(name):
+        return "service" if "-service-" in name else "e2e"
+
+    def fake(ns, *args, **kwargs):
+        if args[0] == "create":
+            return json.dumps(source)
+        if args[:2] == ("get", "pods"):
+            name = args[3].removeprefix("job-name=")
+            return json.dumps(dict(items=[dict(metadata=dict(name=name + "-pod", ownerReferences=[dict(uid=name)]),
+                status=dict(initContainerStatuses=[dict(name="context-loader", state=dict(running={}))],
+                            containerStatuses=[dict(name="builder", state=dict(terminated=dict(
+                                exitCode=0, message="sha256:" + digest[role(name)])))]))]))
+        pytest.fail("Unexpected cluster operation")
+
+    def create(ns, obj):
+        with lock:
+            created[obj["metadata"]["name"]] = obj
+
+    def stream(source, target, **kwargs):
+        with lock:
+            streamed.append(target[5])
+
+    def wait(ns, name):
+        # Both Jobs must be in flight at the same time: a sequential loop never passes this barrier.
+        both_waiting.wait()
+        if role(name) == failing:
+            raise RuntimeError("synthetic build failure")
+        job = copy.deepcopy(created[name])
+        job["metadata"]["uid"] = name
+        return job
+
+    monkeypatch.setattr(preview, "k", fake)
+    monkeypatch.setattr(preview, "load", local_load)
+    monkeypatch.setattr(preview, "create", create)
+    monkeypatch.setattr(preview, "wait_job", wait)
+    monkeypatch.setattr(preview, "pipe_commands", stream)
+    if failing:
+        with pytest.raises(preview.PreviewFailure) as raised:
+            preview.build_images(ROOT, COMMIT, "synthetic-owner")
+        assert raised.value.reason == "IMAGE_BUILD_FAILED"
+        assert raised.value.phase == "preview_build_" + failing
+    else:
+        images = preview.build_images(ROOT, COMMIT, "synthetic-owner")
+        assert images == [preview.REGISTRY + "nexus-ui2-service@sha256:" + digest["service"],
+                          preview.REGISTRY + "nexus-ui2-e2e@sha256:" + digest["e2e"]]
+    # Each Job got its own context stream into its own loader pod, whatever the outcome of the other.
+    assert sorted(streamed) == sorted(name + "-pod" for name in created) and len(created) == 2
+    out = capsys.readouterr().out
+    assert re.search(r"^TIMING preview_build_service \d", out, re.M)
+    assert re.search(r"^TIMING preview_build_e2e \d", out, re.M)
+
+
+@pytest.mark.parametrize("retry_fails", [False, True])
+def test_failed_cached_build_is_retried_once_without_cache_and_reports_a_safe_cause(monkeypatch, capsys, retry_fails):
+    monkeypatch.delenv("NEXUS_PREVIEW_KANIKO_CACHE", raising=False)
+    monkeypatch.setattr(preview, "prepare_build_context", lambda *a: None)
+    source = template("deploy/ui2-image-build/30-build-job.yaml")
+    created, waits = {}, []
+
+    def fake(ns, *args, **kwargs):
+        name = args[3].removeprefix("job-name=")
+        failed = dict(metadata=dict(name=name + "-pod", ownerReferences=[dict(uid=name)]), status=dict(
+            initContainerStatuses=[dict(name="context-loader", state=dict(running={}))],
+            containerStatuses=[dict(name="builder", state=dict(terminated=dict(
+                exitCode=137, reason="OOMKilled", message="synthetic log text")))]))
+        ok = copy.deepcopy(failed)
+        ok["status"]["containerStatuses"][0]["state"]["terminated"] = dict(exitCode=0, message="sha256:" + "e" * 64)
+        return json.dumps(dict(items=[ok if name.endswith("-nc") and not retry_fails else failed]))
+
+    def wait(ns, name):
+        waits.append(name)
+        if not name.endswith("-nc") or retry_fails:
+            raise RuntimeError("synthetic build failure")
+        job = copy.deepcopy(created[name])
+        job["metadata"]["uid"] = name
+        return job
+
+    monkeypatch.setattr(preview, "k", fake)
+    monkeypatch.setattr(preview, "create", lambda ns, obj: created.__setitem__(obj["metadata"]["name"], obj))
+    monkeypatch.setattr(preview, "wait_job", wait)
+    monkeypatch.setattr(preview, "pipe_commands", lambda *a, **kw: None)
+    loader = next(o for o in local_load(ROOT, "deploy/ui2-image-build/20-context-loader.yaml")["items"]
+                  if o["kind"] == "Pod")
+    args = (source, loader, ROOT, COMMIT, "synthetic-owner", "service", "ui2/Containerfile")
+    if retry_fails:
+        with pytest.raises(preview.PreviewFailure) as raised:
+            preview.build_one_image(*args)
+        assert raised.value.reason == "IMAGE_BUILD_FAILED"
+        assert raised.value.exception_class == "builder-OOMKilled-137"
+    else:
+        assert preview.build_one_image(*args).endswith("@sha256:" + "e" * 64)
+    assert len(waits) == 2 and waits[1] == waits[0] + "-nc"
+    first, second = (created[n]["spec"]["template"]["spec"]["containers"][0]["args"] for n in waits)
+    assert "--cache=true" in first and "--cache=false" in second
+    assert not any(x.startswith("--cache-repo=") for x in second)
+    out = capsys.readouterr().out
+    assert "BUILD RETRY role=service first=builder-OOMKilled-137" in out and "synthetic log text" not in out
 
 
 @pytest.mark.parametrize("mode", ["pass", "fail", "signal"])
@@ -960,7 +1108,7 @@ def test_source_list_is_parsed_without_preview_namespace(monkeypatch, path):
         assert "-n" not in argv
         return subprocess.CompletedProcess(argv, 0, json.dumps(local_load(ROOT, path)), "")
     monkeypatch.setattr(preview.subprocess, "run", run)
-    assert [o["kind"] for o in preview.load(ROOT, path)["items"]] == ["Deployment", "Service"]
+    assert [o["kind"] for o in preview.load(ROOT, path)["items"]] == ["PriorityClass", "Deployment", "Service"]
 
 
 def test_apply_flattens_lists_and_sets_each_namespace_without_mutating_source(monkeypatch):
@@ -974,7 +1122,7 @@ def test_apply_flattens_lists_and_sets_each_namespace_without_mutating_source(mo
     monkeypatch.setattr(preview.subprocess, "run", run)
     preview.create("ui2-preview-synthetic", source)
     assert source == before
-    assert [o["kind"] for o in applied] == ["Deployment", "Service"]
+    assert [o["kind"] for o in applied] == ["PriorityClass", "Deployment", "Service"]
     assert all(o["metadata"]["namespace"] == "ui2-preview-synthetic" for o in applied)
 
 
@@ -1520,3 +1668,469 @@ def test_cleanup_waits_past_old_kubectl_bound_for_namespace_deletion(monkeypatch
         preview.cleanup('owner')
         assert gone_after <= clock[0] < gone_after + 10
     assert deletes == [('delete', 'namespace', preview.NS, '--wait=false')]
+
+
+# ------------------------------------------------------------------------------------- golden preview database
+
+DB_TEMPLATE = "deploy/ui2/40-database-statefulset.yaml"
+NOW = 1_800_000_000
+
+
+def pinned_image():
+    return template(DB_TEMPLATE)["spec"]["template"]["spec"]["containers"][0]["image"]
+
+
+def golden_marker(versions, slot="a", created=NOW - 3600, image=None):
+    return dict(slot=slot, created=str(created), image=image or pinned_image(), migrations=json.dumps(sorted(versions)))
+
+
+def golden_pod_json(slot="a", ready=True, image=None):
+    return dict(metadata=dict(labels={preview.GOLDEN_LABEL: slot}),
+                spec=dict(containers=[dict(image=image or pinned_image())]),
+                status=dict(podIP="192.0.2.77", conditions=[dict(type="Ready", status="True" if ready else "False")]))
+
+
+def migration_repo(tmp_path, versions):
+    directory = tmp_path / preview.MIGRATIONS
+    directory.mkdir(parents=True)
+    for version in versions:
+        (directory / ("V" + version + "__synthetic.sql")).write_text("SELECT 1;\n")
+    return tmp_path
+
+
+def golden_cluster(marker=None, pod=None, calls=None):
+    """A fake kubectl for the golden selection: the marker ConfigMap and the serving pod."""
+    def fake(ns, *args, **kwargs):
+        if calls is not None:
+            calls.append((ns, args, kwargs.get("input")))
+        if ns == preview.GOLDEN_NS and args[:2] == ("get", "configmap"):
+            return json.dumps(dict(data=marker)) if marker is not None else ""
+        if ns == preview.GOLDEN_NS and args[:2] == ("get", "pod"):
+            return json.dumps(pod) if pod is not None else ""
+        raise AssertionError("unexpected kubectl call")
+    return fake
+
+
+@pytest.mark.parametrize("case, expected", [
+    ("good", ("golden", "GOLDEN_CURRENT")),
+    ("missing", ("live", "GOLDEN_MISSING")),
+    ("invalid", ("live", "GOLDEN_INVALID")),
+    ("stale", ("live", "GOLDEN_STALE")),
+    ("future", ("live", "GOLDEN_STALE")),
+    ("image", ("live", "GOLDEN_IMAGE_MISMATCH")),
+    ("new_migration", ("live", "NEW_MIGRATION")),
+    ("shipped_since_refresh", ("live", "NEW_MIGRATION")),
+    ("golden_ahead", ("live", "GOLDEN_SCHEMA_AHEAD")),
+    ("not_ready", ("live", "GOLDEN_UNAVAILABLE")),
+    ("pod_missing", ("live", "GOLDEN_UNAVAILABLE")),
+    ("pod_other_image", ("live", "GOLDEN_UNAVAILABLE")),
+])
+def test_golden_source_selection(tmp_path, monkeypatch, case, expected):
+    golden = {"1", "2", "3"}
+    candidate = {"1", "2", "3"}
+    marker, pod = golden_marker(golden), golden_pod_json()
+    if case == "missing":
+        marker = None
+    elif case == "invalid":
+        marker = dict(marker, migrations="not json")
+    elif case == "stale":
+        marker = golden_marker(golden, created=NOW - preview.GOLDEN_MAX_AGE_SECONDS - 1)
+    elif case == "future":
+        marker = golden_marker(golden, created=NOW + 600)
+    elif case == "image":
+        marker = golden_marker(golden, image=IMAGE)
+    elif case == "new_migration":
+        candidate = golden | {"4"}
+    elif case == "shipped_since_refresh":
+        marker = golden_marker({"1", "2"})
+    elif case == "golden_ahead":
+        candidate = {"1", "2"}
+    elif case == "not_ready":
+        pod = golden_pod_json(ready=False)
+    elif case == "pod_missing":
+        pod = None
+    elif case == "pod_other_image":
+        pod = golden_pod_json(image=IMAGE)
+    calls = []
+    monkeypatch.setattr(preview, "k", golden_cluster(marker, pod, calls))
+    source, reason, golden_ref = preview.select_database_source(migration_repo(tmp_path, candidate), pinned_image(),
+                                                                now=NOW)
+    assert (source, reason) == expected
+    assert (golden_ref == dict(slot="a", ip="192.0.2.77")) == (source == "golden")
+    assert all(ns == preview.GOLDEN_NS for ns, _, _ in calls)
+
+
+def test_candidate_migration_versions_follow_flyway_names(tmp_path):
+    repo = migration_repo(tmp_path, ["1", "2_1", "10"])
+    assert preview.candidate_migrations(repo) == {"1", "2.1", "10"}
+    assert len(preview.candidate_migrations(ROOT)) == len(list((ROOT / preview.MIGRATIONS).glob("V*__*.sql")))
+
+
+def golden_setup_fake(monkeypatch, marker, pod, calls, fail_wait=False):
+    def fake(ns, *args, **kwargs):
+        calls.append((ns, args, kwargs.get("input")))
+        if ns == "ui2" and args[:3] == ("get", "pod", "ui2-db-0"):
+            return json.dumps(dict(spec=dict(containers=[dict(image=pinned_image())])))
+        if ns == preview.GOLDEN_NS and args[:2] == ("get", "configmap"):
+            return json.dumps(dict(data=marker))
+        if ns == preview.GOLDEN_NS and args[:2] == ("get", "pod"):
+            return json.dumps(pod)
+        if ns == preview.GOLDEN_NS and args[:2] == ("get", "secret"):
+            return json.dumps(dict(data={"repl-password": base64.b64encode(b"synthetic").decode(),
+                                         "migrate-password": "must-not-be-copied"}))
+        if ns == preview.NS and args[0] == "wait":
+            if fail_wait:
+                raise preview.PreviewFailure("TIMEOUT")
+            return ""
+        if ns == preview.NS and args[:2] == ("get", "pod"):
+            return json.dumps(dict(status=dict(podIP="192.0.2.10")))
+        if ns == preview.NS and args[0] in ("exec", "delete"):
+            return ""
+        raise AssertionError("unexpected kubectl call")
+    monkeypatch.setattr(preview, "k", fake)
+    monkeypatch.setattr(preview, "load", local_load)
+    monkeypatch.setattr(preview.time, "time", lambda: NOW)
+
+
+def test_golden_path_never_reads_the_live_database(monkeypatch, capsys):
+    objects, calls, copied = [], [], []
+    marker = golden_marker(preview.candidate_migrations(ROOT))
+    golden_setup_fake(monkeypatch, marker, golden_pod_json(), calls)
+    monkeypatch.setattr(preview, "create", lambda ns, obj: objects.append((ns, copy.deepcopy(obj))))
+    monkeypatch.setattr(preview, "copy_secret", lambda *a: copied.append(a))
+    monkeypatch.setattr(preview, "copy_database", lambda: pytest.fail("the golden path must not copy the live DB"))
+    monkeypatch.setattr(preview, "database_network_access", lambda: pytest.fail("no live-DB network allowance"))
+    assert preview.setup_database(ROOT) == "192.0.2.10"
+    out = capsys.readouterr().out
+    assert "PREVIEW DB SOURCE: golden reason=GOLDEN_CURRENT" in out
+    assert re.search(r"^TIMING preview_db_golden [0-9.]+$", out, re.M) and "preview_db_copy" not in out
+    # Production is touched only through the API read of its pod spec (pinned-image equality); never exec/service.
+    assert [(ns, args) for ns, args, _ in calls if ns == "ui2"] == [("ui2", ("get", "pod", "ui2-db-0", "-o", "json"))]
+    assert copied == []
+    assert all(ns == preview.NS for ns, _ in objects)
+    pod = next(obj for _, obj in objects if obj["kind"] == "Pod")
+    env = [e["name"] for c in pod["spec"]["containers"] for e in c.get("env", [])]
+    assert "SOURCE_DB_USER" not in env and "SOURCE_DB_PASSWORD" not in env
+    (init,) = pod["spec"]["initContainers"]
+    assert init["image"] == pinned_image()
+    assert "pg_basebackup" in init["command"][-1] and "192.0.2.77" not in init["command"][-1]
+    init_env = {e["name"]: e for e in init["env"]}
+    assert init_env["GOLDEN_HOST"]["value"] == "192.0.2.77"
+    assert init_env["PGPASSWORD"]["valueFrom"]["secretKeyRef"] == dict(name=preview.preview_name("ui2-golden-copy"),
+                                                                       key="repl-password")
+    assert init["securityContext"] == pod["spec"]["containers"][0]["securityContext"]
+    for volume in pod["spec"]["volumes"]:
+        assert "hostPath" not in volume and "persistentVolumeClaim" not in volume
+    copy_secret = next(obj for _, obj in objects if obj["kind"] == "Secret"
+                       and obj["metadata"]["name"] == preview.preview_name("ui2-golden-copy"))
+    assert set(copy_secret["data"]) == {"repl-password"}
+    policy = next(obj for _, obj in objects if obj["kind"] == "NetworkPolicy")
+    assert policy["spec"]["policyTypes"] == ["Egress"]
+    (rule,) = policy["spec"]["egress"]
+    assert rule["ports"] == [dict(protocol="TCP", port=5432)]
+    assert rule["to"] == [dict(namespaceSelector=dict(matchLabels={"kubernetes.io/metadata.name": preview.GOLDEN_NS}),
+                               podSelector=dict(matchLabels={preview.GOLDEN_LABEL: "a"}))]
+    reset = next(text for ns, args, text in calls if args[0] == "exec")
+    assert "DROP ROLE IF EXISTS " + preview.GOLDEN_REPL_USER in reset
+    assert "\\getenv mp POSTGRESQL_PASSWORD" in reset and "synthetic" not in reset
+    deleted = [args[1:3] for ns, args, _ in calls if args[0] == "delete"]
+    assert ("networkpolicy", preview.preview_name("golden-copy")) in deleted
+    assert ("secret", preview.preview_name("ui2-golden-copy")) in deleted
+
+
+def test_new_migration_takes_a_fresh_live_copy(monkeypatch, capsys):
+    objects, calls, copied, copies = [], [], [], []
+    marker = golden_marker(set(sorted(preview.candidate_migrations(ROOT), key=int)[:-1]))
+    golden_setup_fake(monkeypatch, marker, golden_pod_json(), calls)
+    monkeypatch.setattr(preview, "create", lambda ns, obj: objects.append(obj))
+    monkeypatch.setattr(preview, "copy_secret", lambda *a: copied.append(a))
+    monkeypatch.setattr(preview, "copy_database", lambda: copies.append(True))
+    assert preview.setup_database(ROOT) == "192.0.2.10"
+    out = capsys.readouterr().out
+    assert "PREVIEW DB SOURCE: live reason=NEW_MIGRATION" in out and "TIMING preview_db_copy" in out
+    assert copies == [True]
+    assert copied == [("ui2-db", "ui2-db-source", ("migrate-user", "migrate-password"))]
+    pod = next(o for o in objects if o["kind"] == "Pod")
+    assert "initContainers" not in pod["spec"]
+    assert not any(args[:2] == ("get", "secret") for ns, args, _ in calls)
+
+
+@pytest.mark.parametrize("interrupted", [False, True])
+def test_failed_golden_copy_falls_back_to_live_unless_interrupted(monkeypatch, capsys, interrupted):
+    objects, calls, copies = [], [], []
+    marker = golden_marker(preview.candidate_migrations(ROOT))
+    golden_setup_fake(monkeypatch, marker, golden_pod_json(), calls, fail_wait=True)
+    monkeypatch.setattr(preview, "create", lambda ns, obj: objects.append(obj))
+    monkeypatch.setattr(preview, "copy_secret", lambda *a: None)
+    monkeypatch.setattr(preview, "copy_database", lambda: copies.append(True))
+    monkeypatch.setattr(preview, "INTERRUPTED", interrupted)
+    if interrupted:
+        with pytest.raises(preview.PreviewFailure):
+            preview.setup_database(ROOT)
+        assert copies == []
+        return
+    # The live path's own Ready wait succeeds once the golden pod is gone.
+    golden_failed = {"done": False}
+    original = preview.k
+    def fake(ns, *args, **kwargs):
+        if args[0] == "wait" and golden_failed["done"]:
+            return ""
+        if args[:2] == ("delete", "pod"):
+            golden_failed["done"] = True
+        return original(ns, *args, **kwargs)
+    monkeypatch.setattr(preview, "k", fake)
+    assert preview.setup_database(ROOT) == "192.0.2.10"
+    out = capsys.readouterr().out
+    assert "PREVIEW DB SOURCE: live reason=GOLDEN_COPY_FAILED" in out
+    assert copies == [True]
+    pods = [o for o in objects if o["kind"] == "Pod"]
+    assert "initContainers" in pods[0]["spec"] and "initContainers" not in pods[1]["spec"]
+
+
+@pytest.mark.parametrize("hour, minute, allowed", [
+    (3, 30, True), (2, 30, False), (1, 25, False), (1, 10, True), (5, 20, False), (5, 19, True),
+    (6, 0, False), (12, 5, False), (17, 45, False), (18, 10, False), (23, 30, False), (22, 0, True),
+])
+def test_refresh_stays_out_of_collection_and_backup_windows(hour, minute, allowed):
+    assert preview.refresh_window_allowed(datetime(2026, 11, 22, hour, minute)) is allowed
+
+
+def test_refresh_refuses_inside_a_window(monkeypatch):
+    monkeypatch.setattr(preview, "k", lambda *a, **kw: pytest.fail("no cluster call inside a window"))
+    with pytest.raises(preview.PreviewFailure) as error:
+        preview.refresh_golden(ROOT, now=datetime(2026, 11, 22, 2, 15))
+    assert error.value.reason == "GOLDEN_REFRESH_WINDOW"
+
+
+def test_golden_server_manifests_keep_the_pinned_hardening_and_only_their_own_claim():
+    preview_ns = preview.NS
+    try:
+        preview.NS = preview.GOLDEN_NS
+        claim, workload = preview.golden_manifests(template(DB_TEMPLATE, "StatefulSet"), "b", "48Gi")
+    finally:
+        preview.NS = preview_ns
+    assert claim["metadata"] == dict(name="golden-b-data", namespace=preview.GOLDEN_NS,
+                                     labels={preview.GOLDEN_LABEL: "b"})
+    spec = workload["spec"]["template"]["spec"]
+    assert workload["metadata"]["namespace"] == preview.GOLDEN_NS
+    assert spec["containers"][0]["image"] == pinned_image()
+    assert spec["automountServiceAccountToken"] is False and "priorityClassName" not in spec
+    claims = [v["persistentVolumeClaim"]["claimName"] for v in spec["volumes"] if "persistentVolumeClaim" in v]
+    assert claims == ["golden-b-data"] and not any("hostPath" in v for v in spec["volumes"])
+    env = {e["name"]: e["valueFrom"]["secretKeyRef"] for e in spec["containers"][0]["env"] if "valueFrom" in e
+           and "secretKeyRef" in e["valueFrom"]}
+    assert env["POSTGRESQL_PASSWORD"]["name"] == "golden-b"
+    assert env["SOURCE_DB_PASSWORD"] == dict(name=preview.GOLDEN_NS + "-db-source", key="migrate-password",
+                                             optional=True)
+    assert env["GOLDEN_REPL_PASSWORD"] == dict(name="golden-b", key="repl-password")
+    labels = workload["spec"]["template"]["metadata"]["labels"]
+    assert all(labels[key] == value for key, value in workload["spec"]["selector"]["matchLabels"].items())
+    deny, serve = preview.golden_policies()
+    assert deny["spec"] == dict(podSelector={}, policyTypes=["Ingress", "Egress"], ingress=[], egress=[])
+    (rule,) = serve["spec"]["ingress"]
+    assert rule["ports"] == [dict(protocol="TCP", port=5432)] and "egress" not in serve["spec"]
+    (peer,) = rule["from"]
+    assert dict(key=preview.GOLDEN_LABEL, operator="DoesNotExist") in peer["namespaceSelector"]["matchExpressions"]
+    assert peer["podSelector"]["matchLabels"] == {"app.kubernetes.io/component": "database"}
+
+
+class RefreshCluster:
+    """A fake cluster for refresh_golden: records the order of the operations that matter."""
+
+    def __init__(self, active="a", fail=None):
+        self.marker = golden_marker({"1", "2"}, slot=active) if active else None
+        self.events, self.created, self.fail = [], [], fail
+
+    def k(self, ns, *args, **kwargs):
+        text = kwargs.get("input") or ""
+        if ns == "ui2" and args[:3] == ("get", "pod", "ui2-db-0"):
+            return json.dumps(dict(spec=dict(containers=[dict(image=pinned_image())])))
+        if args[:2] == ("get", "namespace"):
+            return json.dumps(dict(metadata=dict(labels={preview.GOLDEN_LABEL: "true", preview.LABEL: "golden"})))
+        if args[:2] == ("get", "configmap"):
+            return json.dumps(dict(data=self.marker)) if self.marker else ""
+        if args[0] == "delete":
+            self.events.append(("delete", ns) + args[1:3])
+            return ""
+        if args[0] == "rollout":
+            self.events.append(("rollout", args[2]))
+            return ""
+        if args[0] == "exec":
+            command = args[-1]
+            if "vacuumdb" in command:
+                self.events.append(("vacuum",))
+                if self.fail == "vacuum":
+                    raise preview.PreviewFailure("TIMEOUT")
+                return ""
+            if "flyway_schema_history" in text:
+                self.events.append(("versions",))
+                return "0\n1\n2\n3\n"
+            if "IDENTIFY_SYSTEM" in command:
+                self.events.append(("probe",))
+                return "synthetic|1|0/0|\n"
+            if "pg_hba.conf" in command:
+                self.events.append(("replication",))
+                return ""
+        raise AssertionError("unexpected kubectl call")
+
+    def create(self, ns, obj):
+        self.created.append((ns, copy.deepcopy(obj)))
+        if obj["kind"] == "ConfigMap" and obj["metadata"]["name"] == preview.GOLDEN_MARKER:
+            self.marker = obj["data"]
+            self.events.append(("promote", obj["data"]["slot"]))
+
+
+@pytest.mark.parametrize("active, fail", [("a", None), ("b", None), (None, None), ("a", "copy"), ("a", "vacuum")])
+def test_refresh_stages_the_idle_slot_and_swaps_with_one_marker_write(monkeypatch, tmp_path, capsys, active, fail):
+    cluster = RefreshCluster(active, fail)
+    monkeypatch.setattr(preview, "k", cluster.k)
+    monkeypatch.setattr(preview, "create", cluster.create)
+    monkeypatch.setattr(preview, "load", local_load)
+    monkeypatch.setattr(preview.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(preview.time, "sleep", lambda s: cluster.events.append(("sleep", s)))
+    copied = []
+    monkeypatch.setattr(preview, "copy_secret", lambda *a: copied.append((preview.NS,) + a))
+
+    def copy_database():
+        assert preview.NS == preview.GOLDEN_NS and preview.target_db_pod() == "golden-" + staging + "-0"
+        cluster.events.append(("copy",))
+        if fail == "copy":
+            raise preview.PreviewFailure("DB_COPY_FAILED_STREAM_BROKEN")
+    monkeypatch.setattr(preview, "copy_database", copy_database)
+    staging = "b" if active == "a" else "a"
+    before = cluster.marker
+    if fail:
+        with pytest.raises(preview.PreviewFailure):
+            preview.refresh_golden(ROOT, now=datetime(2026, 11, 22, 3, 30))
+        # The serving golden is untouched: same marker, its slot never deleted; the staging slot is removed.
+        assert cluster.marker == before
+        assert not any(e[0] == "promote" for e in cluster.events)
+        assert ("delete", preview.GOLDEN_NS, "statefulset", "golden-" + active) not in cluster.events
+        assert cluster.events[-3:] == [("delete", preview.GOLDEN_NS, kind, name) for kind, name in (
+            ("statefulset", "golden-" + staging), ("pvc", "golden-" + staging + "-data"), ("secret", "golden-" + staging))]
+    else:
+        preview.refresh_golden(ROOT, now=datetime(2026, 11, 22, 3, 30))
+        assert cluster.marker["slot"] == staging
+        assert json.loads(cluster.marker["migrations"]) == ["1", "2", "3"]
+        assert cluster.marker["image"] == pinned_image() and cluster.marker["flyway_version"] == "3"
+        order = [e[0] for e in cluster.events if e[0] in ("rollout", "copy", "vacuum", "versions", "replication",
+                                                          "probe", "promote")]
+        assert order == ["rollout", "copy", "vacuum", "versions", "replication", "probe", "promote"]
+        promote = cluster.events.index(("promote", staging))
+        other = "a" if staging == "b" else "b"
+        retire = cluster.events.index(("delete", preview.GOLDEN_NS, "statefulset", "golden-" + other))
+        assert retire > promote
+        if active:
+            assert ("sleep", preview.GOLDEN_RETIRE_GRACE_SECONDS) in cluster.events[promote:retire]
+        assert "PREVIEW GOLDEN: PROMOTED slot=" + staging in capsys.readouterr().out
+    # Source credentials are only copied into the golden namespace and always deleted again.
+    assert copied == [(preview.GOLDEN_NS, "ui2-db", "ui2-db-source", ("migrate-user", "migrate-password"))]
+    assert ("delete", preview.GOLDEN_NS, "secret", preview.GOLDEN_NS + "-db-source") in cluster.events
+    assert ("delete", "ui2", "networkpolicy", "-l") in cluster.events
+    assert preview.NS == "ui2-preview" and preview.DB_POD is None
+    created = [obj for ns, obj in cluster.created]
+    assert all(ns == preview.GOLDEN_NS for ns, _ in cluster.created)
+    assert not any(obj["kind"] in ("Pod", "Deployment") for obj in created)
+
+
+def test_refresh_is_single_flight(monkeypatch, tmp_path):
+    monkeypatch.setattr(preview.Path, "home", lambda: tmp_path)
+    with preview.golden_lock():
+        with pytest.raises(preview.PreviewFailure) as error:
+            with preview.golden_lock():
+                pass
+    assert error.value.reason == "GOLDEN_REFRESH_RUNNING"
+
+
+def test_source_line_crosses_the_wrapper_and_the_orchestrator():
+    wrapper = (ROOT / "tools/e2e/hosta_preview_e2e.sh").read_text()
+    assert "/^PREVIEW DB SOURCE: (golden|live) reason=[A-Z_]+$/" in wrapper
+    source = (ROOT / "tools/delivery/standalone_orchestrate.py").read_text()
+    assert 'r"PREVIEW DB SOURCE: (golden|live) reason=[A-Z_]+"' in source
+    nightly = (ROOT / "tools/e2e/hosta_preview_golden_refresh.sh").read_text()
+    assert "refresh-golden" in nightly and "2>/dev/null" in nightly
+
+
+# Pod hygiene (2026-11-23): per-run ResourceQuota/LimitRange and the lowest neXus priority on preview pods.
+
+_UNITS = {"m": 0.001, "Ki": 2 ** 10, "Mi": 2 ** 20, "Gi": 2 ** 30, "Ti": 2 ** 40}
+
+
+def _quantity(value):
+    text = str(value)
+    for suffix, factor in _UNITS.items():
+        if text.endswith(suffix):
+            return float(text[:-len(suffix)]) * factor
+    return float(text)
+
+
+def _preview_pod_templates():
+    """Every pod the preview creates in its namespace: the database, the service, each worker role, the e2e job."""
+    specs = [preview.database_manifest(template("deploy/ui2/40-database-statefulset.yaml", "StatefulSet"))["spec"],
+             template("deploy/ui2/50-service-deployment.yaml", "Deployment")["spec"]["template"]["spec"],
+             template("deploy/ui2/70-e2e-job.yaml", "Job")["spec"]["template"]["spec"]]
+    for path in sorted((ROOT / "deploy/ui2").glob("*-deployment.yaml")):
+        for doc in yaml.safe_load_all(path.read_text()):
+            if doc and doc["kind"] == "Deployment":
+                pod = doc["spec"]["template"]["spec"]
+                if any(c.get("args", [])[:1] == ["worker"] for c in pod["containers"]):
+                    specs.append(pod)
+    return specs
+
+
+def test_preview_namespace_quota_fits_every_template_it_applies_with_headroom():
+    limit_range, quota = preview.namespace_limits()
+    assert (limit_range["kind"], quota["kind"]) == ("LimitRange", "ResourceQuota")
+    for obj in (limit_range, quota):
+        assert obj["metadata"]["namespace"] == preview.NS and obj["metadata"]["name"].startswith(preview.NS + "-")
+    hard = quota["spec"]["hard"]
+    assert "limits.cpu" not in hard, "module pods carry no CPU limit; a limits.cpu quota would force one"
+    containers = [c for spec in _preview_pod_templates() for c in spec["containers"] + spec.get("initContainers", [])]
+    assert len(_preview_pod_templates()) <= _quantity(hard["pods"]) / 1.5
+    totals = {"requests.cpu": sum(_quantity(c["resources"]["requests"]["cpu"]) for c in containers),
+              "requests.memory": sum(_quantity(c["resources"]["requests"]["memory"]) for c in containers),
+              "limits.memory": sum(_quantity(c["resources"]["limits"]["memory"]) for c in containers)}
+    for key, total in totals.items():
+        assert total * 1.25 <= _quantity(hard[key]), f"{key}: {total} needs headroom under {hard[key]}"
+    rule, = limit_range["spec"]["limits"]
+    assert rule["type"] == "Container"
+    assert max(_quantity(c["resources"]["limits"]["memory"]) for c in containers) <= _quantity(rule["max"]["memory"])
+    assert set(rule) == {"type", "default", "defaultRequest", "max"} and "cpu" not in rule["default"]
+
+
+def test_preview_pods_run_at_the_lowest_nexus_priority_only_when_the_class_exists(monkeypatch):
+    source = template("deploy/ui2/52-worker-deployment.yaml", "Deployment")
+    assert source["spec"]["template"]["spec"]["priorityClassName"] == "ui2-worker"
+    assert "priorityClassName" not in preview.pod_spec(source)
+    monkeypatch.setattr(preview, "PREVIEW_PRIORITY", "ui2-low")
+    assert preview.pod_spec(source)["priorityClassName"] == "ui2-low"
+    db = preview.database_manifest(template("deploy/ui2/40-database-statefulset.yaml", "StatefulSet"))
+    assert db["spec"]["priorityClassName"] == "ui2-low"
+    assert source["spec"]["template"]["spec"]["priorityClassName"] == "ui2-worker", "source template unchanged"
+
+
+@pytest.mark.parametrize("class_exists", [True, False])
+def test_preview_creates_namespace_limits_before_any_pod_and_sets_priority(monkeypatch, class_exists):
+    objects, priorities = [], []
+    monkeypatch.setattr(preview, "load", local_load)
+    monkeypatch.setattr(preview.secrets, "token_hex", lambda n: "synthetic-owner")
+    monkeypatch.setattr(preview, "create", lambda ns, obj: objects.append(obj["kind"]))
+    monkeypatch.setattr(preview, "build_images", lambda *a: [IMAGE, IMAGE])
+    monkeypatch.setattr(preview, "setup_database", lambda *a: priorities.append(preview.PREVIEW_PRIORITY) or "192.0.2.10")
+    monkeypatch.setattr(preview, "setup_worker_services", lambda workers: ENDPOINTS)
+    monkeypatch.setattr(preview, "setup_workload", lambda *a: priorities.append(preview.PREVIEW_PRIORITY))
+    monkeypatch.setattr(preview, "setup_service", lambda *a: "192.0.2.20")
+    monkeypatch.setattr(preview, "assert_module_claims", lambda *a: None)
+    monkeypatch.setattr(preview, "wait_job", lambda *a, **kw: None)
+    monkeypatch.setattr(preview, "cleanup", lambda owner: None)
+
+    def k(ns, *args, **kwargs):
+        if args[:2] == ("get", "priorityclass"):
+            assert ns is None and args[2] == "ui2-low"
+            return "priorityclass.scheduling.k8s.io/ui2-low\n" if class_exists else ""
+        return ""
+    monkeypatch.setattr(preview, "k", k)
+    preview.run(ROOT, COMMIT)
+    assert objects[:3] == ["Namespace", "LimitRange", "ResourceQuota"]
+    assert priorities and set(priorities) == {"ui2-low" if class_exists else None}
+    assert preview.PREVIEW_PRIORITY is None, "restored after the run"

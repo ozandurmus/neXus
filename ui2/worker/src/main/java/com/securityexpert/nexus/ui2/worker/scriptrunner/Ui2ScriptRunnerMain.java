@@ -50,6 +50,14 @@ public final class Ui2ScriptRunnerMain {
 
     public static void main(String[] args) {
         MaskingFormatter.install();
+        com.securityexpert.nexus.ui2.worker.health.WorkerHealth health = com.securityexpert.nexus.ui2.worker.health.WorkerHealth.fromEnvironment(OverwatchEnv::get);
+        com.securityexpert.nexus.ui2.worker.health.WorkerHealthServer.startFromEnvironment(OverwatchEnv::get, health);
+        run(health);
+    }
+
+    /** Ui2WorkerMain's entry ({@code args: [worker, script_runner]}): its probe server is already running on {@code health}. */
+    public static void run(com.securityexpert.nexus.ui2.worker.health.WorkerHealth health) {
+        MaskingFormatter.install();
         Map<String, String> env = System.getenv();
         String role = ScriptExecutionJob.MODULE;
         String dbUrl = requiredEnv(env, "UI2_DB_URL");
@@ -68,7 +76,7 @@ public final class Ui2ScriptRunnerMain {
         TransactionBoundary boundary = TransactionBoundaryFactory.fromDataSource(dataSource);
         ModuleRuntimeRepository runtime = new ModuleRuntimeRepository(boundary);
         String workerId = role + "-" + UUID.randomUUID();
-        awaitOwnership(role, () -> runtime.heartbeat(role, workerId));
+        awaitOwnership(role, () -> health.observeHeartbeat(() -> runtime.heartbeat(role, workerId)));
 
         // script_run executes whenever scheduled or manually triggered (all 360 minutes of every 6-hour slot).
         JobWindowPolicy allDayWindow = new JobWindowPolicy(Clock.systemUTC(), 360);
@@ -96,7 +104,8 @@ public final class Ui2ScriptRunnerMain {
                 DEFAULT_LEASE_DURATION,
                 DEFAULT_LEASE_DURATION.dividedBy(3),
                 DEFAULT_IDLE_POLL,
-                () -> draining[0]);
+                () -> draining[0])
+                .withLiveness(health.register(role));
 
         var claims = Executors.newSingleThreadExecutor();
         claims.submit(loop::runLoop);
@@ -104,7 +113,8 @@ public final class Ui2ScriptRunnerMain {
         var scheduled = Executors.newSingleThreadScheduledExecutor();
         scheduled.scheduleWithFixedDelay(() -> {
             try {
-                if (!runtime.heartbeat(role, workerId)) {
+                if (!health.observeHeartbeat(() -> runtime.heartbeat(role, workerId))) {
+                    health.markDraining();
                     draining[0] = true;
                     loop.requestStop();
                     claims.shutdown();
@@ -113,9 +123,11 @@ public final class Ui2ScriptRunnerMain {
                 LOG.warning("MODULE_HEARTBEAT_UNAVAILABLE");
             }
         }, 10, 10, TimeUnit.SECONDS);
+        health.markStarted();
 
         long drainSeconds = Long.parseLong(OverwatchEnv.getOrDefault(env::get, "UI2_WORKER_DRAIN_SECONDS", "840"));
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            health.markDraining();
             draining[0] = true;
             loop.requestStop();
             claims.shutdown();

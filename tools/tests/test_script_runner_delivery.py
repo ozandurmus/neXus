@@ -40,7 +40,7 @@ def test_render_sets_the_service_image_on_the_broker_and_the_exec_image_in_its_e
     assert _exec_env(broker) == EXEC
     others = deploy.render_script_runner(SERVICE, EXEC, deployment=False)
     kinds = sorted(d["kind"] for d in _docs(others))
-    assert kinds == ["NetworkPolicy", "NetworkPolicy", "Role", "RoleBinding", "ServiceAccount", "ServiceAccount"]
+    assert kinds == ["NetworkPolicy", "NetworkPolicy", "PriorityClass", "Role", "RoleBinding", "ServiceAccount", "ServiceAccount"]
 
 
 def test_exec_image_comes_from_the_flag_else_the_live_broker_never_the_service_image(monkeypatch):
@@ -74,7 +74,7 @@ def test_every_release_reapplies_the_role_and_policies_but_not_the_deployment_be
     assert old == live["spec"]["template"]["spec"]["containers"][0]["image"]
     applied = [inp for args, inp in calls if args[-3:] == ("apply", "-f", "-")]
     assert len(applied) == 1
-    assert {d["kind"] for d in _docs(applied[0])} == {"ServiceAccount", "Role", "RoleBinding", "NetworkPolicy"}
+    assert {d["kind"] for d in _docs(applied[0])} == {"PriorityClass", "ServiceAccount", "Role", "RoleBinding", "NetworkPolicy"}
 
     calls.clear()
     deploy.replace_image("script-runner", SERVICE, sync_manifest=True)
@@ -159,7 +159,7 @@ def test_first_ship_defers_broker_deployment_until_broker_secrets_exist(monkeypa
     assert out["ready"] is False
     applied = [inp for args, inp in calls if args[-3:] == ("apply", "-f", "-")]
     assert len(applied) == 1
-    assert {d["kind"] for d in _docs(applied[0])} == {"ServiceAccount", "Role", "RoleBinding", "NetworkPolicy"}
+    assert {d["kind"] for d in _docs(applied[0])} == {"PriorityClass", "ServiceAccount", "Role", "RoleBinding", "NetworkPolicy"}
 
     # 2. Once both Secrets exist, ensure_script_runner applies the full manifest including the Deployment.
     calls.clear()

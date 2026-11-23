@@ -788,6 +788,48 @@ def test_the_containerfile_is_two_stages_pinned_by_digest():
         assert "@sha256:" in line, f"§3.1: base image is not pinned by digest: {line}"
 
 
+def test_the_build_stage_resolves_dependencies_from_the_build_definition_before_the_sources():
+    """Preview build speed (2026-11-22): Gradle dependencies resolve in a layer that depends only on the build
+    definition, so a source-only change reuses it from the kaniko layer cache. Every included module's build script
+    and lockfile, the wrapper, the version catalog and the verification metadata must be in that layer, and nothing
+    on the resolve or bootJar line may relax locking or verification."""
+    text = CONTAINERFILE.read_text(encoding="utf-8")
+    build = text.split(" AS build\n", 1)[1].split("\nFROM ", 1)[0]
+    resolve = "RUN ./gradlew --no-daemon --console=plain -PfrontendPrebuilt=true resolveBuildDependencies\n"
+    assert build.count(resolve) == 1
+    before, after = build.split(resolve, 1)
+    assert "COPY ui2/ /build\n" in after and "COPY ui2/ /build" not in before
+    # The corporate CA anchors are installed before the first download.
+    assert "update-ca-trust" in before
+    # The Gradle distribution is a host-supplied context input the wrapper cannot download: it must be copied into
+    # GRADLE_USER_HOME before the first ./gradlew (preview image build failed 2026-11-23 without it).
+    assert "COPY ui2/.gradle-home/wrapper/ /build/.gradle-home/wrapper/\n" in before
+    assert "ENV GRADLE_USER_HOME=/build/.gradle-home" in build
+    copies = [line.split()[1:] for line in before.splitlines() if line.startswith("COPY ui2/")]
+    copied = {source for line in copies for source in line[:-1]}
+    settings = (REPO_ROOT / "ui2/settings.gradle.kts").read_text(encoding="utf-8")
+    modules = re.findall(r'^\s*"([a-z0-9-]+)",', settings.split("include(", 1)[1].split("\n)", 1)[0], re.M)
+    assert len(modules) >= 13
+    for module in modules:
+        for name in ("build.gradle.kts", "gradle.lockfile"):
+            assert f"ui2/{module}/{name}" in copied, f"{module}/{name} missing from the dependency layer"
+        assert [f"ui2/{module}/build.gradle.kts", f"ui2/{module}/gradle.lockfile", f"/build/{module}/"] in copies
+    for path in ("ui2/gradlew", "ui2/settings.gradle.kts", "ui2/settings-gradle.lockfile", "ui2/build.gradle.kts",
+                 "ui2/gradle.properties", "ui2/gradle/"):
+        assert path in copied, path
+    gradle_dir = REPO_ROOT / "ui2/gradle"
+    for path in ("verification-metadata.xml", "libs.versions.toml", "wrapper/gradle-wrapper.properties",
+                 "wrapper/gradle-wrapper.jar"):
+        assert (gradle_dir / path).is_file(), path
+    for line in (resolve, build[build.index("RUN ./gradlew", build.index(resolve) + 1):]):
+        for relaxed in ("--write-verification-metadata", "--dependency-verification", "--write-locks",
+                        "--update-locks", "--refresh-dependencies", "lenient", "--offline"):
+            assert relaxed not in line.split("\n &&", 1)[0], relaxed
+    gradle = (REPO_ROOT / "ui2/build.gradle.kts").read_text(encoding="utf-8")
+    assert 'tasks.register("resolveBuildDependencies")' in gradle
+    assert "ModuleComponentIdentifier" in gradle
+
+
 RUNTIME_PACKAGE_UPDATE = (
     "RUN rpm -qa --qf '%{NEVRA}\\n' | sort > /tmp/rpm-before.txt \\\n"
     " && ok=0 rc=0 \\\n"
@@ -1476,7 +1518,7 @@ def test_script_runner_broker_manifest():
     assert set(docs) == {("ServiceAccount", "ui2-script-runner"), ("ServiceAccount", "ui2-script-run"),
                          ("Role", "ui2-script-runner"), ("RoleBinding", "ui2-script-runner"),
                          ("NetworkPolicy", "ui2-script-run-default-deny"), ("NetworkPolicy", "ui2-script-runner"),
-                         ("Deployment", "ui2-script-runner")}
+                         ("Deployment", "ui2-script-runner"), ("PriorityClass", "ui2-worker")}
     assert docs[("ServiceAccount", "ui2-script-run")]["automountServiceAccountToken"] is False
     deployment = docs[("Deployment", "ui2-script-runner")]
     assert deployment["spec"]["replicas"] == 1 and deployment["spec"]["strategy"] == {"type": "Recreate"}
@@ -1663,3 +1705,98 @@ def test_containerfile_ships_overwatch_cli_with_a_working_nexus_cli_alias():
     assert "chmod 0755 /app/overwatch-cli /app/nexus-cli" in text
     script_exec = (REPO_ROOT / "ui2" / "Containerfile.script-exec").read_text(encoding="utf-8")
     assert "chmod 0755 /app/overwatch-cli /app/nexus-cli" in script_exec
+
+
+# ---------------------------------------------------------------------------
+# Pod hygiene (2026-11-23): neXus PriorityClasses and worker probes
+# ---------------------------------------------------------------------------
+
+PRIORITY_FILE = MANIFEST_DIR / "01-priority-classes.yaml"
+EXPECTED_PRIORITY = {
+    "40-database-statefulset.yaml": "ui2-db",
+    "50-service-deployment.yaml": "ui2-core",
+    "54-configuration-deployment.yaml": "ui2-core",
+    "55-compliance-deployment.yaml": "ui2-core",
+    "52-worker-deployment.yaml": "ui2-worker",
+    "53-backup-deployment.yaml": "ui2-worker",
+    "57-policy-deployment.yaml": "ui2-worker",
+    "61-script-runner-deployment.yaml": "ui2-worker",
+    "58-packet-analysis-deployment.yaml": "ui2-low",
+}
+PROBED_WORKERS = ("52-worker-deployment.yaml", "53-backup-deployment.yaml", "57-policy-deployment.yaml",
+                  "58-packet-analysis-deployment.yaml", "61-script-runner-deployment.yaml")
+
+
+def _priority_classes() -> dict[str, dict]:
+    docs = load_documents(PRIORITY_FILE.read_text(encoding="utf-8"))
+    assert all(d["kind"] == "PriorityClass" for d in docs)
+    return {d["metadata"]["name"]: d for d in docs}
+
+
+def _workload_pod(docs: list[dict]) -> dict:
+    workload, = [d for d in docs if d["kind"] in ("Deployment", "StatefulSet")]
+    return workload["spec"]["template"]["spec"]
+
+
+def test_nexus_priority_classes_are_ordered_and_below_every_system_class():
+    classes = _priority_classes()
+    assert list(classes) == ["ui2-db", "ui2-core", "ui2-worker", "ui2-low"]
+    values = [c["value"] for c in classes.values()]
+    assert values == sorted(values, reverse=True) and len(set(values)) == 4
+    assert all(v <= 1_000_000_000 for v in values), "user classes stay below system-cluster-critical (2000000000)"
+    assert classes["ui2-low"]["value"] < 0 < classes["ui2-worker"]["value"]
+    assert all(c["globalDefault"] is False for c in classes.values())
+    assert classes["ui2-low"]["preemptionPolicy"] == "Never"
+
+
+@pytest.mark.parametrize("name,expected", sorted(EXPECTED_PRIORITY.items()))
+def test_app_pods_use_their_nexus_class_and_carry_an_identical_copy_of_it(name, expected):
+    docs = load_documents((MANIFEST_DIR / name).read_text(encoding="utf-8"))
+    assert _workload_pod(docs)["priorityClassName"] == expected
+    copies = [d for d in docs if d["kind"] == "PriorityClass"]
+    assert copies == [_priority_classes()[expected]], f"{name}: one copy, identical to 01-priority-classes.yaml"
+    assert docs[0]["kind"] == "PriorityClass", f"{name}: the class is applied before the pod template naming it"
+
+
+def test_no_nexus_manifest_uses_a_system_priority_class():
+    for path in _manifest_files(include_openshift=False):
+        for doc in load_documents(path.read_text(encoding="utf-8")):
+            text = json.dumps(doc)
+            assert "system-cluster-critical" not in text and "system-node-critical" not in text, path.name
+            if doc.get("kind") == "PriorityClass":
+                assert doc == _priority_classes()[doc["metadata"]["name"]], path.name
+
+
+@pytest.mark.parametrize("name", PROBED_WORKERS)
+def test_worker_pods_have_kubelet_probes_on_their_own_health_port(name):
+    container = _workload_pod(load_documents((MANIFEST_DIR / name).read_text(encoding="utf-8")))["containers"][0]
+    ports = {p["name"]: p["containerPort"] for p in container.get("ports", [])}
+    assert ports["health"] == 9405 and ports.get("metrics", 9404) != 9405
+    env = {e["name"]: e.get("value") for e in container["env"]}
+    assert env["UI2_HEALTH_PORT"] == "9405"
+    for probe, path in (("startupProbe", "/livez"), ("livenessProbe", "/livez"), ("readinessProbe", "/readyz")):
+        assert container[probe]["httpGet"] == {"path": path, "port": "health"}, (name, probe)
+    startup, liveness = container["startupProbe"], container["livenessProbe"]
+    # A slow JVM start is never killed (5 minutes), and a stall restarts within 2-3 minutes after the in-process
+    # 120-second stall window: the probe window itself is 60 s.
+    assert startup["periodSeconds"] * startup["failureThreshold"] >= 300
+    assert 40 <= liveness["periodSeconds"] * liveness["failureThreshold"] <= 90
+    assert liveness["timeoutSeconds"] >= 3
+
+
+def test_the_service_splits_liveness_from_database_readiness():
+    container = _workload_pod(load_documents(
+        (MANIFEST_DIR / "50-service-deployment.yaml").read_text(encoding="utf-8")))["containers"][0]
+    assert container["startupProbe"]["httpGet"]["path"] == "/livez"
+    assert container["livenessProbe"]["httpGet"]["path"] == "/livez"
+    assert container["readinessProbe"]["httpGet"]["path"] == "/readyz"
+    assert container["readinessProbe"]["timeoutSeconds"] >= 3, "above the 2-second database check bound"
+
+
+def test_no_network_policy_opens_the_worker_probe_port():
+    """The probe port is for the kubelet on the pod's own node only; no NetworkPolicy, Service or Ingress names it."""
+    for path in _manifest_files():
+        for doc in load_documents(path.read_text(encoding="utf-8")):
+            if doc.get("kind") in ("NetworkPolicy", "Service", "Ingress", "Route"):
+                text = json.dumps(doc)
+                assert "9405" not in text and '"health"' not in text, (path.name, doc["metadata"]["name"])
