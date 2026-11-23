@@ -185,4 +185,31 @@ describe("EstateDiagnosticRuns", () => {
     expect(model.status === "ok" && model.countLine).toBe("1 diagnostic run listed");
     vi.unstubAllGlobals();
   });
+
+  it("stamps the evidence with the history read time, not the age of the newest run", () => {
+    const readAt = new Date().toISOString();
+    const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    const model = buildDiagnosticRunsModel({
+      status: "ok",
+      runs: [makeRun(1, { submittedAt: twoDaysAgo })],
+      readAt,
+    });
+    expect(model.status === "ok" && model.evidenceAt).toBe(readAt);
+    expect(model.status === "ok" && model.evidenceAt).not.toBe(twoDaysAgo);
+  });
+
+  it("renders the EvidenceStamp from the read time when the newest run was submitted two days earlier", async () => {
+    const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    historyMock.mockResolvedValue({ runs: [makeRun(1, { jobId: "job-old-run", submittedAt: twoDaysAgo })] });
+
+    render(<EstateDiagnosticRuns />);
+
+    const counts = await screen.findByTestId("diagnostic-runs-counts");
+    const stamp = counts.querySelector("[data-evidence-stamp]");
+    expect(stamp).not.toBeNull();
+    // Fresh read: the stamp is the fresh bucket (a1), not the two-day-old submit time (a2/a3/a4).
+    expect(stamp).toHaveAttribute("data-evidence-stamp", "a1");
+    const row = screen.getByTestId("diagnostic-run-row");
+    expect(row.querySelector("[data-evidence-stamp]")).not.toBeNull();
+  });
 });

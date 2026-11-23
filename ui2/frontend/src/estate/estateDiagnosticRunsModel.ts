@@ -137,15 +137,12 @@ export function buildDiagnosticRunsModel(read: DiagnosticRunsRead): DiagnosticRu
 
   const total = sorted.length;
   const countLine = total === 1 ? "1 diagnostic run listed" : `${total} diagnostic runs listed`;
-  const newestSubmittedAt =
-    sorted.find(({ row }) => parseTimeMs(row.submittedAt) !== null)?.row.submittedAt?.trim() ?? null;
-  const evidenceAt = total > 0 && newestSubmittedAt ? newestSubmittedAt : read.readAt;
-
+  // The evidence is the history read, not the age of the newest run: each row keeps its own submittedAt.
   return {
     status: "ok",
     total,
     countLine,
-    evidenceAt,
+    evidenceAt: read.readAt,
     shown,
   };
 }
