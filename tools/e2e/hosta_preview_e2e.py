@@ -31,6 +31,8 @@ import threading
 import time
 from zoneinfo import ZoneInfo
 
+import e2e_failure_titles
+
 # The host deploy tree, owned by the service account `nexus` (docs/operations/HOST_A_RUNBOOK.md §2).
 HOST_TREE = Path("/opt/nexus")
 
@@ -565,6 +567,24 @@ def e2e_manifest(template, image, service_ip):
     result["spec"]["template"]["spec"] = spec
     result["spec"]["template"]["metadata"]["labels"][LABEL] = NS
     return result
+
+
+def report_failed_tests(repo, namespace, job):
+    """Print the failed e2e tests of a Job, by title only, before the FAIL line.
+
+    The log is read in memory and never printed or kept: only list-reporter failure headers whose spec path, line
+    and title match the spec sources of the shipped tree, and the summary counts, survive (e2e_failure_titles).
+    A log that cannot be read adds nothing; the FAIL line is the verdict either way."""
+    try:
+        log = k(namespace, "logs", "-l", "job-name=" + job, "--tail=5000", timeout=60)
+        lines = e2e_failure_titles.report_lines(log, repo)
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError):
+        return
+    for line in lines:
+        print(line, flush=True)
+        if LOG is not None:
+            LOG.write(line + "\n")
+            LOG.flush()
 
 
 def wait_job(namespace, name, timeout=1800):
@@ -1753,7 +1773,12 @@ def run(repo, commit, tree=None):
                 STEP = "create e2e job"
                 create(NS, e2e_manifest(job, images[1], service_ip))
                 STEP = "wait e2e job"
-                wait_job(NS, preview_name("ui2-preview-e2e"), timeout=930)
+                try:
+                    wait_job(NS, preview_name("ui2-preview-e2e"), timeout=930)
+                except RuntimeError:
+                    # Before cleanup removes the namespace: name the failing tests (titles only).
+                    report_failed_tests(repo, NS, preview_name("ui2-preview-e2e"))
+                    raise
         finally:
             cleanup(owner)
     finally:
