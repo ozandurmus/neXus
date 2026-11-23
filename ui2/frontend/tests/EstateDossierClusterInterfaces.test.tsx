@@ -96,4 +96,23 @@ describe("EstateDossierClusterInterfacesBlock", () => {
     expect(text).not.toContain(CLUSTER);
     expect(text).not.toContain(DEVICE);
   });
+
+  it("keeps an evidence stamp on the empty-contexts branch with a collection time", async () => {
+    mockedInventory.mockResolvedValue({ ...PAYLOAD, contexts: [], collected_at: "2026-11-23T11:00:00Z" } as never);
+    render(<EstateDossierClusterInterfacesBlock deviceId={DEVICE} clusterRef={CLUSTER} now={NOW} />);
+    const empty = await screen.findByTestId("dossier-cluster-empty");
+    expect(empty.textContent).toContain("The cluster read lists no contexts.");
+    const stamp = empty.querySelector("[data-evidence-stamp]");
+    expect(stamp).not.toBeNull();
+    expect(stamp?.textContent).not.toContain("UNKNOWN");
+  });
+
+  it("keeps an evidence stamp on the empty-contexts branch without a collection time (UNKNOWN)", async () => {
+    mockedInventory.mockResolvedValue({ ...PAYLOAD, contexts: [] } as never);
+    render(<EstateDossierClusterInterfacesBlock deviceId={DEVICE} clusterRef={CLUSTER} now={NOW} />);
+    const empty = await screen.findByTestId("dossier-cluster-empty");
+    const stamp = empty.querySelector("[data-evidence-stamp]");
+    expect(stamp).not.toBeNull();
+    expect(stamp?.textContent).toContain("evidence time UNKNOWN");
+  });
 });
