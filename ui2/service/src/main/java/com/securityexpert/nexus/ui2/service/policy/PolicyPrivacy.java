@@ -7,7 +7,7 @@ import com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker;
 /** Fail-closed policy projection: unfamiliar fields and free-form extensions never pass through AIView. */
 public final class PolicyPrivacy {
     private PolicyPrivacy() {}
-    private static final Set<String> OPAQUE = Set.of("id", "sourceId", "containerId", "deviceId", "artefactRef", "parentRuleId", "layerRef", "jobId", "ruleId", "policyId", "uid", "duplicateId", "sectionId", "coveringRuleId", "blockingRuleId");
+    private static final Set<String> OPAQUE = Set.of("id", "sourceId", "containerId", "deviceId", "artefactRef", "parentRuleId", "layerRef", "jobId", "ruleId", "policyId", "uid", "duplicateId", "sectionId", "coveringRuleId", "blockingRuleId", "pairRef");
     private static final Set<String> ENUMS = Set.of("CP", "PAN", "ASA", "FGT", "permit", "accept", "log", "asa-interfaces", "fgt-interfaces", "zone", "sdwan-zone", "static", "hide", "any", "address", "group", "service", "service-group", "address-group",
             "simple-gateway", "simple-cluster", "cluster", "gateway", "checkpoint-host", "vsx-cluster", "vsx-gateway", "vsx-cluster-member", "CpmiGatewayCluster", "CpmiVsClusterNetobj", "CpmiVsxClusterNetobj", "CpmiVsxNetobj", "CpmiVsxClusterMember",
             "COLLECTION_FAILED", "host", "network", "address-range", "group-with-exclusion", "service-tcp", "service-udp", "service-icmp", "service-icmp6", "service-other", "service-sctp", "service-dce-rpc", "service-rpc", "access-role", "dynamic-object", "dns-domain", "security-zone",
@@ -141,6 +141,10 @@ public final class PolicyPrivacy {
         if (key.equals("state") && Set.of("USED", "NOT_SEEN", "NOT_AUDITABLE").contains(text)) return text;
         if (key.equals("state")) return Set.of("REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING", "COMPLETED", "FAILED", "REJECTED", "CANCELLED", "OUTCOME_UNKNOWN", "RECONCILED").contains(text) ? text : "UNKNOWN";
         if (key.equals("outcome")) return Set.of("COMPLETED", "PARTIAL", "FAILED", "UNKNOWN").contains(text) ? text : "UNKNOWN";
+        // HA pair policy comparison (HaPolicyPairService): closed outcome and reason sets; a VDOM name is configuration text.
+        if (key.equals("haOutcome")) return java.util.Arrays.stream(HaPolicyPairing.Outcome.values()).anyMatch(o -> o.name().equals(text)) ? text : "UNKNOWN";
+        if (key.equals("haReason")) return java.util.Arrays.stream(HaPolicyPairing.Reason.values()).anyMatch(r -> r.name().equals(text)) ? text : "UNKNOWN";
+        if (key.equals("haContext")) return "single".equals(text) ? text : names.maskPolicyName("context", text);
         if (key.equals("unitFailureCodes")) return failureCode(text);
         if (key.equals("part")) return text.equals("NAT") ? text : "UNKNOWN";
         if (key.equals("reasonCode")) return com.securityexpert.nexus.ui2.policy.PolicySnapshot.UNKNOWN_PART_REASONS.contains(text) ? text : "UNKNOWN";

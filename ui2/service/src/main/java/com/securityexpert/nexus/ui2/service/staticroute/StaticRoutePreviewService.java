@@ -723,7 +723,7 @@ public final class StaticRoutePreviewService {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("unit_id", s.deviceId());
             item.put("device_id", s.deviceId());
-            item.put("cluster_id", s.clusterMemberRef().orElse(null));
+            item.put("cluster_id", masked ? s.clusterMemberRef().map(pseudonymizer::maskClusterName).orElse(null) : s.clusterMemberRef().orElse(null));
             item.put("target_label", displayLabel);
             item.put("vendor", s.vendorHint());
             item.put("ha_role", s.observedHaRole().orElse("STANDALONE"));
@@ -766,7 +766,7 @@ public final class StaticRoutePreviewService {
         out.put("requested_at", row.requestedAt().toString());
         out.put("completed_at", row.completedAt().map(Object::toString).orElse(null));
         out.put("requested_by", masked ? null : row.requestedBy());
-        out.put("unit_id", row.unitId());
+        out.put("unit_id", masked && devices.find(row.unitId()).isEmpty() ? pseudonymizer.maskClusterName(row.unitId()) : row.unitId());
         out.put("target_device_id", row.targetDeviceId());
         out.put("target_label", targetLabel);
         out.put("vendor", row.vendor());

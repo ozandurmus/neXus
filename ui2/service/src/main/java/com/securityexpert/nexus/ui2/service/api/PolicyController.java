@@ -13,11 +13,34 @@ public final class PolicyController {
     private final PolicyQueryService policies;
     private final PolicyBulkhead heavy;
     private final PolicyHygieneFleetSummary fleetSummary;
+    private final HaPolicyPairService haPairs;
     public PolicyController(PolicyQueryService policies) { this(policies, new PolicyBulkhead()); }
     public PolicyController(PolicyQueryService policies, PolicyBulkhead heavy) { this(policies, heavy, new PolicyHygieneFleetSummary(policies)); }
-    @org.springframework.beans.factory.annotation.Autowired
     public PolicyController(PolicyQueryService policies, PolicyBulkhead heavy, PolicyHygieneFleetSummary fleetSummary) {
-        this.policies = policies; this.heavy = heavy; this.fleetSummary = fleetSummary;
+        this(policies, heavy, fleetSummary, null);
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public PolicyController(PolicyQueryService policies, PolicyBulkhead heavy, PolicyHygieneFleetSummary fleetSummary,
+            HaPolicyPairService haPairs) {
+        this.policies = policies; this.heavy = heavy; this.fleetSummary = fleetSummary; this.haPairs = haPairs;
+    }
+
+    /**
+     * HA pair policy comparison (record 2026-11-14 decision 6): per Cisco ASA / FortiGate pair and context SAME,
+     * HA_POLICY_DIVERGENT or UNKNOWN with a reason, from stored snapshots. Read-only; the hash and the rule content are
+     * never returned, and nothing is merged or counted once here.
+     */
+    @GetMapping("/api/v2/policy/ha-pairs")
+    public ResponseEntity<?> haPairs() {
+        if (haPairs == null) return error(HttpStatus.SERVICE_UNAVAILABLE);
+        return heavy.run(() -> {
+            try {
+                return ok(haPairs.view());
+            } catch (IllegalStateException unavailable) {
+                // The stored configuration cannot be read (no artefact store): UNKNOWN for all, never an empty "no pairs".
+                return error(HttpStatus.SERVICE_UNAVAILABLE);
+            }
+        });
     }
 
     /** The cached fleet summary; never computes on the request path (the background pass fills it). */

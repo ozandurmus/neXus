@@ -142,6 +142,8 @@ const WORDS: Readonly<Record<string, string>> = {
   RETURN_PATH_UNPROVEN: "The return walk ended before the source side without showing asymmetry: symmetry is unproven.",
   OUT_OF_STATE_DROP_LIKELY: "A stateful unit sees only one direction of the flow: an out-of-state drop is likely.",
   RETURN_NOT_COMPUTED_AT_EDGE: "The return path is not computed for a path that leaves the known topology.",
+  FABRIC_REDIRECT_NOT_MODELLED: "An address of this query lies in an ACI cutover segment; the fabric redirect is not modelled, so this is the routed path before the redirect.",
+  CUTOVER_SEGMENTS_UNREADABLE: "The stored ACI cutover segments could not be read, so it is not known whether an address of this query lies in one.",
   // ---- return statuses
   SYMMETRIC: "Return traffic crosses the same stateful units.",
   ASYMMETRIC: "Return traffic crosses different stateful units.",

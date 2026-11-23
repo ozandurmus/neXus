@@ -351,6 +351,19 @@ describe("the verdict and the hops (fixture shaped like api-chain.golden.txt)", 
     expect(ruleLabel({ rule_id: "x", rule_number: null, rule_name: null, section_id: null, section_name: "S", action: "drop" })).toBe("Unnamed rule · S · drop");
   });
 
+  it("the cutover caveat and its unreadable warning render their own sentence and mark the result as caveated", () => {
+    expect(explain("FABRIC_REDIRECT_NOT_MODELLED")).toMatch(/ACI cutover segment; the fabric redirect is not modelled/);
+    expect(explain("CUTOVER_SEGMENTS_UNREADABLE")).toMatch(/could not be read/);
+    const caveated: PathResult = { ...PATH_ALLOWED, plain: false, caveats: [...PATH_ALLOWED.caveats, "FABRIC_REDIRECT_NOT_MODELLED"], warnings: [...PATH_ALLOWED.warnings, "CUTOVER_SEGMENTS_UNREADABLE"] };
+    renderResult(caveated);
+    expect(screen.getByTestId("path-verdict")).toHaveTextContent("With caveats");
+    const notices = screen.getByTestId("path-notices");
+    expect(notices).toHaveTextContent("FABRIC_REDIRECT_NOT_MODELLED");
+    expect(notices).toHaveTextContent("the fabric redirect is not modelled, so this is the routed path before the redirect");
+    expect(notices).toHaveTextContent("could not be read, so it is not known");
+    expect(notices).not.toHaveTextContent("No explanation recorded for this code.");
+  });
+
   it("an undecidable rule on a hop is written as a possible match, never as the verdict", () => {
     const undecidable: PathResult = { ...PATH_ALLOWED, verdict: "UNKNOWN", verdict_reason: "UNKNOWN_HOP", plain: false,
       executive_summary: { ...PATH_ALLOWED.executive_summary, headline: "Traffic is UNKNOWN at hop 2", unknown_hops: [{ branch_id: "b1", hop_index: 2 }] },

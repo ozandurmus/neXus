@@ -26,6 +26,8 @@ dependencies {
     // Testcontainers/container-runtime carrier.
     testImplementation(project(":ldap-adapter"))
     testImplementation(project(":service"))
+    // AiviewReachableRoutes: the aiview route enumeration shared with the service's static masking audit.
+    testImplementation(testFixtures(project(":service")))
     testImplementation(project(":sanitizer"))
 
     testImplementation(libs.junit.jupiter)

@@ -139,6 +139,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/cutover/assessments/*/flows", ActionRegistry.CUTOVER_ASSESSMENT_READ),
             Map.entry("DELETE /api/v2/cutover/assessments/*", ActionRegistry.CUTOVER_ASSESSMENT_WRITE),
             Map.entry("GET /api/v2/policy/hygiene-summary", ActionRegistry.POLICY_READ),
+            Map.entry("GET /api/v2/policy/ha-pairs", ActionRegistry.POLICY_READ),
             Map.entry("GET /api/v2/policy/policies/*/hygiene", ActionRegistry.POLICY_READ),
             Map.entry("GET /api/v2/policy/policies/*/hygiene.csv", ActionRegistry.POLICY_READ),
             Map.entry("GET /api/v2/policy/policies/*/rules", ActionRegistry.POLICY_READ),

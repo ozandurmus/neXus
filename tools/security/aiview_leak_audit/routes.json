@@ -99,6 +99,7 @@
   "/api/v2/policy/domains/synthetic-ref/objects",
   "/api/v2/policy/domains/synthetic-ref/objects/duplicates",
   "/api/v2/policy/domains/synthetic-ref/unused",
+  "/api/v2/policy/ha-pairs",
   "/api/v2/policy/hygiene-summary",
   "/api/v2/policy/objects/synthetic-ref",
   "/api/v2/policy/offline-analyses/synthetic-ref",

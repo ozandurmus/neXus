@@ -54,11 +54,13 @@ class StaticRoutePreviewServiceTest {
         when(devices.find(CP_DEVICE_ID)).thenReturn(Optional.of(new DeviceRecord(
                 CP_DEVICE_ID, "gateway", "check_point", "manual", Instant.now(), false,
                 DeviceEnrollmentState.ENROLLED, false, "cred-cp")));
-        when(devices.findSummary(CP_DEVICE_ID)).thenReturn(Optional.of(new DeviceSummaryRecord(
+        DeviceSummaryRecord cpSummary = new DeviceSummaryRecord(
                 CP_DEVICE_ID, "gateway", "check_point", DeviceEnrollmentState.ENROLLED, Optional.of("FW-TANGO-04"),
                 Optional.empty(), Optional.empty(), Optional.of("ACTIVE"), Optional.of("CLS-ROMEO-01"),
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-                Optional.of("192.0.2.2"), Optional.empty(), false)));
+                Optional.of("192.0.2.2"), Optional.empty(), false);
+        when(devices.findSummary(CP_DEVICE_ID)).thenReturn(Optional.of(cpSummary));
+        when(devices.listAll()).thenReturn(List.of(cpSummary));
         when(devices.findEndpointByDeviceId(CP_DEVICE_ID)).thenReturn(Optional.of(new EndpointRecord(
                 "ep-cp", CP_DEVICE_ID, "ssh_exec", "192.0.2.2", Instant.now())));
         when(devices.findMembersByClusterRef("CLS-ROMEO-01")).thenReturn(List.of());
@@ -155,6 +157,21 @@ class StaticRoutePreviewServiceTest {
         ConflictException conflict = assertThrows(ConflictException.class,
                 () -> service.submitPreview(differentPayload, "actor-op-admin", false));
         assertEquals("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH", conflict.code());
+    }
+
+    /** Raw-versus-masked sweep 2026-11-23: the target list returned the raw cluster name as cluster_id to aiview. */
+    @Test
+    void maskedTargetListCarriesNoRawClusterName() {
+        StaticRoutePreviewService service = createService();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> plain = ((List<Map<String, Object>>) service.listPreviewsAndTargets(false).get("targets")).get(0);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> masked = ((List<Map<String, Object>>) service.listPreviewsAndTargets(true).get("targets")).get(0);
+        assertEquals("CLS-ROMEO-01", plain.get("cluster_id"));
+        assertNotNull(masked.get("cluster_id"));
+        assertFalse(masked.get("cluster_id").toString().contains("CLS-ROMEO-01"));
+        // the unit a preview is submitted for stays the opaque device id
+        assertEquals(CP_DEVICE_ID, masked.get("unit_id"));
     }
 
     @Test
