@@ -3,6 +3,17 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0401",
+      "status": "automated_validated",
+      "title": "VSX VS0 independent failover unit (V265), PAN idle-pair session sync warning and Overview section hardening",
+      "summary": "On a VSX chassis VS0 fails over as its own unit in HA and VSLS mode, independent of every VS (PO 2026-11-23, V265 widens only max_frequency of the existing VS0 gate rows, b0848e12), and an idle PAN pair's zero session sync counters are a warning instead of a failure (b0848e12). An overview section that is null or failed reads UNKNOWN and one failing attention rule no longer crashes the list (46050da0).",
+      "started": "2026-11-23",
+      "completed": "2026-11-23",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0401.md"
+    },
+    {
       "build": "NXS-LOCAL-0400",
       "status": "automated_validated",
       "title": "Overview null-device fix, Estate UNKNOWN count fixes and golden refresh vacuum step",
