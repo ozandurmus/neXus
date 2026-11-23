@@ -288,6 +288,11 @@ export function standardPolicyHref(deviceId: string): string {
   return `?screen=policy&device_id=${encodeURIComponent(deviceId)}&standard=1`;
 }
 
+/** The standard Inventory view for one management server, where its management tree is shown (standard view only). */
+export function standardManagementTreeHref(deviceId: string): string {
+  return `?screen=inventory&device_id=${encodeURIComponent(deviceId)}&standard=1`;
+}
+
 /** The Estate System screen (enrolment, what runs, platform, audit). Bare `?screen=administration` stays standard. */
 export function systemHref(): string {
   return "?screen=administration&view=system";

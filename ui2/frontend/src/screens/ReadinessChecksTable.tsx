@@ -111,7 +111,9 @@ function checkRows(checks: ReadinessCheck[], labels: ReadinessMember[] = [], pee
     const passed = blocking && members.every(check => check?.result === "PASS");
     // Palo Alto config sync off on one member: the row is still blocking, but only that member's own cell is red.
     const perMember = failed && members.some(check => check?.memberSync !== undefined);
-    return { no, title: first.title, members, blocking, failed, passed, perMember };
+    // WARN: the readiness model's non-blocking warning (PO 2026-11-23, e.g. the VS0 policy row of a VSX chassis).
+    const warned = !failed && members.some(check => check?.result === "WARN");
+    return { no, title: first.title, members, blocking, failed, passed, perMember, warned };
   });
 }
 
@@ -146,14 +148,16 @@ export function ReadinessChecksTable({ checks, members = [], compact = false, ro
       </TableCell>)}
     </TableRow></TableHead>
     <TableBody>{checkRows(checks, members, peer || singleObserverFgt).map(row => {
-      const icon = row.failed ? "x-circle" : row.passed ? "check-circle" : "info";
-      const result = row.failed ? "Blocking" : row.passed ? "Passed" : !row.blocking ? "Info" : "Unknown";
-      return <TableRow key={row.no} sx={{ bgcolor: row.failed && !row.perMember ? m3.errorContainer : undefined }}>
+      const icon = row.failed ? "x-circle" : row.warned ? "warning" : row.passed ? "check-circle" : "info";
+      const result = row.failed ? "Blocking" : row.warned ? "Warning" : row.passed ? "Passed" : !row.blocking ? "Info" : "Unknown";
+      return <TableRow key={row.no} data-row-tone={row.failed ? "blocking" : row.warned ? "warning" : undefined}
+        sx={{ bgcolor: row.failed && !row.perMember ? m3.errorContainer : row.warned ? m3.warningContainer : undefined }}>
         <TableCell component="th" scope="row" sx={{ py: compact ? 0.5 : 1.5, overflowWrap: "anywhere" }}>
           <Stack direction="row" spacing={1} alignItems="center">
-            <Box component="span" role="img" aria-label={result} sx={{ display: "flex", color: row.failed ? m3.onErrorContainer : row.passed ? m3.goodInk : m3.onSurfaceVar }}><Icon name={icon} /></Box>
+            <Box component="span" role="img" aria-label={result} sx={{ display: "flex", color: row.failed ? m3.onErrorContainer : row.warned ? m3.onWarningContainer : row.passed ? m3.goodInk : m3.onSurfaceVar }}><Icon name={icon} /></Box>
             <Typography variant="body2">{row.title}</Typography>
-            {!row.blocking && <Chip size="small" label="info" sx={{ height: 20, bgcolor: m3.sc, color: m3.onSurfaceVar }} />}
+            {row.warned ? <Chip size="small" label="warning" sx={{ height: 20, bgcolor: m3.sc, color: m3.onWarningContainer }} />
+              : !row.blocking && <Chip size="small" label="info" sx={{ height: 20, bgcolor: m3.sc, color: m3.onSurfaceVar }} />}
           </Stack>
           {rowAction?.(row.no, row.failed)}
         </TableCell>
@@ -197,9 +201,10 @@ export function ReadinessCard({ checks, members, status, cluster, vendor, observ
 }) {
   const rows = checkRows(checks, members, primaryReportsPeer(vendor, members ?? []));
   const blocking = rows.filter(row => row.failed).length;
+  const warnings = rows.filter(row => row.warned).length;
   const ready = !running && status === "READY";
   const notReady = !running && status === "NOT_READY";
-  const verdict = running ? "Running pre-checks" : ready ? "Ready" : notReady
+  const verdict = running ? "Running pre-checks" : ready ? `Ready${warnings ? ` · ${warnings} ${warnings === 1 ? "warning" : "warnings"}` : ""}` : notReady
     ? `Not ready${blocking ? ` · ${blocking} ${blocking === 1 ? "blocker" : "blockers"}` : ""}` : "Unknown";
   const icon = ready ? "check-circle" : notReady ? "x-circle" : "warning";
   const observed = observedAt ? Date.parse(observedAt) : NaN;
@@ -218,7 +223,7 @@ export function ReadinessCard({ checks, members, status, cluster, vendor, observ
       {canRun && <M3Button deviceJob emphasis="outlined" disabled={running || disabled} onClick={onRun}>Run pre-checks</M3Button>}
     </Stack>
     <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 1.5, my: 2.5 }}>
-      {[["Passed", rows.filter(row => row.passed).length], ["Blocking", blocking], ["Info", rows.filter(row => !row.blocking).length]].map(([label, count]) =>
+      {[["Passed", rows.filter(row => row.passed).length], ["Blocking", blocking], ["Info", rows.filter(row => !row.blocking && !row.warned).length]].map(([label, count]) =>
         <Box key={label} aria-label={`${label}: ${count}`} sx={{ border: `1px solid ${m3.outlineVar}`, borderRadius: 2, px: 2, py: 1 }}>
           <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>{label}</Typography>
           <Typography variant="h6" sx={{ fontWeight: 600 }}>{count}</Typography>

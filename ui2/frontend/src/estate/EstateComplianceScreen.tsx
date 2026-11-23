@@ -15,6 +15,7 @@ import {
 import { PRODUCT_NAME } from "../brand/product";
 import type { SourceRead } from "../screens/overview/attentionRules";
 import { isRestricted } from "../shell/States";
+import { plural } from "../shell/plural";
 import { formatUtc } from "../shell/time";
 import { writeUrlParams } from "../shell/urlParams";
 import {
@@ -27,6 +28,7 @@ import {
   UnitTile,
 } from "./EstatePrimitives";
 import { EstateComplianceGuidance } from "./EstateComplianceGuidance";
+import { projectControlDetail } from "./estateComplianceDetailModel";
 import { dossierHref, standardComplianceHref } from "./estateRouting";
 import { buildComplianceLensModel } from "./estateSlice2Model";
 import { ESTATE_MONO, ESTATE_SANS, ESTATE_UNKNOWN_HATCH, ev } from "./estateTokens";
@@ -127,6 +129,7 @@ export function EstateComplianceScreen({
         observed_compliance_pct: overview.compliance.observed_pct ?? 0,
         critical_deficiencies: overview.compliance.critical_deficiencies ?? 0,
         data_gaps: overview.compliance.data_gaps ?? 0,
+        pending_reevaluation: overview.compliance.pending_reevaluation,
         frameworks: (overview.compliance.frameworks ?? []).map((f) => ({
           framework: f.name,
           score_pct: f.score_pct,
@@ -860,6 +863,15 @@ export function EstateComplianceScreen({
                     )}
                   </Typography>
 
+                  {(synthesizedOverview?.pending_reevaluation ?? 0) > 0 && (
+                    <Box data-testid="compliance-pending-reevaluation" sx={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", mb: "8px" }}>
+                      <StateBadge state="watch" word="Re-evaluating" dense />
+                      <span>
+                        {plural(synthesizedOverview!.pending_reevaluation!, "firewall", "firewalls")} shown with previous evaluation while re-evaluation runs
+                      </span>
+                    </Box>
+                  )}
+
                   {lensModel.unassessedFirewalls.length > 0 ? (
                     <Box sx={{ mb: "8px" }}>
                       <Typography sx={{ fontSize: "12.5px", color: ev.unk, fontWeight: 600, mb: "4px" }}>
@@ -931,6 +943,7 @@ export function EstateComplianceScreen({
                   const c = row.control;
                   const isOpen = expandedControlId === c.control_id;
                   const detailState = controlDetails[c.control_id];
+                  const projected = projectControlDetail(detailState);
                   const passBoxCount = Math.min(20, c.pass_count ?? 0);
                   const unavailBoxCount = Math.min(20, c.data_unavailable_count ?? 0);
 
@@ -1055,62 +1068,113 @@ export function EstateComplianceScreen({
                             </Box>
                           </Box>
 
-                          {detailState === "loading" ? (
+                          {projected.state === "loading" ? (
                             <Typography sx={{ fontSize: "12.5px", color: ev.ink2 }}>Reading per-unit verdicts…</Typography>
-                          ) : detailState && detailState.state === "ok" && detailState.value.devices.length > 0 ? (
-                            <Box sx={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                              {detailState.value.devices
-                                .filter((d) => d.status !== "PASS")
-                                .slice(0, 20)
-                                .map((d) => {
-                                  const bState = d.status === "FAIL" ? "act" : "unk";
-                                  return (
-                                    <Box
-                                      key={d.device_id}
-                                      sx={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}
-                                    >
-                                      <StateBadge state={bState} word={d.status === "FAIL" ? "Fail" : "UNKNOWN"} dense />
+                          ) : (
+                            <>
+                              {projected.state === "failed" && (
+                                <Box data-testid="control-detail-failed" sx={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", mb: "8px" }}>
+                                  <StateBadge state="unk" word="UNKNOWN" dense />
+                                  <span style={{ color: ev.ink2 }}>Per-unit control detail could not be read — verdicts are UNKNOWN.</span>
+                                </Box>
+                              )}
+                              {projected.state === "restricted" && (
+                                <Box data-testid="control-detail-restricted" sx={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", mb: "8px" }}>
+                                  <StateBadge state="na" word="Restricted" dense />
+                                  <span style={{ color: ev.ink2 }}>Per-unit control detail is restricted for this role.</span>
+                                </Box>
+                              )}
+                              {projected.state === "ok" && (
+                                <Box sx={{ display: "flex", flexDirection: "column", gap: "10px", mb: "10px" }}>
+                                  <Box data-testid="control-detail-rationale">
+                                    <Typography sx={{ fontWeight: 600, mb: "2px" }}>Why it matters</Typography>
+                                    <Typography sx={{ fontSize: "12.5px", color: ev.ink2 }}>
+                                      {projected.rationale ?? "Rationale not recorded for this control."}
+                                    </Typography>
+                                  </Box>
+                                  <Box data-testid="control-detail-expected">
+                                    <Typography sx={{ fontWeight: 600, mb: "2px" }}>What it should be</Typography>
+                                    {projected.expectedShown.length === 0 ? (
+                                      <Typography sx={{ fontSize: "12.5px", color: ev.ink3 }}>No expected configuration recorded.</Typography>
+                                    ) : (
+                                      <Box component="ul" sx={{ m: 0, pl: "18px", fontSize: "12.5px", color: ev.ink2 }}>
+                                        {projected.expectedShown.map((line, i) => (
+                                          <li key={`${line.vendorWord}-${i}`}>{`${line.vendorWord}: ${line.text}`}</li>
+                                        ))}
+                                      </Box>
+                                    )}
+                                    <MoreFooter shown={projected.expectedShown.length} total={projected.totalExpected} noun="expected rules" testId="control-expected-more" />
+                                  </Box>
+                                  <Box data-testid="control-detail-frameworks">
+                                    <Typography sx={{ fontWeight: 600, mb: "2px" }}>Framework mappings</Typography>
+                                    {projected.frameworksShown.length === 0 ? (
+                                      <Typography sx={{ fontSize: "12.5px", color: ev.ink3 }}>No framework mapping recorded.</Typography>
+                                    ) : (
+                                      <Box component="ul" sx={{ m: 0, pl: "18px", fontSize: "12.5px", color: ev.ink2 }}>
+                                        {projected.frameworksShown.map((label, i) => (
+                                          <li key={`${label}-${i}`}>{label}</li>
+                                        ))}
+                                      </Box>
+                                    )}
+                                    <MoreFooter shown={projected.frameworksShown.length} total={projected.totalFrameworks} noun="framework mappings" testId="control-frameworks-more" />
+                                  </Box>
+                                  <Typography data-testid="control-verdict-counts" sx={{ fontSize: "12.5px", color: ev.ink2 }}>
+                                    {`${plural(projected.verdictCounts.fail, "failing unit", "failing units")} · ${plural(projected.verdictCounts.unknown, "unit", "units")} without evidence · ${plural(projected.verdictCounts.pass, "passing unit", "passing units")}`}
+                                  </Typography>
+                                  {projected.verdicts.length > 0 && (
+                                    <Box sx={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                                      {projected.verdicts.slice(0, 20).map((d) => (
+                                        <Box
+                                          key={d.deviceId}
+                                          sx={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}
+                                        >
+                                          <StateBadge state={d.status === "FAIL" ? "act" : "unk"} word={d.status === "FAIL" ? "Fail" : "UNKNOWN"} dense />
+                                          <Box
+                                            component="a"
+                                            href={dossierHref(d.deviceId)}
+                                            sx={{ fontFamily: ESTATE_MONO, fontWeight: 600, color: ev.accent, textDecoration: "none" }}
+                                          >
+                                            {d.hostname ?? d.deviceId}
+                                          </Box>
+                                          <span style={{ color: ev.ink2 }}>{d.vendorWord}</span>
+                                          <span style={{ color: ev.ink2 }}>{d.observedText}</span>
+                                          {d.messageText && <span style={{ color: ev.ink3 }}>{d.messageText}</span>}
+                                          <EstateComplianceGuidance guidance={d.guidance} status={d.status} />
+                                        </Box>
+                                      ))}
+                                      <MoreFooter
+                                        shown={20}
+                                        total={projected.verdicts.length}
+                                        noun="units"
+                                        testId="verdicts-more"
+                                      />
+                                    </Box>
+                                  )}
+                                </Box>
+                              )}
+                              {(projected.state !== "ok" || projected.verdictCounts.total === 0) &&
+                                (row.affectedUnits.length > 0 || row.unmatchedAffectedNames.length > 0 ? (
+                                  <Box sx={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                    {row.affectedUnits.map((u) => (
                                       <Box
+                                        key={u.deviceId}
                                         component="a"
-                                        href={dossierHref(d.device_id)}
+                                        href={dossierHref(u.deviceId)}
                                         sx={{ fontFamily: ESTATE_MONO, fontWeight: 600, color: ev.accent, textDecoration: "none" }}
                                       >
-                                        {d.hostname ?? d.device_id}
+                                        {u.name}
                                       </Box>
-                                      <span style={{ color: ev.ink2 }}>
-                                        {d.observed_value ?? d.message ?? "No observed value"}
-                                      </span>
-                                      <EstateComplianceGuidance guidance={d.guidance} status={d.status} />
-                                    </Box>
-                                  );
-                                })}
-                              <MoreFooter
-                                shown={20}
-                                total={detailState.value.devices.filter((d) => d.status !== "PASS").length}
-                                noun="units"
-                                testId="verdicts-more"
-                              />
-                            </Box>
-                          ) : row.affectedUnits.length > 0 || row.unmatchedAffectedNames.length > 0 ? (
-                            <Box sx={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                              {row.affectedUnits.map((u) => (
-                                <Box
-                                  key={u.deviceId}
-                                  component="a"
-                                  href={dossierHref(u.deviceId)}
-                                  sx={{ fontFamily: ESTATE_MONO, fontWeight: 600, color: ev.accent, textDecoration: "none" }}
-                                >
-                                  {u.name}
-                                </Box>
-                              ))}
-                              {row.unmatchedAffectedNames.map((nm) => (
-                                <span key={nm} style={{ fontFamily: ESTATE_MONO }}>{nm}</span>
-                              ))}
-                            </Box>
-                          ) : (
-                            <Typography sx={{ fontSize: "12.5px", color: ev.ink3 }}>
-                              {c.missing_reason ?? "No failing firewall names recorded."}
-                            </Typography>
+                                    ))}
+                                    {row.unmatchedAffectedNames.map((nm) => (
+                                      <span key={nm} style={{ fontFamily: ESTATE_MONO }}>{nm}</span>
+                                    ))}
+                                  </Box>
+                                ) : (
+                                  <Typography sx={{ fontSize: "12.5px", color: ev.ink3 }}>
+                                    {c.missing_reason ?? "No failing firewall names recorded."}
+                                  </Typography>
+                                ))}
+                            </>
                           )}
                         </Box>
                       ) : null}

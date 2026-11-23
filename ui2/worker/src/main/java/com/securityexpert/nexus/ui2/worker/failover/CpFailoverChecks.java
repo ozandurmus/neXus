@@ -240,6 +240,23 @@ public final class CpFailoverChecks {
         return new Assessment(status,Map.copyOf(d));
     }
 
+    /** Reason of a VS0 policy row of a VSX chassis whose members carry the same policy installed at different times. */
+    public static final String VS0_INSTALL_TIMES_DIFFER="VS0_INSTALL_TIMES_DIFFER";
+    /**
+     * Policy parity of the VS0 reads of a VSX chassis unit (PO 2026-11-23,
+     * docs/design/PO_DECISION_RECORD_2026_11_23_READINESS_WARNINGS.md): the same rule as {@link #policyParity}, except
+     * that the same policy name with install times more than {@link #POLICY_MAX_SKEW_SECONDS} apart is WARN (non-blocking),
+     * not FAIL. Different or missing names stay FAIL, unrecognised evidence stays UNKNOWN. The parity that blocks is the
+     * one each virtual system's own unit measures in its context.
+     */
+    public static Assessment chassisPolicyParity(Policy a,Policy b,String previousA,String previousB) {
+        var parity=policyParity(a,b,previousA,previousB);
+        if(!"INSTALL_TIMES_DIFFER".equals(parity.derived().get("reason"))) return parity;
+        var d=new HashMap<>(parity.derived());
+        d.put("reason",VS0_INSTALL_TIMES_DIFFER);
+        return new Assessment("WARN",Map.copyOf(d));
+    }
+
     public record Interfaces(Set<String> names, Set<String> trafficNames, int required,
             boolean ccpPresent, boolean healthy) {}
     public static Interfaces interfaces(String output) {

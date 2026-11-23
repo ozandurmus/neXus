@@ -77,6 +77,31 @@ describe("Readiness card", () => {
     expect(within(row).getAllByRole("cell").every(cell => !cell.hasAttribute("data-member-sync"))).toBe(true);
   });
 
+  it("shows a VSX chassis VS0 policy warning as an amber, non-blocking row (PO 2026-11-23)", () => {
+    const text = "Same VS0 policy name; install times differ by 62 days -- reinstall the VSX gateway policy to align";
+    const warn: ReadinessCheck[] = members.map((member, i) => ({ checkNo: 10, title: "Installed policy parity", member: `Member ${i + 1}`,
+      device_id: member.device_id, result: "WARN" as const, summary: text, blocking: false }));
+    render(<ReadinessCard {...props} status="READY" checks={[...checks, ...warn]} />);
+    expect(screen.getByText("Ready · 1 warning")).toBeInTheDocument();
+    for (const label of ["Passed: 1", "Blocking: 0", "Info: 2"]) expect(screen.getByLabelText(label)).toBeInTheDocument();
+    const row = screen.getByText("Installed policy parity").closest("tr")!;
+    expect(row.getAttribute("data-row-tone")).toBe("warning");
+    expect(within(row).getByRole("img", { name: "Warning" })).toBeInTheDocument();
+    expect(within(row).getByText("warning")).toBeInTheDocument();
+    expect(within(row).getAllByText(text)).toHaveLength(2);
+    expect(screen.getAllByText("info")).toHaveLength(2);
+    expect(screen.queryAllByRole("img", { name: "Blocking" })).toHaveLength(0);
+  });
+
+  it("a failing member outweighs a warning on the other member", () => {
+    const mixed: ReadinessCheck[] = members.map((member, i) => ({ checkNo: 10, title: "Installed policy parity", member: `Member ${i + 1}`,
+      device_id: member.device_id, result: i ? "FAIL" as const : "WARN" as const, summary: "x", blocking: i === 1 }));
+    render(<ReadinessCard {...props} status="NOT_READY" checks={[...checks, ...mixed]} />);
+    const row = screen.getByText("Installed policy parity").closest("tr")!;
+    expect(row.getAttribute("data-row-tone")).toBe("blocking");
+    expect(screen.getByLabelText("Blocking: 1")).toBeInTheDocument();
+  });
+
   it("keeps unknown evidence unknown and does not shift a missing member's result", () => {
     render(<ReadinessCard {...props} status="UNKNOWN" checks={[{ ...checks[1], member: "Member 1" }]} />);
     expect(screen.getByText("Unknown")).toBeInTheDocument();
