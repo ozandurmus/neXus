@@ -2,9 +2,12 @@
 // Input is the same read the standard Recent upgrades panel uses (getSoftwareChanges(90)); no DOM, no fetch here.
 import type { CpInstallEventWithDevice, SoftwareChange } from "../auth/adminApi";
 import { plural } from "../shell/plural";
+import { changeWindowText, deviceLocalStamp, installEventText } from "../screens/SoftwareHistoryPanel";
 
 export const SOFTWARE_CHANGE_WINDOW_DAYS = 90;
 export const SOFTWARE_CHANGE_ROW_CAP = 10;
+export const SOFTWARE_UNIT_CAP = 10;
+export const SOFTWARE_INSTALL_EVENT_CAP = 10;
 
 /** Read state of the software-change list. A failed read is never a "no changes" answer. */
 export type SoftwareChangesRead =
@@ -32,8 +35,23 @@ export interface SoftwareChangeRow {
   readonly deviceId: string;
   readonly unitName: string;
   readonly summary: string;
+  /** The observation window as one sentence, or "UNKNOWN (first version seen)". */
+  readonly windowText: string;
   /** The change's own timestamp (end of its change window, else first seen). */
   readonly at: string | null;
+}
+
+/** One Check Point install log entry (device clock) with its Estate unit label. */
+export interface SoftwareInstallEventRow {
+  readonly key: string;
+  readonly deviceId: string;
+  /** Estate unit label. Never the raw hostname. */
+  readonly unitName: string;
+  readonly what: string;
+  /** Device-local install time, shown with "(device clock)". */
+  readonly installedAtLocal: string;
+  /** When Overwatch first saw this install log entry: the evidence age. */
+  readonly firstObservedAt: string | null;
 }
 
 export interface EstateSoftwareChangesModel {
@@ -43,10 +61,17 @@ export interface EstateSoftwareChangesModel {
   readonly totalChanges: number;
   readonly days: number;
   readonly newestAt: string | null;
+  /** At most SOFTWARE_UNIT_CAP units, newest-changed first. */
   readonly perUnit: readonly SoftwareUnitCount[];
+  /** Distinct units with at least one version change, before the cap. */
+  readonly totalUnits: number;
   readonly rows: readonly SoftwareChangeRow[];
   readonly hiddenRows: number;
   readonly installEventLine: string | null;
+  /** At most SOFTWARE_INSTALL_EVENT_CAP entries, newest observed first. */
+  readonly installRows: readonly SoftwareInstallEventRow[];
+  readonly totalInstallEvents: number;
+  readonly newestInstallObservedAt: string | null;
 }
 
 type UnitLookup = ReadonlyMap<string, { readonly name: string }>;
@@ -82,9 +107,13 @@ export function buildEstateSoftwareModel(read: SoftwareChangesRead, unitsById: U
     days,
     newestAt: null,
     perUnit: [],
+    totalUnits: 0,
     rows: [],
     hiddenRows: 0,
     installEventLine: null,
+    installRows: [],
+    totalInstallEvents: 0,
+    newestInstallObservedAt: null,
   });
 
   if (read.status === "not_read") return empty("not_read", "Software changes not read yet");
@@ -104,6 +133,7 @@ export function buildEstateSoftwareModel(read: SoftwareChangesRead, unitsById: U
     deviceId: c.device_id,
     unitName: unitsById.get(c.device_id)?.name ?? NOT_ON_WALL,
     summary: softwareChangeSummary(c),
+    windowText: changeWindowText(c),
     at,
   }));
 
@@ -125,8 +155,20 @@ export function buildEstateSoftwareModel(read: SoftwareChangesRead, unitsById: U
     }))
     .sort((a, b) => b.count - a.count || a.unitName.localeCompare(b.unitName));
 
+  const installs = read.installEvents
+    .map((e, idx) => ({ e, idx }))
+    .sort((x, y) => newerFirst(x.e.first_observed_at ?? null, y.e.first_observed_at ?? null) || x.idx - y.idx);
+  const installRows: SoftwareInstallEventRow[] = installs.slice(0, SOFTWARE_INSTALL_EVENT_CAP).map(({ e, idx }) => ({
+    key: `${e.device_id}-${e.file_name}-${e.installed_at_local}-${idx}`,
+    deviceId: e.device_id,
+    unitName: unitsById.get(e.device_id)?.name ?? NOT_ON_WALL,
+    what: installEventText(e),
+    installedAtLocal: deviceLocalStamp(e.installed_at_local),
+    firstObservedAt: e.first_observed_at ?? null,
+  }));
+
   const total = rows.length;
-  const installCount = read.installEvents.length;
+  const installCount = installs.length;
   return {
     status: "ok",
     headline:
@@ -136,12 +178,16 @@ export function buildEstateSoftwareModel(read: SoftwareChangesRead, unitsById: U
     totalChanges: total,
     days: windowDays,
     newestAt: rows[0]?.at ?? null,
-    perUnit,
+    perUnit: perUnit.slice(0, SOFTWARE_UNIT_CAP),
+    totalUnits: perUnit.length,
     rows: rows.slice(0, SOFTWARE_CHANGE_ROW_CAP),
     hiddenRows: Math.max(0, total - SOFTWARE_CHANGE_ROW_CAP),
     installEventLine:
       installCount > 0
         ? `${plural(installCount, "Check Point install log entry")} in ${windowDays} days (device clock, not observed by Overwatch)`
         : null,
+    installRows,
+    totalInstallEvents: installCount,
+    newestInstallObservedAt: installs[0]?.e.first_observed_at ?? null,
   };
 }

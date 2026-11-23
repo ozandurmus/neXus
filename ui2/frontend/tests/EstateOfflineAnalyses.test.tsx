@@ -15,6 +15,7 @@ vi.mock("../src/auth/adminApi", async (importOriginal) => {
 });
 
 import { EstateOfflineAnalyses } from "../src/estate/EstateOfflineAnalyses";
+import { OFFLINE_RULE_CAP } from "../src/estate/estateOfflineModel";
 
 // Synthetic values only (FW-TANGO-04 style names, documentation addresses).
 const NOW = new Date("2026-11-22T10:00:00Z");
@@ -108,5 +109,49 @@ describe("EstateOfflineAnalyses", () => {
     await screen.findByText("No stored offline analysis for this policy.");
     const link = screen.getByRole("link", { name: "Open offline analyses in standard view" });
     expect(link.getAttribute("href")).toContain("standard=1");
+  });
+
+  it("renders period, SIEM comparison, parse/UNKNOWN stats and per-rule badges; UNKNOWN members are never OK", async () => {
+    listOfflineAnalyses.mockResolvedValue({ analyses: [SUMMARY], canManage: false });
+    getOfflineAnalysis.mockResolvedValue(result({
+      periodStart: "2026-11-01", periodEnd: "2026-11-07", comparisonEnabled: true, agreementCount: 3, disagreementCount: 1, comparisonUnknownCount: 2,
+      parseStats: [{ statReason: "BAD_TIME", count: 1 }], unknownStats: [{ statReason: "NO_RULE", count: 4 }], verdictStats: [{ statReason: "ALLOW", count: 9 }],
+      rules: [
+        { ...result().rules[0], ruleId: "u", number: 2, name: "deny-tango", memberStatus: "UNKNOWN", lookupReason: "lookup timed out" },
+        { ...result().rules[0], ruleId: "w", number: 3, name: "allow-sierra", unseenMembers: [{ memberId: "m1", name: "OBJ-SYN-1", dimension: "source" }] },
+      ],
+    }));
+    render(<EstateOfflineAnalyses policy="pol-tango-04" now={NOW} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Open siem-tango-04.csv" }));
+    expect(await screen.findByText("Period 2026-11-01 – 2026-11-07")).toBeInTheDocument();
+    expect(screen.getByText("SIEM rule agreement: 3 · Disagreement: 1 · UNKNOWN: 2")).toBeInTheDocument();
+    expect(screen.getByText("BAD_TIME: 1")).toBeInTheDocument();
+    expect(screen.getByText("NO_RULE: 4")).toBeInTheDocument();
+    expect(screen.getByText("ALLOW: 9")).toBeInTheDocument();
+    expect(screen.getByText("#2 · deny-tango")).toBeInTheDocument();
+    expect(screen.getByText("UNKNOWN: lookup timed out")).toBeInTheDocument();
+    expect(screen.getByText("1 unseen member")).toBeInTheDocument();
+    expect(screen.getByText("Members UNKNOWN")).toBeInTheDocument();
+    expect(screen.queryByText("Members seen")).toBeNull();
+  });
+
+  it("omits the SIEM comparison line when comparison was not enabled", async () => {
+    listOfflineAnalyses.mockResolvedValue({ analyses: [SUMMARY], canManage: false });
+    getOfflineAnalysis.mockResolvedValue(result({ comparisonEnabled: false }));
+    render(<EstateOfflineAnalyses policy="pol-tango-04" now={NOW} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Open siem-tango-04.csv" }));
+    await screen.findByText(/Rules in this analysis: 1/);
+    expect(screen.queryByText(/SIEM rule agreement/)).toBeNull();
+  });
+
+  it("caps rendered rules at OFFLINE_RULE_CAP and prints the true remainder", async () => {
+    listOfflineAnalyses.mockResolvedValue({ analyses: [SUMMARY], canManage: false });
+    const many = Array.from({ length: OFFLINE_RULE_CAP + 5 }, (_, i) => ({ ...result().rules[0], ruleId: `r-${i}`, number: i + 1, name: `rule-syn-${i + 1}` }));
+    getOfflineAnalysis.mockResolvedValue(result({ rules: many }));
+    render(<EstateOfflineAnalyses policy="pol-tango-04" now={NOW} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Open siem-tango-04.csv" }));
+    expect(await screen.findByTestId("offline-rules-more")).toHaveTextContent("+5 more rules");
+    expect(screen.getByText(`#${OFFLINE_RULE_CAP} · rule-syn-${OFFLINE_RULE_CAP}`)).toBeInTheDocument();
+    expect(screen.queryByText(`#${OFFLINE_RULE_CAP + 1} · rule-syn-${OFFLINE_RULE_CAP + 1}`)).toBeNull();
   });
 });

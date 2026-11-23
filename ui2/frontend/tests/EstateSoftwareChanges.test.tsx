@@ -84,4 +84,45 @@ describe("EstateSoftwareChanges", () => {
     expect(within(list).getAllByRole("listitem")).toHaveLength(10);
     expect(screen.getByTestId("software-changes-more")).toHaveTextContent("+2 more version changes");
   });
+
+  it("shows an UNKNOWN badge beside the failure message", async () => {
+    vi.mocked(getSoftwareChanges).mockRejectedValue(new Error("DOWNSTREAM_ERROR"));
+    renderSection();
+    await waitFor(() => expect(screen.getByTestId("software-changes-headline")).toHaveTextContent("could not be read"));
+    expect(screen.getByText("UNKNOWN")).toBeInTheDocument();
+  });
+
+  it("renders change windows on version-change rows", async () => {
+    vi.mocked(getSoftwareChanges).mockResolvedValue({ days: 90, since: NOW.toISOString(), changes: [change("dev-tango-04", 2)] });
+    renderSection();
+    const list = await screen.findByRole("list", { name: "Software changes" });
+    expect(within(list).getByText("Change window: UNKNOWN (first version seen)")).toBeInTheDocument();
+  });
+
+  it("renders the Check Point install log with evidence stamps and a capped footer", async () => {
+    const installs = Array.from({ length: 11 }, (_, i) => ({
+      device_id: "dev-tango-04", hostname: "FW-ZULU-99", kind: "BASE_INSTALL" as const, product_version: "R81.20",
+      jumbo_take: null, installed_at_local: `2026-11-${String(i + 1).padStart(2, "0")}T10:00:00`, file_name: `f${i}`,
+      first_observed_at: new Date(NOW.getTime() - i * 3_600_000).toISOString(),
+    }));
+    vi.mocked(getSoftwareChanges).mockResolvedValue({ days: 90, since: NOW.toISOString(), changes: [], install_events: installs });
+    const { container } = renderSection();
+    const list = await screen.findByRole("list", { name: "Check Point install log" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(10);
+    expect(list.textContent).toContain("FW-TANGO-04");
+    expect(list.textContent).not.toContain("FW-ZULU-99");
+    expect(list.textContent).toContain("2026-11-01 10:00:00 (device clock)");
+    expect(screen.getAllByText("Base install R81.20")).toHaveLength(10);
+    expect(screen.getByTestId("software-installs-more")).toHaveTextContent("+1 more install log entries");
+    expect(container.querySelectorAll("[data-evidence-stamp]").length).toBeGreaterThanOrEqual(11);
+  });
+
+  it("caps per-unit counts at 10 with a +N more units footer", async () => {
+    const units = new Map(Array.from({ length: 12 }, (_, i) => [`dev-u${i}`, { name: `FW-UNIT-${i}` }] as const));
+    const changes = Array.from({ length: 12 }, (_, i) => (change(`dev-u${i}`, i + 1)));
+    vi.mocked(getSoftwareChanges).mockResolvedValue({ days: 90, since: NOW.toISOString(), changes });
+    render(<EstateSoftwareChanges now={NOW} unitsById={units} />);
+    expect(await screen.findByTestId("software-units-more")).toHaveTextContent("+2 more units");
+    expect(document.querySelectorAll("[data-software-unit-count]")).toHaveLength(10);
+  });
 });

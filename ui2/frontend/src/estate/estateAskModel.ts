@@ -6,8 +6,14 @@ import type {
   PathResult,
   PolicyLookupResult,
 } from "../auth/adminApi";
-import type { ZoneMatrixEvaluationResponse } from "../screens/zonematrix/zoneMatrixApi";
+import { coverageText, STALE_REASON, targetSourceLabel } from "../screens/cutover/cutoverWording";
 import { verdictWord } from "../screens/pathanalysis/pathWords";
+import { NOT_SEEN_WORDING, usageReason } from "../screens/RuleUsageResult";
+import {
+  severityWord,
+  statementWord,
+  type ZoneMatrixEvaluationResponse,
+} from "../screens/zonematrix/zoneMatrixApi";
 import type { BadgeState } from "./estateModel";
 
 /**
@@ -19,6 +25,20 @@ import type { BadgeState } from "./estateModel";
  */
 export const ASK_MODES = ["path", "lookup", "usage", "cutover", "zones"] as const;
 export type AskMode = (typeof ASK_MODES)[number];
+
+export const ASK_EVIDENCE_ROW_CAP = 25;
+
+const ASK_STANDARD_HREF: Readonly<Record<AskMode, { readonly href: string; readonly label: string }>> = {
+  path: { href: "?screen=trace&mode=path&standard=1", label: "Open the standard Trace screen →" },
+  lookup: { href: "?screen=trace&mode=lookup&standard=1", label: "Open the standard Trace screen →" },
+  usage: { href: "?screen=rule_usage&standard=1", label: "Open the standard Rule object usage screen →" },
+  cutover: { href: "?screen=cutover&standard=1", label: "Open the standard Cutover impact screen →" },
+  zones: { href: "?screen=zone_matrix&standard=1", label: "Open the standard Zone matrix screen →" },
+};
+
+export function askStandardHref(mode: AskMode): { readonly href: string; readonly label: string } {
+  return ASK_STANDARD_HREF[mode];
+}
 
 export function isAskMode(value: string | null | undefined): value is AskMode {
   return Boolean(value && (ASK_MODES as readonly string[]).includes(value));
@@ -235,6 +255,7 @@ export function buildUsageAnswer(analysis: OfflineAnalysisResult): AskAnswer {
       : undecided.length
         ? `${undecided.length} of ${objects.length} objects cannot be checked from this export.`
         : `All ${objects.length} objects carried traffic in the period.`;
+  const limitations = [analysis.limitations, unused.length > 0 ? NOT_SEEN_WORDING : null].filter(Boolean).join(" ") || null;
   return {
     mode: "usage",
     state,
@@ -242,16 +263,28 @@ export function buildUsageAnswer(analysis: OfflineAnalysisResult): AskAnswer {
     headline,
     detail: `${analysis.flowCount.toLocaleString("en-US")} flows read · ${analysis.invalidRows.toLocaleString("en-US")} invalid rows · ${analysis.periodStart} → ${analysis.periodEnd}`,
     unprovable: state === "unk",
-    rows: objects.map((o, i) => ({
-      key: `obj-${i}`,
-      title: `${o.dimension} · ${o.name}`,
-      state: o.state === "USED" ? "ok" : o.state === "NOT_SEEN" ? "watch" : "unk",
-      stateWord: o.state === "USED" ? "Used" : o.state === "NOT_SEEN" ? "Not seen" : "UNKNOWN",
-      lines: [`${o.flowCount.toLocaleString("en-US")} flows`, ...(o.reason ? [o.reason] : [])],
-      source: "uploaded log export",
-    })),
+    rows: objects.map((o, i) => {
+      const isJudged = o.state === "USED" || o.state === "NOT_SEEN";
+      return {
+        key: `obj-${i}`,
+        title: `${o.dimension} · ${o.name}`,
+        state: o.state === "USED" ? "ok" : o.state === "NOT_SEEN" ? "watch" : "unk",
+        stateWord:
+          o.state === "USED"
+            ? "Used"
+            : o.state === "NOT_SEEN"
+              ? "Not seen"
+              : o.state === "NOT_AUDITABLE"
+                ? "Not auditable"
+                : "UNKNOWN",
+        lines: isJudged
+          ? [`${o.flowCount.toLocaleString("en-US")} flows`, ...(o.reason ? [o.reason] : [])]
+          : [usageReason(o)],
+        source: "uploaded log export",
+      };
+    }),
     evidenceAt: analysis.collectedAt ?? analysis.createdAt ?? null,
-    limitations: analysis.limitations || null,
+    limitations,
   };
 }
 
@@ -261,24 +294,46 @@ export function buildCutoverAnswer(view: CutoverAssessmentView): AskAnswer {
       : view.readiness === "NO_BLOCKERS_IN_EVALUATED_FLOWS" && view.status === "COMPLETE" ? "ok"
         : view.readiness === "NO_BLOCKERS_IN_EVALUATED_FLOWS" ? "watch" : "unk";
   const counts = view.counts ?? {};
-  const rows: AskEvidenceRow[] = (view.coverage ?? []).map((c, i) => ({
-    key: `cov-${i}`,
-    title: c.code,
-    state: "unk",
-    stateWord: "Coverage",
-    lines: c.count === undefined ? [] : [`${c.count.toLocaleString("en-US")} affected`],
-    source: "assessment coverage",
-  }));
+  const coverage = view.coverage ?? [];
+  const rows: AskEvidenceRow[] =
+    coverage.length === 0
+      ? [
+          {
+            key: "cov-none",
+            title: "NONE",
+            state: "unk",
+            stateWord: "Incomplete",
+            lines: ["The server returned no coverage list: read this verdict as incomplete."],
+            source: "assessment coverage",
+          },
+        ]
+      : coverage.map((c, i) => ({
+          key: `cov-${i}`,
+          title: c.code,
+          state: "unk",
+          stateWord: "Coverage",
+          lines: [coverageText(c)],
+          source: "assessment coverage",
+        }));
+  const staleText = view.stale
+    ? (view.staleReasons ?? []).map((r) => STALE_REASON[r] ?? r).join("; ") || "assessment is stale"
+    : null;
   return {
     mode: "cutover",
     state,
     verdictWord: state === "act" ? "Blockers found" : state === "ok" ? "No blockers" : state === "watch" ? "No blockers, incomplete" : "UNKNOWN",
     headline: view.headline || `Readiness ${view.readiness}`,
     detail: [
+      counts.tuples !== undefined ? `${counts.tuples} distinct flows` : null,
+      counts.flows !== undefined ? `${counts.flows} logged connections` : null,
       counts.WOULD_DROP !== undefined ? `${counts.WOULD_DROP} would drop` : null,
       counts.NOT_DECIDED !== undefined ? `${counts.NOT_DECIDED} not decided` : null,
       counts.NOT_EVALUABLE !== undefined ? `${counts.NOT_EVALUABLE} not evaluable` : null,
-      view.stale ? "assessment is stale" : null,
+      counts.WOULD_ALLOW !== undefined ? `${counts.WOULD_ALLOW} would allow` : null,
+      counts.alreadyDroppedTuples !== undefined ? `${counts.alreadyDroppedTuples} already dropped today` : null,
+      counts.missingRuleGroups !== undefined ? `${counts.missingRuleGroups} missing-rule groups` : null,
+      view.targetSource ? targetSourceLabel(view.targetSource) : null,
+      staleText,
     ].filter(Boolean).join(" · ") || null,
     unprovable: state === "unk",
     rows,
@@ -288,11 +343,68 @@ export function buildCutoverAnswer(view: CutoverAssessmentView): AskAnswer {
 }
 
 export function buildZonesAnswer(evaluation: ZoneMatrixEvaluationResponse): AskAnswer {
-  const violations = evaluation.outcome_counts.VIOLATION ?? 0;
+  const oc = evaluation.outcome_counts ?? {};
+  const violations = oc.VIOLATION ?? 0;
+  const compliant = oc.COMPLIANT ?? 0;
+  const h = evaluation.headline;
+  const notEvaluable = oc.NOT_EVALUABLE ?? h.not_evaluable_rules ?? 0;
+  const unknown = oc.UNKNOWN ?? h.unknown_rules ?? 0;
   const state: BadgeState = !evaluation.evaluated ? "unk"
     : violations > 0 ? "act"
       : evaluation.coverage === "COMPLETE" ? "ok" : "watch";
-  const h = evaluation.headline;
+  const ruleRows: AskEvidenceRow[] = (evaluation.rules ?? [])
+    .filter((r) => r.outcome !== "COMPLIANT")
+    .map((r, i) => {
+      const header = [r.section_name, r.highest_severity ? severityWord(r.highest_severity) : null]
+        .filter(Boolean)
+        .join(" · ");
+      const cellLines = (r.violated_cells ?? []).map(
+        (c) => `${c.source_name} -> ${c.destination_name} (${c.nat_view}): ${statementWord(c.statement)}`,
+      );
+      const lines: string[] = [
+        ...(header ? [header] : []),
+        ...cellLines,
+        ...(r.reason ? [r.reason] : []),
+        ...((r.undecided_parts ?? []).length > 0 ? [r.undecided_parts.join("; ")] : []),
+      ];
+      return {
+        key: `rule-${r.rule_id || r.rule_uid || i}`,
+        title: `Rule #${r.rule_number} ${r.rule_name || r.rule_uid}`,
+        state: r.outcome === "VIOLATION" ? ("act" as const) : ("unk" as const),
+        stateWord:
+          r.outcome === "VIOLATION"
+            ? "Violation"
+            : r.outcome === "NOT_EVALUABLE"
+              ? "Not evaluable"
+              : "Outcome unknown",
+        lines,
+        source: "zone matrix",
+      };
+    });
+  const gapRows: AskEvidenceRow[] = (evaluation.zone_definition_gaps ?? []).map((g, i) => ({
+    key: `gap-${g.rule_id || i}`,
+    title: `Rule #${g.rule_number} ${g.rule_name}`,
+    state: "unk" as const,
+    stateWord: "Zone gap",
+    lines: [`${g.section_name} · ${g.range_count} unassigned private ${g.range_count === 1 ? "range" : "ranges"}`],
+    source: "zone matrix",
+  }));
+  const coverageRows: AskEvidenceRow[] = (evaluation.coverage_items ?? []).map((c) => ({
+    key: `cov-${c.code}`,
+    title: c.code,
+    state: "unk" as const,
+    stateWord: "Coverage",
+    lines: [c.description],
+    source: "zone matrix",
+  }));
+  const detailParts = [
+    `Matrix v${evaluation.version_number}`,
+    `${violations} violation${violations === 1 ? "" : "s"}`,
+    `${compliant} compliant`,
+    `${notEvaluable} not evaluable`,
+    `${unknown} UNKNOWN`,
+    evaluation.not_applicable?.total !== undefined ? `${evaluation.not_applicable.total} not applicable` : null,
+  ].filter((p): p is string => Boolean(p));
   return {
     mode: "zones",
     state,
@@ -300,11 +412,9 @@ export function buildZonesAnswer(evaluation: ZoneMatrixEvaluationResponse): AskA
     headline: !evaluation.evaluated
       ? evaluation.not_evaluated_reason ?? "This policy could not be evaluated against the zone matrix."
       : `${h.distinct_violating_rules} rule${h.distinct_violating_rules === 1 ? "" : "s"} violate the matrix across ${h.violated_zone_pairs} zone pair${h.violated_zone_pairs === 1 ? "" : "s"}.`,
-    detail: `Matrix v${evaluation.version_number} · ${h.unknown_rules} UNKNOWN · ${h.not_evaluable_rules} not evaluable`,
+    detail: detailParts.join(" · "),
     unprovable: state === "unk",
-    rows: evaluation.coverage_items.map((c) => ({
-      key: `cov-${c.code}`, title: c.code, state: "unk" as const, stateWord: "Coverage", lines: [c.description], source: "zone matrix",
-    })),
+    rows: [...ruleRows, ...gapRows, ...coverageRows],
     evidenceAt: evaluation.collected_at,
     limitations: null,
   };

@@ -316,7 +316,3 @@ export function CapabilityMenu({
     </>
   );
 }
-
-export function HeaderActionsRow({ children }: { readonly children: ReactNode }) {
-  return <Box sx={{ display: "flex", gap: 1.25, alignItems: "center" }}>{children}</Box>;
-}

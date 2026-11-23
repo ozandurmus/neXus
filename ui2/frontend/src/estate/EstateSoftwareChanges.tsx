@@ -3,7 +3,7 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import { getSoftwareChanges } from "../auth/adminApi";
 import { PRODUCT_NAME } from "../brand/product";
-import { EstateCard, EvidenceStamp, MoreFooter } from "./EstatePrimitives";
+import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
 import {
   buildEstateSoftwareModel,
   SOFTWARE_CHANGE_WINDOW_DAYS,
@@ -62,6 +62,7 @@ export function EstateSoftwareChanges({
           <Typography data-testid="software-changes-headline" sx={{ fontSize: "13px", color: ev.ink2 }}>
             {model.headline}
           </Typography>
+          {model.status === "failed" ? <StateBadge state="unk" word="UNKNOWN" dense /> : null}
           {model.status === "ok" ? (
             <Box data-testid="software-changes-total-stamp">
               <EvidenceStamp at={model.newestAt} now={now} source="newest software change" />
@@ -99,6 +100,7 @@ export function EstateSoftwareChanges({
                     {row.unitName}
                   </Typography>
                   <Typography sx={{ fontSize: "13px", color: ev.ink2, overflowWrap: "anywhere" }}>{row.summary}</Typography>
+                  <Typography sx={{ fontSize: "12px", color: ev.ink3, overflowWrap: "anywhere" }}>{`Change window: ${row.windowText}`}</Typography>
                 </Box>
                 <EvidenceStamp at={row.at} now={now} source="software change" />
               </Box>
@@ -127,12 +129,50 @@ export function EstateSoftwareChanges({
                 <EvidenceStamp at={u.newestAt} now={now} source="newest change of this unit" />
               </Box>
             ))}
+            <MoreFooter shown={model.perUnit.length} total={model.totalUnits} noun="units" testId="software-units-more" />
           </Box>
         ) : null}
 
-        {model.status === "ok" && model.installEventLine ? (
-          <Box sx={{ px: "18px", py: "10px", borderTop: `1px solid ${ev.line}`, fontSize: "12px", color: ev.ink3 }}>
-            {model.installEventLine}
+        {model.status === "ok" && model.totalInstallEvents > 0 ? (
+          <Box sx={{ px: "18px", py: "10px", borderTop: `1px solid ${ev.line}` }}>
+            <Box sx={{ display: "flex", gap: "12px", alignItems: "baseline", flexWrap: "wrap", mb: "4px" }}>
+              <Typography sx={{ fontSize: "12px", color: ev.ink3 }}>{model.installEventLine}</Typography>
+              <EvidenceStamp at={model.newestInstallObservedAt} now={now} source="newest install log read" />
+            </Box>
+            <Box component="ul" aria-label="Check Point install log" sx={{ listStyle: "none", m: 0, p: 0 }}>
+              {model.installRows.map((row) => (
+                <Box
+                  component="li"
+                  key={row.key}
+                  data-install-event-row={row.deviceId}
+                  sx={{
+                    borderTop: `1px solid ${ev.line}`,
+                    py: "8px",
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 180px" },
+                    gap: "8px",
+                    alignItems: "start",
+                  }}
+                >
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography sx={{ fontFamily: ESTATE_MONO, fontSize: "12.5px", color: ev.ink, overflowWrap: "anywhere" }}>
+                      {row.unitName}
+                    </Typography>
+                    <Typography sx={{ fontSize: "13px", color: ev.ink2, overflowWrap: "anywhere" }}>{row.what}</Typography>
+                    <Typography sx={{ fontFamily: ESTATE_MONO, fontSize: "12px", color: ev.ink3 }}>
+                      {`${row.installedAtLocal} (device clock)`}
+                    </Typography>
+                  </Box>
+                  <EvidenceStamp at={row.firstObservedAt} now={now} source="first observed" />
+                </Box>
+              ))}
+            </Box>
+            <MoreFooter
+              shown={model.installRows.length}
+              total={model.totalInstallEvents}
+              noun="install log entries"
+              testId="software-installs-more"
+            />
           </Box>
         ) : null}
       </EstateCard>

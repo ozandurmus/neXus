@@ -53,3 +53,67 @@ export function offlineSampleLine(result: OfflineAnalysisResult): string {
 export function offlineModeLabel(summary: Pick<OfflineAnalysisSummary, "mode">): string {
   return summary.mode === "ONE_RULE" ? "One rule" : "Whole policy";
 }
+
+/** Rules shown in the findings list before "+N more rules" (the list is capped; the footer prints the true total). */
+export const OFFLINE_RULE_CAP = 20;
+
+/** Sample period line. A missing bound is shown as UNKNOWN, never as an empty date. */
+export function offlinePeriodLine(result: Pick<OfflineAnalysisResult, "periodStart" | "periodEnd">): string {
+  return `Period ${result.periodStart || "UNKNOWN"} – ${result.periodEnd || "UNKNOWN"}`;
+}
+
+/** SIEM rule-agreement line; null when the comparison was not enabled for this analysis. */
+export function offlineComparisonLine(
+  result: Pick<OfflineAnalysisResult, "comparisonEnabled" | "agreementCount" | "disagreementCount" | "comparisonUnknownCount" | "comparisonNote">,
+): string | null {
+  if (!result.comparisonEnabled) return null;
+  return `SIEM rule agreement: ${result.agreementCount} · Disagreement: ${result.disagreementCount} · UNKNOWN: ${result.comparisonUnknownCount}${result.comparisonNote ? ` · ${result.comparisonNote}` : ""}`;
+}
+
+/** One line per parse / UNKNOWN / verdict stat. The count is named by its reason; flows and rows are not conflated here. */
+export function offlineStatLines(stats: readonly { readonly statReason: string; readonly count: number }[] | null | undefined): readonly string[] {
+  return (stats ?? []).map((s) => `${s.statReason}: ${s.count}`);
+}
+
+/** View model of one finding row. UNKNOWN member status is never rendered as "ok". */
+export interface OfflineRuleRow {
+  readonly key: string;
+  readonly title: string;
+  readonly meta: string;
+  readonly memberBadge: { readonly state: "unk" | "watch" | "ok"; readonly word: string };
+  readonly memberNote: string | null;
+  readonly zeroTrafficNote: string | null;
+  readonly narrowingNote: string | null;
+}
+
+export function offlineRuleRow(rule: OfflineRule): OfflineRuleRow {
+  const unseen = rule.unseenMembers ?? [];
+  const memberBadge: OfflineRuleRow["memberBadge"] =
+    rule.memberStatus === "UNKNOWN"
+      ? { state: "unk", word: "Members UNKNOWN" }
+      : unseen.length > 0
+        ? { state: "watch", word: `${unseen.length} unseen ${unseen.length === 1 ? "member" : "members"}` }
+        : { state: "ok", word: "Members seen" };
+  const memberNote =
+    rule.memberStatus === "UNKNOWN"
+      ? `UNKNOWN: ${rule.lookupReason || "member resolution unavailable"}`
+      : unseen.length > 0
+        ? unseen.map((m) => `${m.dimension}: ${m.name}`).join(", ")
+        : null;
+  const narrowing = rule.narrowing;
+  const narrowingNote =
+    narrowing?.memberStatus === "UNKNOWN"
+      ? `Narrowing UNKNOWN: ${narrowing.suggestionNote ?? "not evaluable"}`
+      : narrowing?.memberStatus
+        ? `Narrowing: ${narrowing.memberStatus}${typeof narrowing.coveragePercent === "number" ? ` (${narrowing.coveragePercent}% of ${narrowing.coveredFlows ?? 0} attributed flows)` : ""}`
+        : null;
+  return {
+    key: rule.ruleId || String(rule.number),
+    title: `#${rule.number} · ${rule.name || "Unnamed rule"}`,
+    meta: `${rule.sectionName || "UNKNOWN"} · ${rule.action || "UNKNOWN"} · ${rule.flowCount} attributed ${rule.flowCount === 1 ? "flow" : "flows"} · ${rule.distinctSources} ${rule.distinctSources === 1 ? "source" : "sources"}, ${rule.distinctDestinations} ${rule.distinctDestinations === 1 ? "destination" : "destinations"}, ${rule.distinctServices} ${rule.distinctServices === 1 ? "service" : "services"}`,
+    memberBadge,
+    memberNote,
+    zeroTrafficNote: rule.zeroTraffic ? `${rule.severity ? `${rule.severity}: ` : ""}${rule.zeroTraffic} This does not establish an unused rule.` : null,
+    narrowingNote,
+  };
+}

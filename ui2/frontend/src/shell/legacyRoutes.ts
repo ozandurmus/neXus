@@ -33,9 +33,6 @@ export const LEGACY_ADMIN_TABS: Readonly<Record<string, { readonly group: AdminG
   "audit-logs": { group: "audit", section: "audit-logs" },
 };
 
-/** The Policy tab slugs of the four-tab layout (C2). */
-export const POLICY_TAB_SLUGS = ["rules", "objects", "hygiene", "changes"] as const;
-
 /** The Rule object usage mode an Offline analysis address opens: the whole-policy analysis it always was. */
 const RULE_USAGE_LEGACY_MODE = "policy";
 

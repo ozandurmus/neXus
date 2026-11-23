@@ -3,6 +3,8 @@ import type { CpInstallEventWithDevice, SoftwareChange } from "../src/auth/admin
 import {
   buildEstateSoftwareModel,
   SOFTWARE_CHANGE_ROW_CAP,
+  SOFTWARE_INSTALL_EVENT_CAP,
+  SOFTWARE_UNIT_CAP,
   softwareChangeSummary,
 } from "../src/estate/estateSoftwareModel";
 
@@ -121,5 +123,59 @@ describe("buildEstateSoftwareModel", () => {
     expect(m.totalChanges).toBe(1);
     expect(m.installEventLine).toMatch(/^1 Check Point install log entry in 90 days/);
     expect(buildEstateSoftwareModel(ok([]), UNITS).installEventLine).toBeNull();
+  });
+
+  it("includes the change window on each row; UNKNOWN when a bound is missing", () => {
+    const dated = { ...change("dev-tango-04", 2), window_start: "2026-11-01T08:00:00Z", window_end: "2026-11-02T09:30:00Z" };
+    const m = buildEstateSoftwareModel(ok([change("dev-bravo-02", 3), dated]), UNITS);
+    const byUnit = Object.fromEntries(m.rows.map((r) => [r.unitName, r.windowText]));
+    expect(byUnit["FW-BRAVO-02"]).toBe("UNKNOWN (first version seen)");
+    expect(byUnit["FW-TANGO-04"]).toContain(" to ");
+    expect(byUnit["FW-TANGO-04"]).not.toContain("UNKNOWN");
+  });
+
+  it("caps perUnit at SOFTWARE_UNIT_CAP and keeps the total unit count", () => {
+    const units = new Map(Array.from({ length: 13 }, (_, i) => [`dev-u${i}`, { name: `FW-UNIT-${i}` }] as const));
+    const changes = Array.from({ length: 13 }, (_, i) => change(`dev-u${i}`, i + 1));
+    const m = buildEstateSoftwareModel(ok(changes), units);
+    expect(SOFTWARE_UNIT_CAP).toBe(10);
+    expect(m.perUnit).toHaveLength(10);
+    expect(m.totalUnits).toBe(13);
+  });
+
+  it("maps install events into capped, newest-first rows with Estate labels only", () => {
+    const installs: CpInstallEventWithDevice[] = Array.from({ length: 12 }, (_, i) => ({
+      device_id: i % 2 ? "dev-bravo-02" : "dev-tango-04",
+      hostname: "FW-ZULU-99",
+      kind: i === 0 ? "BASE_INSTALL" : "JUMBO_INSTALL",
+      product_version: "R81.20",
+      jumbo_take: i === 0 ? null : 100 + i,
+      installed_at_local: `2026-11-${String(i + 1).padStart(2, "0")} 10:00:00`,
+      file_name: `install-${i}`,
+      first_observed_at: new Date(NOW.getTime() - i * 3_600_000).toISOString(),
+    }));
+    const m = buildEstateSoftwareModel(ok([], installs), UNITS);
+    expect(SOFTWARE_INSTALL_EVENT_CAP).toBe(10);
+    expect(m.installRows).toHaveLength(10);
+    expect(m.totalInstallEvents).toBe(12);
+    expect(m.newestInstallObservedAt).toBe(installs[0].first_observed_at);
+    expect(m.installRows[0]).toEqual({
+      key: "dev-tango-04-install-0-2026-11-01 10:00:00-0",
+      deviceId: "dev-tango-04",
+      unitName: "FW-TANGO-04",
+      what: "Base install R81.20",
+      installedAtLocal: "2026-11-01 10:00:00",
+      firstObservedAt: installs[0].first_observed_at,
+    });
+    expect(m.installRows[1].what).toBe("Jumbo R81.20 Take 101");
+    expect(m.installRows[1].unitName).toBe("FW-BRAVO-02");
+    expect(JSON.stringify(m)).not.toContain("FW-ZULU-99");
+  });
+
+  it("has no install rows and a null newest stamp when the install log is empty", () => {
+    const m = buildEstateSoftwareModel(ok([change("dev-tango-04", 2)]), UNITS);
+    expect(m.installRows).toEqual([]);
+    expect(m.totalInstallEvents).toBe(0);
+    expect(m.newestInstallObservedAt).toBeNull();
   });
 });

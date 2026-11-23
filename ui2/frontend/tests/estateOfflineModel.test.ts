@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 import type { OfflineAnalysisResult, OfflineRule } from "../src/auth/adminApi";
 import {
   OFFLINE_PAGE_SIZE,
+  OFFLINE_RULE_CAP,
+  offlineComparisonLine,
   offlineListRequest,
   offlineModeLabel,
   offlinePager,
+  offlinePeriodLine,
   offlineRuleCounts,
+  offlineRuleRow,
   offlineSampleLine,
+  offlineStatLines,
 } from "../src/estate/estateOfflineModel";
 
 // Synthetic values only (FW-TANGO-04 style names, documentation addresses).
@@ -75,5 +80,80 @@ describe("offline labels", () => {
       rowCount: 10, invalidRows: 1, flowCount: 8, attributedFlows: 6,
     } as OfflineAnalysisResult;
     expect(offlineSampleLine(result)).toBe("10 rows · 1 invalid rows · 8 valid sample flows · 6 attributed flows");
+  });
+});
+
+describe("offlinePeriodLine", () => {
+  it("formats the sample period and shows missing bounds as UNKNOWN", () => {
+    expect(offlinePeriodLine({ periodStart: "2026-11-01", periodEnd: "2026-11-07" })).toBe("Period 2026-11-01 – 2026-11-07");
+    expect(offlinePeriodLine({ periodStart: "", periodEnd: "" })).toBe("Period UNKNOWN – UNKNOWN");
+  });
+});
+
+describe("offlineComparisonLine", () => {
+  it("returns null when the SIEM comparison was not enabled", () => {
+    expect(offlineComparisonLine({
+      comparisonEnabled: false, agreementCount: 3, disagreementCount: 1, comparisonUnknownCount: 0, comparisonNote: "",
+    })).toBeNull();
+  });
+
+  it("formats agreement, disagreement and UNKNOWN counts when enabled, with the note appended", () => {
+    expect(offlineComparisonLine({
+      comparisonEnabled: true, agreementCount: 3, disagreementCount: 1, comparisonUnknownCount: 2, comparisonNote: "synthetic note",
+    })).toBe("SIEM rule agreement: 3 · Disagreement: 1 · UNKNOWN: 2 · synthetic note");
+    expect(offlineComparisonLine({
+      comparisonEnabled: true, agreementCount: 0, disagreementCount: 0, comparisonUnknownCount: 0, comparisonNote: "",
+    })).toBe("SIEM rule agreement: 0 · Disagreement: 0 · UNKNOWN: 0");
+  });
+});
+
+describe("offlineStatLines", () => {
+  it("names each stat by its reason and count, and tolerates an absent list", () => {
+    expect(offlineStatLines([{ statReason: "BAD_TIME", count: 1 }, { statReason: "NO_RULE", count: 4 }]))
+      .toEqual(["BAD_TIME: 1", "NO_RULE: 4"]);
+    expect(offlineStatLines(null)).toEqual([]);
+    expect(offlineStatLines(undefined)).toEqual([]);
+  });
+});
+
+describe("offlineRuleRow", () => {
+  it("never renders UNKNOWN member status as ok", () => {
+    const row = offlineRuleRow(rule({ memberStatus: "UNKNOWN", lookupReason: "lookup timed out", unseenMembers: [] }));
+    expect(row.memberBadge).toEqual({ state: "unk", word: "Members UNKNOWN" });
+    expect(row.memberNote).toBe("UNKNOWN: lookup timed out");
+  });
+
+  it("maps a known member status with no unseen members to ok, and formats unseen members", () => {
+    expect(offlineRuleRow(rule({})).memberBadge).toEqual({ state: "ok", word: "Members seen" });
+    const row = offlineRuleRow(rule({
+      unseenMembers: [{ memberId: "m1", name: "OBJ-SYN-1", dimension: "source" }, { memberId: "m2", name: "OBJ-SYN-2", dimension: "service" }],
+    }));
+    expect(row.memberBadge).toEqual({ state: "watch", word: "2 unseen members" });
+    expect(row.memberNote).toBe("source: OBJ-SYN-1, service: OBJ-SYN-2");
+  });
+
+  it("states the zero-traffic note with its severity and the no-unused-rule disclaimer", () => {
+    const row = offlineRuleRow(rule({ flowCount: 0, zeroTraffic: "No attributed flows in sample.", severity: "INFO" }));
+    expect(row.zeroTrafficNote).toBe("INFO: No attributed flows in sample. This does not establish an unused rule.");
+    expect(offlineRuleRow(rule({ zeroTraffic: "" })).zeroTrafficNote).toBeNull();
+  });
+
+  it("formats narrowing status, and shows Narrowing UNKNOWN as UNKNOWN", () => {
+    expect(offlineRuleRow(rule({ narrowing: { memberStatus: "SUGGESTED", coveragePercent: 80, coveredFlows: 5 } })).narrowingNote)
+      .toBe("Narrowing: SUGGESTED (80% of 5 attributed flows)");
+    expect(offlineRuleRow(rule({ narrowing: { memberStatus: "UNKNOWN", suggestionNote: "not resolved" } })).narrowingNote)
+      .toBe("Narrowing UNKNOWN: not resolved");
+    expect(offlineRuleRow(rule({ narrowing: {} })).narrowingNote).toBeNull();
+  });
+
+  it("builds the title, key and meta with counts named by their nouns", () => {
+    const row = offlineRuleRow(rule({ ruleId: "", number: 7, name: "", flowCount: 1, distinctSources: 2, distinctDestinations: 1, distinctServices: 1 }));
+    expect(row.key).toBe("7");
+    expect(row.title).toBe("#7 · Unnamed rule");
+    expect(row.meta).toBe("SEC-SYN · allow · 1 attributed flow · 2 sources, 1 destination, 1 service");
+  });
+
+  it("exposes the rule display cap as 20", () => {
+    expect(OFFLINE_RULE_CAP).toBe(20);
   });
 });
