@@ -5,6 +5,9 @@ import org.gradle.language.jvm.tasks.ProcessResources
 
 plugins {
     alias(libs.plugins.spring.boot)
+    // Shared test helpers (AiviewReachableRoutes): the static masking audit here and the HTTP sweep in integration-tests
+    // enumerate the aiview-reachable routes through one class.
+    `java-test-fixtures`
 }
 
 dependencies {
@@ -95,6 +98,12 @@ dependencies {
     gradle.gradleHomeDir?.resolve("lib/plugins")?.let { plugins ->
         testImplementation(fileTree(plugins) { include("sshd-core-*.jar", "sshd-common-*.jar", "sshd-sftp-*.jar") })
     }
+}
+
+// The test fixtures (AiviewReachableRoutes) compile against exactly the main code's own dependencies and version floors,
+// so they add no module or version to the lock state.
+configurations.named("testFixturesImplementation") {
+    extendsFrom(configurations.implementation.get())
 }
 
 // PO ASSISTANT DECISION 2026-09-14 on packaging: the launcher, not

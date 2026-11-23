@@ -5,8 +5,8 @@
 DRAFT - 2026-11-13. Design only; not implementation authority (AGENTS.md "Contract-status law"). Written without
 any device, APIC or host contact. Every APIC read in section 6 is a proposal: nothing is gated, implemented or run
 until the Product Owner approves each exact literal (AGENTS.md "Network action taxonomy", 2026-09-26 amendment). The
-zone matrix contract and the legacy upper-bound match this design builds on are themselves unmerged DRAFT work on
-their own branches (section 3).
+zone matrix contract this design builds on is FROZEN revision 2 on `main` (`ZONE_MATRIX_CONTRACT.md`); the legacy
+upper-bound match is still unmerged DRAFT work on its own branch (section 3).
 
 ## 0. PO answers and step 1 implementation (2026-11-14)
 
@@ -101,7 +101,7 @@ Reused, by state:
 | Rule object usage (uploaded traffic-log CSV, in-memory read, aggregates only; one-rule and whole-policy modes) | `docs/design/RULE_OBJECT_USAGE_CONTRACT.md`, `OfflineAnalysis.java`, `OfflineCsv.java` | Contract FROZEN; one-rule mode on a local lane, not on `main` |
 | Path analysis / Trace (topology graph from inventory, hop engine, return-path walk, `ASYMMETRIC`, `PBR_PRESENT`, `EXITS_KNOWN_TOPOLOGY`) | `docs/design/PATH_ANALYSIS_DESIGN.md`, `ui2/service/.../pathanalysis/` | FROZEN; phase A shipped |
 | Path validation matchers (PAN `test security-policy-match`, `test nat-policy-match`, `test routing fib-lookup`, CP `ip route get`) | `docs/design/PATH_ANALYSIS_A6_COMMAND_PROPOSAL.md` | Literals approved; TCP only; multi-vsys PAN hops not evaluable |
-| Zone matrix (zones as IP blocks, four-eyes publish, address lookup right) | `ZONE_MATRIX_CONTRACT.md` on branch `docs/zone-matrix-contract-1113` | DRAFT, revision 2, not frozen |
+| Zone matrix (zones as IP blocks, four-eyes publish, address lookup right) | `docs/design/ZONE_MATRIX_CONTRACT.md` | FROZEN, revision 2 (on `main`) |
 | Device system logs (scheduled collection, masked view) | `docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md` | Live; see section 5.2 for what it does and does not hold |
 
 Laws kept throughout (AGENTS.md):
@@ -561,6 +561,11 @@ engineer-day estimates, each step its own PR with targeted tests.
 | 2b | Counter snapshots in the watch view, only if 2a is too slow for the first hours | One literal per vendor | Measurement records; PO approval | 4-6 |
 | 5 | Capability 1 takes its scope from the APIC contracts instead of typed scope; per-wave readiness for phase 3 | None beyond step 3 | Steps 3-4 | 4-6 |
 
+Delivery row 2a, Q9 Trace caveat: implemented. A Trace whose source or destination lies in a stored cutover segment's
+`blocks` carries `FABRIC_REDIRECT_NOT_MODELLED` and is not plain; verdict, hops and reasons are unchanged, and unreadable
+stored segments add the warning `CUTOVER_SEGMENTS_UNREADABLE` (`PathQueryService`, `CutoverSegmentCaveat`). The
+assessment side already lists the same code as a coverage item.
+
 Phase 2 of the programme is in measurement now, so step 1 is useful at once; phase 3 planning can use steps 3-5.
 
 ## 8. Risks
@@ -665,6 +670,6 @@ For the contract that will follow this design (numbering provisional):
 - `docs/design/PATH_ANALYSIS_VENDOR_SEMANTICS.md`
 - `docs/design/PATH_ANALYSIS_A6_COMMAND_PROPOSAL.md`
 - `docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md`
-- `ZONE_MATRIX_CONTRACT.md` and `PO_DECISION_RECORD_2026_11_13_ZONE_MATRIX.md` on branch `docs/zone-matrix-contract-1113`
+- `ZONE_MATRIX_CONTRACT.md` (FROZEN, revision 2) and `PO_DECISION_RECORD_2026_11_13_ZONE_MATRIX.md`, both on `main`
   (not on `main` yet)
 - Legacy upper-bound match: branch `feat/hygiene-legacy-resolution-1113`

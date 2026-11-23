@@ -1,11 +1,16 @@
 package com.securityexpert.nexus.ui2.service.pathanalysis.query;
 
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Supplier;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.securityexpert.nexus.ui2.service.pathanalysis.engine.PathEngine;
 import com.securityexpert.nexus.ui2.service.pathanalysis.engine.PathQuery;
@@ -30,6 +35,12 @@ import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
  * are resolved through the snapshot's in-memory {@link PathPseudonymMap}; a raw, unknown or ambiguous value is
  * {@link Refused} with one uniform outcome (the specific code goes to the audit row only). Both addresses are always
  * resolved, so a refusal does not reveal which field failed by doing less work.</p>
+ *
+ * <p><b>Cutover segments (ACI segmentation, PO record 2026-11-14 Q9).</b> After the engine answers, a source or
+ * destination inside a stored cutover segment adds the caveat {@code FABRIC_REDIRECT_NOT_MODELLED} and makes the result
+ * non-plain; verdict, hops and reasons are untouched. Segments that cannot be read add the warning
+ * {@code CUTOVER_SEGMENTS_UNREADABLE}. Only the codes are added -- never a segment name, block or id -- so the replay
+ * viewer's response needs no further masking.</p>
  */
 public final class PathQueryService {
 
@@ -65,15 +76,26 @@ public final class PathQueryService {
 
     static final String REFUSED_VALUE = "[REFUSED]";
 
+    private static final Logger LOG = LoggerFactory.getLogger(PathQueryService.class);
+
     private final TopologyService topology;
     private final PathPolicyBinder policies;
     private final PathPseudonymResolver pseudonyms;
     private final SubnetPreservingIpMasker ips;
     private final TopologyNamePseudonymizer names;
     private final Clock clock;
+    private final Supplier<List<String>> cutoverSegments;
 
     public PathQueryService(TopologyService topology, PathPolicyBinder policies, PathPseudonymResolver pseudonyms,
             SubnetPreservingIpMasker ips, TopologyNamePseudonymizer names, Clock clock) {
+        this(topology, policies, pseudonyms, ips, names, clock, List::of);
+    }
+
+    /** {@code cutoverSegments}: the stored cutover segments as JSON documents (may throw when they cannot be read). */
+    public PathQueryService(TopologyService topology, PathPolicyBinder policies, PathPseudonymResolver pseudonyms,
+            SubnetPreservingIpMasker ips, TopologyNamePseudonymizer names, Clock clock,
+            Supplier<List<String>> cutoverSegments) {
+        this.cutoverSegments = Objects.requireNonNull(cutoverSegments, "cutoverSegments");
         this.topology = Objects.requireNonNull(topology, "topology");
         this.policies = Objects.requireNonNull(policies, "policies");
         this.pseudonyms = Objects.requireNonNull(pseudonyms, "pseudonyms");
@@ -110,7 +132,8 @@ public final class PathQueryService {
         TopologyGraph graph = held.get();
         if (!replayViewer) {
             PathQuery query = request.toQuery(request.source(), request.destination(), request.ingressInterface());
-            PathResult result = PathEngine.analyze(graph, policies.forQuery(clock.instant()), query, clock.instant());
+            PathResult result = withCutoverCaveat(
+                    PathEngine.analyze(graph, policies.forQuery(clock.instant()), query, clock.instant()), query);
             return new Computed(result, masked(request));
         }
         PathPseudonymMap map = pseudonyms.mapFor(graph);
@@ -136,8 +159,42 @@ public final class PathQueryService {
         }
         PathQuery query = request.toQuery(((PathPseudonymMap.Resolved) src).raw(), ((PathPseudonymMap.Resolved) dst).raw(),
                 iface.map(r -> ((PathPseudonymMap.Resolved) r).raw()));
-        PathResult result = PathEngine.analyze(graph, policies.forQuery(clock.instant()), query, clock.instant());
+        PathResult result = withCutoverCaveat(
+                PathEngine.analyze(graph, policies.forQuery(clock.instant()), query, clock.instant()), query);
         return new Computed(result, audit);
+    }
+
+    /**
+     * The result with the fabric-redirect caveat when the query's source or destination lies in a stored cutover segment.
+     * Fail closed but quiet: segments that cannot be read add a warning code, never a silent "not in a segment".
+     */
+    private PathResult withCutoverCaveat(PathResult result, PathQuery query) {
+        CutoverSegmentCaveat.Outcome outcome;
+        try {
+            List<String> segments = cutoverSegments.get();
+            outcome = CutoverSegmentCaveat.check(segments, query.source(), query.destination());
+            if (outcome.unreadable()) {
+                LOG.warn("Some of {} cutover segments could not be read for a path query", segments.size());
+            }
+        } catch (RuntimeException unreadable) {
+            LOG.warn("Cutover segments could not be read for a path query: {}", unreadable.getClass().getSimpleName());
+            outcome = CutoverSegmentCaveat.Outcome.UNREADABLE_ONLY;
+        }
+        if (!outcome.matched() && !outcome.unreadable()) {
+            return result;
+        }
+        List<String> caveats = new ArrayList<>(result.caveats());
+        List<String> warnings = new ArrayList<>(result.warnings());
+        if (outcome.matched() && !caveats.contains(CutoverSegmentCaveat.FABRIC_REDIRECT_NOT_MODELLED)) {
+            caveats.add(CutoverSegmentCaveat.FABRIC_REDIRECT_NOT_MODELLED);
+        }
+        if (outcome.unreadable() && !warnings.contains(CutoverSegmentCaveat.CUTOVER_SEGMENTS_UNREADABLE)) {
+            warnings.add(CutoverSegmentCaveat.CUTOVER_SEGMENTS_UNREADABLE);
+        }
+        return new PathResult(result.query(), result.topologySnapshotId(), result.computedAt(), result.verdict(),
+                result.reason(), result.plain() && !outcome.matched(), caveats, warnings, result.ingress(),
+                result.branches(), result.ecmpTruncated(), result.asymmetric(), result.blockingHop(),
+                result.executiveSummary(), result.limitations());
     }
 
     /** One code for the audit row: a raw value outranks ambiguity, which outranks an unknown value. */

@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
+import com.securityexpert.nexus.ui2.persistence.policy.CutoverRepository;
 import com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository;
 import com.securityexpert.nexus.ui2.service.pathanalysis.topology.InterfaceNameSource;
 import com.securityexpert.nexus.ui2.service.pathanalysis.topology.TopologyService;
@@ -47,8 +48,11 @@ public class PathQueryConfiguration {
 
     @Bean
     public PathQueryService pathQueryService(TopologyService topologyService, PathPolicyBinder pathPolicyBinder,
-            PathPseudonymResolver pathPseudonymResolver, SubnetPreservingIpMasker ips, TopologyNamePseudonymizer names) {
+            PathPseudonymResolver pathPseudonymResolver, SubnetPreservingIpMasker ips, TopologyNamePseudonymizer names,
+            TransactionBoundary transactionBoundary) {
+        // Cutover segments are read as stored (the existing listing); a failed read is a warning, never "no segment".
+        CutoverRepository cutover = new CutoverRepository(transactionBoundary);
         return new PathQueryService(topologyService, pathPolicyBinder, pathPseudonymResolver, ips, names,
-                Clock.systemUTC());
+                Clock.systemUTC(), cutover::listSegments);
     }
 }
