@@ -65,7 +65,8 @@ export type PolicyHygieneView =
       readonly shownReasons: readonly ReasonBreakdownRow[];
       readonly totalReasons: number;
       readonly shownRows: readonly HygieneFindingRowView[];
-      readonly totalRows: number;
+      /** Matching-rule total as reported by the service; null when missing or inconsistent (UNKNOWN). */
+      readonly totalRows: number | null;
     };
 
 export function isValidPolicyHygienePage(value: unknown): value is PolicyHygienePage {
@@ -161,10 +162,11 @@ export function buildPolicyHygieneView(
       shadowText: shadow.shadowText,
     };
   });
+  // The total is trusted only when the service reported it and it can hold every returned row; otherwise UNKNOWN.
   const totalRows =
-    typeof data.total === "number" && Number.isFinite(data.total) && data.total >= shownRows.length
+    typeof data.total === "number" && Number.isFinite(data.total) && data.total >= data.rows.length
       ? data.total
-      : data.rows.length;
+      : null;
 
   return {
     state: "ok",

@@ -116,17 +116,6 @@ export function Donut({ title, slices, size = 132, centerLabel, stacked = false 
   );
 }
 
-/** A single ratio against its whole: a same-ramp track, the value as a word and a number. */
-export function Meter({ value, of, tone }: { readonly value: number; readonly of: number; readonly tone: keyof typeof STATUS | "primary" }) {
-  const pct = of > 0 ? Math.min(100, (100 * value) / of) : 0;
-  const color = tone === "primary" ? m3.primary : STATUS[tone];
-  return (
-    <Box sx={{ height: 8, borderRadius: "4px", bgcolor: m3.sc, overflow: "hidden" }}>
-      <Box sx={{ width: `${pct}%`, height: "100%", bgcolor: color, borderRadius: "4px", transition: "width 300ms" }} />
-    </Box>
-  );
-}
-
 /** Horizontal part-to-whole bar with 2 px gaps between segments and a tooltip per segment. */
 export function StackedBar({ parts, height = 14 }: {
   readonly parts: ReadonlyArray<{ label: string; count: number; color: string; href?: string }>;

@@ -143,10 +143,6 @@ export function explainValidation(code: string): string {
   return WORDS[code] ?? code;
 }
 
-export function hasValidationExplanation(code: string): boolean {
-  return code in WORDS;
-}
-
 /** The query body a verification needs: the computed result's own query, exactly as the server returned it. */
 export function requestFromResult(result: PathResult): PathQueryRequest {
   const q = result.query;

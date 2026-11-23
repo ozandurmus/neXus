@@ -314,20 +314,6 @@ export function useListView(): [ListView, (v: ListView) => void] {
   return [view, set];
 }
 
-export function ListViewSelect({ value, onChange }: { readonly value: ListView; readonly onChange: (v: ListView) => void }) {
-  return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-      <Typography variant="caption" color="text.secondary">View</Typography>
-      <Box component="select" value={value} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange(e.target.value as ListView)}
-        aria-label="Device list view"
-        sx={{ fontSize: "12px", color: m3.onSurface, bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, borderRadius: "6px", px: 1, py: 0.4, cursor: "pointer" }}>
-        <option value="flat">Flat list</option>
-        <option value="manager">By manager</option>
-      </Box>
-    </Box>
-  );
-}
-
 /** Which enrolled devices and clusters each management server's domains hold, from its managed-estate tree. */
 export function managerGroups(tree: ManagementTree): Array<{ domain: string | null; deviceIds: Set<string> }> {
   return tree.domains.map((d) => {

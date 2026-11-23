@@ -167,6 +167,85 @@ describe("EstateDossierConfigurationBlock", () => {
     expect(block.textContent).toContain("2 sections indexed · entries UNKNOWN ·");
     expect(block.textContent).not.toMatch(/\d+ entr(y|ies) ·/);
     expect(block.textContent).not.toContain("4 entries ·");
+    const list = screen.getByTestId("dossier-config-sections-list");
+    expect(list.textContent).toContain("entries UNKNOWN");
+    expect(list.textContent).not.toMatch(/undefined entries|null entries/);
+  });
+
+  it("renders 'entries UNKNOWN' for a section whose entry_count is null, never 'null entries'", () => {
+    render(
+      <EstateDossierConfigurationBlock
+        deviceId={DEVICE_ID}
+        vendor="check_point"
+        role="gateway"
+        configuration={{
+          state: "ok",
+          value: makeSnapshot({
+            index: [
+              { context: "physical", section: "System", source: "local", entry_count: null, has_override: false } as unknown as ConfigurationIndexEntry,
+            ],
+          }),
+        }}
+        now={NOW}
+      />,
+    );
+
+    const list = screen.getByTestId("dossier-config-sections-list");
+    expect(list.textContent).toContain("entries UNKNOWN");
+    expect(list.textContent).not.toMatch(/undefined entries|null entries/);
+    expect(screen.getByTestId("dossier-configuration-block").textContent).not.toMatch(/\bnull\b|\bundefined\b/);
+  });
+
+  it("renders sections, entries and local overrides as UNKNOWN (never 0) and never 'Aligned' when index and overrides are not reported", () => {
+    for (const absent of [
+      { index: null, overrides: null },
+      { index: undefined, overrides: undefined },
+    ]) {
+      const { unmount } = render(
+        <EstateDossierConfigurationBlock
+          deviceId={DEVICE_ID}
+          vendor="check_point"
+          role="gateway"
+          configuration={{
+            state: "ok",
+            value: makeSnapshot({ change_state: "unchanged", ...absent }),
+          }}
+          now={NOW}
+        />,
+      );
+
+      const block = screen.getByTestId("dossier-configuration-block");
+      expect(block.textContent).toContain("sections UNKNOWN");
+      expect(block.textContent).toContain("entries UNKNOWN");
+      expect(block.textContent).toContain("local overrides UNKNOWN");
+      expect(block.textContent).not.toMatch(/0 sections indexed|0 entries|0 local overrides/);
+      expect(block.textContent).not.toContain("No configuration sections indexed");
+      expect(block.textContent).toContain("Configuration sections UNKNOWN (not reported in this snapshot).");
+      expect(block.querySelector('[data-state-badge="unk"]')).not.toBeNull();
+      expect(block.querySelector('[data-state-badge="ok"]')).toBeNull();
+      expect(block.textContent).not.toContain("Aligned");
+      unmount();
+    }
+  });
+
+  it("renders real empty index and overrides arrays as reported zeros", () => {
+    render(
+      <EstateDossierConfigurationBlock
+        deviceId={DEVICE_ID}
+        vendor="check_point"
+        role="gateway"
+        configuration={{
+          state: "ok",
+          value: makeSnapshot({ change_state: "unchanged", index: [], overrides: [] }),
+        }}
+        now={NOW}
+      />,
+    );
+
+    const block = screen.getByTestId("dossier-configuration-block");
+    expect(block.textContent).toContain("0 sections indexed · 0 entries · 0 changed sections · 0 local overrides");
+    expect(block.textContent).toContain("No configuration sections indexed in this snapshot.");
+    expect(block.querySelector('[data-state-badge="ok"]')?.textContent).toContain("Aligned");
   });
 
   it("renders indexed sections with unit words, hash prefix, EvidenceStamp, and standard=1 configuration link", () => {

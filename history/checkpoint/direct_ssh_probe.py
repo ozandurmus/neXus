@@ -13,6 +13,7 @@ from typing import Any
 
 import paramiko
 
+from utils.env_flags import env_bool as _env_bool
 from utils.cp_ssh_trust import CpSshStrictPreflightError, HostKeyNotTrustedError, apply_strict_host_key_policy
 from utils.logger import info, warn, register_sensitive_value, user_fingerprint
 
@@ -57,13 +58,6 @@ CLI_ERROR_PATTERNS = (
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _env_bool(name: str, default: bool) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() not in {"0", "false", "no", "off", "disabled"}
 
 
 def _env_int(name: str, default: int, *, minimum: int = 1, maximum: int = 120) -> int:

@@ -5,6 +5,8 @@ import { parseTimeMs, type BadgeState } from "./estateModel";
 
 /** Diagnostic runs listed before the section prints "+N more diagnostic runs". */
 export const DIAGNOSTIC_RUNS_SHOWN = 10;
+/** Fixed page size of `DiagnosticService.history` (page 0 only is read here); a full page may hide more runs. */
+export const DIAGNOSTIC_HISTORY_PAGE_SIZE = 50;
 export const DIAGNOSTIC_HISTORY_EVIDENCE_SOURCE = "diagnostic history read";
 export const DIAGNOSTIC_RUNS_EMPTY_TEXT = "No diagnostic runs recorded.";
 export const DIAGNOSTIC_RUNS_FAILED_TEXT = "Diagnostic runs could not be read.";
@@ -62,18 +64,22 @@ export type DiagnosticRunsModel =
       readonly status: "restricted";
       readonly badge: DiagnosticRunStateView;
       readonly text: string;
-      readonly evidenceAt: string;
+      /** `null` when no evidence was read (restricted or failed): the stamp renders UNKNOWN (a0). */
+      readonly evidenceAt: null;
     }
   | {
       readonly status: "failed";
       readonly badge: DiagnosticRunStateView;
       readonly text: string;
-      readonly evidenceAt: string;
+      /** `null` when no evidence was read (restricted or failed): the stamp renders UNKNOWN (a0). */
+      readonly evidenceAt: null;
     }
   | {
       readonly status: "ok";
       readonly total: number;
       readonly countLine: string;
+      /** True when page 0 is full (50 rows): more runs may exist beyond the first page. */
+      readonly truncated: boolean;
       readonly evidenceAt: string;
       readonly shown: readonly DiagnosticRunRowView[];
     };
@@ -90,8 +96,9 @@ function nonBlank(value: string | null | undefined): string | null {
 
 /**
  * Pure mapper for the read-only Estate "Diagnostic runs" section.
- * Orders runs by `submittedAt` newest first, caps at 10 rows, and stamps the count line with the newest
- * run's `submittedAt` (or the read instant when the list is empty).
+ * Orders runs by `submittedAt` newest first and caps at 10 rows. The `ok` evidence is the history read instant
+ * (`read.readAt`), never a run's `submittedAt`. `failed` and `restricted` carry `evidenceAt: null` (no evidence).
+ * A full first page (50 rows) is flagged `truncated` so the count is not presented as the complete total.
  */
 export function buildDiagnosticRunsModel(read: DiagnosticRunsRead): DiagnosticRunsModel {
   if (read.status === "restricted") {
@@ -99,7 +106,7 @@ export function buildDiagnosticRunsModel(read: DiagnosticRunsRead): DiagnosticRu
       status: "restricted",
       badge: { state: "na", word: "Restricted" },
       text: DIAGNOSTIC_RUNS_RESTRICTED_TEXT,
-      evidenceAt: read.readAt,
+      evidenceAt: null,
     };
   }
   if (read.status === "failed" || !Array.isArray(read.runs)) {
@@ -107,7 +114,7 @@ export function buildDiagnosticRunsModel(read: DiagnosticRunsRead): DiagnosticRu
       status: "failed",
       badge: { state: "unk", word: "UNKNOWN" },
       text: DIAGNOSTIC_RUNS_FAILED_TEXT,
-      evidenceAt: read.readAt,
+      evidenceAt: null,
     };
   }
 
@@ -136,12 +143,18 @@ export function buildDiagnosticRunsModel(read: DiagnosticRunsRead): DiagnosticRu
   });
 
   const total = sorted.length;
-  const countLine = total === 1 ? "1 diagnostic run listed" : `${total} diagnostic runs listed`;
+  const truncated = total >= DIAGNOSTIC_HISTORY_PAGE_SIZE;
+  const countLine = truncated
+    ? `${total} diagnostic runs on first page (more may exist)`
+    : total === 1
+      ? "1 diagnostic run listed"
+      : `${total} diagnostic runs listed`;
   // The evidence is the history read, not the age of the newest run: each row keeps its own submittedAt.
   return {
     status: "ok",
     total,
     countLine,
+    truncated,
     evidenceAt: read.readAt,
     shown,
   };

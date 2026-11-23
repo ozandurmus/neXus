@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from utils.env_flags import env_bool as _env_bool
 from utils.logger import info
 
 from application.services import (
@@ -23,13 +24,6 @@ from application.services import (
     make_admitted,
     make_runtime_config,
 )
-
-
-def _env_bool(name: str, default: bool) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() not in {"0", "false", "no", "off", "disabled"}
 
 
 def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:

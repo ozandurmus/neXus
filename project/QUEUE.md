@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0398 · Track: PCP.x · Generated: 2026-11-23T09:49:36Z
+Build: NXS-LOCAL-0399 · Track: PCP.x · Generated: 2026-11-23T09:58:56Z
 
 ## Now
-- NXS-LOCAL-0398 — Window-preserving requeue (V263), checkpoint-and-yield hardening, Estate view review fixes and debt splits (automated_validated)
+- NXS-LOCAL-0399 — Failover one-action dialog, PAN config-sync member, preview golden database and Estate UNKNOWN fixes (automated_validated)
 ## Next
 - recovery_offhost_key_custody — Off-host copy of the platform backups and recorded custody of the decryption key (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -66,6 +66,7 @@ Build: NXS-LOCAL-0398 · Track: PCP.x · Generated: 2026-11-23T09:49:36Z
 - P3/planned legacy_python_separation
 - P3/planned old_export_copies_disposal
 - P3/planned opt_nexus_step_d_delete_old_copies
+- P3/planned preview_golden_database_rollout
 - P3/planned radware_cc_identity_and_defensepro_reads
 - P3/planned script_run_launcher_stdout_race
 - P3/planned trivy_cache_pvc_enable_attended
@@ -145,8 +146,8 @@ Build: NXS-LOCAL-0398 · Track: PCP.x · Generated: 2026-11-23T09:49:36Z
 - D-V9b — sk165432 applicability to this estate's version. Does NOT block OP.0b.0
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 ## Recent builds
+- NXS-LOCAL-0399 (automated_validated)
 - NXS-LOCAL-0398 (automated_validated)
 - NXS-LOCAL-0397 (automated_validated)
 - NXS-LOCAL-0396 (automated_validated)
 - NXS-LOCAL-0395 (automated_validated)
-- NXS-LOCAL-0394 (automated_validated)

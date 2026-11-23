@@ -3,6 +3,17 @@
   "record_contract": "One structured record per build, newest first. Required: build, status, title, summary (<= 2 sentences). Optional: started, completed, track, movement, supersedes, evidence, risks_forward, docs{agreement,validation,handover} (repo-relative paths under docs/history/). Full detail lives in the linked doc; do not restate it here. Status vocabulary must stay within utils/project_plan.py STATUS_VALUES.",
   "builds": [
     {
+      "build": "NXS-LOCAL-0399",
+      "status": "automated_validated",
+      "title": "Failover one-action dialog, PAN config-sync member, preview golden database and Estate UNKNOWN fixes",
+      "summary": "Failover screens give an administrator one action and a work log note (frontend only, authority unchanged, f880ee45), and PAN readiness names the member that has config sync off. Preview ships get parallel image builds, a golden database copy and separate preview/deploy locks (fb373545, 6497ab96), and Estate diagnostic runs, Configuration, content versions and failover roles never show an unreported value as OK or zero (528a728d, a455d037, 5e635cf6, 95b4268a, 7a220b14).",
+      "started": "2026-11-23",
+      "completed": "2026-11-23",
+      "movement": "IMPLEMENTATION",
+      "docs": {},
+      "detail": "docs/history/builds/NXS-LOCAL-0399.md"
+    },
+    {
       "build": "NXS-LOCAL-0398",
       "status": "automated_validated",
       "title": "Window-preserving requeue (V263), checkpoint-and-yield hardening, Estate view review fixes and debt splits",

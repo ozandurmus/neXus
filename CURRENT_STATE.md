@@ -1,6 +1,6 @@
 # neXus — Current State
 
-Hot checkpoint reconciled on 2026-11-23 against `origin/main` at `c039ff22`; ships through 2026-11-23 are merged (live deploy not re-verified here).
+Hot checkpoint reconciled on 2026-11-23 against `origin/main` at `7a220b14`; ships through 2026-11-23 are merged (live deploy not re-verified here).
 `project/QUEUE.md` and its tool-managed data own delivery state; repository
 source proves implementation, not the current deployment or device health.
 
@@ -20,9 +20,9 @@ an audited switch (V203). Cisco ASA and FortiGate have identity, HA facts and fa
 
 ## Active build
 
-`NXS-LOCAL-0398` — **AUTOMATED_VALIDATED** (2026-11-23): window-preserving
-requeue (V263), checkpoint-and-yield hardening and Estate view review fixes;
-ships since 2026-11-18 are `NXS-LOCAL-0392`-`0397`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
+`NXS-LOCAL-0399` — **AUTOMATED_VALIDATED** (2026-11-23): one-action failover
+dialog, PAN config-sync member naming, preview golden database and Estate UNKNOWN fixes;
+ships since 2026-11-18 are `NXS-LOCAL-0392`-`0398`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
 `NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory
 sign-in, JSON logs, metrics, CodeQL and Spring Security steps 1-5 landed; SAML stays off until ADFS metadata exists.
 
