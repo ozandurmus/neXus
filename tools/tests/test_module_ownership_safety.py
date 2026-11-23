@@ -131,7 +131,7 @@ def test_backup_creation_and_handover_require_live_heartbeat_and_generation(monk
     objects = list(yaml.safe_load_all(calls[-1][1]['input']))
     assert {item['kind'] for item in objects} == {'PriorityClass', 'ServiceAccount', 'Deployment', 'NetworkPolicy'}
     obj = next(item for item in objects if item['kind'] == 'Deployment')
-    assert obj['spec']['replicas'] == 0
+    assert obj['spec']['replicas'] == 1
     assert obj['spec']['template']['spec']['containers'][0]['image'] == IMAGE
 
     queries = []
