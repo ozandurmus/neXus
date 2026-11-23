@@ -351,6 +351,24 @@ def wait_e2e_outcome(timeout=E2E_TIMEOUT_S, sleep=None, clock=None):
         sleep(E2E_POLL_S)
 
 
+def report_failed_e2e_tests():
+    """Print the failed tests of the e2e Job by title only and return the first 'spec:line title', or None.
+
+    The log is read in memory and never printed or kept: only list-reporter failure headers whose spec path, line
+    and title match the spec sources of this tree, and the summary counts, survive (tools/e2e/e2e_failure_titles.py).
+    Anything unreadable adds nothing; the Failed outcome above stays the verdict."""
+    try:
+        sys.path.insert(0, str(REPO / "tools" / "e2e"))
+        import e2e_failure_titles
+        log = run("kubectl", "-n", "ui2", "logs", "-l", "job-name=ui2-e2e", "--tail=5000")
+        lines = e2e_failure_titles.report_lines(log, REPO)
+    except (ImportError, OSError, ValueError, Blocked):
+        return None
+    for line in lines:
+        print(line, flush=True)
+    return e2e_failure_titles.first_failed(lines)
+
+
 def module_e2e(commit=None):
     args = ("--commit", commit) if commit else ()
     digest = run("python3", str(REPO / "tools/e2e/hosta_e2e_image.py"), "ensure", *args)
@@ -364,8 +382,10 @@ def module_e2e(commit=None):
     run("kubectl", "-n", "ui2", "delete", "job", "ui2-e2e", "--ignore-not-found")
     run("kubectl", "-n", "ui2", "apply", "-f", "-", input=job)
     outcome = wait_e2e_outcome()
+    named = report_failed_e2e_tests() if outcome != "Complete" else None
     if outcome != "Complete" or run("kubectl", "-n", "ui2", "get", "job/ui2-e2e", "-o", "jsonpath={.status.succeeded}") != "1":
-        raise Blocked("masked e2e " + ("failed" if outcome == "Failed" else "did not complete") + "; further replacement stopped")
+        raise Blocked("masked e2e " + ("failed" if outcome == "Failed" else "did not complete")
+                      + (" (first failed test: " + named + ")" if named else "") + "; further replacement stopped")
 
 
 def prepare_policy_public_trust():

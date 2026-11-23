@@ -960,14 +960,24 @@ def _preview_e2e(repo: Path, commit: str) -> None:
             argv += ["--tree", tree]
         result = subprocess.run(argv, input=wrapper, capture_output=True, text=True, timeout=7200)
         # The wrapper returns timings, masked API diagnostics and a derived verdict.
+        failed_tests = []
         for line in result.stdout.splitlines():
-            if (re.fullmatch(r"TIMING preview_[a-z_]+ [0-9.]+", line)
+            # Failed test titles (spec:line and the title written in the spec file) and counts only; no log text.
+            if (re.fullmatch(r"PREVIEW E2E FAILED TEST: e2e/[A-Za-z0-9_.-]+\.spec\.ts:\d+ [^\r\n]{1,300}", line)
+                    or re.fullmatch(r"PREVIEW E2E COUNTS: failed=(\d+|\?) passed=(\d+|\?) flaky=(\d+|\?)", line)):
+                if line.startswith("PREVIEW E2E FAILED TEST: "):
+                    if len(failed_tests) >= 20:
+                        continue
+                    failed_tests.append(line[len("PREVIEW E2E FAILED TEST: "):])
+                print(line, flush=True)
+            elif (re.fullmatch(r"TIMING preview_[a-z_]+ [0-9.]+", line)
                     or re.fullmatch(r"PREVIEW IMAGES: tree=[0-9a-f]{40} service=sha256:[0-9a-f]{64} e2e=sha256:[0-9a-f]{64}", line)
                     or re.fullmatch(r"PREVIEW DB SOURCE: (golden|live) reason=[A-Z_]+", line)
                     or line.startswith(("PREVIEW STEP: ", "PREVIEW E2E: FAIL"))):
                 print(line, flush=True)
         if result.returncode != 0 or "PREVIEW E2E: PASS" not in result.stdout.splitlines():
-            raise SystemExit("preview e2e failed; stopped before PR merge")
+            reason = ("; first failed test: " + failed_tests[0]) if failed_tests else ""
+            raise SystemExit("preview e2e failed" + reason + "; stopped before PR merge")
         print("PREVIEW E2E: PASS", flush=True)
     finally:
         print(f"TIMING preview_total {time.monotonic() - start:.3f}", flush=True)

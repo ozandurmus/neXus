@@ -39,4 +39,4 @@ exit "$result"'
 git -C "$repo" archive --format=tar "$commit" | \
   ssh -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
     "$host" "bash -c $(printf '%q' "$remote") -- $commit $tree" 2>/dev/null | \
-  awk '/^TIMING preview_[a-z_]+ [0-9.]+$/ || /^PREVIEW E2E: (PASS|FAIL)/ || /^PREVIEW STEP: / || /^PREVIEW DB SOURCE: (golden|live) reason=[A-Z_]+$/ || /^PREVIEW IMAGES: tree=[0-9a-f]+ service=sha256:[0-9a-f]+ e2e=sha256:[0-9a-f]+$/'
+  awk '/^TIMING preview_[a-z_]+ [0-9.]+$/ || /^PREVIEW E2E: (PASS|FAIL)/ || /^PREVIEW STEP: / || /^PREVIEW E2E FAILED TEST: e2e\/[A-Za-z0-9_.-]+\.spec\.ts:[0-9]+ / || /^PREVIEW E2E COUNTS: failed=([0-9]+|\?) passed=([0-9]+|\?) flaky=([0-9]+|\?)$/ || /^PREVIEW DB SOURCE: (golden|live) reason=[A-Z_]+$/ || /^PREVIEW IMAGES: tree=[0-9a-f]+ service=sha256:[0-9a-f]+ e2e=sha256:[0-9a-f]+$/'
