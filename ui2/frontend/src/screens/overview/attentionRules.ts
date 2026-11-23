@@ -208,7 +208,9 @@ const estateDevices = (o: OverviewView): readonly EstateDevice[] | null => (Arra
 export function unreadableOverviewParts(o: OverviewView): string[] {
   const parts: string[] = [];
   if (o.estate && estateDevices(o) === null) parts.push("device list");
-  if (o.exceptions?.state === "READ_FAILED" || (o.exceptions && !o.exceptions.failed_jobs)) parts.push("failed jobs");
+  const failedTotal = o.exceptions?.failed_jobs?.total;
+  if (o.exceptions?.state === "READ_FAILED" || (o.exceptions && !o.exceptions.failed_jobs)
+    || (o.exceptions?.failed_jobs && (typeof failedTotal !== "number" || !Number.isFinite(failedTotal)))) parts.push("failed jobs");
   return parts;
 }
 

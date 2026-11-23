@@ -38,7 +38,32 @@ public final class JooqScriptRepository implements ScriptRepository {
             + "scheduled_slot, run_as, requested_by, requested_at, started_at, finished_at, duration_ms, "
             + "exit_code, stdout_bytes, stderr_bytes, stdout_truncated, stderr_truncated, "
             + "output_artefact_ref, output_key_id, output_wrapped_data_key, output_sha256, output_size_bytes, "
-            + "output_tail, egress_declared, egress_device_targets, credential_refs_used, session_id, failure_reason";
+            + "output_tail, egress_declared, egress_device_targets, credential_refs_used, session_id, failure_reason, "
+            + "n.syslog as notify_syslog, n.syslog_code as notify_syslog_code, n.smtp as notify_smtp, "
+            + "n.smtp_code as notify_smtp_code, n.notified_at as notified_at";
+
+    /** The run ledger with its V266 notification outcome, when recorded (append-only, at most one row per run). */
+    private static final String RUN_FROM = " from script_run left join script_run_notification n using (job_id)";
+
+    /**
+     * V266 widened {@code script.notify} with the per-script "mail on failure only" option (contract section 3.5); the
+     * API keeps the four-value channel and a separate boolean.
+     */
+    static final String MAIL_ON_FAILURE_SUFFIX = "_mail_on_failure";
+
+    static String storedNotify(String channel, boolean mailOnFailureOnly) {
+        return mailOnFailureOnly && ("smtp".equals(channel) || "both".equals(channel))
+                ? channel + MAIL_ON_FAILURE_SUFFIX : channel;
+    }
+
+    static String notifyChannel(String stored) {
+        return stored != null && stored.endsWith(MAIL_ON_FAILURE_SUFFIX)
+                ? stored.substring(0, stored.length() - MAIL_ON_FAILURE_SUFFIX.length()) : stored;
+    }
+
+    static boolean mailOnFailureOnly(String stored) {
+        return stored != null && stored.endsWith(MAIL_ON_FAILURE_SUFFIX);
+    }
 
     private static final Pattern FINDING_ITEM = Pattern.compile(
             "\\{\\s*\"line\"\\s*:\\s*(\\d+)\\s*,\\s*\"pattern_class\"\\s*:\\s*\"([^\"]+)\"\\s*}"
@@ -128,7 +153,7 @@ public final class JooqScriptRepository implements ScriptRepository {
                     script.egress().toArray(String[]::new),
                     script.egressDeviceTargets().toArray(String[]::new),
                     script.credentialRefs().toArray(String[]::new),
-                    script.notifyMode(),
+                    storedNotify(script.notifyMode(), script.notifyMailOnFailureOnly()),
                     script.runAs(),
                     script.createdByActorFingerprint(),
                     createdAt,
@@ -169,6 +194,24 @@ public final class JooqScriptRepository implements ScriptRepository {
             String runAs,
             String actorFingerprint,
             String actionId) {
+        return updateSettings(scriptId, enabled, schedule, timeoutSeconds, egress, egressDeviceTargets, credentialRefs,
+                notifyMode, false, runAs, actorFingerprint, actionId);
+    }
+
+    @Override
+    public Optional<ScriptRecord> updateSettings(
+            String scriptId,
+            boolean enabled,
+            Optional<String> schedule,
+            int timeoutSeconds,
+            List<String> egress,
+            List<String> egressDeviceTargets,
+            List<String> credentialRefs,
+            String notifyMode,
+            boolean notifyMailOnFailureOnly,
+            String runAs,
+            String actorFingerprint,
+            String actionId) {
         return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
             int updated = dsl.execute("update script set enabled = {1}, schedule = {2}, timeout_s = {3}, "
                     + "egress = {4}::text[], egress_device_targets = {5}::text[], credential_refs = {6}::text[], "
@@ -180,7 +223,7 @@ public final class JooqScriptRepository implements ScriptRepository {
                     egress.toArray(String[]::new),
                     egressDeviceTargets.toArray(String[]::new),
                     credentialRefs.toArray(String[]::new),
-                    notifyMode,
+                    storedNotify(notifyMode, notifyMailOnFailureOnly),
                     runAs,
                     Timestamp.from(Instant.now()));
             if (updated == 0) {
@@ -323,7 +366,7 @@ public final class JooqScriptRepository implements ScriptRepository {
         }
         int bounded = Math.min(limit, 500);
         return transactionBoundary.inTransaction(dsl -> dsl
-                .fetch("select " + RUN_COLUMNS + " from script_run where script_id = {0} "
+                .fetch("select " + RUN_COLUMNS + RUN_FROM + " where script_id = {0} "
                         + "order by requested_at desc, job_id desc limit {1}", scriptId.strip(), bounded)
                 .stream()
                 .map(JooqScriptRepository::toRunRecord)
@@ -506,7 +549,7 @@ public final class JooqScriptRepository implements ScriptRepository {
     }
 
     private static Optional<ScriptRunRecord> fetchRunByJobId(DSLContext dsl, String jobId) {
-        return dsl.fetch("select " + RUN_COLUMNS + " from script_run where job_id = {0}", jobId)
+        return dsl.fetch("select " + RUN_COLUMNS + RUN_FROM + " where job_id = {0}", jobId)
                 .stream()
                 .findFirst()
                 .map(JooqScriptRepository::toRunRecord);
@@ -542,7 +585,23 @@ public final class JooqScriptRepository implements ScriptRepository {
                 stringList(row.get("egress_device_targets", String[].class)),
                 stringList(row.get("credential_refs_used", String[].class)),
                 Optional.ofNullable(row.get("session_id", String.class)),
-                Optional.ofNullable(row.get("failure_reason", String.class)));
+                Optional.ofNullable(row.get("failure_reason", String.class)),
+                toNotification(row));
+    }
+
+    private static Optional<ScriptRunNotification> toNotification(Record row) {
+        Timestamp notifiedAt = row.field("notified_at") == null ? null : row.get("notified_at", Timestamp.class);
+        String syslog = row.field("notify_syslog") == null ? null : row.get("notify_syslog", String.class);
+        String smtp = row.field("notify_smtp") == null ? null : row.get("notify_smtp", String.class);
+        if (notifiedAt == null || syslog == null || smtp == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new ScriptRunNotification(
+                syslog,
+                Optional.ofNullable(row.get("notify_syslog_code", String.class)),
+                smtp,
+                Optional.ofNullable(row.get("notify_smtp_code", String.class)),
+                notifiedAt.toInstant()));
     }
 
     private static ScriptRecord toScriptRecord(Record row) {
@@ -557,11 +616,12 @@ public final class JooqScriptRepository implements ScriptRepository {
                 stringList(row.get("egress", String[].class)),
                 stringList(row.get("egress_device_targets", String[].class)),
                 stringList(row.get("credential_refs", String[].class)),
-                row.get("notify", String.class),
+                notifyChannel(row.get("notify", String.class)),
                 row.get("run_as", String.class),
                 row.get("created_by_actor_fingerprint", String.class),
                 row.get("created_at", Timestamp.class).toInstant(),
-                row.get("updated_at", Timestamp.class).toInstant());
+                row.get("updated_at", Timestamp.class).toInstant(),
+                mailOnFailureOnly(row.get("notify", String.class)));
     }
 
     private static ScriptVersionRecord toVersionRecord(Record row) {
