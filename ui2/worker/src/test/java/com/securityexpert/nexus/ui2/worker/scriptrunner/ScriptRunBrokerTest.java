@@ -289,6 +289,18 @@ class ScriptRunBrokerTest {
                 "c00k" + "1e" + "a".repeat(60), "csrf" + "b".repeat(44), List.of());
     }
 
+    static String escapedForMessage(String value) {
+        String escaped = value.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
+        return escaped.length() > 400 ? escaped.substring(0, 400) + "...(+" + (escaped.length() - 400) + " chars)" : escaped;
+    }
+
+    @Test
+    void escapedForMessageShowsControlCharactersAndTruncates() {
+        assertEquals("a\\nb\\rc\\td", escapedForMessage("a\nb\rc\td"));
+        String longValue = "x".repeat(450);
+        assertEquals("x".repeat(400) + "...(+50 chars)", escapedForMessage(longValue));
+    }
+
     private static byte[] tagged(String... lines) {
         return String.join("\n", lines).concat("\n").getBytes(StandardCharsets.UTF_8);
     }
@@ -863,7 +875,8 @@ class ScriptRunBrokerTest {
         int rc0 = p0.waitFor();
         assertEquals(0, rc0, "script writing to stderr must not die with SIGPIPE (141) or leak fd 3 (99)");
         ScriptRunLog.Split split0 = ScriptRunLog.split(raw0, false);
-        assertEquals("stdout-line-1\nstdout-line-2\n", split0.stdout());
+        assertEquals("stdout-line-1\nstdout-line-2\n", split0.stdout(),
+                () -> "stdout was: " + escapedForMessage(split0.stdout()));
         assertFalse(split0.stdout().contains("forged-on-fd3"), "child must not be able to write to fd 3");
         assertTrue(split0.stderr().contains("stderr-line-1\n"), "stderr line 1 captured: " + split0.stderr());
         assertTrue(split0.stderr().contains("stderr-line-2\n"), "stderr line 2 captured: " + split0.stderr());
