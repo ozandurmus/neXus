@@ -155,7 +155,8 @@ class JobWindowAdmissionTest {
                 && q.contains("submitted_at >= CAST(") && q.contains("submitted_at < CAST(")));
         // jOOQ's PostgreSQL binding converts OffsetDateTime to a JDBC timestamp string.
         assertEquals(2, Collections.frequency(bindings, "2026-10-09 02:00:00+03:00"));
-        assertEquals(2, Collections.frequency(bindings, "2026-10-09 03:00:00+03:00"));
+        // Twice in the claim predicate, once in the admitted_window_end stamp (V263 window-preserving requeue).
+        assertEquals(3, Collections.frequency(bindings, "2026-10-09 03:00:00+03:00"));
         assertTrue(bindings.contains(ScheduledBackupWindowPolicy.ACTOR));
         assertTrue(bindings.contains(ScheduledBackupWindowPolicy.MDS_ACTOR));
     }

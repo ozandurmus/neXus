@@ -182,6 +182,7 @@ public final class ConfigurationCapabilityExecutor {
                     parseHostname(identity.get(ConfigurationReadPlan.CP_SHOW_HOSTNAME)),
                     com.securityexpert.nexus.ui2.worker.backup.BackupReadPlan.parseGaiaVersion(
                             identity.get(ConfigurationReadPlan.CP_SHOW_VERSION_ALL)));
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.yieldAtUnitBoundary(); // Drain yield before the long configuration read.
             String rawConfig = execOutput(session, ConfigurationReadPlan.CP_SHOW_CONFIGURATION, CP_CONFIG_TIMEOUT);
 
             CheckPointGaiaConfigProcessor.Processed processed = configServiceClient.parseCheckPoint(deviceId, rawConfig);
@@ -237,6 +238,7 @@ public final class ConfigurationCapabilityExecutor {
                 return new ConfigurationResult.ConnectFailed("show gave no FortiOS configuration (no #config-version header)");
             }
             for (String section : List.of("system global", "system interface", "system ha")) {
+                com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.yieldAtUnitBoundary(); // Drain yield between sections.
                 String command = "show full-configuration " + section;
                 String full = interactiveOutput(session, command, java.time.Duration.ofSeconds(600));
                 if (full == null || com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiGatePlan.isCliError(full)) {

@@ -43,11 +43,21 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
                 lease_epoch = lease_epoch + 1,
                 lease_expires_at = now() + ({1} || ' seconds')::interval,
                 last_heartbeat_at = now(),
-                lease_owner_generation = (SELECT generation FROM owner_control WHERE module=ui2_job_module(jobs.capability_id))
+                lease_owner_generation = (SELECT generation FROM owner_control WHERE module=ui2_job_module(jobs.capability_id)),
+                admitted_window_end = CASE
+                  WHEN jobs.resume_eligible_until IS NOT NULL AND clock_timestamp() < jobs.resume_eligible_until
+                  THEN jobs.admitted_window_end
+                  WHEN jobs.window_bypass_role IS NOT NULL THEN NULL
+                  WHEN (jobs.submitted_by_actor_fingerprint = {7} AND jobs.capability_id = ANY(string_to_array({6}, ',')))
+                    OR (jobs.submitted_by_actor_fingerprint = {8} AND jobs.capability_id = {9})
+                  THEN CAST({5} AS timestamptz)
+                  ELSE CAST({3} AS timestamptz) END,
+                resume_eligible_until = NULL
             WHERE job_id = (
                 SELECT job_id FROM jobs, inventory_claim_lock
                 WHERE state = 'REQUESTED'
-                  AND CASE WHEN
+                  AND CASE WHEN resume_eligible_until IS NOT NULL AND clock_timestamp() < resume_eligible_until THEN true
+                  WHEN
                     (submitted_by_actor_fingerprint = {7} AND capability_id = ANY(string_to_array({6}, ',')))
                     OR (submitted_by_actor_fingerprint = {8} AND capability_id = {9})
                   THEN clock_timestamp() >= CAST({4} AS timestamptz)
@@ -117,8 +127,8 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
             return Optional.empty();
         }
         String joined = String.join(",", eligibleCapabilityIds);
-        // Outside every window only an administrator's manual job (PO 2026-10-20, window_bypass_role) is claimable;
-        // with none queued the claim statement is not issued at all.
+        // Outside every window only an administrator's manual job (PO 2026-10-20, window_bypass_role) or a deferred job
+        // still inside its resume grace (V263) is claimable; with none queued the claim statement is not issued at all.
         if (!storedData && !windows.isOpen() && !ScheduledBackupWindowPolicy.isOpen(windows.now())
                 && !transactionBoundary.inTransaction(dsl -> bypassQueued(dsl, joined))) {
             return Optional.empty();
@@ -174,9 +184,14 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
             + "and submitted_in_business_hours is not true and business_hours_ack_at is null "
             + "and capability_id <> all(string_to_array({2}, ','))";
 
-    /** A cheap read (partial index jobs_window_bypass_requested), never a claim: the claim stays the one statement. */
+    /**
+     * A cheap read (partial indexes jobs_window_bypass_requested and jobs_resume_eligible_requested), never a claim:
+     * the claim stays the one statement. Outside every window it finds an administrator's manual job, or a job that a
+     * drain or admission contention deferred after an in-window claim and that is still inside its resume grace (V263).
+     */
     static final String BYPASS_QUEUED_SQL = "select 1 as queued from jobs where state = 'REQUESTED' "
-            + "and window_bypass_role is not null and capability_id = any(string_to_array({0}, ',')) limit 1";
+            + "and (window_bypass_role is not null or resume_eligible_until > now()) "
+            + "and capability_id = any(string_to_array({0}, ',')) limit 1";
 
     private static boolean bypassQueued(org.jooq.DSLContext dsl, String joined) {
         return dsl.fetchOne(BYPASS_QUEUED_SQL, joined) != null;

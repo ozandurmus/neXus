@@ -821,6 +821,7 @@ def test_barrier_modules_are_never_started_by_a_group(monkeypatch, tmp_path, cap
     monkeypatch.setattr(deploy, "clear_drain", lambda *a: None)
     monkeypatch.setattr(deploy, "wait_heartbeat", lambda target: None)
     monkeypatch.setattr(deploy, "handover_policy", lambda *a: None)
+    monkeypatch.setattr(deploy, "resume_dedicated", lambda *a: None)  # fallback off: routine replacement
     monkeypatch.setattr(deploy, "ensure_packet_analysis", lambda image, check=True: OLD)
     code, out = run_main_steps(monkeypatch, tmp_path, "worker configuration compliance policy packet-analysis", capsys)
     assert code == 0, out

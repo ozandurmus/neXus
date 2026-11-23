@@ -29,11 +29,21 @@ public final class ClaimStatementText {
                 lease_epoch = lease_epoch + 1,
                 lease_expires_at = now() + ({1} || ' seconds')::interval,
                 last_heartbeat_at = now(),
-                lease_owner_generation = (SELECT generation FROM owner_control WHERE module=ui2_job_module(jobs.capability_id))
+                lease_owner_generation = (SELECT generation FROM owner_control WHERE module=ui2_job_module(jobs.capability_id)),
+                admitted_window_end = CASE
+                  WHEN jobs.resume_eligible_until IS NOT NULL AND clock_timestamp() < jobs.resume_eligible_until
+                  THEN jobs.admitted_window_end
+                  WHEN jobs.window_bypass_role IS NOT NULL THEN NULL
+                  WHEN (jobs.submitted_by_actor_fingerprint = {7} AND jobs.capability_id = ANY(string_to_array({6}, ',')))
+                    OR (jobs.submitted_by_actor_fingerprint = {8} AND jobs.capability_id = {9})
+                  THEN CAST({5} AS timestamptz)
+                  ELSE CAST({3} AS timestamptz) END,
+                resume_eligible_until = NULL
             WHERE job_id = (
                 SELECT job_id FROM jobs, inventory_claim_lock
                 WHERE state = 'REQUESTED'
-                  AND CASE WHEN
+                  AND CASE WHEN resume_eligible_until IS NOT NULL AND clock_timestamp() < resume_eligible_until THEN true
+                  WHEN
                     (submitted_by_actor_fingerprint = {7} AND capability_id = ANY(string_to_array({6}, ',')))
                     OR (submitted_by_actor_fingerprint = {8} AND capability_id = {9})
                   THEN clock_timestamp() >= CAST({4} AS timestamptz)
