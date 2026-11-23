@@ -66,12 +66,41 @@ function quietOverview(complianceState: "OK" | "UNKNOWN" = "OK") {
   };
 }
 
-/** /devices answers 200; the overview answers `overview()` when given, otherwise 500 (a failed read). */
-function stubFetch(overview?: () => unknown) {
+/** Quiet, valid 200 bodies for every secondary read the Estate hooks make (synthetic, masked). */
+const CLEAN_SOURCES: Record<string, unknown> = {
+  "/api/v2/cp-failover/summary": [],
+  "/backups": { backups: [] },
+  "/api/v2/backups/deviations": { deviations: [] },
+  "/api/v2/lifecycle": { devices: [] },
+  "/compliance/controls": { controls: [] },
+  "/api/v2/changes/feed": { events: [], next_cursor: null },
+  "/api/v2/system-logs/health": {
+    computation: { state: "READY", computed_at: daysAgo(0), duration_ms: 12, snapshot_ttl_seconds: 300, store_available: true },
+    window_days: 7, cpu_p95_threshold_percent: 90, time_basis: "snapshot",
+    rules: {
+      critical: [], attention: [], normal: "OK", unknown: "UNKNOWN", state_order: ["OK", "ATTENTION", "CRITICAL", "UNKNOWN"],
+      p95: "95th percentile CPU over the window", restart_rule: { id: "restart", status: "OK", text: "No restarts" },
+    },
+    kpis: { monitored: { devices: 1, by_vendor: {}, not_collected_listed: 0 }, crash_alerts: null, cpu_over_threshold: null, collection_not_ok: null },
+    devices: [],
+  },
+  "/api/v2/security/scan-summary/latest": {
+    available: true, mail: { route_enabled: false, smtp_configured: false, recipients_configured: false, delivering: false, last_sent_at: null, last_error: null },
+    stale_after_hours: 36, generated_at: daysAgo(0), age_hours: 0, stale: false, passed: true, scan_errors: 0, blocking: 0, counts: {},
+  },
+};
+
+/**
+ * /devices answers 200; the overview answers `overview()` when given, otherwise 500 (a failed read).
+ * With `clean`, every secondary read answers its quiet 200 body, so only the overview decides the headline.
+ */
+function stubFetch(overview?: () => unknown, clean = false) {
   return vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
+    const path = url.split("?")[0];
     if (url === "/devices") return jsonResponse(200, { devices: DEVICES });
     if (overview && (url === "/api/v2/overview" || url.startsWith("/api/v2/overview?"))) return jsonResponse(200, overview());
+    if (clean && path in CLEAN_SOURCES) return jsonResponse(200, CLEAN_SOURCES[path]);
     return jsonResponse(500, { error: "DOWNSTREAM_ERROR" });
   });
 }
@@ -102,14 +131,22 @@ describe("Estate Brief headline over a failed overview (review finding 1)", () =
 });
 
 describe("Estate Brief headline with one UNKNOWN source (review finding 1)", () => {
-  it("a readable overview whose compliance source is UNKNOWN is not all-clear and says sources are UNKNOWN", async () => {
+  it("positive control: a quiet overview with every secondary read clean 200 shows the all-clear sentence", async () => {
     window.history.replaceState(null, "", "/?screen=overview");
-    vi.stubGlobal("fetch", stubFetch(() => quietOverview("UNKNOWN")));
+    vi.stubGlobal("fetch", stubFetch(() => quietOverview("OK"), true));
     stubViewport(1280);
     render(<App />);
     const headline = await screen.findByTestId("brief-headline");
-    // The harness leaves the other sources unread (500), so the count is not pinned here; the wording is.
-    expect(headline).toHaveTextContent(/Nothing is proven to need action, but \d+ sources? (is|are) UNKNOWN/);
+    expect(headline).toHaveTextContent("Nothing needs immediate action across the evidenced estate.");
+  });
+
+  it("a readable overview whose compliance source is UNKNOWN is not all-clear and says exactly one source is UNKNOWN", async () => {
+    window.history.replaceState(null, "", "/?screen=overview");
+    vi.stubGlobal("fetch", stubFetch(() => quietOverview("UNKNOWN"), true));
+    stubViewport(1280);
+    render(<App />);
+    const headline = await screen.findByTestId("brief-headline");
+    expect(headline).toHaveTextContent("Nothing is proven to need action, but 1 source is UNKNOWN.");
     expect(headline).not.toHaveTextContent(/Nothing needs immediate action/i);
   });
 });

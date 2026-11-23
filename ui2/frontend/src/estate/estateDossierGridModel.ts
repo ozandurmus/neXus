@@ -1,6 +1,7 @@
 import type { DeviceInventory, GridMemberView, GridSummaryView } from "../auth/adminApi";
 import type { SourceRead } from "../screens/overview/attentionRules";
 import type { BadgeState } from "./estateModel";
+import { plural } from "../shell/plural";
 
 /**
  * Pure model for the Estate dossier "Grid members" block (Infoblox Grid Manager units).
@@ -52,6 +53,11 @@ export type GridBlockModel =
       readonly headline: string;
       /** True when the read ran but carried no member or count: shown as "No grid member evidence", never as zero. */
       readonly noEvidence: boolean;
+      /**
+       * False when the member list was not collected (`grid_members` absent) though the summary carries counts. The
+       * member counts are then UNKNOWN and are not printed; the summary lines still are. True when the list was collected.
+       */
+      readonly membersKnown: boolean;
       readonly memberCount: number;
       readonly gridMasterCount: number;
       readonly masterCandidateCount: number;
@@ -82,7 +88,7 @@ function rowOf(member: GridMemberView): GridMemberRow {
     : member.master_candidate
       ? "Master candidate"
       : "Member";
-  const ha = member.ha_enabled ? word(member.ha_status) : "HA off";
+  const ha = member.ha_enabled === true ? word(member.ha_status) : member.ha_enabled === false ? "HA off" : UNKNOWN_WORD;
   return {
     name: word(member.virtual_system),
     role,
@@ -96,19 +102,31 @@ function rowOf(member: GridMemberView): GridMemberRow {
   };
 }
 
-function countOf(value: number | null, atLeast: boolean): string {
+function countOf(value: number | null, atLeast: boolean, one: string, many: string): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return UNKNOWN_WORD;
-  return `${atLeast ? "≥" : ""}${value}`;
+  return `${atLeast ? "≥" : ""}${plural(value, one, many)}`;
 }
 
 /** Summary lines in the standard view's order; each label says what the number counts. Null counts are UNKNOWN. */
 export function summaryLinesOf(summary: GridSummaryView | null | undefined): readonly GridSummaryLine[] {
   if (!summary) return [];
   return [
-    { label: "DNS views (count of views)", value: countOf(summary.dns_views, summary.dns_views_at_least) },
-    { label: "Authoritative DNS zones (count of zones)", value: countOf(summary.auth_zones, summary.auth_zones_at_least) },
-    { label: "DHCP networks (count of networks)", value: countOf(summary.dhcp_networks, summary.dhcp_networks_at_least) },
-    { label: "DHCP ranges (count of ranges)", value: countOf(summary.dhcp_ranges, summary.dhcp_ranges_at_least) },
+    {
+      label: "DNS views (count of views)",
+      value: countOf(summary.dns_views, summary.dns_views_at_least, "view", "views"),
+    },
+    {
+      label: "Authoritative DNS zones (count of zones)",
+      value: countOf(summary.auth_zones, summary.auth_zones_at_least, "zone", "zones"),
+    },
+    {
+      label: "DHCP networks (count of networks)",
+      value: countOf(summary.dhcp_networks, summary.dhcp_networks_at_least, "network", "networks"),
+    },
+    {
+      label: "DHCP ranges (count of ranges)",
+      value: countOf(summary.dhcp_ranges, summary.dhcp_ranges_at_least, "range", "ranges"),
+    },
   ];
 }
 
@@ -120,7 +138,8 @@ export function summaryLinesOf(summary: GridSummaryView | null | undefined): rea
 export function buildGridBlockModel(inventory: SourceRead<DeviceInventory> | "loading" | null | undefined): GridBlockModel {
   if (!inventory || inventory === "loading" || inventory.state !== "ok") return { drawn: false };
   const inv = inventory.value;
-  const members = Array.isArray(inv.grid_members) ? inv.grid_members : [];
+  const membersCollected = Array.isArray(inv.grid_members);
+  const members = membersCollected ? inv.grid_members : [];
   const summary = inv.grid_summary ?? null;
   if (members.length === 0 && summary === null) return { drawn: false };
 
@@ -130,7 +149,7 @@ export function buildGridBlockModel(inventory: SourceRead<DeviceInventory> | "lo
   const rows = members.map(rowOf);
   const gridMasterCount = members.filter((m) => m.grid_master).length;
   const masterCandidateCount = members.filter((m) => m.master_candidate && !m.grid_master).length;
-  const haEnabledCount = members.filter((m) => m.ha_enabled).length;
+  const haEnabledCount = members.filter((m) => m.ha_enabled === true).length;
 
   if (noEvidence) {
     return {
@@ -139,6 +158,28 @@ export function buildGridBlockModel(inventory: SourceRead<DeviceInventory> | "lo
       badgeWord: UNKNOWN_WORD,
       headline: "No grid member evidence",
       noEvidence: true,
+      membersKnown: membersCollected,
+      memberCount: 0,
+      gridMasterCount: 0,
+      masterCandidateCount: 0,
+      haEnabledCount: 0,
+      summaryLines,
+      rows: [],
+      hiddenCount: 0,
+      evidenceAt: inv.collected_at ?? null,
+      evidenceSource: "inventory",
+    };
+  }
+
+  if (!membersCollected) {
+    // Summary counts exist but the member list was never collected: UNKNOWN, never a zero member count.
+    return {
+      drawn: true,
+      badge: "unk",
+      badgeWord: UNKNOWN_WORD,
+      headline: "Grid member list not collected (UNKNOWN)",
+      noEvidence: false,
+      membersKnown: false,
       memberCount: 0,
       gridMasterCount: 0,
       masterCandidateCount: 0,
@@ -155,8 +196,9 @@ export function buildGridBlockModel(inventory: SourceRead<DeviceInventory> | "lo
     drawn: true,
     badge: "na",
     badgeWord: "STORED",
-    headline: `${members.length} grid member${members.length === 1 ? "" : "s"} listed in the stored inventory`,
+    headline: `${plural(members.length, "grid member")} listed in the stored inventory`,
     noEvidence: false,
+    membersKnown: true,
     memberCount: members.length,
     gridMasterCount,
     masterCandidateCount,

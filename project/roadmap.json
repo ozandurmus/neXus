@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "NXS-LOCAL-0391",
+  "current_build": "NXS-LOCAL-0397",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,11 +150,10 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "NXS-LOCAL-0391",
-      "title": "Release queue: ASA readiness, integration gate, CP advisories, zone matrix, ACI step 1, API latency, Backups batch",
-      "status": "in_progress",
-      "started": "2026-11-13",
-      "contract_doc": "docs/design/ZONE_MATRIX_CONTRACT.md"
+      "build": "NXS-LOCAL-0397",
+      "title": "Policy chunk garbage collection (V262), narrowed telemetry audit, Flyway expand/contract fence",
+      "status": "automated_validated",
+      "started": "2026-11-23"
     },
     "next": {
       "build": "recovery_offhost_key_custody",

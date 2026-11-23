@@ -5,13 +5,17 @@ import Drawer from "@mui/material/Drawer";
 import Typography from "@mui/material/Typography";
 import { listJobs, type JobEventView } from "../auth/adminApi";
 import { attemptWords } from "../screens/backupWords";
+import { plural } from "../shell/plural";
 import { formatStamp, relativeAge } from "../shell/time";
+import { newestIso, parseTimeMs, type BadgeState } from "./estateModel";
 import { EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
 import { standardBackupsHref } from "./estateRouting";
 import { ESTATE_MONO, ev } from "./estateTokens";
 
 /** Rows shown in the drawer; the rest are counted in the "+N more" footer. */
 export const ATTEMPTS_DRAWER_CAP = 10;
+
+export const ATTEMPTS_TOTAL_UNKNOWN_TEXT = "Total attempts UNKNOWN; more attempts may exist beyond the listed rows";
 
 /** Outcome states the attempt words describe. Anything else (blank, OUTCOME_UNKNOWN, a state we do not know) is UNKNOWN. */
 const READABLE_STATES = new Set(["COMPLETED", "FAILED", "REJECTED", "CANCELLED", "EXECUTING", "CLAIMED", "REQUESTED", "SUBMITTED"]);
@@ -21,34 +25,30 @@ export interface AttemptsUnit {
   readonly name: string;
 }
 
-/** The outcome word for one attempt. An unreadable outcome is UNKNOWN, never a pass. */
-export function attemptOutcome(job: JobEventView): { readonly word: string; readonly tone: "ok" | "bad" | "warn" | "neutral" } {
+/** The outcome word and badge state for one attempt. An unreadable outcome is UNKNOWN, never a pass. */
+export function attemptOutcome(job: JobEventView): {
+  readonly word: string;
+  readonly tone: "ok" | "bad" | "warn" | "neutral";
+  readonly badgeState: BadgeState;
+} {
   const state = (job.state ?? "").trim().toUpperCase();
-  if (!READABLE_STATES.has(state)) return { word: "UNKNOWN", tone: "neutral" };
+  if (!READABLE_STATES.has(state)) return { word: "UNKNOWN", tone: "neutral", badgeState: "unk" };
   const words = attemptWords(state, job.terminal_reason);
-  return { word: words.word, tone: words.tone };
-}
-
-const TONE_INK = { ok: ev.ink2, bad: ev.act, warn: ev.watch, neutral: ev.ink2 } as const;
-
-/** The newest submission time among the attempts shown, or null when none carries a readable time. */
-function newestSubmittedAt(items: readonly JobEventView[]): string | null {
-  let newest: string | null = null;
-  let newestMs = Number.NEGATIVE_INFINITY;
-  for (const job of items) {
-    const ms = job.submitted_at ? Date.parse(job.submitted_at) : Number.NaN;
-    if (Number.isFinite(ms) && ms > newestMs) {
-      newestMs = ms;
-      newest = job.submitted_at;
-    }
-  }
-  return newest;
+  const badgeState: BadgeState =
+    words.tone === "ok"
+      ? "ok"
+      : words.tone === "bad"
+        ? "act"
+        : words.tone === "warn"
+          ? "watch"
+          : "na";
+  return { word: words.word, tone: words.tone, badgeState };
 }
 
 type AttemptsRead =
   | { readonly state: "loading" }
   | { readonly state: "error" }
-  | { readonly state: "ok"; readonly items: readonly JobEventView[]; readonly total: number };
+  | { readonly state: "ok"; readonly items: readonly JobEventView[]; readonly total: number | null };
 
 function AttemptsList({ unit }: { readonly unit: AttemptsUnit }) {
   const [read, setRead] = useState<AttemptsRead>({ state: "loading" });
@@ -58,7 +58,17 @@ function AttemptsList({ unit }: { readonly unit: AttemptsUnit }) {
     setRead({ state: "loading" });
     listJobs({ device_id: unit.deviceId, job_type: "backup", page: 1, page_size: ATTEMPTS_DRAWER_CAP })
       .then((value) => {
-        if (active) setRead({ state: "ok", items: value.items ?? [], total: value.total ?? (value.items?.length ?? 0) });
+        if (!active) return;
+        if (!value || typeof value !== "object" || !Array.isArray(value.items)) {
+          setRead({ state: "error" });
+          return;
+        }
+        const shownCount = Math.min(value.items.length, ATTEMPTS_DRAWER_CAP);
+        const total =
+          typeof value.total === "number" && Number.isFinite(value.total) && value.total >= shownCount
+            ? value.total
+            : null;
+        setRead({ state: "ok", items: value.items, total });
       })
       .catch(() => {
         if (active) setRead({ state: "error" });
@@ -72,13 +82,27 @@ function AttemptsList({ unit }: { readonly unit: AttemptsUnit }) {
   if (read.state === "error") {
     return (
       <Box>
-        <StateBadge state="unk" word="UNKNOWN" dense />{" "}
-        <Typography component="span" sx={{ fontSize: "12.5px", color: ev.ink2 }}>Backup attempts could not be loaded.</Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+          <StateBadge state="unk" word="UNKNOWN" dense />
+          <Typography component="span" sx={{ fontSize: "12.5px", color: ev.ink2 }}>Backup attempts could not be loaded.</Typography>
+        </Box>
+        <Box sx={{ mt: "4px" }}>
+          <EvidenceStamp at={null} source="backup attempts" missingLabel="UNKNOWN" />
+        </Box>
       </Box>
     );
   }
   if (read.items.length === 0) {
-    return <Typography variant="body2" sx={{ fontSize: "12.5px", color: ev.ink2 }}>No backup attempts on record.</Typography>;
+    return (
+      <Box>
+        <Typography variant="body2" sx={{ fontSize: "12.5px", color: ev.ink2 }}>No backup attempts on record.</Typography>
+        {read.total === null && (
+          <Typography data-testid="attempts-drawer-total-unknown" sx={{ fontSize: "12px", color: ev.unk, mt: "4px" }}>
+            {ATTEMPTS_TOTAL_UNKNOWN_TEXT}
+          </Typography>
+        )}
+      </Box>
+    );
   }
 
   const shown = read.items.slice(0, ATTEMPTS_DRAWER_CAP);
@@ -87,14 +111,15 @@ function AttemptsList({ unit }: { readonly unit: AttemptsUnit }) {
     <Box>
       <Box sx={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", mb: "8px" }}>
         <Typography component="span" sx={{ fontSize: "12.5px", color: ev.ink2 }}>
-          Newest of the {shown.length} attempts shown:
+          Newest of the {plural(shown.length, "attempt", "attempts")} shown:
         </Typography>
-        <EvidenceStamp at={newestSubmittedAt(shown)} now={now} missingLabel="UNKNOWN" source="newest attempt shown" />
+        <EvidenceStamp at={newestIso(shown.map((job) => job.submitted_at))} now={now} missingLabel="UNKNOWN" source="newest attempt shown" />
       </Box>
       <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: "6px" }}>
         {shown.map((job) => {
           const outcome = attemptOutcome(job);
-          const age = job.submitted_at ? relativeAge(job.submitted_at, now) : "UNKNOWN";
+          const hasSubmittedAt = parseTimeMs(job.submitted_at) !== null;
+          const age = hasSubmittedAt ? relativeAge(job.submitted_at, now) : "UNKNOWN";
           return (
             <Box
               component="li"
@@ -102,18 +127,24 @@ function AttemptsList({ unit }: { readonly unit: AttemptsUnit }) {
               data-attempt-row={job.job_id}
               sx={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", fontSize: "12.5px" }}
             >
-              <Box component="span" title={job.submitted_at ? formatStamp(job.submitted_at) : "No submission time recorded"} sx={{ fontFamily: ESTATE_MONO, color: ev.ink2, minWidth: "96px" }}>
+              <Box component="span" title={hasSubmittedAt ? formatStamp(job.submitted_at) : "No submission time recorded"} sx={{ fontFamily: ESTATE_MONO, color: ev.ink2, minWidth: "96px" }}>
                 {age}
               </Box>
-              <Box component="span" data-attempt-outcome={outcome.word} sx={{ color: TONE_INK[outcome.tone], fontWeight: outcome.tone === "bad" ? 650 : 500 }}>
-                {outcome.word}
+              <Box component="span" data-attempt-outcome={outcome.word}>
+                <StateBadge state={outcome.badgeState} word={outcome.word} dense />
               </Box>
             </Box>
           );
         })}
       </Box>
       <Box sx={{ mt: "6px" }}>
-        <MoreFooter shown={shown.length} total={read.total} noun="attempts" testId="attempts-drawer-more" />
+        {read.total === null ? (
+          <Typography component="span" data-testid="attempts-drawer-total-unknown" sx={{ fontSize: "12px", color: ev.unk }}>
+            {ATTEMPTS_TOTAL_UNKNOWN_TEXT}
+          </Typography>
+        ) : (
+          <MoreFooter shown={shown.length} total={read.total} noun="attempts" testId="attempts-drawer-more" />
+        )}
       </Box>
     </Box>
   );

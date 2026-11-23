@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import { getPolicyHygieneSummary, listPolicies, type PolicyHygieneSummary, type PolicyMetadata } from "../auth/adminApi";
-import { EstateCard, StateBadge } from "./EstatePrimitives";
+import { plural } from "../shell/plural";
+import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
 import { ESTATE_MONO, ev } from "./estateTokens";
 import { standardPolicyHref } from "./estateRouting";
 import { buildDossierHygieneModel, type DossierHygieneRead } from "./estateDossierHygieneModel";
@@ -78,6 +79,7 @@ export function EstateDossierHygieneBlock({ deviceId }: { readonly deviceId: str
         <Box sx={{ px: "18px", pb: "8px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           <StateBadge state={m.badge} word={m.badgeWord} dense />
           <Typography sx={{ fontSize: "14px", fontWeight: 650 }}>{m.headline}</Typography>
+          <EvidenceStamp at={m.evidenceAt} source="policy hygiene" missingLabel="UNKNOWN" />
         </Box>
         <Typography sx={{ px: "18px", pb: "8px", fontSize: "12.5px", color: ev.ink3 }}>{m.countsLine}</Typography>
         {m.pendingLine ? (
@@ -91,7 +93,7 @@ export function EstateDossierHygieneBlock({ deviceId }: { readonly deviceId: str
             {m.totals.map((t) => (
               <Box key={t.finding} sx={{ display: "flex", gap: "10px", fontSize: "13px" }}>
                 <Box sx={{ fontFamily: ESTATE_MONO, minWidth: "220px" }}>{t.finding}</Box>
-                <Box>{t.rules} rules</Box>
+                <Box>{plural(t.rules, "rule", "rules")}</Box>
               </Box>
             ))}
           </Box>
@@ -103,18 +105,20 @@ export function EstateDossierHygieneBlock({ deviceId }: { readonly deviceId: str
                 <Box sx={{ fontWeight: 600 }}>{row.label}</Box>
                 {row.kind === "ready" ? (
                   <Box sx={{ color: ev.ink2 }}>
-                    {row.rules} rules in this container
-                    {row.counts.map((c) => ` · ${c.finding}: ${c.rules} rules`).join("")}
+                    {plural(row.rules, "rule", "rules")} in this container
+                    {row.counts.map((c) => ` · ${c.finding}: ${plural(c.rules, "rule", "rules")}`).join("")}
                   </Box>
                 ) : row.kind === "pending" ? (
                   <Box sx={{ color: ev.ink2 }}>PENDING: no counts yet, not counted as zero</Box>
                 ) : (
                   <Box sx={{ color: ev.ink2 }}>UNKNOWN: this container could not be read</Box>
                 )}
-                <Box sx={{ color: ev.ink3, fontSize: "12px" }}>{row.stamp}</Box>
+                <Box sx={{ color: ev.ink3, fontSize: "12px" }}>
+                  <EvidenceStamp at={row.snapshotAt} source="policy snapshot" missingLabel="UNKNOWN" />
+                </Box>
               </Box>
             ))}
-            {m.moreLabel ? <Box sx={{ fontSize: "12.5px", color: ev.ink3 }}>{m.moreLabel}</Box> : null}
+            <MoreFooter shown={m.rows.length} total={m.totalContainers} noun="containers" testId="dossier-hygiene-more" />
           </Box>
         ) : null}
         <Box sx={{ px: "18px", pb: "14px" }}>{link}</Box>

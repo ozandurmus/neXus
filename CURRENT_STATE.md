@@ -1,12 +1,12 @@
 # neXus — Current State
 
-Hot checkpoint reconciled on 2026-11-18 against `origin/main` at `1fa4e9f1`; the 2026-11-17 and 2026-11-18 ships are merged (live deploy not re-verified here).
+Hot checkpoint reconciled on 2026-11-23 against `origin/main` at `685910d2`; ships through 2026-11-23 are merged (live deploy not re-verified here).
 `project/QUEUE.md` and its tool-managed data own delivery state; repository
 source proves implementation, not the current deployment or device health.
 
 ## Product today
 
-UI2 is the maintained Java/React product; repository schema is **V250** (live V242 at the last check).
+UI2 is the maintained Java/React product; repository schema is **V262** (live version not re-checked since V242).
 Inventory, configuration, compliance, encrypted backups, Operations, Policy,
 lifecycle and security checks, Packet Analysis and device system logs use
 masked `aiview` projections. Restore from the UI remains disabled. Sign-in uses
@@ -20,23 +20,22 @@ an audited switch (V203). Cisco ASA and FortiGate have identity, HA facts and fa
 
 ## Active build
 
-`NXS-LOCAL-0391` — **IN_PROGRESS** (started 2026-11-13): delivering the
-release queue below, one PR per lane after a live migration dry run.
+`NXS-LOCAL-0397` — **AUTOMATED_VALIDATED** (started 2026-11-23): policy chunk
+garbage collection and the Flyway expand/contract fence; ships since 2026-11-18
+are `NXS-LOCAL-0392`-`0396`. `NXS-LOCAL-0391` (release queue) stays IN_PROGRESS.
 `NXS-LOCAL-0383` (enterprise alignment phase 0) stays IN_PROGRESS: directory
 sign-in, JSON logs, metrics, CodeQL and Spring Security steps 1-5 landed; SAML stays off until ADFS metadata exists.
 Next: `recovery_offhost_key_custody` (script S1 installed and run; off-host target and key custody open).
 
-Shipped through batch 14 (2026-11-16, live to V242; detail in `project/build_history.json`): ASA readiness, zone matrix 1-3, ACI step 1, lifecycle catalog, JSON logs, per-store quota, support bundles, Spring Security steps 1-3, vendor upload, SAML off by default, authorization map, database roles. Applied by hand 2026-11-16: database ingress NetworkPolicy, platform backup script S1.
+Shipped through batch 14 (2026-11-16, live to V242): see `project/build_history.json`. Applied by hand 2026-11-16: database ingress NetworkPolicy, platform backup script S1.
 
-Since 2026-11-17: FortiGate FGCP readiness, ASA readiness on for all five pairs (all READY 2026-11-18), Traffic and ARP check signed off (V249), batch b37, MDS export back on the nightly 02:30 schedule (first run 2026-11-19, unverified), Panorama change-actor trial on (commits logged Submitted are not joined), Policy installation P1 read-only monitoring FROZEN and live, ASA saved-state relation (V250, awaits the first nightly backup). Drafts only: static route change, policy installation P2-P4, ASA failover execution.
+Until 2026-11-18: ASA readiness on for all five pairs, Traffic and ARP check signed off (V249), Panorama change-actor trial on, Policy installation P1 monitoring live. Drafts only: policy installation P2-P4, ASA failover execution.
+
+Since 2026-11-18 (detail in `project/build_history.json`): Script Execution slices 1-2 (V251, V258), static route phase R0 reads only (V252, zero writes; write carve-out ratified), ASA saved-state relation (V253), VSX chassis failover (V255/V256), Check Point per-VS policy gate (V254), failover authority recheck at worker start (V260), database roles step 0 (V261), aiview masked read-only admin switch (default off), Overwatch rename R1 (text, env dual-read), notification mail templates, and policy chunk garbage collection plus a narrowed telemetry audit (V262, hourly, `UI2_POLICY_CHUNK_GC=off` disables). The alternative Estate view (Brief, Wall, Dossier, Failover, Changes, Compliance, Backups, Ask, Rewind, Cases, Reports, System, Lifecycle) is read-only and carries evidence stamps; unreadable evidence shows UNKNOWN. Not real-environment validated.
 
 Open PO decisions: product name; narrowing the ASA identity ACEs; the off-host recovery target; ADFS metadata; the deploy scan parallelism.
 
-Recorded since 2026-11-10 (detail in `project/build_history.json`):
-
-- `NXS-LOCAL-0390` COMPLETE — zone matrix contract FROZEN; ACI, recertification and topology designs; GOV.ORCH.9.
-- `NXS-LOCAL-0384`-`0389` — fleet-wide lifecycle reads and advisory intake (V200-V205), ASA/FortiGate failover phase 0 (V209/V210), navigation redesign, `/opt/nexus` deploy tree, job switches (V203), directory sign-in.
-- Earlier: `NXS-LOCAL-0374`–`0382`.
+Earlier builds `NXS-LOCAL-0374`-`0390`: see `project/build_history.json`.
 
 Failover execution plan PRs 1–10 landed (V133–V143). The Check Point and Palo
 Alto pilot runs finished DONE/SUCCEEDED on 2026-10-22 (`failover_run`). The
@@ -91,7 +90,8 @@ Authority: [contract](docs/design/DATA_SANITIZER_CONTRACT.md).
 - NSPM wave 2 and 3 and per-device job serialization are not merged here.
 - Support bundles: all vendors built; vendor upload untested against real vendor hosts; PO-attended pilot open.
 - Database roles: V242 roles exist, no workload switched. Module pods: backup pod at 0 replicas, cutover not done.
-- Verify on 2026-11-19: the first scheduled MDS export and the first ASA saved-state relations.
+- Verify: the first scheduled MDS export and the first ASA saved-state relations (due since 2026-11-19); the first policy chunk garbage collection counts.
+- Review 2026-11-28: time-boxed CVE acceptances (`cve_acceptances_review_2026_11_28`).
 - Fleet facts (2026-11-16): 136 devices, 40 clusters with daily failover readiness checks, about 1,450 automated jobs a day.
 - Open follow-ups: nightly e2e fails on a legitimate Platform status warning; cisa_kev fetch refused during a deploy; Trivy cache claim; failover four-eyes check before the SCC handover.
 - Masking residual gaps are closed in rules by logmask-v7/v8 (queued), not yet

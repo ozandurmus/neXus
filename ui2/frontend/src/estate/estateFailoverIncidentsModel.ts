@@ -1,5 +1,6 @@
 import type { FailoverIncident } from "../auth/adminApi";
 import type { BadgeState } from "./estateModel";
+import { plural } from "../shell/plural";
 
 /** Rows shown before the list is capped; the rest are counted in "+N more". */
 export const FAILOVER_INCIDENT_CAP = 10;
@@ -26,6 +27,14 @@ export interface FailoverIncidentRow {
   readonly status: IncidentStatus;
   readonly openedAt: string | null;
   readonly blocksEstate: boolean;
+  /** Run reference as read; null when missing or blank, so the view prints UNKNOWN. */
+  readonly incidentRef: string | null;
+  /** Incident reason as read; null when missing or blank, so the view prints UNKNOWN. */
+  readonly reason: string | null;
+  /** Unresolved-send count as read; null when missing, non-numeric or negative. */
+  readonly unresolvedSends: number | null;
+  /** Estate-blocking sentence with its count, or null when the incident does not block the estate. */
+  readonly blocksEstateText: string | null;
 }
 
 export interface FailoverIncidentsModel {
@@ -58,12 +67,29 @@ export function buildFailoverIncidentsModel(
   const items = incidents.map((incident, index) => {
     const status = incidentStatusOf(incident);
     const openedAt = typeof incident.openedAt === "string" && incident.openedAt.trim() ? incident.openedAt : null;
+    const incidentRef =
+      typeof incident.incidentRef === "string" && incident.incidentRef.trim() ? incident.incidentRef.trim() : null;
+    const reason = typeof incident.reason === "string" && incident.reason.trim() ? incident.reason.trim() : null;
+    const unresolvedSends =
+      typeof incident.unresolvedSends === "number" && Number.isFinite(incident.unresolvedSends) && incident.unresolvedSends >= 0
+        ? incident.unresolvedSends
+        : null;
+    const blocksEstate = incident.blocksEstate === true;
+    const blocksEstateText = blocksEstate
+      ? unresolvedSends !== null
+        ? `blocks every failover in the estate (${plural(unresolvedSends, "unresolved send", "unresolved sends")})`
+        : "blocks every failover in the estate (unresolved sends count UNKNOWN)"
+      : null;
     return {
-      key: `${incident.incidentRef ?? "incident"}:${index}`,
+      key: `${incidentRef ?? "incident"}:${index}`,
       label: labelOf(incident),
       status,
       openedAt,
-      blocksEstate: incident.blocksEstate === true,
+      blocksEstate,
+      incidentRef,
+      reason,
+      unresolvedSends,
+      blocksEstateText,
     };
   });
   items.sort((a, b) => RANK[a.status.state] - RANK[b.status.state] || openedMs(b.openedAt) - openedMs(a.openedAt));

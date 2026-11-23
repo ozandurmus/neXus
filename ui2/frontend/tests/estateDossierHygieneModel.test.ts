@@ -82,13 +82,71 @@ describe("dossier policy hygiene: unreadable or malformed reads", () => {
     const m = buildDossierHygieneModel({ deviceId: UNIT, policies: OK_POLICIES, summary: { ok: true, value: summary([bad]) } });
     expect(m.rows[0]?.kind).toBe("unknown");
     expect(m.badge).toBe("unk");
+    expect(m.badgeWord).toBe("UNKNOWN");
+    expect(m.badge).not.toBe("ok");
+    expect(m.badgeWord).not.toBe("No findings");
     expect(m.totals).toEqual([]);
+    expect(m.evidenceAt).toBeNull();
+  });
+
+  it("treats a READY row with missing or null counts as UNKNOWN, never No findings", () => {
+    const missingCounts = { ...ready("c-1", 5, {}), counts: undefined } as unknown as PolicyHygieneSummaryRow;
+    const nullCounts = { ...ready("c-1", 5, {}), counts: null } as unknown as PolicyHygieneSummaryRow;
+    for (const bad of [missingCounts, nullCounts]) {
+      const m = buildDossierHygieneModel({ deviceId: UNIT, policies: OK_POLICIES, summary: { ok: true, value: summary([bad]) } });
+      expect(m.rows[0]?.kind).toBe("unknown");
+      expect(m.badge).toBe("unk");
+      expect(m.badgeWord).toBe("UNKNOWN");
+      expect(m.badge).not.toBe("ok");
+      expect(m.badgeWord).not.toBe("No findings");
+      expect(m.evidenceAt).toBeNull();
+    }
+  });
+
+  it("treats a READY row with NaN or Infinity counts or rules as UNKNOWN, never No findings", () => {
+    const nanCount = ready("c-1", 5, { "shadowed-rule": Number.NaN });
+    const infCount = ready("c-1", 5, { "shadowed-rule": Number.POSITIVE_INFINITY });
+    const nanRules = ready("c-1", Number.NaN, {});
+    for (const bad of [nanCount, infCount, nanRules]) {
+      const m = buildDossierHygieneModel({ deviceId: UNIT, policies: OK_POLICIES, summary: { ok: true, value: summary([bad]) } });
+      expect(m.rows[0]?.kind).toBe("unknown");
+      expect(m.badge).toBe("unk");
+      expect(m.badgeWord).toBe("UNKNOWN");
+      expect(m.badge).not.toBe("ok");
+      expect(m.badgeWord).not.toBe("No findings");
+      expect(m.evidenceAt).toBeNull();
+    }
   });
 
   it("a container with no summary row is UNKNOWN, not OK", () => {
     const m = buildDossierHygieneModel({ deviceId: UNIT, policies: OK_POLICIES, summary: { ok: true, value: summary([]) } });
     expect(m.rows[0]?.kind).toBe("unknown");
+    expect(m.rows[0]?.snapshotAt).toBeNull();
     expect(m.badge).toBe("unk");
+    expect(m.evidenceAt).toBeNull();
+  });
+
+  it("populates evidenceAt from the oldest container snapshotAt when readable and null on failed reads", () => {
+    const older = "2026-11-19T08:00:00Z";
+    const newer = "2026-11-20T10:00:00Z";
+    const policies = { ok: true as const, value: [policy("c-1", [UNIT]), policy("c-2", [UNIT])] };
+    const m = buildDossierHygieneModel({
+      deviceId: UNIT,
+      policies,
+      summary: {
+        ok: true,
+        value: summary([
+          { ...ready("c-1", 10, {}), snapshotAt: newer },
+          { ...ready("c-2", 8, {}), snapshotAt: older },
+        ]),
+      },
+    });
+    expect(m.evidenceAt).toBe(older);
+    expect(m.rows[0]?.snapshotAt).toBe(newer);
+    expect(m.rows[1]?.snapshotAt).toBe(older);
+
+    const failed = buildDossierHygieneModel({ deviceId: UNIT, policies: OK_POLICIES, summary: { ok: false } });
+    expect(failed.evidenceAt).toBeNull();
   });
 });
 

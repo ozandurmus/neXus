@@ -2,7 +2,8 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import type { DeviceInventory } from "../auth/adminApi";
 import type { SourceRead } from "../screens/overview/attentionRules";
-import { EstateCard, EvidenceStamp, StateBadge } from "./EstatePrimitives";
+import { EstateCard, EvidenceStamp, MoreFooter, StateBadge } from "./EstatePrimitives";
+import { plural } from "../shell/plural";
 import { ESTATE_MONO, ev } from "./estateTokens";
 import {
   buildGridBlockModel,
@@ -54,12 +55,17 @@ export function EstateDossierGridBlock({
               <StateBadge state={m.badge} word={m.badgeWord} dense />
               <Typography sx={{ fontSize: "14px", fontWeight: 650 }}>{m.headline}</Typography>
             </Box>
-            <Typography data-testid="grid-member-counts" sx={{ px: "18px", pb: "8px", fontSize: "12.5px", color: ev.ink2 }}>
-              {m.memberCount} member{m.memberCount === 1 ? "" : "s"} listed (count of members) · {m.gridMasterCount} Grid Master
-              (count of Grid Master members) · {m.masterCandidateCount} master candidate
-              {m.masterCandidateCount === 1 ? "" : "s"} (count of candidates) · {m.haEnabledCount} with HA enabled (count of
-              members with HA on)
-            </Typography>
+            {m.membersKnown ? (
+              <Typography data-testid="grid-member-counts" sx={{ px: "18px", pb: "8px", fontSize: "12.5px", color: ev.ink2 }}>
+                {plural(m.memberCount, "member")} listed (count of members) · {m.gridMasterCount} Grid Master (count of Grid
+                Master members) · {plural(m.masterCandidateCount, "master candidate")} (count of candidates) ·{" "}
+                {m.haEnabledCount} with HA enabled (count of members with HA on)
+              </Typography>
+            ) : (
+              <Typography data-testid="grid-member-unknown" sx={{ px: "18px", pb: "8px", fontSize: "12.5px", color: ev.ink2 }}>
+                Member list UNKNOWN (not collected). The summary counts below are stored; no member count is implied.
+              </Typography>
+            )}
             {m.summaryLines.length > 0 ? (
               <Box data-testid="grid-summary-lines" sx={{ px: "18px", pb: "8px" }}>
                 {m.summaryLines.map((line) => (
@@ -89,8 +95,10 @@ export function EstateDossierGridBlock({
                   ) : null}
                 </Box>
               ))}
-              {m.hiddenCount > 0 ? (
-                <Typography data-testid="grid-members-more" sx={{ fontSize: "12.5px", color: ev.ink3, py: "6px" }}>+{m.hiddenCount} more</Typography>
+              {m.membersKnown ? (
+                <Box sx={{ pt: "6px" }}>
+                  <MoreFooter shown={m.rows.length} total={m.memberCount} noun="grid members" testId="grid-members-more" />
+                </Box>
               ) : null}
             </Box>
           </>
