@@ -301,14 +301,14 @@ describe("buildFailoverBoardModel & evaluateCheckMatrixCell", () => {
 describe("buildFailoverBoardModel member roles without readiness", () => {
   it("never presents inventory ha_role as an observed member role; no readiness check means UNKNOWN", () => {
     const devices: readonly DeviceSummary[] = [
-      { ...SYNTHETIC_DEVICES[0], device_id: "dev-noobs-01", hostname: "FW-TANGO-09", cluster_member_ref: "CLS-NOOBS-01", ha_role: "active" },
-      { ...SYNTHETIC_DEVICES[1], device_id: "dev-noobs-02", hostname: "FW-TANGO-10", cluster_member_ref: "CLS-NOOBS-01", ha_role: "standby" },
+      { ...SYNTHETIC_DEVICES[0], device_id: "dev-noobs-01", hostname: "FW-TANGO-09", cluster_member_ref: "CLS-ROMEO-09", ha_role: "active" },
+      { ...SYNTHETIC_DEVICES[1], device_id: "dev-noobs-02", hostname: "FW-TANGO-10", cluster_member_ref: "CLS-ROMEO-09", ha_role: "standby" },
     ];
     const failoverRows: readonly CpFailoverSummary[] = [
       {
         unitId: "cls-noobs-01",
         clusterId: "cls-noobs-01",
-        cluster_member_ref: "CLS-NOOBS-01",
+        cluster_member_ref: "CLS-ROMEO-09",
         vendor: "check_point",
         unitKind: "VSX_CHASSIS",
         activeWindow: true,

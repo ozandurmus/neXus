@@ -27,7 +27,8 @@ class CutoverAssessmentControllerTest {
     final TopologyNamePseudonymizer names = new TopologyNamePseudonymizer("k".repeat(32).getBytes(StandardCharsets.UTF_8));
     final SubnetPreservingIpMasker ips = new SubnetPreservingIpMasker("01234567890123456789012345678901".getBytes(StandardCharsets.UTF_8));
     final CutoverAssessmentController controller = new CutoverAssessmentController(
-        new CutoverAssessmentService(repository, policies, new ObjectMapper()), paths, rbac, names, ips, new PolicyBulkhead());
+        new CutoverAssessmentService(repository, policies, new ObjectMapper()), paths, rbac, names, ips, new PolicyBulkhead(),
+        new CutoverFlowRetention(repository, true));
     static final String SPEC = "{\"targetOverride\":{\"deviceId\":\"device-synthetic-01\",\"policyId\":\"p1\",\"segmentZone\":\"Z-SEG\",\"peerZone\":\"Z-PEER\"},"
         + "\"mappings\":[{\"source\":\"src\",\"destination\":\"dst\",\"port\":\"port\",\"protocol\":\"proto\"}]}";
     static final String DATA = "src,dst,port,proto,ignored\r\n192.0.2.8,198.51.100.8,443,tcp,synthetic-raw-marker\r\n";
@@ -104,5 +105,27 @@ class CutoverAssessmentControllerTest {
         var response = controller.assess(SEGMENT, upload(false, "spec", pathSpec, DATA));
         assertEquals(409, response.getStatusCode().value()); assertTrue(response.getBody().toString().contains("TOPOLOGY_NOT_BUILT"));
         verify(repository, never()).saveAssessment(any()); verify(repository, never()).deviceVendor(anyString());
+    }
+
+    @Test void anEmptyFlowPageOfAnExpiredAssessmentSaysTheRowsWereRemovedByRetention() {
+        String id = "00000000-0000-4000-8000-0000000000b1";
+        when(repository.findAssessment(id)).thenReturn(Optional.of("{\"assessmentId\":\"" + id + "\"}"));
+        when(repository.flowCount(id, "FLOW", "WOULD_DROP")).thenReturn(0L);
+        when(repository.flows(id, "FLOW", "WOULD_DROP", 0)).thenReturn(List.of());
+        when(repository.flowsExpired(id, CutoverFlowRetention.RETENTION_DAYS)).thenReturn(true);
+        for (boolean masked : new boolean[] {false, true}) {
+            var body = ((CutoverResponse) controller.flows(id, "FLOW", "WOULD_DROP", 0, request("GET", "/api/v2/cutover/assessments/" + id + "/flows", masked)).getBody()).body();
+            assertEquals(true, body.get("flowsExpired")); assertEquals(90, body.get("retentionDays")); assertEquals(0L, body.get("total"));
+        }
+        // A young assessment with no row in this decision keeps the plain empty answer.
+        when(repository.flowsExpired(id, CutoverFlowRetention.RETENTION_DAYS)).thenReturn(false);
+        var young = ((CutoverResponse) controller.flows(id, "FLOW", "WOULD_DROP", 0, request("GET", "/api/v2/cutover/assessments/" + id + "/flows", false)).getBody()).body();
+        assertFalse(young.containsKey("flowsExpired")); assertFalse(young.containsKey("retentionDays"));
+        // A page that has rows never asks the retention read.
+        clearInvocations(repository);
+        when(repository.flowCount(id, "FLOW", null)).thenReturn(1L);
+        when(repository.flows(id, "FLOW", null, 0)).thenReturn(List.of("{\"flowSource\":\"192.0.2.9\"}"));
+        controller.flows(id, "FLOW", null, 0, request("GET", "/api/v2/cutover/assessments/" + id + "/flows", false));
+        verify(repository, never()).flowsExpired(anyString(), anyInt());
     }
 }

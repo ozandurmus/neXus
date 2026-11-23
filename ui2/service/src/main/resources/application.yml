@@ -49,6 +49,11 @@ ui2:
     scheduled-collection:
       enabled: ${UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_ENABLED:false}
       independent: ${UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_INDEPENDENT:false}
+  cutover:
+    # Q7 retention of cutover assessment flows (PO decision record 2026-11-14): flow rows older than 90 days are removed
+    # hourly in bounded passes; the verdict and its counts stay. ON by default (ratified); false switches the janitor off.
+    flow-retention:
+      enabled: ${UI2_CUTOVER_FLOW_RETENTION_ENABLED:true}
   metrics:
     # Prometheus scrape port (docs/operations/METRICS.md): a separate JDK server and internal port 8086, never routed by the public Service or Ingress.
     # Off by default (UI2_METRICS_ENABLED=false); when enabled, serves GET /metrics on the internal port.

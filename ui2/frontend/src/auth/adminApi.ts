@@ -4483,7 +4483,8 @@ export interface CutoverMissingRuleItem {
   direction: string; flowDestination: string; protocol: string; port: number; sourceCount: number; flowSources?: string[]; sourceRange?: string;
   flowCount: number; firstSeen?: string; lastSeen?: string; decisionCounts?: { decision: string; count: number }[]; oldPathRule?: CutoverRule | null;
 }
-export interface CutoverFlowPage<T> { total: number; page: number; items: T[] }
+/** {@code flowsExpired}: the assessment is past retention (Q7) and its flow rows were removed; the verdict and counts are kept. */
+export interface CutoverFlowPage<T> { total: number; page: number; items: T[]; flowsExpired?: boolean; retentionDays?: number }
 export interface CutoverTargetOverride { deviceId: string; policyId?: string; context?: string; segmentZone?: string; peerZone?: string }
 export interface CutoverSpec {
   targetOverride?: CutoverTargetOverride; oldPolicyId?: string; oldDeviceId?: string; oldContext?: string;

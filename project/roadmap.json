@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "current_build": "NXS-LOCAL-0402",
+  "current_build": "NXS-LOCAL-0404",
   "current_track": "PCP.x",
   "progress_contract": "Weighted acceptance-criterion completion. Percentages describe the declared roadmap, not calendar time or delivery ETA.",
   "tracks": [
@@ -150,10 +150,11 @@
   "now_next": {
     "horizon_contract": "NOW is exactly one build. NEXT is exactly one. Everything else is an `upcoming` row carrying its own true status: planned = AFTER, blocked = waiting on a named external gate, deferred = consciously postponed. `now.build` must equal the newest project/build_history.json record -- utils.project_plan enforces it.",
     "now": {
-      "build": "NXS-LOCAL-0402",
-      "title": "Estate dossier Management tree scope and malformed-payload hardening",
+      "build": "NXS-LOCAL-0404",
+      "title": "ASA ACL_NOT_BOUND unknown reason, ASA A0 conformance tests and debt cleanups",
       "status": "automated_validated",
-      "started": "2026-11-23"
+      "started": "2026-11-23",
+      "completed": "2026-11-23"
     },
     "next": {
       "build": "recovery_offhost_key_custody",

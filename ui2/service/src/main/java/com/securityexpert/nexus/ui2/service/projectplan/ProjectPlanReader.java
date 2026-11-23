@@ -221,8 +221,12 @@ public final class ProjectPlanReader {
                 .map(ProjectPlanReader::asString).collect(Collectors.toSet());
         List<Map<String, Object>> productBuilds = builds.stream()
                 .filter(row -> productBuildIds.contains(asString(row.get("build")))).toList();
+        List<Map<String, Object>> archivedBuilds = loadArchivedBuilds();
+        Set<String> archivedBuildIds = archivedBuilds.stream()
+                .map(row -> asString(row.get("build"))).collect(Collectors.toSet());
         for (String id : productBuildIds) {
-            if (productBuilds.stream().noneMatch(row -> id.equals(row.get("build")))) {
+            if (productBuilds.stream().noneMatch(row -> id.equals(row.get("build")))
+                    && !archivedBuildIds.contains(id)) {
                 metadataWarnings.add("Java product build source is missing: " + id);
             }
         }
@@ -230,7 +234,7 @@ public final class ProjectPlanReader {
                 : Objects.equals(product.get("reviewed_current_build"), roadmap.get("current_build"))
                         ? "UNKNOWN" : "STALE";
         if ("STALE".equals(freshness)) metadataWarnings.add("Java classification review predates the current recorded build.");
-        int archivedBuildCount = loadArchivedBuilds().size();
+        int archivedBuildCount = archivedBuilds.size();
         Map<String, Object> sourceMetadata = new LinkedHashMap<>();
         sourceMetadata.put("revision", sha256(Stream.of(roadmapLoad, registryLoad, backlogLoad,
                 backlogTerminalLoad, historyLoad, productLoad).map(FileLoad::digest).collect(Collectors.joining(":"))
@@ -337,7 +341,29 @@ public final class ProjectPlanReader {
      * the five sources named in WORKER.md AC-1).
      */
     private List<Map<String, Object>> loadArchivedBuilds() {
-        return new ArrayList<>();
+        List<Map<String, Object>> rows = new ArrayList<>();
+        List<Path> shards = new ArrayList<>();
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(
+                projectDirectory.resolve("archive"), "build_history_*.json")) {
+            for (Path path : stream) shards.add(path);
+        } catch (IOException | RuntimeException e) {
+            return rows;
+        }
+        shards.sort(Comparator.comparing(path -> path.getFileName().toString()));
+        for (Path shard : shards) {
+            try {
+                Map<String, Object> data = MAPPER.readValue(shard.toFile(), new TypeReference<Map<String, Object>>() {
+                });
+                for (Object row : asList(data.get("builds"))) {
+                    if (row instanceof Map<?, ?>) {
+                        rows.add(asMap(row));
+                    }
+                }
+            } catch (IOException | RuntimeException ignored) {
+                // one corrupt archive shard is skipped
+            }
+        }
+        return rows;
     }
 
     private static void appendFileAvailabilityWarning(List<String> warnings, String relativePath, boolean present) {
